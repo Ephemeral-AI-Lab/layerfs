@@ -18,6 +18,10 @@ Primary contracts:
 - [native workspace and Bash verification](08-native-workspace-and-shell-verification.md)
 - [portability and Apple completeness](09-portability-and-apple-completeness.md)
 - [final handoff freeze](10-handoff-freeze.md)
+- [Stage One performance completion](12-stage1-performance-completion.md)
+- [Stage One implementation and complexity](13-stage1-implementation-and-complexity.md)
+- [100 MiB operation campaign](14-stage1-single-file-benchmark.md)
+- [real workspace campaign](15-stage1-workspace-benchmark.md)
 
 Current native disposition (2026-08-24): **PASS for the frozen
 AppleWorkspaceV1 PoC scope**. The active host synthesizes exact
@@ -34,6 +38,11 @@ workspace test/clippy/static gates pass, and the one frozen three-run S0-S12
 campaign completed with exact oracles, terminal Q/FD equality, and zero owned
 residue. Changed-root incremental materialization remains an explicit PoC v1
 exclusion rather than an implemented claim.
+
+That exclusion describes the completed AppleWorkspaceV1 baseline. Stage One
+prospectively reopens changed-root refresh, direct canonical SDK operations,
+repeatable managed checkpoints, and performance closure under documents
+12–15; it does not retroactively relabel the v1 evidence.
 
 ## 1. Completion definition
 

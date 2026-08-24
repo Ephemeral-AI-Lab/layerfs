@@ -1,9 +1,11 @@
 # LayerFS Apple/APFS PoC v1
 
-Status: **implementation specification draft**. This package defines one
-integrated Apple/APFS proof of concept. It does not claim that the proposed
-file representation, VFS surface, or APFS acceleration is implemented or
-measured.
+Status: **AppleWorkspaceV1 and Stage One implementation closed for this PoC**.
+The controlling closure and custody record is
+[17 — Stage One closure and accepted A02 exception](17-stage1-closure.md).
+The preserved A01–A17 campaign remains measured `REVISE`; its A02 latency miss
+is explicitly user-accepted and is not relabeled as a threshold PASS. The
+workspace and Apple-edge campaigns remain prospective, deferred supplements.
 
 The PoC collapses the remaining G6 and project Phase 5–8 work into one vertical
 delivery:
@@ -38,6 +40,11 @@ programs for each small implementation repair.
 | [08 — Native workspace and shell verification](08-native-workspace-and-shell-verification.md) | Ordinary-file workspace contract, Bash lifecycle, supported filesystem subset, and realistic command corpus | SDK + VFS + evaluator |
 | [09 — Portability and Apple completeness](09-portability-and-apple-completeness.md) | Universal projection-driver boundary, canonical inode/metadata model, Apple/APFS completeness profile, and cross-platform rule | Core + VFS + OS |
 | [10 — Handoff freeze](10-handoff-freeze.md) | Final independently audited authority for codecs, inode allocation, drivers, metadata, storage reads, capture, durability and compaction | Implementation handoff |
+| [12 — Stage One performance completion](12-stage1-performance-completion.md) | Current disposition, narrowed scope, sequence, complexity, targets and acceptance gates | Stage One authority |
+| [13 — Stage One implementation and complexity](13-stage1-implementation-and-complexity.md) | Exact resulting tree, files to edit, route algorithms, counter proofs and tests | Product implementation |
+| [14 — 100 MiB operation campaign](14-stage1-single-file-benchmark.md) | Fast deterministic read/write/edit/reconstruct/materialize/refresh/reopen campaign | Single-file evaluator |
+| [15 — Real workspace campaign](15-stage1-workspace-benchmark.md) | Reusable <=300 MiB offline npm/code workspace and complete workflow | Workspace evaluator |
+| [17 — Stage One closure and accepted A02 exception](17-stage1-closure.md) | Final disposition, current-source custody, measured PASS gates, and the explicit A02 waiver | Stage One closure |
 
 ## 2. Reading order
 
@@ -53,6 +60,12 @@ programs for each small implementation repair.
   -> 08 ordinary workspace/Bash contract
   -> 09 portability/Apple completeness gate
   -> 10 final handoff freeze
+  -> 11 measured current operation profile
+  -> 12 Stage One controlling scope/targets
+  -> 13 exact implementation/complexity audit
+  -> 14 100 MiB operation campaign
+  -> 15 <=300 MiB workspace campaign
+  -> 17 Stage One closure and custody
 ```
 
 Do not begin with the benchmark. Implement and model-check the selected

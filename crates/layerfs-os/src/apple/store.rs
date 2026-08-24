@@ -42,7 +42,14 @@ impl StoreGenerationDriver for super::AppleDriver {
 
 impl super::AppleDriver {
     pub fn open_store(directory: &Path) -> EngineResult<Engine> {
-        generation::open_or_create(directory, &Self, IntegrityMode::Verified)
+        Self::open_store_with_integrity(directory, IntegrityMode::Verified)
+    }
+
+    pub fn open_store_with_integrity(
+        directory: &Path,
+        mode: IntegrityMode,
+    ) -> EngineResult<Engine> {
+        generation::open_or_create(directory, &Self, mode)
     }
 
     pub fn compact_store(engine: Engine, directory: &Path) -> EngineResult<Engine> {

@@ -5,6 +5,14 @@ independent Apple, storage/performance and portability/correctness audits. If an
 older PoC passage conflicts with this file, repair the older passage before
 implementation; do not choose locally.
 
+Stage One note: this file remains authority for accepted canonical bytes,
+correctness, durability, portability, and AppleWorkspaceV1 behavior. The
+prospective performance/product-route completion in
+[12-stage1-performance-completion.md](12-stage1-performance-completion.md)
+controls only the new Stage One work identified after implementation and the
+operation profile. It may add product APIs and changed-root refresh without
+changing this file's canonical or durability decisions.
+
 ## 1. Final disposition
 
 ```text

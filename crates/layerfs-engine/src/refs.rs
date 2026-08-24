@@ -11,6 +11,7 @@ impl Engine {
     pub fn read_ref(&self, name: &str) -> EngineResult<Option<RefState>> {
         validate_ref_name(name)?;
         let connection = self.lock_connection()?;
+        self.mark_statement()?;
         read_ref_on_connection(&connection, name)
     }
 

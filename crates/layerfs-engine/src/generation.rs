@@ -98,18 +98,22 @@ pub fn open_or_create(
     fs::create_dir_all(directory).map_err(super::io_engine_error)?;
     let current = directory.join("CURRENT");
     if current.exists() {
+        if !recovery_residue_exists(directory)? {
+            return open_current(directory, mode);
+        }
         if let Some(maintenance) = try_acquire_maintenance(directory)? {
             let selected = read_selector(&current)?;
-            let verified = open_selected(directory, IntegrityMode::Verified)?;
-            crate::scratch::recover_owned_near(verified.path(), selected.store_id, driver)?;
+            let provisional = open_selected(directory, mode)?;
+            crate::scratch::recover_owned_near(provisional.path(), selected.store_id, driver)?;
             cleanup_owned_residue(
                 directory,
                 &selected,
                 selected.generation.checked_sub(1),
                 driver,
             )?;
-            drop(verified);
+            drop(provisional);
             drop(maintenance);
+            return open_current(directory, mode);
         }
         return open_current(directory, mode);
     }
@@ -150,6 +154,30 @@ pub fn open_or_create(
     drop(engine);
     drop(maintenance);
     open_current(directory, mode)
+}
+
+fn recovery_residue_exists(directory: &Path) -> EngineResult<bool> {
+    let mut generations = 0_u8;
+    for entry in fs::read_dir(directory).map_err(super::io_engine_error)? {
+        let name = entry
+            .map_err(super::io_engine_error)?
+            .file_name()
+            .to_string_lossy()
+            .into_owned();
+        if name == "CURRENT.tmp"
+            || (name.starts_with(".layerfs-")
+                && (name.ends_with(".sqlite") || name.contains(".sqlite-")))
+        {
+            return Ok(true);
+        }
+        if name.starts_with("generation-") && name.ends_with(".sqlite") {
+            generations = generations.saturating_add(1);
+            if generations > 1 {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 struct GenesisCustody<'a> {
@@ -623,6 +651,47 @@ mod tests {
         }
     }
 
+    struct AdvancesSelectorDuringInstall;
+    impl StoreGenerationDriver for AdvancesSelectorDuringInstall {
+        fn available_bytes(&self, _directory: &Path) -> io::Result<u64> {
+            Ok(u64::MAX)
+        }
+        fn install_selector(&self, prepared: &Path, current: &Path) -> io::Result<()> {
+            fs::rename(prepared, current)?;
+            let directory = current
+                .parent()
+                .ok_or_else(|| io::Error::other("missing selector parent"))?;
+            let selected =
+                read_selector(current).map_err(|error| io::Error::other(error.to_string()))?;
+            let next_generation = selected
+                .generation
+                .checked_add(1)
+                .ok_or_else(|| io::Error::other("generation overflow"))?;
+            let next_path = directory.join(generation_filename(next_generation));
+            fs::copy(
+                directory.join(generation_filename(selected.generation)),
+                &next_path,
+            )?;
+            let next_engine = Engine::open_with_mode(&next_path, IntegrityMode::TrustedLocalDev)
+                .map_err(|error| io::Error::other(error.to_string()))?;
+            let next = selector(&next_engine, next_generation)
+                .map_err(|error| io::Error::other(error.to_string()))?;
+            drop(next_engine);
+            let raced = directory.join("CURRENT.raced");
+            fs::write(&raced, next.encode())?;
+            fs::rename(raced, current)
+        }
+        fn sync_directory(&self, directory: &Path) -> io::Result<()> {
+            fs::File::open(directory)?.sync_all()
+        }
+        fn file_identity(&self, path: &Path) -> io::Result<Vec<u8>> {
+            test_file_identity(path)
+        }
+        fn remove_file_if_identity(&self, path: &Path, expected: &[u8]) -> io::Result<()> {
+            test_remove_file(path, expected)
+        }
+    }
+
     struct LostBeforeVisibility;
     impl StoreGenerationDriver for LostBeforeVisibility {
         fn available_bytes(&self, _directory: &Path) -> io::Result<u64> {
@@ -851,6 +920,33 @@ mod tests {
                 .unwrap(),
             store_id
         );
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn genesis_handoff_reopens_the_generation_selected_after_maintenance() {
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-generation-handoff-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let engine = open_or_create(
+            &directory,
+            &AdvancesSelectorDuringInstall,
+            IntegrityMode::TrustedLocalDev,
+        )
+        .unwrap();
+        assert_eq!(
+            read_selector(&directory.join("CURRENT"))
+                .unwrap()
+                .generation,
+            1
+        );
+        assert_eq!(engine.path(), directory.join(generation_filename(1)));
+        drop(engine);
         fs::remove_dir_all(directory).unwrap();
     }
 
@@ -1344,6 +1440,45 @@ mod tests {
         assert!(open_or_create(&directory, &NativeDriver, IntegrityMode::Verified).is_err());
         assert!(candidate.exists());
         assert!(directory.join("CURRENT.tmp").exists());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn trusted_recovery_reopens_in_the_requested_store_lifetime_mode() {
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-generation-trusted-recovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let engine =
+            open_or_create(&directory, &NativeDriver, IntegrityMode::TrustedLocalDev).unwrap();
+        let namespace = layerfs_core::namespace_codec::encode_namespace_root(
+            layerfs_core::namespace::NamespaceRootV1 {
+                profile_id: layerfs_core::namespace_codec::profile_id(),
+                root_directory_inode: layerfs_core::inode::InodeId::allocate([0x61; 32], 0),
+                inode_table_root: layerfs_core::ObjectId::for_bytes(b"missing inode table"),
+            },
+        )
+        .unwrap();
+        let state = engine
+            .begin_publication(None, "main")
+            .unwrap()
+            .publish_namespace(&namespace)
+            .unwrap();
+        drop(engine);
+        let residue = directory.join(".layerfs-foreign-trigger.sqlite");
+        fs::write(&residue, b"not owned scratch").unwrap();
+
+        let recovered =
+            open_or_create(&directory, &NativeDriver, IntegrityMode::TrustedLocalDev).unwrap();
+        assert_eq!(recovered.read_ref("main").unwrap(), Some(state));
+        drop(recovered);
+        assert!(open_or_create(&directory, &NativeDriver, IntegrityMode::Verified).is_err());
+
+        fs::remove_file(residue).unwrap();
         fs::remove_dir_all(directory).unwrap();
     }
 

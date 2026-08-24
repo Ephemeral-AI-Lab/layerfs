@@ -3,11 +3,15 @@
 #![forbid(unsafe_code)]
 
 use layerfs_core::content::rope::ObjectRead;
-use layerfs_core::{validate_identity, CoreError, ObjectId, ObjectKind};
-use rusqlite::types::{Value, ValueRef};
+use layerfs_core::{
+    authenticate_identity, validate_bytes_identity, validate_identity, validate_object_from,
+    CoreError, ObjectId, ObjectKind, ObjectSummary,
+};
+use rusqlite::types::ValueRef;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use std::fmt;
 use std::fs::{self, OpenOptions};
+use std::io::Cursor;
 use std::ops::Range;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
@@ -226,6 +230,7 @@ pub struct SqliteProfile {
     pub mmap_size: i64,
     pub page_size: i64,
     pub cache_pages: i64,
+    pub cache_spill_pages: i64,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -250,6 +255,25 @@ pub struct EngineCounters {
     pub root_verifications: u64,
     pub root_verification_objects: u64,
     pub root_verification_bytes: u64,
+    pub fetched_rows: u64,
+    pub fetched_row_authentication_passes: u64,
+    pub fetched_row_role_decode_passes: u64,
+    pub new_object_authentication_passes: u64,
+    pub incumbent_authentication_passes: u64,
+    pub payload_batch_queries: u64,
+    pub payload_batch_references: u64,
+    pub payload_batch_maximum: u64,
+    pub put_lookup_statements: u64,
+    pub put_insert_statements: u64,
+    pub created_rows: u64,
+    pub reused_rows: u64,
+    pub publication_commits: u64,
+    pub publication_closure_passes: u64,
+    pub namespace_graph_verification_passes: u64,
+    pub scratch_tables: u64,
+    pub scratch_statements: u64,
+    pub scratch_rows: u64,
+    pub scratch_high_water_bytes: u64,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -349,6 +373,17 @@ impl ObjectRead for Engine {
         })
         .map_err(core_store_error)
     }
+
+    fn with_authenticated_canonical<T, F>(&self, id: ObjectId, callback: F) -> Result<T, CoreError>
+    where
+        F: FnOnce(&[u8]) -> Result<T, CoreError>,
+    {
+        let connection = self.lock_connection().map_err(core_store_error)?;
+        with_authenticated_canonical_on_connection(self, &connection, id, true, true, |_, bytes| {
+            callback(bytes).map_err(EngineError::Core)
+        })
+        .map_err(core_store_error)
+    }
 }
 
 fn core_store_error(error: EngineError) -> CoreError {
@@ -373,15 +408,6 @@ impl Engine {
         mode: integrity::IntegrityMode,
     ) -> EngineResult<Self> {
         let path = path.as_ref().to_owned();
-        if path.exists() {
-            let admission = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-                .map_err(map_sqlite_error)?;
-            admission
-                .busy_timeout(BUSY_TIMEOUT)
-                .map_err(map_sqlite_error)?;
-            preflight_schema(&admission)
-                .map_err(|error| engine_step("read-only preflight", error))?;
-        }
         let connection = Connection::open(&path)
             .map_err(map_sqlite_error)
             .map_err(|error| engine_step("primary open", error))?;
@@ -504,23 +530,32 @@ impl Engine {
                  INSERT INTO layerfs_retained_roots SELECT * FROM source.layerfs_retained_roots;",
                 )
                 .map_err(map_sqlite_error)?;
+            let mut select = source
+                .prepare(
+                    "SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1",
+                )
+                .map_err(map_sqlite_error)?;
+            let mut insert = candidate
+                .prepare(
+                    "INSERT INTO layerfs_objects (object_id, kind, canonical_length, canonical_bytes) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(object_id) DO NOTHING",
+                )
+                .map_err(map_sqlite_error)?;
             retained.work.for_each_key(|key| {
                 if key.len() != 34 {
                     return Err(EngineError::InvalidRecord("closure key"));
                 }
                 let id = &key[..32];
-                let row = source
-                    .query_row(
-                        "SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1",
-                        params![id],
-                        |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, Vec<u8>>(2)?)),
-                    )
+                let row = select
+                    .query_row(params![id], |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, i64>(1)?,
+                            row.get::<_, Vec<u8>>(2)?,
+                        ))
+                    })
                     .map_err(map_sqlite_error)?;
-                candidate
-                    .execute(
-                        "INSERT INTO layerfs_objects (object_id, kind, canonical_length, canonical_bytes) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(object_id) DO NOTHING",
-                        params![id, row.0, row.1, row.2],
-                    )
+                insert
+                    .execute(params![id, row.0, row.1, row.2])
                     .map_err(map_sqlite_error)?;
                 Ok(())
             })
@@ -665,44 +700,64 @@ impl Engine {
 
     pub fn load_object(&self, id: ObjectId) -> EngineResult<ObjectRecord> {
         let connection = self.lock_connection()?;
-        with_authenticated_canonical_on_connection(self, &connection, id, |kind, bytes| {
-            Ok(ObjectRecord {
-                id,
-                kind,
-                canonical_len: bytes.len() as u64,
-                canonical_bytes: bytes.to_vec(),
-            })
-        })
+        with_authenticated_canonical_on_connection(
+            self,
+            &connection,
+            id,
+            false,
+            false,
+            |kind, bytes| {
+                Ok(ObjectRecord {
+                    id,
+                    kind,
+                    canonical_len: bytes.len() as u64,
+                    canonical_bytes: bytes.to_vec(),
+                })
+            },
+        )
     }
 
     pub fn object_length(&self, id: ObjectId) -> EngineResult<u64> {
         let connection = self.lock_connection()?;
-        with_authenticated_canonical_on_connection(self, &connection, id, |_, bytes| {
-            Ok(bytes.len() as u64)
-        })
+        with_authenticated_canonical_on_connection(
+            self,
+            &connection,
+            id,
+            false,
+            false,
+            |_, bytes| Ok(bytes.len() as u64),
+        )
     }
 
     pub fn read_object_range(&self, id: ObjectId, range: Range<u64>) -> EngineResult<Vec<u8>> {
         let connection = self.lock_connection()?;
-        with_authenticated_canonical_on_connection(self, &connection, id, |_, bytes| {
-            let length = bytes.len() as u64;
-            if range.start > range.end || range.end > length {
-                return Err(EngineError::InvalidRange {
-                    start: range.start,
-                    end: range.end,
-                    length,
-                });
-            }
-            let start = usize::try_from(range.start).map_err(|_| EngineError::CounterOverflow)?;
-            let end = usize::try_from(range.end).map_err(|_| EngineError::CounterOverflow)?;
-            let output = bytes[start..end].to_vec();
-            let requested = range.end - range.start;
-            self.bump(|counters| {
-                checked_add(&mut counters.range_bytes_requested, requested)?;
-                checked_add(&mut counters.range_bytes_returned, requested)
-            })?;
-            Ok(output)
-        })
+        with_authenticated_canonical_on_connection(
+            self,
+            &connection,
+            id,
+            false,
+            false,
+            |_, bytes| {
+                let length = bytes.len() as u64;
+                if range.start > range.end || range.end > length {
+                    return Err(EngineError::InvalidRange {
+                        start: range.start,
+                        end: range.end,
+                        length,
+                    });
+                }
+                let start =
+                    usize::try_from(range.start).map_err(|_| EngineError::CounterOverflow)?;
+                let end = usize::try_from(range.end).map_err(|_| EngineError::CounterOverflow)?;
+                let output = bytes[start..end].to_vec();
+                let requested = range.end - range.start;
+                self.bump(|counters| {
+                    checked_add(&mut counters.range_bytes_requested, requested)?;
+                    checked_add(&mut counters.range_bytes_returned, requested)
+                })?;
+                Ok(output)
+            },
+        )
     }
 
     pub fn for_each_authenticated_payload_batch<F>(
@@ -719,25 +774,35 @@ impl Engine {
         if ids.is_empty() {
             return Ok(());
         }
+        self.bump(|counters| {
+            checked_add(&mut counters.payload_batch_queries, 1)?;
+            checked_add(
+                &mut counters.payload_batch_references,
+                u64::try_from(ids.len()).map_err(|_| EngineError::CounterOverflow)?,
+            )?;
+            counters.payload_batch_maximum = counters
+                .payload_batch_maximum
+                .max(u64::try_from(ids.len()).map_err(|_| EngineError::CounterOverflow)?);
+            Ok(())
+        })?;
         let connection = self.lock_connection()?;
-        let values = (0..ids.len())
-            .map(|index| format!("({index}, ?{})", index + 1))
-            .collect::<Vec<_>>()
-            .join(",");
-        let sql = format!("WITH requested(ord, object_id) AS (VALUES {values}) SELECT requested.ord, layerfs_objects.kind, layerfs_objects.canonical_length, layerfs_objects.canonical_bytes FROM requested LEFT JOIN layerfs_objects ON layerfs_objects.object_id = requested.object_id ORDER BY requested.ord");
+        let sql = payload_batch_sql(ids.len())?;
         self.mark_statement()?;
-        let mut statement = connection.prepare(&sql).map_err(map_sqlite_error)?;
-        let parameters = ids
-            .iter()
-            .map(|id| Value::Blob(id.as_bytes().to_vec()))
-            .collect::<Vec<_>>();
+        let mut statement = connection.prepare_cached(&sql).map_err(map_sqlite_error)?;
         let mut rows = statement
-            .query(rusqlite::params_from_iter(parameters))
+            .query(rusqlite::params_from_iter(
+                ids.iter().map(|id| id.as_bytes().as_slice()),
+            ))
             .map_err(map_sqlite_error)?;
         let mut ordinal = 0;
         while let Some(row) = rows.next().map_err(map_sqlite_error)? {
-            if row.get::<_, i64>(0).map_err(map_sqlite_error)? != ordinal as i64 {
-                return Err(EngineError::InvalidRecord("payload batch order"));
+            let observed_ordinal = row.get::<_, i64>(0).map_err(map_sqlite_error)?;
+            if observed_ordinal != ordinal as i64 {
+                return if observed_ordinal > ordinal as i64 {
+                    Err(EngineError::MissingObject(ids[ordinal]))
+                } else {
+                    Err(EngineError::InvalidRecord("payload batch order"))
+                };
             }
             let id = ids[ordinal];
             let kind = row
@@ -752,12 +817,19 @@ impl Engine {
                 ValueRef::Blob(bytes) => bytes,
                 _ => return Err(EngineError::InvalidRecord("object bytes")),
             };
-            authenticate_borrowed(self, id, kind, length, bytes)?;
-            callback(id, bytes)?;
+            let (payload, actual_length) = validate_payload_borrowed(id, kind, length, bytes)?;
+            self.bump(|counters| {
+                checked_add(&mut counters.objects_validated, 1)?;
+                checked_add(&mut counters.object_bytes_read, actual_length)?;
+                checked_add(&mut counters.fetched_rows, 1)?;
+                checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
+                checked_add(&mut counters.fetched_row_role_decode_passes, 1)
+            })?;
+            callback(id, payload)?;
             ordinal += 1;
         }
         if ordinal != ids.len() {
-            return Err(EngineError::InvalidRecord("payload batch length"));
+            return Err(EngineError::MissingObject(ids[ordinal]));
         }
         Ok(())
     }
@@ -1430,7 +1502,7 @@ fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
         .map_err(map_sqlite_error)?;
     connection
         .execute_batch(
-            "PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA mmap_size=0; PRAGMA cache_size=1280;",
+            "PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA mmap_size=0; PRAGMA cache_size=1280; PRAGMA cache_spill=1280;",
         )
         .map_err(map_sqlite_error)?;
     let synchronous = connection
@@ -1448,6 +1520,9 @@ fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
     let cache_pages = connection
         .query_row("PRAGMA cache_size", [], |row| row.get::<_, i64>(0))
         .map_err(map_sqlite_error)?;
+    let cache_spill_pages = connection
+        .query_row("PRAGMA cache_spill", [], |row| row.get::<_, i64>(0))
+        .map_err(map_sqlite_error)?;
     let profile = SqliteProfile {
         journal_mode,
         synchronous,
@@ -1455,6 +1530,7 @@ fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
         mmap_size,
         page_size,
         cache_pages,
+        cache_spill_pages,
     };
     if !profile.journal_mode.eq_ignore_ascii_case("DELETE")
         || profile.synchronous != 2
@@ -1462,6 +1538,7 @@ fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
         || profile.mmap_size != 0
         || profile.page_size != 4096
         || profile.cache_pages != 1280
+        || profile.cache_spill_pages != 1280
     {
         return Err(EngineError::ProfileMismatch);
     }
@@ -1540,8 +1617,13 @@ fn with_authenticated_canonical_on_connection<T>(
     engine: &Engine,
     connection: &Connection,
     id: ObjectId,
+    fetched_row: bool,
+    role_decode: bool,
     callback: impl FnOnce(ObjectKind, &[u8]) -> EngineResult<T>,
 ) -> EngineResult<T> {
+    if fetched_row != role_decode {
+        return Err(EngineError::InvalidRecord("fetched role accounting"));
+    }
     engine.mark_statement()?;
     let mut statement = connection
         .prepare_cached("SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1")
@@ -1560,7 +1642,21 @@ fn with_authenticated_canonical_on_connection<T>(
         _ => return Err(EngineError::InvalidRecord("object bytes")),
     };
     let kind = authenticate_borrowed(engine, id, kind, length, bytes)?;
-    callback(kind, bytes)
+    if !role_decode {
+        let summary = validate_object_from(Cursor::new(bytes))?;
+        if summary.kind != kind || summary.canonical_len != bytes.len() as u64 {
+            return Err(EngineError::InvalidRecord("object summary"));
+        }
+    }
+    let value = callback(kind, bytes)?;
+    if fetched_row {
+        engine.bump(|counters| {
+            checked_add(&mut counters.fetched_rows, 1)?;
+            checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
+            checked_add(&mut counters.fetched_row_role_decode_passes, 1)
+        })?;
+    }
+    Ok(value)
 }
 
 fn authenticate_borrowed(
@@ -1570,15 +1666,30 @@ fn authenticate_borrowed(
     length: i64,
     bytes: &[u8],
 ) -> EngineResult<ObjectKind> {
+    let (summary, actual_length) = authenticate_borrowed_unaccounted(id, kind, length, bytes)?;
+    engine.bump(|counters| {
+        checked_add(&mut counters.objects_validated, 1)?;
+        checked_add(&mut counters.object_bytes_read, actual_length)?;
+        Ok(())
+    })?;
+    Ok(summary.kind)
+}
+
+fn validate_payload_borrowed(
+    id: ObjectId,
+    kind: i64,
+    length: i64,
+    bytes: &[u8],
+) -> EngineResult<(&[u8], u64)> {
     let expected_kind = ObjectKind::try_from(
         u8::try_from(kind).map_err(|_| EngineError::InvalidRecord("object kind"))?,
     )?;
     let expected_length =
         u64::try_from(length).map_err(|_| EngineError::InvalidRecord("object length"))?;
-    let object =
-        validate_identity(bytes, id).map_err(|cause| EngineError::MalformedObject { id, cause })?;
+    let payload = validate_bytes_identity(bytes, id)
+        .map_err(|cause| EngineError::MalformedObject { id, cause })?;
     let actual_length = u64::try_from(bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
-    if object.kind() != expected_kind || actual_length != expected_length {
+    if expected_kind != ObjectKind::Bytes || actual_length != expected_length {
         return Err(EngineError::MalformedObject {
             id,
             cause: CoreError::LengthMismatch {
@@ -1587,11 +1698,49 @@ fn authenticate_borrowed(
             },
         });
     }
-    engine.bump(|counters| {
-        checked_add(&mut counters.objects_validated, 1)?;
-        checked_add(&mut counters.object_bytes_read, actual_length)
-    })?;
-    Ok(expected_kind)
+    Ok((payload, actual_length))
+}
+
+fn payload_batch_sql(count: usize) -> EngineResult<String> {
+    if !(1..=64).contains(&count) {
+        return Err(EngineError::InvalidRecord("payload batch size"));
+    }
+    Ok((0..count)
+        .map(|index| {
+            format!(
+                "SELECT {index} AS ord, kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?{}",
+                index + 1
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" UNION ALL ")
+        + " ORDER BY 1")
+}
+
+fn authenticate_borrowed_unaccounted(
+    id: ObjectId,
+    kind: i64,
+    length: i64,
+    bytes: &[u8],
+) -> EngineResult<(ObjectSummary, u64)> {
+    let expected_kind = ObjectKind::try_from(
+        u8::try_from(kind).map_err(|_| EngineError::InvalidRecord("object kind"))?,
+    )?;
+    let expected_length =
+        u64::try_from(length).map_err(|_| EngineError::InvalidRecord("object length"))?;
+    let object = authenticate_identity(bytes, id)
+        .map_err(|cause| EngineError::MalformedObject { id, cause })?;
+    let actual_length = u64::try_from(bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
+    if object.kind != expected_kind || actual_length != expected_length {
+        return Err(EngineError::MalformedObject {
+            id,
+            cause: CoreError::LengthMismatch {
+                expected: expected_length,
+                actual: actual_length,
+            },
+        });
+    }
+    Ok((object, actual_length))
 }
 
 fn put_object_on_connection(
@@ -1604,15 +1753,30 @@ fn put_object_on_connection(
         .map_err(|cause| EngineError::MalformedObject { id, cause })?;
     let canonical_len =
         u64::try_from(canonical_bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
-    engine.bump(|counters| checked_add(&mut counters.objects_validated, 1))?;
-    match with_authenticated_canonical_on_connection(engine, connection, id, |kind, stored| {
-        if kind != object.kind() || stored != canonical_bytes {
-            return Err(EngineError::ImmutableConflict("object", id));
-        }
-        Ok(())
-    }) {
+    engine.bump(|counters| {
+        checked_add(&mut counters.objects_validated, 1)?;
+        checked_add(&mut counters.new_object_authentication_passes, 1)?;
+        checked_add(&mut counters.put_lookup_statements, 1)
+    })?;
+    match with_authenticated_canonical_on_connection(
+        engine,
+        connection,
+        id,
+        false,
+        false,
+        |kind, stored| {
+            if kind != object.kind() || stored != canonical_bytes {
+                return Err(EngineError::ImmutableConflict("object", id));
+            }
+            Ok(())
+        },
+    ) {
         Ok(()) => {
-            engine.bump(|counters| checked_add(&mut counters.objects_reused, 1))?;
+            engine.bump(|counters| {
+                checked_add(&mut counters.objects_reused, 1)?;
+                checked_add(&mut counters.reused_rows, 1)?;
+                checked_add(&mut counters.incumbent_authentication_passes, 1)
+            })?;
             return Ok(PutOutcome::Reused);
         }
         Err(EngineError::MissingObject(missing)) if missing == id => {}
@@ -1620,6 +1784,7 @@ fn put_object_on_connection(
     }
 
     engine.mark_statement()?;
+    engine.bump(|counters| checked_add(&mut counters.put_insert_statements, 1))?;
     let mut insert = connection
         .prepare_cached(
             "INSERT INTO layerfs_objects (object_id, kind, canonical_length, canonical_bytes)
@@ -1636,6 +1801,7 @@ fn put_object_on_connection(
         .map_err(map_sqlite_error)?;
     engine.bump(|counters| {
         checked_add(&mut counters.objects_created, 1)?;
+        checked_add(&mut counters.created_rows, 1)?;
         checked_add(&mut counters.object_bytes_written, canonical_len)?;
         checked_add(&mut counters.logical_object_bytes, canonical_len)
     })?;
@@ -1647,7 +1813,7 @@ fn authenticate_directory_object(
     connection: &Connection,
     id: ObjectId,
 ) -> EngineResult<()> {
-    with_authenticated_canonical_on_connection(engine, connection, id, |kind, _| {
+    with_authenticated_canonical_on_connection(engine, connection, id, false, false, |kind, _| {
         if kind == ObjectKind::Directory {
             Ok(())
         } else {
@@ -1895,6 +2061,39 @@ mod tests {
     }
 
     #[test]
+    fn payload_batch_union_preserves_order_without_sorting() {
+        let path = test_path();
+        let engine =
+            Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
+        let (id, canonical) = bytes_object(b"payload");
+        engine.put_object_if_absent(id, &canonical).unwrap();
+        let connection = engine.lock_connection().unwrap();
+        for count in [1, 4, 5, 6, 64] {
+            let ids = vec![id; count];
+            let sql = payload_batch_sql(count).unwrap();
+            let mut statement = connection.prepare(&sql).unwrap();
+            let rows_seen = {
+                let mut rows = statement
+                    .query(rusqlite::params_from_iter(
+                        ids.iter().map(|id| id.as_bytes().as_slice()),
+                    ))
+                    .unwrap();
+                let mut ordinal = 0;
+                while let Some(row) = rows.next().unwrap() {
+                    assert_eq!(row.get::<_, i64>(0).unwrap(), ordinal);
+                    ordinal += 1;
+                }
+                ordinal
+            };
+            assert_eq!(rows_seen, count as i64);
+            assert_eq!(statement.get_status(rusqlite::StatementStatus::Sort), 0);
+        }
+        drop(connection);
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn profile_range_reopen_and_counters() {
         let path = test_path();
         let (id, bytes) = bytes_object(b"durable range payload");
@@ -1904,6 +2103,8 @@ mod tests {
             assert_eq!(engine.profile().synchronous, 2);
             assert_eq!(engine.profile().temp_store, 1);
             assert_eq!(engine.profile().mmap_size, 0);
+            assert_eq!(engine.profile().cache_pages, 1280);
+            assert_eq!(engine.profile().cache_spill_pages, 1280);
             assert_eq!(
                 engine.put_object_if_absent(id, &bytes),
                 Ok(PutOutcome::Created)

@@ -1,8 +1,9 @@
-use crate::capture::capture_workspace;
+use crate::capture::{capture_workspace, live_hard_link_authority, SemanticDigestCache};
 use crate::driver::*;
+use crate::workspace::topology_edge_key;
 use crate::workspace::{VfsError, VfsResult};
 use crate::{NativeRoute, OperationCounters};
-use layerfs_core::content::rope::{read_all, read_all_bounded, FileStateRoot};
+use layerfs_core::content::rope::{read_all, read_all_bounded, FileStateRoot, ObjectRead};
 use layerfs_core::inode::{
     inode_table_lookup, InodeId, InodeKind, InodeTableCounters, InodeTableRoot,
 };
@@ -25,14 +26,21 @@ pub fn materialize(
         WorkspacePolicy::ExternalCooperative,
         engine.store_id()?,
     )?;
-    materialize_workspace(engine, workspace.as_ref(), root).map(drop)
+    materialize_workspace(
+        engine,
+        &SemanticDigestCache::default(),
+        workspace.as_ref(),
+        root,
+    )
+    .map(drop)
 }
 
 pub(crate) fn materialize_workspace(
     engine: &Engine,
+    digest_cache: &SemanticDigestCache,
     workspace: &dyn ProjectionWorkspace,
     root: ObjectId,
-) -> VfsResult<OperationCounters> {
+) -> VfsResult<(OperationCounters, DiskTable, DiskTable)> {
     let mut counters = OperationCounters::default();
     counters.native.route = Some(NativeRoute::MaterializeStream);
     workspace.revalidate_root_binding()?;
@@ -46,38 +54,57 @@ pub(crate) fn materialize_workspace(
         if expected.root != root {
             return Err(VfsError::ExternalDirtyConflict);
         }
-        let (verified, mut counters) =
-            capture_workspace(engine, workspace, Some(&expected), None, true, true)?;
+        let (verified, mut counters) = capture_workspace(
+            engine,
+            digest_cache,
+            workspace,
+            Some(&expected),
+            None,
+            true,
+            true,
+        )?;
         if verified.root != root {
             return Err(VfsError::ExternalDirtyConflict);
         }
         workspace.revalidate_root_binding()?;
         counters.native.route = Some(NativeRoute::ExactNoop);
-        return Ok(counters);
+        let (authority, topology, authority_counters) =
+            live_hard_link_authority(engine, workspace, root)?;
+        return Ok((counters.merge(authority_counters)?, authority, topology));
     }
-    let namespace = decode_namespace_root(&engine.load_object(root)?.canonical_bytes)?;
+    let namespace = engine.with_authenticated_canonical(root, decode_namespace_root)?;
     let table = InodeTableRoot(namespace.inode_table_root);
     let root_record = record(engine, table, namespace.root_directory_inode, &mut counters)?;
     if root_record.kind != InodeKind::Directory {
         return Err(VfsError::InvalidState);
     }
     let links = DiskTable::create_near(engine.path(), "materialize-hardlinks")?;
+    let authority = DiskTable::create_near(engine.path(), "materialize-live-hardlinks")?;
+    let topology = DiskTable::create_near(engine.path(), "materialize-topology-edges")?;
     let current_path = Vec::new();
     materialize_directory(
         workspace,
         engine,
         table,
+        namespace.root_directory_inode,
         DirectoryStateRoot(root_record.content_root),
         root_handle.as_ref(),
         root_handle.as_ref(),
         &links,
+        &authority,
+        &topology,
         &current_path,
         &mut counters,
     )?;
     workspace.set_root_metadata(&metadata(engine, root_record.metadata_root, &mut counters)?)?;
+    counters.native.metadata_calls = checked_add(counters.native.metadata_calls, 1)?;
     workspace.sync_directory(root_handle.as_ref())?;
+    counters.native.sync_calls = checked_add(counters.native.sync_calls, 1)?;
     workspace.revalidate_root_binding()?;
-    Ok(counters)
+    counters.add_scratch(links.observation()?)?;
+    counters.add_scratch(authority.observation()?)?;
+    counters.add_scratch(topology.observation()?)?;
+    Ok((counters, authority, topology))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -85,10 +112,13 @@ fn materialize_directory(
     workspace: &dyn ProjectionWorkspace,
     engine: &Engine,
     table: InodeTableRoot,
+    directory_inode: InodeId,
     directory: DirectoryStateRoot,
     workspace_root: &dyn DirectoryHandle,
     parent: &dyn DirectoryHandle,
     links: &DiskTable,
+    authority: &DiskTable,
+    topology: &DiskTable,
     current_path: &[u8],
     counters: &mut OperationCounters,
 ) -> VfsResult<()> {
@@ -115,6 +145,13 @@ fn materialize_directory(
     let mut namespace_counters = NamespaceCounters::default();
     let visited = visit_directory_entries(engine, directory, &mut namespace_counters, |entries| {
         for (name, inode) in entries {
+            if let Err(cause) = topology.put(
+                &topology_edge_key(*inode, directory_inode, name.as_bytes()),
+                &[],
+            ) {
+                error = Some(cause.into());
+                return Err(layerfs_core::CoreError::Io);
+            }
             if let Err(cause) = materialize_entry(
                 workspace,
                 engine,
@@ -122,6 +159,8 @@ fn materialize_directory(
                 workspace_root,
                 parent,
                 links,
+                authority,
+                topology,
                 current_path,
                 name.as_bytes(),
                 *inode,
@@ -149,6 +188,8 @@ fn materialize_entry(
     workspace_root: &dyn DirectoryHandle,
     parent: &dyn DirectoryHandle,
     links: &DiskTable,
+    authority: &DiskTable,
+    topology: &DiskTable,
     current_path: &[u8],
     name: &[u8],
     inode: InodeId,
@@ -159,31 +200,42 @@ fn materialize_entry(
     match record.kind {
         InodeKind::Directory => {
             let child = workspace.create_directory_at(parent, name)?;
+            counters.native.create_calls = checked_add(counters.native.create_calls, 1)?;
             materialize_directory(
                 workspace,
                 engine,
                 table,
+                inode,
                 DirectoryStateRoot(record.content_root),
                 workspace_root,
                 child.as_ref(),
                 links,
+                authority,
+                topology,
                 &child_path(current_path, name),
                 counters,
             )?;
             let expected = workspace.directory_identity(child.as_ref())?;
             workspace.set_entry_metadata(parent, name, &expected, &metadata)?;
+            counters.native.metadata_calls = checked_add(counters.native.metadata_calls, 1)?;
             workspace.sync_directory(child.as_ref())?;
+            counters.native.sync_calls = checked_add(counters.native.sync_calls, 1)?;
         }
         InodeKind::RegularFile => {
             if let Some(value) = links.get(inode.as_bytes())? {
                 let (remaining, source) = decode_link_state(&value)?;
                 create_hard_link_from_path(workspace, workspace_root, source, parent, name)?;
+                counters.native.hard_link_calls = checked_add(counters.native.hard_link_calls, 1)?;
                 if remaining == 1 {
                     finish_hard_link_from_path(workspace, workspace_root, source, &metadata)?;
+                    counters.native.metadata_calls =
+                        checked_add(counters.native.metadata_calls, 1)?;
+                    counters.native.sync_calls = checked_add(counters.native.sync_calls, 1)?;
                 }
                 links.put(inode.as_bytes(), &encode_link_state(remaining - 1, source))?;
             } else {
                 let mut temp = workspace.create_temp_at(parent)?;
+                counters.native.temp_calls = checked_add(counters.native.temp_calls, 1)?;
                 let root = FileStateRoot(record.content_root);
                 let rope = read_all(engine, root, &mut temp)?;
                 counters.native.bytes_written = counters
@@ -197,7 +249,10 @@ fn materialize_entry(
                     representative_metadata.bsd_flags = 0;
                 }
                 workspace.set_temp_metadata(temp.as_mut(), &representative_metadata)?;
+                counters.native.metadata_calls = checked_add(counters.native.metadata_calls, 1)?;
                 workspace.atomic_replace(temp, parent, name)?;
+                counters.native.replace_calls = checked_add(counters.native.replace_calls, 1)?;
+                counters.native.sync_calls = checked_add(counters.native.sync_calls, 2)?;
                 if record.namespace_ref_count > 1 {
                     let path = child_path(current_path, name);
                     links.put(
@@ -206,13 +261,21 @@ fn materialize_entry(
                     )?;
                 }
             }
+            let key = workspace.identity_at(parent, name)?;
+            authority.put(&key, inode.as_bytes())?;
         }
         InodeKind::Symlink => {
-            let link = decode_symlink(&engine.load_object(record.content_root)?.canonical_bytes)?;
+            let link = engine.with_authenticated_canonical(record.content_root, decode_symlink)?;
             workspace.create_symlink_at(parent, name, &link.target, &metadata)?;
+            counters.native.create_calls = checked_add(counters.native.create_calls, 1)?;
+            counters.native.metadata_calls = checked_add(counters.native.metadata_calls, 1)?;
         }
     }
     Ok(())
+}
+
+fn checked_add(left: u64, right: u64) -> VfsResult<u64> {
+    left.checked_add(right).ok_or(VfsError::InvalidState)
 }
 
 fn encode_link_state(remaining: u64, path: &[u8]) -> Vec<u8> {
@@ -344,12 +407,10 @@ fn record(
     let id = inode_table_lookup(engine, table, inode, &mut inode_counters)?
         .ok_or(VfsError::InvalidState)?;
     counters.add_inode_table(inode_counters)?;
-    Ok(decode_inode_record(
-        &engine.load_object(id)?.canonical_bytes,
-    )?)
+    Ok(engine.with_authenticated_canonical(id, decode_inode_record)?)
 }
 
-fn metadata(
+pub(crate) fn metadata(
     engine: &Engine,
     root: ObjectId,
     counters: &mut OperationCounters,

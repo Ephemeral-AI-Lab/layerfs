@@ -575,7 +575,11 @@ pub fn remove_owned_tree(
 ) -> io::Result<()> {
     let mut entries = directory_entries(root)?;
     for entry in entries.by_ref() {
-        let (child_name, kind, _, _, stable) = entry?;
+        let (child_name, kind, _, _, stable) = match entry {
+            Ok(entry) => entry,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error),
+        };
         if stable_token_at(root, &child_name)? != stable {
             return Err(io::Error::from_raw_os_error(libc::ESTALE));
         }

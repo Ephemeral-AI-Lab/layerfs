@@ -7,13 +7,17 @@ use layerfs_vfs::LayerVfs;
 use std::path::Path;
 use std::sync::Arc;
 
-pub use layerfs_vfs::{NativeRoute, OperationCounters as OperationDiagnostics, RootId, VfsError};
+pub use layerfs_vfs::{
+    IntegrityMode, NativeRoute, OperationCounters as OperationDiagnostics, RefState, RootId,
+    VfsError,
+};
 
 pub const COMPONENT: &str = "layerfs-sdk";
 
 pub struct OpenedLayerFs {
     pub fs: LayerFs,
     pub head: RootId,
+    pub ref_state: RefState,
 }
 pub struct LayerFs(LayerVfs);
 
@@ -50,8 +54,28 @@ pub struct Diagnostics {
     pub root_verifications: u64,
     pub root_verification_objects: u64,
     pub root_verification_bytes: u64,
+    pub fetched_rows: u64,
+    pub fetched_row_authentication_passes: u64,
+    pub fetched_row_role_decode_passes: u64,
+    pub new_object_authentication_passes: u64,
+    pub incumbent_authentication_passes: u64,
+    pub payload_batch_queries: u64,
+    pub payload_batch_references: u64,
+    pub payload_batch_maximum: u64,
+    pub put_lookup_statements: u64,
+    pub put_insert_statements: u64,
+    pub created_rows: u64,
+    pub reused_rows: u64,
+    pub publication_commits: u64,
+    pub publication_closure_passes: u64,
+    pub namespace_graph_verification_passes: u64,
+    pub scratch_tables: u64,
+    pub scratch_statements: u64,
+    pub scratch_rows: u64,
+    pub scratch_high_water_bytes: u64,
     pub page_size: i64,
     pub cache_pages: i64,
+    pub cache_spill_pages: i64,
     pub database_bytes: Option<u64>,
     pub rollback_journal_bytes: Option<u64>,
     pub temporary_file_bytes: Option<u64>,
@@ -65,9 +89,93 @@ pub struct Diagnostics {
 
 impl LayerFs {
     pub fn open(path: &Path) -> Result<OpenedLayerFs, layerfs_vfs::VfsError> {
-        let fs = LayerVfs::from_engine(AppleDriver::open_store(path)?, Arc::new(AppleDriver))?;
-        let head = fs.head().root;
-        Ok(OpenedLayerFs { fs: Self(fs), head })
+        Self::open_with_integrity(path, IntegrityMode::Verified)
+    }
+    pub fn open_with_integrity(
+        path: &Path,
+        mode: IntegrityMode,
+    ) -> Result<OpenedLayerFs, layerfs_vfs::VfsError> {
+        let fs = LayerVfs::from_engine(
+            AppleDriver::open_store_with_integrity(path, mode)?,
+            Arc::new(AppleDriver),
+        )?;
+        let ref_state = fs.current_head("main")?;
+        let head = ref_state.root;
+        Ok(OpenedLayerFs {
+            fs: Self(fs),
+            head,
+            ref_state,
+        })
+    }
+    pub fn current_head(&self, name: &str) -> Result<RefState, VfsError> {
+        self.0.current_head(name)
+    }
+    pub fn store_id(&self) -> Result<[u8; 32], VfsError> {
+        self.0.store_id()
+    }
+    pub fn read_range<W: std::io::Write>(
+        &self,
+        root: RootId,
+        path: &str,
+        range: std::ops::Range<u64>,
+        output: W,
+    ) -> Result<OperationDiagnostics, VfsError> {
+        self.0
+            .read_range(root, &layerfs_vfs::CanonicalPath::new(path)?, range, output)
+    }
+    pub fn read_to<W: std::io::Write>(
+        &self,
+        root: RootId,
+        path: &str,
+        output: W,
+    ) -> Result<OperationDiagnostics, VfsError> {
+        self.0
+            .read_to(root, &layerfs_vfs::CanonicalPath::new(path)?, output)
+    }
+    pub fn replace_range<R: std::io::Read>(
+        &self,
+        expected: &RefState,
+        path: &str,
+        start: u64,
+        delete_len: u64,
+        input: R,
+    ) -> Result<RefState, VfsError> {
+        self.replace_range_observed(expected, path, start, delete_len, input)
+            .map(|value| value.0)
+    }
+    pub fn replace_range_observed<R: std::io::Read>(
+        &self,
+        expected: &RefState,
+        path: &str,
+        start: u64,
+        delete_len: u64,
+        input: R,
+    ) -> Result<(RefState, OperationDiagnostics), VfsError> {
+        self.0.replace_range(
+            expected,
+            &layerfs_vfs::CanonicalPath::new(path)?,
+            start,
+            delete_len,
+            input,
+        )
+    }
+    pub fn replace_file<R: std::io::Read>(
+        &self,
+        expected: &RefState,
+        path: &str,
+        input: R,
+    ) -> Result<RefState, VfsError> {
+        self.replace_file_observed(expected, path, input)
+            .map(|value| value.0)
+    }
+    pub fn replace_file_observed<R: std::io::Read>(
+        &self,
+        expected: &RefState,
+        path: &str,
+        input: R,
+    ) -> Result<(RefState, OperationDiagnostics), VfsError> {
+        self.0
+            .replace_file(expected, &layerfs_vfs::CanonicalPath::new(path)?, input)
     }
     pub fn materialize_external(
         &self,
@@ -93,6 +201,14 @@ impl LayerFs {
     ) -> Result<ManagedWorkspace, layerfs_vfs::VfsError> {
         self.0.materialize_managed(root).map(ManagedWorkspace)
     }
+    pub fn materialize_managed_observed(
+        &self,
+        root: RootId,
+    ) -> Result<(ManagedWorkspace, OperationDiagnostics), layerfs_vfs::VfsError> {
+        self.0
+            .materialize_managed_observed(root)
+            .map(|(workspace, counters)| (ManagedWorkspace(workspace), counters))
+    }
     pub fn open_external(&self, path: &Path) -> Result<ExternalWorkspace, layerfs_vfs::VfsError> {
         self.0.open_external(path).map(ExternalWorkspace)
     }
@@ -102,15 +218,35 @@ impl LayerFs {
     pub fn rollback(&self, root: RootId) -> Result<RootId, layerfs_vfs::VfsError> {
         self.0.rollback(root)
     }
+    pub fn move_main(
+        &self,
+        expected: &RefState,
+        target: RootId,
+    ) -> Result<RefState, layerfs_vfs::VfsError> {
+        self.0.move_main(expected, target)
+    }
     pub fn compact(self, path: &Path) -> Result<OpenedLayerFs, layerfs_vfs::VfsError> {
         let engine = AppleDriver::compact_store(self.0.into_engine()?, path)?;
         let fs = LayerVfs::from_engine(engine, Arc::new(AppleDriver))?;
-        let head = fs.head().root;
-        Ok(OpenedLayerFs { fs: Self(fs), head })
+        let ref_state = fs.current_head("main")?;
+        let head = ref_state.root;
+        Ok(OpenedLayerFs {
+            fs: Self(fs),
+            head,
+            ref_state,
+        })
     }
     pub fn diagnostics(&self) -> Result<Diagnostics, VfsError> {
-        let profile = self.0.profile();
         let storage = self.0.observations();
+        let mut diagnostics = self.counter_snapshot()?;
+        diagnostics.database_bytes = storage.database_bytes;
+        diagnostics.rollback_journal_bytes = storage.rollback_journal_bytes;
+        diagnostics.temporary_file_bytes = storage.temporary_file_bytes;
+        diagnostics.logical_engine_bytes = storage.logical_engine_bytes;
+        Ok(diagnostics)
+    }
+    pub fn counter_snapshot(&self) -> Result<Diagnostics, VfsError> {
+        let profile = self.0.profile();
         let counters = self.0.counters()?;
         let operation_q = self.0.operation_q_observation();
         let compaction = self
@@ -146,12 +282,32 @@ impl LayerFs {
             root_verifications: counters.root_verifications,
             root_verification_objects: counters.root_verification_objects,
             root_verification_bytes: counters.root_verification_bytes,
+            fetched_rows: counters.fetched_rows,
+            fetched_row_authentication_passes: counters.fetched_row_authentication_passes,
+            fetched_row_role_decode_passes: counters.fetched_row_role_decode_passes,
+            new_object_authentication_passes: counters.new_object_authentication_passes,
+            incumbent_authentication_passes: counters.incumbent_authentication_passes,
+            payload_batch_queries: counters.payload_batch_queries,
+            payload_batch_references: counters.payload_batch_references,
+            payload_batch_maximum: counters.payload_batch_maximum,
+            put_lookup_statements: counters.put_lookup_statements,
+            put_insert_statements: counters.put_insert_statements,
+            created_rows: counters.created_rows,
+            reused_rows: counters.reused_rows,
+            publication_commits: counters.publication_commits,
+            publication_closure_passes: counters.publication_closure_passes,
+            namespace_graph_verification_passes: counters.namespace_graph_verification_passes,
+            scratch_tables: counters.scratch_tables,
+            scratch_statements: counters.scratch_statements,
+            scratch_rows: counters.scratch_rows,
+            scratch_high_water_bytes: counters.scratch_high_water_bytes,
             page_size: profile.page_size,
             cache_pages: profile.cache_pages,
-            database_bytes: storage.database_bytes,
-            rollback_journal_bytes: storage.rollback_journal_bytes,
-            temporary_file_bytes: storage.temporary_file_bytes,
-            logical_engine_bytes: storage.logical_engine_bytes,
+            cache_spill_pages: profile.cache_spill_pages,
+            database_bytes: None,
+            rollback_journal_bytes: None,
+            temporary_file_bytes: None,
+            logical_engine_bytes: None,
             compaction,
             active_connections: self.0.active_connection_count()?,
             operation_q_bound_bytes: layerfs_vfs::OPERATION_Q_BOUND_BYTES,
@@ -163,6 +319,34 @@ impl LayerFs {
 
 pub struct ManagedWorkspace(layerfs_vfs::ManagedWorkspace);
 impl ManagedWorkspace {
+    pub fn read_to<W: std::io::Write>(
+        &self,
+        path: &str,
+        output: W,
+    ) -> Result<OperationDiagnostics, layerfs_vfs::VfsError> {
+        self.0
+            .read_to(&layerfs_vfs::CanonicalPath::new(path)?, output)
+    }
+    pub fn checkpoint(&mut self) -> Result<RefState, layerfs_vfs::VfsError> {
+        self.0.checkpoint()
+    }
+    pub fn checkpoint_observed(
+        &mut self,
+    ) -> Result<(RefState, OperationDiagnostics), layerfs_vfs::VfsError> {
+        self.0.checkpoint_observed()
+    }
+    pub fn ensure_exact(
+        &mut self,
+        target: &RefState,
+    ) -> Result<OperationDiagnostics, layerfs_vfs::VfsError> {
+        self.0.ensure_exact(target)
+    }
+    pub fn refresh(
+        &mut self,
+        target: &RefState,
+    ) -> Result<OperationDiagnostics, layerfs_vfs::VfsError> {
+        self.0.refresh(target)
+    }
     pub fn capture(&mut self) -> Result<RootId, layerfs_vfs::VfsError> {
         self.0.capture()
     }
@@ -204,6 +388,9 @@ impl ManagedWorkspace {
     }
     pub fn discard(&mut self) -> Result<(), layerfs_vfs::VfsError> {
         self.0.discard()
+    }
+    pub fn discard_observed(&mut self) -> Result<OperationDiagnostics, layerfs_vfs::VfsError> {
+        self.0.discard_observed()
     }
 }
 

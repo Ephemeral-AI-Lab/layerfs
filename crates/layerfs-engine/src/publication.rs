@@ -32,6 +32,7 @@ impl Engine {
             connection.transaction = true;
         }
         self.bump(|counters| checked_add(&mut counters.transactions_started, 1))?;
+        self.mark_statement()?;
         let actual = read_ref_on_connection(&connection, name)?;
         if actual.as_ref() != expected {
             let store_id = store_id(&connection)?;
@@ -71,6 +72,7 @@ impl Publication<'_> {
         let serial =
             u64::try_from(serial).map_err(|_| EngineError::InvalidRecord("inode serial"))?;
         let next = serial.checked_add(1).ok_or(EngineError::CounterOverflow)?;
+        self.engine.mark_statement()?;
         self.connection
             .execute(
                 "UPDATE layerfs_authority SET next_inode_serial = ?1 WHERE authority_id = 1",
@@ -98,6 +100,7 @@ impl Publication<'_> {
 
     pub(crate) fn retain_existing_root(&mut self, root: ObjectId) -> EngineResult<()> {
         self.ensure_active()?;
+        self.engine.mark_statement()?;
         let retained = self
             .connection
             .query_row(
@@ -113,6 +116,8 @@ impl Publication<'_> {
             self.engine,
             &self.connection,
             root,
+            true,
+            true,
             |_, bytes| {
                 decode_namespace_root(bytes)
                     .map(|_| ())
@@ -156,7 +161,33 @@ impl Publication<'_> {
             self.engine.bump(|counters| {
                 checked_add(&mut counters.root_verifications, 1)?;
                 checked_add(&mut counters.root_verification_objects, observation.objects)?;
-                checked_add(&mut counters.root_verification_bytes, observation.bytes)
+                checked_add(&mut counters.root_verification_bytes, observation.bytes)?;
+                checked_add(&mut counters.statements, observation.statements)?;
+                checked_add(&mut counters.fetched_rows, observation.fetched_rows)?;
+                checked_add(
+                    &mut counters.fetched_row_authentication_passes,
+                    observation.authentication_passes,
+                )?;
+                checked_add(
+                    &mut counters.fetched_row_role_decode_passes,
+                    observation.role_decode_passes,
+                )?;
+                checked_add(&mut counters.scratch_tables, observation.scratch_tables)?;
+                checked_add(
+                    &mut counters.scratch_statements,
+                    observation.scratch_statements,
+                )?;
+                checked_add(&mut counters.scratch_rows, observation.scratch_rows)?;
+                counters.scratch_high_water_bytes = counters
+                    .scratch_high_water_bytes
+                    .max(observation.scratch_bytes);
+                checked_add(
+                    &mut counters.objects_validated,
+                    observation.authentication_passes,
+                )?;
+                checked_add(&mut counters.object_bytes_read, observation.bytes)?;
+                checked_add(&mut counters.publication_closure_passes, 1)?;
+                checked_add(&mut counters.namespace_graph_verification_passes, 1)
             })?;
         }
         let generation = self.expected.as_ref().map_or(Ok(0), |state| {
@@ -168,6 +199,7 @@ impl Publication<'_> {
         self.engine.mark_statement()?;
         self.connection.execute("INSERT INTO layerfs_retained_roots (root_id) VALUES (?1) ON CONFLICT(root_id) DO NOTHING", params![root.as_bytes().as_slice()]).map_err(map_sqlite_error)?;
         if self.expected.is_some() {
+            self.engine.mark_statement()?;
             self.connection
                 .execute(
                     "UPDATE layerfs_refs SET generation = ?1, root_id = ?2 WHERE name = ?3",
@@ -179,6 +211,7 @@ impl Publication<'_> {
                 )
                 .map_err(map_sqlite_error)?;
         } else {
+            self.engine.mark_statement()?;
             self.connection
                 .execute(
                     "INSERT INTO layerfs_refs (name, generation, root_id) VALUES (?1, 0, ?2)",
@@ -188,6 +221,7 @@ impl Publication<'_> {
         }
         self.engine.mark_statement()?;
         if self.engine.mode == super::integrity::IntegrityMode::TrustedLocalDev {
+            self.engine.mark_statement()?;
             self.connection
                 .execute(
                     "UPDATE layerfs_authority SET trusted_history = 1 WHERE authority_id = 1",
@@ -200,8 +234,10 @@ impl Publication<'_> {
             Ok(()) => {
                 self.active = false;
                 self.connection.transaction = false;
-                self.engine
-                    .bump(|counters| checked_add(&mut counters.transactions_committed, 1))?;
+                self.engine.bump(|counters| {
+                    checked_add(&mut counters.transactions_committed, 1)?;
+                    checked_add(&mut counters.publication_commits, 1)
+                })?;
                 Ok(RefState {
                     name: self.name.clone(),
                     generation,
@@ -224,6 +260,10 @@ impl Publication<'_> {
                             &self.name,
                             &Some(state.clone()),
                         )?;
+                        self.engine.bump(|counters| {
+                            checked_add(&mut counters.transactions_committed, 1)?;
+                            checked_add(&mut counters.publication_commits, 1)
+                        })?;
                         Ok(state)
                     }
                     Ok(observed) if observed == self.expected => {
@@ -253,14 +293,34 @@ impl Publication<'_> {
 
 impl ObjectStore for Publication<'_> {
     fn get(&self, id: ObjectId) -> Result<Vec<u8>, CoreError> {
-        with_authenticated_canonical_on_connection(self.engine, &self.connection, id, |_, bytes| {
-            Ok(bytes.to_vec())
-        })
+        with_authenticated_canonical_on_connection(
+            self.engine,
+            &self.connection,
+            id,
+            false,
+            false,
+            |_, bytes| Ok(bytes.to_vec()),
+        )
         .map_err(core_store_error)
     }
 
     fn put(&mut self, canonical: &[u8]) -> Result<ObjectId, CoreError> {
         self.put_object(canonical).map_err(core_store_error)
+    }
+
+    fn with_authenticated_canonical<T, F>(&self, id: ObjectId, callback: F) -> Result<T, CoreError>
+    where
+        F: FnOnce(&[u8]) -> Result<T, CoreError>,
+    {
+        with_authenticated_canonical_on_connection(
+            self.engine,
+            &self.connection,
+            id,
+            true,
+            true,
+            |_, bytes| callback(bytes).map_err(EngineError::Core),
+        )
+        .map_err(core_store_error)
     }
 }
 

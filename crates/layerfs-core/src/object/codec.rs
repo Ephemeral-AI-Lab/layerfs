@@ -157,6 +157,44 @@ pub fn validate_identity(bytes: &[u8], expected: ObjectId) -> CoreResult<Object>
     decode_object(bytes)
 }
 
+/// Authenticates canonical bytes and their outer framing without decoding the
+/// role-specific payload. Callers must run the exact role decoder before using
+/// the payload.
+pub fn authenticate_identity(bytes: &[u8], expected: ObjectId) -> CoreResult<ObjectSummary> {
+    if ObjectId::for_bytes(bytes) != expected {
+        return Err(CoreError::IdentityMismatch);
+    }
+    if bytes.len() > MAX_OBJECT_BYTES {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
+    if bytes.len() < HEADER_LEN {
+        return Err(CoreError::UnexpectedEof);
+    }
+    if bytes[..MAGIC.len()] != MAGIC {
+        return Err(CoreError::Unsupported);
+    }
+    let kind = ObjectKind::try_from(bytes[4])?;
+    let payload_len = usize::try_from(u32::from_be_bytes([bytes[5], bytes[6], bytes[7], bytes[8]]))
+        .map_err(|_| CoreError::LengthOverflow)?;
+    if payload_len > MAX_OBJECT_BYTES - HEADER_LEN {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
+    let canonical_len = HEADER_LEN
+        .checked_add(payload_len)
+        .ok_or(CoreError::LengthOverflow)?;
+    if bytes.len() != canonical_len {
+        return Err(if bytes.len() < canonical_len {
+            CoreError::UnexpectedEof
+        } else {
+            CoreError::TrailingBytes
+        });
+    }
+    Ok(ObjectSummary {
+        kind,
+        canonical_len: canonical_len as u64,
+    })
+}
+
 pub fn validate_bytes_identity(bytes: &[u8], expected: ObjectId) -> CoreResult<&[u8]> {
     if ObjectId::for_bytes(bytes) != expected {
         return Err(CoreError::IdentityMismatch);
@@ -515,6 +553,27 @@ mod tests {
             assert_eq!(ObjectId::for_bytes(&borrowed), ObjectId::for_bytes(&owned));
             assert_eq!(decode_bytes_object(&borrowed).unwrap(), value);
         }
+    }
+
+    #[test]
+    fn shallow_authentication_defers_payload_rules_to_the_exact_role_decoder() {
+        let mut bytes = MAGIC.to_vec();
+        bytes.push(ObjectKind::Bytes as u8);
+        bytes.extend_from_slice(&4_u32.to_be_bytes());
+        bytes.extend_from_slice(&1_u32.to_be_bytes());
+        let id = ObjectId::for_bytes(&bytes);
+        assert_eq!(
+            authenticate_identity(&bytes, id).unwrap(),
+            ObjectSummary {
+                kind: ObjectKind::Bytes,
+                canonical_len: bytes.len() as u64,
+            }
+        );
+        assert_eq!(decode_bytes_object(&bytes), Err(CoreError::UnexpectedEof));
+        assert_eq!(
+            authenticate_identity(&bytes, ObjectId::for_bytes(b"other")),
+            Err(CoreError::IdentityMismatch)
+        );
     }
 
     #[test]

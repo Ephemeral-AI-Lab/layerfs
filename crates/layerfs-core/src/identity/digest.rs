@@ -5,6 +5,39 @@ use crate::error::{CoreError, CoreResult};
 pub const DIGEST_BYTES: usize = 32;
 const OBJECT_DOMAIN: &[u8] = b"layerfs/object\0";
 
+pub struct ContentDigestWriter {
+    hasher: blake3::Hasher,
+}
+
+impl ContentDigestWriter {
+    pub fn new() -> Self {
+        Self {
+            hasher: blake3::Hasher::new(),
+        }
+    }
+
+    pub fn finish(self) -> [u8; DIGEST_BYTES] {
+        *self.hasher.finalize().as_bytes()
+    }
+}
+
+impl Default for ContentDigestWriter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Write for ContentDigestWriter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.hasher.update(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 pub(crate) struct ObjectHashWriter {
     hasher: blake3::Hasher,
 }
@@ -92,6 +125,18 @@ mod tests {
         assert_ne!(
             hash_object_bytes(b"same"),
             *blake3::hash(b"same").as_bytes()
+        );
+    }
+
+    #[test]
+    fn content_digest_writer_is_fragmentation_independent() {
+        let mut fragmented = ContentDigestWriter::new();
+        fragmented.write_all(b"fragmented ").unwrap();
+        fragmented.write_all(b"input").unwrap();
+
+        assert_eq!(
+            fragmented.finish(),
+            *blake3::hash(b"fragmented input").as_bytes()
         );
     }
 }

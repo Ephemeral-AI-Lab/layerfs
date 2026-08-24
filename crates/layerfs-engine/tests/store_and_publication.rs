@@ -3,9 +3,9 @@ use layerfs_core::inode::{
     inode_table_from_root, inode_table_upsert, InodeId, InodeKind, InodeRecordV1,
 };
 use layerfs_core::metadata::{build_metadata_tree, MetadataEntryV1, MetadataKey};
-use layerfs_core::namespace::{empty_directory, NamespaceRootV1};
+use layerfs_core::namespace::{directory_insert, empty_directory, NamespaceRootV1};
 use layerfs_core::namespace_codec::{encode_inode_record, encode_namespace_root, profile_id};
-use layerfs_core::{encode_bytes_object, ObjectId};
+use layerfs_core::{encode_bytes_object, CanonicalName, ObjectId};
 use layerfs_engine::integrity::IntegrityMode;
 use layerfs_engine::refs::RefState;
 use layerfs_engine::{Engine, EngineError};
@@ -47,6 +47,9 @@ fn borrowed_object_load_and_ordered_batch_fetch_once_and_authenticate_once_per_o
     let one = engine.counters().unwrap();
     assert_eq!(one.statements, 1);
     assert_eq!(one.objects_validated, 1);
+    assert_eq!(one.fetched_rows, 0);
+    assert_eq!(one.fetched_row_authentication_passes, 0);
+    assert_eq!(one.fetched_row_role_decode_passes, 0);
 
     engine.reset_counters().unwrap();
     let requested = [second_id, first_id, second_id];
@@ -64,11 +67,24 @@ fn borrowed_object_load_and_ordered_batch_fetch_once_and_authenticate_once_per_o
     let batch = engine.counters().unwrap();
     assert_eq!(batch.statements, 1);
     assert_eq!(batch.objects_validated, 3);
+    assert_eq!(batch.fetched_rows, 3);
+    assert_eq!(batch.fetched_row_authentication_passes, 3);
+    assert_eq!(batch.fetched_row_role_decode_passes, 3);
+    assert_eq!(batch.payload_batch_queries, 1);
+    assert_eq!(batch.payload_batch_references, 3);
+    assert_eq!(batch.payload_batch_maximum, 3);
 
     assert!(matches!(
         engine.for_each_authenticated_payload_batch(&[ObjectId::for_bytes(b"missing")], |_, _| Ok(
             ()
         )),
+        Err(EngineError::MissingObject(_))
+    ));
+    assert!(matches!(
+        engine.for_each_authenticated_payload_batch(
+            &[first_id, ObjectId::for_bytes(b"missing-middle"), second_id],
+            |_, _| Ok(())
+        ),
         Err(EngineError::MissingObject(_))
     ));
     assert_eq!(
@@ -277,6 +293,198 @@ fn verified_publication_rejects_missing_reachable_inode_table_before_visibility(
     assert_eq!(engine.read_ref("main").unwrap(), None);
     drop(engine);
     let _ = fs::remove_file(path);
+}
+
+#[test]
+fn verified_publication_counts_every_integrity_fetch_authentication_and_role_decode() {
+    let path = std::env::temp_dir().join(format!(
+        "layerfs-verified-accounting-{}-{}.sqlite",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let engine = Engine::open(&path).unwrap();
+    let mut publication = engine.begin_publication(None, "main").unwrap();
+    let (mode, _) = build(&mut publication, 0o755_u32.to_be_bytes().as_slice()).unwrap();
+    let mut mtime = Vec::new();
+    mtime.extend_from_slice(&0_i64.to_be_bytes());
+    mtime.extend_from_slice(&0_u32.to_be_bytes());
+    let (mtime, _) = build(&mut publication, mtime.as_slice()).unwrap();
+    let metadata = build_metadata_tree(
+        &mut publication,
+        &[
+            MetadataEntryV1 {
+                key: MetadataKey::new("portable".into(), b"mode".to_vec()).unwrap(),
+                value_file_root: mode.0,
+            },
+            MetadataEntryV1 {
+                key: MetadataKey::new("portable".into(), b"mtime".to_vec()).unwrap(),
+                value_file_root: mtime.0,
+            },
+        ],
+    )
+    .unwrap();
+    let directory = empty_directory(&mut publication).unwrap();
+    let root_inode = InodeId::allocate([0x74; 32], 0);
+    let record = publication
+        .put_object(
+            &encode_inode_record(InodeRecordV1 {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 0,
+                content_root: directory.0,
+                metadata_root: metadata,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let table = inode_table_from_root(&mut publication, root_inode, record).unwrap();
+    let namespace = encode_namespace_root(NamespaceRootV1 {
+        profile_id: profile_id(),
+        root_directory_inode: root_inode,
+        inode_table_root: table.0,
+    })
+    .unwrap();
+    engine.reset_counters().unwrap();
+    publication.publish_namespace(&namespace).unwrap();
+
+    let counters = engine.counters().unwrap();
+    assert!(counters.fetched_rows > 0);
+    assert_eq!(
+        counters.fetched_rows,
+        counters.fetched_row_authentication_passes
+    );
+    assert_eq!(
+        counters.fetched_rows,
+        counters.fetched_row_role_decode_passes
+    );
+    assert_eq!(counters.publication_closure_passes, 1);
+    assert_eq!(counters.namespace_graph_verification_passes, 1);
+    assert_eq!(counters.scratch_tables, 3);
+    assert!(counters.scratch_statements > 0);
+    assert!(counters.scratch_rows > 0);
+    assert!(counters.scratch_high_water_bytes > 0);
+    drop(engine);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn verified_publication_survives_cache_spill_without_reopening_store() {
+    let path = std::env::temp_dir().join(format!(
+        "layerfs-verified-spill-{}-{}.sqlite",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let engine = Engine::open(&path).unwrap();
+    assert_eq!(engine.profile().cache_pages, 1280);
+    assert_eq!(engine.profile().cache_spill_pages, 1280);
+    let mut state = 0x75a1_5eed_cafe_babe_u64;
+    let content_bytes = (0..6 * 1024 * 1024)
+        .map(|_| {
+            state ^= state << 7;
+            state ^= state >> 9;
+            state ^= state << 8;
+            state as u8
+        })
+        .collect::<Vec<_>>();
+    let aborted_content = {
+        let mut publication = engine.begin_publication(None, "aborted").unwrap();
+        let (content, _) = build(&mut publication, content_bytes.as_slice()).unwrap();
+        assert!(fs::metadata(&path).unwrap().len() > 1024 * 1024);
+        content
+    };
+    assert!(matches!(
+        engine.load_object(aborted_content.0),
+        Err(EngineError::MissingObject(_))
+    ));
+    assert_eq!(engine.read_ref("aborted").unwrap(), None);
+
+    let mut publication = engine.begin_publication(None, "main").unwrap();
+    let (mode, _) = build(&mut publication, 0o755_u32.to_be_bytes().as_slice()).unwrap();
+    let mut mtime = Vec::new();
+    mtime.extend_from_slice(&0_i64.to_be_bytes());
+    mtime.extend_from_slice(&0_u32.to_be_bytes());
+    let (mtime, _) = build(&mut publication, mtime.as_slice()).unwrap();
+    let metadata = build_metadata_tree(
+        &mut publication,
+        &[
+            MetadataEntryV1 {
+                key: MetadataKey::new("portable".into(), b"mode".to_vec()).unwrap(),
+                value_file_root: mode.0,
+            },
+            MetadataEntryV1 {
+                key: MetadataKey::new("portable".into(), b"mtime".to_vec()).unwrap(),
+                value_file_root: mtime.0,
+            },
+        ],
+    )
+    .unwrap();
+    let (content, _) = build(&mut publication, content_bytes.as_slice()).unwrap();
+    let root_inode = InodeId::allocate([0x75; 32], 0);
+    let file_inode = InodeId::allocate([0x75; 32], 1);
+    let file_record = publication
+        .put_object(
+            &encode_inode_record(InodeRecordV1 {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: 1,
+                content_root: content.0,
+                metadata_root: metadata,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let directory = empty_directory(&mut publication).unwrap();
+    let directory = directory_insert(
+        &mut publication,
+        directory,
+        CanonicalName::new("large").unwrap(),
+        file_inode,
+    )
+    .unwrap()
+    .0;
+    let root_record = publication
+        .put_object(
+            &encode_inode_record(InodeRecordV1 {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 0,
+                content_root: directory.0,
+                metadata_root: metadata,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let table = inode_table_from_root(&mut publication, root_inode, root_record).unwrap();
+    let table = inode_table_upsert(&mut publication, table, file_inode, file_record)
+        .unwrap()
+        .0;
+    publication
+        .publish_namespace(
+            &encode_namespace_root(NamespaceRootV1 {
+                profile_id: profile_id(),
+                root_directory_inode: root_inode,
+                inode_table_root: table.0,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    assert!(fs::metadata(&path).unwrap().len() > 5 * 1024 * 1024);
+    drop(engine);
+    let reopened = Engine::open(&path).unwrap();
+    let mut observed = Vec::new();
+    read_range(
+        &reopened,
+        content,
+        0..content_bytes.len() as u64,
+        &mut observed,
+    )
+    .unwrap();
+    assert_eq!(observed, content_bytes);
+    drop(reopened);
+    fs::remove_file(path).unwrap();
 }
 
 #[test]

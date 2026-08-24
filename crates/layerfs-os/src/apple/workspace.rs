@@ -325,6 +325,13 @@ impl ProjectionWorkspace for Workspace {
             .set_len(len)?;
         Ok(())
     }
+    fn sync_regular(&self, file: &mut dyn RegularFileHandle) -> Result<()> {
+        let file = file
+            .as_any()
+            .downcast_ref::<Regular>()
+            .ok_or(DriverError::Conflict)?;
+        Ok(file.0.sync_all()?)
+    }
     fn read_link_at(
         &self,
         parent: &dyn DirectoryHandle,
@@ -368,9 +375,10 @@ impl ProjectionWorkspace for Workspace {
     ) -> Result<Box<dyn DirectoryHandle>> {
         let parent = dir(parent)?;
         super::ffi::mkdir_at(&parent.file, name)?;
-        Ok(Box::new(Dir {
-            file: super::ffi::open_directory_at(&parent.file, name)?,
-        }))
+        match super::ffi::open_directory_at(&parent.file, name) {
+            Ok(file) => Ok(Box::new(Dir { file })),
+            Err(_) => Err(DriverError::VisibilityAmbiguous),
+        }
     }
     fn create_temp_at(&self, _parent: &dyn DirectoryHandle) -> Result<Box<dyn OwnedTempHandle>> {
         for _ in 0..64 {
@@ -462,7 +470,6 @@ impl ProjectionWorkspace for Workspace {
             .expected_metadata
             .lock()
             .map_err(|_| DriverError::Conflict)? = Some(metadata.clone());
-        temp.file.sync_all()?;
         Ok(())
     }
     fn set_entry_metadata(
@@ -507,33 +514,20 @@ impl ProjectionWorkspace for Workspace {
             .into_any()
             .downcast::<Temp>()
             .map_err(|_| DriverError::Conflict)?;
-        temp.file.sync_all()?;
-        let parent_dir = dir(parent)?;
-        let requested = super::ffi::file_stable_token(&temp.file)?;
-        let prior = optional_token(&parent_dir.file, name)?;
-        if let Err(error) =
-            super::ffi::replace_at(&temp.staging, &temp.name, &parent_dir.file, name)
-        {
-            return reconcile_replace(&parent_dir.file, name, prior, &requested, error);
-        }
-        if optional_token(&parent_dir.file, name)?.as_deref() != Some(requested.as_slice())
-            || optional_token(&temp.staging, &temp.name)?.is_some()
-        {
-            return Err(DriverError::VisibilityAmbiguous);
-        }
-        let entry = super::ffi::open_entry_at(&parent_dir.file, name)?;
-        let expected = temp
-            .expected_metadata
-            .lock()
-            .map_err(|_| DriverError::Conflict)?
-            .clone()
-            .ok_or(DriverError::Conflict)?;
-        super::metadata::finish(&entry, &expected)?;
-        entry.sync_all()?;
-        match parent_dir.file.sync_all() {
-            Ok(()) => Ok(()),
-            Err(error) => reconcile_replace(&parent_dir.file, name, prior, &requested, error),
-        }
+        atomic_replace_temp(temp, dir(parent)?, name, None)
+    }
+    fn atomic_replace_checked(
+        &self,
+        temp: Box<dyn OwnedTempHandle>,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        expected: Option<&[u8]>,
+    ) -> Result<()> {
+        let temp = temp
+            .into_any()
+            .downcast::<Temp>()
+            .map_err(|_| DriverError::Conflict)?;
+        atomic_replace_temp(temp, dir(parent)?, name, Some(expected))
     }
     fn create_symlink_at(
         &self,
@@ -555,6 +549,72 @@ impl ProjectionWorkspace for Workspace {
         )?;
         super::metadata::finish(&entry, metadata)
     }
+    fn atomic_replace_symlink(
+        &self,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        expected: Option<&[u8]>,
+        target: &[u8],
+        metadata: &NativeMetadata,
+    ) -> Result<()> {
+        super::metadata::preflight_symlink(metadata)?;
+        let parent = &dir(parent)?.file;
+        let prior = optional_token(parent, name)?;
+        if prior.as_deref() != expected {
+            return Err(DriverError::Conflict);
+        }
+        let staging = self.staging_dir.as_ref().ok_or(DriverError::Conflict)?;
+        for _ in 0..64 {
+            let temp_name = format!(
+                "symlink-{}-{}",
+                std::process::id(),
+                TEMP_SERIAL.fetch_add(1, Ordering::Relaxed)
+            )
+            .into_bytes();
+            match super::ffi::symlink_at(staging, &temp_name, target) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error.into()),
+            }
+            let requested = super::ffi::stable_token_at(staging, &temp_name)?;
+            let prepared = (|| -> Result<()> {
+                let entry = super::ffi::open_entry_at(staging, &temp_name)?;
+                super::metadata::write(&entry, metadata)?;
+                super::ffi::set_symlink_mtime_at(
+                    staging,
+                    &temp_name,
+                    metadata.mtime_seconds,
+                    metadata.mtime_nanoseconds,
+                )?;
+                super::metadata::finish(&entry, metadata)
+            })();
+            if let Err(error) = prepared {
+                let _ = super::ffi::unlink_if_identity_at(staging, &temp_name, &requested);
+                return Err(error);
+            }
+            if let Err(error) = super::ffi::replace_at(staging, &temp_name, parent, name) {
+                let result = reconcile_replace(parent, name, prior.clone(), &requested, error);
+                let _ = super::ffi::unlink_if_identity_at(staging, &temp_name, &requested);
+                return result;
+            }
+            if optional_token(parent, name)?.as_deref() != Some(requested.as_slice())
+                || optional_token(staging, &temp_name)?.is_some()
+            {
+                return Err(DriverError::VisibilityAmbiguous);
+            }
+            let verified = super::ffi::open_entry_at(parent, name)
+                .map_err(DriverError::from)
+                .and_then(|entry| super::metadata::verify(&entry, metadata));
+            if verified.is_err() {
+                return Err(DriverError::VisibilityAmbiguous);
+            }
+            return match parent.sync_all() {
+                Ok(()) => Ok(()),
+                Err(error) => reconcile_replace(parent, name, prior, &requested, error),
+            };
+        }
+        Err(DriverError::Conflict)
+    }
     fn create_hard_link_at(
         &self,
         source_parent: &dyn DirectoryHandle,
@@ -568,8 +628,11 @@ impl ProjectionWorkspace for Workspace {
             return Err(DriverError::Conflict);
         }
         super::ffi::hard_link_at(source_parent, source, &dir(target_parent)?.file, target)?;
-        if super::ffi::stable_token_at(source_parent, source)? != source_expected {
-            return Err(DriverError::Conflict);
+        if super::ffi::stable_token_at(source_parent, source)
+            .map(|actual| actual != source_expected)
+            .unwrap_or(true)
+        {
+            return Err(DriverError::VisibilityAmbiguous);
         }
         Ok(())
     }
@@ -613,10 +676,16 @@ impl ProjectionWorkspace for Workspace {
                 error,
             );
         }
-        if let Err(error) = source_parent
-            .sync_all()
-            .and_then(|_| target_parent.sync_all())
+        let sync = if super::ffi::file_stable_token(source_parent)?
+            == super::ffi::file_stable_token(target_parent)?
         {
+            source_parent.sync_all()
+        } else {
+            source_parent
+                .sync_all()
+                .and_then(|_| target_parent.sync_all())
+        };
+        if let Err(error) = sync {
             return reconcile_rename(
                 source_parent,
                 source,
@@ -627,6 +696,30 @@ impl ProjectionWorkspace for Workspace {
             );
         }
         Ok(())
+    }
+    fn unlink_regular_at(
+        &self,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        expected: &[u8],
+    ) -> Result<()> {
+        remove_entry(&dir(parent)?.file, name, expected, false)
+    }
+    fn unlink_symlink_at(
+        &self,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        expected: &[u8],
+    ) -> Result<()> {
+        remove_entry(&dir(parent)?.file, name, expected, false)
+    }
+    fn remove_directory_at(
+        &self,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        expected: &[u8],
+    ) -> Result<()> {
+        remove_entry(&dir(parent)?.file, name, expected, true)
     }
     fn sync_directory(&self, directory: &dyn DirectoryHandle) -> Result<()> {
         dir(directory)?.file.sync_all()?;
@@ -741,68 +834,82 @@ fn decode_recovery_record(
 
 fn recover_owned_workspaces(parent_path: &Path, store_id: [u8; 32]) -> Result<()> {
     let parent = super::ffi::open_directory_path_nofollow(parent_path)?;
-    for entry in super::ffi::directory_entries(&parent)? {
-        let (staging_name, kind, _, token, staging_identity) = entry?;
-        if kind != NativeKind::Directory || !staging_name.starts_with(b".layerfs-staging-") {
-            continue;
-        }
-        let staging = match super::ffi::open_directory_at(&parent, &staging_name) {
-            Ok(staging) => staging,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(error.into()),
-        };
-        validate_expected(&staging, Some(&token))?;
-        let mut marker = match super::ffi::open_regular_at(&staging, RECOVERY_MARKER, false) {
-            Ok(marker) => marker,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(DriverError::Conflict)
-            }
-            Err(error) => {
-                return Err(DriverError::Io(std::io::Error::new(
-                    error.kind(),
-                    format!("open recovery marker: {error}"),
-                )))
-            }
-        };
-        if !super::ffi::try_lock_exclusive(&marker)? {
-            continue;
-        }
-        let mut record = Vec::new();
-        Read::by_ref(&mut marker)
-            .take(4097)
-            .read_to_end(&mut record)?;
-        if record.len() > 4096 {
-            return Err(DriverError::Conflict);
-        }
-        let (owned_root, root_name, root_identity) = decode_recovery_record(&record, store_id)?;
-        if owned_root {
-            match super::ffi::open_directory_at(&parent, &root_name) {
-                Ok(root) => {
-                    if super::ffi::file_stable_token(&root)? != root_identity {
-                        return Err(DriverError::VisibilityAmbiguous);
-                    }
-                    remove_recovered_tree(
-                        &root,
-                        &parent,
-                        &root_name,
-                        &root_identity,
-                        b".layerfs-recovered-root-",
-                    )?;
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+    let mut removed = false;
+    let recovery = (|| -> Result<()> {
+        for entry in super::ffi::directory_entries(&parent)? {
+            let (staging_name, kind, _, token, staging_identity) = match entry {
+                Ok(entry) => entry,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(error) => return Err(error.into()),
+            };
+            if kind != NativeKind::Directory || !staging_name.starts_with(b".layerfs-staging-") {
+                continue;
             }
+            let staging = match super::ffi::open_directory_at(&parent, &staging_name) {
+                Ok(staging) => staging,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.into()),
+            };
+            validate_expected(&staging, Some(&token))?;
+            let mut marker = match super::ffi::open_regular_at(&staging, RECOVERY_MARKER, false) {
+                Ok(marker) => marker,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Err(DriverError::Conflict)
+                }
+                Err(error) => {
+                    return Err(DriverError::Io(std::io::Error::new(
+                        error.kind(),
+                        format!("open recovery marker: {error}"),
+                    )))
+                }
+            };
+            if !super::ffi::try_lock_exclusive(&marker)? {
+                continue;
+            }
+            let mut record = Vec::new();
+            Read::by_ref(&mut marker)
+                .take(4097)
+                .read_to_end(&mut record)?;
+            if record.len() > 4096 {
+                return Err(DriverError::Conflict);
+            }
+            let (owned_root, root_name, root_identity) = decode_recovery_record(&record, store_id)?;
+            if owned_root {
+                match super::ffi::open_directory_at(&parent, &root_name) {
+                    Ok(root) => {
+                        if super::ffi::file_stable_token(&root)? != root_identity {
+                            return Err(DriverError::VisibilityAmbiguous);
+                        }
+                        remove_recovered_tree(
+                            &root,
+                            &parent,
+                            &root_name,
+                            &root_identity,
+                            b".layerfs-recovered-root-",
+                        )?;
+                        removed = true;
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error.into()),
+                }
+            }
+            remove_recovered_tree(
+                &staging,
+                &parent,
+                &staging_name,
+                &staging_identity,
+                b".layerfs-recovered-staging-",
+            )?;
+            removed = true;
         }
-        remove_recovered_tree(
-            &staging,
-            &parent,
-            &staging_name,
-            &staging_identity,
-            b".layerfs-recovered-staging-",
-        )?;
+        Ok(())
+    })();
+    if removed {
+        parent
+            .sync_all()
+            .map_err(|_| DriverError::DurabilityAmbiguous)?;
     }
-    parent.sync_all()?;
-    Ok(())
+    recovery
 }
 
 fn remove_recovered_tree(
@@ -850,6 +957,51 @@ fn optional_token(parent: &File, name: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(token) => Ok(Some(token)),
         Err(error) if error.raw_os_error() == Some(libc::ENOENT) => Ok(None),
         Err(error) => Err(error.into()),
+    }
+}
+
+#[allow(clippy::boxed_local)]
+fn atomic_replace_temp(
+    temp: Box<Temp>,
+    parent: &Dir,
+    name: &[u8],
+    required_prior: Option<Option<&[u8]>>,
+) -> Result<()> {
+    temp.file.sync_all()?;
+    let requested = super::ffi::file_stable_token(&temp.file)?;
+    let prior = optional_token(&parent.file, name)?;
+    if required_prior.is_some_and(|expected| prior.as_deref() != expected) {
+        return Err(DriverError::Conflict);
+    }
+    if let Err(error) = super::ffi::replace_at(&temp.staging, &temp.name, &parent.file, name) {
+        return reconcile_replace(&parent.file, name, prior, &requested, error);
+    }
+    if optional_token(&parent.file, name)?.as_deref() != Some(requested.as_slice())
+        || optional_token(&temp.staging, &temp.name)?.is_some()
+    {
+        return Err(DriverError::VisibilityAmbiguous);
+    }
+    let finalized = (|| -> Result<()> {
+        let entry = super::ffi::open_entry_at(&parent.file, name)?;
+        let expected = temp
+            .expected_metadata
+            .lock()
+            .map_err(|_| DriverError::Conflict)?
+            .clone()
+            .ok_or(DriverError::Conflict)?;
+        if expected.bsd_flags == 0 {
+            super::metadata::verify(&entry, &expected)
+        } else {
+            super::metadata::finish(&entry, &expected)?;
+            Ok(entry.sync_all()?)
+        }
+    })();
+    if finalized.is_err() {
+        return Err(DriverError::VisibilityAmbiguous);
+    }
+    match parent.file.sync_all() {
+        Ok(()) => Ok(()),
+        Err(error) => reconcile_replace(&parent.file, name, prior, &requested, error),
     }
 }
 
@@ -901,6 +1053,37 @@ fn reconcile_rename(
         Err(DriverError::Io(error))
     } else {
         Err(DriverError::VisibilityAmbiguous)
+    }
+}
+
+fn remove_entry(parent: &File, name: &[u8], expected: &[u8], directory: bool) -> Result<()> {
+    if super::ffi::stable_token_at(parent, name)? != expected {
+        return Err(DriverError::Conflict);
+    }
+    let removed = if directory {
+        super::ffi::remove_directory_if_identity_at(parent, name, expected)
+    } else {
+        super::ffi::unlink_if_identity_at(parent, name, expected)
+    };
+    if let Err(error) = removed {
+        return reconcile_remove(parent, name, expected, error);
+    }
+    match parent.sync_all() {
+        Ok(()) => Ok(()),
+        Err(error) => reconcile_remove(parent, name, expected, error),
+    }
+}
+
+fn reconcile_remove(
+    parent: &File,
+    name: &[u8],
+    expected: &[u8],
+    error: std::io::Error,
+) -> Result<()> {
+    match optional_token(parent, name)? {
+        None => Err(DriverError::DurabilityAmbiguous),
+        Some(actual) if actual == expected => Err(DriverError::Io(error)),
+        Some(_) => Err(DriverError::VisibilityAmbiguous),
     }
 }
 
@@ -1213,6 +1396,66 @@ mod tests {
             Err(DriverError::VisibilityAmbiguous)
         ));
         drop(parent);
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn symlink_metadata_survives_reopen_and_lost_parent_sync_ack_is_ambiguous() {
+        let base = test_parent().join(format!(
+            "layerfs-symlink-durability-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&base).unwrap();
+        let parent = File::open(&base).unwrap();
+        crate::apple::ffi::symlink_at(&parent, b"link", b"old").unwrap();
+        let prior = crate::apple::ffi::stable_token_at(&parent, b"link").unwrap();
+        crate::apple::ffi::symlink_at(&parent, b"prepared", b"new-target").unwrap();
+        let requested = crate::apple::ffi::stable_token_at(&parent, b"prepared").unwrap();
+        let metadata = NativeMetadata {
+            mode: 0o777,
+            mtime_seconds: 1_700_000_123,
+            mtime_nanoseconds: 456_789_123,
+            xattrs: Vec::new(),
+            acl: None,
+            bsd_flags: 0,
+        };
+        let prepared = crate::apple::ffi::open_entry_at(&parent, b"prepared").unwrap();
+        crate::apple::metadata::write(&prepared, &metadata).unwrap();
+        crate::apple::ffi::set_symlink_mtime_at(
+            &parent,
+            b"prepared",
+            metadata.mtime_seconds,
+            metadata.mtime_nanoseconds,
+        )
+        .unwrap();
+        crate::apple::metadata::finish(&prepared, &metadata).unwrap();
+        crate::apple::ffi::replace_at(&parent, b"prepared", &parent, b"link").unwrap();
+        assert!(matches!(
+            reconcile_replace(
+                &parent,
+                b"link",
+                Some(prior),
+                &requested,
+                std::io::Error::other("lost parent-sync acknowledgement")
+            ),
+            Err(DriverError::DurabilityAmbiguous)
+        ));
+        drop(prepared);
+        drop(parent);
+
+        let reopened = File::open(&base).unwrap();
+        assert_eq!(
+            crate::apple::ffi::read_link_at(&reopened, b"link").unwrap(),
+            b"new-target"
+        );
+        let installed = crate::apple::ffi::open_entry_at(&reopened, b"link").unwrap();
+        crate::apple::metadata::verify(&installed, &metadata).unwrap();
+        drop(installed);
+        drop(reopened);
         fs::remove_dir_all(base).unwrap();
     }
 

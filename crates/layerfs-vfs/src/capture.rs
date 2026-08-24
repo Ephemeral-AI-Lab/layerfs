@@ -1,7 +1,7 @@
 use crate::driver::*;
-use crate::workspace::{VfsError, VfsResult};
+use crate::workspace::{topology_edge_key, VfsError, VfsResult};
 use crate::{NativeRoute, OperationCounters};
-use layerfs_core::content::rope::build;
+use layerfs_core::content::rope::{build, read_all, FileStateRoot, ObjectRead};
 use layerfs_core::inode::{
     generated_inode_table_from_root, generated_inode_table_upsert, inode_table_from_root,
     inode_table_lookup, GeneratedInodeTable, InodeId, InodeKind, InodeRecordV1, InodeTableCounters,
@@ -23,7 +23,36 @@ use layerfs_engine::publication::Publication;
 use layerfs_engine::refs::RefState;
 use layerfs_engine::scratch::DiskTable;
 use layerfs_engine::Engine;
-use std::io::Cursor;
+use std::collections::HashMap;
+use std::io::{Cursor, Seek, SeekFrom};
+use std::sync::Mutex;
+
+const SEMANTIC_DIGEST_CACHE_LIMIT: usize = 4096;
+
+#[derive(Default)]
+pub(crate) struct SemanticDigestCache(Mutex<HashMap<layerfs_core::ObjectId, [u8; 32]>>);
+
+impl SemanticDigestCache {
+    fn get(&self, root: FileStateRoot) -> VfsResult<Option<[u8; 32]>> {
+        Ok(self
+            .0
+            .lock()
+            .map_err(|_| VfsError::InvalidState)?
+            .get(&root.0)
+            .copied())
+    }
+
+    fn insert(&self, root: FileStateRoot, digest: [u8; 32]) -> VfsResult<()> {
+        let mut entries = self.0.lock().map_err(|_| VfsError::InvalidState)?;
+        if entries.len() == SEMANTIC_DIGEST_CACHE_LIMIT && !entries.contains_key(&root.0) {
+            // ponytail: wholesale eviction keeps Store-lifetime memory bounded; add LRU only if
+            // measured capture workloads repeatedly exceed 4,096 distinct retained file roots.
+            entries.clear();
+        }
+        entries.insert(root.0, digest);
+        Ok(())
+    }
+}
 
 struct HardLink {
     inode: InodeId,
@@ -65,6 +94,7 @@ impl HardLink {
 
 pub(crate) fn capture_workspace(
     engine: &Engine,
+    digest_cache: &SemanticDigestCache,
     workspace: &dyn ProjectionWorkspace,
     expected: Option<&RefState>,
     live_hard_links: Option<&DiskTable>,
@@ -73,24 +103,27 @@ pub(crate) fn capture_workspace(
 ) -> VfsResult<(RefState, OperationCounters)> {
     let mut counters = OperationCounters::default();
     counters.native.route = Some(NativeRoute::CaptureStream);
+    counters.authority_full_scans = 1;
     workspace.revalidate_root_binding()?;
     let root_handle = workspace.root_directory()?;
     let root_token = workspace.directory_token(root_handle.as_ref())?;
     let existing = DiskTable::create_near(engine.path(), "existing-paths")?;
-    if let Some(expected) = expected {
-        seed_existing_paths(engine, expected.root, &existing, &mut counters)?;
-    }
+    let prior_table = expected
+        .map(|expected| seed_existing_paths(engine, expected.root, &existing, None, &mut counters))
+        .transpose()?;
     let seeded_links = DiskTable::create_near(engine.path(), "existing-hardlinks")?;
-    if seed_live_hard_links {
+    if seed_live_hard_links || (prior_table.is_some() && live_hard_links.is_none()) {
         seed_existing_hard_links(
             workspace,
             root_handle.as_ref(),
             &existing,
             &seeded_links,
             &[],
+            !seed_live_hard_links,
         )?;
     }
     let existing_links = live_hard_links.or(seed_live_hard_links.then_some(&seeded_links));
+    let prior_links = live_hard_links.or(prior_table.map(|_| &seeded_links));
     let mut publication = engine.begin_publication(expected, "main")?;
     let root_inode = match existing_inode(&existing, b"", InodeKind::Directory)? {
         Some(inode) => inode,
@@ -104,6 +137,7 @@ pub(crate) fn capture_workspace(
     capture_directory(
         workspace,
         root_handle.as_ref(),
+        digest_cache,
         root_inode,
         true,
         root_metadata,
@@ -113,6 +147,8 @@ pub(crate) fn capture_workspace(
         &entries,
         &existing,
         existing_links,
+        prior_links,
+        prior_table,
         &[],
         &mut next_directory,
         &mut counters,
@@ -154,7 +190,11 @@ pub(crate) fn capture_workspace(
     {
         return Err(VfsError::ExternalDirtyConflict);
     }
-    Ok((publication.publish_namespace(&namespace)?, counters))
+    let next = publication.publish_namespace(&namespace)?;
+    for scratch in [&existing, &seeded_links, &hard_links, &entries] {
+        counters.add_scratch(scratch.observation()?)?;
+    }
+    Ok((next, counters))
 }
 
 pub fn initialize_empty(engine: &Engine) -> VfsResult<RefState> {
@@ -193,6 +233,7 @@ pub fn initialize_empty(engine: &Engine) -> VfsResult<RefState> {
 fn capture_directory(
     workspace: &dyn ProjectionWorkspace,
     directory: &dyn DirectoryHandle,
+    digest_cache: &SemanticDigestCache,
     inode: InodeId,
     root: bool,
     native_metadata: NativeMetadata,
@@ -202,6 +243,8 @@ fn capture_directory(
     entries: &DiskTable,
     existing: &DiskTable,
     existing_links: Option<&DiskTable>,
+    prior_links: Option<&DiskTable>,
+    prior_table: Option<InodeTableRoot>,
     current_path: &[u8],
     next_directory: &mut u64,
     counters: &mut OperationCounters,
@@ -237,6 +280,7 @@ fn capture_directory(
                 capture_directory(
                     workspace,
                     child.as_ref(),
+                    digest_cache,
                     child_inode,
                     false,
                     metadata,
@@ -246,6 +290,8 @@ fn capture_directory(
                     entries,
                     existing,
                     existing_links,
+                    prior_links,
+                    prior_table,
                     &path,
                     next_directory,
                     counters,
@@ -255,11 +301,16 @@ fn capture_directory(
             NativeKind::RegularFile => capture_regular(
                 workspace,
                 directory,
+                digest_cache,
                 &entry,
+                &path,
                 publication,
                 table,
                 hard_links,
+                existing,
                 existing_links,
+                prior_links,
+                prior_table,
                 counters,
             )?,
             NativeKind::Symlink => {
@@ -395,11 +446,16 @@ fn decode_entry(name: Vec<u8>, bytes: &[u8]) -> VfsResult<NativeEntry> {
 fn capture_regular(
     workspace: &dyn ProjectionWorkspace,
     parent: &dyn DirectoryHandle,
+    digest_cache: &SemanticDigestCache,
     entry: &NativeEntry,
+    path: &[u8],
     publication: &mut Publication<'_>,
     table: &mut Option<GeneratedInodeTable>,
     hard_links: &DiskTable,
+    existing: &DiskTable,
     existing_links: Option<&DiskTable>,
+    prior_links: Option<&DiskTable>,
+    prior_table: Option<InodeTableRoot>,
     counters: &mut OperationCounters,
 ) -> VfsResult<InodeId> {
     let key = entry.hard_link_key.clone().ok_or(VfsError::InvalidState)?;
@@ -415,34 +471,103 @@ fn capture_regular(
         hard_links.put(&key, &link.encode())?;
         return Ok(link.inode);
     }
-    let inode = match existing_links
+    let retained_inode = existing_links
         .map(|links| links.get(&key))
         .transpose()?
         .flatten()
-    {
-        Some(bytes) => InodeId::from_slice(&bytes)?,
+        .map(|bytes| InodeId::from_slice(&bytes))
+        .transpose()?;
+    let inode = match retained_inode {
+        Some(inode) => inode,
         None => publication.allocate_inode_id()?,
     };
+    let grouped_prior_inode = prior_links
+        .map(|links| links.get(&key))
+        .transpose()?
+        .flatten()
+        .filter(|bytes| bytes.len() == 32)
+        .map(|bytes| InodeId::from_slice(&bytes))
+        .transpose()?;
+    let prior_inode = retained_inode.or(grouped_prior_inode).or(existing_inode(
+        existing,
+        path,
+        InodeKind::RegularFile,
+    )?);
+    let prior = prior_inode
+        .zip(prior_table)
+        .map(|(inode, table)| existing_record(&*publication, table, inode, counters))
+        .transpose()?;
     let mut file = workspace.open_regular_read_at(parent, &entry.name, Some(&entry.token))?;
-    let (content, rope) = build(publication, &mut file)?;
+    let mut current_digest = layerfs_core::identity::ContentDigestWriter::new();
+    let current_bytes = std::io::copy(&mut file, &mut current_digest)?;
+    counters.current_digest_bytes = counters
+        .current_digest_bytes
+        .checked_add(current_bytes)
+        .ok_or(VfsError::InvalidState)?;
     counters.native.bytes_read = counters
         .native
         .bytes_read
-        .checked_add(rope.cdc_bytes_scanned)
+        .checked_add(current_bytes)
         .ok_or(VfsError::InvalidState)?;
-    counters.add_rope(rope)?;
+    let current_digest = current_digest.finish();
+    let prior_digest = prior
+        .map(|record| {
+            let root = FileStateRoot(record.content_root);
+            if let Some(digest) = digest_cache.get(root)? {
+                return Ok(digest);
+            }
+            let mut digest = layerfs_core::identity::ContentDigestWriter::new();
+            let rope = read_all(&*publication, root, &mut digest)?;
+            counters.uncached_prior_digest_bytes = counters
+                .uncached_prior_digest_bytes
+                .checked_add(rope.payload_bytes_read)
+                .ok_or(VfsError::InvalidState)?;
+            counters.add_rope(rope)?;
+            let digest = digest.finish();
+            digest_cache.insert(root, digest)?;
+            Ok::<_, VfsError>(digest)
+        })
+        .transpose()?;
+    let content = if prior_digest == Some(current_digest) {
+        counters.unchanged_file_roots_reused = counters
+            .unchanged_file_roots_reused
+            .checked_add(1)
+            .ok_or(VfsError::InvalidState)?;
+        FileStateRoot(prior.ok_or(VfsError::InvalidState)?.content_root)
+    } else {
+        file.seek(SeekFrom::Start(0))?;
+        let (content, rope) = build(publication, &mut file)?;
+        counters.changed_current_cdc_bytes = counters
+            .changed_current_cdc_bytes
+            .checked_add(rope.cdc_bytes_scanned)
+            .ok_or(VfsError::InvalidState)?;
+        counters.native.bytes_read = counters
+            .native
+            .bytes_read
+            .checked_add(rope.cdc_bytes_scanned)
+            .ok_or(VfsError::InvalidState)?;
+        counters.add_rope(rope)?;
+        content
+    };
     let metadata = put_metadata_observed(
         publication,
         InodeKind::RegularFile,
         &workspace.read_metadata_at(parent, &entry.name, Some(&entry.token))?,
         counters,
     )?;
-    let record = InodeRecordV1 {
-        kind: InodeKind::RegularFile,
-        namespace_ref_count: 1,
-        content_root: content.0,
-        metadata_root: metadata,
-    };
+    let record = prior
+        .filter(|record| {
+            record.kind == InodeKind::RegularFile
+                && record.namespace_ref_count == 1
+                && record.content_root == content.0
+                && record.metadata_root == metadata
+        })
+        .unwrap_or(InodeRecordV1 {
+            kind: InodeKind::RegularFile,
+            namespace_ref_count: 1,
+            content_root: content.0,
+            metadata_root: metadata,
+        });
     put_record(publication, table, inode, record, counters)?;
     hard_links.put(
         &key,
@@ -496,6 +621,7 @@ fn seed_existing_hard_links(
     existing: &DiskTable,
     links: &DiskTable,
     current_path: &[u8],
+    allow_ambiguous: bool,
 ) -> VfsResult<()> {
     for entry in workspace.enumerate_at(directory)? {
         let entry = entry?;
@@ -504,7 +630,14 @@ fn seed_existing_hard_links(
             NativeKind::Directory => {
                 let child =
                     workspace.open_directory_at(directory, &entry.name, Some(&entry.token))?;
-                seed_existing_hard_links(workspace, child.as_ref(), existing, links, &path)?;
+                seed_existing_hard_links(
+                    workspace,
+                    child.as_ref(),
+                    existing,
+                    links,
+                    &path,
+                    allow_ambiguous,
+                )?;
             }
             NativeKind::RegularFile => {
                 if let (Some(key), Some(inode)) = (
@@ -512,7 +645,11 @@ fn seed_existing_hard_links(
                     existing_inode(existing, &path, InodeKind::RegularFile)?,
                 ) {
                     if let Some(prior) = links.get(&key)? {
-                        if prior.as_slice() != inode.as_bytes() {
+                        if prior.len() == 32 && prior.as_slice() != inode.as_bytes() {
+                            if allow_ambiguous {
+                                links.put(&key, &[])?;
+                                continue;
+                            }
                             return Err(VfsError::InvalidState);
                         }
                     } else {
@@ -530,31 +667,39 @@ pub(crate) fn live_hard_link_authority(
     engine: &Engine,
     workspace: &dyn ProjectionWorkspace,
     root: layerfs_core::ObjectId,
-) -> VfsResult<(DiskTable, OperationCounters)> {
+) -> VfsResult<(DiskTable, DiskTable, OperationCounters)> {
     let mut counters = OperationCounters::default();
     let paths = DiskTable::create_near(engine.path(), "live-hardlink-paths")?;
-    seed_existing_paths(engine, root, &paths, &mut counters)?;
+    let topology = DiskTable::create_near(engine.path(), "live-topology-edges")?;
+    seed_existing_paths(engine, root, &paths, Some(&topology), &mut counters)?;
     let links = DiskTable::create_near(engine.path(), "live-hardlink-authority")?;
     let directory = workspace.root_directory()?;
-    seed_existing_hard_links(workspace, directory.as_ref(), &paths, &links, &[])?;
-    Ok((links, counters))
+    seed_existing_hard_links(workspace, directory.as_ref(), &paths, &links, &[], false)?;
+    counters.add_scratch(paths.observation()?)?;
+    counters.add_scratch(links.observation()?)?;
+    counters.add_scratch(topology.observation()?)?;
+    Ok((links, topology, counters))
 }
 
 fn seed_existing_paths(
     engine: &Engine,
     root: layerfs_core::ObjectId,
     paths: &DiskTable,
+    topology: Option<&DiskTable>,
     counters: &mut OperationCounters,
-) -> VfsResult<()> {
-    let namespace = decode_namespace_root(&engine.load_object(root)?.canonical_bytes)?;
+) -> VfsResult<InodeTableRoot> {
+    let namespace = engine.with_authenticated_canonical(root, decode_namespace_root)?;
+    let table = InodeTableRoot(namespace.inode_table_root);
     seed_existing_directory(
         engine,
-        InodeTableRoot(namespace.inode_table_root),
+        table,
         namespace.root_directory_inode,
         Vec::new(),
         paths,
+        topology,
         counters,
-    )
+    )?;
+    Ok(table)
 }
 
 fn seed_existing_directory(
@@ -563,6 +708,7 @@ fn seed_existing_directory(
     inode: InodeId,
     path: Vec<u8>,
     paths: &DiskTable,
+    topology: Option<&DiskTable>,
     counters: &mut OperationCounters,
 ) -> VfsResult<()> {
     let record = existing_record(engine, table, inode, counters)?;
@@ -578,6 +724,14 @@ fn seed_existing_directory(
         &mut namespace_counters,
         |entries| {
             for (name, child) in entries {
+                if let Some(topology) = topology {
+                    if let Err(error) =
+                        topology.put(&topology_edge_key(*child, inode, name.as_bytes()), &[])
+                    {
+                        callback_error = Some(error.into());
+                        return Err(layerfs_core::CoreError::Io);
+                    }
+                }
                 let child_record = match existing_record(engine, table, *child, counters) {
                     Ok(record) => record,
                     Err(error) => {
@@ -587,9 +741,9 @@ fn seed_existing_directory(
                 };
                 let child_path = child_path(&path, name.as_bytes());
                 if child_record.kind == InodeKind::Directory {
-                    if let Err(error) =
-                        seed_existing_directory(engine, table, *child, child_path, paths, counters)
-                    {
+                    if let Err(error) = seed_existing_directory(
+                        engine, table, *child, child_path, paths, topology, counters,
+                    ) {
                         callback_error = Some(error);
                         return Err(layerfs_core::CoreError::Io);
                     }
@@ -611,19 +765,17 @@ fn seed_existing_directory(
     Ok(())
 }
 
-fn existing_record(
-    engine: &Engine,
+fn existing_record<S: ObjectRead>(
+    source: &S,
     table: InodeTableRoot,
     inode: InodeId,
     counters: &mut OperationCounters,
 ) -> VfsResult<InodeRecordV1> {
     let mut inode_counters = InodeTableCounters::default();
-    let id = inode_table_lookup(engine, table, inode, &mut inode_counters)?
+    let id = inode_table_lookup(source, table, inode, &mut inode_counters)?
         .ok_or(VfsError::InvalidState)?;
     counters.add_inode_table(inode_counters)?;
-    Ok(decode_inode_record(
-        &engine.load_object(id)?.canonical_bytes,
-    )?)
+    Ok(source.with_authenticated_canonical(id, decode_inode_record)?)
 }
 
 fn put_record(
@@ -699,7 +851,7 @@ pub(crate) fn put_metadata_observed(
     let mut entries = Vec::with_capacity(values.len());
     for (key, value) in values {
         let (root, rope) = build(publication, Cursor::new(value))?;
-        counters.add_rope(rope)?;
+        counters.add_metadata_rope(rope)?;
         entries.push(MetadataEntryV1 {
             key,
             value_file_root: root.0,

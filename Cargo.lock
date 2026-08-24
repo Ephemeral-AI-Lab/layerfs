@@ -127,6 +127,8 @@ dependencies = [
 name = "layerfs-eval"
 version = "0.1.0"
 dependencies = [
+ "blake3",
+ "layerfs-core",
  "layerfs-sdk",
 ]
 

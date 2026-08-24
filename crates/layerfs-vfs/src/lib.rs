@@ -6,8 +6,13 @@ pub mod capture;
 pub mod driver;
 mod managed_edit;
 pub mod materialize;
+mod refresh;
+mod resolver;
 pub mod workspace;
 
+pub use layerfs_core::CanonicalPath;
+pub use layerfs_engine::integrity::IntegrityMode;
+pub use layerfs_engine::refs::RefState;
 pub use workspace::{ExternalWorkspace, LayerVfs, ManagedWorkspace, VfsError};
 pub type RootId = layerfs_core::ObjectId;
 
@@ -21,6 +26,7 @@ pub enum NativeRoute {
     InPlaceShift,
     Rename,
     ProtectedExactNoop,
+    FullFallback,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -33,40 +39,141 @@ pub struct NativeOperationCounters {
     pub clone_attempts: u64,
     pub clone_successes: u64,
     pub clone_fallbacks: u64,
+    pub temp_calls: u64,
+    pub sync_calls: u64,
+    pub rename_calls: u64,
+    pub replace_calls: u64,
+    pub metadata_calls: u64,
+    pub create_calls: u64,
+    pub remove_calls: u64,
+    pub hard_link_calls: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct OperationCounters {
     pub rope: layerfs_core::content::rope::RopeCounters,
+    pub metadata_rope: layerfs_core::content::rope::RopeCounters,
     pub namespace: layerfs_core::namespace::NamespaceCounters,
     pub inode_table: layerfs_core::inode::InodeTableCounters,
     pub native: NativeOperationCounters,
+    pub workspace_materializations: u64,
+    pub workspace_reuses: u64,
+    pub rematerializations: u64,
+    pub descriptor_resets: u64,
+    pub root_diff_nodes: u64,
+    pub changed_paths: u64,
+    pub full_fallback_files: u64,
+    pub plan_rows: u64,
+    pub plan_scratch_high_water_bytes: u64,
+    pub current_digest_bytes: u64,
+    pub uncached_prior_digest_bytes: u64,
+    pub changed_current_cdc_bytes: u64,
+    pub unchanged_file_roots_reused: u64,
+    pub authority_full_scans: u64,
+    pub scratch_tables: u64,
+    pub scratch_statements: u64,
+    pub scratch_rows: u64,
+    pub scratch_high_water_bytes: u64,
+    pub operation_q_current_bytes: u64,
+    pub operation_q_high_water_bytes: u64,
+    pub operation_q_terminal_bytes: u64,
+    pub owned_temp_current: u64,
+    pub owned_temp_terminal: u64,
+    pub descriptor_spool_bytes_current: u64,
+    pub descriptor_spool_bytes_terminal: u64,
+    pub unaffected_suffix_payload_reads: u64,
+    pub unaffected_suffix_payload_writes: u64,
 }
 
 impl OperationCounters {
     pub fn merge(mut self, source: Self) -> Result<Self, layerfs_core::CoreError> {
-        self.add_rope(source.rope)?;
+        add_rope_counters(&mut self.rope, source.rope)?;
+        add_rope_counters(&mut self.metadata_rope, source.metadata_rope)?;
         self.add_namespace(source.namespace)?;
         self.add_inode_table(source.inode_table)?;
         self.add_native(source.native)?;
+        self.workspace_materializations = add(
+            self.workspace_materializations,
+            source.workspace_materializations,
+        )?;
+        self.workspace_reuses = add(self.workspace_reuses, source.workspace_reuses)?;
+        self.rematerializations = add(self.rematerializations, source.rematerializations)?;
+        self.descriptor_resets = add(self.descriptor_resets, source.descriptor_resets)?;
+        self.root_diff_nodes = add(self.root_diff_nodes, source.root_diff_nodes)?;
+        self.changed_paths = add(self.changed_paths, source.changed_paths)?;
+        self.full_fallback_files = add(self.full_fallback_files, source.full_fallback_files)?;
+        self.plan_rows = add(self.plan_rows, source.plan_rows)?;
+        self.plan_scratch_high_water_bytes = self
+            .plan_scratch_high_water_bytes
+            .max(source.plan_scratch_high_water_bytes);
+        self.current_digest_bytes = add(self.current_digest_bytes, source.current_digest_bytes)?;
+        self.uncached_prior_digest_bytes = add(
+            self.uncached_prior_digest_bytes,
+            source.uncached_prior_digest_bytes,
+        )?;
+        self.changed_current_cdc_bytes = add(
+            self.changed_current_cdc_bytes,
+            source.changed_current_cdc_bytes,
+        )?;
+        self.unchanged_file_roots_reused = add(
+            self.unchanged_file_roots_reused,
+            source.unchanged_file_roots_reused,
+        )?;
+        self.authority_full_scans = add(self.authority_full_scans, source.authority_full_scans)?;
+        self.scratch_tables = add(self.scratch_tables, source.scratch_tables)?;
+        self.scratch_statements = add(self.scratch_statements, source.scratch_statements)?;
+        self.scratch_rows = add(self.scratch_rows, source.scratch_rows)?;
+        self.scratch_high_water_bytes = add(
+            self.scratch_high_water_bytes,
+            source.scratch_high_water_bytes,
+        )?;
+        self.operation_q_current_bytes = self
+            .operation_q_current_bytes
+            .max(source.operation_q_current_bytes);
+        self.operation_q_high_water_bytes = self
+            .operation_q_high_water_bytes
+            .max(source.operation_q_high_water_bytes);
+        self.operation_q_terminal_bytes = source.operation_q_terminal_bytes;
+        self.owned_temp_current = source.owned_temp_current;
+        self.owned_temp_terminal = source.owned_temp_terminal;
+        self.descriptor_spool_bytes_current = source.descriptor_spool_bytes_current;
+        self.descriptor_spool_bytes_terminal = source.descriptor_spool_bytes_terminal;
+        self.unaffected_suffix_payload_reads = add(
+            self.unaffected_suffix_payload_reads,
+            source.unaffected_suffix_payload_reads,
+        )?;
+        self.unaffected_suffix_payload_writes = add(
+            self.unaffected_suffix_payload_writes,
+            source.unaffected_suffix_payload_writes,
+        )?;
         Ok(self)
+    }
+
+    pub(crate) fn add_scratch(
+        &mut self,
+        source: layerfs_engine::scratch::ScratchObservation,
+    ) -> Result<(), layerfs_core::CoreError> {
+        self.scratch_tables = add(self.scratch_tables, source.tables)?;
+        self.scratch_statements = add(self.scratch_statements, source.statements)?;
+        self.scratch_rows = add(self.scratch_rows, source.rows)?;
+        self.scratch_high_water_bytes =
+            add(self.scratch_high_water_bytes, source.high_water_bytes)?;
+        Ok(())
     }
 
     pub(crate) fn add_rope(
         &mut self,
         source: layerfs_core::content::rope::RopeCounters,
     ) -> Result<(), layerfs_core::CoreError> {
-        self.rope.payload_bytes_read =
-            add(self.rope.payload_bytes_read, source.payload_bytes_read)?;
-        self.rope.payload_bytes_written = add(
-            self.rope.payload_bytes_written,
-            source.payload_bytes_written,
-        )?;
-        self.rope.cdc_bytes_scanned = add(self.rope.cdc_bytes_scanned, source.cdc_bytes_scanned)?;
-        self.rope.chunks_created = add(self.rope.chunks_created, source.chunks_created)?;
-        self.rope.nodes_read = add(self.rope.nodes_read, source.nodes_read)?;
-        self.rope.nodes_created = add(self.rope.nodes_created, source.nodes_created)?;
-        Ok(())
+        add_rope_counters(&mut self.rope, source)
+    }
+
+    pub(crate) fn add_metadata_rope(
+        &mut self,
+        source: layerfs_core::content::rope::RopeCounters,
+    ) -> Result<(), layerfs_core::CoreError> {
+        add_rope_counters(&mut self.metadata_rope, source)?;
+        add_rope_counters(&mut self.rope, source)
     }
 
     pub(crate) fn add_namespace(
@@ -102,8 +209,29 @@ impl OperationCounters {
         self.native.clone_attempts = add(self.native.clone_attempts, source.clone_attempts)?;
         self.native.clone_successes = add(self.native.clone_successes, source.clone_successes)?;
         self.native.clone_fallbacks = add(self.native.clone_fallbacks, source.clone_fallbacks)?;
+        self.native.temp_calls = add(self.native.temp_calls, source.temp_calls)?;
+        self.native.sync_calls = add(self.native.sync_calls, source.sync_calls)?;
+        self.native.rename_calls = add(self.native.rename_calls, source.rename_calls)?;
+        self.native.replace_calls = add(self.native.replace_calls, source.replace_calls)?;
+        self.native.metadata_calls = add(self.native.metadata_calls, source.metadata_calls)?;
+        self.native.create_calls = add(self.native.create_calls, source.create_calls)?;
+        self.native.remove_calls = add(self.native.remove_calls, source.remove_calls)?;
+        self.native.hard_link_calls = add(self.native.hard_link_calls, source.hard_link_calls)?;
         Ok(())
     }
+}
+
+fn add_rope_counters(
+    target: &mut layerfs_core::content::rope::RopeCounters,
+    source: layerfs_core::content::rope::RopeCounters,
+) -> Result<(), layerfs_core::CoreError> {
+    target.payload_bytes_read = add(target.payload_bytes_read, source.payload_bytes_read)?;
+    target.payload_bytes_written = add(target.payload_bytes_written, source.payload_bytes_written)?;
+    target.cdc_bytes_scanned = add(target.cdc_bytes_scanned, source.cdc_bytes_scanned)?;
+    target.chunks_created = add(target.chunks_created, source.chunks_created)?;
+    target.nodes_read = add(target.nodes_read, source.nodes_read)?;
+    target.nodes_created = add(target.nodes_created, source.nodes_created)?;
+    Ok(())
 }
 
 fn add(left: u64, right: u64) -> Result<u64, layerfs_core::CoreError> {
@@ -134,6 +262,13 @@ mod operation_counter_tests {
             })
             .unwrap();
         counters
+            .add_metadata_rope(layerfs_core::content::rope::RopeCounters {
+                cdc_bytes_scanned: 16,
+                payload_bytes_written: 16,
+                ..Default::default()
+            })
+            .unwrap();
+        counters
             .add_namespace(layerfs_core::namespace::NamespaceCounters {
                 nodes_read: 3,
                 nodes_created: 1,
@@ -156,7 +291,9 @@ mod operation_counter_tests {
             })
             .unwrap();
 
-        assert_eq!(counters.rope.cdc_bytes_scanned, 4096);
+        assert_eq!(counters.rope.cdc_bytes_scanned, 4112);
+        assert_eq!(counters.metadata_rope.cdc_bytes_scanned, 16);
+        assert_eq!(counters.metadata_rope.payload_bytes_written, 16);
         assert_eq!(counters.rope.nodes_created, 2);
         assert_eq!(counters.namespace.nodes_read, 3);
         assert_eq!(counters.inode_table.nodes_created, 2);

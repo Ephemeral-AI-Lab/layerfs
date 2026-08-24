@@ -20,8 +20,13 @@ use layerfs_core::namespace_codec::{
     decode_metadata_node, decode_namespace_root, decode_symlink, DirectoryNodeV1, InodeTableNodeV1,
     MetadataNodeV1,
 };
-use layerfs_core::{decode_bytes_object, validate_identity, ObjectId, ObjectKind};
-use rusqlite::{params, Connection, OptionalExtension};
+use layerfs_core::{
+    authenticate_identity, decode_bytes_object, validate_object_from, ObjectId, ObjectKind,
+};
+use rusqlite::{params, Connection};
+use std::cell::Cell;
+use std::collections::BTreeSet;
+use std::io::Cursor;
 use std::path::Path;
 
 #[derive(Clone, Copy)]
@@ -55,6 +60,14 @@ pub(crate) fn verify_retained_union_observed(
 pub(crate) struct VerificationObservation {
     pub(crate) objects: u64,
     pub(crate) bytes: u64,
+    pub(crate) statements: u64,
+    pub(crate) fetched_rows: u64,
+    pub(crate) authentication_passes: u64,
+    pub(crate) role_decode_passes: u64,
+    pub(crate) scratch_tables: u64,
+    pub(crate) scratch_statements: u64,
+    pub(crate) scratch_rows: u64,
+    pub(crate) scratch_bytes: u64,
 }
 
 pub(crate) fn verify_root(
@@ -62,11 +75,93 @@ pub(crate) fn verify_root(
     store: &Path,
     root: ObjectId,
 ) -> EngineResult<VerificationObservation> {
-    let work = DiskTable::create_near(store, "publication-closure")?;
+    let store_id = store_id(connection)?;
+    let work = DiskTable::create_near_with_store_id(store, "publication-closure", store_id)?;
     enqueue(&work, root, Role::Namespace, true)?;
-    let observation = drain(connection, &work)?;
-    validate_namespace_graph_disk(connection, store, root).map(drop)?;
+    let mut observation = drain(connection, &work)?;
+    observation.add_scratch(work.observation()?)?;
+    observation.merge(validate_namespace_graph_disk(
+        connection, store, store_id, root,
+    )?)?;
     Ok(observation)
+}
+
+impl VerificationObservation {
+    fn merge(&mut self, source: Self) -> EngineResult<()> {
+        self.objects = self
+            .objects
+            .checked_add(source.objects)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.bytes = self
+            .bytes
+            .checked_add(source.bytes)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.statements = self
+            .statements
+            .checked_add(source.statements)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.fetched_rows = self
+            .fetched_rows
+            .checked_add(source.fetched_rows)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.authentication_passes = self
+            .authentication_passes
+            .checked_add(source.authentication_passes)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.role_decode_passes = self
+            .role_decode_passes
+            .checked_add(source.role_decode_passes)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.scratch_tables = self
+            .scratch_tables
+            .checked_add(source.scratch_tables)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.scratch_statements = self
+            .scratch_statements
+            .checked_add(source.scratch_statements)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.scratch_rows = self
+            .scratch_rows
+            .checked_add(source.scratch_rows)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.scratch_bytes = self
+            .scratch_bytes
+            .checked_add(source.scratch_bytes)
+            .ok_or(EngineError::CounterOverflow)?;
+        Ok(())
+    }
+
+    fn add_scratch(&mut self, source: crate::scratch::ScratchObservation) -> EngineResult<()> {
+        self.scratch_tables = self
+            .scratch_tables
+            .checked_add(source.tables)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.scratch_statements = self
+            .scratch_statements
+            .checked_add(source.statements)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.scratch_rows = self
+            .scratch_rows
+            .checked_add(source.rows)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.scratch_bytes = self
+            .scratch_bytes
+            .checked_add(source.high_water_bytes)
+            .ok_or(EngineError::CounterOverflow)?;
+        Ok(())
+    }
+}
+
+fn store_id(connection: &Connection) -> EngineResult<[u8; 32]> {
+    connection
+        .query_row(
+            "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
+            [],
+            |row| row.get::<_, Vec<u8>>(0),
+        )
+        .map_err(super::map_sqlite_error)?
+        .try_into()
+        .map_err(|_| EngineError::InvalidRecord("StoreId"))
 }
 
 pub(crate) struct RetainedUnion {
@@ -75,8 +170,10 @@ pub(crate) struct RetainedUnion {
 }
 
 pub(crate) fn retained_union(connection: &Connection, store: &Path) -> EngineResult<RetainedUnion> {
-    let work = DiskTable::create_near(store, "closure")?;
+    let store_id = store_id(connection)?;
+    let work = DiskTable::create_near_with_store_id(store, "closure", store_id)?;
     let mut peak_bytes = work.storage_bytes()?;
+    let mut validated_roots = BTreeSet::new();
     let mut statement = connection
         .prepare("SELECT name, generation, root_id FROM layerfs_refs ORDER BY name")
         .map_err(map_sqlite_error)?;
@@ -106,10 +203,12 @@ pub(crate) fn retained_union(connection: &Connection, store: &Path) -> EngineRes
         if !retained {
             return Err(EngineError::MissingRoot(root));
         }
-        enqueue(&work, root, Role::Namespace, true)?;
-        drain(connection, &work)?;
-        let graph = validate_namespace_graph_disk(connection, store, root)?;
-        peak_bytes = peak_bytes.max(work.storage_bytes()?.saturating_add(graph));
+        if validated_roots.insert(root) {
+            enqueue(&work, root, Role::Namespace, true)?;
+            drain(connection, &work)?;
+            let graph = validate_namespace_graph_disk(connection, store, store_id, root)?;
+            peak_bytes = peak_bytes.max(work.storage_bytes()?.saturating_add(graph.scratch_bytes));
+        }
     }
     drop(statement);
     let mut statement = connection
@@ -120,10 +219,12 @@ pub(crate) fn retained_union(connection: &Connection, store: &Path) -> EngineRes
         .map_err(map_sqlite_error)?;
     for root in roots {
         let root = ObjectId::from_bytes(&root.map_err(map_sqlite_error)?)?;
-        enqueue(&work, root, Role::Namespace, true)?;
-        drain(connection, &work)?;
-        let graph = validate_namespace_graph_disk(connection, store, root)?;
-        peak_bytes = peak_bytes.max(work.storage_bytes()?.saturating_add(graph));
+        if validated_roots.insert(root) {
+            enqueue(&work, root, Role::Namespace, true)?;
+            drain(connection, &work)?;
+            let graph = validate_namespace_graph_disk(connection, store, store_id, root)?;
+            peak_bytes = peak_bytes.max(work.storage_bytes()?.saturating_add(graph.scratch_bytes));
+        }
     }
     Ok(RetainedUnion { work, peak_bytes })
 }
@@ -136,12 +237,15 @@ const QUEUE_KEY: u8 = 0x43;
 fn validate_namespace_graph_disk(
     connection: &Connection,
     store: &Path,
+    store_id: [u8; 32],
     root: ObjectId,
-) -> EngineResult<u64> {
-    let object_store = ConnectionStore(connection);
-    let namespace = decode_namespace_root(&authenticated(&object_store, root)?)?;
-    let records = DiskTable::create_near(store, "namespace-records")?;
-    let state = DiskTable::create_near(store, "namespace-state")?;
+) -> EngineResult<VerificationObservation> {
+    let object_store = ConnectionStore::new(connection);
+    let namespace = object_store
+        .with_authenticated_canonical(root, decode_namespace_root)
+        .map_err(EngineError::Core)?;
+    let records = DiskTable::create_near_with_store_id(store, "namespace-records", store_id)?;
+    let state = DiskTable::create_near_with_store_id(store, "namespace-state", store_id)?;
     let mut scratch_error = None;
     let visited = visit_inode_table_entries(
         &object_store,
@@ -218,16 +322,10 @@ fn validate_namespace_graph_disk(
         }
         Ok(())
     })?;
-    records
-        .storage_bytes()?
-        .checked_add(state.storage_bytes()?)
-        .ok_or(EngineError::CounterOverflow)
-}
-
-fn authenticated<S: ObjectRead>(store: &S, id: ObjectId) -> EngineResult<Vec<u8>> {
-    let bytes = store.get(id).map_err(EngineError::Core)?;
-    validate_identity(&bytes, id).map_err(|cause| EngineError::MalformedObject { id, cause })?;
-    Ok(bytes)
+    let mut observation = object_store.observation();
+    observation.add_scratch(records.observation()?)?;
+    observation.add_scratch(state.observation()?)?;
+    Ok(observation)
 }
 
 fn graph_key(prefix: u8, inode: InodeId) -> [u8; 33] {
@@ -248,7 +346,9 @@ fn graph_record(
             "directory references missing inode",
         )))?;
     let id = ObjectId::from_bytes(&id)?;
-    decode_inode_record(&authenticated(store, id)?).map_err(EngineError::Core)
+    store
+        .with_authenticated_canonical(id, decode_inode_record)
+        .map_err(EngineError::Core)
 }
 
 fn enqueue_graph_inode(
@@ -301,46 +401,155 @@ fn decode_ref_count(bytes: &[u8]) -> EngineResult<u64> {
     })?))
 }
 
-struct ConnectionStore<'a>(&'a Connection);
+struct ConnectionStore<'a> {
+    connection: &'a Connection,
+    observation: Cell<VerificationObservation>,
+}
+
+impl<'a> ConnectionStore<'a> {
+    fn new(connection: &'a Connection) -> Self {
+        Self {
+            connection,
+            observation: Cell::new(VerificationObservation::default()),
+        }
+    }
+
+    fn observation(&self) -> VerificationObservation {
+        self.observation.get()
+    }
+
+    fn with_record<T>(
+        &self,
+        id: ObjectId,
+        role_decode: bool,
+        callback: impl FnOnce(ObjectKind, &[u8]) -> Result<T, layerfs_core::CoreError>,
+    ) -> Result<T, layerfs_core::CoreError> {
+        let mut statement = self
+            .connection
+            .prepare_cached(
+                "SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1",
+            )
+            .map_err(|_| layerfs_core::CoreError::Io)?;
+        let mut rows = statement
+            .query(params![id.as_bytes().as_slice()])
+            .map_err(|_| layerfs_core::CoreError::Io)?;
+        let row = rows
+            .next()
+            .map_err(|_| layerfs_core::CoreError::Io)?
+            .ok_or(layerfs_core::CoreError::MissingObject)?;
+        let kind = row
+            .get::<_, i64>(0)
+            .map_err(|_| layerfs_core::CoreError::Io)?;
+        let length = row
+            .get::<_, i64>(1)
+            .map_err(|_| layerfs_core::CoreError::Io)?;
+        let bytes = match row.get_ref(2).map_err(|_| layerfs_core::CoreError::Io)? {
+            rusqlite::types::ValueRef::Blob(bytes) => bytes,
+            _ => return Err(layerfs_core::CoreError::InvalidRecord("object bytes")),
+        };
+        let expected_kind = ObjectKind::try_from(
+            u8::try_from(kind)
+                .map_err(|_| layerfs_core::CoreError::InvalidRecord("object kind"))?,
+        )?;
+        let expected_length = u64::try_from(length)
+            .map_err(|_| layerfs_core::CoreError::InvalidRecord("object length"))?;
+        let object = authenticate_identity(bytes, id)?;
+        if object.kind != expected_kind || bytes.len() as u64 != expected_length {
+            return Err(layerfs_core::CoreError::LengthMismatch {
+                expected: expected_length,
+                actual: bytes.len() as u64,
+            });
+        }
+        if !role_decode && validate_object_from(Cursor::new(bytes))? != object {
+            return Err(layerfs_core::CoreError::InvalidRecord("object summary"));
+        }
+        let mut observation = self.observation.get();
+        observation.statements = observation
+            .statements
+            .checked_add(1)
+            .ok_or(layerfs_core::CoreError::LengthOverflow)?;
+        observation.fetched_rows = observation
+            .fetched_rows
+            .checked_add(1)
+            .ok_or(layerfs_core::CoreError::LengthOverflow)?;
+        observation.authentication_passes = observation
+            .authentication_passes
+            .checked_add(1)
+            .ok_or(layerfs_core::CoreError::LengthOverflow)?;
+        observation.objects = observation
+            .objects
+            .checked_add(1)
+            .ok_or(layerfs_core::CoreError::LengthOverflow)?;
+        observation.bytes = observation
+            .bytes
+            .checked_add(expected_length)
+            .ok_or(layerfs_core::CoreError::LengthOverflow)?;
+        self.observation.set(observation);
+        let value = callback(expected_kind, bytes)?;
+        if role_decode {
+            self.note_role_decode()?;
+        }
+        Ok(value)
+    }
+
+    fn fetch(&self, id: ObjectId) -> Result<Vec<u8>, layerfs_core::CoreError> {
+        self.with_record(id, false, |_, bytes| Ok(bytes.to_vec()))
+    }
+
+    fn note_role_decode(&self) -> Result<(), layerfs_core::CoreError> {
+        let mut observation = self.observation.get();
+        observation.role_decode_passes = observation
+            .role_decode_passes
+            .checked_add(1)
+            .ok_or(layerfs_core::CoreError::LengthOverflow)?;
+        self.observation.set(observation);
+        Ok(())
+    }
+}
 
 impl ObjectRead for ConnectionStore<'_> {
     fn get(&self, id: ObjectId) -> Result<Vec<u8>, layerfs_core::CoreError> {
-        self.0
-            .query_row(
-                "SELECT canonical_bytes FROM layerfs_objects WHERE object_id = ?1",
-                params![id.as_bytes().as_slice()],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|_| layerfs_core::CoreError::Io)?
-            .ok_or(layerfs_core::CoreError::MissingObject)
+        self.fetch(id)
+    }
+
+    fn with_authenticated_canonical<T, F>(
+        &self,
+        id: ObjectId,
+        callback: F,
+    ) -> Result<T, layerfs_core::CoreError>
+    where
+        F: FnOnce(&[u8]) -> Result<T, layerfs_core::CoreError>,
+    {
+        self.with_record(id, true, |_, bytes| callback(bytes))
     }
 }
 
 fn drain(connection: &Connection, work: &DiskTable) -> EngineResult<VerificationObservation> {
-    let mut observation = VerificationObservation::default();
+    let object_store = ConnectionStore::new(connection);
     while let Some((key, _)) = work.pop_pending()? {
         let (id, role, root) = decode_key(&key)?;
-        let row = connection.query_row("SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1", params![id.as_bytes().as_slice()], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, Vec<u8>>(2)?))).optional().map_err(map_sqlite_error)?.ok_or(EngineError::MissingObject(id))?;
-        let kind = ObjectKind::try_from(
-            u8::try_from(row.0).map_err(|_| EngineError::InvalidRecord("closure object kind"))?,
-        )?;
-        if kind != ObjectKind::Bytes || usize::try_from(row.1).ok() != Some(row.2.len()) {
-            return Err(EngineError::InvalidRecord("closure object metadata"));
+        let mut visit_error = None;
+        let decoded = object_store.with_record(id, true, |kind, canonical| {
+            if kind != ObjectKind::Bytes {
+                return Err(layerfs_core::CoreError::InvalidRecord(
+                    "closure object metadata",
+                ));
+            }
+            if let Err(error) = visit(work, role, root, canonical) {
+                visit_error = Some(error);
+                return Err(layerfs_core::CoreError::Io);
+            }
+            Ok(())
+        });
+        if let Some(error) = visit_error {
+            return Err(error);
         }
-        validate_identity(&row.2, id)
-            .map_err(|cause| EngineError::MalformedObject { id, cause })?;
-        observation.objects = observation
-            .objects
-            .checked_add(1)
-            .ok_or(EngineError::CounterOverflow)?;
-        observation.bytes = observation
-            .bytes
-            .checked_add(u64::try_from(row.2.len()).map_err(|_| EngineError::CounterOverflow)?)
-            .ok_or(EngineError::CounterOverflow)?;
-        visit(work, role, root, &row.2)?;
+        decoded.map_err(|cause| match cause {
+            layerfs_core::CoreError::MissingObject => EngineError::MissingObject(id),
+            cause => EngineError::MalformedObject { id, cause },
+        })?;
     }
-    Ok(observation)
+    Ok(object_store.observation())
 }
 
 fn visit(work: &DiskTable, role: Role, root: bool, canonical: &[u8]) -> EngineResult<()> {

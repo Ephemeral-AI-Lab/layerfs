@@ -324,6 +324,11 @@ fn ordinary_apple_workspace_captures_bash_reopens_and_reads_history() {
     drop(external);
     let compacted = reopened.fs.compact(&store).unwrap();
     assert_eq!(compacted.head, root_c);
+    assert_eq!(compacted.head, compacted.ref_state.root);
+    assert_eq!(
+        compacted.ref_state,
+        compacted.fs.current_head("main").unwrap()
+    );
     let retained = compacted
         .fs
         .materialize_external(root_a, &base.join("post-compact-old"))

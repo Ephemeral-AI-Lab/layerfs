@@ -121,6 +121,7 @@ pub trait ProjectionWorkspace: Send {
         expected: Option<&[u8]>,
     ) -> Result<Box<dyn RegularFileHandle>>;
     fn set_regular_len(&self, file: &mut dyn RegularFileHandle, len: u64) -> Result<()>;
+    fn sync_regular(&self, file: &mut dyn RegularFileHandle) -> Result<()>;
     fn read_link_at(
         &self,
         parent: &dyn DirectoryHandle,
@@ -166,10 +167,25 @@ pub trait ProjectionWorkspace: Send {
         parent: &dyn DirectoryHandle,
         name: &[u8],
     ) -> Result<()>;
+    fn atomic_replace_checked(
+        &self,
+        temp: Box<dyn OwnedTempHandle>,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        expected: Option<&[u8]>,
+    ) -> Result<()>;
     fn create_symlink_at(
         &self,
         parent: &dyn DirectoryHandle,
         name: &[u8],
+        target: &[u8],
+        metadata: &NativeMetadata,
+    ) -> Result<()>;
+    fn atomic_replace_symlink(
+        &self,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        expected: Option<&[u8]>,
         target: &[u8],
         metadata: &NativeMetadata,
     ) -> Result<()>;
@@ -194,6 +210,24 @@ pub trait ProjectionWorkspace: Send {
         source: &[u8],
         target_parent: &dyn DirectoryHandle,
         target: &[u8],
+    ) -> Result<()>;
+    fn unlink_regular_at(
+        &self,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        expected: &[u8],
+    ) -> Result<()>;
+    fn unlink_symlink_at(
+        &self,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        expected: &[u8],
+    ) -> Result<()>;
+    fn remove_directory_at(
+        &self,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        expected: &[u8],
     ) -> Result<()>;
     fn sync_directory(&self, directory: &dyn DirectoryHandle) -> Result<()>;
     fn set_root_metadata(&self, metadata: &NativeMetadata) -> Result<()>;
@@ -301,6 +335,9 @@ mod tests {
         fn set_regular_len(&self, _file: &mut dyn RegularFileHandle, _len: u64) -> Result<()> {
             Err(DriverError::Unsupported)
         }
+        fn sync_regular(&self, _file: &mut dyn RegularFileHandle) -> Result<()> {
+            Err(DriverError::Unsupported)
+        }
         fn read_link_at(
             &self,
             _parent: &dyn DirectoryHandle,
@@ -378,10 +415,29 @@ mod tests {
         ) -> Result<()> {
             Err(DriverError::Unsupported)
         }
+        fn atomic_replace_checked(
+            &self,
+            _temp: Box<dyn OwnedTempHandle>,
+            _parent: &dyn DirectoryHandle,
+            _name: &[u8],
+            _expected: Option<&[u8]>,
+        ) -> Result<()> {
+            Err(DriverError::Unsupported)
+        }
         fn create_symlink_at(
             &self,
             _parent: &dyn DirectoryHandle,
             _name: &[u8],
+            _target: &[u8],
+            _metadata: &NativeMetadata,
+        ) -> Result<()> {
+            Err(DriverError::Unsupported)
+        }
+        fn atomic_replace_symlink(
+            &self,
+            _parent: &dyn DirectoryHandle,
+            _name: &[u8],
+            _expected: Option<&[u8]>,
             _target: &[u8],
             _metadata: &NativeMetadata,
         ) -> Result<()> {
@@ -412,6 +468,30 @@ mod tests {
             _source: &[u8],
             _target_parent: &dyn DirectoryHandle,
             _target: &[u8],
+        ) -> Result<()> {
+            Err(DriverError::Unsupported)
+        }
+        fn unlink_regular_at(
+            &self,
+            _parent: &dyn DirectoryHandle,
+            _name: &[u8],
+            _expected: &[u8],
+        ) -> Result<()> {
+            Err(DriverError::Unsupported)
+        }
+        fn unlink_symlink_at(
+            &self,
+            _parent: &dyn DirectoryHandle,
+            _name: &[u8],
+            _expected: &[u8],
+        ) -> Result<()> {
+            Err(DriverError::Unsupported)
+        }
+        fn remove_directory_at(
+            &self,
+            _parent: &dyn DirectoryHandle,
+            _name: &[u8],
+            _expected: &[u8],
         ) -> Result<()> {
             Err(DriverError::Unsupported)
         }

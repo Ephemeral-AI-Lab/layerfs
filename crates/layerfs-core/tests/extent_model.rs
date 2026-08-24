@@ -4,9 +4,9 @@ use layerfs_core::content::extent_codec::{
 };
 use layerfs_core::content::rope::FileStateRoot;
 use layerfs_core::content::rope::{
-    build, read_range, replace, validate_file, ObjectRead, ObjectStore,
+    build, diff_ranges, read_range, replace, validate_file, visit_extents, ObjectRead, ObjectStore,
 };
-use layerfs_core::encode_bytes_object;
+use layerfs_core::{decode_bytes_object, encode_bytes_object};
 use layerfs_core::{CoreError, CoreResult, ObjectId};
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -30,6 +30,31 @@ impl ObjectStore for MemoryStore {
         }
         Ok(id)
     }
+}
+
+#[test]
+fn extent_visitor_streams_the_mapping_without_fetching_payload_bytes() {
+    let bytes = (0..1_000_000)
+        .map(|index| (index as u64).wrapping_mul(0x9e37_79b9) as u8)
+        .collect::<Vec<_>>();
+    let mut store = MemoryStore::default();
+    let (root, built) = build(&mut store, bytes.as_slice()).unwrap();
+    let mut extents = 0_u64;
+    let mut logical = 0_u64;
+    let (state, visited) = visit_extents(&store, root, |batch| {
+        extents += batch.len() as u64;
+        logical += batch
+            .iter()
+            .map(|extent| u64::from(extent.logical_length))
+            .sum::<u64>();
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(extents, state.extent_count);
+    assert_eq!(logical, state.logical_len);
+    assert_eq!(visited.payload_bytes_read, 0);
+    assert_eq!(visited.cdc_bytes_scanned, 0);
+    assert!(visited.nodes_read <= built.nodes_created + 1);
 }
 
 struct BatchRead<'a> {
@@ -58,10 +83,134 @@ impl ObjectRead for BatchRead<'_> {
             if ObjectId::for_bytes(bytes) != *id {
                 return Err(CoreError::IdentityMismatch);
             }
-            callback(*id, bytes)?;
+            callback(*id, decode_bytes_object(bytes)?)?;
         }
         Ok(())
     }
+}
+
+struct CountRead<'a> {
+    store: &'a MemoryStore,
+    reads: Cell<u64>,
+}
+
+impl ObjectRead for CountRead<'_> {
+    fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+        self.reads.set(self.reads.get() + 1);
+        ObjectStore::get(self.store, id)
+    }
+}
+
+#[test]
+fn paired_diff_skips_equal_roots_and_length_mismatch_mappings() {
+    let mut store = MemoryStore::default();
+    let (old, _) = build(&mut store, [1_u8; 4096].as_slice()).unwrap();
+    let (shorter, _) = build(&mut store, [2_u8; 2048].as_slice()).unwrap();
+    let reader = CountRead {
+        store: &store,
+        reads: Cell::new(0),
+    };
+    let mut ranges = Vec::new();
+    assert_eq!(
+        diff_ranges(&reader, old, old, |range| {
+            ranges.push(range);
+            Ok(())
+        })
+        .unwrap(),
+        (true, Default::default())
+    );
+    assert_eq!(reader.reads.get(), 0);
+    let (same_length, counters) = diff_ranges(&reader, old, shorter, |_| Ok(())).unwrap();
+    assert!(!same_length);
+    assert_eq!(reader.reads.get(), 2);
+    assert_eq!(counters.nodes_read, 2);
+    assert_eq!(counters.payload_bytes_read, 0);
+    assert!(ranges.is_empty());
+}
+
+#[test]
+fn paired_diff_handles_unequal_height_and_partition_without_payload_reads() {
+    let mut store = MemoryStore::default();
+    let payload = store.put(&encode_bytes_object(&[7]).unwrap()).unwrap();
+    let extents = (0..128)
+        .map(|_| ExtentSliceV3::new(payload, 0, 1).unwrap())
+        .collect::<Vec<_>>();
+    let leaf_root = store
+        .put(
+            &encode_node(&ExtentNodeV3::Leaf {
+                subtree_logical_bytes: 128,
+                extents: extents.clone(),
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let left = store
+        .put(
+            &encode_node(&ExtentNodeV3::Leaf {
+                subtree_logical_bytes: 64,
+                extents: extents[..64].to_vec(),
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let right = store
+        .put(
+            &encode_node(&ExtentNodeV3::Leaf {
+                subtree_logical_bytes: 64,
+                extents: extents[64..].to_vec(),
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let branch_root = store
+        .put(
+            &encode_node(&ExtentNodeV3::Branch {
+                level: 1,
+                subtree_logical_bytes: 128,
+                subtree_extent_count: 128,
+                children: vec![
+                    ChildDescriptorV3 {
+                        cumulative_logical_end: 64,
+                        cumulative_extent_end: 64,
+                        child_object_id: left,
+                    },
+                    ChildDescriptorV3 {
+                        cumulative_logical_end: 128,
+                        cumulative_extent_end: 128,
+                        child_object_id: right,
+                    },
+                ],
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let state = |mapping_root, tree_level| FileStateV3 {
+        logical_len: 128,
+        extent_count: 128,
+        tree_level,
+        profile_id: profile_id(),
+        mapping_root,
+    };
+    let old = FileStateRoot(
+        store
+            .put(&encode_file_state(state(leaf_root, 0)).unwrap())
+            .unwrap(),
+    );
+    let new = FileStateRoot(
+        store
+            .put(&encode_file_state(state(branch_root, 1)).unwrap())
+            .unwrap(),
+    );
+    let mut ranges = Vec::new();
+    let (same_length, counters) = diff_ranges(&store, old, new, |range| {
+        ranges.push(range);
+        Ok(())
+    })
+    .unwrap();
+    assert!(same_length);
+    assert!(ranges.is_empty());
+    assert_eq!(counters.payload_bytes_read, 0);
+    assert!(counters.nodes_read <= 6);
 }
 
 #[test]

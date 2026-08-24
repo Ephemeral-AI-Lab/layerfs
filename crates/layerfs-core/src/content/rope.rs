@@ -15,13 +15,25 @@ const STREAM_FLUSH_AT: usize = MAX_ENTRIES + 64;
 pub trait ObjectRead {
     fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>>;
 
+    fn with_authenticated_canonical<T, F>(&self, id: ObjectId, callback: F) -> CoreResult<T>
+    where
+        F: FnOnce(&[u8]) -> CoreResult<T>,
+    {
+        let bytes = self.get(id)?;
+        if ObjectId::for_bytes(&bytes) != id {
+            return Err(CoreError::IdentityMismatch);
+        }
+        callback(&bytes)
+    }
+
     fn get_authenticated_batch<F>(&self, ids: &[ObjectId], mut callback: F) -> CoreResult<()>
     where
         F: FnMut(ObjectId, &[u8]) -> CoreResult<()>,
     {
         for id in ids {
-            let bytes = authenticated_get(self, *id)?;
-            callback(*id, &bytes)?;
+            self.with_authenticated_canonical(*id, |canonical| {
+                callback(*id, decode_bytes_object(canonical)?)
+            })?;
         }
         Ok(())
     }
@@ -30,11 +42,29 @@ pub trait ObjectRead {
 pub trait ObjectStore {
     fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>>;
     fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId>;
+
+    fn with_authenticated_canonical<T, F>(&self, id: ObjectId, callback: F) -> CoreResult<T>
+    where
+        F: FnOnce(&[u8]) -> CoreResult<T>,
+    {
+        let bytes = self.get(id)?;
+        if ObjectId::for_bytes(&bytes) != id {
+            return Err(CoreError::IdentityMismatch);
+        }
+        callback(&bytes)
+    }
 }
 
 impl<T: ObjectStore> ObjectRead for T {
     fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
         ObjectStore::get(self, id)
+    }
+
+    fn with_authenticated_canonical<U, F>(&self, id: ObjectId, callback: F) -> CoreResult<U>
+    where
+        F: FnOnce(&[u8]) -> CoreResult<U>,
+    {
+        ObjectStore::with_authenticated_canonical(self, id, callback)
     }
 }
 
@@ -50,6 +80,18 @@ pub struct RopeCounters {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FileStateRoot(pub ObjectId);
+
+#[derive(Clone, Debug)]
+pub struct ReadPlan {
+    state: FileStateV3,
+    mapping: ExtentNodeV3,
+}
+
+impl ReadPlan {
+    pub fn logical_len(&self) -> u64 {
+        self.state.logical_len
+    }
+}
 
 #[derive(Clone, Copy)]
 struct Summary {
@@ -167,9 +209,8 @@ pub fn state<S: ObjectRead>(
     root: FileStateRoot,
     counters: &mut RopeCounters,
 ) -> CoreResult<FileStateV3> {
-    let canonical = authenticated_get(store, root.0)?;
     counters.nodes_read = add(counters.nodes_read, 1)?;
-    decode_file_state(&canonical)
+    store.with_authenticated_canonical(root.0, decode_file_state)
 }
 
 pub fn validate_file<S: ObjectRead>(store: &S, root: FileStateRoot) -> CoreResult<()> {
@@ -196,34 +237,76 @@ pub fn read_range<S: ObjectRead, W: Write>(
     mut sink: W,
 ) -> CoreResult<RopeCounters> {
     let mut counters = RopeCounters::default();
-    let state = state(store, root, &mut counters)?;
-    if range.start > range.end || range.end > state.logical_len {
-        return Err(CoreError::InvalidRange {
-            start: range.start,
-            end: range.end,
-            length: state.logical_len,
-        });
-    }
-    if range.is_empty() {
-        return Ok(counters);
-    }
+    let plan = read_plan(store, root, &mut counters)?;
+    read_range_with_plan_into(store, &plan, range, &mut sink, &mut counters)?;
+    Ok(counters)
+}
+
+pub fn read_plan<S: ObjectRead>(
+    store: &S,
+    root: FileStateRoot,
+    counters: &mut RopeCounters,
+) -> CoreResult<ReadPlan> {
+    let state = state(store, root, counters)?;
     let summary = Summary {
         id: state.mapping_root,
         bytes: state.logical_len,
         extents: state.extent_count,
         level: state.tree_level,
     };
-    read_node(
+    counters.nodes_read = add(counters.nodes_read, 1)?;
+    let mapping = store.with_authenticated_canonical(summary.id, |canonical| {
+        decode_node_with_context(canonical, true)
+    })?;
+    validate_summary(&mapping, summary)?;
+    Ok(ReadPlan { state, mapping })
+}
+
+pub fn read_range_with_plan<S: ObjectRead, W: Write>(
+    store: &S,
+    plan: &ReadPlan,
+    range: Range<u64>,
+    mut sink: W,
+) -> CoreResult<RopeCounters> {
+    let mut counters = RopeCounters::default();
+    read_range_with_plan_into(store, plan, range, &mut sink, &mut counters)?;
+    Ok(counters)
+}
+
+fn read_range_with_plan_into<S: ObjectRead, W: Write>(
+    store: &S,
+    plan: &ReadPlan,
+    range: Range<u64>,
+    sink: &mut W,
+    counters: &mut RopeCounters,
+) -> CoreResult<()> {
+    if range.start > range.end || range.end > plan.state.logical_len {
+        return Err(CoreError::InvalidRange {
+            start: range.start,
+            end: range.end,
+            length: plan.state.logical_len,
+        });
+    }
+    if range.is_empty() {
+        return Ok(());
+    }
+    let summary = Summary {
+        id: plan.state.mapping_root,
+        bytes: plan.state.logical_len,
+        extents: plan.state.extent_count,
+        level: plan.state.tree_level,
+    };
+    let mut ancestors = vec![summary.id];
+    read_decoded_node(
         store,
-        summary,
-        true,
         0,
         &range,
-        &mut sink,
-        &mut counters,
-        &mut Vec::new(),
+        sink,
+        counters,
+        &mut ancestors,
+        &plan.mapping,
     )?;
-    Ok(counters)
+    Ok(())
 }
 
 pub fn read_all<S: ObjectRead, W: Write>(
@@ -264,6 +347,88 @@ pub fn read_all_bounded<S: ObjectRead, W: Write>(
         &mut Vec::new(),
     )?;
     Ok(counters)
+}
+
+pub fn visit_extents<S: ObjectRead>(
+    store: &S,
+    root: FileStateRoot,
+    mut visitor: impl FnMut(&[ExtentSliceV3]) -> CoreResult<()>,
+) -> CoreResult<(FileStateV3, RopeCounters)> {
+    let mut counters = RopeCounters::default();
+    let state = state(store, root, &mut counters)?;
+    visit_extent_node(
+        store,
+        Summary {
+            id: state.mapping_root,
+            bytes: state.logical_len,
+            extents: state.extent_count,
+            level: state.tree_level,
+        },
+        true,
+        &mut counters,
+        &mut Vec::new(),
+        &mut visitor,
+    )?;
+    Ok((state, counters))
+}
+
+/// Emits coalesced logical ranges whose extent identities differ. Equal file
+/// or mapping object identities stop before fetching descendants. A false
+/// return means the logical lengths differ and the caller must use a full
+/// fallback; mapping nodes and payloads are not read in that case.
+pub fn diff_ranges<S: ObjectRead>(
+    store: &S,
+    old: FileStateRoot,
+    new: FileStateRoot,
+    mut visitor: impl FnMut(Range<u64>) -> CoreResult<()>,
+) -> CoreResult<(bool, RopeCounters)> {
+    if old == new {
+        return Ok((true, RopeCounters::default()));
+    }
+    let mut counters = RopeCounters::default();
+    let old_state = state(store, old, &mut counters)?;
+    let new_state = state(store, new, &mut counters)?;
+    if old_state.logical_len != new_state.logical_len {
+        return Ok((false, counters));
+    }
+    let old_summary = Summary {
+        id: old_state.mapping_root,
+        bytes: old_state.logical_len,
+        extents: old_state.extent_count,
+        level: old_state.tree_level,
+    };
+    let new_summary = Summary {
+        id: new_state.mapping_root,
+        bytes: new_state.logical_len,
+        extents: new_state.extent_count,
+        level: new_state.tree_level,
+    };
+    if old_summary.id == new_summary.id {
+        if !same_summary(old_summary, new_summary) {
+            return Err(CoreError::InvalidRecord("extent summary"));
+        }
+        return Ok((true, counters));
+    }
+    let mut emitter = ChangedRanges {
+        start: None,
+        visitor: &mut visitor,
+    };
+    let mut old_cache = None;
+    let mut new_cache = None;
+    diff_span(
+        store,
+        Span::node(old_summary),
+        Span::node(new_summary),
+        0,
+        &mut counters,
+        &mut Vec::new(),
+        &mut Vec::new(),
+        &mut old_cache,
+        &mut new_cache,
+        &mut emitter,
+    )?;
+    emitter.finish(old_state.logical_len)?;
+    Ok((true, counters))
 }
 
 pub fn replace<S: ObjectStore, R: Read>(
@@ -478,6 +643,17 @@ impl<S: ObjectStore> ObjectStore for DeferredNodes<'_, S> {
             return Err(CoreError::IdentityMismatch);
         }
         Ok(id)
+    }
+
+    fn with_authenticated_canonical<T, F>(&self, id: ObjectId, callback: F) -> CoreResult<T>
+    where
+        F: FnOnce(&[u8]) -> CoreResult<T>,
+    {
+        match self.nodes.get(&id) {
+            Some(bytes) if ObjectId::for_bytes(bytes) == id => callback(bytes),
+            Some(_) => Err(CoreError::IdentityMismatch),
+            None => self.store.with_authenticated_canonical(id, callback),
+        }
     }
 }
 
@@ -835,9 +1011,35 @@ fn load_node<S: ObjectRead>(
     root: bool,
     counters: &mut RopeCounters,
 ) -> CoreResult<ExtentNodeV3> {
-    let canonical = authenticated_get(store, summary.id)?;
     counters.nodes_read = add(counters.nodes_read, 1)?;
-    let node = decode_node_with_context(&canonical, root)?;
+    let node = store.with_authenticated_canonical(summary.id, |canonical| {
+        decode_node_with_context(canonical, root)
+    })?;
+    if node.level() != summary.level
+        || node.logical_len() != summary.bytes
+        || node.extent_count() != summary.extents
+    {
+        return Err(CoreError::InvalidRecord("extent summary"));
+    }
+    node.validate(root)?;
+    Ok(node)
+}
+
+fn load_node_cached<S: ObjectRead>(
+    store: &S,
+    summary: Summary,
+    root: bool,
+    counters: &mut RopeCounters,
+    cache: &mut Option<(ObjectId, ExtentNodeV3)>,
+) -> CoreResult<ExtentNodeV3> {
+    let node = match cache {
+        Some((id, node)) if *id == summary.id => node.clone(),
+        _ => {
+            let node = load_node(store, summary, root, counters)?;
+            *cache = Some((summary.id, node.clone()));
+            node
+        }
+    };
     if node.level() != summary.level
         || node.logical_len() != summary.bytes
         || node.extent_count() != summary.extents
@@ -845,6 +1047,342 @@ fn load_node<S: ObjectRead>(
         return Err(CoreError::InvalidRecord("extent summary"));
     }
     Ok(node)
+}
+
+#[derive(Clone, Copy)]
+enum SpanKind {
+    Node { summary: Summary, root: bool },
+    Extent(ExtentSliceV3),
+}
+
+#[derive(Clone, Copy)]
+struct Span {
+    kind: SpanKind,
+    offset: u64,
+    len: u64,
+}
+
+impl Span {
+    fn node(summary: Summary) -> Self {
+        Self {
+            kind: SpanKind::Node {
+                summary,
+                root: true,
+            },
+            offset: 0,
+            len: summary.bytes,
+        }
+    }
+
+    fn slice(self, offset: u64, len: u64) -> CoreResult<Self> {
+        if offset.checked_add(len).is_none_or(|end| end > self.len) {
+            return Err(CoreError::LengthOverflow);
+        }
+        Ok(Self {
+            kind: self.kind,
+            offset: self
+                .offset
+                .checked_add(offset)
+                .ok_or(CoreError::LengthOverflow)?,
+            len,
+        })
+    }
+}
+
+struct ChangedRanges<'a, F> {
+    start: Option<u64>,
+    visitor: &'a mut F,
+}
+
+impl<F: FnMut(Range<u64>) -> CoreResult<()>> ChangedRanges<'_, F> {
+    fn record(&mut self, start: u64, len: u64, changed: bool) -> CoreResult<()> {
+        let end = start.checked_add(len).ok_or(CoreError::LengthOverflow)?;
+        if changed {
+            self.start.get_or_insert(start);
+        } else if let Some(changed_start) = self.start.take() {
+            (self.visitor)(changed_start..start)?;
+        }
+        if end < start {
+            return Err(CoreError::LengthOverflow);
+        }
+        Ok(())
+    }
+
+    fn finish(&mut self, end: u64) -> CoreResult<()> {
+        if let Some(start) = self.start.take() {
+            (self.visitor)(start..end)?;
+        }
+        Ok(())
+    }
+}
+
+fn same_summary(left: Summary, right: Summary) -> bool {
+    left.id == right.id
+        && left.bytes == right.bytes
+        && left.extents == right.extents
+        && left.level == right.level
+}
+
+#[allow(clippy::too_many_arguments)]
+fn diff_span<S: ObjectRead, F: FnMut(Range<u64>) -> CoreResult<()>>(
+    store: &S,
+    old: Span,
+    new: Span,
+    logical: u64,
+    counters: &mut RopeCounters,
+    old_ancestors: &mut Vec<ObjectId>,
+    new_ancestors: &mut Vec<ObjectId>,
+    old_cache: &mut Option<(ObjectId, ExtentNodeV3)>,
+    new_cache: &mut Option<(ObjectId, ExtentNodeV3)>,
+    emitter: &mut ChangedRanges<'_, F>,
+) -> CoreResult<()> {
+    if old.len != new.len {
+        return Err(CoreError::LengthMismatch {
+            expected: old.len,
+            actual: new.len,
+        });
+    }
+    match (old.kind, new.kind) {
+        (
+            SpanKind::Node {
+                summary: old_summary,
+                ..
+            },
+            SpanKind::Node {
+                summary: new_summary,
+                ..
+            },
+        ) if old_summary.id == new_summary.id && old.offset == new.offset => {
+            if !same_summary(old_summary, new_summary) {
+                return Err(CoreError::InvalidRecord("extent summary"));
+            }
+            emitter.record(logical, old.len, false)
+        }
+        (
+            SpanKind::Node {
+                summary: old_summary,
+                root: old_root,
+            },
+            SpanKind::Node {
+                summary: new_summary,
+                root: new_root,
+            },
+        ) => {
+            if old_ancestors.contains(&old_summary.id) || new_ancestors.contains(&new_summary.id) {
+                return Err(CoreError::MappingCycle);
+            }
+            old_ancestors.push(old_summary.id);
+            new_ancestors.push(new_summary.id);
+            let old_spans = expand_span(store, old, old_root, counters, old_cache)?;
+            let new_spans = expand_span(store, new, new_root, counters, new_cache)?;
+            merge_spans(
+                store,
+                &old_spans,
+                &new_spans,
+                logical,
+                counters,
+                old_ancestors,
+                new_ancestors,
+                old_cache,
+                new_cache,
+                emitter,
+            )?;
+            old_ancestors.pop();
+            new_ancestors.pop();
+            Ok(())
+        }
+        (SpanKind::Extent(old_extent), SpanKind::Extent(new_extent)) => {
+            let old_source = u64::from(old_extent.source_offset)
+                .checked_add(old.offset)
+                .ok_or(CoreError::LengthOverflow)?;
+            let new_source = u64::from(new_extent.source_offset)
+                .checked_add(new.offset)
+                .ok_or(CoreError::LengthOverflow)?;
+            emitter.record(
+                logical,
+                old.len,
+                old_extent.payload_object_id != new_extent.payload_object_id
+                    || old_source != new_source,
+            )
+        }
+        (SpanKind::Node { summary, root }, _) => {
+            if old_ancestors.contains(&summary.id) {
+                return Err(CoreError::MappingCycle);
+            }
+            old_ancestors.push(summary.id);
+            let spans = expand_span(store, old, root, counters, old_cache)?;
+            merge_spans(
+                store,
+                &spans,
+                &[new],
+                logical,
+                counters,
+                old_ancestors,
+                new_ancestors,
+                old_cache,
+                new_cache,
+                emitter,
+            )?;
+            old_ancestors.pop();
+            Ok(())
+        }
+        (_, SpanKind::Node { summary, root }) => {
+            if new_ancestors.contains(&summary.id) {
+                return Err(CoreError::MappingCycle);
+            }
+            new_ancestors.push(summary.id);
+            let spans = expand_span(store, new, root, counters, new_cache)?;
+            merge_spans(
+                store,
+                &[old],
+                &spans,
+                logical,
+                counters,
+                old_ancestors,
+                new_ancestors,
+                old_cache,
+                new_cache,
+                emitter,
+            )?;
+            new_ancestors.pop();
+            Ok(())
+        }
+    }
+}
+
+fn expand_span<S: ObjectRead>(
+    store: &S,
+    span: Span,
+    root: bool,
+    counters: &mut RopeCounters,
+    cache: &mut Option<(ObjectId, ExtentNodeV3)>,
+) -> CoreResult<Vec<Span>> {
+    let SpanKind::Node { summary, .. } = span.kind else {
+        return Ok(vec![span]);
+    };
+    let node = load_node_cached(store, summary, root, counters, cache)?;
+    let mut output = Vec::with_capacity(node.entry_count());
+    let wanted_end = span
+        .offset
+        .checked_add(span.len)
+        .ok_or(CoreError::LengthOverflow)?;
+    match node {
+        ExtentNodeV3::Leaf { extents, .. } => {
+            let mut start = 0_u64;
+            for extent in extents {
+                let end = start
+                    .checked_add(u64::from(extent.logical_length))
+                    .ok_or(CoreError::LengthOverflow)?;
+                push_overlap(
+                    &mut output,
+                    SpanKind::Extent(extent),
+                    start,
+                    end,
+                    span.offset,
+                    wanted_end,
+                )?;
+                start = end;
+            }
+        }
+        ExtentNodeV3::Branch {
+            level, children, ..
+        } => {
+            let mut start = 0_u64;
+            for summary in child_summaries(&children, level - 1) {
+                let end = start
+                    .checked_add(summary.bytes)
+                    .ok_or(CoreError::LengthOverflow)?;
+                push_overlap(
+                    &mut output,
+                    SpanKind::Node {
+                        summary,
+                        root: false,
+                    },
+                    start,
+                    end,
+                    span.offset,
+                    wanted_end,
+                )?;
+                start = end;
+            }
+        }
+    }
+    if output.iter().try_fold(0_u64, |sum, item| {
+        sum.checked_add(item.len).ok_or(CoreError::LengthOverflow)
+    })? != span.len
+    {
+        return Err(CoreError::InvalidRecord("extent span"));
+    }
+    Ok(output)
+}
+
+fn push_overlap(
+    output: &mut Vec<Span>,
+    kind: SpanKind,
+    start: u64,
+    end: u64,
+    wanted_start: u64,
+    wanted_end: u64,
+) -> CoreResult<()> {
+    let overlap_start = start.max(wanted_start);
+    let overlap_end = end.min(wanted_end);
+    if overlap_start < overlap_end {
+        output.push(Span {
+            kind,
+            offset: overlap_start - start,
+            len: overlap_end - overlap_start,
+        });
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn merge_spans<S: ObjectRead, F: FnMut(Range<u64>) -> CoreResult<()>>(
+    store: &S,
+    old: &[Span],
+    new: &[Span],
+    mut logical: u64,
+    counters: &mut RopeCounters,
+    old_ancestors: &mut Vec<ObjectId>,
+    new_ancestors: &mut Vec<ObjectId>,
+    old_cache: &mut Option<(ObjectId, ExtentNodeV3)>,
+    new_cache: &mut Option<(ObjectId, ExtentNodeV3)>,
+    emitter: &mut ChangedRanges<'_, F>,
+) -> CoreResult<()> {
+    let (mut old_index, mut new_index) = (0_usize, 0_usize);
+    let (mut old_used, mut new_used) = (0_u64, 0_u64);
+    while old_index < old.len() && new_index < new.len() {
+        let count = (old[old_index].len - old_used).min(new[new_index].len - new_used);
+        diff_span(
+            store,
+            old[old_index].slice(old_used, count)?,
+            new[new_index].slice(new_used, count)?,
+            logical,
+            counters,
+            old_ancestors,
+            new_ancestors,
+            old_cache,
+            new_cache,
+            emitter,
+        )?;
+        logical = logical
+            .checked_add(count)
+            .ok_or(CoreError::LengthOverflow)?;
+        old_used += count;
+        new_used += count;
+        if old_used == old[old_index].len {
+            old_index += 1;
+            old_used = 0;
+        }
+        if new_used == new[new_index].len {
+            new_index += 1;
+            new_used = 0;
+        }
+    }
+    if old_index != old.len() || new_index != new.len() {
+        return Err(CoreError::InvalidRecord("extent span"));
+    }
+    Ok(())
 }
 
 fn validate_node<S: ObjectRead>(
@@ -861,16 +1399,18 @@ fn validate_node<S: ObjectRead>(
     match load_node(store, expected, root, counters)? {
         ExtentNodeV3::Leaf { extents, .. } => {
             for extent in extents {
-                let canonical = authenticated_get(store, extent.payload_object_id)?;
-                let payload = decode_bytes_object(&canonical)?;
-                if payload.len() > crate::cdc::MAXIMUM_CHUNK_BYTES
-                    || extent
-                        .source_offset
-                        .checked_add(extent.logical_length)
-                        .is_none_or(|end| end as usize > payload.len())
-                {
-                    return Err(CoreError::ChunkLengthMismatch);
-                }
+                store.with_authenticated_canonical(extent.payload_object_id, |canonical| {
+                    let payload = decode_bytes_object(canonical)?;
+                    if payload.len() > crate::cdc::MAXIMUM_CHUNK_BYTES
+                        || extent
+                            .source_offset
+                            .checked_add(extent.logical_length)
+                            .is_none_or(|end| end as usize > payload.len())
+                    {
+                        return Err(CoreError::ChunkLengthMismatch);
+                    }
+                    Ok(())
+                })?;
             }
         }
         ExtentNodeV3::Branch {
@@ -878,6 +1418,32 @@ fn validate_node<S: ObjectRead>(
         } => {
             for child in child_summaries(&children, level - 1) {
                 validate_node(store, child, false, counters, ancestors)?;
+            }
+        }
+    }
+    ancestors.pop();
+    Ok(())
+}
+
+fn visit_extent_node<S: ObjectRead>(
+    store: &S,
+    expected: Summary,
+    root: bool,
+    counters: &mut RopeCounters,
+    ancestors: &mut Vec<ObjectId>,
+    visitor: &mut impl FnMut(&[ExtentSliceV3]) -> CoreResult<()>,
+) -> CoreResult<()> {
+    if ancestors.contains(&expected.id) {
+        return Err(CoreError::MappingCycle);
+    }
+    ancestors.push(expected.id);
+    match load_node(store, expected, root, counters)? {
+        ExtentNodeV3::Leaf { extents, .. } => visitor(&extents)?,
+        ExtentNodeV3::Branch {
+            level, children, ..
+        } => {
+            for child in child_summaries(&children, level - 1) {
+                visit_extent_node(store, child, false, counters, ancestors, visitor)?;
             }
         }
     }
@@ -950,15 +1516,26 @@ fn read_node<S: ObjectRead, W: Write>(
         return Err(CoreError::MappingCycle);
     }
     ancestors.push(expected.id);
-    let canonical = authenticated_get(store, expected.id)?;
     counters.nodes_read = add(counters.nodes_read, 1)?;
-    let node = decode_node_with_context(&canonical, root)?;
-    if node.level() != expected.level
-        || node.logical_len() != expected.bytes
-        || node.extent_count() != expected.extents
-    {
-        return Err(CoreError::InvalidRecord("extent summary"));
-    }
+    let node = store.with_authenticated_canonical(expected.id, |canonical| {
+        decode_node_with_context(canonical, root)
+    })?;
+    validate_summary(&node, expected)?;
+    read_decoded_node(store, base, range, sink, counters, ancestors, &node)?;
+    ancestors.pop();
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn read_decoded_node<S: ObjectRead, W: Write>(
+    store: &S,
+    base: u64,
+    range: &Range<u64>,
+    sink: &mut W,
+    counters: &mut RopeCounters,
+    ancestors: &mut Vec<ObjectId>,
+    node: &ExtentNodeV3,
+) -> CoreResult<()> {
     match node {
         ExtentNodeV3::Leaf { extents, .. } => {
             let mut logical = base;
@@ -968,7 +1545,7 @@ fn read_node<S: ObjectRead, W: Write>(
                     .checked_add(u64::from(extent.logical_length))
                     .ok_or(CoreError::LengthOverflow)?;
                 if end > range.start && logical < range.end {
-                    selected.push((extent, logical, end));
+                    selected.push((*extent, logical, end));
                 }
                 if logical >= range.end {
                     break;
@@ -981,13 +1558,12 @@ fn read_node<S: ObjectRead, W: Write>(
                     .map(|(extent, _, _)| extent.payload_object_id)
                     .collect::<Vec<_>>();
                 let mut index = 0_usize;
-                store.get_authenticated_batch(&ids, |id, canonical| {
+                store.get_authenticated_batch(&ids, |id, payload| {
                     let (extent, logical, end) = batch[index];
                     if id != extent.payload_object_id {
                         return Err(CoreError::IdentityMismatch);
                     }
                     index += 1;
-                    let payload = decode_bytes_object(canonical)?;
                     if payload.len() > crate::cdc::MAXIMUM_CHUNK_BYTES {
                         return Err(CoreError::ChunkLengthMismatch);
                     }
@@ -1023,8 +1599,8 @@ fn read_node<S: ObjectRead, W: Write>(
             } else {
                 children[first - 1].cumulative_logical_end
             };
-            let summaries = child_summaries(&children, level - 1);
-            for (child, summary) in children.into_iter().zip(summaries).skip(first) {
+            let summaries = child_summaries(children, *level - 1);
+            for (child, summary) in children.iter().copied().zip(summaries).skip(first) {
                 let child_start = base.checked_add(prior).ok_or(CoreError::LengthOverflow)?;
                 if child_start >= range.end {
                     break;
@@ -1043,8 +1619,18 @@ fn read_node<S: ObjectRead, W: Write>(
             }
         }
     }
-    ancestors.pop();
     Ok(())
+}
+
+fn validate_summary(node: &ExtentNodeV3, expected: Summary) -> CoreResult<()> {
+    if node.level() != expected.level
+        || node.logical_len() != expected.bytes
+        || node.extent_count() != expected.extents
+    {
+        Err(CoreError::InvalidRecord("extent summary"))
+    } else {
+        Ok(())
+    }
 }
 
 fn flush_streaming<S: ObjectStore>(
@@ -1176,14 +1762,6 @@ fn pending_len(pending: &Pending) -> usize {
         Pending::Extents(v) => v.len(),
         Pending::Children(v) => v.len(),
     }
-}
-
-fn authenticated_get<S: ObjectRead + ?Sized>(store: &S, id: ObjectId) -> CoreResult<Vec<u8>> {
-    let bytes = store.get(id)?;
-    if ObjectId::for_bytes(&bytes) != id {
-        return Err(CoreError::IdentityMismatch);
-    }
-    Ok(bytes)
 }
 
 fn add(left: u64, right: u64) -> CoreResult<u64> {

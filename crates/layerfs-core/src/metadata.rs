@@ -264,14 +264,12 @@ fn read_metadata_node<S: ObjectRead>(
         return Err(CoreError::MappingCycle);
     }
     ancestors.push(id);
-    let canonical = store.get(id)?;
-    if ObjectId::for_bytes(&canonical) != id {
-        return Err(CoreError::IdentityMismatch);
-    }
-    if !root && canonical.len() * 5 < 8192 * 2 {
-        return Err(CoreError::NonCanonicalPagePartition);
-    }
-    let node = decode_metadata_node(&canonical)?;
+    let node = store.with_authenticated_canonical(id, |canonical| {
+        if !root && canonical.len() * 5 < 8192 * 2 {
+            return Err(CoreError::NonCanonicalPagePartition);
+        }
+        decode_metadata_node(canonical)
+    })?;
     let (actual_level, actual_max) = match &node {
         MetadataNodeV1::Leaf { entries, .. } => (0, entries.last().map(|entry| entry.key.clone())),
         MetadataNodeV1::Branch {

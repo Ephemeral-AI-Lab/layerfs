@@ -1,7 +1,8 @@
-use crate::capture::{capture_workspace, initialize_empty, live_hard_link_authority};
+use crate::capture::{capture_workspace, initialize_empty, SemanticDigestCache};
 use crate::driver::{DriverError, ProjectionDriver};
 use crate::materialize::materialize_workspace;
 use crate::{NativeOperationCounters, NativeRoute, OperationCounters};
+use layerfs_core::inode::InodeId;
 use layerfs_core::CanonicalPath;
 use layerfs_core::{CoreError, ObjectId};
 use layerfs_engine::refs::RefState;
@@ -30,6 +31,8 @@ pub enum VfsError {
         error: Box<VfsError>,
     },
     InvalidState,
+    Indeterminate,
+    IncompleteDerived,
 }
 pub type VfsResult<T> = Result<T, VfsError>;
 impl From<CoreError> for VfsError {
@@ -64,10 +67,12 @@ impl fmt::Display for VfsError {
 impl std::error::Error for VfsError {}
 
 pub struct LayerVfs {
-    engine: Arc<Engine>,
+    pub(crate) engine: Arc<Engine>,
     driver: Arc<dyn ProjectionDriver>,
     head: RefState,
-    operation_q: Arc<OperationQ>,
+    pub(crate) operation_q: Arc<OperationQ>,
+    pub(crate) resolved_read_cache: crate::resolver::ResolvedReadCache,
+    digest_cache: Arc<SemanticDigestCache>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -77,13 +82,13 @@ pub struct OperationQObservation {
 }
 
 #[derive(Default)]
-struct OperationQ {
+pub(crate) struct OperationQ {
     current: AtomicU64,
     high_water: AtomicU64,
 }
 
 impl OperationQ {
-    fn reserve(self: &Arc<Self>) -> OperationReservation {
+    pub(crate) fn reserve(self: &Arc<Self>) -> OperationReservation {
         let current = self
             .current
             .fetch_add(crate::OPERATION_Q_BOUND_BYTES, Ordering::AcqRel)
@@ -100,7 +105,18 @@ impl OperationQ {
     }
 }
 
-struct OperationReservation(Arc<OperationQ>);
+pub(crate) struct OperationReservation(Arc<OperationQ>);
+
+impl OperationReservation {
+    pub(crate) fn finish(self, counters: &mut OperationCounters) {
+        let queue = self.0.clone();
+        let active = queue.observation();
+        counters.operation_q_current_bytes = active.current_bytes;
+        counters.operation_q_high_water_bytes = active.high_water_bytes;
+        drop(self);
+        counters.operation_q_terminal_bytes = queue.observation().current_bytes;
+    }
+}
 
 impl Drop for OperationReservation {
     fn drop(&mut self) {
@@ -120,6 +136,14 @@ type SharedLeaseState = Arc<Mutex<LeaseState>>;
 type WriterStateRegistry = Mutex<HashMap<Vec<u8>, Weak<Mutex<LeaseState>>>>;
 
 static WRITER_STATES: OnceLock<WriterStateRegistry> = OnceLock::new();
+
+pub(crate) fn topology_edge_key(child: InodeId, parent: InodeId, name: &[u8]) -> Vec<u8> {
+    let mut key = Vec::with_capacity(64 + name.len());
+    key.extend_from_slice(child.as_bytes());
+    key.extend_from_slice(parent.as_bytes());
+    key.extend_from_slice(name);
+    key
+}
 
 fn shared_writers(identity: &[u8]) -> VfsResult<SharedLeaseState> {
     let states = WRITER_STATES.get_or_init(|| Mutex::new(HashMap::new()));
@@ -152,6 +176,8 @@ impl LayerVfs {
             driver,
             head,
             operation_q: Arc::new(OperationQ::default()),
+            resolved_read_cache: crate::resolver::ResolvedReadCache::default(),
+            digest_cache: Arc::new(SemanticDigestCache::default()),
         })
     }
     pub fn into_engine(self) -> VfsResult<Engine> {
@@ -174,6 +200,9 @@ impl LayerVfs {
     pub fn counters(&self) -> VfsResult<layerfs_engine::EngineCounters> {
         Ok(self.engine.counters()?)
     }
+    pub fn store_id(&self) -> VfsResult<[u8; 32]> {
+        Ok(self.engine.store_id()?)
+    }
     pub fn active_connection_count(&self) -> VfsResult<u64> {
         Ok(self.engine.active_connection_count()?)
     }
@@ -193,22 +222,18 @@ impl LayerVfs {
         root: ObjectId,
         path: &Path,
     ) -> VfsResult<(ExternalWorkspace, OperationCounters)> {
-        let _reservation = self.operation_q.reserve();
+        let reservation = self.operation_q.reserve();
         let native = self.driver.open_workspace(
             path,
             crate::driver::WorkspacePolicy::ExternalCooperative,
             self.engine.store_id()?,
         )?;
-        let mut counters = materialize_workspace(&self.engine, native.as_ref(), root)?;
-        let (hard_link_authority, authority_counters) =
-            live_hard_link_authority(&self.engine, native.as_ref(), root)?;
-        counters.add_rope(authority_counters.rope)?;
-        counters.add_namespace(authority_counters.namespace)?;
-        counters.add_inode_table(authority_counters.inode_table)?;
-        counters.add_native(authority_counters.native)?;
+        let (mut counters, hard_link_authority, topology_edges) =
+            materialize_workspace(&self.engine, &self.digest_cache, native.as_ref(), root)?;
         let native_root = native.root_directory()?;
         let identity = native.directory_identity(native_root.as_ref())?;
         let writers = shared_writers(&identity)?;
+        reservation.finish(&mut counters);
         Ok((
             ExternalWorkspace {
                 engine: self.engine.clone(),
@@ -222,9 +247,11 @@ impl LayerVfs {
                 owned: false,
                 owned_identity: None,
                 hard_link_authority: Some(hard_link_authority),
+                topology_edges: Some(topology_edges),
                 active: true,
                 committed: None,
                 operation_q: self.operation_q.clone(),
+                digest_cache: self.digest_cache.clone(),
             },
             counters,
         ))
@@ -251,13 +278,22 @@ impl LayerVfs {
             owned: false,
             owned_identity: None,
             hard_link_authority: None,
+            topology_edges: None,
             active: true,
             committed: None,
             operation_q: self.operation_q.clone(),
+            digest_cache: self.digest_cache.clone(),
         })
     }
     pub fn materialize_managed(&self, root: ObjectId) -> VfsResult<ManagedWorkspace> {
-        let _reservation = self.operation_q.reserve();
+        self.materialize_managed_observed(root)
+            .map(|(workspace, _)| workspace)
+    }
+    pub fn materialize_managed_observed(
+        &self,
+        root: ObjectId,
+    ) -> VfsResult<(ManagedWorkspace, OperationCounters)> {
+        let reservation = self.operation_q.reserve();
         let expected = self
             .engine
             .read_ref("main")?
@@ -283,21 +319,27 @@ impl LayerVfs {
         let native_root = native.root_directory()?;
         let owned_identity = native.directory_identity(native_root.as_ref())?;
         let setup = (|| {
-            materialize_workspace(&self.engine, native.as_ref(), root)?;
+            let (mut counters, hard_link_authority, topology_edges) =
+                materialize_workspace(&self.engine, &self.digest_cache, native.as_ref(), root)?;
+            counters.workspace_materializations = 1;
             let spool = native.create_temp_at(native_root.as_ref())?;
             let writers = shared_writers(&owned_identity)?;
-            let (hard_link_authority, _) =
-                live_hard_link_authority(&self.engine, native.as_ref(), root)?;
-            Ok::<_, VfsError>((spool, writers, hard_link_authority))
+            Ok::<_, VfsError>((
+                spool,
+                writers,
+                hard_link_authority,
+                topology_edges,
+                counters,
+            ))
         })();
-        let (spool, writers, hard_link_authority) = match setup {
+        let (spool, writers, hard_link_authority, topology_edges, mut counters) = match setup {
             Ok(setup) => setup,
             Err(error) => {
                 let _ = native.remove_owned_root(&owned_identity);
                 return Err(error);
             }
         };
-        Ok(ManagedWorkspace {
+        let mut workspace = ManagedWorkspace {
             external: Some(ExternalWorkspace {
                 engine: self.engine.clone(),
                 native,
@@ -307,15 +349,19 @@ impl LayerVfs {
                 owned: true,
                 owned_identity: Some(owned_identity),
                 hard_link_authority: Some(hard_link_authority),
+                topology_edges: Some(topology_edges),
                 active: true,
                 committed: None,
                 operation_q: self.operation_q.clone(),
+                digest_cache: self.digest_cache.clone(),
             }),
             edits: Vec::new(),
-            dirty: false,
-            committed: None,
+            state: ManagedState::Live,
             spool: Some(spool),
-        })
+        };
+        workspace.observe_spool(&mut counters)?;
+        reservation.finish(&mut counters);
+        Ok((workspace, counters))
     }
     pub fn fork(&self, root: ObjectId, name: &str) -> VfsResult<ObjectId> {
         let source = RefState {
@@ -332,61 +378,70 @@ impl LayerVfs {
             .ok_or(VfsError::InvalidState)?;
         Ok(self.engine.move_ref(&expected, target)?.root)
     }
+    pub fn move_main(&self, expected: &RefState, target: ObjectId) -> VfsResult<RefState> {
+        if expected.name != "main" {
+            return Err(VfsError::InvalidState);
+        }
+        Ok(self.engine.move_ref(expected, target)?)
+    }
 }
 
 pub struct ManagedWorkspace {
     external: Option<ExternalWorkspace>,
     edits: Vec<crate::managed_edit::ManagedEdit>,
-    dirty: bool,
-    committed: Option<ObjectId>,
+    state: ManagedState,
     spool: Option<Box<dyn crate::driver::OwnedTempHandle>>,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ManagedState {
+    Live,
+    Dirty,
+    Refreshing,
+    ExternalDirtyConflict,
+    Indeterminate,
+    IncompleteDerived,
+    Closed,
+}
 impl ManagedWorkspace {
-    pub fn capture(&mut self) -> VfsResult<ObjectId> {
-        self.capture_observed().map(|(root, _)| root)
-    }
-    pub fn capture_observed(&mut self) -> VfsResult<(ObjectId, OperationCounters)> {
-        let _reservation = self
+    pub fn read_to<W: Write>(
+        &self,
+        path: &CanonicalPath,
+        mut output: W,
+    ) -> VfsResult<OperationCounters> {
+        self.require_editable()?;
+        let reservation = self
             .external
             .as_ref()
             .ok_or(VfsError::InvalidState)?
             .operation_q
             .reserve();
-        let (root, counters) = if let Some(root) = self.committed {
-            (root, OperationCounters::default())
-        } else {
-            let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
-            if self.dirty {
-                return Err(VfsError::ExternalDirtyConflict);
-            }
-            let root = if self.edits.is_empty() {
-                (external.expected.root, OperationCounters::default())
-            } else {
-                let spool = self.spool.as_mut().ok_or(VfsError::InvalidState)?;
-                if let Err(error) = spool.flush() {
-                    self.dirty = true;
-                    return Err(error.into());
-                }
-                let (next, counters) = match crate::managed_edit::replay(
-                    &external.engine,
-                    &external.expected,
-                    &self.edits,
-                    spool.as_mut(),
-                ) {
-                    Ok(next) => next,
-                    Err(error) => {
-                        self.dirty = true;
-                        return Err(error);
-                    }
-                };
-                external.expected = next.clone();
-                (next.root, counters)
-            };
-            self.edits.clear();
-            self.dirty = false;
-            self.committed = Some(root.0);
-            (root.0, root.1)
+        let external = self.external.as_ref().ok_or(VfsError::InvalidState)?;
+        let root = external.native.root_directory()?;
+        let (parent, name) =
+            crate::managed_edit::native_parent(external.native.as_ref(), root, path)?;
+        let token = external.native.token_at(parent.as_ref(), name)?;
+        let mut file = external
+            .native
+            .open_regular_read_at(parent.as_ref(), name, Some(&token))?;
+        let bytes = std::io::copy(&mut file, &mut output)?;
+        let mut counters = OperationCounters {
+            native: NativeOperationCounters {
+                bytes_read: bytes,
+                ..NativeOperationCounters::default()
+            },
+            workspace_reuses: 1,
+            ..OperationCounters::default()
         };
+        reservation.finish(&mut counters);
+        Ok(counters)
+    }
+    pub fn capture(&mut self) -> VfsResult<ObjectId> {
+        self.capture_observed().map(|(root, _)| root)
+    }
+    pub fn capture_observed(&mut self) -> VfsResult<(ObjectId, OperationCounters)> {
+        let (state, mut counters) = self.checkpoint_observed()?;
+        let root = state.root;
         if let Err(error) = self
             .external
             .as_mut()
@@ -405,8 +460,171 @@ impl ManagedWorkspace {
             });
         }
         self.external.take();
-        self.committed.take();
+        self.state = ManagedState::Closed;
+        self.observe_spool(&mut counters)?;
         Ok((root, counters))
+    }
+    pub fn checkpoint(&mut self) -> VfsResult<RefState> {
+        self.checkpoint_observed().map(|value| value.0)
+    }
+    pub fn checkpoint_observed(&mut self) -> VfsResult<(RefState, OperationCounters)> {
+        self.require_checkpointable()?;
+        let reservation = self
+            .external
+            .as_ref()
+            .ok_or(VfsError::InvalidState)?
+            .operation_q
+            .reserve();
+        let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
+        if self.state == ManagedState::Live {
+            if external.native.revalidate_root_binding().is_err() {
+                self.state = ManagedState::ExternalDirtyConflict;
+                return Err(VfsError::ExternalDirtyConflict);
+            }
+            let state = external.expected.clone();
+            let mut counters = OperationCounters {
+                workspace_reuses: 1,
+                ..OperationCounters::default()
+            };
+            self.observe_spool(&mut counters)?;
+            reservation.finish(&mut counters);
+            return Ok((state, counters));
+        }
+        crate::managed_edit::sync_pending(external.native.as_ref(), &self.edits)?;
+        let root = external.native.root_directory()?;
+        let next_spool = external.native.create_temp_at(root.as_ref())?;
+        let replay = {
+            let spool = self.spool.as_mut().ok_or(VfsError::InvalidState)?;
+            spool.flush()?;
+            crate::managed_edit::replay(
+                &external.engine,
+                &external.expected,
+                &self.edits,
+                spool.as_mut(),
+            )
+        };
+        let (next, mut counters) = match replay {
+            Ok(next) => next,
+            Err(VfsError::ExternalDirtyConflict) => {
+                self.state = ManagedState::ExternalDirtyConflict;
+                return Err(VfsError::ExternalDirtyConflict);
+            }
+            Err(error @ VfsError::Engine(EngineError::AmbiguousDurability)) => {
+                self.state = ManagedState::Indeterminate;
+                return Err(error);
+            }
+            Err(error) => return Err(error),
+        };
+        external.expected = next.clone();
+        self.edits.clear();
+        self.spool = Some(next_spool);
+        self.state = ManagedState::Live;
+        counters.workspace_reuses = 1;
+        counters.descriptor_resets = 1;
+        self.observe_spool(&mut counters)?;
+        reservation.finish(&mut counters);
+        Ok((next, counters))
+    }
+    pub fn ensure_exact(&mut self, target: &RefState) -> VfsResult<OperationCounters> {
+        self.require_live()?;
+        if !self.edits.is_empty() {
+            return Err(VfsError::InvalidState);
+        }
+        let external = self.external.as_ref().ok_or(VfsError::InvalidState)?;
+        if external.native.revalidate_root_binding().is_err() {
+            self.state = ManagedState::ExternalDirtyConflict;
+            return Err(VfsError::ExternalDirtyConflict);
+        }
+        if &external.expected != target
+            || external.engine.read_ref("main")?.as_ref() != Some(target)
+        {
+            return Err(VfsError::ExternalDirtyConflict);
+        }
+        let mut counters = OperationCounters {
+            native: NativeOperationCounters {
+                route: Some(NativeRoute::ExactNoop),
+                ..NativeOperationCounters::default()
+            },
+            workspace_reuses: 1,
+            ..OperationCounters::default()
+        };
+        self.observe_spool(&mut counters)?;
+        let queue = self
+            .external
+            .as_ref()
+            .ok_or(VfsError::InvalidState)?
+            .operation_q
+            .observation();
+        counters.operation_q_current_bytes = queue.current_bytes;
+        counters.operation_q_high_water_bytes = queue.high_water_bytes;
+        counters.operation_q_terminal_bytes = queue.current_bytes;
+        Ok(counters)
+    }
+    pub fn refresh(&mut self, target: &RefState) -> VfsResult<OperationCounters> {
+        self.require_live()?;
+        if !self.edits.is_empty() || target.name != "main" {
+            return Err(VfsError::InvalidState);
+        }
+        let reservation = self
+            .external
+            .as_ref()
+            .ok_or(VfsError::InvalidState)?
+            .operation_q
+            .reserve();
+        let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
+        if external.engine.read_ref("main")?.as_ref() != Some(target) {
+            return Err(VfsError::ExternalDirtyConflict);
+        }
+        if external.expected.root == target.root {
+            external.expected = target.clone();
+            let mut counters = OperationCounters {
+                native: NativeOperationCounters {
+                    route: Some(NativeRoute::ExactNoop),
+                    ..NativeOperationCounters::default()
+                },
+                workspace_reuses: 1,
+                ..OperationCounters::default()
+            };
+            self.observe_spool(&mut counters)?;
+            reservation.finish(&mut counters);
+            return Ok(counters);
+        }
+        let authority = external
+            .hard_link_authority
+            .as_ref()
+            .ok_or(VfsError::InvalidState)?;
+        let topology = external
+            .topology_edges
+            .as_ref()
+            .ok_or(VfsError::InvalidState)?;
+        self.state = ManagedState::Refreshing;
+        let mut visible = false;
+        match crate::refresh::apply(
+            &external.engine,
+            external.native.as_ref(),
+            authority,
+            topology,
+            &external.expected,
+            target,
+            &mut visible,
+        ) {
+            Ok(mut counters) => {
+                external.expected = target.clone();
+                self.state = ManagedState::Live;
+                counters.workspace_reuses = 1;
+                self.observe_spool(&mut counters)?;
+                reservation.finish(&mut counters);
+                Ok(counters)
+            }
+            Err(error) => {
+                self.state = if visible {
+                    ManagedState::IncompleteDerived
+                } else {
+                    ManagedState::Live
+                };
+                Err(error)
+            }
+        }
     }
     pub fn replace(
         &mut self,
@@ -425,16 +643,14 @@ impl ManagedWorkspace {
         delete_len: u64,
         bytes: &[u8],
     ) -> VfsResult<OperationCounters> {
-        let _reservation = self
+        self.require_editable()?;
+        let reservation = self
             .external
             .as_ref()
             .ok_or(VfsError::InvalidState)?
             .operation_q
             .reserve();
         if self.edits.len() == 64 {
-            return Err(VfsError::InvalidState);
-        }
-        if self.dirty {
             return Err(VfsError::InvalidState);
         }
         let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
@@ -445,11 +661,11 @@ impl ManagedWorkspace {
             match crate::managed_edit::native_hard_link_key(external.native.as_ref(), path) {
                 Ok(key) => key,
                 Err(error) => {
-                    self.dirty = true;
+                    self.state = ManagedState::ExternalDirtyConflict;
                     return Err(error);
                 }
             };
-        let (metadata, native_counters) = match crate::managed_edit::mutate_native(
+        let (metadata, native_counters, sync_required) = match crate::managed_edit::mutate_native(
             external.native.as_ref(),
             path,
             start,
@@ -457,8 +673,9 @@ impl ManagedWorkspace {
             bytes,
         ) {
             Ok(metadata) => metadata,
+            Err(error @ VfsError::NativeProtected) => return Err(error),
             Err(error) => {
-                self.dirty = true;
+                self.state = ManagedState::Indeterminate;
                 let _ = spool.seek(SeekFrom::Start(spool_offset));
                 return Err(error);
             }
@@ -468,7 +685,7 @@ impl ManagedWorkspace {
                 Ok(key) => key,
                 Err(error) => {
                     external.hard_link_authority = None;
-                    self.dirty = true;
+                    self.state = ManagedState::Indeterminate;
                     return Err(error);
                 }
             };
@@ -487,7 +704,7 @@ impl ManagedWorkspace {
                 });
             if let Err(error) = transfer {
                 external.hard_link_authority = None;
-                self.dirty = true;
+                self.state = ManagedState::Indeterminate;
                 return Err(error);
             }
         }
@@ -495,7 +712,7 @@ impl ManagedWorkspace {
             match crate::managed_edit::spool_metadata(spool.as_mut(), &metadata) {
                 Ok(evidence) => evidence,
                 Err(error) => {
-                    self.dirty = true;
+                    self.state = ManagedState::Indeterminate;
                     return Err(error);
                 }
             };
@@ -507,11 +724,17 @@ impl ManagedWorkspace {
             replacement_len: u64::try_from(bytes.len()).map_err(|_| VfsError::InvalidState)?,
             metadata_offset,
             metadata_len,
+            sync_required,
+            native_identity: new_hard_link_key,
         });
-        Ok(OperationCounters {
+        self.state = ManagedState::Dirty;
+        let mut counters = OperationCounters {
             native: native_counters,
             ..OperationCounters::default()
-        })
+        };
+        self.observe_spool(&mut counters)?;
+        reservation.finish(&mut counters);
+        Ok(counters)
     }
     pub fn replace_path(
         &mut self,
@@ -539,7 +762,8 @@ impl ManagedWorkspace {
         from: &CanonicalPath,
         to: &CanonicalPath,
     ) -> VfsResult<OperationCounters> {
-        let _reservation = self
+        self.require_editable()?;
+        let reservation = self
             .external
             .as_ref()
             .ok_or(VfsError::InvalidState)?
@@ -548,13 +772,42 @@ impl ManagedWorkspace {
         if self.edits.len() == 64 {
             return Err(VfsError::InvalidState);
         }
-        if self.dirty {
+        let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
+        let mut topology_counters = OperationCounters::default();
+        let (old_edge, new_edge) = managed_rename_edges(
+            &external.engine,
+            &external.expected,
+            &self.edits,
+            from,
+            to,
+            &mut topology_counters,
+        )?;
+        if external
+            .topology_edges
+            .as_ref()
+            .ok_or(VfsError::InvalidState)?
+            .get(&old_edge)?
+            .is_none()
+        {
             return Err(VfsError::InvalidState);
         }
-        let external = self.external.as_ref().ok_or(VfsError::InvalidState)?;
         let result = crate::managed_edit::rename_native(external.native.as_ref(), from, to);
         match result {
             Ok((source_parent_metadata, target_parent_metadata)) => {
+                let topology_update = external
+                    .topology_edges
+                    .as_ref()
+                    .ok_or(VfsError::InvalidState)
+                    .and_then(|topology| {
+                        topology.remove(&old_edge)?;
+                        topology.put(&new_edge, &[])?;
+                        Ok(())
+                    });
+                if let Err(error) = topology_update {
+                    external.topology_edges = None;
+                    self.state = ManagedState::Indeterminate;
+                    return Err(error);
+                }
                 let spool = self.spool.as_mut().ok_or(VfsError::InvalidState)?;
                 let (source_metadata_offset, source_metadata_len) =
                     match crate::managed_edit::spool_metadata(
@@ -563,7 +816,7 @@ impl ManagedWorkspace {
                     ) {
                         Ok(evidence) => evidence,
                         Err(error) => {
-                            self.dirty = true;
+                            self.state = ManagedState::Indeterminate;
                             return Err(error);
                         }
                     };
@@ -574,7 +827,7 @@ impl ManagedWorkspace {
                     ) {
                         Ok(evidence) => evidence,
                         Err(error) => {
-                            self.dirty = true;
+                            self.state = ManagedState::Indeterminate;
                             return Err(error);
                         }
                     };
@@ -586,17 +839,23 @@ impl ManagedWorkspace {
                     target_metadata_offset,
                     target_metadata_len,
                 });
-                Ok(OperationCounters {
+                self.state = ManagedState::Dirty;
+                let mut counters = topology_counters.merge(OperationCounters {
                     native: NativeOperationCounters {
                         route: Some(NativeRoute::Rename),
                         ..NativeOperationCounters::default()
                     },
                     ..OperationCounters::default()
-                })
+                })?;
+                self.observe_spool(&mut counters)?;
+                reservation.finish(&mut counters);
+                Ok(counters)
             }
-            Err(error @ VfsError::NativeProtected) => Err(error),
+            Err(error @ VfsError::NativeProtected) | Err(error @ VfsError::InvalidState) => {
+                Err(error)
+            }
             Err(error) => {
-                self.dirty = true;
+                self.state = ManagedState::Indeterminate;
                 Err(error)
             }
         }
@@ -608,6 +867,7 @@ impl ManagedWorkspace {
         self.rename_observed(&CanonicalPath::new(from)?, &CanonicalPath::new(to)?)
     }
     pub fn into_external(mut self) -> VfsResult<ExternalWorkspace> {
+        self.require_editable()?;
         let _reservation = self
             .external
             .as_ref()
@@ -618,7 +878,10 @@ impl ManagedWorkspace {
         self.external.take().ok_or(VfsError::InvalidState)
     }
     pub fn discard(&mut self) -> VfsResult<()> {
-        let _reservation = self
+        self.discard_observed().map(drop)
+    }
+    pub fn discard_observed(&mut self) -> VfsResult<OperationCounters> {
+        let reservation = self
             .external
             .as_ref()
             .map(|external| external.operation_q.reserve());
@@ -628,12 +891,133 @@ impl ManagedWorkspace {
                 return Err(error);
             }
         }
-        self.remove_spool()
+        self.remove_spool()?;
+        self.state = ManagedState::Closed;
+        let mut counters = OperationCounters::default();
+        self.observe_spool(&mut counters)?;
+        if let Some(reservation) = reservation {
+            reservation.finish(&mut counters);
+        }
+        Ok(counters)
     }
     fn remove_spool(&mut self) -> VfsResult<()> {
         self.spool.take();
         Ok(())
     }
+    fn observe_spool(&mut self, counters: &mut OperationCounters) -> VfsResult<()> {
+        let bytes = if let Some(spool) = self.spool.as_mut() {
+            let position = spool.stream_position()?;
+            let bytes = spool.seek(SeekFrom::End(0))?;
+            spool.seek(SeekFrom::Start(position))?;
+            counters.owned_temp_current = 1;
+            bytes
+        } else {
+            0
+        };
+        counters.owned_temp_terminal = counters.owned_temp_current;
+        counters.descriptor_spool_bytes_current = bytes;
+        counters.descriptor_spool_bytes_terminal = bytes;
+        Ok(())
+    }
+    fn require_live(&self) -> VfsResult<()> {
+        match self.state {
+            ManagedState::Live => Ok(()),
+            ManagedState::Dirty => Err(VfsError::InvalidState),
+            ManagedState::Refreshing => Err(VfsError::InvalidState),
+            ManagedState::ExternalDirtyConflict => Err(VfsError::ExternalDirtyConflict),
+            ManagedState::Indeterminate => Err(VfsError::Indeterminate),
+            ManagedState::IncompleteDerived => Err(VfsError::IncompleteDerived),
+            ManagedState::Closed => Err(VfsError::InvalidState),
+        }
+    }
+    fn require_editable(&self) -> VfsResult<()> {
+        match self.state {
+            ManagedState::Live | ManagedState::Dirty => Ok(()),
+            ManagedState::Refreshing => Err(VfsError::InvalidState),
+            ManagedState::ExternalDirtyConflict => Err(VfsError::ExternalDirtyConflict),
+            ManagedState::Indeterminate => Err(VfsError::Indeterminate),
+            ManagedState::IncompleteDerived => Err(VfsError::IncompleteDerived),
+            ManagedState::Closed => Err(VfsError::InvalidState),
+        }
+    }
+    fn require_checkpointable(&self) -> VfsResult<()> {
+        self.require_editable()?;
+        if (self.state == ManagedState::Live) == self.edits.is_empty() {
+            Ok(())
+        } else {
+            Err(VfsError::InvalidState)
+        }
+    }
+}
+
+fn managed_rename_edges(
+    engine: &Engine,
+    expected: &RefState,
+    edits: &[crate::managed_edit::ManagedEdit],
+    from: &CanonicalPath,
+    to: &CanonicalPath,
+    counters: &mut OperationCounters,
+) -> VfsResult<(Vec<u8>, Vec<u8>)> {
+    let namespace = crate::resolver::namespace(engine, expected.root)?;
+    let original = translate_prior_renames(from, edits)?;
+    let source_parent_path = translate_prior_renames(&parent_path(from)?, edits)?;
+    let target_parent_path = translate_prior_renames(&parent_path(to)?, edits)?;
+    let (child, _) = crate::resolver::resolve(engine, namespace, &original, counters)?;
+    let (source_parent, _) =
+        crate::resolver::resolve(engine, namespace, &source_parent_path, counters)?;
+    let (target_parent, _) =
+        crate::resolver::resolve(engine, namespace, &target_parent_path, counters)?;
+    Ok((
+        topology_edge_key(child, source_parent, basename(from)?),
+        topology_edge_key(child, target_parent, basename(to)?),
+    ))
+}
+
+fn translate_prior_renames(
+    path: &CanonicalPath,
+    edits: &[crate::managed_edit::ManagedEdit],
+) -> VfsResult<CanonicalPath> {
+    let mut bytes = path.as_bytes().to_vec();
+    for edit in edits.iter().rev() {
+        let crate::managed_edit::ManagedEdit::Rename { from, to, .. } = edit else {
+            continue;
+        };
+        let target = to.as_bytes();
+        if bytes == target
+            || bytes
+                .strip_prefix(target)
+                .is_some_and(|suffix| suffix.first() == Some(&b'/'))
+        {
+            let suffix = &bytes[target.len()..];
+            let mut translated = Vec::with_capacity(from.as_bytes().len() + suffix.len());
+            translated.extend_from_slice(from.as_bytes());
+            translated.extend_from_slice(suffix);
+            bytes = translated;
+        }
+    }
+    Ok(CanonicalPath::from_bytes(&bytes)?)
+}
+
+fn parent_path(path: &CanonicalPath) -> VfsResult<CanonicalPath> {
+    let bytes = path.as_bytes();
+    Ok(CanonicalPath::from_bytes(
+        bytes
+            .iter()
+            .rposition(|byte| *byte == b'/')
+            .map_or(&[][..], |separator| &bytes[..separator]),
+    )?)
+}
+
+fn basename(path: &CanonicalPath) -> VfsResult<&[u8]> {
+    let bytes = path.as_bytes();
+    let name = bytes
+        .iter()
+        .rposition(|byte| *byte == b'/')
+        .map_or(bytes, |separator| &bytes[separator + 1..]);
+    if name.is_empty() {
+        return Err(VfsError::InvalidState);
+    }
+    Ok(name)
 }
 
 impl Drop for ManagedWorkspace {
@@ -654,9 +1038,11 @@ pub struct ExternalWorkspace {
     owned: bool,
     owned_identity: Option<Vec<u8>>,
     hard_link_authority: Option<DiskTable>,
+    topology_edges: Option<DiskTable>,
     active: bool,
     committed: Option<ObjectId>,
     operation_q: Arc<OperationQ>,
+    digest_cache: Arc<SemanticDigestCache>,
 }
 impl ExternalWorkspace {
     pub fn path(&self) -> &Path {
@@ -666,16 +1052,17 @@ impl ExternalWorkspace {
         self.capture_quiescent_observed().map(|(root, _)| root)
     }
     pub fn capture_quiescent_observed(&mut self) -> VfsResult<(ObjectId, OperationCounters)> {
-        let _reservation = self.operation_q.reserve();
+        let reservation = self.operation_q.reserve();
         if !self.active {
             return Err(VfsError::InvalidState);
         }
         let mut capture = CaptureLease::begin(self.writers.clone())?;
-        let (root, counters) = if let Some(root) = self.committed {
+        let (root, mut counters) = if let Some(root) = self.committed {
             (root, OperationCounters::default())
         } else {
             let (next, counters) = capture_workspace(
                 &self.engine,
+                &self.digest_cache,
                 self.native.as_ref(),
                 Some(&self.expected),
                 self.hard_link_authority.as_ref(),
@@ -701,6 +1088,7 @@ impl ExternalWorkspace {
         self.active = false;
         self.committed = None;
         capture.finish()?;
+        reservation.finish(&mut counters);
         Ok((root, counters))
     }
     pub fn discard(&mut self) -> VfsResult<()> {

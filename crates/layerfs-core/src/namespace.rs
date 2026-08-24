@@ -146,6 +146,46 @@ pub fn visit_directory_entries<S: ObjectRead>(
     Ok(())
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DirectoryEntryDiff {
+    pub name: CanonicalName,
+    pub before: Option<InodeId>,
+    pub after: Option<InodeId>,
+}
+
+/// Streams changed directory entries while pruning equal persistent
+/// subtrees. Unequal heights or page partitions use bounded leaf cursors.
+pub fn diff_directory_entries<S: ObjectRead>(
+    store: &S,
+    old: DirectoryStateRoot,
+    new: DirectoryStateRoot,
+    mut visitor: impl FnMut(DirectoryEntryDiff) -> CoreResult<()>,
+) -> CoreResult<NamespaceCounters> {
+    let mut counters = NamespaceCounters::default();
+    if old == new {
+        return Ok(counters);
+    }
+    let old_state = load_directory_state(store, old, &mut counters)?;
+    let new_state = load_directory_state(store, new, &mut counters)?;
+    if old_state.mapping_root == new_state.mapping_root {
+        if old_state.entry_count != new_state.entry_count
+            || old_state.tree_level != new_state.tree_level
+        {
+            return Err(CoreError::InvalidRecord("directory state summary"));
+        }
+        return Ok(counters);
+    }
+    diff_directory_nodes(
+        store,
+        old_state.mapping_root,
+        new_state.mapping_root,
+        true,
+        &mut counters,
+        &mut visitor,
+    )?;
+    Ok(counters)
+}
+
 pub fn directory_insert<S: ObjectStore>(
     store: &mut S,
     root: DirectoryStateRoot,
@@ -292,6 +332,17 @@ impl<S: ObjectStore> ObjectStore for DeferredDirectory<'_, S> {
             return Err(CoreError::IdentityMismatch);
         }
         Ok(id)
+    }
+
+    fn with_authenticated_canonical<T, F>(&self, id: ObjectId, callback: F) -> CoreResult<T>
+    where
+        F: FnOnce(&[u8]) -> CoreResult<T>,
+    {
+        match self.objects.get(&id) {
+            Some(bytes) if ObjectId::for_bytes(bytes) == id => callback(bytes),
+            Some(_) => Err(CoreError::IdentityMismatch),
+            None => self.store.with_authenticated_canonical(id, callback),
+        }
     }
 }
 
@@ -891,6 +942,346 @@ fn walk_directory_node<S: ObjectRead>(
     Ok(summary)
 }
 
+fn diff_directory_nodes<S: ObjectRead>(
+    store: &S,
+    old: ObjectId,
+    new: ObjectId,
+    root: bool,
+    counters: &mut NamespaceCounters,
+    visitor: &mut impl FnMut(DirectoryEntryDiff) -> CoreResult<()>,
+) -> CoreResult<()> {
+    if old == new {
+        return Ok(());
+    }
+    let old_node = load_directory_node_shallow(store, old, root, None, counters)?;
+    let new_node = load_directory_node_shallow(store, new, root, None, counters)?;
+    match (&old_node.node, &new_node.node) {
+        (
+            DirectoryNodeV1::Leaf { entries: old, .. },
+            DirectoryNodeV1::Leaf { entries: new, .. },
+        ) => merge_directory_entries(
+            old.iter().cloned().map(Ok),
+            new.iter().cloned().map(Ok),
+            visitor,
+        ),
+        (
+            DirectoryNodeV1::Branch {
+                level: old_level,
+                children: old_children,
+                ..
+            },
+            DirectoryNodeV1::Branch {
+                level: new_level,
+                children: new_children,
+                ..
+            },
+        ) if old_level == new_level => diff_directory_children(
+            store,
+            *old_level,
+            old_children,
+            new_children,
+            counters,
+            visitor,
+        ),
+        _ => {
+            let mut old_counters = NamespaceCounters::default();
+            let mut new_counters = NamespaceCounters::default();
+            let result = merge_directory_entries(
+                DirectoryEntryCursor::new(store, old, root, &mut old_counters),
+                DirectoryEntryCursor::new(store, new, root, &mut new_counters),
+                visitor,
+            );
+            counters.nodes_read = counters
+                .nodes_read
+                .checked_add(old_counters.nodes_read)
+                .and_then(|value| value.checked_add(new_counters.nodes_read))
+                .ok_or(CoreError::LengthOverflow)?;
+            result
+        }
+    }
+}
+
+fn diff_directory_children<S: ObjectRead>(
+    store: &S,
+    level: u8,
+    old: &[(CanonicalName, ObjectId)],
+    new: &[(CanonicalName, ObjectId)],
+    counters: &mut NamespaceCounters,
+    visitor: &mut impl FnMut(DirectoryEntryDiff) -> CoreResult<()>,
+) -> CoreResult<()> {
+    let child_level = level
+        .checked_sub(1)
+        .ok_or(CoreError::InvalidRecord("directory child summary"))?;
+    let (mut old_index, mut new_index) = (0_usize, 0_usize);
+    while old_index < old.len() && new_index < new.len() {
+        if old[old_index].0 == new[new_index].0 {
+            diff_directory_nodes(
+                store,
+                old[old_index].1,
+                new[new_index].1,
+                false,
+                counters,
+                visitor,
+            )?;
+            old_index += 1;
+            new_index += 1;
+            continue;
+        }
+        let (old_stop, new_stop) = next_directory_boundary(old, new, old_index, new_index)
+            .unwrap_or((old.len() - 1, new.len() - 1));
+        let mut old_counters = NamespaceCounters::default();
+        let mut new_counters = NamespaceCounters::default();
+        let result = merge_directory_entries(
+            DirectoryEntryCursor::from_children(
+                store,
+                &old[old_index..=old_stop],
+                child_level,
+                &mut old_counters,
+            ),
+            DirectoryEntryCursor::from_children(
+                store,
+                &new[new_index..=new_stop],
+                child_level,
+                &mut new_counters,
+            ),
+            visitor,
+        );
+        counters.nodes_read = counters
+            .nodes_read
+            .checked_add(old_counters.nodes_read)
+            .and_then(|value| value.checked_add(new_counters.nodes_read))
+            .ok_or(CoreError::LengthOverflow)?;
+        result?;
+        old_index = old_stop + 1;
+        new_index = new_stop + 1;
+    }
+    if old_index < old.len() {
+        let mut old_counters = NamespaceCounters::default();
+        merge_directory_entries(
+            DirectoryEntryCursor::from_children(
+                store,
+                &old[old_index..],
+                child_level,
+                &mut old_counters,
+            ),
+            std::iter::empty(),
+            visitor,
+        )?;
+        counters.nodes_read = counters
+            .nodes_read
+            .checked_add(old_counters.nodes_read)
+            .ok_or(CoreError::LengthOverflow)?;
+    }
+    if new_index < new.len() {
+        let mut new_counters = NamespaceCounters::default();
+        merge_directory_entries(
+            std::iter::empty(),
+            DirectoryEntryCursor::from_children(
+                store,
+                &new[new_index..],
+                child_level,
+                &mut new_counters,
+            ),
+            visitor,
+        )?;
+        counters.nodes_read = counters
+            .nodes_read
+            .checked_add(new_counters.nodes_read)
+            .ok_or(CoreError::LengthOverflow)?;
+    }
+    Ok(())
+}
+
+fn next_directory_boundary(
+    old: &[(CanonicalName, ObjectId)],
+    new: &[(CanonicalName, ObjectId)],
+    old_start: usize,
+    new_start: usize,
+) -> Option<(usize, usize)> {
+    for (old_index, old_child) in old.iter().enumerate().skip(old_start) {
+        if let Some(new_index) = new
+            .iter()
+            .enumerate()
+            .skip(new_start)
+            .find_map(|(index, child)| (child.0 == old_child.0).then_some(index))
+        {
+            return Some((old_index, new_index));
+        }
+    }
+    None
+}
+
+fn merge_directory_entries(
+    old: impl Iterator<Item = CoreResult<(CanonicalName, InodeId)>>,
+    new: impl Iterator<Item = CoreResult<(CanonicalName, InodeId)>>,
+    visitor: &mut impl FnMut(DirectoryEntryDiff) -> CoreResult<()>,
+) -> CoreResult<()> {
+    let mut old = old;
+    let mut new = new;
+    let mut old_entry = old.next().transpose()?;
+    let mut new_entry = new.next().transpose()?;
+    loop {
+        match (old_entry.take(), new_entry.take()) {
+            (None, None) => return Ok(()),
+            (Some((old_name, before)), Some((new_name, after))) if old_name == new_name => {
+                if before != after {
+                    visitor(DirectoryEntryDiff {
+                        name: old_name,
+                        before: Some(before),
+                        after: Some(after),
+                    })?;
+                }
+                old_entry = old.next().transpose()?;
+                new_entry = new.next().transpose()?;
+            }
+            (Some((old_name, before)), Some((new_name, after))) if old_name < new_name => {
+                visitor(DirectoryEntryDiff {
+                    name: old_name,
+                    before: Some(before),
+                    after: None,
+                })?;
+                old_entry = old.next().transpose()?;
+                new_entry = Some((new_name, after));
+            }
+            (Some((old_name, before)), Some((new_name, after))) => {
+                visitor(DirectoryEntryDiff {
+                    name: new_name,
+                    before: None,
+                    after: Some(after),
+                })?;
+                old_entry = Some((old_name, before));
+                new_entry = new.next().transpose()?;
+            }
+            (Some((old_name, before)), None) => {
+                visitor(DirectoryEntryDiff {
+                    name: old_name,
+                    before: Some(before),
+                    after: None,
+                })?;
+                old_entry = old.next().transpose()?;
+            }
+            (None, Some((new_name, after))) => {
+                visitor(DirectoryEntryDiff {
+                    name: new_name,
+                    before: None,
+                    after: Some(after),
+                })?;
+                new_entry = new.next().transpose()?;
+            }
+        }
+    }
+}
+
+struct DirectoryWalkItem {
+    id: ObjectId,
+    root: bool,
+    expected_level: Option<u8>,
+    expected_max: Option<CanonicalName>,
+}
+
+struct DirectoryEntryCursor<'a, S> {
+    store: &'a S,
+    stack: Vec<DirectoryWalkItem>,
+    leaf: std::vec::IntoIter<(CanonicalName, InodeId)>,
+    counters: &'a mut NamespaceCounters,
+}
+
+impl<'a, S> DirectoryEntryCursor<'a, S> {
+    fn new(
+        store: &'a S,
+        root: ObjectId,
+        root_context: bool,
+        counters: &'a mut NamespaceCounters,
+    ) -> Self {
+        Self {
+            store,
+            stack: vec![DirectoryWalkItem {
+                id: root,
+                root: root_context,
+                expected_level: None,
+                expected_max: None,
+            }],
+            leaf: Vec::new().into_iter(),
+            counters,
+        }
+    }
+
+    fn from_children(
+        store: &'a S,
+        children: &[(CanonicalName, ObjectId)],
+        child_level: u8,
+        counters: &'a mut NamespaceCounters,
+    ) -> Self {
+        Self {
+            store,
+            stack: children
+                .iter()
+                .rev()
+                .map(|(maximum, id)| DirectoryWalkItem {
+                    id: *id,
+                    root: false,
+                    expected_level: Some(child_level),
+                    expected_max: Some(maximum.clone()),
+                })
+                .collect(),
+            leaf: Vec::new().into_iter(),
+            counters,
+        }
+    }
+}
+
+impl<S: ObjectRead> Iterator for DirectoryEntryCursor<'_, S> {
+    type Item = CoreResult<(CanonicalName, InodeId)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(entry) = self.leaf.next() {
+                return Some(Ok(entry));
+            }
+            let item = self.stack.pop()?;
+            let loaded = match load_directory_node_shallow(
+                self.store,
+                item.id,
+                item.root,
+                None,
+                self.counters,
+            ) {
+                Ok(loaded) => loaded,
+                Err(error) => return Some(Err(error)),
+            };
+            if item
+                .expected_level
+                .is_some_and(|level| loaded.summary.level != level)
+                || item
+                    .expected_max
+                    .as_ref()
+                    .is_some_and(|maximum| loaded.summary.max.as_ref() != Some(maximum))
+            {
+                return Some(Err(CoreError::InvalidRecord("directory child summary")));
+            }
+            match loaded.node {
+                DirectoryNodeV1::Leaf { entries, .. } => self.leaf = entries.into_iter(),
+                DirectoryNodeV1::Branch {
+                    level, children, ..
+                } => {
+                    let Some(child_level) = level.checked_sub(1) else {
+                        return Some(Err(CoreError::InvalidRecord("directory child summary")));
+                    };
+                    self.stack
+                        .extend(children.into_iter().rev().map(|(maximum, id)| {
+                            DirectoryWalkItem {
+                                id,
+                                root: false,
+                                expected_level: Some(child_level),
+                                expected_max: Some(maximum),
+                            }
+                        }));
+                }
+            }
+        }
+    }
+}
+
 fn directory_node_shape(
     id: ObjectId,
     node: &DirectoryNodeV1,
@@ -957,15 +1348,11 @@ fn load_directory_node<S: ObjectRead>(
     id: ObjectId,
     counters: &mut NamespaceCounters,
 ) -> CoreResult<DirectoryNodeV1> {
-    let canonical = store.get(id)?;
-    if ObjectId::for_bytes(&canonical) != id {
-        return Err(CoreError::IdentityMismatch);
-    }
     counters.nodes_read = counters
         .nodes_read
         .checked_add(1)
         .ok_or(CoreError::LengthOverflow)?;
-    decode_directory_node(&canonical)
+    store.with_authenticated_canonical(id, decode_directory_node)
 }
 
 fn load_directory_state<S: ObjectRead>(
@@ -973,15 +1360,11 @@ fn load_directory_state<S: ObjectRead>(
     root: DirectoryStateRoot,
     counters: &mut NamespaceCounters,
 ) -> CoreResult<DirectoryStateV1> {
-    let canonical = store.get(root.0)?;
-    if ObjectId::for_bytes(&canonical) != root.0 {
-        return Err(CoreError::IdentityMismatch);
-    }
     counters.nodes_read = counters
         .nodes_read
         .checked_add(1)
         .ok_or(CoreError::LengthOverflow)?;
-    decode_directory_state(&canonical)
+    store.with_authenticated_canonical(root.0, decode_directory_state)
 }
 
 fn store_directory_state<S: ObjectStore>(
@@ -1008,10 +1391,10 @@ pub fn validate_inode_record<S: ObjectRead>(
     validate_metadata(store, record.metadata_root, record.kind)?;
     match record.kind {
         InodeKind::RegularFile => validate_file(store, FileStateRoot(record.content_root)),
-        InodeKind::Symlink => {
-            decode_symlink(&authenticated(store, record.content_root)?)?;
-            Ok(())
-        }
+        InodeKind::Symlink => store
+            .with_authenticated_canonical(record.content_root, |canonical| {
+                decode_symlink(canonical).map(drop)
+            }),
         InodeKind::Directory => visit_directory_entries(
             store,
             DirectoryStateRoot(record.content_root),
@@ -1074,14 +1457,6 @@ fn validate_metadata<S: ObjectRead>(store: &S, root: ObjectId, kind: InodeKind) 
         mtime_nanoseconds: nanoseconds,
     }
     .validate(kind)
-}
-
-fn authenticated<S: ObjectRead>(store: &S, id: ObjectId) -> CoreResult<Vec<u8>> {
-    let canonical = store.get(id)?;
-    if ObjectId::for_bytes(&canonical) != id {
-        return Err(CoreError::IdentityMismatch);
-    }
-    Ok(canonical)
 }
 
 fn nearest_half(widths: Vec<usize>) -> usize {

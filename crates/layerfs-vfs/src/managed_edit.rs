@@ -28,6 +28,8 @@ pub enum ManagedEdit {
         replacement_len: u64,
         metadata_offset: u64,
         metadata_len: u64,
+        sync_required: bool,
+        native_identity: Vec<u8>,
     },
     Rename {
         from: CanonicalPath,
@@ -56,7 +58,7 @@ pub fn mutate_native(
     start: u64,
     delete_len: u64,
     replacement: &[u8],
-) -> VfsResult<(NativeMetadata, NativeOperationCounters)> {
+) -> VfsResult<(NativeMetadata, NativeOperationCounters, bool)> {
     let root = native.root_directory()?;
     let (parent, name) = native_parent(native, root, path)?;
     let original_metadata = native.read_metadata_at(parent.as_ref(), name, None)?;
@@ -93,6 +95,7 @@ pub fn mutate_native(
                     bytes_read: replacement.len() as u64,
                     ..NativeOperationCounters::default()
                 },
+                false,
             ));
         }
         return Err(VfsError::NativeProtected);
@@ -116,6 +119,7 @@ pub fn mutate_native(
                         clone_successes: 1,
                         ..NativeOperationCounters::default()
                     },
+                    false,
                 ));
             }
             Err(DriverError::Unsupported) => {}
@@ -130,7 +134,66 @@ pub fn mutate_native(
     Ok((
         native.read_metadata_at(parent.as_ref(), name, None)?,
         counters,
+        true,
     ))
+}
+
+pub fn sync_pending(native: &dyn ProjectionWorkspace, edits: &[ManagedEdit]) -> VfsResult<()> {
+    let mut synced = std::collections::BTreeSet::new();
+    for (index, edit) in edits.iter().enumerate().rev() {
+        let ManagedEdit::Replace {
+            path,
+            sync_required: true,
+            native_identity,
+            ..
+        } = edit
+        else {
+            continue;
+        };
+        let path = translate_later_renames(path, &edits[index + 1..])?;
+        if !synced.insert(path.clone()) {
+            continue;
+        }
+        let root = native.root_directory()?;
+        let (parent, name) = native_parent(native, root, &path)?;
+        if native.identity_at(parent.as_ref(), name)? != *native_identity {
+            return Err(VfsError::Indeterminate);
+        }
+        let current_token = native.token_at(parent.as_ref(), name)?;
+        let mut file = native.open_regular_at(parent.as_ref(), name, Some(&current_token))?;
+        native.sync_regular(file.as_mut())?;
+        if native.token_at(parent.as_ref(), name)? != current_token
+            || native.identity_at(parent.as_ref(), name)? != *native_identity
+        {
+            return Err(VfsError::Indeterminate);
+        }
+    }
+    Ok(())
+}
+
+fn translate_later_renames(
+    path: &CanonicalPath,
+    edits: &[ManagedEdit],
+) -> VfsResult<CanonicalPath> {
+    let mut bytes = path.as_bytes().to_vec();
+    for edit in edits {
+        let ManagedEdit::Rename { from, to, .. } = edit else {
+            continue;
+        };
+        let source = from.as_bytes();
+        if bytes == source
+            || bytes
+                .strip_prefix(source)
+                .is_some_and(|suffix| suffix.first() == Some(&b'/'))
+        {
+            let suffix = &bytes[source.len()..];
+            let mut translated = Vec::with_capacity(to.as_bytes().len() + suffix.len());
+            translated.extend_from_slice(to.as_bytes());
+            translated.extend_from_slice(suffix);
+            bytes = translated;
+        }
+    }
+    Ok(CanonicalPath::from_bytes(&bytes)?)
 }
 
 pub fn rename_native(
@@ -140,6 +203,11 @@ pub fn rename_native(
 ) -> VfsResult<(NativeMetadata, NativeMetadata)> {
     let (source_parent, source) = native_parent(native, native.root_directory()?, from)?;
     let (target_parent, target) = native_parent(native, native.root_directory()?, to)?;
+    match native.token_at(target_parent.as_ref(), target) {
+        Ok(_) => return Err(VfsError::InvalidState),
+        Err(DriverError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
     if native
         .read_metadata_at(source_parent.as_ref(), source, None)?
         .bsd_flags
@@ -177,7 +245,8 @@ pub fn replay(
     spool: &mut dyn OwnedTempHandle,
 ) -> VfsResult<(RefState, OperationCounters)> {
     let mut counters = OperationCounters::default();
-    let mut namespace = decode_namespace_root(&engine.load_object(expected.root)?.canonical_bytes)?;
+    let mut namespace =
+        engine.with_authenticated_canonical(expected.root, decode_namespace_root)?;
     let mut publication = engine
         .begin_publication(Some(expected), &expected.name)
         .map_err(|error| {
@@ -197,6 +266,7 @@ pub fn replay(
                 replacement_len,
                 metadata_offset,
                 metadata_len,
+                ..
             } => replay_replace(
                 &mut publication,
                 namespace,
@@ -557,7 +627,7 @@ fn load_record<S: ObjectRead>(
     Ok(decode_inode_record(&store.get(id)?)?)
 }
 
-fn native_parent<'a>(
+pub(crate) fn native_parent<'a>(
     workspace: &dyn ProjectionWorkspace,
     mut directory: Box<dyn DirectoryHandle>,
     path: &'a CanonicalPath,
