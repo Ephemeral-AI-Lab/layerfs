@@ -1,6 +1,7 @@
-use crate::capture::put_metadata;
+use crate::capture::put_metadata_observed;
 use crate::driver::*;
 use crate::workspace::{VfsError, VfsResult};
+use crate::{NativeOperationCounters, NativeRoute, OperationCounters};
 use layerfs_core::content::rope::{replace as replace_rope, FileStateRoot, ObjectRead};
 use layerfs_core::inode::{
     inode_table_lookup, inode_table_upsert, InodeKind, InodeTableCounters, InodeTableRoot,
@@ -55,7 +56,7 @@ pub fn mutate_native(
     start: u64,
     delete_len: u64,
     replacement: &[u8],
-) -> VfsResult<NativeMetadata> {
+) -> VfsResult<(NativeMetadata, NativeOperationCounters)> {
     let root = native.root_directory()?;
     let (parent, name) = native_parent(native, root, path)?;
     let original_metadata = native.read_metadata_at(parent.as_ref(), name, None)?;
@@ -85,7 +86,14 @@ pub fn mutate_native(
                 }
                 offset += count;
             }
-            return Ok(original_metadata);
+            return Ok((
+                original_metadata,
+                NativeOperationCounters {
+                    route: Some(NativeRoute::ProtectedExactNoop),
+                    bytes_read: replacement.len() as u64,
+                    ..NativeOperationCounters::default()
+                },
+            ));
         }
         return Err(VfsError::NativeProtected);
     }
@@ -98,18 +106,31 @@ pub fn mutate_native(
                 let metadata = native.read_temp_metadata(temp.as_ref())?;
                 native.set_temp_metadata(temp.as_mut(), &metadata)?;
                 native.atomic_replace(temp, parent.as_ref(), name)?;
-                return native
-                    .read_metadata_at(parent.as_ref(), name, None)
-                    .map_err(Into::into);
+                return Ok((
+                    native.read_metadata_at(parent.as_ref(), name, None)?,
+                    NativeOperationCounters {
+                        route: Some(NativeRoute::ClonePatch),
+                        bytes_written: replacement.len() as u64,
+                        patch_bytes: replacement.len() as u64,
+                        clone_attempts: 1,
+                        clone_successes: 1,
+                        ..NativeOperationCounters::default()
+                    },
+                ));
             }
             Err(DriverError::Unsupported) => {}
             Err(error) => return Err(error.into()),
         }
     }
-    replace_native(native, file.as_mut(), start, delete_len, replacement)?;
-    native
-        .read_metadata_at(parent.as_ref(), name, None)
-        .map_err(Into::into)
+    let mut counters = replace_native(native, file.as_mut(), start, delete_len, replacement)?;
+    if delete_len == replacement.len() as u64 {
+        counters.clone_attempts = 1;
+        counters.clone_fallbacks = 1;
+    }
+    Ok((
+        native.read_metadata_at(parent.as_ref(), name, None)?,
+        counters,
+    ))
 }
 
 pub fn rename_native(
@@ -154,7 +175,8 @@ pub fn replay(
     expected: &RefState,
     edits: &[ManagedEdit],
     spool: &mut dyn OwnedTempHandle,
-) -> VfsResult<RefState> {
+) -> VfsResult<(RefState, OperationCounters)> {
+    let mut counters = OperationCounters::default();
     let mut namespace = decode_namespace_root(&engine.load_object(expected.root)?.canonical_bytes)?;
     let mut publication = engine
         .begin_publication(Some(expected), &expected.name)
@@ -185,6 +207,7 @@ pub fn replay(
                 *replacement_len,
                 &load_spooled_metadata(spool, *metadata_offset, *metadata_len)?,
                 spool,
+                &mut counters,
             )?,
             ManagedEdit::Rename {
                 from,
@@ -200,12 +223,14 @@ pub fn replay(
                 to,
                 &load_spooled_metadata(spool, *source_metadata_offset, *source_metadata_len)?,
                 &load_spooled_metadata(spool, *target_metadata_offset, *target_metadata_len)?,
+                &mut counters,
             )?,
         };
     }
-    publication
+    let state = publication
         .publish_namespace(&encode_namespace_root(namespace)?)
-        .map_err(Into::into)
+        .map_err(VfsError::from)?;
+    Ok((state, counters))
 }
 
 pub(crate) fn spool_metadata(
@@ -323,37 +348,40 @@ fn replay_replace(
     replacement_len: u64,
     metadata: &NativeMetadata,
     spool: &mut dyn OwnedTempHandle,
+    counters: &mut OperationCounters,
 ) -> VfsResult<NamespaceRootV1> {
-    let (inode, record) = resolve(publication, namespace, path)?;
+    let (inode, record) = resolve(publication, namespace, path, counters)?;
     if record.kind != InodeKind::RegularFile {
         return Err(VfsError::InvalidState);
     }
     spool.seek(SeekFrom::Start(spool_offset))?;
     let mut replacement = (&mut *spool).take(replacement_len);
-    let (content, _) = replace_rope(
+    let (content, rope) = replace_rope(
         publication,
         FileStateRoot(record.content_root),
         start,
         delete_len,
         &mut replacement,
     )?;
+    counters.add_rope(rope)?;
     if replacement.limit() != 0 {
         return Err(VfsError::InvalidState);
     }
-    let metadata_root = put_metadata(publication, InodeKind::RegularFile, metadata)?;
+    let metadata_root =
+        put_metadata_observed(publication, InodeKind::RegularFile, metadata, counters)?;
     let record_id =
         publication.put_object(&encode_inode_record(layerfs_core::inode::InodeRecordV1 {
             content_root: content.0,
             metadata_root,
             ..record
         })?)?;
-    let table = inode_table_upsert(
+    let (table, inode_counters) = inode_table_upsert(
         publication,
         InodeTableRoot(namespace.inode_table_root),
         inode,
         record_id,
-    )?
-    .0;
+    )?;
+    counters.add_inode_table(inode_counters)?;
     Ok(NamespaceRootV1 {
         inode_table_root: table.0,
         ..namespace
@@ -367,58 +395,82 @@ fn replay_rename(
     to: &CanonicalPath,
     source_parent_metadata: &NativeMetadata,
     target_parent_metadata: &NativeMetadata,
+    counters: &mut OperationCounters,
 ) -> VfsResult<NamespaceRootV1> {
-    let (source_inode, source_record, source_name) = resolve_parent(publication, namespace, from)?;
-    let (target_inode, target_record, target_name) = resolve_parent(publication, namespace, to)?;
+    let (source_inode, source_record, source_name) =
+        resolve_parent(publication, namespace, from, counters)?;
+    let (target_inode, target_record, target_name) =
+        resolve_parent(publication, namespace, to, counters)?;
     let mut table = InodeTableRoot(namespace.inode_table_root);
     if source_inode == target_inode {
-        let directory = directory_rename(
+        let (directory, namespace_counters) = directory_rename(
             publication,
             DirectoryStateRoot(source_record.content_root),
             &source_name,
             target_name,
-        )?
-        .0;
-        let metadata_root =
-            put_metadata(publication, InodeKind::Directory, source_parent_metadata)?;
+        )?;
+        counters.add_namespace(namespace_counters)?;
+        let metadata_root = put_metadata_observed(
+            publication,
+            InodeKind::Directory,
+            source_parent_metadata,
+            counters,
+        )?;
         let id =
             publication.put_object(&encode_inode_record(layerfs_core::inode::InodeRecordV1 {
                 content_root: directory.0,
                 metadata_root,
                 ..source_record
             })?)?;
-        table = inode_table_upsert(publication, table, source_inode, id)?.0;
+        let (next, inode_counters) = inode_table_upsert(publication, table, source_inode, id)?;
+        counters.add_inode_table(inode_counters)?;
+        table = next;
     } else {
-        let (source_directory, moved, _) = directory_remove(
+        let (source_directory, moved, namespace_counters) = directory_remove(
             publication,
             DirectoryStateRoot(source_record.content_root),
             &source_name,
         )?;
-        let target_directory = directory_insert(
+        counters.add_namespace(namespace_counters)?;
+        let (target_directory, namespace_counters) = directory_insert(
             publication,
             DirectoryStateRoot(target_record.content_root),
             target_name,
             moved,
-        )?
-        .0;
-        let source_metadata_root =
-            put_metadata(publication, InodeKind::Directory, source_parent_metadata)?;
+        )?;
+        counters.add_namespace(namespace_counters)?;
+        let source_metadata_root = put_metadata_observed(
+            publication,
+            InodeKind::Directory,
+            source_parent_metadata,
+            counters,
+        )?;
         let source_id =
             publication.put_object(&encode_inode_record(layerfs_core::inode::InodeRecordV1 {
                 content_root: source_directory.0,
                 metadata_root: source_metadata_root,
                 ..source_record
             })?)?;
-        table = inode_table_upsert(publication, table, source_inode, source_id)?.0;
-        let target_metadata_root =
-            put_metadata(publication, InodeKind::Directory, target_parent_metadata)?;
+        let (next, inode_counters) =
+            inode_table_upsert(publication, table, source_inode, source_id)?;
+        counters.add_inode_table(inode_counters)?;
+        table = next;
+        let target_metadata_root = put_metadata_observed(
+            publication,
+            InodeKind::Directory,
+            target_parent_metadata,
+            counters,
+        )?;
         let target_id =
             publication.put_object(&encode_inode_record(layerfs_core::inode::InodeRecordV1 {
                 content_root: target_directory.0,
                 metadata_root: target_metadata_root,
                 ..target_record
             })?)?;
-        table = inode_table_upsert(publication, table, target_inode, target_id)?.0;
+        let (next, inode_counters) =
+            inode_table_upsert(publication, table, target_inode, target_id)?;
+        counters.add_inode_table(inode_counters)?;
+        table = next;
     }
     Ok(NamespaceRootV1 {
         inode_table_root: table.0,
@@ -430,6 +482,7 @@ fn resolve_parent<S: ObjectRead>(
     store: &S,
     namespace: NamespaceRootV1,
     path: &CanonicalPath,
+    counters: &mut OperationCounters,
 ) -> VfsResult<(
     layerfs_core::inode::InodeId,
     layerfs_core::inode::InodeRecordV1,
@@ -448,7 +501,12 @@ fn resolve_parent<S: ObjectRead>(
                 bytes.extend_from_slice(component);
                 bytes
             });
-    let (inode, record) = resolve(store, namespace, &CanonicalPath::from_bytes(&parent_bytes)?)?;
+    let (inode, record) = resolve(
+        store,
+        namespace,
+        &CanonicalPath::from_bytes(&parent_bytes)?,
+        counters,
+    )?;
     if record.kind != InodeKind::Directory {
         return Err(VfsError::InvalidState);
     }
@@ -459,26 +517,29 @@ fn resolve<S: ObjectRead>(
     store: &S,
     namespace: NamespaceRootV1,
     path: &CanonicalPath,
+    counters: &mut OperationCounters,
 ) -> VfsResult<(
     layerfs_core::inode::InodeId,
     layerfs_core::inode::InodeRecordV1,
 )> {
     let table = InodeTableRoot(namespace.inode_table_root);
     let mut inode = namespace.root_directory_inode;
-    let mut record = load_record(store, table, inode)?;
+    let mut record = load_record(store, table, inode, counters)?;
     for component in path.components() {
         if record.kind != InodeKind::Directory {
             return Err(VfsError::InvalidState);
         }
         let name = CanonicalName::from_bytes(component)?;
+        let mut namespace_counters = NamespaceCounters::default();
         inode = directory_lookup(
             store,
             DirectoryStateRoot(record.content_root),
             &name,
-            &mut NamespaceCounters::default(),
+            &mut namespace_counters,
         )?
         .ok_or(VfsError::InvalidState)?;
-        record = load_record(store, table, inode)?;
+        counters.add_namespace(namespace_counters)?;
+        record = load_record(store, table, inode, counters)?;
     }
     Ok((inode, record))
 }
@@ -487,9 +548,12 @@ fn load_record<S: ObjectRead>(
     store: &S,
     table: InodeTableRoot,
     inode: layerfs_core::inode::InodeId,
+    counters: &mut OperationCounters,
 ) -> VfsResult<layerfs_core::inode::InodeRecordV1> {
-    let id = inode_table_lookup(store, table, inode, &mut InodeTableCounters::default())?
+    let mut inode_counters = InodeTableCounters::default();
+    let id = inode_table_lookup(store, table, inode, &mut inode_counters)?
         .ok_or(VfsError::InvalidState)?;
+    counters.add_inode_table(inode_counters)?;
     Ok(decode_inode_record(&store.get(id)?)?)
 }
 
@@ -512,7 +576,7 @@ fn replace_native(
     start: u64,
     delete_len: u64,
     replacement: &[u8],
-) -> VfsResult<()> {
+) -> VfsResult<NativeOperationCounters> {
     let length = file.seek(SeekFrom::End(0))?;
     let end = start
         .checked_add(delete_len)
@@ -526,6 +590,7 @@ fn replace_native(
         .and_then(|value| value.checked_add(replacement_len))
         .ok_or(VfsError::InvalidState)?;
     let mut buffer = vec![0_u8; 1024 * 1024];
+    let shifted = if next_len == length { 0 } else { length - end };
     if next_len > length {
         workspace.set_regular_len(file, next_len)?;
         let mut remaining = length - end;
@@ -553,5 +618,18 @@ fn replace_native(
     file.seek(SeekFrom::Start(start))?;
     file.write_all(replacement)?;
     file.flush()?;
-    Ok(())
+    Ok(NativeOperationCounters {
+        route: Some(if next_len == length {
+            NativeRoute::InPlacePatch
+        } else {
+            NativeRoute::InPlaceShift
+        }),
+        bytes_read: shifted,
+        bytes_written: shifted
+            .checked_add(replacement_len)
+            .ok_or(VfsError::InvalidState)?,
+        patch_bytes: replacement_len,
+        suffix_bytes_shifted: shifted,
+        ..NativeOperationCounters::default()
+    })
 }

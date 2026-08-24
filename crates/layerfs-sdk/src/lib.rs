@@ -7,7 +7,7 @@ use layerfs_vfs::LayerVfs;
 use std::path::Path;
 use std::sync::Arc;
 
-pub use layerfs_vfs::{RootId, VfsError};
+pub use layerfs_vfs::{NativeRoute, OperationCounters as OperationDiagnostics, RootId, VfsError};
 
 pub const COMPONENT: &str = "layerfs-sdk";
 
@@ -17,7 +17,7 @@ pub struct OpenedLayerFs {
 }
 pub struct LayerFs(LayerVfs);
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CompactionDiagnostics {
     pub old_generation_bytes: u64,
     pub new_generation_bytes: u64,
@@ -28,15 +28,33 @@ pub struct CompactionDiagnostics {
     pub total_peak_bytes: u64,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Diagnostics {
     pub transactions_started: u64,
     pub transactions_committed: u64,
+    pub transactions_rolled_back: u64,
+    pub statements: u64,
+    pub busy_events: u64,
+    pub locked_events: u64,
+    pub objects_validated: u64,
     pub objects_created: u64,
     pub objects_reused: u64,
+    pub object_bytes_read: u64,
+    pub object_bytes_written: u64,
+    pub range_bytes_requested: u64,
+    pub range_bytes_returned: u64,
+    pub logical_object_bytes: u64,
+    pub logical_root_bytes: u64,
+    pub logical_delta_bytes: u64,
+    pub retained_union_scrubs: u64,
+    pub root_verifications: u64,
+    pub root_verification_objects: u64,
+    pub root_verification_bytes: u64,
     pub page_size: i64,
     pub cache_pages: i64,
     pub database_bytes: Option<u64>,
+    pub rollback_journal_bytes: Option<u64>,
+    pub temporary_file_bytes: Option<u64>,
     pub logical_engine_bytes: Option<u64>,
     pub compaction: Option<CompactionDiagnostics>,
     pub active_connections: u64,
@@ -59,6 +77,15 @@ impl LayerFs {
         self.0
             .materialize_external(root, path)
             .map(ExternalWorkspace)
+    }
+    pub fn materialize_external_observed(
+        &self,
+        root: RootId,
+        path: &Path,
+    ) -> Result<(ExternalWorkspace, OperationDiagnostics), layerfs_vfs::VfsError> {
+        self.0
+            .materialize_external_observed(root, path)
+            .map(|(workspace, counters)| (ExternalWorkspace(workspace), counters))
     }
     pub fn materialize_managed(
         &self,
@@ -101,11 +128,29 @@ impl LayerFs {
         Ok(Diagnostics {
             transactions_started: counters.transactions_started,
             transactions_committed: counters.transactions_committed,
+            transactions_rolled_back: counters.transactions_rolled_back,
+            statements: counters.statements,
+            busy_events: counters.busy_events,
+            locked_events: counters.locked_events,
+            objects_validated: counters.objects_validated,
             objects_created: counters.objects_created,
             objects_reused: counters.objects_reused,
+            object_bytes_read: counters.object_bytes_read,
+            object_bytes_written: counters.object_bytes_written,
+            range_bytes_requested: counters.range_bytes_requested,
+            range_bytes_returned: counters.range_bytes_returned,
+            logical_object_bytes: counters.logical_object_bytes,
+            logical_root_bytes: counters.logical_root_bytes,
+            logical_delta_bytes: counters.logical_delta_bytes,
+            retained_union_scrubs: counters.retained_union_scrubs,
+            root_verifications: counters.root_verifications,
+            root_verification_objects: counters.root_verification_objects,
+            root_verification_bytes: counters.root_verification_bytes,
             page_size: profile.page_size,
             cache_pages: profile.cache_pages,
             database_bytes: storage.database_bytes,
+            rollback_journal_bytes: storage.rollback_journal_bytes,
+            temporary_file_bytes: storage.temporary_file_bytes,
             logical_engine_bytes: storage.logical_engine_bytes,
             compaction,
             active_connections: self.0.active_connection_count()?,
@@ -121,6 +166,11 @@ impl ManagedWorkspace {
     pub fn capture(&mut self) -> Result<RootId, layerfs_vfs::VfsError> {
         self.0.capture()
     }
+    pub fn capture_observed(
+        &mut self,
+    ) -> Result<(RootId, OperationDiagnostics), layerfs_vfs::VfsError> {
+        self.0.capture_observed()
+    }
     pub fn replace(
         &mut self,
         path: &str,
@@ -130,8 +180,24 @@ impl ManagedWorkspace {
     ) -> Result<(), layerfs_vfs::VfsError> {
         self.0.replace_path(path, start, delete_len, bytes)
     }
+    pub fn replace_observed(
+        &mut self,
+        path: &str,
+        start: u64,
+        delete_len: u64,
+        bytes: &[u8],
+    ) -> Result<OperationDiagnostics, layerfs_vfs::VfsError> {
+        self.0.replace_path_observed(path, start, delete_len, bytes)
+    }
     pub fn rename(&mut self, from: &str, to: &str) -> Result<(), layerfs_vfs::VfsError> {
         self.0.rename_path(from, to)
+    }
+    pub fn rename_observed(
+        &mut self,
+        from: &str,
+        to: &str,
+    ) -> Result<OperationDiagnostics, layerfs_vfs::VfsError> {
+        self.0.rename_path_observed(from, to)
     }
     pub fn into_external(self) -> Result<ExternalWorkspace, layerfs_vfs::VfsError> {
         self.0.into_external().map(ExternalWorkspace)
@@ -148,6 +214,11 @@ impl ExternalWorkspace {
     }
     pub fn capture_quiescent(&mut self) -> Result<RootId, layerfs_vfs::VfsError> {
         self.0.capture_quiescent()
+    }
+    pub fn capture_quiescent_observed(
+        &mut self,
+    ) -> Result<(RootId, OperationDiagnostics), layerfs_vfs::VfsError> {
+        self.0.capture_quiescent_observed()
     }
     pub fn discard(&mut self) -> Result<(), layerfs_vfs::VfsError> {
         self.0.discard()

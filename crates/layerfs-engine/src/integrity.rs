@@ -51,15 +51,22 @@ pub(crate) fn verify_retained_union_observed(
     Ok(retained.peak_bytes)
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct VerificationObservation {
+    pub(crate) objects: u64,
+    pub(crate) bytes: u64,
+}
+
 pub(crate) fn verify_root(
     connection: &Connection,
     store: &Path,
     root: ObjectId,
-) -> EngineResult<()> {
+) -> EngineResult<VerificationObservation> {
     let work = DiskTable::create_near(store, "publication-closure")?;
     enqueue(&work, root, Role::Namespace, true)?;
-    drain(connection, &work)?;
-    validate_namespace_graph_disk(connection, store, root).map(drop)
+    let observation = drain(connection, &work)?;
+    validate_namespace_graph_disk(connection, store, root).map(drop)?;
+    Ok(observation)
 }
 
 pub(crate) struct RetainedUnion {
@@ -310,7 +317,8 @@ impl ObjectRead for ConnectionStore<'_> {
     }
 }
 
-fn drain(connection: &Connection, work: &DiskTable) -> EngineResult<()> {
+fn drain(connection: &Connection, work: &DiskTable) -> EngineResult<VerificationObservation> {
+    let mut observation = VerificationObservation::default();
     while let Some((key, _)) = work.pop_pending()? {
         let (id, role, root) = decode_key(&key)?;
         let row = connection.query_row("SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1", params![id.as_bytes().as_slice()], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, Vec<u8>>(2)?))).optional().map_err(map_sqlite_error)?.ok_or(EngineError::MissingObject(id))?;
@@ -322,9 +330,17 @@ fn drain(connection: &Connection, work: &DiskTable) -> EngineResult<()> {
         }
         validate_identity(&row.2, id)
             .map_err(|cause| EngineError::MalformedObject { id, cause })?;
+        observation.objects = observation
+            .objects
+            .checked_add(1)
+            .ok_or(EngineError::CounterOverflow)?;
+        observation.bytes = observation
+            .bytes
+            .checked_add(u64::try_from(row.2.len()).map_err(|_| EngineError::CounterOverflow)?)
+            .ok_or(EngineError::CounterOverflow)?;
         visit(work, role, root, &row.2)?;
     }
-    Ok(())
+    Ok(observation)
 }
 
 fn visit(work: &DiskTable, role: Role, root: bool, canonical: &[u8]) -> EngineResult<()> {

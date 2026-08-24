@@ -1,6 +1,7 @@
 use crate::capture::capture_workspace;
 use crate::driver::*;
 use crate::workspace::{VfsError, VfsResult};
+use crate::{NativeRoute, OperationCounters};
 use layerfs_core::content::rope::{read_all, read_all_bounded, FileStateRoot};
 use layerfs_core::inode::{
     inode_table_lookup, InodeId, InodeKind, InodeTableCounters, InodeTableRoot,
@@ -24,14 +25,16 @@ pub fn materialize(
         WorkspacePolicy::ExternalCooperative,
         engine.store_id()?,
     )?;
-    materialize_workspace(engine, workspace.as_ref(), root)
+    materialize_workspace(engine, workspace.as_ref(), root).map(drop)
 }
 
 pub(crate) fn materialize_workspace(
     engine: &Engine,
     workspace: &dyn ProjectionWorkspace,
     root: ObjectId,
-) -> VfsResult<()> {
+) -> VfsResult<OperationCounters> {
+    let mut counters = OperationCounters::default();
+    counters.native.route = Some(NativeRoute::MaterializeStream);
     workspace.revalidate_root_binding()?;
     let root_handle = workspace.root_directory()?;
     if workspace
@@ -43,16 +46,18 @@ pub(crate) fn materialize_workspace(
         if expected.root != root {
             return Err(VfsError::ExternalDirtyConflict);
         }
-        let verified = capture_workspace(engine, workspace, Some(&expected), None, true, true)?;
+        let (verified, mut counters) =
+            capture_workspace(engine, workspace, Some(&expected), None, true, true)?;
         if verified.root != root {
             return Err(VfsError::ExternalDirtyConflict);
         }
         workspace.revalidate_root_binding()?;
-        return Ok(());
+        counters.native.route = Some(NativeRoute::ExactNoop);
+        return Ok(counters);
     }
     let namespace = decode_namespace_root(&engine.load_object(root)?.canonical_bytes)?;
     let table = InodeTableRoot(namespace.inode_table_root);
-    let root_record = record(engine, table, namespace.root_directory_inode)?;
+    let root_record = record(engine, table, namespace.root_directory_inode, &mut counters)?;
     if root_record.kind != InodeKind::Directory {
         return Err(VfsError::InvalidState);
     }
@@ -67,11 +72,12 @@ pub(crate) fn materialize_workspace(
         root_handle.as_ref(),
         &links,
         &current_path,
+        &mut counters,
     )?;
-    workspace.set_root_metadata(&metadata(engine, root_record.metadata_root)?)?;
+    workspace.set_root_metadata(&metadata(engine, root_record.metadata_root, &mut counters)?)?;
     workspace.sync_directory(root_handle.as_ref())?;
     workspace.revalidate_root_binding()?;
-    Ok(())
+    Ok(counters)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -84,58 +90,54 @@ fn materialize_directory(
     parent: &dyn DirectoryHandle,
     links: &DiskTable,
     current_path: &[u8],
+    counters: &mut OperationCounters,
 ) -> VfsResult<()> {
     let mut preflight = workspace.begin_name_preflight()?;
     let mut error = None;
-    let visited = visit_directory_entries(
-        engine,
-        directory,
-        &mut NamespaceCounters::default(),
-        |entries| {
-            for (name, _) in entries {
-                if let Err(cause) = preflight.add(name.as_bytes()) {
-                    error = Some(VfsError::Driver(cause));
-                    return Err(layerfs_core::CoreError::Io);
-                }
+    let mut namespace_counters = NamespaceCounters::default();
+    let visited = visit_directory_entries(engine, directory, &mut namespace_counters, |entries| {
+        for (name, _) in entries {
+            if let Err(cause) = preflight.add(name.as_bytes()) {
+                error = Some(VfsError::Driver(cause));
+                return Err(layerfs_core::CoreError::Io);
             }
-            Ok(())
-        },
-    );
+        }
+        Ok(())
+    });
     if let Some(error) = error {
         return Err(error);
     }
     visited?;
+    counters.add_namespace(namespace_counters)?;
     preflight.finish()?;
 
     let mut error = None;
-    let visited = visit_directory_entries(
-        engine,
-        directory,
-        &mut NamespaceCounters::default(),
-        |entries| {
-            for (name, inode) in entries {
-                if let Err(cause) = materialize_entry(
-                    workspace,
-                    engine,
-                    table,
-                    workspace_root,
-                    parent,
-                    links,
-                    current_path,
-                    name.as_bytes(),
-                    *inode,
-                ) {
-                    error = Some(cause);
-                    return Err(layerfs_core::CoreError::Io);
-                }
+    let mut namespace_counters = NamespaceCounters::default();
+    let visited = visit_directory_entries(engine, directory, &mut namespace_counters, |entries| {
+        for (name, inode) in entries {
+            if let Err(cause) = materialize_entry(
+                workspace,
+                engine,
+                table,
+                workspace_root,
+                parent,
+                links,
+                current_path,
+                name.as_bytes(),
+                *inode,
+                counters,
+            ) {
+                error = Some(cause);
+                return Err(layerfs_core::CoreError::Io);
             }
-            Ok(())
-        },
-    );
+        }
+        Ok(())
+    });
     if let Some(error) = error {
         return Err(error);
     }
     visited?;
+    counters.add_namespace(namespace_counters)?;
     Ok(())
 }
 
@@ -150,9 +152,10 @@ fn materialize_entry(
     current_path: &[u8],
     name: &[u8],
     inode: InodeId,
+    counters: &mut OperationCounters,
 ) -> VfsResult<()> {
-    let record = record(engine, table, inode)?;
-    let metadata = metadata(engine, record.metadata_root)?;
+    let record = record(engine, table, inode, counters)?;
+    let metadata = metadata(engine, record.metadata_root, counters)?;
     match record.kind {
         InodeKind::Directory => {
             let child = workspace.create_directory_at(parent, name)?;
@@ -165,6 +168,7 @@ fn materialize_entry(
                 child.as_ref(),
                 links,
                 &child_path(current_path, name),
+                counters,
             )?;
             let expected = workspace.directory_identity(child.as_ref())?;
             workspace.set_entry_metadata(parent, name, &expected, &metadata)?;
@@ -181,7 +185,13 @@ fn materialize_entry(
             } else {
                 let mut temp = workspace.create_temp_at(parent)?;
                 let root = FileStateRoot(record.content_root);
-                read_all(engine, root, &mut temp)?;
+                let rope = read_all(engine, root, &mut temp)?;
+                counters.native.bytes_written = counters
+                    .native
+                    .bytes_written
+                    .checked_add(rope.payload_bytes_read)
+                    .ok_or(VfsError::InvalidState)?;
+                counters.add_rope(rope)?;
                 let mut representative_metadata = metadata.clone();
                 if record.namespace_ref_count > 1 {
                     representative_metadata.bsd_flags = 0;
@@ -328,15 +338,22 @@ fn record(
     engine: &Engine,
     table: InodeTableRoot,
     inode: InodeId,
+    counters: &mut OperationCounters,
 ) -> VfsResult<layerfs_core::inode::InodeRecordV1> {
-    let id = inode_table_lookup(engine, table, inode, &mut InodeTableCounters::default())?
+    let mut inode_counters = InodeTableCounters::default();
+    let id = inode_table_lookup(engine, table, inode, &mut inode_counters)?
         .ok_or(VfsError::InvalidState)?;
+    counters.add_inode_table(inode_counters)?;
     Ok(decode_inode_record(
         &engine.load_object(id)?.canonical_bytes,
     )?)
 }
 
-fn metadata(engine: &Engine, root: ObjectId) -> VfsResult<NativeMetadata> {
+fn metadata(
+    engine: &Engine,
+    root: ObjectId,
+    counters: &mut OperationCounters,
+) -> VfsResult<NativeMetadata> {
     let mut mode = None;
     let mut seconds = None;
     let mut nanos = None;
@@ -348,7 +365,8 @@ fn metadata(engine: &Engine, root: ObjectId) -> VfsResult<NativeMetadata> {
         for entry in entries {
             let file_root = FileStateRoot(entry.value_file_root);
             let mut value = Vec::new();
-            read_all_bounded(engine, file_root, 1024 * 1024, &mut value)?;
+            let rope = read_all_bounded(engine, file_root, 1024 * 1024, &mut value)?;
+            counters.add_rope(rope)?;
             match (entry.key.domain.as_str(), entry.key.key.as_slice()) {
                 ("portable", b"mode") if value.len() == 4 => {
                     mode = Some(u32::from_be_bytes(value.try_into().unwrap()))

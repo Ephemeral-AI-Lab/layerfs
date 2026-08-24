@@ -1,5 +1,6 @@
 use crate::driver::*;
 use crate::workspace::{VfsError, VfsResult};
+use crate::{NativeRoute, OperationCounters};
 use layerfs_core::content::rope::build;
 use layerfs_core::inode::{
     generated_inode_table_from_root, generated_inode_table_upsert, inode_table_from_root,
@@ -69,13 +70,15 @@ pub(crate) fn capture_workspace(
     live_hard_links: Option<&DiskTable>,
     seed_live_hard_links: bool,
     require_same_root: bool,
-) -> VfsResult<RefState> {
+) -> VfsResult<(RefState, OperationCounters)> {
+    let mut counters = OperationCounters::default();
+    counters.native.route = Some(NativeRoute::CaptureStream);
     workspace.revalidate_root_binding()?;
     let root_handle = workspace.root_directory()?;
     let root_token = workspace.directory_token(root_handle.as_ref())?;
     let existing = DiskTable::create_near(engine.path(), "existing-paths")?;
     if let Some(expected) = expected {
-        seed_existing_paths(engine, expected.root, &existing)?;
+        seed_existing_paths(engine, expected.root, &existing, &mut counters)?;
     }
     let seeded_links = DiskTable::create_near(engine.path(), "existing-hardlinks")?;
     if seed_live_hard_links {
@@ -112,6 +115,7 @@ pub(crate) fn capture_workspace(
         existing_links,
         &[],
         &mut next_directory,
+        &mut counters,
     )?;
     if workspace.directory_token(root_handle.as_ref())? != root_token {
         return Err(DriverError::Conflict.into());
@@ -150,7 +154,7 @@ pub(crate) fn capture_workspace(
     {
         return Err(VfsError::ExternalDirtyConflict);
     }
-    Ok(publication.publish_namespace(&namespace)?)
+    Ok((publication.publish_namespace(&namespace)?, counters))
 }
 
 pub fn initialize_empty(engine: &Engine) -> VfsResult<RefState> {
@@ -200,6 +204,7 @@ fn capture_directory(
     existing_links: Option<&DiskTable>,
     current_path: &[u8],
     next_directory: &mut u64,
+    counters: &mut OperationCounters,
 ) -> VfsResult<()> {
     let mut state = empty_directory(publication)?;
     let directory_key = next_directory.to_be_bytes();
@@ -243,6 +248,7 @@ fn capture_directory(
                     existing_links,
                     &path,
                     next_directory,
+                    counters,
                 )?;
                 child_inode
             }
@@ -254,6 +260,7 @@ fn capture_directory(
                 table,
                 hard_links,
                 existing_links,
+                counters,
             )?,
             NativeKind::Symlink => {
                 let child_inode = match existing_inode(existing, &path, InodeKind::Symlink)? {
@@ -264,10 +271,11 @@ fn capture_directory(
                 let content = publication.put_object(&encode_symlink(
                     &layerfs_core::namespace::SymlinkStateV1::new(target)?,
                 )?)?;
-                let metadata = put_metadata(
+                let metadata = put_metadata_observed(
                     publication,
                     InodeKind::Symlink,
                     &workspace.read_metadata_at(directory, &entry.name, Some(&entry.token))?,
+                    counters,
                 )?;
                 put_record(
                     publication,
@@ -279,6 +287,7 @@ fn capture_directory(
                         content_root: content,
                         metadata_root: metadata,
                     },
+                    counters,
                 )?;
                 child_inode
             }
@@ -286,9 +295,16 @@ fn capture_directory(
         if workspace.token_at(directory, &entry.name)? != entry.token {
             return Err(DriverError::Conflict.into());
         }
-        state = directory_insert(publication, state, name, child_inode)?.0;
+        let (next, namespace_counters) = directory_insert(publication, state, name, child_inode)?;
+        counters.add_namespace(namespace_counters)?;
+        state = next;
     }
-    let metadata = put_metadata(publication, InodeKind::Directory, &native_metadata)?;
+    let metadata = put_metadata_observed(
+        publication,
+        InodeKind::Directory,
+        &native_metadata,
+        counters,
+    )?;
     put_record(
         publication,
         table,
@@ -299,6 +315,7 @@ fn capture_directory(
             content_root: state.0,
             metadata_root: metadata,
         },
+        counters,
     )
 }
 
@@ -374,6 +391,7 @@ fn decode_entry(name: Vec<u8>, bytes: &[u8]) -> VfsResult<NativeEntry> {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn capture_regular(
     workspace: &dyn ProjectionWorkspace,
     parent: &dyn DirectoryHandle,
@@ -382,6 +400,7 @@ fn capture_regular(
     table: &mut Option<GeneratedInodeTable>,
     hard_links: &DiskTable,
     existing_links: Option<&DiskTable>,
+    counters: &mut OperationCounters,
 ) -> VfsResult<InodeId> {
     let key = entry.hard_link_key.clone().ok_or(VfsError::InvalidState)?;
     if let Some(bytes) = hard_links.get(&key)? {
@@ -392,7 +411,7 @@ fn capture_regular(
             .namespace_ref_count
             .checked_add(1)
             .ok_or(VfsError::InvalidState)?;
-        put_record(publication, table, link.inode, link.record)?;
+        put_record(publication, table, link.inode, link.record, counters)?;
         hard_links.put(&key, &link.encode())?;
         return Ok(link.inode);
     }
@@ -405,11 +424,18 @@ fn capture_regular(
         None => publication.allocate_inode_id()?,
     };
     let mut file = workspace.open_regular_read_at(parent, &entry.name, Some(&entry.token))?;
-    let (content, _) = build(publication, &mut file)?;
-    let metadata = put_metadata(
+    let (content, rope) = build(publication, &mut file)?;
+    counters.native.bytes_read = counters
+        .native
+        .bytes_read
+        .checked_add(rope.cdc_bytes_scanned)
+        .ok_or(VfsError::InvalidState)?;
+    counters.add_rope(rope)?;
+    let metadata = put_metadata_observed(
         publication,
         InodeKind::RegularFile,
         &workspace.read_metadata_at(parent, &entry.name, Some(&entry.token))?,
+        counters,
     )?;
     let record = InodeRecordV1 {
         kind: InodeKind::RegularFile,
@@ -417,7 +443,7 @@ fn capture_regular(
         content_root: content.0,
         metadata_root: metadata,
     };
-    put_record(publication, table, inode, record)?;
+    put_record(publication, table, inode, record, counters)?;
     hard_links.put(
         &key,
         &HardLink {
@@ -504,19 +530,21 @@ pub(crate) fn live_hard_link_authority(
     engine: &Engine,
     workspace: &dyn ProjectionWorkspace,
     root: layerfs_core::ObjectId,
-) -> VfsResult<DiskTable> {
+) -> VfsResult<(DiskTable, OperationCounters)> {
+    let mut counters = OperationCounters::default();
     let paths = DiskTable::create_near(engine.path(), "live-hardlink-paths")?;
-    seed_existing_paths(engine, root, &paths)?;
+    seed_existing_paths(engine, root, &paths, &mut counters)?;
     let links = DiskTable::create_near(engine.path(), "live-hardlink-authority")?;
     let directory = workspace.root_directory()?;
     seed_existing_hard_links(workspace, directory.as_ref(), &paths, &links, &[])?;
-    Ok(links)
+    Ok((links, counters))
 }
 
 fn seed_existing_paths(
     engine: &Engine,
     root: layerfs_core::ObjectId,
     paths: &DiskTable,
+    counters: &mut OperationCounters,
 ) -> VfsResult<()> {
     let namespace = decode_namespace_root(&engine.load_object(root)?.canonical_bytes)?;
     seed_existing_directory(
@@ -525,6 +553,7 @@ fn seed_existing_paths(
         namespace.root_directory_inode,
         Vec::new(),
         paths,
+        counters,
     )
 }
 
@@ -534,20 +563,22 @@ fn seed_existing_directory(
     inode: InodeId,
     path: Vec<u8>,
     paths: &DiskTable,
+    counters: &mut OperationCounters,
 ) -> VfsResult<()> {
-    let record = existing_record(engine, table, inode)?;
+    let record = existing_record(engine, table, inode, counters)?;
     if record.kind != InodeKind::Directory {
         return Err(VfsError::InvalidState);
     }
     paths.put(&path, &encode_existing(inode, record.kind))?;
     let mut callback_error = None;
+    let mut namespace_counters = NamespaceCounters::default();
     let visited = visit_directory_entries(
         engine,
         DirectoryStateRoot(record.content_root),
-        &mut NamespaceCounters::default(),
+        &mut namespace_counters,
         |entries| {
             for (name, child) in entries {
-                let child_record = match existing_record(engine, table, *child) {
+                let child_record = match existing_record(engine, table, *child, counters) {
                     Ok(record) => record,
                     Err(error) => {
                         callback_error = Some(error);
@@ -557,7 +588,7 @@ fn seed_existing_directory(
                 let child_path = child_path(&path, name.as_bytes());
                 if child_record.kind == InodeKind::Directory {
                     if let Err(error) =
-                        seed_existing_directory(engine, table, *child, child_path, paths)
+                        seed_existing_directory(engine, table, *child, child_path, paths, counters)
                     {
                         callback_error = Some(error);
                         return Err(layerfs_core::CoreError::Io);
@@ -576,6 +607,7 @@ fn seed_existing_directory(
         return Err(error);
     }
     visited?;
+    counters.add_namespace(namespace_counters)?;
     Ok(())
 }
 
@@ -583,9 +615,12 @@ fn existing_record(
     engine: &Engine,
     table: InodeTableRoot,
     inode: InodeId,
+    counters: &mut OperationCounters,
 ) -> VfsResult<InodeRecordV1> {
-    let id = inode_table_lookup(engine, table, inode, &mut InodeTableCounters::default())?
+    let mut inode_counters = InodeTableCounters::default();
+    let id = inode_table_lookup(engine, table, inode, &mut inode_counters)?
         .ok_or(VfsError::InvalidState)?;
+    counters.add_inode_table(inode_counters)?;
     Ok(decode_inode_record(
         &engine.load_object(id)?.canonical_bytes,
     )?)
@@ -596,10 +631,16 @@ fn put_record(
     table: &mut Option<GeneratedInodeTable>,
     inode: InodeId,
     record: InodeRecordV1,
+    counters: &mut OperationCounters,
 ) -> VfsResult<()> {
     let id = publication.put_object(&encode_inode_record(record)?)?;
     *table = Some(match table.take() {
-        Some(root) => generated_inode_table_upsert(publication, root, inode, id)?.0,
+        Some(root) => {
+            let (root, inode_counters) =
+                generated_inode_table_upsert(publication, root, inode, id)?;
+            counters.add_inode_table(inode_counters)?;
+            root
+        }
         None => generated_inode_table_from_root(publication, inode, id)?,
     });
     Ok(())
@@ -609,6 +650,15 @@ pub(crate) fn put_metadata(
     publication: &mut Publication<'_>,
     kind: InodeKind,
     native: &NativeMetadata,
+) -> VfsResult<layerfs_core::ObjectId> {
+    put_metadata_observed(publication, kind, native, &mut OperationCounters::default())
+}
+
+pub(crate) fn put_metadata_observed(
+    publication: &mut Publication<'_>,
+    kind: InodeKind,
+    native: &NativeMetadata,
+    counters: &mut OperationCounters,
 ) -> VfsResult<layerfs_core::ObjectId> {
     let portable = PortableMetadataV1 {
         permission_mode: native.mode,
@@ -648,7 +698,8 @@ pub(crate) fn put_metadata(
     values.sort_by(|left, right| left.0.cmp(&right.0));
     let mut entries = Vec::with_capacity(values.len());
     for (key, value) in values {
-        let (root, _) = build(publication, Cursor::new(value))?;
+        let (root, rope) = build(publication, Cursor::new(value))?;
+        counters.add_rope(rope)?;
         entries.push(MetadataEntryV1 {
             key,
             value_file_root: root.0,

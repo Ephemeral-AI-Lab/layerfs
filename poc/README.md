@@ -33,6 +33,7 @@ programs for each small implementation repair.
 | [04 — Apple/APFS materialization and recovery](04-apple-apfs-materialization-and-recovery.md) | Native correctness path, clone/patch option, atomic publication, restart | `layerfs-os`, `layerfs-vfs` |
 | [05 — Minimal implementation plan](05-minimal-implementation-plan.md) | One vertical work sequence, extraction order, budgets, stop rules | Whole PoC |
 | [06 — Correctness and fast verification](06-correctness-and-fast-verification.md) | Model tests, goldens, fault/restart checks, structural counters, small benchmark | Tests + evaluator |
+| [11 — Apple PoC operation profile](11-operation-profile.md) | Per-operation wall, native routes, byte amplification, measured bottlenecks | Release evaluator |
 | [07 — Implementation checklist](07-implementation-checklist.md) | Cross-document executable checklist and completion ledger | Whole PoC |
 | [08 — Native workspace and shell verification](08-native-workspace-and-shell-verification.md) | Ordinary-file workspace contract, Bash lifecycle, supported filesystem subset, and realistic command corpus | SDK + VFS + evaluator |
 | [09 — Portability and Apple completeness](09-portability-and-apple-completeness.md) | Universal projection-driver boundary, canonical inode/metadata model, Apple/APFS completeness profile, and cross-platform rule | Core + VFS + OS |

@@ -1,6 +1,7 @@
 use crate::capture::{capture_workspace, initialize_empty, live_hard_link_authority};
 use crate::driver::{DriverError, ProjectionDriver};
 use crate::materialize::materialize_workspace;
+use crate::{NativeOperationCounters, NativeRoute, OperationCounters};
 use layerfs_core::CanonicalPath;
 use layerfs_core::{CoreError, ObjectId};
 use layerfs_engine::refs::RefState;
@@ -184,33 +185,49 @@ impl LayerVfs {
         root: ObjectId,
         path: &Path,
     ) -> VfsResult<ExternalWorkspace> {
+        self.materialize_external_observed(root, path)
+            .map(|(workspace, _)| workspace)
+    }
+    pub fn materialize_external_observed(
+        &self,
+        root: ObjectId,
+        path: &Path,
+    ) -> VfsResult<(ExternalWorkspace, OperationCounters)> {
         let _reservation = self.operation_q.reserve();
         let native = self.driver.open_workspace(
             path,
             crate::driver::WorkspacePolicy::ExternalCooperative,
             self.engine.store_id()?,
         )?;
-        materialize_workspace(&self.engine, native.as_ref(), root)?;
-        let hard_link_authority = live_hard_link_authority(&self.engine, native.as_ref(), root)?;
+        let mut counters = materialize_workspace(&self.engine, native.as_ref(), root)?;
+        let (hard_link_authority, authority_counters) =
+            live_hard_link_authority(&self.engine, native.as_ref(), root)?;
+        counters.add_rope(authority_counters.rope)?;
+        counters.add_namespace(authority_counters.namespace)?;
+        counters.add_inode_table(authority_counters.inode_table)?;
+        counters.add_native(authority_counters.native)?;
         let native_root = native.root_directory()?;
         let identity = native.directory_identity(native_root.as_ref())?;
         let writers = shared_writers(&identity)?;
-        Ok(ExternalWorkspace {
-            engine: self.engine.clone(),
-            native,
-            path: path.to_owned(),
-            expected: self
-                .engine
-                .read_ref("main")?
-                .ok_or(VfsError::InvalidState)?,
-            writers,
-            owned: false,
-            owned_identity: None,
-            hard_link_authority: Some(hard_link_authority),
-            active: true,
-            committed: None,
-            operation_q: self.operation_q.clone(),
-        })
+        Ok((
+            ExternalWorkspace {
+                engine: self.engine.clone(),
+                native,
+                path: path.to_owned(),
+                expected: self
+                    .engine
+                    .read_ref("main")?
+                    .ok_or(VfsError::InvalidState)?,
+                writers,
+                owned: false,
+                owned_identity: None,
+                hard_link_authority: Some(hard_link_authority),
+                active: true,
+                committed: None,
+                operation_q: self.operation_q.clone(),
+            },
+            counters,
+        ))
     }
     pub fn open_external(&self, path: &Path) -> VfsResult<ExternalWorkspace> {
         let _reservation = self.operation_q.reserve();
@@ -269,7 +286,7 @@ impl LayerVfs {
             materialize_workspace(&self.engine, native.as_ref(), root)?;
             let spool = native.create_temp_at(native_root.as_ref())?;
             let writers = shared_writers(&owned_identity)?;
-            let hard_link_authority =
+            let (hard_link_authority, _) =
                 live_hard_link_authority(&self.engine, native.as_ref(), root)?;
             Ok::<_, VfsError>((spool, writers, hard_link_authority))
         })();
@@ -326,28 +343,31 @@ pub struct ManagedWorkspace {
 }
 impl ManagedWorkspace {
     pub fn capture(&mut self) -> VfsResult<ObjectId> {
+        self.capture_observed().map(|(root, _)| root)
+    }
+    pub fn capture_observed(&mut self) -> VfsResult<(ObjectId, OperationCounters)> {
         let _reservation = self
             .external
             .as_ref()
             .ok_or(VfsError::InvalidState)?
             .operation_q
             .reserve();
-        let root = if let Some(root) = self.committed {
-            root
+        let (root, counters) = if let Some(root) = self.committed {
+            (root, OperationCounters::default())
         } else {
             let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
             if self.dirty {
                 return Err(VfsError::ExternalDirtyConflict);
             }
             let root = if self.edits.is_empty() {
-                external.expected.root
+                (external.expected.root, OperationCounters::default())
             } else {
                 let spool = self.spool.as_mut().ok_or(VfsError::InvalidState)?;
                 if let Err(error) = spool.flush() {
                     self.dirty = true;
                     return Err(error.into());
                 }
-                let next = match crate::managed_edit::replay(
+                let (next, counters) = match crate::managed_edit::replay(
                     &external.engine,
                     &external.expected,
                     &self.edits,
@@ -360,12 +380,12 @@ impl ManagedWorkspace {
                     }
                 };
                 external.expected = next.clone();
-                next.root
+                (next.root, counters)
             };
             self.edits.clear();
             self.dirty = false;
-            self.committed = Some(root);
-            root
+            self.committed = Some(root.0);
+            (root.0, root.1)
         };
         if let Err(error) = self
             .external
@@ -386,7 +406,7 @@ impl ManagedWorkspace {
         }
         self.external.take();
         self.committed.take();
-        Ok(root)
+        Ok((root, counters))
     }
     pub fn replace(
         &mut self,
@@ -395,6 +415,16 @@ impl ManagedWorkspace {
         delete_len: u64,
         bytes: &[u8],
     ) -> VfsResult<()> {
+        self.replace_observed(path, start, delete_len, bytes)
+            .map(drop)
+    }
+    pub fn replace_observed(
+        &mut self,
+        path: &CanonicalPath,
+        start: u64,
+        delete_len: u64,
+        bytes: &[u8],
+    ) -> VfsResult<OperationCounters> {
         let _reservation = self
             .external
             .as_ref()
@@ -419,7 +449,7 @@ impl ManagedWorkspace {
                     return Err(error);
                 }
             };
-        let metadata = match crate::managed_edit::mutate_native(
+        let (metadata, native_counters) = match crate::managed_edit::mutate_native(
             external.native.as_ref(),
             path,
             start,
@@ -478,7 +508,10 @@ impl ManagedWorkspace {
             metadata_offset,
             metadata_len,
         });
-        Ok(())
+        Ok(OperationCounters {
+            native: native_counters,
+            ..OperationCounters::default()
+        })
     }
     pub fn replace_path(
         &mut self,
@@ -489,7 +522,23 @@ impl ManagedWorkspace {
     ) -> VfsResult<()> {
         self.replace(&CanonicalPath::new(path)?, start, delete_len, bytes)
     }
+    pub fn replace_path_observed(
+        &mut self,
+        path: &str,
+        start: u64,
+        delete_len: u64,
+        bytes: &[u8],
+    ) -> VfsResult<OperationCounters> {
+        self.replace_observed(&CanonicalPath::new(path)?, start, delete_len, bytes)
+    }
     pub fn rename(&mut self, from: &CanonicalPath, to: &CanonicalPath) -> VfsResult<()> {
+        self.rename_observed(from, to).map(drop)
+    }
+    pub fn rename_observed(
+        &mut self,
+        from: &CanonicalPath,
+        to: &CanonicalPath,
+    ) -> VfsResult<OperationCounters> {
         let _reservation = self
             .external
             .as_ref()
@@ -537,7 +586,13 @@ impl ManagedWorkspace {
                     target_metadata_offset,
                     target_metadata_len,
                 });
-                Ok(())
+                Ok(OperationCounters {
+                    native: NativeOperationCounters {
+                        route: Some(NativeRoute::Rename),
+                        ..NativeOperationCounters::default()
+                    },
+                    ..OperationCounters::default()
+                })
             }
             Err(error @ VfsError::NativeProtected) => Err(error),
             Err(error) => {
@@ -548,6 +603,9 @@ impl ManagedWorkspace {
     }
     pub fn rename_path(&mut self, from: &str, to: &str) -> VfsResult<()> {
         self.rename(&CanonicalPath::new(from)?, &CanonicalPath::new(to)?)
+    }
+    pub fn rename_path_observed(&mut self, from: &str, to: &str) -> VfsResult<OperationCounters> {
+        self.rename_observed(&CanonicalPath::new(from)?, &CanonicalPath::new(to)?)
     }
     pub fn into_external(mut self) -> VfsResult<ExternalWorkspace> {
         let _reservation = self
@@ -605,15 +663,18 @@ impl ExternalWorkspace {
         &self.path
     }
     pub fn capture_quiescent(&mut self) -> VfsResult<ObjectId> {
+        self.capture_quiescent_observed().map(|(root, _)| root)
+    }
+    pub fn capture_quiescent_observed(&mut self) -> VfsResult<(ObjectId, OperationCounters)> {
         let _reservation = self.operation_q.reserve();
         if !self.active {
             return Err(VfsError::InvalidState);
         }
         let mut capture = CaptureLease::begin(self.writers.clone())?;
-        let root = if let Some(root) = self.committed {
-            root
+        let (root, counters) = if let Some(root) = self.committed {
+            (root, OperationCounters::default())
         } else {
-            let next = capture_workspace(
+            let (next, counters) = capture_workspace(
                 &self.engine,
                 self.native.as_ref(),
                 Some(&self.expected),
@@ -623,7 +684,7 @@ impl ExternalWorkspace {
             )?;
             self.expected = next.clone();
             self.committed = Some(next.root);
-            next.root
+            (next.root, counters)
         };
         if self.owned {
             if let Err(error) = self.native.remove_owned_root(
@@ -640,7 +701,7 @@ impl ExternalWorkspace {
         self.active = false;
         self.committed = None;
         capture.finish()?;
-        Ok(root)
+        Ok((root, counters))
     }
     pub fn discard(&mut self) -> VfsResult<()> {
         let _reservation = self.operation_q.reserve();

@@ -247,6 +247,9 @@ pub struct EngineCounters {
     pub logical_root_bytes: u64,
     pub logical_delta_bytes: u64,
     pub retained_union_scrubs: u64,
+    pub root_verifications: u64,
+    pub root_verification_objects: u64,
+    pub root_verification_bytes: u64,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

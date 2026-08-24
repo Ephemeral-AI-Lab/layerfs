@@ -151,7 +151,13 @@ impl Publication<'_> {
         if self.engine.mode == super::integrity::IntegrityMode::Verified
             && self.verified_retained_root != Some(root)
         {
-            super::integrity::verify_root(&self.connection, &self.engine.path, root)?;
+            let observation =
+                super::integrity::verify_root(&self.connection, &self.engine.path, root)?;
+            self.engine.bump(|counters| {
+                checked_add(&mut counters.root_verifications, 1)?;
+                checked_add(&mut counters.root_verification_objects, observation.objects)?;
+                checked_add(&mut counters.root_verification_bytes, observation.bytes)
+            })?;
         }
         let generation = self.expected.as_ref().map_or(Ok(0), |state| {
             state
