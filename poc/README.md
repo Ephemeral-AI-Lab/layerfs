@@ -1,12 +1,21 @@
 # LayerFS Apple/APFS PoC v1
 
-Status: **AppleWorkspaceV1 and Stage One implementation closed for this PoC
-after adversarial correctness repair**.
+Status: **AppleWorkspaceV1 Stage 1.0 implementation closed after adversarial
+correctness repair; Stage 1.1 and Stage 1.2 verification remain prospective**.
 The controlling closure and custody record is
-[17 — Stage One closure and accepted A02 exception](17-stage1-closure.md).
+[17 — Stage 1.0 closure and accepted A02 exception](17-stage1-closure.md).
 The preserved A01–A17 campaign remains measured `REVISE`; its A02 latency miss
-is explicitly user-accepted and is not relabeled as a threshold PASS. The
-workspace and Apple-edge campaigns remain prospective, deferred supplements.
+is explicitly user-accepted and is not relabeled as a threshold PASS. Stage
+1.1 is the single-file APFS edge specification in `poc/16`; Stage 1.2 is the
+npm/developer-workspace specification in `poc/15`. Mounted/write-intercepted
+macOS work is reserved for Stage Two and is not specified by either benchmark.
+
+```text
+Stage 1.0  implemented product baseline and A01–A17 closure
+Stage 1.1  poc/16 single-file APFS edge benchmark
+Stage 1.2  poc/15 npm/developer-workspace benchmark
+Stage 2    future mounted/write-intercepted macOS architecture
+```
 
 The PoC collapses the remaining G6 and project Phase 5–8 work into one vertical
 delivery:
@@ -44,9 +53,10 @@ programs for each small implementation repair.
 | [12 — Stage One performance completion](12-stage1-performance-completion.md) | Current disposition, narrowed scope, sequence, complexity, targets and acceptance gates | Stage One authority |
 | [13 — Stage One implementation and complexity](13-stage1-implementation-and-complexity.md) | Exact resulting tree, files to edit, route algorithms, counter proofs and tests | Product implementation |
 | [14 — 100 MiB operation campaign](14-stage1-single-file-benchmark.md) | Fast deterministic read/write/edit/reconstruct/materialize/refresh/reopen campaign | Single-file evaluator |
-| [15 — Real workspace campaign](15-stage1-workspace-benchmark.md) | Reusable <=300 MiB offline npm/code workspace and complete workflow | Workspace evaluator |
-| [16 — Apple random-edit edge benchmark](16-stage1-part1-apple-edge-benchmark.md) | Deferred supplemental real-APFS edit/checkpoint/refresh design | Supplemental evaluator |
-| [17 — Stage One closure and accepted A02 exception](17-stage1-closure.md) | Final disposition, current-source custody, measured PASS gates, and the explicit A02 waiver | Stage One closure |
+| [17 — Stage 1.0 closure and accepted A02 exception](17-stage1-closure.md) | Implemented baseline disposition, current-source custody, measured PASS gates, and explicit A02 waiver | Stage 1.0 closure |
+| [16 — Stage 1.1 single-file APFS edge specification](16-stage1-part1-apple-edge-benchmark.md) | One 24 MiB file; 47 rows; bidirectional edits, save bursts, checkpoints, history and refresh under 60 s | Stage 1.1 evaluator |
+| [18 — Stage 1.1 result and handoff template](18-stage1.1-result-template.md) | Exact summary tables, JSONL row schema, availability rules, timer receipt and final response | Stage 1.1 evaluator |
+| [15 — Stage 1.2 npm/developer-workspace specification](15-stage1-workspace-benchmark.md) | Reusable <=300 MiB offline npm/build/search/capture workflow | Stage 1.2 evaluator |
 
 ## 2. Reading order
 
@@ -66,9 +76,11 @@ programs for each small implementation repair.
   -> 12 Stage One controlling scope/targets
   -> 13 exact implementation/complexity audit
   -> 14 100 MiB operation campaign
-  -> 15 <=300 MiB workspace campaign
-  -> 16 deferred Apple random-edit supplement
-  -> 17 Stage One closure and custody
+  -> 17 Stage 1.0 implementation closure and custody
+  -> 16 Stage 1.1 single-file APFS edge specification
+  -> 18 Stage 1.1 result and handoff template
+  -> 15 Stage 1.2 npm/developer-workspace specification
+  -> Stage 2 mounted/write-intercepted macOS architecture (future spec)
 ```
 
 Do not begin with the benchmark. Implement and model-check the selected

@@ -1,9 +1,32 @@
-# Stage One — Real Developer Workspace Campaign
+# Stage 1.2 Specification — npm / Developer Workspace Benchmark
 
-Status: **prospective and deferred after Stage One closure; not executed**
-Authority: [12-stage1-performance-completion.md](12-stage1-performance-completion.md)
+Status: **prospective controlling specification for Stage 1.2; implementation
+not started; measurement not authorized**
+Authority: controls only the Stage 1.2 workload, fixture, readiness and
+disposition; [10 — handoff freeze](10-handoff-freeze.md),
+[17 — Stage 1.0 closure](17-stage1-closure.md), and the accepted Stage 1.1
+terminal artifact remain authoritative for product correctness and custody
 Purpose: exercise an ordinary APFS code workspace through real shell, Node,
 npm, search, edit, build, capture, reopen, history, and rematerialization.
+
+Sequence: **accepted Stage 1.1 -> Stage 1.2 -> mounted Stage Two**.
+The historical filename number does not define execution order: `poc/16` is
+Stage 1.1 and this `poc/15` document is Stage 1.2.
+
+Entry requires a settled Stage 1.1 source and independently accepted terminal
+disposition with no open correctness, durability, authentication, resource,
+population or custody failure. Stage 1.2 does not reopen A02 or inherit a
+Stage 1.1 performance claim.
+
+Explicit boundary:
+
+```text
+ordinary APFS directory + explicit full-scan capture only
+no mounted filesystem
+no FSKit, macFUSE, File Provider or write interception
+no DeltaGit watcher/journal implementation
+no Stage Two implementation or measurement
+```
 
 ## 1. Budget
 
@@ -366,9 +389,10 @@ raw sorted samples
 Use the same compact schema and files as the single-file campaign:
 
 ```text
-<run>/
+target/layerfs-stage1-workspace-<timestamp>/
 ├── environment.json
 ├── master.json
+├── readiness.json          exact admitted external receipt copy
 ├── schedule.json
 ├── rows.jsonl
 ├── summary.json
@@ -379,3 +403,78 @@ Use the same compact schema and files as the single-file campaign:
 
 No source copy, npm registry mirror, giant fixture committed to Git, Python
 runner, Criterion suite, benchmark lock, or per-operation manifest tree.
+
+## 13. Fixed population and disposition
+
+The B00–B16 table contains exactly 85 measured rows:
+
+```text
+B00 admission                                      1
+B01–B07, three rows each                          21
+B08, seven searches in each of three workflows   21
+B09–B10, three rows each                           6
+B11–B13, nine ref/move/read rows each             27
+B14–B16, three rows each                           9
+total                                             85
+```
+
+`PASS` requires:
+
+```text
+exact 85-row population and three complete workflows
+all command, native-tree, canonical-root and retained-history oracles exact
+offline npm inventory, build digest, search digest/count and test exit exact
+all capture/authentication/transaction equations exact
+all resource and cleanup gates pass
+roots repeat across the three cloned attempts
+complete campaign wall <=120 seconds
+fixture, cache and master remain unchanged
+```
+
+`REVISE` means every hard correctness, determinism, resource, custody and
+120-second gate passes, but report-only timing exposes a worthwhile product
+bottleneck or the preferred `<60 s` goal is missed.
+
+`FAIL` includes any byte/path/kind/metadata/root/history/durability/
+authentication mismatch, unexpected network access, incomplete population,
+resource or hard-time violation, timer/custody defect, escaped child, or
+terminal residue. No population, threshold or oracle may be weakened after the
+first measured observation.
+
+## 14. Prospective implementation map
+
+```text
+tools/layerfs-eval/src/
+├── main.rs                   tiny Stage 1.2 command dispatch only
+├── stage1_workspace.rs       fixture, schedule, runner, oracles and receipts
+└── stage1_fixture.rs         visibility-only reuse of generic seal/reset helpers
+```
+
+Expected commands:
+
+```text
+layerfs-eval stage1 prepare workspace
+layerfs-eval stage1 readiness workspace
+layerfs-eval stage1 run workspace <new-run-directory>
+```
+
+No product crate, dependency, canonical/SQLite schema, benchmark framework,
+Python runner, npm registry mirror, watcher or mount frontend is added for
+Stage 1.2. Product-source changes require a concrete correctness defect in an
+existing public route and a separate focused proof.
+
+## 15. Execution stages and handoff
+
+| Stage | Work | Exit condition |
+|---|---|---|
+| W0 | Freeze this specification and exact B00–B16 population | No open workload, tool or oracle choice |
+| W1 | Implement/test deterministic project, offline packages and command oracles | Generated project and package DAG match literal model |
+| W2 | Prepare and seal the reusable <=300 MiB fixture/cache | Fresh Verified reopen and exact native oracle; preparation recorded once |
+| W3 | Implement three-workflow runner, full-scan accounting and receipts | Focused evaluator checks pass; zero network |
+| W4 | One workspace fmt/check/test/clippy closure | Zero failures and warnings |
+| W5 | One release build and zero-row readiness | Exact source/executable/tool/fixture hashes; 85-row schedule; zero rows |
+| W6 | One campaign with hard <=120 s stop | Immutable PASS/REVISE/FAIL artifact |
+| W7 | Independent terminal audit | Honest disposition; no mounted Stage Two work started |
+
+An accepted W7 disposition closes Stage One verification and makes mounted
+Stage Two eligible. It does not implement or qualify a mount frontend.

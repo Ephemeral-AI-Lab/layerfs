@@ -21,7 +21,10 @@ Primary contracts:
 - [Stage One performance completion](12-stage1-performance-completion.md)
 - [Stage One implementation and complexity](13-stage1-implementation-and-complexity.md)
 - [100 MiB operation campaign](14-stage1-single-file-benchmark.md)
-- [real workspace campaign](15-stage1-workspace-benchmark.md)
+- [Stage 1.0 closure and custody](17-stage1-closure.md)
+- [Stage 1.1 single-file APFS edge specification](16-stage1-part1-apple-edge-benchmark.md)
+- [Stage 1.1 result and handoff template](18-stage1.1-result-template.md)
+- [Stage 1.2 npm/developer-workspace specification](15-stage1-workspace-benchmark.md)
 
 Current native disposition (2026-08-24): **PASS for the frozen
 AppleWorkspaceV1 PoC scope**. The active host synthesizes exact
@@ -39,10 +42,11 @@ campaign completed with exact oracles, terminal Q/FD equality, and zero owned
 residue. Changed-root incremental materialization remains an explicit PoC v1
 exclusion rather than an implemented claim.
 
-That exclusion describes the completed AppleWorkspaceV1 baseline. Stage One
-prospectively reopens changed-root refresh, direct canonical SDK operations,
-repeatable managed checkpoints, and performance closure under documents
-12–15; it does not retroactively relabel the v1 evidence.
+That exclusion describes the completed AppleWorkspaceV1 baseline. Stage 1.0
+implemented changed-root refresh, direct canonical SDK operations, repeatable
+managed checkpoints, and the operation campaign under documents 12–14 and 17.
+Stage 1.1 (`poc/16`) and Stage 1.2 (`poc/15`) are the remaining source-bound
+verification specifications; neither retroactively relabels the v1 evidence.
 
 ## 1. Completion definition
 
