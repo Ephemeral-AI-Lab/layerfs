@@ -169,6 +169,153 @@ fn trusted_reads_are_weaker_but_incumbent_writes_and_verified_reads_authenticate
 }
 
 #[test]
+fn trusted_valid_substitution_is_rejected_by_verified_retained_union_scrub() {
+    let base = std::env::temp_dir().join(format!(
+        "layerfs-reachable-substitution-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir(&base).unwrap();
+    let path = base.join("store.sqlite");
+    let original = b"reachable-original";
+    let substituted = b"reachable-impostor";
+    assert_eq!(original.len(), substituted.len());
+    let original_canonical = encode_bytes_object(original).unwrap();
+    let substituted_canonical = encode_bytes_object(substituted).unwrap();
+    let payload_id = ObjectId::for_bytes(&original_canonical);
+    assert_ne!(payload_id, ObjectId::for_bytes(&substituted_canonical));
+
+    let engine = Engine::open_with_mode(&path, IntegrityMode::TrustedLocalDev).unwrap();
+    let mut publication = engine.begin_publication(None, "main").unwrap();
+    let (mode, _) = build(&mut publication, 0o755_u32.to_be_bytes().as_slice()).unwrap();
+    let mut mtime = Vec::new();
+    mtime.extend_from_slice(&0_i64.to_be_bytes());
+    mtime.extend_from_slice(&0_u32.to_be_bytes());
+    let (mtime, _) = build(&mut publication, mtime.as_slice()).unwrap();
+    let metadata = build_metadata_tree(
+        &mut publication,
+        &[
+            MetadataEntryV1 {
+                key: MetadataKey::new("portable".into(), b"mode".to_vec()).unwrap(),
+                value_file_root: mode.0,
+            },
+            MetadataEntryV1 {
+                key: MetadataKey::new("portable".into(), b"mtime".to_vec()).unwrap(),
+                value_file_root: mtime.0,
+            },
+        ],
+    )
+    .unwrap();
+    let (content, _) = build(&mut publication, original.as_slice()).unwrap();
+    let root_inode = InodeId::allocate([0xa7; 32], 0);
+    let file_inode = InodeId::allocate([0xa7; 32], 1);
+    let file_record = publication
+        .put_object(
+            &encode_inode_record(InodeRecordV1 {
+                kind: InodeKind::RegularFile,
+                namespace_ref_count: 1,
+                content_root: content.0,
+                metadata_root: metadata,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let directory = empty_directory(&mut publication).unwrap();
+    let directory = directory_insert(
+        &mut publication,
+        directory,
+        CanonicalName::new("payload.bin").unwrap(),
+        file_inode,
+    )
+    .unwrap()
+    .0;
+    let root_record = publication
+        .put_object(
+            &encode_inode_record(InodeRecordV1 {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 0,
+                content_root: directory.0,
+                metadata_root: metadata,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let table = inode_table_from_root(&mut publication, root_inode, root_record).unwrap();
+    let table = inode_table_upsert(&mut publication, table, file_inode, file_record)
+        .unwrap()
+        .0;
+    publication
+        .publish_namespace(
+            &encode_namespace_root(NamespaceRootV1 {
+                profile_id: profile_id(),
+                root_directory_inode: root_inode,
+                inode_table_root: table.0,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    drop(engine);
+
+    let verified = Engine::open(&path).unwrap();
+    assert_eq!(verified.counters().unwrap().retained_union_scrubs, 1);
+    drop(verified);
+
+    let raw = Connection::open(&path).unwrap();
+    assert_eq!(
+        raw.execute(
+            "UPDATE layerfs_objects SET canonical_bytes = ?1 WHERE object_id = ?2",
+            params![&substituted_canonical, payload_id.as_bytes().as_slice()],
+        )
+        .unwrap(),
+        1
+    );
+    drop(raw);
+    let trusted = Engine::open_with_mode(&path, IntegrityMode::TrustedLocalDev).unwrap();
+    assert_eq!(
+        trusted.load_object(payload_id).unwrap().canonical_bytes,
+        substituted_canonical
+    );
+    assert_eq!(
+        trusted
+            .counters()
+            .unwrap()
+            .fetched_row_authentication_passes,
+        0
+    );
+    drop(trusted);
+
+    let error = match Engine::open(&path) {
+        Ok(_) => panic!("Verified scrub admitted a substituted reachable object"),
+        Err(error) => error,
+    };
+    assert!(matches!(
+        error,
+        EngineError::MalformedObject { .. } | EngineError::IdentityMismatch { .. }
+    ));
+    assert_eq!(
+        Connection::open(&path)
+            .unwrap()
+            .query_row(
+                "SELECT trusted_history FROM layerfs_authority WHERE authority_id = 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        1
+    );
+    let mut entries = fs::read_dir(&base)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<Vec<_>>();
+    entries.sort();
+    assert_eq!(entries, vec![std::ffi::OsString::from("store.sqlite")]);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
 fn canonical_rope_objects_share_the_publication_transaction() {
     let path = std::env::temp_dir().join(format!(
         "layerfs-core-publication-test-{}-{}.sqlite",

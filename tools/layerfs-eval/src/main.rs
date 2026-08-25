@@ -92,13 +92,15 @@ fn main() {
         {
             stage1_materialize::prepare()
         }
-        [stage1, materialize, manifest, role, commit, executable, output]
+        [stage1, materialize, manifest, role, commit, executable, build_target, build_log, output]
             if stage1 == "stage1" && materialize == "materialize" && manifest == "manifest" =>
         {
             stage1_materialize::manifest(
                 role,
                 commit,
                 std::path::Path::new(executable),
+                std::path::Path::new(build_target),
+                std::path::Path::new(build_log),
                 std::path::Path::new(output),
             )
         }
@@ -164,7 +166,7 @@ fn main() {
             )
         }
         _ => Err(
-            "usage:\n  layerfs-eval apple-poc <run-directory>\n  layerfs-eval stage1 prepare single-file\n  layerfs-eval stage1 readiness-only single-file\n  layerfs-eval stage1 run single-file <run-directory>\n  layerfs-eval stage1 prepare apple-edge\n  layerfs-eval stage1 readiness apple-edge\n  layerfs-eval stage1 run apple-edge <run-directory>\n  layerfs-eval stage1 materialize prepare\n  layerfs-eval stage1 materialize parity-row <store> <source> <size-mib> <work-directory> <identity>\n  layerfs-eval stage1 materialize attribution-block <store> <source> <size-mib> <complete|null|digest|native> <work-directory> <identity>\n  layerfs-eval stage1 materialize trusted-block <store> <source> <size-mib> <work-directory> <identity>\n  layerfs-eval stage1 materialize trusted-run <fixture-root> <source-manifest.json> <new-run-directory>\n  layerfs-eval stage1 materialize attribution-run <control-executable> <fixture-root> <new-run-directory>\n  layerfs-eval stage1 materialize acceptance-run <control-executable> <candidate-executable> <fixture-root> <new-run-directory>\n  layerfs-eval stage1 materialize hash <path>\n  layerfs-eval stage1 materialize manifest <role> <commit> <executable> <output.json>\n  layerfs-eval stage1 materialize parity-readiness <historical> <instrumented> <store> <source> <receipt.json>\n  layerfs-eval stage1 materialize parity-run <historical> <instrumented> <store> <source> <readiness.json> <new-run-directory>"
+            "usage:\n  layerfs-eval apple-poc <run-directory>\n  layerfs-eval stage1 prepare single-file\n  layerfs-eval stage1 readiness-only single-file\n  layerfs-eval stage1 run single-file <run-directory>\n  layerfs-eval stage1 prepare apple-edge\n  layerfs-eval stage1 readiness apple-edge\n  layerfs-eval stage1 run apple-edge <run-directory>\n  layerfs-eval stage1 materialize prepare\n  layerfs-eval stage1 materialize parity-row <store> <source> <size-mib> <work-directory> <identity>\n  layerfs-eval stage1 materialize attribution-block <store> <source> <size-mib> <complete|null|digest|native> <work-directory> <identity>\n  layerfs-eval stage1 materialize trusted-block <store> <source> <size-mib> <work-directory> <identity>\n  layerfs-eval stage1 materialize trusted-run <fixture-root> <source-manifest.json> <new-run-directory>\n  layerfs-eval stage1 materialize attribution-run <control-executable> <fixture-root> <new-run-directory>\n  layerfs-eval stage1 materialize acceptance-run <control-executable> <candidate-executable> <fixture-root> <new-run-directory>\n  layerfs-eval stage1 materialize hash <path>\n  layerfs-eval stage1 materialize manifest <role> <commit> <executable> <build-target-dir> <build.log> <output.json>\n  layerfs-eval stage1 materialize parity-readiness <historical> <instrumented> <store> <source> <receipt.json>\n  layerfs-eval stage1 materialize parity-run <historical> <instrumented> <store> <source> <readiness.json> <new-run-directory>"
                 .to_owned(),
         ),
     };

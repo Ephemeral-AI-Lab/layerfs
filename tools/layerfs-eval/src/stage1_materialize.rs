@@ -371,18 +371,86 @@ pub fn hash(path: &Path) -> EvalResult<()> {
     Ok(())
 }
 
-pub fn manifest(role: &OsStr, commit: &OsStr, executable: &Path, output: &Path) -> EvalResult<()> {
+pub fn manifest(
+    role: &OsStr,
+    commit: &OsStr,
+    executable: &Path,
+    build_target: &Path,
+    build_log: &Path,
+    output: &Path,
+) -> EvalResult<()> {
     let role = ascii_argument(role, "role")?;
-    let commit = ascii_argument(commit, "commit")?;
+    let requested_commit = ascii_argument(commit, "commit")?;
     if output.exists() {
         return Err(format!(
             "refusing to replace source manifest {}",
             output.display()
         ));
     }
+    let json =
+        source_build_manifest_json(role, requested_commit, executable, build_target, build_log)?;
+    durable_write(output, json.as_bytes())?;
+    println!(
+        "stage1-manifest status=PASS role={} commit={} output={}",
+        role,
+        resolve_commit(requested_commit)?,
+        output.display()
+    );
+    Ok(())
+}
+
+fn source_build_manifest_json(
+    role: &str,
+    requested_commit: &str,
+    executable: &Path,
+    build_target: &Path,
+    build_log: &Path,
+) -> EvalResult<String> {
     let executable = executable.canonicalize().map_err(io_error)?;
+    let running_executable = std::env::current_exe()
+        .map_err(io_error)?
+        .canonicalize()
+        .map_err(io_error)?;
+    let build_target = build_target.canonicalize().map_err(io_error)?;
+    let expected_executable = build_target
+        .join("release/layerfs-eval")
+        .canonicalize()
+        .map_err(io_error)?;
+    if executable != running_executable || executable != expected_executable {
+        return Err("manifest executable is not the running clean-build output".to_owned());
+    }
+    let (commit, workspace_root) = clean_head_custody()?;
+    let resolved_commit = resolve_commit(requested_commit)?;
+    if resolved_commit != commit {
+        return Err(format!(
+            "manifest commit {resolved_commit} is not current HEAD {commit}"
+        ));
+    }
+    let build_log = build_log.canonicalize().map_err(io_error)?;
+    let build_log_bytes = fs::read(&build_log).map_err(io_error)?;
+    let build_log_text = String::from_utf8_lossy(&build_log_bytes);
+    let build_command = format!(
+        "CARGO_NET_OFFLINE=true CARGO_TARGET_DIR={} cargo build --release --locked -p layerfs-eval",
+        build_target.display()
+    );
+    let required_build_log = [
+        "schema=layerfs-build-log-v1".to_owned(),
+        format!("source_head_before={commit}"),
+        "source_status_before=clean".to_owned(),
+        format!("build_command={build_command}"),
+        "build_exit_code=0".to_owned(),
+        format!("source_head_after={commit}"),
+        "source_status_after=clean".to_owned(),
+        "Finished `release` profile".to_owned(),
+    ];
+    if required_build_log
+        .iter()
+        .any(|required| !build_log_text.contains(required))
+    {
+        return Err("build log does not contain the exact successful release command".to_owned());
+    }
     let listed = Command::new("git")
-        .args(["ls-tree", "-r", "--name-only", "-z", commit])
+        .args(["ls-tree", "-r", "--name-only", "-z", &commit])
         .output()
         .map_err(io_error)?;
     if !listed.status.success() {
@@ -440,22 +508,37 @@ pub fn manifest(role: &OsStr, commit: &OsStr, executable: &Path, output: &Path) 
     }
     let executable_sha256 = sha256_file(&executable)?;
     let executable_blake3 = digest_file(&executable)?;
+    let build_log_sha256 = sha256_bytes(&build_log_bytes)?;
+    let build_log_blake3 = blake3::hash(&build_log_bytes).to_hex().to_string();
     let rustc = command_version("rustc")?;
     let cargo = command_version("cargo")?;
     let json = format!(
         concat!(
-            "{{\"schema\":\"layerfs-stage1m-source-manifest-v1\",",
+            "{{\"schema\":\"layerfs-stage1-source-build-manifest-v2\",",
             "\"status\":\"PASS\",\"role\":\"{}\",\"commit\":\"{}\",",
-            "\"dirty_tree\":false,\"file_count\":{},",
+            "\"head_matches_commit\":true,\"dirty_tree\":false,",
+            "\"workspace_root\":\"{}\",\"file_count\":{},",
             "\"aggregate_sha256\":\"{}\",\"aggregate_blake3\":\"{}\",",
             "\"product_file_count\":{},\"product_aggregate_sha256\":\"{}\",",
             "\"product_aggregate_blake3\":\"{}\",",
+            "\"executable_path\":\"{}\",\"executable_sha256\":\"{}\",",
+            "\"executable_blake3\":\"{}\",",
+            "\"build_target\":\"{}\",\"build_command\":\"{}\",",
+            "\"build_log_path\":\"{}\",\"build_log_bytes\":{},",
+            "\"build_log_sha256\":\"{}\",\"build_log_blake3\":\"{}\",",
+            "\"deterministic_build_claim\":false,",
             "\"executable\":{{\"path\":\"{}\",\"bytes\":{},",
             "\"sha256\":\"{}\",\"blake3\":\"{}\"}},",
+            "\"build\":{{\"cwd\":\"{}\",",
+            "\"environment\":{{\"CARGO_NET_OFFLINE\":\"true\",",
+            "\"CARGO_TARGET_DIR\":\"{}\"}},",
+            "\"argv\":[\"cargo\",\"build\",\"--release\",\"--locked\",",
+            "\"-p\",\"layerfs-eval\"],\"log_sha256\":\"{}\"}},",
             "\"rustc\":\"{}\",\"cargo\":\"{}\",\"files\":[{}]}}\n"
         ),
         json_escape(role),
-        json_escape(commit),
+        json_escape(&commit),
+        json_escape(&workspace_root.display().to_string()),
         entries.len(),
         sha256_bytes(&aggregate)?,
         blake3::hash(&aggregate).to_hex(),
@@ -463,21 +546,65 @@ pub fn manifest(role: &OsStr, commit: &OsStr, executable: &Path, output: &Path) 
         sha256_bytes(&product_aggregate)?,
         blake3::hash(&product_aggregate).to_hex(),
         json_escape(&executable.display().to_string()),
+        executable_sha256,
+        executable_blake3,
+        json_escape(&build_target.display().to_string()),
+        json_escape(&build_command),
+        json_escape(&build_log.display().to_string()),
+        build_log_bytes.len(),
+        build_log_sha256,
+        build_log_blake3,
+        json_escape(&executable.display().to_string()),
         fs::metadata(&executable).map_err(io_error)?.len(),
         executable_sha256,
         executable_blake3,
+        json_escape(&workspace_root.display().to_string()),
+        json_escape(&build_target.display().to_string()),
+        build_log_sha256,
         json_escape(&rustc),
         json_escape(&cargo),
         entries.join(","),
     );
-    durable_write(output, json.as_bytes())?;
-    println!(
-        "stage1m-manifest status=PASS role={} commit={} output={}",
-        role,
-        commit,
-        output.display()
-    );
-    Ok(())
+    Ok(json)
+}
+
+fn git_stdout(arguments: &[&str]) -> EvalResult<String> {
+    let output = Command::new("git")
+        .args(arguments)
+        .output()
+        .map_err(io_error)?;
+    if !output.status.success() {
+        return Err(format!("git {} failed", arguments.join(" ")));
+    }
+    String::from_utf8(output.stdout)
+        .map(|value| value.trim().to_owned())
+        .map_err(display_error)
+}
+
+fn resolve_commit(commit: &str) -> EvalResult<String> {
+    git_stdout(&["rev-parse", "--verify", &format!("{commit}^{{commit}}")])
+}
+
+fn clean_head_custody() -> EvalResult<(String, PathBuf)> {
+    let workspace_root = PathBuf::from(git_stdout(&["rev-parse", "--show-toplevel"])?);
+    let current = std::env::current_dir()
+        .map_err(io_error)?
+        .canonicalize()
+        .map_err(io_error)?;
+    let workspace_root = workspace_root.canonicalize().map_err(io_error)?;
+    if current != workspace_root {
+        return Err("source/build custody must run at the clean workspace root".to_owned());
+    }
+    let status = git_stdout(&[
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+    ])?;
+    if !status.is_empty() {
+        return Err("source/build custody requires a completely clean worktree".to_owned());
+    }
+    Ok((resolve_commit("HEAD")?, workspace_root))
 }
 
 pub fn parity_readiness(
@@ -1011,6 +1138,20 @@ fn json_u128(json: &str, key: &str) -> EvalResult<u128> {
 
 fn json_i128(json: &str, key: &str) -> EvalResult<i128> {
     json_number_text(json, key)?.parse().map_err(display_error)
+}
+
+fn json_string_value(json: &str, key: &str) -> EvalResult<String> {
+    let needle = format!("\"{key}\":\"");
+    let rest = json
+        .find(&needle)
+        .and_then(|offset| json.get(offset + needle.len()..))
+        .ok_or_else(|| format!("missing JSON string {key}"))?;
+    let end = rest
+        .find('"')
+        .ok_or_else(|| format!("unterminated JSON string {key}"))?;
+    rest.get(..end)
+        .map(str::to_owned)
+        .ok_or_else(|| format!("invalid JSON string {key}"))
 }
 
 fn json_number_text<'a>(json: &'a str, key: &str) -> EvalResult<&'a str> {
@@ -1624,11 +1765,24 @@ pub fn trusted_run(fixture: &Path, source_manifest: &Path, run: &Path) -> EvalRe
     let source_manifest_bytes = fs::read(&source_manifest).map_err(io_error)?;
     let source_manifest_text =
         std::str::from_utf8(&source_manifest_bytes).map_err(display_error)?;
-    if !source_manifest_text.contains("\"status\":\"PASS\"")
-        || !source_manifest_text.contains("\"dirty_tree\":false")
-        || !source_manifest_text.contains(&format!("\"sha256\":\"{executable_sha256}\""))
-    {
-        return Err("source manifest does not bind the clean running executable".to_owned());
+    let (head, _) = clean_head_custody()?;
+    let build_target = PathBuf::from(json_string_value(source_manifest_text, "build_target")?);
+    let build_log = PathBuf::from(json_string_value(source_manifest_text, "build_log_path")?)
+        .canonicalize()
+        .map_err(io_error)?;
+    let build_log_bytes = fs::read(&build_log).map_err(io_error)?;
+    let expected_manifest = source_build_manifest_json(
+        "stage1t-trusted-measurement-final",
+        &head,
+        &executable,
+        &build_target,
+        &build_log,
+    )?;
+    if source_manifest_bytes != expected_manifest.as_bytes() {
+        return Err(
+            "source manifest bytes do not exactly match clean HEAD, build log, and running executable"
+                .to_owned()
+        );
     }
     let fixture_manifest = fs::read(fixture.join("fixture-manifest.json")).map_err(io_error)?;
     let schedule = trusted_schedule_json();
@@ -1643,6 +1797,7 @@ pub fn trusted_run(fixture: &Path, source_manifest: &Path, run: &Path) -> EvalRe
     )?;
     durable_write(&run.join("fixture-manifest.json"), &fixture_manifest)?;
     durable_write(&run.join("source-manifest.json"), &source_manifest_bytes)?;
+    durable_write(&run.join("build.log"), &build_log_bytes)?;
     durable_write(
         &run.join("environment.json"),
         format!(
@@ -1650,8 +1805,9 @@ pub fn trusted_run(fixture: &Path, source_manifest: &Path, run: &Path) -> EvalRe
                 "{{\"schema\":\"layerfs-stage1t-environment-v1\",",
                 "\"integrity_mode\":\"TrustedLocalDev\",\"network\":0,",
                 "\"rows_serial\":true,\"cwd\":\"{}\",",
+                "\"git_commit\":\"{}\",\"dirty_tree\":false,",
                 "\"executable\":\"{}\",\"executable_sha256\":\"{}\",",
-                "\"executable_blake3\":\"{}\"}}\n"
+                "\"executable_blake3\":\"{}\",\"build_log_sha256\":\"{}\"}}\n"
             ),
             json_escape(
                 &std::env::current_dir()
@@ -1659,9 +1815,11 @@ pub fn trusted_run(fixture: &Path, source_manifest: &Path, run: &Path) -> EvalRe
                     .display()
                     .to_string()
             ),
+            head,
             json_escape(&executable.display().to_string()),
             executable_sha256,
             executable_blake3,
+            sha256_bytes(&build_log_bytes)?,
         )
         .as_bytes(),
     )?;
@@ -1672,11 +1830,15 @@ pub fn trusted_run(fixture: &Path, source_manifest: &Path, run: &Path) -> EvalRe
                 "{{\"schema\":\"layerfs-stage1t-readiness-v1\",\"status\":\"PASS\",",
                 "\"measured_rows_started\":false,\"integrity_mode\":\"TrustedLocalDev\",",
                 "\"expected_rows\":12,\"warmups\":3,\"measured\":9,",
+                "\"git_commit\":\"{}\",\"dirty_tree\":false,",
                 "\"executable_sha256\":\"{}\",\"source_manifest_sha256\":\"{}\",",
+                "\"build_log_sha256\":\"{}\",",
                 "\"fixture_manifest_sha256\":\"{}\",\"schedule_blake3\":\"{}\"}}\n"
             ),
+            head,
             executable_sha256,
             sha256_bytes(&source_manifest_bytes)?,
+            sha256_bytes(&build_log_bytes)?,
             sha256_bytes(&fixture_manifest)?,
             schedule_blake3,
         )
@@ -2002,6 +2164,7 @@ pub fn trusted_run(fixture: &Path, source_manifest: &Path, run: &Path) -> EvalRe
                 "\"integrity_mode\":\"TrustedLocalDev\",\"rows_sha256\":\"{}\",",
                 "\"commands_sha256\":\"{}\",\"summary_sha256\":\"{}\",",
                 "\"campaign_time_sha256\":\"{}\",\"source_manifest_sha256\":\"{}\",",
+                "\"build_log_sha256\":\"{}\",\"git_commit\":\"{}\",",
                 "\"executable_sha256\":\"{}\"}}\n"
             ),
             sha256_file(&run.join("rows.jsonl"))?,
@@ -2009,6 +2172,8 @@ pub fn trusted_run(fixture: &Path, source_manifest: &Path, run: &Path) -> EvalRe
             sha256_file(&run.join("summary.json"))?,
             sha256_file(&run.join("campaign-time.txt"))?,
             sha256_file(&run.join("source-manifest.json"))?,
+            sha256_file(&run.join("build.log"))?,
+            head,
             executable_sha256,
         )
         .as_bytes(),
@@ -2545,7 +2710,9 @@ fn enrich_acceptance_row(
 
 fn validate_acceptance_row(row: &str, candidate: bool) -> EvalResult<()> {
     validate_instrumented_row(row)?;
+    validate_row_wall_json(row)?;
     for exact in [
+        "\"schema\":\"layerfs-stage1m-attribution-row-v2\"",
         "\"status\":\"PASS\"",
         "\"engine_sql_exact\":true",
         "\"scratch_sql_exact\":true",
@@ -3028,6 +3195,24 @@ fn validate_attribution_json(row: &str) -> EvalResult<()> {
             return Err(format!("attribution row does not prove {exact}"));
         }
     }
+    validate_row_wall_json(row)
+}
+
+fn validate_row_wall_json(row: &str) -> EvalResult<()> {
+    let product = json_u128(row, "product_operation_wall_ns")?;
+    let oracle = json_u128(row, "oracle_wall_ns")?;
+    let cleanup = json_u128(row, "cleanup_wall_ns")?;
+    let expected_row_wall = product
+        .checked_add(oracle)
+        .and_then(|value| value.checked_add(cleanup))
+        .ok_or_else(|| "attribution row wall overflow".to_owned())?;
+    let residual = json_i128(row, "row_wall_residual_ns")?;
+    let observed_row_wall =
+        i128::try_from(json_u128(row, "row_wall_ns")?).map_err(display_error)?;
+    let expected_row_wall = i128::try_from(expected_row_wall).map_err(display_error)?;
+    if residual < 0 || observed_row_wall != expected_row_wall + residual {
+        return Err("row wall = product + oracle + cleanup + residual".to_owned());
+    }
     Ok(())
 }
 
@@ -3285,6 +3470,7 @@ fn run_attribution_one(
             destination.display()
         ));
     }
+    let row_started = Instant::now();
     let before = fs.counter_snapshot().map_err(display_error)?;
     let projection_before = fs.projection_facts();
     let usage_before = process_usage()?;
@@ -3368,9 +3554,11 @@ fn run_attribution_one(
         .active_connections
         .checked_add(scratch_connections_peak)
         .ok_or_else(|| "peak connection count overflow".to_owned())?;
+    let row_wall_ns = row_started.elapsed().as_nanos();
     Ok(AttributionObservation {
         row: Row {
             product_wall_ns,
+            row_wall_ns,
             oracle_wall_ns,
             cleanup_wall_ns,
             output_digest,
@@ -3700,9 +3888,16 @@ fn attribution_row_json(
         IntegrityMode::Verified => "Verified",
         IntegrityMode::TrustedLocalDev => "TrustedLocalDev",
     };
+    let named_row_wall_ns = row
+        .product_wall_ns
+        .checked_add(row.oracle_wall_ns)
+        .and_then(|value| value.checked_add(row.cleanup_wall_ns))
+        .ok_or_else(|| "row wall overflow".to_owned())?;
+    let row_wall_residual_ns = i128::try_from(row.row_wall_ns).map_err(display_error)?
+        - i128::try_from(named_row_wall_ns).map_err(display_error)?;
     Ok(format!(
         concat!(
-            "{{\"schema\":\"layerfs-stage1m-attribution-row-v1\",\"status\":\"PASS\",",
+            "{{\"schema\":\"layerfs-stage1m-attribution-row-v2\",\"status\":\"PASS\",",
             "\"integrity_mode\":\"{}\",\"row_kind\":\"{}\",\"block_identity\":\"{}\",",
             "\"requested_arm\":\"{}\",\"executed_arm\":\"{}\",",
             "\"measured_ordinal\":{},\"operation_label\":\"{}\",",
@@ -3763,7 +3958,7 @@ fn attribution_row_json(
             AttributionArm::Native => "exact_native_bytes_metadata",
         },
         row.product_wall_ns,
-        row.product_wall_ns,
+        row.row_wall_ns,
         row.oracle_wall_ns,
         row.cleanup_wall_ns,
         source_applicability,
@@ -3820,7 +4015,7 @@ fn attribution_row_json(
         leaf_ns,
         vfs_dispatch_ns,
         operation_residual_ns,
-        operation_residual_ns,
+        row_wall_residual_ns,
         operation.operation_q_terminal_bytes,
     ))
 }
@@ -4080,6 +4275,7 @@ fn clone_store(source: &Path, destination: &Path) -> EvalResult<()> {
 
 struct Row {
     product_wall_ns: u128,
+    row_wall_ns: u128,
     oracle_wall_ns: u128,
     cleanup_wall_ns: u128,
     output_digest: String,
@@ -4121,6 +4317,7 @@ fn run_one(
             destination.display()
         ));
     }
+    let row_started = Instant::now();
     let before = fs.counter_snapshot().map_err(display_error)?;
     let projection_before = fs.projection_facts();
     let usage_before = process_usage()?;
@@ -4167,8 +4364,10 @@ fn run_one(
     if destination.exists() {
         return Err("destination cleanup left residue".to_owned());
     }
+    let row_wall_ns = row_started.elapsed().as_nanos();
     Ok(Row {
         product_wall_ns,
+        row_wall_ns,
         oracle_wall_ns,
         cleanup_wall_ns,
         output_digest,
@@ -4932,6 +5131,25 @@ mod tests {
         };
         assert!(trust_equation(IntegrityMode::Verified, &verified));
         assert!(!trust_equation(IntegrityMode::TrustedLocalDev, &verified));
+    }
+
+    #[test]
+    fn attribution_row_wall_requires_product_oracle_cleanup_and_residual() {
+        let valid = concat!(
+            "{\"schema\":\"layerfs-stage1m-attribution-row-v2\",",
+            "\"product_operation_wall_ns\":100,\"oracle_wall_ns\":20,",
+            "\"cleanup_wall_ns\":30,\"row_wall_residual_ns\":10,",
+            "\"row_wall_ns\":160}"
+        );
+        assert!(validate_row_wall_json(valid).is_ok());
+        assert!(validate_row_wall_json(
+            &valid.replace("\"row_wall_ns\":160", "\"row_wall_ns\":159")
+        )
+        .is_err());
+        assert!(validate_row_wall_json(
+            &valid.replace("\"row_wall_residual_ns\":10", "\"row_wall_residual_ns\":-1")
+        )
+        .is_err());
     }
 
     #[test]
