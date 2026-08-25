@@ -282,10 +282,10 @@ mod tests {
         let before = read(&file).unwrap();
         let mut refused = before.clone();
         refused.mode = 0o600;
-        refused
-            .xattrs
-            .push(b"com.apple.quarantine", b"blocked")
-            .unwrap();
+        let mut xattrs = before.xattrs.iter().collect::<Vec<_>>();
+        xattrs.push((b"com.apple.quarantine".to_vec(), b"blocked".to_vec()));
+        xattrs.sort_by(|left, right| left.0.cmp(&right.0));
+        refused.xattrs = layerfs_vfs::driver::NativeXattrs::from_entries(xattrs).unwrap();
         assert!(matches!(
             write(&file, &refused),
             Err(DriverError::Unsupported)
