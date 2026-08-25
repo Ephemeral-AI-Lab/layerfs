@@ -32,6 +32,7 @@ impl Engine {
         publication.commit_ref(target)
     }
 
+    #[allow(clippy::let_and_return)]
     pub fn retained_roots(&self) -> EngineResult<Vec<ObjectId>> {
         let connection = self.lock_connection()?;
         self.mark_statement()?;

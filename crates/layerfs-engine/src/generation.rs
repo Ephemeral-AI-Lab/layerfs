@@ -1210,7 +1210,7 @@ mod tests {
                 .unwrap()
                 .file_name()
                 .to_string_lossy()
-                .starts_with(".layerfs-live-")
+                .contains("-live-")
         }));
         drop(live_scratch);
         let candidate = directory.join(generation_filename(9));
@@ -1581,7 +1581,7 @@ mod tests {
                 path.file_name()
                     .unwrap()
                     .to_string_lossy()
-                    .starts_with(".layerfs-crash-child-")
+                    .contains("-crash-child-")
                     && path
                         .extension()
                         .is_some_and(|extension| extension == "sqlite")

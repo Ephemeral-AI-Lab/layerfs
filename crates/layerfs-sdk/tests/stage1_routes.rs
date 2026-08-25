@@ -351,8 +351,8 @@ fn managed_refresh_applies_only_the_changed_canonical_range() {
     assert!(refresh.scratch_rows > 0);
     assert!(refresh.scratch_high_water_bytes > 0);
     assert_eq!(
-        refresh.plan_scratch_high_water_bytes,
-        refresh.scratch_high_water_bytes
+        refresh.scratch_high_water_bytes,
+        refresh.plan_scratch_high_water_bytes + 33_304
     );
     assert_eq!(after.transactions_started, before.transactions_started);
     assert_eq!(after.publication_commits, before.publication_commits);

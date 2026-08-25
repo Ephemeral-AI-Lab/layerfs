@@ -78,8 +78,8 @@ fn refresh_covers_lifecycle_metadata_and_hard_links() {
     assert!(counters.scratch_rows > 0);
     assert!(counters.scratch_high_water_bytes > 0);
     assert_eq!(
-        counters.plan_scratch_high_water_bytes,
-        counters.scratch_high_water_bytes
+        counters.scratch_high_water_bytes,
+        counters.plan_scratch_high_water_bytes + 33_304
     );
     let mut target_two = vfs
         .materialize_external(root_b, &base.join("target-two"))

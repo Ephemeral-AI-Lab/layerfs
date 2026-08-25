@@ -49,6 +49,12 @@ pub struct NamespaceCounters {
     pub nodes_created: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DirectoryPage {
+    pub entries: Vec<(CanonicalName, InodeId)>,
+    pub continuation: Option<CanonicalName>,
+}
+
 #[derive(Clone)]
 struct NodeSummary {
     id: ObjectId,
@@ -122,6 +128,54 @@ pub fn directory_entries<S: ObjectRead>(
         Ok(())
     })?;
     Ok(output)
+}
+
+/// Returns one bounded ordered page strictly after `exclusive_after`.
+pub fn directory_page_after<S: ObjectRead>(
+    store: &S,
+    root: DirectoryStateRoot,
+    exclusive_after: Option<&CanonicalName>,
+    max_entries: usize,
+    max_bytes: usize,
+    counters: &mut NamespaceCounters,
+) -> CoreResult<DirectoryPage> {
+    if max_entries == 0 || max_bytes == 0 {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
+    let state = load_directory_state(store, root, counters)?;
+    let mut cursor =
+        DirectoryEntryCursor::after(store, &state, exclusive_after, counters)?.peekable();
+    let mut entries = Vec::new();
+    let mut bytes = 0_usize;
+    while entries.len() < max_entries {
+        let Some(next) = cursor.peek() else {
+            return Ok(DirectoryPage {
+                entries,
+                continuation: None,
+            });
+        };
+        let width = match next {
+            Ok((name, _)) => 34_usize
+                .checked_add(name.as_bytes().len())
+                .ok_or(CoreError::LengthOverflow)?,
+            Err(_) => return Err(cursor.next().expect("peeked entry").unwrap_err()),
+        };
+        if bytes
+            .checked_add(width)
+            .is_none_or(|total| total > max_bytes)
+        {
+            if entries.is_empty() {
+                return Err(CoreError::ObjectLimitExceeded);
+            }
+            break;
+        }
+        bytes += width;
+        entries.push(cursor.next().expect("peeked entry")?);
+    }
+    Ok(DirectoryPage {
+        continuation: entries.last().map(|entry| entry.0.clone()),
+        entries,
+    })
 }
 
 pub fn visit_directory_entries<S: ObjectRead>(
@@ -1228,6 +1282,71 @@ impl<'a, S> DirectoryEntryCursor<'a, S> {
             counters,
         }
     }
+
+    fn after(
+        store: &'a S,
+        state: &DirectoryStateV1,
+        exclusive_after: Option<&CanonicalName>,
+        counters: &'a mut NamespaceCounters,
+    ) -> CoreResult<Self>
+    where
+        S: ObjectRead,
+    {
+        let mut loaded = load_directory_root_shallow(store, state, counters)?;
+        let mut stack = Vec::new();
+        loop {
+            match loaded.node {
+                DirectoryNodeV1::Leaf { entries, .. } => {
+                    let start = exclusive_after
+                        .map(|after| entries.partition_point(|entry| entry.0 <= *after))
+                        .unwrap_or(0);
+                    return Ok(Self {
+                        store,
+                        stack,
+                        leaf: entries
+                            .into_iter()
+                            .skip(start)
+                            .collect::<Vec<_>>()
+                            .into_iter(),
+                        counters,
+                    });
+                }
+                DirectoryNodeV1::Branch {
+                    level, children, ..
+                } => {
+                    let child_level = level
+                        .checked_sub(1)
+                        .ok_or(CoreError::InvalidRecord("directory child summary"))?;
+                    let selected = exclusive_after
+                        .map(|after| children.partition_point(|entry| entry.0 <= *after))
+                        .unwrap_or(0);
+                    if selected == children.len() {
+                        return Ok(Self {
+                            store,
+                            stack,
+                            leaf: Vec::new().into_iter(),
+                            counters,
+                        });
+                    }
+                    stack.extend(children[selected + 1..].iter().rev().map(|(maximum, id)| {
+                        DirectoryWalkItem {
+                            id: *id,
+                            root: false,
+                            expected_level: Some(child_level),
+                            expected_max: Some(maximum.clone()),
+                        }
+                    }));
+                    let (maximum, id) = &children[selected];
+                    loaded = load_directory_node_shallow(store, *id, false, None, counters)?;
+                    if loaded.summary.level != child_level
+                        || loaded.summary.max.as_ref() != Some(maximum)
+                    {
+                        return Err(CoreError::InvalidRecord("directory child summary"));
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<S: ObjectRead> Iterator for DirectoryEntryCursor<'_, S> {
@@ -1500,6 +1619,43 @@ mod tests {
             self.0.insert(id, canonical.to_vec());
             Ok(id)
         }
+    }
+
+    #[test]
+    fn directory_pages_resume_without_rescanning_or_skipping() {
+        let mut store = MemoryStore::default();
+        let mut root = empty_directory(&mut store).unwrap();
+        for serial in 0..300_u64 {
+            let name = CanonicalName::new(&format!("entry-{serial:03}")).unwrap();
+            root = directory_insert(
+                &mut store,
+                root,
+                name,
+                InodeId::allocate([0x31; 32], serial),
+            )
+            .unwrap()
+            .0;
+        }
+        let mut after = None;
+        let mut names = Vec::new();
+        loop {
+            let page = directory_page_after(
+                &store,
+                root,
+                after.as_ref(),
+                17,
+                2048,
+                &mut NamespaceCounters::default(),
+            )
+            .unwrap();
+            names.extend(page.entries.iter().map(|entry| entry.0.as_str().to_owned()));
+            after = page.continuation;
+            if after.is_none() {
+                break;
+            }
+        }
+        assert_eq!(names.len(), 300);
+        assert!(names.windows(2).all(|pair| pair[0] < pair[1]));
     }
 
     #[test]

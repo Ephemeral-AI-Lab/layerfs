@@ -18,6 +18,7 @@ use layerfs_core::{CanonicalName, CanonicalPath};
 use layerfs_engine::publication::Publication;
 use layerfs_engine::refs::RefState;
 use layerfs_engine::Engine;
+use std::cmp::Ordering;
 use std::io::{Read, Seek, SeekFrom, Write};
 
 const MAX_NATIVE_ACL_BYTES: usize = 4_620;
@@ -324,9 +325,9 @@ pub fn replay(
     Ok((state, counters, steps.unwrap_or_default()))
 }
 
-pub(crate) fn write_spooled_metadata(
+pub(crate) fn write_spooled_metadata<W: Write + ?Sized>(
     metadata: &NativeMetadata,
-    spool: &mut dyn Write,
+    spool: &mut W,
 ) -> VfsResult<u64> {
     let (len, acl_len, count) = spooled_metadata_layout(metadata)?;
 
@@ -792,31 +793,35 @@ fn shift_file<F: Read + Write + Seek + ?Sized>(
         .and_then(|value| value.checked_add(replacement_len))
         .ok_or(VfsError::InvalidState)?;
     let shifted = if next_len == length { 0 } else { length - end };
-    if next_len > length {
-        set_len(file, next_len)?;
-        let mut buffer = vec![0_u8; 1024 * 1024];
-        let mut remaining = shifted;
-        while remaining > 0 {
-            let count = remaining.min(buffer.len() as u64);
-            let source = end + remaining - count;
-            file.seek(SeekFrom::Start(source))?;
-            file.read_exact(&mut buffer[..count as usize])?;
-            file.seek(SeekFrom::Start(source + (next_len - length)))?;
-            file.write_all(&buffer[..count as usize])?;
-            remaining -= count;
+    match next_len.cmp(&length) {
+        Ordering::Greater => {
+            set_len(file, next_len)?;
+            let mut buffer = vec![0_u8; 1024 * 1024];
+            let mut remaining = shifted;
+            while remaining > 0 {
+                let count = remaining.min(buffer.len() as u64);
+                let source = end + remaining - count;
+                file.seek(SeekFrom::Start(source))?;
+                file.read_exact(&mut buffer[..count as usize])?;
+                file.seek(SeekFrom::Start(source + (next_len - length)))?;
+                file.write_all(&buffer[..count as usize])?;
+                remaining -= count;
+            }
         }
-    } else if next_len < length {
-        let mut buffer = vec![0_u8; 1024 * 1024];
-        let mut source = end;
-        while source < length {
-            let count = (length - source).min(buffer.len() as u64);
-            file.seek(SeekFrom::Start(source))?;
-            file.read_exact(&mut buffer[..count as usize])?;
-            file.seek(SeekFrom::Start(source - (length - next_len)))?;
-            file.write_all(&buffer[..count as usize])?;
-            source += count;
+        Ordering::Less => {
+            let mut buffer = vec![0_u8; 1024 * 1024];
+            let mut source = end;
+            while source < length {
+                let count = (length - source).min(buffer.len() as u64);
+                file.seek(SeekFrom::Start(source))?;
+                file.read_exact(&mut buffer[..count as usize])?;
+                file.seek(SeekFrom::Start(source - (length - next_len)))?;
+                file.write_all(&buffer[..count as usize])?;
+                source += count;
+            }
+            set_len(file, next_len)?;
         }
-        set_len(file, next_len)?;
+        Ordering::Equal => {}
     }
     Ok(NativeOperationCounters {
         bytes_read: shifted,

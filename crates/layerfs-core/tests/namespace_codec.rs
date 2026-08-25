@@ -1,9 +1,9 @@
 use layerfs_core::content::rope::ObjectStore;
 use layerfs_core::inode::{InodeId, InodeKind, InodeRecordV1};
 use layerfs_core::metadata::{
-    build_metadata_tree, decode_apple_acl, encode_apple_acl, metadata_tree_entries,
-    AppleAclEntryV1, AppleAclTag, MetadataEntryV1, MetadataKey, MetadataTreeBuilder,
-    PortableMetadataV1,
+    build_metadata_tree, decode_apple_acl, encode_apple_acl, metadata_lookup,
+    metadata_tree_entries, AppleAclEntryV1, AppleAclTag, MetadataEntryV1, MetadataKey,
+    MetadataTreeBuilder, PortableMetadataV1,
 };
 use layerfs_core::namespace::{DirectoryStateV1, NamespaceRootV1, SymlinkStateV1};
 use layerfs_core::namespace_codec::*;
@@ -243,6 +243,14 @@ fn metadata_empty_root_is_canonical_and_one_child_root_is_not() {
     let root = store.put(&encode_metadata_node(&branch).unwrap()).unwrap();
     assert_eq!(
         metadata_tree_entries(&store, root),
+        Err(CoreError::NonCanonicalPagePartition)
+    );
+    assert_eq!(
+        metadata_lookup(
+            &store,
+            root,
+            &MetadataKey::new("portable".into(), b"mode".to_vec()).unwrap()
+        ),
         Err(CoreError::NonCanonicalPagePartition)
     );
 }

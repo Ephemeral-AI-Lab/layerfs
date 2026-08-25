@@ -84,6 +84,7 @@ pub enum EngineError {
     },
     SchemaMismatch,
     ProfileMismatch,
+    SqliteProfileMismatch(SqliteProfile),
     InvalidRecord(&'static str),
     InvalidTransaction,
     PublicationConflict,
@@ -132,6 +133,9 @@ impl fmt::Display for EngineError {
             }
             Self::SchemaMismatch => formatter.write_str("SQLite schema marker mismatch"),
             Self::ProfileMismatch => formatter.write_str("SQLite profile mismatch"),
+            Self::SqliteProfileMismatch(profile) => {
+                write!(formatter, "SQLite profile mismatch: {profile:?}")
+            }
             Self::InvalidRecord(name) => write!(formatter, "invalid durable {name} record"),
             Self::InvalidTransaction => formatter.write_str("capture transaction is not active"),
             Self::PublicationConflict => {
@@ -440,6 +444,17 @@ impl CommitDispatch for SqliteCommit {
     }
 }
 
+#[cfg(any(test, feature = "test-hooks"))]
+struct LostCommitAcknowledgementHook;
+
+#[cfg(any(test, feature = "test-hooks"))]
+impl CommitDispatch for LostCommitAcknowledgementHook {
+    fn commit(&self, connection: &Connection) -> rusqlite::Result<()> {
+        connection.execute_batch("COMMIT")?;
+        Err(rusqlite::Error::InvalidQuery)
+    }
+}
+
 pub(crate) struct ConnectionGuard<'a> {
     engine: &'a Engine,
     guard: MutexGuard<'a, Option<Connection>>,
@@ -652,6 +667,20 @@ impl Engine {
                 .map_err(|_| EngineError::InvalidRecord("connection lock"))?
                 .is_some(),
         ))
+    }
+
+    pub fn close_primary_connection(&self) -> EngineResult<()> {
+        self.connection
+            .lock()
+            .map_err(|_| EngineError::InvalidRecord("connection lock"))?
+            .take();
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "test-hooks"))]
+    #[doc(hidden)]
+    pub fn inject_lost_commit_acknowledgement(&mut self) {
+        self.commit_dispatch = std::sync::Arc::new(LostCommitAcknowledgementHook);
     }
 
     pub fn compact_to(&self, destination: &Path) -> EngineResult<()> {
@@ -2253,7 +2282,7 @@ fn configure_profile_counted(
         .ok_or(EngineError::CounterOverflow)?;
     connection
         .execute_batch(
-            "PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA mmap_size=0; PRAGMA cache_size=1280; PRAGMA cache_spill=1280;",
+            "PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA mmap_size=0; PRAGMA cache_size=1280; PRAGMA cache_spill=ON;",
         )
         .map_err(map_sqlite_error)?;
     note_statement(statements)?;
@@ -2297,7 +2326,7 @@ fn configure_profile_counted(
         || profile.cache_pages != 1280
         || profile.cache_spill_pages != 1280
     {
-        return Err(EngineError::ProfileMismatch);
+        return Err(EngineError::SqliteProfileMismatch(profile));
     }
     Ok(profile)
 }
@@ -2906,6 +2935,25 @@ mod tests {
     use layerfs_core::inode::InodeId;
     use layerfs_core::namespace::NamespaceRootV1;
     use layerfs_core::namespace_codec::{encode_namespace_root, profile_id};
+
+    #[test]
+    fn cache_spill_requires_enable_before_threshold() {
+        let path = test_path();
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE probe(value INTEGER); PRAGMA cache_size=1280; PRAGMA cache_spill=ON;",
+            )
+            .unwrap();
+        assert_eq!(
+            connection
+                .query_row("PRAGMA cache_spill", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            1280
+        );
+        drop(connection);
+        std::fs::remove_file(path).unwrap();
+    }
     use layerfs_core::{encode_object, Object};
     use std::process::Command;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -3122,6 +3170,18 @@ mod tests {
         assert_eq!(counters.connection_mutex_wait_ns, 0);
 
         drop(scratch);
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn explicit_primary_close_reports_zero_terminal_connections() {
+        let path = test_path();
+        let engine =
+            Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
+        assert_eq!(engine.active_connection_count().unwrap(), 1);
+        engine.close_primary_connection().unwrap();
+        assert_eq!(engine.active_connection_count().unwrap(), 0);
         drop(engine);
         std::fs::remove_file(path).unwrap();
     }

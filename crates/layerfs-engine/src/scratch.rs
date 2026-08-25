@@ -2,6 +2,7 @@ use super::{map_sqlite_error, EngineError, EngineResult};
 use rusqlite::types::ValueRef;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use std::cell::Cell;
+use std::fmt::Write as _;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -126,8 +127,9 @@ impl DiskTable {
             .duration_since(UNIX_EPOCH)
             .map_err(|_| EngineError::InvalidRecord("scratch clock"))?
             .as_nanos();
+        let store_tag = hex_store_id(store_id);
         let path = parent.join(format!(
-            ".layerfs-{label}-{}-{stamp}-{}.sqlite",
+            ".layerfs-{store_tag}-{label}-{}-{stamp}-{}.sqlite",
             std::process::id(),
             SCRATCH_SERIAL.fetch_add(1, Ordering::Relaxed)
         ));
@@ -278,7 +280,7 @@ impl DiskTable {
         if cache_spill != pages {
             self.mark_owner_setup_statement()?;
             self.connection()
-                .pragma_update(None, "cache_spill", pages)
+                .pragma_update(None, "cache_spill", true)
                 .map_err(map_sqlite_error)?;
         }
         self.mark_owner_setup_statement()?;
@@ -928,11 +930,19 @@ pub(crate) fn recover_owned_near(
     driver: &dyn crate::generation::StoreGenerationDriver,
 ) -> EngineResult<()> {
     let parent = store.parent().unwrap_or_else(|| Path::new("."));
+    let expected_tag = hex_store_id(store_id);
     for entry in std::fs::read_dir(parent).map_err(super::io_engine_error)? {
         let entry = entry.map_err(super::io_engine_error)?;
         let name = entry.file_name();
         let Some(name) = name.to_str() else { continue };
         if !name.starts_with(".layerfs-") || !name.ends_with(".sqlite") {
+            continue;
+        }
+        let suffix = &name.as_bytes()[9..];
+        if suffix.get(64) == Some(&b'-')
+            && suffix[..64].iter().all(u8::is_ascii_hexdigit)
+            && &suffix[..64] != expected_tag.as_bytes()
+        {
             continue;
         }
         let path = entry.path();
@@ -1084,6 +1094,14 @@ fn cleanup_files(path: &Path) {
     let mut journal = path.as_os_str().to_os_string();
     journal.push("-journal");
     let _ = std::fs::remove_file(PathBuf::from(journal));
+}
+
+fn hex_store_id(store_id: [u8; 32]) -> String {
+    let mut output = String::with_capacity(64);
+    for byte in store_id {
+        let _ = write!(output, "{byte:02x}");
+    }
+    output
 }
 
 #[cfg(test)]

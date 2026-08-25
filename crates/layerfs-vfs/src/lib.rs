@@ -6,6 +6,7 @@ pub mod capture;
 pub mod driver;
 mod managed_edit;
 pub mod materialize;
+pub mod mounted;
 mod refresh;
 mod resolver;
 pub mod workspace;

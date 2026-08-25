@@ -9,5 +9,8 @@ license.workspace = true
 layerfs-core = { path = "../layerfs-core" }
 layerfs-engine = { path = "../layerfs-engine" }
 
+[dev-dependencies]
+layerfs-engine = { path = "../layerfs-engine", features = ["test-hooks"] }
+
 [lib]
 path = "src/lib.rs"

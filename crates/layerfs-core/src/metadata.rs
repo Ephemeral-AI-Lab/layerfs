@@ -176,6 +176,11 @@ struct MetadataSummary {
     level: u8,
 }
 
+struct ValidatedMetadataNode {
+    node: MetadataNodeV1,
+    summary: MetadataSummary,
+}
+
 const SUMMARY_CHUNK_BYTES: usize = 8 * 1024;
 const SUMMARIES_PER_CHUNK: usize = SUMMARY_CHUNK_BYTES / std::mem::size_of::<MetadataSummary>();
 
@@ -326,6 +331,38 @@ pub fn metadata_tree_entries<S: ObjectRead>(
     Ok(output)
 }
 
+pub fn metadata_lookup<S: ObjectRead>(
+    store: &S,
+    root: ObjectId,
+    key: &MetadataKey,
+) -> CoreResult<Option<MetadataEntryV1>> {
+    let mut id = root;
+    let mut root_page = true;
+    let mut expected_level = None;
+    let mut expected_max: Option<MetadataKey> = None;
+    loop {
+        let loaded =
+            load_metadata_shallow(store, id, root_page, expected_level, expected_max.as_ref())?;
+        match loaded.node {
+            MetadataNodeV1::Leaf { entries, .. } => {
+                return Ok(entries
+                    .binary_search_by(|entry| entry.key.cmp(key))
+                    .ok()
+                    .map(|index| entries[index].clone()));
+            }
+            MetadataNodeV1::Branch { children, .. } => {
+                let index = children
+                    .partition_point(|entry| entry.0 < *key)
+                    .min(children.len() - 1);
+                expected_level = Some(loaded.summary.level - 1);
+                expected_max = Some(children[index].0.clone());
+                id = children[index].1;
+                root_page = false;
+            }
+        }
+    }
+}
+
 pub fn visit_metadata_entries<S: ObjectRead>(
     store: &S,
     root: ObjectId,
@@ -348,42 +385,17 @@ fn read_metadata_node<S: ObjectRead>(
         return Err(CoreError::MappingCycle);
     }
     ancestors.push(id);
-    let node = store.with_authenticated_canonical(id, |canonical| {
-        if !root && canonical.len() * 5 < 8192 * 2 {
-            return Err(CoreError::NonCanonicalPagePartition);
-        }
-        decode_metadata_node(canonical)
-    })?;
-    let (actual_level, actual_max) = match &node {
-        MetadataNodeV1::Leaf { entries, .. } => (0, entries.last().map(|entry| entry.key.clone())),
-        MetadataNodeV1::Branch {
-            level, children, ..
-        } => (*level, children.last().map(|child| child.0.clone())),
-    };
-    if expected_level.is_some_and(|level| actual_level != level)
-        || expected_max.is_some_and(|maximum| actual_max.as_ref() != Some(maximum))
-    {
-        return Err(CoreError::InvalidRecord("metadata child summary"));
-    }
-    let summary = match node {
+    let loaded = load_metadata_shallow(store, id, root, expected_level, expected_max)?;
+    let summary = match loaded.node {
         MetadataNodeV1::Leaf {
             subtree_encoded_bytes,
             entries,
         } => {
-            let max = entries.last().map(|entry| entry.key.clone());
-            if !root && max.is_none() {
-                return Err(CoreError::NonCanonicalPagePartition);
-            }
-            let summary = MetadataSummary {
-                id,
-                min: entries.first().map(|entry| entry.key.clone()),
-                max,
-                entries: entries.len() as u64,
-                encoded_bytes: subtree_encoded_bytes,
-                level: 0,
-            };
             visitor(&entries)?;
-            summary
+            MetadataSummary {
+                encoded_bytes: subtree_encoded_bytes,
+                ..loaded.summary
+            }
         }
         MetadataNodeV1::Branch {
             level,
@@ -391,9 +403,6 @@ fn read_metadata_node<S: ObjectRead>(
             subtree_encoded_bytes,
             children,
         } => {
-            if children.len() < 2 {
-                return Err(CoreError::NonCanonicalPagePartition);
-            }
             let mut count = 0_u64;
             let mut bytes = 0_u64;
             let mut minimum = None;
@@ -444,6 +453,72 @@ fn read_metadata_node<S: ObjectRead>(
     };
     ancestors.pop();
     Ok(summary)
+}
+
+fn load_metadata_shallow<S: ObjectRead>(
+    store: &S,
+    id: ObjectId,
+    root: bool,
+    expected_level: Option<u8>,
+    expected_max: Option<&MetadataKey>,
+) -> CoreResult<ValidatedMetadataNode> {
+    let node = store.with_authenticated_canonical(id, |canonical| {
+        if !root && canonical.len() * 5 < 8192 * 2 {
+            return Err(CoreError::NonCanonicalPagePartition);
+        }
+        decode_metadata_node(canonical)
+    })?;
+    let summary = metadata_node_shape(id, &node, root)?;
+    if expected_level.is_some_and(|level| summary.level != level)
+        || expected_max.is_some_and(|maximum| summary.max.as_ref() != Some(maximum))
+    {
+        return Err(CoreError::InvalidRecord("metadata child summary"));
+    }
+    Ok(ValidatedMetadataNode { node, summary })
+}
+
+fn metadata_node_shape(
+    id: ObjectId,
+    node: &MetadataNodeV1,
+    root: bool,
+) -> CoreResult<MetadataSummary> {
+    let (min, max, entries, encoded_bytes, level, count) = match node {
+        MetadataNodeV1::Leaf {
+            subtree_encoded_bytes,
+            entries,
+        } => (
+            entries.first().map(|entry| entry.key.clone()),
+            entries.last().map(|entry| entry.key.clone()),
+            entries.len() as u64,
+            *subtree_encoded_bytes,
+            0,
+            entries.len(),
+        ),
+        MetadataNodeV1::Branch {
+            level,
+            subtree_entry_count,
+            subtree_encoded_bytes,
+            children,
+        } => (
+            children.first().map(|child| child.0.clone()),
+            children.last().map(|child| child.0.clone()),
+            *subtree_entry_count,
+            *subtree_encoded_bytes,
+            *level,
+            children.len(),
+        ),
+    };
+    if matches!(node, MetadataNodeV1::Branch { .. }) && count < 2 || !root && count == 0 {
+        return Err(CoreError::NonCanonicalPagePartition);
+    }
+    Ok(MetadataSummary {
+        id,
+        min,
+        max,
+        entries,
+        encoded_bytes,
+        level,
+    })
 }
 
 fn metadata_leaf(entries: Vec<MetadataEntryV1>) -> CoreResult<MetadataNodeV1> {

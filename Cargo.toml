@@ -5,6 +5,7 @@ members = [
     "crates/layerfs-engine",
     "crates/layerfs-os",
     "crates/layerfs-vfs",
+    "crates/layerfs-fuse",
     "crates/layerfs-sdk",
     "tools/layerfs-eval",
 ]
