@@ -81,6 +81,15 @@ pub enum DurabilityClass {
     PowerLossQualified,
 }
 
+/// Directory durability for one atomic install. Deferral is valid only while
+/// building a fresh tree that cannot become Complete until later bottom-up
+/// directory barriers and root revalidation succeed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DirectoryDurability {
+    ImmediateDirectoryDurability,
+    DeferredToIncompleteTreeBoundary,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DurabilityClassCounts {
     pub process_crash_reconciled: u64,
@@ -945,6 +954,16 @@ pub trait ProjectionWorkspace: Send {
         parent: &dyn DirectoryHandle,
         name: &[u8],
     ) -> Result<()>;
+    fn atomic_replace_with_directory_durability(
+        &self,
+        temp: Box<dyn OwnedTempHandle>,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        _requested: DirectoryDurability,
+    ) -> Result<DirectoryDurability> {
+        self.atomic_replace(temp, parent, name)?;
+        Ok(DirectoryDurability::ImmediateDirectoryDurability)
+    }
     fn atomic_replace_checked(
         &self,
         temp: Box<dyn OwnedTempHandle>,
@@ -1031,7 +1050,11 @@ pub trait ProjectionDriver: Send + Sync {
 mod tests {
     use super::*;
 
-    struct MemoryWorkspace;
+    #[derive(Default)]
+    struct MemoryWorkspace {
+        fail_replace: bool,
+    }
+    struct MemoryTemp(std::io::Cursor<Vec<u8>>);
     struct MemoryPreflight;
     impl NamePreflight for MemoryPreflight {
         fn add(&mut self, _name: &[u8]) -> Result<()> {
@@ -1045,6 +1068,40 @@ mod tests {
     struct Dir;
     impl DirectoryHandle for Dir {
         fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    impl Read for MemoryTemp {
+        fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+            self.0.read(bytes)
+        }
+    }
+    impl Write for MemoryTemp {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.write(bytes)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    impl Seek for MemoryTemp {
+        fn seek(&mut self, position: io::SeekFrom) -> io::Result<u64> {
+            self.0.seek(position)
+        }
+    }
+    impl OwnedTempHandle for MemoryTemp {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn set_len(&mut self, len: u64) -> Result<()> {
+            self.0.get_mut().resize(
+                usize::try_from(len).map_err(|_| DriverError::Unsupported)?,
+                0,
+            );
+            Ok(())
+        }
+        fn into_any(self: Box<Self>) -> Box<dyn Any> {
             self
         }
     }
@@ -1194,7 +1251,11 @@ mod tests {
             _parent: &dyn DirectoryHandle,
             _name: &[u8],
         ) -> Result<()> {
-            Err(DriverError::Unsupported)
+            if self.fail_replace {
+                Err(DriverError::DurabilityAmbiguous)
+            } else {
+                Ok(())
+            }
         }
         fn atomic_replace_checked(
             &self,
@@ -1296,7 +1357,7 @@ mod tests {
             _policy: WorkspacePolicy,
             _store_id: [u8; 32],
         ) -> Result<Box<dyn ProjectionWorkspace>> {
-            Ok(Box::new(MemoryWorkspace))
+            Ok(Box::new(MemoryWorkspace::default()))
         }
     }
 
@@ -1354,5 +1415,29 @@ mod tests {
             ProjectionTimerAvailability::Unavailable
         );
         assert!(before.checked_delta(after).is_none());
+    }
+
+    #[test]
+    fn portable_deferred_install_falls_back_to_safe_immediate_and_preserves_failure() {
+        let directory = Dir;
+        let achieved = MemoryWorkspace::default()
+            .atomic_replace_with_directory_durability(
+                Box::new(MemoryTemp(std::io::Cursor::new(Vec::new()))),
+                &directory,
+                b"file",
+                DirectoryDurability::DeferredToIncompleteTreeBoundary,
+            )
+            .unwrap();
+        assert_eq!(achieved, DirectoryDurability::ImmediateDirectoryDurability);
+
+        assert!(matches!(
+            (MemoryWorkspace { fail_replace: true }).atomic_replace_with_directory_durability(
+                Box::new(MemoryTemp(std::io::Cursor::new(Vec::new()))),
+                &directory,
+                b"file",
+                DirectoryDurability::DeferredToIncompleteTreeBoundary,
+            ),
+            Err(DriverError::DurabilityAmbiguous)
+        ));
     }
 }

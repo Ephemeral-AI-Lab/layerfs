@@ -335,7 +335,7 @@ fn finish_replace(facts: &Recorder, start: Instant, prior_existed: bool, result:
     });
 }
 
-fn record_replace_durability_ambiguity(facts: &Recorder, result: &Result<()>) {
+fn record_replace_durability_ambiguity<T>(facts: &Recorder, result: &Result<T>) {
     if matches!(result, Err(DriverError::DurabilityAmbiguous)) {
         facts.update(|facts| {
             facts.replace.durability_ambiguous =
@@ -1060,7 +1060,28 @@ impl ProjectionWorkspace for Workspace {
             .into_any()
             .downcast::<Temp>()
             .map_err(|_| DriverError::Conflict)?;
-        atomic_replace_temp(temp, dir(parent)?, name, None, &self.facts)
+        atomic_replace_temp(
+            temp,
+            dir(parent)?,
+            name,
+            None,
+            DirectoryDurability::ImmediateDirectoryDurability,
+            &self.facts,
+        )
+        .map(drop)
+    }
+    fn atomic_replace_with_directory_durability(
+        &self,
+        temp: Box<dyn OwnedTempHandle>,
+        parent: &dyn DirectoryHandle,
+        name: &[u8],
+        requested: DirectoryDurability,
+    ) -> Result<DirectoryDurability> {
+        let temp = temp
+            .into_any()
+            .downcast::<Temp>()
+            .map_err(|_| DriverError::Conflict)?;
+        atomic_replace_temp(temp, dir(parent)?, name, None, requested, &self.facts)
     }
     fn atomic_replace_checked(
         &self,
@@ -1073,7 +1094,15 @@ impl ProjectionWorkspace for Workspace {
             .into_any()
             .downcast::<Temp>()
             .map_err(|_| DriverError::Conflict)?;
-        atomic_replace_temp(temp, dir(parent)?, name, Some(expected), &self.facts)
+        atomic_replace_temp(
+            temp,
+            dir(parent)?,
+            name,
+            Some(expected),
+            DirectoryDurability::ImmediateDirectoryDurability,
+            &self.facts,
+        )
+        .map(drop)
     }
     fn create_symlink_at(
         &self,
@@ -1633,8 +1662,9 @@ fn atomic_replace_temp(
     parent: &Dir,
     name: &[u8],
     required_prior: Option<Option<&[u8]>>,
+    directory_durability: DirectoryDurability,
     facts: &Recorder,
-) -> Result<()> {
+) -> Result<DirectoryDurability> {
     sync_file(&temp.file, facts, FileSyncOwner::ContentTemp)?;
     let requested = super::ffi::file_stable_token(&temp.file)?;
     let prior = optional_token(&parent.file, name)?;
@@ -1681,10 +1711,14 @@ fn atomic_replace_temp(
     if restrictive_flags && sync_file(&entry, facts, FileSyncOwner::PostHardLink).is_err() {
         return Err(DriverError::VisibilityAmbiguous);
     }
+    if directory_durability == DirectoryDurability::DeferredToIncompleteTreeBoundary {
+        return Ok(DirectoryDurability::DeferredToIncompleteTreeBoundary);
+    }
     let outcome =
         match sync_directory_file_io(&parent.file, facts, DirectorySyncOwner::InstallParent) {
-            Ok(()) => Ok(()),
-            Err(error) => reconcile_replace(&parent.file, name, prior, &requested, error),
+            Ok(()) => Ok(DirectoryDurability::ImmediateDirectoryDurability),
+            Err(error) => reconcile_replace(&parent.file, name, prior, &requested, error)
+                .map(|()| DirectoryDurability::ImmediateDirectoryDurability),
         };
     record_replace_durability_ambiguity(facts, &outcome);
     outcome
@@ -1801,11 +1835,94 @@ pub(super) fn modified_time(metadata: &NativeMetadata) -> Result<SystemTime> {
 mod tests {
     use super::*;
     use crate::apple::ffi;
+    use layerfs_vfs::workspace::LayerVfs;
+    use layerfs_vfs::RootId;
     use std::os::unix::fs::symlink;
     use std::process::Command;
+    use std::sync::Arc;
 
     fn test_parent() -> std::path::PathBuf {
         fs::canonicalize(std::env::temp_dir()).unwrap()
+    }
+
+    fn captured_tree(
+        base: &Path,
+        driver: &Arc<AppleDriver>,
+        populate: impl FnOnce(&Path),
+    ) -> (LayerVfs, RootId) {
+        let vfs = LayerVfs::open(&base.join("store"), driver.clone()).unwrap();
+        let empty = vfs.current_head("main").unwrap();
+        let mut source = vfs
+            .materialize_external(empty.root, &base.join("source"))
+            .unwrap();
+        populate(source.path());
+        let root = source.capture_quiescent().unwrap();
+        drop(source);
+        fs::remove_dir_all(base.join("source")).unwrap();
+        (vfs, root)
+    }
+
+    #[test]
+    fn fresh_materialization_batches_barriers_and_preserves_hard_link_syncs() {
+        let base = test_parent().join(format!(
+            "layerfs-deferred-materialization-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&base).unwrap();
+        let driver = Arc::new(AppleDriver::default());
+        let (vfs, root) = captured_tree(&base, &driver, |source| {
+            fs::write(source.join("a"), b"one").unwrap();
+            fs::write(source.join("b"), b"two").unwrap();
+            fs::create_dir_all(source.join("outer/inner")).unwrap();
+            fs::write(source.join("outer/inner/file"), b"nested").unwrap();
+            fs::write(source.join("shared"), b"shared").unwrap();
+            fs::hard_link(source.join("shared"), source.join("alias")).unwrap();
+        });
+
+        let (mut target, counters) = vfs
+            .materialize_external_observed(root, &base.join("target"))
+            .unwrap();
+        assert_eq!(counters.projection.content_temp_file_sync.successes, 4);
+        assert_eq!(counters.projection.post_hardlink_file_sync.successes, 1);
+        assert_eq!(counters.projection.replace.successes, 4);
+        assert_eq!(
+            counters.projection.install_parent_directory_sync.attempts,
+            0
+        );
+        assert_eq!(counters.projection.dirty_tree_directory_sync.successes, 2);
+        assert_eq!(counters.projection.final_root_directory_sync.successes, 1);
+        assert_eq!(counters.native.hard_link_calls, 1);
+        assert_eq!(counters.native.sync_calls, 8);
+        target.discard().unwrap();
+        drop(target);
+
+        let immediate = vfs
+            .native_durable_output(
+                &base.join("native"),
+                b"file",
+                &NativeMetadata {
+                    mode: 0o600,
+                    mtime_seconds: 1_700_000_123,
+                    mtime_nanoseconds: 456_789_123,
+                    xattrs: NativeXattrs::new(),
+                    acl: None,
+                    bsd_flags: 0,
+                },
+                6,
+                std::io::Cursor::new(b"native"),
+            )
+            .unwrap();
+        assert_eq!(
+            immediate.projection.install_parent_directory_sync.successes,
+            1
+        );
+        fs::remove_dir_all(base.join("native")).unwrap();
+        drop(vfs);
+        fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

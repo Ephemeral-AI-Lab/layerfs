@@ -197,6 +197,7 @@ pub fn native_durable_output<R: Read>(
         root.as_ref(),
         name,
         metadata,
+        DirectoryDurability::ImmediateDirectoryDurability,
         |output| {
             let written = std::io::copy(&mut input, output)?;
             if written != logical_len {
@@ -429,6 +430,7 @@ fn materialize_entry(
                             parent.ok_or(VfsError::InvalidState)?,
                             name,
                             &representative_metadata,
+                            DirectoryDurability::DeferredToIncompleteTreeBoundary,
                             |output| {
                                 let rope = read_all(engine, root, output)?;
                                 Ok((rope, rope.payload_bytes_read))
@@ -477,6 +479,7 @@ fn project_regular_file<T>(
     parent: &dyn DirectoryHandle,
     name: &[u8],
     metadata: &NativeMetadata,
+    requested_directory_durability: DirectoryDurability,
     write: impl FnOnce(&mut dyn Write) -> VfsResult<(T, u64)>,
     counters: &mut OperationCounters,
 ) -> VfsResult<T> {
@@ -489,9 +492,19 @@ fn project_regular_file<T>(
     counters.native.bytes_written = checked_add(counters.native.bytes_written, written)?;
     workspace.set_temp_metadata(temp.as_mut(), metadata)?;
     counters.native.metadata_calls = checked_add(counters.native.metadata_calls, 1)?;
-    workspace.atomic_replace(temp, parent, name)?;
+    let achieved_directory_durability = workspace.atomic_replace_with_directory_durability(
+        temp,
+        parent,
+        name,
+        requested_directory_durability,
+    )?;
     counters.native.replace_calls = checked_add(counters.native.replace_calls, 1)?;
-    counters.native.sync_calls = checked_add(counters.native.sync_calls, 2)?;
+    let file_syncs = 1 + u64::from(metadata.bsd_flags != 0);
+    let directory_syncs = u64::from(
+        achieved_directory_durability == DirectoryDurability::ImmediateDirectoryDurability,
+    );
+    counters.native.sync_calls =
+        checked_add(counters.native.sync_calls, file_syncs + directory_syncs)?;
     Ok(result)
 }
 
