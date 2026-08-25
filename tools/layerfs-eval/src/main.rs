@@ -55,8 +55,13 @@ fn main() {
                 identity,
             )
         }
+        [stage1, materialize, hash, path]
+            if stage1 == "stage1" && materialize == "materialize" && hash == "hash" =>
+        {
+            stage1_materialize::hash(std::path::Path::new(path))
+        }
         _ => Err(
-            "usage:\n  layerfs-eval apple-poc <run-directory>\n  layerfs-eval stage1 prepare single-file\n  layerfs-eval stage1 readiness-only single-file\n  layerfs-eval stage1 run single-file <run-directory>\n  layerfs-eval stage1 prepare apple-edge\n  layerfs-eval stage1 readiness apple-edge\n  layerfs-eval stage1 run apple-edge <run-directory>\n  layerfs-eval stage1 materialize parity-row <store> <source> <size-mib> <work-directory> <identity>"
+            "usage:\n  layerfs-eval apple-poc <run-directory>\n  layerfs-eval stage1 prepare single-file\n  layerfs-eval stage1 readiness-only single-file\n  layerfs-eval stage1 run single-file <run-directory>\n  layerfs-eval stage1 prepare apple-edge\n  layerfs-eval stage1 readiness apple-edge\n  layerfs-eval stage1 run apple-edge <run-directory>\n  layerfs-eval stage1 materialize parity-row <store> <source> <size-mib> <work-directory> <identity>\n  layerfs-eval stage1 materialize hash <path>"
                 .to_owned(),
         ),
     };

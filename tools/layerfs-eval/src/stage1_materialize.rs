@@ -13,6 +13,31 @@ const FIXTURE_MODE: u32 = 0o644;
 
 type EvalResult<T> = Result<T, String>;
 
+pub fn hash(path: &Path) -> EvalResult<()> {
+    let output = Command::new("/usr/bin/shasum")
+        .args(["-a", "256"])
+        .arg(path)
+        .output()
+        .map_err(io_error)?;
+    if !output.status.success() {
+        return Err("shasum failed".to_owned());
+    }
+    let sha256 = String::from_utf8(output.stdout)
+        .map_err(display_error)?
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| "shasum returned no digest".to_owned())?
+        .to_owned();
+    println!(
+        "{{\"path\":\"{}\",\"bytes\":{},\"sha256\":\"{}\",\"blake3\":\"{}\"}}",
+        path.display(),
+        fs::metadata(path).map_err(io_error)?.len(),
+        sha256,
+        digest_file(path)?,
+    );
+    Ok(())
+}
+
 pub fn parity_row(
     store: &Path,
     source: &Path,
