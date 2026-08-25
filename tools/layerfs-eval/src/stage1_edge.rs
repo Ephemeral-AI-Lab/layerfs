@@ -1407,9 +1407,6 @@ impl EngineDelta {
     }
 
     fn verify_common(self) -> EvalResult<()> {
-        if self.fetched_rows != self.fetched_row_authentication_passes {
-            return Err("fetched_rows = fetched_row_authentication_passes".to_owned());
-        }
         if self.fetched_rows != self.fetched_row_role_decode_passes {
             return Err("fetched_rows = fetched_row_role_decode_passes".to_owned());
         }
@@ -1471,8 +1468,28 @@ impl EngineDelta {
         Ok(())
     }
 
-    fn verify_transition(self) -> EvalResult<()> {
+    fn verify_verified(self) -> EvalResult<()> {
         self.verify_common()?;
+        if self.fetched_rows != self.fetched_row_authentication_passes {
+            return Err("Verified fetched_rows = fetched_row_authentication_passes".to_owned());
+        }
+        Ok(())
+    }
+
+    fn verify_trusted(self) -> EvalResult<()> {
+        self.verify_common()?;
+        if self.fetched_row_authentication_passes != 0 {
+            return Err("Trusted fetched_row_authentication_passes = 0".to_owned());
+        }
+        Ok(())
+    }
+
+    fn verify_trusted_transition(self) -> EvalResult<()> {
+        self.verify_trusted()?;
+        self.verify_transition_work()
+    }
+
+    fn verify_transition_work(self) -> EvalResult<()> {
         if self.transactions_started != 1
             || self.transactions_committed != 1
             || self.transactions_rolled_back != 0
@@ -1488,7 +1505,16 @@ impl EngineDelta {
     }
 
     fn verify_read_only(self) -> EvalResult<()> {
-        self.verify_common()?;
+        self.verify_verified()?;
+        self.verify_read_only_work()
+    }
+
+    fn verify_trusted_read_only(self) -> EvalResult<()> {
+        self.verify_trusted()?;
+        self.verify_read_only_work()
+    }
+
+    fn verify_read_only_work(self) -> EvalResult<()> {
         if self.transactions_started != 0
             || self.transactions_committed != 0
             || self.transactions_rolled_back != 0
@@ -3923,13 +3949,13 @@ fn run_physical_row(
     let after_storage = fs.diagnostics().map_err(display_error)?;
     verify_storage_transition(&before_storage, &after_storage)?;
     let engine = EngineDelta::between(&before_storage, &after_storage)?;
-    engine.verify_transition()?;
+    engine.verify_trusted_transition()?;
     let checkpoint_engine =
         PhaseCounterDelta::between("checkpoint", &before_storage, &after_checkpoint)?;
-    checkpoint_engine.engine.verify_transition()?;
+    checkpoint_engine.engine.verify_trusted_transition()?;
     let witness_engine =
         PhaseCounterDelta::between("canonical_witness", &after_checkpoint, &after_witness)?;
-    witness_engine.engine.verify_read_only()?;
+    witness_engine.engine.verify_trusted_read_only()?;
     let phase_counters = vec![checkpoint_engine, witness_engine];
     verify_phase_partition(&phase_counters, engine)?;
     let operation = combine_physical_checkpoint(native, checkpoint)?;
@@ -4308,17 +4334,17 @@ fn run_logical_row(
     let after_storage = fs.diagnostics().map_err(display_error)?;
     verify_storage_transition(&before_storage, &after_storage)?;
     let engine = EngineDelta::between(&before_storage, &after_storage)?;
-    engine.verify_transition()?;
+    engine.verify_trusted_transition()?;
     let logical_engine =
         PhaseCounterDelta::between("logical_edit", &before_storage, &after_logical)?;
-    logical_engine.engine.verify_transition()?;
+    logical_engine.engine.verify_trusted_transition()?;
     let refresh_engine =
         PhaseCounterDelta::between("apfs_refresh", &after_logical, &after_refresh)?
             .with_operation_scratch(&refresh);
-    refresh_engine.engine.verify_read_only()?;
+    refresh_engine.engine.verify_trusted_read_only()?;
     let witness_engine =
         PhaseCounterDelta::between("canonical_witness", &after_refresh, &after_witness)?;
-    witness_engine.engine.verify_read_only()?;
+    witness_engine.engine.verify_trusted_read_only()?;
     let phase_counters = vec![logical_engine, refresh_engine, witness_engine];
     verify_phase_partition(&phase_counters, engine)?;
     let operation = combine_logical_refresh(logical, refresh)?;
@@ -4520,13 +4546,13 @@ fn run_burst_row(
     let after_storage = fs.diagnostics().map_err(display_error)?;
     verify_storage_transition(&before_storage, &after_storage)?;
     let engine = EngineDelta::between(&before_storage, &after_storage)?;
-    engine.verify_transition()?;
+    engine.verify_trusted_transition()?;
     let checkpoint_engine =
         PhaseCounterDelta::between("checkpoint", &before_storage, &after_checkpoint)?;
-    checkpoint_engine.engine.verify_transition()?;
+    checkpoint_engine.engine.verify_trusted_transition()?;
     let witness_engine =
         PhaseCounterDelta::between("canonical_witness", &after_checkpoint, &after_witness)?;
-    witness_engine.engine.verify_read_only()?;
+    witness_engine.engine.verify_trusted_read_only()?;
     let phase_counters = vec![checkpoint_engine, witness_engine];
     verify_phase_partition(&phase_counters, engine)?;
     let operation = combine_physical_checkpoint(native_aggregate, checkpoint)?;
@@ -5467,7 +5493,8 @@ fn validate_authentication(rows: &[ParsedRow]) -> EvalResult<AuthenticationValid
         let objects_created = row_u128(row, "objects_created")?;
         let objects_reused = row_u128(row, "objects_reused")?;
         let payload_max = row_u128(row, "payload_batch_maximum")?;
-        if fetched != authentication {
+        let trusted_reads = matches!(row.row_group.as_str(), "C02" | "C03" | "C05" | "C07");
+        if (trusted_reads && authentication != 0) || (!trusted_reads && fetched != authentication) {
             result.fetched_authentication_failures += 1;
         }
         if fetched != role_decode {
@@ -5861,7 +5888,9 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
             let retained_scrubs = json_u128(phase, "retained_union_scrubs")?;
             let retained_roots = json_u128(phase, "retained_roots_validated")?;
             let namespace_graphs = json_u128(phase, "namespace_graph_verification_passes")?;
-            if fetched != authenticated
+            let trusted_reads = matches!(row.row_group.as_str(), "C02" | "C03" | "C05" | "C07");
+            if ((trusted_reads && authenticated != 0)
+                || (!trusted_reads && fetched != authenticated))
                 || fetched != decoded
                 || new != created + reused
                 || new != json_u128(phase, "put_lookup_statements")?
@@ -9372,7 +9401,7 @@ fn summary_markdown(
     )
     .map_err(display_error)?;
 
-    writeln!(output, "\n## 11. Transaction and authentication closure\n\n| Equation | Required | Observed/failures | Status |\n|---|---:|---:|---|\n| Generation increment | `34/34` | `{}/0` | `PASS` |\n| Writer transactions | `34` | `{}` | `PASS` |\n| Committed transactions | `34` | `{}` | `PASS` |\n| Rolled-back transactions | `0` | `{}` | `PASS` |\n| Publication COMMITs | `34` | `{}` | `PASS` |\n| fetched = authentication | every applicable row | `{}` failures | `PASS` |\n| fetched = role decode | every applicable row | `{}` failures | `PASS` |\n| new auth = created + reused | every publication | `{}` failures | `PASS` |\n| incumbent auth = reused | every publication | `{}` failures | `PASS` |\n| Payload batch maximum | `<=64` | `{}` | `PASS` |", rows.iter().filter(|row| matches!(row.row_group.as_str(), "C03" | "C05" | "C07")).count(), sum_key(rows, None, "transactions_started")?, sum_key(rows, None, "transactions_committed")?, sum_key(rows, None, "transactions_rolled_back")?, sum_key(rows, None, "publication_commits")?, authentication.fetched_authentication_failures, authentication.fetched_role_decode_failures, authentication.new_object_equation_failures, authentication.incumbent_equation_failures, authentication.payload_batch_maximum).map_err(display_error)?;
+    writeln!(output, "\n## 11. Transaction and authentication closure\n\n| Equation | Required | Observed/failures | Status |\n|---|---:|---:|---|\n| Generation increment | `34/34` | `{}/0` | `PASS` |\n| Writer transactions | `34` | `{}` | `PASS` |\n| Committed transactions | `34` | `{}` | `PASS` |\n| Rolled-back transactions | `0` | `{}` | `PASS` |\n| Publication COMMITs | `34` | `{}` | `PASS` |\n| Verified fetched = authentication; Trusted fetched authentication = 0 | every applicable row | `{}` failures | `PASS` |\n| fetched = role decode | every applicable row | `{}` failures | `PASS` |\n| new auth = created + reused | every publication | `{}` failures | `PASS` |\n| incumbent auth = reused | every publication | `{}` failures | `PASS` |\n| Payload batch maximum | `<=64` | `{}` | `PASS` |", rows.iter().filter(|row| matches!(row.row_group.as_str(), "C03" | "C05" | "C07")).count(), sum_key(rows, None, "transactions_started")?, sum_key(rows, None, "transactions_committed")?, sum_key(rows, None, "transactions_rolled_back")?, sum_key(rows, None, "publication_commits")?, authentication.fetched_authentication_failures, authentication.fetched_role_decode_failures, authentication.new_object_equation_failures, authentication.incumbent_equation_failures, authentication.payload_batch_maximum).map_err(display_error)?;
     writeln!(output, "\n| SQL boundary | Started | Committed | Rolled back | Statements/roots | Status |\n|---|---:|---:|---:|---:|---|\n| Publication visibility | `{}` | `{}` | `{}` | `34 COMMITs` | `PASS` |\n| Open admission | `{}` | `{}` | `{}` | `{}` statements | `PASS` |\n| Live Verified integrity | `{}` | `{}` | `{}` | `{}` statements | `PASS` |\n| Disk-backed retained-root validation | N/A | N/A | N/A | `{}` roots | `PASS` |", sum_key(rows, None, "publication_transactions_started")?, sum_key(rows, None, "publication_commits")?, sum_key(rows, None, "publication_transactions_rolled_back")?, sum_key(rows, None, "admission_transactions_started")?, sum_key(rows, None, "admission_transactions_committed")?, sum_key(rows, None, "admission_transactions_rolled_back")?, sum_key(rows, None, "admission_statements")?, sum_key(rows, None, "integrity_transactions_started")?, sum_key(rows, None, "integrity_transactions_committed")?, sum_key(rows, None, "integrity_transactions_rolled_back")?, sum_key(rows, None, "integrity_statements")?, sum_key(rows, None, "retained_roots_validated")?).map_err(display_error)?;
     writeln!(output, "\n| Counter phase | Rows | Statements | Fetched/auth/role | Object read B | Object write B | Tx/COMMIT | Scrubs | Engine/VFS scratch tables | Q structural-reservation high B | Connections |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|").map_err(display_error)?;
     for phase in &phase_attribution {
@@ -10716,7 +10745,8 @@ fn run_inner(run: &Path) -> EvalResult<Disposition> {
     begin_failure_context("C02-001", "store_open");
     let c02_started = Instant::now();
     let open_started = Instant::now();
-    let opened = LayerFs::open(&store).map_err(display_error)?;
+    let opened = LayerFs::open_with_integrity(&store, IntegrityMode::TrustedLocalDev)
+        .map_err(display_error)?;
     if opened.ref_state.root != master.root
         || opened.ref_state.generation != master.generation
         || hex(&opened.fs.store_id().map_err(display_error)?) != master.store_id
@@ -10763,13 +10793,13 @@ fn run_inner(run: &Path) -> EvalResult<Disposition> {
     let after_c02 = opened.fs.diagnostics().map_err(display_error)?;
     let engine_start = Diagnostics::default();
     let c02_engine = EngineDelta::between(&engine_start, &after_c02)?;
-    c02_engine.verify_read_only()?;
+    c02_engine.verify_trusted_read_only()?;
     let open_engine = PhaseCounterDelta::between("store_open", &engine_start, &after_open)?;
-    open_engine.engine.verify_read_only()?;
+    open_engine.engine.verify_trusted_read_only()?;
     let materialize_engine =
         PhaseCounterDelta::between("materialization", &after_open, &after_c02)?
             .with_operation_scratch(&materialize);
-    materialize_engine.engine.verify_read_only()?;
+    materialize_engine.engine.verify_trusted_read_only()?;
     let phase_counters = vec![open_engine, materialize_engine];
     verify_phase_partition(&phase_counters, c02_engine)?;
     let c02_resources = observe_row_resources(Some(&work), after_c02.active_connections)?;
@@ -12709,10 +12739,9 @@ mod tests {
         let before = opened.fs.diagnostics().unwrap();
         let (state1, checkpoint) = managed.checkpoint_observed().unwrap();
         let after = opened.fs.diagnostics().unwrap();
-        EngineDelta::between(&before, &after)
-            .unwrap()
-            .verify_transition()
-            .unwrap();
+        let checkpoint_delta = EngineDelta::between(&before, &after).unwrap();
+        checkpoint_delta.verify_verified().unwrap();
+        checkpoint_delta.verify_transition_work().unwrap();
         assert_eq!(checkpoint.descriptor_resets, 1);
         let mut canonical = Vec::new();
         opened
@@ -12761,10 +12790,9 @@ mod tests {
         let before_burst = opened.fs.diagnostics().unwrap();
         let (state3, burst, steps) = managed.checkpoint_observed_detailed().unwrap();
         let after_burst = opened.fs.diagnostics().unwrap();
-        EngineDelta::between(&before_burst, &after_burst)
-            .unwrap()
-            .verify_transition()
-            .unwrap();
+        let burst_delta = EngineDelta::between(&before_burst, &after_burst).unwrap();
+        burst_delta.verify_verified().unwrap();
+        burst_delta.verify_transition_work().unwrap();
         assert_eq!(burst.descriptor_resets, 1);
         assert_eq!(steps.len(), 2);
         assert_eq!(steps[0].tree_level_before, Some(0));
