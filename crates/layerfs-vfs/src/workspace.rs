@@ -248,7 +248,7 @@ impl LayerVfs {
             crate::driver::WorkspacePolicy::ExternalCooperative,
             self.engine.store_id()?,
         )?;
-        let (mut counters, hard_link_authority, topology_edges) =
+        let (mut counters, live_scratch) =
             materialize_workspace(&self.engine, &self.digest_cache, native.as_ref(), root)?;
         let native_root = native.root_directory()?;
         let identity = native.directory_identity(native_root.as_ref())?;
@@ -268,8 +268,7 @@ impl LayerVfs {
             writers,
             owned: false,
             owned_identity: None,
-            hard_link_authority: Some(hard_link_authority),
-            topology_edges: Some(topology_edges),
+            live_scratch: Some(live_scratch),
             active: true,
             committed: None,
             operation_q: self.operation_q.clone(),
@@ -301,8 +300,7 @@ impl LayerVfs {
             writers,
             owned: false,
             owned_identity: None,
-            hard_link_authority: None,
-            topology_edges: None,
+            live_scratch: None,
             active: true,
             committed: None,
             operation_q: self.operation_q.clone(),
@@ -344,20 +342,14 @@ impl LayerVfs {
         let native_root = native.root_directory()?;
         let owned_identity = native.directory_identity(native_root.as_ref())?;
         let setup = (|| {
-            let (mut counters, hard_link_authority, topology_edges) =
+            let (mut counters, live_scratch) =
                 materialize_workspace(&self.engine, &self.digest_cache, native.as_ref(), root)?;
             counters.workspace_materializations = 1;
             let spool = native.create_temp_at(native_root.as_ref())?;
             let writers = shared_writers(&owned_identity)?;
-            Ok::<_, VfsError>((
-                spool,
-                writers,
-                hard_link_authority,
-                topology_edges,
-                counters,
-            ))
+            Ok::<_, VfsError>((spool, writers, live_scratch, counters))
         })();
-        let (spool, writers, hard_link_authority, topology_edges, mut counters) = match setup {
+        let (spool, writers, live_scratch, mut counters) = match setup {
             Ok(setup) => setup,
             Err(error) => {
                 let _ = native.remove_owned_root(&owned_identity);
@@ -374,8 +366,7 @@ impl LayerVfs {
                 writers,
                 owned: true,
                 owned_identity: Some(owned_identity),
-                hard_link_authority: Some(hard_link_authority),
-                topology_edges: Some(topology_edges),
+                live_scratch: Some(live_scratch),
                 active: true,
                 committed: None,
                 operation_q: self.operation_q.clone(),
@@ -667,21 +658,19 @@ impl ManagedWorkspace {
             reservation.finish(&mut counters);
             return Ok(counters);
         }
-        let authority = external
-            .hard_link_authority
+        let live_scratch = external
+            .live_scratch
             .as_ref()
             .ok_or(VfsError::InvalidState)?;
-        let topology = external
-            .topology_edges
-            .as_ref()
-            .ok_or(VfsError::InvalidState)?;
+        let authority = live_scratch.namespace(b"authority")?;
+        let topology = live_scratch.namespace(b"topology")?;
         self.state = ManagedState::Refreshing;
         let mut visible = false;
         match crate::refresh::apply(
             &external.engine,
             external.native.as_ref(),
-            authority,
-            topology,
+            &authority,
+            &topology,
             (&external.expected, target, accepted),
             &mut visible,
         ) {
@@ -754,17 +743,18 @@ impl ManagedWorkspace {
             match crate::managed_edit::native_hard_link_key(external.native.as_ref(), path) {
                 Ok(key) => key,
                 Err(error) => {
-                    external.hard_link_authority = None;
+                    external.live_scratch = None;
                     self.state = ManagedState::Indeterminate;
                     return Err(error);
                 }
             };
         if old_hard_link_key != new_hard_link_key {
             let transfer = external
-                .hard_link_authority
+                .live_scratch
                 .as_ref()
                 .ok_or(VfsError::InvalidState)
-                .and_then(|authority| {
+                .and_then(|scratch| {
+                    let authority = scratch.namespace(b"authority")?;
                     let inode = authority
                         .get(&old_hard_link_key)?
                         .ok_or(VfsError::InvalidState)?;
@@ -773,7 +763,7 @@ impl ManagedWorkspace {
                     Ok(())
                 });
             if let Err(error) = transfer {
-                external.hard_link_authority = None;
+                external.live_scratch = None;
                 self.state = ManagedState::Indeterminate;
                 return Err(error);
             }
@@ -848,29 +838,29 @@ impl ManagedWorkspace {
             to,
             &mut topology_counters,
         )?;
-        if external
-            .topology_edges
+        let topology = external
+            .live_scratch
             .as_ref()
             .ok_or(VfsError::InvalidState)?
-            .get(&old_edge)?
-            .is_none()
-        {
+            .namespace(b"topology")?;
+        if topology.get(&old_edge)?.is_none() {
             return Err(VfsError::InvalidState);
         }
         let result = crate::managed_edit::rename_native(external.native.as_ref(), from, to);
         match result {
             Ok((source_parent_metadata, target_parent_metadata)) => {
                 let topology_update = external
-                    .topology_edges
+                    .live_scratch
                     .as_ref()
                     .ok_or(VfsError::InvalidState)
-                    .and_then(|topology| {
+                    .and_then(|scratch| {
+                        let topology = scratch.namespace(b"topology")?;
                         topology.remove(&old_edge)?;
                         topology.put(&new_edge, &[])?;
                         Ok(())
                     });
                 if let Err(error) = topology_update {
-                    external.topology_edges = None;
+                    external.live_scratch = None;
                     self.state = ManagedState::Indeterminate;
                     return Err(error);
                 }
@@ -1163,8 +1153,7 @@ pub struct ExternalWorkspace {
     writers: SharedLeaseState,
     owned: bool,
     owned_identity: Option<Vec<u8>>,
-    hard_link_authority: Option<DiskTable>,
-    topology_edges: Option<DiskTable>,
+    live_scratch: Option<DiskTable>,
     active: bool,
     committed: Option<ObjectId>,
     operation_q: Arc<OperationQ>,
@@ -1200,12 +1189,17 @@ impl ExternalWorkspace {
         let (root, mut counters) = if let Some(root) = self.committed {
             (root, OperationCounters::default())
         } else {
+            let live_hard_links = self
+                .live_scratch
+                .as_ref()
+                .map(|scratch| scratch.namespace(b"authority"))
+                .transpose()?;
             let (next, counters) = capture_workspace(
                 &self.engine,
                 &self.digest_cache,
                 self.native.as_ref(),
                 Some(&self.expected),
-                self.hard_link_authority.as_ref(),
+                live_hard_links.as_ref(),
                 false,
                 false,
             )?;

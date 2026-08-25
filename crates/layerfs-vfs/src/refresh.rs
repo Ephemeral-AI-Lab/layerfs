@@ -86,8 +86,8 @@ struct Snapshot {
 pub(crate) fn apply(
     engine: &Engine,
     native: &dyn ProjectionWorkspace,
-    authority: &DiskTable,
-    topology: &DiskTable,
+    authority: &DiskNamespace<'_>,
+    topology: &DiskNamespace<'_>,
     transition: (&RefState, &RefState, Option<&AcceptedSplice>),
     visible: &mut bool,
 ) -> VfsResult<OperationCounters> {
@@ -371,7 +371,7 @@ pub(crate) fn apply(
 fn namespace_delta_paths(
     engine: &Engine,
     scratch: &RefreshScratch,
-    topology: &DiskTable,
+    topology: &DiskNamespace<'_>,
     root_inode: InodeId,
     old_table: InodeTableRoot,
     new_table: InodeTableRoot,
@@ -742,7 +742,7 @@ fn snapshot_value(inode: InodeId, record: InodeRecordV1) -> Snapshot {
 fn selective_paths(
     engine: &Engine,
     scratch: &RefreshScratch,
-    topology: &DiskTable,
+    topology: &DiskNamespace<'_>,
     root_inode: InodeId,
     old_paths: &DiskNamespace<'_>,
     old_representatives: &DiskNamespace<'_>,
@@ -811,7 +811,7 @@ fn selective_paths(
 
 fn topology_paths<'a>(
     scratch: &'a RefreshScratch,
-    topology: &DiskTable,
+    topology: &DiskNamespace<'_>,
     root_inode: InodeId,
     inode: InodeId,
 ) -> VfsResult<DiskNamespace<'a>> {
@@ -885,7 +885,7 @@ fn topology_paths<'a>(
 
 fn topology_target_paths<'a>(
     scratch: &'a RefreshScratch,
-    topology: &DiskTable,
+    topology: &DiskNamespace<'_>,
     removed: &DiskNamespace<'_>,
     added: &DiskNamespace<'_>,
     root_inode: InodeId,
@@ -975,7 +975,7 @@ fn enqueue_topology_parents(
 }
 
 fn rotate_topology(
-    topology: &DiskTable,
+    topology: &DiskNamespace<'_>,
     old_edges: &DiskNamespace<'_>,
     new_edges: &DiskNamespace<'_>,
 ) -> VfsResult<()> {
@@ -1139,7 +1139,7 @@ fn apply_directories(
 
 fn apply_renames(
     native: &dyn ProjectionWorkspace,
-    authority: &DiskTable,
+    authority: &DiskNamespace<'_>,
     queue: &DiskNamespace<'_>,
     visible: &mut bool,
     counters: &mut OperationCounters,
@@ -1194,7 +1194,7 @@ fn apply_update(
     engine: &Engine,
     scratch: &RefreshScratch,
     native: &dyn ProjectionWorkspace,
-    authority: &DiskTable,
+    authority: &DiskNamespace<'_>,
     old_representatives: &DiskNamespace<'_>,
     new_representatives: &DiskNamespace<'_>,
     created_representatives: &DiskNamespace<'_>,
@@ -1278,7 +1278,7 @@ fn apply_update(
 fn apply_create(
     engine: &Engine,
     native: &dyn ProjectionWorkspace,
-    authority: &DiskTable,
+    authority: &DiskNamespace<'_>,
     old_representatives: &DiskNamespace<'_>,
     created_representatives: &DiskNamespace<'_>,
     touched_groups: &DiskNamespace<'_>,
@@ -1495,7 +1495,7 @@ fn finalize_hard_links(
 #[allow(clippy::too_many_arguments)]
 fn apply_delete(
     native: &dyn ProjectionWorkspace,
-    authority: &DiskTable,
+    authority: &DiskNamespace<'_>,
     new_representatives: &DiskNamespace<'_>,
     removed_authority: &DiskNamespace<'_>,
     path: &CanonicalPath,
@@ -1541,7 +1541,7 @@ fn refresh_regular(
     engine: &Engine,
     scratch: &RefreshScratch,
     native: &dyn ProjectionWorkspace,
-    authority: &DiskTable,
+    authority: &DiskNamespace<'_>,
     path: &CanonicalPath,
     before: Snapshot,
     after: Snapshot,
@@ -1703,7 +1703,7 @@ fn refresh_regular(
 fn refresh_splice(
     engine: &Engine,
     native: &dyn ProjectionWorkspace,
-    authority: &DiskTable,
+    authority: &DiskNamespace<'_>,
     parent: &dyn crate::driver::DirectoryHandle,
     name: &[u8],
     old_key: &[u8],
@@ -1819,7 +1819,7 @@ fn refresh_splice(
 fn full_fallback(
     engine: &Engine,
     native: &dyn ProjectionWorkspace,
-    authority: &DiskTable,
+    authority: &DiskNamespace<'_>,
     parent: &dyn crate::driver::DirectoryHandle,
     name: &[u8],
     old_key: &[u8],

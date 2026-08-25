@@ -11,7 +11,7 @@ use layerfs_core::metadata::{decode_apple_acl, visit_metadata_entries, SUPPORTED
 use layerfs_core::namespace::{visit_directory_entries, DirectoryStateRoot, NamespaceCounters};
 use layerfs_core::namespace_codec::{decode_inode_record, decode_namespace_root, decode_symlink};
 use layerfs_core::ObjectId;
-use layerfs_engine::scratch::DiskTable;
+use layerfs_engine::scratch::{DiskNamespace, DiskTable};
 use layerfs_engine::Engine;
 use std::io::{BufWriter, Read, Write};
 use std::path::Path;
@@ -41,7 +41,7 @@ pub(crate) fn materialize_workspace(
     digest_cache: &SemanticDigestCache,
     workspace: &dyn ProjectionWorkspace,
     root: ObjectId,
-) -> VfsResult<(OperationCounters, DiskTable, DiskTable)> {
+) -> VfsResult<(OperationCounters, DiskTable)> {
     let mut counters = OperationCounters::default();
     counters.native.route = Some(NativeRoute::MaterializeStream);
     workspace.revalidate_root_binding()?;
@@ -69,13 +69,13 @@ pub(crate) fn materialize_workspace(
         }
         workspace.revalidate_root_binding()?;
         counters.native.route = Some(NativeRoute::ExactNoop);
-        let (authority, topology, authority_counters) =
-            live_hard_link_authority(engine, workspace, root)?;
-        return Ok((counters.merge(authority_counters)?, authority, topology));
+        let (live_scratch, authority_counters) = live_hard_link_authority(engine, workspace, root)?;
+        return Ok((counters.merge(authority_counters)?, live_scratch));
     }
-    let links = engine.create_scratch_table("materialize-hardlinks")?;
-    let authority = engine.create_scratch_table("materialize-live-hardlinks")?;
-    let topology = engine.create_scratch_table("materialize-topology-edges")?;
+    let scratch = engine.create_scratch_table("materialize")?;
+    let links = scratch.namespace(b"hard-links")?;
+    let authority = scratch.namespace(b"authority")?;
+    let topology = scratch.namespace(b"topology")?;
     let mut target = MaterializeTarget::Native {
         workspace,
         workspace_root: root_handle.as_ref(),
@@ -95,10 +95,8 @@ pub(crate) fn materialize_workspace(
     workspace.sync_directory(root_handle.as_ref())?;
     counters.native.sync_calls = checked_add(counters.native.sync_calls, 1)?;
     workspace.revalidate_root_binding()?;
-    counters.add_scratch(links.observation()?)?;
-    counters.add_scratch(authority.observation()?)?;
-    counters.add_scratch(topology.observation()?)?;
-    Ok((counters, authority, topology))
+    counters.add_scratch(scratch.observation()?)?;
+    Ok((counters, scratch))
 }
 
 /// Runs the exact canonical source side of full materialization and sends each
@@ -109,9 +107,10 @@ pub fn materialize_authenticated_to<W: Write>(
     mut output: W,
 ) -> VfsResult<OperationCounters> {
     let mut counters = OperationCounters::default();
-    let links = engine.create_scratch_table("materialize-hardlinks")?;
-    let authority = engine.create_scratch_table("materialize-live-hardlinks")?;
-    let topology = engine.create_scratch_table("materialize-topology-edges")?;
+    let scratch = engine.create_scratch_table("materialize")?;
+    let links = scratch.namespace(b"hard-links")?;
+    let authority = scratch.namespace(b"authority")?;
+    let topology = scratch.namespace(b"topology")?;
     let mut target = MaterializeTarget::Sink(&mut output);
     visit_materialization_source(
         engine,
@@ -124,9 +123,7 @@ pub fn materialize_authenticated_to<W: Write>(
         &mut counters,
     )?;
     output.flush()?;
-    counters.add_scratch(links.observation()?)?;
-    counters.add_scratch(authority.observation()?)?;
-    counters.add_scratch(topology.observation()?)?;
+    counters.add_scratch(scratch.observation()?)?;
     Ok(counters)
 }
 
@@ -234,9 +231,9 @@ fn visit_materialization_source(
     root: ObjectId,
     target: &mut MaterializeTarget<'_>,
     root_parent: Option<&dyn DirectoryHandle>,
-    links: &DiskTable,
-    authority: &DiskTable,
-    topology: &DiskTable,
+    links: &DiskNamespace<'_>,
+    authority: &DiskNamespace<'_>,
+    topology: &DiskNamespace<'_>,
     counters: &mut OperationCounters,
 ) -> VfsResult<NativeMetadata> {
     let namespace = engine.with_authenticated_canonical(root, decode_namespace_root)?;
@@ -269,9 +266,9 @@ fn materialize_directory(
     directory_inode: InodeId,
     directory: DirectoryStateRoot,
     parent: Option<&dyn DirectoryHandle>,
-    links: &DiskTable,
-    authority: &DiskTable,
-    topology: &DiskTable,
+    links: &DiskNamespace<'_>,
+    authority: &DiskNamespace<'_>,
+    topology: &DiskNamespace<'_>,
     current_path: &[u8],
     counters: &mut OperationCounters,
 ) -> VfsResult<()> {
@@ -345,9 +342,9 @@ fn materialize_entry(
     engine: &Engine,
     table: InodeTableRoot,
     parent: Option<&dyn DirectoryHandle>,
-    links: &DiskTable,
-    authority: &DiskTable,
-    topology: &DiskTable,
+    links: &DiskNamespace<'_>,
+    authority: &DiskNamespace<'_>,
+    topology: &DiskNamespace<'_>,
     current_path: &[u8],
     name: &[u8],
     inode: InodeId,
@@ -390,7 +387,12 @@ fn materialize_entry(
             }
         }
         InodeKind::RegularFile => {
-            if let Some(value) = links.get(inode.as_bytes())? {
+            let prior_link = if record.namespace_ref_count > 1 {
+                links.get(inode.as_bytes())?
+            } else {
+                None
+            };
+            if let Some(value) = prior_link {
                 let (remaining, source) = decode_link_state(&value)?;
                 if let MaterializeTarget::Native {
                     workspace,

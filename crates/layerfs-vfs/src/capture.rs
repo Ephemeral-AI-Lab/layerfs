@@ -21,7 +21,7 @@ use layerfs_core::namespace_codec::{
 };
 use layerfs_engine::publication::Publication;
 use layerfs_engine::refs::RefState;
-use layerfs_engine::scratch::DiskTable;
+use layerfs_engine::scratch::{DiskNamespace, DiskTable};
 use layerfs_engine::Engine;
 use std::collections::HashMap;
 use std::io::{Cursor, Seek, SeekFrom};
@@ -97,7 +97,7 @@ pub(crate) fn capture_workspace(
     digest_cache: &SemanticDigestCache,
     workspace: &dyn ProjectionWorkspace,
     expected: Option<&RefState>,
-    live_hard_links: Option<&DiskTable>,
+    live_hard_links: Option<&DiskNamespace<'_>>,
     seed_live_hard_links: bool,
     require_same_root: bool,
 ) -> VfsResult<(RefState, OperationCounters)> {
@@ -107,11 +107,13 @@ pub(crate) fn capture_workspace(
     workspace.revalidate_root_binding()?;
     let root_handle = workspace.root_directory()?;
     let root_token = workspace.directory_token(root_handle.as_ref())?;
-    let existing = engine.create_scratch_table("existing-paths")?;
+    let existing_table = engine.create_scratch_table("existing-paths")?;
+    let existing = existing_table.namespace(b"paths")?;
     let prior_table = expected
         .map(|expected| seed_existing_paths(engine, expected.root, &existing, None, &mut counters))
         .transpose()?;
-    let seeded_links = engine.create_scratch_table("existing-hardlinks")?;
+    let seeded_links_table = engine.create_scratch_table("existing-hardlinks")?;
+    let seeded_links = seeded_links_table.namespace(b"links")?;
     if seed_live_hard_links || (prior_table.is_some() && live_hard_links.is_none()) {
         seed_existing_hard_links(
             workspace,
@@ -191,7 +193,7 @@ pub(crate) fn capture_workspace(
         return Err(VfsError::ExternalDirtyConflict);
     }
     let next = publication.publish_namespace(&namespace)?;
-    for scratch in [&existing, &seeded_links, &hard_links, &entries] {
+    for scratch in [&existing_table, &seeded_links_table, &hard_links, &entries] {
         counters.add_scratch(scratch.observation()?)?;
     }
     Ok((next, counters))
@@ -241,9 +243,9 @@ fn capture_directory(
     table: &mut Option<GeneratedInodeTable>,
     hard_links: &DiskTable,
     entries: &DiskTable,
-    existing: &DiskTable,
-    existing_links: Option<&DiskTable>,
-    prior_links: Option<&DiskTable>,
+    existing: &DiskNamespace<'_>,
+    existing_links: Option<&DiskNamespace<'_>>,
+    prior_links: Option<&DiskNamespace<'_>>,
     prior_table: Option<InodeTableRoot>,
     current_path: &[u8],
     next_directory: &mut u64,
@@ -452,9 +454,9 @@ fn capture_regular(
     publication: &mut Publication<'_>,
     table: &mut Option<GeneratedInodeTable>,
     hard_links: &DiskTable,
-    existing: &DiskTable,
-    existing_links: Option<&DiskTable>,
-    prior_links: Option<&DiskTable>,
+    existing: &DiskNamespace<'_>,
+    existing_links: Option<&DiskNamespace<'_>>,
+    prior_links: Option<&DiskNamespace<'_>>,
     prior_table: Option<InodeTableRoot>,
     counters: &mut OperationCounters,
 ) -> VfsResult<InodeId> {
@@ -599,7 +601,7 @@ fn encode_existing(inode: InodeId, kind: InodeKind) -> [u8; 33] {
 }
 
 fn existing_inode(
-    existing: &DiskTable,
+    existing: &DiskNamespace<'_>,
     path: &[u8],
     kind: InodeKind,
 ) -> VfsResult<Option<InodeId>> {
@@ -618,8 +620,8 @@ fn existing_inode(
 fn seed_existing_hard_links(
     workspace: &dyn ProjectionWorkspace,
     directory: &dyn DirectoryHandle,
-    existing: &DiskTable,
-    links: &DiskTable,
+    existing: &DiskNamespace<'_>,
+    links: &DiskNamespace<'_>,
     current_path: &[u8],
     allow_ambiguous: bool,
 ) -> VfsResult<()> {
@@ -667,25 +669,24 @@ pub(crate) fn live_hard_link_authority(
     engine: &Engine,
     workspace: &dyn ProjectionWorkspace,
     root: layerfs_core::ObjectId,
-) -> VfsResult<(DiskTable, DiskTable, OperationCounters)> {
+) -> VfsResult<(DiskTable, OperationCounters)> {
     let mut counters = OperationCounters::default();
-    let paths = engine.create_scratch_table("live-hardlink-paths")?;
-    let topology = engine.create_scratch_table("live-topology-edges")?;
+    let scratch = engine.create_scratch_table("live")?;
+    let paths = scratch.namespace(b"paths")?;
+    let topology = scratch.namespace(b"topology")?;
+    let links = scratch.namespace(b"authority")?;
     seed_existing_paths(engine, root, &paths, Some(&topology), &mut counters)?;
-    let links = engine.create_scratch_table("live-hardlink-authority")?;
     let directory = workspace.root_directory()?;
     seed_existing_hard_links(workspace, directory.as_ref(), &paths, &links, &[], false)?;
-    counters.add_scratch(paths.observation()?)?;
-    counters.add_scratch(links.observation()?)?;
-    counters.add_scratch(topology.observation()?)?;
-    Ok((links, topology, counters))
+    counters.add_scratch(scratch.observation()?)?;
+    Ok((scratch, counters))
 }
 
 fn seed_existing_paths(
     engine: &Engine,
     root: layerfs_core::ObjectId,
-    paths: &DiskTable,
-    topology: Option<&DiskTable>,
+    paths: &DiskNamespace<'_>,
+    topology: Option<&DiskNamespace<'_>>,
     counters: &mut OperationCounters,
 ) -> VfsResult<InodeTableRoot> {
     let namespace = engine.with_authenticated_canonical(root, decode_namespace_root)?;
@@ -707,8 +708,8 @@ fn seed_existing_directory(
     table: InodeTableRoot,
     inode: InodeId,
     path: Vec<u8>,
-    paths: &DiskTable,
-    topology: Option<&DiskTable>,
+    paths: &DiskNamespace<'_>,
+    topology: Option<&DiskNamespace<'_>>,
     counters: &mut OperationCounters,
 ) -> VfsResult<()> {
     let record = existing_record(engine, table, inode, counters)?;

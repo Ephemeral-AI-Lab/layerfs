@@ -44,8 +44,23 @@ fn attribution_arms_reuse_full_source_and_native_routes() {
     assert_eq!(source_only.namespace, complete.namespace);
     assert_eq!(source_only.inode_table, complete.inode_table);
     assert_eq!(source_only.scratch_tables, complete.scratch_tables);
+    assert_eq!(source_only.scratch_tables, 1);
     assert_eq!(source_only.scratch_statements, complete.scratch_statements);
     assert_eq!(source_only.scratch_rows, complete.scratch_rows);
+    assert_eq!(
+        source_only.scratch_owner_setup_statements,
+        complete.scratch_owner_setup_statements
+    );
+    assert_eq!(source_only.scratch_owner_setup_statements, 15);
+    assert_eq!(
+        source_only.scratch_derived_setup_statements,
+        complete.scratch_derived_setup_statements
+    );
+    assert_eq!(source_only.scratch_derived_setup_statements, 2);
+    assert_eq!(
+        source_only.scratch_operation_statements,
+        complete.scratch_operation_statements
+    );
     assert_eq!(source_only.scratch_store_reopens, 0);
     assert_eq!(source_only.scratch_store_inspection_statements, 0);
     assert_eq!(complete.scratch_store_reopens, 0);
