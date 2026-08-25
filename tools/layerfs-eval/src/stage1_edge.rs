@@ -1646,14 +1646,18 @@ impl PhaseCounterDelta {
         self
     }
 
-    fn operation_only(name: &'static str, operation: &layerfs_sdk::OperationDiagnostics) -> Self {
+    fn operation_only(
+        name: &'static str,
+        operation: &layerfs_sdk::OperationDiagnostics,
+        active_connections: u64,
+    ) -> Self {
         Self {
             name,
             engine: EngineDelta::default(),
             q_before_bytes: 0,
             q_after_bytes: operation.operation_q_terminal_bytes,
             q_high_water_bytes: operation.operation_q_high_water_bytes,
-            active_connections: 0,
+            active_connections,
             operation_scratch_tables: operation.scratch_tables,
             operation_scratch_statements: operation.scratch_statements,
             operation_scratch_rows: operation.scratch_rows,
@@ -3979,7 +3983,11 @@ fn run_physical_row(
         PhaseCounterDelta::between("storage_observation", &after_witness, &after_storage)?;
     storage_engine.engine.verify_trusted_read_only()?;
     let phase_counters = vec![
-        PhaseCounterDelta::operation_only("native_edit", &native),
+        PhaseCounterDelta::operation_only(
+            "native_edit",
+            &native,
+            before_storage.active_connections,
+        ),
         checkpoint_engine,
         witness_engine,
         storage_engine,
@@ -4597,7 +4605,11 @@ fn run_burst_row(
         PhaseCounterDelta::between("storage_observation", &after_witness, &after_storage)?;
     storage_engine.engine.verify_trusted_read_only()?;
     let phase_counters = vec![
-        PhaseCounterDelta::operation_only("native_edit", &native_aggregate),
+        PhaseCounterDelta::operation_only(
+            "native_edit",
+            &native_aggregate,
+            before_storage.active_connections,
+        ),
         checkpoint_engine,
         witness_engine,
         storage_engine,
@@ -4991,6 +5003,7 @@ fn run_terminal_row(
     let phase_counters = vec![PhaseCounterDelta::operation_only(
         "explicit_cleanup",
         &cleanup,
+        0,
     )];
     campaign.append(RowReceipt {
         schedule,
@@ -6077,11 +6090,13 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
             .into_iter()
             .max()
             .unwrap_or(0);
-        let operation_scratch_high = phases.iter().try_fold(0_u128, |total, phase| {
-            total
-                .checked_add(json_u128(phase, "operation_scratch_high_water_bytes")?)
-                .ok_or_else(|| format!("{} VFS scratch high-water overflow", row.row_id))
-        })?;
+        let operation_scratch_high = phases
+            .iter()
+            .map(|phase| json_u128(phase, "operation_scratch_high_water_bytes"))
+            .collect::<EvalResult<Vec<_>>>()?
+            .into_iter()
+            .max()
+            .unwrap_or(0);
         if engine_scratch_high.max(operation_scratch_high)
             != row_u128(row, "scratch_high_water_bytes")?
         {
@@ -11477,6 +11492,24 @@ fn display_error(error: impl std::fmt::Display) -> String {
 mod tests {
     use super::*;
 
+    #[test]
+    fn operation_only_phase_preserves_peak_and_actual_connections() {
+        let operation = layerfs_sdk::OperationDiagnostics {
+            scratch_statements: 6,
+            scratch_high_water_bytes: 33_304,
+            ..Default::default()
+        };
+        let native = PhaseCounterDelta::operation_only("native_edit", &operation, 1);
+        let cleanup = PhaseCounterDelta::operation_only("explicit_cleanup", &operation, 0);
+        assert_eq!(native.active_connections, 1);
+        assert_eq!(cleanup.active_connections, 0);
+        assert_eq!(native.operation_scratch_statements, 6);
+        assert_eq!(native.operation_scratch_high_water_bytes, 33_304);
+        let json = phase_counter_json(&native);
+        assert!(json.contains("\"active_connections\":1"));
+        assert!(json.contains("\"operation_scratch_high_water_bytes\":33304"));
+    }
+
     fn synthetic_root(index: u8) -> RootId {
         RootId::from_bytes(blake3::hash(&[index]).as_bytes()).unwrap()
     }
@@ -11655,7 +11688,7 @@ mod tests {
             value.descriptor_resets = 1;
             value.scratch_statements = burst.edits.len() as u64 * 3;
             value.scratch_rows = burst.edits.len() as u64 * 3;
-            value.scratch_high_water_bytes = 33_304 * burst.edits.len() as u64;
+            value.scratch_high_water_bytes = 33_304;
             value.scratch_operation_statements = burst.edits.len() as u64 * 3;
             for edit in &burst.edits {
                 let suffix = edit.before_bytes - edit.offset - edit.delete_bytes;

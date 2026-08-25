@@ -180,10 +180,9 @@ impl OperationCounters {
         self.scratch_tables = add(self.scratch_tables, source.scratch_tables)?;
         self.scratch_statements = add(self.scratch_statements, source.scratch_statements)?;
         self.scratch_rows = add(self.scratch_rows, source.scratch_rows)?;
-        self.scratch_high_water_bytes = add(
-            self.scratch_high_water_bytes,
-            source.scratch_high_water_bytes,
-        )?;
+        self.scratch_high_water_bytes = self
+            .scratch_high_water_bytes
+            .max(source.scratch_high_water_bytes);
         self.scratch_owner_setup_statements = add(
             self.scratch_owner_setup_statements,
             source.scratch_owner_setup_statements,
@@ -464,5 +463,40 @@ mod operation_counter_tests {
             ..Default::default()
         };
         assert_eq!(invalid.content_payload_bytes_read(), None);
+    }
+
+    #[test]
+    fn sequential_receipts_take_scratch_peak_while_distinct_tables_add() {
+        let first = OperationCounters {
+            scratch_statements: 3,
+            scratch_high_water_bytes: 100,
+            ..OperationCounters::default()
+        };
+        let second = OperationCounters {
+            scratch_statements: 4,
+            scratch_high_water_bytes: 120,
+            ..OperationCounters::default()
+        };
+        let sequential = first.merge(second).unwrap();
+        assert_eq!(sequential.scratch_statements, 7);
+        assert_eq!(sequential.scratch_high_water_bytes, 120);
+
+        let mut concurrent = OperationCounters::default();
+        concurrent
+            .add_scratch(layerfs_engine::scratch::ScratchObservation {
+                tables: 1,
+                high_water_bytes: 100,
+                ..Default::default()
+            })
+            .unwrap();
+        concurrent
+            .add_scratch(layerfs_engine::scratch::ScratchObservation {
+                tables: 1,
+                high_water_bytes: 120,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(concurrent.scratch_tables, 2);
+        assert_eq!(concurrent.scratch_high_water_bytes, 220);
     }
 }
