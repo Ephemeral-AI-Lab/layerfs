@@ -193,8 +193,8 @@ pub(crate) fn capture_workspace(
         return Err(VfsError::ExternalDirtyConflict);
     }
     let next = publication.publish_namespace(&namespace)?;
-    for scratch in [&existing_table, &seeded_links_table, &hard_links, &entries] {
-        counters.add_scratch(scratch.observation()?)?;
+    for scratch in [existing_table, seeded_links_table, hard_links, entries] {
+        counters.add_scratch(scratch.finish()?)?;
     }
     Ok((next, counters))
 }

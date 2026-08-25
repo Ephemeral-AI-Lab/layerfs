@@ -154,11 +154,9 @@ impl DiskTable {
         let table = Self {
             path,
             connection: Some(connection),
-            // Includes the terminal ROLLBACK that Drop always attempts for the
-            // live derived transaction opened below.
-            statements: Cell::new(11),
+            statements: Cell::new(10),
             owner_setup_statements: Cell::new(8),
-            derived_setup_statements: Cell::new(3),
+            derived_setup_statements: Cell::new(2),
             operation_statements: Cell::new(0),
             store_reopens,
             store_inspection_statements,
@@ -504,6 +502,13 @@ impl DiskTable {
         })
     }
 
+    pub fn finish(mut self) -> EngineResult<ScratchObservation> {
+        let rollback = self.finish_transaction();
+        let observation = self.observation();
+        rollback?;
+        observation
+    }
+
     fn mark_statement(&self) -> EngineResult<()> {
         self.statements.set(
             self.statements
@@ -534,6 +539,33 @@ impl DiskTable {
                 .ok_or(EngineError::CounterOverflow)?,
         );
         Ok(())
+    }
+
+    fn mark_derived_setup_statement(&self) -> EngineResult<()> {
+        self.statements.set(
+            self.statements
+                .get()
+                .checked_add(1)
+                .ok_or(EngineError::CounterOverflow)?,
+        );
+        self.derived_setup_statements.set(
+            self.derived_setup_statements
+                .get()
+                .checked_add(1)
+                .ok_or(EngineError::CounterOverflow)?,
+        );
+        Ok(())
+    }
+
+    fn finish_transaction(&mut self) -> EngineResult<()> {
+        let Some(connection) = self.connection.take() else {
+            return Ok(());
+        };
+        let rollback = connection
+            .execute_batch("ROLLBACK")
+            .map_err(map_sqlite_error);
+        self.mark_derived_setup_statement()?;
+        rollback
     }
 
     fn mark_rows(&self, rows: u64) -> EngineResult<()> {
@@ -854,9 +886,7 @@ fn prefix_upper_bound(prefix: &[u8]) -> EngineResult<Vec<u8>> {
 
 impl Drop for DiskTable {
     fn drop(&mut self) {
-        if let Some(connection) = self.connection.take() {
-            let _ = connection.execute_batch("ROLLBACK");
-        }
+        let _ = self.finish_transaction();
         cleanup_files(&self.path);
     }
 }
@@ -1133,14 +1163,20 @@ mod tests {
         assert_eq!(setup.store_reopens, 1);
         assert_eq!(setup.store_inspection_statements, 11);
         assert_eq!(setup.owner_setup_statements, 15);
-        assert_eq!(setup.derived_setup_statements, 3);
+        assert_eq!(setup.derived_setup_statements, 2);
         assert_eq!(setup.operation_statements, 0);
-        assert_eq!(setup.statements, 18);
+        assert_eq!(setup.statements, 17);
         table.put(b"key", b"value").unwrap();
         let operated = table.observation().unwrap();
         assert_eq!(operated.operation_statements, 1);
-        assert_eq!(operated.statements, 19);
-        drop(table);
+        assert_eq!(operated.derived_setup_statements, 2);
+        assert_eq!(operated.statements, 18);
+        let path = table.path.clone();
+        let finished = table.finish().unwrap();
+        assert_eq!(finished.derived_setup_statements, 3);
+        assert_eq!(finished.operation_statements, 1);
+        assert_eq!(finished.statements, 19);
+        assert!(!path.exists());
         drop(engine);
         std::fs::remove_file(anchor).unwrap();
     }
@@ -1328,6 +1364,38 @@ mod tests {
         };
         assert!(!path.exists());
         assert!(!PathBuf::from(format!("{}-journal", path.display())).exists());
+        drop(engine);
+        std::fs::remove_file(anchor).unwrap();
+    }
+
+    #[test]
+    fn failed_operation_finish_observes_rollback_only_after_execution() {
+        let anchor = std::env::temp_dir().join(format!(
+            "layerfs-scratch-failed-finish-{}-{}",
+            std::process::id(),
+            SCRATCH_SERIAL.fetch_add(1, Ordering::Relaxed)
+        ));
+        let engine = crate::Engine::open(&anchor).unwrap();
+        let table = DiskTable::create_near(&anchor, "failed-finish").unwrap();
+        let path = table.path.clone();
+        let namespace = table.namespace(b"records").unwrap();
+        namespace.put(b"key", b"value").unwrap();
+        assert!(matches!(
+            namespace.get_ordered_batch(&[b"key"], |_, _| {
+                Err(EngineError::InjectedFailure("batch callback"))
+            }),
+            Err(EngineError::InjectedFailure("batch callback"))
+        ));
+        let before_finish = table.observation().unwrap();
+        assert_eq!(before_finish.derived_setup_statements, 2);
+        assert_eq!(before_finish.operation_statements, 2);
+
+        let finished = table.finish().unwrap();
+        assert_eq!(finished.derived_setup_statements, 3);
+        assert_eq!(finished.operation_statements, 2);
+        assert_eq!(finished.statements, before_finish.statements + 1);
+        assert!(!path.exists());
+
         drop(engine);
         std::fs::remove_file(anchor).unwrap();
     }

@@ -361,7 +361,7 @@ pub(crate) fn apply(
     if namespace_changed {
         rotate_topology(topology, &old_edges, &new_edges)?;
     }
-    let scratch = scratch.table.observation()?;
+    let scratch = scratch.table.finish()?;
     counters.plan_scratch_high_water_bytes = scratch.high_water_bytes;
     counters.add_scratch(scratch)?;
     Ok(counters)

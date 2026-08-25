@@ -45,19 +45,20 @@ fn attribution_arms_reuse_full_source_and_native_routes() {
     assert_eq!(source_only.inode_table, complete.inode_table);
     assert_eq!(source_only.scratch_tables, complete.scratch_tables);
     assert_eq!(source_only.scratch_tables, 1);
-    assert_eq!(source_only.scratch_statements, complete.scratch_statements);
+    assert_eq!(
+        source_only.scratch_statements,
+        complete.scratch_statements + 1
+    );
     assert_eq!(source_only.scratch_rows, complete.scratch_rows);
     assert_eq!(
         source_only.scratch_owner_setup_statements,
         complete.scratch_owner_setup_statements
     );
     assert_eq!(source_only.scratch_owner_setup_statements, 15);
-    assert_eq!(
-        source_only.scratch_derived_setup_statements,
-        complete.scratch_derived_setup_statements
-    );
-    // Owner marker, BEGIN IMMEDIATE, and the terminal Drop ROLLBACK.
+    // Source-only has finished its scratch transaction; the projected
+    // workspace keeps its scratch authority live for refreshes.
     assert_eq!(source_only.scratch_derived_setup_statements, 3);
+    assert_eq!(complete.scratch_derived_setup_statements, 2);
     assert_eq!(
         source_only.scratch_operation_statements,
         complete.scratch_operation_statements

@@ -9,6 +9,7 @@ use layerfs_core::{
 };
 use rusqlite::types::ValueRef;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
+use std::cell::Cell;
 use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io::Cursor;
@@ -683,8 +684,11 @@ impl Engine {
         reject_legacy_compaction_state(&source)?;
         self.mark_compaction_sql(1)?;
         authenticate_complete_object_index(&source)?;
-        let retained = integrity::retained_union(&source, &self.path, self.store_id)?;
-        self.mark_compaction_sql(retained.observation.statements)?;
+        let retained_statements = Cell::new(0);
+        let retained =
+            integrity::retained_union(&source, &self.path, self.store_id, &retained_statements);
+        self.mark_compaction_sql(retained_statements.get())?;
+        let retained = retained?;
         let mark_database_bytes = retained.work.storage_bytes()?;
         let candidate = Connection::open(destination).map_err(map_sqlite_error)?;
         candidate
@@ -761,14 +765,21 @@ impl Engine {
             let _ = candidate.execute_batch("ROLLBACK");
             return Err(error);
         }
+        retained.work.finish()?;
         let candidate_journal_temp_peak_bytes = candidate_auxiliary_bytes(destination);
         self.mark_compaction_sql(1)?;
         candidate
             .execute_batch("COMMIT")
             .map_err(map_sqlite_error)?;
-        let verification =
-            integrity::verify_retained_union_observed(&candidate, destination, self.store_id)?;
-        self.mark_compaction_sql(verification.verification.statements)?;
+        let verification_statements = Cell::new(0);
+        let verification = integrity::verify_retained_union_observed_counted(
+            &candidate,
+            destination,
+            self.store_id,
+            &verification_statements,
+        );
+        self.mark_compaction_sql(verification_statements.get())?;
+        let verification = verification?;
         let verification_scratch_peak_bytes = verification.peak_bytes;
         self.mark_compaction_sql(1)?;
         candidate
@@ -2956,6 +2967,39 @@ mod tests {
         drop(engine);
         std::fs::remove_file(path).unwrap();
         std::fs::remove_file(destination).unwrap();
+    }
+
+    #[test]
+    fn failed_retained_union_assigns_completed_sql_to_compaction() {
+        let path = test_path();
+        let destination = path.with_extension("failed-compaction");
+        let engine =
+            Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
+        let namespace = encode_namespace_root(NamespaceRootV1 {
+            profile_id: profile_id(),
+            root_directory_inode: InodeId::allocate([0x42; 32], 0),
+            inode_table_root: ObjectId::for_bytes(b"missing inode table"),
+        })
+        .unwrap();
+        engine
+            .begin_publication(None, "main")
+            .unwrap()
+            .publish_namespace(&namespace)
+            .unwrap();
+        engine.reset_counters().unwrap();
+
+        assert!(matches!(
+            engine.compact_to(&destination),
+            Err(EngineError::MissingObject(_)) | Err(EngineError::MalformedObject { .. })
+        ));
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.statements, 6);
+        assert_eq!(counters.compaction_statements, 6);
+        assert_eq!(counters.primary_read_statements, 0);
+        assert!(!destination.exists());
+
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

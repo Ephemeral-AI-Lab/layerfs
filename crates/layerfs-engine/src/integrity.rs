@@ -55,7 +55,18 @@ pub(crate) fn verify_retained_union_observed(
     store: &Path,
     store_id: [u8; 32],
 ) -> EngineResult<RetainedUnionObservation> {
-    let retained = retained_union(connection, store, store_id)?;
+    let statements = Cell::new(0);
+    verify_retained_union_observed_counted(connection, store, store_id, &statements)
+}
+
+pub(crate) fn verify_retained_union_observed_counted(
+    connection: &Connection,
+    store: &Path,
+    store_id: [u8; 32],
+    statements: &Cell<u64>,
+) -> EngineResult<RetainedUnionObservation> {
+    let mut retained = retained_union(connection, store, store_id, statements)?;
+    retained.observation.add_scratch(retained.work.finish()?)?;
     Ok(RetainedUnionObservation {
         verification: retained.observation,
         peak_bytes: retained.peak_bytes,
@@ -84,13 +95,14 @@ pub(crate) fn verify_root(
     store_id: [u8; 32],
     root: ObjectId,
 ) -> EngineResult<VerificationObservation> {
+    let statements = Cell::new(0);
     let work = DiskTable::create_near_with_store_id(store, "publication-closure", store_id)?;
     let graph = DiskTable::create_near_with_store_id(store, "publication-graph", store_id)?;
     let records = graph.namespace(b"records")?;
     let state = graph.namespace(b"state")?;
     let payload_lengths = graph.namespace(b"payload-lengths")?;
     enqueue(&work, root, Role::Namespace, true)?;
-    let mut observation = drain(connection, &work, &payload_lengths)?;
+    let mut observation = drain(connection, &work, &payload_lengths, &statements)?;
     records.clear()?;
     state.clear()?;
     observation.merge(validate_namespace_graph_disk(
@@ -99,9 +111,11 @@ pub(crate) fn verify_root(
         &state,
         &payload_lengths,
         root,
+        &statements,
     )?)?;
-    observation.add_scratch(work.observation()?)?;
-    observation.add_scratch(graph.observation()?)?;
+    observation.add_scratch(work.finish()?)?;
+    observation.add_scratch(graph.finish()?)?;
+    observation.statements = statements.get();
     Ok(observation)
 }
 
@@ -185,10 +199,21 @@ pub(crate) struct RetainedUnion {
     pub(crate) observation: VerificationObservation,
 }
 
+fn note_statement_attempt(statements: &Cell<u64>) -> EngineResult<()> {
+    statements.set(
+        statements
+            .get()
+            .checked_add(1)
+            .ok_or(EngineError::CounterOverflow)?,
+    );
+    Ok(())
+}
+
 pub(crate) fn retained_union(
     connection: &Connection,
     store: &Path,
     store_id: [u8; 32],
+    statements: &Cell<u64>,
 ) -> EngineResult<RetainedUnion> {
     let work = DiskTable::create_near_with_store_id(store, "closure", store_id)?;
     let graph = DiskTable::create_near_with_store_id(store, "namespace-graph", store_id)?;
@@ -196,12 +221,9 @@ pub(crate) fn retained_union(
     let state = graph.namespace(b"state")?;
     let payload_lengths = graph.namespace(b"payload-lengths")?;
     let validated_roots = graph.namespace(b"validated-roots")?;
-    // The ordered ref scan below is real Store SQL; StoreId was admitted once.
-    let mut observation = VerificationObservation {
-        statements: 1,
-        ..VerificationObservation::default()
-    };
+    let mut observation = VerificationObservation::default();
     let mut peak_bytes = work.storage_bytes()?.saturating_add(graph.storage_bytes()?);
+    note_statement_attempt(statements)?;
     let mut statement = connection
         .prepare("SELECT name, generation, root_id FROM layerfs_refs ORDER BY name")
         .map_err(map_sqlite_error)?;
@@ -221,6 +243,7 @@ pub(crate) fn retained_union(
             return Err(EngineError::InvalidRecord("ref generation"));
         }
         let root = ObjectId::from_bytes(&root)?;
+        note_statement_attempt(statements)?;
         let retained = connection
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM layerfs_retained_roots WHERE root_id = ?1)",
@@ -228,10 +251,6 @@ pub(crate) fn retained_union(
                 |row| row.get::<_, bool>(0),
             )
             .map_err(map_sqlite_error)?;
-        observation.statements = observation
-            .statements
-            .checked_add(1)
-            .ok_or(EngineError::CounterOverflow)?;
         if !retained {
             return Err(EngineError::MissingRoot(root));
         }
@@ -241,7 +260,7 @@ pub(crate) fn retained_union(
                 .checked_add(1)
                 .ok_or(EngineError::CounterOverflow)?;
             enqueue(&work, root, Role::Namespace, true)?;
-            observation.merge(drain(connection, &work, &payload_lengths)?)?;
+            observation.merge(drain(connection, &work, &payload_lengths, statements)?)?;
             records.clear()?;
             state.clear()?;
             observation.merge(validate_namespace_graph_disk(
@@ -250,16 +269,14 @@ pub(crate) fn retained_union(
                 &state,
                 &payload_lengths,
                 root,
+                statements,
             )?)?;
             peak_bytes =
                 peak_bytes.max(work.storage_bytes()?.saturating_add(graph.storage_bytes()?));
         }
     }
     drop(statement);
-    observation.statements = observation
-        .statements
-        .checked_add(1)
-        .ok_or(EngineError::CounterOverflow)?;
+    note_statement_attempt(statements)?;
     let mut statement = connection
         .prepare("SELECT root_id FROM layerfs_retained_roots ORDER BY root_id")
         .map_err(map_sqlite_error)?;
@@ -274,7 +291,7 @@ pub(crate) fn retained_union(
                 .checked_add(1)
                 .ok_or(EngineError::CounterOverflow)?;
             enqueue(&work, root, Role::Namespace, true)?;
-            observation.merge(drain(connection, &work, &payload_lengths)?)?;
+            observation.merge(drain(connection, &work, &payload_lengths, statements)?)?;
             records.clear()?;
             state.clear()?;
             observation.merge(validate_namespace_graph_disk(
@@ -283,13 +300,14 @@ pub(crate) fn retained_union(
                 &state,
                 &payload_lengths,
                 root,
+                statements,
             )?)?;
             peak_bytes =
                 peak_bytes.max(work.storage_bytes()?.saturating_add(graph.storage_bytes()?));
         }
     }
-    observation.add_scratch(work.observation()?)?;
-    observation.add_scratch(graph.observation()?)?;
+    observation.add_scratch(graph.finish()?)?;
+    observation.statements = statements.get();
     Ok(RetainedUnion {
         work,
         peak_bytes,
@@ -316,8 +334,9 @@ fn validate_namespace_graph_disk(
     state: &DiskNamespace<'_>,
     payload_lengths: &DiskNamespace<'_>,
     root: ObjectId,
+    statements: &Cell<u64>,
 ) -> EngineResult<VerificationObservation> {
-    let object_store = ConnectionStore::new(connection);
+    let object_store = ConnectionStore::new(connection, statements);
     let namespace = object_store
         .with_authenticated_canonical(root, decode_namespace_root)
         .map_err(EngineError::Core)?;
@@ -502,6 +521,7 @@ fn decode_ref_count(bytes: &[u8]) -> EngineResult<u64> {
 struct ConnectionStore<'a> {
     connection: &'a Connection,
     observation: Cell<VerificationObservation>,
+    statements: &'a Cell<u64>,
 }
 
 struct PayloadSummaryStore<'a, 'connection, 'scratch> {
@@ -557,10 +577,11 @@ impl ObjectRead for PayloadSummaryStore<'_, '_, '_> {
 }
 
 impl<'a> ConnectionStore<'a> {
-    fn new(connection: &'a Connection) -> Self {
+    fn new(connection: &'a Connection, statements: &'a Cell<u64>) -> Self {
         Self {
             connection,
             observation: Cell::new(VerificationObservation::default()),
+            statements,
         }
     }
 
@@ -574,6 +595,12 @@ impl<'a> ConnectionStore<'a> {
         role_decode: bool,
         callback: impl FnOnce(ObjectKind, &[u8]) -> Result<T, layerfs_core::CoreError>,
     ) -> Result<T, layerfs_core::CoreError> {
+        self.statements.set(
+            self.statements
+                .get()
+                .checked_add(1)
+                .ok_or(layerfs_core::CoreError::LengthOverflow)?,
+        );
         let mut statement = self
             .connection
             .prepare_cached(
@@ -614,10 +641,6 @@ impl<'a> ConnectionStore<'a> {
             return Err(layerfs_core::CoreError::InvalidRecord("object summary"));
         }
         let mut observation = self.observation.get();
-        observation.statements = observation
-            .statements
-            .checked_add(1)
-            .ok_or(layerfs_core::CoreError::LengthOverflow)?;
         observation.fetched_rows = observation
             .fetched_rows
             .checked_add(1)
@@ -678,8 +701,9 @@ fn drain(
     connection: &Connection,
     work: &DiskTable,
     payload_lengths: &DiskNamespace<'_>,
+    statements: &Cell<u64>,
 ) -> EngineResult<VerificationObservation> {
-    let object_store = ConnectionStore::new(connection);
+    let object_store = ConnectionStore::new(connection, statements);
     while let Some((key, _)) = work.pop_pending()? {
         let (id, role, root) = decode_key(&key)?;
         let mut visit_error = None;

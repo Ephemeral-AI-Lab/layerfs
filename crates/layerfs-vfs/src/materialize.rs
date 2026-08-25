@@ -123,7 +123,7 @@ pub fn materialize_authenticated_to<W: Write>(
         &mut counters,
     )?;
     output.flush()?;
-    counters.add_scratch(scratch.observation()?)?;
+    counters.add_scratch(scratch.finish()?)?;
     Ok(counters)
 }
 
