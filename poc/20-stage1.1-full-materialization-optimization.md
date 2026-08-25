@@ -7,6 +7,43 @@ Canonical, trust, durability, and Apple authority: [10 — handoff freeze](10-ha
 Current measured source: `f3dd4a32273a4c5cbe5e7ca2287c945ba4434c30`  
 Sequence: **Stage 1.1 accepted baseline -> Stage 1.1M attribution and repair -> Stage 1.2**
 
+## M1 execution-authority correction
+
+Post-freeze executable inspection proved that the preserved `f3dd4a3` release
+binary cannot execute the section-12 parity operation: its CLI has no
+single-materialization or primer command, its fixed Apple-edge route requires
+47 rows, and every C08 row opens a fresh Engine and performs no same-open
+primer. It also cannot emit the hidden SQL/native/sync facts that M1 was
+created to add. Requiring that immutable binary to run the new operation is
+therefore impossible, not a product or performance failure.
+
+The authorized smallest correction is:
+
+```text
+accepted historical executable
+  = preserved unchanged as Stage 1.1 correctness/wall custody
+
+historical parity harness
+  = product Rust/Cargo files byte-identical to f3dd4a3
+  + evaluator-only parity command and custody schema
+  = no attribution instrumentation and no product change
+
+instrumented A/B control
+  = the same evaluator command
+  + attribution-only product facts/timers
+
+candidate
+  = frozen instrumented control plus selected product optimizations
+```
+
+The exact 8-primer/8-measured-row conditioning, estimator, wall gates, fixtures,
+oracles, pair order, and performance targets remain unchanged. Product-source
+manifests independently prove that the historical harness product is exactly
+`f3dd4a3`; evaluator-source manifests identify the added command. Fields the
+uninstrumented harness cannot emit are proved by product-source identity plus
+focused instrumented observation goldens and are never fabricated as zero.
+The accepted binary, attempt-014, and all failed rows remain immutable.
+
 ## 0. Decision
 
 Attempt 014 remains immutable accepted evidence for its exact source:
