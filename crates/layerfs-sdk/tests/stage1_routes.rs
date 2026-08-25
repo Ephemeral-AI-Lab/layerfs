@@ -172,6 +172,11 @@ fn repeated_ranges_reuse_only_the_exact_resolved_root_and_path() {
         after.statements - before.statements,
         second_counters.rope.nodes_read + after.payload_batch_queries
             - before.payload_batch_queries
+            + 3 // the trailing diagnostics call's three storage-observation SELECTs
+    );
+    assert_eq!(
+        after.primary_read_statements - before.primary_read_statements,
+        after.statements - before.statements
     );
     assert_eq!(
         after.fetched_rows - before.fetched_rows,
