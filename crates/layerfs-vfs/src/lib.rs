@@ -374,7 +374,7 @@ fn add(left: u64, right: u64) -> Result<u64, layerfs_core::CoreError> {
 /// bounded metadata-tree summaries. Every individual chunk/buffer is <=1 MiB;
 /// managed serialization itself is disk-backed. SQLite caches and caller
 /// buffers are reported separately.
-pub const OPERATION_Q_BOUND_BYTES: u64 = 8 * 1024 * 1024;
+pub const OPERATION_Q_BOUND_BYTES: u64 = 8 * 1024 * 1024 - 1;
 
 pub const COMPONENT: &str = "layerfs-vfs";
 
