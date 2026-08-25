@@ -3690,6 +3690,8 @@ fn validate_attribution_observation(
     let trust_exact = trust_equation(mode, &row.engine);
     let common = engine_sql == row.engine.statements
         && scratch_sql == operation.scratch_statements
+        && successful_projection_facts_exact(operation.projection)
+        && successful_projection_facts_exact(row.projection_total)
         && trust_exact
         && row.engine.busy_events == 0
         && row.engine.locked_events == 0
@@ -4105,6 +4107,193 @@ fn scratch_sql(operation: &OperationDiagnostics) -> EvalResult<u64> {
         .checked_add(operation.scratch_derived_setup_statements)
         .and_then(|value| value.checked_add(operation.scratch_operation_statements))
         .ok_or_else(|| "scratch SQL equation overflow".to_owned())
+}
+
+fn fact_count_exact(attempts: u64, successes: u64, failures: u64) -> bool {
+    successes.checked_add(failures) == Some(attempts)
+}
+
+fn fact_sum_exact(expected: u64, mut values: impl Iterator<Item = u64>) -> bool {
+    values.try_fold(0_u64, u64::checked_add) == Some(expected)
+}
+
+fn fact_timer_sum_exact(
+    aggregate: ProjectionTimer,
+    mut owners: impl Iterator<Item = ProjectionTimer>,
+) -> bool {
+    owners.try_fold(0_u64, |total, owner| {
+        (owner.availability == aggregate.availability)
+            .then(|| total.checked_add(owner.nanoseconds))
+            .flatten()
+    }) == Some(aggregate.nanoseconds)
+}
+
+fn sync_fact_exact(fact: ProjectionSyncFacts) -> bool {
+    fact_count_exact(fact.attempts, fact.successes, fact.failures)
+        && [
+            fact.requested.process_crash_reconciled,
+            fact.requested.host_crash_ordered,
+            fact.requested.device_flush_requested,
+            fact.requested.power_loss_qualified,
+        ]
+        .into_iter()
+        .try_fold(0_u64, u64::checked_add)
+            == Some(fact.attempts)
+        && [
+            fact.achieved.process_crash_reconciled,
+            fact.achieved.host_crash_ordered,
+            fact.achieved.device_flush_requested,
+            fact.achieved.power_loss_qualified,
+        ]
+        .into_iter()
+        .try_fold(0_u64, u64::checked_add)
+            == Some(fact.successes)
+}
+
+fn sync_aggregate_exact(aggregate: ProjectionSyncFacts, owners: &[ProjectionSyncFacts]) -> bool {
+    sync_fact_exact(aggregate)
+        && owners.iter().copied().all(sync_fact_exact)
+        && fact_sum_exact(
+            aggregate.attempts,
+            owners.iter().map(|owner| owner.attempts),
+        )
+        && fact_sum_exact(
+            aggregate.successes,
+            owners.iter().map(|owner| owner.successes),
+        )
+        && fact_sum_exact(
+            aggregate.failures,
+            owners.iter().map(|owner| owner.failures),
+        )
+        && fact_sum_exact(
+            aggregate.requested.process_crash_reconciled,
+            owners
+                .iter()
+                .map(|owner| owner.requested.process_crash_reconciled),
+        )
+        && fact_sum_exact(
+            aggregate.requested.host_crash_ordered,
+            owners
+                .iter()
+                .map(|owner| owner.requested.host_crash_ordered),
+        )
+        && fact_sum_exact(
+            aggregate.requested.device_flush_requested,
+            owners
+                .iter()
+                .map(|owner| owner.requested.device_flush_requested),
+        )
+        && fact_sum_exact(
+            aggregate.requested.power_loss_qualified,
+            owners
+                .iter()
+                .map(|owner| owner.requested.power_loss_qualified),
+        )
+        && fact_sum_exact(
+            aggregate.achieved.process_crash_reconciled,
+            owners
+                .iter()
+                .map(|owner| owner.achieved.process_crash_reconciled),
+        )
+        && fact_sum_exact(
+            aggregate.achieved.host_crash_ordered,
+            owners.iter().map(|owner| owner.achieved.host_crash_ordered),
+        )
+        && fact_sum_exact(
+            aggregate.achieved.device_flush_requested,
+            owners
+                .iter()
+                .map(|owner| owner.achieved.device_flush_requested),
+        )
+        && fact_sum_exact(
+            aggregate.achieved.power_loss_qualified,
+            owners
+                .iter()
+                .map(|owner| owner.achieved.power_loss_qualified),
+        )
+        && fact_timer_sum_exact(aggregate.wall, owners.iter().map(|owner| owner.wall))
+}
+
+fn write_aggregate_exact(aggregate: ProjectionWriteFacts, owners: &[ProjectionWriteFacts]) -> bool {
+    fact_count_exact(aggregate.attempts, aggregate.successes, aggregate.failures)
+        && owners
+            .iter()
+            .all(|owner| fact_count_exact(owner.attempts, owner.successes, owner.failures))
+        && fact_sum_exact(
+            aggregate.attempts,
+            owners.iter().map(|owner| owner.attempts),
+        )
+        && fact_sum_exact(
+            aggregate.successes,
+            owners.iter().map(|owner| owner.successes),
+        )
+        && fact_sum_exact(
+            aggregate.failures,
+            owners.iter().map(|owner| owner.failures),
+        )
+        && fact_sum_exact(aggregate.bytes, owners.iter().map(|owner| owner.bytes))
+        && fact_timer_sum_exact(aggregate.wall, owners.iter().map(|owner| owner.wall))
+}
+
+fn projection_facts_exact(facts: ProjectionFacts) -> bool {
+    [
+        facts.workspace_setup,
+        facts.workspace_root_create_open,
+        facts.staging_create_open,
+        facts.recovery_marker_create,
+        facts.name_preflight,
+        facts.temp_create,
+        facts.content_flush,
+        facts.metadata_validate,
+        facts.metadata_apply,
+        facts.metadata_preinstall_verify,
+        facts.metadata_postinstall_verify,
+        facts.root_binding_revalidate,
+        facts.authority_completion,
+    ]
+    .iter()
+    .all(|fact| fact_count_exact(fact.attempts, fact.successes, fact.failures))
+        && write_aggregate_exact(
+            facts.aggregate_native_write,
+            &[
+                facts.workspace_marker_write,
+                facts.content_write,
+                facts.metadata_value_write,
+            ],
+        )
+        && sync_aggregate_exact(
+            facts.regular_file_sync,
+            &[
+                facts.recovery_marker_file_sync,
+                facts.content_temp_file_sync,
+                facts.post_hardlink_file_sync,
+            ],
+        )
+        && sync_aggregate_exact(
+            facts.directory_sync,
+            &[
+                facts.staging_directory_sync,
+                facts.root_parent_directory_sync,
+                facts.install_parent_directory_sync,
+                facts.dirty_tree_directory_sync,
+                facts.final_root_directory_sync,
+            ],
+        )
+        && fact_count_exact(
+            facts.replace.attempts,
+            facts.replace.successes,
+            facts.replace.failures,
+        )
+        && fact_count_exact(
+            facts.cleanup.attempts,
+            facts.cleanup.successes,
+            facts.cleanup.failures,
+        )
+        && facts.cleanup.residue == facts.cleanup.failures
+}
+
+fn successful_projection_facts_exact(facts: ProjectionFacts) -> bool {
+    projection_facts_exact(facts) && facts.cleanup.failures == 0 && facts.cleanup.residue == 0
 }
 
 fn attribution_timer_equation(
@@ -5150,6 +5339,71 @@ mod tests {
             &valid.replace("\"row_wall_residual_ns\":10", "\"row_wall_residual_ns\":-1")
         )
         .is_err());
+    }
+
+    #[test]
+    fn projection_fact_mutation_rejects_hidden_or_missing_syncs() {
+        let mut one_sync = ProjectionSyncFacts::available();
+        one_sync.attempts = 1;
+        one_sync.successes = 1;
+        one_sync.requested.process_crash_reconciled = 1;
+        one_sync.achieved.process_crash_reconciled = 1;
+
+        let mut facts = ProjectionFacts::available();
+        facts.recovery_marker_file_sync = one_sync;
+        facts.content_temp_file_sync = one_sync;
+        facts.regular_file_sync = one_sync;
+        facts.regular_file_sync.attempts = 2;
+        facts.regular_file_sync.successes = 2;
+        facts.regular_file_sync.requested.process_crash_reconciled = 2;
+        facts.regular_file_sync.achieved.process_crash_reconciled = 2;
+        for owner in [
+            &mut facts.staging_directory_sync,
+            &mut facts.root_parent_directory_sync,
+            &mut facts.dirty_tree_directory_sync,
+            &mut facts.final_root_directory_sync,
+        ] {
+            *owner = one_sync;
+        }
+        facts.directory_sync = one_sync;
+        facts.directory_sync.attempts = 4;
+        facts.directory_sync.successes = 4;
+        facts.directory_sync.requested.process_crash_reconciled = 4;
+        facts.directory_sync.achieved.process_crash_reconciled = 4;
+
+        assert!(projection_facts_exact(facts));
+        facts.regular_file_sync.attempts -= 1;
+        assert!(!projection_facts_exact(facts));
+        facts.regular_file_sync.attempts += 1;
+        facts
+            .content_temp_file_sync
+            .requested
+            .process_crash_reconciled = 0;
+        assert!(!projection_facts_exact(facts));
+        facts
+            .content_temp_file_sync
+            .requested
+            .process_crash_reconciled = 1;
+        facts
+            .content_temp_file_sync
+            .achieved
+            .process_crash_reconciled = 0;
+        assert!(!projection_facts_exact(facts));
+        facts
+            .content_temp_file_sync
+            .achieved
+            .process_crash_reconciled = 1;
+        facts.content_write.bytes = 1;
+        assert!(!projection_facts_exact(facts));
+        facts.content_write.bytes = 0;
+        facts.content_temp_file_sync.wall.nanoseconds = 1;
+        assert!(!projection_facts_exact(facts));
+        facts.content_temp_file_sync.wall.nanoseconds = 0;
+        facts.cleanup.attempts = 1;
+        facts.cleanup.failures = 1;
+        facts.cleanup.residue = 1;
+        assert!(projection_facts_exact(facts));
+        assert!(!successful_projection_facts_exact(facts));
     }
 
     #[test]
