@@ -3,7 +3,7 @@ use crate::managed_edit::native_parent;
 use crate::materialize::metadata;
 use crate::resolver::namespace;
 use crate::workspace::{VfsError, VfsResult};
-use crate::{NativeRoute, OperationCounters};
+use crate::{AcceptedSplice, NativeRoute, OperationCounters};
 use layerfs_core::content::rope::{diff_ranges, read_all, read_range, FileStateRoot, ObjectRead};
 use layerfs_core::inode::{
     diff_inode_table_entries, inode_table_lookup, InodeId, InodeKind, InodeRecordV1,
@@ -88,10 +88,10 @@ pub(crate) fn apply(
     native: &dyn ProjectionWorkspace,
     authority: &DiskTable,
     topology: &DiskTable,
-    old: &RefState,
-    target: &RefState,
+    transition: (&RefState, &RefState, Option<&AcceptedSplice>),
     visible: &mut bool,
 ) -> VfsResult<OperationCounters> {
+    let (old, target, accepted) = transition;
     let scratch = RefreshScratch::create(engine)?;
     let old_paths = scratch.table("old-paths")?;
     let new_paths = scratch.table("new-paths")?;
@@ -246,7 +246,13 @@ pub(crate) fn apply(
             {
                 return Err(DriverError::Unsupported.into());
             }
-            (Some(_), Some(_)) => updates.enqueue_once(&path, &path)?,
+            (Some(_), Some(_)) => {
+                if accepted.is_some_and(|splice| splice.path().as_bytes() == path) {
+                    updates.enqueue_once(&[], &path)?;
+                } else {
+                    updates.enqueue_once(&path, &path)?;
+                }
+            }
             (None, None) => return Err(VfsError::InvalidState),
         }
     }
@@ -316,6 +322,7 @@ pub(crate) fn apply(
             &CanonicalPath::from_bytes(&path)?,
             before,
             after,
+            accepted,
             visible,
             &mut counters,
         )?;
@@ -1197,6 +1204,7 @@ fn apply_update(
     path: &CanonicalPath,
     before: Snapshot,
     after: Snapshot,
+    accepted: Option<&AcceptedSplice>,
     visible: &mut bool,
     counters: &mut OperationCounters,
 ) -> VfsResult<()> {
@@ -1256,7 +1264,8 @@ fn apply_update(
             }
             processed_inodes.put(after.inode.as_bytes(), path.as_bytes())?;
             refresh_regular(
-                engine, scratch, native, authority, path, before, after, visible, counters,
+                engine, scratch, native, authority, path, before, after, accepted, visible,
+                counters,
             )
         }
         InodeKind::Symlink => {
@@ -1536,6 +1545,7 @@ fn refresh_regular(
     path: &CanonicalPath,
     before: Snapshot,
     after: Snapshot,
+    accepted: Option<&AcceptedSplice>,
     visible: &mut bool,
     counters: &mut OperationCounters,
 ) -> VfsResult<()> {
@@ -1578,6 +1588,22 @@ fn refresh_regular(
     }
     ensure_unprotected(native, parent.as_ref(), name, counters)?;
     if !same_length {
+        if let Some(accepted) = accepted.filter(|splice| splice.path() == path) {
+            return refresh_splice(
+                engine,
+                native,
+                authority,
+                parent.as_ref(),
+                name,
+                &old_key,
+                &old_token,
+                before,
+                after,
+                accepted,
+                visible,
+                counters,
+            );
+        }
         return full_fallback(
             engine,
             native,
@@ -1670,6 +1696,122 @@ fn refresh_regular(
         }
         Err(error) => return Err(error.into()),
     }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn refresh_splice(
+    engine: &Engine,
+    native: &dyn ProjectionWorkspace,
+    authority: &DiskTable,
+    parent: &dyn crate::driver::DirectoryHandle,
+    name: &[u8],
+    old_key: &[u8],
+    old_token: &[u8],
+    before: Snapshot,
+    after: Snapshot,
+    accepted: &AcceptedSplice,
+    visible: &mut bool,
+    counters: &mut OperationCounters,
+) -> VfsResult<()> {
+    let end = accepted
+        .start
+        .checked_add(accepted.delete_len)
+        .ok_or(VfsError::InvalidState)?;
+    let replacement_end = accepted
+        .start
+        .checked_add(accepted.insert_len)
+        .ok_or(VfsError::InvalidState)?;
+    if end > accepted.old_len
+        || accepted
+            .old_len
+            .checked_sub(accepted.delete_len)
+            .and_then(|length| length.checked_add(accepted.insert_len))
+            != Some(accepted.new_len)
+        || replacement_end > accepted.new_len
+    {
+        return Err(VfsError::InvalidState);
+    }
+    let target_metadata = metadata(engine, after.metadata_root, counters)?;
+    let mut source = native.open_regular_read_at(parent, name, Some(old_token))?;
+    if source.seek(SeekFrom::End(0))? != accepted.old_len {
+        return Err(VfsError::ExternalDirtyConflict);
+    }
+    let suffix = accepted
+        .old_len
+        .checked_sub(end)
+        .ok_or(VfsError::InvalidState)?;
+    if suffix != 0 && before.namespace_ref_count == 1 && after.namespace_ref_count == 1 {
+        counters.native.clone_attempts = checked_add(counters.native.clone_attempts, 1)?;
+        match native.clone_temp_from_regular(source.as_ref()) {
+            Ok(mut temp) => {
+                if temp.seek(SeekFrom::End(0))? != accepted.old_len {
+                    return Err(VfsError::ExternalDirtyConflict);
+                }
+                counters.native.clone_successes = checked_add(counters.native.clone_successes, 1)?;
+                counters.native.temp_calls = checked_add(counters.native.temp_calls, 1)?;
+                counters.add_native(crate::managed_edit::shift_temp(
+                    temp.as_mut(),
+                    accepted.start,
+                    accepted.delete_len,
+                    accepted.insert_len,
+                )?)?;
+                copy_target_range(
+                    engine,
+                    after.content_root,
+                    accepted.start,
+                    replacement_end,
+                    temp.as_mut(),
+                    counters,
+                )?;
+                native.set_temp_metadata(temp.as_mut(), &target_metadata)?;
+                counters.native.metadata_calls = checked_add(counters.native.metadata_calls, 2)?;
+                match native.atomic_replace_checked(temp, parent, name, Some(old_key)) {
+                    Ok(()) => *visible = true,
+                    Err(error) => {
+                        mark_ambiguous(visible, &error);
+                        return Err(error.into());
+                    }
+                }
+                counters.native.replace_calls = checked_add(counters.native.replace_calls, 1)?;
+                counters.native.sync_calls = checked_add(counters.native.sync_calls, 2)?;
+                counters.native.route = Some(NativeRoute::CloneShift);
+                let next_key = native.identity_at(parent, name)?;
+                authority.remove(old_key)?;
+                authority.put(&next_key, after.inode.as_bytes())?;
+                return Ok(());
+            }
+            Err(DriverError::Unsupported) => {
+                counters.native.clone_fallbacks = checked_add(counters.native.clone_fallbacks, 1)?;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+    let mut file = native.open_regular_at(parent, name, Some(old_token))?;
+    if file.seek(SeekFrom::End(0))? != accepted.old_len {
+        return Err(VfsError::ExternalDirtyConflict);
+    }
+    *visible = true;
+    counters.add_native(crate::managed_edit::shift_regular(
+        native,
+        file.as_mut(),
+        accepted.start,
+        accepted.delete_len,
+        accepted.insert_len,
+    )?)?;
+    copy_target_range(
+        engine,
+        after.content_root,
+        accepted.start,
+        replacement_end,
+        file.as_mut(),
+        counters,
+    )?;
+    native.set_entry_metadata(parent, name, old_key, &target_metadata)?;
+    native.sync_regular(file.as_mut())?;
+    counters.native.metadata_calls = checked_add(counters.native.metadata_calls, 2)?;
+    counters.native.sync_calls = checked_add(counters.native.sync_calls, 1)?;
+    counters.native.route = Some(NativeRoute::InPlaceShift);
     Ok(())
 }
 

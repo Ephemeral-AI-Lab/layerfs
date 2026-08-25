@@ -15,6 +15,7 @@ pub trait RegularFileHandle: Read + Write + Seek + Send {
 }
 pub trait OwnedTempHandle: Read + Write + Seek + Send {
     fn as_any(&self) -> &dyn Any;
+    fn set_len(&mut self, len: u64) -> Result<()>;
     fn into_any(self: Box<Self>) -> Box<dyn Any>;
 }
 pub trait NamePreflight: Send {

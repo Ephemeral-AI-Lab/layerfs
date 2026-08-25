@@ -428,18 +428,24 @@ impl Engine {
             configure_profile(&connection).map_err(|error| engine_step("profile", error))?;
         initialize_schema(&connection, &profile)
             .map_err(|error| engine_step("schema initialization", error))?;
-        if mode == integrity::IntegrityMode::Verified {
+        let scrub = if mode == integrity::IntegrityMode::Verified {
             let _admission = VERIFIED_OPEN_LOCK.lock().map_err(|_| EngineError::Sqlite {
                 kind: SqliteErrorKind::Other,
                 message: "Verified admission mutex poisoned".to_owned(),
             })?;
             initial_verified_scrub(&connection, &path)
-                .map_err(|error| engine_step("initial verified scrub", error))?;
+                .map_err(|error| engine_step("initial verified scrub", error))?
+        } else {
+            None
+        };
+        let mut counters = EngineCounters::default();
+        if let Some(observation) = scrub {
+            add_retained_scrub_counters(&mut counters, observation)?;
         }
         Ok(Self {
             path,
             connection: Mutex::new(Some(connection)),
-            counters: Mutex::new(EngineCounters::default()),
+            counters: Mutex::new(counters),
             rollback_journal_sample: Mutex::new(None),
             profile,
             mode,
@@ -476,13 +482,12 @@ impl Engine {
     }
 
     pub fn active_connection_count(&self) -> EngineResult<u64> {
-        let primary = u64::from(
+        Ok(u64::from(
             self.connection
                 .lock()
                 .map_err(|_| EngineError::InvalidRecord("connection lock"))?
                 .is_some(),
-        );
-        Ok(primary + u64::from(self.maintenance_pin.is_some()))
+        ))
     }
 
     pub fn compact_to(&self, destination: &Path) -> EngineResult<()> {
@@ -580,7 +585,7 @@ impl Engine {
             .execute_batch("COMMIT")
             .map_err(map_sqlite_error)?;
         let verification_scratch_peak_bytes =
-            integrity::verify_retained_union_observed(&candidate, destination)?;
+            integrity::verify_retained_union_observed(&candidate, destination)?.peak_bytes;
         candidate
             .execute_batch("DETACH DATABASE source")
             .map_err(map_sqlite_error)?;
@@ -963,10 +968,14 @@ impl Engine {
                         .execute_batch("ROLLBACK; BEGIN IMMEDIATE")
                         .map_err(map_sqlite_error)?;
                 }
-                self.bump(|counters| checked_add(&mut counters.retained_union_scrubs, 1))?;
-                if let Err(error) = integrity::verify_retained_union(&connection, &self.path)
-                    .and_then(|_| clear_trusted_history(&connection))
-                {
+                let scrubbed = integrity::verify_retained_union_observed(&connection, &self.path)
+                    .and_then(|observation| {
+                        clear_trusted_history(&connection)?;
+                        self.bump(|counters| {
+                            add_retained_scrub_counters(counters, observation.verification)
+                        })
+                    });
+                if let Err(error) = scrubbed {
                     let _ = connection.execute_batch("ROLLBACK");
                     connection.transaction = false;
                     return Err(error);
@@ -1178,25 +1187,70 @@ fn clear_trusted_history(connection: &Connection) -> EngineResult<()> {
     Ok(())
 }
 
-fn initial_verified_scrub(connection: &Connection, path: &Path) -> EngineResult<()> {
+fn initial_verified_scrub(
+    connection: &Connection,
+    path: &Path,
+) -> EngineResult<Option<integrity::VerificationObservation>> {
     connection
         .execute_batch("BEGIN IMMEDIATE")
         .map_err(map_sqlite_error)?;
     let result = trusted_history(connection).and_then(|dirty| {
         if dirty {
-            integrity::verify_retained_union(connection, path)
-                .and_then(|_| clear_trusted_history(connection))
+            let observation = integrity::verify_retained_union_observed(connection, path)?;
+            clear_trusted_history(connection)?;
+            Ok(Some(observation.verification))
         } else {
-            Ok(())
+            Ok(None)
         }
     });
     match result {
-        Ok(()) => connection.execute_batch("COMMIT").map_err(map_sqlite_error),
+        Ok(observation) => {
+            connection
+                .execute_batch("COMMIT")
+                .map_err(map_sqlite_error)?;
+            Ok(observation)
+        }
         Err(error) => {
             let _ = connection.execute_batch("ROLLBACK");
             Err(error)
         }
     }
+}
+
+fn add_retained_scrub_counters(
+    counters: &mut EngineCounters,
+    observation: integrity::VerificationObservation,
+) -> EngineResult<()> {
+    checked_add(&mut counters.retained_union_scrubs, 1)?;
+    checked_add(&mut counters.statements, observation.statements)?;
+    checked_add(
+        &mut counters.objects_validated,
+        observation.authentication_passes,
+    )?;
+    checked_add(&mut counters.object_bytes_read, observation.bytes)?;
+    checked_add(&mut counters.fetched_rows, observation.fetched_rows)?;
+    checked_add(
+        &mut counters.fetched_row_authentication_passes,
+        observation.authentication_passes,
+    )?;
+    checked_add(
+        &mut counters.fetched_row_role_decode_passes,
+        observation.role_decode_passes,
+    )?;
+    checked_add(
+        &mut counters.namespace_graph_verification_passes,
+        observation.namespace_graphs,
+    )?;
+    checked_add(&mut counters.scratch_tables, observation.scratch_tables)?;
+    checked_add(
+        &mut counters.scratch_statements,
+        observation.scratch_statements,
+    )?;
+    checked_add(&mut counters.scratch_rows, observation.scratch_rows)?;
+    counters.scratch_high_water_bytes = counters
+        .scratch_high_water_bytes
+        .max(observation.scratch_bytes);
+    Ok(())
 }
 
 fn trusted_history(connection: &Connection) -> EngineResult<bool> {

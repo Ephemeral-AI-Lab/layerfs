@@ -25,6 +25,7 @@ Primary contracts:
 - [Stage 1.1 single-file APFS edge specification](16-stage1-part1-apple-edge-benchmark.md)
 - [Stage 1.1 result and handoff template](18-stage1.1-result-template.md)
 - [Stage 1.2 npm/developer-workspace specification](15-stage1-workspace-benchmark.md)
+- [Stage 2 LayerFS + Linux FUSE direct workspace](19-stage2-docker-linux-fuse.md)
 
 Current native disposition (2026-08-24): **PASS for the frozen
 AppleWorkspaceV1 PoC scope**. The active host synthesizes exact

@@ -37,6 +37,22 @@ pub trait ObjectRead {
         }
         Ok(())
     }
+
+    fn get_authenticated_payload_lengths_batch<F>(
+        &self,
+        ids: &[ObjectId],
+        mut callback: F,
+    ) -> CoreResult<()>
+    where
+        F: FnMut(ObjectId, u32) -> CoreResult<()>,
+    {
+        self.get_authenticated_batch(ids, |id, payload| {
+            callback(
+                id,
+                u32::try_from(payload.len()).map_err(|_| CoreError::LengthOverflow)?,
+            )
+        })
+    }
 }
 
 pub trait ObjectStore {
@@ -76,6 +92,9 @@ pub struct RopeCounters {
     pub chunks_created: u64,
     pub nodes_read: u64,
     pub nodes_created: u64,
+    pub tree_level_before: Option<u8>,
+    pub logical_len_before: Option<u64>,
+    pub logical_len_after: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -297,6 +316,7 @@ fn read_range_with_plan_into<S: ObjectRead, W: Write>(
         level: plan.state.tree_level,
     };
     let mut ancestors = vec![summary.id];
+    let mut selected = Vec::with_capacity(64);
     read_decoded_node(
         store,
         0,
@@ -305,7 +325,9 @@ fn read_range_with_plan_into<S: ObjectRead, W: Write>(
         counters,
         &mut ancestors,
         &plan.mapping,
+        &mut selected,
     )?;
+    flush_read_batch(store, sink, counters, &mut selected)?;
     Ok(())
 }
 
@@ -328,6 +350,7 @@ pub fn read_all_bounded<S: ObjectRead, W: Write>(
     if state.logical_len > maximum {
         return Err(CoreError::ObjectLimitExceeded);
     }
+    let mut selected = Vec::with_capacity(64);
     read_node(
         store,
         Summary {
@@ -342,7 +365,9 @@ pub fn read_all_bounded<S: ObjectRead, W: Write>(
         &mut sink,
         &mut counters,
         &mut Vec::new(),
+        &mut selected,
     )?;
+    flush_read_batch(store, &mut sink, &mut counters, &mut selected)?;
     Ok(counters)
 }
 
@@ -437,6 +462,8 @@ pub fn replace<S: ObjectStore, R: Read>(
 ) -> CoreResult<(FileStateRoot, RopeCounters)> {
     let mut counters = RopeCounters::default();
     let old = state(store, root, &mut counters)?;
+    counters.tree_level_before = Some(old.tree_level);
+    counters.logical_len_before = Some(old.logical_len);
     let end = start
         .checked_add(delete_len)
         .ok_or(CoreError::LengthOverflow)?;
@@ -481,6 +508,7 @@ pub fn replace<S: ObjectStore, R: Read>(
         profile_id: profile_id(),
         mapping_root: mapping.id,
     };
+    counters.logical_len_after = Some(next.logical_len);
     let canonical = encode_file_state(next)?;
     let id = store.put(&canonical)?;
     Ok((FileStateRoot(id), counters))
@@ -1395,19 +1423,33 @@ fn validate_node<S: ObjectRead>(
     ancestors.push(expected.id);
     match load_node(store, expected, root, counters)? {
         ExtentNodeV3::Leaf { extents, .. } => {
-            for extent in extents {
-                store.with_authenticated_canonical(extent.payload_object_id, |canonical| {
-                    let payload = decode_bytes_object(canonical)?;
-                    if payload.len() > crate::cdc::MAXIMUM_CHUNK_BYTES
+            for batch in extents.chunks(64) {
+                let ids = batch
+                    .iter()
+                    .map(|extent| extent.payload_object_id)
+                    .collect::<Vec<_>>();
+                let mut index = 0_usize;
+                store.get_authenticated_payload_lengths_batch(&ids, |id, payload_length| {
+                    let extent = batch
+                        .get(index)
+                        .ok_or(CoreError::InvalidRecord("payload batch cardinality"))?;
+                    if id != extent.payload_object_id {
+                        return Err(CoreError::IdentityMismatch);
+                    }
+                    index += 1;
+                    if payload_length as usize > crate::cdc::MAXIMUM_CHUNK_BYTES
                         || extent
                             .source_offset
                             .checked_add(extent.logical_length)
-                            .is_none_or(|end| end as usize > payload.len())
+                            .is_none_or(|end| end > payload_length)
                     {
                         return Err(CoreError::ChunkLengthMismatch);
                     }
                     Ok(())
                 })?;
+                if index != batch.len() {
+                    return Err(CoreError::InvalidRecord("payload batch cardinality"));
+                }
             }
         }
         ExtentNodeV3::Branch {
@@ -1495,7 +1537,24 @@ fn merge_counters(target: &mut RopeCounters, source: RopeCounters) -> CoreResult
     target.chunks_created = add(target.chunks_created, source.chunks_created)?;
     target.nodes_read = add(target.nodes_read, source.nodes_read)?;
     target.nodes_created = add(target.nodes_created, source.nodes_created)?;
+    target.tree_level_before = match (target.tree_level_before, source.tree_level_before) {
+        (None, value) | (value, None) => value,
+        (Some(left), Some(right)) if left == right => Some(left),
+        (Some(_), Some(_)) => None,
+    };
+    target.logical_len_before =
+        merge_optional_equal(target.logical_len_before, source.logical_len_before);
+    target.logical_len_after =
+        merge_optional_equal(target.logical_len_after, source.logical_len_after);
     Ok(())
+}
+
+fn merge_optional_equal<T: Copy + Eq>(left: Option<T>, right: Option<T>) -> Option<T> {
+    match (left, right) {
+        (None, value) | (value, None) => value,
+        (Some(left), Some(right)) if left == right => Some(left),
+        (Some(_), Some(_)) => None,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1508,6 +1567,7 @@ fn read_node<S: ObjectRead, W: Write>(
     sink: &mut W,
     counters: &mut RopeCounters,
     ancestors: &mut Vec<ObjectId>,
+    selected: &mut Vec<(ExtentSliceV3, u64, u64)>,
 ) -> CoreResult<()> {
     if ancestors.contains(&expected.id) {
         return Err(CoreError::MappingCycle);
@@ -1518,7 +1578,9 @@ fn read_node<S: ObjectRead, W: Write>(
         decode_node_with_context(canonical, root)
     })?;
     validate_summary(&node, expected)?;
-    read_decoded_node(store, base, range, sink, counters, ancestors, &node)?;
+    read_decoded_node(
+        store, base, range, sink, counters, ancestors, &node, selected,
+    )?;
     ancestors.pop();
     Ok(())
 }
@@ -1532,62 +1594,29 @@ fn read_decoded_node<S: ObjectRead, W: Write>(
     counters: &mut RopeCounters,
     ancestors: &mut Vec<ObjectId>,
     node: &ExtentNodeV3,
+    selected: &mut Vec<(ExtentSliceV3, u64, u64)>,
 ) -> CoreResult<()> {
     match node {
         ExtentNodeV3::Leaf { extents, .. } => {
             let mut logical = base;
-            let mut selected = Vec::new();
             for extent in extents {
                 let end = logical
                     .checked_add(u64::from(extent.logical_length))
                     .ok_or(CoreError::LengthOverflow)?;
                 if end > range.start && logical < range.end {
-                    selected.push((*extent, logical, end));
+                    selected.push((
+                        *extent,
+                        range.start.max(logical) - logical,
+                        range.end.min(end) - logical,
+                    ));
+                    if selected.len() == 64 {
+                        flush_read_batch(store, sink, counters, selected)?;
+                    }
                 }
                 if logical >= range.end {
                     break;
                 }
                 logical = end;
-            }
-            for batch in selected.chunks(64) {
-                let ids = batch
-                    .iter()
-                    .map(|(extent, _, _)| extent.payload_object_id)
-                    .collect::<Vec<_>>();
-                let mut index = 0_usize;
-                store.get_authenticated_batch(&ids, |id, payload| {
-                    let (extent, logical, end) = batch
-                        .get(index)
-                        .copied()
-                        .ok_or(CoreError::InvalidRecord("payload batch cardinality"))?;
-                    if id != extent.payload_object_id {
-                        return Err(CoreError::IdentityMismatch);
-                    }
-                    index += 1;
-                    if payload.len() > crate::cdc::MAXIMUM_CHUNK_BYTES {
-                        return Err(CoreError::ChunkLengthMismatch);
-                    }
-                    let source_end = extent
-                        .source_offset
-                        .checked_add(extent.logical_length)
-                        .ok_or(CoreError::LengthOverflow)?
-                        as usize;
-                    if source_end > payload.len() {
-                        return Err(CoreError::ChunkLengthMismatch);
-                    }
-                    let overlap_start = range.start.max(logical) - logical;
-                    let overlap_end = range.end.min(end) - logical;
-                    let start = extent.source_offset as usize + overlap_start as usize;
-                    let stop = extent.source_offset as usize + overlap_end as usize;
-                    sink.write_all(&payload[start..stop])
-                        .map_err(|_| CoreError::Io)?;
-                    counters.payload_bytes_read =
-                        add(counters.payload_bytes_read, (stop - start) as u64)?;
-                    Ok(())
-                })?;
-                if index != batch.len() {
-                    return Err(CoreError::InvalidRecord("payload batch cardinality"));
-                }
             }
         }
         ExtentNodeV3::Branch {
@@ -1617,11 +1646,59 @@ fn read_decoded_node<S: ObjectRead, W: Write>(
                     sink,
                     counters,
                     ancestors,
+                    selected,
                 )?;
                 prior = child.cumulative_logical_end;
             }
         }
     }
+    Ok(())
+}
+
+fn flush_read_batch<S: ObjectRead, W: Write>(
+    store: &S,
+    sink: &mut W,
+    counters: &mut RopeCounters,
+    selected: &mut Vec<(ExtentSliceV3, u64, u64)>,
+) -> CoreResult<()> {
+    if selected.is_empty() {
+        return Ok(());
+    }
+    let ids = selected
+        .iter()
+        .map(|(extent, _, _)| extent.payload_object_id)
+        .collect::<Vec<_>>();
+    let mut index = 0_usize;
+    store.get_authenticated_batch(&ids, |id, payload| {
+        let (extent, overlap_start, overlap_end) = selected
+            .get(index)
+            .copied()
+            .ok_or(CoreError::InvalidRecord("payload batch cardinality"))?;
+        if id != extent.payload_object_id {
+            return Err(CoreError::IdentityMismatch);
+        }
+        index += 1;
+        if payload.len() > crate::cdc::MAXIMUM_CHUNK_BYTES {
+            return Err(CoreError::ChunkLengthMismatch);
+        }
+        let source_end = extent
+            .source_offset
+            .checked_add(extent.logical_length)
+            .ok_or(CoreError::LengthOverflow)? as usize;
+        if source_end > payload.len() {
+            return Err(CoreError::ChunkLengthMismatch);
+        }
+        let start = extent.source_offset as usize + overlap_start as usize;
+        let stop = extent.source_offset as usize + overlap_end as usize;
+        sink.write_all(&payload[start..stop])
+            .map_err(|_| CoreError::Io)?;
+        counters.payload_bytes_read = add(counters.payload_bytes_read, (stop - start) as u64)?;
+        Ok(())
+    })?;
+    if index != selected.len() {
+        return Err(CoreError::InvalidRecord("payload batch cardinality"));
+    }
+    selected.clear();
     Ok(())
 }
 

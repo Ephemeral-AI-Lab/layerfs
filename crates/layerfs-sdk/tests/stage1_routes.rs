@@ -21,6 +21,7 @@ fn public_direct_routes_stream_and_preserve_history() {
     let opened =
         LayerFs::open_with_integrity(&base.join("store"), IntegrityMode::TrustedLocalDev).unwrap();
     let counters_only = opened.fs.counter_snapshot().unwrap();
+    assert_eq!(counters_only.active_connections, 1);
     assert_eq!(counters_only.database_bytes, None);
     assert_eq!(counters_only.logical_engine_bytes, None);
     let mut source = opened
@@ -202,8 +203,10 @@ fn managed_workspace_rotates_one_hundred_checkpoints_without_rematerializing() {
         .materialize_external(opened.head, &base.join("source"))
         .unwrap();
     fs::write(source.path().join("file"), vec![0_u8; 8192]).unwrap();
+    let source_metadata = source.read_metadata("file").unwrap();
     let root = source.capture_quiescent().unwrap();
     let (mut managed, materialize) = opened.fs.materialize_managed_observed(root).unwrap();
+    assert_eq!(managed.read_metadata("file").unwrap(), source_metadata);
     assert_eq!(materialize.workspace_materializations, 1);
     assert_eq!(materialize.rematerializations, 0);
     assert!(materialize.native.temp_calls > 0);
@@ -341,6 +344,261 @@ fn managed_refresh_applies_only_the_changed_canonical_range() {
     let bytes = fs::read(external.path().join("file")).unwrap();
     assert_eq!(&bytes[512 * 1024 - 2048..512 * 1024 + 2048], &replacement);
     drop(external);
+    drop(source);
+    drop(opened);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn accepted_random_splices_refresh_without_full_fallback() {
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap()
+        .join(format!(
+            "layerfs-random-splice-refresh-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+    fs::create_dir(&base).unwrap();
+    let opened =
+        LayerFs::open_with_integrity(&base.join("store"), IntegrityMode::TrustedLocalDev).unwrap();
+    let mut source = opened
+        .fs
+        .materialize_external(opened.head, &base.join("source"))
+        .unwrap();
+    let mut expected = vec![0x51_u8; 256 * 1024];
+    fs::write(source.path().join("file"), &expected).unwrap();
+    let root = source.capture_quiescent().unwrap();
+    let mut state = opened.fs.current_head("main").unwrap();
+    let mut managed = opened.fs.materialize_managed(root).unwrap();
+    let mut random = 0x4c46_532d_5350_4c43_u64;
+
+    for serial in 0..16_u8 {
+        random = random.wrapping_add(0x9e37_79b9_7f4a_7c15).rotate_left(17) ^ 0xbf58_476d_1ce4_e5b9;
+        let offset = usize::try_from(random % (expected.len() as u64 + 1)).unwrap();
+        let available = expected.len() - offset;
+        let delete = usize::try_from((random >> 17) % 2049)
+            .unwrap()
+            .min(available);
+        let mut insert = usize::try_from((random >> 41) % 2049).unwrap();
+        if insert == delete {
+            insert = (insert + 1) % 2049;
+        }
+        let replacement = (0..insert)
+            .map(|index| serial.wrapping_add(index as u8).wrapping_mul(31))
+            .collect::<Vec<_>>();
+        let before_len = expected.len() as u64;
+        let suffix = before_len - offset as u64 - delete as u64;
+
+        let (accepted, logical) = opened
+            .fs
+            .replace_range_for_refresh_observed(
+                &state,
+                "file",
+                offset as u64,
+                delete as u64,
+                Cursor::new(&replacement),
+            )
+            .unwrap();
+        assert_eq!(accepted.before(), &state);
+        assert_eq!(accepted.start(), offset as u64);
+        assert_eq!(accepted.delete_len(), delete as u64);
+        assert_eq!(accepted.insert_len(), insert as u64);
+        assert_eq!(logical.rope.payload_bytes_written, insert as u64);
+        expected.splice(offset..offset + delete, replacement);
+
+        let refresh = managed.refresh_splice(&accepted).unwrap();
+        assert!(matches!(
+            refresh.native.route,
+            Some(layerfs_sdk::NativeRoute::CloneShift | layerfs_sdk::NativeRoute::InPlaceShift)
+        ));
+        assert_eq!(refresh.full_fallback_files, 0);
+        assert_eq!(refresh.native.suffix_bytes_shifted, suffix);
+        assert_eq!(refresh.native.bytes_read, suffix);
+        assert_eq!(refresh.native.bytes_written, suffix + insert as u64);
+        assert_eq!(refresh.native.patch_bytes, insert as u64);
+        let mut physical = Vec::new();
+        managed.read_to("file", &mut physical).unwrap();
+        assert_eq!(physical, expected);
+        state = accepted.after().clone();
+    }
+
+    let fallback = opened
+        .fs
+        .replace_range(&state, "file", 7, 0, Cursor::new(b"unknown-provenance"))
+        .unwrap();
+    let refresh = managed.refresh(&fallback).unwrap();
+    assert_eq!(
+        refresh.native.route,
+        Some(layerfs_sdk::NativeRoute::FullFallback)
+    );
+    assert_eq!(refresh.full_fallback_files, 1);
+
+    managed.discard().unwrap();
+    drop(source);
+    drop(opened);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn accepted_eof_append_and_truncate_skip_the_clone_without_skipping_durability() {
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap()
+        .join(format!(
+            "layerfs-eof-splice-refresh-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+    fs::create_dir(&base).unwrap();
+    let opened =
+        LayerFs::open_with_integrity(&base.join("store"), IntegrityMode::TrustedLocalDev).unwrap();
+    let mut source = opened
+        .fs
+        .materialize_external(opened.head, &base.join("source"))
+        .unwrap();
+    let mut expected = vec![0x63_u8; 64 * 1024];
+    fs::write(source.path().join("file"), &expected).unwrap();
+    let root = source.capture_quiescent().unwrap();
+    let mut state = opened.fs.current_head("main").unwrap();
+    let mut managed = opened.fs.materialize_managed(root).unwrap();
+
+    let appended = vec![0xa7_u8; 16 * 1024];
+    let (accepted, _) = opened
+        .fs
+        .replace_range_for_refresh_observed(
+            &state,
+            "file",
+            expected.len() as u64,
+            0,
+            Cursor::new(&appended),
+        )
+        .unwrap();
+    let refresh = managed.refresh_splice(&accepted).unwrap();
+    assert_eq!(
+        refresh.native.route,
+        Some(layerfs_sdk::NativeRoute::InPlaceShift)
+    );
+    assert_eq!(refresh.native.clone_attempts, 0);
+    assert_eq!(refresh.native.suffix_bytes_shifted, 0);
+    assert_eq!(refresh.native.bytes_read, 0);
+    assert_eq!(refresh.native.bytes_written, appended.len() as u64);
+    assert_eq!(refresh.native.sync_calls, 1);
+    assert_eq!(refresh.full_fallback_files, 0);
+    expected.extend_from_slice(&appended);
+    state = accepted.after().clone();
+
+    let deleted = 24 * 1024_usize;
+    let (accepted, _) = opened
+        .fs
+        .replace_range_for_refresh_observed(
+            &state,
+            "file",
+            (expected.len() - deleted) as u64,
+            deleted as u64,
+            Cursor::new([]),
+        )
+        .unwrap();
+    let refresh = managed.refresh_splice(&accepted).unwrap();
+    assert_eq!(
+        refresh.native.route,
+        Some(layerfs_sdk::NativeRoute::InPlaceShift)
+    );
+    assert_eq!(refresh.native.clone_attempts, 0);
+    assert_eq!(refresh.native.suffix_bytes_shifted, 0);
+    assert_eq!(refresh.native.bytes_read, 0);
+    assert_eq!(refresh.native.bytes_written, 0);
+    assert_eq!(refresh.native.sync_calls, 1);
+    assert_eq!(refresh.full_fallback_files, 0);
+    expected.truncate(expected.len() - deleted);
+
+    let mut physical = Vec::new();
+    managed.read_to("file", &mut physical).unwrap();
+    assert_eq!(physical, expected);
+    assert_eq!(opened.fs.current_head("main").unwrap(), *accepted.after());
+
+    managed.discard().unwrap();
+    let mut rebuilt = opened
+        .fs
+        .materialize_managed(accepted.after().root)
+        .unwrap();
+    let mut rebuilt_bytes = Vec::new();
+    rebuilt.read_to("file", &mut rebuilt_bytes).unwrap();
+    assert_eq!(rebuilt_bytes, expected);
+    rebuilt.discard().unwrap();
+    drop(source);
+    drop(opened);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn accepted_splice_prioritizes_the_edited_hard_link_alias() {
+    use std::os::unix::fs::MetadataExt;
+
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap()
+        .join(format!(
+            "layerfs-hard-link-splice-refresh-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+    fs::create_dir(&base).unwrap();
+    let opened =
+        LayerFs::open_with_integrity(&base.join("store"), IntegrityMode::TrustedLocalDev).unwrap();
+    let mut source = opened
+        .fs
+        .materialize_external(opened.head, &base.join("source"))
+        .unwrap();
+    let mut expected = vec![0x39_u8; 64 * 1024];
+    fs::write(source.path().join("a"), &expected).unwrap();
+    fs::hard_link(source.path().join("a"), source.path().join("z")).unwrap();
+    let root = source.capture_quiescent().unwrap();
+    let state = opened.fs.current_head("main").unwrap();
+    let mut managed = opened.fs.materialize_managed(root).unwrap();
+    let replacement = b"hard-link-size-change";
+    let offset = 7_003_usize;
+    let deleted = 5_usize;
+    let suffix = expected.len() as u64 - offset as u64 - deleted as u64;
+    let (accepted, _) = opened
+        .fs
+        .replace_range_for_refresh_observed(
+            &state,
+            "z",
+            offset as u64,
+            deleted as u64,
+            Cursor::new(replacement),
+        )
+        .unwrap();
+    expected.splice(offset..offset + deleted, *replacement);
+
+    let refresh = managed.refresh_splice(&accepted).unwrap();
+    assert_eq!(
+        refresh.native.route,
+        Some(layerfs_sdk::NativeRoute::InPlaceShift)
+    );
+    assert_eq!(refresh.full_fallback_files, 0);
+    assert_eq!(refresh.native.suffix_bytes_shifted, suffix);
+    assert_eq!(refresh.native.bytes_read, suffix);
+    assert_eq!(
+        refresh.native.bytes_written,
+        suffix + replacement.len() as u64
+    );
+    let mut external = managed.into_external().unwrap();
+    assert_eq!(fs::read(external.path().join("a")).unwrap(), expected);
+    assert_eq!(fs::read(external.path().join("z")).unwrap(), expected);
+    let a = fs::metadata(external.path().join("a")).unwrap();
+    let z = fs::metadata(external.path().join("z")).unwrap();
+    assert_eq!(a.ino(), z.ino());
+    assert_eq!(a.nlink(), 2);
+    external.discard().unwrap();
+
     drop(source);
     drop(opened);
     fs::remove_dir_all(base).unwrap();

@@ -952,7 +952,7 @@ fn resolved_base_source(fixture: &Path, base: &str) -> EvalResult<PathBuf> {
     Ok(source)
 }
 
-fn clone_directory(source: &Path, destination: &Path) -> EvalResult<()> {
+pub(crate) fn clone_directory(source: &Path, destination: &Path) -> EvalResult<()> {
     if destination.exists() {
         return Err(format!("refusing to overwrite {}", destination.display()));
     }
@@ -1080,7 +1080,7 @@ fn prove_distinct_inodes(source: &Path, destination: &Path) -> EvalResult<u64> {
     Ok(count)
 }
 
-fn tree_sizes(root: &Path) -> EvalResult<(u64, u64)> {
+pub(crate) fn tree_sizes(root: &Path) -> EvalResult<(u64, u64)> {
     fn walk(path: &Path, logical: &mut u64, allocated: &mut u64) -> EvalResult<()> {
         let mut entries = fs::read_dir(path)
             .map_err(io_error)?
@@ -1194,7 +1194,7 @@ fn collect_paths(root: &Path, path: &Path, output: &mut Vec<PathBuf>) -> EvalRes
     Ok(())
 }
 
-fn seal_tree(root: &Path) -> EvalResult<()> {
+pub(crate) fn seal_tree(root: &Path) -> EvalResult<()> {
     fn walk(path: &Path) -> EvalResult<()> {
         for entry in fs::read_dir(path).map_err(io_error)? {
             let path = entry.map_err(io_error)?.path();
@@ -1215,7 +1215,7 @@ fn seal_tree(root: &Path) -> EvalResult<()> {
     fs::set_permissions(root, fs::Permissions::from_mode(0o555)).map_err(io_error)
 }
 
-fn verify_sealed(root: &Path) -> EvalResult<()> {
+pub(crate) fn verify_sealed(root: &Path) -> EvalResult<()> {
     let mut paths = vec![PathBuf::new()];
     collect_paths(root, root, &mut paths)?;
     for relative in paths {
@@ -1228,7 +1228,7 @@ fn verify_sealed(root: &Path) -> EvalResult<()> {
     Ok(())
 }
 
-fn make_writable(root: &Path) -> EvalResult<()> {
+pub(crate) fn make_writable(root: &Path) -> EvalResult<()> {
     fn walk(path: &Path) -> EvalResult<()> {
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).map_err(io_error)?;
         for entry in fs::read_dir(path).map_err(io_error)? {
@@ -1248,7 +1248,7 @@ fn make_writable(root: &Path) -> EvalResult<()> {
     walk(root)
 }
 
-fn sync_directory(path: &Path) -> EvalResult<()> {
+pub(crate) fn sync_directory(path: &Path) -> EvalResult<()> {
     File::open(path)
         .and_then(|file| file.sync_all())
         .map_err(io_error)

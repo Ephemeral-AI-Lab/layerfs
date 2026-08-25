@@ -1387,8 +1387,7 @@ pub fn validate_inode_record<S: ObjectRead>(
     root: bool,
     mut child_visitor: impl FnMut(InodeId) -> CoreResult<()>,
 ) -> CoreResult<()> {
-    record.validate(root)?;
-    validate_metadata(store, record.metadata_root, record.kind)?;
+    validate_inode_record_metadata(store, record, root)?;
     match record.kind {
         InodeKind::RegularFile => validate_file(store, FileStateRoot(record.content_root)),
         InodeKind::Symlink => store
@@ -1407,6 +1406,15 @@ pub fn validate_inode_record<S: ObjectRead>(
             },
         ),
     }
+}
+
+pub fn validate_inode_record_metadata<S: ObjectRead>(
+    store: &S,
+    record: InodeRecordV1,
+    root: bool,
+) -> CoreResult<()> {
+    record.validate(root)?;
+    validate_metadata(store, record.metadata_root, record.kind)
 }
 
 fn validate_metadata<S: ObjectRead>(store: &S, root: ObjectId, kind: InodeKind) -> CoreResult<()> {

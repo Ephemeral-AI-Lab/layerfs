@@ -7,14 +7,16 @@ The controlling closure and custody record is
 The preserved A01–A17 campaign remains measured `REVISE`; its A02 latency miss
 is explicitly user-accepted and is not relabeled as a threshold PASS. Stage
 1.1 is the single-file APFS edge specification in `poc/16`; Stage 1.2 is the
-npm/developer-workspace specification in `poc/15`. Mounted/write-intercepted
-macOS work is reserved for Stage Two and is not specified by either benchmark.
+npm/developer-workspace specification in `poc/15`. The prospective post-Stage-1
+LayerFS + Linux FUSE direct workspace is specified in `poc/19`, with Docker
+only as its Linux execution envelope. macFUSE and FSKit are not selected
+dependencies.
 
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure
 Stage 1.1  poc/16 single-file APFS edge benchmark
 Stage 1.2  poc/15 npm/developer-workspace benchmark
-Stage 2    future mounted/write-intercepted macOS architecture
+Stage 2    poc/19 LayerFS + Linux FUSE direct workspace after Stage 1.2
 ```
 
 The PoC collapses the remaining G6 and project Phase 5–8 work into one vertical
@@ -57,6 +59,7 @@ programs for each small implementation repair.
 | [16 — Stage 1.1 single-file APFS edge specification](16-stage1-part1-apple-edge-benchmark.md) | One 24 MiB file; 47 rows; bidirectional edits, save bursts, checkpoints, history and refresh under 60 s | Stage 1.1 evaluator |
 | [18 — Stage 1.1 result and handoff template](18-stage1.1-result-template.md) | Exact summary tables, JSONL row schema, availability rules, timer receipt and final response | Stage 1.1 evaluator |
 | [15 — Stage 1.2 npm/developer-workspace specification](15-stage1-workspace-benchmark.md) | Reusable <=300 MiB offline npm/build/search/capture workflow | Stage 1.2 evaluator |
+| [19 — Stage 2 LayerFS + Linux FUSE workspace](19-stage2-docker-linux-fuse.md) | Post-Stage-1 container admission, direct mounted read/write/locality proof, real workspace gates, and strict exclusions | LayerFS VFS + thin Linux FUSE adapter |
 
 ## 2. Reading order
 
@@ -80,7 +83,7 @@ programs for each small implementation repair.
   -> 16 Stage 1.1 single-file APFS edge specification
   -> 18 Stage 1.1 result and handoff template
   -> 15 Stage 1.2 npm/developer-workspace specification
-  -> Stage 2 mounted/write-intercepted macOS architecture (future spec)
+  -> 19 Stage 2 LayerFS + Linux FUSE direct workspace
 ```
 
 Do not begin with the benchmark. Implement and model-check the selected

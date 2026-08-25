@@ -13,6 +13,7 @@ use layerfs_core::namespace_codec::{decode_inode_record, decode_namespace_root, 
 use layerfs_core::ObjectId;
 use layerfs_engine::scratch::DiskTable;
 use layerfs_engine::Engine;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
 pub fn materialize(
@@ -237,7 +238,10 @@ fn materialize_entry(
                 let mut temp = workspace.create_temp_at(parent)?;
                 counters.native.temp_calls = checked_add(counters.native.temp_calls, 1)?;
                 let root = FileStateRoot(record.content_root);
-                let rope = read_all(engine, root, &mut temp)?;
+                let mut output = BufWriter::with_capacity(1024 * 1024, temp.as_mut());
+                let rope = read_all(engine, root, &mut output)?;
+                output.flush()?;
+                drop(output);
                 counters.native.bytes_written = counters
                     .native
                     .bytes_written

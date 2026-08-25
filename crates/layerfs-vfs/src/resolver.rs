@@ -214,6 +214,46 @@ impl LayerVfs {
         })
     }
 
+    pub fn replace_range_for_refresh<R: Read>(
+        &self,
+        expected: &RefState,
+        path: &CanonicalPath,
+        start: u64,
+        delete_len: u64,
+        input: R,
+    ) -> VfsResult<(crate::AcceptedSplice, OperationCounters)> {
+        let (after, counters) = self.replace_range(expected, path, start, delete_len, input)?;
+        let old_len = counters
+            .rope
+            .logical_len_before
+            .ok_or(VfsError::InvalidState)?;
+        let new_len = counters
+            .rope
+            .logical_len_after
+            .ok_or(VfsError::InvalidState)?;
+        let insert_len = counters.rope.payload_bytes_written;
+        if old_len
+            .checked_sub(delete_len)
+            .and_then(|length| length.checked_add(insert_len))
+            != Some(new_len)
+        {
+            return Err(VfsError::InvalidState);
+        }
+        Ok((
+            crate::AcceptedSplice {
+                before: expected.clone(),
+                after,
+                path: path.clone(),
+                start,
+                delete_len,
+                insert_len,
+                old_len,
+                new_len,
+            },
+            counters,
+        ))
+    }
+
     pub fn replace_file<R: Read>(
         &self,
         expected: &RefState,

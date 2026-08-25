@@ -56,7 +56,7 @@ requires explicit acceptance before Stage 1.2 begins.
 | Are prior revisions immutable? | Direct reads from revisions 0, 5, 10, 15, 20, 25, 30, and 34 after reopen |
 | Does a fresh Verified reader recover the exact durable head? | Six source-independent Verified open/read sessions while the managed workspace remains live |
 | Can a live workspace refresh to changed canonical roots? | Fifteen direct logical edits followed by fifteen exact physical refreshes |
-| Is count-changing refresh reported honestly? | Three same-size patch cases and twelve route-labeled FullFallback cases with exact byte equations |
+| Is count-changing refresh reported honestly? | Three same-size patch cases and twelve accepted-splice `CloneShift`/`InPlaceShift` cases with exact byte equations; unproven root changes retain `FullFallback` |
 | Do editor-like save bursts compose correctly? | Four frozen overlapping/disjoint/EOF edit sequences; one checkpoint and one COMMIT per burst |
 | Are resources bounded? | Q, RSS, buffers, descriptors, SQLite connections, scratch, temp, and residue gates |
 | What does LayerFS add beyond physical editing? | Separate native-edit and durable-checkpoint timers |
@@ -244,20 +244,20 @@ population changes.
 | Seq | Epoch | Kind | Size band | Position | Offset | Delete B | Insert B | Before B | After B | Honest route |
 |---:|---:|---|---|---|---:|---:|---:|---:|---:|---|
 | 16 | 4 | overwrite | 8 KiB - 1 | early | 3,167,684 | 8,191 | 8,191 | 25,165,824 | 25,165,824 | ClonePatch or InPlacePatch |
-| 17 | 4 | insert | 16 KiB | middle | 9,979,080 | 0 | 16,384 | 25,165,824 | 25,182,208 | FullFallback |
-| 18 | 4 | delete | 32 KiB + 1 | late | 20,965,809 | 32,769 | 0 | 25,182,208 | 25,149,439 | FullFallback |
-| 19 | 4 | append | 8 KiB + 1 | EOF | 25,149,439 | 0 | 8,193 | 25,149,439 | 25,157,632 | FullFallback |
-| 20 | 4 | truncate | 16 KiB | EOF | 25,141,248 | 16,384 | 0 | 25,157,632 | 25,141,248 | FullFallback |
-| 21 | 5 | insert | 8 KiB | early | 3,990,642 | 0 | 8,192 | 25,141,248 | 25,149,440 | FullFallback |
-| 22 | 5 | delete | 16 KiB + 1 | middle | 16,550,428 | 16,385 | 0 | 25,149,440 | 25,133,055 | FullFallback |
-| 23 | 5 | append | 32 KiB + 1 | EOF | 25,133,055 | 0 | 32,769 | 25,133,055 | 25,165,824 | FullFallback |
-| 24 | 5 | truncate | 8 KiB | EOF | 25,157,632 | 8,192 | 0 | 25,165,824 | 25,157,632 | FullFallback |
+| 17 | 4 | insert | 16 KiB | middle | 9,979,080 | 0 | 16,384 | 25,165,824 | 25,182,208 | CloneShift or InPlaceShift |
+| 18 | 4 | delete | 32 KiB + 1 | late | 20,965,809 | 32,769 | 0 | 25,182,208 | 25,149,439 | CloneShift or InPlaceShift |
+| 19 | 4 | append | 8 KiB + 1 | EOF | 25,149,439 | 0 | 8,193 | 25,149,439 | 25,157,632 | CloneShift or InPlaceShift |
+| 20 | 4 | truncate | 16 KiB | EOF | 25,141,248 | 16,384 | 0 | 25,157,632 | 25,141,248 | CloneShift or InPlaceShift |
+| 21 | 5 | insert | 8 KiB | early | 3,990,642 | 0 | 8,192 | 25,141,248 | 25,149,440 | CloneShift or InPlaceShift |
+| 22 | 5 | delete | 16 KiB + 1 | middle | 16,550,428 | 16,385 | 0 | 25,149,440 | 25,133,055 | CloneShift or InPlaceShift |
+| 23 | 5 | append | 32 KiB + 1 | EOF | 25,133,055 | 0 | 32,769 | 25,133,055 | 25,165,824 | CloneShift or InPlaceShift |
+| 24 | 5 | truncate | 8 KiB | EOF | 25,157,632 | 8,192 | 0 | 25,165,824 | 25,157,632 | CloneShift or InPlaceShift |
 | 25 | 5 | overwrite | 16 KiB - 1 | late | 22,880,155 | 16,383 | 16,383 | 25,157,632 | 25,157,632 | ClonePatch or InPlacePatch |
-| 26 | 6 | delete | 8 KiB + 1 | early | 4,308,809 | 8,193 | 0 | 25,157,632 | 25,149,439 | FullFallback |
-| 27 | 6 | append | 16 KiB + 1 | EOF | 25,149,439 | 0 | 16,385 | 25,149,439 | 25,165,824 | FullFallback |
-| 28 | 6 | truncate | 32 KiB | EOF | 25,133,056 | 32,768 | 0 | 25,165,824 | 25,133,056 | FullFallback |
+| 26 | 6 | delete | 8 KiB + 1 | early | 4,308,809 | 8,193 | 0 | 25,157,632 | 25,149,439 | CloneShift or InPlaceShift |
+| 27 | 6 | append | 16 KiB + 1 | EOF | 25,149,439 | 0 | 16,385 | 25,149,439 | 25,165,824 | CloneShift or InPlaceShift |
+| 28 | 6 | truncate | 32 KiB | EOF | 25,133,056 | 32,768 | 0 | 25,165,824 | 25,133,056 | CloneShift or InPlaceShift |
 | 29 | 6 | overwrite | 32 KiB - 1 | middle | 10,813,201 | 32,767 | 32,767 | 25,133,056 | 25,133,056 | ClonePatch or InPlacePatch |
-| 30 | 6 | insert | 32 KiB | late | 19,272,909 | 0 | 32,768 | 25,133,056 | 25,165,824 | FullFallback |
+| 30 | 6 | insert | 32 KiB | late | 19,272,909 | 0 | 32,768 | 25,133,056 | 25,165,824 | CloneShift or InPlaceShift |
 
 Coverage equations:
 
@@ -268,15 +268,17 @@ nonzero CDC replacements at minus/exact/plus     = 3 per threshold
 early / middle / late non-EOF locations          = 3 each
 EOF edits                                        = 6
 same-length patch-eligible refreshes              = 3
-count-changing FullFallback refreshes             = 12
+accepted-splice count-changing shift refreshes    = 12
+unproven FullFallback refreshes                    = 0
 growth / shrink refreshes                         = 6 / 6
 maximum modeled length                            = 25,182,208 bytes
 terminal logical-refresh-chain length             = 25,165,824 bytes
 ```
 
-The benchmark must not relabel a count-changing `FullFallback` as incremental.
-No latency improvement is required for that fallback; exact bytes, exact root,
-honest route and real wall time are hard.
+The benchmark must use the opaque receipt returned by the real direct logical
+edit. It must not reconstruct a receipt from the schedule or relabel an
+unproven `FullFallback` as incremental. Exact bytes, exact root, honest route,
+suffix equations, and real wall time are hard.
 
 ## 6.1 Frozen multi-edit save bursts
 
@@ -430,6 +432,18 @@ Oracle checkpoints:
 | 30 | full digest + start/middle/end probes |
 | 31–34 | full digest and exact live physical stream after every burst |
 
+The R0–R34 full digest is produced once by the exact full-byte oracle attached
+to C02 or its transition row and retained with the accepted root. Fresh C04/C06
+history rows reuse that already-synced root-bound digest; they do not regenerate
+the same 24 MiB expected digest. Each history read still performs all three
+independent 64 KiB byte comparisons per selected root.
+
+Every one of the 63 history probes retains an ordered receipt with its exact
+root, ordinal, range, wall, path/plan counters, rope counters, payload-batch
+counters, and fetched/authentication/role-decode delta. Ordinal 1 is a plan miss;
+ordinals 2 and 3 must be exact root/path plan hits. Probe deltas sum exactly to
+the row `history_read` phase.
+
 Fresh milestone materialization oracles:
 
 ```text
@@ -451,6 +465,22 @@ row_wall
   + counter_snapshot_wall
   + row_residual_wall
 ```
+
+Every applicable product row also takes zero-SQL cumulative counter snapshots
+at these boundaries:
+
+```text
+before product operation
+after logical edit or checkpoint
+after APFS refresh when applicable
+after canonical witness
+```
+
+The retained phase deltas independently close authentication, role decode,
+new/incumbent object, transaction/COMMIT, Q, and storage equations and sum
+exactly to the row aggregate. VFS-operation scratch receipts are retained
+separately inside the owning phase, then combined with Engine scratch using the
+same row-level aggregate equation. Snapshot calls do not execute Store SQL.
 
 C05 row:
 
@@ -536,7 +566,7 @@ Report:
 | direct logical edit by kind | 3 each | min/p50/p95/max/range/sum |
 | direct logical edit by size band | 5 each | min/p50/p95/max/range/sum |
 | same-size refresh | 3 | raw + min/p50/p95/max/range/sum |
-| FullFallback refresh by kind | 3 each for insert/delete/append/truncate | raw + min/p50/p95/max/range/sum; never mix with patch |
+| accepted-splice shift refresh by kind | 3 each for insert/delete/append/truncate | raw + min/p50/p95/max/range/sum; never mix with patch or FullFallback |
 | logical edit plus refresh | 15 | raw + min/p50/p95/max/range/sum |
 | burst save plus checkpoint | 4 | retain each pattern separately plus aggregate raw/sum |
 | physical oracle | 51 sub-operations | raw + min/p50/p95/max/range/sum |
@@ -557,7 +587,7 @@ Planning expectations, not acceptance thresholds:
 | durable checkpoint | low tens of milliseconds |
 | fresh Verified open of 24 MiB history | report measured scrub cost |
 | same-size refresh | tens of milliseconds |
-| count-changing refresh fallback | approximately changed-file linear |
+| count-changing accepted-splice refresh | suffix-position dependent; append/truncate have zero shifted suffix |
 | multi-edit save burst | low tens of milliseconds plus sub-edit native work |
 | complete workflow | 30–60 seconds |
 
@@ -588,10 +618,14 @@ Changed-root refresh:
 
 ```text
 same-size overwrite       ClonePatch or InPlacePatch
-insert/delete             explicit FullFallback
-append/truncate           explicit FullFallback
+accepted insert/delete    CloneShift or InPlaceShift
+accepted append/truncate  CloneShift or InPlaceShift
+unknown root provenance   explicit FullFallback
 exact target bytes/root   required for every route
-full_fallback_files       1 for each count-changing refresh
+suffix S                  pre_length - (offset + delete_bytes)
+native.bytes_read         S
+native.bytes_written      S + replacement_bytes
+full_fallback_files       0 for the twelve accepted-splice refreshes
 workspace rematerialize   0; the same live workspace is retained
 ```
 
@@ -665,7 +699,8 @@ logical edit          O(B + log E + path)
 checkpoint replay     O(B + log E + path) plus one durable publication
 random witness read   O(log E + C_R + R)
 same-size refresh     changed Merkle spines + changed native bytes
-count-change fallback Theta(changed file bytes), labeled honestly
+accepted count change O(S + B) native bytes after authenticated path/root validation
+unknown root change   Theta(changed file bytes) FullFallback, labeled honestly
 history read          direct immutable root read; no replay
 ```
 
@@ -726,7 +761,9 @@ live workspace materializations total = 1; C08 witnesses counted separately
 workspace_reuses increments      = 1
 rematerializations               = 0
 same-size overwrite              = patch route
-count-changing operation         = explicit FullFallback
+accepted count-changing operation = CloneShift or InPlaceShift
+accepted suffix/read/write       = exact S / S / S+B
+FullFallback operations          = 0
 ```
 
 During every fresh Verified open/read session while the original managed
@@ -740,6 +777,15 @@ start/middle/end probes exact
 no native authority used for historical reads
 Store connection high-water <=2
 ```
+
+One Verified retained-union scrub may retain authenticated payload lengths in
+its existing disk-bounded scratch database. The union closure still fetches,
+identity-authenticates, and role-decodes every unique immutable payload. Each
+root still validates its namespace reachability, reference counts, file state,
+mapping nodes, extent summaries, and payload slice bounds; the already
+authenticated length replaces only repeated payload-byte fetches. The scratch
+namespace is cleared/dropped with the scrub and is never a persistent trust
+cache or changed-only shortcut.
 
 Final:
 
@@ -781,6 +827,13 @@ C09 first performs explicit owned cleanup, drops every `LayerFs`, managed, and
 external handle, and only then invokes the existing external FD/connection/
 process/temp/residue observers. Destructor-only recursive deletion is not
 terminal evidence.
+
+Ordinary rows use the exact SDK/Engine connection count, `/dev/fd`, `getrusage`
+peak RSS, and in-process residue traversal, with structural product child count
+zero. One known connection-high-water row and both terminal observations retain
+the external `ps`/`lsof`/`pgrep` proof. Because `getrusage` is a peak rather than
+a current-RSS observer, ordinary `rss_current_bytes` values are `null` plus an
+`Unavailable` receipt; decisive external rows retain a numeric current RSS.
 
 ## 16. Zero-row readiness
 
@@ -834,10 +887,12 @@ sequence / epoch / operation class / size band
 direction: physical-to-logical / logical-to-physical / burst / witness
 offset / delete / replacement / pre-length / post-length
 ordered sub-edit array for C07
+ordered per-probe array for C04/C06
 native route and exact byte counters
 native-edit, logical-edit, refresh, checkpoint, oracle, and row walls
 pre/post RefState
 operation counters and engine deltas
+zero-SQL phase counter deltas
 database and scratch observations
 Q and process-resource observation
 oracle length/digest and prior-root witness

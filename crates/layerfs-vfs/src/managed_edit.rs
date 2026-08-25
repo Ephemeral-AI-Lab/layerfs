@@ -1,7 +1,7 @@
 use crate::capture::put_metadata_observed;
 use crate::driver::*;
 use crate::workspace::{VfsError, VfsResult};
-use crate::{NativeOperationCounters, NativeRoute, OperationCounters};
+use crate::{ManagedReplayStep, NativeOperationCounters, NativeRoute, OperationCounters};
 use layerfs_core::content::rope::{replace as replace_rope, FileStateRoot, ObjectRead};
 use layerfs_core::inode::{
     inode_table_lookup, inode_table_upsert, InodeKind, InodeTableCounters, InodeTableRoot,
@@ -17,7 +17,7 @@ use layerfs_core::{CanonicalName, CanonicalPath};
 use layerfs_engine::publication::Publication;
 use layerfs_engine::refs::RefState;
 use layerfs_engine::Engine;
-use std::io::{Read, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 
 pub enum ManagedEdit {
     Replace {
@@ -243,8 +243,10 @@ pub fn replay(
     expected: &RefState,
     edits: &[ManagedEdit],
     spool: &mut dyn OwnedTempHandle,
-) -> VfsResult<(RefState, OperationCounters)> {
+    collect_steps: bool,
+) -> VfsResult<(RefState, OperationCounters, Vec<ManagedReplayStep>)> {
     let mut counters = OperationCounters::default();
+    let mut steps = collect_steps.then(|| Vec::with_capacity(edits.len()));
     let mut namespace =
         engine.with_authenticated_canonical(expected.root, decode_namespace_root)?;
     let mut publication = engine
@@ -257,7 +259,13 @@ pub fn replay(
             }
         })?;
     for edit in edits {
-        namespace = match edit {
+        let mut step_counters = OperationCounters::default();
+        let edit_counters = if collect_steps {
+            &mut step_counters
+        } else {
+            &mut counters
+        };
+        let next_namespace = match edit {
             ManagedEdit::Replace {
                 path,
                 start,
@@ -277,7 +285,7 @@ pub fn replay(
                 *replacement_len,
                 &load_spooled_metadata(spool, *metadata_offset, *metadata_len)?,
                 spool,
-                &mut counters,
+                edit_counters,
             )?,
             ManagedEdit::Rename {
                 from,
@@ -293,14 +301,22 @@ pub fn replay(
                 to,
                 &load_spooled_metadata(spool, *source_metadata_offset, *source_metadata_len)?,
                 &load_spooled_metadata(spool, *target_metadata_offset, *target_metadata_len)?,
-                &mut counters,
+                edit_counters,
             )?,
         };
+        namespace = next_namespace;
+        if let Some(steps) = steps.as_mut() {
+            counters = counters.merge(step_counters)?;
+            steps.push(ManagedReplayStep {
+                tree_level_before: step_counters.rope.tree_level_before,
+                counters: step_counters,
+            });
+        }
     }
     let state = publication
         .publish_namespace(&encode_namespace_root(namespace)?)
         .map_err(VfsError::from)?;
-    Ok((state, counters))
+    Ok((state, counters, steps.unwrap_or_default()))
 }
 
 pub(crate) fn encode_spooled_metadata(metadata: &NativeMetadata) -> VfsResult<Vec<u8>> {
@@ -639,6 +655,56 @@ fn replace_native(
     delete_len: u64,
     replacement: &[u8],
 ) -> VfsResult<NativeOperationCounters> {
+    let replacement_len = u64::try_from(replacement.len()).map_err(|_| VfsError::InvalidState)?;
+    let mut counters = shift_file(file, start, delete_len, replacement_len, |file, len| {
+        workspace.set_regular_len(file, len).map_err(Into::into)
+    })?;
+    file.seek(SeekFrom::Start(start))?;
+    file.write_all(replacement)?;
+    file.flush()?;
+    counters.route = Some(if delete_len == replacement_len {
+        NativeRoute::InPlacePatch
+    } else {
+        NativeRoute::InPlaceShift
+    });
+    counters.bytes_written = counters
+        .bytes_written
+        .checked_add(replacement_len)
+        .ok_or(VfsError::InvalidState)?;
+    counters.patch_bytes = replacement_len;
+    Ok(counters)
+}
+
+pub(crate) fn shift_regular(
+    workspace: &dyn ProjectionWorkspace,
+    file: &mut dyn RegularFileHandle,
+    start: u64,
+    delete_len: u64,
+    replacement_len: u64,
+) -> VfsResult<NativeOperationCounters> {
+    shift_file(file, start, delete_len, replacement_len, |file, len| {
+        workspace.set_regular_len(file, len).map_err(Into::into)
+    })
+}
+
+pub(crate) fn shift_temp(
+    file: &mut dyn OwnedTempHandle,
+    start: u64,
+    delete_len: u64,
+    replacement_len: u64,
+) -> VfsResult<NativeOperationCounters> {
+    shift_file(file, start, delete_len, replacement_len, |file, len| {
+        file.set_len(len).map_err(Into::into)
+    })
+}
+
+fn shift_file<F: Read + Write + Seek + ?Sized>(
+    file: &mut F,
+    start: u64,
+    delete_len: u64,
+    replacement_len: u64,
+    mut set_len: impl FnMut(&mut F, u64) -> VfsResult<()>,
+) -> VfsResult<NativeOperationCounters> {
     let length = file.seek(SeekFrom::End(0))?;
     let end = start
         .checked_add(delete_len)
@@ -646,16 +712,15 @@ fn replace_native(
     if end > length {
         return Err(VfsError::InvalidState);
     }
-    let replacement_len = u64::try_from(replacement.len()).map_err(|_| VfsError::InvalidState)?;
     let next_len = length
         .checked_sub(delete_len)
         .and_then(|value| value.checked_add(replacement_len))
         .ok_or(VfsError::InvalidState)?;
-    let mut buffer = vec![0_u8; 1024 * 1024];
     let shifted = if next_len == length { 0 } else { length - end };
     if next_len > length {
-        workspace.set_regular_len(file, next_len)?;
-        let mut remaining = length - end;
+        set_len(file, next_len)?;
+        let mut buffer = vec![0_u8; 1024 * 1024];
+        let mut remaining = shifted;
         while remaining > 0 {
             let count = remaining.min(buffer.len() as u64);
             let source = end + remaining - count;
@@ -666,6 +731,7 @@ fn replace_native(
             remaining -= count;
         }
     } else if next_len < length {
+        let mut buffer = vec![0_u8; 1024 * 1024];
         let mut source = end;
         while source < length {
             let count = (length - source).min(buffer.len() as u64);
@@ -675,22 +741,11 @@ fn replace_native(
             file.write_all(&buffer[..count as usize])?;
             source += count;
         }
-        workspace.set_regular_len(file, next_len)?;
+        set_len(file, next_len)?;
     }
-    file.seek(SeekFrom::Start(start))?;
-    file.write_all(replacement)?;
-    file.flush()?;
     Ok(NativeOperationCounters {
-        route: Some(if next_len == length {
-            NativeRoute::InPlacePatch
-        } else {
-            NativeRoute::InPlaceShift
-        }),
         bytes_read: shifted,
-        bytes_written: shifted
-            .checked_add(replacement_len)
-            .ok_or(VfsError::InvalidState)?,
-        patch_bytes: replacement_len,
+        bytes_written: shifted,
         suffix_bytes_shifted: shifted,
         ..NativeOperationCounters::default()
     })

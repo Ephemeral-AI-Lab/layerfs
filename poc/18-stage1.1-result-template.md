@@ -19,7 +19,7 @@ integer bytes are the machine size authority
 human milliseconds/MiB/s are derived only from machine integers
 Unavailable is never encoded as zero
 NotApplicable is never encoded as zero work observed
-patch and FullFallback populations are never combined
+patch, accepted-splice shift, and FullFallback populations are never combined
 physical-to-logical and logical-to-physical populations are never combined
 oracle work is outside operation latency but inside row and complete wall
 summary tables are derived only from rows.jsonl
@@ -246,10 +246,10 @@ placeholder row above establishes the exact column order.
 | Operation | n | Logical p50 ms | Logical p95 ms | Route class | Refresh p50 ms | Refresh p95 ms | End-to-end p50 ms | End-to-end p95 ms | Oracle |
 |---|---:|---:|---:|---|---:|---:|---:|---:|---|
 | Overwrite | 3 | `{{v}}` | `{{v}}` | Patch | `{{v}}` | `{{v}}` | `{{v}}` | `{{v}}` | `{{n}}/3` |
-| Insert | 3 | `{{v}}` | `{{v}}` | FullFallback | `{{v}}` | `{{v}}` | `{{v}}` | `{{v}}` | `{{n}}/3` |
-| Delete | 3 | `{{v}}` | `{{v}}` | FullFallback | `{{v}}` | `{{v}}` | `{{v}}` | `{{v}}` | `{{n}}/3` |
-| Append | 3 | `{{v}}` | `{{v}}` | FullFallback | `{{v}}` | `{{v}}` | `{{v}}` | `{{v}}` | `{{n}}/3` |
-| Truncate | 3 | `{{v}}` | `{{v}}` | FullFallback | `{{v}}` | `{{v}}` | `{{v}}` | `{{v}}` | `{{n}}/3` |
+| Insert | 3 | `{{v}}` | `{{v}}` | Shift | `{{v}}` | `{{v}}` | `{{v}}` | `{{v}}` | `{{n}}/3` |
+| Delete | 3 | `{{v}}` | `{{v}}` | Shift | `{{v}}` | `{{v}}` | `{{v}}` | `{{v}}` | `{{n}}/3` |
+| Append | 3 | `{{v}}` | `{{v}}` | Shift | `{{v}}` | `{{v}}` | `{{v}}` | `{{v}}` | `{{n}}/3` |
+| Truncate | 3 | `{{v}}` | `{{v}}` | Shift | `{{v}}` | `{{v}}` | `{{v}}` | `{{v}}` | `{{n}}/3` |
 ```
 
 ### 3.6 Refresh routes
@@ -262,10 +262,14 @@ placeholder row above establishes the exact column order.
 | ClonePatch | `0..3` | `{{n}}` | `{{v|N/A}}` | `{{v|N/A}}` | `{{B}}` | `0` | `{{status}}` |
 | InPlacePatch | `0..3` | `{{n}}` | `{{v|N/A}}` | `{{v|N/A}}` | `{{B}}` | `0` | `{{status}}` |
 | Patch aggregate | `3` | `{{n}}` | `{{v}}` | `{{v}}` | `{{B}}` | `0` | `{{status}}` |
-| Insert FullFallback | `3` | `{{n}}` | `{{v}}` | `{{v}}` | `{{B}}` | `0` | `{{status}}` |
-| Delete FullFallback | `3` | `{{n}}` | `{{v}}` | `{{v}}` | `{{B}}` | `0` | `{{status}}` |
-| Append FullFallback | `3` | `{{n}}` | `{{v}}` | `{{v}}` | `{{B}}` | `0` | `{{status}}` |
-| Truncate FullFallback | `3` | `{{n}}` | `{{v}}` | `{{v}}` | `{{B}}` | `0` | `{{status}}` |
+| CloneShift | `0..12` | `{{n}}` | `{{v|N/A}}` | `{{v|N/A}}` | `{{B}}` | `0` | `{{status}}` |
+| InPlaceShift | `0..12` | `{{n}}` | `{{v|N/A}}` | `{{v|N/A}}` | `{{B}}` | `0` | `{{status}}` |
+| Shift aggregate | `12` | `{{n}}` | `{{v}}` | `{{v}}` | `{{B}}` | `0` | `{{status}}` |
+| Insert Shift | `3` | `{{n}}` | `{{v}}` | `{{v}}` | `{{B}}` | `0` | `{{status}}` |
+| Delete Shift | `3` | `{{n}}` | `{{v}}` | `{{v}}` | `{{B}}` | `0` | `{{status}}` |
+| Append Shift | `3` | `{{n}}` | `{{v}}` | `{{v}}` | `{{B}}` | `0` | `{{status}}` |
+| Truncate Shift | `3` | `{{n}}` | `{{v}}` | `{{v}}` | `{{B}}` | `0` | `{{status}}` |
+| FullFallback | `0` | `{{n}}` | `{{v|N/A}}` | `{{v|N/A}}` | `{{B}}` | `0` | `{{status}}` |
 ```
 
 ### 3.7 Canonical locality
@@ -308,6 +312,12 @@ placeholder row above establishes the exact column order.
 | 4 | R20 | R0,R15,R20 | `{{v}}` | `{{n}}` | `{{B}}` | `{{B}}` | 0 | 0 | `{{status}}` |
 | 5 | R25 | R0,R15,R20,R25 | `{{v}}` | `{{n}}` | `{{B}}` | `{{B}}` | 0 | 0 | `{{status}}` |
 | 6 | R30 | R0,R15,R20,R25,R30 | `{{v}}` | `{{n}}` | `{{B}}` | `{{B}}` | 0 | 0 | `{{status}}` |
+
+| Probe ordinal | n | p50 ms | p95 ms | Non-payload rows | Payload rows | Cache classification |
+|---:|---:|---:|---:|---:|---:|---|
+| 1 | 21 | `{{v}}` | `{{v}}` | `{{n}}` | `{{n}}` | first root/path resolution |
+| 2 | 21 | `{{v}}` | `{{v}}` | `{{n}}` | `{{n}}` | exact root/path plan hit |
+| 3 | 21 | `{{v}}` | `{{v}}` | `{{n}}` | `{{n}}` | exact root/path plan hit |
 ```
 
 ### 3.10 Materialization
@@ -340,6 +350,10 @@ placeholder row above establishes the exact column order.
 | new auth = created + reused | every publication | `{{failures}} failures` | `{{status}}` |
 | incumbent auth = reused | every publication | `{{failures}} failures` | `{{status}}` |
 | Payload batch maximum | `<=64` | `{{n}}` | `{{status}}` |
+
+| Counter phase | Rows | Statements | Fetched/auth/role | Object read B | Object write B | Tx/COMMIT | Scrubs | Engine/VFS scratch tables | Q high B | Connections |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `{{phase}}` | `{{n}}` | `{{n}}` | `{{n}}/{{n}}/{{n}}` | `{{B}}` | `{{B}}` | `{{n}}/{{n}}` | `{{n}}` | `{{n}}/{{n}}` | `{{B}}` | `{{n}}` |
 ```
 
 ### 3.12 Storage
@@ -430,6 +444,17 @@ table remain present.
 ```markdown
 ## 16. Final disposition
 
+Post-PASS optimization baseline: `{{absolute attempt-007 path}}` (rows SHA-256 `{{digest}}`).
+
+| Optimization metric | Attempt-007 before ms | Current after ms | Absolute gain ms | Owner |
+|---|---:|---:|---:|---|
+| Complete campaign wall | `{{v}}` | `{{v}}` | `{{v}}` | product + evaluator |
+| Transition counter/resource snapshots | `{{v}}` | `{{v}}` | `{{v}}` | evaluator |
+| History read/oracle wall | `{{v}}` | `{{v}}` | `{{v}}` | evaluator |
+| Append/truncate refresh p50 | `{{v}}` | `{{v}}` | `{{v}}` | product EOF splice |
+| Milestone materialization p50 | `{{v}}` | `{{v}}` | `{{v}}` | product read/materialize |
+| Verified open `{{root}}` | `{{v}}` | `{{v}}` | `{{v}}` | product retained-union scrub; current scrub/graphs/fetched/object B/scratch=`{{v/v/v/v/v}}` |
+
 Result: `{{PASS|REVISE|FAIL}}`
 
 | Category | Result | Decisive evidence |
@@ -473,10 +498,13 @@ Required common object shape:
   "after_bytes": 25165824,
   "edit": null,
   "sub_edits": [],
+  "history_probes": [],
   "pre_ref": null,
   "post_ref": null,
   "native_route": "NotApplicable",
+  "tree_level_before": null,
   "phases": [],
+  "phase_counters": [],
   "row_wall_ns": 0,
   "row_residual_ns": 0,
   "counters": {},
@@ -506,7 +534,7 @@ operation:
   verified-history burst milestone-materialize terminal-resources
 
 native_route:
-  NotApplicable ExactNoop ClonePatch InPlacePatch InPlaceShift FullFallback
+  NotApplicable ExactNoop ClonePatch CloneShift InPlacePatch InPlaceShift FullFallback
 
 status:
   PASS REVISE FAIL
@@ -535,6 +563,36 @@ Each C07 `sub_edits` element uses the same fields plus:
   "native_route": "InPlacePatch"
 }
 ```
+
+Each C04/C06 `history_probes` element is retained in exact execution order and
+uses:
+
+```json
+{
+  "root": "R0",
+  "ordinal": 1,
+  "start": 0,
+  "length": 65536,
+  "wall_ns": 0,
+  "namespace_nodes_read": 1,
+  "inode_table_nodes_read": 1,
+  "rope_nodes_read": 0,
+  "payload_bytes_read": 65536,
+  "payload_batch_queries": 0,
+  "payload_batch_references": 0,
+  "non_payload_statements": 0,
+  "non_payload_rows": 0,
+  "fetched_rows": 0,
+  "authentication_passes": 0,
+  "role_decode_passes": 0,
+  "engine_counters": {}
+}
+```
+
+There are exactly 63 such receipts. Within each root, ordinal 1 is the cold
+root/path plan lookup and ordinals 2 and 3 must show zero namespace and inode
+table reads. Their Engine and operation counters sum exactly to the retained
+`history_read` phase and row aggregate.
 
 `pre_ref` and `post_ref`, when present:
 
@@ -567,6 +625,33 @@ durable_checkpoint verified_open history_read canonical_witness
 counter_snapshot milestone_materialization metadata_oracle
 explicit_cleanup artifact_write
 ```
+
+`phase_counters` is the zero-SQL cumulative-counter delta at each applicable
+product boundary. The ordered names are:
+
+```text
+store_open materialization checkpoint logical_edit apfs_refresh
+canonical_witness verified_open history_read
+```
+
+Every phase object contains all Engine counter fields plus
+`q_before_bytes`, `q_after_bytes`, `q_high_water_bytes`, and
+`active_connections`, plus exact VFS-operation
+`operation_scratch_tables`, `operation_scratch_statements`,
+`operation_scratch_rows`, and `operation_scratch_high_water_bytes`. Additive
+Engine phase fields sum exactly; the row's combined scratch fields equal the
+documented Engine/VFS aggregate. Session high-water fields use the exact
+maximum. Every phase independently
+closes fetched/authentication/role, new/incumbent, transaction, publication,
+Q, and storage-byte equations.
+
+For a retained-union scrub, report unique-object authentication separately
+from per-root graph validation. A scrub-scoped, disk-bounded payload-length
+summary is permitted only after the union closure has fetched,
+identity-authenticated, and role-decoded that payload. It may replace repeated
+payload-byte fetches during per-root extent slice-bound checks, but it must not
+skip file-state/mapping validation, namespace reachability, reference counts,
+or cleanup, and it must not survive the scrub.
 
 Required `counters` keys:
 
@@ -614,6 +699,12 @@ fd_current active_store_connections child_processes
 owned_temp_entries residue_entries
 largest_buffer_bytes page_size cache_pages cache_spill_pages
 ```
+
+Ordinary row observers use `/dev/fd`, `getrusage`, exact SDK/Engine active
+connections, and in-process residue traversal. Therefore
+`rss_current_bytes` is `null` with an `Unavailable` record on those rows;
+current RSS is sampled only by the decisive external high-water and terminal
+observers. `rss_peak_bytes` remains observed on every row.
 
 Required `oracle` keys:
 
@@ -733,6 +824,7 @@ n=51  p50=x26  p95=x49
   "resources": {},
   "timer_closure": {},
   "correctness": {},
+  "optimization": {},
   "unavailable": [],
   "failures": [],
   "artifacts": {},
@@ -776,15 +868,17 @@ logical_to_physical:
   logical_edit_plus_refresh physical_oracle
 
 refresh_routes:
-  clone_patch in_place_patch patch_aggregate
-  insert_full_fallback delete_full_fallback
-  append_full_fallback truncate_full_fallback
+  clone_patch in_place_patch patch_aggregate clone_shift in_place_shift
+  shift_aggregate insert_shift delete_shift append_shift truncate_shift
+  full_fallback_count
 
 bursts:
   by_root aggregate suboperation_count checkpoint_count transaction_count
 
 history:
-  sessions aggregate selected_roots verified_open_count
+  sessions aggregate selected_roots verified_open_count probe_count
+  first_probe second_probe third_probe first_probe_non_payload_rows
+  warm_probe_non_payload_rows
 
 materialization:
   initial by_root milestone_aggregate live_workspace_materializations
@@ -804,7 +898,12 @@ transactions:
 authentication:
   fetched_authentication_failures fetched_role_decode_failures
   new_object_equation_failures incumbent_equation_failures
-  payload_batch_maximum
+  payload_batch_maximum phase_attribution
+
+optimization:
+  baseline_run baseline_rows_sha256 baseline_summary_sha256
+  complete_wall counter_snapshot_wall history_read_wall verified_open_by_root
+  append_truncate_refresh milestone_materialization shift_routes
 
 storage:
   initial_database_bytes terminal_database_bytes initial_logical_engine_bytes
@@ -933,10 +1032,24 @@ Logical-to-physical refresh:
 | Route | n | p50 | p95 |
 |---|---:|---:|---:|
 | Patch aggregate | `3` | `{{ms}} ms` | `{{ms}} ms` |
-| Insert FullFallback | `3` | `{{ms}} ms` | `{{ms}} ms` |
-| Delete FullFallback | `3` | `{{ms}} ms` | `{{ms}} ms` |
-| Append FullFallback | `3` | `{{ms}} ms` | `{{ms}} ms` |
-| Truncate FullFallback | `3` | `{{ms}} ms` | `{{ms}} ms` |
+| Insert Shift | `3` | `{{ms}} ms` | `{{ms}} ms` |
+| Delete Shift | `3` | `{{ms}} ms` | `{{ms}} ms` |
+| Append Shift | `3` | `{{ms}} ms` | `{{ms}} ms` |
+| Truncate Shift | `3` | `{{ms}} ms` | `{{ms}} ms` |
+| FullFallback | `0` | `N/A` | `N/A` |
+
+Post-PASS optimization versus immutable attempt-007:
+
+| Metric | Before | After | Absolute gain |
+|---|---:|---:|---:|
+| Complete campaign | `{{ms}} ms` | `{{ms}} ms` | `{{ms}}` |
+| Verified open R34 | `{{ms}} ms` | `{{ms}} ms` | `{{ms}}` |
+| Append/truncate refresh p50 | `{{ms}} ms` | `{{ms}} ms` | `{{ms}}` |
+| Milestone materialization p50 | `{{ms}} ms` | `{{ms}} ms` | `{{ms}}` |
+| Evaluator counter/resource snapshots | `{{ms}} ms` | `{{ms}} ms` | `{{ms}}` |
+
+Product gain and evaluator-only gain are labeled separately. The retained
+100 MiB focused attribution is reported separately from the 24 MiB campaign.
 
 Decisive disposition: {{one sentence}}.
 
@@ -948,6 +1061,9 @@ Artifacts:
 - [campaign-time.txt]({{absolute path}})
 
 Source: `{{commit}}`; executable SHA-256: `{{digest}}`.
+
+Attempt-007 remains preserved as the accepted pre-optimization baseline.
+Stage 1.2 and mounted Stage Two were not started.
 ```
 
 The final response must not:

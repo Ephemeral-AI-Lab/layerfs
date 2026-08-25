@@ -22,6 +22,7 @@ pub enum NativeRoute {
     MaterializeStream,
     ExactNoop,
     ClonePatch,
+    CloneShift,
     InPlacePatch,
     InPlaceShift,
     Rename,
@@ -83,6 +84,45 @@ pub struct OperationCounters {
     pub descriptor_spool_bytes_terminal: u64,
     pub unaffected_suffix_payload_reads: u64,
     pub unaffected_suffix_payload_writes: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ManagedReplayStep {
+    pub tree_level_before: Option<u8>,
+    pub counters: OperationCounters,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AcceptedSplice {
+    pub(crate) before: RefState,
+    pub(crate) after: RefState,
+    pub(crate) path: CanonicalPath,
+    pub(crate) start: u64,
+    pub(crate) delete_len: u64,
+    pub(crate) insert_len: u64,
+    pub(crate) old_len: u64,
+    pub(crate) new_len: u64,
+}
+
+impl AcceptedSplice {
+    pub fn before(&self) -> &RefState {
+        &self.before
+    }
+    pub fn after(&self) -> &RefState {
+        &self.after
+    }
+    pub fn path(&self) -> &CanonicalPath {
+        &self.path
+    }
+    pub fn start(&self) -> u64 {
+        self.start
+    }
+    pub fn delete_len(&self) -> u64 {
+        self.delete_len
+    }
+    pub fn insert_len(&self) -> u64 {
+        self.insert_len
+    }
 }
 
 impl OperationCounters {
@@ -231,7 +271,24 @@ fn add_rope_counters(
     target.chunks_created = add(target.chunks_created, source.chunks_created)?;
     target.nodes_read = add(target.nodes_read, source.nodes_read)?;
     target.nodes_created = add(target.nodes_created, source.nodes_created)?;
+    target.tree_level_before = match (target.tree_level_before, source.tree_level_before) {
+        (None, value) | (value, None) => value,
+        (Some(left), Some(right)) if left == right => Some(left),
+        (Some(_), Some(_)) => None,
+    };
+    target.logical_len_before =
+        merge_optional_equal(target.logical_len_before, source.logical_len_before);
+    target.logical_len_after =
+        merge_optional_equal(target.logical_len_after, source.logical_len_after);
     Ok(())
+}
+
+fn merge_optional_equal<T: Copy + Eq>(left: Option<T>, right: Option<T>) -> Option<T> {
+    match (left, right) {
+        (None, value) | (value, None) => value,
+        (Some(left), Some(right)) if left == right => Some(left),
+        (Some(_), Some(_)) => None,
+    }
 }
 
 fn add(left: u64, right: u64) -> Result<u64, layerfs_core::CoreError> {

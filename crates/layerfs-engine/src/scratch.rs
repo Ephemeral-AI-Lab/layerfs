@@ -466,6 +466,20 @@ impl DiskTable {
 }
 
 impl DiskNamespace<'_> {
+    pub fn clear(&self) -> EngineResult<()> {
+        self.table.mark_statement()?;
+        let rows = self
+            .table
+            .connection()
+            .execute(
+                "DELETE FROM entries WHERE key >= ?1 AND key < ?2",
+                params![&self.prefix, &self.upper],
+            )
+            .map_err(map_sqlite_error)?;
+        self.table.mark_rows(rows as u64)?;
+        self.table.observe_storage()
+    }
+
     pub fn get(&self, key: &[u8]) -> EngineResult<Option<Vec<u8>>> {
         self.table.mark_statement()?;
         let key = self.key(key);
@@ -481,6 +495,65 @@ impl DiskNamespace<'_> {
             .map_err(map_sqlite_error)?;
         self.table.mark_rows(u64::from(value.is_some()))?;
         Ok(value)
+    }
+
+    pub fn get_ordered_batch(
+        &self,
+        keys: &[&[u8]],
+        mut callback: impl FnMut(usize, Option<&[u8]>) -> EngineResult<()>,
+    ) -> EngineResult<()> {
+        if keys.len() > 64 {
+            return Err(EngineError::InvalidRecord("scratch batch exceeds 64"));
+        }
+        if keys.is_empty() {
+            return Ok(());
+        }
+        let keys = keys.iter().map(|key| self.key(key)).collect::<Vec<_>>();
+        let sql = (0..keys.len())
+            .map(|index| {
+                format!(
+                    "SELECT {index} AS ord, (SELECT value FROM entries WHERE key = ?{}) AS value",
+                    index + 1
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" UNION ALL ")
+            + " ORDER BY 1";
+        self.table.mark_statement()?;
+        let mut statement = self
+            .table
+            .connection()
+            .prepare_cached(&sql)
+            .map_err(map_sqlite_error)?;
+        let mut rows = statement
+            .query(rusqlite::params_from_iter(keys.iter().map(Vec::as_slice)))
+            .map_err(map_sqlite_error)?;
+        let mut ordinal = 0;
+        while let Some(row) = rows.next().map_err(map_sqlite_error)? {
+            if ordinal >= keys.len() {
+                return Err(EngineError::InvalidRecord("scratch batch cardinality"));
+            }
+            let observed = row.get::<_, i64>(0).map_err(map_sqlite_error)?;
+            if observed != ordinal as i64 {
+                return Err(EngineError::InvalidRecord("scratch batch order"));
+            }
+            match row.get_ref(1).map_err(map_sqlite_error)? {
+                ValueRef::Null => callback(ordinal, None)?,
+                ValueRef::Blob(value) => {
+                    self.table.mark_rows(1)?;
+                    callback(ordinal, Some(value))?;
+                }
+                _ => {
+                    self.table.mark_rows(1)?;
+                    return Err(EngineError::InvalidRecord("scratch value"));
+                }
+            }
+            ordinal += 1;
+        }
+        if ordinal != keys.len() {
+            return Err(EngineError::InvalidRecord("scratch batch cardinality"));
+        }
+        Ok(())
     }
 
     pub fn storage_bytes(&self) -> EngineResult<u64> {
@@ -985,6 +1058,11 @@ mod tests {
             })
             .unwrap();
         assert!(second.get(b"nested").unwrap().is_some());
+        first.clear().unwrap();
+        assert_eq!(first.get(b"same").unwrap(), None);
+        assert_eq!(first.pop_pending().unwrap(), None);
+        assert_eq!(second.get(b"same").unwrap(), Some(b"two".to_vec()));
+        assert!(second.get(b"nested").unwrap().is_some());
 
         let observation = table.observation().unwrap();
         assert_eq!(observation.tables, 1);
@@ -993,6 +1071,135 @@ mod tests {
         drop(second);
         drop(first);
         drop(table);
+        drop(engine);
+        std::fs::remove_file(anchor).unwrap();
+    }
+
+    #[test]
+    fn namespace_ordered_batch_is_bounded_ordered_and_counts_present_rows() {
+        let anchor = std::env::temp_dir().join(format!(
+            "layerfs-scratch-batch-{}-{}",
+            std::process::id(),
+            SCRATCH_SERIAL.fetch_add(1, Ordering::Relaxed)
+        ));
+        let engine = crate::Engine::open(&anchor).unwrap();
+        let path = {
+            let table = DiskTable::create_near(&anchor, "batch").unwrap();
+            let path = table.path.clone();
+            let first = table.namespace(b"first").unwrap();
+            let second = table.namespace(b"second").unwrap();
+            first.put(b"a", b"one").unwrap();
+            first.put(b"b", b"two").unwrap();
+            second.put(b"a", b"other").unwrap();
+
+            let before = table.observation().unwrap();
+            first
+                .get_ordered_batch(&[], |_, _| panic!("empty batch callback"))
+                .unwrap();
+            assert_eq!(table.observation().unwrap(), before);
+
+            let mut values = Vec::new();
+            first
+                .get_ordered_batch(&[b"b", b"a", b"b"], |ordinal, value| {
+                    values.push((ordinal, value.map(<[u8]>::to_vec)));
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(
+                values,
+                vec![
+                    (0, Some(b"two".to_vec())),
+                    (1, Some(b"one".to_vec())),
+                    (2, Some(b"two".to_vec())),
+                ]
+            );
+            let after_ordered = table.observation().unwrap();
+            assert_eq!(after_ordered.statements, before.statements + 1);
+            assert_eq!(after_ordered.rows, before.rows + 3);
+
+            let mut missing = Vec::new();
+            first
+                .get_ordered_batch(
+                    &[
+                        b"missing-first".as_slice(),
+                        b"a".as_slice(),
+                        b"missing-middle".as_slice(),
+                        b"b".as_slice(),
+                        b"missing-last".as_slice(),
+                    ],
+                    |ordinal, value| {
+                        missing.push((ordinal, value.map(<[u8]>::to_vec)));
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            assert_eq!(
+                missing,
+                vec![
+                    (0, None),
+                    (1, Some(b"one".to_vec())),
+                    (2, None),
+                    (3, Some(b"two".to_vec())),
+                    (4, None),
+                ]
+            );
+            let after_missing = table.observation().unwrap();
+            assert_eq!(after_missing.statements, after_ordered.statements + 1);
+            assert_eq!(after_missing.rows, after_ordered.rows + 2);
+
+            let mut isolated = None;
+            second
+                .get_ordered_batch(&[b"a"], |_, value| {
+                    isolated = value.map(<[u8]>::to_vec);
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(isolated, Some(b"other".to_vec()));
+
+            let repeated = vec![b"a".as_slice(); 64];
+            let before_64 = table.observation().unwrap();
+            let mut seen = 0;
+            first
+                .get_ordered_batch(&repeated, |ordinal, value| {
+                    assert_eq!(ordinal, seen);
+                    assert_eq!(value, Some(b"one".as_slice()));
+                    seen += 1;
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(seen, 64);
+            let after_64 = table.observation().unwrap();
+            assert_eq!(after_64.statements, before_64.statements + 1);
+            assert_eq!(after_64.rows, before_64.rows + 64);
+
+            let oversized = vec![b"a".as_slice(); 65];
+            assert!(matches!(
+                first.get_ordered_batch(&oversized, |_, _| Ok(())),
+                Err(EngineError::InvalidRecord("scratch batch exceeds 64"))
+            ));
+            assert_eq!(table.observation().unwrap(), after_64);
+            assert!(matches!(
+                first.get_ordered_batch(&[b"a"], |_, _| {
+                    Err(EngineError::InjectedFailure("batch callback"))
+                }),
+                Err(EngineError::InjectedFailure("batch callback"))
+            ));
+
+            table
+                .connection()
+                .execute(
+                    "UPDATE entries SET value = 'bad' WHERE key = ?1",
+                    params![first.key(b"a")],
+                )
+                .unwrap();
+            assert!(matches!(
+                first.get_ordered_batch(&[b"a"], |_, _| Ok(())),
+                Err(EngineError::InvalidRecord("scratch value"))
+            ));
+            path
+        };
+        assert!(!path.exists());
+        assert!(!PathBuf::from(format!("{}-journal", path.display())).exists());
         drop(engine);
         std::fs::remove_file(anchor).unwrap();
     }
@@ -1009,6 +1216,34 @@ mod tests {
         let mut journal = path.into_os_string();
         journal.push("-journal");
         assert!(!PathBuf::from(journal).exists());
+    }
+
+    #[test]
+    fn namespace_write_failure_still_removes_exact_owned_files() {
+        let anchor = std::env::temp_dir().join(format!(
+            "layerfs-scratch-write-failure-{}-{}",
+            std::process::id(),
+            SCRATCH_SERIAL.fetch_add(1, Ordering::Relaxed)
+        ));
+        let engine = crate::Engine::open(&anchor).unwrap();
+        let path = {
+            let table = DiskTable::create_near(&anchor, "write-failure").unwrap();
+            let path = table.path.clone();
+            table
+                .connection()
+                .execute_batch("PRAGMA query_only=ON")
+                .unwrap();
+            assert!(table
+                .namespace(b"records")
+                .unwrap()
+                .put(b"key", b"value")
+                .is_err());
+            path
+        };
+        assert!(!path.exists());
+        assert!(!PathBuf::from(format!("{}-journal", path.display())).exists());
+        drop(engine);
+        std::fs::remove_file(anchor).unwrap();
     }
 
     #[test]

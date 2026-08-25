@@ -410,6 +410,17 @@ enum ManagedState {
     Closed,
 }
 impl ManagedWorkspace {
+    pub fn read_metadata(&self, path: &CanonicalPath) -> VfsResult<crate::driver::NativeMetadata> {
+        self.require_editable()?;
+        let external = self.external.as_ref().ok_or(VfsError::InvalidState)?;
+        let root = external.native.root_directory()?;
+        let (parent, name) =
+            crate::managed_edit::native_parent(external.native.as_ref(), root, path)?;
+        let token = external.native.token_at(parent.as_ref(), name)?;
+        Ok(external
+            .native
+            .read_metadata_at(parent.as_ref(), name, Some(&token))?)
+    }
     pub fn read_to<W: Write>(
         &self,
         path: &CanonicalPath,
@@ -474,6 +485,18 @@ impl ManagedWorkspace {
         self.checkpoint_observed().map(|value| value.0)
     }
     pub fn checkpoint_observed(&mut self) -> VfsResult<(RefState, OperationCounters)> {
+        self.checkpoint_observed_inner(false)
+            .map(|(state, counters, _)| (state, counters))
+    }
+    pub fn checkpoint_observed_detailed(
+        &mut self,
+    ) -> VfsResult<(RefState, OperationCounters, Vec<crate::ManagedReplayStep>)> {
+        self.checkpoint_observed_inner(true)
+    }
+    fn checkpoint_observed_inner(
+        &mut self,
+        collect_steps: bool,
+    ) -> VfsResult<(RefState, OperationCounters, Vec<crate::ManagedReplayStep>)> {
         self.require_checkpointable()?;
         let reservation = self
             .external
@@ -494,7 +517,7 @@ impl ManagedWorkspace {
             };
             self.observe_spool(&mut counters)?;
             reservation.finish(&mut counters);
-            return Ok((state, counters));
+            return Ok((state, counters, Vec::new()));
         }
         crate::managed_edit::sync_pending(external.native.as_ref(), &self.edits)?;
         let root = external.native.root_directory()?;
@@ -507,9 +530,10 @@ impl ManagedWorkspace {
                 &external.expected,
                 &self.edits,
                 spool.as_mut(),
+                collect_steps,
             )
         };
-        let (next, mut counters) = match replay {
+        let (next, mut counters, steps) = match replay {
             Ok(next) => next,
             Err(VfsError::ExternalDirtyConflict) => {
                 self.state = ManagedState::ExternalDirtyConflict;
@@ -529,7 +553,7 @@ impl ManagedWorkspace {
         counters.descriptor_resets = 1;
         Self::record_spool_observation(&mut counters, Some(0));
         reservation.finish(&mut counters);
-        Ok((next, counters))
+        Ok((next, counters, steps))
     }
     pub fn ensure_exact(&mut self, target: &RefState) -> VfsResult<OperationCounters> {
         self.require_live()?;
@@ -567,6 +591,19 @@ impl ManagedWorkspace {
         Ok(counters)
     }
     pub fn refresh(&mut self, target: &RefState) -> VfsResult<OperationCounters> {
+        self.refresh_inner(target, None)
+    }
+    pub fn refresh_splice(
+        &mut self,
+        accepted: &crate::AcceptedSplice,
+    ) -> VfsResult<OperationCounters> {
+        self.refresh_inner(accepted.after(), Some(accepted))
+    }
+    fn refresh_inner(
+        &mut self,
+        target: &RefState,
+        accepted: Option<&crate::AcceptedSplice>,
+    ) -> VfsResult<OperationCounters> {
         self.require_live()?;
         if !self.edits.is_empty() || target.name != "main" {
             return Err(VfsError::InvalidState);
@@ -578,6 +615,11 @@ impl ManagedWorkspace {
             .operation_q
             .reserve();
         let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
+        if accepted
+            .is_some_and(|splice| splice.before() != &external.expected || splice.after() != target)
+        {
+            return Err(VfsError::ExternalDirtyConflict);
+        }
         if external.engine.read_ref("main")?.as_ref() != Some(target) {
             return Err(VfsError::ExternalDirtyConflict);
         }
@@ -614,8 +656,7 @@ impl ManagedWorkspace {
             external.native.as_ref(),
             authority,
             topology,
-            &external.expected,
-            target,
+            (&external.expected, target, accepted),
             &mut visible,
         ) {
             Ok(mut counters) => {
@@ -1112,6 +1153,17 @@ impl ExternalWorkspace {
     pub fn path(&self) -> &Path {
         &self.path
     }
+    pub fn read_metadata(&self, path: &CanonicalPath) -> VfsResult<crate::driver::NativeMetadata> {
+        if !self.active {
+            return Err(VfsError::InvalidState);
+        }
+        let root = self.native.root_directory()?;
+        let (parent, name) = crate::managed_edit::native_parent(self.native.as_ref(), root, path)?;
+        let token = self.native.token_at(parent.as_ref(), name)?;
+        Ok(self
+            .native
+            .read_metadata_at(parent.as_ref(), name, Some(&token))?)
+    }
     pub fn capture_quiescent(&mut self) -> VfsResult<ObjectId> {
         self.capture_quiescent_observed().map(|(root, _)| root)
     }
@@ -1288,6 +1340,10 @@ mod lease_tests {
             self
         }
 
+        fn set_len(&mut self, _len: u64) -> crate::driver::Result<()> {
+            Err(crate::driver::DriverError::Unsupported)
+        }
+
         fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
             self
         }
@@ -1333,6 +1389,12 @@ mod lease_tests {
     impl crate::driver::OwnedTempHandle for LaterEndSeekFailure {
         fn as_any(&self) -> &dyn std::any::Any {
             self
+        }
+
+        fn set_len(&mut self, len: u64) -> crate::driver::Result<()> {
+            self.len = len;
+            self.position = self.position.min(len);
+            Ok(())
         }
 
         fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {

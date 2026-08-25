@@ -297,6 +297,80 @@ fn product_range_reader_uses_bounded_authenticated_payload_batches() {
 }
 
 #[test]
+fn payload_batches_continue_across_mapping_leaf_boundaries() {
+    let mut store = MemoryStore::default();
+    let payloads = [
+        store.put(&encode_bytes_object(&[0x51]).unwrap()).unwrap(),
+        store.put(&encode_bytes_object(&[0xa7]).unwrap()).unwrap(),
+    ];
+    let mut leaves = Vec::new();
+    for leaf in 0..3_usize {
+        let extents = (0..65_usize)
+            .map(|index| ExtentSliceV3::new(payloads[(leaf * 65 + index) % 2], 0, 1).unwrap())
+            .collect::<Vec<_>>();
+        leaves.push(
+            store
+                .put(
+                    &encode_node(&ExtentNodeV3::Leaf {
+                        subtree_logical_bytes: 65,
+                        extents,
+                    })
+                    .unwrap(),
+                )
+                .unwrap(),
+        );
+    }
+    let mapping = store
+        .put(
+            &encode_node(&ExtentNodeV3::Branch {
+                level: 1,
+                subtree_logical_bytes: 195,
+                subtree_extent_count: 195,
+                children: leaves
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, child_object_id)| ChildDescriptorV3 {
+                        cumulative_logical_end: (index as u64 + 1) * 65,
+                        cumulative_extent_end: (index as u64 + 1) * 65,
+                        child_object_id,
+                    })
+                    .collect(),
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    let root = FileStateRoot(
+        store
+            .put(
+                &encode_file_state(FileStateV3 {
+                    logical_len: 195,
+                    extent_count: 195,
+                    tree_level: 1,
+                    profile_id: profile_id(),
+                    mapping_root: mapping,
+                })
+                .unwrap(),
+            )
+            .unwrap(),
+    );
+    let reader = BatchRead {
+        store: &store,
+        batches: Cell::new(0),
+        state_root: root.0,
+        state_reads: Cell::new(0),
+    };
+    let mut actual = Vec::new();
+    read_range(&reader, root, 0..195, &mut actual).unwrap();
+    assert_eq!(
+        actual,
+        (0..195)
+            .map(|index| if index % 2 == 0 { 0x51 } else { 0xa7 })
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(reader.batches.get(), 4);
+}
+
+#[test]
 fn missing_payload_batch_callback_is_rejected() {
     let bytes = b"callback cardinality";
     let mut store = MemoryStore::default();

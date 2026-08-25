@@ -7,9 +7,10 @@ use layerfs_vfs::LayerVfs;
 use std::path::Path;
 use std::sync::Arc;
 
+pub use layerfs_vfs::driver::NativeMetadata;
 pub use layerfs_vfs::{
-    IntegrityMode, NativeRoute, OperationCounters as OperationDiagnostics, RefState, RootId,
-    VfsError,
+    AcceptedSplice, IntegrityMode, ManagedReplayStep, NativeRoute,
+    OperationCounters as OperationDiagnostics, RefState, RootId, VfsError,
 };
 
 pub const COMPONENT: &str = "layerfs-sdk";
@@ -152,6 +153,22 @@ impl LayerFs {
         input: R,
     ) -> Result<(RefState, OperationDiagnostics), VfsError> {
         self.0.replace_range(
+            expected,
+            &layerfs_vfs::CanonicalPath::new(path)?,
+            start,
+            delete_len,
+            input,
+        )
+    }
+    pub fn replace_range_for_refresh_observed<R: std::io::Read>(
+        &self,
+        expected: &RefState,
+        path: &str,
+        start: u64,
+        delete_len: u64,
+        input: R,
+    ) -> Result<(AcceptedSplice, OperationDiagnostics), VfsError> {
+        self.0.replace_range_for_refresh(
             expected,
             &layerfs_vfs::CanonicalPath::new(path)?,
             start,
@@ -323,6 +340,10 @@ impl LayerFs {
 
 pub struct ManagedWorkspace(layerfs_vfs::ManagedWorkspace);
 impl ManagedWorkspace {
+    pub fn read_metadata(&self, path: &str) -> Result<NativeMetadata, layerfs_vfs::VfsError> {
+        self.0
+            .read_metadata(&layerfs_vfs::CanonicalPath::new(path)?)
+    }
     pub fn read_to<W: std::io::Write>(
         &self,
         path: &str,
@@ -339,6 +360,18 @@ impl ManagedWorkspace {
     ) -> Result<(RefState, OperationDiagnostics), layerfs_vfs::VfsError> {
         self.0.checkpoint_observed()
     }
+    pub fn checkpoint_observed_detailed(
+        &mut self,
+    ) -> Result<
+        (
+            RefState,
+            OperationDiagnostics,
+            Vec<layerfs_vfs::ManagedReplayStep>,
+        ),
+        layerfs_vfs::VfsError,
+    > {
+        self.0.checkpoint_observed_detailed()
+    }
     pub fn ensure_exact(
         &mut self,
         target: &RefState,
@@ -350,6 +383,12 @@ impl ManagedWorkspace {
         target: &RefState,
     ) -> Result<OperationDiagnostics, layerfs_vfs::VfsError> {
         self.0.refresh(target)
+    }
+    pub fn refresh_splice(
+        &mut self,
+        accepted: &AcceptedSplice,
+    ) -> Result<OperationDiagnostics, layerfs_vfs::VfsError> {
+        self.0.refresh_splice(accepted)
     }
     pub fn capture(&mut self) -> Result<RootId, layerfs_vfs::VfsError> {
         self.0.capture()
@@ -402,6 +441,10 @@ pub struct ExternalWorkspace(layerfs_vfs::ExternalWorkspace);
 impl ExternalWorkspace {
     pub fn path(&self) -> &Path {
         self.0.path()
+    }
+    pub fn read_metadata(&self, path: &str) -> Result<NativeMetadata, layerfs_vfs::VfsError> {
+        self.0
+            .read_metadata(&layerfs_vfs::CanonicalPath::new(path)?)
     }
     pub fn capture_quiescent(&mut self) -> Result<RootId, layerfs_vfs::VfsError> {
         self.0.capture_quiescent()

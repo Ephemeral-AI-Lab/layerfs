@@ -9,6 +9,7 @@ retain/revise/revert decisions.
 
 | Note | Primary value | Best phase | Use now? |
 |---|---|---|---|
+| [Cloudflare Computer architecture](cloudflare-computer-architecture.md) | Container/FUSE execution lessons, storage-model comparison, platform reality, performance evidence, and an immutable-object remote-client roadmap | After Stage 1.2; Linux/OCI/remote planning | Borrow execution patterns; reject fixed chunks, mutable sync authority, and macFUSE dependency |
 | [Cursor — Git at any scale](cursor-git-at-any-scale.md) | Local-storage guardrails, physical locality, atomic publication, and limits on pack/carrier conclusions | Phase 4 and Phase 8 | Use as doctrine and experiment filtering, not as the current F4 plan |
 | [Mem9/Drive9 layered filesystem](mem9-drive9-layered-filesystem-distilled.md) | Workspace lifecycle, native staging, root/ref publication, open-handle generations, audit history, and lazy hydration | Phases 5–7, then Phase 8 | Use as a primary input when writing Phase 5/6 specifications |
 | [Phase 4 optimization research](phase-4/index.md) | Code/evidence-first directions for canonical identity, CAS+CDC+COW, materialization, compression, and residual SQLite work | Phase 4 and Phase 5 handoff | Use the decision map to assign future specialists; no report is implementation authority |
@@ -31,6 +32,18 @@ retain/revise/revert decisions.
 3. Extract only the smallest capability needed by the first real
    materialize/capture caller.
 4. Keep immutable LayerFS roots as the sole authoritative filesystem state.
+
+### When preparing Linux, OCI, and remote execution
+
+1. Finish Stage 1.2 and freeze the accepted local Store behavior first.
+2. Read the [Cloudflare Computer note](cloudflare-computer-architecture.md).
+3. Borrow its container-local FUSE, write-buffer, range-read, RPC, and real
+   workspace-testing patterns.
+4. Preserve LayerFS immutable roots, expected-head publication, extent
+   locality, authentication, and bounded memory.
+5. Do not promote fixed chunks, last-write-wins sync, a polling shim,
+   OverlayFS copy-up, macFUSE, or a remote pack without separate measured
+   authority.
 
 ### During Phase 8
 
