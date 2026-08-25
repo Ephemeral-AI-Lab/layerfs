@@ -103,9 +103,9 @@ fn public_direct_routes_stream_and_preserve_history() {
         .replace_range(&original, "file", 0, 0, Cursor::new(b"stale"))
         .is_err());
     let diagnostics = opened.fs.diagnostics().unwrap();
-    assert_eq!(
-        diagnostics.fetched_rows,
-        diagnostics.fetched_row_authentication_passes
+    assert!(
+        diagnostics.fetched_row_authentication_passes < diagnostics.fetched_rows,
+        "Trusted reads skip hashes while publication traversal stays authenticated"
     );
     assert_eq!(
         diagnostics.fetched_rows,

@@ -18,7 +18,7 @@ use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
-fn borrowed_object_load_and_ordered_batch_fetch_once_and_authenticate_once_per_occurrence() {
+fn trusted_borrowed_load_and_ordered_batch_skip_identity_authentication() {
     let path = std::env::temp_dir().join(format!(
         "layerfs-store-test-{}-{}.sqlite",
         std::process::id(),
@@ -72,8 +72,9 @@ fn borrowed_object_load_and_ordered_batch_fetch_once_and_authenticate_once_per_o
     assert_eq!(batch.statements, 1);
     assert_eq!(batch.objects_validated, 3);
     assert_eq!(batch.fetched_rows, 3);
-    assert_eq!(batch.fetched_row_authentication_passes, 3);
+    assert_eq!(batch.fetched_row_authentication_passes, 0);
     assert_eq!(batch.fetched_row_role_decode_passes, 3);
+    assert_eq!(batch.identity_authentication_ns, 0);
     assert_eq!(batch.payload_batch_queries, 1);
     assert_eq!(batch.payload_batch_references, 3);
     assert_eq!(batch.payload_batch_maximum, 3);
@@ -97,6 +98,74 @@ fn borrowed_object_load_and_ordered_batch_fetch_once_and_authenticate_once_per_o
     );
     drop(engine);
     let _ = fs::remove_file(path);
+}
+
+#[test]
+fn trusted_reads_are_weaker_but_incumbent_writes_and_verified_reads_authenticate() {
+    let path = std::env::temp_dir().join(format!(
+        "layerfs-trusted-read-boundary-{}-{}.sqlite",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let engine = Engine::open_with_mode(&path, IntegrityMode::TrustedLocalDev).unwrap();
+    let original = encode_bytes_object(b"first").unwrap();
+    let substituted = encode_bytes_object(b"other").unwrap();
+    let original_id = ObjectId::for_bytes(&original);
+    let mut publication = engine.begin_publication(None, "main").unwrap();
+    publication.put_object(&original).unwrap();
+    let state = publication
+        .publish_namespace(
+            &encode_namespace_root(NamespaceRootV1 {
+                profile_id: profile_id(),
+                root_directory_inode: InodeId::allocate([0x91; 32], 0),
+                inode_table_root: ObjectId::for_bytes(b"unused table"),
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE layerfs_objects SET canonical_bytes = ?1 WHERE object_id = ?2",
+            params![&substituted, original_id.as_bytes().as_slice()],
+        )
+        .unwrap();
+
+    engine.reset_counters().unwrap();
+    assert_eq!(
+        engine.load_object(original_id).unwrap().canonical_bytes,
+        substituted
+    );
+    let read = engine.counters().unwrap();
+    assert_eq!(read.objects_validated, 1);
+    assert_eq!(read.fetched_row_authentication_passes, 0);
+    assert_eq!(read.identity_authentication_ns, 0);
+
+    let mut publication = engine.begin_publication(Some(&state), "main").unwrap();
+    assert!(matches!(
+        publication.put_object(&original),
+        Err(EngineError::MalformedObject { .. })
+    ));
+    drop(publication);
+    drop(engine);
+
+    Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE layerfs_authority SET trusted_history = 0 WHERE authority_id = 1",
+            [],
+        )
+        .unwrap();
+    let verified = Engine::open(&path).unwrap();
+    assert!(matches!(
+        verified.load_object(original_id),
+        Err(EngineError::MalformedObject { .. })
+    ));
+    drop(verified);
+    fs::remove_file(path).unwrap();
 }
 
 #[test]
@@ -324,6 +393,11 @@ fn one_thousand_tiny_revisions_remain_directly_readable_after_reopen() {
     }
     drop(engine);
     let reopened = Engine::open(&path).unwrap();
+    let scrub = reopened.counters().unwrap();
+    assert_eq!(scrub.retained_union_scrubs, 1);
+    assert!(scrub.fetched_rows > 0);
+    assert_eq!(scrub.fetched_rows, scrub.fetched_row_authentication_passes);
+    assert_eq!(scrub.fetched_rows, scrub.fetched_row_role_decode_passes);
     assert_eq!(reopened.read_ref("main").unwrap(), expected);
     assert_eq!(reopened.retained_roots().unwrap().len(), 1_000);
     for index in [0, 499, 999] {

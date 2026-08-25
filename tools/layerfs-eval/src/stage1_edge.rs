@@ -12680,7 +12680,7 @@ mod tests {
             ));
         fs::create_dir(&base).unwrap();
         let store = base.join("store");
-        let opened = LayerFs::open_with_integrity(&store, IntegrityMode::TrustedLocalDev).unwrap();
+        let opened = LayerFs::open(&store).unwrap();
         let mut source = opened
             .fs
             .materialize_external(opened.head, &base.join("source"))

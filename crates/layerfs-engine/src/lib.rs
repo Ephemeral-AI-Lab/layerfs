@@ -4,8 +4,8 @@
 
 use layerfs_core::content::rope::ObjectRead;
 use layerfs_core::{
-    authenticate_identity, validate_identity, validate_object_from, CoreError, ObjectId,
-    ObjectKind, ObjectSummary,
+    authenticate_identity, decode_bytes_object, validate_identity, validate_object_from, CoreError,
+    ObjectId, ObjectKind, ObjectSummary,
 };
 use rusqlite::types::ValueRef;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
@@ -522,7 +522,7 @@ impl ObjectRead for Engine {
         F: FnOnce(&[u8]) -> Result<T, CoreError>,
     {
         let connection = self.lock_connection().map_err(core_store_error)?;
-        with_authenticated_canonical_on_connection(self, &connection, id, true, true, |_, bytes| {
+        with_read_canonical_on_connection(self, &connection, id, true, true, |_, bytes| {
             callback(bytes).map_err(EngineError::Core)
         })
         .map_err(core_store_error)
@@ -875,7 +875,7 @@ impl Engine {
         let root = visible_root_on_connection(self, &connection)?;
         if let Some(root) = root {
             let record = load_root_on_connection(self, &connection, root)?;
-            authenticate_directory_object(self, &connection, record.directory_object)?;
+            read_directory_object(self, &connection, record.directory_object)?;
         }
         Ok(root)
     }
@@ -883,7 +883,7 @@ impl Engine {
     pub fn load_root(&self, id: RootId) -> EngineResult<RootRecord> {
         let connection = self.lock_connection()?;
         let record = load_root_on_connection(self, &connection, id)?;
-        authenticate_directory_object(self, &connection, record.directory_object)?;
+        read_directory_object(self, &connection, record.directory_object)?;
         Ok(record)
     }
 
@@ -894,64 +894,44 @@ impl Engine {
 
     pub fn load_object(&self, id: ObjectId) -> EngineResult<ObjectRecord> {
         let connection = self.lock_connection()?;
-        with_authenticated_canonical_on_connection(
-            self,
-            &connection,
-            id,
-            false,
-            false,
-            |kind, bytes| {
-                Ok(ObjectRecord {
-                    id,
-                    kind,
-                    canonical_len: bytes.len() as u64,
-                    canonical_bytes: bytes.to_vec(),
-                })
-            },
-        )
+        with_read_canonical_on_connection(self, &connection, id, false, false, |kind, bytes| {
+            Ok(ObjectRecord {
+                id,
+                kind,
+                canonical_len: bytes.len() as u64,
+                canonical_bytes: bytes.to_vec(),
+            })
+        })
     }
 
     pub fn object_length(&self, id: ObjectId) -> EngineResult<u64> {
         let connection = self.lock_connection()?;
-        with_authenticated_canonical_on_connection(
-            self,
-            &connection,
-            id,
-            false,
-            false,
-            |_, bytes| Ok(bytes.len() as u64),
-        )
+        with_read_canonical_on_connection(self, &connection, id, false, false, |_, bytes| {
+            Ok(bytes.len() as u64)
+        })
     }
 
     pub fn read_object_range(&self, id: ObjectId, range: Range<u64>) -> EngineResult<Vec<u8>> {
         let connection = self.lock_connection()?;
-        with_authenticated_canonical_on_connection(
-            self,
-            &connection,
-            id,
-            false,
-            false,
-            |_, bytes| {
-                let length = bytes.len() as u64;
-                if range.start > range.end || range.end > length {
-                    return Err(EngineError::InvalidRange {
-                        start: range.start,
-                        end: range.end,
-                        length,
-                    });
-                }
-                let start =
-                    usize::try_from(range.start).map_err(|_| EngineError::CounterOverflow)?;
-                let end = usize::try_from(range.end).map_err(|_| EngineError::CounterOverflow)?;
-                let output = bytes[start..end].to_vec();
-                let requested = range.end - range.start;
-                self.bump(|counters| {
-                    checked_add(&mut counters.range_bytes_requested, requested)?;
-                    checked_add(&mut counters.range_bytes_returned, requested)
-                })?;
-                Ok(output)
-            },
-        )
+        with_read_canonical_on_connection(self, &connection, id, false, false, |_, bytes| {
+            let length = bytes.len() as u64;
+            if range.start > range.end || range.end > length {
+                return Err(EngineError::InvalidRange {
+                    start: range.start,
+                    end: range.end,
+                    length,
+                });
+            }
+            let start = usize::try_from(range.start).map_err(|_| EngineError::CounterOverflow)?;
+            let end = usize::try_from(range.end).map_err(|_| EngineError::CounterOverflow)?;
+            let output = bytes[start..end].to_vec();
+            let requested = range.end - range.start;
+            self.bump(|counters| {
+                checked_add(&mut counters.range_bytes_requested, requested)?;
+                checked_add(&mut counters.range_bytes_returned, requested)
+            })?;
+            Ok(output)
+        })
     }
 
     pub fn for_each_authenticated_payload_batch<F>(
@@ -968,6 +948,7 @@ impl Engine {
         if ids.is_empty() {
             return Ok(());
         }
+        let authenticate_reads = self.mode == integrity::IntegrityMode::Verified;
         let mut timings = BatchTimings::default();
         let result = (|| {
             let counter_started = Instant::now();
@@ -1028,7 +1009,7 @@ impl Engine {
                     _ => return Err(EngineError::InvalidRecord("object bytes")),
                 };
                 let (payload, actual_length, authentication_ns, role_decode_ns) =
-                    validate_payload_borrowed(id, kind, length, bytes)?;
+                    validate_payload_borrowed(id, kind, length, bytes, authenticate_reads)?;
                 timings.identity_authentication_ns = timings
                     .identity_authentication_ns
                     .saturating_add(authentication_ns);
@@ -1038,7 +1019,9 @@ impl Engine {
                     checked_add(&mut counters.objects_validated, 1)?;
                     checked_add(&mut counters.object_bytes_read, actual_length)?;
                     checked_add(&mut counters.fetched_rows, 1)?;
-                    checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
+                    if authenticate_reads {
+                        checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
+                    }
                     checked_add(&mut counters.fetched_row_role_decode_passes, 1)
                 })?;
                 timings.counter_merge_ns = timings
@@ -2157,6 +2140,45 @@ fn with_authenticated_canonical_on_connection<T>(
     role_decode: bool,
     callback: impl FnOnce(ObjectKind, &[u8]) -> EngineResult<T>,
 ) -> EngineResult<T> {
+    with_canonical_on_connection(
+        engine,
+        connection,
+        id,
+        fetched_row,
+        role_decode,
+        true,
+        callback,
+    )
+}
+
+fn with_read_canonical_on_connection<T>(
+    engine: &Engine,
+    connection: &Connection,
+    id: ObjectId,
+    fetched_row: bool,
+    role_decode: bool,
+    callback: impl FnOnce(ObjectKind, &[u8]) -> EngineResult<T>,
+) -> EngineResult<T> {
+    with_canonical_on_connection(
+        engine,
+        connection,
+        id,
+        fetched_row,
+        role_decode,
+        engine.mode == integrity::IntegrityMode::Verified,
+        callback,
+    )
+}
+
+fn with_canonical_on_connection<T>(
+    engine: &Engine,
+    connection: &Connection,
+    id: ObjectId,
+    fetched_row: bool,
+    role_decode: bool,
+    authenticate: bool,
+    callback: impl FnOnce(ObjectKind, &[u8]) -> EngineResult<T>,
+) -> EngineResult<T> {
     if fetched_row != role_decode {
         return Err(EngineError::InvalidRecord("fetched role accounting"));
     }
@@ -2179,7 +2201,11 @@ fn with_authenticated_canonical_on_connection<T>(
         _ => return Err(EngineError::InvalidRecord("object bytes")),
     };
     observe_time(&engine.timings.nonpayload_query_ns, query_started);
-    let kind = authenticate_borrowed(engine, id, kind, length, bytes)?;
+    let kind = if authenticate {
+        authenticate_borrowed(engine, id, kind, length, bytes)?
+    } else {
+        validate_borrowed(engine, id, kind, length, bytes)?
+    };
     if !role_decode {
         let role_started = Instant::now();
         let summary = validate_object_from(Cursor::new(bytes))?;
@@ -2198,12 +2224,46 @@ fn with_authenticated_canonical_on_connection<T>(
         let counter_started = Instant::now();
         engine.bump(|counters| {
             checked_add(&mut counters.fetched_rows, 1)?;
-            checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
+            if authenticate {
+                checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
+            }
             checked_add(&mut counters.fetched_row_role_decode_passes, 1)
         })?;
         observe_time(&engine.timings.counter_merge_ns, counter_started);
     }
     Ok(value)
+}
+
+fn validate_borrowed(
+    engine: &Engine,
+    id: ObjectId,
+    kind: i64,
+    length: i64,
+    bytes: &[u8],
+) -> EngineResult<ObjectKind> {
+    let role_started = Instant::now();
+    let expected_kind = ObjectKind::try_from(
+        u8::try_from(kind).map_err(|_| EngineError::InvalidRecord("object kind"))?,
+    )?;
+    let expected_length =
+        u64::try_from(length).map_err(|_| EngineError::InvalidRecord("object length"))?;
+    let summary = validate_object_from(Cursor::new(bytes))
+        .map_err(|cause| EngineError::MalformedObject { id, cause })?;
+    let actual_length = u64::try_from(bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
+    observe_time(&engine.timings.role_decode_ns, role_started);
+    if summary.kind != expected_kind
+        || summary.canonical_len != actual_length
+        || actual_length != expected_length
+    {
+        return Err(EngineError::InvalidRecord("object summary"));
+    }
+    let counter_started = Instant::now();
+    engine.bump(|counters| {
+        checked_add(&mut counters.objects_validated, 1)?;
+        checked_add(&mut counters.object_bytes_read, actual_length)
+    })?;
+    observe_time(&engine.timings.counter_merge_ns, counter_started);
+    Ok(summary.kind)
 }
 
 fn authenticate_borrowed(
@@ -2234,11 +2294,16 @@ fn validate_payload_borrowed(
     kind: i64,
     length: i64,
     bytes: &[u8],
+    authenticate: bool,
 ) -> EngineResult<(&[u8], u64, u64, u64)> {
-    let authentication_started = Instant::now();
-    let summary = authenticate_identity(bytes, id)
-        .map_err(|cause| EngineError::MalformedObject { id, cause })?;
-    let authentication_ns = elapsed_ns(authentication_started);
+    let (summary, authentication_ns) = if authenticate {
+        let authentication_started = Instant::now();
+        let summary = authenticate_identity(bytes, id)
+            .map_err(|cause| EngineError::MalformedObject { id, cause })?;
+        (Some(summary), elapsed_ns(authentication_started))
+    } else {
+        (None, 0)
+    };
     let role_started = Instant::now();
     let expected_kind = ObjectKind::try_from(
         u8::try_from(kind).map_err(|_| EngineError::InvalidRecord("object kind"))?,
@@ -2246,7 +2311,7 @@ fn validate_payload_borrowed(
     let expected_length =
         u64::try_from(length).map_err(|_| EngineError::InvalidRecord("object length"))?;
     let actual_length = u64::try_from(bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
-    if summary.kind != expected_kind
+    if summary.is_some_and(|summary| summary.kind != expected_kind)
         || expected_kind != ObjectKind::Bytes
         || actual_length != expected_length
     {
@@ -2258,36 +2323,7 @@ fn validate_payload_borrowed(
             },
         });
     }
-    let outer_payload_len = usize::try_from(u32::from_be_bytes(
-        bytes
-            .get(5..9)
-            .ok_or(EngineError::InvalidRecord("object header"))?
-            .try_into()
-            .unwrap(),
-    ))
-    .map_err(|_| EngineError::CounterOverflow)?;
-    let payload_len = usize::try_from(u32::from_be_bytes(
-        bytes
-            .get(9..13)
-            .ok_or(EngineError::InvalidRecord("bytes object header"))?
-            .try_into()
-            .unwrap(),
-    ))
-    .map_err(|_| EngineError::CounterOverflow)?;
-    if outer_payload_len
-        != payload_len
-            .checked_add(4)
-            .ok_or(EngineError::CounterOverflow)?
-    {
-        return Err(EngineError::InvalidRecord("bytes object length"));
-    }
-    let payload_start = bytes
-        .len()
-        .checked_sub(payload_len)
-        .ok_or(EngineError::InvalidRecord("payload length"))?;
-    let payload = bytes
-        .get(payload_start..)
-        .ok_or(EngineError::InvalidRecord("payload length"))?;
+    let payload = decode_bytes_object(bytes).map_err(EngineError::Core)?;
     let role_decode_ns = elapsed_ns(role_started);
     Ok((payload, actual_length, authentication_ns, role_decode_ns))
 }
@@ -2399,12 +2435,27 @@ fn put_object_on_connection(
     Ok(PutOutcome::Created)
 }
 
+#[cfg(test)]
 fn authenticate_directory_object(
     engine: &Engine,
     connection: &Connection,
     id: ObjectId,
 ) -> EngineResult<()> {
     with_authenticated_canonical_on_connection(engine, connection, id, false, false, |kind, _| {
+        if kind == ObjectKind::Directory {
+            Ok(())
+        } else {
+            Err(EngineError::InvalidRecord("root directory object"))
+        }
+    })
+}
+
+fn read_directory_object(
+    engine: &Engine,
+    connection: &Connection,
+    id: ObjectId,
+) -> EngineResult<()> {
+    with_read_canonical_on_connection(engine, connection, id, false, false, |kind, _| {
         if kind == ObjectKind::Directory {
             Ok(())
         } else {

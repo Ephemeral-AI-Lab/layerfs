@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 
-use layerfs_sdk::{LayerFs, NativeMetadata, NativeRoute, NativeXattrs};
+use layerfs_sdk::{IntegrityMode, LayerFs, NativeMetadata, NativeRoute, NativeXattrs};
 use std::fs;
 use std::io::Cursor;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -109,5 +109,95 @@ fn attribution_arms_reuse_full_source_and_native_routes() {
 
     drop(source);
     drop(opened);
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[test]
+fn trusted_materialization_skips_read_hashes_and_verified_reopen_scrubs() {
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap()
+        .join(format!(
+            "layerfs-trusted-materialization-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+    fs::create_dir(&base).unwrap();
+    let store = base.join("store");
+    let trusted = LayerFs::open_with_integrity(&store, IntegrityMode::TrustedLocalDev).unwrap();
+    let mut source = trusted
+        .fs
+        .materialize_external(trusted.head, &base.join("source"))
+        .unwrap();
+    let payload = vec![0x5a; 2 * 1024 * 1024];
+    fs::write(source.path().join("payload.bin"), &payload).unwrap();
+    let root = source.capture_quiescent().unwrap();
+    let written = trusted.fs.counter_snapshot().unwrap();
+    assert!(written.new_object_authentication_passes > 0);
+    assert_eq!(
+        written.new_object_authentication_passes,
+        written.created_rows + written.reused_rows
+    );
+    assert_eq!(written.incumbent_authentication_passes, written.reused_rows);
+    drop(source);
+
+    let before = trusted.fs.counter_snapshot().unwrap();
+    let (projected, _) = trusted
+        .fs
+        .materialize_external_observed(root, &base.join("trusted-output"))
+        .unwrap();
+    let after = trusted.fs.counter_snapshot().unwrap();
+    let fetched = after.fetched_rows - before.fetched_rows;
+    assert!(fetched > 0);
+    assert_eq!(
+        after.fetched_row_authentication_passes - before.fetched_row_authentication_passes,
+        0
+    );
+    assert_eq!(
+        after.fetched_row_role_decode_passes - before.fetched_row_role_decode_passes,
+        fetched
+    );
+    assert_eq!(
+        after.identity_authentication_ns - before.identity_authentication_ns,
+        0
+    );
+    assert_eq!(
+        fs::read(projected.path().join("payload.bin")).unwrap(),
+        payload
+    );
+    drop(projected);
+    drop(trusted);
+
+    let verified = LayerFs::open(&store).unwrap();
+    let scrubbed = verified.fs.counter_snapshot().unwrap();
+    assert_eq!(scrubbed.retained_union_scrubs, 1);
+    assert!(scrubbed.fetched_rows > 0);
+    assert_eq!(
+        scrubbed.fetched_rows,
+        scrubbed.fetched_row_authentication_passes
+    );
+    assert_eq!(
+        scrubbed.fetched_rows,
+        scrubbed.fetched_row_role_decode_passes
+    );
+    let before = verified.fs.counter_snapshot().unwrap();
+    let output = verified
+        .fs
+        .materialize_external(root, &base.join("verified-output"))
+        .unwrap();
+    let after = verified.fs.counter_snapshot().unwrap();
+    assert!(after.fetched_rows > before.fetched_rows);
+    assert_eq!(
+        after.fetched_rows - before.fetched_rows,
+        after.fetched_row_authentication_passes - before.fetched_row_authentication_passes
+    );
+    assert_eq!(
+        fs::read(output.path().join("payload.bin")).unwrap(),
+        payload
+    );
+    drop(output);
+    drop(verified);
     fs::remove_dir_all(base).unwrap();
 }
