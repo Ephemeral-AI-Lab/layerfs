@@ -24,7 +24,7 @@ dependencies.
 Stage 1.0  implemented product baseline and A01–A17 closure
 Stage 1.1  poc/16 single-file APFS edge benchmark — PASS / closed
 Stage 1.1M poc/20 Verified attribution/correctness closed; performance REVISE
-Stage 1.1T poc/22 explicit TrustedLocalDev product class — measurement pending
+Stage 1.1T poc/22 explicit TrustedLocalDev product class — primary class PASS
 Stage 1.2  poc/15 npm/developer-workspace benchmark
 Stage 2    poc/19 LayerFS + Linux FUSE direct workspace after Stage 1.2
 ```

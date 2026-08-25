@@ -20,6 +20,9 @@ stage1.1m-current-source-closure-20260825/
   compact Verified M0-M15 terminal receipt, closure failures and repairs,
   frozen 0/24/96 MiB result, owner-audit disposition, and independently audited
   current-source attempt-015 regression receipt
+stage1.1t-trusted-20260826/
+  separate explicit TrustedLocalDev 0/24/96 MiB result, source/release/raw
+  hashes, trust equations, Verified comparison and model-validity qualification
 ```
 
 The performance campaign and A02 diagnostic predate the adversarial correctness

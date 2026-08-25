@@ -72,3 +72,15 @@ stage1.1m-current-source-closure-20260825/independent-audit.json   2fde59d6be659
 stage1.1m-current-source-closure-20260825/terminal-receipt.json    07f1628689abc8aff0882a880359c6754939c1a562f83d40d525f15369e3bc96
 stage1.1m-current-source-closure-20260825/summary.md               e540e5fe0c5ae28b29c81289ac3da5713e8fd52f1245f7c12351778ef8ac3cfc
 ```
+
+## Stage 1.1T TrustedLocalDev materialization
+
+These compact receipts bind the separate weaker-trust product class and never
+replace or relabel the Verified Stage 1.1M result. Raw rows remain under
+`target/layerfs-stage1t-trusted-20260826-attempt-001`.
+
+```text
+stage1.1t-trusted-20260826/terminal-receipt.json  f5b4e7ce3b02423647abef25fab1801786b6b86ef0313d0738e8e801bccf4177
+stage1.1t-trusted-20260826/independent-audit.json 2f20dd2be7a457aa974d2f3b8a8eb0602b36acec50492c244f1c5fcbdb164626
+stage1.1t-trusted-20260826/summary.md              ad38fddfb05ccef25e27348cf891fc03b08c428432e2a06b1f6f901819283cee
+```
