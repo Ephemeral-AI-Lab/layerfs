@@ -1,8 +1,8 @@
 # LayerFS Apple/APFS PoC v1
 
-Status: **AppleWorkspaceV1 Stage 1.0 and the Stage 1.1 correctness/performance
-baseline are closed; Stage 1.1M materialization optimization and Stage 1.2
-remain prospective**.
+Status: **AppleWorkspaceV1 Stage 1.0 and Stage 1.1 are closed; Stage 1.1M
+Verified correctness is closed and its performance result is
+`REVISE_NO_AUTHORIZED_OWNER`; Stage 1.2 remains prospective**.
 The controlling closure and custody record is
 [17 — Stage 1.0 closure and accepted A02 exception](17-stage1-closure.md).
 The preserved A01–A17 campaign remains measured `REVISE`; its A02 latency miss
@@ -11,7 +11,10 @@ is explicitly user-accepted and is not relabeled as a threshold PASS. Stage
 13.517581334 seconds; its controlling result is recorded in `poc/16` and
 `poc/evidence/stage1.1-apple-edge-20260825`. Later audit preserved those results
 but found incomplete full-materialization SQL/native attribution. The separate
-portable repair and target authority is `poc/20`. Stage 1.2 is the
+portable repair and target authority is `poc/20`; it now records the exact
+M0–M15 execution, frozen `385.905 MiB/s` 24 MiB p50 miss, `614.617 MiB/s`
+fitted sustained PASS, current-source 47-row regression PASS, and the explicit
+authority-expansion boundary. Stage 1.2 is the
 npm/developer-workspace specification in `poc/15`. The prospective post-Stage-1
 LayerFS + Linux FUSE direct workspace is specified in `poc/19`, with Docker
 only as its Linux execution envelope. macFUSE and FSKit are not selected
@@ -20,7 +23,7 @@ dependencies.
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure
 Stage 1.1  poc/16 single-file APFS edge benchmark — PASS / closed
-Stage 1.1M poc/20 portable full-materialization attribution and optimization
+Stage 1.1M poc/20 Verified attribution/correctness closed; performance REVISE
 Stage 1.2  poc/15 npm/developer-workspace benchmark
 Stage 2    poc/19 LayerFS + Linux FUSE direct workspace after Stage 1.2
 ```

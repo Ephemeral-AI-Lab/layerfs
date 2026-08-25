@@ -57,3 +57,18 @@ retained under `target/layerfs-stage1-apple-edge-20260825-attempt-014`.
 ```text
 stage1.1-apple-edge-20260825/terminal-receipt.md  0fe48f8cd68fc50a003d6e9d34a675efedee178e5997d5cb03a74d250b2f6e17
 ```
+
+## Stage 1.1M current-source Verified closure
+
+The compact receipts bind the frozen M7 performance operand separately from
+the clean current-source release and independently recomputed attempt-015
+correctness regression. The raw campaign remains append-only under
+`target/layerfs-stage1-apple-edge-20260825-attempt-015`.
+
+```text
+stage1.1m-current-source-closure-20260825/closure.json             459ca0af8c63d1f2140248dd872b68b255c0e64b5bd4afb39b702b088e4c261a
+stage1.1m-current-source-closure-20260825/regression-receipt.json  e5aceda23ffb86a07f21f927eb004d8f39e00a1cbed3f0559a4cba6fc7154c68
+stage1.1m-current-source-closure-20260825/independent-audit.json   2fde59d6be6595a5538a404a4b6663a89400dc45133aa793182db2cfc1871b12
+stage1.1m-current-source-closure-20260825/terminal-receipt.json    07f1628689abc8aff0882a880359c6754939c1a562f83d40d525f15369e3bc96
+stage1.1m-current-source-closure-20260825/summary.md               e540e5fe0c5ae28b29c81289ac3da5713e8fd52f1245f7c12351778ef8ac3cfc
+```

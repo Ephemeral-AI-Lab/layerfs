@@ -1,10 +1,12 @@
 # Stage 1.1M — Portable Full-Materialization Optimization
 
-Status: **prospective controlling specification; implementation and measurement
-have not started**  
-Baseline authority: [16 — Stage 1.1 Apple edge benchmark](16-stage1-part1-apple-edge-benchmark.md)  
-Canonical, trust, durability, and Apple authority: [10 — handoff freeze](10-handoff-freeze.md)  
-Current measured source: `f3dd4a32273a4c5cbe5e7ca2287c945ba4434c30`  
+Status: **Verified implementation/correctness closed; performance
+`REVISE_NO_AUTHORIZED_OWNER`; `terminal_pass=false`**
+Baseline authority: [16 — Stage 1.1 Apple edge benchmark](16-stage1-part1-apple-edge-benchmark.md)
+Canonical, trust, durability, and Apple authority: [10 — handoff freeze](10-handoff-freeze.md)
+Historical accepted source: `f3dd4a32273a4c5cbe5e7ca2287c945ba4434c30`
+Verified performance operand: `9800f8650bbb5f1ae89fe8de2724bcd7e331716a`
+Current-source correctness closure: `0403ea7166b332c5ddcb7b6cf04f60a0610fd5db`
 Sequence: **Stage 1.1 accepted baseline -> Stage 1.1M attribution and repair -> Stage 1.2**
 
 ## M1 execution-authority correction
@@ -76,12 +78,44 @@ Therefore:
 ```text
 Stage 1.1 correctness and measured wall        PASS / preserved
 Stage 1.1 complete SQL/native attribution      REVISE / repaired here
-Stage 1.1M implementation and performance      prospective
+Stage 1.1M implementation/correctness           PASS / current source
+Stage 1.1M Verified performance                 REVISE / no authorized owner
 ```
 
 This document does not edit, relabel, replace, or delete attempt-014 rows. It
 defines one portable constant-factor optimization of authenticated full
 materialization and one source-bound before/after campaign.
+
+### 0.1 Executed terminal result
+
+The implementation and measurement loop has run. The compact durable receipt
+is [the Stage 1.1M current-source closure](evidence/stage1.1m-current-source-closure-20260825/summary.md).
+The controlling Verified result is:
+
+| Gate | Observed | Disposition |
+|---|---:|---|
+| 24 MiB p50 | `62.191459 ms / 385.905 MiB/s` | FAIL by `8.858126 ms` |
+| 24 MiB p95 | `65.981500 ms / 363.738 MiB/s` | FAIL by `7.314500 ms` |
+| 96 MiB p50 | `179.337500 ms / 535.304 MiB/s` | PASS |
+| 96 MiB p95 | `183.878333 ms / 522.084 MiB/s` | PASS |
+| Measured zero-byte p50 | `24.071333 ms` | report |
+| Fitted intercept | `23.142779 ms` | FAIL by `3.142779 ms` |
+| Fitted sustained bandwidth | `614.617 MiB/s` | PASS |
+
+M7 is retained. It removed one redundant fresh-construction install-parent
+barrier and saved the direct owner `4.330125 ms` at 24 MiB and `4.384750 ms`
+at 96 MiB. The independently audited Engine and native owner surfaces contain
+no further safe owner meeting the 3 ms prospective floor at both targets.
+The paired acceptance population was therefore not consumed: the absolute
+24 MiB gates already fail. This is an honest terminal `REVISE`, not a target
+waiver.
+
+Current-source correctness is separately closed by attempt-015: `47/47`
+rows, `51/51` edit/sub-edit operations, `34/34` durable transitions, exact
+bytes/metadata/history/refresh and the fixture's exact empty hard-link topology,
+zero FullFallback, zero forbidden
+rematerialization, no BUSY/LOCKED, Q terminal zero, connections terminal zero,
+FD closure, and zero owned residue.
 
 ## 1. Exact operation taxonomy
 
@@ -1227,6 +1261,50 @@ M14 independent raw artifact audit
 M15 one final Stage 1.1 regression campaign
 ```
 
+### 18.1 Executed milestone ledger
+
+| Milestone | Result | Exact disposition |
+|---|---|---|
+| M0 | PASS | Spec, fixtures, estimator, custody and schedules frozen. |
+| M1 | PASS with preserved miss | Eight-row parity closed. Attempt-004's `0.489333 ms` p95 excess is `NONMATERIAL_MICROVARIANCE`, not a numerical threshold PASS. |
+| M2 | PASS after append-only repairs | Exact 12 warmups + 36 measured rows; all earlier attempts retained. |
+| M3 | PASS / retained | StoreId cache is exact; no further tuning after its independently measured sub-3 ms effect. |
+| M4 | PASS | Derived namespaces share one authenticated scratch database while retaining DELETE/FULL cleanup and recovery. |
+| M5 | skipped | Guarded-read route stayed below the user-authorized 3 ms prospective floor; no target weakening. |
+| M6 | PASS | Portable projection facts, disjoint leaves, failed-open facts and exact Apple accounting implemented. |
+| M7 | PASS / retained | Fresh IncompleteDerived install-parent barrier deferred; live refresh and hard-link order unchanged. |
+| M8 | skipped | Metadata owner is sub-3 ms. |
+| M9 | retained DELETE/FULL | Lighter scratch durability not pursued under the floor. |
+| M10 | PASS | Focused crate tests/checks and fault cuts passed. |
+| M11 | PASS after preserved failures | One full closure exposed a Trusted/Verified lifetime test defect; smallest invalidated serial scopes and downstream scopes close on `0403ea7`. |
+| M12 | PASS | One clean current-source release and one zero-row readiness receipt. |
+| M13 | harness PASS; campaign skipped | Absolute 24 MiB gates already fail, so paired acceptance would not admit the candidate. |
+| M14 | PASS | M7 raw rows, Engine owners, native owners and final attempt-015 were independently audited. |
+| M15 | PASS | Current-source Stage 1.1 attempt-015 closes 47/51/34 in `13.430358958 s` accounted wall. |
+
+### 18.2 Current-source release and regression
+
+```text
+source commit                 0403ea7166b332c5ddcb7b6cf04f60a0610fd5db
+dirty tree at build/run       false
+release SHA-256               347746fc4ec7e78654a1b041bbe97f2ec8945bb286e537df43de270d71a44d53
+release BLAKE3                1cb5b6b208d2a24ac94ffb43e4db30317c4082a300504c62c1f268119d06038b
+attempt-015 rows SHA-256       b6f815dbe2c9bed34e8c9e539568c0d1b7faf44012a84a461b9d2625950ec01a
+attempt-015 summary SHA-256    ea22611b90bcf28569e668e0ce3d3beed91206bc0c6116aa102fe6fc6180187a
+complete wall equation        13,430,358,958 = 9,077,248,419 + 4,353,110,539 ns
+RSS / Q high / Q terminal     28,770,304 / 8,388,607 / 0 B
+connections high / terminal   2 / 0
+FD baseline / terminal        5 / 5
+owned residue                 0
+```
+
+The current regression's phase equation is `74,236 fetched = 74,236 identity
+authentications = 74,236 role decodes`; its publication equation is `34
+transactions = 34 COMMITs`, with zero rollback and zero authentication,
+role-decode, new-object or incumbent-object equation failures. The final
+receipt and raw hashes are under
+`poc/evidence/stage1.1m-current-source-closure-20260825`.
+
 On any intermediate miss:
 
 ```text
@@ -1241,7 +1319,7 @@ Do not rerun unchanged source for favorable noise.
 
 ## 19. Completion
 
-Stage 1.1M is complete only when:
+The completion predicates remain:
 
 ```text
 closed attempt-014 evidence remains immutable
@@ -1259,3 +1337,19 @@ three independent raw audits return PASS
 
 Otherwise the disposition is `REVISE`, the raw failure is retained, and the
 optimization continues without weakening targets or correctness.
+
+The executed result satisfies the correctness, attribution, portability,
+resource, custody and final-regression predicates, but not the 24 MiB or fixed
+performance predicates. The terminal status under current authority is:
+
+```text
+REVISE_NO_AUTHORIZED_OWNER
+terminal_pass=false
+```
+
+Continuing the Verified performance loop requires explicit authority expansion
+for a new >=3 ms owner, bounded multi-object authentication, a canonical or
+durability change, or a changed target. None is inferred. A separate explicit
+`TrustedLocalDev` class may be investigated prospectively only if it remains
+distinct from Verified and retains close + Verified reopen/full scrub at every
+publish/export/share boundary.

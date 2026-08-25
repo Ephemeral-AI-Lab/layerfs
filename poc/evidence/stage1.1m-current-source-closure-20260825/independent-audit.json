@@ -1,0 +1,116 @@
+{
+  "schema": "layerfs-stage1m-current-regression-independent-audit-v1",
+  "status": "PASS",
+  "method": "Independent recomputation from rows.jsonl, schedule.json, environment.json, readiness.json, master.json, campaign-time.txt, Git objects, the frozen executable, and the standalone source manifest; summary.json was not treated as authority.",
+  "population": {
+    "class_counts": {
+      "C00": 1,
+      "C01": 1,
+      "C02": 1,
+      "C03": 15,
+      "C04": 3,
+      "C05": 15,
+      "C06": 3,
+      "C07": 4,
+      "C08": 3,
+      "C09": 1
+    },
+    "rows": 47,
+    "schedule_mismatches": 0,
+    "edit_suboperations": 51,
+    "durable_transitions": 34,
+    "unique_roots": 35,
+    "length_equation_failures": 0
+  },
+  "bytes_and_routes": {
+    "insert_bytes": 495616,
+    "delete_bytes": 495616,
+    "maximum_logical_bytes": 25227264,
+    "terminal_logical_bytes": 25165824,
+    "cdc_bytes": 495616,
+    "payload_bytes_written": 495616,
+    "unaffected_payload_reads": 0,
+    "unaffected_payload_writes": 0,
+    "clone_patch": 3,
+    "clone_shift": 6,
+    "in_place_shift": 6,
+    "full_fallback": 0,
+    "rematerializations": 0
+  },
+  "history": {
+    "verified_sessions": 6,
+    "probes": 63,
+    "selected_roots": 8,
+    "fresh_milestones": ["R15", "R30", "R34"],
+    "probe_equation_failures": 0
+  },
+  "hard_links": {
+    "fixture_class": "NO_HARD_LINK",
+    "fixture_files_with_link_count_greater_than_one": 0,
+    "payload_link_count": 1,
+    "disposition": "The 47-row campaign proves the exact empty hard-link topology. Nonzero hard-link ordering and metadata behavior remain proved by focused workspace tests, not by this fixture."
+  },
+  "sql_authentication": {
+    "operation_statements": 7080,
+    "admission_statements": 22673,
+    "integrity_statements": 2568,
+    "fetched_rows": 74236,
+    "authentication_passes": 74236,
+    "role_decode_passes": 74236,
+    "new_object_authentication_passes": 677,
+    "created_plus_reused_rows": 677,
+    "incumbent_authentication_passes": 123,
+    "reused_rows": 123,
+    "maximum_payload_batch": 64,
+    "equation_failures": 0,
+    "busy_events": 0,
+    "locked_events": 0
+  },
+  "transactions": {
+    "operation_started": 34,
+    "operation_committed": 34,
+    "operation_rolled_back": 0,
+    "publication_started": 34,
+    "publication_commits": 34,
+    "publication_rolled_back": 0,
+    "admission": "9 = 9 + 0",
+    "integrity": "642 = 0 + 642"
+  },
+  "resources": {
+    "q_high_water_bytes": 8388607,
+    "q_terminal_bytes": 0,
+    "rss_peak_bytes": 28770304,
+    "largest_buffer_bytes": 1048576,
+    "connection_high_water": 2,
+    "connections_terminal": 0,
+    "fd_baseline": 5,
+    "fd_terminal": 5,
+    "child_process_peak": 0,
+    "network_operations": 0,
+    "owned_residue": 0
+  },
+  "timers": {
+    "row_wall_sum_ns": 9077248419,
+    "phase_wall_sum_ns": 8906863759,
+    "row_residual_sum_ns": 170384660,
+    "outside_rows_wall_ns": 4353110539,
+    "complete_wall_ns": 13430358958,
+    "complete_residual_ns": 0,
+    "row_equation_failures": 0
+  },
+  "custody": {
+    "source_commit": "0403ea7166b332c5ddcb7b6cf04f60a0610fd5db",
+    "source_files": 230,
+    "source_tree_blake3": "e922e6fcf3eb8fe7f5a000b1681f48ce15468e2157a16f6cd820c987b4039d22",
+    "source_manifest_sha256": "bc45768cae1a0d01f381a2f556e3e8894147834388e528268da1851b3017a004",
+    "source_file_mismatches": 0,
+    "executable_sha256": "347746fc4ec7e78654a1b041bbe97f2ec8945bb286e537df43de270d71a44d53",
+    "executable_blake3": "1cb5b6b208d2a24ac94ffb43e4db30317c4082a300504c62c1f268119d06038b",
+    "artifact_hash_mismatches": 0,
+    "literal_run_argv_appended_in": "regression-receipt.json"
+  },
+  "qualifications": [
+    "The frozen fixture intentionally has no nonzero hard-link group.",
+    "environment.json carries the evaluator command template; regression-receipt.json appends the literal concrete argv without changing raw rows."
+  ]
+}
