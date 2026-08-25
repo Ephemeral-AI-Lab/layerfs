@@ -21,8 +21,11 @@ stage1.1m-current-source-closure-20260825/
   frozen 0/24/96 MiB result, owner-audit disposition, and independently audited
   current-source attempt-015 regression receipt
 stage1.1t-trusted-20260826/
-  separate explicit TrustedLocalDev 0/24/96 MiB result, source/release/raw
-  hashes, trust equations, Verified comparison and model-validity qualification
+  preserved attempt-001 result plus append-only supersession: materialize-only
+  Trusted open did not yet mark trusted_history
+stage1.1t-trusted-20260826-attempt-002/
+  final corrected explicit TrustedLocalDev 0/24/96 MiB result, source/release/
+  raw hashes, open-time trust marking, Verified comparison and model qualification
 ```
 
 The performance campaign and A02 diagnostic predate the adversarial correctness

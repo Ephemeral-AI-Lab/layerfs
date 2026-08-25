@@ -177,7 +177,7 @@ operations, but capture/publish/export/share promotion must use:
 ```text
 close TrustedLocalDev
 -> reopen Verified
--> full retained-union scrub when trusted_history=1
+-> full retained-union scrub (explicit Trusted open set trusted_history=1)
 -> only then publish/export/share
 ```
 
@@ -186,34 +186,38 @@ Stage 1.2 execution is outside this document unless separately assigned.
 ## 8. Executed result
 
 The compact durable evidence is
-[Stage 1.1T TrustedLocalDev result](evidence/stage1.1t-trusted-20260826/summary.md).
+[final Stage 1.1T TrustedLocalDev result](evidence/stage1.1t-trusted-20260826-attempt-002/summary.md).
+
+Attempt-001 remains preserved for commit `5e58fa6`, but it is superseded as a
+trust-boundary result: materialize-only Trusted use did not yet mark history.
+Attempt-002 measures the corrected `dfa6020` product.
 
 ```text
-source commit          5e58fa6f0f35451ab49c48de56a144fca8276cc5
-release SHA-256        ec015b50d22b7d93b9028155f4ac761bc44b5d239cfaec69aff2c93d179fa4a7
-release BLAKE3         5fced67500a0ced8e1d77af9958989ba3b60a71d015367d89f9410dea1558716
-rows SHA-256           059b1bf4ac091f9f5ff5444203d8c69ec6827d3d27b5a002169d3e85b0c15082
+source commit          dfa60200084962cc3ac16c8518655ed85e62eb7f
+release SHA-256        dc500fc862c76ec5de5e6d99c391e047d0da59fb78b5b50d859e3914033f295d
+release BLAKE3         73eb52dd54101d18d4113f4da9b7e93b910e3f9203d2f80ebedece9ac5ca3a92
+rows SHA-256           487a93dfd279f0cbdcbb04264686296f34a2aabe1de35d81bafa4b3f6a91f0a6
 population             3 warmups + 9 measured rows
-campaign wall          2.043962958 s
+campaign wall          2.100807792 s
 ```
 
 | Size | p50 | p95 | p50 MiB/s | p95 MiB/s | Primary gate |
 |---:|---:|---:|---:|---:|---|
-| 0 MiB | `26.626833 ms` | `36.185625 ms` | N/A | N/A | report |
-| 24 MiB | `37.595417 ms` | `40.417625 ms` | `638.376` | `593.800` | PASS |
-| 96 MiB | `81.700958 ms` | `89.090125 ms` | `1175.017` | `1077.561` | PASS |
+| 0 MiB | `22.961833 ms` | `33.035708 ms` | N/A | N/A | report |
+| 24 MiB | `43.504833 ms` | `45.408083 ms` | `551.663` | `528.540` | PASS |
+| 96 MiB | `89.210208 ms` | `102.889500 ms` | `1076.110` | `933.040` | PASS |
 
 Every row was explicitly labeled `TrustedLocalDev`. The raw equation is
 `26,016 fetched rows = 26,016 role decodes`, with zero fetched-row identity
 authentication passes and zero identity-authentication nanoseconds. RSS, Q,
 connections, FD and residue gates all pass.
 
-The diagnostic 24-to-96 slope is `612,576.958 ns/MiB` (`1632.448 MiB/s`) and
-the fitted intercept is `22.893570 ms`. The model is invalid because measured
-zero differs from that intercept by `3.733263 ms`; fixed cost also remains a
-`2.893570 ms` miss. Those misses are preserved and were not rerun.
+The diagnostic 24-to-96 slope is `634,796.875 ns/MiB` (`1575.307 MiB/s`) and
+the fitted intercept is `28.269708 ms`. The model is invalid because measured
+zero differs from that intercept by `5.307875 ms`; fixed cost also remains an
+`8.269708 ms` miss. Those misses are preserved and were not rerun.
 
 Relative to the frozen Verified population, Trusted saved
-`24.596042/25.563875 ms` at 24 MiB p50/p95 and
-`97.636542/94.788208 ms` at 96 MiB. The result is a material source-bound gain
+`18.686626/20.573417 ms` at 24 MiB p50/p95 and
+`90.127292/80.988833 ms` at 96 MiB. The result is a material source-bound gain
 and admits only the narrow Stage 1.2 trust handoff in section 7.

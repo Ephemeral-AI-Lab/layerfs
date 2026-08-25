@@ -84,3 +84,13 @@ stage1.1t-trusted-20260826/terminal-receipt.json  f5b4e7ce3b02423647abef25fab180
 stage1.1t-trusted-20260826/independent-audit.json 2f20dd2be7a457aa974d2f3b8a8eb0602b36acec50492c244f1c5fcbdb164626
 stage1.1t-trusted-20260826/summary.md              ad38fddfb05ccef25e27348cf891fc03b08c428432e2a06b1f6f901819283cee
 ```
+
+Attempt-001 remains byte-for-byte preserved. The append-only supersession and
+corrected attempt-002 receipts are:
+
+```text
+stage1.1t-trusted-20260826/supersession.json                     57b4971d7065f754e4ec5ceb4bf9a6a0166e7a8d23c325d3db36691d95589732
+stage1.1t-trusted-20260826-attempt-002/terminal-receipt.json      fae29ddf95ed16f33520ec13a56b575cec00f7f006e24d2df06240915511c181
+stage1.1t-trusted-20260826-attempt-002/independent-audit.json     3d79427a1e581306ca658cb4821058674b8fe1881b314167ce4bade50d965857
+stage1.1t-trusted-20260826-attempt-002/summary.md                 d50b3888be832e384cacc8f196ee8c2974fec3aea4b2327bf272c57e6999cb71
+```

@@ -1,0 +1,12 @@
+{
+  "schema": "layerfs-stage1t-append-only-supersession-v1",
+  "status": "SUPERSEDED_BY_CORRECTED_TRUST_BOUNDARY",
+  "preserved_source_commit": "5e58fa6f0f35451ab49c48de56a144fca8276cc5",
+  "preserved_run": "target/layerfs-stage1t-trusted-20260826-attempt-001",
+  "reason": "Handoff review found that a materialize-only explicit Trusted open did not set trusted_history, so a later Verified open could skip the mandatory retained-union scrub. Attempt-001 remains valid for its exact source and is not deleted or relabeled, but it cannot be the final trust-boundary product result.",
+  "corrected_source_commit": "dfa60200084962cc3ac16c8518655ed85e62eb7f",
+  "corrected_run": "target/layerfs-stage1t-trusted-20260826-attempt-002",
+  "corrected_portable_evidence": "../stage1.1t-trusted-20260826-attempt-002",
+  "rows_replaced": 0,
+  "rows_relabelled": 0
+}

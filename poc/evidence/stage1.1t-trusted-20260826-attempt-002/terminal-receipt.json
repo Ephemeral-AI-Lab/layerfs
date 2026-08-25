@@ -1,0 +1,131 @@
+{
+  "schema": "layerfs-stage1t-portable-terminal-receipt-v1",
+  "status": "PASS_PRIMARY_TRUSTED_CLASS",
+  "integrity_mode": "TrustedLocalDev",
+  "not_verified": true,
+  "source": {
+    "commit": "dfa60200084962cc3ac16c8518655ed85e62eb7f",
+    "clean_detached_build": true,
+    "manifest_path": "target/layerfs-stage1t-custody/source-manifests/source-manifest-stage1t-dfa6020.json",
+    "manifest_sha256": "a9230d22b3beb24a0bcd4f3980bc042fe38a3c3f695e2ec847f64abc0c927943",
+    "manifest_blake3": "e7379b718b7c84b92e6235dbf3601758a74e12b7ae466ce418fa8e1de4d1996c",
+    "aggregate_sha256": "d39a30c5a236eb091a4d44b04f4c2cd5e062c342212457796490b981c83198cd",
+    "aggregate_blake3": "c34c6a824f21439fb176c85aa1380c4b7d984dadcc7dbfc52b8926cab54612fa",
+    "product_aggregate_sha256": "90990b09f63fe66ff7d4a851bf583d6cfe1053bb48ede0cc845ccec7ee0ddbd3",
+    "product_aggregate_blake3": "ba92f14e9879d27634ff41cb4b020f52a16707dea180eb69379cd3eb2dcaae24",
+    "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+    "cargo": "1.96.0 (30a34c682 2026-05-25)"
+  },
+  "executable": {
+    "path": "target/layerfs-stage1t-custody/bin/layerfs-eval-dfa6020-trusted",
+    "bytes": 3936720,
+    "sha256": "dc500fc862c76ec5de5e6d99c391e047d0da59fb78b5b50d859e3914033f295d",
+    "blake3": "73eb52dd54101d18d4113f4da9b7e93b910e3f9203d2f80ebedece9ac5ca3a92"
+  },
+  "campaign": {
+    "run_directory": "target/layerfs-stage1t-trusted-20260826-attempt-002",
+    "warmups": 3,
+    "measured_rows": 9,
+    "total_rows": 12,
+    "commands": 3,
+    "campaign_wall_ns": 2100807792,
+    "campaign_setup_ns": 88817792,
+    "command_wall_sum_ns": 1896036375,
+    "campaign_coordinator_ns": 115953625,
+    "wall_equation_exact": true,
+    "preferred_wall_pass": true,
+    "hard_wall_pass": true
+  },
+  "performance": {
+    "0_mib": {
+      "raw_ns": [33035708, 22961833, 22563625],
+      "p50_ns": 22961833,
+      "p95_ns": 33035708
+    },
+    "24_mib": {
+      "raw_ns": [43504833, 37590250, 45408083],
+      "p50_ns": 43504833,
+      "p95_ns": 45408083,
+      "p50_mib_s": 551.663,
+      "p95_mib_s": 528.540,
+      "primary_target_pass": true
+    },
+    "96_mib": {
+      "raw_ns": [89210208, 82237791, 102889500],
+      "p50_ns": 89210208,
+      "p95_ns": 102889500,
+      "p50_mib_s": 1076.110,
+      "p95_mib_s": 933.040,
+      "primary_target_pass": true
+    },
+    "fitted_intercept_ns": 28269708,
+    "fixed_target_pass": false,
+    "fixed_target_miss_ns": 8269708,
+    "slope_ns_per_mib": 634796.875,
+    "fitted_sustained_mib_s": 1575.307,
+    "sustained_target_pass": true,
+    "zero_residual_ns": -5307875,
+    "model_valid": false
+  },
+  "verified_comparison": {
+    "source_class": "Verified M7 frozen result; populations are not pooled",
+    "24_mib_p50_saved_ns": 18686626,
+    "24_mib_p95_saved_ns": 20573417,
+    "96_mib_p50_saved_ns": 90127292,
+    "96_mib_p95_saved_ns": 80988833,
+    "0_mib_p50_saved_ns": 1109500,
+    "fitted_intercept_trusted_minus_verified_ns": 5126929,
+    "identity_owner_is_upper_bound_not_promise": true
+  },
+  "trust_equation": {
+    "explicit_trusted_open_sets_trusted_history": true,
+    "fetched_rows": 26016,
+    "role_decode_passes": 26016,
+    "fetched_row_authentication_passes": 0,
+    "identity_authentication_ns": 0,
+    "write_time_authentication_unchanged": true,
+    "trusted_publication_marking_unchanged": true,
+    "verified_reopen_full_scrub_required": true
+  },
+  "work_equations": {
+    "engine_statements": 1068,
+    "object_bytes_read": 504723384,
+    "content_payload_bytes": 503316480,
+    "native_bytes_written": 503316480,
+    "publication_commits": 0,
+    "cdc_bytes": 0,
+    "engine_sql_exact": true,
+    "scratch_sql_exact": true,
+    "byte_equations_exact": true
+  },
+  "resources": {
+    "maximum_rss_bytes": 15826944,
+    "maximum_q_bytes": 8388607,
+    "terminal_q_bytes": 0,
+    "maximum_scratch_connections": 1,
+    "maximum_total_connections": 2,
+    "terminal_connections": 0,
+    "maximum_fd": 13,
+    "block_fd_baseline_terminal": ["4/4", "4/4", "4/4"],
+    "maximum_row_cpu_ns": 107201000,
+    "residue": 0,
+    "network": 0
+  },
+  "preserved_failures": [
+    "attempt-001 is retained for commit 5e58fa6 and superseded only because explicit Trusted open did not yet mark trusted_history"
+  ],
+  "raw_hashes": {
+    "environment_sha256": "0a93c82de754a5e9ab2f6d2e9f6421b1d5e3f3a25662e3b0013c2a90d3b93aec",
+    "readiness_sha256": "659ce1118c70fb998d7b78f5222b8f0180edd7c54859cb7a99179a4e9f73aba4",
+    "schedule_sha256": "398a16eab64b14cb0144838b85dcebb5e34ce0178d01afc650416c2d44d90200",
+    "preregistration_sha256": "ab0dedf6f9268fe9db76e671d97e56e5f3f59c423f0cda267dc4fa5f81940469",
+    "fixture_manifest_sha256": "9c315490d1567a3a623e362f4878687d5a97ec06fe761540d5280c2487e1471d",
+    "commands_sha256": "b15961861fb5dc923913589f049e5d2f22ada9d435710f67e76621a411acc27e",
+    "rows_sha256": "487a93dfd279f0cbdcbb04264686296f34a2aabe1de35d81bafa4b3f6a91f0a6",
+    "summary_sha256": "0dda5e0dda4185f44485bc3663316939a7c35c1bb9eedeae3f94cd9b76c8cdae",
+    "campaign_time_sha256": "f0af1c17ffefe50785ffe2d04e38daed8bd51a392851aec15922be1f50d82f9a",
+    "failure_ledger_sha256": "b8734c17693bec75942abe6ced21aedf60ee9b0f3279f8d70b2435509c56b178",
+    "generated_terminal_receipt_sha256": "e5cccd1e75bf6efeee0a2d02a49b1c7db0ef1c78fb8d19faa8b0240be2fd26cf"
+  },
+  "disposition": "Material source-bound gain with complete open-time trust marking; authorize the narrow Stage 1.2 handoff without relabeling Verified."
+}
