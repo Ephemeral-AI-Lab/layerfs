@@ -14,7 +14,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug)]
 pub enum VfsError {
@@ -235,6 +235,7 @@ impl LayerVfs {
         root: ObjectId,
         path: &Path,
     ) -> VfsResult<(ExternalWorkspace, OperationCounters)> {
+        let materialize_started = Instant::now();
         let reservation = self.operation_q.reserve();
         let projection_before = self.driver.projection_facts();
         let expected = self
@@ -258,25 +259,25 @@ impl LayerVfs {
             .checked_delta(projection_before)
             .ok_or(VfsError::InvalidState)?;
         reservation.finish(&mut counters);
-        Ok((
-            ExternalWorkspace {
-                engine: self.engine.clone(),
-                native,
-                path: path.to_owned(),
-                expected,
-                base_matches_expected,
-                writers,
-                owned: false,
-                owned_identity: None,
-                hard_link_authority: Some(hard_link_authority),
-                topology_edges: Some(topology_edges),
-                active: true,
-                committed: None,
-                operation_q: self.operation_q.clone(),
-                digest_cache: self.digest_cache.clone(),
-            },
-            counters,
-        ))
+        let workspace = ExternalWorkspace {
+            engine: self.engine.clone(),
+            native,
+            path: path.to_owned(),
+            expected,
+            base_matches_expected,
+            writers,
+            owned: false,
+            owned_identity: None,
+            hard_link_authority: Some(hard_link_authority),
+            topology_edges: Some(topology_edges),
+            active: true,
+            committed: None,
+            operation_q: self.operation_q.clone(),
+            digest_cache: self.digest_cache.clone(),
+        };
+        counters.materialize_inclusive_ns = u64::try_from(materialize_started.elapsed().as_nanos())
+            .map_err(|_| VfsError::InvalidState)?;
+        Ok((workspace, counters))
     }
     pub fn open_external(&self, path: &Path) -> VfsResult<ExternalWorkspace> {
         let _reservation = self.operation_q.reserve();

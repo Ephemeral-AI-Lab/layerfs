@@ -59,6 +59,7 @@ pub struct OperationCounters {
     pub inode_table: layerfs_core::inode::InodeTableCounters,
     pub native: NativeOperationCounters,
     pub projection: crate::driver::ProjectionFacts,
+    pub materialize_inclusive_ns: u64,
     pub workspace_materializations: u64,
     pub workspace_reuses: u64,
     pub rematerializations: u64,
@@ -144,6 +145,10 @@ impl OperationCounters {
             .projection
             .checked_add(source.projection)
             .ok_or(layerfs_core::CoreError::LengthOverflow)?;
+        self.materialize_inclusive_ns = add(
+            self.materialize_inclusive_ns,
+            source.materialize_inclusive_ns,
+        )?;
         self.workspace_materializations = add(
             self.workspace_materializations,
             source.workspace_materializations,

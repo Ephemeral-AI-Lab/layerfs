@@ -1619,7 +1619,7 @@ fn print_row(
         .checked_add(row.operation.scratch_derived_setup_statements)
         .and_then(|value| value.checked_add(row.operation.scratch_operation_statements))
         .ok_or_else(|| "scratch SQL equation overflow".to_owned())?;
-    let leaf_ns = exclusive_leaf_ns(row)?;
+    let (leaf_ns, vfs_dispatch_ns) = exclusive_leaf_ns(row)?;
     let operation_residual_ns =
         i128::try_from(row.product_wall_ns).map_err(display_error)? - i128::from(leaf_ns);
     println!(
@@ -1641,7 +1641,8 @@ fn print_row(
             "\"connections_terminal\":{}}},",
             "\"equations\":{{\"engine_sql_sum\":{},\"engine_sql_exact\":{},",
             "\"scratch_sql_sum\":{},\"scratch_sql_exact\":{},",
-            "\"fetched_auth_decode_exact\":{},\"exclusive_leaf_ns\":{},",
+            "\"fetched_auth_decode_exact\":{},\"materialize_inclusive_ns\":{},",
+            "\"vfs_dispatch_ns\":{},\"exclusive_leaf_ns\":{},",
             "\"operation_residual_ns\":{}}},",
             "\"operation_q_terminal_bytes\":{},\"residue\":0}}"
         ),
@@ -1682,6 +1683,8 @@ fn print_row(
         scratch_sql == row.operation.scratch_statements,
         row.engine.fetched_rows == row.engine.authentication_passes
             && row.engine.fetched_rows == row.engine.role_decode_passes,
+        row.operation.materialize_inclusive_ns,
+        vfs_dispatch_ns,
         leaf_ns,
         operation_residual_ns,
         row.operation.operation_q_terminal_bytes,
@@ -1693,7 +1696,7 @@ fn json_optional_u64(value: Option<u64>) -> String {
     value.map_or_else(|| "null".to_owned(), |value| value.to_string())
 }
 
-fn exclusive_leaf_ns(row: &Row) -> EvalResult<u64> {
+fn exclusive_leaf_ns(row: &Row) -> EvalResult<(u64, u64)> {
     let projection = row.operation.projection;
     let content_write_ns = timer_ns(projection.content_write.wall)?;
     let dispatch_ns = row
@@ -1743,7 +1746,17 @@ fn exclusive_leaf_ns(row: &Row) -> EvalResult<u64> {
             .checked_add(value)
             .ok_or_else(|| "exclusive timer equation overflow".to_owned())?;
     }
-    Ok(total)
+    let vfs_dispatch_ns = row
+        .operation
+        .materialize_inclusive_ns
+        .checked_sub(total)
+        .ok_or_else(|| "named children exceed VFS materialization parent".to_owned())?;
+    Ok((
+        total
+            .checked_add(vfs_dispatch_ns)
+            .ok_or_else(|| "VFS timer equation overflow".to_owned())?,
+        vfs_dispatch_ns,
+    ))
 }
 
 fn timer_ns(timer: ProjectionTimer) -> EvalResult<u64> {
