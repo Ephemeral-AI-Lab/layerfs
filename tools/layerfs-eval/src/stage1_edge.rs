@@ -2525,6 +2525,8 @@ fn counters_json(
         .transpose()?
         .unwrap_or_default();
     let o = operation.copied().unwrap_or_default();
+    let (scratch_tables, scratch_statements, scratch_rows, scratch_high_water_bytes) =
+        joined_scratch_counts(e, o)?;
     Ok(format!(
         concat!(
             "{{\"transactions_started\":{},\"transactions_committed\":{},",
@@ -2594,10 +2596,10 @@ fn counters_json(
         e.publication_commits,
         e.publication_closure_passes,
         e.namespace_graph_verification_passes,
-        e.scratch_tables.max(o.scratch_tables),
-        e.scratch_statements.max(o.scratch_statements),
-        e.scratch_rows.max(o.scratch_rows),
-        e.scratch_high_water_bytes.max(o.scratch_high_water_bytes),
+        scratch_tables,
+        scratch_statements,
+        scratch_rows,
+        scratch_high_water_bytes,
         e.retained_roots_validated,
         c.cdc_bytes_scanned,
         c.payload_bytes_written,
@@ -2610,6 +2612,29 @@ fn counters_json(
         o.workspace_reuses,
         o.rematerializations,
         o.descriptor_resets,
+    ))
+}
+
+fn joined_scratch_counts(
+    engine: EngineDelta,
+    operation: layerfs_sdk::OperationDiagnostics,
+) -> EvalResult<(u64, u64, u64, u64)> {
+    Ok((
+        engine
+            .scratch_tables
+            .checked_add(operation.scratch_tables)
+            .ok_or_else(|| "combined scratch tables overflow".to_owned())?,
+        engine
+            .scratch_statements
+            .checked_add(operation.scratch_statements)
+            .ok_or_else(|| "combined scratch statements overflow".to_owned())?,
+        engine
+            .scratch_rows
+            .checked_add(operation.scratch_rows)
+            .ok_or_else(|| "combined scratch rows overflow".to_owned())?,
+        engine
+            .scratch_high_water_bytes
+            .max(operation.scratch_high_water_bytes),
     ))
 }
 
@@ -6076,7 +6101,10 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
                     .checked_add(json_u128(phase, operation_key)?)
                     .ok_or_else(|| format!("{} phase {operation_key} overflow", row.row_id))
             })?;
-            if engine.max(operation) != row_u128(row, engine_key)? {
+            let combined = engine
+                .checked_add(operation)
+                .ok_or_else(|| format!("{} combined {engine_key} overflow", row.row_id))?;
+            if combined != row_u128(row, engine_key)? {
                 return Err(format!(
                     "{} phase Engine/VFS {engine_key} aggregate",
                     row.row_id
@@ -11510,6 +11538,33 @@ mod tests {
         assert!(json.contains("\"operation_scratch_high_water_bytes\":33304"));
     }
 
+    #[test]
+    fn row_join_adds_disjoint_engine_and_vfs_scratch_but_maxes_peak() {
+        let engine = EngineDelta {
+            scratch_tables: 2,
+            scratch_statements: 20_242,
+            scratch_rows: 62_540,
+            scratch_high_water_bytes: 90_000,
+            ..EngineDelta::default()
+        };
+        let operation = layerfs_sdk::OperationDiagnostics {
+            scratch_tables: 1,
+            scratch_statements: 21,
+            scratch_rows: 4,
+            scratch_high_water_bytes: 33_304,
+            ..Default::default()
+        };
+        assert_eq!(
+            joined_scratch_counts(engine, operation).unwrap(),
+            (3, 20_263, 62_544, 90_000)
+        );
+        let json = counters_json(Some(engine), Some(&operation)).unwrap();
+        assert!(json.contains("\"scratch_tables\":3"));
+        assert!(json.contains("\"scratch_statements\":20263"));
+        assert!(json.contains("\"scratch_rows\":62544"));
+        assert!(json.contains("\"scratch_high_water_bytes\":90000"));
+    }
+
     fn synthetic_root(index: u8) -> RootId {
         RootId::from_bytes(blake3::hash(&[index]).as_bytes()).unwrap()
     }
@@ -11612,10 +11667,10 @@ mod tests {
                 value.scratch_rows = 6;
                 value.scratch_high_water_bytes = 87_088;
             } else if scheduled.row_group == "C08" {
-                value.scratch_tables = 3;
-                value.scratch_statements = 55;
-                value.scratch_rows = 6;
-                value.scratch_high_water_bytes = 87_088;
+                value.scratch_tables = 1;
+                value.scratch_statements = 21;
+                value.scratch_rows = 4;
+                value.scratch_high_water_bytes = 33_304;
             } else if scheduled.row_group == "C09" {
                 value.scratch_statements = 1;
                 value.scratch_derived_setup_statements = 1;
