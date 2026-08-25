@@ -148,7 +148,7 @@ mod linux {
             MountOption::NoAtime,
             MountOption::DefaultPermissions,
         ];
-        config.n_threads = Some(4);
+        config.n_threads = Some(1);
         config.clone_fd = true;
         let session = fuser::spawn_mount(fuse, &mount, &config)?;
         let notifier = session.notifier();
