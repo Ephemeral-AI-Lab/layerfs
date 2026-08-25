@@ -1,14 +1,17 @@
 # LayerFS Apple/APFS PoC v1
 
-Status: **AppleWorkspaceV1 Stage 1.0 implementation and Stage 1.1 single-file
-APFS edge verification are closed; Stage 1.2 remains prospective**.
+Status: **AppleWorkspaceV1 Stage 1.0 and the Stage 1.1 correctness/performance
+baseline are closed; Stage 1.1M materialization optimization and Stage 1.2
+remain prospective**.
 The controlling closure and custody record is
 [17 — Stage 1.0 closure and accepted A02 exception](17-stage1-closure.md).
 The preserved A01–A17 campaign remains measured `REVISE`; its A02 latency miss
 is explicitly user-accepted and is not relabeled as a threshold PASS. Stage
 1.1 passed its source-bound 47-row/51-edit/34-transition campaign in
 13.517581334 seconds; its controlling result is recorded in `poc/16` and
-`poc/evidence/stage1.1-apple-edge-20260825`. Stage 1.2 is the
+`poc/evidence/stage1.1-apple-edge-20260825`. Later audit preserved those results
+but found incomplete full-materialization SQL/native attribution. The separate
+portable repair and target authority is `poc/20`. Stage 1.2 is the
 npm/developer-workspace specification in `poc/15`. The prospective post-Stage-1
 LayerFS + Linux FUSE direct workspace is specified in `poc/19`, with Docker
 only as its Linux execution envelope. macFUSE and FSKit are not selected
@@ -17,6 +20,7 @@ dependencies.
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure
 Stage 1.1  poc/16 single-file APFS edge benchmark — PASS / closed
+Stage 1.1M poc/20 portable full-materialization attribution and optimization
 Stage 1.2  poc/15 npm/developer-workspace benchmark
 Stage 2    poc/19 LayerFS + Linux FUSE direct workspace after Stage 1.2
 ```
@@ -60,6 +64,7 @@ programs for each small implementation repair.
 | [17 — Stage 1.0 closure and accepted A02 exception](17-stage1-closure.md) | Implemented baseline disposition, current-source custody, measured PASS gates, and explicit A02 waiver | Stage 1.0 closure |
 | [16 — Stage 1.1 single-file APFS edge specification](16-stage1-part1-apple-edge-benchmark.md) | One 24 MiB file; 47 rows; bidirectional edits, save bursts, checkpoints, history and refresh under 60 s | Stage 1.1 evaluator |
 | [18 — Stage 1.1 result and handoff template](18-stage1.1-result-template.md) | Exact summary tables, JSONL row schema, availability rules, timer receipt and final response | Stage 1.1 evaluator |
+| [20 — Stage 1.1M portable full-materialization optimization](20-stage1.1-full-materialization-optimization.md) | Guarded Verified reads, derived scratch, portable native facts, fixed/stream attribution, CPU/memory gates and 0/24/96 MiB targets | Engine + VFS + OS + evaluator |
 | [15 — Stage 1.2 npm/developer-workspace specification](15-stage1-workspace-benchmark.md) | Reusable <=300 MiB offline npm/build/search/capture workflow | Stage 1.2 evaluator |
 | [19 — Stage 2 LayerFS + Linux FUSE workspace](19-stage2-docker-linux-fuse.md) | Post-Stage-1 container admission, direct mounted read/write/locality proof, real workspace gates, and strict exclusions | LayerFS VFS + thin Linux FUSE adapter |
 
@@ -84,6 +89,7 @@ programs for each small implementation repair.
   -> 17 Stage 1.0 implementation closure and custody
   -> 16 Stage 1.1 single-file APFS edge specification
   -> 18 Stage 1.1 result and handoff template
+  -> 20 Stage 1.1M portable full-materialization optimization
   -> 15 Stage 1.2 npm/developer-workspace specification
   -> 19 Stage 2 LayerFS + Linux FUSE direct workspace
 ```
