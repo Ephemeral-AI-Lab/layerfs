@@ -1,0 +1,62 @@
+{
+  "schema": "layerfs-stage1.1-terminal-closure-receipt-v1",
+  "status": "PASS_AFTER_PRESERVED_FAILURES_AND_FOCUSED_REPAIR",
+  "final_source_commit": "d1848200d249915d3f1e35af5556fdf6c1ec05c6",
+  "dirty_tree_at_final_build": false,
+  "full_workspace_closure": {
+    "source_commit": "e408cae3fc8fa7cba304c83036b0159f0619ddbf",
+    "log_sha256": "f5b07d3792cccc9909e69b822c70ce0826b2cd4aa281c2c6fca1b599322462f3",
+    "cargo_fmt_check": "PASS",
+    "cargo_check_workspace": "PASS",
+    "cargo_test_workspace": "FAIL_PRESERVED",
+    "first_failure": "generated_pass_summary_is_valid_row_derived_and_rejects_resource_mutation required an ignored target/ attempt-007 artifact in a fresh checkout",
+    "not_repeated": true
+  },
+  "focused_continuation": {
+    "log_sha256": "91102840f5024c40bb1329e3c3bc841e5847a075f5cb3087a9cc6bcee1b65cea",
+    "self_contained_evaluator_test": "PASS in a clean detached worktree with both historical baseline files absent",
+    "not_yet_reached_os_sdk_vfs_tests": "PASS",
+    "workspace_doc_tests": "PASS",
+    "workspace_all_targets_clippy_deny_warnings": "PASS"
+  },
+  "later_invalidated_scopes": {
+    "engine": "61 unit + 7 faults/reopen + 16 store/publication PASS",
+    "vfs": "22 PASS",
+    "os": "29 unit + 5 integration PASS",
+    "sdk": "managed 4 + external 1 + attribution 2 + Stage1 routes 7 PASS",
+    "evaluator": "49 unit PASS / 4 intentional large-fixture ignores; storage, live-scratch, combined Engine+VFS scratch, phase-resource, pass-summary, failure-summary and terminal-cleanup proofs PASS",
+    "format_check": "PASS",
+    "touched_check": "PASS",
+    "touched_clippy_deny_warnings": "PASS"
+  },
+  "scope_equation": "The single full closure is preserved. Already-passing unchanged Core/Engine scopes were not rerun; each later changed or not-yet-reached scope was rerun at its final source.",
+  "source_repair_diff": {
+    "from_commit": "0781df716230ba1193d9c9bfa453b0d0fac8f7d0",
+    "to_commit": "d1848200d249915d3f1e35af5556fdf6c1ec05c6",
+    "diff_sha256": "bce805da5452699cb978216533875eb25116942eaa8ffc97e2191da8743bbfd7",
+    "sorted_path_list_sha256": "b10531df810baaa03d189da8a44ea0c4f8ccd738424026e2f3bab24940a7c476"
+  },
+  "final_release": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage11-final-build-d184820/release/layerfs-eval",
+    "bytes": 4026320,
+    "sha256": "b056b535c7d3e0711a120731e414bbff213ca0be9c6a603cc3387da6633af624",
+    "blake3": "8fe897685cda24c850d58c35e27687a02389747232fcc862337bcf7de234ef01",
+    "build_log_sha256": "14b013e6357748791509a2700a89924723f01ebb46fabd98846b158190e4c71d",
+    "build_log_blake3": "d3b987b3f974205319f09595d4c9d194a5956eb4de3c81ba97d696b9e90538a6",
+    "build_log_bytes": 1677,
+    "build_command": "CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage11-final-build-d184820 cargo build --release --locked -p layerfs-eval"
+  },
+  "source_manifest": {
+    "sha256": "3b52e3ca1539bee8cacf4cf7a5243af88d494b78195917a53f5492c27f799218",
+    "blake3": "75dedd98c1203868445b9cee055e5be9863bb2ae5bd53a7802f7b886bb94193c",
+    "aggregate_sha256": "a2926bf0e68dbcd37f2ac26b01f56397b3b4875f27b545772eae5908ea01a7ba",
+    "aggregate_blake3": "dd6a6f19a46e912afc2d032045e0b54858c0684beee65f104dd430f08ab61a3f",
+    "file_count": 230,
+    "product_file_count": 74,
+    "product_aggregate_sha256": "a1359e924071271f481641153f37728e43e564d2b8be331418bfc4ef98cd9a45",
+    "product_aggregate_blake3": "4f2ee632e4b180b8691b3229f148b68e75d320cfa77c06edbb6ade2b738290ce",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+    "deterministic_build_claim": false
+  }
+}

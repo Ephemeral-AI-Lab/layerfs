@@ -113,3 +113,23 @@ The attempt-003 files bind raw evidence under
 at `3635dfc`, and the final current-source Stage 1.1 attempt-020 regression at
 `36d05d8`. Trusted is never relabeled Verified; the Verified performance
 result remains `REVISE_NO_AUTHORIZED_OWNER`.
+
+## Final Stage 1.1 terminal source/raw audit
+
+This append-only terminal audit preserves the later source repair series,
+attempt-021/022 failures, independently rejected attempt-023, and controlling
+attempt-024. The compact files bind raw evidence retained under
+`target/layerfs-stage1-apple-edge-20260826-attempt-021` through `attempt-024`.
+
+```text
+stage1.1-terminal-audit-20260826/closure-receipt.json     3b051ce25071291b7e1951ed8490291c4fe48754c292a3623350834b38c645c9
+stage1.1-terminal-audit-20260826/independent-audit.json   c2617b3720ae1b814774035e29433dab94ed6f5ad17a53c27ac38581ecba77a0
+stage1.1-terminal-audit-20260826/regression-receipt.json  aa463fa3be195350835336270016095c6a4ace173a9d821853a3307810da313a
+stage1.1-terminal-audit-20260826/summary.md                93e76b7496ca9ff4eea1ab0f479fb76b9986ef08cf519913e5a57f5d28746229
+stage1.1-terminal-audit-20260826/terminal-receipt.json     018557adffbf03725e03b765628afab97a89adaf91094e75ad6e575e414c8cfe
+```
+
+The final product source is `d184820`; attempt-024 independently passes
+47/51/34. Verified performance remains bound to the older frozen M7 operand
+and remains `REVISE_NO_AUTHORIZED_OWNER`; no performance population is
+promoted to the final accounting-only source.

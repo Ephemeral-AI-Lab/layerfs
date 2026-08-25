@@ -1271,22 +1271,22 @@ M15 one final Stage 1.1 regression campaign
 | M2 | PASS after append-only repairs | Exact 12 warmups + 36 measured rows; all earlier attempts retained. |
 | M3 | PASS / retained | StoreId cache is exact; no further tuning after its independently measured sub-3 ms effect. |
 | M4 | PASS | Derived namespaces share one authenticated scratch database while retaining DELETE/FULL cleanup and recovery. |
-| M5 | skipped | Guarded-read route stayed below the user-authorized 3 ms prospective floor; no target weakening. |
-| M6 | PASS | Portable projection facts, disjoint leaves, failed-open facts and exact Apple accounting implemented. |
+| M5 | skipped | Guarded-read route stayed below the then-authorized 3 ms prospective floor; the later user preference is 10 ms and no performance work resumed. |
+| M6 | PASS after terminal audit | Portable projection facts, disjoint leaves, failed-open facts, Apple setup cleanup, operation/through-row mutation rejection, and exact native accounting implemented. |
 | M7 | PASS / retained | Fresh IncompleteDerived install-parent barrier deferred; live refresh and hard-link order unchanged. |
 | M8 | skipped | Metadata owner is sub-3 ms. |
 | M9 | retained DELETE/FULL | Lighter scratch durability not pursued under the floor. |
 | M10 | PASS | Focused crate tests/checks and fault cuts passed. |
-| M11 | PASS after preserved failures | The terminal audit preserves every failed closure; the final same-source fmt/check/test/doc-test/clippy closure passes on `36d05d8`. |
-| M12 | PASS | The clean `36d05d8` release and zero-row readiness are source/build/hash bound. |
+| M11 | PASS after preserved failures | The one full closure failure is retained. Unchanged passing scopes were not repeated; every invalidated/not-yet-reached final-source scope plus doctests and deny-warnings clippy passes. |
+| M12 | PASS | The clean `d184820` release, source manifest, build log and zero-row readiness are source/build/hash bound. |
 | M13 | harness PASS; campaign skipped | Absolute 24 MiB gates already fail, so paired acceptance would not admit the candidate. |
-| M14 | PASS | M7, corrected Trusted attempt-003, and final attempt-020 raw artifacts were independently recomputed. |
-| M15 | PASS | Current-source Stage 1.1 attempt-020 closes 47/51/34 in `12.581879167 s` accounted wall. |
+| M14 | PASS | M7, corrected Trusted attempt-003, final attempt-024, and the complete terminal repair series were independently recomputed/reviewed. |
+| M15 | PASS | Current-source Stage 1.1 attempt-024 closes 47/51/34 in `12.745738083 s` accounted wall. |
 
 ### 18.2 Prior current-source release and regression — preserved
 
-This subsection preserves the first closure at `0403ea7`. Section 18.3 is the
-later controlling terminal-audit closure; the attempt-015 artifacts are not
+This subsection preserves the first closure at `0403ea7`. Sections 18.3 and
+18.4 retain the later terminal audits; the attempt-015 artifacts are not
 rewritten.
 
 ```text
@@ -1375,6 +1375,96 @@ REVISE_NO_AUTHORIZED_OWNER
 terminal_pass=false
 ```
 
+### 18.4 Final integrated source/accounting audit
+
+The independent final review found no P0 canonical, trust-escalation,
+durability or data-loss defect, but it did find P1 evidence gaps that the prior
+closure had not exercised. The append-only repair series through `d184820`
+closes them:
+
+```text
+e362fdf  portable fresh/nested/hard-link fault matrix
+c9917b2  identity-safe Apple setup cleanup
+fac03f3  Engine SQL and completed failure counters
+a6af7fa  diagnostic SQL ownership proof
+e855f47  actual scratch close and compaction Store accounting
+3c2dacf  operation/through-row projection-fact validation
+7865dae  failed integrity/publication SQL receipts
+f7bf970  integrity progress and terminal external scratch
+e408cae  compaction source/candidate scratch custody
+83eaab0  self-contained evaluator summary contract
+12bc25e  disjoint Store storage-observation phases
+1b1b9f1  live authority/topology scratch operation deltas
+f3c4a69  sequential high-water and phase connection truth
+d184820  additive disjoint Engine+VFS scratch row joins
+```
+
+Attempt-021 is the preserved four-row failure that showed three newly counted
+storage-observation `SELECT`s outside the old phase partition. Attempt-022
+completed 47/51/34 but remains `FAIL` because its fresh worktree had not staged
+the exact accepted attempt-007 comparison artifact. Attempt-023 stages that
+artifact and its generated summary says PASS, but independent audit rejects it
+because C08-001 used maximum instead of addition for disjoint Engine+VFS
+scratch counts. Attempt-024 closes the audited predicate and is controlling:
+
+```text
+source commit              d1848200d249915d3f1e35af5556fdf6c1ec05c6
+release SHA-256            b056b535c7d3e0711a120731e414bbff213ca0be9c6a603cc3387da6633af624
+release BLAKE3             8fe897685cda24c850d58c35e27687a02389747232fcc862337bcf7de234ef01
+rows / edits / transitions 47 / 51 / 34
+complete wall equation     12,745,738,083 = 8,355,633,375 + 4,390,104,708 ns
+operation Store + scratch  7,242 + 103,338 = 110,580
+admission + operation SQL  22,674 + 110,580 = 133,254
+storage-observation SQL    54 * 3 = 162
+transactions / COMMITs     34 / 34; rollback 0
+RSS / Q high / Q terminal  28,442,624 / 8,388,607 / 0 B
+connections high/terminal  2 / 0
+FD baseline/terminal       5 / 5
+BUSY / LOCKED / residue    0 / 0 / 0
+rows SHA-256               57a11f4c85da0d5105b9ecb5954780770db00d18602b7610ac4d3b25e66bff6e
+summary SHA-256            168c4fa2dd118861be845b9383b6ba1919c2f25df50bd824f68a689a2b43b2f5
+```
+
+The final Store phase equation is:
+
+```text
+2 + 969 + 1,814 + 638 + 363 + 1,626 + 72 + 1,596 + 162 = 7,242
+```
+
+Long-lived VFS scratch work is now owned by `native_edit` (54 statements),
+`apfs_refresh` (1,719), materialization (83), and C09 `explicit_cleanup` (one
+final rollback). C07 takes the maximum
+sequential scratch peak (`33,304 B`) instead of summing one cumulative table
+peak across sub-edits; distinct tables within one operation remain additive.
+C08-001 adds its disjoint Engine `{2 tables, 20,242 statements, 62,540 rows}`
+and VFS `{1, 21, 4}` receipts to exact row totals `{3, 20,263, 62,544}`;
+only their high-water uses maximum (`74,816 B`). This is the predicate that
+independently rejected attempt-023 and admits attempt-024.
+
+The final source/raw reviews report P0=0 and P1=0. Five narrow P2 evidence
+qualifications remain and are not trust/durability exceptions:
+
+1. scratch-rollback I/O failure cannot return both its close observation and
+   error through the current result type;
+2. failure to obtain the first Apple creation-time identity safely preserves
+   residue rather than deleting by name;
+3. failed initial Verified-open diagnostics are internally proved but are not
+   caller-visible;
+4. Engine integrity/compaction exposes aggregate scratch totals, not an
+   unavailable subfamily split;
+5. failed managed operations cannot return partial live-scratch diagnostics,
+   while all successful prescribed operations are exact.
+
+The frozen M7 performance rows require one evidence qualification: all 48 v1
+rows aliased `row_wall_ns` to product-operation wall. Their product-operation
+latency/throughput values remain the frozen denominator, but none is claimed as
+an exact row-wall receipt. CPU scaling independently passes: p50 CPU at 0/24/96
+MiB is `4.924/41.779/158.535 ms`, and the fixed-subtracted per-MiB ratio is
+`1.041995659 <= 1.25`.
+
+The complete controlling receipts are under
+`poc/evidence/stage1.1-terminal-audit-20260826`.
+
 On any intermediate miss:
 
 ```text
@@ -1417,9 +1507,11 @@ REVISE_NO_AUTHORIZED_OWNER
 terminal_pass=false
 ```
 
-Continuing the Verified performance loop requires explicit authority expansion
-for a new >=3 ms owner, bounded multi-object authentication, a canonical or
-durability change, or a changed target. None is inferred. A separate explicit
-`TrustedLocalDev` class may be investigated prospectively only if it remains
-distinct from Verified and retains close + Verified reopen/full scrub at every
-publish/export/share boundary.
+The historical 3 ms floor governed the completed owner selection. The user's
+current preference rejects further performance work below 10 ms per target
+operation. Continuing the Verified performance loop therefore requires an
+explicitly authorized safe owner at or above that current floor, bounded
+multi-object authentication, a canonical or durability change, or a changed
+target. None is inferred. The separately implemented `TrustedLocalDev` class
+remains distinct from Verified and retains close + Verified reopen/full scrub
+at every publish/export/share boundary.

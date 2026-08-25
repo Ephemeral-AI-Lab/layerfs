@@ -1,0 +1,125 @@
+{
+  "schema": "layerfs-stage1.1-independent-terminal-raw-audit-v1",
+  "status": "PASS_STAGE1.1_CURRENT_SOURCE_CORRECTNESS",
+  "p0": 0,
+  "p1": 0,
+  "source_commit": "d1848200d249915d3f1e35af5556fdf6c1ec05c6",
+  "source_clean": true,
+  "release": {
+    "bytes": 4026320,
+    "sha256": "b056b535c7d3e0711a120731e414bbff213ca0be9c6a603cc3387da6633af624",
+    "blake3": "8fe897685cda24c850d58c35e27687a02389747232fcc862337bcf7de234ef01"
+  },
+  "population": {
+    "ordered_pass_rows": 47,
+    "edits_and_subedits": 51,
+    "durable_transitions": 34,
+    "history_probes": 63,
+    "physical_oracles": 51,
+    "canonical_transition_oracles": 34,
+    "save_bursts": 4,
+    "selected_history_roots": 8
+  },
+  "timer_equation_ns": "12745738083 = 8355633375 + 4390104708 + 0",
+  "sql": {
+    "operation_store_statements": 7242,
+    "admission_statements": 22674,
+    "engine_scratch_statements": 101481,
+    "vfs_scratch_statements": 1857,
+    "scratch_statements": 103338,
+    "all_sql": 133254,
+    "store_phase_equation": "2 + 969 + 1814 + 638 + 363 + 1626 + 72 + 1596 + 162 = 7242",
+    "storage_observation_equation": "54 * 3 = 162",
+    "vfs_scratch_phase_equation": "native_edit 54 + apfs_refresh 1719 + materialization 83 + explicit_cleanup 1 = 1857",
+    "scratch_tables": 33,
+    "scratch_rows": 274595,
+    "c08_001": "Engine 2/20242/62540 + VFS 1/21/4 = row 3/20263/62544; high-water max 74816"
+  },
+  "trust": {
+    "fetched_rows": 74236,
+    "role_decode_passes": 74236,
+    "fetched_identity_authentication_passes": 27880,
+    "trusted_omission_expected": true,
+    "new_authentication": 677,
+    "created": 554,
+    "reused": 123,
+    "incumbent_authentication": 123,
+    "objects_validated": 75036,
+    "objects_equation": "75036 = 74236 + 677 + 123",
+    "verified_rows_authenticate_every_fetched_row": true,
+    "retained_union_scrubs": 7,
+    "authentication_failures": 0,
+    "role_decode_failures": 0
+  },
+  "transactions": {
+    "publication_started": 34,
+    "publication_committed": 34,
+    "publication_rolled_back": 0,
+    "admission_started": 9,
+    "admission_committed": 9,
+    "integrity_started": 642,
+    "integrity_rolled_back": 642,
+    "integrity_statements": 2568,
+    "busy": 0,
+    "locked": 0
+  },
+  "locality_and_native": {
+    "cdc_bytes": 495616,
+    "payload_bytes": 495616,
+    "unaffected_edit_writes": 0,
+    "clone_patch": 3,
+    "clone_shift": 6,
+    "in_place_shift": 6,
+    "insert_delete_append_truncate_each": 3,
+    "full_fallback": 0,
+    "rematerialization": 0,
+    "hard_link_fixture": "one file, nlink=1, zero nonzero groups; nonzero topology NotApplicable and separately source-tested"
+  },
+  "resources": {
+    "rss_peak_bytes": 28442624,
+    "buffer_bytes": 1048576,
+    "q_high_water_bytes": 8388607,
+    "q_terminal_bytes": 0,
+    "connections_high": 2,
+    "connections_terminal": 0,
+    "fd_baseline": 5,
+    "fd_peak": 18,
+    "fd_terminal": 5,
+    "children": 0,
+    "network": 0,
+    "terminal_residue": 0,
+    "terminal_sidecars": "absent"
+  },
+  "hashes": {
+    "rows_sha256": "57a11f4c85da0d5105b9ecb5954780770db00d18602b7610ac4d3b25e66bff6e",
+    "summary_sha256": "168c4fa2dd118861be845b9383b6ba1919c2f25df50bd824f68a689a2b43b2f5",
+    "summary_markdown_sha256": "493b8deaa53ceecd0e57eba5fc9bc8c0320408c1304ce60e9f2447d8ba646e43",
+    "environment_sha256": "8b5ccd7a209a2ecd8ab9a1c4db5c1a6b6fa75dcadaf9f5a4873624b9d045163c",
+    "readiness_sha256": "82e612cdef1244bc8aaf2a24f33fe12918d9e0027f97d73275594048dd797b05",
+    "schedule_sha256": "9c570bbe9005fbaa8ae8e1ca82cf1211909b91c635fe2ff83557d19aaf71a2dc",
+    "master_sha256": "d8fabde776f5d764942fae60627dbad2d4b118019cf08c7e0c6c95b3568b3683",
+    "campaign_time_sha256": "cf2bfd9cc01050b240958a077b76ef46b9db21cd4770cdc8d15f3c1c1e8ad673",
+    "runtime_source_manifest_sha256": "1f8a9205c253865174adf24ff9a04d3eae80b233f844113f1858e9262493721e",
+    "build_manifest_file_sha256": "3b52e3ca1539bee8cacf4cf7a5243af88d494b78195917a53f5492c27f799218",
+    "build_log_sha256": "14b013e6357748791509a2700a89924723f01ebb46fabd98846b158190e4c71d",
+    "build_log_blake3": "d3b987b3f974205319f09595d4c9d194a5956eb4de3c81ba97d696b9e90538a6"
+  },
+  "preserved_failures": {
+    "attempt_021": "rows 4; rows SHA 1e824fc9bf85e34844ead72510351be419ea0bc24fce658741a1993d0fc14b9c; summary SHA acf8c2cb2e97e711870ed1d7e38977b127e59458a7906e34e214c46ab4ce574e; +3 storage SELECT phase miss",
+    "attempt_022": "rows 47; rows SHA c252888eafd337cefd08b27068524a26b0e44851c81e2a59a90f621f814e58b7; summary SHA e1ab2f801f61667cdd980da6f19188c8b353cb6caf7f47702ec64d19cce3c18c; missing attempt-007 custody",
+    "attempt_023": "immutable evaluator PASS but independent FAIL; rows SHA 399dd4d7349c145dee290e6874e4aa0da535ed251cfc1cf16bfd305fd0a46d4f; summary SHA 52518003cbc2e8f8444f7f2d1b749ee2e227d42b7bc13dde002ba092aeaf6dec; C08 row 2/20242/62540 != 3/20263/62544 and global scratch 32/103317/274591 != 33/103338/274595"
+  },
+  "p2_qualifications": [
+    "scratch rollback-close I/O failure cannot return both receipt and error",
+    "first Apple stable-token failure preserves residue rather than deleting by name",
+    "failed initial Verified-open diagnostics are internal rather than caller-visible",
+    "Engine integrity/compaction exposes aggregate scratch without unavailable subfamily split",
+    "failed managed operations cannot return partial live-scratch diagnostics"
+  ],
+  "honest_unavailable": [
+    "regular/directory sync-class split",
+    "continuous rollback-journal peak",
+    "continuous temporary-file peak"
+  ],
+  "terminal_disposition": "Stage 1.1 current-source correctness PASS; Verified Stage 1.1M performance remains REVISE_NO_AUTHORIZED_OWNER"
+}

@@ -278,10 +278,14 @@ campaign wall                           2.106328041 s
 rows SHA-256                            4c476039cb8cc7881a3103e9d832c5032387b120cf91775e8625475305b00cea
 ```
 
-Later commits through `36d05d8` change only the Apple-edge evaluator; they do
-not change product crates or `stage1_materialize.rs`, so attempt-003 remains
-the source-bound Trusted product-performance population. The final
-current-source attempt-020 separately passes 47/51/34 and proves Trusted
-read-only omission, authenticated writes, and seven Verified-after-Trusted
-scrubs. Stage 1.2 and Docker/FUSE were not started or resequenced by this
-audit.
+Attempt-003 remains the frozen source-bound Trusted product-performance
+population for its recorded source. Later terminal-audit commits add
+correctness/accounting observations in Engine/VFS/evaluator code; no Trusted
+performance rerun was authorized, so attempt-003 is not silently promoted to
+final-source performance evidence. Final source `d184820` instead closes
+current-source correctness through independently audited attempt-024
+(`47/51/34`), including
+authenticated writes and seven Verified-after-Trusted scrubs. The complete
+source/raw receipts are under
+`poc/evidence/stage1.1-terminal-audit-20260826`. Stage 1.2 and Docker/FUSE were
+not started or resequenced by this audit.

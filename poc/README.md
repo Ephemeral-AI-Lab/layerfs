@@ -15,9 +15,15 @@ portable repair and target authority is `poc/20`; it now records the exact
 M0–M15 execution, frozen `385.905 MiB/s` 24 MiB p50 miss, `614.617 MiB/s`
 fitted sustained PASS, current-source 47-row regression PASS, and the explicit
 authority-expansion boundary. The later terminal audit repaired source/build
-custody and row timers, retained the Verified result unchanged, and closed the
-separate TrustedLocalDev class with corrected attempt-003 plus current-source
-attempt-020. Stage 1.2 is the
+custody, row timers, failed-open cleanup, Store/scratch/phase accounting,
+portable fault cuts, and live-scratch terminal ownership. It retained the
+Verified performance result unchanged and closed the separate TrustedLocalDev
+class with corrected attempt-003. Final source `d184820` passes independently
+audited current-source attempt-024 (`47/51/34`) after preserving attempt-021,
+attempt-022, and independently rejected attempt-023 evidence.
+The final three-lane source and raw audit reports P0=0/P1=0; its five narrow P2
+evidence qualifications are recorded under
+`poc/evidence/stage1.1-terminal-audit-20260826`. Stage 1.2 is the
 npm/developer-workspace specification in `poc/15`. The prospective post-Stage-1
 LayerFS + Linux FUSE direct workspace is specified in `poc/19`, with Docker
 only as its Linux execution envelope. macFUSE and FSKit are not selected
@@ -26,7 +32,7 @@ dependencies.
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure
 Stage 1.1  poc/16 single-file APFS edge benchmark — PASS / closed
-Stage 1.1M poc/20 Verified attribution/correctness closed; performance REVISE
+Stage 1.1M poc/20 Verified correctness/accounting closed; performance REVISE
 Stage 1.1T poc/22 explicit TrustedLocalDev product class — audited primary class PASS; fixed-cost miss retained
 Stage 1.2  poc/15 npm/developer-workspace — trust handoff admitted; not started
 Stage 2    poc/19 LayerFS + Linux FUSE direct workspace after Stage 1.2

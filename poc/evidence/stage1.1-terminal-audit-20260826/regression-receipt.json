@@ -1,0 +1,128 @@
+{
+  "schema": "layerfs-stage1.1-terminal-regression-receipt-v1",
+  "status": "PASS",
+  "source_commit": "d1848200d249915d3f1e35af5556fdf6c1ec05c6",
+  "release_sha256": "b056b535c7d3e0711a120731e414bbff213ca0be9c6a603cc3387da6633af624",
+  "release_blake3": "8fe897685cda24c850d58c35e27687a02389747232fcc862337bcf7de234ef01",
+  "runtime_source_tree_blake3": "b21542b299f07adffa50741ee72d03b893bb0154f5f0fbfd9a8f566ffb75fc1a",
+  "runtime_source_manifest_sha256": "1f8a9205c253865174adf24ff9a04d3eae80b233f844113f1858e9262493721e",
+  "raw_run": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1-apple-edge-20260826-attempt-024",
+  "command_receipt_sha256": "1dbb4bf101b04d5e48674320a35e963f78d2a4ff00539679fdbcdeb2370afc38",
+  "hashes": {
+    "rows_sha256": "57a11f4c85da0d5105b9ecb5954780770db00d18602b7610ac4d3b25e66bff6e",
+    "summary_sha256": "168c4fa2dd118861be845b9383b6ba1919c2f25df50bd824f68a689a2b43b2f5",
+    "summary_markdown_sha256": "493b8deaa53ceecd0e57eba5fc9bc8c0320408c1304ce60e9f2447d8ba646e43",
+    "campaign_time_sha256": "cf2bfd9cc01050b240958a077b76ef46b9db21cd4770cdc8d15f3c1c1e8ad673",
+    "environment_sha256": "8b5ccd7a209a2ecd8ab9a1c4db5c1a6b6fa75dcadaf9f5a4873624b9d045163c",
+    "master_sha256": "d8fabde776f5d764942fae60627dbad2d4b118019cf08c7e0c6c95b3568b3683",
+    "readiness_sha256": "82e612cdef1244bc8aaf2a24f33fe12918d9e0027f97d73275594048dd797b05",
+    "schedule_sha256": "9c570bbe9005fbaa8ae8e1ca82cf1211909b91c635fe2ff83557d19aaf71a2dc"
+  },
+  "population": {
+    "rows": "47/47",
+    "edit_suboperations": "51/51",
+    "durable_transitions": "34/34",
+    "physical_oracles": "51/51",
+    "canonical_transition_oracles": "34/34",
+    "save_bursts": "4/4",
+    "selected_history_roots": "8/8",
+    "all_row_statuses": "PASS"
+  },
+  "timer_equation_ns": {
+    "complete_wall": 12745738083,
+    "row_wall_sum": 8355633375,
+    "outside_rows_wall": 4390104708,
+    "residual": 0,
+    "hard_limit": 60000000000,
+    "process_reported_wall_after_final_validation": 13172360833,
+    "post_campaign_receipt_validation_wall": 426622750
+  },
+  "trust_and_publication": {
+    "fetched_rows": 74236,
+    "role_decode_passes": 74236,
+    "fetched_authentication_passes": 27880,
+    "fresh_verified_fetched_auth_decode": "26916/26916/26916",
+    "new_object_authentication": 677,
+    "created_rows": 554,
+    "reused_rows": 123,
+    "incumbent_authentication": 123,
+    "new_object_equation": "677 = 554 + 123",
+    "incumbent_equation": "123 = reused 123",
+    "fetched_authentication_failures": 0,
+    "role_decode_failures": 0,
+    "publication_transactions": 34,
+    "publication_commits": 34,
+    "publication_rollbacks": 0,
+    "verified_retained_union_scrubs": 7
+  },
+  "sql": {
+    "operation_store_statements": 7242,
+    "admission_statements": 22674,
+    "engine_scratch_statements": 101481,
+    "vfs_scratch_statements": 1857,
+    "scratch_statements": 103338,
+    "operation_store_plus_scratch": 110580,
+    "all_sql_including_admission": 133254,
+    "store_phase_equation": "2 + 969 + 1814 + 638 + 363 + 1626 + 72 + 1596 + 162 = 7242",
+    "storage_observation_equation": "54 observations * 3 SELECTs = 162 Store statements",
+    "scratch_rows": 274595,
+    "scratch_tables": 33,
+    "maximum_scratch_high_water_bytes": 74816,
+    "c08_001_combined_scratch": "Engine {2 tables, 20242 statements, 62540 rows} + VFS {1, 21, 4} = row {3, 20263, 62544}; high-water max 74816",
+    "native_edit_live_scratch_statements": 54,
+    "apfs_refresh_operation_scratch_statements": 1719,
+    "materialization_operation_scratch_statements": 83,
+    "terminal_cleanup_scratch_statements": 1,
+    "vfs_scratch_phase_equation": "54 + 1719 + 83 + 1 = 1857"
+  },
+  "native_and_correctness": {
+    "clone_patch_rows": 3,
+    "clone_shift_rows": 6,
+    "in_place_shift_rows": 6,
+    "full_fallbacks": 0,
+    "rematerializations": 0,
+    "exact_bytes": true,
+    "metadata_exact": true,
+    "historical_roots_exact": true,
+    "refresh_exact": true,
+    "fixture_unchanged": true,
+    "hard_link_fixture_topology": "empty; nonzero hard-link ordering is proved by focused VFS/Apple fault tests"
+  },
+  "resources": {
+    "rss_peak_bytes": 28442624,
+    "largest_buffer_bytes": 1048576,
+    "operation_q_high_water_bytes": 8388607,
+    "operation_q_terminal_bytes": 0,
+    "store_connection_high_water": 2,
+    "store_connections_terminal": 0,
+    "fd_baseline": 5,
+    "fd_terminal": 5,
+    "child_process_peak": 0,
+    "child_processes_terminal": 0,
+    "owned_temp_residue": 0,
+    "sidecar_residue": 0,
+    "busy_events": 0,
+    "locked_events": 0,
+    "network_operations": 0
+  },
+  "preserved_failures": {
+    "attempt_021": {
+      "rows": "4/47",
+      "reason": "three newly counted storage-observation SELECTs were outside the old phase partition",
+      "rows_sha256": "1e824fc9bf85e34844ead72510351be419ea0bc24fce658741a1993d0fc14b9c",
+      "summary_sha256": "acf8c2cb2e97e711870ed1d7e38977b127e59458a7906e34e214c46ab4ce574e"
+    },
+    "attempt_022": {
+      "rows": "47/47",
+      "reason": "clean worktree had not staged the exact accepted attempt-007 comparison artifact",
+      "rows_sha256": "c252888eafd337cefd08b27068524a26b0e44851c81e2a59a90f621f814e58b7",
+      "summary_sha256": "e1ab2f801f61667cdd980da6f19188c8b353cb6caf7f47702ec64d19cce3c18c"
+    },
+    "attempt_023": {
+      "rows": "47/47 evaluator PASS; independent audit FAIL",
+      "reason": "C08-001 row scratch {2,20242,62540} used max instead of additive Engine+VFS {3,20263,62544}; global scratch SQL 103317 != phase-derived 103338",
+      "rows_sha256": "399dd4d7349c145dee290e6874e4aa0da535ed251cfc1cf16bfd305fd0a46d4f",
+      "summary_sha256": "52518003cbc2e8f8444f7f2d1b749ee2e227d42b7bc13dde002ba092aeaf6dec"
+    }
+  }
+}
