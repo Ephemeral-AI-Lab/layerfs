@@ -16,6 +16,37 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+type ManagedRootAdmission = (
+    Box<dyn crate::driver::ProjectionWorkspace>,
+    Box<dyn crate::driver::DirectoryHandle>,
+    Vec<u8>,
+);
+
+pub(crate) fn admit_managed_root(
+    native: Box<dyn crate::driver::ProjectionWorkspace>,
+) -> VfsResult<ManagedRootAdmission> {
+    let native_root = match native.root_directory() {
+        Ok(root) => root,
+        Err(error) => {
+            return match native.discard_owned_root() {
+                Ok(()) => Err(error.into()),
+                Err(cleanup) => Err(cleanup.into()),
+            }
+        }
+    };
+    let owned_identity = match native.directory_identity(native_root.as_ref()) {
+        Ok(identity) => identity,
+        Err(error) => {
+            drop(native_root);
+            return match native.discard_owned_root() {
+                Ok(()) => Err(error.into()),
+                Err(cleanup) => Err(cleanup.into()),
+            };
+        }
+    };
+    Ok((native, native_root, owned_identity))
+}
+
 #[derive(Debug)]
 pub enum VfsError {
     Core(CoreError),
@@ -339,8 +370,7 @@ impl LayerVfs {
             crate::driver::WorkspacePolicy::ManagedCreateOwned,
             self.engine.store_id()?,
         )?;
-        let native_root = native.root_directory()?;
-        let owned_identity = native.directory_identity(native_root.as_ref())?;
+        let (native, native_root, owned_identity) = admit_managed_root(native)?;
         let setup = (|| {
             let (mut counters, live_scratch) =
                 materialize_workspace(&self.engine, &self.digest_cache, native.as_ref(), root)?;

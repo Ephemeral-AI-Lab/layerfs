@@ -1028,6 +1028,11 @@ pub trait ProjectionWorkspace: Send {
     ) -> Result<()>;
     fn sync_directory(&self, directory: &dyn DirectoryHandle) -> Result<()>;
     fn set_root_metadata(&self, metadata: &NativeMetadata) -> Result<()>;
+    /// Discards the root created by `ManagedCreateOwned` when admission fails
+    /// before the portable layer can obtain a root handle or stable identity.
+    /// The workspace retains the creation-time identity needed to remove only
+    /// that exact owned root.
+    fn discard_owned_root(self: Box<Self>) -> Result<()>;
     fn remove_owned_root(&self, expected_identity: &[u8]) -> Result<()>;
 }
 
@@ -1049,10 +1054,19 @@ pub trait ProjectionDriver: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use layerfs_core::content::rope::ObjectRead;
+    use std::collections::BTreeMap;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::{Arc, Mutex};
 
     #[derive(Default)]
     struct MemoryWorkspace {
         fail_replace: bool,
+        fail_root: bool,
+        fail_identity: bool,
+        discarded: Arc<AtomicBool>,
+        materialize: Option<Arc<Mutex<MaterializeState>>>,
+        fault: Option<MaterializeFault>,
     }
     struct MemoryTemp(std::io::Cursor<Vec<u8>>);
     struct MemoryPreflight;
@@ -1065,11 +1079,168 @@ mod tests {
         }
     }
 
-    struct Dir;
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum MaterializeFault {
+        TempCreate,
+        WriteZero,
+        WriteShort,
+        WriteError,
+        Metadata,
+        FileSync,
+        RenameBeforeVisibility,
+        RenameAfterVisibility,
+        DirectorySync(u64),
+        RootRevalidation,
+        HardLink(u64),
+        HardLinkBeforeMetadata,
+        HardLinkAfterMetadata,
+        HardLinkAfterFinalSync,
+    }
+
+    #[derive(Default)]
+    struct MaterializeState {
+        events: Vec<String>,
+        files: BTreeMap<Vec<u8>, Vec<u8>>,
+        directories: Vec<Vec<u8>>,
+        directory_syncs: Vec<Vec<u8>>,
+        revalidations: u64,
+        hard_links: u64,
+        removed: bool,
+    }
+
+    struct Dir(Vec<u8>);
     impl DirectoryHandle for Dir {
         fn as_any(&self) -> &dyn Any {
             self
         }
+    }
+
+    struct MaterializeTemp {
+        bytes: std::io::Cursor<Vec<u8>>,
+        parent: Vec<u8>,
+        fault: Option<MaterializeFault>,
+        state: Arc<Mutex<MaterializeState>>,
+    }
+
+    impl Read for MaterializeTemp {
+        fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+            self.bytes.read(bytes)
+        }
+    }
+    impl Write for MaterializeTemp {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.state.lock().unwrap().events.push("write".into());
+            match self.fault {
+                Some(MaterializeFault::WriteZero) => Ok(0),
+                Some(MaterializeFault::WriteShort) => {
+                    self.bytes.write(&bytes[..bytes.len().min(1)])
+                }
+                Some(MaterializeFault::WriteError) => {
+                    Err(io::Error::other("injected content-write failure"))
+                }
+                _ => self.bytes.write(bytes),
+            }
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    impl Seek for MaterializeTemp {
+        fn seek(&mut self, position: io::SeekFrom) -> io::Result<u64> {
+            self.bytes.seek(position)
+        }
+    }
+    impl OwnedTempHandle for MaterializeTemp {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn set_len(&mut self, len: u64) -> Result<()> {
+            self.bytes.get_mut().resize(
+                usize::try_from(len).map_err(|_| DriverError::Unsupported)?,
+                0,
+            );
+            Ok(())
+        }
+        fn into_any(self: Box<Self>) -> Box<dyn Any> {
+            self
+        }
+    }
+
+    impl MemoryWorkspace {
+        fn install_temp(
+            &self,
+            temp: Box<dyn OwnedTempHandle>,
+            parent: &dyn DirectoryHandle,
+            name: &[u8],
+            requested: DirectoryDurability,
+        ) -> Result<DirectoryDurability> {
+            let temp = temp
+                .into_any()
+                .downcast::<MaterializeTemp>()
+                .map_err(|_| DriverError::Conflict)?;
+            let path = entry_path(parent, name)?;
+            if temp.parent
+                != parent
+                    .as_any()
+                    .downcast_ref::<Dir>()
+                    .ok_or(DriverError::Conflict)?
+                    .0
+            {
+                return Err(DriverError::Conflict);
+            }
+            let mut state = temp.state.lock().unwrap();
+            state.events.push("file_sync".into());
+            if self.fault == Some(MaterializeFault::FileSync) {
+                return Err(DriverError::DurabilityAmbiguous);
+            }
+            state.events.push(format!("rename:{}", display_path(&path)));
+            if self.fault == Some(MaterializeFault::RenameBeforeVisibility) {
+                return Err(DriverError::Io(io::Error::other(
+                    "injected pre-visibility rename failure",
+                )));
+            }
+            state.files.insert(path, temp.bytes.into_inner());
+            if self.fault == Some(MaterializeFault::RenameAfterVisibility) {
+                return Err(DriverError::VisibilityAmbiguous);
+            }
+            if requested == DirectoryDurability::ImmediateDirectoryDurability {
+                let parent = parent
+                    .as_any()
+                    .downcast_ref::<Dir>()
+                    .ok_or(DriverError::Conflict)?
+                    .0
+                    .clone();
+                state.directory_syncs.push(parent.clone());
+                state
+                    .events
+                    .push(format!("directory_sync:{}", display_path(&parent)));
+            }
+            Ok(requested)
+        }
+    }
+
+    fn entry_path(parent: &dyn DirectoryHandle, name: &[u8]) -> Result<Vec<u8>> {
+        let parent = parent
+            .as_any()
+            .downcast_ref::<Dir>()
+            .ok_or(DriverError::Conflict)?;
+        let mut path = parent.0.clone();
+        if !path.is_empty() {
+            path.push(b'/');
+        }
+        path.extend_from_slice(name);
+        Ok(path)
+    }
+
+    fn display_path(path: &[u8]) -> String {
+        String::from_utf8_lossy(path).into_owned()
+    }
+
+    fn clear_owned_state(state: &mut MaterializeState) {
+        state.events.push("owned_root_removed".into());
+        state.files.clear();
+        state.directories.clear();
+        state.removed = true;
     }
 
     impl Read for MemoryTemp {
@@ -1108,13 +1279,22 @@ mod tests {
 
     impl ProjectionWorkspace for MemoryWorkspace {
         fn root_directory(&self) -> Result<Box<dyn DirectoryHandle>> {
-            Ok(Box::new(Dir))
+            if self.fail_root {
+                Err(DriverError::Io(io::Error::other(
+                    "injected root-handle failure",
+                )))
+            } else {
+                Ok(Box::new(Dir(Vec::new())))
+            }
         }
 
         fn enumerate_at<'a>(
             &'a self,
             _parent: &'a dyn DirectoryHandle,
         ) -> Result<Box<dyn Iterator<Item = Result<NativeEntry>> + 'a>> {
+            if self.materialize.is_some() {
+                return Ok(Box::new(std::iter::empty()));
+            }
             Ok(Box::new(
                 [NativeEntry {
                     name: b"file".to_vec(),
@@ -1138,17 +1318,37 @@ mod tests {
         }
         fn duplicate_directory(
             &self,
-            _directory: &dyn DirectoryHandle,
+            directory: &dyn DirectoryHandle,
         ) -> Result<Box<dyn DirectoryHandle>> {
-            Err(DriverError::Unsupported)
+            let directory = directory
+                .as_any()
+                .downcast_ref::<Dir>()
+                .ok_or(DriverError::Conflict)?;
+            Ok(Box::new(Dir(directory.0.clone())))
         }
         fn directory_token(&self, _directory: &dyn DirectoryHandle) -> Result<Vec<u8>> {
             Ok(vec![1])
         }
         fn directory_identity(&self, _directory: &dyn DirectoryHandle) -> Result<Vec<u8>> {
-            Ok(vec![1])
+            if self.fail_identity {
+                Err(DriverError::Io(io::Error::other(
+                    "injected root-identity failure",
+                )))
+            } else {
+                Ok(vec![1])
+            }
         }
         fn revalidate_root_binding(&self) -> Result<()> {
+            if let Some(state) = &self.materialize {
+                let mut state = state.lock().unwrap();
+                state.revalidations += 1;
+                state.events.push("root_revalidate".into());
+                if self.fault == Some(MaterializeFault::RootRevalidation)
+                    && state.revalidations == 2
+                {
+                    return Err(DriverError::Conflict);
+                }
+            }
             Ok(())
         }
         fn begin_name_preflight(&self) -> Result<Box<dyn NamePreflight>> {
@@ -1196,7 +1396,7 @@ mod tests {
             Err(DriverError::Unsupported)
         }
         fn identity_at(&self, _parent: &dyn DirectoryHandle, _name: &[u8]) -> Result<Vec<u8>> {
-            Err(DriverError::Unsupported)
+            entry_path(_parent, _name)
         }
         fn read_root_metadata(&self) -> Result<NativeMetadata> {
             Err(DriverError::Unsupported)
@@ -1209,16 +1409,38 @@ mod tests {
         }
         fn create_directory_at(
             &self,
-            _parent: &dyn DirectoryHandle,
-            _name: &[u8],
+            parent: &dyn DirectoryHandle,
+            name: &[u8],
         ) -> Result<Box<dyn DirectoryHandle>> {
-            Err(DriverError::Unsupported)
+            let path = entry_path(parent, name)?;
+            let Some(state) = &self.materialize else {
+                return Err(DriverError::Unsupported);
+            };
+            let mut state = state.lock().unwrap();
+            state.events.push(format!("mkdir:{}", display_path(&path)));
+            state.directories.push(path.clone());
+            Ok(Box::new(Dir(path)))
         }
-        fn create_temp_at(
-            &self,
-            _parent: &dyn DirectoryHandle,
-        ) -> Result<Box<dyn OwnedTempHandle>> {
-            Err(DriverError::Unsupported)
+        fn create_temp_at(&self, parent: &dyn DirectoryHandle) -> Result<Box<dyn OwnedTempHandle>> {
+            let Some(state) = &self.materialize else {
+                return Err(DriverError::Unsupported);
+            };
+            state.lock().unwrap().events.push("temp_create".into());
+            if self.fault == Some(MaterializeFault::TempCreate) {
+                return Err(DriverError::Io(io::Error::other(
+                    "injected temp-create failure",
+                )));
+            }
+            let parent = parent
+                .as_any()
+                .downcast_ref::<Dir>()
+                .ok_or(DriverError::Conflict)?;
+            Ok(Box::new(MaterializeTemp {
+                bytes: std::io::Cursor::new(Vec::new()),
+                parent: parent.0.clone(),
+                fault: self.fault,
+                state: state.clone(),
+            }))
         }
         fn clone_temp_from_regular(
             &self,
@@ -1234,37 +1456,86 @@ mod tests {
             _temp: &mut dyn OwnedTempHandle,
             _metadata: &NativeMetadata,
         ) -> Result<()> {
-            Err(DriverError::Unsupported)
-        }
-        fn set_entry_metadata(
-            &self,
-            _parent: &dyn DirectoryHandle,
-            _name: &[u8],
-            _expected: &[u8],
-            _metadata: &NativeMetadata,
-        ) -> Result<()> {
-            Err(DriverError::Unsupported)
-        }
-        fn atomic_replace(
-            &self,
-            _temp: Box<dyn OwnedTempHandle>,
-            _parent: &dyn DirectoryHandle,
-            _name: &[u8],
-        ) -> Result<()> {
-            if self.fail_replace {
-                Err(DriverError::DurabilityAmbiguous)
+            let Some(state) = &self.materialize else {
+                return Err(DriverError::Unsupported);
+            };
+            state.lock().unwrap().events.push("metadata".into());
+            if self.fault == Some(MaterializeFault::Metadata) {
+                Err(DriverError::Io(io::Error::other(
+                    "injected metadata failure",
+                )))
             } else {
                 Ok(())
             }
         }
+        fn set_entry_metadata(
+            &self,
+            parent: &dyn DirectoryHandle,
+            name: &[u8],
+            _expected: &[u8],
+            _metadata: &NativeMetadata,
+        ) -> Result<()> {
+            let Some(state) = &self.materialize else {
+                return Err(DriverError::Unsupported);
+            };
+            state.lock().unwrap().events.push(format!(
+                "directory_metadata:{}",
+                display_path(&entry_path(parent, name)?)
+            ));
+            Ok(())
+        }
+        fn atomic_replace(
+            &self,
+            temp: Box<dyn OwnedTempHandle>,
+            parent: &dyn DirectoryHandle,
+            name: &[u8],
+        ) -> Result<()> {
+            if self.fail_replace {
+                Err(DriverError::DurabilityAmbiguous)
+            } else if self.materialize.is_some() {
+                self.install_temp(
+                    temp,
+                    parent,
+                    name,
+                    DirectoryDurability::ImmediateDirectoryDurability,
+                )
+                .map(drop)
+            } else {
+                Ok(())
+            }
+        }
+        fn atomic_replace_with_directory_durability(
+            &self,
+            temp: Box<dyn OwnedTempHandle>,
+            parent: &dyn DirectoryHandle,
+            name: &[u8],
+            requested: DirectoryDurability,
+        ) -> Result<DirectoryDurability> {
+            if self.materialize.is_some() {
+                self.install_temp(temp, parent, name, requested)
+            } else {
+                self.atomic_replace(temp, parent, name)?;
+                Ok(DirectoryDurability::ImmediateDirectoryDurability)
+            }
+        }
         fn atomic_replace_checked(
             &self,
-            _temp: Box<dyn OwnedTempHandle>,
-            _parent: &dyn DirectoryHandle,
-            _name: &[u8],
+            temp: Box<dyn OwnedTempHandle>,
+            parent: &dyn DirectoryHandle,
+            name: &[u8],
             _expected: Option<&[u8]>,
         ) -> Result<()> {
-            Err(DriverError::Unsupported)
+            if self.materialize.is_some() {
+                self.install_temp(
+                    temp,
+                    parent,
+                    name,
+                    DirectoryDurability::ImmediateDirectoryDurability,
+                )
+                .map(drop)
+            } else {
+                Err(DriverError::Unsupported)
+            }
         }
         fn create_symlink_at(
             &self,
@@ -1287,13 +1558,34 @@ mod tests {
         }
         fn create_hard_link_at(
             &self,
-            _source_parent: &dyn DirectoryHandle,
-            _source: &[u8],
+            source_parent: &dyn DirectoryHandle,
+            source: &[u8],
             _source_expected: &[u8],
-            _target_parent: &dyn DirectoryHandle,
-            _target: &[u8],
+            target_parent: &dyn DirectoryHandle,
+            target: &[u8],
         ) -> Result<()> {
-            Err(DriverError::Unsupported)
+            let Some(state) = &self.materialize else {
+                return Err(DriverError::Unsupported);
+            };
+            let source = entry_path(source_parent, source)?;
+            let target = entry_path(target_parent, target)?;
+            let mut state = state.lock().unwrap();
+            state.hard_links += 1;
+            state
+                .events
+                .push(format!("hard_link:{}", display_path(&target)));
+            if self.fault == Some(MaterializeFault::HardLink(state.hard_links)) {
+                return Err(DriverError::Io(io::Error::other(
+                    "injected hard-link failure",
+                )));
+            }
+            let bytes = state
+                .files
+                .get(&source)
+                .cloned()
+                .ok_or(DriverError::Conflict)?;
+            state.files.insert(target, bytes);
+            Ok(())
         }
         fn finish_hard_link_at(
             &self,
@@ -1302,7 +1594,27 @@ mod tests {
             _source_expected: &[u8],
             _metadata: &NativeMetadata,
         ) -> Result<()> {
-            Err(DriverError::Unsupported)
+            let Some(state) = &self.materialize else {
+                return Err(DriverError::Unsupported);
+            };
+            let mut state = state.lock().unwrap();
+            state.events.push("hard_link_before_metadata".into());
+            if self.fault == Some(MaterializeFault::HardLinkBeforeMetadata) {
+                return Err(DriverError::Io(io::Error::other(
+                    "injected pre-metadata hard-link failure",
+                )));
+            }
+            state.events.push("hard_link_metadata".into());
+            if self.fault == Some(MaterializeFault::HardLinkAfterMetadata) {
+                return Err(DriverError::Io(io::Error::other(
+                    "injected post-metadata hard-link failure",
+                )));
+            }
+            state.events.push("hard_link_final_sync".into());
+            if self.fault == Some(MaterializeFault::HardLinkAfterFinalSync) {
+                return Err(DriverError::DurabilityAmbiguous);
+            }
+            Ok(())
         }
         fn rename_at(
             &self,
@@ -1337,14 +1649,48 @@ mod tests {
         ) -> Result<()> {
             Err(DriverError::Unsupported)
         }
-        fn sync_directory(&self, _directory: &dyn DirectoryHandle) -> Result<()> {
+        fn sync_directory(&self, directory: &dyn DirectoryHandle) -> Result<()> {
+            if let Some(state) = &self.materialize {
+                let directory = directory
+                    .as_any()
+                    .downcast_ref::<Dir>()
+                    .ok_or(DriverError::Conflict)?;
+                let mut state = state.lock().unwrap();
+                state.directory_syncs.push(directory.0.clone());
+                state
+                    .events
+                    .push(format!("directory_sync:{}", display_path(&directory.0)));
+                let sync = u64::try_from(state.directory_syncs.len()).unwrap();
+                if self.fault == Some(MaterializeFault::DirectorySync(sync)) {
+                    return Err(DriverError::DurabilityAmbiguous);
+                }
+            }
             Ok(())
         }
         fn set_root_metadata(&self, _metadata: &NativeMetadata) -> Result<()> {
-            Err(DriverError::Unsupported)
+            if let Some(state) = &self.materialize {
+                state.lock().unwrap().events.push("root_metadata".into());
+                Ok(())
+            } else {
+                Err(DriverError::Unsupported)
+            }
         }
-        fn remove_owned_root(&self, _expected_identity: &[u8]) -> Result<()> {
-            Err(DriverError::Unsupported)
+        fn discard_owned_root(self: Box<Self>) -> Result<()> {
+            self.discarded.store(true, Ordering::Release);
+            if let Some(state) = &self.materialize {
+                clear_owned_state(&mut state.lock().unwrap());
+            }
+            Ok(())
+        }
+        fn remove_owned_root(&self, expected_identity: &[u8]) -> Result<()> {
+            let Some(state) = &self.materialize else {
+                return Err(DriverError::Unsupported);
+            };
+            if expected_identity != [1] {
+                return Err(DriverError::Conflict);
+            }
+            clear_owned_state(&mut state.lock().unwrap());
+            Ok(())
         }
     }
 
@@ -1359,6 +1705,341 @@ mod tests {
         ) -> Result<Box<dyn ProjectionWorkspace>> {
             Ok(Box::new(MemoryWorkspace::default()))
         }
+    }
+
+    struct MaterializeDriver {
+        state: Arc<Mutex<MaterializeState>>,
+        fault: Option<MaterializeFault>,
+    }
+
+    impl ProjectionDriver for MaterializeDriver {
+        fn open_workspace(
+            &self,
+            _path: &Path,
+            _policy: WorkspacePolicy,
+            _store_id: [u8; 32],
+        ) -> Result<Box<dyn ProjectionWorkspace>> {
+            Ok(Box::new(MemoryWorkspace {
+                materialize: Some(self.state.clone()),
+                fault: self.fault,
+                ..MemoryWorkspace::default()
+            }))
+        }
+    }
+
+    static TEST_SERIAL: AtomicU64 = AtomicU64::new(0);
+
+    fn test_vfs(
+        fault: Option<MaterializeFault>,
+    ) -> (
+        std::path::PathBuf,
+        crate::workspace::LayerVfs,
+        Arc<Mutex<MaterializeState>>,
+    ) {
+        let base = std::env::temp_dir().join(format!(
+            "layerfs-vfs-fault-{}-{}",
+            std::process::id(),
+            TEST_SERIAL.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir(&base).unwrap();
+        let state = Arc::new(Mutex::new(MaterializeState::default()));
+        let driver = Arc::new(MaterializeDriver {
+            state: state.clone(),
+            fault,
+        });
+        let vfs = crate::workspace::LayerVfs::open(&base.join("store.sqlite"), driver).unwrap();
+        (base, vfs, state)
+    }
+
+    fn flat_file(vfs: &crate::workspace::LayerVfs) -> layerfs_engine::refs::RefState {
+        let head = vfs.current_head("main").unwrap();
+        vfs.replace_file(
+            &head,
+            &layerfs_core::CanonicalPath::new("file").unwrap(),
+            io::Cursor::new(b"portable-fault-matrix"),
+        )
+        .unwrap()
+        .0
+    }
+
+    fn nested_two_files(vfs: &crate::workspace::LayerVfs) -> layerfs_engine::refs::RefState {
+        use layerfs_core::content::rope::build;
+        use layerfs_core::inode::{
+            inode_table_lookup, inode_table_upsert, InodeKind, InodeRecordV1, InodeTableCounters,
+            InodeTableRoot,
+        };
+        use layerfs_core::namespace::{
+            directory_insert, empty_directory, DirectoryStateRoot, NamespaceRootV1,
+        };
+        use layerfs_core::namespace_codec::{
+            decode_inode_record, decode_namespace_root, encode_inode_record, encode_namespace_root,
+        };
+        use layerfs_core::CanonicalName;
+
+        let head = vfs.current_head("main").unwrap();
+        let mut publication = vfs.engine.begin_publication(Some(&head), "main").unwrap();
+        let namespace = publication
+            .with_authenticated_canonical(head.root, decode_namespace_root)
+            .unwrap();
+        let table = InodeTableRoot(namespace.inode_table_root);
+        let mut visits = InodeTableCounters::default();
+        let root_record_id = inode_table_lookup(
+            &publication,
+            table,
+            namespace.root_directory_inode,
+            &mut visits,
+        )
+        .unwrap()
+        .unwrap();
+        let root_record = publication
+            .with_authenticated_canonical(root_record_id, decode_inode_record)
+            .unwrap();
+
+        let directory_inode = publication.allocate_inode_id().unwrap();
+        let mut directory = empty_directory(&mut publication).unwrap();
+        let mut file_records = Vec::new();
+        for (name, bytes) in [(b"one".as_slice(), b"one".as_slice()), (b"two", b"two")] {
+            let inode = publication.allocate_inode_id().unwrap();
+            let (content, _) = build(&mut publication, io::Cursor::new(bytes)).unwrap();
+            let metadata = crate::capture::put_metadata(
+                &mut publication,
+                InodeKind::RegularFile,
+                &NativeMetadata {
+                    mode: 0o644,
+                    mtime_seconds: 0,
+                    mtime_nanoseconds: 0,
+                    xattrs: NativeXattrs::new(),
+                    acl: None,
+                    bsd_flags: 0,
+                },
+            )
+            .unwrap();
+            let record = publication
+                .put_object(
+                    &encode_inode_record(InodeRecordV1 {
+                        kind: InodeKind::RegularFile,
+                        namespace_ref_count: 1,
+                        content_root: content.0,
+                        metadata_root: metadata,
+                    })
+                    .unwrap(),
+                )
+                .unwrap();
+            directory = directory_insert(
+                &mut publication,
+                directory,
+                CanonicalName::from_bytes(name).unwrap(),
+                inode,
+            )
+            .unwrap()
+            .0;
+            file_records.push((inode, record));
+        }
+
+        let directory_metadata = crate::capture::put_metadata(
+            &mut publication,
+            InodeKind::Directory,
+            &NativeMetadata {
+                mode: 0o755,
+                mtime_seconds: 0,
+                mtime_nanoseconds: 0,
+                xattrs: NativeXattrs::new(),
+                acl: None,
+                bsd_flags: 0,
+            },
+        )
+        .unwrap();
+        let directory_record = publication
+            .put_object(
+                &encode_inode_record(InodeRecordV1 {
+                    kind: InodeKind::Directory,
+                    namespace_ref_count: 1,
+                    content_root: directory.0,
+                    metadata_root: directory_metadata,
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let root_directory = directory_insert(
+            &mut publication,
+            DirectoryStateRoot(root_record.content_root),
+            CanonicalName::from_bytes(b"nested").unwrap(),
+            directory_inode,
+        )
+        .unwrap()
+        .0;
+        let root_record = publication
+            .put_object(
+                &encode_inode_record(InodeRecordV1 {
+                    content_root: root_directory.0,
+                    ..root_record
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let mut table = table;
+        for (inode, record) in file_records {
+            table = inode_table_upsert(&mut publication, table, inode, record)
+                .unwrap()
+                .0;
+        }
+        table = inode_table_upsert(&mut publication, table, directory_inode, directory_record)
+            .unwrap()
+            .0;
+        table = inode_table_upsert(
+            &mut publication,
+            table,
+            namespace.root_directory_inode,
+            root_record,
+        )
+        .unwrap()
+        .0;
+        publication
+            .publish_namespace(
+                &encode_namespace_root(NamespaceRootV1 {
+                    inode_table_root: table.0,
+                    ..namespace
+                })
+                .unwrap(),
+            )
+            .unwrap()
+    }
+
+    fn three_hard_links(vfs: &crate::workspace::LayerVfs) -> layerfs_engine::refs::RefState {
+        use layerfs_core::inode::{
+            inode_table_lookup, inode_table_upsert, InodeKind, InodeRecordV1, InodeTableCounters,
+            InodeTableRoot,
+        };
+        use layerfs_core::namespace::{directory_insert, directory_lookup, DirectoryStateRoot};
+        use layerfs_core::namespace_codec::{
+            decode_inode_record, decode_namespace_root, encode_inode_record, encode_namespace_root,
+        };
+        use layerfs_core::CanonicalName;
+
+        let head = flat_file(vfs);
+        let mut publication = vfs.engine.begin_publication(Some(&head), "main").unwrap();
+        let namespace = publication
+            .with_authenticated_canonical(head.root, decode_namespace_root)
+            .unwrap();
+        let mut inode_visits = InodeTableCounters::default();
+        let table = InodeTableRoot(namespace.inode_table_root);
+        let root_record_id = inode_table_lookup(
+            &publication,
+            table,
+            namespace.root_directory_inode,
+            &mut inode_visits,
+        )
+        .unwrap()
+        .unwrap();
+        let root_record = publication
+            .with_authenticated_canonical(root_record_id, decode_inode_record)
+            .unwrap();
+        let directory = DirectoryStateRoot(root_record.content_root);
+        let mut namespace_visits = layerfs_core::namespace::NamespaceCounters::default();
+        let inode = directory_lookup(
+            &publication,
+            directory,
+            &CanonicalName::from_bytes(b"file").unwrap(),
+            &mut namespace_visits,
+        )
+        .unwrap()
+        .unwrap();
+        let record_id = inode_table_lookup(&publication, table, inode, &mut inode_visits)
+            .unwrap()
+            .unwrap();
+        let record = publication
+            .with_authenticated_canonical(record_id, decode_inode_record)
+            .unwrap();
+        let metadata = crate::capture::put_metadata(
+            &mut publication,
+            InodeKind::RegularFile,
+            &NativeMetadata {
+                mode: 0o644,
+                mtime_seconds: 0,
+                mtime_nanoseconds: 0,
+                xattrs: NativeXattrs::new(),
+                acl: None,
+                bsd_flags: 0x2,
+            },
+        )
+        .unwrap();
+        let record = publication
+            .put_object(
+                &encode_inode_record(InodeRecordV1 {
+                    namespace_ref_count: 3,
+                    metadata_root: metadata,
+                    ..record
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let directory = directory_insert(
+            &mut publication,
+            directory,
+            CanonicalName::from_bytes(b"link-b").unwrap(),
+            inode,
+        )
+        .unwrap()
+        .0;
+        let directory = directory_insert(
+            &mut publication,
+            directory,
+            CanonicalName::from_bytes(b"link-c").unwrap(),
+            inode,
+        )
+        .unwrap()
+        .0;
+        let root_record = publication
+            .put_object(
+                &encode_inode_record(InodeRecordV1 {
+                    content_root: directory.0,
+                    ..root_record
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let table = inode_table_upsert(&mut publication, table, inode, record)
+            .unwrap()
+            .0;
+        let table = inode_table_upsert(
+            &mut publication,
+            table,
+            namespace.root_directory_inode,
+            root_record,
+        )
+        .unwrap()
+        .0;
+        publication
+            .publish_namespace(
+                &encode_namespace_root(layerfs_core::namespace::NamespaceRootV1 {
+                    inode_table_root: table.0,
+                    ..namespace
+                })
+                .unwrap(),
+            )
+            .unwrap()
+    }
+
+    fn assert_failed_fresh_materialization(
+        fault: MaterializeFault,
+        fixture: fn(&crate::workspace::LayerVfs) -> layerfs_engine::refs::RefState,
+    ) {
+        let (base, vfs, state) = test_vfs(Some(fault));
+        let head = fixture(&vfs);
+        assert!(
+            vfs.materialize_managed(head.root).is_err(),
+            "fault {fault:?}"
+        );
+        let state = state.lock().unwrap();
+        assert!(state.removed, "fault {fault:?} left an owned root");
+        assert!(state.files.is_empty(), "fault {fault:?} left visible files");
+        assert!(
+            state.directories.is_empty(),
+            "fault {fault:?} left visible directories"
+        );
+        drop(state);
+        drop(vfs);
+        std::fs::remove_dir_all(base).unwrap();
     }
 
     #[test]
@@ -1378,6 +2059,209 @@ mod tests {
             .collect::<Result<Vec<_>>>()
             .unwrap();
         assert_eq!(entries[0].name, b"file");
+    }
+
+    #[test]
+    fn managed_root_handle_failure_discards_the_exact_opened_workspace() {
+        let discarded = Arc::new(AtomicBool::new(false));
+        let result = crate::workspace::admit_managed_root(Box::new(MemoryWorkspace {
+            fail_root: true,
+            discarded: discarded.clone(),
+            ..MemoryWorkspace::default()
+        }));
+        assert!(matches!(result, Err(crate::VfsError::Driver(_))));
+        assert!(discarded.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn managed_root_identity_failure_discards_the_exact_opened_workspace() {
+        let discarded = Arc::new(AtomicBool::new(false));
+        let result = crate::workspace::admit_managed_root(Box::new(MemoryWorkspace {
+            fail_identity: true,
+            discarded: discarded.clone(),
+            ..MemoryWorkspace::default()
+        }));
+        assert!(matches!(result, Err(crate::VfsError::Driver(_))));
+        assert!(discarded.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn fresh_materializer_faults_never_return_complete_or_leave_owned_residue() {
+        for fault in [
+            MaterializeFault::TempCreate,
+            MaterializeFault::WriteZero,
+            MaterializeFault::WriteError,
+            MaterializeFault::Metadata,
+            MaterializeFault::FileSync,
+            MaterializeFault::RenameBeforeVisibility,
+            MaterializeFault::RenameAfterVisibility,
+            MaterializeFault::DirectorySync(1),
+            MaterializeFault::RootRevalidation,
+        ] {
+            assert_failed_fresh_materialization(fault, flat_file);
+        }
+    }
+
+    #[test]
+    fn fresh_materializer_accepts_short_writes_and_completes_exact_bytes() {
+        let (base, vfs, state) = test_vfs(Some(MaterializeFault::WriteShort));
+        let head = flat_file(&vfs);
+        let mut workspace = vfs.materialize_managed(head.root).unwrap();
+        let state_guard = state.lock().unwrap();
+        assert_eq!(
+            state_guard.files.get(b"file".as_slice()).unwrap(),
+            b"portable-fault-matrix"
+        );
+        assert!(
+            state_guard
+                .events
+                .iter()
+                .filter(|event| event.as_str() == "write")
+                .count()
+                > 1
+        );
+        assert_eq!(state_guard.directory_syncs, [Vec::<u8>::new()]);
+        assert_eq!(state_guard.revalidations, 2);
+        assert!(!state_guard.removed);
+        drop(state_guard);
+        workspace.discard().unwrap();
+        assert!(state.lock().unwrap().removed);
+        drop(workspace);
+        drop(vfs);
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn fresh_nested_tree_barriers_are_once_per_directory_and_bottom_up() {
+        let (base, vfs, state) = test_vfs(None);
+        let head = nested_two_files(&vfs);
+        let mut workspace = vfs.materialize_managed(head.root).unwrap();
+        let state_guard = state.lock().unwrap();
+        assert_eq!(state_guard.files.len(), 2);
+        assert_eq!(
+            state_guard.directory_syncs,
+            [b"nested".to_vec(), Vec::<u8>::new()]
+        );
+        let events = &state_guard.events;
+        let second_rename = events
+            .iter()
+            .rposition(|event| event.starts_with("rename:nested/"))
+            .unwrap();
+        let nested_sync = events
+            .iter()
+            .position(|event| event == "directory_sync:nested")
+            .unwrap();
+        let root_metadata = events
+            .iter()
+            .position(|event| event == "root_metadata")
+            .unwrap();
+        let root_sync = events
+            .iter()
+            .position(|event| event == "directory_sync:")
+            .unwrap();
+        let final_revalidation = events
+            .iter()
+            .rposition(|event| event == "root_revalidate")
+            .unwrap();
+        assert!(second_rename < nested_sync);
+        assert!(nested_sync < root_metadata);
+        assert!(root_metadata < root_sync);
+        assert!(root_sync < final_revalidation);
+        drop(state_guard);
+        workspace.discard().unwrap();
+        drop(workspace);
+        drop(vfs);
+        std::fs::remove_dir_all(base).unwrap();
+
+        assert_failed_fresh_materialization(MaterializeFault::DirectorySync(1), nested_two_files);
+        assert_failed_fresh_materialization(MaterializeFault::DirectorySync(2), nested_two_files);
+    }
+
+    #[test]
+    fn fresh_hard_link_cut_matrix_preserves_two_sync_order_and_cleans_residue() {
+        for fault in [
+            MaterializeFault::RenameBeforeVisibility,
+            MaterializeFault::RenameAfterVisibility,
+            MaterializeFault::HardLink(2),
+            MaterializeFault::HardLinkBeforeMetadata,
+            MaterializeFault::HardLinkAfterMetadata,
+            MaterializeFault::HardLinkAfterFinalSync,
+        ] {
+            assert_failed_fresh_materialization(fault, three_hard_links);
+        }
+
+        let (base, vfs, state) = test_vfs(None);
+        let head = three_hard_links(&vfs);
+        let mut workspace = vfs.materialize_managed(head.root).unwrap();
+        let state_guard = state.lock().unwrap();
+        assert_eq!(state_guard.files.len(), 3);
+        let events = &state_guard.events;
+        let construction_sync = events
+            .iter()
+            .position(|event| event == "file_sync")
+            .unwrap();
+        let representative_install = events
+            .iter()
+            .position(|event| event == "rename:file")
+            .unwrap();
+        let first_alias = events
+            .iter()
+            .position(|event| event == "hard_link:link-b")
+            .unwrap();
+        let second_alias = events
+            .iter()
+            .position(|event| event == "hard_link:link-c")
+            .unwrap();
+        let restrictive_metadata = events
+            .iter()
+            .position(|event| event == "hard_link_metadata")
+            .unwrap();
+        let final_sync = events
+            .iter()
+            .position(|event| event == "hard_link_final_sync")
+            .unwrap();
+        let directory_barrier = events
+            .iter()
+            .position(|event| event == "directory_sync:")
+            .unwrap();
+        assert!(construction_sync < representative_install);
+        assert!(representative_install < first_alias);
+        assert!(first_alias < second_alias);
+        assert!(second_alias < restrictive_metadata);
+        assert!(restrictive_metadata < final_sync);
+        assert!(final_sync < directory_barrier);
+        drop(state_guard);
+        workspace.discard().unwrap();
+        drop(workspace);
+        drop(vfs);
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn checked_live_refresh_install_keeps_immediate_parent_durability() {
+        let state = Arc::new(Mutex::new(MaterializeState::default()));
+        let workspace = MemoryWorkspace {
+            materialize: Some(state.clone()),
+            ..MemoryWorkspace::default()
+        };
+        let root = Dir(Vec::new());
+        workspace
+            .atomic_replace_checked(
+                Box::new(MaterializeTemp {
+                    bytes: io::Cursor::new(b"refresh".to_vec()),
+                    parent: Vec::new(),
+                    fault: None,
+                    state: state.clone(),
+                }),
+                &root,
+                b"file",
+                None,
+            )
+            .unwrap();
+        assert_eq!(
+            state.lock().unwrap().events,
+            ["file_sync", "rename:file", "directory_sync:"]
+        );
     }
 
     #[test]
@@ -1419,7 +2303,7 @@ mod tests {
 
     #[test]
     fn portable_deferred_install_falls_back_to_safe_immediate_and_preserves_failure() {
-        let directory = Dir;
+        let directory = Dir(Vec::new());
         let achieved = MemoryWorkspace::default()
             .atomic_replace_with_directory_durability(
                 Box::new(MemoryTemp(std::io::Cursor::new(Vec::new()))),
@@ -1431,7 +2315,11 @@ mod tests {
         assert_eq!(achieved, DirectoryDurability::ImmediateDirectoryDurability);
 
         assert!(matches!(
-            (MemoryWorkspace { fail_replace: true }).atomic_replace_with_directory_durability(
+            (MemoryWorkspace {
+                fail_replace: true,
+                ..MemoryWorkspace::default()
+            })
+            .atomic_replace_with_directory_durability(
                 Box::new(MemoryTemp(std::io::Cursor::new(Vec::new()))),
                 &directory,
                 b"file",
