@@ -1,6 +1,6 @@
 #![cfg(target_os = "macos")]
 
-use layerfs_sdk::{IntegrityMode, LayerFs};
+use layerfs_sdk::{IntegrityMode, LayerFs, OPERATION_Q_BOUND_BYTES};
 use std::fs;
 use std::io::Cursor;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -41,8 +41,11 @@ fn public_direct_routes_stream_and_preserve_history() {
     assert_eq!(range, b"3456");
     assert_eq!(counters.native.bytes_read, 0);
     assert_eq!(counters.native.bytes_written, 0);
-    assert_eq!(counters.operation_q_current_bytes, 8 * 1024 * 1024);
-    assert_eq!(counters.operation_q_high_water_bytes, 8 * 1024 * 1024);
+    assert_eq!(counters.operation_q_current_bytes, OPERATION_Q_BOUND_BYTES);
+    assert_eq!(
+        counters.operation_q_high_water_bytes,
+        OPERATION_Q_BOUND_BYTES
+    );
     assert_eq!(counters.operation_q_terminal_bytes, 0);
 
     let (edited, counters) = opened
@@ -54,8 +57,11 @@ fn public_direct_routes_stream_and_preserve_history() {
     assert_eq!(counters.rope.payload_bytes_read, 0);
     assert_eq!(counters.native.bytes_read, 0);
     assert_eq!(counters.native.bytes_written, 0);
-    assert_eq!(counters.operation_q_current_bytes, 8 * 1024 * 1024);
-    assert_eq!(counters.operation_q_high_water_bytes, 8 * 1024 * 1024);
+    assert_eq!(counters.operation_q_current_bytes, OPERATION_Q_BOUND_BYTES);
+    assert_eq!(
+        counters.operation_q_high_water_bytes,
+        OPERATION_Q_BOUND_BYTES
+    );
     assert_eq!(counters.operation_q_terminal_bytes, 0);
 
     let mut old = Vec::new();
@@ -72,15 +78,21 @@ fn public_direct_routes_stream_and_preserve_history() {
         .fs
         .replace_file_observed(&edited, "file", Cursor::new(b"replacement"))
         .unwrap();
-    assert_eq!(counters.operation_q_current_bytes, 8 * 1024 * 1024);
-    assert_eq!(counters.operation_q_high_water_bytes, 8 * 1024 * 1024);
+    assert_eq!(counters.operation_q_current_bytes, OPERATION_Q_BOUND_BYTES);
+    assert_eq!(
+        counters.operation_q_high_water_bytes,
+        OPERATION_Q_BOUND_BYTES
+    );
     assert_eq!(counters.operation_q_terminal_bytes, 0);
     let (created, counters) = opened
         .fs
         .replace_file_observed(&replaced, "new", Cursor::new(b"streamed-new"))
         .unwrap();
-    assert_eq!(counters.operation_q_current_bytes, 8 * 1024 * 1024);
-    assert_eq!(counters.operation_q_high_water_bytes, 8 * 1024 * 1024);
+    assert_eq!(counters.operation_q_current_bytes, OPERATION_Q_BOUND_BYTES);
+    assert_eq!(
+        counters.operation_q_high_water_bytes,
+        OPERATION_Q_BOUND_BYTES
+    );
     assert_eq!(counters.operation_q_terminal_bytes, 0);
     let mut bytes = Vec::new();
     opened.fs.read_to(created.root, "new", &mut bytes).unwrap();
@@ -151,7 +163,10 @@ fn repeated_ranges_reuse_only_the_exact_resolved_root_and_path() {
     assert_eq!(second, bytes[64 * 1024..128 * 1024]);
     assert_eq!(second_counters.namespace.nodes_read, 0);
     assert_eq!(second_counters.inode_table.nodes_read, 0);
-    assert_eq!(second_counters.operation_q_current_bytes, 8 * 1024 * 1024);
+    assert_eq!(
+        second_counters.operation_q_current_bytes,
+        OPERATION_Q_BOUND_BYTES
+    );
     assert_eq!(second_counters.operation_q_terminal_bytes, 0);
     assert_eq!(
         after.statements - before.statements,

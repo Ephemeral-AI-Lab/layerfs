@@ -2663,13 +2663,18 @@ mod tests {
             .unwrap()
             .publish_namespace(&root)
             .unwrap();
+        drop(trusted);
         verified.reset_counters().unwrap();
         verified.commit_dispatch = std::sync::Arc::new(RollbackFailure);
 
-        assert!(matches!(
-            verified.begin_publication(None, "probe"),
-            Err(EngineError::MissingObject(_))
-        ));
+        let failed_scrub = match verified.begin_publication(None, "probe") {
+            Ok(_) => panic!("failed scrub unexpectedly opened a publication"),
+            Err(error) => error,
+        };
+        assert!(
+            matches!(failed_scrub, EngineError::MissingObject(_)),
+            "unexpected failed-scrub result: {failed_scrub:?}"
+        );
         let counters = verified.counters().unwrap();
         assert_eq!(counters.transactions_started, 1);
         assert_eq!(counters.transactions_rolled_back, 0);
@@ -2679,7 +2684,6 @@ mod tests {
             verified.read_ref("main"),
             Err(EngineError::AmbiguousDurability)
         ));
-        drop(trusted);
         let _ = std::fs::remove_file(path);
     }
 
