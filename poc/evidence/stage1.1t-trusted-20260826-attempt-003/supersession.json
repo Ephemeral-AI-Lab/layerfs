@@ -1,0 +1,18 @@
+{
+  "schema": "layerfs-stage1.1t-supersession-v2",
+  "status": "SUPERSEDED_BY_ATTEMPT_003",
+  "superseded_raw_run": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1t-trusted-20260826-attempt-002",
+  "superseding_raw_run": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1t-trusted-20260826-attempt-003",
+  "reason": "Attempt-002 emitted row_wall_ns as product_operation_wall_ns and row_wall_residual_ns as operation_residual_ns. All 12 rows violated the Stage 1.1M row timer equation; its custody also did not bind an observed clean build log.",
+  "attempt_002_timer_audit_ns": {
+    "nonconforming_rows": 12,
+    "reported_row_wall_sum": 941959331,
+    "oracle_wall_sum": 753764460,
+    "cleanup_wall_sum": 25232168,
+    "misreported_row_residual_sum": 41790,
+    "contract_rhs_sum": 1720997749,
+    "aggregate_mismatch": -779038418
+  },
+  "preservation": "Attempt-002 bytes and product-operation performance values remain immutable historical diagnostics. They are not exact row-timer or terminal custody evidence and were not rewritten.",
+  "attempt_003_exact_timer_rows": 12
+}

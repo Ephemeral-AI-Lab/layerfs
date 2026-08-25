@@ -1,0 +1,92 @@
+{
+  "schema": "layerfs-stage1.1-current-regression-receipt-v2",
+  "status": "PASS",
+  "source_commit": "36d05d844b36eb73598ba4e2a5decafd152df6d1",
+  "dirty_tree": false,
+  "argv": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1-final-build-36d05d8/release/layerfs-eval",
+    "stage1",
+    "run",
+    "apple-edge",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1-apple-edge-20260826-attempt-020"
+  ],
+  "manifest_role_qualification": "The reused source-build manifest role is stage1t-trusted-measurement-final; this receipt binds the exact regression argv and executable without claiming a regression-specific manifest role.",
+  "executable_sha256": "88cd70e64ec950a51ae67c1503c8c835b84b0095eb7bc08e6d74e82c8b9763c4",
+  "executable_blake3": "346d78ce5126f81e33c69a8e63ed60c79fc24831ed372eb8e02c4969cea8edfc",
+  "population": {
+    "rows": 47,
+    "edit_suboperations": 51,
+    "durable_transitions": 34,
+    "physical_oracles": 51,
+    "canonical_transition_oracles": 34,
+    "save_bursts": 4,
+    "selected_history_roots": 8
+  },
+  "timer_ns": {
+    "complete_wall": 12581879167,
+    "row_wall_sum": 8282138252,
+    "outside_rows_wall": 4299740915,
+    "timer_residual": 0,
+    "command_return_wall": 12980491834
+  },
+  "correctness": {
+    "exact_bytes": true,
+    "exact_metadata": true,
+    "exact_history": true,
+    "exact_refresh_routes": true,
+    "full_fallbacks": 0,
+    "rematerializations": 0,
+    "busy_events": 0,
+    "locked_events": 0,
+    "fixture_unchanged": true,
+    "fixture_hard_link_groups": 0,
+    "fixture_link_count": 1,
+    "hard_link_campaign_qualification": "The frozen single-file fixture is intentionally no-hard-link. Hard-link ordering remains covered by the passing workspace/unit closure, not by a fabricated campaign group."
+  },
+  "transactions_and_authentication": {
+    "transactions": 34,
+    "commits": 34,
+    "rollbacks": 0,
+    "new_object_authentication_passes": 677,
+    "created_rows": 554,
+    "reused_rows": 123,
+    "incumbent_authentication_passes": 123,
+    "trusted_read_only_authentication_zero": true,
+    "verified_fetched_authentication_exact": true,
+    "role_decode_exact": true,
+    "authentication_equation_failures": 0
+  },
+  "resources": {
+    "cpu_ns": null,
+    "cpu_availability": "Unavailable: the Stage 1.1 edge row schema does not expose operation CPU; this is not reported as zero.",
+    "maximum_rss_bytes": 29327360,
+    "largest_buffer_bytes": 1048576,
+    "q_high_water_bytes": 8388607,
+    "q_terminal_bytes": 0,
+    "connection_high_water": 2,
+    "connections_terminal": 0,
+    "fd_baseline": 5,
+    "fd_maximum_observed": 18,
+    "fd_terminal": 5,
+    "child_processes_terminal": 0,
+    "owned_residue": 0,
+    "sidecar_residue": 0,
+    "network_operations": 0
+  },
+  "artifact_sha256": {
+    "rows.jsonl": "2a725974234397527c267cfdde7f9d5bf8e07af13fe69be1109cbe9d8b61bb5f",
+    "summary.json": "f0cb7c676bc9d9af2dde4d069434bf41a6a656f4e3fc95b00546598b1a43c666",
+    "summary.md": "3a92f75adcbdcd7b917058262350b03f02cf46600757a349acc9b760637edf88",
+    "campaign-time.txt": "676020885fc8e6fae7722ef7387544f6d9056d6a942084d3e4cdff49d212efe8",
+    "environment.json": "bc2cf892f42d048f72869246bad8ae867e89edf835479242c2dcb878e3a57d92",
+    "readiness.json": "91d2816e0fdd32e8e4fc8a7574080b2567858baa6c3cf8f122ce4a4a5670c48e",
+    "schedule.json": "9c570bbe9005fbaa8ae8e1ca82cf1211909b91c635fe2ff83557d19aaf71a2dc",
+    "master.json": "5ec0dc7f6432bfe579bba12c75ae0c6381ebaace06ceef69504a6b11014e9424"
+  },
+  "preserved_failed_attempts": [
+    {"attempt": "016", "first_failed_equation": "fetched_rows = fetched_row_authentication_passes", "rows_sha256": "09ed9c788db3127b9cbe4a1f82236f70c1c3e6b7b45b3e7e1d6dce14776c55ed"},
+    {"attempt": "017", "first_failed_equation": "R5 optimization row must be the one-scrub/two-scratch open", "rows_sha256": "74e72329085f606adb03d1898ec8393e4059392d16a5cff2819afc8f9f631d5e"},
+    {"attempt": "018", "first_failed_equation": "objects_validated = fetched auth + new auth + incumbent auth", "rows_sha256": "7c134fcadc67686788407da5540f74d83f6d0bfeef858f66fe05b74221da6264"},
+    {"attempt": "019", "first_failed_equation": "Trusted fetched_row_authentication_passes = 0", "rows_sha256": "a2f4235baeb6a896df885e735e8636ffe72491843bed386ce46ccf551240a0e7"}
+  ]
+}

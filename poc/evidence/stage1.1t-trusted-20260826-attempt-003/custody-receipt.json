@@ -1,0 +1,63 @@
+{
+  "schema": "layerfs-stage1.1-terminal-audit-custody-v1",
+  "status": "PASS",
+  "deterministic_build_claim": false,
+  "trusted_measurement": {
+    "source_commit": "3635dfcea3008649f9838dd95e6ed34b8d89fd98",
+    "runtime_product_source_commit": "dfa60200084962cc3ac16c8518655ed85e62eb7f",
+    "runtime_product_diff_from_dfa6020": "empty",
+    "dirty_tree": false,
+    "workspace": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-stage1-clean-3635dfc",
+    "source_manifest": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1-terminal-custody/source-build-manifest-3635dfc.json",
+    "source_manifest_sha256": "979161b5d086cb25ce18f9922257b64806d196aac592aa8e2ef69ba689dd4e59",
+    "product_aggregate_sha256": "736725d564f5586762f33a4da4ff3e8583719ab3f17596858b481ece93c1097f",
+    "product_aggregate_blake3": "53e8ae916babeb863245c025ec64552f74ffa02f1be9fc4666cf497fe8a6143d",
+    "build_command": "CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1-final-build-3635dfc cargo build --release --locked -p layerfs-eval",
+    "build_log": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1-terminal-custody/build-logs/build-3635dfc-final.log",
+    "build_log_sha256": "d64012f314fb9598ee4d8ea60583d30d4471e8d885f81a4b94cbc8257a35e487",
+    "executable": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1-final-build-3635dfc/release/layerfs-eval",
+    "executable_bytes": 3954816,
+    "executable_sha256": "97e4fb265af9142e63da762ed1721f0df8440cdeab2f447d8de8301e8aeddf26",
+    "executable_blake3": "8845ad9962f1a6413dbde43909f26f1c943e3b3890edd55bfab4d3cf4850c66c",
+    "raw_run": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1t-trusted-20260826-attempt-003"
+  },
+  "final_regression": {
+    "source_commit": "36d05d844b36eb73598ba4e2a5decafd152df6d1",
+    "runtime_product_source_commit": "dfa60200084962cc3ac16c8518655ed85e62eb7f",
+    "runtime_product_diff_from_dfa6020": "empty",
+    "dirty_tree": false,
+    "source_build_manifest_role": "stage1t-trusted-measurement-final",
+    "role_qualification": "The manifest role is Trusted-measurement-specific. The exact Stage 1.1 regression argv and reused executable are bound by regression-receipt.json; no stronger role claim is made.",
+    "source_build_manifest_sha256": "3c2ee29ab34d4fe279683bfbf413a27cc18449d6a6dc9e535a2d3720088fb473",
+    "stage1_source_manifest_sha256": "dd748dc6ae8af2796470a1a3b2e47efc7cd3084a044eeb26f25ec3841182b8ba",
+    "build_log_sha256": "2209b5dceb75c4a94fad39b47dce99de194f10310eea4ad8242da0e7e9cfaf56",
+    "closure_log_sha256": "f80326c874baa43e2904776c7203e6ece02a2ae2b353f6428cef483a158b2dd7",
+    "executable_bytes": 3955136,
+    "executable_sha256": "88cd70e64ec950a51ae67c1503c8c835b84b0095eb7bc08e6d74e82c8b9763c4",
+    "executable_blake3": "346d78ce5126f81e33c69a8e63ed60c79fc24831ed372eb8e02c4969cea8edfc",
+    "raw_run": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1-apple-edge-20260826-attempt-020"
+  },
+  "workspace_closure": {
+    "source_commit": "36d05d844b36eb73598ba4e2a5decafd152df6d1",
+    "source_status_before": "clean",
+    "source_status_after": "clean",
+    "commands": [
+      "CARGO_NET_OFFLINE=true cargo fmt --check",
+      "CARGO_NET_OFFLINE=true cargo check --workspace",
+      "CARGO_NET_OFFLINE=true cargo test --workspace -- --test-threads=1",
+      "CARGO_NET_OFFLINE=true cargo test --workspace --doc -- --test-threads=1",
+      "CARGO_NET_OFFLINE=true cargo clippy --workspace --all-targets -- -D warnings"
+    ],
+    "status": "PASS",
+    "log": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target/layerfs-stage1-terminal-custody/closure/closure-final-36d05d8.log",
+    "log_sha256": "f80326c874baa43e2904776c7203e6ece02a2ae2b353f6428cef483a158b2dd7",
+    "preserved_initial_3635_failure_log_sha256": "317b6904ce42b55f9a0720f943dff414368334f5e3f4bc9524a5f14d27b1fbd5",
+    "preserved_unchanged_3635_pass_log_sha256": "313e4a8fa33e3582819214bbfe24f00f226cacc4c8487af787cd7e03b5b4dcf0"
+  },
+  "negative_proofs": {
+    "wrong_commit_exit": 1,
+    "wrong_commit_log_sha256": "79251b79b46de33bdd058d2c5c1829c1aa1d36f6d36524f8d1724b3734943849",
+    "wrong_executable_pairing_exit": 1,
+    "wrong_executable_pairing_log_sha256": "8d6a20f268aef1bd1626150726e9fc5ea9b82a116153c063d464b971545d454f"
+  }
+}

@@ -85,8 +85,8 @@ stage1.1t-trusted-20260826/independent-audit.json 2f20dd2be7a457aa974d2f3b8a8eb0
 stage1.1t-trusted-20260826/summary.md              ad38fddfb05ccef25e27348cf891fc03b08c428432e2a06b1f6f901819283cee
 ```
 
-Attempt-001 remains byte-for-byte preserved. The append-only supersession and
-corrected attempt-002 receipts are:
+Attempt-001 remains byte-for-byte preserved. Its append-only supersession and
+the historical attempt-002 receipts are:
 
 ```text
 stage1.1t-trusted-20260826/supersession.json                     57b4971d7065f754e4ec5ceb4bf9a6a0166e7a8d23c325d3db36691d95589732
@@ -94,3 +94,22 @@ stage1.1t-trusted-20260826-attempt-002/terminal-receipt.json      fae29ddf95ed16
 stage1.1t-trusted-20260826-attempt-002/independent-audit.json     3d79427a1e581306ca658cb4821058674b8fe1881b314167ce4bade50d965857
 stage1.1t-trusted-20260826-attempt-002/summary.md                 d50b3888be832e384cacc8f196ee8c2974fec3aea4b2327bf272c57e6999cb71
 ```
+
+Attempt-002 remains byte-for-byte preserved, but its exact row-timer and build
+custody claims are superseded. The independently audited v2 population and
+current-source regression receipts are:
+
+```text
+stage1.1t-trusted-20260826-attempt-003/custody-receipt.json     7bf7a7e66124c555001cec35c31897448385e5e7174b046672833fd8e3e8a55c
+stage1.1t-trusted-20260826-attempt-003/independent-audit.json   9de26d3eaafe9c465f12a67221b1744985fb23584e1acc28b99042f56b774a8a
+stage1.1t-trusted-20260826-attempt-003/regression-receipt.json  f8192c65c44010242a99ec2ccb59cca827cb4b2975cdc1329e9ec5bddf973fa2
+stage1.1t-trusted-20260826-attempt-003/summary.md                a77dcbd15ddfb8be956850f78f0954da7e64eaf66bffe855a771017707d4b025
+stage1.1t-trusted-20260826-attempt-003/supersession.json        dc70bd1747c531c6d8bdb5f99bfdd2c9d09b8f9434d6061b591759360ad70859
+stage1.1t-trusted-20260826-attempt-003/terminal-receipt.json     94a9494a039143f69d2e380fb4e01b3bf6c801c1ff7bd4a7590909ba6fc4edbf
+```
+
+The attempt-003 files bind raw evidence under
+`target/layerfs-stage1t-trusted-20260826-attempt-003`, the clean observed build
+at `3635dfc`, and the final current-source Stage 1.1 attempt-020 regression at
+`36d05d8`. Trusted is never relabeled Verified; the Verified performance
+result remains `REVISE_NO_AUTHORIZED_OWNER`.

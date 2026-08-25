@@ -14,7 +14,10 @@ but found incomplete full-materialization SQL/native attribution. The separate
 portable repair and target authority is `poc/20`; it now records the exact
 M0–M15 execution, frozen `385.905 MiB/s` 24 MiB p50 miss, `614.617 MiB/s`
 fitted sustained PASS, current-source 47-row regression PASS, and the explicit
-authority-expansion boundary. Stage 1.2 is the
+authority-expansion boundary. The later terminal audit repaired source/build
+custody and row timers, retained the Verified result unchanged, and closed the
+separate TrustedLocalDev class with corrected attempt-003 plus current-source
+attempt-020. Stage 1.2 is the
 npm/developer-workspace specification in `poc/15`. The prospective post-Stage-1
 LayerFS + Linux FUSE direct workspace is specified in `poc/19`, with Docker
 only as its Linux execution envelope. macFUSE and FSKit are not selected
@@ -24,7 +27,7 @@ dependencies.
 Stage 1.0  implemented product baseline and A01–A17 closure
 Stage 1.1  poc/16 single-file APFS edge benchmark — PASS / closed
 Stage 1.1M poc/20 Verified attribution/correctness closed; performance REVISE
-Stage 1.1T poc/22 explicit TrustedLocalDev product class — primary class PASS
+Stage 1.1T poc/22 explicit TrustedLocalDev product class — audited primary class PASS; fixed-cost miss retained
 Stage 1.2  poc/15 npm/developer-workspace — trust handoff admitted; not started
 Stage 2    poc/19 LayerFS + Linux FUSE direct workspace after Stage 1.2
 ```
@@ -69,7 +72,7 @@ programs for each small implementation repair.
 | [16 — Stage 1.1 single-file APFS edge specification](16-stage1-part1-apple-edge-benchmark.md) | One 24 MiB file; 47 rows; bidirectional edits, save bursts, checkpoints, history and refresh under 60 s | Stage 1.1 evaluator |
 | [18 — Stage 1.1 result and handoff template](18-stage1.1-result-template.md) | Exact summary tables, JSONL row schema, availability rules, timer receipt and final response | Stage 1.1 evaluator |
 | [20 — Stage 1.1M portable full-materialization optimization](20-stage1.1-full-materialization-optimization.md) | Guarded Verified reads, derived scratch, portable native facts, fixed/stream attribution, CPU/memory gates and 0/24/96 MiB targets | Engine + VFS + OS + evaluator |
-| [22 — Stage 1.1T explicit TrustedLocalDev materialization](22-stage1.1-trusted-localdev-materialization.md) | Separate explicit weaker-trust developer-loop reads, close/reopen/Verified-scrub promotion boundary and 0/24/96 MiB comparison | Engine + evaluator |
+| [22 — Stage 1.1T explicit TrustedLocalDev materialization](22-stage1.1-trusted-localdev-materialization.md) | Separate explicit weaker-trust developer-loop reads, close/reopen/Verified-scrub promotion boundary, corrected 0/24/96 MiB comparison, and terminal custody audit | Engine + evaluator |
 | [15 — Stage 1.2 npm/developer-workspace specification](15-stage1-workspace-benchmark.md) | Reusable <=300 MiB offline npm/build/search/capture workflow | Stage 1.2 evaluator |
 | [19 — Stage 2 LayerFS + Linux FUSE workspace](19-stage2-docker-linux-fuse.md) | Post-Stage-1 container admission, direct mounted read/write/locality proof, real workspace gates, and strict exclusions | LayerFS VFS + thin Linux FUSE adapter |
 

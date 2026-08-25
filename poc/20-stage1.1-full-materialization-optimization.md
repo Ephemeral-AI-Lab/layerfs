@@ -6,7 +6,7 @@ Baseline authority: [16 — Stage 1.1 Apple edge benchmark](16-stage1-part1-appl
 Canonical, trust, durability, and Apple authority: [10 — handoff freeze](10-handoff-freeze.md)
 Historical accepted source: `f3dd4a32273a4c5cbe5e7ca2287c945ba4434c30`
 Verified performance operand: `9800f8650bbb5f1ae89fe8de2724bcd7e331716a`
-Current-source correctness closure: `0403ea7166b332c5ddcb7b6cf04f60a0610fd5db`
+Current-source correctness closure: `36d05d844b36eb73598ba4e2a5decafd152df6d1`
 Sequence: **Stage 1.1 accepted baseline -> Stage 1.1M attribution and repair -> Stage 1.2**
 
 ## M1 execution-authority correction
@@ -110,8 +110,9 @@ The paired acceptance population was therefore not consumed: the absolute
 24 MiB gates already fail. This is an honest terminal `REVISE`, not a target
 waiver.
 
-Current-source correctness is separately closed by attempt-015: `47/47`
-rows, `51/51` edit/sub-edit operations, `34/34` durable transitions, exact
+Current-source correctness was first closed by attempt-015 and is reclosed by
+the terminal-audit attempt-020 described in section 18.3: `47/47` rows,
+`51/51` edit/sub-edit operations, `34/34` durable transitions, exact
 bytes/metadata/history/refresh and the fixture's exact empty hard-link topology,
 zero FullFallback, zero forbidden
 rematerialization, no BUSY/LOCKED, Q terminal zero, connections terminal zero,
@@ -1276,13 +1277,17 @@ M15 one final Stage 1.1 regression campaign
 | M8 | skipped | Metadata owner is sub-3 ms. |
 | M9 | retained DELETE/FULL | Lighter scratch durability not pursued under the floor. |
 | M10 | PASS | Focused crate tests/checks and fault cuts passed. |
-| M11 | PASS after preserved failures | One full closure exposed a Trusted/Verified lifetime test defect; smallest invalidated serial scopes and downstream scopes close on `0403ea7`. |
-| M12 | PASS | One clean current-source release and one zero-row readiness receipt. |
+| M11 | PASS after preserved failures | The terminal audit preserves every failed closure; the final same-source fmt/check/test/doc-test/clippy closure passes on `36d05d8`. |
+| M12 | PASS | The clean `36d05d8` release and zero-row readiness are source/build/hash bound. |
 | M13 | harness PASS; campaign skipped | Absolute 24 MiB gates already fail, so paired acceptance would not admit the candidate. |
-| M14 | PASS | M7 raw rows, Engine owners, native owners and final attempt-015 were independently audited. |
-| M15 | PASS | Current-source Stage 1.1 attempt-015 closes 47/51/34 in `13.430358958 s` accounted wall. |
+| M14 | PASS | M7, corrected Trusted attempt-003, and final attempt-020 raw artifacts were independently recomputed. |
+| M15 | PASS | Current-source Stage 1.1 attempt-020 closes 47/51/34 in `12.581879167 s` accounted wall. |
 
-### 18.2 Current-source release and regression
+### 18.2 Prior current-source release and regression — preserved
+
+This subsection preserves the first closure at `0403ea7`. Section 18.3 is the
+later controlling terminal-audit closure; the attempt-015 artifacts are not
+rewritten.
 
 ```text
 source commit                 0403ea7166b332c5ddcb7b6cf04f60a0610fd5db
@@ -1304,6 +1309,71 @@ transactions = 34 COMMITs`, with zero rollback and zero authentication,
 role-decode, new-object or incumbent-object equation failures. The final
 receipt and raw hashes are under
 `poc/evidence/stage1.1m-current-source-closure-20260825`.
+
+### 18.3 Terminal custody, timer, and regression audit
+
+The 2026-08-26 audit found two evaluator evidence defects without finding a
+canonical/data-loss/trust-escalation defect:
+
+```text
+old source manifest      accepted arbitrary commit/executable pairing
+old v1 row receipt       aliased row wall to product-operation wall
+```
+
+Commit `3635dfc` makes the manifest require clean current HEAD, the running
+build output, the exact successful build command/log, and byte-for-byte
+manifest recomputation at Trusted-run admission. It also emits independent v2
+row walls and validates:
+
+```text
+row wall = product operation + oracle + cleanup + row residual
+product operation = exclusive leaves + operation residual
+```
+
+The exact corrected Trusted population is attempt-003. It remains separately
+labeled `TrustedLocalDev`; later Apple-edge-only evaluator commits do not
+change its runtime product, materialization path, rows, or performance result.
+Attempt-002 remains immutable diagnostic evidence but is superseded for exact
+timer/custody claims because all 12 of its rows violated the row-wall equation.
+
+The final Stage 1.1 correctness regression is attempt-020:
+
+```text
+source commit              36d05d844b36eb73598ba4e2a5decafd152df6d1
+release SHA-256            88cd70e64ec950a51ae67c1503c8c835b84b0095eb7bc08e6d74e82c8b9763c4
+release BLAKE3             346d78ce5126f81e33c69a8e63ed60c79fc24831ed372eb8e02c4969cea8edfc
+rows / edits / transitions 47 / 51 / 34
+complete wall equation     12,581,879,167 = 8,282,138,252 + 4,299,740,915 ns
+transactions / COMMITs     34 / 34; rollback 0
+RSS / Q high / Q terminal  29,327,360 / 8,388,607 / 0 B
+connections high/terminal  2 / 0
+FD baseline/peak/terminal  5 / 18 / 5
+BUSY / LOCKED / residue    0 / 0 / 0
+rows SHA-256               2a725974234397527c267cfdde7f9d5bf8e07af13fe69be1109cbe9d8b61bb5f
+summary SHA-256            f0cb7c676bc9d9af2dde4d069434bf41a6a656f4e3fc95b00546598b1a43c666
+```
+
+Trusted read-only phases have `46,337 fetched = 46,337 role decodes` and zero
+fetched identity authentication. Trusted write phases retain exact new-object
+and incumbent authentication (`677 = 554 + 123`; incumbent `123 = reused
+123`). Fresh Verified phases have `26,916 fetched = 26,916 authentication =
+26,916 role decodes` and seven mandatory retained-union scrubs. This keeps the
+weaker local reads separate from authenticated writes and Verified promotion.
+
+The frozen single-file fixture has exact empty hard-link topology (`nlink=1`,
+zero nonzero groups); nonzero hard-link ordering is covered by the passing
+workspace tests, not fabricated as a campaign observation. Attempts 016–019
+are retained failures that drove the mode-aware evaluator repair. The exact
+portable audit is under
+`poc/evidence/stage1.1t-trusted-20260826-attempt-003`.
+
+The Verified performance population was not rerun and its terminal disposition
+does not change:
+
+```text
+REVISE_NO_AUTHORIZED_OWNER
+terminal_pass=false
+```
 
 On any intermediate miss:
 
