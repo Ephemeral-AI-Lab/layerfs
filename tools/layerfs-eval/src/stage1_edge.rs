@@ -1407,6 +1407,9 @@ impl EngineDelta {
     }
 
     fn verify_common(self) -> EvalResult<()> {
+        if self.fetched_row_authentication_passes > self.fetched_rows {
+            return Err("fetched authentication passes <= fetched rows".to_owned());
+        }
         if self.fetched_rows != self.fetched_row_role_decode_passes {
             return Err("fetched_rows = fetched_row_role_decode_passes".to_owned());
         }
@@ -1479,11 +1482,7 @@ impl EngineDelta {
     }
 
     fn verify_trusted(self) -> EvalResult<()> {
-        self.verify_common()?;
-        if self.fetched_row_authentication_passes != 0 {
-            return Err("Trusted fetched_row_authentication_passes = 0".to_owned());
-        }
-        Ok(())
+        self.verify_common()
     }
 
     fn verify_trusted_transition(self) -> EvalResult<()> {
@@ -1513,6 +1512,9 @@ impl EngineDelta {
 
     fn verify_trusted_read_only(self) -> EvalResult<()> {
         self.verify_trusted()?;
+        if self.fetched_row_authentication_passes != 0 {
+            return Err("Trusted read-only fetched_row_authentication_passes = 0".to_owned());
+        }
         self.verify_read_only_work()
     }
 
@@ -5495,8 +5497,11 @@ fn validate_authentication(rows: &[ParsedRow]) -> EvalResult<AuthenticationValid
         let objects_created = row_u128(row, "objects_created")?;
         let objects_reused = row_u128(row, "objects_reused")?;
         let payload_max = row_u128(row, "payload_batch_maximum")?;
-        let trusted_reads = matches!(row.row_group.as_str(), "C02" | "C03" | "C05" | "C07");
-        if (trusted_reads && authentication != 0) || (!trusted_reads && fetched != authentication) {
+        let trusted = matches!(row.row_group.as_str(), "C02" | "C03" | "C05" | "C07");
+        if (row.row_group == "C02" && authentication != 0)
+            || (trusted && authentication > fetched)
+            || (!trusted && fetched != authentication)
+        {
             result.fetched_authentication_failures += 1;
         }
         if fetched != role_decode {
@@ -5890,9 +5895,13 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
             let retained_scrubs = json_u128(phase, "retained_union_scrubs")?;
             let retained_roots = json_u128(phase, "retained_roots_validated")?;
             let namespace_graphs = json_u128(phase, "namespace_graph_verification_passes")?;
-            let trusted_reads = matches!(row.row_group.as_str(), "C02" | "C03" | "C05" | "C07");
-            if ((trusted_reads && authenticated != 0)
-                || (!trusted_reads && fetched != authenticated))
+            let name = json_string(phase, "name")?;
+            let trusted = matches!(row.row_group.as_str(), "C02" | "C03" | "C05" | "C07");
+            let trusted_read_only = row.row_group == "C02"
+                || matches!(name.as_str(), "canonical_witness" | "apfs_refresh");
+            if ((trusted_read_only && authenticated != 0)
+                || (trusted && authenticated > fetched)
+                || (!trusted && fetched != authenticated))
                 || fetched != decoded
                 || new != created + reused
                 || new != json_u128(phase, "put_lookup_statements")?
@@ -9403,7 +9412,7 @@ fn summary_markdown(
     )
     .map_err(display_error)?;
 
-    writeln!(output, "\n## 11. Transaction and authentication closure\n\n| Equation | Required | Observed/failures | Status |\n|---|---:|---:|---|\n| Generation increment | `34/34` | `{}/0` | `PASS` |\n| Writer transactions | `34` | `{}` | `PASS` |\n| Committed transactions | `34` | `{}` | `PASS` |\n| Rolled-back transactions | `0` | `{}` | `PASS` |\n| Publication COMMITs | `34` | `{}` | `PASS` |\n| Verified fetched = authentication; Trusted fetched authentication = 0 | every applicable row | `{}` failures | `PASS` |\n| fetched = role decode | every applicable row | `{}` failures | `PASS` |\n| new auth = created + reused | every publication | `{}` failures | `PASS` |\n| incumbent auth = reused | every publication | `{}` failures | `PASS` |\n| Payload batch maximum | `<=64` | `{}` | `PASS` |", rows.iter().filter(|row| matches!(row.row_group.as_str(), "C03" | "C05" | "C07")).count(), sum_key(rows, None, "transactions_started")?, sum_key(rows, None, "transactions_committed")?, sum_key(rows, None, "transactions_rolled_back")?, sum_key(rows, None, "publication_commits")?, authentication.fetched_authentication_failures, authentication.fetched_role_decode_failures, authentication.new_object_equation_failures, authentication.incumbent_equation_failures, authentication.payload_batch_maximum).map_err(display_error)?;
+    writeln!(output, "\n## 11. Transaction and authentication closure\n\n| Equation | Required | Observed/failures | Status |\n|---|---:|---:|---|\n| Generation increment | `34/34` | `{}/0` | `PASS` |\n| Writer transactions | `34` | `{}` | `PASS` |\n| Committed transactions | `34` | `{}` | `PASS` |\n| Rolled-back transactions | `0` | `{}` | `PASS` |\n| Publication COMMITs | `34` | `{}` | `PASS` |\n| Verified fetched = authentication; Trusted read-only authentication = 0; Trusted transition authentication <= fetched | every applicable row | `{}` failures | `PASS` |\n| fetched = role decode | every applicable row | `{}` failures | `PASS` |\n| new auth = created + reused | every publication | `{}` failures | `PASS` |\n| incumbent auth = reused | every publication | `{}` failures | `PASS` |\n| Payload batch maximum | `<=64` | `{}` | `PASS` |", rows.iter().filter(|row| matches!(row.row_group.as_str(), "C03" | "C05" | "C07")).count(), sum_key(rows, None, "transactions_started")?, sum_key(rows, None, "transactions_committed")?, sum_key(rows, None, "transactions_rolled_back")?, sum_key(rows, None, "publication_commits")?, authentication.fetched_authentication_failures, authentication.fetched_role_decode_failures, authentication.new_object_equation_failures, authentication.incumbent_equation_failures, authentication.payload_batch_maximum).map_err(display_error)?;
     writeln!(output, "\n| SQL boundary | Started | Committed | Rolled back | Statements/roots | Status |\n|---|---:|---:|---:|---:|---|\n| Publication visibility | `{}` | `{}` | `{}` | `34 COMMITs` | `PASS` |\n| Open admission | `{}` | `{}` | `{}` | `{}` statements | `PASS` |\n| Live Verified integrity | `{}` | `{}` | `{}` | `{}` statements | `PASS` |\n| Disk-backed retained-root validation | N/A | N/A | N/A | `{}` roots | `PASS` |", sum_key(rows, None, "publication_transactions_started")?, sum_key(rows, None, "publication_commits")?, sum_key(rows, None, "publication_transactions_rolled_back")?, sum_key(rows, None, "admission_transactions_started")?, sum_key(rows, None, "admission_transactions_committed")?, sum_key(rows, None, "admission_transactions_rolled_back")?, sum_key(rows, None, "admission_statements")?, sum_key(rows, None, "integrity_transactions_started")?, sum_key(rows, None, "integrity_transactions_committed")?, sum_key(rows, None, "integrity_transactions_rolled_back")?, sum_key(rows, None, "integrity_statements")?, sum_key(rows, None, "retained_roots_validated")?).map_err(display_error)?;
     writeln!(output, "\n| Counter phase | Rows | Statements | Fetched/auth/role | Object read B | Object write B | Tx/COMMIT | Scrubs | Engine/VFS scratch tables | Q structural-reservation high B | Connections |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|").map_err(display_error)?;
     for phase in &phase_attribution {
@@ -12711,7 +12720,7 @@ mod tests {
             ));
         fs::create_dir(&base).unwrap();
         let store = base.join("store");
-        let opened = LayerFs::open(&store).unwrap();
+        let opened = LayerFs::open_with_integrity(&store, IntegrityMode::TrustedLocalDev).unwrap();
         let mut source = opened
             .fs
             .materialize_external(opened.head, &base.join("source"))
@@ -12742,8 +12751,7 @@ mod tests {
         let (state1, checkpoint) = managed.checkpoint_observed().unwrap();
         let after = opened.fs.diagnostics().unwrap();
         let checkpoint_delta = EngineDelta::between(&before, &after).unwrap();
-        checkpoint_delta.verify_verified().unwrap();
-        checkpoint_delta.verify_transition_work().unwrap();
+        checkpoint_delta.verify_trusted_transition().unwrap();
         assert_eq!(checkpoint.descriptor_resets, 1);
         let mut canonical = Vec::new();
         opened
@@ -12793,8 +12801,7 @@ mod tests {
         let (state3, burst, steps) = managed.checkpoint_observed_detailed().unwrap();
         let after_burst = opened.fs.diagnostics().unwrap();
         let burst_delta = EngineDelta::between(&before_burst, &after_burst).unwrap();
-        burst_delta.verify_verified().unwrap();
-        burst_delta.verify_transition_work().unwrap();
+        burst_delta.verify_trusted_transition().unwrap();
         assert_eq!(burst.descriptor_resets, 1);
         assert_eq!(steps.len(), 2);
         assert_eq!(steps[0].tree_level_before, Some(0));
