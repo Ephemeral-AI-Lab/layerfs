@@ -144,6 +144,7 @@ pub struct MountedCounters {
     pub spool_physical_high_water_bytes: u64,
     pub spool_resets: u64,
     pub spool_compactions: u64,
+    pub contiguous_file_builds: u64,
     pub largest_request_bytes: u64,
     pub operation_q_current_bytes: u64,
     pub operation_q_high_water_bytes: u64,
@@ -491,6 +492,7 @@ struct Spool {
     appended: u64,
     total_appended: u64,
     live: u64,
+    contiguous_builds: u64,
 }
 
 impl Spool {
@@ -533,6 +535,7 @@ impl Spool {
             appended: 0,
             total_appended: 0,
             live: 0,
+            contiguous_builds: 0,
         })
     }
 
@@ -1851,6 +1854,19 @@ impl MountedWorkspace {
                 ranges,
                 ..
             } => {
+                if base.is_none()
+                    && *base_visible_len == 0
+                    && ranges.len() == 1
+                    && ranges
+                        .first_key_value()
+                        .is_some_and(|(start, range)| *start == 0 && range.end == *logical_len)
+                {
+                    let range = ranges.first_key_value().unwrap().1;
+                    let slice = spool.slice(range.spool_offset, *logical_len)?;
+                    let (root, _) = build(publication, slice)?;
+                    spool.contiguous_builds += 1;
+                    return Ok(root.0);
+                }
                 let (mut root, mut current_len) = if let Some(root) = base {
                     let mut counters = RopeCounters::default();
                     let state =
@@ -2816,6 +2832,7 @@ impl MountedWorkspace {
             .counters
             .spool_physical_high_water_bytes
             .max(self.counters.spool_physical_bytes);
+        self.counters.contiguous_file_builds = self.spool.contiguous_builds;
         self.observe_request(0)
     }
 
@@ -3500,6 +3517,7 @@ mod tests {
             assert_eq!(engine.transactions_started, 1);
             assert_eq!(engine.transactions_committed, 1);
             assert_eq!(engine.publication_commits, 1);
+            assert_eq!(mounted.counters().unwrap().contiguous_file_builds, 1);
             mounted.release(handle).unwrap();
             mounted.shutdown().unwrap();
             accepted
