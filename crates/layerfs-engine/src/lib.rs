@@ -687,9 +687,20 @@ impl Engine {
         self.mark_compaction_sql(1)?;
         authenticate_complete_object_index(&source)?;
         let retained_statements = Cell::new(0);
-        let retained =
-            integrity::retained_union(&source, &self.path, self.store_id, &retained_statements);
+        let retained_failed = Cell::new(integrity::VerificationObservation::default());
+        let retained = integrity::retained_union(
+            &source,
+            &self.path,
+            self.store_id,
+            &retained_statements,
+            &retained_failed,
+        );
         self.mark_compaction_sql(retained_statements.get())?;
+        if retained.is_err() {
+            self.bump(|counters| {
+                add_verification_progress_counters(counters, retained_failed.get())
+            })?;
+        }
         let retained = retained?;
         let mark_database_bytes = retained.work.storage_bytes()?;
         let candidate = Connection::open(destination).map_err(map_sqlite_error)?;
@@ -763,13 +774,20 @@ impl Engine {
             .execute_batch("COMMIT")
             .map_err(map_sqlite_error)?;
         let verification_statements = Cell::new(0);
+        let verification_failed = Cell::new(integrity::VerificationObservation::default());
         let verification = integrity::verify_retained_union_observed_counted(
             &candidate,
             destination,
             self.store_id,
             &verification_statements,
+            &verification_failed,
         );
         self.mark_compaction_sql(verification_statements.get())?;
+        if verification.is_err() {
+            self.bump(|counters| {
+                add_verification_progress_counters(counters, verification_failed.get())
+            })?;
+        }
         let verification = verification?;
         let verification_scratch_peak_bytes = verification.peak_bytes;
         self.mark_compaction_sql(1)?;
@@ -1304,17 +1322,24 @@ impl Engine {
                         .store(SQL_FAMILY_LIVE_INTEGRITY, Ordering::Release);
                 }
                 let scrub_statements = Cell::new(0);
+                let scrub_failed = Cell::new(integrity::VerificationObservation::default());
                 let scrubbed = integrity::verify_retained_union_observed_counted(
                     &connection,
                     &self.path,
                     self.store_id,
                     &scrub_statements,
+                    &scrub_failed,
                 );
                 self.bump(|counters| {
                     checked_add(&mut counters.integrity_statements, scrub_statements.get())?;
                     checked_add(&mut counters.statements, scrub_statements.get())?;
                     mark_sql_family(counters, SQL_FAMILY_LIVE_INTEGRITY, scrub_statements.get())
                 })?;
+                if scrubbed.is_err() {
+                    self.bump(|counters| {
+                        add_verification_progress_counters(counters, scrub_failed.get())
+                    })?;
+                }
                 let scrubbed = scrubbed.and_then(|observation| {
                     self.bump(|counters| {
                         checked_add(&mut counters.statements, 1)?;
@@ -1656,6 +1681,7 @@ fn mark_known_trusted_history(connection: &Connection) -> EngineResult<()> {
 #[derive(Debug, Default)]
 struct InitialScrubObservation {
     verification: Option<integrity::VerificationObservation>,
+    failed_verification: integrity::VerificationObservation,
     transactions_started: u64,
     transactions_committed: u64,
     transactions_rolled_back: u64,
@@ -1690,16 +1716,21 @@ fn initial_verified_scrub(
     };
     if dirty {
         let statements = Cell::new(0);
+        let failed = Cell::new(integrity::VerificationObservation::default());
         let verified = integrity::verify_retained_union_observed_counted(
             connection,
             path,
             store_id,
             &statements,
+            &failed,
         );
         observation.statements += statements.get();
         let verified = match verified {
             Ok(verified) => verified,
-            Err(error) => return Err(initial_scrub_rollback(connection, error, observation)),
+            Err(error) => {
+                observation.failed_verification = failed.get();
+                return Err(initial_scrub_rollback(connection, error, observation));
+            }
         };
         observation.statements += 1;
         if let Err(error) = clear_known_trusted_history(connection) {
@@ -1735,6 +1766,22 @@ fn add_retained_scrub_counters(
     observation: integrity::VerificationObservation,
 ) -> EngineResult<()> {
     checked_add(&mut counters.retained_union_scrubs, 1)?;
+    add_verification_progress_counters(counters, observation)?;
+    checked_add(
+        &mut counters.namespace_graph_verification_passes,
+        observation.namespace_graphs,
+    )?;
+    checked_add(
+        &mut counters.retained_roots_validated,
+        observation.retained_roots_validated,
+    )?;
+    Ok(())
+}
+
+fn add_verification_progress_counters(
+    counters: &mut EngineCounters,
+    observation: integrity::VerificationObservation,
+) -> EngineResult<()> {
     checked_add(
         &mut counters.objects_validated,
         observation.authentication_passes,
@@ -1749,20 +1796,12 @@ fn add_retained_scrub_counters(
         &mut counters.fetched_row_role_decode_passes,
         observation.role_decode_passes,
     )?;
-    checked_add(
-        &mut counters.namespace_graph_verification_passes,
-        observation.namespace_graphs,
-    )?;
     checked_add(&mut counters.scratch_tables, observation.scratch_tables)?;
     checked_add(
         &mut counters.scratch_statements,
         observation.scratch_statements,
     )?;
     checked_add(&mut counters.scratch_rows, observation.scratch_rows)?;
-    checked_add(
-        &mut counters.retained_roots_validated,
-        observation.retained_roots_validated,
-    )?;
     counters.scratch_high_water_bytes = counters
         .scratch_high_water_bytes
         .max(observation.scratch_bytes);
@@ -2869,6 +2908,11 @@ mod tests {
         assert_eq!(counters.publication_statements, 3);
         assert_eq!(counters.live_verified_integrity_statements, 4);
         assert_eq!(counters.integrity_statements, 4);
+        assert_eq!(counters.fetched_rows, 1);
+        assert_eq!(counters.fetched_row_authentication_passes, 1);
+        assert_eq!(counters.fetched_row_role_decode_passes, 1);
+        assert_eq!(counters.scratch_tables, 2);
+        assert_eq!(counters.scratch_statements, 46);
         assert!(matches!(
             verified.read_ref("main"),
             Err(EngineError::AmbiguousDurability)
@@ -2905,6 +2949,23 @@ mod tests {
         assert_eq!(failure.observation.transactions_started, 1);
         assert_eq!(failure.observation.transactions_committed, 0);
         assert_eq!(failure.observation.transactions_rolled_back, 1);
+        assert_eq!(failure.observation.failed_verification.fetched_rows, 1);
+        assert_eq!(
+            failure
+                .observation
+                .failed_verification
+                .authentication_passes,
+            1
+        );
+        assert_eq!(
+            failure.observation.failed_verification.role_decode_passes,
+            1
+        );
+        assert_eq!(failure.observation.failed_verification.scratch_tables, 2);
+        assert_eq!(
+            failure.observation.failed_verification.scratch_statements,
+            46
+        );
         drop(connection);
         assert!(matches!(
             Engine::open(&path),
@@ -3061,6 +3122,11 @@ mod tests {
         assert_eq!(counters.statements, 6);
         assert_eq!(counters.compaction_statements, 6);
         assert_eq!(counters.primary_read_statements, 0);
+        assert_eq!(counters.fetched_rows, 1);
+        assert_eq!(counters.fetched_row_authentication_passes, 1);
+        assert_eq!(counters.fetched_row_role_decode_passes, 1);
+        assert_eq!(counters.scratch_tables, 2);
+        assert_eq!(counters.scratch_statements, 46);
         assert!(!destination.exists());
 
         drop(engine);

@@ -65,6 +65,37 @@ pub struct ScratchObservation {
     pub operation_wall_ns: u64,
 }
 
+impl ScratchObservation {
+    pub fn checked_delta(self, before: Self) -> Option<Self> {
+        Some(Self {
+            tables: self.tables.checked_sub(before.tables)?,
+            statements: self.statements.checked_sub(before.statements)?,
+            rows: self.rows.checked_sub(before.rows)?,
+            high_water_bytes: self.high_water_bytes.checked_sub(before.high_water_bytes)?,
+            owner_setup_statements: self
+                .owner_setup_statements
+                .checked_sub(before.owner_setup_statements)?,
+            derived_setup_statements: self
+                .derived_setup_statements
+                .checked_sub(before.derived_setup_statements)?,
+            operation_statements: self
+                .operation_statements
+                .checked_sub(before.operation_statements)?,
+            store_reopens: self.store_reopens.checked_sub(before.store_reopens)?,
+            store_inspection_statements: self
+                .store_inspection_statements
+                .checked_sub(before.store_inspection_statements)?,
+            store_inspection_wall_ns: self
+                .store_inspection_wall_ns
+                .checked_sub(before.store_inspection_wall_ns)?,
+            setup_wall_ns: self.setup_wall_ns.checked_sub(before.setup_wall_ns)?,
+            operation_wall_ns: self
+                .operation_wall_ns
+                .checked_sub(before.operation_wall_ns)?,
+        })
+    }
+}
+
 impl DiskTable {
     pub fn create_near(store: &Path, label: &str) -> EngineResult<Self> {
         let started = Instant::now();
@@ -1176,6 +1207,11 @@ mod tests {
         assert_eq!(finished.derived_setup_statements, 3);
         assert_eq!(finished.operation_statements, 1);
         assert_eq!(finished.statements, 19);
+        let terminal = finished.checked_delta(operated).unwrap();
+        assert_eq!(terminal.tables, 0);
+        assert_eq!(terminal.statements, 1);
+        assert_eq!(terminal.derived_setup_statements, 1);
+        assert_eq!(terminal.operation_statements, 0);
         assert!(!path.exists());
         drop(engine);
         std::fs::remove_file(anchor).unwrap();

@@ -536,6 +536,9 @@ impl ExternalWorkspace {
     pub fn discard(&mut self) -> Result<(), layerfs_vfs::VfsError> {
         self.0.discard()
     }
+    pub fn discard_observed(&mut self) -> Result<OperationDiagnostics, layerfs_vfs::VfsError> {
+        self.0.discard_observed()
+    }
     pub fn register_writer(&self) -> Result<WriterLease, layerfs_vfs::VfsError> {
         Ok(WriterLease {
             _lease: self.0.register_writer()?,

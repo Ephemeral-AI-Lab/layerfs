@@ -55,8 +55,9 @@ pub(crate) fn verify_retained_union_observed_counted(
     store: &Path,
     store_id: [u8; 32],
     statements: &Cell<u64>,
+    failed: &Cell<VerificationObservation>,
 ) -> EngineResult<RetainedUnionObservation> {
-    let mut retained = retained_union(connection, store, store_id, statements)?;
+    let mut retained = retained_union(connection, store, store_id, statements, failed)?;
     retained.observation.add_scratch(retained.work.finish()?)?;
     Ok(RetainedUnionObservation {
         verification: retained.observation,
@@ -86,28 +87,58 @@ pub(crate) fn verify_root(
     store_id: [u8; 32],
     root: ObjectId,
     statements: &Cell<u64>,
+    failed: &Cell<VerificationObservation>,
 ) -> EngineResult<VerificationObservation> {
     let work = DiskTable::create_near_with_store_id(store, "publication-closure", store_id)?;
-    let graph = DiskTable::create_near_with_store_id(store, "publication-graph", store_id)?;
-    let records = graph.namespace(b"records")?;
-    let state = graph.namespace(b"state")?;
-    let payload_lengths = graph.namespace(b"payload-lengths")?;
-    enqueue(&work, root, Role::Namespace, true)?;
-    let mut observation = drain(connection, &work, &payload_lengths, statements)?;
-    records.clear()?;
-    state.clear()?;
-    observation.merge(validate_namespace_graph_disk(
-        connection,
-        &records,
-        &state,
-        &payload_lengths,
-        root,
-        statements,
-    )?)?;
-    observation.add_scratch(work.finish()?)?;
-    observation.add_scratch(graph.finish()?)?;
-    observation.statements = statements.get();
-    Ok(observation)
+    let graph = match DiskTable::create_near_with_store_id(store, "publication-graph", store_id) {
+        Ok(graph) => graph,
+        Err(error) => {
+            let mut observation = VerificationObservation::default();
+            if let Ok(scratch) = work.finish() {
+                let _ = observation.add_scratch(scratch);
+            }
+            merge_failed_observation(failed, observation);
+            return Err(error);
+        }
+    };
+    let result = (|| {
+        let records = graph.namespace(b"records")?;
+        let state = graph.namespace(b"state")?;
+        let payload_lengths = graph.namespace(b"payload-lengths")?;
+        enqueue(&work, root, Role::Namespace, true)?;
+        let mut observation = drain(connection, &work, &payload_lengths, statements, failed)?;
+        records.clear()?;
+        state.clear()?;
+        observation.merge(validate_namespace_graph_disk(
+            connection,
+            &records,
+            &state,
+            &payload_lengths,
+            root,
+            statements,
+            failed,
+        )?)?;
+        Ok(observation)
+    })();
+    match result {
+        Ok(mut observation) => {
+            observation.add_scratch(work.finish()?)?;
+            observation.add_scratch(graph.finish()?)?;
+            observation.statements = statements.get();
+            Ok(observation)
+        }
+        Err(error) => {
+            let mut observation = VerificationObservation::default();
+            if let Ok(scratch) = work.finish() {
+                let _ = observation.add_scratch(scratch);
+            }
+            if let Ok(scratch) = graph.finish() {
+                let _ = observation.add_scratch(scratch);
+            }
+            merge_failed_observation(failed, observation);
+            Err(error)
+        }
+    }
 }
 
 impl VerificationObservation {
@@ -200,110 +231,163 @@ fn note_statement_attempt(statements: &Cell<u64>) -> EngineResult<()> {
     Ok(())
 }
 
+fn merge_failed_observation(
+    failed: &Cell<VerificationObservation>,
+    observation: VerificationObservation,
+) {
+    let mut merged = failed.get();
+    if merged.merge(observation).is_ok() {
+        failed.set(merged);
+    }
+}
+
 pub(crate) fn retained_union(
     connection: &Connection,
     store: &Path,
     store_id: [u8; 32],
     statements: &Cell<u64>,
+    failed: &Cell<VerificationObservation>,
 ) -> EngineResult<RetainedUnion> {
     let work = DiskTable::create_near_with_store_id(store, "closure", store_id)?;
-    let graph = DiskTable::create_near_with_store_id(store, "namespace-graph", store_id)?;
-    let records = graph.namespace(b"records")?;
-    let state = graph.namespace(b"state")?;
-    let payload_lengths = graph.namespace(b"payload-lengths")?;
-    let validated_roots = graph.namespace(b"validated-roots")?;
-    let mut observation = VerificationObservation::default();
-    let mut peak_bytes = work.storage_bytes()?.saturating_add(graph.storage_bytes()?);
-    note_statement_attempt(statements)?;
-    let mut statement = connection
-        .prepare("SELECT name, generation, root_id FROM layerfs_refs ORDER BY name")
-        .map_err(map_sqlite_error)?;
-    let refs = statement
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, Vec<u8>>(2)?,
-            ))
-        })
-        .map_err(map_sqlite_error)?;
-    for row in refs {
-        let (name, generation, root) = row.map_err(map_sqlite_error)?;
-        validate_ref_name(&name)?;
-        if generation < 0 {
-            return Err(EngineError::InvalidRecord("ref generation"));
+    let graph = match DiskTable::create_near_with_store_id(store, "namespace-graph", store_id) {
+        Ok(graph) => graph,
+        Err(error) => {
+            let mut observation = VerificationObservation::default();
+            if let Ok(scratch) = work.finish() {
+                let _ = observation.add_scratch(scratch);
+            }
+            merge_failed_observation(failed, observation);
+            return Err(error);
         }
-        let root = ObjectId::from_bytes(&root)?;
+    };
+    let result = (|| {
+        let records = graph.namespace(b"records")?;
+        let state = graph.namespace(b"state")?;
+        let payload_lengths = graph.namespace(b"payload-lengths")?;
+        let validated_roots = graph.namespace(b"validated-roots")?;
+        let mut observation = VerificationObservation::default();
+        let mut peak_bytes = work.storage_bytes()?.saturating_add(graph.storage_bytes()?);
         note_statement_attempt(statements)?;
-        let retained = connection
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM layerfs_retained_roots WHERE root_id = ?1)",
-                params![root.as_bytes().as_slice()],
-                |row| row.get::<_, bool>(0),
-            )
+        let mut statement = connection
+            .prepare("SELECT name, generation, root_id FROM layerfs_refs ORDER BY name")
             .map_err(map_sqlite_error)?;
-        if !retained {
-            return Err(EngineError::MissingRoot(root));
+        let refs = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                ))
+            })
+            .map_err(map_sqlite_error)?;
+        for row in refs {
+            let (name, generation, root) = row.map_err(map_sqlite_error)?;
+            validate_ref_name(&name)?;
+            if generation < 0 {
+                return Err(EngineError::InvalidRecord("ref generation"));
+            }
+            let root = ObjectId::from_bytes(&root)?;
+            note_statement_attempt(statements)?;
+            let retained = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM layerfs_retained_roots WHERE root_id = ?1)",
+                    params![root.as_bytes().as_slice()],
+                    |row| row.get::<_, bool>(0),
+                )
+                .map_err(map_sqlite_error)?;
+            if !retained {
+                return Err(EngineError::MissingRoot(root));
+            }
+            if claim_root(&validated_roots, root)? {
+                observation.retained_roots_validated = observation
+                    .retained_roots_validated
+                    .checked_add(1)
+                    .ok_or(EngineError::CounterOverflow)?;
+                enqueue(&work, root, Role::Namespace, true)?;
+                observation.merge(drain(
+                    connection,
+                    &work,
+                    &payload_lengths,
+                    statements,
+                    failed,
+                )?)?;
+                records.clear()?;
+                state.clear()?;
+                observation.merge(validate_namespace_graph_disk(
+                    connection,
+                    &records,
+                    &state,
+                    &payload_lengths,
+                    root,
+                    statements,
+                    failed,
+                )?)?;
+                peak_bytes =
+                    peak_bytes.max(work.storage_bytes()?.saturating_add(graph.storage_bytes()?));
+            }
         }
-        if claim_root(&validated_roots, root)? {
-            observation.retained_roots_validated = observation
-                .retained_roots_validated
-                .checked_add(1)
-                .ok_or(EngineError::CounterOverflow)?;
-            enqueue(&work, root, Role::Namespace, true)?;
-            observation.merge(drain(connection, &work, &payload_lengths, statements)?)?;
-            records.clear()?;
-            state.clear()?;
-            observation.merge(validate_namespace_graph_disk(
-                connection,
-                &records,
-                &state,
-                &payload_lengths,
-                root,
-                statements,
-            )?)?;
-            peak_bytes =
-                peak_bytes.max(work.storage_bytes()?.saturating_add(graph.storage_bytes()?));
+        drop(statement);
+        note_statement_attempt(statements)?;
+        let mut statement = connection
+            .prepare("SELECT root_id FROM layerfs_retained_roots ORDER BY root_id")
+            .map_err(map_sqlite_error)?;
+        let roots = statement
+            .query_map([], |row| row.get::<_, Vec<u8>>(0))
+            .map_err(map_sqlite_error)?;
+        for root in roots {
+            let root = ObjectId::from_bytes(&root.map_err(map_sqlite_error)?)?;
+            if claim_root(&validated_roots, root)? {
+                observation.retained_roots_validated = observation
+                    .retained_roots_validated
+                    .checked_add(1)
+                    .ok_or(EngineError::CounterOverflow)?;
+                enqueue(&work, root, Role::Namespace, true)?;
+                observation.merge(drain(
+                    connection,
+                    &work,
+                    &payload_lengths,
+                    statements,
+                    failed,
+                )?)?;
+                records.clear()?;
+                state.clear()?;
+                observation.merge(validate_namespace_graph_disk(
+                    connection,
+                    &records,
+                    &state,
+                    &payload_lengths,
+                    root,
+                    statements,
+                    failed,
+                )?)?;
+                peak_bytes =
+                    peak_bytes.max(work.storage_bytes()?.saturating_add(graph.storage_bytes()?));
+            }
+        }
+        Ok((peak_bytes, observation))
+    })();
+    match result {
+        Ok((peak_bytes, mut observation)) => {
+            observation.add_scratch(graph.finish()?)?;
+            observation.statements = statements.get();
+            Ok(RetainedUnion {
+                work,
+                peak_bytes,
+                observation,
+            })
+        }
+        Err(error) => {
+            let mut observation = VerificationObservation::default();
+            if let Ok(scratch) = work.finish() {
+                let _ = observation.add_scratch(scratch);
+            }
+            if let Ok(scratch) = graph.finish() {
+                let _ = observation.add_scratch(scratch);
+            }
+            merge_failed_observation(failed, observation);
+            Err(error)
         }
     }
-    drop(statement);
-    note_statement_attempt(statements)?;
-    let mut statement = connection
-        .prepare("SELECT root_id FROM layerfs_retained_roots ORDER BY root_id")
-        .map_err(map_sqlite_error)?;
-    let roots = statement
-        .query_map([], |row| row.get::<_, Vec<u8>>(0))
-        .map_err(map_sqlite_error)?;
-    for root in roots {
-        let root = ObjectId::from_bytes(&root.map_err(map_sqlite_error)?)?;
-        if claim_root(&validated_roots, root)? {
-            observation.retained_roots_validated = observation
-                .retained_roots_validated
-                .checked_add(1)
-                .ok_or(EngineError::CounterOverflow)?;
-            enqueue(&work, root, Role::Namespace, true)?;
-            observation.merge(drain(connection, &work, &payload_lengths, statements)?)?;
-            records.clear()?;
-            state.clear()?;
-            observation.merge(validate_namespace_graph_disk(
-                connection,
-                &records,
-                &state,
-                &payload_lengths,
-                root,
-                statements,
-            )?)?;
-            peak_bytes =
-                peak_bytes.max(work.storage_bytes()?.saturating_add(graph.storage_bytes()?));
-        }
-    }
-    observation.add_scratch(graph.finish()?)?;
-    observation.statements = statements.get();
-    Ok(RetainedUnion {
-        work,
-        peak_bytes,
-        observation,
-    })
 }
 
 fn claim_root(validated_roots: &DiskNamespace<'_>, root: ObjectId) -> EngineResult<bool> {
@@ -326,8 +410,9 @@ fn validate_namespace_graph_disk(
     payload_lengths: &DiskNamespace<'_>,
     root: ObjectId,
     statements: &Cell<u64>,
+    failed: &Cell<VerificationObservation>,
 ) -> EngineResult<VerificationObservation> {
-    let object_store = ConnectionStore::new(connection, statements);
+    let object_store = ConnectionStore::new(connection, statements, failed);
     let namespace = object_store
         .with_authenticated_canonical(root, decode_namespace_root)
         .map_err(EngineError::Core)?;
@@ -513,6 +598,7 @@ struct ConnectionStore<'a> {
     connection: &'a Connection,
     observation: Cell<VerificationObservation>,
     statements: &'a Cell<u64>,
+    failed: &'a Cell<VerificationObservation>,
 }
 
 struct PayloadSummaryStore<'a, 'connection, 'scratch> {
@@ -568,11 +654,16 @@ impl ObjectRead for PayloadSummaryStore<'_, '_, '_> {
 }
 
 impl<'a> ConnectionStore<'a> {
-    fn new(connection: &'a Connection, statements: &'a Cell<u64>) -> Self {
+    fn new(
+        connection: &'a Connection,
+        statements: &'a Cell<u64>,
+        failed: &'a Cell<VerificationObservation>,
+    ) -> Self {
         Self {
             connection,
             observation: Cell::new(VerificationObservation::default()),
             statements,
+            failed,
         }
     }
 
@@ -671,6 +762,12 @@ impl<'a> ConnectionStore<'a> {
     }
 }
 
+impl Drop for ConnectionStore<'_> {
+    fn drop(&mut self) {
+        merge_failed_observation(self.failed, self.observation.get());
+    }
+}
+
 impl ObjectRead for ConnectionStore<'_> {
     fn get(&self, id: ObjectId) -> Result<Vec<u8>, layerfs_core::CoreError> {
         self.fetch(id)
@@ -693,8 +790,9 @@ fn drain(
     work: &DiskTable,
     payload_lengths: &DiskNamespace<'_>,
     statements: &Cell<u64>,
+    failed: &Cell<VerificationObservation>,
 ) -> EngineResult<VerificationObservation> {
-    let object_store = ConnectionStore::new(connection, statements);
+    let object_store = ConnectionStore::new(connection, statements, failed);
     while let Some((key, _)) = work.pop_pending()? {
         let (id, role, root) = decode_key(&key)?;
         let mut visit_error = None;

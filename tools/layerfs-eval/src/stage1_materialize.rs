@@ -4512,7 +4512,7 @@ fn run_one(
     let usage_before = process_usage()?;
     let fd_before = fd_count()?;
     let product_started = Instant::now();
-    let (external, operation) = fs
+    let (mut external, mut operation) = fs
         .materialize_external_observed(root, destination)
         .map_err(display_error)?;
     let product_wall_ns = product_started.elapsed().as_nanos();
@@ -4543,6 +4543,10 @@ fn run_one(
     let oracle_wall_ns = oracle_started.elapsed().as_nanos();
 
     let cleanup_started = Instant::now();
+    operation = merge_terminal_cleanup(
+        operation,
+        external.discard_observed().map_err(display_error)?,
+    )?;
     drop(external);
     let projection_total = fs
         .projection_facts()
@@ -4586,6 +4590,13 @@ fn run_one(
         total_connections_terminal: None,
         process_fd_baseline,
     })
+}
+
+fn merge_terminal_cleanup(
+    operation: OperationDiagnostics,
+    cleanup: OperationDiagnostics,
+) -> EvalResult<OperationDiagnostics> {
+    operation.merge(cleanup).map_err(display_error)
 }
 
 fn verify_destination(
@@ -5296,6 +5307,30 @@ mod tests {
     fn delta_rejects_backwards_counters() {
         assert_eq!(delta(9, 4, "x").unwrap(), 5);
         assert!(delta(4, 9, "x").is_err());
+    }
+
+    #[test]
+    fn terminal_scratch_cleanup_closes_the_complete_row_sql_equation() {
+        let operation = OperationDiagnostics {
+            scratch_tables: 1,
+            scratch_statements: 19,
+            scratch_owner_setup_statements: 15,
+            scratch_derived_setup_statements: 2,
+            scratch_operation_statements: 2,
+            ..OperationDiagnostics::default()
+        };
+        let cleanup = OperationDiagnostics {
+            scratch_statements: 1,
+            scratch_derived_setup_statements: 1,
+            ..OperationDiagnostics::default()
+        };
+        let terminal = merge_terminal_cleanup(operation, cleanup).unwrap();
+        assert_eq!(terminal.scratch_tables, 1);
+        assert_eq!(terminal.scratch_statements, 20);
+        assert_eq!(terminal.scratch_owner_setup_statements, 15);
+        assert_eq!(terminal.scratch_derived_setup_statements, 3);
+        assert_eq!(terminal.scratch_operation_statements, 2);
+        assert_eq!(scratch_sql(&terminal).unwrap(), terminal.scratch_statements);
     }
 
     #[test]

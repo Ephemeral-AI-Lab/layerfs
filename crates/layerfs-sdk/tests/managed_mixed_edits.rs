@@ -82,8 +82,8 @@ fn checkpoint_syncs_the_final_token_after_mixed_same_path_edits() {
     assert_eq!(discarded.owned_temp_terminal, 0);
     assert_eq!(discarded.descriptor_spool_bytes_current, 0);
     assert_eq!(discarded.descriptor_spool_bytes_terminal, 0);
-    assert_eq!(discarded.scratch_tables, 1);
-    assert_eq!(discarded.scratch_derived_setup_statements, 3);
+    assert_eq!(discarded.scratch_tables, 0);
+    assert_eq!(discarded.scratch_derived_setup_statements, 1);
     assert_eq!(
         discarded.scratch_statements,
         discarded.scratch_owner_setup_statements

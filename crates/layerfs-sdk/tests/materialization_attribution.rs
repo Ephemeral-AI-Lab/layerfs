@@ -34,9 +34,12 @@ fn attribution_arms_reuse_full_source_and_native_routes() {
         .fs
         .materialize_authenticated_to(root, &mut sink)
         .unwrap();
-    let (_projected, complete) = opened
+    let (mut projected, complete) = opened
         .fs
         .materialize_external_observed(root, &base.join("complete"))
+        .unwrap();
+    let complete = complete
+        .merge(projected.discard_observed().unwrap())
         .unwrap();
     assert_eq!(sink, payload);
     assert_eq!(source_only.rope, complete.rope);
@@ -45,20 +48,17 @@ fn attribution_arms_reuse_full_source_and_native_routes() {
     assert_eq!(source_only.inode_table, complete.inode_table);
     assert_eq!(source_only.scratch_tables, complete.scratch_tables);
     assert_eq!(source_only.scratch_tables, 1);
-    assert_eq!(
-        source_only.scratch_statements,
-        complete.scratch_statements + 1
-    );
+    assert_eq!(source_only.scratch_statements, complete.scratch_statements);
     assert_eq!(source_only.scratch_rows, complete.scratch_rows);
     assert_eq!(
         source_only.scratch_owner_setup_statements,
         complete.scratch_owner_setup_statements
     );
     assert_eq!(source_only.scratch_owner_setup_statements, 15);
-    // Source-only has finished its scratch transaction; the projected
-    // workspace keeps its scratch authority live for refreshes.
+    // Both terminal routes have executed their scratch rollback.
     assert_eq!(source_only.scratch_derived_setup_statements, 3);
-    assert_eq!(complete.scratch_derived_setup_statements, 2);
+    assert_eq!(complete.scratch_derived_setup_statements, 3);
+    assert_eq!(projected.scratch_connection_count(), 0);
     assert_eq!(
         source_only.scratch_operation_statements,
         complete.scratch_operation_statements

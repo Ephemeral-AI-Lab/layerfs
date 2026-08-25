@@ -158,15 +158,21 @@ impl Publication<'_> {
             && self.verified_retained_root != Some(root)
         {
             let statements = Cell::new(0);
+            let failed = Cell::new(super::integrity::VerificationObservation::default());
             let observation = super::integrity::verify_root(
                 &self.connection,
                 &self.engine.path,
                 self.engine.store_id()?,
                 root,
                 &statements,
+                &failed,
             );
             self.engine
                 .mark_family_sql(SQL_FAMILY_PUBLICATION, statements.get())?;
+            if observation.is_err() {
+                self.engine
+                    .bump(|counters| add_verification_progress_counters(counters, failed.get()))?;
+            }
             let observation = observation?;
             self.engine.bump(|counters| {
                 checked_add(&mut counters.root_verifications, 1)?;

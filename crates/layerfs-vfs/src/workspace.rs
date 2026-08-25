@@ -506,17 +506,26 @@ impl ManagedWorkspace {
     pub fn capture_observed(&mut self) -> VfsResult<(ObjectId, OperationCounters)> {
         let (state, mut counters) = self.checkpoint_observed()?;
         let root = state.root;
-        if let Err(error) = self
+        let cleanup = match self
             .external
             .as_mut()
             .ok_or(VfsError::InvalidState)?
             .discard_inner()
         {
-            return Err(VfsError::CommittedCleanup {
+            Ok(cleanup) => cleanup,
+            Err(error) => {
+                return Err(VfsError::CommittedCleanup {
+                    root,
+                    error: Box::new(error),
+                })
+            }
+        };
+        counters = counters
+            .merge(cleanup)
+            .map_err(|error| VfsError::CommittedCleanup {
                 root,
-                error: Box::new(error),
-            });
-        }
+                error: Box::new(error.into()),
+            })?;
         if let Err(error) = self.remove_spool() {
             return Err(VfsError::CommittedCleanup {
                 root,
@@ -1258,12 +1267,29 @@ impl ExternalWorkspace {
         self.active = false;
         self.committed = None;
         capture.finish()?;
+        let cleanup = self
+            .finish_live_scratch()
+            .map_err(|error| VfsError::CommittedCleanup {
+                root,
+                error: Box::new(error),
+            })?;
+        counters = counters
+            .merge(cleanup)
+            .map_err(|error| VfsError::CommittedCleanup {
+                root,
+                error: Box::new(error.into()),
+            })?;
         reservation.finish(&mut counters);
         Ok((root, counters))
     }
     pub fn discard(&mut self) -> VfsResult<()> {
-        let _reservation = self.operation_q.reserve();
-        self.discard_inner().map(drop)
+        self.discard_observed().map(drop)
+    }
+    pub fn discard_observed(&mut self) -> VfsResult<OperationCounters> {
+        let reservation = self.operation_q.reserve();
+        let mut counters = self.discard_inner()?;
+        reservation.finish(&mut counters);
+        Ok(counters)
     }
     fn discard_inner(&mut self) -> VfsResult<OperationCounters> {
         let mut capture = CaptureLease::begin(self.writers.clone())?;
@@ -1277,9 +1303,17 @@ impl ExternalWorkspace {
         self.active = false;
         self.committed = None;
         capture.finish()?;
+        self.finish_live_scratch()
+    }
+    fn finish_live_scratch(&mut self) -> VfsResult<OperationCounters> {
         let mut counters = OperationCounters::default();
         if let Some(scratch) = self.live_scratch.take() {
-            counters.add_scratch(scratch.finish()?)?;
+            let before = scratch.observation()?;
+            let terminal = scratch
+                .finish()?
+                .checked_delta(before)
+                .ok_or(VfsError::InvalidState)?;
+            counters.add_scratch(terminal)?;
         }
         Ok(counters)
     }

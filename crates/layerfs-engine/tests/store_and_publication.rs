@@ -592,6 +592,17 @@ fn verified_publication_rejects_missing_reachable_inode_table_before_visibility(
         5
     );
     assert_eq!(after.live_verified_integrity_statements, 0);
+    assert_eq!(after.fetched_rows - before.fetched_rows, 1);
+    assert_eq!(
+        after.fetched_row_authentication_passes - before.fetched_row_authentication_passes,
+        1
+    );
+    assert_eq!(
+        after.fetched_row_role_decode_passes - before.fetched_row_role_decode_passes,
+        1
+    );
+    assert_eq!(after.scratch_tables - before.scratch_tables, 2);
+    assert_eq!(after.scratch_statements - before.scratch_statements, 44);
     assert_eq!(engine.read_ref("main").unwrap(), None);
     drop(engine);
     let _ = fs::remove_file(path);

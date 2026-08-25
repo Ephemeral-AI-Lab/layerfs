@@ -41,6 +41,9 @@ fn external_capture_reuses_unchanged_file_roots_and_cdc_scans_only_changes() {
     assert_eq!(same.native.bytes_read, bytes.len() as u64);
     assert_eq!(same.authority_full_scans, 1);
     assert_eq!(same.scratch_tables, 4);
+    assert_eq!(same.scratch_owner_setup_statements, 60);
+    assert_eq!(same.scratch_derived_setup_statements, 13);
+    assert_eq!(unchanged.scratch_connection_count(), 0);
     assert!(same.scratch_statements > 0);
     assert!(same.scratch_rows > 0);
     assert!(same.scratch_high_water_bytes > 0);
