@@ -10716,8 +10716,7 @@ fn run_inner(run: &Path) -> EvalResult<Disposition> {
     begin_failure_context("C02-001", "store_open");
     let c02_started = Instant::now();
     let open_started = Instant::now();
-    let opened = LayerFs::open_with_integrity(&store, IntegrityMode::TrustedLocalDev)
-        .map_err(display_error)?;
+    let opened = LayerFs::open(&store).map_err(display_error)?;
     if opened.ref_state.root != master.root
         || opened.ref_state.generation != master.generation
         || hex(&opened.fs.store_id().map_err(display_error)?) != master.store_id
