@@ -1177,6 +1177,57 @@ const ATTRIBUTION_SCHEDULE: [(AttributionArm, u64); 12] = [
     (AttributionArm::Null, 24),
 ];
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct AcceptanceBlock {
+    pair: u64,
+    size_mib: u64,
+    order: [char; 2],
+}
+
+const fn acceptance_block(pair: u64, size_mib: u64, order: [char; 2]) -> AcceptanceBlock {
+    AcceptanceBlock {
+        pair,
+        size_mib,
+        order,
+    }
+}
+
+const ACCEPTANCE_SCHEDULE: [AcceptanceBlock; 12] = [
+    acceptance_block(1, 0, ['A', 'B']),
+    acceptance_block(1, 24, ['A', 'B']),
+    acceptance_block(1, 96, ['A', 'B']),
+    acceptance_block(2, 96, ['B', 'A']),
+    acceptance_block(2, 24, ['B', 'A']),
+    acceptance_block(2, 0, ['B', 'A']),
+    acceptance_block(3, 24, ['B', 'A']),
+    acceptance_block(3, 0, ['B', 'A']),
+    acceptance_block(3, 96, ['B', 'A']),
+    acceptance_block(4, 0, ['A', 'B']),
+    acceptance_block(4, 96, ['A', 'B']),
+    acceptance_block(4, 24, ['A', 'B']),
+];
+
+fn acceptance_schedule_json() -> String {
+    let blocks = ACCEPTANCE_SCHEDULE
+        .iter()
+        .enumerate()
+        .map(|(index, block)| {
+            format!(
+                "{{\"block\":{},\"pair\":{},\"size_mib\":{},\"order\":[\"{}\",\"{}\"]}}",
+                index + 1,
+                block.pair,
+                block.size_mib,
+                block.order[0],
+                block.order[1],
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"schema\":\"layerfs-stage1m-acceptance-schedule-v1\",\"blocks\":[{blocks}],\"paired_warmups\":24,\"measured\":24,\"rows\":48}}\n"
+    )
+}
+
 fn attribution_schedule_json() -> String {
     let blocks = ATTRIBUTION_SCHEDULE
         .iter()
@@ -1533,6 +1584,841 @@ pub fn attribution_run(control: &Path, fixture: &Path, run: &Path) -> EvalResult
         preferred_wall_pass,
     );
     Ok(())
+}
+
+#[derive(Clone)]
+struct AcceptanceSample {
+    pair: u64,
+    size_mib: u64,
+    operand: char,
+    wall_ns: u128,
+    cpu_ns: u128,
+}
+
+pub fn acceptance_run(
+    control: &Path,
+    candidate: &Path,
+    fixture: &Path,
+    run: &Path,
+) -> EvalResult<()> {
+    if run.exists() {
+        return Err(format!("run directory already exists: {}", run.display()));
+    }
+    let control = control.canonicalize().map_err(io_error)?;
+    let candidate = candidate.canonicalize().map_err(io_error)?;
+    let fixture = fixture.canonicalize().map_err(io_error)?;
+    crate::stage1_fixture::verify_sealed(&fixture)?;
+    verify_fixture_sources(&fixture)?;
+    let fixture_manifest = fs::read(fixture.join("fixture-manifest.json")).map_err(io_error)?;
+    let control_sha256 = sha256_file(&control)?;
+    let candidate_sha256 = sha256_file(&candidate)?;
+    let control_blake3 = digest_file(&control)?;
+    let candidate_blake3 = digest_file(&candidate)?;
+    if control_sha256 == candidate_sha256 {
+        return Err("control and candidate executables are identical".to_owned());
+    }
+    let manifest_directory = fixture
+        .parent()
+        .and_then(Path::parent)
+        .ok_or_else(|| "fixture is not below the target directory".to_owned())?
+        .join("layerfs-stage1m-custody/source-manifests");
+    for (name, executable_sha256) in [
+        ("source-manifest-control.json", control_sha256.as_str()),
+        ("source-manifest-candidate.json", candidate_sha256.as_str()),
+    ] {
+        let manifest = fs::read_to_string(manifest_directory.join(name)).map_err(io_error)?;
+        if !manifest.contains(executable_sha256)
+            || !manifest.contains("\"dirty_tree\":false")
+            || !manifest.contains("\"status\":\"PASS\"")
+        {
+            return Err(format!("{name} does not bind its clean executable"));
+        }
+    }
+    let schedule = acceptance_schedule_json();
+    let schedule_blake3 = blake3::hash(schedule.as_bytes()).to_hex().to_string();
+    fs::create_dir(run).map_err(io_error)?;
+    let campaign_started = Instant::now();
+    durable_write(&run.join("schedule.json"), schedule.as_bytes())?;
+    durable_write(
+        &run.join("preregistration.json"),
+        concat!(
+            "{\"schema\":\"layerfs-stage1m-acceptance-preregistration-v1\",",
+            "\"status\":\"PASS\",\"paired_warmups\":24,\"measured\":24,",
+            "\"p50\":\"mean_positions_2_3\",\"p95\":\"position_4\",",
+            "\"preferred_wall_ns\":15000000000,\"hard_wall_ns\":30000000000,",
+            "\"wins_required_24\":3,\"wins_required_96\":3,",
+            "\"fixed_cost_allowance_ns\":1000000,\"p95_allowance_ns\":1000000}\n"
+        )
+        .as_bytes(),
+    )?;
+    durable_write(
+        &run.join("readiness.json"),
+        format!(
+            concat!(
+                "{{\"schema\":\"layerfs-stage1m-acceptance-readiness-v1\",",
+                "\"status\":\"PASS\",\"measured_rows_started\":false,",
+                "\"control_sha256\":\"{}\",\"candidate_sha256\":\"{}\",",
+                "\"fixture_blake3\":\"{}\",\"schedule_blake3\":\"{}\",",
+                "\"expected_rows\":48}}\n"
+            ),
+            control_sha256,
+            candidate_sha256,
+            blake3::hash(&fixture_manifest).to_hex(),
+            schedule_blake3,
+        )
+        .as_bytes(),
+    )?;
+    durable_write(&run.join("fixture-manifest.json"), &fixture_manifest)?;
+    let cwd = std::env::current_dir().map_err(io_error)?;
+    durable_write(
+        &run.join("environment.json"),
+        format!(
+            "{{\"schema\":\"layerfs-stage1m-environment-v1\",\"network\":0,\"rows_serial\":true,\"cwd\":\"{}\"}}\n",
+            json_escape(&cwd.display().to_string())
+        )
+        .as_bytes(),
+    )?;
+    durable_write(
+        &run.join("executables.json"),
+        format!(
+            concat!(
+                "{{\"control\":{{\"path\":\"{}\",\"sha256\":\"{}\",",
+                "\"blake3\":\"{}\"}},\"candidate\":{{\"path\":\"{}\",",
+                "\"sha256\":\"{}\",\"blake3\":\"{}\"}}}}\n"
+            ),
+            json_escape(&control.display().to_string()),
+            control_sha256,
+            control_blake3,
+            json_escape(&candidate.display().to_string()),
+            candidate_sha256,
+            candidate_blake3,
+        )
+        .as_bytes(),
+    )?;
+    copy_acceptance_manifests(run, &fixture)?;
+    create_empty(&run.join("rows.jsonl"))?;
+    create_empty(&run.join("commands.jsonl"))?;
+    append_sync(
+        &run.join("failure-ledger.json"),
+        "{\"sequence\":1,\"state\":\"OPEN\",\"preserved_failures\":0}",
+    )?;
+
+    let setup_wall_ns = campaign_started.elapsed().as_nanos();
+    let mut command_wall_sum_ns = 0_u128;
+    let mut row_sequence = 0_u64;
+    let mut command_sequence = 0_u64;
+    let mut samples = Vec::with_capacity(24);
+    for (block_index, block) in ACCEPTANCE_SCHEDULE.iter().enumerate() {
+        let mut signatures = Vec::with_capacity(2);
+        for (order_index, operand) in block.order.iter().enumerate() {
+            if campaign_started.elapsed().as_nanos() >= 30_000_000_000 {
+                return acceptance_campaign_failure(run, block_index + 1, "hard wall reached");
+            }
+            command_sequence += 1;
+            let (executable, executable_sha256, source_role) = if *operand == 'A' {
+                (&control, &control_sha256, "control")
+            } else {
+                (&candidate, &candidate_sha256, "candidate")
+            };
+            let size = fixture.join("sizes").join(block.size_mib.to_string());
+            let store = size.join("bases/base");
+            let source = size.join("source-native").join(FILE_PATH);
+            let identity = format!(
+                "p{}-s{}-o{}-{}",
+                block.pair,
+                block.size_mib,
+                order_index + 1,
+                operand
+            );
+            let work = run.join(format!(".sample-{identity}"));
+            let size_arg = block.size_mib.to_string();
+            let argv = [
+                executable.display().to_string(),
+                "stage1".to_owned(),
+                "materialize".to_owned(),
+                "parity-row".to_owned(),
+                store.display().to_string(),
+                source.display().to_string(),
+                size_arg.clone(),
+                work.display().to_string(),
+                identity.clone(),
+            ];
+            let argv_json = argv
+                .iter()
+                .map(|argument| format!("\"{}\"", json_escape(argument)))
+                .collect::<Vec<_>>()
+                .join(",");
+            let start_unix_ns = unix_ns()?;
+            let started = Instant::now();
+            let output = Command::new(executable)
+                .args(["stage1", "materialize", "parity-row"])
+                .arg(&store)
+                .arg(&source)
+                .arg(&size_arg)
+                .arg(&work)
+                .arg(&identity)
+                .output()
+                .map_err(io_error)?;
+            let command_wall_ns = started.elapsed().as_nanos();
+            command_wall_sum_ns = command_wall_sum_ns
+                .checked_add(command_wall_ns)
+                .ok_or_else(|| "acceptance command wall overflow".to_owned())?;
+            append_sync(
+                &run.join("commands.jsonl"),
+                &format!(
+                    concat!(
+                        "{{\"sequence\":{},\"block\":{},\"pair\":{},",
+                        "\"pair_size_order\":{},\"operand\":\"{}\",",
+                        "\"source_role\":\"{}\",\"size_mib\":{},",
+                        "\"executable\":\"{}\",\"executable_sha256\":\"{}\",",
+                        "\"fixture_root\":\"{}\",\"store\":\"{}\",",
+                        "\"source\":\"{}\",\"work\":\"{}\",\"cwd\":\"{}\",",
+                        "\"argv\":[{}],\"start_unix_ns\":{},\"end_unix_ns\":{},",
+                        "\"wall_ns\":{},\"exit_code\":{},\"stderr\":\"{}\"}}"
+                    ),
+                    command_sequence,
+                    block_index + 1,
+                    block.pair,
+                    order_index + 1,
+                    operand,
+                    source_role,
+                    block.size_mib,
+                    json_escape(&executable.display().to_string()),
+                    executable_sha256,
+                    json_escape(&fixture.display().to_string()),
+                    json_escape(&store.display().to_string()),
+                    json_escape(&source.display().to_string()),
+                    json_escape(&work.display().to_string()),
+                    json_escape(&cwd.display().to_string()),
+                    argv_json,
+                    start_unix_ns,
+                    unix_ns()?,
+                    command_wall_ns,
+                    output.status.code().unwrap_or(-1),
+                    json_escape(&String::from_utf8_lossy(&output.stderr)),
+                ),
+            )?;
+            let stdout = String::from_utf8(output.stdout).map_err(display_error)?;
+            let rows = stdout.lines().collect::<Vec<_>>();
+            for (child_index, row) in rows.iter().enumerate() {
+                row_sequence += 1;
+                append_sync(
+                    &run.join("rows.jsonl"),
+                    &enrich_acceptance_row(
+                        row,
+                        row_sequence,
+                        block_index + 1,
+                        block,
+                        order_index + 1,
+                        *operand,
+                        source_role,
+                        executable_sha256,
+                        &schedule_blake3,
+                        command_wall_ns,
+                    )?,
+                )?;
+                if output.status.success() {
+                    if let Err(error) = validate_acceptance_row(row, *operand == 'B') {
+                        return acceptance_campaign_failure(
+                            run,
+                            block_index + 1,
+                            &format!("row validation failed: {error}"),
+                        );
+                    }
+                    if child_index == 1 {
+                        let measured = (|| {
+                            let signature = acceptance_semantic_signature(row)?;
+                            let cpu_ns = json_u128(row, "user_cpu_ns")?
+                                .checked_add(json_u128(row, "system_cpu_ns")?)
+                                .ok_or_else(|| "acceptance CPU overflow".to_owned())?;
+                            let wall_ns = json_u128(row, "product_operation_wall_ns")?;
+                            Ok::<_, String>((signature, cpu_ns, wall_ns))
+                        })();
+                        let (signature, cpu_ns, wall_ns) = match measured {
+                            Ok(measured) => measured,
+                            Err(error) => {
+                                return acceptance_campaign_failure(
+                                    run,
+                                    block_index + 1,
+                                    &format!("measured row parsing failed: {error}"),
+                                );
+                            }
+                        };
+                        signatures.push(signature);
+                        samples.push(AcceptanceSample {
+                            pair: block.pair,
+                            size_mib: block.size_mib,
+                            operand: *operand,
+                            wall_ns,
+                            cpu_ns,
+                        });
+                    }
+                }
+            }
+            if !output.status.success() {
+                return acceptance_campaign_failure(
+                    run,
+                    block_index + 1,
+                    "operand command failed; partial rows preserved",
+                );
+            }
+            if rows.len() != 2
+                || !rows[0].contains("\"row_kind\":\"warmup\"")
+                || !rows[1].contains("\"row_kind\":\"measured\"")
+            {
+                return acceptance_campaign_failure(
+                    run,
+                    block_index + 1,
+                    "operand population is not one warmup plus one measured",
+                );
+            }
+        }
+        if signatures.len() != 2 || signatures[0] != signatures[1] {
+            return acceptance_campaign_failure(
+                run,
+                block_index + 1,
+                "adjacent semantic work differs",
+            );
+        }
+    }
+    if row_sequence != 48 || command_sequence != 24 || samples.len() != 24 {
+        return acceptance_campaign_failure(run, 12, "acceptance population mismatch");
+    }
+    let commands = fs::read_to_string(run.join("commands.jsonl")).map_err(io_error)?;
+    durable_write(
+        &run.join("commands.json"),
+        format!("[{}]\n", commands.lines().collect::<Vec<_>>().join(",")).as_bytes(),
+    )?;
+    let disposition = match acceptance_disposition(&samples) {
+        Ok(disposition) => disposition,
+        Err(error) => {
+            return acceptance_campaign_failure(run, 12, &format!("disposition failed: {error}"));
+        }
+    };
+    let campaign_wall_ns = campaign_started.elapsed().as_nanos();
+    if campaign_wall_ns >= 30_000_000_000 {
+        return acceptance_campaign_failure(run, 12, "hard wall reached");
+    }
+    let coordinator_wall_ns = campaign_wall_ns
+        .checked_sub(setup_wall_ns)
+        .and_then(|wall| wall.checked_sub(command_wall_sum_ns))
+        .ok_or_else(|| "acceptance campaign wall equation underflow".to_owned())?;
+    let rows_sha256 = sha256_file(&run.join("rows.jsonl"))?;
+    let commands_sha256 = sha256_file(&run.join("commands.json"))?;
+    durable_write(
+        &run.join("summary.json"),
+        acceptance_summary_json(
+            &disposition,
+            campaign_wall_ns,
+            setup_wall_ns,
+            command_wall_sum_ns,
+            coordinator_wall_ns,
+        )?
+        .as_bytes(),
+    )?;
+    durable_write(
+        &run.join("summary.md"),
+        format!(
+            "# Stage 1.1M paired acceptance\n\nStatus: **{}**. Exact population: 24 paired warmups + 24 measured complete-public rows. 24/96 wins: `{}/{}`. Complete wall: `{campaign_wall_ns}` ns.\n",
+            disposition.status, disposition.wins24, disposition.wins96
+        )
+        .as_bytes(),
+    )?;
+    durable_write(
+        &run.join("campaign-time.txt"),
+        format!(
+            "schema=layerfs-stage1m-acceptance-campaign-time-v1\nstatus={}\ncampaign_wall_ns={campaign_wall_ns}\nsetup_wall_ns={setup_wall_ns}\ncommand_wall_sum_ns={command_wall_sum_ns}\ncoordinator_wall_ns={coordinator_wall_ns}\ncampaign_wall_equation_exact=true\npaired_warmups=24\nmeasured=24\npreferred_wall_ns=15000000000\nhard_wall_ns=30000000000\n",
+            disposition.status
+        )
+        .as_bytes(),
+    )?;
+    append_sync(
+        &run.join("failure-ledger.json"),
+        &format!(
+            "{{\"sequence\":2,\"state\":\"CLOSE\",\"status\":\"{}\",\"preserved_failures\":0}}",
+            disposition.status
+        ),
+    )?;
+    durable_write(
+        &run.join("terminal-receipt.json"),
+        format!(
+            concat!(
+                "{{\"schema\":\"layerfs-stage1m-acceptance-terminal-receipt-v1\",",
+                "\"status\":\"{}\",\"rows_sha256\":\"{}\",",
+                "\"commands_sha256\":\"{}\",\"summary_sha256\":\"{}\",",
+                "\"campaign_time_sha256\":\"{}\",\"failure_ledger_sha256\":\"{}\",",
+                "\"schedule_sha256\":\"{}\",\"environment_sha256\":\"{}\",",
+                "\"fixture_manifest_sha256\":\"{}\",\"executables_sha256\":\"{}\",",
+                "\"control_manifest_sha256\":\"{}\",\"candidate_manifest_sha256\":\"{}\",",
+                "\"control_sha256\":\"{}\",\"candidate_sha256\":\"{}\"}}\n"
+            ),
+            disposition.status,
+            rows_sha256,
+            commands_sha256,
+            sha256_file(&run.join("summary.json"))?,
+            sha256_file(&run.join("campaign-time.txt"))?,
+            sha256_file(&run.join("failure-ledger.json"))?,
+            sha256_file(&run.join("schedule.json"))?,
+            sha256_file(&run.join("environment.json"))?,
+            sha256_file(&run.join("fixture-manifest.json"))?,
+            sha256_file(&run.join("executables.json"))?,
+            sha256_file(&run.join("source-manifest-control.json"))?,
+            sha256_file(&run.join("source-manifest-candidate.json"))?,
+            control_sha256,
+            candidate_sha256,
+        )
+        .as_bytes(),
+    )?;
+    println!(
+        "stage1m-acceptance-run status={} run={} wall_ns={} wins24={} wins96={}",
+        disposition.status,
+        run.display(),
+        campaign_wall_ns,
+        disposition.wins24,
+        disposition.wins96,
+    );
+    if disposition.status == "PASS" {
+        Ok(())
+    } else {
+        Err("paired acceptance requires repair; complete evidence preserved".to_owned())
+    }
+}
+
+fn acceptance_campaign_failure(run: &Path, block: usize, reason: &str) -> EvalResult<()> {
+    append_sync(
+        &run.join("failure-ledger.json"),
+        &format!(
+            "{{\"sequence\":2,\"state\":\"FAIL\",\"block\":{block},\"reason\":\"{}\"}}",
+            json_escape(reason)
+        ),
+    )?;
+    Err(format!(
+        "acceptance campaign stopped at block {block}: {reason}"
+    ))
+}
+
+fn copy_acceptance_manifests(run: &Path, fixture: &Path) -> EvalResult<()> {
+    let source = fixture
+        .parent()
+        .and_then(Path::parent)
+        .ok_or_else(|| "fixture is not below the target directory".to_owned())?
+        .join("layerfs-stage1m-custody/source-manifests");
+    for name in [
+        "source-manifest-historical.json",
+        "source-manifest-historical-harness.json",
+        "source-manifest-control.json",
+        "source-manifest-candidate.json",
+    ] {
+        durable_write(
+            &run.join(name),
+            &fs::read(source.join(name)).map_err(io_error)?,
+        )?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn enrich_acceptance_row(
+    row: &str,
+    sequence: u64,
+    block_index: usize,
+    block: &AcceptanceBlock,
+    order: usize,
+    operand: char,
+    source_role: &str,
+    executable_sha256: &str,
+    schedule_blake3: &str,
+    command_wall_ns: u128,
+) -> EvalResult<String> {
+    let body = row
+        .strip_suffix('}')
+        .ok_or_else(|| "child row is not a JSON object".to_owned())?;
+    Ok(format!(
+        "{},\"sequence\":{},\"block\":{},\"pair\":{},\"pair_size_order\":{},\"operand\":\"{}\",\"source_role\":\"{}\",\"executable_sha256\":\"{}\",\"schedule_blake3\":\"{}\",\"command_wall_ns\":{}}}",
+        body,
+        sequence,
+        block_index,
+        block.pair,
+        order,
+        operand,
+        source_role,
+        executable_sha256,
+        schedule_blake3,
+        command_wall_ns,
+    ))
+}
+
+fn validate_acceptance_row(row: &str, candidate: bool) -> EvalResult<()> {
+    validate_instrumented_row(row)?;
+    for exact in [
+        "\"status\":\"PASS\"",
+        "\"engine_sql_exact\":true",
+        "\"scratch_sql_exact\":true",
+        "\"fetched_auth_decode_exact\":true",
+        "\"operation_q_terminal_bytes\":0",
+        "\"residue\":0",
+    ] {
+        if !row.contains(exact) {
+            return Err(format!("acceptance row does not prove {exact}"));
+        }
+    }
+    let resources_pass = json_u128(row, "rss_peak_bytes")? <= 32 * 1024 * 1024
+        && json_u128(row, "rss_current_bytes")? <= 32 * 1024 * 1024
+        && json_u128(row, "fd_before")? <= 24
+        && json_u128(row, "fd_after")? <= 24
+        && json_u128(row, "operation_q_high_water_bytes")? <= 8 * 1024 * 1024
+        && json_u128(row, "owned_temp_terminal")? == 0
+        && json_u128(row, "descriptor_spool_bytes_terminal")? == 0
+        && (!candidate
+            || json_u128(row, "scratch_connections_peak")? <= 1
+                && json_u128(row, "total_connections_peak")? <= 2);
+    if !resources_pass {
+        return Err("acceptance row resource gate failed".to_owned());
+    }
+    if row.contains("\"row_kind\":\"measured\"")
+        && (json_u128(row, "fd_terminal")? != json_u128(row, "process_fd_baseline")?
+            || json_u128(row, "connections_terminal")? != 0
+            || json_u128(row, "scratch_connections_terminal")? != 0
+            || json_u128(row, "total_connections_terminal")? != 0)
+    {
+        return Err("acceptance row terminal resource closure failed".to_owned());
+    }
+    Ok(())
+}
+
+fn acceptance_semantic_signature(row: &str) -> EvalResult<Vec<u128>> {
+    [
+        "logical_bytes",
+        "fetched_rows",
+        "authentication_passes",
+        "role_decode_passes",
+        "object_bytes_read",
+        "payload_batch_references",
+        "payload_batch_maximum",
+        "publication_commits",
+        "bytes_written",
+        "temp_calls",
+        "replace_calls",
+        "operation_q_terminal_bytes",
+        "residue",
+    ]
+    .into_iter()
+    .map(|key| json_u128(row, key))
+    .collect()
+}
+
+#[derive(Clone)]
+struct AcceptanceStats {
+    raw: Vec<u128>,
+    minimum: u128,
+    p50: u128,
+    p95: u128,
+    maximum: u128,
+}
+
+fn acceptance_stats(values: &[u128]) -> EvalResult<AcceptanceStats> {
+    if values.len() != 4 {
+        return Err("acceptance n=4 statistic requires four values".to_owned());
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_unstable();
+    Ok(AcceptanceStats {
+        raw: values.to_vec(),
+        minimum: sorted[0],
+        p50: sorted[1]
+            .checked_add(sorted[2])
+            .ok_or_else(|| "acceptance p50 overflow".to_owned())?
+            / 2,
+        p95: sorted[3],
+        maximum: sorted[3],
+    })
+}
+
+struct AbsoluteClass {
+    name: &'static str,
+    p50_24: u128,
+    p95_24: u128,
+    p50_96: u128,
+    p95_96: u128,
+}
+
+const ABSOLUTE_CLASSES: [AbsoluteClass; 5] = [
+    AbsoluteClass {
+        name: "375",
+        p50_24: 64_000_000,
+        p95_24: 70_400_000,
+        p50_96: 256_000_000,
+        p95_96: 281_600_000,
+    },
+    AbsoluteClass {
+        name: "400",
+        p50_24: 60_000_000,
+        p95_24: 66_000_000,
+        p50_96: 240_000_000,
+        p95_96: 264_000_000,
+    },
+    AbsoluteClass {
+        name: "450",
+        p50_24: 53_333_000,
+        p95_24: 58_667_000,
+        p50_96: 213_333_000,
+        p95_96: 234_667_000,
+    },
+    AbsoluteClass {
+        name: "500",
+        p50_24: 48_000_000,
+        p95_24: 52_800_000,
+        p50_96: 192_000_000,
+        p95_96: 211_200_000,
+    },
+    AbsoluteClass {
+        name: "800",
+        p50_24: 30_000_000,
+        p95_24: 33_000_000,
+        p50_96: 120_000_000,
+        p95_96: 132_000_000,
+    },
+];
+
+struct AcceptanceDisposition {
+    status: &'static str,
+    populations: Vec<(u64, AcceptanceStats, AcceptanceStats)>,
+    wins24: u64,
+    wins96: u64,
+    fixed_cost_pass: bool,
+    p95_relative_pass: bool,
+    higher_absolute_class: bool,
+    absolute_classes_json: String,
+    primary_class_pass: bool,
+    primary_nonmaterial_microvariance: bool,
+    fitted_fixed_ns: f64,
+    fitted_bandwidth_mib_s: f64,
+    model_valid: bool,
+    cpu_scaling_pass: bool,
+}
+
+fn acceptance_disposition(samples: &[AcceptanceSample]) -> EvalResult<AcceptanceDisposition> {
+    let mut populations = Vec::new();
+    for size in [0_u64, 24, 96] {
+        let operand = |wanted| {
+            samples
+                .iter()
+                .filter(|sample| sample.size_mib == size && sample.operand == wanted)
+                .map(|sample| sample.wall_ns)
+                .collect::<Vec<_>>()
+        };
+        populations.push((
+            size,
+            acceptance_stats(&operand('A'))?,
+            acceptance_stats(&operand('B'))?,
+        ));
+    }
+    let stats = |size: u64, candidate: bool| {
+        populations
+            .iter()
+            .find(|(candidate_size, _, _)| *candidate_size == size)
+            .map(
+                |(_, control, candidate_stats)| {
+                    if candidate {
+                        candidate_stats
+                    } else {
+                        control
+                    }
+                },
+            )
+            .ok_or_else(|| format!("missing acceptance size {size}"))
+    };
+    let wins = |size| {
+        (1..=4)
+            .filter(|pair| {
+                let wall = |operand| {
+                    samples
+                        .iter()
+                        .find(|sample| {
+                            sample.size_mib == size
+                                && sample.pair == *pair
+                                && sample.operand == operand
+                        })
+                        .map(|sample| sample.wall_ns)
+                };
+                matches!((wall('A'), wall('B')), (Some(control), Some(candidate)) if candidate < control)
+            })
+            .count() as u64
+    };
+    let wins24 = wins(24);
+    let wins96 = wins(96);
+    let class_pass = |class: &AbsoluteClass, candidate: bool| -> EvalResult<bool> {
+        let s24 = stats(24, candidate)?;
+        let s96 = stats(96, candidate)?;
+        Ok(s24.p50 <= class.p50_24
+            && s24.p95 <= class.p95_24
+            && s96.p50 <= class.p50_96
+            && s96.p95 <= class.p95_96)
+    };
+    let mut control_highest = None;
+    let mut candidate_highest = None;
+    let mut classes = Vec::new();
+    for (index, class) in ABSOLUTE_CLASSES.iter().enumerate() {
+        let control_pass = class_pass(class, false)?;
+        let candidate_pass = class_pass(class, true)?;
+        if control_pass {
+            control_highest = Some(index);
+        }
+        if candidate_pass {
+            candidate_highest = Some(index);
+        }
+        classes.push(format!(
+            "{{\"class_mib_s\":{},\"control_pass\":{},\"candidate_pass\":{}}}",
+            class.name, control_pass, candidate_pass
+        ));
+    }
+    let higher_absolute_class = candidate_highest
+        .is_some_and(|candidate| control_highest.is_none_or(|control| candidate > control));
+    let fixed_cost_pass = stats(0, true)?.p50 <= stats(0, false)?.p50 + 1_000_000;
+    let mut p95_relative_pass = true;
+    for size in [0_u64, 24, 96] {
+        p95_relative_pass &=
+            stats(size, true)?.p95 <= stats(size, false)?.p95 + 1_000_000 || higher_absolute_class;
+    }
+    let t0 = stats(0, true)?.p50 as f64;
+    let t24 = stats(24, true)?.p50 as f64;
+    let t96 = stats(96, true)?.p50 as f64;
+    let slope = (t96 - t24) / 72.0;
+    let residual24 = t24 - (t0 + 24.0 * slope);
+    let residual96 = t96 - (t0 + 96.0 * slope);
+    let model_valid = slope > 0.0
+        && residual24.abs() <= 2_000_000_f64.max(t24 * 0.05)
+        && residual96.abs() <= 2_000_000_f64.max(t96 * 0.05);
+    let fitted_bandwidth_mib_s = if slope > 0.0 {
+        1_000_000_000.0 / slope
+    } else {
+        0.0
+    };
+    let cpu = |size| {
+        acceptance_stats(
+            &samples
+                .iter()
+                .filter(|sample| sample.size_mib == size && sample.operand == 'B')
+                .map(|sample| sample.cpu_ns)
+                .collect::<Vec<_>>(),
+        )
+    };
+    let cpu0 = cpu(0)?.p50;
+    let cpu24 = cpu(24)?.p50;
+    let cpu96 = cpu(96)?.p50;
+    let cpu_scaling_pass = cpu24 > cpu0
+        && cpu96 > cpu0
+        && (cpu96 - cpu0) as f64 / 96.0 <= 1.25 * (cpu24 - cpu0) as f64 / 24.0;
+    let primary_class_pass = class_pass(&ABSOLUTE_CLASSES[2], true)?;
+    let primary = &ABSOLUTE_CLASSES[2];
+    let primary_miss_ns = [
+        stats(24, true)?.p50.saturating_sub(primary.p50_24),
+        stats(24, true)?.p95.saturating_sub(primary.p95_24),
+        stats(96, true)?.p50.saturating_sub(primary.p50_96),
+        stats(96, true)?.p95.saturating_sub(primary.p95_96),
+    ]
+    .into_iter()
+    .max()
+    .unwrap_or(0);
+    let pass = wins24 >= 3
+        && wins96 >= 3
+        && fixed_cost_pass
+        && p95_relative_pass
+        && primary_class_pass
+        && model_valid
+        && t0 < 20_000_000.0
+        && fitted_bandwidth_mib_s >= 500.0
+        && cpu_scaling_pass;
+    Ok(AcceptanceDisposition {
+        status: if pass { "PASS" } else { "REVISE" },
+        populations,
+        wins24,
+        wins96,
+        fixed_cost_pass,
+        p95_relative_pass,
+        higher_absolute_class,
+        absolute_classes_json: format!("[{}]", classes.join(",")),
+        primary_class_pass,
+        primary_nonmaterial_microvariance: !primary_class_pass && primary_miss_ns < 1_000_000,
+        fitted_fixed_ns: t0,
+        fitted_bandwidth_mib_s,
+        model_valid,
+        cpu_scaling_pass,
+    })
+}
+
+fn acceptance_summary_json(
+    disposition: &AcceptanceDisposition,
+    campaign_wall_ns: u128,
+    setup_wall_ns: u128,
+    command_wall_sum_ns: u128,
+    coordinator_wall_ns: u128,
+) -> EvalResult<String> {
+    let populations = disposition
+        .populations
+        .iter()
+        .map(|(size, control, candidate)| {
+            format!(
+                concat!(
+                    "{{\"size_mib\":{},\"control\":{{\"raw_ns\":{:?},",
+                    "\"minimum_ns\":{},\"p50_ns\":{},\"p95_ns\":{},\"maximum_ns\":{}}},",
+                    "\"candidate\":{{\"raw_ns\":{:?},\"minimum_ns\":{},",
+                    "\"p50_ns\":{},\"p95_ns\":{},\"maximum_ns\":{}}}}}"
+                ),
+                size,
+                control.raw,
+                control.minimum,
+                control.p50,
+                control.p95,
+                control.maximum,
+                candidate.raw,
+                candidate.minimum,
+                candidate.p50,
+                candidate.p95,
+                candidate.maximum,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    Ok(format!(
+        concat!(
+            "{{\"schema\":\"layerfs-stage1m-acceptance-summary-v1\",",
+            "\"status\":\"{}\",\"paired_warmups\":24,\"measured_rows\":24,",
+            "\"population_exact\":true,\"wins_24\":{},\"wins_96\":{},",
+            "\"wins_24_pass\":{},\"wins_96_pass\":{},\"fixed_cost_pass\":{},",
+            "\"p95_relative_pass\":{},\"higher_absolute_class\":{},",
+            "\"absolute_classes\":{},\"primary_450_class_pass\":{},",
+            "\"primary_nonmaterial_microvariance\":{},",
+            "\"model\":{{\"fitted_fixed_ns\":{},",
+            "\"fitted_bandwidth_mib_s\":{},\"valid\":{}}},",
+            "\"cpu_scaling_pass\":{},\"preferred_wall_pass\":{},",
+            "\"hard_wall_pass\":true,\"campaign_wall_ns\":{},",
+            "\"setup_wall_ns\":{},\"command_wall_sum_ns\":{},",
+            "\"coordinator_wall_ns\":{},\"campaign_wall_equation_exact\":true,",
+            "\"populations\":[{}]}}\n"
+        ),
+        disposition.status,
+        disposition.wins24,
+        disposition.wins96,
+        disposition.wins24 >= 3,
+        disposition.wins96 >= 3,
+        disposition.fixed_cost_pass,
+        disposition.p95_relative_pass,
+        disposition.higher_absolute_class,
+        disposition.absolute_classes_json,
+        disposition.primary_class_pass,
+        disposition.primary_nonmaterial_microvariance,
+        disposition.fitted_fixed_ns,
+        disposition.fitted_bandwidth_mib_s,
+        disposition.model_valid,
+        disposition.cpu_scaling_pass,
+        campaign_wall_ns < 15_000_000_000,
+        campaign_wall_ns,
+        setup_wall_ns,
+        command_wall_sum_ns,
+        coordinator_wall_ns,
+        populations,
+    ))
 }
 
 fn attribution_campaign_failure(run: &Path, block: usize, reason: &str) -> EvalResult<()> {
@@ -3029,8 +3915,13 @@ fn print_row(
             "\"resources\":{{\"user_cpu_ns\":{},\"system_cpu_ns\":{},",
             "\"rss_peak_bytes\":{},\"rss_current_bytes\":{},\"process_fd_baseline\":{},",
             "\"fd_before\":{},",
-            "\"fd_after\":{},\"active_connections\":{},\"fd_terminal\":{},",
-            "\"connections_terminal\":{}}},",
+            "\"fd_after\":{},\"active_connections\":{},",
+            "\"scratch_connections_current\":{},\"scratch_connections_peak\":{},",
+            "\"total_connections_current\":{},\"total_connections_peak\":{},",
+            "\"fd_terminal\":{},\"connections_terminal\":{},",
+            "\"scratch_connections_terminal\":{},\"total_connections_terminal\":{},",
+            "\"operation_q_high_water_bytes\":{},\"owned_temp_terminal\":{},",
+            "\"descriptor_spool_bytes_terminal\":{}}},",
             "\"equations\":{{\"engine_sql_sum\":{},\"engine_sql_exact\":{},",
             "\"scratch_sql_sum\":{},\"scratch_sql_exact\":{},",
             "\"fetched_auth_decode_exact\":{},\"materialize_inclusive_ns\":{},",
@@ -3067,8 +3958,17 @@ fn print_row(
         row.fd_before,
         row.fd_after,
         row.active_connections,
+        row.scratch_connections_current,
+        row.scratch_connections_peak,
+        row.total_connections_current,
+        row.total_connections_peak,
         json_optional_u64(row.fd_terminal),
         json_optional_u64(row.connections_terminal),
+        json_optional_u64(row.scratch_connections_terminal),
+        json_optional_u64(row.total_connections_terminal),
+        row.operation.operation_q_high_water_bytes,
+        row.operation.owned_temp_terminal,
+        row.operation.descriptor_spool_bytes_terminal,
         engine_sql,
         engine_sql == row.engine.statements,
         scratch_sql,
@@ -3476,5 +4376,74 @@ mod tests {
         assert!(models.contains("\"residual_24_ns\":0"));
         assert!(models.contains("\"residual_96_ns\":0"));
         assert!(models.contains("\"model_valid\":true"));
+    }
+
+    #[test]
+    fn acceptance_schedule_statistics_and_gates_are_frozen() {
+        assert_eq!(
+            ACCEPTANCE_SCHEDULE,
+            [
+                acceptance_block(1, 0, ['A', 'B']),
+                acceptance_block(1, 24, ['A', 'B']),
+                acceptance_block(1, 96, ['A', 'B']),
+                acceptance_block(2, 96, ['B', 'A']),
+                acceptance_block(2, 24, ['B', 'A']),
+                acceptance_block(2, 0, ['B', 'A']),
+                acceptance_block(3, 24, ['B', 'A']),
+                acceptance_block(3, 0, ['B', 'A']),
+                acceptance_block(3, 96, ['B', 'A']),
+                acceptance_block(4, 0, ['A', 'B']),
+                acceptance_block(4, 96, ['A', 'B']),
+                acceptance_block(4, 24, ['A', 'B']),
+            ]
+        );
+        let schedule = acceptance_schedule_json();
+        assert!(schedule.contains("\"paired_warmups\":24"));
+        assert!(schedule.contains("\"measured\":24"));
+        let stats = acceptance_stats(&[40, 10, 30, 20]).unwrap();
+        assert_eq!(
+            (stats.minimum, stats.p50, stats.p95, stats.maximum),
+            (10, 25, 40, 40)
+        );
+        let mut samples = Vec::new();
+        for pair in 1..=4 {
+            for (size, control_wall, candidate_wall, candidate_cpu) in [
+                (0, 12_000_000, 10_000_000, 1_000_000),
+                (24, 70_000_000, 53_200_000, 25_000_000),
+                (96, 250_000_000, 182_800_000, 97_000_000),
+            ] {
+                samples.push(AcceptanceSample {
+                    pair,
+                    size_mib: size,
+                    operand: 'A',
+                    wall_ns: control_wall,
+                    cpu_ns: candidate_cpu + 1_000_000,
+                });
+                samples.push(AcceptanceSample {
+                    pair,
+                    size_mib: size,
+                    operand: 'B',
+                    wall_ns: candidate_wall,
+                    cpu_ns: candidate_cpu,
+                });
+            }
+        }
+        let disposition = acceptance_disposition(&samples).unwrap();
+        assert_eq!(disposition.status, "PASS");
+        assert_eq!((disposition.wins24, disposition.wins96), (4, 4));
+        assert!(disposition.fixed_cost_pass);
+        assert!(disposition.p95_relative_pass);
+        assert!(disposition.higher_absolute_class);
+        assert!(disposition.primary_class_pass);
+        assert!(disposition.model_valid);
+        assert!(disposition.fitted_bandwidth_mib_s >= 500.0);
+        assert!(disposition.cpu_scaling_pass);
+
+        for sample in &mut samples {
+            if sample.operand == 'B' && sample.pair <= 2 {
+                sample.wall_ns = sample.wall_ns.saturating_add(100_000_000);
+            }
+        }
+        assert_eq!(acceptance_disposition(&samples).unwrap().status, "REVISE");
     }
 }
