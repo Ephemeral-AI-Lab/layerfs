@@ -575,8 +575,10 @@ impl Engine {
                 message: "Verified admission mutex poisoned".to_owned(),
             })?;
             Some(
-                initial_verified_scrub(&connection, &path, store_id)
-                    .map_err(|error| engine_step("initial verified scrub", error))?,
+                initial_verified_scrub(&connection, &path, store_id).map_err(|failure| {
+                    let _observation = failure.observation;
+                    engine_step("initial verified scrub", failure.error)
+                })?,
             )
         } else {
             note_statement(&mut admission_statements)?;
@@ -713,18 +715,7 @@ impl Engine {
         self.mark_compaction_sql(1)?;
         candidate.execute_batch("BEGIN").map_err(map_sqlite_error)?;
         let copied = (|| {
-            self.mark_compaction_sql(7)?;
-            candidate
-                .execute_batch(
-                    "DELETE FROM layerfs_store_meta;
-                 DELETE FROM layerfs_authority;
-                 INSERT INTO layerfs_store_meta SELECT * FROM source.layerfs_store_meta;
-                 UPDATE layerfs_store_meta SET visible_root = NULL;
-                 INSERT INTO layerfs_authority SELECT * FROM source.layerfs_authority;
-                 INSERT INTO layerfs_refs SELECT * FROM source.layerfs_refs;
-                 INSERT INTO layerfs_retained_roots SELECT * FROM source.layerfs_retained_roots;",
-                )
-                .map_err(map_sqlite_error)?;
+            self.copy_compaction_metadata(&candidate)?;
             let mut select = source
                 .prepare(
                     "SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1",
@@ -807,6 +798,22 @@ impl Engine {
             selector_temporary_bytes,
             total_peak_bytes,
         })
+    }
+
+    fn copy_compaction_metadata(&self, candidate: &Connection) -> EngineResult<()> {
+        for sql in [
+            "DELETE FROM layerfs_store_meta",
+            "DELETE FROM layerfs_authority",
+            "INSERT INTO layerfs_store_meta SELECT * FROM source.layerfs_store_meta",
+            "UPDATE layerfs_store_meta SET visible_root = NULL",
+            "INSERT INTO layerfs_authority SELECT * FROM source.layerfs_authority",
+            "INSERT INTO layerfs_refs SELECT * FROM source.layerfs_refs",
+            "INSERT INTO layerfs_retained_roots SELECT * FROM source.layerfs_retained_roots",
+        ] {
+            self.mark_compaction_sql(1)?;
+            candidate.execute(sql, []).map_err(map_sqlite_error)?;
+        }
+        Ok(())
     }
 
     pub fn counters(&self) -> EngineResult<EngineCounters> {
@@ -1296,30 +1303,26 @@ impl Engine {
                     self.sql_family_scope
                         .store(SQL_FAMILY_LIVE_INTEGRITY, Ordering::Release);
                 }
-                let scrubbed = integrity::verify_retained_union_observed(
+                let scrub_statements = Cell::new(0);
+                let scrubbed = integrity::verify_retained_union_observed_counted(
                     &connection,
                     &self.path,
                     self.store_id,
-                )
-                .and_then(|observation| {
-                    clear_known_trusted_history(&connection)?;
+                    &scrub_statements,
+                );
+                self.bump(|counters| {
+                    checked_add(&mut counters.integrity_statements, scrub_statements.get())?;
+                    checked_add(&mut counters.statements, scrub_statements.get())?;
+                    mark_sql_family(counters, SQL_FAMILY_LIVE_INTEGRITY, scrub_statements.get())
+                })?;
+                let scrubbed = scrubbed.and_then(|observation| {
                     self.bump(|counters| {
-                        checked_add(
-                            &mut counters.integrity_statements,
-                            observation.verification.statements,
-                        )?;
-                        checked_add(
-                            &mut counters.statements,
-                            observation.verification.statements,
-                        )?;
-                        mark_sql_family(
-                            counters,
-                            SQL_FAMILY_LIVE_INTEGRITY,
-                            observation.verification.statements,
-                        )?;
                         checked_add(&mut counters.statements, 1)?;
                         mark_sql_family(counters, SQL_FAMILY_LIVE_INTEGRITY, 1)?;
-                        checked_add(&mut counters.integrity_statements, 1)?;
+                        checked_add(&mut counters.integrity_statements, 1)
+                    })?;
+                    clear_known_trusted_history(&connection)?;
+                    self.bump(|counters| {
                         add_retained_scrub_counters(counters, observation.verification)
                     })
                 });
@@ -1650,6 +1653,7 @@ fn mark_known_trusted_history(connection: &Connection) -> EngineResult<()> {
     Ok(())
 }
 
+#[derive(Debug, Default)]
 struct InitialScrubObservation {
     verification: Option<integrity::VerificationObservation>,
     transactions_started: u64,
@@ -1658,53 +1662,72 @@ struct InitialScrubObservation {
     statements: u64,
 }
 
+struct InitialScrubFailure {
+    error: EngineError,
+    observation: InitialScrubObservation,
+}
+
 fn initial_verified_scrub(
     connection: &Connection,
     path: &Path,
     store_id: [u8; 32],
-) -> EngineResult<InitialScrubObservation> {
-    connection
-        .execute_batch("BEGIN IMMEDIATE")
-        .map_err(map_sqlite_error)?;
-    let mut statements = 1_u64;
-    let result = trusted_history(connection).and_then(|dirty| {
-        statements = statements
-            .checked_add(1)
-            .ok_or(EngineError::CounterOverflow)?;
-        if dirty {
-            let observation =
-                integrity::verify_retained_union_observed(connection, path, store_id)?;
-            statements = statements
-                .checked_add(observation.verification.statements)
-                .and_then(|value| value.checked_add(1))
-                .ok_or(EngineError::CounterOverflow)?;
-            clear_known_trusted_history(connection)?;
-            Ok(Some(observation.verification))
-        } else {
-            Ok(None)
-        }
-    });
-    match result {
-        Ok(observation) => {
-            connection
-                .execute_batch("COMMIT")
-                .map_err(map_sqlite_error)?;
-            statements = statements
-                .checked_add(1)
-                .ok_or(EngineError::CounterOverflow)?;
-            Ok(InitialScrubObservation {
-                verification: observation,
-                transactions_started: 1,
-                transactions_committed: 1,
-                transactions_rolled_back: 0,
-                statements,
-            })
-        }
-        Err(error) => {
-            let _ = connection.execute_batch("ROLLBACK");
-            Err(error)
-        }
+) -> Result<InitialScrubObservation, Box<InitialScrubFailure>> {
+    let mut observation = InitialScrubObservation {
+        statements: 1,
+        ..InitialScrubObservation::default()
+    };
+    if let Err(error) = connection.execute_batch("BEGIN IMMEDIATE") {
+        return Err(Box::new(InitialScrubFailure {
+            error: map_sqlite_error(error),
+            observation,
+        }));
     }
+    observation.transactions_started = 1;
+    observation.statements += 1;
+    let dirty = match trusted_history(connection) {
+        Ok(dirty) => dirty,
+        Err(error) => return Err(initial_scrub_rollback(connection, error, observation)),
+    };
+    if dirty {
+        let statements = Cell::new(0);
+        let verified = integrity::verify_retained_union_observed_counted(
+            connection,
+            path,
+            store_id,
+            &statements,
+        );
+        observation.statements += statements.get();
+        let verified = match verified {
+            Ok(verified) => verified,
+            Err(error) => return Err(initial_scrub_rollback(connection, error, observation)),
+        };
+        observation.statements += 1;
+        if let Err(error) = clear_known_trusted_history(connection) {
+            return Err(initial_scrub_rollback(connection, error, observation));
+        }
+        observation.verification = Some(verified.verification);
+    }
+    observation.statements += 1;
+    if let Err(error) = connection.execute_batch("COMMIT") {
+        return Err(Box::new(InitialScrubFailure {
+            error: map_sqlite_error(error),
+            observation,
+        }));
+    }
+    observation.transactions_committed = 1;
+    Ok(observation)
+}
+
+fn initial_scrub_rollback(
+    connection: &Connection,
+    error: EngineError,
+    mut observation: InitialScrubObservation,
+) -> Box<InitialScrubFailure> {
+    observation.statements += 1;
+    if connection.execute_batch("ROLLBACK").is_ok() {
+        observation.transactions_rolled_back = 1;
+    }
+    Box::new(InitialScrubFailure { error, observation })
 }
 
 fn add_retained_scrub_counters(
@@ -2842,11 +2865,53 @@ mod tests {
         assert_eq!(counters.transactions_rolled_back, 0);
         assert_eq!(counters.publication_transactions_started, 1);
         assert_eq!(counters.publication_transactions_rolled_back, 0);
+        assert_eq!(counters.statements, 7);
+        assert_eq!(counters.publication_statements, 3);
+        assert_eq!(counters.live_verified_integrity_statements, 4);
+        assert_eq!(counters.integrity_statements, 4);
         assert!(matches!(
             verified.read_ref("main"),
             Err(EngineError::AmbiguousDurability)
         ));
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn failed_initial_scrub_preserves_its_complete_admission_equation() {
+        let path = test_path();
+        let trusted =
+            Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
+        let root = encode_namespace_root(NamespaceRootV1 {
+            profile_id: profile_id(),
+            root_directory_inode: InodeId::allocate([0x62; 32], 0),
+            inode_table_root: ObjectId::for_bytes(b"missing initial table"),
+        })
+        .unwrap();
+        trusted
+            .begin_publication(None, "main")
+            .unwrap()
+            .publish_namespace(&root)
+            .unwrap();
+        let store_id = trusted.store_id().unwrap();
+        drop(trusted);
+
+        let connection = Connection::open(&path).unwrap();
+        let failure = initial_verified_scrub(&connection, &path, store_id).unwrap_err();
+        assert!(matches!(
+            failure.error,
+            EngineError::MissingObject(_) | EngineError::MalformedObject { .. }
+        ));
+        assert_eq!(failure.observation.statements, 7);
+        assert_eq!(failure.observation.transactions_started, 1);
+        assert_eq!(failure.observation.transactions_committed, 0);
+        assert_eq!(failure.observation.transactions_rolled_back, 1);
+        drop(connection);
+        assert!(matches!(
+            Engine::open(&path),
+            Err(EngineError::MissingObject(_)) | Err(EngineError::MalformedObject { .. })
+        ));
+
+        std::fs::remove_file(path).unwrap();
     }
 
     fn bytes_object(value: &[u8]) -> (ObjectId, Vec<u8>) {
@@ -3000,6 +3065,44 @@ mod tests {
 
         drop(engine);
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn partial_compaction_metadata_copy_counts_only_attempted_statements() {
+        let path = test_path();
+        let candidate_path = path.with_extension("partial-copy");
+        let engine =
+            Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
+        drop(
+            Engine::open_with_mode(&candidate_path, integrity::IntegrityMode::TrustedLocalDev)
+                .unwrap(),
+        );
+        let candidate = Connection::open(&candidate_path).unwrap();
+        candidate
+            .execute(
+                "ATTACH DATABASE ?1 AS source",
+                params![path.to_str().unwrap()],
+            )
+            .unwrap();
+        candidate
+            .execute_batch(
+                "CREATE TEMP TRIGGER fail_compaction_authority
+                 BEFORE INSERT ON layerfs_authority
+                 BEGIN SELECT RAISE(ABORT, 'injected partial copy'); END;",
+            )
+            .unwrap();
+        engine.reset_counters().unwrap();
+
+        assert!(engine.copy_compaction_metadata(&candidate).is_err());
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.statements, 5);
+        assert_eq!(counters.compaction_statements, 5);
+        assert_eq!(counters.primary_read_statements, 0);
+
+        drop(candidate);
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_file(candidate_path).unwrap();
     }
 
     #[test]

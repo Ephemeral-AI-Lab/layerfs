@@ -157,18 +157,21 @@ impl Publication<'_> {
         if self.engine.mode == super::integrity::IntegrityMode::Verified
             && self.verified_retained_root != Some(root)
         {
+            let statements = Cell::new(0);
             let observation = super::integrity::verify_root(
                 &self.connection,
                 &self.engine.path,
                 self.engine.store_id()?,
                 root,
-            )?;
+                &statements,
+            );
+            self.engine
+                .mark_family_sql(SQL_FAMILY_PUBLICATION, statements.get())?;
+            let observation = observation?;
             self.engine.bump(|counters| {
                 checked_add(&mut counters.root_verifications, 1)?;
                 checked_add(&mut counters.root_verification_objects, observation.objects)?;
                 checked_add(&mut counters.root_verification_bytes, observation.bytes)?;
-                checked_add(&mut counters.statements, observation.statements)?;
-                checked_add(&mut counters.publication_statements, observation.statements)?;
                 checked_add(&mut counters.fetched_rows, observation.fetched_rows)?;
                 checked_add(
                     &mut counters.fetched_row_authentication_passes,

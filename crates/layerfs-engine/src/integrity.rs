@@ -50,15 +50,6 @@ pub(crate) struct RetainedUnionObservation {
     pub(crate) peak_bytes: u64,
 }
 
-pub(crate) fn verify_retained_union_observed(
-    connection: &Connection,
-    store: &Path,
-    store_id: [u8; 32],
-) -> EngineResult<RetainedUnionObservation> {
-    let statements = Cell::new(0);
-    verify_retained_union_observed_counted(connection, store, store_id, &statements)
-}
-
 pub(crate) fn verify_retained_union_observed_counted(
     connection: &Connection,
     store: &Path,
@@ -94,15 +85,15 @@ pub(crate) fn verify_root(
     store: &Path,
     store_id: [u8; 32],
     root: ObjectId,
+    statements: &Cell<u64>,
 ) -> EngineResult<VerificationObservation> {
-    let statements = Cell::new(0);
     let work = DiskTable::create_near_with_store_id(store, "publication-closure", store_id)?;
     let graph = DiskTable::create_near_with_store_id(store, "publication-graph", store_id)?;
     let records = graph.namespace(b"records")?;
     let state = graph.namespace(b"state")?;
     let payload_lengths = graph.namespace(b"payload-lengths")?;
     enqueue(&work, root, Role::Namespace, true)?;
-    let mut observation = drain(connection, &work, &payload_lengths, &statements)?;
+    let mut observation = drain(connection, &work, &payload_lengths, statements)?;
     records.clear()?;
     state.clear()?;
     observation.merge(validate_namespace_graph_disk(
@@ -111,7 +102,7 @@ pub(crate) fn verify_root(
         &state,
         &payload_lengths,
         root,
-        &statements,
+        statements,
     )?)?;
     observation.add_scratch(work.finish()?)?;
     observation.add_scratch(graph.finish()?)?;

@@ -954,15 +954,18 @@ impl ManagedWorkspace {
             .external
             .as_ref()
             .map(|external| external.operation_q.reserve());
+        let mut counters = OperationCounters::default();
         if let Some(mut external) = self.external.take() {
-            if let Err(error) = external.discard_inner() {
-                self.external = Some(external);
-                return Err(error);
+            match external.discard_inner() {
+                Ok(cleanup) => counters = counters.merge(cleanup)?,
+                Err(error) => {
+                    self.external = Some(external);
+                    return Err(error);
+                }
             }
         }
         self.remove_spool()?;
         self.state = ManagedState::Closed;
-        let mut counters = OperationCounters::default();
         self.observe_spool(&mut counters)?;
         if let Some(reservation) = reservation {
             reservation.finish(&mut counters);
@@ -1260,9 +1263,9 @@ impl ExternalWorkspace {
     }
     pub fn discard(&mut self) -> VfsResult<()> {
         let _reservation = self.operation_q.reserve();
-        self.discard_inner()
+        self.discard_inner().map(drop)
     }
-    fn discard_inner(&mut self) -> VfsResult<()> {
+    fn discard_inner(&mut self) -> VfsResult<OperationCounters> {
         let mut capture = CaptureLease::begin(self.writers.clone())?;
         if self.active && self.owned {
             self.native.remove_owned_root(
@@ -1274,7 +1277,11 @@ impl ExternalWorkspace {
         self.active = false;
         self.committed = None;
         capture.finish()?;
-        Ok(())
+        let mut counters = OperationCounters::default();
+        if let Some(scratch) = self.live_scratch.take() {
+            counters.add_scratch(scratch.finish()?)?;
+        }
+        Ok(counters)
     }
     pub fn register_writer(&self) -> VfsResult<WriterLease> {
         if !self.active {

@@ -578,13 +578,20 @@ fn verified_publication_rejects_missing_reachable_inode_table_before_visibility(
         inode_table_root: ObjectId::for_bytes(b"missing inode table"),
     })
     .unwrap();
+    engine.reset_counters().unwrap();
+    let publication = engine.begin_publication(None, "main").unwrap();
+    let before = engine.counters().unwrap();
     assert!(matches!(
-        engine
-            .begin_publication(None, "main")
-            .unwrap()
-            .publish_namespace(&root),
+        publication.publish_namespace(&root),
         Err(EngineError::MissingObject(_))
     ));
+    let after = engine.counters().unwrap();
+    assert_eq!(after.statements - before.statements, 5);
+    assert_eq!(
+        after.publication_statements - before.publication_statements,
+        5
+    );
+    assert_eq!(after.live_verified_integrity_statements, 0);
     assert_eq!(engine.read_ref("main").unwrap(), None);
     drop(engine);
     let _ = fs::remove_file(path);
