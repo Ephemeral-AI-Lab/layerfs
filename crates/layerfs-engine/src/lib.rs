@@ -686,23 +686,6 @@ impl Engine {
         reject_legacy_compaction_state(&source)?;
         self.mark_compaction_sql(1)?;
         authenticate_complete_object_index(&source)?;
-        let retained_statements = Cell::new(0);
-        let retained_failed = Cell::new(integrity::VerificationObservation::default());
-        let retained = integrity::retained_union(
-            &source,
-            &self.path,
-            self.store_id,
-            &retained_statements,
-            &retained_failed,
-        );
-        self.mark_compaction_sql(retained_statements.get())?;
-        if retained.is_err() {
-            self.bump(|counters| {
-                add_verification_progress_counters(counters, retained_failed.get())
-            })?;
-        }
-        let retained = retained?;
-        let mark_database_bytes = retained.work.storage_bytes()?;
         let candidate = Connection::open(destination).map_err(map_sqlite_error)?;
         candidate
             .busy_timeout(BUSY_TIMEOUT)
@@ -725,54 +708,47 @@ impl Engine {
             .map_err(map_sqlite_error)?;
         self.mark_compaction_sql(1)?;
         candidate.execute_batch("BEGIN").map_err(map_sqlite_error)?;
-        let copied = (|| {
-            self.copy_compaction_metadata(&candidate)?;
-            let mut select = source
-                .prepare(
-                    "SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1",
-                )
-                .map_err(map_sqlite_error)?;
-            let mut insert = candidate
-                .prepare(
-                    "INSERT INTO layerfs_objects (object_id, kind, canonical_length, canonical_bytes) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(object_id) DO NOTHING",
-                )
-                .map_err(map_sqlite_error)?;
-            retained.work.for_each_key(|key| {
-                if key.len() != 34 {
-                    return Err(EngineError::InvalidRecord("closure key"));
-                }
-                let id = &key[..32];
-                self.mark_compaction_sql(1)?;
-                let row = select
-                    .query_row(params![id], |row| {
-                        Ok((
-                            row.get::<_, i64>(0)?,
-                            row.get::<_, i64>(1)?,
-                            row.get::<_, Vec<u8>>(2)?,
-                        ))
-                    })
-                    .map_err(map_sqlite_error)?;
-                self.mark_compaction_sql(1)?;
-                insert
-                    .execute(params![id, row.0, row.1, row.2])
-                    .map_err(map_sqlite_error)?;
-                Ok(())
-            })
-        })();
+        let retained_statements = Cell::new(0);
+        let retained_failed = Cell::new(integrity::VerificationObservation::default());
+        let retained = integrity::retained_union(
+            &source,
+            &self.path,
+            self.store_id,
+            &retained_statements,
+            &retained_failed,
+        );
+        self.mark_compaction_sql(retained_statements.get())?;
+        if retained.is_err() {
+            self.bump(|counters| {
+                add_verification_progress_counters(counters, retained_failed.get())
+            })?;
+        }
+        let retained = match retained {
+            Ok(retained) => retained,
+            Err(error) => {
+                self.rollback_compaction_candidate(&candidate);
+                return Err(error);
+            }
+        };
+        let mark_database_bytes = match retained.work.storage_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                let _ = self.finish_retained_compaction(retained);
+                self.rollback_compaction_candidate(&candidate);
+                return Err(error);
+            }
+        };
+        let copied = self.copy_retained_to_candidate(&source, retained, &candidate);
         if let Err(error) = copied {
-            self.bump_best_effort(|counters| {
-                checked_add(&mut counters.statements, 1)?;
-                checked_add(&mut counters.compaction_statements, 1)
-            });
-            let _ = candidate.execute_batch("ROLLBACK");
+            self.rollback_compaction_candidate(&candidate);
             return Err(error);
         }
-        retained.work.finish()?;
         let candidate_journal_temp_peak_bytes = candidate_auxiliary_bytes(destination);
         self.mark_compaction_sql(1)?;
-        candidate
-            .execute_batch("COMMIT")
-            .map_err(map_sqlite_error)?;
+        if let Err(error) = candidate.execute_batch("COMMIT") {
+            self.rollback_compaction_candidate(&candidate);
+            return Err(map_sqlite_error(error));
+        }
         let verification_statements = Cell::new(0);
         let verification_failed = Cell::new(integrity::VerificationObservation::default());
         let verification = integrity::verify_retained_union_observed_counted(
@@ -789,6 +765,9 @@ impl Engine {
             })?;
         }
         let verification = verification?;
+        self.bump(|counters| {
+            add_compaction_verification_counters(counters, verification.verification)
+        })?;
         let verification_scratch_peak_bytes = verification.peak_bytes;
         self.mark_compaction_sql(1)?;
         candidate
@@ -832,6 +811,77 @@ impl Engine {
             candidate.execute(sql, []).map_err(map_sqlite_error)?;
         }
         Ok(())
+    }
+
+    fn rollback_compaction_candidate(&self, candidate: &Connection) {
+        self.bump_best_effort(|counters| {
+            checked_add(&mut counters.statements, 1)?;
+            checked_add(&mut counters.compaction_statements, 1)
+        });
+        let _ = candidate.execute_batch("ROLLBACK");
+    }
+
+    fn copy_retained_to_candidate(
+        &self,
+        source: &Connection,
+        retained: integrity::RetainedUnion,
+        candidate: &Connection,
+    ) -> EngineResult<()> {
+        let copied = (|| {
+            self.copy_compaction_metadata(candidate)?;
+            let mut select = source
+                .prepare(
+                    "SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1",
+                )
+                .map_err(map_sqlite_error)?;
+            let mut insert = candidate
+                .prepare(
+                    "INSERT INTO layerfs_objects (object_id, kind, canonical_length, canonical_bytes) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(object_id) DO NOTHING",
+                )
+                .map_err(map_sqlite_error)?;
+            retained.work.for_each_key(|key| {
+                if key.len() != 34 {
+                    return Err(EngineError::InvalidRecord("closure key"));
+                }
+                let id = &key[..32];
+                self.mark_compaction_sql(1)?;
+                let row = select
+                    .query_row(params![id], |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, i64>(1)?,
+                            row.get::<_, Vec<u8>>(2)?,
+                        ))
+                    })
+                    .map_err(map_sqlite_error)?;
+                self.mark_compaction_sql(1)?;
+                insert
+                    .execute(params![id, row.0, row.1, row.2])
+                    .map_err(map_sqlite_error)?;
+                Ok(())
+            })
+        })();
+        let finished = self.finish_retained_compaction(retained);
+        match copied {
+            Err(error) => Err(error),
+            Ok(()) => finished,
+        }
+    }
+
+    fn finish_retained_compaction(&self, retained: integrity::RetainedUnion) -> EngineResult<()> {
+        let work = retained.work.finish();
+        self.bump(|counters| {
+            add_compaction_verification_counters(counters, retained.observation)?;
+            if let Ok(work) = &work {
+                checked_add(&mut counters.scratch_tables, work.tables)?;
+                checked_add(&mut counters.scratch_statements, work.statements)?;
+                checked_add(&mut counters.scratch_rows, work.rows)?;
+                counters.scratch_high_water_bytes =
+                    counters.scratch_high_water_bytes.max(work.high_water_bytes);
+            }
+            Ok(())
+        })?;
+        work.map(drop)
     }
 
     pub fn counters(&self) -> EngineResult<EngineCounters> {
@@ -1796,6 +1846,13 @@ fn add_verification_progress_counters(
         &mut counters.fetched_row_role_decode_passes,
         observation.role_decode_passes,
     )?;
+    add_verification_scratch_counters(counters, observation)
+}
+
+fn add_verification_scratch_counters(
+    counters: &mut EngineCounters,
+    observation: integrity::VerificationObservation,
+) -> EngineResult<()> {
     checked_add(&mut counters.scratch_tables, observation.scratch_tables)?;
     checked_add(
         &mut counters.scratch_statements,
@@ -1806,6 +1863,21 @@ fn add_verification_progress_counters(
         .scratch_high_water_bytes
         .max(observation.scratch_bytes);
     Ok(())
+}
+
+fn add_compaction_verification_counters(
+    counters: &mut EngineCounters,
+    observation: integrity::VerificationObservation,
+) -> EngineResult<()> {
+    add_verification_progress_counters(counters, observation)?;
+    checked_add(
+        &mut counters.namespace_graph_verification_passes,
+        observation.namespace_graphs,
+    )?;
+    checked_add(
+        &mut counters.retained_roots_validated,
+        observation.retained_roots_validated,
+    )
 }
 
 fn trusted_history(connection: &Connection) -> EngineResult<bool> {
@@ -3089,6 +3161,10 @@ mod tests {
         assert_eq!(counters.publication_statements, 0);
         assert_eq!(counters.live_verified_integrity_statements, 0);
         assert_eq!(counters.reconciliation_statements, 0);
+        assert_eq!(counters.scratch_tables, 4);
+        assert_eq!(counters.scratch_statements, 73);
+        assert_eq!(counters.scratch_rows, 4);
+        assert_eq!(counters.statements + counters.scratch_statements, 114);
 
         drop(engine);
         std::fs::remove_file(path).unwrap();
@@ -3119,8 +3195,8 @@ mod tests {
             Err(EngineError::MissingObject(_)) | Err(EngineError::MalformedObject { .. })
         ));
         let counters = engine.counters().unwrap();
-        assert_eq!(counters.statements, 6);
-        assert_eq!(counters.compaction_statements, 6);
+        assert_eq!(counters.statements, 33);
+        assert_eq!(counters.compaction_statements, 33);
         assert_eq!(counters.primary_read_statements, 0);
         assert_eq!(counters.fetched_rows, 1);
         assert_eq!(counters.fetched_row_authentication_passes, 1);
@@ -3131,6 +3207,61 @@ mod tests {
 
         drop(engine);
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn post_retained_copy_failure_finishes_and_merges_source_scratch() {
+        let path = test_path();
+        let candidate_path = path.with_extension("retained-copy-failure");
+        let engine =
+            Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
+        drop(
+            Engine::open_with_mode(&candidate_path, integrity::IntegrityMode::TrustedLocalDev)
+                .unwrap(),
+        );
+        let source = engine.lock_connection().unwrap();
+        let statements = Cell::new(0);
+        let failed = Cell::new(integrity::VerificationObservation::default());
+        let retained = integrity::retained_union(
+            &source,
+            &path,
+            engine.store_id().unwrap(),
+            &statements,
+            &failed,
+        )
+        .unwrap();
+        let candidate = Connection::open(&candidate_path).unwrap();
+        candidate
+            .execute(
+                "ATTACH DATABASE ?1 AS source",
+                params![path.to_str().unwrap()],
+            )
+            .unwrap();
+        candidate
+            .execute_batch(
+                "CREATE TEMP TRIGGER fail_retained_copy_authority
+                 BEFORE INSERT ON layerfs_authority
+                 BEGIN SELECT RAISE(ABORT, 'injected retained copy'); END;",
+            )
+            .unwrap();
+        engine.reset_counters().unwrap();
+
+        assert!(engine
+            .copy_retained_to_candidate(&source, retained, &candidate)
+            .is_err());
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.statements, 5);
+        assert_eq!(counters.compaction_statements, 5);
+        assert_eq!(counters.scratch_tables, 2);
+        assert_eq!(counters.scratch_statements, 36);
+        assert_eq!(counters.scratch_rows, 2);
+        assert_eq!(counters.statements + counters.scratch_statements, 41);
+
+        drop(candidate);
+        drop(source);
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_file(candidate_path).unwrap();
     }
 
     #[test]
