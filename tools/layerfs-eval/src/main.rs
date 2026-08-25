@@ -60,8 +60,50 @@ fn main() {
         {
             stage1_materialize::hash(std::path::Path::new(path))
         }
+        [stage1, materialize, prepare]
+            if stage1 == "stage1" && materialize == "materialize" && prepare == "prepare" =>
+        {
+            stage1_materialize::prepare()
+        }
+        [stage1, materialize, manifest, role, commit, executable, output]
+            if stage1 == "stage1" && materialize == "materialize" && manifest == "manifest" =>
+        {
+            stage1_materialize::manifest(
+                role,
+                commit,
+                std::path::Path::new(executable),
+                std::path::Path::new(output),
+            )
+        }
+        [stage1, materialize, parity_readiness, historical, instrumented, store, source, receipt]
+            if stage1 == "stage1"
+                && materialize == "materialize"
+                && parity_readiness == "parity-readiness" =>
+        {
+            stage1_materialize::parity_readiness(
+                std::path::Path::new(historical),
+                std::path::Path::new(instrumented),
+                std::path::Path::new(store),
+                std::path::Path::new(source),
+                std::path::Path::new(receipt),
+            )
+        }
+        [stage1, materialize, parity_run, historical, instrumented, store, source, readiness, run]
+            if stage1 == "stage1"
+                && materialize == "materialize"
+                && parity_run == "parity-run" =>
+        {
+            stage1_materialize::parity_run(
+                std::path::Path::new(historical),
+                std::path::Path::new(instrumented),
+                std::path::Path::new(store),
+                std::path::Path::new(source),
+                std::path::Path::new(readiness),
+                std::path::Path::new(run),
+            )
+        }
         _ => Err(
-            "usage:\n  layerfs-eval apple-poc <run-directory>\n  layerfs-eval stage1 prepare single-file\n  layerfs-eval stage1 readiness-only single-file\n  layerfs-eval stage1 run single-file <run-directory>\n  layerfs-eval stage1 prepare apple-edge\n  layerfs-eval stage1 readiness apple-edge\n  layerfs-eval stage1 run apple-edge <run-directory>\n  layerfs-eval stage1 materialize parity-row <store> <source> <size-mib> <work-directory> <identity>\n  layerfs-eval stage1 materialize hash <path>"
+            "usage:\n  layerfs-eval apple-poc <run-directory>\n  layerfs-eval stage1 prepare single-file\n  layerfs-eval stage1 readiness-only single-file\n  layerfs-eval stage1 run single-file <run-directory>\n  layerfs-eval stage1 prepare apple-edge\n  layerfs-eval stage1 readiness apple-edge\n  layerfs-eval stage1 run apple-edge <run-directory>\n  layerfs-eval stage1 materialize prepare\n  layerfs-eval stage1 materialize parity-row <store> <source> <size-mib> <work-directory> <identity>\n  layerfs-eval stage1 materialize hash <path>\n  layerfs-eval stage1 materialize manifest <role> <commit> <executable> <output.json>\n  layerfs-eval stage1 materialize parity-readiness <historical> <instrumented> <store> <source> <receipt.json>\n  layerfs-eval stage1 materialize parity-run <historical> <instrumented> <store> <source> <readiness.json> <new-run-directory>"
                 .to_owned(),
         ),
     };

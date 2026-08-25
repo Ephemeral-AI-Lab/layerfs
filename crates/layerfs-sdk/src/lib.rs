@@ -7,7 +7,11 @@ use layerfs_vfs::LayerVfs;
 use std::path::Path;
 use std::sync::Arc;
 
-pub use layerfs_vfs::driver::{NativeMetadata, NativeXattrs};
+pub use layerfs_vfs::driver::{
+    DurabilityClass, DurabilityClassCounts, NativeMetadata, NativeXattrs, ProjectionCallFacts,
+    ProjectionCleanupFacts, ProjectionFacts, ProjectionReplaceFacts, ProjectionSyncFacts,
+    ProjectionTimer, ProjectionTimerAvailability, ProjectionWriteFacts,
+};
 pub use layerfs_vfs::{
     AcceptedSplice, IntegrityMode, ManagedReplayStep, NativeRoute,
     OperationCounters as OperationDiagnostics, RefState, RootId, VfsError,
@@ -45,6 +49,7 @@ pub struct Diagnostics {
     pub admission_transactions_committed: u64,
     pub admission_transactions_rolled_back: u64,
     pub admission_statements: u64,
+    pub store_id_queries: u64,
     pub integrity_transactions_started: u64,
     pub integrity_transactions_committed: u64,
     pub integrity_transactions_rolled_back: u64,
@@ -87,6 +92,19 @@ pub struct Diagnostics {
     pub scratch_rows: u64,
     pub scratch_high_water_bytes: u64,
     pub retained_roots_validated: u64,
+    pub publication_statements: u64,
+    pub live_verified_integrity_statements: u64,
+    pub primary_read_statements: u64,
+    pub reconciliation_statements: u64,
+    pub compaction_statements: u64,
+    pub connection_mutex_wait_ns: u64,
+    pub trust_guard_ns: u64,
+    pub nonpayload_query_ns: u64,
+    pub payload_query_ns: u64,
+    pub identity_authentication_ns: u64,
+    pub role_decode_ns: u64,
+    pub payload_callback_inclusive_ns: u64,
+    pub counter_merge_ns: u64,
     pub page_size: i64,
     pub cache_pages: i64,
     pub cache_spill_pages: i64,
@@ -111,7 +129,7 @@ impl LayerFs {
     ) -> Result<OpenedLayerFs, layerfs_vfs::VfsError> {
         let fs = LayerVfs::from_engine(
             AppleDriver::open_store_with_integrity(path, mode)?,
-            Arc::new(AppleDriver),
+            Arc::new(AppleDriver::default()),
         )?;
         let ref_state = fs.current_head("main")?;
         let head = ref_state.root;
@@ -145,6 +163,26 @@ impl LayerFs {
     ) -> Result<OperationDiagnostics, VfsError> {
         self.0
             .read_to(root, &layerfs_vfs::CanonicalPath::new(path)?, output)
+    }
+    /// Runs full authenticated materialization source traversal without native output.
+    pub fn materialize_authenticated_to<W: std::io::Write>(
+        &self,
+        root: RootId,
+        output: W,
+    ) -> Result<OperationDiagnostics, VfsError> {
+        self.0.materialize_authenticated_to(root, output)
+    }
+    /// Writes one bounded source through the Apple durable projection route.
+    pub fn native_durable_output<R: std::io::Read>(
+        &self,
+        path: &Path,
+        name: &[u8],
+        metadata: &NativeMetadata,
+        logical_len: u64,
+        input: R,
+    ) -> Result<OperationDiagnostics, VfsError> {
+        self.0
+            .native_durable_output(path, name, metadata, logical_len, input)
     }
     pub fn replace_range<R: std::io::Read>(
         &self,
@@ -261,7 +299,7 @@ impl LayerFs {
     }
     pub fn compact(self, path: &Path) -> Result<OpenedLayerFs, layerfs_vfs::VfsError> {
         let engine = AppleDriver::compact_store(self.0.into_engine()?, path)?;
-        let fs = LayerVfs::from_engine(engine, Arc::new(AppleDriver))?;
+        let fs = LayerVfs::from_engine(engine, Arc::new(AppleDriver::default()))?;
         let ref_state = fs.current_head("main")?;
         let head = ref_state.root;
         Ok(OpenedLayerFs {
@@ -278,6 +316,10 @@ impl LayerFs {
         diagnostics.temporary_file_bytes = storage.temporary_file_bytes;
         diagnostics.logical_engine_bytes = storage.logical_engine_bytes;
         Ok(diagnostics)
+    }
+    /// Cumulative projection facts, including failed opens and operations.
+    pub fn projection_facts(&self) -> ProjectionFacts {
+        self.0.projection_facts()
     }
     pub fn counter_snapshot(&self) -> Result<Diagnostics, VfsError> {
         let profile = self.0.profile();
@@ -304,6 +346,7 @@ impl LayerFs {
             admission_transactions_committed: counters.admission_transactions_committed,
             admission_transactions_rolled_back: counters.admission_transactions_rolled_back,
             admission_statements: counters.admission_statements,
+            store_id_queries: counters.store_id_queries,
             integrity_transactions_started: counters.integrity_transactions_started,
             integrity_transactions_committed: counters.integrity_transactions_committed,
             integrity_transactions_rolled_back: counters.integrity_transactions_rolled_back,
@@ -346,6 +389,19 @@ impl LayerFs {
             scratch_rows: counters.scratch_rows,
             scratch_high_water_bytes: counters.scratch_high_water_bytes,
             retained_roots_validated: counters.retained_roots_validated,
+            publication_statements: counters.publication_statements,
+            live_verified_integrity_statements: counters.live_verified_integrity_statements,
+            primary_read_statements: counters.primary_read_statements,
+            reconciliation_statements: counters.reconciliation_statements,
+            compaction_statements: counters.compaction_statements,
+            connection_mutex_wait_ns: counters.connection_mutex_wait_ns,
+            trust_guard_ns: counters.trust_guard_ns,
+            nonpayload_query_ns: counters.nonpayload_query_ns,
+            payload_query_ns: counters.payload_query_ns,
+            identity_authentication_ns: counters.identity_authentication_ns,
+            role_decode_ns: counters.role_decode_ns,
+            payload_callback_inclusive_ns: counters.payload_callback_inclusive_ns,
+            counter_merge_ns: counters.counter_merge_ns,
             page_size: profile.page_size,
             cache_pages: profile.cache_pages,
             cache_spill_pages: profile.cache_spill_pages,

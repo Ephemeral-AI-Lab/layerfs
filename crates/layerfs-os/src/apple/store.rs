@@ -49,10 +49,10 @@ impl super::AppleDriver {
         directory: &Path,
         mode: IntegrityMode,
     ) -> EngineResult<Engine> {
-        generation::open_or_create(directory, &Self, mode)
+        generation::open_or_create(directory, &Self::default(), mode)
     }
 
     pub fn compact_store(engine: Engine, directory: &Path) -> EngineResult<Engine> {
-        generation::compact(engine, directory, &Self)
+        generation::compact(engine, directory, &Self::default())
     }
 }

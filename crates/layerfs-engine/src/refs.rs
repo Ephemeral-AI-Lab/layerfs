@@ -1,4 +1,5 @@
 use super::*;
+use std::time::Instant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RefState {
@@ -11,8 +12,11 @@ impl Engine {
     pub fn read_ref(&self, name: &str) -> EngineResult<Option<RefState>> {
         validate_ref_name(name)?;
         let connection = self.lock_connection()?;
+        let query_started = Instant::now();
         self.mark_statement()?;
-        read_ref_on_connection(&connection, name)
+        let result = read_ref_on_connection(&connection, name);
+        observe_time(&self.timings.nonpayload_query_ns, query_started);
+        result
     }
 
     pub fn fork_ref(&self, source: &RefState, new_name: &str) -> EngineResult<RefState> {

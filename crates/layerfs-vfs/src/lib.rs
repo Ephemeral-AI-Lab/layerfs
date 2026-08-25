@@ -20,6 +20,7 @@ pub type RootId = layerfs_core::ObjectId;
 pub enum NativeRoute {
     CaptureStream,
     MaterializeStream,
+    NativeDurableOutput,
     ExactNoop,
     ClonePatch,
     CloneShift,
@@ -57,6 +58,7 @@ pub struct OperationCounters {
     pub namespace: layerfs_core::namespace::NamespaceCounters,
     pub inode_table: layerfs_core::inode::InodeTableCounters,
     pub native: NativeOperationCounters,
+    pub projection: crate::driver::ProjectionFacts,
     pub workspace_materializations: u64,
     pub workspace_reuses: u64,
     pub rematerializations: u64,
@@ -75,6 +77,14 @@ pub struct OperationCounters {
     pub scratch_statements: u64,
     pub scratch_rows: u64,
     pub scratch_high_water_bytes: u64,
+    pub scratch_owner_setup_statements: u64,
+    pub scratch_derived_setup_statements: u64,
+    pub scratch_operation_statements: u64,
+    pub scratch_store_reopens: u64,
+    pub scratch_store_inspection_statements: u64,
+    pub scratch_store_inspection_wall_ns: u64,
+    pub scratch_setup_wall_ns: u64,
+    pub scratch_operation_wall_ns: u64,
     pub operation_q_current_bytes: u64,
     pub operation_q_high_water_bytes: u64,
     pub operation_q_terminal_bytes: u64,
@@ -130,6 +140,10 @@ impl OperationCounters {
         self.add_namespace(source.namespace)?;
         self.add_inode_table(source.inode_table)?;
         self.add_native(source.native)?;
+        self.projection = self
+            .projection
+            .checked_add(source.projection)
+            .ok_or(layerfs_core::CoreError::LengthOverflow)?;
         self.workspace_materializations = add(
             self.workspace_materializations,
             source.workspace_materializations,
@@ -164,6 +178,32 @@ impl OperationCounters {
         self.scratch_high_water_bytes = add(
             self.scratch_high_water_bytes,
             source.scratch_high_water_bytes,
+        )?;
+        self.scratch_owner_setup_statements = add(
+            self.scratch_owner_setup_statements,
+            source.scratch_owner_setup_statements,
+        )?;
+        self.scratch_derived_setup_statements = add(
+            self.scratch_derived_setup_statements,
+            source.scratch_derived_setup_statements,
+        )?;
+        self.scratch_operation_statements = add(
+            self.scratch_operation_statements,
+            source.scratch_operation_statements,
+        )?;
+        self.scratch_store_reopens = add(self.scratch_store_reopens, source.scratch_store_reopens)?;
+        self.scratch_store_inspection_statements = add(
+            self.scratch_store_inspection_statements,
+            source.scratch_store_inspection_statements,
+        )?;
+        self.scratch_store_inspection_wall_ns = add(
+            self.scratch_store_inspection_wall_ns,
+            source.scratch_store_inspection_wall_ns,
+        )?;
+        self.scratch_setup_wall_ns = add(self.scratch_setup_wall_ns, source.scratch_setup_wall_ns)?;
+        self.scratch_operation_wall_ns = add(
+            self.scratch_operation_wall_ns,
+            source.scratch_operation_wall_ns,
         )?;
         self.operation_q_current_bytes = self
             .operation_q_current_bytes
@@ -202,6 +242,30 @@ impl OperationCounters {
         self.scratch_rows = add(self.scratch_rows, source.rows)?;
         self.scratch_high_water_bytes =
             add(self.scratch_high_water_bytes, source.high_water_bytes)?;
+        self.scratch_owner_setup_statements = add(
+            self.scratch_owner_setup_statements,
+            source.owner_setup_statements,
+        )?;
+        self.scratch_derived_setup_statements = add(
+            self.scratch_derived_setup_statements,
+            source.derived_setup_statements,
+        )?;
+        self.scratch_operation_statements = add(
+            self.scratch_operation_statements,
+            source.operation_statements,
+        )?;
+        self.scratch_store_reopens = add(self.scratch_store_reopens, source.store_reopens)?;
+        self.scratch_store_inspection_statements = add(
+            self.scratch_store_inspection_statements,
+            source.store_inspection_statements,
+        )?;
+        self.scratch_store_inspection_wall_ns = add(
+            self.scratch_store_inspection_wall_ns,
+            source.store_inspection_wall_ns,
+        )?;
+        self.scratch_setup_wall_ns = add(self.scratch_setup_wall_ns, source.setup_wall_ns)?;
+        self.scratch_operation_wall_ns =
+            add(self.scratch_operation_wall_ns, source.operation_wall_ns)?;
         Ok(())
     }
 

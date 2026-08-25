@@ -5,7 +5,7 @@ use std::cell::Cell;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 static SCRATCH_SERIAL: AtomicU64 = AtomicU64::new(0);
 const DISK_TABLE_CACHE_KIB: u32 = 256;
@@ -31,6 +31,14 @@ pub struct DiskTable {
     path: PathBuf,
     connection: Option<Connection>,
     statements: Cell<u64>,
+    owner_setup_statements: Cell<u64>,
+    derived_setup_statements: Cell<u64>,
+    operation_statements: Cell<u64>,
+    store_reopens: u64,
+    store_inspection_statements: u64,
+    store_inspection_wall_ns: u64,
+    setup_wall_ns: u64,
+    operation_wall_ns: Cell<u64>,
     rows: Cell<u64>,
     high_water_bytes: Cell<u64>,
 }
@@ -47,18 +55,40 @@ pub struct ScratchObservation {
     pub statements: u64,
     pub rows: u64,
     pub high_water_bytes: u64,
+    pub owner_setup_statements: u64,
+    pub derived_setup_statements: u64,
+    pub operation_statements: u64,
+    pub store_reopens: u64,
+    pub store_inspection_statements: u64,
+    pub store_inspection_wall_ns: u64,
+    pub setup_wall_ns: u64,
+    pub operation_wall_ns: u64,
 }
 
 impl DiskTable {
     pub fn create_near(store: &Path, label: &str) -> EngineResult<Self> {
+        let started = Instant::now();
         let store_id = crate::inspect_store_id_readonly(store)?;
-        Self::create_near_with_store_id(store, label, store_id)
+        let wall_ns = u64::try_from(started.elapsed().as_nanos())
+            .map_err(|_| EngineError::CounterOverflow)?;
+        Self::create_near_observed(store, label, store_id, 1, 11, wall_ns)
     }
 
     pub(crate) fn create_near_with_store_id(
         store: &Path,
         label: &str,
         store_id: [u8; 32],
+    ) -> EngineResult<Self> {
+        Self::create_near_observed(store, label, store_id, 0, 0, 0)
+    }
+
+    fn create_near_observed(
+        store: &Path,
+        label: &str,
+        store_id: [u8; 32],
+        store_reopens: u64,
+        store_inspection_statements: u64,
+        store_inspection_wall_ns: u64,
     ) -> EngineResult<Self> {
         let parent = store.parent().unwrap_or_else(|| Path::new("."));
         let stamp = SystemTime::now()
@@ -70,10 +100,25 @@ impl DiskTable {
             std::process::id(),
             SCRATCH_SERIAL.fetch_add(1, Ordering::Relaxed)
         ));
-        Self::create_at(path, SCRATCH_SCHEMA, store_id)
+        Self::create_at(
+            path,
+            SCRATCH_SCHEMA,
+            store_id,
+            store_reopens,
+            store_inspection_statements,
+            store_inspection_wall_ns,
+        )
     }
 
-    fn create_at(path: PathBuf, schema: &str, store_id: [u8; 32]) -> EngineResult<Self> {
+    fn create_at(
+        path: PathBuf,
+        schema: &str,
+        store_id: [u8; 32],
+        store_reopens: u64,
+        store_inspection_statements: u64,
+        store_inspection_wall_ns: u64,
+    ) -> EngineResult<Self> {
+        let setup_started = Instant::now();
         OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -110,15 +155,27 @@ impl DiskTable {
             path,
             connection: Some(connection),
             statements: Cell::new(10),
+            owner_setup_statements: Cell::new(8),
+            derived_setup_statements: Cell::new(2),
+            operation_statements: Cell::new(0),
+            store_reopens,
+            store_inspection_statements,
+            store_inspection_wall_ns,
+            setup_wall_ns: 0,
+            operation_wall_ns: Cell::new(0),
             rows: Cell::new(1),
             high_water_bytes: Cell::new(0),
         };
         table.set_cache_size_kib(DISK_TABLE_CACHE_KIB)?;
+        let mut table = table;
+        table.setup_wall_ns = u64::try_from(setup_started.elapsed().as_nanos())
+            .map_err(|_| EngineError::CounterOverflow)?;
         table.observe_storage()?;
         Ok(table)
     }
 
     pub fn get(&self, key: &[u8]) -> EngineResult<Option<Vec<u8>>> {
+        let started = Instant::now();
         self.mark_statement()?;
         let value = self
             .connection()
@@ -130,6 +187,7 @@ impl DiskTable {
             .optional()
             .map_err(map_sqlite_error)?;
         self.mark_rows(u64::from(value.is_some()))?;
+        self.observe_operation_time(started);
         Ok(value)
     }
 
@@ -153,7 +211,7 @@ impl DiskTable {
         if kib == 0 {
             return Err(EngineError::InvalidRecord("scratch cache size"));
         }
-        self.mark_statement()?;
+        self.mark_owner_setup_statement()?;
         let page_size = self
             .connection()
             .query_row("PRAGMA page_size", [], |row| row.get::<_, i64>(0))
@@ -167,12 +225,12 @@ impl DiskTable {
             .ok_or(EngineError::CounterOverflow)?
             .div_ceil(page_size);
         let pages = i64::try_from(pages).map_err(|_| EngineError::CounterOverflow)?;
-        self.mark_statement()?;
+        self.mark_owner_setup_statement()?;
         let cache_size = self
             .connection()
             .query_row("PRAGMA cache_size", [], |row| row.get::<_, i64>(0))
             .map_err(map_sqlite_error)?;
-        self.mark_statement()?;
+        self.mark_owner_setup_statement()?;
         let cache_spill = self
             .connection()
             .query_row("PRAGMA cache_spill", [], |row| row.get::<_, i64>(0))
@@ -181,23 +239,23 @@ impl DiskTable {
             return Ok(());
         }
         if cache_size != pages {
-            self.mark_statement()?;
+            self.mark_owner_setup_statement()?;
             self.connection()
                 .pragma_update(None, "cache_size", pages)
                 .map_err(map_sqlite_error)?;
         }
         if cache_spill != pages {
-            self.mark_statement()?;
+            self.mark_owner_setup_statement()?;
             self.connection()
                 .pragma_update(None, "cache_spill", pages)
                 .map_err(map_sqlite_error)?;
         }
-        self.mark_statement()?;
+        self.mark_owner_setup_statement()?;
         let cache_size = self
             .connection()
             .query_row("PRAGMA cache_size", [], |row| row.get::<_, i64>(0))
             .map_err(map_sqlite_error)?;
-        self.mark_statement()?;
+        self.mark_owner_setup_statement()?;
         let cache_spill = self
             .connection()
             .query_row("PRAGMA cache_spill", [], |row| row.get::<_, i64>(0))
@@ -224,6 +282,7 @@ impl DiskTable {
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) -> EngineResult<()> {
+        let started = Instant::now();
         self.mark_statement()?;
         let rows = self
             .connection()
@@ -235,6 +294,7 @@ impl DiskTable {
             .map_err(map_sqlite_error)?;
         self.mark_rows(rows as u64)?;
         self.observe_storage()?;
+        self.observe_operation_time(started);
         Ok(())
     }
 
@@ -431,12 +491,42 @@ impl DiskTable {
             statements: self.statements.get(),
             rows: self.rows.get(),
             high_water_bytes: self.high_water_bytes.get(),
+            owner_setup_statements: self.owner_setup_statements.get(),
+            derived_setup_statements: self.derived_setup_statements.get(),
+            operation_statements: self.operation_statements.get(),
+            store_reopens: self.store_reopens,
+            store_inspection_statements: self.store_inspection_statements,
+            store_inspection_wall_ns: self.store_inspection_wall_ns,
+            setup_wall_ns: self.setup_wall_ns,
+            operation_wall_ns: self.operation_wall_ns.get(),
         })
     }
 
     fn mark_statement(&self) -> EngineResult<()> {
         self.statements.set(
             self.statements
+                .get()
+                .checked_add(1)
+                .ok_or(EngineError::CounterOverflow)?,
+        );
+        self.operation_statements.set(
+            self.operation_statements
+                .get()
+                .checked_add(1)
+                .ok_or(EngineError::CounterOverflow)?,
+        );
+        Ok(())
+    }
+
+    fn mark_owner_setup_statement(&self) -> EngineResult<()> {
+        self.statements.set(
+            self.statements
+                .get()
+                .checked_add(1)
+                .ok_or(EngineError::CounterOverflow)?,
+        );
+        self.owner_setup_statements.set(
+            self.owner_setup_statements
                 .get()
                 .checked_add(1)
                 .ok_or(EngineError::CounterOverflow)?,
@@ -460,6 +550,12 @@ impl DiskTable {
         Ok(())
     }
 
+    fn observe_operation_time(&self, started: Instant) {
+        let elapsed = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        self.operation_wall_ns
+            .set(self.operation_wall_ns.get().saturating_add(elapsed));
+    }
+
     fn connection(&self) -> &Connection {
         self.connection.as_ref().expect("scratch connection closed")
     }
@@ -481,6 +577,7 @@ impl DiskNamespace<'_> {
     }
 
     pub fn get(&self, key: &[u8]) -> EngineResult<Option<Vec<u8>>> {
+        let started = Instant::now();
         self.table.mark_statement()?;
         let key = self.key(key);
         let value = self
@@ -494,6 +591,7 @@ impl DiskNamespace<'_> {
             .optional()
             .map_err(map_sqlite_error)?;
         self.table.mark_rows(u64::from(value.is_some()))?;
+        self.table.observe_operation_time(started);
         Ok(value)
     }
 
@@ -561,6 +659,7 @@ impl DiskNamespace<'_> {
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) -> EngineResult<()> {
+        let started = Instant::now();
         self.table.mark_statement()?;
         let key = self.key(key);
         let rows = self
@@ -573,7 +672,9 @@ impl DiskNamespace<'_> {
             )
             .map_err(map_sqlite_error)?;
         self.table.mark_rows(rows as u64)?;
-        self.table.observe_storage()
+        let result = self.table.observe_storage();
+        self.table.observe_operation_time(started);
+        result
     }
 
     pub fn remove(&self, key: &[u8]) -> EngineResult<()> {
@@ -1018,6 +1119,31 @@ mod tests {
     }
 
     #[test]
+    fn observation_exposes_hidden_store_inspection_and_sql_families() {
+        let anchor = std::env::temp_dir().join(format!(
+            "layerfs-scratch-attribution-{}-{}",
+            std::process::id(),
+            SCRATCH_SERIAL.fetch_add(1, Ordering::Relaxed)
+        ));
+        let engine = crate::Engine::open(&anchor).unwrap();
+        let table = DiskTable::create_near(&anchor, "attribution").unwrap();
+        let setup = table.observation().unwrap();
+        assert_eq!(setup.store_reopens, 1);
+        assert_eq!(setup.store_inspection_statements, 11);
+        assert_eq!(setup.owner_setup_statements, 15);
+        assert_eq!(setup.derived_setup_statements, 2);
+        assert_eq!(setup.operation_statements, 0);
+        assert_eq!(setup.statements, 17);
+        table.put(b"key", b"value").unwrap();
+        let operated = table.observation().unwrap();
+        assert_eq!(operated.operation_statements, 1);
+        assert_eq!(operated.statements, 18);
+        drop(table);
+        drop(engine);
+        std::fs::remove_file(anchor).unwrap();
+    }
+
+    #[test]
     fn namespaces_share_one_connection_and_isolate_keys_and_queues() {
         let anchor = std::env::temp_dir().join(format!(
             "layerfs-scratch-namespaces-{}-{}",
@@ -1211,7 +1337,7 @@ mod tests {
             std::process::id(),
             SCRATCH_SERIAL.fetch_add(1, Ordering::Relaxed)
         ));
-        assert!(DiskTable::create_at(path.clone(), "not valid sqlite", [0; 32]).is_err());
+        assert!(DiskTable::create_at(path.clone(), "not valid sqlite", [0; 32], 0, 0, 0).is_err());
         assert!(!path.exists());
         let mut journal = path.into_os_string();
         journal.push("-journal");

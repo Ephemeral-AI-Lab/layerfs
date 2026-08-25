@@ -4,8 +4,8 @@
 
 use layerfs_core::content::rope::ObjectRead;
 use layerfs_core::{
-    authenticate_identity, validate_bytes_identity, validate_identity, validate_object_from,
-    CoreError, ObjectId, ObjectKind, ObjectSummary,
+    authenticate_identity, validate_identity, validate_object_from, CoreError, ObjectId,
+    ObjectKind, ObjectSummary,
 };
 use rusqlite::types::ValueRef;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
@@ -15,9 +15,9 @@ use std::io::Cursor;
 use std::ops::Range;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 // ponytail: serialize Verified admission in-process; use per-Store locks only if
 // parallel open throughput becomes a measured requirement.
@@ -297,6 +297,20 @@ pub struct EngineCounters {
     pub scratch_rows: u64,
     pub scratch_high_water_bytes: u64,
     pub retained_roots_validated: u64,
+    pub publication_statements: u64,
+    pub live_verified_integrity_statements: u64,
+    pub primary_read_statements: u64,
+    pub reconciliation_statements: u64,
+    pub compaction_statements: u64,
+    pub connection_mutex_wait_ns: u64,
+    pub trust_guard_ns: u64,
+    pub nonpayload_query_ns: u64,
+    pub payload_query_ns: u64,
+    pub identity_authentication_ns: u64,
+    pub role_decode_ns: u64,
+    pub payload_callback_inclusive_ns: u64,
+    pub counter_merge_ns: u64,
+    pub store_id_queries: u64,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -331,6 +345,49 @@ pub struct Engine {
     last_compaction: Option<CompactionStorageObservation>,
     commit_dispatch: std::sync::Arc<dyn CommitDispatch>,
     integrity_scope: AtomicBool,
+    sql_family_scope: AtomicU8,
+    timings: EngineTimings,
+}
+
+#[derive(Default)]
+struct EngineTimings {
+    connection_mutex_wait_ns: AtomicU64,
+    trust_guard_ns: AtomicU64,
+    nonpayload_query_ns: AtomicU64,
+    payload_query_ns: AtomicU64,
+    identity_authentication_ns: AtomicU64,
+    role_decode_ns: AtomicU64,
+    payload_callback_inclusive_ns: AtomicU64,
+    counter_merge_ns: AtomicU64,
+}
+
+impl EngineTimings {
+    fn reset(&self) {
+        for timing in [
+            &self.connection_mutex_wait_ns,
+            &self.trust_guard_ns,
+            &self.nonpayload_query_ns,
+            &self.payload_query_ns,
+            &self.identity_authentication_ns,
+            &self.role_decode_ns,
+            &self.payload_callback_inclusive_ns,
+            &self.counter_merge_ns,
+        ] {
+            timing.store(0, Ordering::Relaxed);
+        }
+    }
+}
+
+const SQL_FAMILY_NONE: u8 = 0;
+const SQL_FAMILY_PUBLICATION: u8 = 1;
+const SQL_FAMILY_LIVE_INTEGRITY: u8 = 2;
+const SQL_FAMILY_PRIMARY_READ: u8 = 3;
+
+fn observe_time(target: &AtomicU64, started: Instant) {
+    let elapsed = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    let _ = target.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+        Some(current.saturating_add(elapsed))
+    });
 }
 
 trait CommitDispatch: Send + Sync {
@@ -373,8 +430,10 @@ impl Drop for ConnectionGuard<'_> {
         if self.transaction {
             if let Some(connection) = self.guard.as_ref() {
                 if self.integrity_transaction {
+                    let family = self.engine.sql_family_scope.load(Ordering::Acquire);
                     self.engine.bump_best_effort(|counters| {
                         checked_add(&mut counters.statements, 1)?;
+                        mark_sql_family(counters, family, 1)?;
                         checked_add(&mut counters.integrity_statements, 1)
                     });
                 }
@@ -402,6 +461,9 @@ impl Drop for ConnectionGuard<'_> {
         if self.integrity_transaction {
             self.engine.integrity_scope.store(false, Ordering::Release);
         }
+        self.engine
+            .sql_family_scope
+            .store(SQL_FAMILY_NONE, Ordering::Release);
     }
 }
 
@@ -514,6 +576,8 @@ impl Engine {
             last_compaction: None,
             commit_dispatch: std::sync::Arc::new(SqliteCommit),
             integrity_scope: AtomicBool::new(false),
+            sql_family_scope: AtomicU8::new(SQL_FAMILY_NONE),
+            timings: EngineTimings::default(),
         })
     }
 
@@ -531,6 +595,7 @@ impl Engine {
 
     pub fn store_id(&self) -> EngineResult<[u8; 32]> {
         let connection = self.lock_connection()?;
+        let query_started = Instant::now();
         self.mark_statement()?;
         let bytes = connection
             .query_row(
@@ -539,6 +604,8 @@ impl Engine {
                 |row| row.get::<_, Vec<u8>>(0),
             )
             .map_err(map_sqlite_error)?;
+        observe_time(&self.timings.nonpayload_query_ns, query_started);
+        self.bump(|counters| checked_add(&mut counters.store_id_queries, 1))?;
         bytes
             .try_into()
             .map_err(|_| EngineError::InvalidRecord("StoreId"))
@@ -677,13 +744,32 @@ impl Engine {
     }
 
     pub fn counters(&self) -> EngineResult<EngineCounters> {
-        self.counters
+        let mut counters = self
+            .counters
             .lock()
             .map(|counters| *counters)
             .map_err(|_| EngineError::Sqlite {
                 kind: SqliteErrorKind::Other,
                 message: "counter mutex poisoned".to_owned(),
-            })
+            })?;
+        counters.connection_mutex_wait_ns = self
+            .timings
+            .connection_mutex_wait_ns
+            .load(Ordering::Relaxed);
+        counters.trust_guard_ns = self.timings.trust_guard_ns.load(Ordering::Relaxed);
+        counters.nonpayload_query_ns = self.timings.nonpayload_query_ns.load(Ordering::Relaxed);
+        counters.payload_query_ns = self.timings.payload_query_ns.load(Ordering::Relaxed);
+        counters.identity_authentication_ns = self
+            .timings
+            .identity_authentication_ns
+            .load(Ordering::Relaxed);
+        counters.role_decode_ns = self.timings.role_decode_ns.load(Ordering::Relaxed);
+        counters.payload_callback_inclusive_ns = self
+            .timings
+            .payload_callback_inclusive_ns
+            .load(Ordering::Relaxed);
+        counters.counter_merge_ns = self.timings.counter_merge_ns.load(Ordering::Relaxed);
+        Ok(counters)
     }
 
     pub fn reset_counters(&self) -> EngineResult<()> {
@@ -698,6 +784,7 @@ impl Engine {
                 kind: SqliteErrorKind::Other,
                 message: "journal observation mutex poisoned".to_owned(),
             })? = None;
+        self.timings.reset();
         Ok(())
     }
 
@@ -853,6 +940,7 @@ impl Engine {
         if ids.is_empty() {
             return Ok(());
         }
+        let counter_started = Instant::now();
         self.bump(|counters| {
             checked_add(&mut counters.payload_batch_queries, 1)?;
             checked_add(
@@ -864,8 +952,10 @@ impl Engine {
                 .max(u64::try_from(ids.len()).map_err(|_| EngineError::CounterOverflow)?);
             Ok(())
         })?;
+        observe_time(&self.timings.counter_merge_ns, counter_started);
         let connection = self.lock_connection()?;
         let sql = payload_batch_sql(ids.len())?;
+        let query_started = Instant::now();
         self.mark_statement()?;
         let mut statement = connection.prepare_cached(&sql).map_err(map_sqlite_error)?;
         let mut rows = statement
@@ -873,8 +963,13 @@ impl Engine {
                 ids.iter().map(|id| id.as_bytes().as_slice()),
             ))
             .map_err(map_sqlite_error)?;
+        observe_time(&self.timings.payload_query_ns, query_started);
         let mut ordinal = 0;
-        while let Some(row) = rows.next().map_err(map_sqlite_error)? {
+        loop {
+            let step_started = Instant::now();
+            let row = rows.next().map_err(map_sqlite_error)?;
+            observe_time(&self.timings.payload_query_ns, step_started);
+            let Some(row) = row else { break };
             let observed_ordinal = row.get::<_, i64>(0).map_err(map_sqlite_error)?;
             if observed_ordinal != ordinal as i64 {
                 return if observed_ordinal > ordinal as i64 {
@@ -896,7 +991,9 @@ impl Engine {
                 ValueRef::Blob(bytes) => bytes,
                 _ => return Err(EngineError::InvalidRecord("object bytes")),
             };
-            let (payload, actual_length) = validate_payload_borrowed(id, kind, length, bytes)?;
+            let (payload, actual_length) =
+                validate_payload_borrowed(self, id, kind, length, bytes)?;
+            let counter_started = Instant::now();
             self.bump(|counters| {
                 checked_add(&mut counters.objects_validated, 1)?;
                 checked_add(&mut counters.object_bytes_read, actual_length)?;
@@ -904,7 +1001,14 @@ impl Engine {
                 checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
                 checked_add(&mut counters.fetched_row_role_decode_passes, 1)
             })?;
-            callback(id, payload)?;
+            observe_time(&self.timings.counter_merge_ns, counter_started);
+            let callback_started = Instant::now();
+            let callback_result = callback(id, payload);
+            observe_time(
+                &self.timings.payload_callback_inclusive_ns,
+                callback_started,
+            );
+            callback_result?;
             ordinal += 1;
         }
         if ordinal != ids.len() {
@@ -1008,10 +1112,12 @@ impl Engine {
     }
 
     fn lock_connection_mode(&self, write: bool) -> EngineResult<ConnectionGuard<'_>> {
+        let wait_started = Instant::now();
         let connection = self.connection.lock().map_err(|_| EngineError::Sqlite {
             kind: SqliteErrorKind::Other,
             message: "connection mutex poisoned".to_owned(),
         })?;
+        observe_time(&self.timings.connection_mutex_wait_ns, wait_started);
         if connection.is_none() {
             return Err(EngineError::AmbiguousDurability);
         }
@@ -1022,6 +1128,13 @@ impl Engine {
             commit_scrub_on_drop: false,
             integrity_transaction: false,
         };
+        let family = if write {
+            SQL_FAMILY_PUBLICATION
+        } else {
+            SQL_FAMILY_PRIMARY_READ
+        };
+        self.sql_family_scope.store(family, Ordering::Release);
+        let trust_started = Instant::now();
         if self.mode == integrity::IntegrityMode::Verified {
             connection
                 .execute_batch(if write { "BEGIN IMMEDIATE" } else { "BEGIN" })
@@ -1031,7 +1144,8 @@ impl Engine {
                 self.bump(|counters| {
                     checked_add(&mut counters.transactions_started, 1)?;
                     checked_add(&mut counters.publication_transactions_started, 1)?;
-                    checked_add(&mut counters.statements, 1)
+                    checked_add(&mut counters.statements, 1)?;
+                    mark_sql_family(counters, SQL_FAMILY_PUBLICATION, 1)
                 })?;
             } else {
                 connection.integrity_transaction = true;
@@ -1039,6 +1153,7 @@ impl Engine {
                 self.bump(|counters| {
                     checked_add(&mut counters.integrity_transactions_started, 1)?;
                     checked_add(&mut counters.statements, 1)?;
+                    mark_sql_family(counters, SQL_FAMILY_PRIMARY_READ, 1)?;
                     checked_add(&mut counters.integrity_statements, 1)
                 })?;
             }
@@ -1056,8 +1171,12 @@ impl Engine {
                         checked_add(&mut counters.integrity_transactions_rolled_back, 1)?;
                         checked_add(&mut counters.integrity_transactions_started, 1)?;
                         checked_add(&mut counters.statements, 2)?;
+                        mark_sql_family(counters, SQL_FAMILY_PRIMARY_READ, 1)?;
+                        mark_sql_family(counters, SQL_FAMILY_LIVE_INTEGRITY, 1)?;
                         checked_add(&mut counters.integrity_statements, 2)
                     })?;
+                    self.sql_family_scope
+                        .store(SQL_FAMILY_LIVE_INTEGRITY, Ordering::Release);
                 }
                 let scrubbed = integrity::verify_retained_union_observed(&connection, &self.path)
                     .and_then(|observation| {
@@ -1067,7 +1186,17 @@ impl Engine {
                                 &mut counters.integrity_statements,
                                 observation.verification.statements,
                             )?;
+                            checked_add(
+                                &mut counters.statements,
+                                observation.verification.statements,
+                            )?;
+                            mark_sql_family(
+                                counters,
+                                SQL_FAMILY_LIVE_INTEGRITY,
+                                observation.verification.statements,
+                            )?;
                             checked_add(&mut counters.statements, 1)?;
+                            mark_sql_family(counters, SQL_FAMILY_LIVE_INTEGRITY, 1)?;
                             checked_add(&mut counters.integrity_statements, 1)?;
                             add_retained_scrub_counters(counters, observation.verification)
                         })
@@ -1076,10 +1205,14 @@ impl Engine {
                     if connection.integrity_transaction {
                         self.bump_best_effort(|counters| {
                             checked_add(&mut counters.statements, 1)?;
+                            mark_sql_family(counters, SQL_FAMILY_LIVE_INTEGRITY, 1)?;
                             checked_add(&mut counters.integrity_statements, 1)
                         });
                     } else if write {
-                        self.bump_best_effort(|counters| checked_add(&mut counters.statements, 1));
+                        self.bump_best_effort(|counters| {
+                            checked_add(&mut counters.statements, 1)?;
+                            mark_sql_family(counters, SQL_FAMILY_PUBLICATION, 1)
+                        });
                     }
                     let rollback = self.commit_dispatch.rollback(&connection);
                     if rollback.is_ok() {
@@ -1099,18 +1232,24 @@ impl Engine {
                     connection.transaction = false;
                     connection.integrity_transaction = false;
                     self.integrity_scope.store(false, Ordering::Release);
+                    self.sql_family_scope
+                        .store(SQL_FAMILY_NONE, Ordering::Release);
+                    observe_time(&self.timings.trust_guard_ns, trust_started);
                     return Err(error);
                 }
                 connection.commit_scrub_on_drop = true;
             }
         }
+        observe_time(&self.timings.trust_guard_ns, trust_started);
         Ok(connection)
     }
 
     fn mark_statement(&self) -> EngineResult<()> {
         let integrity = self.integrity_scope.load(Ordering::Acquire);
+        let family = self.sql_family_scope.load(Ordering::Acquire);
         self.bump(|counters| {
             checked_add(&mut counters.statements, 1)?;
+            mark_sql_family(counters, family, 1)?;
             if integrity {
                 checked_add(&mut counters.integrity_statements, 1)?;
             }
@@ -1119,8 +1258,10 @@ impl Engine {
     }
 
     fn mark_integrity_sql(&self, statements: u64) -> EngineResult<()> {
+        let family = self.sql_family_scope.load(Ordering::Acquire);
         self.bump(|counters| {
             checked_add(&mut counters.statements, statements)?;
+            mark_sql_family(counters, family, statements)?;
             checked_add(&mut counters.integrity_statements, statements)
         })
     }
@@ -1168,6 +1309,18 @@ impl Engine {
             }
             _ => Ok(()),
         }
+    }
+}
+
+fn mark_sql_family(counters: &mut EngineCounters, family: u8, statements: u64) -> EngineResult<()> {
+    match family {
+        SQL_FAMILY_NONE => Ok(()),
+        SQL_FAMILY_PUBLICATION => checked_add(&mut counters.publication_statements, statements),
+        SQL_FAMILY_LIVE_INTEGRITY => {
+            checked_add(&mut counters.live_verified_integrity_statements, statements)
+        }
+        SQL_FAMILY_PRIMARY_READ => checked_add(&mut counters.primary_read_statements, statements),
+        _ => Err(EngineError::InvalidRecord("SQL statement family")),
     }
 }
 
@@ -1942,6 +2095,7 @@ fn with_authenticated_canonical_on_connection<T>(
     if fetched_row != role_decode {
         return Err(EngineError::InvalidRecord("fetched role accounting"));
     }
+    let query_started = Instant::now();
     engine.mark_statement()?;
     let mut statement = connection
         .prepare_cached("SELECT kind, canonical_length, canonical_bytes FROM layerfs_objects WHERE object_id = ?1")
@@ -1959,20 +2113,30 @@ fn with_authenticated_canonical_on_connection<T>(
         ValueRef::Blob(bytes) => bytes,
         _ => return Err(EngineError::InvalidRecord("object bytes")),
     };
+    observe_time(&engine.timings.nonpayload_query_ns, query_started);
     let kind = authenticate_borrowed(engine, id, kind, length, bytes)?;
     if !role_decode {
+        let role_started = Instant::now();
         let summary = validate_object_from(Cursor::new(bytes))?;
+        observe_time(&engine.timings.role_decode_ns, role_started);
         if summary.kind != kind || summary.canonical_len != bytes.len() as u64 {
             return Err(EngineError::InvalidRecord("object summary"));
         }
     }
-    let value = callback(kind, bytes)?;
+    let role_started = Instant::now();
+    let value = callback(kind, bytes);
+    if role_decode {
+        observe_time(&engine.timings.role_decode_ns, role_started);
+    }
+    let value = value?;
     if fetched_row {
+        let counter_started = Instant::now();
         engine.bump(|counters| {
             checked_add(&mut counters.fetched_rows, 1)?;
             checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
             checked_add(&mut counters.fetched_row_role_decode_passes, 1)
         })?;
+        observe_time(&engine.timings.counter_merge_ns, counter_started);
     }
     Ok(value)
 }
@@ -1984,30 +2148,47 @@ fn authenticate_borrowed(
     length: i64,
     bytes: &[u8],
 ) -> EngineResult<ObjectKind> {
+    let authentication_started = Instant::now();
     let (summary, actual_length) = authenticate_borrowed_unaccounted(id, kind, length, bytes)?;
+    observe_time(
+        &engine.timings.identity_authentication_ns,
+        authentication_started,
+    );
+    let counter_started = Instant::now();
     engine.bump(|counters| {
         checked_add(&mut counters.objects_validated, 1)?;
         checked_add(&mut counters.object_bytes_read, actual_length)?;
         Ok(())
     })?;
+    observe_time(&engine.timings.counter_merge_ns, counter_started);
     Ok(summary.kind)
 }
 
-fn validate_payload_borrowed(
+fn validate_payload_borrowed<'a>(
+    engine: &Engine,
     id: ObjectId,
     kind: i64,
     length: i64,
-    bytes: &[u8],
-) -> EngineResult<(&[u8], u64)> {
+    bytes: &'a [u8],
+) -> EngineResult<(&'a [u8], u64)> {
+    let authentication_started = Instant::now();
+    let summary = authenticate_identity(bytes, id)
+        .map_err(|cause| EngineError::MalformedObject { id, cause })?;
+    observe_time(
+        &engine.timings.identity_authentication_ns,
+        authentication_started,
+    );
+    let role_started = Instant::now();
     let expected_kind = ObjectKind::try_from(
         u8::try_from(kind).map_err(|_| EngineError::InvalidRecord("object kind"))?,
     )?;
     let expected_length =
         u64::try_from(length).map_err(|_| EngineError::InvalidRecord("object length"))?;
-    let payload = validate_bytes_identity(bytes, id)
-        .map_err(|cause| EngineError::MalformedObject { id, cause })?;
     let actual_length = u64::try_from(bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
-    if expected_kind != ObjectKind::Bytes || actual_length != expected_length {
+    if summary.kind != expected_kind
+        || expected_kind != ObjectKind::Bytes
+        || actual_length != expected_length
+    {
         return Err(EngineError::MalformedObject {
             id,
             cause: CoreError::LengthMismatch {
@@ -2016,6 +2197,37 @@ fn validate_payload_borrowed(
             },
         });
     }
+    let outer_payload_len = usize::try_from(u32::from_be_bytes(
+        bytes
+            .get(5..9)
+            .ok_or(EngineError::InvalidRecord("object header"))?
+            .try_into()
+            .unwrap(),
+    ))
+    .map_err(|_| EngineError::CounterOverflow)?;
+    let payload_len = usize::try_from(u32::from_be_bytes(
+        bytes
+            .get(9..13)
+            .ok_or(EngineError::InvalidRecord("bytes object header"))?
+            .try_into()
+            .unwrap(),
+    ))
+    .map_err(|_| EngineError::CounterOverflow)?;
+    if outer_payload_len
+        != payload_len
+            .checked_add(4)
+            .ok_or(EngineError::CounterOverflow)?
+    {
+        return Err(EngineError::InvalidRecord("bytes object length"));
+    }
+    let payload_start = bytes
+        .len()
+        .checked_sub(payload_len)
+        .ok_or(EngineError::InvalidRecord("payload length"))?;
+    let payload = bytes
+        .get(payload_start..)
+        .ok_or(EngineError::InvalidRecord("payload length"))?;
+    observe_time(&engine.timings.role_decode_ns, role_started);
     Ok((payload, actual_length))
 }
 
@@ -2459,6 +2671,44 @@ mod tests {
             assert_eq!(statement.get_status(rusqlite::StatementStatus::Sort), 0);
         }
         drop(connection);
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn verified_read_attribution_closes_sql_and_timer_facts() {
+        let path = test_path();
+        let (id, canonical) = bytes_object(b"attributed payload");
+        let writer =
+            Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
+        writer.put_object_if_absent(id, &canonical).unwrap();
+        drop(writer);
+
+        let engine = Engine::open(&path).unwrap();
+        engine.reset_counters().unwrap();
+        let mut callbacks = 0;
+        engine
+            .for_each_authenticated_payload_batch(&[id, id], |_, payload| {
+                assert_eq!(payload, b"attributed payload");
+                callbacks += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(callbacks, 2);
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.statements, 4);
+        assert_eq!(counters.primary_read_statements, 4);
+        assert_eq!(counters.publication_statements, 0);
+        assert_eq!(counters.live_verified_integrity_statements, 0);
+        assert_eq!(counters.fetched_rows, 2);
+        assert_eq!(counters.fetched_row_authentication_passes, 2);
+        assert_eq!(counters.fetched_row_role_decode_passes, 2);
+        assert!(counters.connection_mutex_wait_ns > 0);
+        assert!(counters.trust_guard_ns > 0);
+        assert!(counters.payload_query_ns > 0);
+        assert!(counters.identity_authentication_ns > 0);
+        assert!(counters.role_decode_ns > 0);
+        assert!(counters.counter_merge_ns > 0);
         drop(engine);
         std::fs::remove_file(path).unwrap();
     }

@@ -214,6 +214,14 @@ impl LayerVfs {
     pub fn operation_q_observation(&self) -> OperationQObservation {
         self.operation_q.observation()
     }
+    /// Cumulative native projection facts remain available after a failed open
+    /// or after the returned workspace has been dropped.
+    pub fn projection_facts(&self) -> crate::driver::ProjectionFacts {
+        self.driver.projection_facts()
+    }
+    pub(crate) fn projection_driver(&self) -> &dyn ProjectionDriver {
+        self.driver.as_ref()
+    }
     pub fn materialize_external(
         &self,
         root: ObjectId,
@@ -228,6 +236,7 @@ impl LayerVfs {
         path: &Path,
     ) -> VfsResult<(ExternalWorkspace, OperationCounters)> {
         let reservation = self.operation_q.reserve();
+        let projection_before = self.driver.projection_facts();
         let expected = self
             .engine
             .read_ref("main")?
@@ -243,6 +252,11 @@ impl LayerVfs {
         let native_root = native.root_directory()?;
         let identity = native.directory_identity(native_root.as_ref())?;
         let writers = shared_writers(&identity)?;
+        counters.projection = self
+            .driver
+            .projection_facts()
+            .checked_delta(projection_before)
+            .ok_or(VfsError::InvalidState)?;
         reservation.finish(&mut counters);
         Ok((
             ExternalWorkspace {
@@ -303,6 +317,7 @@ impl LayerVfs {
         root: ObjectId,
     ) -> VfsResult<(ManagedWorkspace, OperationCounters)> {
         let reservation = self.operation_q.reserve();
+        let projection_before = self.driver.projection_facts();
         let expected = self
             .engine
             .read_ref("main")?
@@ -370,6 +385,11 @@ impl LayerVfs {
             spool: Some(spool),
         };
         workspace.observe_spool(&mut counters)?;
+        counters.projection = self
+            .driver
+            .projection_facts()
+            .checked_delta(projection_before)
+            .ok_or(VfsError::InvalidState)?;
         reservation.finish(&mut counters);
         Ok((workspace, counters))
     }

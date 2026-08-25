@@ -31,6 +31,566 @@ pub enum WorkspacePolicy {
     ExternalCooperative,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ProjectionTimerAvailability {
+    Available,
+    #[default]
+    Unavailable,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProjectionTimer {
+    pub availability: ProjectionTimerAvailability,
+    pub nanoseconds: u64,
+}
+
+impl ProjectionTimer {
+    pub const fn available() -> Self {
+        Self {
+            availability: ProjectionTimerAvailability::Available,
+            nanoseconds: 0,
+        }
+    }
+
+    fn checked_delta(self, before: Self) -> Option<Self> {
+        (self.availability == before.availability).then_some(Self {
+            availability: self.availability,
+            nanoseconds: self.nanoseconds.checked_sub(before.nanoseconds)?,
+        })
+    }
+
+    fn checked_add(self, other: Self) -> Option<Self> {
+        if self.availability == ProjectionTimerAvailability::Available
+            && other.availability == ProjectionTimerAvailability::Available
+        {
+            Some(Self {
+                availability: ProjectionTimerAvailability::Available,
+                nanoseconds: self.nanoseconds.checked_add(other.nanoseconds)?,
+            })
+        } else {
+            Some(Self::default())
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DurabilityClass {
+    ProcessCrashReconciled,
+    HostCrashOrdered,
+    DeviceFlushRequested,
+    PowerLossQualified,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DurabilityClassCounts {
+    pub process_crash_reconciled: u64,
+    pub host_crash_ordered: u64,
+    pub device_flush_requested: u64,
+    pub power_loss_qualified: u64,
+}
+
+impl DurabilityClassCounts {
+    pub fn get(&self, class: DurabilityClass) -> u64 {
+        match class {
+            DurabilityClass::ProcessCrashReconciled => self.process_crash_reconciled,
+            DurabilityClass::HostCrashOrdered => self.host_crash_ordered,
+            DurabilityClass::DeviceFlushRequested => self.device_flush_requested,
+            DurabilityClass::PowerLossQualified => self.power_loss_qualified,
+        }
+    }
+
+    fn checked_delta(self, before: Self) -> Option<Self> {
+        Some(Self {
+            process_crash_reconciled: self
+                .process_crash_reconciled
+                .checked_sub(before.process_crash_reconciled)?,
+            host_crash_ordered: self
+                .host_crash_ordered
+                .checked_sub(before.host_crash_ordered)?,
+            device_flush_requested: self
+                .device_flush_requested
+                .checked_sub(before.device_flush_requested)?,
+            power_loss_qualified: self
+                .power_loss_qualified
+                .checked_sub(before.power_loss_qualified)?,
+        })
+    }
+
+    fn checked_add(self, other: Self) -> Option<Self> {
+        Some(Self {
+            process_crash_reconciled: self
+                .process_crash_reconciled
+                .checked_add(other.process_crash_reconciled)?,
+            host_crash_ordered: self
+                .host_crash_ordered
+                .checked_add(other.host_crash_ordered)?,
+            device_flush_requested: self
+                .device_flush_requested
+                .checked_add(other.device_flush_requested)?,
+            power_loss_qualified: self
+                .power_loss_qualified
+                .checked_add(other.power_loss_qualified)?,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProjectionCallFacts {
+    pub attempts: u64,
+    pub successes: u64,
+    pub failures: u64,
+    pub wall: ProjectionTimer,
+}
+
+impl ProjectionCallFacts {
+    pub const fn available() -> Self {
+        Self {
+            attempts: 0,
+            successes: 0,
+            failures: 0,
+            wall: ProjectionTimer::available(),
+        }
+    }
+
+    fn checked_delta(self, before: Self) -> Option<Self> {
+        Some(Self {
+            attempts: self.attempts.checked_sub(before.attempts)?,
+            successes: self.successes.checked_sub(before.successes)?,
+            failures: self.failures.checked_sub(before.failures)?,
+            wall: self.wall.checked_delta(before.wall)?,
+        })
+    }
+
+    fn checked_add(self, other: Self) -> Option<Self> {
+        Some(Self {
+            attempts: self.attempts.checked_add(other.attempts)?,
+            successes: self.successes.checked_add(other.successes)?,
+            failures: self.failures.checked_add(other.failures)?,
+            wall: self.wall.checked_add(other.wall)?,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProjectionWriteFacts {
+    pub attempts: u64,
+    pub successes: u64,
+    pub failures: u64,
+    pub bytes: u64,
+    pub wall: ProjectionTimer,
+}
+
+impl ProjectionWriteFacts {
+    pub const fn available() -> Self {
+        Self {
+            attempts: 0,
+            successes: 0,
+            failures: 0,
+            bytes: 0,
+            wall: ProjectionTimer::available(),
+        }
+    }
+
+    fn checked_delta(self, before: Self) -> Option<Self> {
+        Some(Self {
+            attempts: self.attempts.checked_sub(before.attempts)?,
+            successes: self.successes.checked_sub(before.successes)?,
+            failures: self.failures.checked_sub(before.failures)?,
+            bytes: self.bytes.checked_sub(before.bytes)?,
+            wall: self.wall.checked_delta(before.wall)?,
+        })
+    }
+
+    fn checked_add(self, other: Self) -> Option<Self> {
+        Some(Self {
+            attempts: self.attempts.checked_add(other.attempts)?,
+            successes: self.successes.checked_add(other.successes)?,
+            failures: self.failures.checked_add(other.failures)?,
+            bytes: self.bytes.checked_add(other.bytes)?,
+            wall: self.wall.checked_add(other.wall)?,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProjectionSyncFacts {
+    pub attempts: u64,
+    pub successes: u64,
+    pub failures: u64,
+    pub requested: DurabilityClassCounts,
+    pub achieved: DurabilityClassCounts,
+    pub wall: ProjectionTimer,
+}
+
+impl ProjectionSyncFacts {
+    pub const fn available() -> Self {
+        Self {
+            attempts: 0,
+            successes: 0,
+            failures: 0,
+            requested: DurabilityClassCounts {
+                process_crash_reconciled: 0,
+                host_crash_ordered: 0,
+                device_flush_requested: 0,
+                power_loss_qualified: 0,
+            },
+            achieved: DurabilityClassCounts {
+                process_crash_reconciled: 0,
+                host_crash_ordered: 0,
+                device_flush_requested: 0,
+                power_loss_qualified: 0,
+            },
+            wall: ProjectionTimer::available(),
+        }
+    }
+
+    fn checked_delta(self, before: Self) -> Option<Self> {
+        Some(Self {
+            attempts: self.attempts.checked_sub(before.attempts)?,
+            successes: self.successes.checked_sub(before.successes)?,
+            failures: self.failures.checked_sub(before.failures)?,
+            requested: self.requested.checked_delta(before.requested)?,
+            achieved: self.achieved.checked_delta(before.achieved)?,
+            wall: self.wall.checked_delta(before.wall)?,
+        })
+    }
+
+    fn checked_add(self, other: Self) -> Option<Self> {
+        Some(Self {
+            attempts: self.attempts.checked_add(other.attempts)?,
+            successes: self.successes.checked_add(other.successes)?,
+            failures: self.failures.checked_add(other.failures)?,
+            requested: self.requested.checked_add(other.requested)?,
+            achieved: self.achieved.checked_add(other.achieved)?,
+            wall: self.wall.checked_add(other.wall)?,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProjectionReplaceFacts {
+    pub attempts: u64,
+    pub successes: u64,
+    pub failures: u64,
+    pub requested_visible: u64,
+    pub prior_visible: u64,
+    pub visibility_ambiguous: u64,
+    pub durability_ambiguous: u64,
+    pub wall: ProjectionTimer,
+}
+
+impl ProjectionReplaceFacts {
+    pub const fn available() -> Self {
+        Self {
+            attempts: 0,
+            successes: 0,
+            failures: 0,
+            requested_visible: 0,
+            prior_visible: 0,
+            visibility_ambiguous: 0,
+            durability_ambiguous: 0,
+            wall: ProjectionTimer::available(),
+        }
+    }
+
+    fn checked_delta(self, before: Self) -> Option<Self> {
+        Some(Self {
+            attempts: self.attempts.checked_sub(before.attempts)?,
+            successes: self.successes.checked_sub(before.successes)?,
+            failures: self.failures.checked_sub(before.failures)?,
+            requested_visible: self
+                .requested_visible
+                .checked_sub(before.requested_visible)?,
+            prior_visible: self.prior_visible.checked_sub(before.prior_visible)?,
+            visibility_ambiguous: self
+                .visibility_ambiguous
+                .checked_sub(before.visibility_ambiguous)?,
+            durability_ambiguous: self
+                .durability_ambiguous
+                .checked_sub(before.durability_ambiguous)?,
+            wall: self.wall.checked_delta(before.wall)?,
+        })
+    }
+
+    fn checked_add(self, other: Self) -> Option<Self> {
+        Some(Self {
+            attempts: self.attempts.checked_add(other.attempts)?,
+            successes: self.successes.checked_add(other.successes)?,
+            failures: self.failures.checked_add(other.failures)?,
+            requested_visible: self
+                .requested_visible
+                .checked_add(other.requested_visible)?,
+            prior_visible: self.prior_visible.checked_add(other.prior_visible)?,
+            visibility_ambiguous: self
+                .visibility_ambiguous
+                .checked_add(other.visibility_ambiguous)?,
+            durability_ambiguous: self
+                .durability_ambiguous
+                .checked_add(other.durability_ambiguous)?,
+            wall: self.wall.checked_add(other.wall)?,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProjectionCleanupFacts {
+    pub attempts: u64,
+    pub successes: u64,
+    pub failures: u64,
+    pub residue: u64,
+    pub wall: ProjectionTimer,
+}
+
+impl ProjectionCleanupFacts {
+    pub const fn available() -> Self {
+        Self {
+            attempts: 0,
+            successes: 0,
+            failures: 0,
+            residue: 0,
+            wall: ProjectionTimer::available(),
+        }
+    }
+
+    fn checked_delta(self, before: Self) -> Option<Self> {
+        Some(Self {
+            attempts: self.attempts.checked_sub(before.attempts)?,
+            successes: self.successes.checked_sub(before.successes)?,
+            failures: self.failures.checked_sub(before.failures)?,
+            residue: self.residue.checked_sub(before.residue)?,
+            wall: self.wall.checked_delta(before.wall)?,
+        })
+    }
+
+    fn checked_add(self, other: Self) -> Option<Self> {
+        Some(Self {
+            attempts: self.attempts.checked_add(other.attempts)?,
+            successes: self.successes.checked_add(other.successes)?,
+            failures: self.failures.checked_add(other.failures)?,
+            residue: self.residue.checked_add(other.residue)?,
+            wall: self.wall.checked_add(other.wall)?,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProjectionFacts {
+    pub workspace_setup: ProjectionCallFacts,
+    pub workspace_root_create_open: ProjectionCallFacts,
+    pub staging_create_open: ProjectionCallFacts,
+    pub recovery_marker_create: ProjectionCallFacts,
+    pub name_preflight: ProjectionCallFacts,
+    pub temp_create: ProjectionCallFacts,
+    pub workspace_marker_write: ProjectionWriteFacts,
+    pub content_write: ProjectionWriteFacts,
+    pub metadata_value_write: ProjectionWriteFacts,
+    /// Inclusive report-only sum of marker, content, and metadata writes.
+    pub aggregate_native_write: ProjectionWriteFacts,
+    pub content_flush: ProjectionCallFacts,
+    pub metadata_validate: ProjectionCallFacts,
+    pub metadata_apply: ProjectionCallFacts,
+    pub metadata_preinstall_verify: ProjectionCallFacts,
+    pub metadata_postinstall_verify: ProjectionCallFacts,
+    pub root_binding_revalidate: ProjectionCallFacts,
+    pub regular_file_sync: ProjectionSyncFacts,
+    pub directory_sync: ProjectionSyncFacts,
+    pub recovery_marker_file_sync: ProjectionSyncFacts,
+    pub content_temp_file_sync: ProjectionSyncFacts,
+    pub post_hardlink_file_sync: ProjectionSyncFacts,
+    pub staging_directory_sync: ProjectionSyncFacts,
+    pub root_parent_directory_sync: ProjectionSyncFacts,
+    pub install_parent_directory_sync: ProjectionSyncFacts,
+    pub dirty_tree_directory_sync: ProjectionSyncFacts,
+    pub final_root_directory_sync: ProjectionSyncFacts,
+    pub replace: ProjectionReplaceFacts,
+    pub authority_completion: ProjectionCallFacts,
+    pub cleanup: ProjectionCleanupFacts,
+}
+
+impl ProjectionFacts {
+    pub const fn available() -> Self {
+        Self {
+            workspace_setup: ProjectionCallFacts::available(),
+            workspace_root_create_open: ProjectionCallFacts::available(),
+            staging_create_open: ProjectionCallFacts::available(),
+            recovery_marker_create: ProjectionCallFacts::available(),
+            name_preflight: ProjectionCallFacts::available(),
+            temp_create: ProjectionCallFacts::available(),
+            workspace_marker_write: ProjectionWriteFacts::available(),
+            content_write: ProjectionWriteFacts::available(),
+            metadata_value_write: ProjectionWriteFacts::available(),
+            aggregate_native_write: ProjectionWriteFacts::available(),
+            content_flush: ProjectionCallFacts::available(),
+            metadata_validate: ProjectionCallFacts::available(),
+            metadata_apply: ProjectionCallFacts::available(),
+            metadata_preinstall_verify: ProjectionCallFacts::available(),
+            metadata_postinstall_verify: ProjectionCallFacts::available(),
+            root_binding_revalidate: ProjectionCallFacts::available(),
+            regular_file_sync: ProjectionSyncFacts::available(),
+            directory_sync: ProjectionSyncFacts::available(),
+            recovery_marker_file_sync: ProjectionSyncFacts::available(),
+            content_temp_file_sync: ProjectionSyncFacts::available(),
+            post_hardlink_file_sync: ProjectionSyncFacts::available(),
+            staging_directory_sync: ProjectionSyncFacts::available(),
+            root_parent_directory_sync: ProjectionSyncFacts::available(),
+            install_parent_directory_sync: ProjectionSyncFacts::available(),
+            dirty_tree_directory_sync: ProjectionSyncFacts::available(),
+            final_root_directory_sync: ProjectionSyncFacts::available(),
+            replace: ProjectionReplaceFacts::available(),
+            authority_completion: ProjectionCallFacts::available(),
+            cleanup: ProjectionCleanupFacts::available(),
+        }
+    }
+
+    pub fn checked_delta(self, before: Self) -> Option<Self> {
+        Some(Self {
+            workspace_setup: self.workspace_setup.checked_delta(before.workspace_setup)?,
+            workspace_root_create_open: self
+                .workspace_root_create_open
+                .checked_delta(before.workspace_root_create_open)?,
+            staging_create_open: self
+                .staging_create_open
+                .checked_delta(before.staging_create_open)?,
+            recovery_marker_create: self
+                .recovery_marker_create
+                .checked_delta(before.recovery_marker_create)?,
+            name_preflight: self.name_preflight.checked_delta(before.name_preflight)?,
+            temp_create: self.temp_create.checked_delta(before.temp_create)?,
+            workspace_marker_write: self
+                .workspace_marker_write
+                .checked_delta(before.workspace_marker_write)?,
+            content_write: self.content_write.checked_delta(before.content_write)?,
+            metadata_value_write: self
+                .metadata_value_write
+                .checked_delta(before.metadata_value_write)?,
+            aggregate_native_write: self
+                .aggregate_native_write
+                .checked_delta(before.aggregate_native_write)?,
+            content_flush: self.content_flush.checked_delta(before.content_flush)?,
+            metadata_validate: self
+                .metadata_validate
+                .checked_delta(before.metadata_validate)?,
+            metadata_apply: self.metadata_apply.checked_delta(before.metadata_apply)?,
+            metadata_preinstall_verify: self
+                .metadata_preinstall_verify
+                .checked_delta(before.metadata_preinstall_verify)?,
+            metadata_postinstall_verify: self
+                .metadata_postinstall_verify
+                .checked_delta(before.metadata_postinstall_verify)?,
+            root_binding_revalidate: self
+                .root_binding_revalidate
+                .checked_delta(before.root_binding_revalidate)?,
+            regular_file_sync: self
+                .regular_file_sync
+                .checked_delta(before.regular_file_sync)?,
+            directory_sync: self.directory_sync.checked_delta(before.directory_sync)?,
+            recovery_marker_file_sync: self
+                .recovery_marker_file_sync
+                .checked_delta(before.recovery_marker_file_sync)?,
+            content_temp_file_sync: self
+                .content_temp_file_sync
+                .checked_delta(before.content_temp_file_sync)?,
+            post_hardlink_file_sync: self
+                .post_hardlink_file_sync
+                .checked_delta(before.post_hardlink_file_sync)?,
+            staging_directory_sync: self
+                .staging_directory_sync
+                .checked_delta(before.staging_directory_sync)?,
+            root_parent_directory_sync: self
+                .root_parent_directory_sync
+                .checked_delta(before.root_parent_directory_sync)?,
+            install_parent_directory_sync: self
+                .install_parent_directory_sync
+                .checked_delta(before.install_parent_directory_sync)?,
+            dirty_tree_directory_sync: self
+                .dirty_tree_directory_sync
+                .checked_delta(before.dirty_tree_directory_sync)?,
+            final_root_directory_sync: self
+                .final_root_directory_sync
+                .checked_delta(before.final_root_directory_sync)?,
+            replace: self.replace.checked_delta(before.replace)?,
+            authority_completion: self
+                .authority_completion
+                .checked_delta(before.authority_completion)?,
+            cleanup: self.cleanup.checked_delta(before.cleanup)?,
+        })
+    }
+
+    pub fn checked_add(self, other: Self) -> Option<Self> {
+        Some(Self {
+            workspace_setup: self.workspace_setup.checked_add(other.workspace_setup)?,
+            workspace_root_create_open: self
+                .workspace_root_create_open
+                .checked_add(other.workspace_root_create_open)?,
+            staging_create_open: self
+                .staging_create_open
+                .checked_add(other.staging_create_open)?,
+            recovery_marker_create: self
+                .recovery_marker_create
+                .checked_add(other.recovery_marker_create)?,
+            name_preflight: self.name_preflight.checked_add(other.name_preflight)?,
+            temp_create: self.temp_create.checked_add(other.temp_create)?,
+            workspace_marker_write: self
+                .workspace_marker_write
+                .checked_add(other.workspace_marker_write)?,
+            content_write: self.content_write.checked_add(other.content_write)?,
+            metadata_value_write: self
+                .metadata_value_write
+                .checked_add(other.metadata_value_write)?,
+            aggregate_native_write: self
+                .aggregate_native_write
+                .checked_add(other.aggregate_native_write)?,
+            content_flush: self.content_flush.checked_add(other.content_flush)?,
+            metadata_validate: self
+                .metadata_validate
+                .checked_add(other.metadata_validate)?,
+            metadata_apply: self.metadata_apply.checked_add(other.metadata_apply)?,
+            metadata_preinstall_verify: self
+                .metadata_preinstall_verify
+                .checked_add(other.metadata_preinstall_verify)?,
+            metadata_postinstall_verify: self
+                .metadata_postinstall_verify
+                .checked_add(other.metadata_postinstall_verify)?,
+            root_binding_revalidate: self
+                .root_binding_revalidate
+                .checked_add(other.root_binding_revalidate)?,
+            regular_file_sync: self
+                .regular_file_sync
+                .checked_add(other.regular_file_sync)?,
+            directory_sync: self.directory_sync.checked_add(other.directory_sync)?,
+            recovery_marker_file_sync: self
+                .recovery_marker_file_sync
+                .checked_add(other.recovery_marker_file_sync)?,
+            content_temp_file_sync: self
+                .content_temp_file_sync
+                .checked_add(other.content_temp_file_sync)?,
+            post_hardlink_file_sync: self
+                .post_hardlink_file_sync
+                .checked_add(other.post_hardlink_file_sync)?,
+            staging_directory_sync: self
+                .staging_directory_sync
+                .checked_add(other.staging_directory_sync)?,
+            root_parent_directory_sync: self
+                .root_parent_directory_sync
+                .checked_add(other.root_parent_directory_sync)?,
+            install_parent_directory_sync: self
+                .install_parent_directory_sync
+                .checked_add(other.install_parent_directory_sync)?,
+            dirty_tree_directory_sync: self
+                .dirty_tree_directory_sync
+                .checked_add(other.dirty_tree_directory_sync)?,
+            final_root_directory_sync: self
+                .final_root_directory_sync
+                .checked_add(other.final_root_directory_sync)?,
+            replace: self.replace.checked_add(other.replace)?,
+            authority_completion: self
+                .authority_completion
+                .checked_add(other.authority_completion)?,
+            cleanup: self.cleanup.checked_add(other.cleanup)?,
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeKind {
     Directory,
@@ -304,6 +864,9 @@ impl From<io::Error> for DriverError {
 pub type Result<T> = std::result::Result<T, DriverError>;
 
 pub trait ProjectionWorkspace: Send {
+    fn projection_facts(&self) -> ProjectionFacts {
+        ProjectionFacts::default()
+    }
     fn root_directory(&self) -> Result<Box<dyn DirectoryHandle>>;
     fn enumerate_at<'a>(
         &'a self,
@@ -450,6 +1013,9 @@ pub trait ProjectionWorkspace: Send {
 }
 
 pub trait ProjectionDriver: Send + Sync {
+    fn projection_facts(&self) -> ProjectionFacts {
+        ProjectionFacts::default()
+    }
     fn open_workspace(
         &self,
         path: &Path,
@@ -772,5 +1338,21 @@ mod tests {
             unordered.push(b"a", b"2"),
             Err(DriverError::Unsupported)
         ));
+    }
+
+    #[test]
+    fn projection_facts_delta_is_checked_and_preserves_unavailable_timers() {
+        let before = ProjectionFacts::default();
+        let mut after = before;
+        after.content_write.attempts = 1;
+        after.content_write.successes = 1;
+        after.content_write.bytes = 4096;
+        let delta = after.checked_delta(before).unwrap();
+        assert_eq!(delta.content_write.bytes, 4096);
+        assert_eq!(
+            delta.content_write.wall.availability,
+            ProjectionTimerAvailability::Unavailable
+        );
+        assert!(before.checked_delta(after).is_none());
     }
 }

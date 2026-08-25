@@ -3008,6 +3008,7 @@ fn native_route_name(route: Option<layerfs_sdk::NativeRoute>) -> &'static str {
         Some(layerfs_sdk::NativeRoute::InPlaceShift) => "InPlaceShift",
         Some(layerfs_sdk::NativeRoute::FullFallback) => "FullFallback",
         Some(layerfs_sdk::NativeRoute::MaterializeStream)
+        | Some(layerfs_sdk::NativeRoute::NativeDurableOutput)
         | Some(layerfs_sdk::NativeRoute::CaptureStream)
         | Some(layerfs_sdk::NativeRoute::Rename)
         | Some(layerfs_sdk::NativeRoute::ProtectedExactNoop) => "NotApplicable",

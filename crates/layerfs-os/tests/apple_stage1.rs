@@ -26,7 +26,7 @@ fn refresh_covers_lifecycle_metadata_and_hard_links() {
                 .as_nanos()
         ));
     fs::create_dir(&base).unwrap();
-    let vfs = LayerVfs::open(&base.join("store"), Arc::new(AppleDriver)).unwrap();
+    let vfs = LayerVfs::open(&base.join("store"), Arc::new(AppleDriver::default())).unwrap();
     let empty = vfs.current_head("main").unwrap();
     let mut source = vfs
         .materialize_external(empty.root, &base.join("source"))
@@ -134,7 +134,7 @@ fn refresh_covers_lifecycle_metadata_and_hard_links() {
 }
 
 fn symlink_metadata(path: &Path, store_id: [u8; 32]) -> NativeMetadata {
-    let workspace = AppleDriver
+    let workspace = AppleDriver::default()
         .open_workspace(path, WorkspacePolicy::ExternalCooperative, store_id)
         .unwrap();
     let root = workspace.root_directory().unwrap();
@@ -158,7 +158,7 @@ fn identity_checked_removal_never_unlinks_a_replacement() {
         ));
     fs::create_dir(&base).unwrap();
     fs::write(base.join("file"), b"retained").unwrap();
-    let driver = AppleDriver;
+    let driver = AppleDriver::default();
     let workspace = driver
         .open_workspace(&base, WorkspacePolicy::ManagedPrivate, [7; 32])
         .unwrap();
@@ -192,7 +192,7 @@ fn selective_refresh_resolves_more_than_sixteen_topology_edges() {
                 .as_nanos()
         ));
     fs::create_dir(&base).unwrap();
-    let vfs = LayerVfs::open(&base.join("store"), Arc::new(AppleDriver)).unwrap();
+    let vfs = LayerVfs::open(&base.join("store"), Arc::new(AppleDriver::default())).unwrap();
     let empty = vfs.current_head("main").unwrap();
     let mut source = vfs
         .materialize_external(empty.root, &base.join("source"))
@@ -238,7 +238,7 @@ fn nested_directory_delta_applies_when_root_directory_mapping_is_equal() {
                 .as_nanos()
         ));
     fs::create_dir(&base).unwrap();
-    let vfs = LayerVfs::open(&base.join("store"), Arc::new(AppleDriver)).unwrap();
+    let vfs = LayerVfs::open(&base.join("store"), Arc::new(AppleDriver::default())).unwrap();
     let empty = vfs.current_head("main").unwrap();
     let mut source = vfs
         .materialize_external(empty.root, &base.join("source"))
@@ -290,7 +290,7 @@ fn symlink_metadata_only_refresh_syncs_parent_and_survives_fresh_open() {
                 .as_nanos()
         ));
     fs::create_dir(&base).unwrap();
-    let vfs = LayerVfs::open(&base.join("store"), Arc::new(AppleDriver)).unwrap();
+    let vfs = LayerVfs::open(&base.join("store"), Arc::new(AppleDriver::default())).unwrap();
     let empty = vfs.current_head("main").unwrap();
     let mut source = vfs
         .materialize_external(empty.root, &base.join("source"))
