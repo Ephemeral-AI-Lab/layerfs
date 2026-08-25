@@ -1737,6 +1737,7 @@ fn exclusive_leaf_ns(row: &Row) -> EvalResult<u64> {
         timer_ns(projection.dirty_tree_directory_sync.wall)?,
         timer_ns(projection.final_root_directory_sync.wall)?,
         timer_ns(projection.replace.wall)?,
+        timer_ns(projection.cleanup.wall)?,
     ] {
         total = total
             .checked_add(value)

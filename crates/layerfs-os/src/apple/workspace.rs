@@ -110,7 +110,7 @@ struct Temp {
 }
 struct Preflight {
     facts: Recorder,
-    started: Instant,
+    wall_ns: u64,
     observed: bool,
     directory: File,
     staging: File,
@@ -301,13 +301,16 @@ fn record_replace_durability_ambiguity(facts: &Recorder, result: &Result<()>) {
 
 impl NamePreflight for Preflight {
     fn add(&mut self, name: &[u8]) -> Result<()> {
-        match super::ffi::create_regular_at(&self.directory, name) {
+        let started = Instant::now();
+        let result = super::ffi::create_regular_at(&self.directory, name);
+        self.wall_ns = self.wall_ns.saturating_add(elapsed_ns(started));
+        match result {
             Ok(_) => Ok(()),
             Err(error) => {
                 if !self.observed {
-                    let elapsed = elapsed_ns(self.started);
-                    self.facts
-                        .update(|facts| finish_call(&mut facts.name_preflight, elapsed, false));
+                    self.facts.update(|facts| {
+                        finish_call(&mut facts.name_preflight, self.wall_ns, false)
+                    });
                     self.observed = true;
                 }
                 Err(error.into())
@@ -324,9 +327,9 @@ impl NamePreflight for Preflight {
         );
         finish_cleanup(&self.facts, cleanup_start, result.is_ok());
         if !self.observed {
-            let elapsed = elapsed_ns(self.started);
-            self.facts
-                .update(|facts| finish_call(&mut facts.name_preflight, elapsed, result.is_ok()));
+            self.facts.update(|facts| {
+                finish_call(&mut facts.name_preflight, self.wall_ns, result.is_ok())
+            });
             self.observed = true;
         }
         if result.is_ok() {
@@ -339,9 +342,8 @@ impl NamePreflight for Preflight {
 impl Drop for Preflight {
     fn drop(&mut self) {
         if !self.observed {
-            let elapsed = elapsed_ns(self.started);
             self.facts
-                .update(|facts| finish_call(&mut facts.name_preflight, elapsed, false));
+                .update(|facts| finish_call(&mut facts.name_preflight, self.wall_ns, false));
             self.observed = true;
         }
         if self.active {
@@ -678,7 +680,7 @@ impl ProjectionWorkspace for Workspace {
             let identity = super::ffi::file_stable_token(&directory)?;
             Ok::<_, DriverError>(Box::new(Preflight {
                 facts: self.facts.clone(),
-                started,
+                wall_ns: elapsed_ns(started),
                 observed: false,
                 directory,
                 staging: staging.try_clone()?,
