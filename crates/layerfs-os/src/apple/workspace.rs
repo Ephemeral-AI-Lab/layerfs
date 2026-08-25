@@ -1,5 +1,7 @@
 use layerfs_vfs::driver::*;
 use std::any::Any;
+#[cfg(test)]
+use std::cell::Cell;
 use std::fs::{self, File, FileTimes};
 use std::io::{Read, Seek, Write};
 use std::os::unix::ffi::OsStrExt;
@@ -12,6 +14,39 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 static TEMP_SERIAL: AtomicU64 = AtomicU64::new(0);
 const RECOVERY_MARKER: &[u8] = b".layerfs-recovery-v1";
 const RECOVERY_MAGIC: &[u8] = b"layerfs/apple-recovery/v1\0";
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SetupFault {
+    ManagedRootCreated,
+    RootOpened,
+    RootIdentified,
+    StagingCreated,
+    StagingOpened,
+    StagingIdentified,
+    MarkerCreated,
+    MarkerWritten,
+    MarkerSynced,
+    MarkerLocked,
+    StagingSynced,
+    RootParentSynced,
+}
+
+#[cfg(test)]
+thread_local! {
+    static SETUP_FAULT: Cell<Option<SetupFault>> = const { Cell::new(None) };
+}
+
+#[cfg(test)]
+fn setup_fault(point: SetupFault) -> Result<()> {
+    if SETUP_FAULT.get() == Some(point) {
+        Err(DriverError::Io(std::io::Error::other(format!(
+            "test setup fault after {point:?}"
+        ))))
+    } else {
+        Ok(())
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct AppleDriver {
@@ -87,23 +122,26 @@ struct Workspace {
     root_dir: File,
     root_parent: File,
     root_name: Vec<u8>,
+    root_identity: Vec<u8>,
     staging_dir: Option<File>,
     staging_parent: File,
     staging_name: Vec<u8>,
     staging_identity: Vec<u8>,
     _recovery_marker: File,
     managed: bool,
+    owned_root: bool,
+}
+struct SetupDirectory {
+    name: Vec<u8>,
+    file: Option<File>,
+    identity: Option<Vec<u8>>,
+    owned: bool,
 }
 struct SetupCleanup<'a> {
     facts: &'a Recorder,
-    root_dir: &'a File,
-    root_parent: &'a File,
-    root_name: &'a [u8],
-    root_identity: &'a [u8],
-    staging_dir: &'a File,
-    staging_name: &'a [u8],
-    staging_identity: &'a [u8],
-    remove_root: bool,
+    root_parent: Option<File>,
+    root: SetupDirectory,
+    staging: Option<SetupDirectory>,
     active: bool,
 }
 struct Dir {
@@ -136,25 +174,35 @@ impl Drop for SetupCleanup<'_> {
         if !self.active {
             return;
         }
-        let staging_start = Instant::now();
-        let staging = super::ffi::remove_owned_tree(
-            self.staging_dir,
-            self.root_parent,
-            self.staging_name,
-            self.staging_identity,
-        );
-        finish_cleanup(self.facts, staging_start, staging.is_ok());
-        if self.remove_root {
-            let root_start = Instant::now();
-            let root = super::ffi::remove_owned_tree(
-                self.root_dir,
-                self.root_parent,
-                self.root_name,
-                self.root_identity,
-            );
-            finish_cleanup(self.facts, root_start, root.is_ok());
+        let Some(root_parent) = self.root_parent.as_ref() else {
+            return;
+        };
+        if let Some(staging) = self.staging.as_mut().filter(|staging| staging.owned) {
+            cleanup_setup_directory(self.facts, root_parent, staging);
+        }
+        if self.root.owned {
+            cleanup_setup_directory(self.facts, root_parent, &mut self.root);
         }
     }
+}
+
+fn cleanup_setup_directory(facts: &Recorder, parent: &File, entry: &mut SetupDirectory) {
+    let start = Instant::now();
+    let removed = (|| {
+        let expected = entry
+            .identity
+            .as_deref()
+            .ok_or_else(|| std::io::Error::from_raw_os_error(libc::ESTALE))?;
+        if entry.file.is_none() {
+            entry.file = Some(super::ffi::open_directory_at(parent, &entry.name)?);
+        }
+        let directory = entry.file.as_ref().expect("setup directory just opened");
+        if super::ffi::file_stable_token(directory)? != expected {
+            return Err(std::io::Error::from_raw_os_error(libc::ESTALE));
+        }
+        super::ffi::remove_owned_tree(directory, parent, &entry.name, expected)
+    })();
+    finish_cleanup(facts, start, removed.is_ok());
 }
 
 fn elapsed_ns(start: Instant) -> u64 {
@@ -518,34 +566,68 @@ impl ProjectionDriver for AppleDriver {
                     .ok_or(DriverError::Conflict)?
                     .as_bytes()
                     .to_vec();
-                let (root_dir, root_created) = if policy == WorkspacePolicy::ManagedCreateOwned {
-                    match super::ffi::mkdir_at(&root_parent, &root_name) {
-                        Ok(()) => (
-                            super::ffi::open_directory_at(&root_parent, &root_name)?,
-                            true,
-                        ),
+                let mut cleanup = SetupCleanup {
+                    facts: &self.facts,
+                    root_parent: Some(root_parent),
+                    root: SetupDirectory {
+                        name: root_name,
+                        file: None,
+                        identity: None,
+                        owned: false,
+                    },
+                    staging: None,
+                    active: true,
+                };
+                let parent = cleanup
+                    .root_parent
+                    .as_ref()
+                    .expect("root parent is present");
+                let root_dir = if policy == WorkspacePolicy::ManagedCreateOwned {
+                    match super::ffi::mkdir_at(parent, &cleanup.root.name) {
+                        Ok(()) => {
+                            cleanup.root.owned = true;
+                            cleanup.root.identity =
+                                Some(super::ffi::stable_token_at(parent, &cleanup.root.name)?);
+                            #[cfg(test)]
+                            setup_fault(SetupFault::ManagedRootCreated)?;
+                            super::ffi::open_directory_at(parent, &cleanup.root.name)?
+                        }
                         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                             return Err(DriverError::Conflict)
                         }
                         Err(error) => return Err(error.into()),
                     }
                 } else {
-                    match super::ffi::open_directory_at(&root_parent, &root_name) {
-                        Ok(file) => (file, false),
+                    match super::ffi::open_directory_at(parent, &cleanup.root.name) {
+                        Ok(file) => file,
                         Err(error)
                             if error.kind() == std::io::ErrorKind::NotFound
                                 && policy == WorkspacePolicy::ExternalCooperative =>
                         {
-                            super::ffi::mkdir_at(&root_parent, &root_name)?;
-                            (
-                                super::ffi::open_directory_at(&root_parent, &root_name)?,
-                                true,
-                            )
+                            super::ffi::mkdir_at(parent, &cleanup.root.name)?;
+                            super::ffi::open_directory_at(parent, &cleanup.root.name)?
                         }
                         Err(error) => return Err(error.into()),
                     }
                 };
-                Ok::<_, DriverError>((root_parent, root_name, root_dir, root_created))
+                cleanup.root.file = Some(root_dir);
+                #[cfg(test)]
+                setup_fault(SetupFault::RootOpened)?;
+                let root_identity = super::ffi::file_stable_token(
+                    cleanup.root.file.as_ref().expect("root directory is open"),
+                )?;
+                if cleanup
+                    .root
+                    .identity
+                    .as_deref()
+                    .is_some_and(|expected| expected != root_identity)
+                {
+                    return Err(std::io::Error::from_raw_os_error(libc::ESTALE).into());
+                }
+                cleanup.root.identity = Some(root_identity);
+                #[cfg(test)]
+                setup_fault(SetupFault::RootIdentified)?;
+                Ok::<_, DriverError>(cleanup)
             })();
             let root_elapsed = elapsed_ns(root_start);
             self.facts.update(|facts| {
@@ -555,26 +637,74 @@ impl ProjectionDriver for AppleDriver {
                     root_result.is_ok(),
                 )
             });
-            let (root_parent, root_name, root_dir, root_created) = root_result?;
-            let root_identity = super::ffi::file_stable_token(&root_dir)?;
+            let mut setup_cleanup = root_result?;
             let staging_start = Instant::now();
-            let staging_result = (0..64)
-                .find_map(|_| {
+            let staging_result = (|| {
+                for _ in 0..64 {
                     let serial = TEMP_SERIAL.fetch_add(1, Ordering::Relaxed);
                     let name =
                         format!(".layerfs-staging-{}-{serial}", std::process::id()).into_bytes();
-                    match super::ffi::mkdir_at(&root_parent, &name) {
-                        Ok(()) => Some(
-                            super::ffi::open_directory_at(&root_parent, &name)
-                                .map(|directory| (name, directory)),
-                        ),
-                        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => None,
-                        Err(error) => Some(Err(error)),
+                    match super::ffi::mkdir_at(
+                        setup_cleanup
+                            .root_parent
+                            .as_ref()
+                            .expect("root parent is present"),
+                        &name,
+                    ) {
+                        Ok(()) => {
+                            setup_cleanup.staging = Some(SetupDirectory {
+                                name,
+                                file: None,
+                                identity: None,
+                                owned: true,
+                            });
+                            let identity = super::ffi::stable_token_at(
+                                setup_cleanup
+                                    .root_parent
+                                    .as_ref()
+                                    .expect("root parent is present"),
+                                &setup_cleanup
+                                    .staging
+                                    .as_ref()
+                                    .expect("staging ownership was recorded")
+                                    .name,
+                            )?;
+                            setup_cleanup
+                                .staging
+                                .as_mut()
+                                .expect("staging ownership was recorded")
+                                .identity = Some(identity);
+                            #[cfg(test)]
+                            setup_fault(SetupFault::StagingCreated)?;
+                            let staging = setup_cleanup
+                                .staging
+                                .as_mut()
+                                .expect("staging ownership was recorded");
+                            staging.file = Some(super::ffi::open_directory_at(
+                                setup_cleanup
+                                    .root_parent
+                                    .as_ref()
+                                    .expect("root parent is present"),
+                                &staging.name,
+                            )?);
+                            #[cfg(test)]
+                            setup_fault(SetupFault::StagingOpened)?;
+                            let actual = super::ffi::file_stable_token(
+                                staging.file.as_ref().expect("staging directory is open"),
+                            )?;
+                            if staging.identity.as_deref() != Some(actual.as_slice()) {
+                                return Err(std::io::Error::from_raw_os_error(libc::ESTALE).into());
+                            }
+                            #[cfg(test)]
+                            setup_fault(SetupFault::StagingIdentified)?;
+                            return Ok::<_, DriverError>(());
+                        }
+                        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                        Err(error) => return Err(error.into()),
                     }
-                })
-                .transpose()
-                .map_err(DriverError::from)
-                .and_then(|value| value.ok_or(DriverError::Conflict));
+                }
+                Err(DriverError::Conflict)
+            })();
             let staging_elapsed = elapsed_ns(staging_start);
             self.facts.update(|facts| {
                 finish_call(
@@ -583,23 +713,15 @@ impl ProjectionDriver for AppleDriver {
                     staging_result.is_ok(),
                 )
             });
-            let (staging_name, staging_dir) = staging_result?;
-            let staging_identity = super::ffi::file_stable_token(&staging_dir)?;
-            let mut setup_cleanup = SetupCleanup {
-                facts: &self.facts,
-                root_dir: &root_dir,
-                root_parent: &root_parent,
-                root_name: &root_name,
-                root_identity: &root_identity,
-                staging_dir: &staging_dir,
-                staging_name: &staging_name,
-                staging_identity: &staging_identity,
-                remove_root: root_created && policy == WorkspacePolicy::ManagedCreateOwned,
-                active: true,
-            };
+            staging_result?;
+            let staging_dir = setup_cleanup
+                .staging
+                .as_ref()
+                .and_then(|staging| staging.file.as_ref())
+                .expect("successful staging setup has an open directory");
             staging_dir.set_permissions(fs::Permissions::from_mode(0o700))?;
             let marker_start = Instant::now();
-            let marker_result = super::ffi::create_regular_at(&staging_dir, RECOVERY_MARKER);
+            let marker_result = super::ffi::create_regular_at(staging_dir, RECOVERY_MARKER);
             let marker_elapsed = elapsed_ns(marker_start);
             self.facts.update(|facts| {
                 finish_call(
@@ -609,6 +731,8 @@ impl ProjectionDriver for AppleDriver {
                 )
             });
             let mut recovery_marker = marker_result?;
+            #[cfg(test)]
+            setup_fault(SetupFault::MarkerCreated)?;
             recovery_marker.set_permissions(fs::Permissions::from_mode(0o600))?;
             MarkerWriter {
                 file: &mut recovery_marker,
@@ -617,16 +741,69 @@ impl ProjectionDriver for AppleDriver {
             .write_all(&encode_recovery_record(
                 store_id,
                 policy == WorkspacePolicy::ManagedCreateOwned,
-                &root_name,
-                &root_identity,
+                &setup_cleanup.root.name,
+                setup_cleanup
+                    .root
+                    .identity
+                    .as_ref()
+                    .expect("successful root setup has an identity"),
             ))?;
+            #[cfg(test)]
+            setup_fault(SetupFault::MarkerWritten)?;
             sync_file(&recovery_marker, &self.facts, FileSyncOwner::RecoveryMarker)?;
+            #[cfg(test)]
+            setup_fault(SetupFault::MarkerSynced)?;
             if !super::ffi::try_lock_exclusive(&recovery_marker)? {
                 return Err(DriverError::Conflict);
             }
-            sync_directory_file(&staging_dir, &self.facts, DirectorySyncOwner::Staging)?;
-            sync_directory_file(&root_parent, &self.facts, DirectorySyncOwner::RootParent)?;
-            let workspace_root_parent = root_parent.try_clone()?;
+            #[cfg(test)]
+            setup_fault(SetupFault::MarkerLocked)?;
+            sync_directory_file(staging_dir, &self.facts, DirectorySyncOwner::Staging)?;
+            #[cfg(test)]
+            setup_fault(SetupFault::StagingSynced)?;
+            sync_directory_file(
+                setup_cleanup
+                    .root_parent
+                    .as_ref()
+                    .expect("root parent is present"),
+                &self.facts,
+                DirectorySyncOwner::RootParent,
+            )?;
+            #[cfg(test)]
+            setup_fault(SetupFault::RootParentSynced)?;
+            let workspace_root_parent = setup_cleanup
+                .root_parent
+                .as_ref()
+                .expect("root parent is present")
+                .try_clone()?;
+            let root_dir = setup_cleanup
+                .root
+                .file
+                .take()
+                .expect("successful root setup has an open directory");
+            let root_name = std::mem::take(&mut setup_cleanup.root.name);
+            let root_identity = setup_cleanup
+                .root
+                .identity
+                .take()
+                .expect("successful root setup has an identity");
+            let mut staging = setup_cleanup
+                .staging
+                .take()
+                .expect("successful setup has staging ownership");
+            let staging_dir = staging
+                .file
+                .take()
+                .expect("successful staging setup has an open directory");
+            let staging_name = staging.name;
+            let staging_identity = staging
+                .identity
+                .take()
+                .expect("successful staging setup has an identity");
+            let root_parent = setup_cleanup
+                .root_parent
+                .take()
+                .expect("root parent is present");
             setup_cleanup.active = false;
             drop(setup_cleanup);
             Ok::<_, DriverError>(Box::new(Workspace {
@@ -634,12 +811,14 @@ impl ProjectionDriver for AppleDriver {
                 root_dir,
                 root_parent: workspace_root_parent,
                 root_name,
+                root_identity,
                 staging_dir: Some(staging_dir),
                 staging_parent: root_parent,
                 staging_name,
                 staging_identity,
                 _recovery_marker: recovery_marker,
                 managed: policy != WorkspacePolicy::ExternalCooperative,
+                owned_root: policy == WorkspacePolicy::ManagedCreateOwned,
             }) as Box<dyn ProjectionWorkspace>)
         })();
         let setup_elapsed = elapsed_ns(setup_start);
@@ -1415,6 +1594,12 @@ impl ProjectionWorkspace for Workspace {
             || super::metadata::finish(&self.root_dir, metadata),
         )
     }
+    fn discard_owned_root(self: Box<Self>) -> Result<()> {
+        if !self.owned_root {
+            return Err(DriverError::Conflict);
+        }
+        self.remove_owned_root(&self.root_identity)
+    }
     fn remove_owned_root(&self, expected_identity: &[u8]) -> Result<()> {
         if super::ffi::file_stable_token(&self.root_dir)? != expected_identity {
             return Err(DriverError::Conflict);
@@ -1834,12 +2019,26 @@ pub(super) fn modified_time(metadata: &NativeMetadata) -> Result<SystemTime> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::apple::ffi;
     use layerfs_vfs::workspace::LayerVfs;
     use layerfs_vfs::RootId;
     use std::os::unix::fs::symlink;
     use std::process::Command;
     use std::sync::Arc;
+
+    struct SetupFaultGuard;
+
+    impl SetupFaultGuard {
+        fn at(fault: SetupFault) -> Self {
+            SETUP_FAULT.set(Some(fault));
+            Self
+        }
+    }
+
+    impl Drop for SetupFaultGuard {
+        fn drop(&mut self) {
+            SETUP_FAULT.set(None);
+        }
+    }
 
     fn test_parent() -> std::path::PathBuf {
         fs::canonicalize(std::env::temp_dir()).unwrap()
@@ -1943,7 +2142,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_setup_guard_removes_staging_and_managed_root_at_every_setup_cut() {
+    fn failed_open_workspace_removes_staging_and_managed_root_at_every_setup_cut() {
         let base = test_parent().join(format!(
             "layerfs-setup-cleanup-{}-{}",
             std::process::id(),
@@ -1953,61 +2152,185 @@ mod tests {
                 .as_nanos()
         ));
         fs::create_dir(&base).unwrap();
-        for cut in 0..7 {
+        for (cut, fault) in [
+            SetupFault::ManagedRootCreated,
+            SetupFault::RootOpened,
+            SetupFault::RootIdentified,
+            SetupFault::StagingCreated,
+            SetupFault::StagingOpened,
+            SetupFault::StagingIdentified,
+            SetupFault::MarkerCreated,
+            SetupFault::MarkerWritten,
+            SetupFault::MarkerSynced,
+            SetupFault::MarkerLocked,
+            SetupFault::StagingSynced,
+            SetupFault::RootParentSynced,
+        ]
+        .into_iter()
+        .enumerate()
+        {
             let case = base.join(cut.to_string());
             fs::create_dir(&case).unwrap();
-            let parent = ffi::open_directory_path_nofollow(&case).unwrap();
-            let root_name = b"managed".to_vec();
-            let staging_name = b".layerfs-staging-test".to_vec();
-            ffi::mkdir_at(&parent, &root_name).unwrap();
-            ffi::mkdir_at(&parent, &staging_name).unwrap();
-            let root = ffi::open_directory_at(&parent, &root_name).unwrap();
-            let staging = ffi::open_directory_at(&parent, &staging_name).unwrap();
-            let root_identity = ffi::file_stable_token(&root).unwrap();
-            let staging_identity = ffi::file_stable_token(&staging).unwrap();
-            let facts = Recorder::default();
-            let guard = SetupCleanup {
-                facts: &facts,
-                root_dir: &root,
-                root_parent: &parent,
-                root_name: &root_name,
-                root_identity: &root_identity,
-                staging_dir: &staging,
-                staging_name: &staging_name,
-                staging_identity: &staging_identity,
-                remove_root: true,
-                active: true,
+            let driver = AppleDriver::default();
+            let result = {
+                let _fault = SetupFaultGuard::at(fault);
+                driver.open_workspace(
+                    &case.join("managed"),
+                    WorkspacePolicy::ManagedCreateOwned,
+                    [0x63; 32],
+                )
             };
-            let mut marker = None;
-            if cut >= 1 {
-                marker = Some(ffi::create_regular_at(&staging, RECOVERY_MARKER).unwrap());
+            if let Ok(workspace) = result {
+                drop(workspace);
+                fs::remove_dir_all(case.join("managed")).unwrap();
+                panic!("setup fault {fault:?} did not fire");
             }
-            if cut >= 2 {
-                marker
-                    .as_mut()
-                    .unwrap()
-                    .write_all(b"partial marker")
-                    .unwrap();
-            }
-            if cut >= 3 {
-                marker.as_ref().unwrap().sync_all().unwrap();
-            }
-            if cut >= 4 {
-                assert!(ffi::try_lock_exclusive(marker.as_ref().unwrap()).unwrap());
-            }
-            if cut >= 5 {
-                staging.sync_all().unwrap();
-            }
-            if cut >= 6 {
-                parent.sync_all().unwrap();
-            }
-            drop(guard);
-            assert_eq!(facts.snapshot().cleanup.successes, 2);
+            let facts = driver.projection_facts();
+            assert_eq!(facts.workspace_setup.failures, 1, "fault {fault:?}");
+            let cleanup_count = u64::from(matches!(
+                fault,
+                SetupFault::ManagedRootCreated
+                    | SetupFault::RootOpened
+                    | SetupFault::RootIdentified
+            )) + 2 * u64::from(matches!(
+                fault,
+                SetupFault::StagingCreated
+                    | SetupFault::StagingOpened
+                    | SetupFault::StagingIdentified
+                    | SetupFault::MarkerCreated
+                    | SetupFault::MarkerWritten
+                    | SetupFault::MarkerSynced
+                    | SetupFault::MarkerLocked
+                    | SetupFault::StagingSynced
+                    | SetupFault::RootParentSynced
+            ));
+            assert_eq!(facts.cleanup.attempts, cleanup_count, "fault {fault:?}");
+            assert_eq!(facts.cleanup.successes, cleanup_count, "fault {fault:?}");
+            assert_eq!(facts.cleanup.failures, 0, "fault {fault:?}");
+            assert_eq!(facts.cleanup.residue, 0, "fault {fault:?}");
             assert!(!case.join("managed").exists());
-            assert!(!case.join(".layerfs-staging-test").exists());
+            assert!(
+                !fs::read_dir(&case).unwrap().any(|entry| entry
+                    .unwrap()
+                    .file_name()
+                    .as_bytes()
+                    .starts_with(b".layerfs-staging-")),
+                "fault {fault:?} left staging residue"
+            );
             fs::remove_dir(case).unwrap();
         }
         fs::remove_dir(base).unwrap();
+    }
+
+    #[test]
+    fn failed_open_workspace_preserves_external_root_at_every_applicable_setup_cut() {
+        let base = test_parent().join(format!(
+            "layerfs-external-setup-cleanup-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&base).unwrap();
+        for (cut, fault) in [
+            SetupFault::RootOpened,
+            SetupFault::RootIdentified,
+            SetupFault::StagingCreated,
+            SetupFault::StagingOpened,
+            SetupFault::StagingIdentified,
+            SetupFault::MarkerCreated,
+            SetupFault::MarkerWritten,
+            SetupFault::MarkerSynced,
+            SetupFault::MarkerLocked,
+            SetupFault::StagingSynced,
+            SetupFault::RootParentSynced,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let case = base.join(cut.to_string());
+            let external = case.join("external");
+            fs::create_dir_all(&external).unwrap();
+            fs::write(external.join("sentinel"), b"cooperative").unwrap();
+            let driver = AppleDriver::default();
+            let result = {
+                let _fault = SetupFaultGuard::at(fault);
+                driver.open_workspace(&external, WorkspacePolicy::ExternalCooperative, [0x64; 32])
+            };
+            if let Ok(workspace) = result {
+                drop(workspace);
+                panic!("setup fault {fault:?} did not fire");
+            }
+            let facts = driver.projection_facts();
+            let cleanup_count = u64::from(!matches!(
+                fault,
+                SetupFault::RootOpened | SetupFault::RootIdentified
+            ));
+            assert_eq!(facts.cleanup.attempts, cleanup_count, "fault {fault:?}");
+            assert_eq!(facts.cleanup.successes, cleanup_count, "fault {fault:?}");
+            assert_eq!(facts.cleanup.failures, 0, "fault {fault:?}");
+            assert_eq!(facts.cleanup.residue, 0, "fault {fault:?}");
+            assert_eq!(fs::read(external.join("sentinel")).unwrap(), b"cooperative");
+            assert!(
+                !fs::read_dir(&case).unwrap().any(|entry| entry
+                    .unwrap()
+                    .file_name()
+                    .as_bytes()
+                    .starts_with(b".layerfs-staging-")),
+                "fault {fault:?} left staging residue"
+            );
+            fs::remove_dir_all(case).unwrap();
+        }
+        fs::remove_dir(base).unwrap();
+    }
+
+    #[test]
+    fn discard_owned_root_uses_retained_identity_and_preserves_external_roots() {
+        let base = test_parent().join(format!(
+            "layerfs-discard-owned-root-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&base).unwrap();
+
+        let driver = AppleDriver::default();
+        let owned_path = base.join("owned");
+        let owned = driver
+            .open_workspace(&owned_path, WorkspacePolicy::ManagedCreateOwned, [0x65; 32])
+            .unwrap();
+        owned.discard_owned_root().unwrap();
+        assert!(!owned_path.exists());
+        assert_eq!(driver.projection_facts().cleanup.successes, 2);
+
+        let external_path = base.join("external");
+        fs::create_dir(&external_path).unwrap();
+        fs::write(external_path.join("sentinel"), b"cooperative").unwrap();
+        let external = AppleDriver::default()
+            .open_workspace(
+                &external_path,
+                WorkspacePolicy::ExternalCooperative,
+                [0x66; 32],
+            )
+            .unwrap();
+        assert!(matches!(
+            external.discard_owned_root(),
+            Err(DriverError::Conflict)
+        ));
+        assert_eq!(
+            fs::read(external_path.join("sentinel")).unwrap(),
+            b"cooperative"
+        );
+        assert!(!fs::read_dir(&base).unwrap().any(|entry| entry
+            .unwrap()
+            .file_name()
+            .as_bytes()
+            .starts_with(b".layerfs-staging-")));
+
+        fs::remove_dir_all(base).unwrap();
     }
 
     #[test]
