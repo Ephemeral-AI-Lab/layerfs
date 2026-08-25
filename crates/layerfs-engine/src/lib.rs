@@ -408,6 +408,8 @@ const SQL_FAMILY_NONE: u8 = 0;
 const SQL_FAMILY_PUBLICATION: u8 = 1;
 const SQL_FAMILY_LIVE_INTEGRITY: u8 = 2;
 const SQL_FAMILY_PRIMARY_READ: u8 = 3;
+const SQL_FAMILY_RECONCILIATION: u8 = 4;
+const SQL_FAMILY_COMPACTION: u8 = 5;
 
 fn observe_time(target: &AtomicU64, started: Instant) {
     observe_value(target, elapsed_ns(started));
@@ -675,25 +677,39 @@ impl Engine {
     fn compact_to_created(&self, destination: &Path) -> EngineResult<CompactionStorageObservation> {
         let old_generation_bytes = fs::metadata(&self.path).map_err(io_engine_error)?.len();
         let source = self.lock_connection()?;
+        self.sql_family_scope
+            .store(SQL_FAMILY_COMPACTION, Ordering::Release);
+        self.mark_compaction_sql(1)?;
         reject_legacy_compaction_state(&source)?;
+        self.mark_compaction_sql(1)?;
         authenticate_complete_object_index(&source)?;
         let retained = integrity::retained_union(&source, &self.path, self.store_id)?;
+        self.mark_compaction_sql(retained.observation.statements)?;
         let mark_database_bytes = retained.work.storage_bytes()?;
         let candidate = Connection::open(destination).map_err(map_sqlite_error)?;
         candidate
             .busy_timeout(BUSY_TIMEOUT)
             .map_err(map_sqlite_error)?;
-        let profile = configure_profile(&candidate)?;
-        initialize_schema(&candidate, &profile)?;
+        let mut statements = 0;
+        let profile = configure_profile_counted(&candidate, &mut statements);
+        self.mark_compaction_sql(statements)?;
+        let profile = profile?;
+        statements = 0;
+        let initialized = initialize_schema_counted(&candidate, &profile, &mut statements);
+        self.mark_compaction_sql(statements)?;
+        initialized?;
         let source_path = self
             .path
             .to_str()
             .ok_or(EngineError::InvalidRecord("non-UTF-8 Store path"))?;
+        self.mark_compaction_sql(1)?;
         candidate
             .execute("ATTACH DATABASE ?1 AS source", params![source_path])
             .map_err(map_sqlite_error)?;
+        self.mark_compaction_sql(1)?;
         candidate.execute_batch("BEGIN").map_err(map_sqlite_error)?;
         let copied = (|| {
+            self.mark_compaction_sql(7)?;
             candidate
                 .execute_batch(
                     "DELETE FROM layerfs_store_meta;
@@ -720,6 +736,7 @@ impl Engine {
                     return Err(EngineError::InvalidRecord("closure key"));
                 }
                 let id = &key[..32];
+                self.mark_compaction_sql(1)?;
                 let row = select
                     .query_row(params![id], |row| {
                         Ok((
@@ -729,6 +746,7 @@ impl Engine {
                         ))
                     })
                     .map_err(map_sqlite_error)?;
+                self.mark_compaction_sql(1)?;
                 insert
                     .execute(params![id, row.0, row.1, row.2])
                     .map_err(map_sqlite_error)?;
@@ -736,16 +754,23 @@ impl Engine {
             })
         })();
         if let Err(error) = copied {
+            self.bump_best_effort(|counters| {
+                checked_add(&mut counters.statements, 1)?;
+                checked_add(&mut counters.compaction_statements, 1)
+            });
             let _ = candidate.execute_batch("ROLLBACK");
             return Err(error);
         }
         let candidate_journal_temp_peak_bytes = candidate_auxiliary_bytes(destination);
+        self.mark_compaction_sql(1)?;
         candidate
             .execute_batch("COMMIT")
             .map_err(map_sqlite_error)?;
-        let verification_scratch_peak_bytes =
-            integrity::verify_retained_union_observed(&candidate, destination, self.store_id)?
-                .peak_bytes;
+        let verification =
+            integrity::verify_retained_union_observed(&candidate, destination, self.store_id)?;
+        self.mark_compaction_sql(verification.verification.statements)?;
+        let verification_scratch_peak_bytes = verification.peak_bytes;
+        self.mark_compaction_sql(1)?;
         candidate
             .execute_batch("DETACH DATABASE source")
             .map_err(map_sqlite_error)?;
@@ -843,6 +868,7 @@ impl Engine {
     fn logical_engine_bytes(&self) -> Option<u64> {
         let connection = self.connection.lock().ok()?;
         let connection = connection.as_ref()?;
+        self.mark_family_sql(SQL_FAMILY_PRIMARY_READ, 1).ok()?;
         let objects = connection
             .query_row(
                 "SELECT COALESCE(SUM(canonical_length), 0) FROM layerfs_objects",
@@ -851,6 +877,7 @@ impl Engine {
             )
             .ok()
             .and_then(|value| u64::try_from(value).ok())?;
+        self.mark_family_sql(SQL_FAMILY_PRIMARY_READ, 1).ok()?;
         let roots = connection
             .query_row(
                 "SELECT COALESCE(SUM(64 + CASE WHEN parent_root IS NULL THEN 0 ELSE 32 END), 0)
@@ -860,6 +887,7 @@ impl Engine {
             )
             .ok()
             .and_then(|value| u64::try_from(value).ok())?;
+        self.mark_family_sql(SQL_FAMILY_PRIMARY_READ, 1).ok()?;
         let deltas = connection
             .query_row(
                 "SELECT COALESCE(SUM(64 + length(payload) + CASE WHEN parent_root IS NULL THEN 0 ELSE 32 END), 0)
@@ -952,6 +980,11 @@ impl Engine {
         }
         let authenticate_reads = self.mode == integrity::IntegrityMode::Verified;
         let mut timings = BatchTimings::default();
+        let mut objects_validated = 0_u64;
+        let mut object_bytes_read = 0_u64;
+        let mut fetched_rows = 0_u64;
+        let mut authentication_passes = 0_u64;
+        let mut role_decode_passes = 0_u64;
         let result = (|| {
             let counter_started = Instant::now();
             self.bump(|counters| {
@@ -1010,25 +1043,52 @@ impl Engine {
                     ValueRef::Blob(bytes) => bytes,
                     _ => return Err(EngineError::InvalidRecord("object bytes")),
                 };
-                let (payload, actual_length, authentication_ns, role_decode_ns) =
-                    validate_payload_borrowed(id, kind, length, bytes, authenticate_reads)?;
-                timings.identity_authentication_ns = timings
-                    .identity_authentication_ns
-                    .saturating_add(authentication_ns);
-                timings.role_decode_ns = timings.role_decode_ns.saturating_add(role_decode_ns);
-                let counter_started = Instant::now();
-                self.bump(|counters| {
-                    checked_add(&mut counters.objects_validated, 1)?;
-                    checked_add(&mut counters.object_bytes_read, actual_length)?;
-                    checked_add(&mut counters.fetched_rows, 1)?;
-                    if authenticate_reads {
-                        checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
+                checked_add(&mut fetched_rows, 1)?;
+                let summary = if authenticate_reads {
+                    let authentication_started = Instant::now();
+                    let result = authenticate_identity(bytes, id)
+                        .map_err(|cause| EngineError::MalformedObject { id, cause });
+                    timings.identity_authentication_ns = timings
+                        .identity_authentication_ns
+                        .saturating_add(elapsed_ns(authentication_started));
+                    let summary = result?;
+                    checked_add(&mut authentication_passes, 1)?;
+                    Some(summary)
+                } else {
+                    None
+                };
+                let role_started = Instant::now();
+                let role = (|| {
+                    let expected_kind = ObjectKind::try_from(
+                        u8::try_from(kind)
+                            .map_err(|_| EngineError::InvalidRecord("object kind"))?,
+                    )?;
+                    let expected_length = u64::try_from(length)
+                        .map_err(|_| EngineError::InvalidRecord("object length"))?;
+                    let actual_length =
+                        u64::try_from(bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
+                    if summary.is_some_and(|summary| summary.kind != expected_kind)
+                        || expected_kind != ObjectKind::Bytes
+                        || actual_length != expected_length
+                    {
+                        return Err(EngineError::MalformedObject {
+                            id,
+                            cause: CoreError::LengthMismatch {
+                                expected: expected_length,
+                                actual: actual_length,
+                            },
+                        });
                     }
-                    checked_add(&mut counters.fetched_row_role_decode_passes, 1)
-                })?;
-                timings.counter_merge_ns = timings
-                    .counter_merge_ns
-                    .saturating_add(elapsed_ns(counter_started));
+                    let payload = decode_bytes_object(bytes).map_err(EngineError::Core)?;
+                    Ok((payload, actual_length))
+                })();
+                timings.role_decode_ns = timings
+                    .role_decode_ns
+                    .saturating_add(elapsed_ns(role_started));
+                let (payload, actual_length) = role?;
+                checked_add(&mut objects_validated, 1)?;
+                checked_add(&mut object_bytes_read, actual_length)?;
+                checked_add(&mut role_decode_passes, 1)?;
                 let callback_started = Instant::now();
                 let callback_result = callback(id, payload);
                 timings.payload_callback_inclusive_ns = timings
@@ -1042,7 +1102,25 @@ impl Engine {
             }
             Ok(())
         })();
+        let counter_started = Instant::now();
+        let merged = self.bump(|counters| {
+            checked_add(&mut counters.objects_validated, objects_validated)?;
+            checked_add(&mut counters.object_bytes_read, object_bytes_read)?;
+            checked_add(&mut counters.fetched_rows, fetched_rows)?;
+            checked_add(
+                &mut counters.fetched_row_authentication_passes,
+                authentication_passes,
+            )?;
+            checked_add(
+                &mut counters.fetched_row_role_decode_passes,
+                role_decode_passes,
+            )
+        });
+        timings.counter_merge_ns = timings
+            .counter_merge_ns
+            .saturating_add(elapsed_ns(counter_started));
         timings.record(&self.timings);
+        merged?;
         result
     }
 
@@ -1299,6 +1377,17 @@ impl Engine {
         })
     }
 
+    fn mark_family_sql(&self, family: u8, statements: u64) -> EngineResult<()> {
+        self.bump(|counters| {
+            checked_add(&mut counters.statements, statements)?;
+            mark_sql_family(counters, family, statements)
+        })
+    }
+
+    fn mark_compaction_sql(&self, statements: u64) -> EngineResult<()> {
+        self.mark_family_sql(SQL_FAMILY_COMPACTION, statements)
+    }
+
     #[cfg(test)]
     fn sample_rollback_journal(&self) {
         let mut sample = match self.rollback_journal_sample.lock() {
@@ -1353,6 +1442,10 @@ fn mark_sql_family(counters: &mut EngineCounters, family: u8, statements: u64) -
             checked_add(&mut counters.live_verified_integrity_statements, statements)
         }
         SQL_FAMILY_PRIMARY_READ => checked_add(&mut counters.primary_read_statements, statements),
+        SQL_FAMILY_RECONCILIATION => {
+            checked_add(&mut counters.reconciliation_statements, statements)
+        }
+        SQL_FAMILY_COMPACTION => checked_add(&mut counters.compaction_statements, statements),
         _ => Err(EngineError::InvalidRecord("SQL statement family")),
     }
 }
@@ -1435,44 +1528,75 @@ fn open_store_readonly(path: &Path) -> EngineResult<(Connection, [u8; 32])> {
 }
 
 pub(crate) fn read_ref_reconcile_readonly(
-    path: &Path,
+    engine: &Engine,
     name: &str,
     expected_store_id: [u8; 32],
 ) -> EngineResult<Option<refs::RefState>> {
-    let (connection, store_id) = open_store_readonly(path)?;
-    if store_id != expected_store_id {
-        return Err(EngineError::InvalidRecord("reconciliation StoreId"));
-    }
-    refs::read_ref_on_connection(&connection, name)
+    let mut statements = 0;
+    let result = (|| {
+        let connection =
+            Connection::open_with_flags(&engine.path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(map_sqlite_error)?;
+        connection
+            .busy_timeout(BUSY_TIMEOUT)
+            .map_err(map_sqlite_error)?;
+        preflight_schema_counted(&connection, &mut statements)?;
+        note_statement(&mut statements)?;
+        let bytes = connection
+            .query_row(
+                "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
+                [],
+                |row| row.get::<_, Vec<u8>>(0),
+            )
+            .map_err(map_sqlite_error)?;
+        let store_id: [u8; 32] = bytes
+            .try_into()
+            .map_err(|_| EngineError::InvalidRecord("StoreId"))?;
+        if store_id != expected_store_id {
+            return Err(EngineError::InvalidRecord("reconciliation StoreId"));
+        }
+        note_statement(&mut statements)?;
+        refs::read_ref_on_connection(&connection, name)
+    })();
+    engine.mark_family_sql(SQL_FAMILY_RECONCILIATION, statements)?;
+    result
 }
 
 fn reopen_store_primary(
-    path: &Path,
+    engine: &Engine,
     expected_store_id: [u8; 32],
     ref_name: &str,
     expected_ref: &Option<refs::RefState>,
 ) -> EngineResult<Connection> {
-    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
-        .map_err(map_sqlite_error)?;
-    connection
-        .busy_timeout(BUSY_TIMEOUT)
-        .map_err(map_sqlite_error)?;
-    preflight_schema(&connection)?;
-    let store_id = connection
-        .query_row(
-            "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
-            [],
-            |row| row.get::<_, Vec<u8>>(0),
-        )
-        .map_err(map_sqlite_error)?;
-    if store_id.as_slice() != expected_store_id {
-        return Err(EngineError::InvalidRecord("reopened StoreId"));
-    }
-    if &refs::read_ref_on_connection(&connection, ref_name)? != expected_ref {
-        return Err(EngineError::AmbiguousDurability);
-    }
-    configure_profile(&connection)?;
-    Ok(connection)
+    let mut statements = 0;
+    let result = (|| {
+        let connection =
+            Connection::open_with_flags(&engine.path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+                .map_err(map_sqlite_error)?;
+        connection
+            .busy_timeout(BUSY_TIMEOUT)
+            .map_err(map_sqlite_error)?;
+        preflight_schema_counted(&connection, &mut statements)?;
+        note_statement(&mut statements)?;
+        let store_id = connection
+            .query_row(
+                "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
+                [],
+                |row| row.get::<_, Vec<u8>>(0),
+            )
+            .map_err(map_sqlite_error)?;
+        if store_id.as_slice() != expected_store_id {
+            return Err(EngineError::InvalidRecord("reopened StoreId"));
+        }
+        note_statement(&mut statements)?;
+        if &refs::read_ref_on_connection(&connection, ref_name)? != expected_ref {
+            return Err(EngineError::AmbiguousDurability);
+        }
+        let profile = configure_profile_counted(&connection, &mut statements)?;
+        Ok((connection, profile))
+    })();
+    engine.mark_family_sql(SQL_FAMILY_RECONCILIATION, statements)?;
+    result.map(|(connection, _)| connection)
 }
 
 fn io_engine_error(error: std::io::Error) -> EngineError {
@@ -1969,11 +2093,6 @@ fn schema_shape(sql: &str) -> String {
         .replace("ifnotexists", "")
 }
 
-fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
-    let mut ignored = 0;
-    configure_profile_counted(connection, &mut ignored)
-}
-
 fn configure_profile_counted(
     connection: &Connection,
     statements: &mut u64,
@@ -2036,11 +2155,6 @@ fn configure_profile_counted(
         return Err(EngineError::ProfileMismatch);
     }
     Ok(profile)
-}
-
-fn initialize_schema(connection: &Connection, profile: &SqliteProfile) -> EngineResult<()> {
-    let mut ignored = 0;
-    initialize_schema_counted(connection, profile, &mut ignored)
 }
 
 fn initialize_schema_counted(
@@ -2213,37 +2327,49 @@ fn with_canonical_on_connection<T>(
         _ => return Err(EngineError::InvalidRecord("object bytes")),
     };
     observe_time(&engine.timings.nonpayload_query_ns, query_started);
-    let kind = if authenticate {
-        authenticate_borrowed(engine, id, kind, length, bytes)?
-    } else {
-        validate_borrowed(engine, id, kind, length, bytes)?
-    };
-    if !role_decode {
-        let role_started = Instant::now();
-        let summary = validate_object_from(Cursor::new(bytes))?;
-        observe_time(&engine.timings.role_decode_ns, role_started);
-        if summary.kind != kind || summary.canonical_len != bytes.len() as u64 {
-            return Err(EngineError::InvalidRecord("object summary"));
+    let mut authentication_passed = false;
+    let mut role_decode_passed = false;
+    let result = (|| {
+        let kind = if authenticate {
+            let kind = authenticate_borrowed(engine, id, kind, length, bytes)?;
+            authentication_passed = true;
+            kind
+        } else {
+            validate_borrowed(engine, id, kind, length, bytes)?
+        };
+        if !role_decode {
+            let role_started = Instant::now();
+            let decoded = validate_object_from(Cursor::new(bytes));
+            observe_time(&engine.timings.role_decode_ns, role_started);
+            let summary = decoded?;
+            if summary.kind != kind || summary.canonical_len != bytes.len() as u64 {
+                return Err(EngineError::InvalidRecord("object summary"));
+            }
         }
-    }
-    let role_started = Instant::now();
-    let value = callback(kind, bytes);
-    if role_decode {
-        observe_time(&engine.timings.role_decode_ns, role_started);
-    }
-    let value = value?;
+        let role_started = Instant::now();
+        let value = callback(kind, bytes);
+        if role_decode {
+            observe_time(&engine.timings.role_decode_ns, role_started);
+        }
+        let value = value?;
+        role_decode_passed = role_decode;
+        Ok(value)
+    })();
     if fetched_row {
         let counter_started = Instant::now();
         engine.bump(|counters| {
             checked_add(&mut counters.fetched_rows, 1)?;
-            if authenticate {
+            if authentication_passed {
                 checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
             }
-            checked_add(&mut counters.fetched_row_role_decode_passes, 1)
+            if role_decode_passed {
+                checked_add(&mut counters.fetched_row_role_decode_passes, 1)?;
+            }
+            Ok(())
         })?;
         observe_time(&engine.timings.counter_merge_ns, counter_started);
     }
-    Ok(value)
+    result
 }
 
 fn validate_borrowed(
@@ -2286,11 +2412,12 @@ fn authenticate_borrowed(
     bytes: &[u8],
 ) -> EngineResult<ObjectKind> {
     let authentication_started = Instant::now();
-    let (summary, actual_length) = authenticate_borrowed_unaccounted(id, kind, length, bytes)?;
+    let authenticated = authenticate_borrowed_unaccounted(id, kind, length, bytes);
     observe_time(
         &engine.timings.identity_authentication_ns,
         authentication_started,
     );
+    let (summary, actual_length) = authenticated?;
     let counter_started = Instant::now();
     engine.bump(|counters| {
         checked_add(&mut counters.objects_validated, 1)?;
@@ -2299,45 +2426,6 @@ fn authenticate_borrowed(
     })?;
     observe_time(&engine.timings.counter_merge_ns, counter_started);
     Ok(summary.kind)
-}
-
-fn validate_payload_borrowed(
-    id: ObjectId,
-    kind: i64,
-    length: i64,
-    bytes: &[u8],
-    authenticate: bool,
-) -> EngineResult<(&[u8], u64, u64, u64)> {
-    let (summary, authentication_ns) = if authenticate {
-        let authentication_started = Instant::now();
-        let summary = authenticate_identity(bytes, id)
-            .map_err(|cause| EngineError::MalformedObject { id, cause })?;
-        (Some(summary), elapsed_ns(authentication_started))
-    } else {
-        (None, 0)
-    };
-    let role_started = Instant::now();
-    let expected_kind = ObjectKind::try_from(
-        u8::try_from(kind).map_err(|_| EngineError::InvalidRecord("object kind"))?,
-    )?;
-    let expected_length =
-        u64::try_from(length).map_err(|_| EngineError::InvalidRecord("object length"))?;
-    let actual_length = u64::try_from(bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
-    if summary.is_some_and(|summary| summary.kind != expected_kind)
-        || expected_kind != ObjectKind::Bytes
-        || actual_length != expected_length
-    {
-        return Err(EngineError::MalformedObject {
-            id,
-            cause: CoreError::LengthMismatch {
-                expected: expected_length,
-                actual: actual_length,
-            },
-        });
-    }
-    let payload = decode_bytes_object(bytes).map_err(EngineError::Core)?;
-    let role_decode_ns = elapsed_ns(role_started);
-    Ok((payload, actual_length, authentication_ns, role_decode_ns))
 }
 
 fn payload_batch_sql(count: usize) -> EngineResult<String> {
@@ -2830,6 +2918,131 @@ mod tests {
     }
 
     #[test]
+    fn storage_observation_counts_its_three_queries_as_primary_reads() {
+        let path = test_path();
+        let engine = Engine::open(&path).unwrap();
+        engine.reset_counters().unwrap();
+
+        assert!(engine.observations().logical_engine_bytes.is_some());
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.statements, 3);
+        assert_eq!(counters.primary_read_statements, 3);
+        assert_eq!(counters.publication_statements, 0);
+        assert_eq!(counters.live_verified_integrity_statements, 0);
+        assert_eq!(counters.reconciliation_statements, 0);
+        assert_eq!(counters.compaction_statements, 0);
+
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn empty_compaction_counts_every_statement_in_its_disjoint_family() {
+        let path = test_path();
+        let destination = path.with_extension("compacted");
+        let engine =
+            Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
+        engine.reset_counters().unwrap();
+
+        engine.compact_to(&destination).unwrap();
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.statements, 41);
+        assert_eq!(counters.compaction_statements, 41);
+        assert_eq!(counters.primary_read_statements, 0);
+        assert_eq!(counters.publication_statements, 0);
+        assert_eq!(counters.live_verified_integrity_statements, 0);
+        assert_eq!(counters.reconciliation_statements, 0);
+
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_file(destination).unwrap();
+    }
+
+    #[test]
+    fn failed_single_callback_preserves_completed_fetch_and_authentication_only() {
+        let path = test_path();
+        let engine = Engine::open(&path).unwrap();
+        let (id, canonical) = bytes_object(b"callback failure");
+        engine.put_object_if_absent(id, &canonical).unwrap();
+        engine.reset_counters().unwrap();
+
+        assert!(matches!(
+            engine.with_authenticated_canonical(id, |_| {
+                Err::<(), _>(CoreError::InvalidRecord("callback failure"))
+            }),
+            Err(CoreError::InvalidRecord("callback failure"))
+        ));
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.fetched_rows, 1);
+        assert_eq!(counters.fetched_row_authentication_passes, 1);
+        assert_eq!(counters.fetched_row_role_decode_passes, 0);
+
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn failed_ordered_batch_preserves_each_completed_counter_phase() {
+        let path = test_path();
+        let engine = Engine::open(&path).unwrap();
+        let (first, first_bytes) = bytes_object(b"first!");
+        let (second, second_bytes) = bytes_object(b"second");
+        let (_, substituted_bytes) = bytes_object(b"alter!");
+        engine.put_object_if_absent(first, &first_bytes).unwrap();
+        engine.put_object_if_absent(second, &second_bytes).unwrap();
+        engine.reset_counters().unwrap();
+
+        let mut callbacks = 0;
+        assert!(matches!(
+            engine.for_each_authenticated_payload_batch(&[first, second], |_, _| {
+                callbacks += 1;
+                if callbacks == 2 {
+                    Err(EngineError::InjectedFailure("batch callback"))
+                } else {
+                    Ok(())
+                }
+            }),
+            Err(EngineError::InjectedFailure("batch callback"))
+        ));
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.fetched_rows, 2);
+        assert_eq!(counters.fetched_row_authentication_passes, 2);
+        assert_eq!(counters.fetched_row_role_decode_passes, 2);
+        assert_eq!(counters.objects_validated, 2);
+        assert_eq!(
+            counters.object_bytes_read,
+            (first_bytes.len() + second_bytes.len()) as u64
+        );
+
+        engine
+            .connection
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .execute(
+                "UPDATE layerfs_objects SET canonical_bytes = ?1 WHERE object_id = ?2",
+                params![substituted_bytes, second.as_bytes().as_slice()],
+            )
+            .unwrap();
+        engine.reset_counters().unwrap();
+
+        assert!(matches!(
+            engine.for_each_authenticated_payload_batch(&[first, second], |_, _| Ok(())),
+            Err(EngineError::MalformedObject { .. })
+        ));
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.fetched_rows, 2);
+        assert_eq!(counters.fetched_row_authentication_passes, 1);
+        assert_eq!(counters.fetched_row_role_decode_passes, 1);
+        assert_eq!(counters.objects_validated, 1);
+        assert_eq!(counters.object_bytes_read, first_bytes.len() as u64);
+
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn verified_read_attribution_closes_sql_and_timer_facts() {
         let path = test_path();
         let (id, canonical) = bytes_object(b"attributed payload");
@@ -3204,7 +3417,7 @@ mod tests {
         let store_id = original.store_id().unwrap();
         let saved = path.with_extension("saved");
         fs::rename(&path, &saved).unwrap();
-        assert!(read_ref_reconcile_readonly(&path, "main", store_id).is_err());
+        assert!(read_ref_reconcile_readonly(&original, "main", store_id).is_err());
         assert!(
             !path.exists(),
             "read-only reconciliation created a database"
@@ -3213,12 +3426,12 @@ mod tests {
         let replacement = Engine::open(&path).unwrap();
         assert_ne!(replacement.store_id().unwrap(), store_id);
         assert_eq!(original.store_id().unwrap(), store_id);
-        drop(original);
         drop(replacement);
         assert!(matches!(
-            read_ref_reconcile_readonly(&path, "main", store_id),
+            read_ref_reconcile_readonly(&original, "main", store_id),
             Err(EngineError::InvalidRecord("reconciliation StoreId"))
         ));
+        drop(original);
         fs::remove_file(path).unwrap();
         fs::remove_file(saved).unwrap();
     }

@@ -879,9 +879,9 @@ fn retained_union_reuses_two_scratch_tables_at_five_fifteen_and_thirty_five_root
         assert_eq!(
             counters.scratch_statements,
             match root_count {
-                5 => 428,
-                15 => 1_138,
-                35 => 2_558,
+                5 => 430,
+                15 => 1_140,
+                35 => 2_560,
                 _ => unreachable!(),
             },
             "retained-root scrub stopped batching payload-summary lookups"

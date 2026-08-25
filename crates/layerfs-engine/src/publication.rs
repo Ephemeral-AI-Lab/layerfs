@@ -42,7 +42,7 @@ impl Engine {
             let store_id = self.store_id()?;
             let discarded = finalize_rollback(self, &mut connection);
             if discarded {
-                let observed = super::read_ref_reconcile_readonly(&self.path, name, store_id);
+                let observed = super::read_ref_reconcile_readonly(self, name, store_id);
                 if observed.as_ref().ok() != Some(&actual) {
                     return Err(EngineError::AmbiguousDurability);
                 }
@@ -139,7 +139,7 @@ impl Publication<'_> {
                 self.active = false;
                 if discarded {
                     let observed =
-                        super::read_ref_reconcile_readonly(&self.engine.path, &self.name, store_id);
+                        super::read_ref_reconcile_readonly(self.engine, &self.name, store_id);
                     if observed.as_ref().ok() != Some(&Some(expected.clone())) {
                         return Err(EngineError::AmbiguousDurability);
                     }
@@ -251,7 +251,7 @@ impl Publication<'_> {
                 self.connection.guard.take();
                 self.active = false;
                 let observed =
-                    super::read_ref_reconcile_readonly(&self.engine.path, &self.name, store_id);
+                    super::read_ref_reconcile_readonly(self.engine, &self.name, store_id);
                 match observed {
                     Ok(Some(state)) if state.generation == generation && state.root == root => {
                         restore_primary(
@@ -333,7 +333,7 @@ impl Drop for Publication<'_> {
             if discarded {
                 if let Some(store_id) = store_id {
                     let observed =
-                        super::read_ref_reconcile_readonly(&self.engine.path, &self.name, store_id);
+                        super::read_ref_reconcile_readonly(self.engine, &self.name, store_id);
                     if let Ok(observed) = observed {
                         if observed == self.expected {
                             let _ = restore_primary(
@@ -380,7 +380,7 @@ fn restore_primary(
     ref_name: &str,
     expected_ref: &Option<RefState>,
 ) -> EngineResult<()> {
-    let reopened = super::reopen_store_primary(&engine.path, store_id, ref_name, expected_ref)
+    let reopened = super::reopen_store_primary(engine, store_id, ref_name, expected_ref)
         .map_err(|_| EngineError::AmbiguousDurability)?;
     *connection.guard = Some(reopened);
     Ok(())
@@ -574,6 +574,40 @@ mod tests {
             drop(reopened);
             fs::remove_file(path).unwrap();
         }
+    }
+
+    #[test]
+    fn lost_commit_acknowledgement_counts_reconciliation_and_reopen_sql() {
+        let path = std::env::temp_dir().join(format!(
+            "layerfs-publication-reconciliation-counters-{}-{}.sqlite",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut engine =
+            Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
+        engine.commit_dispatch = std::sync::Arc::new(LostCommitAcknowledgement);
+        engine.reset_counters().unwrap();
+
+        engine
+            .begin_publication(None, "main")
+            .unwrap()
+            .publish_namespace(&root("requested"))
+            .unwrap();
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.reconciliation_statements, 36);
+        assert_eq!(
+            counters.statements,
+            counters.publication_statements + counters.reconciliation_statements
+        );
+        assert_eq!(counters.primary_read_statements, 0);
+        assert_eq!(counters.live_verified_integrity_statements, 0);
+        assert_eq!(counters.compaction_statements, 0);
+
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

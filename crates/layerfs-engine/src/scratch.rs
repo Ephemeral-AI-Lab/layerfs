@@ -154,9 +154,11 @@ impl DiskTable {
         let table = Self {
             path,
             connection: Some(connection),
-            statements: Cell::new(10),
+            // Includes the terminal ROLLBACK that Drop always attempts for the
+            // live derived transaction opened below.
+            statements: Cell::new(11),
             owner_setup_statements: Cell::new(8),
-            derived_setup_statements: Cell::new(2),
+            derived_setup_statements: Cell::new(3),
             operation_statements: Cell::new(0),
             store_reopens,
             store_inspection_statements,
@@ -1131,13 +1133,13 @@ mod tests {
         assert_eq!(setup.store_reopens, 1);
         assert_eq!(setup.store_inspection_statements, 11);
         assert_eq!(setup.owner_setup_statements, 15);
-        assert_eq!(setup.derived_setup_statements, 2);
+        assert_eq!(setup.derived_setup_statements, 3);
         assert_eq!(setup.operation_statements, 0);
-        assert_eq!(setup.statements, 17);
+        assert_eq!(setup.statements, 18);
         table.put(b"key", b"value").unwrap();
         let operated = table.observation().unwrap();
         assert_eq!(operated.operation_statements, 1);
-        assert_eq!(operated.statements, 18);
+        assert_eq!(operated.statements, 19);
         drop(table);
         drop(engine);
         std::fs::remove_file(anchor).unwrap();

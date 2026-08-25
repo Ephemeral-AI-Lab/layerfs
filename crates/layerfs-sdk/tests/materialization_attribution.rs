@@ -56,7 +56,8 @@ fn attribution_arms_reuse_full_source_and_native_routes() {
         source_only.scratch_derived_setup_statements,
         complete.scratch_derived_setup_statements
     );
-    assert_eq!(source_only.scratch_derived_setup_statements, 2);
+    // Owner marker, BEGIN IMMEDIATE, and the terminal Drop ROLLBACK.
+    assert_eq!(source_only.scratch_derived_setup_statements, 3);
     assert_eq!(
         source_only.scratch_operation_statements,
         complete.scratch_operation_statements
