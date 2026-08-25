@@ -1593,6 +1593,14 @@ struct AcceptanceSample {
     operand: char,
     wall_ns: u128,
     cpu_ns: u128,
+    rss_bytes: u128,
+    q_bytes: u128,
+    fd_peak: u128,
+    primary_connections: u128,
+    scratch_connections: u128,
+    total_connections: u128,
+    sync_calls: u128,
+    residue: u128,
 }
 
 pub fn acceptance_run(
@@ -1659,7 +1667,10 @@ pub fn acceptance_run(
                 "\"status\":\"PASS\",\"measured_rows_started\":false,",
                 "\"control_sha256\":\"{}\",\"candidate_sha256\":\"{}\",",
                 "\"fixture_blake3\":\"{}\",\"schedule_blake3\":\"{}\",",
-                "\"expected_rows\":48}}\n"
+                "\"expected_rows\":48,\"control_resource_derivations\":",
+                "{{\"q_high_water_bytes\":\"source_bound_8_mib\",",
+                "\"scratch_connections_peak\":\"scratch.tables\",",
+                "\"total_connections_peak\":\"active_connections_plus_scratch.tables\"}}}}\n"
             ),
             control_sha256,
             candidate_sha256,
@@ -1832,9 +1843,49 @@ pub fn acceptance_run(
                                 .checked_add(json_u128(row, "system_cpu_ns")?)
                                 .ok_or_else(|| "acceptance CPU overflow".to_owned())?;
                             let wall_ns = json_u128(row, "product_operation_wall_ns")?;
-                            Ok::<_, String>((signature, cpu_ns, wall_ns))
+                            Ok::<_, String>((
+                                signature,
+                                cpu_ns,
+                                wall_ns,
+                                json_u128(row, "rss_peak_bytes")?,
+                                if *operand == 'A' {
+                                    8 * 1024 * 1024
+                                } else {
+                                    json_u128(row, "operation_q_high_water_bytes")?
+                                },
+                                json_u128(row, "fd_before")?.max(json_u128(row, "fd_after")?),
+                                json_u128(row, "active_connections")?,
+                                if *operand == 'A' {
+                                    json_u128(row, "tables")?
+                                } else {
+                                    json_u128(row, "scratch_connections_peak")?
+                                },
+                                if *operand == 'A' {
+                                    json_u128(row, "active_connections")?
+                                        .checked_add(json_u128(row, "tables")?)
+                                        .ok_or_else(|| {
+                                            "control connection peak overflow".to_owned()
+                                        })?
+                                } else {
+                                    json_u128(row, "total_connections_peak")?
+                                },
+                                json_u128(row, "sync_calls")?,
+                                json_u128(row, "residue")?,
+                            ))
                         })();
-                        let (signature, cpu_ns, wall_ns) = match measured {
+                        let (
+                            signature,
+                            cpu_ns,
+                            wall_ns,
+                            rss_bytes,
+                            q_bytes,
+                            fd_peak,
+                            primary_connections,
+                            scratch_connections,
+                            total_connections,
+                            sync_calls,
+                            residue,
+                        ) = match measured {
                             Ok(measured) => measured,
                             Err(error) => {
                                 return acceptance_campaign_failure(
@@ -1851,6 +1902,14 @@ pub fn acceptance_run(
                             operand: *operand,
                             wall_ns,
                             cpu_ns,
+                            rss_bytes,
+                            q_bytes,
+                            fd_peak,
+                            primary_connections,
+                            scratch_connections,
+                            total_connections,
+                            sync_calls,
+                            residue,
                         });
                     }
                 }
@@ -2066,11 +2125,11 @@ fn validate_acceptance_row(row: &str, candidate: bool) -> EvalResult<()> {
         && json_u128(row, "rss_current_bytes")? <= 32 * 1024 * 1024
         && json_u128(row, "fd_before")? <= 24
         && json_u128(row, "fd_after")? <= 24
-        && json_u128(row, "operation_q_high_water_bytes")? <= 8 * 1024 * 1024
-        && json_u128(row, "owned_temp_terminal")? == 0
-        && json_u128(row, "descriptor_spool_bytes_terminal")? == 0
         && (!candidate
-            || json_u128(row, "scratch_connections_peak")? <= 1
+            || json_u128(row, "operation_q_high_water_bytes")? < 8 * 1024 * 1024
+                && json_u128(row, "owned_temp_terminal")? == 0
+                && json_u128(row, "descriptor_spool_bytes_terminal")? == 0
+                && json_u128(row, "scratch_connections_peak")? <= 1
                 && json_u128(row, "total_connections_peak")? <= 2);
     if !resources_pass {
         return Err("acceptance row resource gate failed".to_owned());
@@ -2078,8 +2137,9 @@ fn validate_acceptance_row(row: &str, candidate: bool) -> EvalResult<()> {
     if row.contains("\"row_kind\":\"measured\"")
         && (json_u128(row, "fd_terminal")? != json_u128(row, "process_fd_baseline")?
             || json_u128(row, "connections_terminal")? != 0
-            || json_u128(row, "scratch_connections_terminal")? != 0
-            || json_u128(row, "total_connections_terminal")? != 0)
+            || candidate
+                && (json_u128(row, "scratch_connections_terminal")? != 0
+                    || json_u128(row, "total_connections_terminal")? != 0))
     {
         return Err("acceptance row terminal resource closure failed".to_owned());
     }
@@ -2142,6 +2202,7 @@ struct AbsoluteClass {
     p95_96: u128,
 }
 
+// Section 16.1's displayed millisecond gates converted exactly to nanoseconds.
 const ABSOLUTE_CLASSES: [AbsoluteClass; 5] = [
     AbsoluteClass {
         name: "375",
@@ -2195,6 +2256,10 @@ struct AcceptanceDisposition {
     fitted_bandwidth_mib_s: f64,
     model_valid: bool,
     cpu_scaling_pass: bool,
+    cpu_regression_pass: bool,
+    no_resource_regression: bool,
+    no_sync_regression: bool,
+    no_residue_regression: bool,
 }
 
 fn acceptance_disposition(samples: &[AcceptanceSample]) -> EvalResult<AcceptanceDisposition> {
@@ -2309,6 +2374,29 @@ fn acceptance_disposition(samples: &[AcceptanceSample]) -> EvalResult<Acceptance
     let cpu_scaling_pass = cpu24 > cpu0
         && cpu96 > cpu0
         && (cpu96 - cpu0) as f64 / 96.0 <= 1.25 * (cpu24 - cpu0) as f64 / 24.0;
+    let mut cpu_regression_pass = true;
+    let mut no_resource_regression = true;
+    let mut no_sync_regression = true;
+    let mut no_residue_regression = true;
+    for candidate in samples.iter().filter(|sample| sample.operand == 'B') {
+        let control = samples
+            .iter()
+            .find(|sample| {
+                sample.operand == 'A'
+                    && sample.pair == candidate.pair
+                    && sample.size_mib == candidate.size_mib
+            })
+            .ok_or_else(|| "candidate has no adjacent control".to_owned())?;
+        cpu_regression_pass &= candidate.cpu_ns <= control.cpu_ns;
+        no_resource_regression &= candidate.rss_bytes <= control.rss_bytes
+            && candidate.q_bytes <= control.q_bytes
+            && candidate.fd_peak <= control.fd_peak
+            && candidate.primary_connections <= control.primary_connections
+            && candidate.scratch_connections <= control.scratch_connections
+            && candidate.total_connections <= control.total_connections;
+        no_sync_regression &= candidate.sync_calls <= control.sync_calls;
+        no_residue_regression &= candidate.residue == 0 && control.residue == 0;
+    }
     let primary_class_pass = class_pass(&ABSOLUTE_CLASSES[2], true)?;
     let primary = &ABSOLUTE_CLASSES[2];
     let primary_miss_ns = [
@@ -2328,7 +2416,11 @@ fn acceptance_disposition(samples: &[AcceptanceSample]) -> EvalResult<Acceptance
         && model_valid
         && t0 < 20_000_000.0
         && fitted_bandwidth_mib_s >= 500.0
-        && cpu_scaling_pass;
+        && cpu_scaling_pass
+        && cpu_regression_pass
+        && no_resource_regression
+        && no_sync_regression
+        && no_residue_regression;
     Ok(AcceptanceDisposition {
         status: if pass { "PASS" } else { "REVISE" },
         populations,
@@ -2344,6 +2436,10 @@ fn acceptance_disposition(samples: &[AcceptanceSample]) -> EvalResult<Acceptance
         fitted_bandwidth_mib_s,
         model_valid,
         cpu_scaling_pass,
+        cpu_regression_pass,
+        no_resource_regression,
+        no_sync_regression,
+        no_residue_regression,
     })
 }
 
@@ -2384,14 +2480,20 @@ fn acceptance_summary_json(
         concat!(
             "{{\"schema\":\"layerfs-stage1m-acceptance-summary-v1\",",
             "\"status\":\"{}\",\"paired_warmups\":24,\"measured_rows\":24,",
-            "\"population_exact\":true,\"wins_24\":{},\"wins_96\":{},",
+            "\"population_exact\":true,\"semantic_exact\":true,",
+            "\"wins_24\":{},\"wins_96\":{},",
+            "\"control_resource_derivations\":{{\"q_high_water_bytes\":\"source_bound_8_mib\",",
+            "\"scratch_connections_peak\":\"scratch.tables\",",
+            "\"total_connections_peak\":\"active_connections_plus_scratch.tables\"}},",
             "\"wins_24_pass\":{},\"wins_96_pass\":{},\"fixed_cost_pass\":{},",
             "\"p95_relative_pass\":{},\"higher_absolute_class\":{},",
             "\"absolute_classes\":{},\"primary_450_class_pass\":{},",
             "\"primary_nonmaterial_microvariance\":{},",
             "\"model\":{{\"fitted_fixed_ns\":{},",
             "\"fitted_bandwidth_mib_s\":{},\"valid\":{}}},",
-            "\"cpu_scaling_pass\":{},\"preferred_wall_pass\":{},",
+            "\"cpu_scaling_pass\":{},\"cpu_regression_pass\":{},",
+            "\"no_resource_regression\":{},\"no_sync_regression\":{},",
+            "\"no_residue_regression\":{},\"preferred_wall_pass\":{},",
             "\"hard_wall_pass\":true,\"campaign_wall_ns\":{},",
             "\"setup_wall_ns\":{},\"command_wall_sum_ns\":{},",
             "\"coordinator_wall_ns\":{},\"campaign_wall_equation_exact\":true,",
@@ -2412,6 +2514,10 @@ fn acceptance_summary_json(
         disposition.fitted_bandwidth_mib_s,
         disposition.model_valid,
         disposition.cpu_scaling_pass,
+        disposition.cpu_regression_pass,
+        disposition.no_resource_regression,
+        disposition.no_sync_regression,
+        disposition.no_residue_regression,
         campaign_wall_ns < 15_000_000_000,
         campaign_wall_ns,
         setup_wall_ns,
@@ -2927,7 +3033,7 @@ fn validate_attribution_observation(
         && operation.rope.cdc_bytes_scanned == 0
         && operation.rematerializations == 0
         && operation.full_fallback_files == 0
-        && operation.operation_q_high_water_bytes <= 8 * 1024 * 1024
+        && operation.operation_q_high_water_bytes < 8 * 1024 * 1024
         && operation.operation_q_terminal_bytes == 0
         && operation.owned_temp_terminal == 0
         && operation.descriptor_spool_bytes_terminal == 0
@@ -3026,7 +3132,7 @@ fn attribution_row_json(
             content_bytes == 0 && operation.native.bytes_written == expected_bytes
         }
     };
-    let resource_gates_pass = operation.operation_q_high_water_bytes <= 8 * 1024 * 1024
+    let resource_gates_pass = operation.operation_q_high_water_bytes < 8 * 1024 * 1024
         && operation.operation_q_terminal_bytes == 0
         && row.scratch_connections_peak <= 1
         && row.total_connections_peak <= 2
@@ -4418,6 +4524,14 @@ mod tests {
                     operand: 'A',
                     wall_ns: control_wall,
                     cpu_ns: candidate_cpu + 1_000_000,
+                    rss_bytes: 10_000_000,
+                    q_bytes: 8 * 1024 * 1024,
+                    fd_peak: 12,
+                    primary_connections: 1,
+                    scratch_connections: 3,
+                    total_connections: 4,
+                    sync_calls: 4,
+                    residue: 0,
                 });
                 samples.push(AcceptanceSample {
                     pair,
@@ -4425,6 +4539,14 @@ mod tests {
                     operand: 'B',
                     wall_ns: candidate_wall,
                     cpu_ns: candidate_cpu,
+                    rss_bytes: 9_000_000,
+                    q_bytes: 8 * 1024 * 1024 - 1,
+                    fd_peak: 10,
+                    primary_connections: 1,
+                    scratch_connections: 1,
+                    total_connections: 2,
+                    sync_calls: 3,
+                    residue: 0,
                 });
             }
         }
@@ -4438,6 +4560,10 @@ mod tests {
         assert!(disposition.model_valid);
         assert!(disposition.fitted_bandwidth_mib_s >= 500.0);
         assert!(disposition.cpu_scaling_pass);
+        assert!(disposition.cpu_regression_pass);
+        assert!(disposition.no_resource_regression);
+        assert!(disposition.no_sync_regression);
+        assert!(disposition.no_residue_regression);
 
         for sample in &mut samples {
             if sample.operand == 'B' && sample.pair <= 2 {
