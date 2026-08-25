@@ -3960,7 +3960,10 @@ fn run_physical_row(
     let witness_engine =
         PhaseCounterDelta::between("canonical_witness", &after_checkpoint, &after_witness)?;
     witness_engine.engine.verify_trusted_read_only()?;
-    let phase_counters = vec![checkpoint_engine, witness_engine];
+    let storage_engine =
+        PhaseCounterDelta::between("storage_observation", &after_witness, &after_storage)?;
+    storage_engine.engine.verify_trusted_read_only()?;
+    let phase_counters = vec![checkpoint_engine, witness_engine, storage_engine];
     verify_phase_partition(&phase_counters, engine)?;
     let operation = combine_physical_checkpoint(native, checkpoint)?;
     let resources = observe_row_resources(Some(work), after_storage.active_connections)?;
@@ -4141,14 +4144,19 @@ fn run_history_row(
         .cloned()
         .ok_or_else(|| format!("missing retained full-byte digest R{head_index}"))?;
     let history_wall = history_started.elapsed().as_nanos();
+    let after_history = opened.fs.counter_snapshot().map_err(display_error)?;
     let after = opened.fs.diagnostics().map_err(display_error)?;
     let engine_start = Diagnostics::default();
     let engine = EngineDelta::between(&engine_start, &after)?;
     engine.verify_read_only()?;
     let open_engine = PhaseCounterDelta::between("verified_open", &engine_start, &after_open)?;
     open_engine.engine.verify_read_only()?;
-    let history_engine = PhaseCounterDelta::between("history_read", &after_open, &after)?;
+    let storage_before = PhaseCounterDelta::between("storage_observation", &after_open, &before)?;
+    storage_before.engine.verify_read_only()?;
+    let history_engine = PhaseCounterDelta::between("history_read", &before, &after_history)?;
     history_engine.engine.verify_read_only()?;
+    let storage_after = PhaseCounterDelta::between("storage_observation", &after_history, &after)?;
+    storage_after.engine.verify_read_only()?;
     let probe_engine = history_probes
         .iter()
         .try_fold(EngineDelta::default(), |aggregate, probe| {
@@ -4166,7 +4174,7 @@ fn run_history_row(
             "history session {session} probe counters sum to retained row"
         ));
     }
-    let phase_counters = vec![open_engine, history_engine];
+    let phase_counters = vec![open_engine, storage_before, history_engine, storage_after];
     verify_phase_partition(&phase_counters, engine)?;
     if operation.native.bytes_read != 0
         || operation.native.bytes_written != 0
@@ -4349,7 +4357,15 @@ fn run_logical_row(
     let witness_engine =
         PhaseCounterDelta::between("canonical_witness", &after_refresh, &after_witness)?;
     witness_engine.engine.verify_trusted_read_only()?;
-    let phase_counters = vec![logical_engine, refresh_engine, witness_engine];
+    let storage_engine =
+        PhaseCounterDelta::between("storage_observation", &after_witness, &after_storage)?;
+    storage_engine.engine.verify_trusted_read_only()?;
+    let phase_counters = vec![
+        logical_engine,
+        refresh_engine,
+        witness_engine,
+        storage_engine,
+    ];
     verify_phase_partition(&phase_counters, engine)?;
     let operation = combine_logical_refresh(logical, refresh)?;
     let resources = observe_row_resources(Some(work), after_storage.active_connections)?;
@@ -4557,7 +4573,10 @@ fn run_burst_row(
     let witness_engine =
         PhaseCounterDelta::between("canonical_witness", &after_checkpoint, &after_witness)?;
     witness_engine.engine.verify_trusted_read_only()?;
-    let phase_counters = vec![checkpoint_engine, witness_engine];
+    let storage_engine =
+        PhaseCounterDelta::between("storage_observation", &after_witness, &after_storage)?;
+    storage_engine.engine.verify_trusted_read_only()?;
+    let phase_counters = vec![checkpoint_engine, witness_engine, storage_engine];
     verify_phase_partition(&phase_counters, engine)?;
     let operation = combine_physical_checkpoint(native_aggregate, checkpoint)?;
     let resources = observe_row_resources(Some(work), after_storage.active_connections)?;
@@ -4692,7 +4711,7 @@ fn run_milestone_row(
     let destination = work.join(format!("milestone-R{root_index}"));
     set_failure_phase("milestone_materialization");
     let materialize_started = Instant::now();
-    let (mut external, operation) = opened
+    let (mut external, mut operation) = opened
         .fs
         .materialize_external_observed(roots[usize::from(root_index)].root, &destination)
         .map_err(display_error)?;
@@ -4719,20 +4738,12 @@ fn run_milestone_row(
         name: "metadata_oracle",
         wall_ns: oracle_wall,
     });
+    let after_materialize = opened.fs.counter_snapshot().map_err(display_error)?;
     let after = opened.fs.diagnostics().map_err(display_error)?;
-    let engine_start = Diagnostics::default();
-    let engine = EngineDelta::between(&engine_start, &after)?;
-    engine.verify_read_only()?;
-    let open_engine = PhaseCounterDelta::between("verified_open", &engine_start, &after_open)?;
-    open_engine.engine.verify_read_only()?;
-    let materialize_engine = PhaseCounterDelta::between("materialization", &after_open, &after)?
-        .with_operation_scratch(&operation);
-    materialize_engine.engine.verify_read_only()?;
-    let phase_counters = vec![open_engine, materialize_engine];
-    verify_phase_partition(&phase_counters, engine)?;
     set_failure_phase("explicit_cleanup");
     let cleanup_started = Instant::now();
-    external.discard().map_err(display_error)?;
+    let cleanup = external.discard_observed().map_err(display_error)?;
+    operation = operation.merge(cleanup).map_err(display_error)?;
     drop(external);
     fs::remove_dir_all(&destination).map_err(io_error)?;
     if destination.exists() {
@@ -4743,6 +4754,27 @@ fn run_milestone_row(
         name: "explicit_cleanup",
         wall_ns: cleanup_wall,
     });
+    let engine_start = Diagnostics::default();
+    let engine = EngineDelta::between(&engine_start, &after)?;
+    engine.verify_read_only()?;
+    let open_engine = PhaseCounterDelta::between("verified_open", &engine_start, &after_open)?;
+    open_engine.engine.verify_read_only()?;
+    let storage_before = PhaseCounterDelta::between("storage_observation", &after_open, &before)?;
+    storage_before.engine.verify_read_only()?;
+    let materialize_engine =
+        PhaseCounterDelta::between("materialization", &before, &after_materialize)?
+            .with_operation_scratch(&operation);
+    materialize_engine.engine.verify_read_only()?;
+    let storage_after =
+        PhaseCounterDelta::between("storage_observation", &after_materialize, &after)?;
+    storage_after.engine.verify_read_only()?;
+    let phase_counters = vec![
+        open_engine,
+        storage_before,
+        materialize_engine,
+        storage_after,
+    ];
+    verify_phase_partition(&phase_counters, engine)?;
     let active_connections = after
         .active_connections
         .checked_add(
@@ -5863,11 +5895,31 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
     ];
     for row in rows {
         let expected: &[&str] = match row.row_group.as_str() {
-            "C02" => &["store_open", "materialization"],
-            "C03" | "C07" => &["checkpoint", "canonical_witness"],
-            "C04" | "C06" => &["verified_open", "history_read"],
-            "C05" => &["logical_edit", "apfs_refresh", "canonical_witness"],
-            "C08" => &["verified_open", "materialization"],
+            "C02" => &[
+                "store_open",
+                "storage_observation",
+                "materialization",
+                "storage_observation",
+            ],
+            "C03" | "C07" => &["checkpoint", "canonical_witness", "storage_observation"],
+            "C04" | "C06" => &[
+                "verified_open",
+                "storage_observation",
+                "history_read",
+                "storage_observation",
+            ],
+            "C05" => &[
+                "logical_edit",
+                "apfs_refresh",
+                "canonical_witness",
+                "storage_observation",
+            ],
+            "C08" => &[
+                "verified_open",
+                "storage_observation",
+                "materialization",
+                "storage_observation",
+            ],
             _ => &[],
         };
         let phases = json_array_objects(&row.json, "phase_counters")?;
@@ -7004,6 +7056,7 @@ fn phase_attributions(rows: &[ParsedRow]) -> EvalResult<Vec<PhaseAttribution>> {
         "canonical_witness",
         "verified_open",
         "history_read",
+        "storage_observation",
     ] {
         let phases = rows
             .iter()
@@ -8745,6 +8798,7 @@ fn validate_summary_json_contract(json: &str) -> EvalResult<()> {
             "canonical_witness",
             "verified_open",
             "history_read",
+            "storage_observation",
         ]
     {
         return Err("summary JSON exact phase attribution population".to_owned());
@@ -10364,6 +10418,7 @@ fn failure_summary_json(
             "canonical_witness",
             "verified_open",
             "history_read",
+            "storage_observation",
         ])
     );
     let optimization = format!(
@@ -10938,17 +10993,29 @@ fn run_inner(run: &Path) -> EvalResult<Disposition> {
         return Err("initial exact Apple metadata".to_owned());
     }
     set_failure_phase("counter_snapshot");
+    let after_materialize = opened.fs.counter_snapshot().map_err(display_error)?;
     let after_c02 = opened.fs.diagnostics().map_err(display_error)?;
     let engine_start = Diagnostics::default();
     let c02_engine = EngineDelta::between(&engine_start, &after_c02)?;
     c02_engine.verify_trusted_read_only()?;
     let open_engine = PhaseCounterDelta::between("store_open", &engine_start, &after_open)?;
     open_engine.engine.verify_trusted_read_only()?;
+    let storage_before =
+        PhaseCounterDelta::between("storage_observation", &after_open, &before_c02)?;
+    storage_before.engine.verify_trusted_read_only()?;
     let materialize_engine =
-        PhaseCounterDelta::between("materialization", &after_open, &after_c02)?
+        PhaseCounterDelta::between("materialization", &before_c02, &after_materialize)?
             .with_operation_scratch(&materialize);
     materialize_engine.engine.verify_trusted_read_only()?;
-    let phase_counters = vec![open_engine, materialize_engine];
+    let storage_after =
+        PhaseCounterDelta::between("storage_observation", &after_materialize, &after_c02)?;
+    storage_after.engine.verify_trusted_read_only()?;
+    let phase_counters = vec![
+        open_engine,
+        storage_before,
+        materialize_engine,
+        storage_after,
+    ];
     verify_phase_partition(&phase_counters, c02_engine)?;
     let c02_resources = observe_row_resources(Some(&work), after_c02.active_connections)?;
     let c02_wall = c02_started.elapsed().as_nanos();
@@ -11693,25 +11760,40 @@ mod tests {
             "NotApplicable"
         };
         let phase_names: &[&str] = match scheduled.row_group {
-            "C02" => &["store_open", "materialization"],
-            "C03" | "C07" => &["checkpoint", "canonical_witness"],
-            "C04" | "C06" => &["verified_open", "history_read"],
-            "C05" => &["logical_edit", "apfs_refresh", "canonical_witness"],
-            "C08" => &["verified_open", "materialization"],
+            "C02" => &[
+                "store_open",
+                "storage_observation",
+                "materialization",
+                "storage_observation",
+            ],
+            "C03" | "C07" => &["checkpoint", "canonical_witness", "storage_observation"],
+            "C04" | "C06" => &[
+                "verified_open",
+                "storage_observation",
+                "history_read",
+                "storage_observation",
+            ],
+            "C05" => &[
+                "logical_edit",
+                "apfs_refresh",
+                "canonical_witness",
+                "storage_observation",
+            ],
+            "C08" => &[
+                "verified_open",
+                "storage_observation",
+                "materialization",
+                "storage_observation",
+            ],
             _ => &[],
         };
         let phase_counters = engine.map_or_else(Vec::new, |engine| {
-            let owner = usize::from(scheduled.history_session.is_some());
-            let operation_scratch_owner = match scheduled.row_group {
-                "C02" | "C05" | "C08" => Some(1),
-                _ => None,
-            };
             phase_names
                 .iter()
                 .enumerate()
                 .map(|(index, name)| {
                     let phase_engine = if scheduled.history_session.is_some() {
-                        if index == 0 {
+                        if *name == "verified_open" {
                             EngineDelta {
                                 retained_union_scrubs: 1,
                                 scratch_tables: 2,
@@ -11720,7 +11802,7 @@ mod tests {
                                 scratch_high_water_bytes: 4_096,
                                 ..EngineDelta::default()
                             }
-                        } else {
+                        } else if *name == "history_read" {
                             EngineDelta {
                                 retained_union_scrubs: 0,
                                 scratch_tables: 0,
@@ -11729,12 +11811,19 @@ mod tests {
                                 scratch_high_water_bytes: 0,
                                 ..engine
                             }
+                        } else {
+                            EngineDelta::default()
                         }
-                    } else if index == owner {
+                    } else if index == 0 {
                         engine
                     } else {
                         EngineDelta::default()
                     };
+                    let operation_scratch_owner = matches!(
+                        (scheduled.row_group, *name),
+                        ("C02" | "C08", "materialization") | ("C05", "apfs_refresh")
+                    );
+                    let operation_scratch = operation.as_ref().filter(|_| operation_scratch_owner);
                     PhaseCounterDelta {
                         name,
                         engine: phase_engine,
@@ -11742,21 +11831,13 @@ mod tests {
                         q_after_bytes: 0,
                         q_high_water_bytes: layerfs_sdk::OPERATION_Q_BOUND_BYTES,
                         active_connections: active_store_connections,
-                        operation_scratch_tables: operation_scratch_owner
-                            .filter(|owner| *owner == index)
-                            .and(operation.as_ref())
+                        operation_scratch_tables: operation_scratch
                             .map_or(0, |operation| operation.scratch_tables),
-                        operation_scratch_statements: operation_scratch_owner
-                            .filter(|owner| *owner == index)
-                            .and(operation.as_ref())
+                        operation_scratch_statements: operation_scratch
                             .map_or(0, |operation| operation.scratch_statements),
-                        operation_scratch_rows: operation_scratch_owner
-                            .filter(|owner| *owner == index)
-                            .and(operation.as_ref())
+                        operation_scratch_rows: operation_scratch
                             .map_or(0, |operation| operation.scratch_rows),
-                        operation_scratch_high_water_bytes: operation_scratch_owner
-                            .filter(|owner| *owner == index)
-                            .and(operation.as_ref())
+                        operation_scratch_high_water_bytes: operation_scratch
                             .map_or(0, |operation| operation.scratch_high_water_bytes),
                     }
                 })
@@ -12279,6 +12360,35 @@ mod tests {
         assert!(enforce_campaign_limit(Instant::now()).is_ok());
         assert!(enforce_campaign_limit(Instant::now() - Duration::from_secs(61)).is_err());
         fs::remove_dir_all(run).unwrap();
+    }
+
+    #[test]
+    fn storage_observation_is_a_disjoint_phase_counter_owner() {
+        let before = Diagnostics::default();
+        let product = Diagnostics {
+            statements: 5,
+            primary_read_statements: 5,
+            ..Diagnostics::default()
+        };
+        let after = Diagnostics {
+            statements: 8,
+            primary_read_statements: 8,
+            ..Diagnostics::default()
+        };
+        let product_phase = PhaseCounterDelta::between("product", &before, &product).unwrap();
+        let storage_phase =
+            PhaseCounterDelta::between("storage_observation", &product, &after).unwrap();
+        assert_eq!(storage_phase.engine.statements, 3);
+        assert!(verify_phase_partition(
+            &[product_phase, storage_phase],
+            EngineDelta::between(&before, &after).unwrap()
+        )
+        .is_ok());
+        assert!(verify_phase_partition(
+            &[product_phase],
+            EngineDelta::between(&before, &after).unwrap()
+        )
+        .is_err());
     }
 
     #[test]
