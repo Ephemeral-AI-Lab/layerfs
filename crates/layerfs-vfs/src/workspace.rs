@@ -6,7 +6,7 @@ use layerfs_core::inode::InodeId;
 use layerfs_core::CanonicalPath;
 use layerfs_core::{CoreError, ObjectId};
 use layerfs_engine::refs::RefState;
-use layerfs_engine::scratch::DiskTable;
+use layerfs_engine::scratch::{DiskTable, ScratchObservation};
 use layerfs_engine::{Engine, EngineError};
 use std::collections::HashMap;
 use std::fmt;
@@ -671,6 +671,7 @@ impl ManagedWorkspace {
             .operation_q
             .reserve();
         let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
+        let scratch_before = external.live_scratch_observation()?;
         if accepted
             .is_some_and(|splice| splice.before() != &external.expected || splice.after() != target)
         {
@@ -693,6 +694,7 @@ impl ManagedWorkspace {
                 workspace_reuses: 1,
                 ..OperationCounters::default()
             };
+            external.add_live_scratch_delta(scratch_before, &mut counters)?;
             self.observe_spool(&mut counters)?;
             reservation.finish(&mut counters);
             return Ok(counters);
@@ -717,6 +719,7 @@ impl ManagedWorkspace {
                 external.expected = target.clone();
                 self.state = ManagedState::Live;
                 counters.workspace_reuses = 1;
+                external.add_live_scratch_delta(scratch_before, &mut counters)?;
                 self.observe_spool(&mut counters)?;
                 reservation.finish(&mut counters);
                 Ok(counters)
@@ -756,6 +759,7 @@ impl ManagedWorkspace {
         }
         let replacement_len = u64::try_from(bytes.len()).map_err(|_| VfsError::InvalidState)?;
         let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
+        let scratch_before = external.live_scratch_observation()?;
         let old_hard_link_key =
             match crate::managed_edit::native_hard_link_key(external.native.as_ref(), path) {
                 Ok(key) => key,
@@ -807,6 +811,7 @@ impl ManagedWorkspace {
                 return Err(error);
             }
         }
+        let _ = external;
         let (offsets, spool_bytes) =
             self.append_spool_parts(&[SpoolPart::Bytes(bytes), SpoolPart::Metadata(&metadata)])?;
         let (spool_offset, _) = offsets[0];
@@ -827,6 +832,10 @@ impl ManagedWorkspace {
             native: native_counters,
             ..OperationCounters::default()
         };
+        self.external
+            .as_ref()
+            .ok_or(VfsError::InvalidState)?
+            .add_live_scratch_delta(scratch_before, &mut counters)?;
         Self::record_spool_observation(&mut counters, Some(spool_bytes));
         reservation.finish(&mut counters);
         Ok(counters)
@@ -868,6 +877,7 @@ impl ManagedWorkspace {
             return Err(VfsError::InvalidState);
         }
         let external = self.external.as_mut().ok_or(VfsError::InvalidState)?;
+        let scratch_before = external.live_scratch_observation()?;
         let mut topology_counters = OperationCounters::default();
         let (old_edge, new_edge) = managed_rename_edges(
             &external.engine,
@@ -903,6 +913,7 @@ impl ManagedWorkspace {
                     self.state = ManagedState::Indeterminate;
                     return Err(error);
                 }
+                let _ = external;
                 let (offsets, spool_bytes) = self.append_spool_parts(&[
                     SpoolPart::Metadata(&source_parent_metadata),
                     SpoolPart::Metadata(&target_parent_metadata),
@@ -925,6 +936,10 @@ impl ManagedWorkspace {
                     },
                     ..OperationCounters::default()
                 })?;
+                self.external
+                    .as_ref()
+                    .ok_or(VfsError::InvalidState)?
+                    .add_live_scratch_delta(scratch_before, &mut counters)?;
                 Self::record_spool_observation(&mut counters, Some(spool_bytes));
                 reservation.finish(&mut counters);
                 Ok(counters)
@@ -1230,6 +1245,7 @@ impl ExternalWorkspace {
         if !self.base_matches_expected {
             return Err(VfsError::ExternalDirtyConflict);
         }
+        let scratch_before = self.live_scratch_observation()?;
         let mut capture = CaptureLease::begin(self.writers.clone())?;
         let (root, mut counters) = if let Some(root) = self.committed {
             (root, OperationCounters::default())
@@ -1252,6 +1268,7 @@ impl ExternalWorkspace {
             self.committed = Some(next.root);
             (next.root, counters)
         };
+        self.add_live_scratch_delta(scratch_before, &mut counters)?;
         if self.owned {
             if let Err(error) = self.native.remove_owned_root(
                 self.owned_identity
@@ -1316,6 +1333,33 @@ impl ExternalWorkspace {
             counters.add_scratch(terminal)?;
         }
         Ok(counters)
+    }
+    fn live_scratch_observation(&self) -> VfsResult<Option<ScratchObservation>> {
+        self.live_scratch
+            .as_ref()
+            .map(DiskTable::observation)
+            .transpose()
+            .map_err(Into::into)
+    }
+    fn add_live_scratch_delta(
+        &self,
+        before: Option<ScratchObservation>,
+        counters: &mut OperationCounters,
+    ) -> VfsResult<()> {
+        let Some(before) = before else {
+            return Ok(());
+        };
+        let after = self
+            .live_scratch
+            .as_ref()
+            .ok_or(VfsError::InvalidState)?
+            .observation()?;
+        let mut delta = after.checked_delta(before).ok_or(VfsError::InvalidState)?;
+        if delta.operation_statements != 0 || delta.rows != 0 {
+            delta.high_water_bytes = after.high_water_bytes;
+        }
+        counters.add_scratch(delta)?;
+        Ok(())
     }
     pub fn register_writer(&self) -> VfsResult<WriterLease> {
         if !self.active {

@@ -1645,6 +1645,21 @@ impl PhaseCounterDelta {
         self.operation_scratch_high_water_bytes = operation.scratch_high_water_bytes;
         self
     }
+
+    fn operation_only(name: &'static str, operation: &layerfs_sdk::OperationDiagnostics) -> Self {
+        Self {
+            name,
+            engine: EngineDelta::default(),
+            q_before_bytes: 0,
+            q_after_bytes: operation.operation_q_terminal_bytes,
+            q_high_water_bytes: operation.operation_q_high_water_bytes,
+            active_connections: 0,
+            operation_scratch_tables: operation.scratch_tables,
+            operation_scratch_statements: operation.scratch_statements,
+            operation_scratch_rows: operation.scratch_rows,
+            operation_scratch_high_water_bytes: operation.scratch_high_water_bytes,
+        }
+    }
 }
 
 fn verify_phase_partition(phases: &[PhaseCounterDelta], aggregate: EngineDelta) -> EvalResult<()> {
@@ -3963,7 +3978,12 @@ fn run_physical_row(
     let storage_engine =
         PhaseCounterDelta::between("storage_observation", &after_witness, &after_storage)?;
     storage_engine.engine.verify_trusted_read_only()?;
-    let phase_counters = vec![checkpoint_engine, witness_engine, storage_engine];
+    let phase_counters = vec![
+        PhaseCounterDelta::operation_only("native_edit", &native),
+        checkpoint_engine,
+        witness_engine,
+        storage_engine,
+    ];
     verify_phase_partition(&phase_counters, engine)?;
     let operation = combine_physical_checkpoint(native, checkpoint)?;
     let resources = observe_row_resources(Some(work), after_storage.active_connections)?;
@@ -4576,7 +4596,12 @@ fn run_burst_row(
     let storage_engine =
         PhaseCounterDelta::between("storage_observation", &after_witness, &after_storage)?;
     storage_engine.engine.verify_trusted_read_only()?;
-    let phase_counters = vec![checkpoint_engine, witness_engine, storage_engine];
+    let phase_counters = vec![
+        PhaseCounterDelta::operation_only("native_edit", &native_aggregate),
+        checkpoint_engine,
+        witness_engine,
+        storage_engine,
+    ];
     verify_phase_partition(&phase_counters, engine)?;
     let operation = combine_physical_checkpoint(native_aggregate, checkpoint)?;
     let resources = observe_row_resources(Some(work), after_storage.active_connections)?;
@@ -4896,9 +4921,10 @@ fn run_terminal_row(
     let row_started = Instant::now();
     set_failure_phase("explicit_cleanup");
     let cleanup_started = Instant::now();
-    if let Some(external) = converted.as_mut() {
-        external.discard().map_err(display_error)?;
-    }
+    let cleanup = converted.as_mut().map_or_else(
+        || Ok(layerfs_sdk::OperationDiagnostics::default()),
+        |external| external.discard_observed().map_err(display_error),
+    )?;
     drop(converted);
     drop(fs);
     let store = work.join("store");
@@ -4962,6 +4988,10 @@ fn run_terminal_row(
         name: "explicit_cleanup",
         wall_ns: cleanup_wall,
     }];
+    let phase_counters = vec![PhaseCounterDelta::operation_only(
+        "explicit_cleanup",
+        &cleanup,
+    )];
     campaign.append(RowReceipt {
         schedule,
         status: "PASS",
@@ -4975,11 +5005,11 @@ fn run_terminal_row(
         native_route: "NotApplicable".to_owned(),
         tree_level_before: None,
         phases: phases.clone(),
-        phase_counters: Vec::new(),
+        phase_counters,
         row_wall_ns: row_wall,
         row_residual_ns: row_residual(row_wall, &phases)?,
-        engine: None,
-        operation: None,
+        engine: Some(EngineDelta::default()),
+        operation: Some(cleanup),
         storage_before: None,
         storage_after: None,
         resources,
@@ -5901,7 +5931,12 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
                 "materialization",
                 "storage_observation",
             ],
-            "C03" | "C07" => &["checkpoint", "canonical_witness", "storage_observation"],
+            "C03" | "C07" => &[
+                "native_edit",
+                "checkpoint",
+                "canonical_witness",
+                "storage_observation",
+            ],
             "C04" | "C06" => &[
                 "verified_open",
                 "storage_observation",
@@ -5920,6 +5955,7 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
                 "materialization",
                 "storage_observation",
             ],
+            "C09" => &["explicit_cleanup"],
             _ => &[],
         };
         let phases = json_array_objects(&row.json, "phase_counters")?;
@@ -11530,7 +11566,7 @@ mod tests {
             _ => unreachable!(),
         };
         let row_wall_ns = phases.iter().map(|phase| phase.wall_ns).sum::<u128>();
-        let mut operation = (!matches!(scheduled.row_group, "C00" | "C01" | "C09"))
+        let mut operation = (!matches!(scheduled.row_group, "C00" | "C01"))
             .then(layerfs_sdk::OperationDiagnostics::default);
         if let Some(value) = operation.as_mut() {
             value.operation_q_current_bytes = layerfs_sdk::OPERATION_Q_BOUND_BYTES;
@@ -11547,6 +11583,9 @@ mod tests {
                 value.scratch_statements = 55;
                 value.scratch_rows = 6;
                 value.scratch_high_water_bytes = 87_088;
+            } else if scheduled.row_group == "C09" {
+                value.scratch_statements = 1;
+                value.scratch_derived_setup_statements = 1;
             }
             if let Some(edit) = &edit {
                 value.rope.cdc_bytes_scanned = edit.insert_bytes;
@@ -11562,6 +11601,10 @@ mod tests {
                     } else {
                         layerfs_sdk::NativeRoute::InPlaceShift
                     });
+                    value.scratch_statements = 3;
+                    value.scratch_rows = 3;
+                    value.scratch_high_water_bytes = 33_304;
+                    value.scratch_operation_statements = 3;
                 } else if scheduled.row_group == "C05" {
                     value.workspace_reuses = 1;
                     value.scratch_tables = 1;
@@ -11610,6 +11653,10 @@ mod tests {
             value.rope.nodes_created = burst.edits.len() as u64;
             value.workspace_reuses = 1;
             value.descriptor_resets = 1;
+            value.scratch_statements = burst.edits.len() as u64 * 3;
+            value.scratch_rows = burst.edits.len() as u64 * 3;
+            value.scratch_high_water_bytes = 33_304 * burst.edits.len() as u64;
+            value.scratch_operation_statements = burst.edits.len() as u64 * 3;
             for edit in &burst.edits {
                 let suffix = edit.before_bytes - edit.offset - edit.delete_bytes;
                 let patch = edit.kind == EditKind::Overwrite;
@@ -11698,25 +11745,30 @@ mod tests {
             }
         });
         let serial = scheduled.row_index as u64;
-        let storage = operation.as_ref().map(|_| {
-            let before = Diagnostics {
-                database_bytes: Some(1_000_000 + serial * 4_096),
-                logical_engine_bytes: Some(900_000 + serial * 2_048),
-                object_bytes_written: serial * 1_024,
-                ..Diagnostics::default()
-            };
-            let delta = u64::from(transition.is_some()) * 4_096;
-            let after = Diagnostics {
-                database_bytes: before.database_bytes.map(|value| value + delta),
-                logical_engine_bytes: before.logical_engine_bytes.map(|value| value + delta / 2),
-                object_bytes_written: before.object_bytes_written
-                    + transition.map_or(0, |_| {
-                        edit.as_ref().map_or(4_096, |edit| edit.insert_bytes.max(1))
-                    }),
-                ..Diagnostics::default()
-            };
-            (before, after)
-        });
+        let storage = operation
+            .as_ref()
+            .filter(|_| scheduled.row_group != "C09")
+            .map(|_| {
+                let before = Diagnostics {
+                    database_bytes: Some(1_000_000 + serial * 4_096),
+                    logical_engine_bytes: Some(900_000 + serial * 2_048),
+                    object_bytes_written: serial * 1_024,
+                    ..Diagnostics::default()
+                };
+                let delta = u64::from(transition.is_some()) * 4_096;
+                let after = Diagnostics {
+                    database_bytes: before.database_bytes.map(|value| value + delta),
+                    logical_engine_bytes: before
+                        .logical_engine_bytes
+                        .map(|value| value + delta / 2),
+                    object_bytes_written: before.object_bytes_written
+                        + transition.map_or(0, |_| {
+                            edit.as_ref().map_or(4_096, |edit| edit.insert_bytes.max(1))
+                        }),
+                    ..Diagnostics::default()
+                };
+                (before, after)
+            });
         let active_store_connections = match scheduled.row_group {
             "C00" | "C01" | "C09" => 0,
             "C04" | "C06" | "C08" => 2,
@@ -11766,7 +11818,12 @@ mod tests {
                 "materialization",
                 "storage_observation",
             ],
-            "C03" | "C07" => &["checkpoint", "canonical_witness", "storage_observation"],
+            "C03" | "C07" => &[
+                "native_edit",
+                "checkpoint",
+                "canonical_witness",
+                "storage_observation",
+            ],
             "C04" | "C06" => &[
                 "verified_open",
                 "storage_observation",
@@ -11785,6 +11842,7 @@ mod tests {
                 "materialization",
                 "storage_observation",
             ],
+            "C09" => &["explicit_cleanup"],
             _ => &[],
         };
         let phase_counters = engine.map_or_else(Vec::new, |engine| {
@@ -11814,14 +11872,17 @@ mod tests {
                         } else {
                             EngineDelta::default()
                         }
-                    } else if index == 0 {
+                    } else if index == usize::from(matches!(scheduled.row_group, "C03" | "C07")) {
                         engine
                     } else {
                         EngineDelta::default()
                     };
                     let operation_scratch_owner = matches!(
                         (scheduled.row_group, *name),
-                        ("C02" | "C08", "materialization") | ("C05", "apfs_refresh")
+                        ("C02" | "C08", "materialization")
+                            | ("C03" | "C07", "native_edit")
+                            | ("C05", "apfs_refresh")
+                            | ("C09", "explicit_cleanup")
                     );
                     let operation_scratch = operation.as_ref().filter(|_| operation_scratch_owner);
                     PhaseCounterDelta {

@@ -35,12 +35,26 @@ fn checkpoint_syncs_the_final_token_after_mixed_same_path_edits() {
     assert_eq!(edit.operation_q_terminal_bytes, 0);
     assert_eq!(edit.owned_temp_current, 1);
     assert!(edit.descriptor_spool_bytes_current >= 4);
+    assert_eq!(edit.scratch_tables, 0);
+    assert_eq!(edit.scratch_owner_setup_statements, 0);
+    assert_eq!(edit.scratch_derived_setup_statements, 0);
+    assert_eq!(edit.scratch_operation_statements, 3);
+    assert_eq!(edit.scratch_statements, 3);
+    assert_eq!(edit.scratch_rows, 3);
+    assert!(edit.scratch_high_water_bytes > 0);
     expected.splice(0..4, *b"EDIT");
     managed.replace("file", 100, 0, b"INS").unwrap();
     expected.splice(100..100, *b"INS");
     managed.replace("file", 200, 2, b"").unwrap();
     expected.splice(200..202, []);
-    managed.rename("file", "intermediate").unwrap();
+    let renamed = managed.rename_observed("file", "intermediate").unwrap();
+    assert_eq!(renamed.scratch_tables, 0);
+    assert_eq!(renamed.scratch_owner_setup_statements, 0);
+    assert_eq!(renamed.scratch_derived_setup_statements, 0);
+    assert_eq!(renamed.scratch_operation_statements, 3);
+    assert_eq!(renamed.scratch_statements, 3);
+    assert_eq!(renamed.scratch_rows, 3);
+    assert!(renamed.scratch_high_water_bytes > 0);
     managed.rename("intermediate", "nested/moved").unwrap();
 
     let (next, counters) = managed.checkpoint_observed().unwrap();
@@ -70,7 +84,19 @@ fn checkpoint_syncs_the_final_token_after_mixed_same_path_edits() {
         .fs
         .replace_range(&next, "nested/moved", 10, 1, std::io::Cursor::new([0xa5]))
         .unwrap();
-    managed.refresh(&target).unwrap();
+    let refreshed_counters = managed.refresh(&target).unwrap();
+    assert_eq!(refreshed_counters.scratch_tables, 1);
+    assert_eq!(
+        refreshed_counters.scratch_statements,
+        refreshed_counters.scratch_owner_setup_statements
+            + refreshed_counters.scratch_derived_setup_statements
+            + refreshed_counters.scratch_operation_statements
+    );
+    assert!(refreshed_counters.scratch_operation_statements > 0);
+    let equal_refresh = managed.refresh(&target).unwrap();
+    assert_eq!(equal_refresh.scratch_tables, 0);
+    assert_eq!(equal_refresh.scratch_statements, 0);
+    assert_eq!(equal_refresh.scratch_rows, 0);
     expected[10] = 0xa5;
     let mut refreshed = Vec::new();
     managed.read_to("nested/moved", &mut refreshed).unwrap();
