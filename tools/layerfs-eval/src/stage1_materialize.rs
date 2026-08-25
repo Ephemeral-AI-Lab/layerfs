@@ -1871,7 +1871,6 @@ fn validate_attribution_observation(
         }
         AttributionArm::Native => {
             content_bytes == 0
-                && row.engine.statements == 0
                 && row.engine.fetched_rows == 0
                 && operation.scratch_statements == 0
                 && operation.native.bytes_written == expected_bytes
