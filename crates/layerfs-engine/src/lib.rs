@@ -15,6 +15,7 @@ use std::io::Cursor;
 use std::ops::Range;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -244,10 +245,20 @@ pub struct SqliteProfile {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct EngineCounters {
+    /// State-changing writer transactions. Admission/read transactions are
+    /// reported separately below so publication equations stay exact.
     pub transactions_started: u64,
     pub transactions_committed: u64,
     pub transactions_rolled_back: u64,
     pub statements: u64,
+    pub admission_transactions_started: u64,
+    pub admission_transactions_committed: u64,
+    pub admission_transactions_rolled_back: u64,
+    pub admission_statements: u64,
+    pub integrity_transactions_started: u64,
+    pub integrity_transactions_committed: u64,
+    pub integrity_transactions_rolled_back: u64,
+    pub integrity_statements: u64,
     pub busy_events: u64,
     pub locked_events: u64,
     pub objects_validated: u64,
@@ -276,6 +287,8 @@ pub struct EngineCounters {
     pub put_insert_statements: u64,
     pub created_rows: u64,
     pub reused_rows: u64,
+    pub publication_transactions_started: u64,
+    pub publication_transactions_rolled_back: u64,
     pub publication_commits: u64,
     pub publication_closure_passes: u64,
     pub namespace_graph_verification_passes: u64,
@@ -283,6 +296,7 @@ pub struct EngineCounters {
     pub scratch_statements: u64,
     pub scratch_rows: u64,
     pub scratch_high_water_bytes: u64,
+    pub retained_roots_validated: u64,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -316,10 +330,14 @@ pub struct Engine {
     maintenance_pin: Option<Mutex<Connection>>,
     last_compaction: Option<CompactionStorageObservation>,
     commit_dispatch: std::sync::Arc<dyn CommitDispatch>,
+    integrity_scope: AtomicBool,
 }
 
 trait CommitDispatch: Send + Sync {
     fn commit(&self, connection: &Connection) -> rusqlite::Result<()>;
+    fn rollback(&self, connection: &Connection) -> rusqlite::Result<()> {
+        connection.execute_batch("ROLLBACK")
+    }
 }
 
 struct SqliteCommit;
@@ -330,9 +348,11 @@ impl CommitDispatch for SqliteCommit {
 }
 
 pub(crate) struct ConnectionGuard<'a> {
+    engine: &'a Engine,
     guard: MutexGuard<'a, Option<Connection>>,
     transaction: bool,
     commit_scrub_on_drop: bool,
+    integrity_transaction: bool,
 }
 
 impl Deref for ConnectionGuard<'_> {
@@ -352,16 +372,35 @@ impl Drop for ConnectionGuard<'_> {
     fn drop(&mut self) {
         if self.transaction {
             if let Some(connection) = self.guard.as_ref() {
+                if self.integrity_transaction {
+                    self.engine.bump_best_effort(|counters| {
+                        checked_add(&mut counters.statements, 1)?;
+                        checked_add(&mut counters.integrity_statements, 1)
+                    });
+                }
                 let result = connection.execute_batch(if self.commit_scrub_on_drop {
                     "COMMIT"
                 } else {
                     "ROLLBACK"
                 });
+                if self.integrity_transaction && result.is_ok() {
+                    let committed = self.commit_scrub_on_drop;
+                    self.engine.bump_best_effort(|counters| {
+                        if committed {
+                            checked_add(&mut counters.integrity_transactions_committed, 1)
+                        } else {
+                            checked_add(&mut counters.integrity_transactions_rolled_back, 1)
+                        }
+                    });
+                }
                 if result.is_err() {
                     self.guard.take();
                 }
             }
             self.transaction = false;
+        }
+        if self.integrity_transaction {
+            self.engine.integrity_scope.store(false, Ordering::Release);
         }
     }
 }
@@ -423,24 +462,46 @@ impl Engine {
         connection
             .busy_timeout(BUSY_TIMEOUT)
             .map_err(map_sqlite_error)?;
-        preflight_schema(&connection).map_err(|error| engine_step("primary preflight", error))?;
-        let profile =
-            configure_profile(&connection).map_err(|error| engine_step("profile", error))?;
-        initialize_schema(&connection, &profile)
+        let mut admission_statements = 0;
+        preflight_schema_counted(&connection, &mut admission_statements)
+            .map_err(|error| engine_step("primary preflight", error))?;
+        let profile = configure_profile_counted(&connection, &mut admission_statements)
+            .map_err(|error| engine_step("profile", error))?;
+        initialize_schema_counted(&connection, &profile, &mut admission_statements)
             .map_err(|error| engine_step("schema initialization", error))?;
         let scrub = if mode == integrity::IntegrityMode::Verified {
             let _admission = VERIFIED_OPEN_LOCK.lock().map_err(|_| EngineError::Sqlite {
                 kind: SqliteErrorKind::Other,
                 message: "Verified admission mutex poisoned".to_owned(),
             })?;
-            initial_verified_scrub(&connection, &path)
-                .map_err(|error| engine_step("initial verified scrub", error))?
+            Some(
+                initial_verified_scrub(&connection, &path)
+                    .map_err(|error| engine_step("initial verified scrub", error))?,
+            )
         } else {
             None
         };
-        let mut counters = EngineCounters::default();
-        if let Some(observation) = scrub {
-            add_retained_scrub_counters(&mut counters, observation)?;
+        let mut counters = EngineCounters {
+            admission_statements,
+            ..EngineCounters::default()
+        };
+        if let Some(scrub) = scrub {
+            checked_add(
+                &mut counters.admission_transactions_started,
+                scrub.transactions_started,
+            )?;
+            checked_add(
+                &mut counters.admission_transactions_committed,
+                scrub.transactions_committed,
+            )?;
+            checked_add(
+                &mut counters.admission_transactions_rolled_back,
+                scrub.transactions_rolled_back,
+            )?;
+            checked_add(&mut counters.admission_statements, scrub.statements)?;
+            if let Some(observation) = scrub.verification {
+                add_retained_scrub_counters(&mut counters, observation)?;
+            }
         }
         Ok(Self {
             path,
@@ -452,6 +513,7 @@ impl Engine {
             maintenance_pin: None,
             last_compaction: None,
             commit_dispatch: std::sync::Arc::new(SqliteCommit),
+            integrity_scope: AtomicBool::new(false),
         })
     }
 
@@ -469,6 +531,7 @@ impl Engine {
 
     pub fn store_id(&self) -> EngineResult<[u8; 32]> {
         let connection = self.lock_connection()?;
+        self.mark_statement()?;
         let bytes = connection
             .query_row(
                 "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
@@ -953,31 +1016,89 @@ impl Engine {
             return Err(EngineError::AmbiguousDurability);
         }
         let mut connection = ConnectionGuard {
+            engine: self,
             guard: connection,
             transaction: false,
             commit_scrub_on_drop: false,
+            integrity_transaction: false,
         };
         if self.mode == integrity::IntegrityMode::Verified {
             connection
                 .execute_batch(if write { "BEGIN IMMEDIATE" } else { "BEGIN" })
                 .map_err(map_sqlite_error)?;
             connection.transaction = true;
+            if write {
+                self.bump(|counters| {
+                    checked_add(&mut counters.transactions_started, 1)?;
+                    checked_add(&mut counters.publication_transactions_started, 1)?;
+                    checked_add(&mut counters.statements, 1)
+                })?;
+            } else {
+                connection.integrity_transaction = true;
+                self.integrity_scope.store(true, Ordering::Release);
+                self.bump(|counters| {
+                    checked_add(&mut counters.integrity_transactions_started, 1)?;
+                    checked_add(&mut counters.statements, 1)?;
+                    checked_add(&mut counters.integrity_statements, 1)
+                })?;
+            }
+            if write {
+                self.mark_statement()?;
+            } else {
+                self.mark_integrity_sql(1)?;
+            }
             if trusted_history(&connection)? {
                 if !write {
                     connection
                         .execute_batch("ROLLBACK; BEGIN IMMEDIATE")
                         .map_err(map_sqlite_error)?;
+                    self.bump(|counters| {
+                        checked_add(&mut counters.integrity_transactions_rolled_back, 1)?;
+                        checked_add(&mut counters.integrity_transactions_started, 1)?;
+                        checked_add(&mut counters.statements, 2)?;
+                        checked_add(&mut counters.integrity_statements, 2)
+                    })?;
                 }
                 let scrubbed = integrity::verify_retained_union_observed(&connection, &self.path)
                     .and_then(|observation| {
-                        clear_trusted_history(&connection)?;
+                        clear_known_trusted_history(&connection)?;
                         self.bump(|counters| {
+                            checked_add(
+                                &mut counters.integrity_statements,
+                                observation.verification.statements,
+                            )?;
+                            checked_add(&mut counters.statements, 1)?;
+                            checked_add(&mut counters.integrity_statements, 1)?;
                             add_retained_scrub_counters(counters, observation.verification)
                         })
                     });
                 if let Err(error) = scrubbed {
-                    let _ = connection.execute_batch("ROLLBACK");
+                    if connection.integrity_transaction {
+                        self.bump_best_effort(|counters| {
+                            checked_add(&mut counters.statements, 1)?;
+                            checked_add(&mut counters.integrity_statements, 1)
+                        });
+                    } else if write {
+                        self.bump_best_effort(|counters| checked_add(&mut counters.statements, 1));
+                    }
+                    let rollback = self.commit_dispatch.rollback(&connection);
+                    if rollback.is_ok() {
+                        if connection.integrity_transaction {
+                            self.bump_best_effort(|counters| {
+                                checked_add(&mut counters.integrity_transactions_rolled_back, 1)
+                            });
+                        } else if write {
+                            self.bump_best_effort(|counters| {
+                                checked_add(&mut counters.transactions_rolled_back, 1)?;
+                                checked_add(&mut counters.publication_transactions_rolled_back, 1)
+                            });
+                        }
+                    } else {
+                        connection.guard.take();
+                    }
                     connection.transaction = false;
+                    connection.integrity_transaction = false;
+                    self.integrity_scope.store(false, Ordering::Release);
                     return Err(error);
                 }
                 connection.commit_scrub_on_drop = true;
@@ -987,7 +1108,21 @@ impl Engine {
     }
 
     fn mark_statement(&self) -> EngineResult<()> {
-        self.bump(|counters| checked_add(&mut counters.statements, 1))
+        let integrity = self.integrity_scope.load(Ordering::Acquire);
+        self.bump(|counters| {
+            checked_add(&mut counters.statements, 1)?;
+            if integrity {
+                checked_add(&mut counters.integrity_statements, 1)?;
+            }
+            Ok(())
+        })
+    }
+
+    fn mark_integrity_sql(&self, statements: u64) -> EngineResult<()> {
+        self.bump(|counters| {
+            checked_add(&mut counters.statements, statements)?;
+            checked_add(&mut counters.integrity_statements, statements)
+        })
     }
 
     #[cfg(test)]
@@ -1174,10 +1309,7 @@ fn candidate_auxiliary_bytes(path: &Path) -> u64 {
         .sum()
 }
 
-fn clear_trusted_history(connection: &Connection) -> EngineResult<()> {
-    if !trusted_history(connection)? {
-        return Ok(());
-    }
+fn clear_known_trusted_history(connection: &Connection) -> EngineResult<()> {
     connection
         .execute(
             "UPDATE layerfs_authority SET trusted_history = 0 WHERE authority_id = 1",
@@ -1187,17 +1319,33 @@ fn clear_trusted_history(connection: &Connection) -> EngineResult<()> {
     Ok(())
 }
 
+struct InitialScrubObservation {
+    verification: Option<integrity::VerificationObservation>,
+    transactions_started: u64,
+    transactions_committed: u64,
+    transactions_rolled_back: u64,
+    statements: u64,
+}
+
 fn initial_verified_scrub(
     connection: &Connection,
     path: &Path,
-) -> EngineResult<Option<integrity::VerificationObservation>> {
+) -> EngineResult<InitialScrubObservation> {
     connection
         .execute_batch("BEGIN IMMEDIATE")
         .map_err(map_sqlite_error)?;
+    let mut statements = 1_u64;
     let result = trusted_history(connection).and_then(|dirty| {
+        statements = statements
+            .checked_add(1)
+            .ok_or(EngineError::CounterOverflow)?;
         if dirty {
             let observation = integrity::verify_retained_union_observed(connection, path)?;
-            clear_trusted_history(connection)?;
+            statements = statements
+                .checked_add(observation.verification.statements)
+                .and_then(|value| value.checked_add(1))
+                .ok_or(EngineError::CounterOverflow)?;
+            clear_known_trusted_history(connection)?;
             Ok(Some(observation.verification))
         } else {
             Ok(None)
@@ -1208,7 +1356,16 @@ fn initial_verified_scrub(
             connection
                 .execute_batch("COMMIT")
                 .map_err(map_sqlite_error)?;
-            Ok(observation)
+            statements = statements
+                .checked_add(1)
+                .ok_or(EngineError::CounterOverflow)?;
+            Ok(InitialScrubObservation {
+                verification: observation,
+                transactions_started: 1,
+                transactions_committed: 1,
+                transactions_rolled_back: 0,
+                statements,
+            })
         }
         Err(error) => {
             let _ = connection.execute_batch("ROLLBACK");
@@ -1247,6 +1404,10 @@ fn add_retained_scrub_counters(
         observation.scratch_statements,
     )?;
     checked_add(&mut counters.scratch_rows, observation.scratch_rows)?;
+    checked_add(
+        &mut counters.retained_roots_validated,
+        observation.retained_roots_validated,
+    )?;
     counters.scratch_high_water_bytes = counters
         .scratch_high_water_bytes
         .max(observation.scratch_bytes);
@@ -1507,6 +1668,12 @@ const TABLE_SCHEMAS: [(&str, &str); 7] = [
 ];
 
 fn preflight_schema(connection: &Connection) -> EngineResult<()> {
+    let mut ignored = 0;
+    preflight_schema_counted(connection, &mut ignored)
+}
+
+fn preflight_schema_counted(connection: &Connection, statements: &mut u64) -> EngineResult<()> {
+    note_statement(statements)?;
     let mut statement = connection
         .prepare(
             "SELECT type, name FROM sqlite_schema
@@ -1538,6 +1705,7 @@ fn preflight_schema(connection: &Connection) -> EngineResult<()> {
         return Err(EngineError::SchemaMismatch);
     }
     for (name, expected) in TABLE_SCHEMAS {
+        note_statement(statements)?;
         let actual = connection
             .query_row(
                 "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
@@ -1549,6 +1717,7 @@ fn preflight_schema(connection: &Connection) -> EngineResult<()> {
             return Err(EngineError::SchemaMismatch);
         }
     }
+    note_statement(statements)?;
     let metadata = connection
         .query_row(
             "SELECT format_marker, schema_version, journal_mode, synchronous, temp_store, mmap_size
@@ -1572,6 +1741,7 @@ fn preflight_schema(connection: &Connection) -> EngineResult<()> {
     {
         return Err(EngineError::SchemaMismatch);
     }
+    note_statement(statements)?;
     let authority = connection
         .query_row(
             "SELECT length(store_id), next_inode_serial, trusted_history
@@ -1603,31 +1773,49 @@ fn schema_shape(sql: &str) -> String {
 }
 
 fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
+    let mut ignored = 0;
+    configure_profile_counted(connection, &mut ignored)
+}
+
+fn configure_profile_counted(
+    connection: &Connection,
+    statements: &mut u64,
+) -> EngineResult<SqliteProfile> {
+    note_statement(statements)?;
     let journal_mode = connection
         .query_row("PRAGMA journal_mode=DELETE", [], |row| {
             row.get::<_, String>(0)
         })
         .map_err(map_sqlite_error)?;
+    *statements = statements
+        .checked_add(5)
+        .ok_or(EngineError::CounterOverflow)?;
     connection
         .execute_batch(
             "PRAGMA synchronous=FULL; PRAGMA temp_store=FILE; PRAGMA mmap_size=0; PRAGMA cache_size=1280; PRAGMA cache_spill=1280;",
         )
         .map_err(map_sqlite_error)?;
+    note_statement(statements)?;
     let synchronous = connection
         .query_row("PRAGMA synchronous", [], |row| row.get::<_, i64>(0))
         .map_err(map_sqlite_error)?;
+    note_statement(statements)?;
     let temp_store = connection
         .query_row("PRAGMA temp_store", [], |row| row.get::<_, i64>(0))
         .map_err(map_sqlite_error)?;
+    note_statement(statements)?;
     let mmap_size = connection
         .query_row("PRAGMA mmap_size", [], |row| row.get::<_, i64>(0))
         .map_err(map_sqlite_error)?;
+    note_statement(statements)?;
     let page_size = connection
         .query_row("PRAGMA page_size", [], |row| row.get::<_, i64>(0))
         .map_err(map_sqlite_error)?;
+    note_statement(statements)?;
     let cache_pages = connection
         .query_row("PRAGMA cache_size", [], |row| row.get::<_, i64>(0))
         .map_err(map_sqlite_error)?;
+    note_statement(statements)?;
     let cache_spill_pages = connection
         .query_row("PRAGMA cache_spill", [], |row| row.get::<_, i64>(0))
         .map_err(map_sqlite_error)?;
@@ -1654,9 +1842,20 @@ fn configure_profile(connection: &Connection) -> EngineResult<SqliteProfile> {
 }
 
 fn initialize_schema(connection: &Connection, profile: &SqliteProfile) -> EngineResult<()> {
+    let mut ignored = 0;
+    initialize_schema_counted(connection, profile, &mut ignored)
+}
+
+fn initialize_schema_counted(
+    connection: &Connection,
+    profile: &SqliteProfile,
+    statements: &mut u64,
+) -> EngineResult<()> {
     for (_, schema) in TABLE_SCHEMAS {
+        note_statement(statements)?;
         connection.execute_batch(schema).map_err(map_sqlite_error)?;
     }
+    note_statement(statements)?;
     let existing = connection
         .query_row(
             "SELECT format_marker, schema_version, journal_mode, synchronous, temp_store, mmap_size
@@ -1688,6 +1887,7 @@ fn initialize_schema(connection: &Connection, profile: &SqliteProfile) -> Engine
             }
         }
         None => {
+            note_statement(statements)?;
             connection
                 .execute(
                     "INSERT INTO layerfs_store_meta
@@ -1705,6 +1905,7 @@ fn initialize_schema(connection: &Connection, profile: &SqliteProfile) -> Engine
                 .map_err(map_sqlite_error)?;
         }
     }
+    note_statement(statements)?;
     let authority_exists = connection
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM layerfs_authority WHERE authority_id = 1)",
@@ -1713,11 +1914,20 @@ fn initialize_schema(connection: &Connection, profile: &SqliteProfile) -> Engine
         )
         .map_err(map_sqlite_error)?;
     if !authority_exists {
+        note_statement(statements)?;
         let store_id = connection
             .query_row("SELECT randomblob(32)", [], |row| row.get::<_, Vec<u8>>(0))
             .map_err(map_sqlite_error)?;
+        note_statement(statements)?;
         connection.execute("INSERT INTO layerfs_authority (authority_id, store_id, next_inode_serial, trusted_history) VALUES (1, ?1, 0, 0)", params![store_id.as_slice()]).map_err(map_sqlite_error)?;
     }
+    Ok(())
+}
+
+fn note_statement(statements: &mut u64) -> EngineResult<()> {
+    *statements = statements
+        .checked_add(1)
+        .ok_or(EngineError::CounterOverflow)?;
     Ok(())
 }
 
@@ -2124,6 +2334,9 @@ fn map_sqlite_error(error: rusqlite::Error) -> EngineError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use layerfs_core::inode::InodeId;
+    use layerfs_core::namespace::NamespaceRootV1;
+    use layerfs_core::namespace_codec::{encode_namespace_root, profile_id};
     use layerfs_core::{encode_object, Object};
     use std::process::Command;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -2146,6 +2359,55 @@ mod tests {
     fn test_path() -> PathBuf {
         let id = NEXT_TEST_ID.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!("layerfs-engine-{}-{id}.sqlite", std::process::id()))
+    }
+
+    struct RollbackFailure;
+
+    impl CommitDispatch for RollbackFailure {
+        fn commit(&self, connection: &Connection) -> rusqlite::Result<()> {
+            connection.execute_batch("COMMIT")
+        }
+
+        fn rollback(&self, _connection: &Connection) -> rusqlite::Result<()> {
+            Err(rusqlite::Error::InvalidQuery)
+        }
+    }
+
+    #[test]
+    fn failed_live_scrub_rollback_drops_the_ambiguous_primary() {
+        let path = test_path();
+        let mut verified = Engine::open(&path).unwrap();
+        let trusted =
+            Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
+        let root = encode_namespace_root(NamespaceRootV1 {
+            profile_id: profile_id(),
+            root_directory_inode: InodeId::allocate([0x61; 32], 0),
+            inode_table_root: ObjectId::for_bytes(b"missing table"),
+        })
+        .unwrap();
+        trusted
+            .begin_publication(None, "main")
+            .unwrap()
+            .publish_namespace(&root)
+            .unwrap();
+        verified.reset_counters().unwrap();
+        verified.commit_dispatch = std::sync::Arc::new(RollbackFailure);
+
+        assert!(matches!(
+            verified.begin_publication(None, "probe"),
+            Err(EngineError::MissingObject(_))
+        ));
+        let counters = verified.counters().unwrap();
+        assert_eq!(counters.transactions_started, 1);
+        assert_eq!(counters.transactions_rolled_back, 0);
+        assert_eq!(counters.publication_transactions_started, 1);
+        assert_eq!(counters.publication_transactions_rolled_back, 0);
+        assert!(matches!(
+            verified.read_ref("main"),
+            Err(EngineError::AmbiguousDurability)
+        ));
+        drop(trusted);
+        let _ = std::fs::remove_file(path);
     }
 
     fn bytes_object(value: &[u8]) -> (ObjectId, Vec<u8>) {

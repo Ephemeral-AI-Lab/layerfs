@@ -1,5 +1,8 @@
 use crate::stage1_fixture::{self, EvalResult};
-use layerfs_sdk::{Diagnostics, IntegrityMode, LayerFs, NativeMetadata, RefState, RootId};
+use layerfs_sdk::{
+    Diagnostics, IntegrityMode, LayerFs, NativeMetadata, RefState, RootId,
+    PRODUCT_BUFFER_BOUND_BYTES,
+};
 use std::cell::RefCell;
 use std::fmt::Write as FmtWrite;
 use std::fs::{self, File, FileTimes, OpenOptions};
@@ -1288,6 +1291,14 @@ struct EngineDelta {
     transactions_committed: u64,
     transactions_rolled_back: u64,
     statements: u64,
+    admission_transactions_started: u64,
+    admission_transactions_committed: u64,
+    admission_transactions_rolled_back: u64,
+    admission_statements: u64,
+    integrity_transactions_started: u64,
+    integrity_transactions_committed: u64,
+    integrity_transactions_rolled_back: u64,
+    integrity_statements: u64,
     busy_events: u64,
     locked_events: u64,
     objects_validated: u64,
@@ -1316,6 +1327,8 @@ struct EngineDelta {
     put_insert_statements: u64,
     created_rows: u64,
     reused_rows: u64,
+    publication_transactions_started: u64,
+    publication_transactions_rolled_back: u64,
     publication_commits: u64,
     publication_closure_passes: u64,
     namespace_graph_verification_passes: u64,
@@ -1323,6 +1336,7 @@ struct EngineDelta {
     scratch_statements: u64,
     scratch_rows: u64,
     scratch_high_water_bytes: u64,
+    retained_roots_validated: u64,
 }
 
 impl EngineDelta {
@@ -1339,6 +1353,14 @@ impl EngineDelta {
             transactions_committed: delta!(transactions_committed),
             transactions_rolled_back: delta!(transactions_rolled_back),
             statements: delta!(statements),
+            admission_transactions_started: delta!(admission_transactions_started),
+            admission_transactions_committed: delta!(admission_transactions_committed),
+            admission_transactions_rolled_back: delta!(admission_transactions_rolled_back),
+            admission_statements: delta!(admission_statements),
+            integrity_transactions_started: delta!(integrity_transactions_started),
+            integrity_transactions_committed: delta!(integrity_transactions_committed),
+            integrity_transactions_rolled_back: delta!(integrity_transactions_rolled_back),
+            integrity_statements: delta!(integrity_statements),
             busy_events: delta!(busy_events),
             locked_events: delta!(locked_events),
             objects_validated: delta!(objects_validated),
@@ -1369,6 +1391,8 @@ impl EngineDelta {
             put_insert_statements: delta!(put_insert_statements),
             created_rows: delta!(created_rows),
             reused_rows: delta!(reused_rows),
+            publication_transactions_started: delta!(publication_transactions_started),
+            publication_transactions_rolled_back: delta!(publication_transactions_rolled_back),
             publication_commits: delta!(publication_commits),
             publication_closure_passes: delta!(publication_closure_passes),
             namespace_graph_verification_passes: delta!(namespace_graph_verification_passes),
@@ -1378,6 +1402,7 @@ impl EngineDelta {
             scratch_high_water_bytes: after
                 .scratch_high_water_bytes
                 .max(before.scratch_high_water_bytes),
+            retained_roots_validated: delta!(retained_roots_validated),
         })
     }
 
@@ -1420,6 +1445,24 @@ impl EngineDelta {
         if self.payload_batch_maximum > 64 {
             return Err("payload_batch_maximum <= 64".to_owned());
         }
+        if self.admission_transactions_started
+            != self
+                .admission_transactions_committed
+                .checked_add(self.admission_transactions_rolled_back)
+                .ok_or_else(|| "admission transaction equation overflow".to_owned())?
+            || self.integrity_transactions_started
+                != self
+                    .integrity_transactions_committed
+                    .checked_add(self.integrity_transactions_rolled_back)
+                    .ok_or_else(|| "integrity transaction equation overflow".to_owned())?
+            || self.publication_transactions_started
+                != self
+                    .publication_commits
+                    .checked_add(self.publication_transactions_rolled_back)
+                    .ok_or_else(|| "publication transaction equation overflow".to_owned())?
+        {
+            return Err("admission/integrity/publication transaction closure".to_owned());
+        }
         if self.object_bytes_written != self.logical_object_bytes
             || self.range_bytes_requested != self.range_bytes_returned
         {
@@ -1433,6 +1476,8 @@ impl EngineDelta {
         if self.transactions_started != 1
             || self.transactions_committed != 1
             || self.transactions_rolled_back != 0
+            || self.publication_transactions_started != 1
+            || self.publication_transactions_rolled_back != 0
             || self.publication_commits != 1
         {
             return Err(
@@ -1447,6 +1492,8 @@ impl EngineDelta {
         if self.transactions_started != 0
             || self.transactions_committed != 0
             || self.transactions_rolled_back != 0
+            || self.publication_transactions_started != 0
+            || self.publication_transactions_rolled_back != 0
             || self.publication_commits != 0
             || self.object_bytes_written != 0
             || self.logical_object_bytes != 0
@@ -1471,6 +1518,14 @@ impl EngineDelta {
         add!(transactions_committed);
         add!(transactions_rolled_back);
         add!(statements);
+        add!(admission_transactions_started);
+        add!(admission_transactions_committed);
+        add!(admission_transactions_rolled_back);
+        add!(admission_statements);
+        add!(integrity_transactions_started);
+        add!(integrity_transactions_committed);
+        add!(integrity_transactions_rolled_back);
+        add!(integrity_statements);
         add!(busy_events);
         add!(locked_events);
         add!(objects_validated);
@@ -1499,6 +1554,8 @@ impl EngineDelta {
         add!(put_insert_statements);
         add!(created_rows);
         add!(reused_rows);
+        add!(publication_transactions_started);
+        add!(publication_transactions_rolled_back);
         add!(publication_commits);
         add!(publication_closure_passes);
         add!(namespace_graph_verification_passes);
@@ -1508,6 +1565,7 @@ impl EngineDelta {
         self.scratch_high_water_bytes = self
             .scratch_high_water_bytes
             .max(source.scratch_high_water_bytes);
+        add!(retained_roots_validated);
         Ok(self)
     }
 }
@@ -1585,19 +1643,24 @@ struct ContentCounters {
 }
 
 fn content_counters(operation: &layerfs_sdk::OperationDiagnostics) -> EvalResult<ContentCounters> {
+    let payload_bytes_read = operation
+        .content_payload_bytes_read()
+        .ok_or_else(|| "metadata payload reads exceed aggregate reads".to_owned())?;
+    let payload_bytes_written = operation
+        .content_payload_bytes_written()
+        .ok_or_else(|| "metadata payload writes exceed aggregate writes".to_owned())?;
+    let cdc_bytes_scanned = operation
+        .rope
+        .cdc_bytes_scanned
+        .checked_sub(operation.metadata_rope.cdc_bytes_scanned)
+        .ok_or_else(|| "metadata CDC exceeds aggregate CDC".to_owned())?;
     Ok(ContentCounters {
-        cdc_bytes_scanned: operation
-            .rope
-            .cdc_bytes_scanned
-            .checked_sub(operation.metadata_rope.cdc_bytes_scanned)
-            .ok_or_else(|| "metadata CDC exceeds aggregate CDC".to_owned())?,
-        payload_bytes_written: operation
-            .rope
-            .payload_bytes_written
-            .checked_sub(operation.metadata_rope.payload_bytes_written)
-            .ok_or_else(|| "metadata payload writes exceed aggregate writes".to_owned())?,
-        unaffected_payload_reads: operation.unaffected_suffix_payload_reads,
-        unaffected_payload_writes: operation.unaffected_suffix_payload_writes,
+        cdc_bytes_scanned,
+        payload_bytes_written,
+        unaffected_payload_reads: payload_bytes_read,
+        unaffected_payload_writes: payload_bytes_written
+            .checked_sub(cdc_bytes_scanned)
+            .ok_or_else(|| "content payload writes are below content CDC input".to_owned())?,
         rope_nodes_read: operation
             .rope
             .nodes_read
@@ -1730,6 +1793,7 @@ struct ResourceObservation {
     fd_current: u64,
     active_store_connections: u64,
     child_processes: u64,
+    owned_temp_entries: Option<u64>,
     residue_entries: u64,
 }
 
@@ -1764,6 +1828,14 @@ struct SubEditReceipt {
     native_wall_ns: u128,
     physical_oracle_wall_ns: u128,
     native_route: String,
+    native_bytes_read: u64,
+    native_bytes_written: u64,
+    native_patch_bytes: u64,
+    native_suffix_bytes_shifted: u64,
+    native_clone_attempts: u64,
+    native_clone_successes: u64,
+    native_clone_fallbacks: u64,
+    native_full_fallback_files: u64,
     tree_level_before: Option<u8>,
     locality: Option<ContentCounters>,
 }
@@ -1851,6 +1923,14 @@ impl RowReceipt {
                 "counters.transactions_committed",
                 "counters.transactions_rolled_back",
                 "counters.statements",
+                "counters.admission_transactions_started",
+                "counters.admission_transactions_committed",
+                "counters.admission_transactions_rolled_back",
+                "counters.admission_statements",
+                "counters.integrity_transactions_started",
+                "counters.integrity_transactions_committed",
+                "counters.integrity_transactions_rolled_back",
+                "counters.integrity_statements",
                 "counters.busy_events",
                 "counters.locked_events",
                 "counters.objects_validated",
@@ -1870,6 +1950,8 @@ impl RowReceipt {
                 "counters.put_insert_statements",
                 "counters.created_rows",
                 "counters.reused_rows",
+                "counters.publication_transactions_started",
+                "counters.publication_transactions_rolled_back",
                 "counters.publication_commits",
                 "counters.publication_closure_passes",
                 "counters.namespace_graph_verification_passes",
@@ -1877,6 +1959,7 @@ impl RowReceipt {
                 "counters.scratch_statements",
                 "counters.scratch_rows",
                 "counters.scratch_high_water_bytes",
+                "counters.retained_roots_validated",
                 "counters.cdc_bytes_scanned",
                 "counters.payload_bytes_written",
                 "counters.unaffected_payload_reads",
@@ -1902,7 +1985,6 @@ impl RowReceipt {
                 "resources.operation_q_current_bytes",
                 "resources.operation_q_high_water_bytes",
                 "resources.operation_q_terminal_bytes",
-                "resources.owned_temp_entries",
             ] {
                 unavailable_values.push(Unavailable {
                     field: field.to_owned(),
@@ -1975,6 +2057,14 @@ impl RowReceipt {
                 field: "resources.rss_current_bytes".to_owned(),
                 availability: "Unavailable",
                 reason: "per-row observer uses getrusage peak; current RSS is sampled only by decisive external observers".to_owned(),
+            });
+        }
+        if self.operation.is_none() && self.resources.owned_temp_entries.is_none() {
+            unavailable_values.push(Unavailable {
+                field: "resources.owned_temp_entries".to_owned(),
+                availability: "NotApplicable",
+                reason: "row has no product operation or terminal owned-residue observation"
+                    .to_owned(),
             });
         }
         let unavailable = unavailable_values
@@ -2113,7 +2203,13 @@ fn phase_counter_json(phase: &PhaseCounterDelta) -> String {
         concat!(
             "{{\"name\":\"{}\",\"transactions_started\":{},",
             "\"transactions_committed\":{},\"transactions_rolled_back\":{},",
-            "\"statements\":{},\"busy_events\":{},\"locked_events\":{},",
+            "\"statements\":{},\"admission_transactions_started\":{},",
+            "\"admission_transactions_committed\":{},",
+            "\"admission_transactions_rolled_back\":{},\"admission_statements\":{},",
+            "\"integrity_transactions_started\":{},",
+            "\"integrity_transactions_committed\":{},",
+            "\"integrity_transactions_rolled_back\":{},\"integrity_statements\":{},",
+            "\"busy_events\":{},\"locked_events\":{},",
             "\"objects_validated\":{},\"objects_created\":{},\"objects_reused\":{},",
             "\"object_bytes_read\":{},\"object_bytes_written\":{},",
             "\"range_bytes_requested\":{},\"range_bytes_returned\":{},",
@@ -2128,10 +2224,13 @@ fn phase_counter_json(phase: &PhaseCounterDelta) -> String {
             "\"payload_batch_queries\":{},\"payload_batch_references\":{},",
             "\"payload_batch_maximum\":{},\"put_lookup_statements\":{},",
             "\"put_insert_statements\":{},\"created_rows\":{},\"reused_rows\":{},",
+            "\"publication_transactions_started\":{},",
+            "\"publication_transactions_rolled_back\":{},",
             "\"publication_commits\":{},\"publication_closure_passes\":{},",
             "\"namespace_graph_verification_passes\":{},\"scratch_tables\":{},",
             "\"scratch_statements\":{},\"scratch_rows\":{},",
-            "\"scratch_high_water_bytes\":{},\"q_before_bytes\":{},",
+            "\"scratch_high_water_bytes\":{},\"retained_roots_validated\":{},",
+            "\"q_before_bytes\":{},",
             "\"q_after_bytes\":{},\"q_high_water_bytes\":{},",
             "\"active_connections\":{},\"operation_scratch_tables\":{},",
             "\"operation_scratch_statements\":{},\"operation_scratch_rows\":{},",
@@ -2142,6 +2241,14 @@ fn phase_counter_json(phase: &PhaseCounterDelta) -> String {
         value.transactions_committed,
         value.transactions_rolled_back,
         value.statements,
+        value.admission_transactions_started,
+        value.admission_transactions_committed,
+        value.admission_transactions_rolled_back,
+        value.admission_statements,
+        value.integrity_transactions_started,
+        value.integrity_transactions_committed,
+        value.integrity_transactions_rolled_back,
+        value.integrity_statements,
         value.busy_events,
         value.locked_events,
         value.objects_validated,
@@ -2170,6 +2277,8 @@ fn phase_counter_json(phase: &PhaseCounterDelta) -> String {
         value.put_insert_statements,
         value.created_rows,
         value.reused_rows,
+        value.publication_transactions_started,
+        value.publication_transactions_rolled_back,
         value.publication_commits,
         value.publication_closure_passes,
         value.namespace_graph_verification_passes,
@@ -2177,6 +2286,7 @@ fn phase_counter_json(phase: &PhaseCounterDelta) -> String {
         value.scratch_statements,
         value.scratch_rows,
         value.scratch_high_water_bytes,
+        value.retained_roots_validated,
         phase.q_before_bytes,
         phase.q_after_bytes,
         phase.q_high_water_bytes,
@@ -2217,7 +2327,11 @@ fn sub_edit_json(receipt: &SubEditReceipt) -> EvalResult<String> {
             "\"insert_bytes\":{},\"replacement_digest\":\"{}\",",
             "\"before_bytes\":{},\"after_bytes\":{},",
             "\"native_wall_ns\":{},\"physical_oracle_wall_ns\":{},",
-            "\"native_route\":\"{}\",\"tree_level_before\":{},",
+            "\"native_route\":\"{}\",\"native_bytes_read\":{},",
+            "\"native_bytes_written\":{},\"native_patch_bytes\":{},",
+            "\"native_suffix_bytes_shifted\":{},\"native_clone_attempts\":{},",
+            "\"native_clone_successes\":{},\"native_clone_fallbacks\":{},",
+            "\"native_full_fallback_files\":{},\"tree_level_before\":{},",
             "\"cdc_bytes_scanned\":{},\"payload_bytes_written\":{},",
             "\"unaffected_payload_reads\":{},\"unaffected_payload_writes\":{},",
             "\"rope_nodes_read\":{},\"rope_nodes_emitted\":{},",
@@ -2233,6 +2347,14 @@ fn sub_edit_json(receipt: &SubEditReceipt) -> EvalResult<String> {
         receipt.native_wall_ns,
         receipt.physical_oracle_wall_ns,
         receipt.native_route,
+        receipt.native_bytes_read,
+        receipt.native_bytes_written,
+        receipt.native_patch_bytes,
+        receipt.native_suffix_bytes_shifted,
+        receipt.native_clone_attempts,
+        receipt.native_clone_successes,
+        receipt.native_clone_fallbacks,
+        receipt.native_full_fallback_files,
         receipt
             .tree_level_before
             .map_or_else(|| "null".to_owned(), |value| value.to_string()),
@@ -2293,6 +2415,14 @@ fn counters_json(
                 "transactions_committed",
                 "transactions_rolled_back",
                 "statements",
+                "admission_transactions_started",
+                "admission_transactions_committed",
+                "admission_transactions_rolled_back",
+                "admission_statements",
+                "integrity_transactions_started",
+                "integrity_transactions_committed",
+                "integrity_transactions_rolled_back",
+                "integrity_statements",
                 "busy_events",
                 "locked_events",
                 "objects_validated",
@@ -2312,6 +2442,8 @@ fn counters_json(
                 "put_insert_statements",
                 "created_rows",
                 "reused_rows",
+                "publication_transactions_started",
+                "publication_transactions_rolled_back",
                 "publication_commits",
                 "publication_closure_passes",
                 "namespace_graph_verification_passes",
@@ -2319,6 +2451,7 @@ fn counters_json(
                 "scratch_statements",
                 "scratch_rows",
                 "scratch_high_water_bytes",
+                "retained_roots_validated",
                 "cdc_bytes_scanned",
                 "payload_bytes_written",
                 "unaffected_payload_reads",
@@ -2347,6 +2480,12 @@ fn counters_json(
         concat!(
             "{{\"transactions_started\":{},\"transactions_committed\":{},",
             "\"transactions_rolled_back\":{},\"statements\":{},",
+            "\"admission_transactions_started\":{},",
+            "\"admission_transactions_committed\":{},",
+            "\"admission_transactions_rolled_back\":{},\"admission_statements\":{},",
+            "\"integrity_transactions_started\":{},",
+            "\"integrity_transactions_committed\":{},",
+            "\"integrity_transactions_rolled_back\":{},\"integrity_statements\":{},",
             "\"busy_events\":{},\"locked_events\":{},\"objects_validated\":{},",
             "\"objects_created\":{},\"objects_reused\":{},",
             "\"object_bytes_read\":{},\"object_bytes_written\":{},",
@@ -2357,10 +2496,13 @@ fn counters_json(
             "\"payload_batch_queries\":{},\"payload_batch_references\":{},",
             "\"payload_batch_maximum\":{},\"put_lookup_statements\":{},",
             "\"put_insert_statements\":{},\"created_rows\":{},\"reused_rows\":{},",
+            "\"publication_transactions_started\":{},",
+            "\"publication_transactions_rolled_back\":{},",
             "\"publication_commits\":{},\"publication_closure_passes\":{},",
             "\"namespace_graph_verification_passes\":{},\"scratch_tables\":{},",
             "\"scratch_statements\":{},\"scratch_rows\":{},",
-            "\"scratch_high_water_bytes\":{},\"cdc_bytes_scanned\":{},",
+            "\"scratch_high_water_bytes\":{},\"retained_roots_validated\":{},",
+            "\"cdc_bytes_scanned\":{},",
             "\"payload_bytes_written\":{},\"unaffected_payload_reads\":{},",
             "\"unaffected_payload_writes\":{},\"rope_nodes_read\":{},",
             "\"rope_nodes_emitted\":{},\"content_directory_nodes_emitted\":{},",
@@ -2371,6 +2513,14 @@ fn counters_json(
         e.transactions_committed,
         e.transactions_rolled_back,
         e.statements,
+        e.admission_transactions_started,
+        e.admission_transactions_committed,
+        e.admission_transactions_rolled_back,
+        e.admission_statements,
+        e.integrity_transactions_started,
+        e.integrity_transactions_committed,
+        e.integrity_transactions_rolled_back,
+        e.integrity_statements,
         e.busy_events,
         e.locked_events,
         e.objects_validated,
@@ -2390,6 +2540,8 @@ fn counters_json(
         e.put_insert_statements,
         e.created_rows,
         e.reused_rows,
+        e.publication_transactions_started,
+        e.publication_transactions_rolled_back,
         e.publication_commits,
         e.publication_closure_passes,
         e.namespace_graph_verification_passes,
@@ -2397,6 +2549,7 @@ fn counters_json(
         e.scratch_statements.max(o.scratch_statements),
         e.scratch_rows.max(o.scratch_rows),
         e.scratch_high_water_bytes.max(o.scratch_high_water_bytes),
+        e.retained_roots_validated,
         c.cdc_bytes_scanned,
         c.payload_bytes_written,
         c.unaffected_payload_reads,
@@ -2500,7 +2653,9 @@ fn resources_json(
     let q_current = operation.map(|_| operation_value.operation_q_current_bytes);
     let q_high = operation.map(|_| operation_value.operation_q_high_water_bytes);
     let q_terminal = operation.map(|_| operation_value.operation_q_terminal_bytes);
-    let owned_temp = operation.map(|_| operation_value.owned_temp_current);
+    let owned_temp = operation
+        .map(|_| operation_value.owned_temp_current)
+        .or(resources.owned_temp_entries);
     format!(
         concat!(
             "{{\"rss_current_bytes\":{},\"rss_peak_bytes\":{},",
@@ -2522,7 +2677,7 @@ fn resources_json(
         resources.child_processes,
         option_u64_json(owned_temp),
         resources.residue_entries,
-        BUFFER_BYTES,
+        PRODUCT_BUFFER_BOUND_BYTES,
     )
 }
 
@@ -2816,8 +2971,8 @@ fn metadata_receipt_json(metadata: &NativeMetadata) -> String {
         .map(|(name, value)| {
             format!(
                 "{{\"name_hex\":\"{}\",\"value_hex\":\"{}\"}}",
-                hex(name),
-                hex(value)
+                hex(&name),
+                hex(&value)
             )
         })
         .collect::<Vec<_>>()
@@ -3077,6 +3232,7 @@ fn observe_row_resources(
         fd_current: fd_count()?,
         active_store_connections,
         child_processes: 0,
+        owned_temp_entries: None,
         residue_entries: residue_root.map(residue_count).transpose()?.unwrap_or(0),
     })
 }
@@ -3091,6 +3247,7 @@ fn observe_external_resources(
         fd_current: fd_count()?,
         active_store_connections: open_store_connection_count(store)?,
         child_processes: child_process_count()?,
+        owned_temp_entries: None,
         residue_entries: residue_root.map(residue_count).transpose()?.unwrap_or(0),
     })
 }
@@ -4288,6 +4445,14 @@ fn run_burst_row(
             native_wall_ns: one_native_wall,
             physical_oracle_wall_ns: one_oracle_wall,
             native_route: native_route_name(native.native.route).to_owned(),
+            native_bytes_read: native.native.bytes_read,
+            native_bytes_written: native.native.bytes_written,
+            native_patch_bytes: native.native.patch_bytes,
+            native_suffix_bytes_shifted: native.native.suffix_bytes_shifted,
+            native_clone_attempts: native.native.clone_attempts,
+            native_clone_successes: native.native.clone_successes,
+            native_clone_fallbacks: native.native.clone_fallbacks,
+            native_full_fallback_files: native.full_fallback_files,
             tree_level_before: None,
             locality: None,
         });
@@ -4702,7 +4867,8 @@ fn run_terminal_row(
     }
     verify_fixture(fixture, master, true)?;
     let cleanup_wall = cleanup_started.elapsed().as_nanos();
-    let resources = observe_external_resources(Some(work), None)?;
+    let mut resources = observe_external_resources(Some(work), None)?;
+    resources.owned_temp_entries = Some(0);
     if campaign.rss_peak_bytes.max(resources.rss_peak_bytes) > 33_554_432
         || campaign.q_high_water_bytes > 8_388_608
         || campaign.q_maximum_terminal_bytes != 0
@@ -4749,21 +4915,26 @@ fn run_terminal_row(
         phase_counters: Vec::new(),
         row_wall_ns: row_wall,
         row_residual_ns: row_residual(row_wall, &phases)?,
-        engine: Some(EngineDelta::default()),
-        operation: Some(layerfs_sdk::OperationDiagnostics::default()),
+        engine: None,
+        operation: None,
         storage_before: None,
         storage_after: None,
         resources,
         oracle: OracleReceipt {
             logical_length: INITIAL_BYTES,
-            content_digest: master.raw_digest.clone(),
-            physical_bytes_exact: Some(true),
-            canonical_bytes_exact: Some(true),
-            metadata_exact: Some(true),
-            historical_roots_exact: Some(true),
-            route_exact: Some(true),
+            content_digest: String::new(),
+            ..OracleReceipt::default()
         },
-        unavailable: unavailable_defaults(),
+        unavailable: {
+            let mut unavailable = unavailable_defaults();
+            unavailable.push(Unavailable {
+                field: "oracle.content_digest".to_owned(),
+                availability: "NotApplicable",
+                reason: "workspace authority was discarded before terminal resource observation"
+                    .to_owned(),
+            });
+            unavailable
+        },
         error: None,
         custody: Some(format!(
             concat!(
@@ -4772,7 +4943,8 @@ fn run_terminal_row(
                 "\"pre_cleanup_residue_entries\":{},",
                 "\"post_cleanup_active_store_connections\":{},",
                 "\"post_cleanup_fd_count\":{},\"post_cleanup_child_processes\":{},",
-                "\"post_cleanup_residue_entries\":{}}}"
+                "\"post_cleanup_residue_entries\":{},",
+                "\"fixture_unchanged\":true}}"
             ),
             before_cleanup.active_store_connections,
             before_cleanup.fd_current,
@@ -5087,6 +5259,14 @@ fn row_optional_u128(row: &ParsedRow, key: &str) -> EvalResult<Option<u128>> {
             | "transactions_committed"
             | "transactions_rolled_back"
             | "statements"
+            | "admission_transactions_started"
+            | "admission_transactions_committed"
+            | "admission_transactions_rolled_back"
+            | "admission_statements"
+            | "integrity_transactions_started"
+            | "integrity_transactions_committed"
+            | "integrity_transactions_rolled_back"
+            | "integrity_statements"
             | "busy_events"
             | "locked_events"
             | "objects_validated"
@@ -5106,6 +5286,8 @@ fn row_optional_u128(row: &ParsedRow, key: &str) -> EvalResult<Option<u128>> {
             | "put_insert_statements"
             | "created_rows"
             | "reused_rows"
+            | "publication_transactions_started"
+            | "publication_transactions_rolled_back"
             | "publication_commits"
             | "publication_closure_passes"
             | "namespace_graph_verification_passes"
@@ -5113,6 +5295,7 @@ fn row_optional_u128(row: &ParsedRow, key: &str) -> EvalResult<Option<u128>> {
             | "scratch_statements"
             | "scratch_rows"
             | "scratch_high_water_bytes"
+            | "retained_roots_validated"
             | "cdc_bytes_scanned"
             | "payload_bytes_written"
             | "unaffected_payload_reads"
@@ -5311,14 +5494,28 @@ fn validate_authentication(rows: &[ParsedRow]) -> EvalResult<AuthenticationValid
             row_u128(row, "transactions_started")?,
             row_u128(row, "transactions_committed")?,
             row_u128(row, "transactions_rolled_back")?,
+            row_u128(row, "publication_transactions_started")?,
             row_u128(row, "publication_commits")?,
+            row_u128(row, "publication_transactions_rolled_back")?,
         );
         if matches!(row.row_group.as_str(), "C03" | "C05" | "C07") {
-            if transaction != (1, 1, 0, 1) {
+            if transaction != (1, 1, 0, 1, 1, 0) {
                 return Err(format!("{} one transition transaction/COMMIT", row.row_id));
             }
-        } else if transaction != (0, 0, 0, 0) {
+        } else if transaction != (0, 0, 0, 0, 0, 0) {
             return Err(format!("{} read-only transaction closure", row.row_id));
+        }
+        if row_u128(row, "admission_transactions_started")?
+            != row_u128(row, "admission_transactions_committed")?
+                + row_u128(row, "admission_transactions_rolled_back")?
+            || row_u128(row, "integrity_transactions_started")?
+                != row_u128(row, "integrity_transactions_committed")?
+                    + row_u128(row, "integrity_transactions_rolled_back")?
+        {
+            return Err(format!(
+                "{} admission/integrity transaction closure",
+                row.row_id
+            ));
         }
         result.payload_batch_maximum = result
             .payload_batch_maximum
@@ -5415,6 +5612,7 @@ fn validate_locality_rows(rows: &[ParsedRow]) -> EvalResult<()> {
     let mut subedit_count = 0_usize;
     for row in rows.iter().filter(|row| row.row_group == "C07") {
         let mut exact = ContentCounters::default();
+        let mut native_exact = [0_u128; 8];
         for subedit in json_array_objects(&row.json, "sub_edits")? {
             subedit_count += 1;
             let required = [
@@ -5428,6 +5626,14 @@ fn validate_locality_rows(rows: &[ParsedRow]) -> EvalResult<()> {
                 "native_wall_ns",
                 "physical_oracle_wall_ns",
                 "native_route",
+                "native_bytes_read",
+                "native_bytes_written",
+                "native_patch_bytes",
+                "native_suffix_bytes_shifted",
+                "native_clone_attempts",
+                "native_clone_successes",
+                "native_clone_fallbacks",
+                "native_full_fallback_files",
                 "tree_level_before",
                 "cdc_bytes_scanned",
                 "payload_bytes_written",
@@ -5441,6 +5647,72 @@ fn validate_locality_rows(rows: &[ParsedRow]) -> EvalResult<()> {
                 return Err(format!("{} exact flattened sub-edit schema", row.row_id));
             }
             let replacement = json_u128(subedit, "insert_bytes")?;
+            let delete = json_u128(subedit, "delete_bytes")?;
+            let before = json_u128(subedit, "before_bytes")?;
+            let offset = json_u128(subedit, "offset")?;
+            let route = json_string(subedit, "native_route")?;
+            let native_read = json_u128(subedit, "native_bytes_read")?;
+            let native_written = json_u128(subedit, "native_bytes_written")?;
+            let native_patch = json_u128(subedit, "native_patch_bytes")?;
+            let native_suffix = json_u128(subedit, "native_suffix_bytes_shifted")?;
+            let clone_attempts = json_u128(subedit, "native_clone_attempts")?;
+            let clone_successes = json_u128(subedit, "native_clone_successes")?;
+            let clone_fallbacks = json_u128(subedit, "native_clone_fallbacks")?;
+            let full_fallbacks = json_u128(subedit, "native_full_fallback_files")?;
+            for (total, value) in native_exact.iter_mut().zip([
+                native_read,
+                native_written,
+                native_patch,
+                native_suffix,
+                clone_attempts,
+                clone_successes,
+                clone_fallbacks,
+                full_fallbacks,
+            ]) {
+                *total = total
+                    .checked_add(value)
+                    .ok_or_else(|| format!("{} native sub-edit sum overflow", row.row_id))?;
+            }
+            if delete == replacement {
+                if !matches!(route.as_str(), "ClonePatch" | "InPlacePatch")
+                    || native_read != 0
+                    || native_written != replacement
+                    || native_patch != replacement
+                    || native_suffix != 0
+                    || clone_attempts != 1
+                    || (route == "ClonePatch" && (clone_successes != 1 || clone_fallbacks != 0))
+                    || (route == "InPlacePatch" && (clone_successes != 0 || clone_fallbacks != 1))
+                    || full_fallbacks != 0
+                {
+                    return Err(format!(
+                        "{} exact sub-edit native patch equation",
+                        row.row_id
+                    ));
+                }
+            } else {
+                let suffix = before
+                    .checked_sub(
+                        offset
+                            .checked_add(delete)
+                            .ok_or_else(|| "sub-edit native suffix overflow".to_owned())?,
+                    )
+                    .ok_or_else(|| "sub-edit native suffix underflow".to_owned())?;
+                if route != "InPlaceShift"
+                    || native_read != suffix
+                    || native_written != suffix + replacement
+                    || native_patch != replacement
+                    || native_suffix != suffix
+                    || clone_attempts != 0
+                    || clone_successes != 0
+                    || clone_fallbacks != 0
+                    || full_fallbacks != 0
+                {
+                    return Err(format!(
+                        "{} exact sub-edit native shift equation",
+                        row.row_id
+                    ));
+                }
+            }
             let tree_level = json_u128(subedit, "tree_level_before")?;
             let read_bound = 16 * (tree_level + 1);
             let emitted_bound = read_bound + replacement.div_ceil(8_192) + 2;
@@ -5488,6 +5760,24 @@ fn validate_locality_rows(rows: &[ParsedRow]) -> EvalResult<()> {
         {
             return Err(format!("{} retained exact sub-edit aggregate", row.row_id));
         }
+        let native = json_object(&row.json, "native")?;
+        for (key, expected) in [
+            "bytes_read",
+            "bytes_written",
+            "patch_bytes",
+            "suffix_bytes_shifted",
+            "clone_attempts",
+            "clone_successes",
+            "clone_fallbacks",
+            "full_fallback_files",
+        ]
+        .into_iter()
+        .zip(native_exact)
+        {
+            if json_u128(native, key)? != expected {
+                return Err(format!("{} native {key} sub-edit aggregate", row.row_id));
+            }
+        }
     }
     if subedit_count != 21 {
         return Err(format!(
@@ -5503,6 +5793,14 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
         "transactions_committed",
         "transactions_rolled_back",
         "statements",
+        "admission_transactions_started",
+        "admission_transactions_committed",
+        "admission_transactions_rolled_back",
+        "admission_statements",
+        "integrity_transactions_started",
+        "integrity_transactions_committed",
+        "integrity_transactions_rolled_back",
+        "integrity_statements",
         "busy_events",
         "locked_events",
         "objects_validated",
@@ -5521,9 +5819,12 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
         "put_insert_statements",
         "created_rows",
         "reused_rows",
+        "publication_transactions_started",
+        "publication_transactions_rolled_back",
         "publication_commits",
         "publication_closure_passes",
         "namespace_graph_verification_passes",
+        "retained_roots_validated",
     ];
     for row in rows {
         let expected: &[&str] = match row.row_group.as_str() {
@@ -5556,6 +5857,9 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
             let reused = json_u128(phase, "reused_rows")?;
             let new = json_u128(phase, "new_object_authentication_passes")?;
             let incumbent = json_u128(phase, "incumbent_authentication_passes")?;
+            let retained_scrubs = json_u128(phase, "retained_union_scrubs")?;
+            let retained_roots = json_u128(phase, "retained_roots_validated")?;
+            let namespace_graphs = json_u128(phase, "namespace_graph_verification_passes")?;
             if fetched != authenticated
                 || fetched != decoded
                 || new != created + reused
@@ -5570,6 +5874,16 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
                 || json_u128(phase, "range_bytes_requested")?
                     != json_u128(phase, "range_bytes_returned")?
                 || json_u128(phase, "payload_batch_maximum")? > 64
+                || json_u128(phase, "admission_transactions_started")?
+                    != json_u128(phase, "admission_transactions_committed")?
+                        + json_u128(phase, "admission_transactions_rolled_back")?
+                || json_u128(phase, "integrity_transactions_started")?
+                    != json_u128(phase, "integrity_transactions_committed")?
+                        + json_u128(phase, "integrity_transactions_rolled_back")?
+                || json_u128(phase, "publication_transactions_started")?
+                    != json_u128(phase, "publication_commits")?
+                        + json_u128(phase, "publication_transactions_rolled_back")?
+                || (retained_scrubs != 0 && retained_roots != namespace_graphs)
                 || json_u128(phase, "q_before_bytes")? != 0
                 || json_u128(phase, "q_after_bytes")? != 0
                 || json_u128(phase, "q_high_water_bytes")? > 8_388_608
@@ -5734,6 +6048,14 @@ fn validate_availability_rows(rows: &[ParsedRow]) -> EvalResult<()> {
                     "transactions_committed",
                     "transactions_rolled_back",
                     "statements",
+                    "admission_transactions_started",
+                    "admission_transactions_committed",
+                    "admission_transactions_rolled_back",
+                    "admission_statements",
+                    "integrity_transactions_started",
+                    "integrity_transactions_committed",
+                    "integrity_transactions_rolled_back",
+                    "integrity_statements",
                     "busy_events",
                     "locked_events",
                     "objects_validated",
@@ -5753,6 +6075,8 @@ fn validate_availability_rows(rows: &[ParsedRow]) -> EvalResult<()> {
                     "put_insert_statements",
                     "created_rows",
                     "reused_rows",
+                    "publication_transactions_started",
+                    "publication_transactions_rolled_back",
                     "publication_commits",
                     "publication_closure_passes",
                     "namespace_graph_verification_passes",
@@ -5760,6 +6084,7 @@ fn validate_availability_rows(rows: &[ParsedRow]) -> EvalResult<()> {
                     "scratch_statements",
                     "scratch_rows",
                     "scratch_high_water_bytes",
+                    "retained_roots_validated",
                     "cdc_bytes_scanned",
                     "payload_bytes_written",
                     "unaffected_payload_reads",
@@ -5957,6 +6282,8 @@ fn validate_history_rows(rows: &[ParsedRow]) -> EvalResult<usize> {
                         || json_u128(probe, "inode_table_nodes_read")? != 0))
                 || json_u128(counters, "transactions_started")? != 0
                 || json_u128(counters, "transactions_committed")? != 0
+                || json_u128(counters, "publication_transactions_started")? != 0
+                || json_u128(counters, "publication_transactions_rolled_back")? != 0
                 || json_u128(counters, "publication_commits")? != 0
                 || json_u128(counters, "object_bytes_written")? != 0
                 || json_u128(counters, "cdc_bytes_scanned")? != 0
@@ -5976,6 +6303,14 @@ fn validate_history_rows(rows: &[ParsedRow]) -> EvalResult<usize> {
             "transactions_committed",
             "transactions_rolled_back",
             "statements",
+            "admission_transactions_started",
+            "admission_transactions_committed",
+            "admission_transactions_rolled_back",
+            "admission_statements",
+            "integrity_transactions_started",
+            "integrity_transactions_committed",
+            "integrity_transactions_rolled_back",
+            "integrity_statements",
             "busy_events",
             "locked_events",
             "objects_validated",
@@ -5994,12 +6329,15 @@ fn validate_history_rows(rows: &[ParsedRow]) -> EvalResult<usize> {
             "put_insert_statements",
             "created_rows",
             "reused_rows",
+            "publication_transactions_started",
+            "publication_transactions_rolled_back",
             "publication_commits",
             "publication_closure_passes",
             "namespace_graph_verification_passes",
             "scratch_tables",
             "scratch_statements",
             "scratch_rows",
+            "retained_roots_validated",
         ] {
             let sum = probes.iter().try_fold(0_u128, |sum, probe| {
                 sum.checked_add(json_u128(json_object(probe, "engine_counters")?, key)?)
@@ -6373,6 +6711,26 @@ fn maximum_key(rows: &[ParsedRow], key: &str) -> EvalResult<u128> {
         .flatten()
         .max()
         .ok_or_else(|| format!("no rows for maximum {key}"))
+}
+
+fn sum_locality_key(rows: &[ParsedRow], key: &str) -> EvalResult<u128> {
+    ["C03", "C05", "C07"]
+        .into_iter()
+        .try_fold(0_u128, |total, group| {
+            total
+                .checked_add(sum_key(rows, Some(group), key)?)
+                .ok_or_else(|| format!("locality {key} sum overflow"))
+        })
+}
+
+fn maximum_locality_key(rows: &[ParsedRow], key: &str) -> EvalResult<u128> {
+    ["C03", "C05", "C07"]
+        .into_iter()
+        .map(|group| maximum_group_key(rows, group, key))
+        .collect::<EvalResult<Vec<_>>>()?
+        .into_iter()
+        .max()
+        .ok_or_else(|| format!("no locality rows for maximum {key}"))
 }
 
 fn physical_by_kind_json(rows: &[ParsedRow]) -> EvalResult<String> {
@@ -7276,8 +7634,16 @@ fn summary_json(
         .iter()
         .filter(|row| row.row_group == "C07" && row.status == "PASS")
         .count();
-    let terminal_length_exact = c09.after_bytes == INITIAL_BYTES;
-    let fixture_unchanged = json_bool(&c09.json, "canonical_bytes_exact")?;
+    let r34 = rows
+        .iter()
+        .find(|row| row.row_id == "C08-003")
+        .ok_or_else(|| "missing R34 terminal witness".to_owned())?;
+    let r34_oracle = json_object(&r34.json, "oracle")?;
+    let terminal_length_exact = json_u128(r34_oracle, "logical_length")?
+        == u128::from(INITIAL_BYTES)
+        && json_bool(r34_oracle, "physical_bytes_exact")?
+        && json_bool(r34_oracle, "canonical_bytes_exact")?;
+    let fixture_unchanged = json_bool(&c09.json, "fixture_unchanged")?;
     if physical_oracles_passed != 51
         || canonical_transitions_passed != 34
         || !route_labels_exact
@@ -7421,6 +7787,15 @@ fn summary_json(
             "\"content_directory_nodes_emitted\":{},\"payload_batch_maximum\":{}}},",
             "\"transactions\":{{\"expected\":34,\"observed\":{},",
             "\"committed\":{},\"rolled_back\":{},\"publication_commits\":{},",
+            "\"publication_transactions_started\":{},",
+            "\"publication_transactions_rolled_back\":{},",
+            "\"admission_transactions_started\":{},",
+            "\"admission_transactions_committed\":{},",
+            "\"admission_transactions_rolled_back\":{},\"admission_statements\":{},",
+            "\"integrity_transactions_started\":{},",
+            "\"integrity_transactions_committed\":{},",
+            "\"integrity_transactions_rolled_back\":{},\"integrity_statements\":{},",
+            "\"retained_roots_validated\":{},",
             "\"generation_increment_failures\":0}},",
             "\"authentication\":{{\"fetched_authentication_failures\":{},",
             "\"fetched_role_decode_failures\":{},\"new_object_equation_failures\":{},",
@@ -7551,17 +7926,28 @@ fn summary_json(
         cdc_bursts,
         cdc_total,
         cdc_total,
-        sum_key(rows, None, "payload_bytes_written")?,
-        sum_key(rows, None, "unaffected_payload_reads")?,
-        sum_key(rows, None, "unaffected_payload_writes")?,
-        maximum_key(rows, "rope_nodes_read")?,
-        maximum_key(rows, "rope_nodes_emitted")?,
-        sum_key(rows, None, "content_directory_nodes_emitted")?,
+        sum_locality_key(rows, "payload_bytes_written")?,
+        sum_locality_key(rows, "unaffected_payload_reads")?,
+        sum_locality_key(rows, "unaffected_payload_writes")?,
+        maximum_locality_key(rows, "rope_nodes_read")?,
+        maximum_locality_key(rows, "rope_nodes_emitted")?,
+        sum_locality_key(rows, "content_directory_nodes_emitted")?,
         maximum_key(rows, "payload_batch_maximum")?,
         transactions,
         commits,
         rollbacks,
         publications,
+        sum_key(rows, None, "publication_transactions_started")?,
+        sum_key(rows, None, "publication_transactions_rolled_back")?,
+        sum_key(rows, None, "admission_transactions_started")?,
+        sum_key(rows, None, "admission_transactions_committed")?,
+        sum_key(rows, None, "admission_transactions_rolled_back")?,
+        sum_key(rows, None, "admission_statements")?,
+        sum_key(rows, None, "integrity_transactions_started")?,
+        sum_key(rows, None, "integrity_transactions_committed")?,
+        sum_key(rows, None, "integrity_transactions_rolled_back")?,
+        sum_key(rows, None, "integrity_statements")?,
+        sum_key(rows, None, "retained_roots_validated")?,
         authentication_validation.fetched_authentication_failures,
         authentication_validation.fetched_role_decode_failures,
         authentication_validation.new_object_equation_failures,
@@ -7579,7 +7965,7 @@ fn summary_json(
         maximum_key(rows, "scratch_high_water_bytes")?,
         storage_by_root_range_json(rows)?,
         rss_peak,
-        BUFFER_BYTES,
+        PRODUCT_BUFFER_BOUND_BYTES,
         q_high_water,
         q_terminal,
         connection_high_water,
@@ -8050,6 +8436,17 @@ fn validate_summary_json_contract(json: &str) -> EvalResult<()> {
                 "committed",
                 "rolled_back",
                 "publication_commits",
+                "publication_transactions_started",
+                "publication_transactions_rolled_back",
+                "admission_transactions_started",
+                "admission_transactions_committed",
+                "admission_transactions_rolled_back",
+                "admission_statements",
+                "integrity_transactions_started",
+                "integrity_transactions_committed",
+                "integrity_transactions_rolled_back",
+                "integrity_statements",
+                "retained_roots_validated",
                 "generation_increment_failures",
             ],
         ),
@@ -8570,7 +8967,7 @@ fn summary_markdown(
     .map_err(display_error)?;
 
     writeln!(output, "## 2. Overall gate scoreboard\n").map_err(display_error)?;
-    writeln!(output, "| Gate | Required | Observed | Status |\n|---|---:|---:|---|\n| Rows | `47` | `{}` | `PASS` |\n| Edit/sub-edit operations | `51` | `51` | `PASS` |\n| Durable transitions | `34` | `{}` | `PASS` |\n| Complete workflow | `<60,000 ms` | `{} ms` | `PASS` |\n| Physical oracles | `51 exact` | `{}` exact | `PASS` |\n| Canonical transition oracles | `34 exact` | `{}` exact | `PASS` |\n| Save bursts | `4 exact` | `{}` exact | `PASS` |\n| Selected historical roots | `8 exact` | `{}` exact | `PASS` |\n| Route labels | exact | `{}` patch / `{}` shift / `{}` FullFallback | `PASS` |\n| Live rematerializations | `0` | `{}` | `PASS` |\n| RSS peak | `<=33,554,432 B` | `{}` | `PASS` |\n| Q high-water | `<=8,388,608 B` | `{}` | `PASS` |\n| Q terminal after every operation | `0` | `{}` | `PASS` |\n| FD baseline/terminal | equal | `{}` / `{}` | `PASS` |\n| Store connections terminal | `0` | `{}` | `PASS` |\n| Owned residue | `0` | `{}` | `PASS` |\n| Network | `0` | `{}` | `PASS` |\n", rows.len(), canonical_transitions, format_ms(complete_wall_ns), physical_oracles, canonical_transitions, rows.iter().filter(|row| row.row_group == "C07" && row.status == "PASS").count(), selected_history_roots_passed, patch_refreshes, shift_refreshes, fallback_refreshes, rematerializations, rss_peak, q_high_water, q_terminal, fd_baseline, fd_terminal, connection_terminal, owned_temp_terminal.max(residue_terminal), network_operations).map_err(display_error)?;
+    writeln!(output, "| Gate | Required | Observed | Status |\n|---|---:|---:|---|\n| Rows | `47` | `{}` | `PASS` |\n| Edit/sub-edit operations | `51` | `51` | `PASS` |\n| Durable transitions | `34` | `{}` | `PASS` |\n| Complete workflow | `<60,000 ms` | `{} ms` | `PASS` |\n| Physical oracles | `51 exact` | `{}` exact | `PASS` |\n| Canonical transition oracles | `34 exact` | `{}` exact | `PASS` |\n| Save bursts | `4 exact` | `{}` exact | `PASS` |\n| Selected historical roots | `8 exact` | `{}` exact | `PASS` |\n| Route labels | exact | `{}` patch / `{}` shift / `{}` FullFallback | `PASS` |\n| Live rematerializations | `0` | `{}` | `PASS` |\n| RSS peak | `<=33,554,432 B` | `{}` | `PASS` |\n| Q structural-reservation high-water | `<=8,388,608 B` | `{}` | `PASS` |\n| Q reservation terminal after every operation | `0` | `{}` | `PASS` |\n| FD baseline/terminal | equal | `{}` / `{}` | `PASS` |\n| Store connections terminal | `0` | `{}` | `PASS` |\n| Owned residue | `0` | `{}` | `PASS` |\n| Network | `0` | `{}` | `PASS` |\n", rows.len(), canonical_transitions, format_ms(complete_wall_ns), physical_oracles, canonical_transitions, rows.iter().filter(|row| row.row_group == "C07" && row.status == "PASS").count(), selected_history_roots_passed, patch_refreshes, shift_refreshes, fallback_refreshes, rematerializations, rss_peak, q_high_water, q_terminal, fd_baseline, fd_terminal, connection_terminal, owned_temp_terminal.max(residue_terminal), network_operations).map_err(display_error)?;
 
     writeln!(output, "## 3. Physical APFS edit to LayerFS checkpoint\n\n| Operation | n | Native p50 ms | Native p95 ms | Checkpoint p50 ms | Checkpoint p95 ms | Combined p50 ms | Combined p95 ms | Oracle | Status |\n|---|---:|---:|---:|---:|---:|---:|---:|---|---|").map_err(display_error)?;
     for kind in ["overwrite", "insert", "delete", "append", "truncate"] {
@@ -8843,9 +9240,9 @@ fn summary_markdown(
     writeln!(
         output,
         "| **Total** | **34** | `495616` | `{}` | **0** | **0** | `{}` | `{}` | `PASS` |",
-        sum_key(rows, None, "cdc_bytes_scanned")?,
-        maximum_key(rows, "rope_nodes_read")?,
-        maximum_key(rows, "rope_nodes_emitted")?
+        sum_locality_key(rows, "cdc_bytes_scanned")?,
+        maximum_locality_key(rows, "rope_nodes_read")?,
+        maximum_locality_key(rows, "rope_nodes_emitted")?
     )
     .map_err(display_error)?;
 
@@ -8975,7 +9372,8 @@ fn summary_markdown(
     .map_err(display_error)?;
 
     writeln!(output, "\n## 11. Transaction and authentication closure\n\n| Equation | Required | Observed/failures | Status |\n|---|---:|---:|---|\n| Generation increment | `34/34` | `{}/0` | `PASS` |\n| Writer transactions | `34` | `{}` | `PASS` |\n| Committed transactions | `34` | `{}` | `PASS` |\n| Rolled-back transactions | `0` | `{}` | `PASS` |\n| Publication COMMITs | `34` | `{}` | `PASS` |\n| fetched = authentication | every applicable row | `{}` failures | `PASS` |\n| fetched = role decode | every applicable row | `{}` failures | `PASS` |\n| new auth = created + reused | every publication | `{}` failures | `PASS` |\n| incumbent auth = reused | every publication | `{}` failures | `PASS` |\n| Payload batch maximum | `<=64` | `{}` | `PASS` |", rows.iter().filter(|row| matches!(row.row_group.as_str(), "C03" | "C05" | "C07")).count(), sum_key(rows, None, "transactions_started")?, sum_key(rows, None, "transactions_committed")?, sum_key(rows, None, "transactions_rolled_back")?, sum_key(rows, None, "publication_commits")?, authentication.fetched_authentication_failures, authentication.fetched_role_decode_failures, authentication.new_object_equation_failures, authentication.incumbent_equation_failures, authentication.payload_batch_maximum).map_err(display_error)?;
-    writeln!(output, "\n| Counter phase | Rows | Statements | Fetched/auth/role | Object read B | Object write B | Tx/COMMIT | Scrubs | Engine/VFS scratch tables | Q high B | Connections |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|").map_err(display_error)?;
+    writeln!(output, "\n| SQL boundary | Started | Committed | Rolled back | Statements/roots | Status |\n|---|---:|---:|---:|---:|---|\n| Publication visibility | `{}` | `{}` | `{}` | `34 COMMITs` | `PASS` |\n| Open admission | `{}` | `{}` | `{}` | `{}` statements | `PASS` |\n| Live Verified integrity | `{}` | `{}` | `{}` | `{}` statements | `PASS` |\n| Disk-backed retained-root validation | N/A | N/A | N/A | `{}` roots | `PASS` |", sum_key(rows, None, "publication_transactions_started")?, sum_key(rows, None, "publication_commits")?, sum_key(rows, None, "publication_transactions_rolled_back")?, sum_key(rows, None, "admission_transactions_started")?, sum_key(rows, None, "admission_transactions_committed")?, sum_key(rows, None, "admission_transactions_rolled_back")?, sum_key(rows, None, "admission_statements")?, sum_key(rows, None, "integrity_transactions_started")?, sum_key(rows, None, "integrity_transactions_committed")?, sum_key(rows, None, "integrity_transactions_rolled_back")?, sum_key(rows, None, "integrity_statements")?, sum_key(rows, None, "retained_roots_validated")?).map_err(display_error)?;
+    writeln!(output, "\n| Counter phase | Rows | Statements | Fetched/auth/role | Object read B | Object write B | Tx/COMMIT | Scrubs | Engine/VFS scratch tables | Q structural-reservation high B | Connections |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|").map_err(display_error)?;
     for phase in &phase_attribution {
         writeln!(
             output,
@@ -9004,7 +9402,7 @@ fn summary_markdown(
     writeln!(output, "\n## 12. Storage growth and amplification\n\n| Metric | Initial | Terminal/peak | Delta | Status |\n|---|---:|---:|---:|---|\n| SQLite database B | `{}` | `{}` | `{}` | report |\n| Logical Engine B | `{}` | `{}` | `{}` | report |\n| Canonical object B written | 0 | `{}` | `{}` | report |\n| Physical DB/canonical amplification | N/A | `{:.3}` | N/A | report |\n| Maximum transition DB growth B | N/A | `{}` | N/A | report |\n| Scratch high-water B | 0 | `{}` | N/A | `PASS` |\n| Rollback journal peak B | N/A | `Unavailable` | N/A | `PASS` |\n| Terminal journal/WAL/SHM | absent | `absent` | N/A | `PASS` |", storage_initial(rows)?, storage_terminal(rows)?, storage_terminal(rows)?.saturating_sub(storage_initial(rows)?), initial_logical_engine, terminal_logical_engine, terminal_logical_engine - initial_logical_engine, sum_key(rows, None, "canonical_object_bytes_written")?, sum_key(rows, None, "canonical_object_bytes_written")?, storage_amplification(rows)?, maximum_key(rows, "database_growth_bytes")?, maximum_key(rows, "scratch_high_water_bytes")?).map_err(display_error)?;
     writeln!(output, "\n| Root range | Transitions | Canonical B written | DB growth B | Amplification |\n|---|---:|---:|---:|---:|\n| R0→R15 | 15 | `{}` | `{}` | `{:.3}` |\n| R15→R30 | 15 | `{}` | `{}` | `{:.3}` |\n| R30→R34 | 4 | `{}` | `{}` | `{:.3}` |", range_sum(rows, "C03", "canonical_object_bytes_written")?, range_sum(rows, "C03", "database_growth_bytes")?, range_amplification(rows, "C03")?, range_sum(rows, "C05", "canonical_object_bytes_written")?, range_sum(rows, "C05", "database_growth_bytes")?, range_amplification(rows, "C05")?, range_sum(rows, "C07", "canonical_object_bytes_written")?, range_sum(rows, "C07", "database_growth_bytes")?, range_amplification(rows, "C07")?).map_err(display_error)?;
 
-    writeln!(output, "\n## 13. Resource closure\n\n| Resource | Hard gate | Observed | Status |\n|---|---:|---:|---|\n| RSS peak B | `<=33,554,432` | `{}` | `PASS` |\n| Largest buffer B | `<=1,048,576` | `{BUFFER_BYTES}` | `PASS` |\n| Q high-water B | `<=8,388,608` | `{}` | `PASS` |\n| Q terminal after every operation B | `0` | `{}` | `PASS` |\n| Store cache pages | `1,280` | `1,280` | `PASS` |\n| Store spill pages | `1,280` | `1,280` | `PASS` |\n| Store connection high-water | `<=2` | `{}` | `PASS` |\n| Store connections terminal | `0` | `{}` | `PASS` |\n| FD baseline/terminal | equal | `{}/{}` | `PASS` |\n| Product child-process peak | `0` | `{}` | `PASS` |\n| Terminal child processes | `0` | `{}` | `PASS` |\n| Owned temp residue | `0` | `{}` | `PASS` |\n| Journal/WAL/SHM residue | `0` | `{}` | `PASS` |\n| Live rematerializations | `0` | `{}` | `PASS` |", rss_peak, q_high_water, q_terminal, connection_high_water, connection_terminal, fd_baseline, fd_terminal, child_peak, child_terminal, owned_temp_terminal, residue_terminal, rematerializations).map_err(display_error)?;
+    writeln!(output, "\n## 13. Resource closure\n\n| Resource | Hard gate | Observed | Status |\n|---|---:|---:|---|\n| RSS peak B | `<=33,554,432` | `{}` | `PASS` |\n| Largest product-buffer structural bound B | `<=1,048,576` | `{PRODUCT_BUFFER_BOUND_BYTES}` | `PASS` |\n| Q structural-reservation high-water B | `<=8,388,608` | `{}` | `PASS` |\n| Q reservation terminal after every operation B | `0` | `{}` | `PASS` |\n| Store cache pages | `1,280` | `1,280` | `PASS` |\n| Store spill pages | `1,280` | `1,280` | `PASS` |\n| Store connection high-water | `<=2` | `{}` | `PASS` |\n| Store connections terminal | `0` | `{}` | `PASS` |\n| FD baseline/terminal | equal | `{}/{}` | `PASS` |\n| Product child-process peak | `0` | `{}` | `PASS` |\n| Terminal child processes | `0` | `{}` | `PASS` |\n| Owned temp residue | `0` | `{}` | `PASS` |\n| Journal/WAL/SHM residue | `0` | `{}` | `PASS` |\n| Live rematerializations | `0` | `{}` | `PASS` |", rss_peak, q_high_water, q_terminal, connection_high_water, connection_terminal, fd_baseline, fd_terminal, child_peak, child_terminal, owned_temp_terminal, residue_terminal, rematerializations).map_err(display_error)?;
 
     writeln!(output, "\n## 14. Timer closure\n\n| Row group | Rows | Maximum residual ns | Sum residual ns | Status |\n|---|---:|---:|---:|---|").map_err(display_error)?;
     for (label, group) in [
@@ -9091,7 +9489,7 @@ fn summary_markdown(
         )
         .map_err(display_error)?;
     }
-    writeln!(output, "\nShift-route mix changed from CloneShift/InPlaceShift `{}/{}` to `{}/{}`; append/truncate EOF splices retain exact InPlaceShift durability and zero FullFallback.\n\nResult: `PASS`\n\n| Category | Result | Decisive evidence |\n|---|---|---|\n| Correctness | `PASS` | `{}/51 physical; {}/34 canonical; {}/8 selected history` |\n| Durability | `PASS` | `{}` transactions / `{}` COMMITs / exact RefState rotation |\n| Locality | `PASS` | `{}` CDC B; zero unaffected canonical suffix; node bounds exact |\n| Physical routes | `PASS` | `{}` patch / `{}` shift / `{}` FullFallback refreshes |\n| Resources | `PASS` | `RSS/Q/FD/connections/residue closed` |\n| Custody | `PASS` | `source/executable/fixture/rows bound by digest` |\n| Complete wall | `PASS` | `{} ms < 60 s` |\n\nReason: All correctness, durability, locality, route, resource, custody, cleanup, population, and sub-60-second gates passed.\n", optimization.baseline_clone_shift, optimization.baseline_in_place_shift, optimization.current_clone_shift, optimization.current_in_place_shift, physical_oracles, canonical_transitions, selected_history_roots_passed, sum_key(rows, None, "transactions_started")?, sum_key(rows, None, "publication_commits")?, sum_key(rows, None, "cdc_bytes_scanned")?, patch_refreshes, shift_refreshes, fallback_refreshes, format_ms(complete_wall_ns)).map_err(display_error)?;
+    writeln!(output, "\nShift-route mix changed from CloneShift/InPlaceShift `{}/{}` to `{}/{}`; append/truncate EOF splices retain exact InPlaceShift durability and zero FullFallback.\n\nResult: `PASS`\n\n| Category | Result | Decisive evidence |\n|---|---|---|\n| Correctness | `PASS` | `{}/51 physical; {}/34 canonical; {}/8 selected history` |\n| Durability | `PASS` | `{}` transactions / `{}` COMMITs / exact RefState rotation |\n| Locality | `PASS` | `{}` CDC B; zero unaffected canonical suffix; node bounds exact |\n| Physical routes | `PASS` | `{}` patch / `{}` shift / `{}` FullFallback refreshes |\n| Resources | `PASS` | `RSS/Q/FD/connections/residue closed` |\n| Custody | `PASS` | `source/executable/fixture/rows bound by digest` |\n| Complete wall | `PASS` | `{} ms < 60 s` |\n\nReason: All correctness, durability, locality, route, resource, custody, cleanup, population, and sub-60-second gates passed.\n", optimization.baseline_clone_shift, optimization.baseline_in_place_shift, optimization.current_clone_shift, optimization.current_in_place_shift, physical_oracles, canonical_transitions, selected_history_roots_passed, sum_key(rows, None, "transactions_started")?, sum_key(rows, None, "publication_commits")?, sum_locality_key(rows, "cdc_bytes_scanned")?, patch_refreshes, shift_refreshes, fallback_refreshes, format_ms(complete_wall_ns)).map_err(display_error)?;
     if disposition != Disposition::Pass {
         output = output.replacen(
             "Disposition: `PASS`",
@@ -9149,7 +9547,7 @@ const SUMMARY_TABLE_HEADERS: [&str; 23] = [
     "| Probe ordinal | n | p50 ms | p95 ms | Non-payload rows | Payload rows | Cache classification |",
     "| Root | Purpose | Logical B | Wall ms | MiB/s | Native write B | Exact bytes | Metadata | Cleanup |",
     "| Equation | Required | Observed/failures | Status |",
-    "| Counter phase | Rows | Statements | Fetched/auth/role | Object read B | Object write B | Tx/COMMIT | Scrubs | Engine/VFS scratch tables | Q high B | Connections |",
+    "| Counter phase | Rows | Statements | Fetched/auth/role | Object read B | Object write B | Tx/COMMIT | Scrubs | Engine/VFS scratch tables | Q structural-reservation high B | Connections |",
     "| Metric | Initial | Terminal/peak | Delta | Status |",
     "| Root range | Transitions | Canonical B written | DB growth B | Amplification |",
     "| Resource | Hard gate | Observed | Status |",
@@ -10812,7 +11210,7 @@ mod tests {
             mode: FIXTURE_MODE,
             mtime_seconds: FIXTURE_MTIME_SECONDS as i64 + i64::from(root) + 1,
             mtime_nanoseconds: u32::from(root) + 1,
-            xattrs: Vec::new(),
+            xattrs: layerfs_sdk::NativeXattrs::new(),
             acl: None,
             bsd_flags: 0,
         }
@@ -10876,11 +11274,11 @@ mod tests {
             _ => unreachable!(),
         };
         let row_wall_ns = phases.iter().map(|phase| phase.wall_ns).sum::<u128>();
-        let mut operation = (!matches!(scheduled.row_group, "C00" | "C01"))
+        let mut operation = (!matches!(scheduled.row_group, "C00" | "C01" | "C09"))
             .then(layerfs_sdk::OperationDiagnostics::default);
         if let Some(value) = operation.as_mut() {
-            value.operation_q_current_bytes = 4 * 1024 * 1024;
-            value.operation_q_high_water_bytes = 4 * 1024 * 1024;
+            value.operation_q_current_bytes = layerfs_sdk::OPERATION_Q_BOUND_BYTES;
+            value.operation_q_high_water_bytes = layerfs_sdk::OPERATION_Q_BOUND_BYTES;
             if scheduled.row_group == "C02" {
                 value.workspace_materializations = 1;
                 value.native.bytes_written = INITIAL_BYTES;
@@ -10957,6 +11355,18 @@ mod tests {
             value.workspace_reuses = 1;
             value.descriptor_resets = 1;
             for edit in &burst.edits {
+                let suffix = edit.before_bytes - edit.offset - edit.delete_bytes;
+                let patch = edit.kind == EditKind::Overwrite;
+                value.native.bytes_read += if patch { 0 } else { suffix };
+                value.native.bytes_written += if patch {
+                    edit.insert_bytes
+                } else {
+                    suffix + edit.insert_bytes
+                };
+                value.native.patch_bytes += edit.insert_bytes;
+                value.native.suffix_bytes_shifted += if patch { 0 } else { suffix };
+                value.native.clone_attempts += u64::from(patch);
+                value.native.clone_successes += u64::from(patch);
                 sub_edits.push(SubEditReceipt {
                     edit: edit.clone(),
                     native_wall_ns: 10,
@@ -10966,6 +11376,18 @@ mod tests {
                     } else {
                         "InPlaceShift".to_owned()
                     },
+                    native_bytes_read: if patch { 0 } else { suffix },
+                    native_bytes_written: if patch {
+                        edit.insert_bytes
+                    } else {
+                        suffix + edit.insert_bytes
+                    },
+                    native_patch_bytes: edit.insert_bytes,
+                    native_suffix_bytes_shifted: if patch { 0 } else { suffix },
+                    native_clone_attempts: u64::from(patch),
+                    native_clone_successes: u64::from(patch),
+                    native_clone_fallbacks: 0,
+                    native_full_fallback_files: 0,
                     tree_level_before: Some(1),
                     locality: Some(ContentCounters {
                         cdc_bytes_scanned: edit.insert_bytes,
@@ -11011,6 +11433,7 @@ mod tests {
                 EngineDelta {
                     transactions_started: 1,
                     transactions_committed: 1,
+                    publication_transactions_started: 1,
                     publication_commits: 1,
                     ..EngineDelta::default()
                 }
@@ -11049,6 +11472,7 @@ mod tests {
             fd_current: 5,
             active_store_connections,
             child_processes: 0,
+            owned_temp_entries: (scheduled.row_group == "C09").then_some(0),
             residue_entries: 0,
         };
         let pre_ref = transition.map(|root| synthetic_ref(root - 1)).or_else(|| {
@@ -11127,7 +11551,7 @@ mod tests {
                         engine: phase_engine,
                         q_before_bytes: 0,
                         q_after_bytes: 0,
-                        q_high_water_bytes: 4 * 1024 * 1024,
+                        q_high_water_bytes: layerfs_sdk::OPERATION_Q_BOUND_BYTES,
                         active_connections: active_store_connections,
                         operation_scratch_tables: operation_scratch_owner
                             .filter(|owner| *owner == index)
@@ -11216,18 +11640,22 @@ mod tests {
             resources,
             oracle: OracleReceipt {
                 logical_length: after_bytes,
-                content_digest: synthetic_root_digest(
-                    scheduled
-                        .transition_root
-                        .or(scheduled.milestone_root)
-                        .or_else(|| scheduled.history_session.map(|session| session * 5))
-                        .unwrap_or(if scheduled.row_group == "C02" { 0 } else { 34 }),
-                ),
-                physical_bytes_exact: matches!(scheduled.row_group, "C03" | "C05" | "C07" | "C08" | "C09").then_some(true),
-                canonical_bytes_exact: matches!(scheduled.row_group, "C02" | "C03" | "C05" | "C07" | "C08" | "C09").then_some(true),
-                metadata_exact: matches!(scheduled.row_group, "C02" | "C03" | "C05" | "C07" | "C08" | "C09").then_some(true),
-                historical_roots_exact: matches!(scheduled.row_group, "C04" | "C06" | "C08" | "C09").then_some(true),
-                route_exact: Some(true),
+                content_digest: if scheduled.row_group == "C09" {
+                    String::new()
+                } else {
+                    synthetic_root_digest(
+                        scheduled
+                            .transition_root
+                            .or(scheduled.milestone_root)
+                            .or_else(|| scheduled.history_session.map(|session| session * 5))
+                            .unwrap_or(if scheduled.row_group == "C02" { 0 } else { 34 }),
+                    )
+                },
+                physical_bytes_exact: matches!(scheduled.row_group, "C03" | "C05" | "C07" | "C08").then_some(true),
+                canonical_bytes_exact: matches!(scheduled.row_group, "C02" | "C03" | "C05" | "C07" | "C08").then_some(true),
+                metadata_exact: matches!(scheduled.row_group, "C02" | "C03" | "C05" | "C07" | "C08").then_some(true),
+                historical_roots_exact: matches!(scheduled.row_group, "C04" | "C06" | "C08").then_some(true),
+                route_exact: (scheduled.row_group != "C09").then_some(true),
             },
             unavailable: unavailable_defaults(),
             error: None,
@@ -11254,7 +11682,7 @@ mod tests {
                         if root == 34 { metadata.as_str() } else { "null" },
                     ))
                 }
-                "C09" => Some("{\"pre_cleanup_active_store_connections\":0,\"pre_cleanup_fd_count\":5,\"pre_cleanup_child_processes\":0,\"pre_cleanup_residue_entries\":0,\"post_cleanup_active_store_connections\":0,\"post_cleanup_fd_count\":5,\"post_cleanup_child_processes\":0,\"post_cleanup_residue_entries\":0}".to_owned()),
+                "C09" => Some("{\"pre_cleanup_active_store_connections\":0,\"pre_cleanup_fd_count\":5,\"pre_cleanup_child_processes\":0,\"pre_cleanup_residue_entries\":0,\"post_cleanup_active_store_connections\":0,\"post_cleanup_fd_count\":5,\"post_cleanup_child_processes\":0,\"post_cleanup_residue_entries\":0,\"fixture_unchanged\":true}".to_owned()),
                 _ => None,
             },
         }
@@ -11725,7 +12153,7 @@ mod tests {
             row_wall_sum_ns,
             fd_baseline: 5,
             rss_peak_bytes: 20_000_000,
-            q_high_water_bytes: 4 * 1024 * 1024,
+            q_high_water_bytes: layerfs_sdk::OPERATION_Q_BOUND_BYTES,
             q_maximum_terminal_bytes: 0,
             store_connection_high_water: 2,
             physical_oracles: 51,
@@ -11895,6 +12323,34 @@ mod tests {
             1,
         );
         assert!(validate_phase_counter_rows(&bad_phase_partition).is_err());
+        let history_row = rows.iter().position(|row| row.row_id == "C04-001").unwrap();
+        let mut bad_retained_root_equation = rows.clone();
+        let verified_phase = json_array_objects(
+            &bad_retained_root_equation[history_row].json,
+            "phase_counters",
+        )
+        .unwrap()[0]
+            .to_owned();
+        let mutated_phase = verified_phase.replacen(
+            "\"retained_roots_validated\":0",
+            "\"retained_roots_validated\":1",
+            1,
+        );
+        bad_retained_root_equation[history_row].json = bad_retained_root_equation[history_row]
+            .json
+            .replacen(&verified_phase, &mutated_phase, 1);
+        let counters = json_object(&bad_retained_root_equation[history_row].json, "counters")
+            .unwrap()
+            .to_owned();
+        let mutated_counters = counters.replacen(
+            "\"retained_roots_validated\":0",
+            "\"retained_roots_validated\":1",
+            1,
+        );
+        bad_retained_root_equation[history_row].json = bad_retained_root_equation[history_row]
+            .json
+            .replacen(&counters, &mutated_counters, 1);
+        assert!(validate_phase_counter_rows(&bad_retained_root_equation).is_err());
         let c02 = rows.iter().position(|row| row.row_id == "C02-001").unwrap();
         let mut bad_operation_scratch = rows.clone();
         bad_operation_scratch[c02].json = bad_operation_scratch[c02].json.replacen(
@@ -11935,6 +12391,48 @@ mod tests {
             1,
         );
         assert!(validate_locality_rows(&bad_locality).is_err());
+        let mut bad_payload_read = rows.clone();
+        let counters = json_object(&bad_payload_read[transition].json, "counters")
+            .unwrap()
+            .to_owned();
+        let mutated = counters.replacen(
+            "\"unaffected_payload_reads\":0",
+            "\"unaffected_payload_reads\":1",
+            1,
+        );
+        bad_payload_read[transition].json = bad_payload_read[transition]
+            .json
+            .replacen(&counters, &mutated, 1);
+        assert!(validate_locality_rows(&bad_payload_read).is_err());
+        let mut bad_payload_write = rows.clone();
+        let counters = json_object(&bad_payload_write[transition].json, "counters")
+            .unwrap()
+            .to_owned();
+        let written = json_u128(&counters, "payload_bytes_written").unwrap();
+        let mutated = counters.replacen(
+            &format!("\"payload_bytes_written\":{written}"),
+            &format!("\"payload_bytes_written\":{}", written + 1),
+            1,
+        );
+        bad_payload_write[transition].json = bad_payload_write[transition]
+            .json
+            .replacen(&counters, &mutated, 1);
+        assert!(validate_locality_rows(&bad_payload_write).is_err());
+        let burst = rows.iter().position(|row| row.row_id == "C07-001").unwrap();
+        let mut bad_burst_native_aggregate = rows.clone();
+        let native = json_object(&bad_burst_native_aggregate[burst].json, "native")
+            .unwrap()
+            .to_owned();
+        let bytes_read = json_u128(&native, "bytes_read").unwrap();
+        let mutated = native.replacen(
+            &format!("\"bytes_read\":{bytes_read}"),
+            &format!("\"bytes_read\":{}", bytes_read + 1),
+            1,
+        );
+        bad_burst_native_aggregate[burst].json = bad_burst_native_aggregate[burst]
+            .json
+            .replacen(&native, &mutated, 1);
+        assert!(validate_locality_rows(&bad_burst_native_aggregate).is_err());
 
         let logical_insert = rows.iter().position(|row| row.row_id == "C05-002").unwrap();
         let mut bad_refresh_route = rows.clone();
@@ -11973,6 +12471,28 @@ mod tests {
         );
         assert!(validate_history_rows(&bad_history_probe).is_err());
         let milestone = rows.iter().position(|row| row.row_id == "C08-003").unwrap();
+        let mut bad_terminal_length = rows.clone();
+        let oracle = json_object(&bad_terminal_length[milestone].json, "oracle")
+            .unwrap()
+            .to_owned();
+        let mutated_oracle = oracle.replacen(
+            &format!("\"logical_length\":{INITIAL_BYTES}"),
+            &format!("\"logical_length\":{}", INITIAL_BYTES + 1),
+            1,
+        );
+        bad_terminal_length[milestone].json =
+            bad_terminal_length[milestone]
+                .json
+                .replacen(&oracle, &mutated_oracle, 1);
+        assert!(summary_json(
+            &campaign,
+            &bad_terminal_length,
+            &source,
+            &master,
+            complete,
+            &"8".repeat(64)
+        )
+        .is_err());
         let mut bad_milestone = rows.clone();
         bad_milestone[milestone].json = bad_milestone[milestone].json.replacen(
             "\"metadata_exact\":true",
@@ -12115,9 +12635,7 @@ mod tests {
         metadata.mode = 0o600;
         assert!(verify_supported_metadata(&metadata, "synthetic R34").is_err());
         metadata = synthetic_metadata(34);
-        metadata
-            .xattrs
-            .push((b"user.test".to_vec(), b"value".to_vec()));
+        metadata.xattrs.push(b"user.test", b"value").unwrap();
         assert!(verify_supported_metadata(&metadata, "synthetic R34").is_err());
     }
 

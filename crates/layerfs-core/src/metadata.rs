@@ -176,58 +176,142 @@ struct MetadataSummary {
     level: u8,
 }
 
+const SUMMARY_CHUNK_BYTES: usize = 8 * 1024;
+const SUMMARIES_PER_CHUNK: usize = SUMMARY_CHUNK_BYTES / std::mem::size_of::<MetadataSummary>();
+
+#[derive(Default)]
+struct MetadataLevel {
+    chunks: Vec<Vec<MetadataSummary>>,
+    len: usize,
+    level: Option<u8>,
+}
+
+impl MetadataLevel {
+    fn push(&mut self, summary: MetadataSummary) -> CoreResult<()> {
+        if self.level.is_some_and(|level| level != summary.level) {
+            return Err(CoreError::InvalidRecord("metadata level"));
+        }
+        self.level = Some(summary.level);
+        if self
+            .chunks
+            .last()
+            .is_none_or(|chunk| chunk.len() == SUMMARIES_PER_CHUNK)
+        {
+            self.chunks.push(Vec::with_capacity(SUMMARIES_PER_CHUNK));
+        }
+        self.chunks.last_mut().unwrap().push(summary);
+        self.len = self.len.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+        Ok(())
+    }
+
+    fn into_summaries(self) -> impl Iterator<Item = MetadataSummary> {
+        self.chunks.into_iter().flatten()
+    }
+}
+
 pub fn build_metadata_tree<S: ObjectStore>(
     store: &mut S,
     entries: &[MetadataEntryV1],
 ) -> CoreResult<ObjectId> {
-    if entries.is_empty() {
-        return Ok(emit_metadata(store, metadata_leaf(Vec::new())?)?.id);
+    let mut builder = MetadataTreeBuilder::new();
+    for entry in entries.iter().cloned() {
+        builder.push(store, entry)?;
     }
-    for pair in entries.windows(2) {
-        if pair[0].key >= pair[1].key {
+    builder.finish(store)
+}
+
+pub struct MetadataTreeBuilder {
+    groups: Vec<Vec<MetadataEntryV1>>,
+    leaves: MetadataLevel,
+    previous: Option<MetadataKey>,
+}
+
+impl Default for MetadataTreeBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetadataTreeBuilder {
+    pub fn new() -> Self {
+        Self {
+            groups: Vec::new(),
+            leaves: MetadataLevel::default(),
+            previous: None,
+        }
+    }
+
+    pub fn push<S: ObjectStore>(
+        &mut self,
+        store: &mut S,
+        entry: MetadataEntryV1,
+    ) -> CoreResult<()> {
+        if self.previous.as_ref().is_some_and(|key| key >= &entry.key) {
             return Err(CoreError::NonCanonicalOrdering);
         }
-    }
-    let mut groups: Vec<Vec<MetadataEntryV1>> = Vec::new();
-    for entry in entries.iter().cloned() {
-        if groups.is_empty() {
-            groups.push(Vec::new());
+        self.previous = Some(entry.key.clone());
+        if self.groups.is_empty() {
+            self.groups.push(Vec::new());
         }
-        groups.last_mut().unwrap().push(entry);
-        if encode_metadata_node(&metadata_leaf(groups.last().unwrap().clone())?).is_err() {
-            let entry = groups.last_mut().unwrap().pop().unwrap();
-            groups.push(vec![entry]);
+        self.groups.last_mut().unwrap().push(entry);
+        if encode_metadata_node(&metadata_leaf(self.groups.last().unwrap().clone())?).is_err() {
+            let entry = self.groups.last_mut().unwrap().pop().unwrap();
+            self.groups.push(vec![entry]);
         }
+        if self.groups.len() == 3 {
+            let sealed = self.groups.remove(0);
+            self.leaves
+                .push(emit_metadata(store, metadata_leaf(sealed)?)?)?;
+        }
+        Ok(())
     }
-    rebalance_leaf_tail(&mut groups)?;
-    let mut level = groups
-        .into_iter()
-        .map(|group| emit_metadata(store, metadata_leaf(group)?))
-        .collect::<CoreResult<Vec<_>>>()?;
-    while level.len() > 1 {
-        let next_level = level[0]
-            .level
-            .checked_add(1)
-            .ok_or(CoreError::MappingDepthExceeded)?;
-        let mut groups: Vec<Vec<MetadataSummary>> = Vec::new();
-        for child in level {
-            if groups.is_empty() {
-                groups.push(Vec::new());
+
+    pub fn finish<S: ObjectStore>(mut self, store: &mut S) -> CoreResult<ObjectId> {
+        if self.groups.is_empty() {
+            return Ok(emit_metadata(store, metadata_leaf(Vec::new())?)?.id);
+        }
+        rebalance_leaf_tail(&mut self.groups)?;
+        for group in self.groups {
+            self.leaves
+                .push(emit_metadata(store, metadata_leaf(group)?)?)?;
+        }
+        let mut level = self.leaves;
+        while level.len > 1 {
+            let next_level = level
+                .level
+                .ok_or(CoreError::InvalidRecord("empty metadata level"))?
+                .checked_add(1)
+                .ok_or(CoreError::MappingDepthExceeded)?;
+            let mut groups: Vec<Vec<MetadataSummary>> = Vec::new();
+            let mut next = MetadataLevel::default();
+            for child in level.into_summaries() {
+                if groups.is_empty() {
+                    groups.push(Vec::new());
+                }
+                groups.last_mut().unwrap().push(child);
+                if encode_metadata_node(&metadata_branch(next_level, groups.last().unwrap())?)
+                    .is_err()
+                {
+                    let child = groups.last_mut().unwrap().pop().unwrap();
+                    groups.push(vec![child]);
+                }
+                if groups.len() == 3 {
+                    let sealed = groups.remove(0);
+                    next.push(emit_metadata(store, metadata_branch(next_level, &sealed)?)?)?;
+                }
             }
-            groups.last_mut().unwrap().push(child);
-            if encode_metadata_node(&metadata_branch(next_level, groups.last().unwrap())?).is_err()
-            {
-                let child = groups.last_mut().unwrap().pop().unwrap();
-                groups.push(vec![child]);
+            rebalance_branch_tail(next_level, &mut groups)?;
+            for group in groups {
+                next.push(emit_metadata(store, metadata_branch(next_level, &group)?)?)?;
             }
+            level = next;
         }
-        rebalance_branch_tail(next_level, &mut groups)?;
-        level = groups
-            .into_iter()
-            .map(|group| emit_metadata(store, metadata_branch(next_level, &group)?))
-            .collect::<CoreResult<Vec<_>>>()?;
+        Ok(level
+            .into_summaries()
+            .next()
+            .ok_or(CoreError::InvalidRecord("empty metadata level"))?
+            .id)
     }
-    Ok(level.remove(0).id)
 }
 
 pub fn metadata_tree_entries<S: ObjectRead>(

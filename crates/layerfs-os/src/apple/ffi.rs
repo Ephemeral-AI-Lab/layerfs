@@ -69,7 +69,73 @@ impl Drop for OwnedAcl {
     }
 }
 
-pub fn list_xattrs_file(file: &File) -> io::Result<Vec<Vec<u8>>> {
+pub struct XattrNames {
+    bytes: Vec<u8>,
+    offsets: Vec<Vec<u32>>,
+    count: usize,
+}
+
+impl XattrNames {
+    pub fn iter(&self) -> impl Iterator<Item = &[u8]> {
+        (0..self.count).map(|index| name_at(&self.bytes, self.offset(index)))
+    }
+
+    pub fn sort(&mut self) {
+        let count = self.count;
+        for root in (0..count / 2).rev() {
+            self.sift_down(root, count);
+        }
+        for end in (1..count).rev() {
+            self.swap(0, end);
+            self.sift_down(0, end);
+        }
+    }
+
+    fn offset(&self, index: usize) -> usize {
+        const OFFSETS_PER_CHUNK: usize = layerfs_vfs::driver::MAX_NATIVE_XATTR_BYTES / 4;
+        self.offsets[index / OFFSETS_PER_CHUNK][index % OFFSETS_PER_CHUNK] as usize
+    }
+
+    fn swap(&mut self, left: usize, right: usize) {
+        const OFFSETS_PER_CHUNK: usize = layerfs_vfs::driver::MAX_NATIVE_XATTR_BYTES / 4;
+        let left_value = self.offset(left) as u32;
+        let right_value = self.offset(right) as u32;
+        self.offsets[left / OFFSETS_PER_CHUNK][left % OFFSETS_PER_CHUNK] = right_value;
+        self.offsets[right / OFFSETS_PER_CHUNK][right % OFFSETS_PER_CHUNK] = left_value;
+    }
+
+    fn sift_down(&mut self, mut root: usize, end: usize) {
+        loop {
+            let child = root * 2 + 1;
+            if child >= end {
+                return;
+            }
+            let mut maximum = child;
+            if child + 1 < end
+                && name_at(&self.bytes, self.offset(child))
+                    < name_at(&self.bytes, self.offset(child + 1))
+            {
+                maximum = child + 1;
+            }
+            if name_at(&self.bytes, self.offset(root)) >= name_at(&self.bytes, self.offset(maximum))
+            {
+                return;
+            }
+            self.swap(root, maximum);
+            root = maximum;
+        }
+    }
+}
+
+fn name_at(bytes: &[u8], offset: usize) -> &[u8] {
+    let tail = &bytes[offset..];
+    &tail[..tail
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(tail.len())]
+}
+
+pub fn list_xattrs_file(file: &File) -> io::Result<XattrNames> {
     let size = unsafe { libc::flistxattr(file.as_raw_fd(), std::ptr::null_mut(), 0, 0) };
     if size < 0 {
         return Err(io::Error::last_os_error());
@@ -90,11 +156,42 @@ pub fn list_xattrs_file(file: &File) -> io::Result<Vec<Vec<u8>>> {
         }
         bytes.truncate(read as usize);
     }
-    Ok(bytes
+    const OFFSETS_PER_CHUNK: usize = layerfs_vfs::driver::MAX_NATIVE_XATTR_BYTES / 4;
+    let total_names = bytes
         .split(|byte| *byte == 0)
         .filter(|name| !name.is_empty())
-        .map(<[u8]>::to_vec)
-        .collect())
+        .count();
+    let mut offsets = Vec::new();
+    let mut count = 0_usize;
+    let mut start = 0_usize;
+    while start < bytes.len() {
+        let name = name_at(&bytes, start);
+        if name.is_empty() {
+            start += 1;
+            continue;
+        }
+        if offsets
+            .last()
+            .is_none_or(|chunk: &Vec<u32>| chunk.len() == OFFSETS_PER_CHUNK)
+        {
+            offsets.push(Vec::with_capacity(
+                total_names.saturating_sub(count).min(OFFSETS_PER_CHUNK),
+            ));
+        }
+        offsets
+            .last_mut()
+            .unwrap()
+            .push(u32::try_from(start).map_err(|_| io::ErrorKind::FileTooLarge)?);
+        count += 1;
+        start = start
+            .checked_add(name.len() + 1)
+            .ok_or(io::ErrorKind::FileTooLarge)?;
+    }
+    Ok(XattrNames {
+        bytes,
+        offsets,
+        count,
+    })
 }
 
 pub fn get_xattr_file(file: &File, name: &[u8]) -> io::Result<Vec<u8>> {
@@ -1013,6 +1110,21 @@ mod tests {
     use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
     use std::process::Command;
+
+    #[test]
+    fn compact_xattr_name_index_sorts_without_per_name_allocations() {
+        let bytes = b"z\0alpha\0middle\0".to_vec();
+        let mut names = XattrNames {
+            bytes,
+            offsets: vec![vec![0, 2, 8]],
+            count: 3,
+        };
+        names.sort();
+        assert_eq!(
+            names.iter().collect::<Vec<_>>(),
+            [b"alpha".as_slice(), b"middle".as_slice(), b"z".as_slice()]
+        );
+    }
 
     #[test]
     fn entry_token_changes_for_an_in_place_live_writer() {

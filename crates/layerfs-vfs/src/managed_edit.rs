@@ -6,6 +6,7 @@ use layerfs_core::content::rope::{replace as replace_rope, FileStateRoot, Object
 use layerfs_core::inode::{
     inode_table_lookup, inode_table_upsert, InodeKind, InodeTableCounters, InodeTableRoot,
 };
+use layerfs_core::metadata::decode_apple_acl;
 use layerfs_core::namespace::{
     directory_insert, directory_lookup, directory_remove, directory_rename, DirectoryStateRoot,
     NamespaceCounters, NamespaceRootV1,
@@ -18,6 +19,10 @@ use layerfs_engine::publication::Publication;
 use layerfs_engine::refs::RefState;
 use layerfs_engine::Engine;
 use std::io::{Read, Seek, SeekFrom, Write};
+
+const MAX_NATIVE_ACL_BYTES: usize = 4_620;
+const MAX_SPOOLED_METADATA_BYTES: u64 =
+    36 + MAX_NATIVE_ACL_BYTES as u64 + 7 * MAX_NATIVE_XATTR_BYTES as u64;
 
 pub enum ManagedEdit {
     Replace {
@@ -319,48 +324,79 @@ pub fn replay(
     Ok((state, counters, steps.unwrap_or_default()))
 }
 
-pub(crate) fn encode_spooled_metadata(metadata: &NativeMetadata) -> VfsResult<Vec<u8>> {
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(b"LFSMETA1");
-    bytes.extend_from_slice(&metadata.mode.to_be_bytes());
-    bytes.extend_from_slice(&metadata.mtime_seconds.to_be_bytes());
-    bytes.extend_from_slice(&metadata.mtime_nanoseconds.to_be_bytes());
-    bytes.extend_from_slice(&metadata.bsd_flags.to_be_bytes());
-    bytes.extend_from_slice(
-        &metadata
-            .acl
-            .as_ref()
-            .map(|acl| u32::try_from(acl.len()).map_err(|_| VfsError::InvalidState))
-            .transpose()?
-            .unwrap_or(u32::MAX)
-            .to_be_bytes(),
-    );
-    bytes.extend_from_slice(
-        &u32::try_from(metadata.xattrs.len())
-            .map_err(|_| VfsError::InvalidState)?
-            .to_be_bytes(),
-    );
+pub(crate) fn write_spooled_metadata(
+    metadata: &NativeMetadata,
+    spool: &mut dyn Write,
+) -> VfsResult<u64> {
+    let (len, acl_len, count) = spooled_metadata_layout(metadata)?;
+
+    spool.write_all(b"LFSMETA1")?;
+    spool.write_all(&metadata.mode.to_be_bytes())?;
+    spool.write_all(&metadata.mtime_seconds.to_be_bytes())?;
+    spool.write_all(&metadata.mtime_nanoseconds.to_be_bytes())?;
+    spool.write_all(&metadata.bsd_flags.to_be_bytes())?;
+    spool.write_all(&acl_len.to_be_bytes())?;
+    spool.write_all(&count.to_be_bytes())?;
     if let Some(acl) = &metadata.acl {
-        bytes.extend_from_slice(acl);
+        spool.write_all(acl)?;
     }
     for (name, value) in &metadata.xattrs {
-        bytes.extend_from_slice(
-            &u16::try_from(name.len())
-                .map_err(|_| VfsError::InvalidState)?
-                .to_be_bytes(),
-        );
-        bytes.extend_from_slice(
-            &u32::try_from(value.len())
-                .map_err(|_| VfsError::InvalidState)?
-                .to_be_bytes(),
-        );
-        bytes.extend_from_slice(name);
-        bytes.extend_from_slice(value);
+        spool.write_all(&(name.len() as u16).to_be_bytes())?;
+        spool.write_all(&(value.len() as u32).to_be_bytes())?;
+        spool.write_all(&name)?;
+        spool.write_all(&value)?;
     }
-    if bytes.len() > MAX_NATIVE_XATTR_BYTES + 128 * 1024 {
+    Ok(len)
+}
+
+pub(crate) fn spooled_metadata_len(metadata: &NativeMetadata) -> VfsResult<u64> {
+    spooled_metadata_layout(metadata).map(|layout| layout.0)
+}
+
+fn spooled_metadata_layout(metadata: &NativeMetadata) -> VfsResult<(u64, u32, u32)> {
+    let acl_len = metadata
+        .acl
+        .as_ref()
+        .map(|acl| {
+            decode_apple_acl(acl)?;
+            u32::try_from(acl.len()).map_err(|_| VfsError::InvalidState)
+        })
+        .transpose()?
+        .unwrap_or(u32::MAX);
+    if metadata.xattrs.len() > MAX_NATIVE_XATTR_BYTES {
         return Err(VfsError::InvalidState);
     }
-    Ok(bytes)
+    let count = u32::try_from(metadata.xattrs.len()).map_err(|_| VfsError::InvalidState)?;
+    let mut xattr_bytes = 0_usize;
+    let mut len = 36_u64
+        .checked_add(if acl_len == u32::MAX {
+            0
+        } else {
+            u64::from(acl_len)
+        })
+        .ok_or(VfsError::InvalidState)?;
+    for (name, value) in &metadata.xattrs {
+        if name.is_empty() || name.len() > 127 || name.contains(&0) {
+            return Err(VfsError::InvalidState);
+        }
+        let name_len = u16::try_from(name.len()).map_err(|_| VfsError::InvalidState)?;
+        let value_len = u32::try_from(value.len()).map_err(|_| VfsError::InvalidState)?;
+        xattr_bytes = xattr_bytes
+            .checked_add(name.len())
+            .and_then(|total| total.checked_add(value.len()))
+            .filter(|total| *total <= MAX_NATIVE_XATTR_BYTES)
+            .ok_or(VfsError::InvalidState)?;
+        len = len
+            .checked_add(6)
+            .and_then(|total| total.checked_add(u64::from(name_len)))
+            .and_then(|total| total.checked_add(u64::from(value_len)))
+            .ok_or(VfsError::InvalidState)?;
+    }
+    if len > MAX_SPOOLED_METADATA_BYTES {
+        return Err(VfsError::InvalidState);
+    }
+
+    Ok((len, acl_len, count))
 }
 
 fn load_spooled_metadata(
@@ -368,41 +404,53 @@ fn load_spooled_metadata(
     offset: u64,
     len: u64,
 ) -> VfsResult<NativeMetadata> {
-    let len = usize::try_from(len).map_err(|_| VfsError::InvalidState)?;
-    if len > MAX_NATIVE_XATTR_BYTES + 128 * 1024 {
+    if len > MAX_SPOOLED_METADATA_BYTES {
         return Err(VfsError::InvalidState);
     }
     spool.seek(SeekFrom::Start(offset))?;
-    let mut bytes = vec![0_u8; len];
-    spool.read_exact(&mut bytes)?;
-    let mut cursor = 0_usize;
-    let mut take = |len: usize| -> VfsResult<&[u8]> {
-        let end = cursor.checked_add(len).ok_or(VfsError::InvalidState)?;
-        let value = bytes.get(cursor..end).ok_or(VfsError::InvalidState)?;
-        cursor = end;
-        Ok(value)
-    };
-    if take(8)? != b"LFSMETA1" {
+    let mut input = spool.take(len);
+    let mut magic = [0_u8; 8];
+    input.read_exact(&mut magic)?;
+    if &magic != b"LFSMETA1" {
         return Err(VfsError::InvalidState);
     }
-    let mode = u32::from_be_bytes(take(4)?.try_into().unwrap());
-    let mtime_seconds = i64::from_be_bytes(take(8)?.try_into().unwrap());
-    let mtime_nanoseconds = u32::from_be_bytes(take(4)?.try_into().unwrap());
-    let bsd_flags = u32::from_be_bytes(take(4)?.try_into().unwrap());
-    let acl_len = u32::from_be_bytes(take(4)?.try_into().unwrap());
-    let count = u32::from_be_bytes(take(4)?.try_into().unwrap());
-    let acl = (acl_len != u32::MAX)
-        .then(|| take(acl_len as usize).map(<[u8]>::to_vec))
-        .transpose()?;
-    let mut xattrs = Vec::new();
-    for _ in 0..count {
-        let name_len = u16::from_be_bytes(take(2)?.try_into().unwrap()) as usize;
-        let value_len = u32::from_be_bytes(take(4)?.try_into().unwrap()) as usize;
-        let name = take(name_len)?.to_vec();
-        let value = take(value_len)?.to_vec();
-        xattrs.push((name, value));
+    let mode = read_u32(&mut input)?;
+    let mtime_seconds = read_i64(&mut input)?;
+    let mtime_nanoseconds = read_u32(&mut input)?;
+    let bsd_flags = read_u32(&mut input)?;
+    let acl_len = read_u32(&mut input)?;
+    let count = read_u32(&mut input)?;
+    if count as usize > MAX_NATIVE_XATTR_BYTES {
+        return Err(VfsError::InvalidState);
     }
-    if cursor != bytes.len() {
+    let acl = if acl_len == u32::MAX {
+        None
+    } else {
+        let acl = read_vec(&mut input, acl_len as usize, MAX_NATIVE_ACL_BYTES)?;
+        decode_apple_acl(&acl)?;
+        Some(acl)
+    };
+    let mut xattrs = crate::driver::NativeXattrs::new();
+    let mut xattr_bytes = 0_usize;
+    for _ in 0..count {
+        let name_len = read_u16(&mut input)? as usize;
+        let value_len =
+            usize::try_from(read_u32(&mut input)?).map_err(|_| VfsError::InvalidState)?;
+        xattr_bytes = xattr_bytes
+            .checked_add(name_len)
+            .and_then(|total| total.checked_add(value_len))
+            .filter(|total| *total <= MAX_NATIVE_XATTR_BYTES)
+            .ok_or(VfsError::InvalidState)?;
+        let name = read_vec(&mut input, name_len, 127)?;
+        if name.is_empty() || name.contains(&0) {
+            return Err(VfsError::InvalidState);
+        }
+        let value = read_vec(&mut input, value_len, MAX_NATIVE_XATTR_BYTES)?;
+        xattrs
+            .push(&name, &value)
+            .map_err(|_| VfsError::InvalidState)?;
+    }
+    if input.limit() != 0 {
         return Err(VfsError::InvalidState);
     }
     Ok(NativeMetadata {
@@ -413,6 +461,33 @@ fn load_spooled_metadata(
         acl,
         bsd_flags,
     })
+}
+
+fn read_u16(input: &mut dyn Read) -> VfsResult<u16> {
+    let mut bytes = [0_u8; 2];
+    input.read_exact(&mut bytes)?;
+    Ok(u16::from_be_bytes(bytes))
+}
+
+fn read_u32(input: &mut dyn Read) -> VfsResult<u32> {
+    let mut bytes = [0_u8; 4];
+    input.read_exact(&mut bytes)?;
+    Ok(u32::from_be_bytes(bytes))
+}
+
+fn read_i64(input: &mut dyn Read) -> VfsResult<i64> {
+    let mut bytes = [0_u8; 8];
+    input.read_exact(&mut bytes)?;
+    Ok(i64::from_be_bytes(bytes))
+}
+
+fn read_vec(input: &mut dyn Read, len: usize, limit: usize) -> VfsResult<Vec<u8>> {
+    if len > limit {
+        return Err(VfsError::InvalidState);
+    }
+    let mut bytes = vec![0_u8; len];
+    input.read_exact(&mut bytes)?;
+    Ok(bytes)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -760,6 +835,50 @@ mod tests {
     use layerfs_core::{CoreError, CoreResult, ObjectId};
     use std::cell::Cell;
     use std::collections::BTreeMap;
+    use std::io::Cursor;
+
+    struct MemoryTemp {
+        inner: Cursor<Vec<u8>>,
+        largest_write: usize,
+    }
+
+    impl Read for MemoryTemp {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            self.inner.read(buffer)
+        }
+    }
+
+    impl Write for MemoryTemp {
+        fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+            self.largest_write = self.largest_write.max(buffer.len());
+            self.inner.write(buffer)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Seek for MemoryTemp {
+        fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
+            self.inner.seek(position)
+        }
+    }
+
+    impl OwnedTempHandle for MemoryTemp {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn set_len(&mut self, len: u64) -> crate::driver::Result<()> {
+            self.inner.get_mut().resize(len as usize, 0);
+            Ok(())
+        }
+
+        fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+            self
+        }
+    }
 
     #[derive(Default)]
     struct TrackingStore {
@@ -817,5 +936,63 @@ mod tests {
         );
         assert_eq!(store.gets.get(), 0);
         assert_eq!(store.authenticated.get(), 2);
+    }
+
+    #[test]
+    fn managed_metadata_spool_streams_the_full_xattr_envelope_and_rejects_one_over() {
+        let metadata = NativeMetadata {
+            mode: 0o644,
+            mtime_seconds: 7,
+            mtime_nanoseconds: 8,
+            xattrs: crate::driver::NativeXattrs::from_entries(
+                (0..1024).map(|index| (format!("x{index:015}").into_bytes(), vec![9; 1008])),
+            )
+            .unwrap(),
+            acl: None,
+            bsd_flags: 0,
+        };
+        let mut spool = MemoryTemp {
+            inner: Cursor::new(Vec::new()),
+            largest_write: 0,
+        };
+        let len = write_spooled_metadata(&metadata, &mut spool).unwrap();
+        assert_eq!(
+            len,
+            36 + MAX_NATIVE_XATTR_BYTES as u64 + 6 * metadata.xattrs.len() as u64
+        );
+        assert!(len > MAX_NATIVE_XATTR_BYTES as u64);
+        assert!(spool.largest_write < MAX_NATIVE_XATTR_BYTES);
+        assert_eq!(load_spooled_metadata(&mut spool, 0, len).unwrap(), metadata);
+
+        let oversized = crate::driver::NativeXattrs::from_entries(std::iter::once((
+            b"x".to_vec(),
+            vec![0; MAX_NATIVE_XATTR_BYTES],
+        )))
+        .and_then(|mut xattrs| xattrs.push(b"y", b"").map(|_| xattrs));
+        assert!(matches!(
+            oversized,
+            Err(crate::driver::DriverError::Unsupported)
+        ));
+
+        let mut corrupt = Vec::from(b"LFSMETA1".as_slice());
+        corrupt.extend_from_slice(&0o644_u32.to_be_bytes());
+        corrupt.extend_from_slice(&0_i64.to_be_bytes());
+        corrupt.extend_from_slice(&0_u32.to_be_bytes());
+        corrupt.extend_from_slice(&0_u32.to_be_bytes());
+        corrupt.extend_from_slice(&u32::MAX.to_be_bytes());
+        corrupt.extend_from_slice(&((MAX_NATIVE_XATTR_BYTES + 1) as u32).to_be_bytes());
+        let corrupt_len = corrupt.len() as u64;
+        let mut corrupt = MemoryTemp {
+            inner: Cursor::new(corrupt),
+            largest_write: 0,
+        };
+        assert!(matches!(
+            load_spooled_metadata(&mut corrupt, 0, corrupt_len),
+            Err(VfsError::InvalidState)
+        ));
+        assert!(matches!(
+            load_spooled_metadata(&mut corrupt, 0, MAX_SPOOLED_METADATA_BYTES + 1),
+            Err(VfsError::InvalidState)
+        ));
     }
 }

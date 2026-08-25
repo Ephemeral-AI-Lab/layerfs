@@ -185,7 +185,12 @@ fn publication_is_one_guarded_commit_and_fork_rollback_copy_no_objects() {
         .unwrap()
         .publish_namespace(&root_a_bytes)
         .unwrap();
-    assert_eq!(engine.counters().unwrap().transactions_committed, 1);
+    let committed = engine.counters().unwrap();
+    assert_eq!(committed.transactions_committed, 1);
+    assert_eq!(committed.publication_transactions_started, 1);
+    assert_eq!(committed.publication_transactions_rolled_back, 0);
+    assert_eq!(committed.publication_commits, 1);
+    assert_eq!(committed.statements, 9);
     let stale = a.clone();
     let b = engine
         .begin_publication(Some(&a), "main")
@@ -200,7 +205,11 @@ fn publication_is_one_guarded_commit_and_fork_rollback_copy_no_objects() {
         .publish_namespace(&root_b_bytes)
         .unwrap();
     assert_eq!(no_op, b);
-    assert_eq!(engine.counters().unwrap().transactions_committed, 0);
+    let no_op_counters = engine.counters().unwrap();
+    assert_eq!(no_op_counters.transactions_committed, 0);
+    assert_eq!(no_op_counters.publication_transactions_started, 1);
+    assert_eq!(no_op_counters.publication_transactions_rolled_back, 1);
+    assert_eq!(no_op_counters.publication_commits, 0);
     assert!(matches!(
         engine.begin_publication(Some(&stale), "main"),
         Err(EngineError::PublicationConflict)
@@ -370,6 +379,7 @@ fn verified_publication_counts_every_integrity_fetch_authentication_and_role_dec
             .as_nanos()
     ));
     let engine = Engine::open(&path).unwrap();
+    engine.reset_counters().unwrap();
     let mut publication = engine.begin_publication(None, "main").unwrap();
     let (mode, _) = build(&mut publication, 0o755_u32.to_be_bytes().as_slice()).unwrap();
     let mut mtime = Vec::new();
@@ -410,10 +420,18 @@ fn verified_publication_counts_every_integrity_fetch_authentication_and_role_dec
         inode_table_root: table.0,
     })
     .unwrap();
-    engine.reset_counters().unwrap();
     publication.publish_namespace(&namespace).unwrap();
 
     let counters = engine.counters().unwrap();
+    assert_eq!(counters.transactions_started, 1);
+    assert_eq!(counters.transactions_committed, 1);
+    assert_eq!(counters.publication_transactions_started, 1);
+    assert_eq!(counters.publication_transactions_rolled_back, 0);
+    assert_eq!(counters.publication_commits, 1);
+    assert_eq!(counters.integrity_transactions_started, 0);
+    assert_eq!(counters.integrity_transactions_committed, 0);
+    assert_eq!(counters.integrity_transactions_rolled_back, 0);
+    assert_eq!(counters.integrity_statements, 0);
     assert!(counters.fetched_rows > 0);
     assert_eq!(
         counters.fetched_rows,
@@ -430,6 +448,42 @@ fn verified_publication_counts_every_integrity_fetch_authentication_and_role_dec
     assert!(counters.scratch_rows > 0);
     assert!(counters.scratch_high_water_bytes > 0);
     drop(engine);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn verified_open_accounts_schema_profile_authority_and_admission_transaction() {
+    let path = std::env::temp_dir().join(format!(
+        "layerfs-admission-accounting-{}-{}.sqlite",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+
+    let fresh = Engine::open(&path).unwrap();
+    let counters = fresh.counters().unwrap();
+    assert_eq!(counters.admission_transactions_started, 1);
+    assert_eq!(counters.admission_transactions_committed, 1);
+    assert_eq!(counters.admission_transactions_rolled_back, 0);
+    assert_eq!(counters.admission_statements, 28);
+    assert_eq!(counters.transactions_started, 0);
+    assert_eq!(counters.publication_transactions_started, 0);
+    assert_eq!(counters.publication_commits, 0);
+    drop(fresh);
+
+    let reopened = Engine::open(&path).unwrap();
+    let counters = reopened.counters().unwrap();
+    assert_eq!(counters.admission_transactions_started, 1);
+    assert_eq!(counters.admission_transactions_committed, 1);
+    assert_eq!(counters.admission_transactions_rolled_back, 0);
+    assert_eq!(counters.admission_statements, 34);
+    assert_eq!(counters.transactions_started, 0);
+    assert_eq!(counters.publication_transactions_started, 0);
+    assert_eq!(counters.publication_commits, 0);
+    drop(reopened);
+
     fs::remove_file(path).unwrap();
 }
 
@@ -580,15 +634,30 @@ fn retained_union_reuses_two_scratch_tables_at_five_fifteen_and_thirty_five_root
         );
         assert_eq!(counters.transactions_started, 0);
         assert_eq!(counters.transactions_committed, 0);
+        assert_eq!(counters.admission_transactions_started, 1);
+        assert_eq!(counters.admission_transactions_committed, 1);
+        assert_eq!(counters.admission_transactions_rolled_back, 0);
+        assert!(counters.admission_statements >= 34);
+        assert_eq!(
+            counters.integrity_transactions_started,
+            root_count as u64 + 1
+        );
+        assert_eq!(counters.integrity_transactions_committed, 0);
+        assert_eq!(
+            counters.integrity_transactions_rolled_back,
+            root_count as u64 + 1
+        );
+        assert_eq!(counters.integrity_statements, 4 * (root_count as u64 + 1));
+        assert_eq!(counters.retained_roots_validated, root_count as u64);
         assert_eq!(counters.publication_commits, 0);
         assert_eq!(counters.root_verifications, 0);
         assert_eq!(counters.publication_closure_passes, 0);
         assert_eq!(
             counters.scratch_statements,
             match root_count {
-                5 => 417,
-                15 => 1_107,
-                35 => 2_487,
+                5 => 428,
+                15 => 1_138,
+                35 => 2_558,
                 _ => unreachable!(),
             },
             "retained-root scrub stopped batching payload-summary lookups"

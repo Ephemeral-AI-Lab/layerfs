@@ -41,8 +41,8 @@ fn public_direct_routes_stream_and_preserve_history() {
     assert_eq!(range, b"3456");
     assert_eq!(counters.native.bytes_read, 0);
     assert_eq!(counters.native.bytes_written, 0);
-    assert_eq!(counters.operation_q_current_bytes, 4 * 1024 * 1024);
-    assert_eq!(counters.operation_q_high_water_bytes, 4 * 1024 * 1024);
+    assert_eq!(counters.operation_q_current_bytes, 8 * 1024 * 1024);
+    assert_eq!(counters.operation_q_high_water_bytes, 8 * 1024 * 1024);
     assert_eq!(counters.operation_q_terminal_bytes, 0);
 
     let (edited, counters) = opened
@@ -54,8 +54,8 @@ fn public_direct_routes_stream_and_preserve_history() {
     assert_eq!(counters.rope.payload_bytes_read, 0);
     assert_eq!(counters.native.bytes_read, 0);
     assert_eq!(counters.native.bytes_written, 0);
-    assert_eq!(counters.operation_q_current_bytes, 4 * 1024 * 1024);
-    assert_eq!(counters.operation_q_high_water_bytes, 4 * 1024 * 1024);
+    assert_eq!(counters.operation_q_current_bytes, 8 * 1024 * 1024);
+    assert_eq!(counters.operation_q_high_water_bytes, 8 * 1024 * 1024);
     assert_eq!(counters.operation_q_terminal_bytes, 0);
 
     let mut old = Vec::new();
@@ -72,15 +72,15 @@ fn public_direct_routes_stream_and_preserve_history() {
         .fs
         .replace_file_observed(&edited, "file", Cursor::new(b"replacement"))
         .unwrap();
-    assert_eq!(counters.operation_q_current_bytes, 4 * 1024 * 1024);
-    assert_eq!(counters.operation_q_high_water_bytes, 4 * 1024 * 1024);
+    assert_eq!(counters.operation_q_current_bytes, 8 * 1024 * 1024);
+    assert_eq!(counters.operation_q_high_water_bytes, 8 * 1024 * 1024);
     assert_eq!(counters.operation_q_terminal_bytes, 0);
     let (created, counters) = opened
         .fs
         .replace_file_observed(&replaced, "new", Cursor::new(b"streamed-new"))
         .unwrap();
-    assert_eq!(counters.operation_q_current_bytes, 4 * 1024 * 1024);
-    assert_eq!(counters.operation_q_high_water_bytes, 4 * 1024 * 1024);
+    assert_eq!(counters.operation_q_current_bytes, 8 * 1024 * 1024);
+    assert_eq!(counters.operation_q_high_water_bytes, 8 * 1024 * 1024);
     assert_eq!(counters.operation_q_terminal_bytes, 0);
     let mut bytes = Vec::new();
     opened.fs.read_to(created.root, "new", &mut bytes).unwrap();
@@ -151,7 +151,7 @@ fn repeated_ranges_reuse_only_the_exact_resolved_root_and_path() {
     assert_eq!(second, bytes[64 * 1024..128 * 1024]);
     assert_eq!(second_counters.namespace.nodes_read, 0);
     assert_eq!(second_counters.inode_table.nodes_read, 0);
-    assert_eq!(second_counters.operation_q_current_bytes, 4 * 1024 * 1024);
+    assert_eq!(second_counters.operation_q_current_bytes, 8 * 1024 * 1024);
     assert_eq!(second_counters.operation_q_terminal_bytes, 0);
     assert_eq!(
         after.statements - before.statements,
@@ -213,6 +213,8 @@ fn managed_workspace_rotates_one_hundred_checkpoints_without_rematerializing() {
     assert!(materialize.native.metadata_calls > 0);
     assert!(materialize.native.replace_calls > 0);
     assert!(materialize.native.sync_calls > 0);
+    assert!(materialize.metadata_rope.payload_bytes_read > 0);
+    assert_eq!(materialize.content_payload_bytes_read(), Some(8192));
     let before = opened.fs.diagnostics().unwrap();
     let mut state = opened.fs.current_head("main").unwrap();
     let selected_old = state.clone();

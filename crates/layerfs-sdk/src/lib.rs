@@ -7,13 +7,15 @@ use layerfs_vfs::LayerVfs;
 use std::path::Path;
 use std::sync::Arc;
 
-pub use layerfs_vfs::driver::NativeMetadata;
+pub use layerfs_vfs::driver::{NativeMetadata, NativeXattrs};
 pub use layerfs_vfs::{
     AcceptedSplice, IntegrityMode, ManagedReplayStep, NativeRoute,
     OperationCounters as OperationDiagnostics, RefState, RootId, VfsError,
 };
 
 pub const COMPONENT: &str = "layerfs-sdk";
+pub const PRODUCT_BUFFER_BOUND_BYTES: usize = layerfs_vfs::driver::MAX_NATIVE_XATTR_BYTES;
+pub const OPERATION_Q_BOUND_BYTES: u64 = layerfs_vfs::OPERATION_Q_BOUND_BYTES;
 
 pub struct OpenedLayerFs {
     pub fs: LayerFs,
@@ -39,6 +41,14 @@ pub struct Diagnostics {
     pub transactions_committed: u64,
     pub transactions_rolled_back: u64,
     pub statements: u64,
+    pub admission_transactions_started: u64,
+    pub admission_transactions_committed: u64,
+    pub admission_transactions_rolled_back: u64,
+    pub admission_statements: u64,
+    pub integrity_transactions_started: u64,
+    pub integrity_transactions_committed: u64,
+    pub integrity_transactions_rolled_back: u64,
+    pub integrity_statements: u64,
     pub busy_events: u64,
     pub locked_events: u64,
     pub objects_validated: u64,
@@ -67,6 +77,8 @@ pub struct Diagnostics {
     pub put_insert_statements: u64,
     pub created_rows: u64,
     pub reused_rows: u64,
+    pub publication_transactions_started: u64,
+    pub publication_transactions_rolled_back: u64,
     pub publication_commits: u64,
     pub publication_closure_passes: u64,
     pub namespace_graph_verification_passes: u64,
@@ -74,6 +86,7 @@ pub struct Diagnostics {
     pub scratch_statements: u64,
     pub scratch_rows: u64,
     pub scratch_high_water_bytes: u64,
+    pub retained_roots_validated: u64,
     pub page_size: i64,
     pub cache_pages: i64,
     pub cache_spill_pages: i64,
@@ -287,6 +300,14 @@ impl LayerFs {
             transactions_committed: counters.transactions_committed,
             transactions_rolled_back: counters.transactions_rolled_back,
             statements: counters.statements,
+            admission_transactions_started: counters.admission_transactions_started,
+            admission_transactions_committed: counters.admission_transactions_committed,
+            admission_transactions_rolled_back: counters.admission_transactions_rolled_back,
+            admission_statements: counters.admission_statements,
+            integrity_transactions_started: counters.integrity_transactions_started,
+            integrity_transactions_committed: counters.integrity_transactions_committed,
+            integrity_transactions_rolled_back: counters.integrity_transactions_rolled_back,
+            integrity_statements: counters.integrity_statements,
             busy_events: counters.busy_events,
             locked_events: counters.locked_events,
             objects_validated: counters.objects_validated,
@@ -315,6 +336,8 @@ impl LayerFs {
             put_insert_statements: counters.put_insert_statements,
             created_rows: counters.created_rows,
             reused_rows: counters.reused_rows,
+            publication_transactions_started: counters.publication_transactions_started,
+            publication_transactions_rolled_back: counters.publication_transactions_rolled_back,
             publication_commits: counters.publication_commits,
             publication_closure_passes: counters.publication_closure_passes,
             namespace_graph_verification_passes: counters.namespace_graph_verification_passes,
@@ -322,6 +345,7 @@ impl LayerFs {
             scratch_statements: counters.scratch_statements,
             scratch_rows: counters.scratch_rows,
             scratch_high_water_bytes: counters.scratch_high_water_bytes,
+            retained_roots_validated: counters.retained_roots_validated,
             page_size: profile.page_size,
             cache_pages: profile.cache_pages,
             cache_spill_pages: profile.cache_spill_pages,
@@ -331,7 +355,7 @@ impl LayerFs {
             logical_engine_bytes: None,
             compaction,
             active_connections: self.0.active_connection_count()?,
-            operation_q_bound_bytes: layerfs_vfs::OPERATION_Q_BOUND_BYTES,
+            operation_q_bound_bytes: OPERATION_Q_BOUND_BYTES,
             operation_q_current_bytes: operation_q.current_bytes,
             operation_q_high_water_bytes: operation_q.high_water_bytes,
         })

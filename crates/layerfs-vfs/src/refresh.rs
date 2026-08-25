@@ -2065,4 +2065,19 @@ mod tests {
         );
         assert!(ordered_path(b"", false).unwrap() < ordered_path(b"x", false).unwrap());
     }
+
+    #[test]
+    fn ambiguous_driver_failures_mark_possible_visibility() {
+        for error in [
+            DriverError::VisibilityAmbiguous,
+            DriverError::DurabilityAmbiguous,
+        ] {
+            let mut visible = false;
+            mark_ambiguous(&mut visible, &error);
+            assert!(visible);
+        }
+        let mut visible = false;
+        mark_ambiguous(&mut visible, &DriverError::Conflict);
+        assert!(!visible);
+    }
 }

@@ -8,7 +8,7 @@ use layerfs_core::inode::{
     InodeTableRoot,
 };
 use layerfs_core::metadata::{
-    build_metadata_tree, decode_apple_acl, encode_bsd_flags, MetadataEntryV1, MetadataKey,
+    decode_apple_acl, encode_bsd_flags, MetadataEntryV1, MetadataKey, MetadataTreeBuilder,
     PortableMetadataV1,
 };
 use layerfs_core::namespace::{
@@ -208,7 +208,7 @@ pub fn initialize_empty(engine: &Engine) -> VfsResult<RefState> {
             mode: 0o755,
             mtime_seconds: 0,
             mtime_nanoseconds: 0,
-            xattrs: Vec::new(),
+            xattrs: crate::driver::NativeXattrs::new(),
             acl: None,
             bsd_flags: 0,
         },
@@ -812,50 +812,71 @@ pub(crate) fn put_metadata_observed(
     native: &NativeMetadata,
     counters: &mut OperationCounters,
 ) -> VfsResult<layerfs_core::ObjectId> {
+    crate::managed_edit::spooled_metadata_len(native)?;
     let portable = PortableMetadataV1 {
         permission_mode: native.mode,
         mtime_seconds: native.mtime_seconds,
         mtime_nanoseconds: native.mtime_nanoseconds,
     };
     portable.validate(kind)?;
-    let mut values = vec![
-        (
-            MetadataKey::new("portable".into(), b"mode".to_vec())?,
-            portable.mode_bytes(kind)?.to_vec(),
-        ),
-        (
-            MetadataKey::new("portable".into(), b"mtime".to_vec())?,
-            portable.mtime_bytes()?.to_vec(),
-        ),
-    ];
-    for (name, value) in &native.xattrs {
-        values.push((
-            MetadataKey::new("apple.xattr".into(), name.clone())?,
-            value.clone(),
-        ));
-    }
+    let mut tree = MetadataTreeBuilder::new();
     if let Some(acl) = &native.acl {
         decode_apple_acl(acl)?;
-        values.push((
+        let entry = metadata_value(
+            publication,
             MetadataKey::new("apple.acl".into(), Vec::new())?,
-            acl.clone(),
-        ));
+            acl,
+            counters,
+        )?;
+        tree.push(publication, entry)?;
     }
     if let Some(flags) = encode_bsd_flags(native.bsd_flags)? {
-        values.push((
+        let entry = metadata_value(
+            publication,
             MetadataKey::new("apple.bsd-flags".into(), Vec::new())?,
-            flags.to_vec(),
-        ));
+            &flags,
+            counters,
+        )?;
+        tree.push(publication, entry)?;
     }
-    values.sort_by(|left, right| left.0.cmp(&right.0));
-    let mut entries = Vec::with_capacity(values.len());
-    for (key, value) in values {
-        let (root, rope) = build(publication, Cursor::new(value))?;
-        counters.add_metadata_rope(rope)?;
-        entries.push(MetadataEntryV1 {
-            key,
-            value_file_root: root.0,
-        });
+    for (name, value) in &native.xattrs {
+        let entry = metadata_value(
+            publication,
+            MetadataKey::new("apple.xattr".into(), name)?,
+            &value,
+            counters,
+        )?;
+        tree.push(publication, entry)?;
     }
-    Ok(build_metadata_tree(publication, &entries)?)
+    let mode = portable.mode_bytes(kind)?;
+    let entry = metadata_value(
+        publication,
+        MetadataKey::new("portable".into(), b"mode".to_vec())?,
+        &mode,
+        counters,
+    )?;
+    tree.push(publication, entry)?;
+    let mtime = portable.mtime_bytes()?;
+    let entry = metadata_value(
+        publication,
+        MetadataKey::new("portable".into(), b"mtime".to_vec())?,
+        &mtime,
+        counters,
+    )?;
+    tree.push(publication, entry)?;
+    Ok(tree.finish(publication)?)
+}
+
+fn metadata_value(
+    publication: &mut Publication<'_>,
+    key: MetadataKey,
+    value: &[u8],
+    counters: &mut OperationCounters,
+) -> VfsResult<MetadataEntryV1> {
+    let (root, rope) = build(publication, Cursor::new(value))?;
+    counters.add_metadata_rope(rope)?;
+    Ok(MetadataEntryV1 {
+        key,
+        value_file_root: root.0,
+    })
 }

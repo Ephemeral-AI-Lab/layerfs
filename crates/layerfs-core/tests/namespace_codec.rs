@@ -2,7 +2,8 @@ use layerfs_core::content::rope::ObjectStore;
 use layerfs_core::inode::{InodeId, InodeKind, InodeRecordV1};
 use layerfs_core::metadata::{
     build_metadata_tree, decode_apple_acl, encode_apple_acl, metadata_tree_entries,
-    AppleAclEntryV1, AppleAclTag, MetadataEntryV1, MetadataKey, PortableMetadataV1,
+    AppleAclEntryV1, AppleAclTag, MetadataEntryV1, MetadataKey, MetadataTreeBuilder,
+    PortableMetadataV1,
 };
 use layerfs_core::namespace::{DirectoryStateV1, NamespaceRootV1, SymlinkStateV1};
 use layerfs_core::namespace_codec::*;
@@ -210,6 +211,11 @@ fn persistent_metadata_tree_round_trips_multiple_levels() {
         .collect::<Vec<_>>();
     let mut store = MemoryStore::default();
     let root = build_metadata_tree(&mut store, &entries).unwrap();
+    let mut streaming = MetadataTreeBuilder::new();
+    for entry in entries.iter().cloned() {
+        streaming.push(&mut store, entry).unwrap();
+    }
+    assert_eq!(streaming.finish(&mut store).unwrap(), root);
     assert_eq!(metadata_tree_entries(&store, root).unwrap(), entries);
 }
 

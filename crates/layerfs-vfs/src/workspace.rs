@@ -137,6 +137,11 @@ type WriterStateRegistry = Mutex<HashMap<Vec<u8>, Weak<Mutex<LeaseState>>>>;
 
 static WRITER_STATES: OnceLock<WriterStateRegistry> = OnceLock::new();
 
+enum SpoolPart<'a> {
+    Bytes(&'a [u8]),
+    Metadata(&'a crate::driver::NativeMetadata),
+}
+
 pub(crate) fn topology_edge_key(child: InodeId, parent: InodeId, name: &[u8]) -> Vec<u8> {
     let mut key = Vec::with_capacity(64 + name.len());
     key.extend_from_slice(child.as_bytes());
@@ -668,11 +673,7 @@ impl ManagedWorkspace {
                 Ok(counters)
             }
             Err(error) => {
-                self.state = if visible {
-                    ManagedState::IncompleteDerived
-                } else {
-                    ManagedState::Live
-                };
+                self.state = refresh_error_state(visible);
                 Err(error)
             }
         }
@@ -756,14 +757,8 @@ impl ManagedWorkspace {
                 return Err(error);
             }
         }
-        let metadata = match crate::managed_edit::encode_spooled_metadata(&metadata) {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                self.state = ManagedState::Indeterminate;
-                return Err(error);
-            }
-        };
-        let (offsets, spool_bytes) = self.append_spool_parts(&[bytes, &metadata])?;
+        let (offsets, spool_bytes) =
+            self.append_spool_parts(&[SpoolPart::Bytes(bytes), SpoolPart::Metadata(&metadata)])?;
         let (spool_offset, _) = offsets[0];
         let (metadata_offset, metadata_len) = offsets[1];
         self.edits.push(crate::managed_edit::ManagedEdit::Replace {
@@ -858,21 +853,10 @@ impl ManagedWorkspace {
                     self.state = ManagedState::Indeterminate;
                     return Err(error);
                 }
-                let metadata = (|| {
-                    Ok::<_, VfsError>((
-                        crate::managed_edit::encode_spooled_metadata(&source_parent_metadata)?,
-                        crate::managed_edit::encode_spooled_metadata(&target_parent_metadata)?,
-                    ))
-                })();
-                let (source_metadata, target_metadata) = match metadata {
-                    Ok(metadata) => metadata,
-                    Err(error) => {
-                        self.state = ManagedState::Indeterminate;
-                        return Err(error);
-                    }
-                };
-                let (offsets, spool_bytes) =
-                    self.append_spool_parts(&[&source_metadata, &target_metadata])?;
+                let (offsets, spool_bytes) = self.append_spool_parts(&[
+                    SpoolPart::Metadata(&source_parent_metadata),
+                    SpoolPart::Metadata(&target_parent_metadata),
+                ])?;
                 let (source_metadata_offset, source_metadata_len) = offsets[0];
                 let (target_metadata_offset, target_metadata_len) = offsets[1];
                 self.edits.push(crate::managed_edit::ManagedEdit::Rename {
@@ -948,7 +932,7 @@ impl ManagedWorkspace {
         self.spool.take();
         Ok(())
     }
-    fn append_spool_parts(&mut self, parts: &[&[u8]]) -> VfsResult<(Vec<(u64, u64)>, u64)> {
+    fn append_spool_parts(&mut self, parts: &[SpoolPart<'_>]) -> VfsResult<(Vec<(u64, u64)>, u64)> {
         let start = match self.spool.as_mut() {
             Some(spool) => spool.seek(SeekFrom::End(0)).map_err(VfsError::from),
             None => Err(VfsError::InvalidState),
@@ -964,9 +948,17 @@ impl ManagedWorkspace {
             let spool = self.spool.as_mut().ok_or(VfsError::InvalidState)?;
             let mut offsets = Vec::with_capacity(parts.len());
             let mut offset = start;
-            for bytes in parts {
-                let len = u64::try_from(bytes.len()).map_err(|_| VfsError::InvalidState)?;
-                spool.write_all(bytes)?;
+            for part in parts {
+                let len = match part {
+                    SpoolPart::Bytes(bytes) => {
+                        let len = u64::try_from(bytes.len()).map_err(|_| VfsError::InvalidState)?;
+                        spool.write_all(bytes)?;
+                        len
+                    }
+                    SpoolPart::Metadata(metadata) => {
+                        crate::managed_edit::write_spooled_metadata(metadata, spool.as_mut())?
+                    }
+                };
                 offsets.push((offset, len));
                 offset = offset.checked_add(len).ok_or(VfsError::InvalidState)?;
             }
@@ -1051,6 +1043,14 @@ impl ManagedWorkspace {
         } else {
             Err(VfsError::InvalidState)
         }
+    }
+}
+
+fn refresh_error_state(possibly_visible: bool) -> ManagedState {
+    if possibly_visible {
+        ManagedState::IncompleteDerived
+    } else {
+        ManagedState::Live
     }
 }
 
@@ -1411,7 +1411,9 @@ mod lease_tests {
             spool: Some(Box::new(EndSeekFailure)),
         };
 
-        assert!(workspace.append_spool_parts(&[b"edit"]).is_err());
+        assert!(workspace
+            .append_spool_parts(&[SpoolPart::Bytes(b"edit")])
+            .is_err());
         assert_eq!(workspace.state, ManagedState::Indeterminate);
     }
 
@@ -1428,7 +1430,9 @@ mod lease_tests {
             })),
         };
 
-        workspace.append_spool_parts(&[b"edit"]).unwrap();
+        workspace
+            .append_spool_parts(&[SpoolPart::Bytes(b"edit")])
+            .unwrap();
         workspace.state = ManagedState::Dirty;
         assert!(workspace
             .observe_spool(&mut OperationCounters::default())
@@ -1454,6 +1458,22 @@ mod lease_tests {
         assert!(matches!(
             WriterLease::begin(state),
             Err(VfsError::WorkspaceBusy)
+        ));
+    }
+
+    #[test]
+    fn post_visibility_refresh_failure_requires_discard_or_rebuild() {
+        assert_eq!(refresh_error_state(false), ManagedState::Live);
+        assert_eq!(refresh_error_state(true), ManagedState::IncompleteDerived);
+        let workspace = ManagedWorkspace {
+            external: None,
+            edits: Vec::new(),
+            state: refresh_error_state(true),
+            spool: None,
+        };
+        assert!(matches!(
+            workspace.require_live(),
+            Err(VfsError::IncompleteDerived)
         ));
     }
 }

@@ -151,8 +151,10 @@ stores authenticate before callback too.
 
 ### I2 — Complete counters
 
-Current `EngineCounters.statements` omits manual SQL in integrity, refs,
-scratch, StoreId, and generation selection. Rope “created” counters count
+`EngineCounters` reports publication SQL separately from open admission and
+live Verified-integrity SQL. Transaction-control statements, StoreId reads,
+trusted-history preflight/clear, and retained-root work are counted at the
+boundary that actually executes them. Rope “created” counters still count
 emission attempts, not unique CAS inserts.
 
 Add observed fields:
@@ -166,6 +168,10 @@ put_lookup_statements/put_insert_statements/created_rows/reused_rows
 chunks_emitted/rope_nodes_emitted
 namespace_nodes_emitted/inode_nodes_emitted
 scratch_tables/statements/rows/high_water_bytes
+admission_transactions_started/committed/rolled_back/admission_statements
+integrity_transactions_started/committed/rolled_back/integrity_statements
+publication_transactions_started/rolled_back/publication_commits
+retained_roots_validated/namespace_graph_verification_passes
 root_diff_nodes/changed_paths/full_fallback_files
 native_read/write/patch/suffix bytes
 temp/clone/sync/rename/replace/metadata calls
@@ -220,6 +226,13 @@ range: O(log E + C_R + R)
 space: O(tree height + <=1 MiB stream buffer)
 native work: 0
 ```
+
+Native metadata uses compact chunked xattr framing and compact chunked Apple
+name offsets; every chunk and active value buffer is at most 1 MiB. Canonical
+metadata construction bulk-loads leaf groups and branch summaries
+incrementally, retaining neither the complete xattr entry population nor a
+complete serialized metadata buffer. The structural operation reservation is
+8 MiB and returns to zero after each operation.
 
 ### I4 — Direct write and logical edit
 

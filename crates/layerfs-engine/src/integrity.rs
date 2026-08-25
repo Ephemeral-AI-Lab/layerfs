@@ -27,7 +27,6 @@ use layerfs_core::{
 };
 use rusqlite::{params, Connection};
 use std::cell::Cell;
-use std::collections::BTreeSet;
 use std::io::Cursor;
 use std::path::Path;
 
@@ -75,6 +74,7 @@ pub(crate) struct VerificationObservation {
     pub(crate) scratch_rows: u64,
     pub(crate) scratch_bytes: u64,
     pub(crate) namespace_graphs: u64,
+    pub(crate) retained_roots_validated: u64,
 }
 
 pub(crate) fn verify_root(
@@ -150,6 +150,10 @@ impl VerificationObservation {
             .namespace_graphs
             .checked_add(source.namespace_graphs)
             .ok_or(EngineError::CounterOverflow)?;
+        self.retained_roots_validated = self
+            .retained_roots_validated
+            .checked_add(source.retained_roots_validated)
+            .ok_or(EngineError::CounterOverflow)?;
         Ok(())
     }
 
@@ -199,9 +203,13 @@ pub(crate) fn retained_union(connection: &Connection, store: &Path) -> EngineRes
     let records = graph.namespace(b"records")?;
     let state = graph.namespace(b"state")?;
     let payload_lengths = graph.namespace(b"payload-lengths")?;
-    let mut observation = VerificationObservation::default();
+    let validated_roots = graph.namespace(b"validated-roots")?;
+    // StoreId admission plus the ordered ref scan below are real Store SQL.
+    let mut observation = VerificationObservation {
+        statements: 2,
+        ..VerificationObservation::default()
+    };
     let mut peak_bytes = work.storage_bytes()?.saturating_add(graph.storage_bytes()?);
-    let mut validated_roots = BTreeSet::new();
     let mut statement = connection
         .prepare("SELECT name, generation, root_id FROM layerfs_refs ORDER BY name")
         .map_err(map_sqlite_error)?;
@@ -228,10 +236,18 @@ pub(crate) fn retained_union(connection: &Connection, store: &Path) -> EngineRes
                 |row| row.get::<_, bool>(0),
             )
             .map_err(map_sqlite_error)?;
+        observation.statements = observation
+            .statements
+            .checked_add(1)
+            .ok_or(EngineError::CounterOverflow)?;
         if !retained {
             return Err(EngineError::MissingRoot(root));
         }
-        if validated_roots.insert(root) {
+        if claim_root(&validated_roots, root)? {
+            observation.retained_roots_validated = observation
+                .retained_roots_validated
+                .checked_add(1)
+                .ok_or(EngineError::CounterOverflow)?;
             enqueue(&work, root, Role::Namespace, true)?;
             observation.merge(drain(connection, &work, &payload_lengths)?)?;
             records.clear()?;
@@ -248,6 +264,10 @@ pub(crate) fn retained_union(connection: &Connection, store: &Path) -> EngineRes
         }
     }
     drop(statement);
+    observation.statements = observation
+        .statements
+        .checked_add(1)
+        .ok_or(EngineError::CounterOverflow)?;
     let mut statement = connection
         .prepare("SELECT root_id FROM layerfs_retained_roots ORDER BY root_id")
         .map_err(map_sqlite_error)?;
@@ -256,7 +276,11 @@ pub(crate) fn retained_union(connection: &Connection, store: &Path) -> EngineRes
         .map_err(map_sqlite_error)?;
     for root in roots {
         let root = ObjectId::from_bytes(&root.map_err(map_sqlite_error)?)?;
-        if validated_roots.insert(root) {
+        if claim_root(&validated_roots, root)? {
+            observation.retained_roots_validated = observation
+                .retained_roots_validated
+                .checked_add(1)
+                .ok_or(EngineError::CounterOverflow)?;
             enqueue(&work, root, Role::Namespace, true)?;
             observation.merge(drain(connection, &work, &payload_lengths)?)?;
             records.clear()?;
@@ -279,6 +303,14 @@ pub(crate) fn retained_union(connection: &Connection, store: &Path) -> EngineRes
         peak_bytes,
         observation,
     })
+}
+
+fn claim_root(validated_roots: &DiskNamespace<'_>, root: ObjectId) -> EngineResult<bool> {
+    if validated_roots.get(root.as_bytes())?.is_some() {
+        return Ok(false);
+    }
+    validated_roots.put(root.as_bytes(), &[])?;
+    Ok(true)
 }
 
 const RECORD_KEY: u8 = 0x40;

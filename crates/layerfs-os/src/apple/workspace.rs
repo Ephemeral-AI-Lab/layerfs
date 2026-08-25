@@ -1,7 +1,5 @@
 use layerfs_vfs::driver::*;
 use std::any::Any;
-#[cfg(test)]
-use std::cell::Cell;
 use std::fs::{self, File, FileTimes};
 use std::io::{Read, Seek, Write};
 use std::os::unix::ffi::OsStrExt;
@@ -14,11 +12,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 static TEMP_SERIAL: AtomicU64 = AtomicU64::new(0);
 const RECOVERY_MARKER: &[u8] = b".layerfs-recovery-v1";
 const RECOVERY_MAGIC: &[u8] = b"layerfs/apple-recovery/v1\0";
-
-#[cfg(test)]
-std::thread_local! {
-    static DISPLACE_ENTRY_BEFORE_METADATA: Cell<bool> = const { Cell::new(false) };
-}
 
 #[derive(Default)]
 pub struct AppleDriver;
@@ -490,10 +483,6 @@ impl ProjectionWorkspace for Workspace {
         metadata: &NativeMetadata,
     ) -> Result<()> {
         let parent = &dir(parent)?.file;
-        #[cfg(test)]
-        if DISPLACE_ENTRY_BEFORE_METADATA.with(|armed| armed.replace(false)) {
-            super::ffi::rename_at(parent, name, parent, b"displaced")?;
-        }
         if super::ffi::stable_token_at(parent, name)? != expected {
             return Err(DriverError::Conflict);
         }
@@ -1125,7 +1114,6 @@ mod tests {
     use super::*;
     use std::os::unix::fs::symlink;
     use std::process::Command;
-    use std::sync::Arc;
 
     fn test_parent() -> std::path::PathBuf {
         fs::canonicalize(std::env::temp_dir()).unwrap()
@@ -1308,7 +1296,8 @@ mod tests {
         refused.mode = if before.mode == 0o700 { 0o755 } else { 0o700 };
         refused
             .xattrs
-            .push((b"com.apple.quarantine".to_vec(), b"blocked".to_vec()));
+            .push(b"com.apple.quarantine", b"blocked")
+            .unwrap();
         assert!(matches!(
             workspace.set_root_metadata(&refused),
             Err(DriverError::Unsupported)
@@ -1319,9 +1308,9 @@ mod tests {
     }
 
     #[test]
-    fn eof_post_visibility_conflict_is_fail_closed_and_reconstructible() {
+    fn entry_displacement_is_detected_by_the_release_identity_checks() {
         let base = test_parent().join(format!(
-            "layerfs-eof-visible-failure-{}-{}",
+            "layerfs-entry-displacement-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -1329,58 +1318,29 @@ mod tests {
                 .as_nanos()
         ));
         fs::create_dir(&base).unwrap();
-        let engine = AppleDriver::open_store_with_integrity(
-            &base.join("store"),
-            layerfs_engine::integrity::IntegrityMode::TrustedLocalDev,
-        )
-        .unwrap();
-        let vfs = layerfs_vfs::LayerVfs::from_engine(engine, Arc::new(AppleDriver)).unwrap();
-        let mut source = vfs
-            .materialize_external(vfs.head().root, &base.join("source"))
+        let path = base.join("workspace");
+        fs::create_dir(&path).unwrap();
+        let workspace = AppleDriver
+            .open_workspace(&path, WorkspacePolicy::ExternalCooperative, [0x51; 32])
             .unwrap();
-        let path = layerfs_vfs::CanonicalPath::new("file").unwrap();
-        let mut expected = vec![0x63_u8; 64 * 1024];
-        fs::write(source.path().join("file"), &expected).unwrap();
-        let root = source.capture_quiescent().unwrap();
-        let state = vfs.current_head("main").unwrap();
-        let mut managed = vfs.materialize_managed(root).unwrap();
-        let managed_path = fs::read_dir(base.join("store"))
-            .unwrap()
-            .map(|entry| entry.unwrap().path())
-            .find(|path| {
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.starts_with(".layerfs-managed-"))
-            })
+        let root = workspace.root_directory().unwrap();
+        fs::write(path.join("file"), b"expected").unwrap();
+        let expected = workspace.identity_at(root.as_ref(), b"file").unwrap();
+        let metadata = workspace
+            .read_metadata_at(root.as_ref(), b"file", None)
             .unwrap();
 
-        let appended = vec![0xa7_u8; 16 * 1024];
-        let (accepted, _) = vfs
-            .replace_range_for_refresh(&state, &path, expected.len() as u64, 0, appended.as_slice())
-            .unwrap();
-        expected.extend_from_slice(&appended);
-        DISPLACE_ENTRY_BEFORE_METADATA.with(|armed| armed.set(true));
-        assert!(managed.refresh_splice(&accepted).is_err());
-        assert_eq!(fs::read(managed_path.join("displaced")).unwrap(), expected);
+        fs::rename(path.join("file"), path.join("displaced")).unwrap();
+        fs::write(path.join("file"), b"foreign").unwrap();
         assert!(matches!(
-            managed.read_to(&path, Vec::new()),
-            Err(layerfs_vfs::VfsError::IncompleteDerived)
+            workspace.set_entry_metadata(root.as_ref(), b"file", &expected, &metadata),
+            Err(DriverError::Conflict)
         ));
-        assert!(matches!(
-            managed.ensure_exact(accepted.after()),
-            Err(layerfs_vfs::VfsError::IncompleteDerived)
-        ));
-        assert_eq!(vfs.current_head("main").unwrap(), *accepted.after());
-        managed.discard().unwrap();
-        assert!(!managed_path.exists());
+        assert_eq!(fs::read(path.join("file")).unwrap(), b"foreign");
+        assert_eq!(fs::read(path.join("displaced")).unwrap(), b"expected");
 
-        let mut rebuilt = vfs.materialize_managed(accepted.after().root).unwrap();
-        let mut rebuilt_bytes = Vec::new();
-        rebuilt.read_to(&path, &mut rebuilt_bytes).unwrap();
-        assert_eq!(rebuilt_bytes, expected);
-        rebuilt.discard().unwrap();
-        drop(source);
-        drop(vfs);
+        drop(root);
+        drop(workspace);
         fs::remove_dir_all(base).unwrap();
     }
 
@@ -1500,7 +1460,7 @@ mod tests {
             mode: 0o777,
             mtime_seconds: 1_700_000_123,
             mtime_nanoseconds: 456_789_123,
-            xattrs: Vec::new(),
+            xattrs: layerfs_vfs::driver::NativeXattrs::new(),
             acl: None,
             bsd_flags: 0,
         };

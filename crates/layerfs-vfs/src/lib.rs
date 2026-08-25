@@ -82,8 +82,6 @@ pub struct OperationCounters {
     pub owned_temp_terminal: u64,
     pub descriptor_spool_bytes_current: u64,
     pub descriptor_spool_bytes_terminal: u64,
-    pub unaffected_suffix_payload_reads: u64,
-    pub unaffected_suffix_payload_writes: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -178,15 +176,21 @@ impl OperationCounters {
         self.owned_temp_terminal = source.owned_temp_terminal;
         self.descriptor_spool_bytes_current = source.descriptor_spool_bytes_current;
         self.descriptor_spool_bytes_terminal = source.descriptor_spool_bytes_terminal;
-        self.unaffected_suffix_payload_reads = add(
-            self.unaffected_suffix_payload_reads,
-            source.unaffected_suffix_payload_reads,
-        )?;
-        self.unaffected_suffix_payload_writes = add(
-            self.unaffected_suffix_payload_writes,
-            source.unaffected_suffix_payload_writes,
-        )?;
         Ok(self)
+    }
+
+    /// Payload bytes touched by the content rope, excluding metadata value ropes.
+    pub fn content_payload_bytes_read(&self) -> Option<u64> {
+        self.rope
+            .payload_bytes_read
+            .checked_sub(self.metadata_rope.payload_bytes_read)
+    }
+
+    /// Payload bytes emitted by the content rope, excluding metadata value ropes.
+    pub fn content_payload_bytes_written(&self) -> Option<u64> {
+        self.rope
+            .payload_bytes_written
+            .checked_sub(self.metadata_rope.payload_bytes_written)
     }
 
     pub(crate) fn add_scratch(
@@ -296,11 +300,12 @@ fn add(left: u64, right: u64) -> Result<u64, layerfs_core::CoreError> {
         .ok_or(layerfs_core::CoreError::LengthOverflow)
 }
 
-/// Structural upper bound: one 1 MiB xattr set, one <=1.125 MiB serialized
-/// metadata item, one 1 MiB stream window, and <0.875 MiB of bounded tree,
-/// descriptor, and SQL parameter pages. SQLite caches and caller buffers are
-/// reported separately.
-pub const OPERATION_Q_BOUND_BYTES: u64 = 4 * 1024 * 1024;
+/// Structural upper bound: <=3 MiB compact xattr framing, <=3 MiB chunked
+/// Apple name/index admission, one <=1 MiB active value/stream window, and
+/// bounded metadata-tree summaries. Every individual chunk/buffer is <=1 MiB;
+/// managed serialization itself is disk-backed. SQLite caches and caller
+/// buffers are reported separately.
+pub const OPERATION_Q_BOUND_BYTES: u64 = 8 * 1024 * 1024;
 
 pub const COMPONENT: &str = "layerfs-vfs";
 
@@ -356,5 +361,39 @@ mod operation_counter_tests {
         assert_eq!(counters.inode_table.nodes_created, 2);
         assert_eq!(counters.native.route, Some(NativeRoute::ClonePatch));
         assert_eq!(counters.native.patch_bytes, 4096);
+        assert_eq!(counters.content_payload_bytes_read(), Some(0));
+        assert_eq!(counters.content_payload_bytes_written(), Some(0));
+    }
+
+    #[test]
+    fn content_payload_facts_exclude_metadata_ropes_and_detect_bad_accounting() {
+        let counters = OperationCounters {
+            rope: layerfs_core::content::rope::RopeCounters {
+                payload_bytes_read: 12,
+                payload_bytes_written: 20,
+                ..Default::default()
+            },
+            metadata_rope: layerfs_core::content::rope::RopeCounters {
+                payload_bytes_read: 4,
+                payload_bytes_written: 6,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert_eq!(counters.content_payload_bytes_read(), Some(8));
+        assert_eq!(counters.content_payload_bytes_written(), Some(14));
+
+        let invalid = OperationCounters {
+            rope: layerfs_core::content::rope::RopeCounters {
+                payload_bytes_read: 3,
+                ..Default::default()
+            },
+            metadata_rope: layerfs_core::content::rope::RopeCounters {
+                payload_bytes_read: 4,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert_eq!(invalid.content_payload_bytes_read(), None);
     }
 }

@@ -396,7 +396,7 @@ fn create_file(
             mode: 0o644,
             mtime_seconds: 0,
             mtime_nanoseconds: 0,
-            xattrs: Vec::new(),
+            xattrs: crate::driver::NativeXattrs::new(),
             acl: None,
             bsd_flags: 0,
         },

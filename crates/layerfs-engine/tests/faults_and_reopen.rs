@@ -133,6 +133,19 @@ fn live_verified_handle_rechecks_history_written_by_trusted_handle() {
         .unwrap()
         .publish_namespace(&root)
         .unwrap();
+    verified.reset_counters().unwrap();
+    assert!(matches!(
+        verified.begin_publication(None, "probe"),
+        Err(EngineError::MissingObject(_))
+    ));
+    let failed_writer = verified.counters().unwrap();
+    assert_eq!(failed_writer.transactions_started, 1);
+    assert_eq!(failed_writer.transactions_committed, 0);
+    assert_eq!(failed_writer.transactions_rolled_back, 1);
+    assert_eq!(failed_writer.publication_transactions_started, 1);
+    assert_eq!(failed_writer.publication_transactions_rolled_back, 1);
+    assert_eq!(failed_writer.publication_commits, 0);
+    verified.reset_counters().unwrap();
     assert!(matches!(
         verified.read_ref("main"),
         Err(EngineError::MissingObject(_))
@@ -187,7 +200,12 @@ fn successful_live_scrub_clears_history_once_durably() {
         .unwrap();
 
     verified.store_id().unwrap();
-    assert_eq!(verified.counters().unwrap().retained_union_scrubs, 1);
+    let first = verified.counters().unwrap();
+    assert_eq!(first.retained_union_scrubs, 1);
+    assert_eq!(first.integrity_transactions_started, 2);
+    assert_eq!(first.integrity_transactions_committed, 1);
+    assert_eq!(first.integrity_transactions_rolled_back, 1);
+    assert_eq!(first.integrity_statements, 10);
     assert_eq!(
         Connection::open(&path)
             .unwrap()
@@ -200,7 +218,12 @@ fn successful_live_scrub_clears_history_once_durably() {
         0
     );
     verified.store_id().unwrap();
-    assert_eq!(verified.counters().unwrap().retained_union_scrubs, 1);
+    let second = verified.counters().unwrap();
+    assert_eq!(second.retained_union_scrubs, 1);
+    assert_eq!(second.integrity_transactions_started, 3);
+    assert_eq!(second.integrity_transactions_committed, 1);
+    assert_eq!(second.integrity_transactions_rolled_back, 2);
+    assert_eq!(second.integrity_statements, first.integrity_statements + 4);
     drop(verified);
     fs::remove_file(path).unwrap();
 }

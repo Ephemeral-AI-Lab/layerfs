@@ -24,18 +24,21 @@ impl Engine {
             return Err(EngineError::InvalidRecord("expected ref name"));
         }
         let mut connection = self.lock_write_connection()?;
-        self.mark_statement()?;
         if !connection.transaction {
             connection
                 .execute_batch("BEGIN IMMEDIATE")
                 .map_err(map_sqlite_error)?;
             connection.transaction = true;
+            self.bump(|counters| {
+                checked_add(&mut counters.transactions_started, 1)?;
+                checked_add(&mut counters.publication_transactions_started, 1)?;
+                checked_add(&mut counters.statements, 1)
+            })?;
         }
-        self.bump(|counters| checked_add(&mut counters.transactions_started, 1))?;
         self.mark_statement()?;
         let actual = read_ref_on_connection(&connection, name)?;
         if actual.as_ref() != expected {
-            let store_id = store_id(&connection)?;
+            let store_id = store_id(self, &connection)?;
             let discarded = finalize_rollback(self, &mut connection);
             if discarded {
                 let observed = super::read_ref_reconcile_readonly(&self.path, name, store_id);
@@ -133,7 +136,7 @@ impl Publication<'_> {
         if let Some(expected) = &self.expected {
             if expected.root == root {
                 let expected = expected.clone();
-                let store_id = store_id(&self.connection)?;
+                let store_id = store_id(self.engine, &self.connection)?;
                 let discarded = finalize_rollback(self.engine, &mut self.connection);
                 self.active = false;
                 if discarded {
@@ -219,7 +222,6 @@ impl Publication<'_> {
                 )
                 .map_err(map_sqlite_error)?;
         }
-        self.engine.mark_statement()?;
         if self.engine.mode == super::integrity::IntegrityMode::TrustedLocalDev {
             self.engine.mark_statement()?;
             self.connection
@@ -229,7 +231,8 @@ impl Publication<'_> {
                 )
                 .map_err(map_sqlite_error)?;
         }
-        let store_id = store_id(&self.connection)?;
+        let store_id = store_id(self.engine, &self.connection)?;
+        self.engine.mark_statement()?;
         match self.engine.commit_dispatch.commit(&self.connection) {
             Ok(()) => {
                 self.active = false;
@@ -327,7 +330,7 @@ impl ObjectStore for Publication<'_> {
 impl Drop for Publication<'_> {
     fn drop(&mut self) {
         if self.active {
-            let store_id = store_id(&self.connection).ok();
+            let store_id = store_id(self.engine, &self.connection).ok();
             let discarded = finalize_rollback(self.engine, &mut self.connection);
             if discarded {
                 if let Some(store_id) = store_id {
@@ -351,7 +354,8 @@ impl Drop for Publication<'_> {
     }
 }
 
-fn store_id(connection: &Connection) -> EngineResult<[u8; 32]> {
+fn store_id(engine: &Engine, connection: &Connection) -> EngineResult<[u8; 32]> {
+    engine.mark_statement()?;
     connection
         .query_row(
             "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
@@ -365,12 +369,18 @@ fn store_id(connection: &Connection) -> EngineResult<[u8; 32]> {
 
 fn finalize_rollback(engine: &Engine, connection: &mut ConnectionGuard<'_>) -> bool {
     let active = !connection.is_autocommit();
-    let failed = active && connection.execute_batch("ROLLBACK").is_err();
+    if active {
+        engine.bump_best_effort(|counters| checked_add(&mut counters.statements, 1));
+    }
+    let failed = active && engine.commit_dispatch.rollback(connection).is_err();
     connection.transaction = false;
     if failed {
         connection.guard.take();
     } else if active {
-        engine.bump_best_effort(|counters| checked_add(&mut counters.transactions_rolled_back, 1));
+        engine.bump_best_effort(|counters| {
+            checked_add(&mut counters.transactions_rolled_back, 1)?;
+            checked_add(&mut counters.publication_transactions_rolled_back, 1)
+        });
     }
     failed
 }

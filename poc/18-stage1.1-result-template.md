@@ -189,8 +189,8 @@ Disposition: `{{PASS|REVISE|FAIL}}`
 | Route labels | exact | `{{counts}}` | `{{status}}` |
 | Live rematerializations | `0` | `{{n}}` | `{{status}}` |
 | RSS peak | `<=33,554,432 B` | `{{bytes}}` | `{{status}}` |
-| Q high-water | `<=8,388,608 B` | `{{bytes}}` | `{{status}}` |
-| Q terminal after every operation | `0` | `{{max}}` | `{{status}}` |
+| Q structural-reservation high-water | `<=8,388,608 B` | `{{bytes}}` | `{{status}}` |
+| Q reservation terminal after every operation | `0` | `{{max}}` | `{{status}}` |
 | FD baseline/terminal | equal | `{{n}} / {{n}}` | `{{status}}` |
 | Store connections terminal | `0` | `{{n}}` | `{{status}}` |
 | Owned residue | `0` | `{{n}}` | `{{status}}` |
@@ -351,7 +351,14 @@ placeholder row above establishes the exact column order.
 | incumbent auth = reused | every publication | `{{failures}} failures` | `{{status}}` |
 | Payload batch maximum | `<=64` | `{{n}}` | `{{status}}` |
 
-| Counter phase | Rows | Statements | Fetched/auth/role | Object read B | Object write B | Tx/COMMIT | Scrubs | Engine/VFS scratch tables | Q high B | Connections |
+| SQL boundary | Started | Committed | Rolled back | Statements/roots | Status |
+|---|---:|---:|---:|---:|---|
+| Publication visibility | `{{n}}` | `{{n}}` | `{{n}}` | `{{n}} COMMITs` | `{{status}}` |
+| Open admission | `{{n}}` | `{{n}}` | `{{n}}` | `{{n}} statements` | `{{status}}` |
+| Live Verified integrity | `{{n}}` | `{{n}}` | `{{n}}` | `{{n}} statements` | `{{status}}` |
+| Disk-backed retained-root validation | N/A | N/A | N/A | `{{n}} roots` | `{{status}}` |
+
+| Counter phase | Rows | Statements | Fetched/auth/role | Object read B | Object write B | Tx/COMMIT | Scrubs | Engine/VFS scratch tables | Q structural-reservation high B | Connections |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | `{{phase}}` | `{{n}}` | `{{n}}` | `{{n}}/{{n}}/{{n}}` | `{{B}}` | `{{B}}` | `{{n}}/{{n}}` | `{{n}}` | `{{n}}/{{n}}` | `{{B}}` | `{{n}}` |
 ```
@@ -387,9 +394,9 @@ placeholder row above establishes the exact column order.
 | Resource | Hard gate | Observed | Status |
 |---|---:|---:|---|
 | RSS peak B | `<=33,554,432` | `{{B}}` | `{{status}}` |
-| Largest buffer B | `<=1,048,576` | `{{B}}` | `{{status}}` |
-| Q high-water B | `<=8,388,608` | `{{B}}` | `{{status}}` |
-| Q terminal after every operation B | `0` | `{{max}}` | `{{status}}` |
+| Largest product-buffer structural bound B | `<=1,048,576` | `{{B}}` | `{{status}}` |
+| Q structural-reservation high-water B | `<=8,388,608` | `{{B}}` | `{{status}}` |
+| Q reservation terminal after every operation B | `0` | `{{max}}` | `{{status}}` |
 | Store cache pages | `1,280` | `{{n}}` | `{{status}}` |
 | Store spill pages | `1,280` | `{{n}}` | `{{status}}` |
 | Store connection high-water | `<=2` | `{{n}}` | `{{status}}` |
@@ -401,6 +408,10 @@ placeholder row above establishes the exact column order.
 | Journal/WAL/SHM residue | `0` | `{{n}}` | `{{status}}` |
 | Live rematerializations | `0` | `{{n}}` | `{{status}}` |
 ```
+
+The largest-buffer value is a source-bound structural maximum for one product
+buffer, not the evaluator's oracle buffer or allocator telemetry. Q is the
+conservative structural reservation held by an active product operation.
 
 ### 3.14 Timers
 
@@ -560,9 +571,30 @@ Each C07 `sub_edits` element uses the same fields plus:
   "after_bytes": 25165824,
   "native_wall_ns": 0,
   "physical_oracle_wall_ns": 0,
-  "native_route": "InPlacePatch"
+  "native_route": "InPlacePatch",
+  "native_bytes_read": 0,
+  "native_bytes_written": 8192,
+  "native_patch_bytes": 8192,
+  "native_suffix_bytes_shifted": 0,
+  "native_clone_attempts": 1,
+  "native_clone_successes": 0,
+  "native_clone_fallbacks": 1,
+  "native_full_fallback_files": 0,
+  "tree_level_before": 2,
+  "cdc_bytes_scanned": 8192,
+  "payload_bytes_written": 8192,
+  "unaffected_payload_reads": 0,
+  "unaffected_payload_writes": 0,
+  "rope_nodes_read": 3,
+  "rope_nodes_emitted": 3,
+  "content_directory_nodes_emitted": 0
 }
 ```
+
+The eight `native_*` values and the seven locality values are retained for
+every sub-edit. Their per-row sums equal the corresponding row-level `native`
+and `counters` fields exactly; a serialization or merge mismatch is a hard
+failure.
 
 Each C04/C06 `history_probes` element is retained in exact execution order and
 uses:
@@ -657,16 +689,23 @@ Required `counters` keys:
 
 ```text
 transactions_started transactions_committed transactions_rolled_back
-statements busy_events locked_events
+statements
+admission_transactions_started admission_transactions_committed
+admission_transactions_rolled_back admission_statements
+integrity_transactions_started integrity_transactions_committed
+integrity_transactions_rolled_back integrity_statements
+busy_events locked_events
 objects_validated objects_created objects_reused
 object_bytes_read object_bytes_written
 fetched_rows fetched_row_authentication_passes fetched_row_role_decode_passes
 new_object_authentication_passes incumbent_authentication_passes
 payload_batch_queries payload_batch_references payload_batch_maximum
 put_lookup_statements put_insert_statements created_rows reused_rows
+publication_transactions_started publication_transactions_rolled_back
 publication_commits publication_closure_passes
 namespace_graph_verification_passes
 scratch_tables scratch_statements scratch_rows scratch_high_water_bytes
+retained_roots_validated
 cdc_bytes_scanned payload_bytes_written
 unaffected_payload_reads unaffected_payload_writes
 rope_nodes_read rope_nodes_emitted content_directory_nodes_emitted
@@ -698,7 +737,13 @@ operation_q_current_bytes operation_q_high_water_bytes operation_q_terminal_byte
 fd_current active_store_connections child_processes
 owned_temp_entries residue_entries
 largest_buffer_bytes page_size cache_pages cache_spill_pages
+network_operations
 ```
+
+`largest_buffer_bytes` is the source-bound structural product-buffer maximum,
+not the evaluator's oracle buffer or allocator telemetry. The three
+`operation_q_*` fields are conservative structural-reservation counters, not
+resident-memory samples.
 
 Ordinary row observers use `/dev/fd`, `getrusage`, exact SDK/Engine active
 connections, and in-process residue traversal. Therefore
@@ -893,6 +938,12 @@ canonical_locality:
 
 transactions:
   expected observed committed rolled_back publication_commits
+  publication_transactions_started publication_transactions_rolled_back
+  admission_transactions_started admission_transactions_committed
+  admission_transactions_rolled_back admission_statements
+  integrity_transactions_started integrity_transactions_committed
+  integrity_transactions_rolled_back integrity_statements
+  retained_roots_validated
   generation_increment_failures
 
 authentication:
@@ -1023,7 +1074,7 @@ Stage 1.1 completed with disposition **{{PASS|REVISE|FAIL}}**.
 | Canonical transitions | `{{n}} / 34` |
 | Live rematerializations | `{{n}}` |
 | RSS peak | `{{MiB}} MiB` |
-| Q high-water / terminal | `{{MiB}} MiB / {{bytes}} B` |
+| Q structural-reservation high-water / terminal | `{{MiB}} MiB / {{bytes}} B` |
 | FD baseline / terminal | `{{n}} / {{n}}` |
 | Terminal residue | `{{n}}` |
 

@@ -90,7 +90,7 @@ realistic developer workflows.
 | Replacement operand | <=32,769 B | <=1 MiB |
 | Delete operand | <=61,440 B | <=1 MiB |
 | Evaluator buffer | <=1 MiB | <=1 MiB |
-| Operation Q | 4 MiB expected | <=8 MiB; terminal 0 |
+| Operation Q structural reservation | <=8 MiB expected | <=8 MiB; terminal 0 |
 | Process RSS | <=24 MiB expected | <=32 MiB |
 | Preparation wall | <10 s | <=30 s |
 | APFS reset | <2 s | <=5 s |
@@ -638,6 +638,7 @@ checkpoint                one after the final sub-edit only
 writer transaction        1 per burst
 publication COMMIT        1 per burst
 sub-edit reorder          forbidden
+row native aggregate      exact sum of all retained sub-edit native counters
 ```
 
 ## 13. Canonical and complexity gates
@@ -671,6 +672,11 @@ objects_validated
 
 total state-changing transitions              = 15 + 15 + 4 = 34
 total writer transactions / publication COMMITs = 34 / 34
+publication_transactions_started              = publication COMMITs + publication rollbacks
+admission_transactions_started                = admission commits + admission rollbacks
+integrity_transactions_started                = integrity commits + integrity rollbacks
+admission/integrity/publication statements    = actual SQL at the named boundary
+retained_roots_validated                      = actual disk-backed unique-root claims
 ```
 
 Trusted changed-spine gate:
@@ -805,9 +811,9 @@ extra user files            = 0 in every destination
 
 | Resource | Gate |
 |---|---:|
-| Largest product/evaluator buffer | <=1 MiB |
-| Operation Q high-water | <=8 MiB |
-| Operation terminal Q | 0 after every operation |
+| Largest product-buffer structural bound | <=1 MiB |
+| Operation Q structural-reservation high-water | <=8 MiB |
+| Operation Q reservation terminal | 0 after every operation |
 | Process RSS peak | <=32 MiB |
 | Store cache profile | page 4096; cache 1280; spill 1280 |
 | Scratch cache/spill | bounded default, source/executable-bound |
@@ -822,6 +828,11 @@ extra user files            = 0 in every destination
 | Fresh R15/R30/R34 materialization residue | 0 after explicit owned cleanup |
 
 Unavailable values must be reported as `Unavailable`, never zero.
+
+The product-buffer value is the source-bound maximum admitted individual
+product buffer, not the evaluator's oracle buffer and not allocator telemetry.
+Operation Q is a conservative per-operation structural reservation; report it
+as a reservation, never as measured resident allocation.
 
 C09 first performs explicit owned cleanup, drops every `LayerFs`, managed, and
 external handle, and only then invokes the existing external FD/connection/
