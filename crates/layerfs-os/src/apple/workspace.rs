@@ -94,6 +94,18 @@ struct Workspace {
     _recovery_marker: File,
     managed: bool,
 }
+struct SetupCleanup<'a> {
+    facts: &'a Recorder,
+    root_dir: &'a File,
+    root_parent: &'a File,
+    root_name: &'a [u8],
+    root_identity: &'a [u8],
+    staging_dir: &'a File,
+    staging_name: &'a [u8],
+    staging_identity: &'a [u8],
+    remove_root: bool,
+    active: bool,
+}
 struct Dir {
     file: File,
     role: DirectoryRole,
@@ -117,6 +129,32 @@ struct Preflight {
     name: Vec<u8>,
     identity: Vec<u8>,
     active: bool,
+}
+
+impl Drop for SetupCleanup<'_> {
+    fn drop(&mut self) {
+        if !self.active {
+            return;
+        }
+        let staging_start = Instant::now();
+        let staging = super::ffi::remove_owned_tree(
+            self.staging_dir,
+            self.root_parent,
+            self.staging_name,
+            self.staging_identity,
+        );
+        finish_cleanup(self.facts, staging_start, staging.is_ok());
+        if self.remove_root {
+            let root_start = Instant::now();
+            let root = super::ffi::remove_owned_tree(
+                self.root_dir,
+                self.root_parent,
+                self.root_name,
+                self.root_identity,
+            );
+            finish_cleanup(self.facts, root_start, root.is_ok());
+        }
+    }
 }
 
 fn elapsed_ns(start: Instant) -> u64 {
@@ -244,6 +282,13 @@ fn write_metadata_values(file: &File, metadata: &NativeMetadata, facts: &Recorde
         finish_write(&mut facts.metadata_value_write, elapsed, written);
         finish_write(&mut facts.aggregate_native_write, elapsed, written);
     });
+    result
+}
+
+fn metadata_apply_step(elapsed: &mut u64, operation: impl FnOnce() -> Result<()>) -> Result<()> {
+    let start = Instant::now();
+    let result = operation();
+    *elapsed = elapsed.saturating_add(elapsed_ns(start));
     result
 }
 
@@ -473,9 +518,12 @@ impl ProjectionDriver for AppleDriver {
                     .ok_or(DriverError::Conflict)?
                     .as_bytes()
                     .to_vec();
-                let root_dir = if policy == WorkspacePolicy::ManagedCreateOwned {
+                let (root_dir, root_created) = if policy == WorkspacePolicy::ManagedCreateOwned {
                     match super::ffi::mkdir_at(&root_parent, &root_name) {
-                        Ok(()) => super::ffi::open_directory_at(&root_parent, &root_name)?,
+                        Ok(()) => (
+                            super::ffi::open_directory_at(&root_parent, &root_name)?,
+                            true,
+                        ),
                         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                             return Err(DriverError::Conflict)
                         }
@@ -483,18 +531,21 @@ impl ProjectionDriver for AppleDriver {
                     }
                 } else {
                     match super::ffi::open_directory_at(&root_parent, &root_name) {
-                        Ok(file) => file,
+                        Ok(file) => (file, false),
                         Err(error)
                             if error.kind() == std::io::ErrorKind::NotFound
                                 && policy == WorkspacePolicy::ExternalCooperative =>
                         {
                             super::ffi::mkdir_at(&root_parent, &root_name)?;
-                            super::ffi::open_directory_at(&root_parent, &root_name)?
+                            (
+                                super::ffi::open_directory_at(&root_parent, &root_name)?,
+                                true,
+                            )
                         }
                         Err(error) => return Err(error.into()),
                     }
                 };
-                Ok::<_, DriverError>((root_parent, root_name, root_dir))
+                Ok::<_, DriverError>((root_parent, root_name, root_dir, root_created))
             })();
             let root_elapsed = elapsed_ns(root_start);
             self.facts.update(|facts| {
@@ -504,7 +555,8 @@ impl ProjectionDriver for AppleDriver {
                     root_result.is_ok(),
                 )
             });
-            let (root_parent, root_name, root_dir) = root_result?;
+            let (root_parent, root_name, root_dir, root_created) = root_result?;
+            let root_identity = super::ffi::file_stable_token(&root_dir)?;
             let staging_start = Instant::now();
             let staging_result = (0..64)
                 .find_map(|_| {
@@ -532,9 +584,20 @@ impl ProjectionDriver for AppleDriver {
                 )
             });
             let (staging_name, staging_dir) = staging_result?;
-            staging_dir.set_permissions(fs::Permissions::from_mode(0o700))?;
             let staging_identity = super::ffi::file_stable_token(&staging_dir)?;
-            let root_identity = super::ffi::file_stable_token(&root_dir)?;
+            let mut setup_cleanup = SetupCleanup {
+                facts: &self.facts,
+                root_dir: &root_dir,
+                root_parent: &root_parent,
+                root_name: &root_name,
+                root_identity: &root_identity,
+                staging_dir: &staging_dir,
+                staging_name: &staging_name,
+                staging_identity: &staging_identity,
+                remove_root: root_created && policy == WorkspacePolicy::ManagedCreateOwned,
+                active: true,
+            };
+            staging_dir.set_permissions(fs::Permissions::from_mode(0o700))?;
             let marker_start = Instant::now();
             let marker_result = super::ffi::create_regular_at(&staging_dir, RECOVERY_MARKER);
             let marker_elapsed = elapsed_ns(marker_start);
@@ -563,10 +626,13 @@ impl ProjectionDriver for AppleDriver {
             }
             sync_directory_file(&staging_dir, &self.facts, DirectorySyncOwner::Staging)?;
             sync_directory_file(&root_parent, &self.facts, DirectorySyncOwner::RootParent)?;
+            let workspace_root_parent = root_parent.try_clone()?;
+            setup_cleanup.active = false;
+            drop(setup_cleanup);
             Ok::<_, DriverError>(Box::new(Workspace {
                 facts: self.facts.clone(),
                 root_dir,
-                root_parent: root_parent.try_clone()?,
+                root_parent: workspace_root_parent,
                 root_name,
                 staging_dir: Some(staging_dir),
                 staging_parent: root_parent,
@@ -883,16 +949,22 @@ impl ProjectionWorkspace for Workspace {
             |facts| &mut facts.metadata_validate,
             || super::metadata::preflight(&temp.file, metadata),
         )?;
-        let apply_start = Instant::now();
+        let mut apply_elapsed = 0;
         let applied: Result<()> = (|| {
-            temp.file
-                .set_permissions(fs::Permissions::from_mode(metadata.mode))?;
+            metadata_apply_step(&mut apply_elapsed, || {
+                temp.file
+                    .set_permissions(fs::Permissions::from_mode(metadata.mode))
+                    .map_err(Into::into)
+            })?;
             write_metadata_values(&temp.file, metadata, &self.facts)?;
-            temp.file
-                .set_times(FileTimes::new().set_modified(modified_time(metadata)?))?;
+            let modified = modified_time(metadata)?;
+            metadata_apply_step(&mut apply_elapsed, || {
+                temp.file
+                    .set_times(FileTimes::new().set_modified(modified))
+                    .map_err(Into::into)
+            })?;
             Ok(())
         })();
-        let apply_elapsed = elapsed_ns(apply_start);
         self.facts
             .update(|facts| finish_call(&mut facts.metadata_apply, apply_elapsed, applied.is_ok()));
         applied?;
@@ -929,18 +1001,20 @@ impl ProjectionWorkspace for Workspace {
             || super::metadata::preflight(&entry, metadata),
         )?;
         if native.file_type().is_symlink() {
-            let apply_start = Instant::now();
+            let mut apply_elapsed = 0;
             let applied: Result<()> = (|| {
                 write_metadata_values(&entry, metadata, &self.facts)?;
-                super::ffi::set_symlink_mtime_at(
-                    parent,
-                    name,
-                    metadata.mtime_seconds,
-                    metadata.mtime_nanoseconds,
-                )?;
+                metadata_apply_step(&mut apply_elapsed, || {
+                    super::ffi::set_symlink_mtime_at(
+                        parent,
+                        name,
+                        metadata.mtime_seconds,
+                        metadata.mtime_nanoseconds,
+                    )
+                    .map_err(Into::into)
+                })?;
                 Ok(())
             })();
-            let apply_elapsed = elapsed_ns(apply_start);
             self.facts.update(|facts| {
                 finish_call(&mut facts.metadata_apply, apply_elapsed, applied.is_ok())
             });
@@ -951,14 +1025,22 @@ impl ProjectionWorkspace for Workspace {
                 || super::metadata::finish(&entry, metadata),
             );
         }
-        let apply_start = Instant::now();
+        let mut apply_elapsed = 0;
         let applied: Result<()> = (|| {
-            entry.set_permissions(fs::Permissions::from_mode(metadata.mode))?;
+            metadata_apply_step(&mut apply_elapsed, || {
+                entry
+                    .set_permissions(fs::Permissions::from_mode(metadata.mode))
+                    .map_err(Into::into)
+            })?;
             write_metadata_values(&entry, metadata, &self.facts)?;
-            entry.set_times(FileTimes::new().set_modified(modified_time(metadata)?))?;
+            let modified = modified_time(metadata)?;
+            metadata_apply_step(&mut apply_elapsed, || {
+                entry
+                    .set_times(FileTimes::new().set_modified(modified))
+                    .map_err(Into::into)
+            })?;
             Ok(())
         })();
-        let apply_elapsed = elapsed_ns(apply_start);
         self.facts
             .update(|facts| finish_call(&mut facts.metadata_apply, apply_elapsed, applied.is_ok()));
         applied?;
@@ -1008,18 +1090,20 @@ impl ProjectionWorkspace for Workspace {
         let parent_dir = dir(parent)?;
         super::ffi::symlink_at(&parent_dir.file, name, target)?;
         let entry = super::ffi::open_entry_at(&parent_dir.file, name)?;
-        let apply_start = Instant::now();
+        let mut apply_elapsed = 0;
         let applied: Result<()> = (|| {
             write_metadata_values(&entry, metadata, &self.facts)?;
-            super::ffi::set_symlink_mtime_at(
-                &parent_dir.file,
-                name,
-                metadata.mtime_seconds,
-                metadata.mtime_nanoseconds,
-            )?;
+            metadata_apply_step(&mut apply_elapsed, || {
+                super::ffi::set_symlink_mtime_at(
+                    &parent_dir.file,
+                    name,
+                    metadata.mtime_seconds,
+                    metadata.mtime_nanoseconds,
+                )
+                .map_err(Into::into)
+            })?;
             Ok(())
         })();
-        let apply_elapsed = elapsed_ns(apply_start);
         self.facts
             .update(|facts| finish_call(&mut facts.metadata_apply, apply_elapsed, applied.is_ok()));
         applied?;
@@ -1063,18 +1147,20 @@ impl ProjectionWorkspace for Workspace {
             let requested = super::ffi::stable_token_at(staging, &temp_name)?;
             let prepared = (|| -> Result<()> {
                 let entry = super::ffi::open_entry_at(staging, &temp_name)?;
-                let apply_start = Instant::now();
+                let mut apply_elapsed = 0;
                 let applied: Result<()> = (|| {
                     write_metadata_values(&entry, metadata, &self.facts)?;
-                    super::ffi::set_symlink_mtime_at(
-                        staging,
-                        &temp_name,
-                        metadata.mtime_seconds,
-                        metadata.mtime_nanoseconds,
-                    )?;
+                    metadata_apply_step(&mut apply_elapsed, || {
+                        super::ffi::set_symlink_mtime_at(
+                            staging,
+                            &temp_name,
+                            metadata.mtime_seconds,
+                            metadata.mtime_nanoseconds,
+                        )
+                        .map_err(Into::into)
+                    })?;
                     Ok(())
                 })();
-                let apply_elapsed = elapsed_ns(apply_start);
                 self.facts.update(|facts| {
                     finish_call(&mut facts.metadata_apply, apply_elapsed, applied.is_ok())
                 });
@@ -1275,16 +1361,22 @@ impl ProjectionWorkspace for Workspace {
             |facts| &mut facts.metadata_validate,
             || super::metadata::preflight(&self.root_dir, metadata),
         )?;
-        let apply_start = Instant::now();
+        let mut apply_elapsed = 0;
         let applied: Result<()> = (|| {
-            self.root_dir
-                .set_permissions(fs::Permissions::from_mode(metadata.mode))?;
+            metadata_apply_step(&mut apply_elapsed, || {
+                self.root_dir
+                    .set_permissions(fs::Permissions::from_mode(metadata.mode))
+                    .map_err(Into::into)
+            })?;
             write_metadata_values(&self.root_dir, metadata, &self.facts)?;
-            self.root_dir
-                .set_times(FileTimes::new().set_modified(modified_time(metadata)?))?;
+            let modified = modified_time(metadata)?;
+            metadata_apply_step(&mut apply_elapsed, || {
+                self.root_dir
+                    .set_times(FileTimes::new().set_modified(modified))
+                    .map_err(Into::into)
+            })?;
             Ok(())
         })();
-        let apply_elapsed = elapsed_ns(apply_start);
         self.facts
             .update(|facts| finish_call(&mut facts.metadata_apply, apply_elapsed, applied.is_ok()));
         applied?;
@@ -1564,26 +1656,29 @@ fn atomic_replace_temp(
     };
     finish_replace(facts, replace_start, prior.is_some(), &replaced);
     replaced?;
+    let entry = super::ffi::open_entry_at(&parent.file, name)?;
+    let expected = temp
+        .expected_metadata
+        .lock()
+        .map_err(|_| DriverError::Conflict)?
+        .clone()
+        .ok_or(DriverError::Conflict)?;
+    let restrictive_flags = expected.bsd_flags != 0;
     let finalized = observed_call(
         facts,
         |facts| &mut facts.metadata_postinstall_verify,
         || {
-            let entry = super::ffi::open_entry_at(&parent.file, name)?;
-            let expected = temp
-                .expected_metadata
-                .lock()
-                .map_err(|_| DriverError::Conflict)?
-                .clone()
-                .ok_or(DriverError::Conflict)?;
-            if expected.bsd_flags == 0 {
-                super::metadata::verify(&entry, &expected)
+            if restrictive_flags {
+                super::metadata::finish(&entry, &expected)
             } else {
-                super::metadata::finish(&entry, &expected)?;
-                sync_file(&entry, facts, FileSyncOwner::PostHardLink)
+                super::metadata::verify(&entry, &expected)
             }
         },
     );
     if finalized.is_err() {
+        return Err(DriverError::VisibilityAmbiguous);
+    }
+    if restrictive_flags && sync_file(&entry, facts, FileSyncOwner::PostHardLink).is_err() {
         return Err(DriverError::VisibilityAmbiguous);
     }
     let outcome =
@@ -1705,6 +1800,7 @@ pub(super) fn modified_time(metadata: &NativeMetadata) -> Result<SystemTime> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::apple::ffi;
     use std::os::unix::fs::symlink;
     use std::process::Command;
 
@@ -1727,6 +1823,74 @@ mod tests {
         fs::write(Path::new(&base).join("owned/file"), b"crash residue").unwrap();
         std::mem::forget(workspace);
         std::process::exit(91);
+    }
+
+    #[test]
+    fn failed_setup_guard_removes_staging_and_managed_root_at_every_setup_cut() {
+        let base = test_parent().join(format!(
+            "layerfs-setup-cleanup-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&base).unwrap();
+        for cut in 0..7 {
+            let case = base.join(cut.to_string());
+            fs::create_dir(&case).unwrap();
+            let parent = ffi::open_directory_path_nofollow(&case).unwrap();
+            let root_name = b"managed".to_vec();
+            let staging_name = b".layerfs-staging-test".to_vec();
+            ffi::mkdir_at(&parent, &root_name).unwrap();
+            ffi::mkdir_at(&parent, &staging_name).unwrap();
+            let root = ffi::open_directory_at(&parent, &root_name).unwrap();
+            let staging = ffi::open_directory_at(&parent, &staging_name).unwrap();
+            let root_identity = ffi::file_stable_token(&root).unwrap();
+            let staging_identity = ffi::file_stable_token(&staging).unwrap();
+            let facts = Recorder::default();
+            let guard = SetupCleanup {
+                facts: &facts,
+                root_dir: &root,
+                root_parent: &parent,
+                root_name: &root_name,
+                root_identity: &root_identity,
+                staging_dir: &staging,
+                staging_name: &staging_name,
+                staging_identity: &staging_identity,
+                remove_root: true,
+                active: true,
+            };
+            let mut marker = None;
+            if cut >= 1 {
+                marker = Some(ffi::create_regular_at(&staging, RECOVERY_MARKER).unwrap());
+            }
+            if cut >= 2 {
+                marker
+                    .as_mut()
+                    .unwrap()
+                    .write_all(b"partial marker")
+                    .unwrap();
+            }
+            if cut >= 3 {
+                marker.as_ref().unwrap().sync_all().unwrap();
+            }
+            if cut >= 4 {
+                assert!(ffi::try_lock_exclusive(marker.as_ref().unwrap()).unwrap());
+            }
+            if cut >= 5 {
+                staging.sync_all().unwrap();
+            }
+            if cut >= 6 {
+                parent.sync_all().unwrap();
+            }
+            drop(guard);
+            assert_eq!(facts.snapshot().cleanup.successes, 2);
+            assert!(!case.join("managed").exists());
+            assert!(!case.join(".layerfs-staging-test").exists());
+            fs::remove_dir(case).unwrap();
+        }
+        fs::remove_dir(base).unwrap();
     }
 
     #[test]

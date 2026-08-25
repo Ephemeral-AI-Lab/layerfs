@@ -32,7 +32,8 @@ impl Engine {
             self.bump(|counters| {
                 checked_add(&mut counters.transactions_started, 1)?;
                 checked_add(&mut counters.publication_transactions_started, 1)?;
-                checked_add(&mut counters.statements, 1)
+                checked_add(&mut counters.statements, 1)?;
+                checked_add(&mut counters.publication_statements, 1)
             })?;
         }
         self.mark_statement()?;
@@ -167,6 +168,7 @@ impl Publication<'_> {
                 checked_add(&mut counters.root_verification_objects, observation.objects)?;
                 checked_add(&mut counters.root_verification_bytes, observation.bytes)?;
                 checked_add(&mut counters.statements, observation.statements)?;
+                checked_add(&mut counters.publication_statements, observation.statements)?;
                 checked_add(&mut counters.fetched_rows, observation.fetched_rows)?;
                 checked_add(
                     &mut counters.fetched_row_authentication_passes,
@@ -358,7 +360,10 @@ impl Drop for Publication<'_> {
 fn finalize_rollback(engine: &Engine, connection: &mut ConnectionGuard<'_>) -> bool {
     let active = !connection.is_autocommit();
     if active {
-        engine.bump_best_effort(|counters| checked_add(&mut counters.statements, 1));
+        engine.bump_best_effort(|counters| {
+            checked_add(&mut counters.statements, 1)?;
+            checked_add(&mut counters.publication_statements, 1)
+        });
     }
     let failed = active && engine.commit_dispatch.rollback(connection).is_err();
     connection.transaction = false;

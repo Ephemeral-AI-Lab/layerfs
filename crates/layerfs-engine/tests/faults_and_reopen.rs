@@ -206,6 +206,9 @@ fn successful_live_scrub_clears_history_once_durably() {
     assert_eq!(first.integrity_transactions_committed, 1);
     assert_eq!(first.integrity_transactions_rolled_back, 1);
     assert_eq!(first.integrity_statements, 9);
+    assert_eq!(first.statements, 9);
+    assert_eq!(first.primary_read_statements, 3);
+    assert_eq!(first.live_verified_integrity_statements, 6);
     assert_eq!(
         Connection::open(&path)
             .unwrap()

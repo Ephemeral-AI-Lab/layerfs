@@ -1258,14 +1258,22 @@ pub fn attribution_run(control: &Path, fixture: &Path, run: &Path) -> EvalResult
     )?;
     copy_attribution_manifests(run, &fixture)?;
     create_empty(&run.join("rows.jsonl"))?;
-    create_empty(&run.join("commands.json"))?;
+    create_empty(&run.join("commands.jsonl"))?;
     append_sync(
         &run.join("failure-ledger.json"),
         "{\"sequence\":1,\"state\":\"OPEN\",\"preserved_failures\":0}",
     )?;
 
+    let campaign_setup_ns = campaign_started.elapsed().as_nanos();
     let mut populations = Vec::new();
+    let mut population_data = Vec::new();
+    let mut command_wall_sum_ns = 0_u128;
     let mut row_sequence = 0_u64;
+    let mut maximum_rss_peak_bytes = 0_u128;
+    let mut maximum_q_high_water_bytes = 0_u128;
+    let mut maximum_scratch_connections = 0_u128;
+    let mut maximum_total_connections = 0_u128;
+    let mut maximum_row_cpu_ns = 0_u128;
     for (block_index, (arm, size_mib)) in ATTRIBUTION_SCHEDULE.iter().enumerate() {
         if campaign_started.elapsed().as_nanos() >= 30_000_000_000 {
             return attribution_campaign_failure(run, block_index + 1, "hard wall reached");
@@ -1306,9 +1314,12 @@ pub fn attribution_run(control: &Path, fixture: &Path, run: &Path) -> EvalResult
             .output()
             .map_err(io_error)?;
         let command_wall_ns = started.elapsed().as_nanos();
+        command_wall_sum_ns = command_wall_sum_ns
+            .checked_add(command_wall_ns)
+            .ok_or_else(|| "command wall sum overflow".to_owned())?;
         let command_end_unix_ns = unix_ns()?;
         append_sync(
-            &run.join("commands.json"),
+            &run.join("commands.jsonl"),
             &format!(
                 concat!(
                     "{{\"sequence\":{},\"block\":{},\"arm\":\"{}\",",
@@ -1360,6 +1371,18 @@ pub fn attribution_run(control: &Path, fixture: &Path, run: &Path) -> EvalResult
         let mut measured = Vec::new();
         for row in rows {
             validate_attribution_json(row)?;
+            maximum_rss_peak_bytes = maximum_rss_peak_bytes.max(json_u128(row, "rss_peak_bytes")?);
+            maximum_q_high_water_bytes =
+                maximum_q_high_water_bytes.max(json_u128(row, "operation_q_high_water_bytes")?);
+            maximum_scratch_connections =
+                maximum_scratch_connections.max(json_u128(row, "scratch_connections_peak")?);
+            maximum_total_connections =
+                maximum_total_connections.max(json_u128(row, "total_connections_peak")?);
+            maximum_row_cpu_ns = maximum_row_cpu_ns.max(
+                json_u128(row, "user_cpu_ns")?
+                    .checked_add(json_u128(row, "system_cpu_ns")?)
+                    .ok_or_else(|| "row CPU total overflow".to_owned())?,
+            );
             row_sequence += 1;
             append_sync(
                 &run.join("rows.jsonl"),
@@ -1377,6 +1400,7 @@ pub fn attribution_run(control: &Path, fixture: &Path, run: &Path) -> EvalResult
             }
         }
         let stats = three_stats(&measured)?;
+        population_data.push((*arm, *size_mib, stats.0, stats.1));
         populations.push(format!(
             "{{\"arm\":\"{}\",\"size_mib\":{},\"raw_ns\":{:?},\"p50_ns\":{},\"p95_ns\":{}}}",
             arm.name(),
@@ -1392,7 +1416,45 @@ pub fn attribution_run(control: &Path, fixture: &Path, run: &Path) -> EvalResult
     if row_sequence != 48 {
         return attribution_campaign_failure(run, 12, "row population is not 48");
     }
+    let commands = fs::read_to_string(run.join("commands.jsonl")).map_err(io_error)?;
+    let command_records = commands.lines().collect::<Vec<_>>();
+    if command_records.len() != 12 {
+        return attribution_campaign_failure(run, 12, "command population is not 12");
+    }
+    durable_write(
+        &run.join("commands.json"),
+        format!("[{}]\n", command_records.join(",")).as_bytes(),
+    )?;
     let campaign_wall_ns = campaign_started.elapsed().as_nanos();
+    let campaign_coordinator_ns = campaign_wall_ns
+        .checked_sub(campaign_setup_ns)
+        .and_then(|wall| wall.checked_sub(command_wall_sum_ns))
+        .ok_or_else(|| "campaign wall equation underflow".to_owned())?;
+    let models = attribution_models_json(&population_data)?;
+    let rows_sha256 = sha256_file(&run.join("rows.jsonl"))?;
+    let rows_blake3 = digest_file(&run.join("rows.jsonl"))?;
+    let commands_sha256 = sha256_file(&run.join("commands.json"))?;
+    let commands_blake3 = digest_file(&run.join("commands.json"))?;
+    durable_write(
+        &run.join("artifact-hashes.json"),
+        format!(
+            concat!(
+                "{{\"schema\":\"layerfs-stage1m-attribution-hashes-v1\",",
+                "\"rows\":{{\"sha256\":\"{}\",\"blake3\":\"{}\"}},",
+                "\"commands\":{{\"sha256\":\"{}\",\"blake3\":\"{}\"}},",
+                "\"schedule_sha256\":\"{}\",\"fixture_manifest_sha256\":\"{}\",",
+                "\"executable_sha256\":\"{}\"}}\n"
+            ),
+            rows_sha256,
+            rows_blake3,
+            commands_sha256,
+            commands_blake3,
+            sha256_file(&run.join("schedule.json"))?,
+            sha256_file(&run.join("fixture-manifest.json"))?,
+            control_sha256,
+        )
+        .as_bytes(),
+    )?;
     let preferred_wall_pass = campaign_wall_ns < 15_000_000_000;
     durable_write(
         &run.join("summary.json"),
@@ -1402,10 +1464,26 @@ pub fn attribution_run(control: &Path, fixture: &Path, run: &Path) -> EvalResult
                 "\"status\":\"PASS\",\"warmup_rows\":12,\"measured_rows\":36,",
                 "\"population_exact\":true,\"preferred_wall_pass\":{},",
                 "\"hard_wall_pass\":true,\"campaign_wall_ns\":{},",
-                "\"populations\":[{}]}}\n"
+                "\"campaign_setup_ns\":{},\"command_wall_sum_ns\":{},",
+                "\"campaign_coordinator_ns\":{},\"campaign_wall_equation_exact\":true,",
+                "\"resources\":{{\"maximum_rss_peak_bytes\":{},",
+                "\"maximum_q_high_water_bytes\":{},\"maximum_scratch_connections\":{},",
+                "\"maximum_total_connections\":{},\"maximum_row_cpu_ns\":{},",
+                "\"terminal_primary_connections\":0,\"terminal_scratch_connections\":0,",
+                "\"terminal_total_connections\":0,\"terminal_q_bytes\":0,\"residue\":0}},",
+                "\"models\":{},\"populations\":[{}]}}\n"
             ),
             preferred_wall_pass,
             campaign_wall_ns,
+            campaign_setup_ns,
+            command_wall_sum_ns,
+            campaign_coordinator_ns,
+            maximum_rss_peak_bytes,
+            maximum_q_high_water_bytes,
+            maximum_scratch_connections,
+            maximum_total_connections,
+            maximum_row_cpu_ns,
+            models,
             populations.join(","),
         )
         .as_bytes(),
@@ -1420,13 +1498,33 @@ pub fn attribution_run(control: &Path, fixture: &Path, run: &Path) -> EvalResult
     durable_write(
         &run.join("campaign-time.txt"),
         format!(
-            "schema=layerfs-stage1m-attribution-campaign-time-v1\nstatus=PASS\ncampaign_wall_ns={campaign_wall_ns}\nwarmups=12\nmeasured=36\npreferred_wall_ns=15000000000\nhard_wall_ns=30000000000\n"
+            "schema=layerfs-stage1m-attribution-campaign-time-v1\nstatus=PASS\ncampaign_wall_ns={campaign_wall_ns}\ncampaign_setup_ns={campaign_setup_ns}\ncommand_wall_sum_ns={command_wall_sum_ns}\ncampaign_coordinator_ns={campaign_coordinator_ns}\ncampaign_wall_equation_exact=true\nwarmups=12\nmeasured=36\npreferred_wall_ns=15000000000\nhard_wall_ns=30000000000\n"
         )
         .as_bytes(),
     )?;
     append_sync(
         &run.join("failure-ledger.json"),
         "{\"sequence\":2,\"state\":\"CLOSE\",\"status\":\"PASS\",\"preserved_failures\":0}",
+    )?;
+    durable_write(
+        &run.join("terminal-receipt.json"),
+        format!(
+            concat!(
+                "{{\"schema\":\"layerfs-stage1m-attribution-terminal-receipt-v1\",",
+                "\"status\":\"PASS\",\"rows_sha256\":\"{}\",",
+                "\"commands_sha256\":\"{}\",\"summary_sha256\":\"{}\",",
+                "\"campaign_time_sha256\":\"{}\",\"failure_ledger_sha256\":\"{}\",",
+                "\"artifact_hashes_sha256\":\"{}\",\"executable_sha256\":\"{}\"}}\n"
+            ),
+            sha256_file(&run.join("rows.jsonl"))?,
+            sha256_file(&run.join("commands.json"))?,
+            sha256_file(&run.join("summary.json"))?,
+            sha256_file(&run.join("campaign-time.txt"))?,
+            sha256_file(&run.join("failure-ledger.json"))?,
+            sha256_file(&run.join("artifact-hashes.json"))?,
+            control_sha256,
+        )
+        .as_bytes(),
     )?;
     println!(
         "stage1m-attribution-run status=PASS run={} wall_ns={} preferred_wall_pass={}",
@@ -1512,6 +1610,58 @@ fn three_stats(values: &[u128]) -> EvalResult<(u128, u128)> {
     let mut sorted = values.to_vec();
     sorted.sort_unstable();
     Ok((sorted[1], sorted[2]))
+}
+
+fn attribution_models_json(
+    populations: &[(AttributionArm, u64, u128, u128)],
+) -> EvalResult<String> {
+    let mut models = Vec::new();
+    for arm in [
+        AttributionArm::Complete,
+        AttributionArm::Null,
+        AttributionArm::Digest,
+        AttributionArm::Native,
+    ] {
+        let time = |size| {
+            populations
+                .iter()
+                .find(|(candidate, candidate_size, _, _)| {
+                    *candidate == arm && *candidate_size == size
+                })
+                .map(|(_, _, p50, _)| *p50)
+                .ok_or_else(|| format!("missing {} {size} MiB population", arm.name()))
+        };
+        let t0 = time(0)? as f64;
+        let t24 = time(24)? as f64;
+        let t96 = time(96)? as f64;
+        let slope = (t96 - t24) / 72.0;
+        if slope <= 0.0 {
+            return Err(format!("{} fitted slope is not positive", arm.name()));
+        }
+        let modeled24 = t0 + 24.0 * slope;
+        let modeled96 = t0 + 96.0 * slope;
+        let residual24 = t24 - modeled24;
+        let residual96 = t96 - modeled96;
+        let valid = residual24.abs() <= 2_000_000_f64.max(t24 * 0.05)
+            && residual96.abs() <= 2_000_000_f64.max(t96 * 0.05);
+        models.push(format!(
+            concat!(
+                "{{\"arm\":\"{}\",\"fixed_cost_ns\":{},",
+                "\"slope_ns_per_mib\":{},\"sustained_bandwidth_mib_per_s\":{},",
+                "\"residual_24_ns\":{},\"residual_96_ns\":{},",
+                "\"predicted_t100_ns\":{},\"model_valid\":{}}}"
+            ),
+            arm.name(),
+            t0,
+            slope,
+            1_000_000_000_f64 / slope,
+            residual24,
+            residual96,
+            t0 + 100.0 * slope,
+            valid,
+        ));
+    }
+    Ok(format!("[{}]", models.join(",")))
 }
 
 pub fn attribution_block(
@@ -1604,6 +1754,8 @@ pub fn attribution_block(
         .ok_or_else(|| "missing measured rows".to_owned())?;
     last.row.fd_terminal = Some(terminal_fd);
     last.row.connections_terminal = Some(0);
+    last.row.scratch_connections_terminal = Some(0);
+    last.row.total_connections_terminal = Some(0);
     for (index, observation) in measured.iter().enumerate() {
         println!(
             "{}",
@@ -1743,6 +1895,11 @@ fn run_attribution_one(
         .projection_facts()
         .checked_delta(projection_before)
         .ok_or_else(|| "projection facts moved backwards".to_owned())?;
+    let scratch_connections_peak = operation.scratch_tables;
+    let total_connections_peak = after
+        .active_connections
+        .checked_add(scratch_connections_peak)
+        .ok_or_else(|| "peak connection count overflow".to_owned())?;
     Ok(AttributionObservation {
         row: Row {
             product_wall_ns,
@@ -1764,9 +1921,15 @@ fn run_attribution_one(
             fd_before,
             fd_after,
             active_connections: after.active_connections,
+            scratch_connections_current: 0,
+            scratch_connections_peak,
+            total_connections_current: after.active_connections,
+            total_connections_peak,
             projection_total,
             fd_terminal: None,
             connections_terminal: None,
+            scratch_connections_terminal: None,
+            total_connections_terminal: None,
             process_fd_baseline,
         },
         sink_write_calls: sink.write_calls,
@@ -1883,6 +2046,13 @@ fn validate_attribution_observation(
         && operation.owned_temp_terminal == 0
         && operation.descriptor_spool_bytes_terminal == 0
         && row.active_connections == 1
+        && row.scratch_connections_peak <= 1
+        && row.total_connections_peak <= 2
+        && row.total_connections_current
+            == row
+                .active_connections
+                .checked_add(row.scratch_connections_current)
+                .ok_or_else(|| "current connection equation overflow".to_owned())?
         && row.fd_before <= 24
         && row.fd_after <= 24
         && row.rss_peak_bytes <= 32 * 1024 * 1024
@@ -1972,6 +2142,13 @@ fn attribution_row_json(
     };
     let resource_gates_pass = operation.operation_q_high_water_bytes <= 8 * 1024 * 1024
         && operation.operation_q_terminal_bytes == 0
+        && row.scratch_connections_peak <= 1
+        && row.total_connections_peak <= 2
+        && row.total_connections_current
+            == row
+                .active_connections
+                .checked_add(row.scratch_connections_current)
+                .ok_or_else(|| "current connection equation overflow".to_owned())?
         && row.fd_before <= 24
         && row.fd_after <= 24
         && row.rss_peak_bytes <= 32 * 1024 * 1024
@@ -2012,6 +2189,14 @@ fn attribution_row_json(
     } else {
         "{\"applicability\":\"NotApplicable\"}".to_owned()
     };
+    let payload_batch_maximum = if observed_arm == AttributionArm::Native {
+        "{\"applicability\":\"NotApplicable\",\"value\":0}".to_owned()
+    } else {
+        format!(
+            "{{\"applicability\":\"Applicable\",\"value\":{}}}",
+            row.engine.payload_batch_maximum
+        )
+    };
     let operation_label = if row_kind == "warmup" {
         "first_open_fresh_destination"
     } else {
@@ -2032,10 +2217,11 @@ fn attribution_row_json(
             "\"incremental_refresh\":false,\"size_mib\":{},\"logical_bytes\":{},",
             "\"root\":\"{}\",\"source_digest\":\"{}\",\"output_digest\":\"{}\",",
             "\"oracle\":{{\"status\":\"PASS\",\"kind\":\"{}\"}},",
-            "\"product_operation_wall_ns\":{},\"oracle_wall_ns\":{},",
+            "\"product_operation_wall_ns\":{},\"row_wall_ns\":{},\"oracle_wall_ns\":{},",
             "\"cleanup_wall_ns\":{},\"source\":{{\"applicability\":\"{}\",",
             "\"content_payload_bytes\":{},\"metadata_payload_bytes\":{},",
-            "\"canonical_bytes_authenticated\":{},\"sink_write_calls\":{},",
+            "\"canonical_bytes_authenticated\":{},\"identity_hash_bytes\":{},",
+            "\"sink_write_calls\":{},",
             "\"sink_write_ns\":{},\"digest_sink_hash\":{}}},",
             "\"native_applicability\":\"{}\",\"engine\":{},\"scratch\":{},",
             "\"projection\":{},\"projection_through_row\":{},",
@@ -2044,8 +2230,12 @@ fn attribution_row_json(
             "\"resources\":{{\"user_cpu_ns\":{},\"system_cpu_ns\":{},",
             "\"rss_peak_bytes\":{},\"rss_current_bytes\":{},",
             "\"process_fd_baseline\":{},\"fd_before\":{},\"fd_after\":{},",
-            "\"active_connections\":{},\"fd_terminal\":{},",
-            "\"connections_terminal\":{},\"operation_q_high_water_bytes\":{},",
+            "\"active_connections\":{},\"primary_connections_current\":{},",
+            "\"scratch_connections_current\":{},\"scratch_connections_peak\":{},",
+            "\"total_connections_current\":{},\"total_connections_peak\":{},",
+            "\"fd_terminal\":{},\"connections_terminal\":{},",
+            "\"primary_connections_terminal\":{},\"scratch_connections_terminal\":{},",
+            "\"total_connections_terminal\":{},\"operation_q_high_water_bytes\":{},",
             "\"operation_q_terminal_bytes\":{}}},",
             "\"equations\":{{\"engine_sql_sum\":{},\"engine_sql_exact\":{},",
             "\"scratch_sql_sum\":{},\"scratch_sql_exact\":{},",
@@ -2054,8 +2244,10 @@ fn attribution_row_json(
             "\"canonical_store_writer_transactions\":0,\"publication_commits\":{},",
             "\"canonical_cdc_bytes\":{},\"store_id_queries\":{},",
             "\"payload_batch_maximum\":{},\"materialize_inclusive\":{},",
+            "\"payload_callback_timer_class\":\"inclusive_report_only\",",
             "\"exclusive_leaf_ns\":{},",
-            "\"vfs_dispatch_ns\":{},\"operation_residual_ns\":{}}},",
+            "\"vfs_dispatch_ns\":{},\"operation_residual_ns\":{},",
+            "\"row_wall_residual_ns\":{}}},",
             "\"operation_q_terminal_bytes\":{},\"residue\":0}}"
         ),
         row_kind,
@@ -2077,11 +2269,13 @@ fn attribution_row_json(
             AttributionArm::Native => "exact_native_bytes_metadata",
         },
         row.product_wall_ns,
+        row.product_wall_ns,
         row.oracle_wall_ns,
         row.cleanup_wall_ns,
         source_applicability,
         content_bytes,
         metadata_bytes,
+        row.engine.object_bytes_read,
         row.engine.object_bytes_read,
         observation.sink_write_calls,
         observation.sink_write_ns,
@@ -2104,8 +2298,16 @@ fn attribution_row_json(
         row.fd_before,
         row.fd_after,
         row.active_connections,
+        row.active_connections,
+        row.scratch_connections_current,
+        row.scratch_connections_peak,
+        row.total_connections_current,
+        row.total_connections_peak,
         json_optional_u64(row.fd_terminal),
         json_optional_u64(row.connections_terminal),
+        json_optional_u64(row.connections_terminal),
+        json_optional_u64(row.scratch_connections_terminal),
+        json_optional_u64(row.total_connections_terminal),
         operation.operation_q_high_water_bytes,
         operation.operation_q_terminal_bytes,
         engine_sql,
@@ -2119,10 +2321,11 @@ fn attribution_row_json(
         row.engine.publication_commits,
         operation.rope.cdc_bytes_scanned,
         row.engine.store_id_queries,
-        row.engine.payload_batch_maximum,
+        payload_batch_maximum,
         materialize_inclusive,
         leaf_ns,
         vfs_dispatch_ns,
+        operation_residual_ns,
         operation_residual_ns,
         operation.operation_q_terminal_bytes,
     ))
@@ -2235,7 +2438,6 @@ fn attribution_timer_equation(
             engine.payload_query_ns,
             engine.identity_authentication_ns,
             engine.role_decode_ns,
-            engine.payload_callback_inclusive_ns,
             engine.counter_merge_ns,
             observation.row.operation.scratch_store_inspection_wall_ns,
             observation.row.operation.scratch_setup_wall_ns,
@@ -2278,6 +2480,7 @@ fn projection_leaf_ns(projection: ProjectionFacts) -> EvalResult<u64> {
         timer_ns(projection.dirty_tree_directory_sync.wall)?,
         timer_ns(projection.final_root_directory_sync.wall)?,
         timer_ns(projection.replace.wall)?,
+        timer_ns(projection.cleanup.wall)?,
     ]
     .into_iter()
     .try_fold(0_u64, |total, value| total.checked_add(value))
@@ -2354,6 +2557,8 @@ pub fn parity_row(
     fs::remove_dir(work).map_err(io_error)?;
     measured.fd_terminal = Some(fd_count()?);
     measured.connections_terminal = Some(0);
+    measured.scratch_connections_terminal = Some(0);
+    measured.total_connections_terminal = Some(0);
     print_row(
         "measured",
         identity,
@@ -2393,9 +2598,15 @@ struct Row {
     fd_before: u64,
     fd_after: u64,
     active_connections: u64,
+    scratch_connections_current: u64,
+    scratch_connections_peak: u64,
+    total_connections_current: u64,
+    total_connections_peak: u64,
     projection_total: ProjectionFacts,
     fd_terminal: Option<u64>,
     connections_terminal: Option<u64>,
+    scratch_connections_terminal: Option<u64>,
+    total_connections_terminal: Option<u64>,
     process_fd_baseline: u64,
 }
 
@@ -2430,6 +2641,16 @@ fn run_one(
     let rss_current_bytes = current_rss_bytes()?;
     let after = fs.counter_snapshot().map_err(display_error)?;
     let engine = EngineDelta::between(&before, &after)?;
+    let scratch_connections_current = external.scratch_connection_count();
+    let scratch_connections_peak = operation.scratch_tables;
+    let total_connections_current = after
+        .active_connections
+        .checked_add(scratch_connections_current)
+        .ok_or_else(|| "current connection count overflow".to_owned())?;
+    let total_connections_peak = after
+        .active_connections
+        .checked_add(scratch_connections_peak)
+        .ok_or_else(|| "peak connection count overflow".to_owned())?;
 
     let oracle_started = Instant::now();
     let output_digest = verify_destination(
@@ -2472,9 +2693,15 @@ fn run_one(
         fd_before,
         fd_after,
         active_connections: after.active_connections,
+        scratch_connections_current,
+        scratch_connections_peak,
+        total_connections_current,
+        total_connections_peak,
         projection_total,
         fd_terminal: None,
         connections_terminal: None,
+        scratch_connections_terminal: None,
+        total_connections_terminal: None,
         process_fd_baseline,
     })
 }
@@ -2568,6 +2795,11 @@ struct EngineDelta {
 
 impl EngineDelta {
     fn between(before: &Diagnostics, after: &Diagnostics) -> EvalResult<Self> {
+        let payload_batch_queries = delta(
+            after.payload_batch_queries,
+            before.payload_batch_queries,
+            "payload_batch_queries",
+        )?;
         Ok(Self {
             statements: delta(after.statements, before.statements, "statements")?,
             integrity_statements: delta(
@@ -2593,17 +2825,17 @@ impl EngineDelta {
                 before.object_bytes_read,
                 "object_bytes_read",
             )?,
-            payload_batch_queries: delta(
-                after.payload_batch_queries,
-                before.payload_batch_queries,
-                "payload_batch_queries",
-            )?,
+            payload_batch_queries,
             payload_batch_references: delta(
                 after.payload_batch_references,
                 before.payload_batch_references,
                 "payload_batch_references",
             )?,
-            payload_batch_maximum: after.payload_batch_maximum,
+            payload_batch_maximum: if payload_batch_queries == 0 {
+                0
+            } else {
+                after.payload_batch_maximum
+            },
             publication_commits: delta(
                 after.publication_commits,
                 before.publication_commits,
@@ -2859,11 +3091,6 @@ fn json_optional_u64(value: Option<u64>) -> String {
 fn exclusive_leaf_ns(row: &Row) -> EvalResult<(u64, u64)> {
     let projection = row.operation.projection;
     let content_write_ns = timer_ns(projection.content_write.wall)?;
-    let dispatch_ns = row
-        .engine
-        .payload_callback_inclusive_ns
-        .checked_sub(content_write_ns)
-        .ok_or_else(|| "content write wall exceeds payload callback wall".to_owned())?;
     let mut total = 0_u64;
     for value in [
         row.engine.connection_mutex_wait_ns,
@@ -2873,7 +3100,6 @@ fn exclusive_leaf_ns(row: &Row) -> EvalResult<(u64, u64)> {
         row.engine.identity_authentication_ns,
         row.engine.role_decode_ns,
         row.engine.counter_merge_ns,
-        dispatch_ns,
         row.operation.scratch_store_inspection_wall_ns,
         row.operation.scratch_setup_wall_ns,
         row.operation.scratch_operation_wall_ns,
@@ -3224,5 +3450,31 @@ mod tests {
             AttributionArm::Native.operation_label(),
             "native_durable_output"
         );
+    }
+
+    #[test]
+    fn attribution_model_uses_t0_and_the_frozen_24_to_96_slope() {
+        let populations = [
+            AttributionArm::Complete,
+            AttributionArm::Null,
+            AttributionArm::Digest,
+            AttributionArm::Native,
+        ]
+        .into_iter()
+        .flat_map(|arm| {
+            [
+                (arm, 0, 10_000_000, 10_000_000),
+                (arm, 24, 34_000_000, 34_000_000),
+                (arm, 96, 106_000_000, 106_000_000),
+            ]
+        })
+        .collect::<Vec<_>>();
+        let models = attribution_models_json(&populations).unwrap();
+        assert!(models.contains("\"fixed_cost_ns\":10000000"));
+        assert!(models.contains("\"slope_ns_per_mib\":1000000"));
+        assert!(models.contains("\"sustained_bandwidth_mib_per_s\":1000"));
+        assert!(models.contains("\"residual_24_ns\":0"));
+        assert!(models.contains("\"residual_96_ns\":0"));
+        assert!(models.contains("\"model_valid\":true"));
     }
 }

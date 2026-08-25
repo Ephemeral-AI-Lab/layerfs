@@ -8,12 +8,71 @@
 #[cfg(target_os = "macos")]
 pub mod apple;
 
+#[cfg(target_os = "macos")]
+pub type HostDriver = apple::AppleDriver;
+
+#[cfg(not(target_os = "macos"))]
+#[derive(Default)]
+pub struct HostDriver;
+
 use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io;
 use std::path::Path;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(not(target_os = "macos"))]
+impl layerfs_vfs::driver::ProjectionDriver for HostDriver {
+    fn open_workspace(
+        &self,
+        _path: &Path,
+        _policy: layerfs_vfs::driver::WorkspacePolicy,
+        _store_id: [u8; 32],
+    ) -> layerfs_vfs::driver::Result<Box<dyn layerfs_vfs::driver::ProjectionWorkspace>> {
+        Err(layerfs_vfs::driver::DriverError::Unsupported)
+    }
+}
+
+pub fn host_driver() -> std::sync::Arc<dyn layerfs_vfs::driver::ProjectionDriver> {
+    std::sync::Arc::new(HostDriver::default())
+}
+
+#[cfg(target_os = "macos")]
+pub fn open_host_store(
+    directory: &Path,
+    mode: layerfs_engine::integrity::IntegrityMode,
+) -> Result<layerfs_engine::Engine, layerfs_vfs::VfsError> {
+    Ok(HostDriver::open_store_with_integrity(directory, mode)?)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn open_host_store(
+    _directory: &Path,
+    _mode: layerfs_engine::integrity::IntegrityMode,
+) -> Result<layerfs_engine::Engine, layerfs_vfs::VfsError> {
+    Err(layerfs_vfs::VfsError::Driver(
+        layerfs_vfs::driver::DriverError::Unsupported,
+    ))
+}
+
+#[cfg(target_os = "macos")]
+pub fn compact_host_store(
+    engine: layerfs_engine::Engine,
+    directory: &Path,
+) -> Result<layerfs_engine::Engine, layerfs_vfs::VfsError> {
+    Ok(HostDriver::compact_store(engine, directory)?)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn compact_host_store(
+    _engine: layerfs_engine::Engine,
+    _directory: &Path,
+) -> Result<layerfs_engine::Engine, layerfs_vfs::VfsError> {
+    Err(layerfs_vfs::VfsError::Driver(
+        layerfs_vfs::driver::DriverError::Unsupported,
+    ))
+}
 
 pub const COMPONENT: &str = "layerfs-os";
 

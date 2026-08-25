@@ -1163,6 +1163,9 @@ impl ExternalWorkspace {
     pub fn path(&self) -> &Path {
         &self.path
     }
+    pub fn scratch_connection_count(&self) -> u64 {
+        u64::from(self.live_scratch.is_some())
+    }
     pub fn read_metadata(&self, path: &CanonicalPath) -> VfsResult<crate::driver::NativeMetadata> {
         if !self.active {
             return Err(VfsError::InvalidState);

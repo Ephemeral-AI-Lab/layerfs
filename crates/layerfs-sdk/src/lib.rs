@@ -2,10 +2,9 @@
 
 #![forbid(unsafe_code)]
 
-use layerfs_os::apple::AppleDriver;
+use layerfs_os::{compact_host_store, host_driver, open_host_store};
 use layerfs_vfs::LayerVfs;
 use std::path::Path;
-use std::sync::Arc;
 
 pub use layerfs_vfs::driver::{
     DurabilityClass, DurabilityClassCounts, NativeMetadata, NativeXattrs, ProjectionCallFacts,
@@ -127,10 +126,7 @@ impl LayerFs {
         path: &Path,
         mode: IntegrityMode,
     ) -> Result<OpenedLayerFs, layerfs_vfs::VfsError> {
-        let fs = LayerVfs::from_engine(
-            AppleDriver::open_store_with_integrity(path, mode)?,
-            Arc::new(AppleDriver::default()),
-        )?;
+        let fs = LayerVfs::from_engine(open_host_store(path, mode)?, host_driver())?;
         let ref_state = fs.current_head("main")?;
         let head = ref_state.root;
         Ok(OpenedLayerFs {
@@ -298,8 +294,8 @@ impl LayerFs {
         self.0.move_main(expected, target)
     }
     pub fn compact(self, path: &Path) -> Result<OpenedLayerFs, layerfs_vfs::VfsError> {
-        let engine = AppleDriver::compact_store(self.0.into_engine()?, path)?;
-        let fs = LayerVfs::from_engine(engine, Arc::new(AppleDriver::default()))?;
+        let engine = compact_host_store(self.0.into_engine()?, path)?;
+        let fs = LayerVfs::from_engine(engine, host_driver())?;
         let ref_state = fs.current_head("main")?;
         let head = ref_state.root;
         Ok(OpenedLayerFs {
@@ -521,6 +517,9 @@ pub struct ExternalWorkspace(layerfs_vfs::ExternalWorkspace);
 impl ExternalWorkspace {
     pub fn path(&self) -> &Path {
         self.0.path()
+    }
+    pub fn scratch_connection_count(&self) -> u64 {
+        self.0.scratch_connection_count()
     }
     pub fn read_metadata(&self, path: &str) -> Result<NativeMetadata, layerfs_vfs::VfsError> {
         self.0

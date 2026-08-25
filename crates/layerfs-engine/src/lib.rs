@@ -1582,7 +1582,6 @@ fn add_retained_scrub_counters(
     observation: integrity::VerificationObservation,
 ) -> EngineResult<()> {
     checked_add(&mut counters.retained_union_scrubs, 1)?;
-    checked_add(&mut counters.statements, observation.statements)?;
     checked_add(
         &mut counters.objects_validated,
         observation.authentication_passes,

@@ -191,6 +191,7 @@ fn publication_is_one_guarded_commit_and_fork_rollback_copy_no_objects() {
     assert_eq!(committed.publication_transactions_rolled_back, 0);
     assert_eq!(committed.publication_commits, 1);
     assert_eq!(committed.statements, 8);
+    assert_eq!(committed.publication_statements, committed.statements);
     let stale = a.clone();
     let b = engine
         .begin_publication(Some(&a), "main")
