@@ -1,15 +1,20 @@
 # Stage 1.2 Specification — npm / Developer Workspace Benchmark
 
-Status: **prospective controlling specification for Stage 1.2; implementation
-not started; measurement not authorized**
+Status: **prospective controlling specification for Stage 1.2; Stage 1.1T
+trust handoff admitted; implementation not started; measurement not authorized**
 Authority: controls only the Stage 1.2 workload, fixture, readiness and
 disposition; [10 — handoff freeze](10-handoff-freeze.md),
 [17 — Stage 1.0 closure](17-stage1-closure.md), and the accepted Stage 1.1
-terminal artifact remain authoritative for product correctness and custody
+terminal artifact remain authoritative for product correctness and custody;
+[20 — Stage 1.1M](20-stage1.1-full-materialization-optimization.md) preserves
+the Verified performance REVISE, while
+[22 — Stage 1.1T](22-stage1.1-trusted-localdev-materialization.md) controls the
+separate explicit TrustedLocalDev handoff
 Purpose: exercise an ordinary APFS code workspace through real shell, Node,
 npm, search, edit, build, capture, reopen, history, and rematerialization.
 
-Sequence: **accepted Stage 1.1 -> Stage 1.2 -> mounted Stage Two**.
+Sequence: **accepted Stage 1.1 -> closed Verified Stage 1.1M + admitted
+TrustedLocalDev Stage 1.1T handoff -> Stage 1.2 -> mounted Stage Two**.
 The historical filename number does not define execution order: `poc/16` is
 Stage 1.1 and this `poc/15` document is Stage 1.2.
 
@@ -17,6 +22,11 @@ Entry requires a settled Stage 1.1 source and independently accepted terminal
 disposition with no open correctness, durability, authentication, resource,
 population or custody failure. Stage 1.2 does not reopen A02 or inherit a
 Stage 1.1 performance claim.
+
+The admitted handoff does not relabel Stage 1.1M performance as PASS. Verified
+remains `REVISE_NO_AUTHORIZED_OWNER`; Stage 1.2 is admitted by its current-source
+correctness closure plus the separately labeled Stage 1.1T material gain and
+mandatory Verified promotion boundary.
 
 Explicit boundary:
 
@@ -27,6 +37,53 @@ no FSKit, macFUSE, File Provider or write interception
 no DeltaGit watcher/journal implementation
 no Stage Two implementation or measurement
 ```
+
+### 0.1 Exact Stage 1.1T handoff
+
+The fixed 85-row population and full-scan capture semantics remain unchanged.
+Trust transitions are named phases inside the existing rows, not extra hidden
+or benchmark-only product operations.
+
+```text
+clone sealed Store/cache
+-> explicit TrustedLocalDev open (durably marks trusted_history=1)
+-> Trusted local source materialization + npm/native work
+-> drop Trusted workspace and Engine
+-> reopen Verified
+-> require exactly one retained-union scrub and trusted_history clear
+-> reopen the same external APFS workspace under Verified
+-> full-scan capture/publish Rdeps
+-> drop Verified workspace and Engine
+-> explicit TrustedLocalDev reopen (marks trusted_history=1)
+-> Trusted local edit/build/search loop
+-> drop Trusted workspace and Engine
+-> reopen Verified
+-> require exactly one retained-union scrub and trusted_history clear
+-> reopen the same external APFS workspace under Verified
+-> full-scan capture/publish Redit
+-> keep reopen/history/ref-switch/final export materialization in Verified
+```
+
+Hard rules:
+
+```text
+LayerFs::open remains Verified default
+TrustedLocalDev is explicit at each local-loop open
+no live trust escalation or mode mutation
+no automatic trust inference
+no capture, ref publication, export or share operation on a Trusted Engine
+new/incumbent writes remain authenticated in every mode
+every Trusted -> Verified transition closes all Trusted workspace/Engine handles
+every transition observes one full retained-union scrub before authority work
+any scrub failure stops that workflow before capture/publication/export/share
+```
+
+B03 is the explicit Trusted workspace materialization population. B14 is the
+same public materialization route under Verified and remains the within-campaign
+Verified semantic/resource control. Their roots and workspace contents differ,
+so timing is reported separately and never presented as a paired causal delta.
+The frozen Stage 1.1M Verified and Stage 1.1T Trusted 0/24/96 results remain the
+source-bound performance comparison.
 
 ## 1. Budget
 
@@ -157,21 +214,22 @@ invocation uses those exact absolute paths; mutable `PATH` lookup is forbidden.
 
 ```text
 clone sealed Store/cache
--> reopen Rsource
--> cold materialize ordinary APFS workspace
+-> explicit TrustedLocalDev reopen Rsource; mark trusted history
+-> Trusted cold materialize ordinary APFS workspace
 -> npm ci --offline
 -> normalize npm-created mtimes to the fixed epoch
--> capture Rdeps
+-> close Trusted; Verified reopen/full scrub; capture Rdeps
+-> close Verified; explicit TrustedLocalDev reopen; mark trusted history
 -> run deterministic multi-file edit
 -> build
 -> normalize edit/build-created mtimes to the fixed epoch
 -> rg search seven times
--> capture Redit
--> reopen
+-> close Trusted; Verified reopen/full scrub; capture Redit
+-> Verified reopen
 -> fork retained Rsource/Rdeps/Redit
 -> switch main Redit -> Rsource -> Rdeps -> Redit
 -> direct canonical spot reads after each switch
--> fresh materialize Redit
+-> Verified fresh materialize/export Redit
 -> npm test --offline
 -> exact tree/metadata oracle
 -> terminal cleanup/resource proof
@@ -209,19 +267,19 @@ Expected match count and ordered-output digest are frozen. Timing includes
 |---|---|---:|---|
 | B00 | Master admission | 1 | complete manifest/root/tool validation |
 | B01 | APFS reset | 3 | clone success, distinct inode, master unchanged |
-| B02 | Reopen source | 3 | exact `Rsource` |
-| B03 | Cold materialize | 3 | exact ~155 MiB tree; bytes/s + files/s |
+| B02 | Explicit Trusted reopen source | 3 | exact `Rsource`; mode `TrustedLocalDev`; `trusted_history=1` |
+| B03 | Trusted cold materialize | 3 | exact ~155 MiB tree; bytes/s + files/s; zero fetched-row identity hashes |
 | B04 | Offline npm install | 3 | exit 0; no network; package/link/bin oracle |
-| B05 | Normalize + capture dependencies | 3 | fixed mtimes; full-scan class; one transaction/COMMIT; `Rdeps` |
-| B06 | Real edit script | 3 | exit 0; exact native oracle |
+| B05 | Normalize + Verified promotion/capture dependencies | 3 | close Trusted; Verified reopen + one scrub; fixed mtimes; full-scan class; one transaction/COMMIT; `Rdeps` |
+| B06 | Trusted reopen + real edit script | 3 | explicit Trusted reopen/marker; exit 0; exact native oracle |
 | B07 | Build | 3 | exact `dist` digest; <=16 MiB |
 | B08 | Search | `3 × 7 = 21` | exact sorted count/digest; wall/user/system/RSS |
-| B09 | Normalize + capture edited/build | 3 | fixed mtimes; full-scan class; exact `Redit` |
-| B10 | Reopen edited | 3 | exact `Redit`; no native authority assumed |
+| B09 | Normalize + Verified promotion/capture edited/build | 3 | close Trusted; Verified reopen + one scrub; fixed mtimes; full-scan class; exact `Redit` |
+| B10 | Verified reopen edited | 3 | exact `Redit`; no native authority assumed |
 | B11 | Fork retained roots | 9 refs | zero payload-byte copies |
 | B12 | Root switching | 9 moves | one ref transaction/COMMIT; no payload copy |
 | B13 | Canonical spot reads | 9 | exact bytes from selected root |
-| B14 | Final materialize | 3 | exact independent native oracle |
+| B14 | Verified final materialize/export control | 3 | exact independent native oracle; fetched rows authenticated |
 | B15 | Offline test | 3 | exit 0 |
 | B16 | Terminal resources | 3 | Q/FD/child/temp/cache-attempt zero/baseline |
 
@@ -236,18 +294,26 @@ Every workflow:
 ```text
 complete_workflow_wall
   = reset
-  + reopen
-  + materialize
+  + trusted_reopen_source
+  + trusted_materialize
   + npm
   + normalize_after_npm
+  + close_trusted_1
+  + verified_reopen_scrub_1
+  + verified_workspace_reopen_1
   + capture_deps
+  + close_verified_1
+  + trusted_reopen_edit
   + edit
   + build
   + normalize_after_build
   + search
+  + close_trusted_2
+  + verified_reopen_scrub_2
+  + verified_workspace_reopen_2
   + capture_edit
   + reopen_and_root_ops
-  + final_materialize
+  + verified_final_materialize
   + test
   + oracle
   + cleanup
@@ -270,6 +336,12 @@ inside complete workflow wall but outside npm/edit/build operation timers.
 LayerFS operation counters are deltas around SDK calls. Whole-process RSS is
 not relabeled as operation-owned Q.
 
+Every open/capture/materialization row records `integrity_mode`. Both promotion
+phases retain exact before/after `trusted_history`, scrub count, authenticated
+objects/bytes, SQL transaction family, close/open wall, connection/FD closure,
+and the first failing equation. A transition is never reported as a zero-cost
+mode flip because no live Engine can change mode.
+
 ## 8. External capture accounting
 
 Report separately:
@@ -284,6 +356,8 @@ metadata calls/bytes
 hard-link scratch rows/bytes
 native read calls/bytes
 SQLite statements/transactions/COMMITs
+Trusted open marker writes and FULL-sync admission wall
+Verified promotion scrub objects/bytes/statements/wall
 ```
 
 Do not collapse these passes into one invented `bytes_scanned` number.
@@ -312,6 +386,10 @@ bounded memory; disk-backed path/hard-link scratch
 | Build | expected bounded `dist` digest and exit 0 |
 | Search | exact ordered-output digest and count |
 | Capture | honest full scan, exact root, one transaction/COMMIT |
+| Trust class | B02/B03/B06–B08 explicitly Trusted; both captures, refs/history and B14 Verified |
+| Trusted marker | every explicit Trusted open observes `trusted_history=1` before local work |
+| Promotion | all Trusted handles closed; Verified reopen owns exactly one full scrub before each capture/export boundary |
+| Scrub | fetched = authentication = role decode; marker clears durably; failure blocks authority work |
 | Unchanged files | prior FileStateRoot retained; digest pass but zero changed-file CDC bytes |
 | Hard links | unchanged surviving group retains allowed prior InodeId/topology |
 | Metadata-only | content root retained |
@@ -342,9 +420,12 @@ startup receipts:
 ```text
 forecast_complete_wall
   = 3*reset
-  + 3*(materialize + npm + normalize1 + capture1
-       + edit + build + normalize2 + 7*search + capture2
-       + reopen/root_ops + final_materialize + test + oracle + cleanup)
+  + 3*(trusted_open1 + trusted_materialize + npm + normalize1
+       + promotion_scrub1 + capture1 + trusted_open2
+       + edit + build + normalize2 + 7*search
+       + promotion_scrub2 + capture2
+       + verified_reopen/root_ops + verified_final_materialize
+       + test + oracle + cleanup)
   + artifact_write
 ```
 
@@ -398,6 +479,7 @@ target/layerfs-stage1-workspace-<timestamp>/
 ├── summary.json
 ├── summary.md
 ├── campaign-time.txt
+├── trust-handoff.json      exact Trusted opens and Verified scrub promotions
 └── stderr.txt              only when nonempty/failure
 ```
 
@@ -425,6 +507,7 @@ exact 85-row population and three complete workflows
 all command, native-tree, canonical-root and retained-history oracles exact
 offline npm inventory, build digest, search digest/count and test exit exact
 all capture/authentication/transaction equations exact
+both Trusted -> Verified close/reopen/full-scrub promotions exact
 all resource and cleanup gates pass
 roots repeat across the three cloned attempts
 complete campaign wall <=120 seconds
@@ -463,14 +546,18 @@ Python runner, npm registry mirror, watcher or mount frontend is added for
 Stage 1.2. Product-source changes require a concrete correctness defect in an
 existing public route and a separate focused proof.
 
+The Trusted read route and open-time history marker already exist at the
+admitted `dfa6020` Stage 1.1T source. Stage 1.2 implementation reuses those
+public APIs; it does not add another trust mode, cache or benchmark-only switch.
+
 ## 15. Execution stages and handoff
 
 | Stage | Work | Exit condition |
 |---|---|---|
-| W0 | Freeze this specification and exact B00–B16 population | No open workload, tool or oracle choice |
+| W0 | Freeze this specification, trust schedule and exact B00–B16 population | No open workload, trust, tool or oracle choice |
 | W1 | Implement/test deterministic project, offline packages and command oracles | Generated project and package DAG match literal model |
 | W2 | Prepare and seal the reusable <=300 MiB fixture/cache | Fresh Verified reopen and exact native oracle; preparation recorded once |
-| W3 | Implement three-workflow runner, full-scan accounting and receipts | Focused evaluator checks pass; zero network |
+| W3 | Implement three-workflow runner, full-scan accounting, two Verified promotions and receipts | Focused evaluator checks pass; zero network; failed scrub blocks capture/export |
 | W4 | One workspace fmt/check/test/clippy closure | Zero failures and warnings |
 | W5 | One release build and zero-row readiness | Exact source/executable/tool/fixture hashes; 85-row schedule; zero rows |
 | W6 | One campaign with hard <=120 s stop | Immutable PASS/REVISE/FAIL artifact |
