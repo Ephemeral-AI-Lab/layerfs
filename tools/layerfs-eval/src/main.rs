@@ -2,6 +2,7 @@ mod apple_poc;
 mod stage1;
 mod stage1_edge;
 mod stage1_fixture;
+mod stage1_materialize;
 
 fn main() {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
@@ -41,8 +42,21 @@ fn main() {
         {
             stage1_edge::run(std::path::Path::new(directory))
         }
+        [stage1, materialize, parity_row, store, source, size_mib, work, identity]
+            if stage1 == "stage1"
+                && materialize == "materialize"
+                && parity_row == "parity-row" =>
+        {
+            stage1_materialize::parity_row(
+                std::path::Path::new(store),
+                std::path::Path::new(source),
+                size_mib,
+                std::path::Path::new(work),
+                identity,
+            )
+        }
         _ => Err(
-            "usage:\n  layerfs-eval apple-poc <run-directory>\n  layerfs-eval stage1 prepare single-file\n  layerfs-eval stage1 readiness-only single-file\n  layerfs-eval stage1 run single-file <run-directory>\n  layerfs-eval stage1 prepare apple-edge\n  layerfs-eval stage1 readiness apple-edge\n  layerfs-eval stage1 run apple-edge <run-directory>"
+            "usage:\n  layerfs-eval apple-poc <run-directory>\n  layerfs-eval stage1 prepare single-file\n  layerfs-eval stage1 readiness-only single-file\n  layerfs-eval stage1 run single-file <run-directory>\n  layerfs-eval stage1 prepare apple-edge\n  layerfs-eval stage1 readiness apple-edge\n  layerfs-eval stage1 run apple-edge <run-directory>\n  layerfs-eval stage1 materialize parity-row <store> <source> <size-mib> <work-directory> <identity>"
                 .to_owned(),
         ),
     };
