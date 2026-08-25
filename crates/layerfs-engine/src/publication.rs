@@ -227,12 +227,7 @@ impl Publication<'_> {
         }
         if self.engine.mode == super::integrity::IntegrityMode::TrustedLocalDev {
             self.engine.mark_statement()?;
-            self.connection
-                .execute(
-                    "UPDATE layerfs_authority SET trusted_history = 1 WHERE authority_id = 1",
-                    [],
-                )
-                .map_err(map_sqlite_error)?;
+            super::mark_known_trusted_history(&self.connection)?;
         }
         let store_id = self.engine.store_id()?;
         self.engine.mark_statement()?;

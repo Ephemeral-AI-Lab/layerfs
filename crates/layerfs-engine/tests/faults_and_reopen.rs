@@ -9,6 +9,45 @@ use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
+fn explicit_trusted_open_marks_history_and_verified_reopen_scrubs() {
+    let path = std::env::temp_dir().join(format!(
+        "layerfs-trusted-open-marker-{}-{}.sqlite",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    drop(Engine::open_with_mode(&path, IntegrityMode::TrustedLocalDev).unwrap());
+    assert_eq!(
+        Connection::open(&path)
+            .unwrap()
+            .query_row(
+                "SELECT trusted_history FROM layerfs_authority WHERE authority_id = 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        1
+    );
+    let verified = Engine::open(&path).unwrap();
+    assert_eq!(verified.counters().unwrap().retained_union_scrubs, 1);
+    drop(verified);
+    assert_eq!(
+        Connection::open(&path)
+            .unwrap()
+            .query_row(
+                "SELECT trusted_history FROM layerfs_authority WHERE authority_id = 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        0
+    );
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
 fn trusted_ref_with_missing_inode_table_never_becomes_verified_authority() {
     let path = std::env::temp_dir().join(format!(
         "layerfs-integrity-test-{}-{}.sqlite",

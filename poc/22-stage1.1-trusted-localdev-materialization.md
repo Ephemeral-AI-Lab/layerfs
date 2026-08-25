@@ -37,6 +37,7 @@ TrustedLocalDev is selected explicitly at Store open.
 The selected mode is immutable for that Engine lifetime.
 No SQLite property, locality, ownership, environment or cache state infers trust.
 No live Engine changes from TrustedLocalDev to Verified.
+Explicit TrustedLocalDev open durably sets the existing trusted_history bit.
 New canonical objects are authenticated before write in both modes.
 Existing incumbent objects are authenticated before reuse in both modes.
 Trusted publication sets trusted_history=1 in the visibility transaction.
@@ -67,7 +68,7 @@ validation differs:
 | New object write | authenticate | authenticate |
 | Incumbent reuse | authenticate | authenticate |
 | Publication closure | full Verified root verification | marks trusted history |
-| Reopen for Verified use | ordinary clean admission or full retained-union scrub | not applicable |
+| Reopen for Verified use | full retained-union scrub after any explicit Trusted open | not applicable |
 
 The existing `ObjectRead` method names are retained because changing the Core
 trait would expand canonical authority. Their guarantee is interpreted through
@@ -102,7 +103,8 @@ No benchmark result substitutes for these tests.
 The product implementation is confined to the Engine's shared fetched-row
 read helpers. Publication, retained-union verification, compaction,
 reconciliation and object-write call sites remain on the always-authenticated
-helper.
+helper. Explicit Trusted open also durably sets the existing trusted-history
+bit so a materialize-only session cannot bypass the Verified scrub boundary.
 
 Focused closure:
 

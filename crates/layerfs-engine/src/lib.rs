@@ -576,6 +576,8 @@ impl Engine {
                     .map_err(|error| engine_step("initial verified scrub", error))?,
             )
         } else {
+            note_statement(&mut admission_statements)?;
+            mark_known_trusted_history(&connection)?;
             None
         };
         let mut counters = EngineCounters {
@@ -1497,6 +1499,16 @@ fn clear_known_trusted_history(connection: &Connection) -> EngineResult<()> {
     connection
         .execute(
             "UPDATE layerfs_authority SET trusted_history = 0 WHERE authority_id = 1",
+            [],
+        )
+        .map_err(map_sqlite_error)?;
+    Ok(())
+}
+
+fn mark_known_trusted_history(connection: &Connection) -> EngineResult<()> {
+    connection
+        .execute(
+            "UPDATE layerfs_authority SET trusted_history = 1 WHERE authority_id = 1",
             [],
         )
         .map_err(map_sqlite_error)?;
