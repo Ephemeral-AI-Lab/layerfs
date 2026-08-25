@@ -1432,12 +1432,14 @@ impl EngineDelta {
             return Err("put/created/reused row equations".to_owned());
         }
         let expected_validated = self
-            .fetched_row_authentication_passes
+            .fetched_row_role_decode_passes
             .checked_add(self.new_object_authentication_passes)
             .and_then(|value| value.checked_add(self.incumbent_authentication_passes))
             .ok_or_else(|| "objects_validated equation overflow".to_owned())?;
         if self.objects_validated != expected_validated {
-            return Err("objects_validated = fetched auth + new auth + incumbent auth".to_owned());
+            return Err(
+                "objects_validated = fetched role decode + new auth + incumbent auth".to_owned(),
+            );
         }
         if self.payload_batch_maximum > 64 {
             return Err("payload_batch_maximum <= 64".to_owned());
@@ -5506,7 +5508,7 @@ fn validate_authentication(rows: &[ParsedRow]) -> EvalResult<AuthenticationValid
         if incumbent != reused {
             result.incumbent_equation_failures += 1;
         }
-        if objects_validated != authentication + new_auth + incumbent {
+        if objects_validated != role_decode + new_auth + incumbent {
             return Err(format!(
                 "{} objects_validated authentication equation",
                 row.row_id
@@ -5898,7 +5900,7 @@ fn validate_phase_counter_rows(rows: &[ParsedRow]) -> EvalResult<()> {
                 || json_u128(phase, "put_insert_statements")? != created
                 || json_u128(phase, "objects_created")? != created
                 || json_u128(phase, "objects_reused")? != reused
-                || json_u128(phase, "objects_validated")? != authenticated + new + incumbent
+                || json_u128(phase, "objects_validated")? != decoded + new + incumbent
                 || json_u128(phase, "object_bytes_written")?
                     != json_u128(phase, "logical_object_bytes")?
                 || json_u128(phase, "range_bytes_requested")?
