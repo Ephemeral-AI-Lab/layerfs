@@ -73,9 +73,9 @@ pub(crate) fn materialize_workspace(
             live_hard_link_authority(engine, workspace, root)?;
         return Ok((counters.merge(authority_counters)?, authority, topology));
     }
-    let links = DiskTable::create_near(engine.path(), "materialize-hardlinks")?;
-    let authority = DiskTable::create_near(engine.path(), "materialize-live-hardlinks")?;
-    let topology = DiskTable::create_near(engine.path(), "materialize-topology-edges")?;
+    let links = engine.create_scratch_table("materialize-hardlinks")?;
+    let authority = engine.create_scratch_table("materialize-live-hardlinks")?;
+    let topology = engine.create_scratch_table("materialize-topology-edges")?;
     let mut target = MaterializeTarget::Native {
         workspace,
         workspace_root: root_handle.as_ref(),
@@ -109,9 +109,9 @@ pub fn materialize_authenticated_to<W: Write>(
     mut output: W,
 ) -> VfsResult<OperationCounters> {
     let mut counters = OperationCounters::default();
-    let links = DiskTable::create_near(engine.path(), "materialize-hardlinks")?;
-    let authority = DiskTable::create_near(engine.path(), "materialize-live-hardlinks")?;
-    let topology = DiskTable::create_near(engine.path(), "materialize-topology-edges")?;
+    let links = engine.create_scratch_table("materialize-hardlinks")?;
+    let authority = engine.create_scratch_table("materialize-live-hardlinks")?;
+    let topology = engine.create_scratch_table("materialize-topology-edges")?;
     let mut target = MaterializeTarget::Sink(&mut output);
     visit_materialization_source(
         engine,

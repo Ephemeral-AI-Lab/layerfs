@@ -27,6 +27,7 @@ fn attribution_arms_reuse_full_source_and_native_routes() {
     let payload = b"shared full-materializer payload";
     fs::write(source.path().join("payload.bin"), payload).unwrap();
     let root = source.capture_quiescent().unwrap();
+    let admitted_store_id_queries = opened.fs.counter_snapshot().unwrap().store_id_queries;
 
     let mut sink = Vec::new();
     let source_only = opened
@@ -45,6 +46,10 @@ fn attribution_arms_reuse_full_source_and_native_routes() {
     assert_eq!(source_only.scratch_tables, complete.scratch_tables);
     assert_eq!(source_only.scratch_statements, complete.scratch_statements);
     assert_eq!(source_only.scratch_rows, complete.scratch_rows);
+    assert_eq!(source_only.scratch_store_reopens, 0);
+    assert_eq!(source_only.scratch_store_inspection_statements, 0);
+    assert_eq!(complete.scratch_store_reopens, 0);
+    assert_eq!(complete.scratch_store_inspection_statements, 0);
     assert_eq!(source_only.native, Default::default());
     assert_eq!(source_only.operation_q_terminal_bytes, 0);
 
@@ -82,6 +87,10 @@ fn attribution_arms_reuse_full_source_and_native_routes() {
     assert_eq!(native.projection.content_write.bytes, payload.len() as u64);
     assert_eq!(native.projection.temp_create.attempts, 1);
     assert_eq!(native.projection.replace.attempts, 1);
+    assert_eq!(
+        opened.fs.counter_snapshot().unwrap().store_id_queries,
+        admitted_store_id_queries
+    );
 
     drop(source);
     drop(opened);

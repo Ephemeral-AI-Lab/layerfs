@@ -30,7 +30,7 @@ struct RefreshScratch {
 
 impl RefreshScratch {
     fn create(engine: &Engine) -> VfsResult<Self> {
-        let table = DiskTable::create_near(engine.path(), "refresh")?;
+        let table = engine.create_scratch_table("refresh")?;
         Ok(Self {
             table,
             serial: Cell::new(0),

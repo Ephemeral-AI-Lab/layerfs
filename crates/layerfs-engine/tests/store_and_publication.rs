@@ -190,7 +190,7 @@ fn publication_is_one_guarded_commit_and_fork_rollback_copy_no_objects() {
     assert_eq!(committed.publication_transactions_started, 1);
     assert_eq!(committed.publication_transactions_rolled_back, 0);
     assert_eq!(committed.publication_commits, 1);
-    assert_eq!(committed.statements, 9);
+    assert_eq!(committed.statements, 8);
     let stale = a.clone();
     let b = engine
         .begin_publication(Some(&a), "main")
@@ -467,7 +467,8 @@ fn verified_open_accounts_schema_profile_authority_and_admission_transaction() {
     assert_eq!(counters.admission_transactions_started, 1);
     assert_eq!(counters.admission_transactions_committed, 1);
     assert_eq!(counters.admission_transactions_rolled_back, 0);
-    assert_eq!(counters.admission_statements, 28);
+    assert_eq!(counters.admission_statements, 29);
+    assert_eq!(counters.store_id_queries, 1);
     assert_eq!(counters.transactions_started, 0);
     assert_eq!(counters.publication_transactions_started, 0);
     assert_eq!(counters.publication_commits, 0);
@@ -478,7 +479,8 @@ fn verified_open_accounts_schema_profile_authority_and_admission_transaction() {
     assert_eq!(counters.admission_transactions_started, 1);
     assert_eq!(counters.admission_transactions_committed, 1);
     assert_eq!(counters.admission_transactions_rolled_back, 0);
-    assert_eq!(counters.admission_statements, 34);
+    assert_eq!(counters.admission_statements, 35);
+    assert_eq!(counters.store_id_queries, 1);
     assert_eq!(counters.transactions_started, 0);
     assert_eq!(counters.publication_transactions_started, 0);
     assert_eq!(counters.publication_commits, 0);

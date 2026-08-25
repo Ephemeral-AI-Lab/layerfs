@@ -336,6 +336,7 @@ pub type EngineResult<T> = Result<T, EngineError>;
 
 pub struct Engine {
     path: PathBuf,
+    store_id: [u8; 32],
     connection: Mutex<Option<Connection>>,
     counters: Mutex<EngineCounters>,
     rollback_journal_sample: Mutex<Option<u64>>,
@@ -563,13 +564,15 @@ impl Engine {
             .map_err(|error| engine_step("profile", error))?;
         initialize_schema_counted(&connection, &profile, &mut admission_statements)
             .map_err(|error| engine_step("schema initialization", error))?;
+        let store_id = admitted_store_id_counted(&connection, &mut admission_statements)
+            .map_err(|error| engine_step("StoreId admission", error))?;
         let scrub = if mode == integrity::IntegrityMode::Verified {
             let _admission = VERIFIED_OPEN_LOCK.lock().map_err(|_| EngineError::Sqlite {
                 kind: SqliteErrorKind::Other,
                 message: "Verified admission mutex poisoned".to_owned(),
             })?;
             Some(
-                initial_verified_scrub(&connection, &path)
+                initial_verified_scrub(&connection, &path, store_id)
                     .map_err(|error| engine_step("initial verified scrub", error))?,
             )
         } else {
@@ -577,6 +580,7 @@ impl Engine {
         };
         let mut counters = EngineCounters {
             admission_statements,
+            store_id_queries: 1,
             ..EngineCounters::default()
         };
         if let Some(scrub) = scrub {
@@ -599,6 +603,7 @@ impl Engine {
         }
         Ok(Self {
             path,
+            store_id,
             connection: Mutex::new(Some(connection)),
             counters: Mutex::new(counters),
             rollback_journal_sample: Mutex::new(None),
@@ -626,21 +631,11 @@ impl Engine {
     }
 
     pub fn store_id(&self) -> EngineResult<[u8; 32]> {
-        let connection = self.lock_connection()?;
-        let query_started = Instant::now();
-        self.mark_statement()?;
-        let bytes = connection
-            .query_row(
-                "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
-                [],
-                |row| row.get::<_, Vec<u8>>(0),
-            )
-            .map_err(map_sqlite_error)?;
-        observe_time(&self.timings.nonpayload_query_ns, query_started);
-        self.bump(|counters| checked_add(&mut counters.store_id_queries, 1))?;
-        bytes
-            .try_into()
-            .map_err(|_| EngineError::InvalidRecord("StoreId"))
+        Ok(self.store_id)
+    }
+
+    pub fn create_scratch_table(&self, label: &str) -> EngineResult<scratch::DiskTable> {
+        scratch::DiskTable::create_near_with_store_id(&self.path, label, self.store_id)
     }
 
     pub fn active_connection_count(&self) -> EngineResult<u64> {
@@ -680,7 +675,7 @@ impl Engine {
         let source = self.lock_connection()?;
         reject_legacy_compaction_state(&source)?;
         authenticate_complete_object_index(&source)?;
-        let retained = integrity::retained_union(&source, &self.path)?;
+        let retained = integrity::retained_union(&source, &self.path, self.store_id)?;
         let mark_database_bytes = retained.work.storage_bytes()?;
         let candidate = Connection::open(destination).map_err(map_sqlite_error)?;
         candidate
@@ -747,7 +742,8 @@ impl Engine {
             .execute_batch("COMMIT")
             .map_err(map_sqlite_error)?;
         let verification_scratch_peak_bytes =
-            integrity::verify_retained_union_observed(&candidate, destination)?.peak_bytes;
+            integrity::verify_retained_union_observed(&candidate, destination, self.store_id)?
+                .peak_bytes;
         candidate
             .execute_batch("DETACH DATABASE source")
             .map_err(map_sqlite_error)?;
@@ -1226,29 +1222,33 @@ impl Engine {
                     self.sql_family_scope
                         .store(SQL_FAMILY_LIVE_INTEGRITY, Ordering::Release);
                 }
-                let scrubbed = integrity::verify_retained_union_observed(&connection, &self.path)
-                    .and_then(|observation| {
-                        clear_known_trusted_history(&connection)?;
-                        self.bump(|counters| {
-                            checked_add(
-                                &mut counters.integrity_statements,
-                                observation.verification.statements,
-                            )?;
-                            checked_add(
-                                &mut counters.statements,
-                                observation.verification.statements,
-                            )?;
-                            mark_sql_family(
-                                counters,
-                                SQL_FAMILY_LIVE_INTEGRITY,
-                                observation.verification.statements,
-                            )?;
-                            checked_add(&mut counters.statements, 1)?;
-                            mark_sql_family(counters, SQL_FAMILY_LIVE_INTEGRITY, 1)?;
-                            checked_add(&mut counters.integrity_statements, 1)?;
-                            add_retained_scrub_counters(counters, observation.verification)
-                        })
-                    });
+                let scrubbed = integrity::verify_retained_union_observed(
+                    &connection,
+                    &self.path,
+                    self.store_id,
+                )
+                .and_then(|observation| {
+                    clear_known_trusted_history(&connection)?;
+                    self.bump(|counters| {
+                        checked_add(
+                            &mut counters.integrity_statements,
+                            observation.verification.statements,
+                        )?;
+                        checked_add(
+                            &mut counters.statements,
+                            observation.verification.statements,
+                        )?;
+                        mark_sql_family(
+                            counters,
+                            SQL_FAMILY_LIVE_INTEGRITY,
+                            observation.verification.statements,
+                        )?;
+                        checked_add(&mut counters.statements, 1)?;
+                        mark_sql_family(counters, SQL_FAMILY_LIVE_INTEGRITY, 1)?;
+                        checked_add(&mut counters.integrity_statements, 1)?;
+                        add_retained_scrub_counters(counters, observation.verification)
+                    })
+                });
                 if let Err(error) = scrubbed {
                     if connection.integrity_transaction {
                         self.bump_best_effort(|counters| {
@@ -1531,6 +1531,7 @@ struct InitialScrubObservation {
 fn initial_verified_scrub(
     connection: &Connection,
     path: &Path,
+    store_id: [u8; 32],
 ) -> EngineResult<InitialScrubObservation> {
     connection
         .execute_batch("BEGIN IMMEDIATE")
@@ -1541,7 +1542,8 @@ fn initial_verified_scrub(
             .checked_add(1)
             .ok_or(EngineError::CounterOverflow)?;
         if dirty {
-            let observation = integrity::verify_retained_union_observed(connection, path)?;
+            let observation =
+                integrity::verify_retained_union_observed(connection, path, store_id)?;
             statements = statements
                 .checked_add(observation.verification.statements)
                 .and_then(|value| value.checked_add(1))
@@ -2123,6 +2125,22 @@ fn initialize_schema_counted(
         connection.execute("INSERT INTO layerfs_authority (authority_id, store_id, next_inode_serial, trusted_history) VALUES (1, ?1, 0, 0)", params![store_id.as_slice()]).map_err(map_sqlite_error)?;
     }
     Ok(())
+}
+
+fn admitted_store_id_counted(
+    connection: &Connection,
+    statements: &mut u64,
+) -> EngineResult<[u8; 32]> {
+    note_statement(statements)?;
+    connection
+        .query_row(
+            "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
+            [],
+            |row| row.get::<_, Vec<u8>>(0),
+        )
+        .map_err(map_sqlite_error)?
+        .try_into()
+        .map_err(|_| EngineError::InvalidRecord("StoreId"))
 }
 
 fn note_statement(statements: &mut u64) -> EngineResult<()> {
@@ -2720,6 +2738,32 @@ mod tests {
     }
 
     #[test]
+    fn admitted_store_id_is_cached_and_scratch_reuses_it_without_store_sql() {
+        let path = test_path();
+        let engine = Engine::open(&path).unwrap();
+        assert_eq!(engine.counters().unwrap().store_id_queries, 1);
+        let expected = engine.store_id().unwrap();
+        engine.reset_counters().unwrap();
+
+        for _ in 0..4 {
+            assert_eq!(engine.store_id().unwrap(), expected);
+        }
+        let scratch = engine.create_scratch_table("cached-store-id").unwrap();
+        let observation = scratch.observation().unwrap();
+        assert_eq!(observation.store_reopens, 0);
+        assert_eq!(observation.store_inspection_statements, 0);
+        assert_eq!(observation.store_inspection_wall_ns, 0);
+        let counters = engine.counters().unwrap();
+        assert_eq!(counters.statements, 0);
+        assert_eq!(counters.store_id_queries, 0);
+        assert_eq!(counters.connection_mutex_wait_ns, 0);
+
+        drop(scratch);
+        drop(engine);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn verified_read_attribution_closes_sql_and_timer_facts() {
         let path = test_path();
         let (id, canonical) = bytes_object(b"attributed payload");
@@ -3092,7 +3136,6 @@ mod tests {
         let path = test_path();
         let original = Engine::open(&path).unwrap();
         let store_id = original.store_id().unwrap();
-        drop(original);
         let saved = path.with_extension("saved");
         fs::rename(&path, &saved).unwrap();
         assert!(read_ref_reconcile_readonly(&path, "main", store_id).is_err());
@@ -3103,6 +3146,8 @@ mod tests {
 
         let replacement = Engine::open(&path).unwrap();
         assert_ne!(replacement.store_id().unwrap(), store_id);
+        assert_eq!(original.store_id().unwrap(), store_id);
+        drop(original);
         drop(replacement);
         assert!(matches!(
             read_ref_reconcile_readonly(&path, "main", store_id),

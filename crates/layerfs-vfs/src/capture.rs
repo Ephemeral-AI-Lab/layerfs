@@ -107,11 +107,11 @@ pub(crate) fn capture_workspace(
     workspace.revalidate_root_binding()?;
     let root_handle = workspace.root_directory()?;
     let root_token = workspace.directory_token(root_handle.as_ref())?;
-    let existing = DiskTable::create_near(engine.path(), "existing-paths")?;
+    let existing = engine.create_scratch_table("existing-paths")?;
     let prior_table = expected
         .map(|expected| seed_existing_paths(engine, expected.root, &existing, None, &mut counters))
         .transpose()?;
-    let seeded_links = DiskTable::create_near(engine.path(), "existing-hardlinks")?;
+    let seeded_links = engine.create_scratch_table("existing-hardlinks")?;
     if seed_live_hard_links || (prior_table.is_some() && live_hard_links.is_none()) {
         seed_existing_hard_links(
             workspace,
@@ -130,8 +130,8 @@ pub(crate) fn capture_workspace(
         None => publication.allocate_inode_id()?,
     };
     let mut table = None;
-    let hard_links = DiskTable::create_near(engine.path(), "hardlinks")?;
-    let entries = DiskTable::create_near(engine.path(), "enumeration")?;
+    let hard_links = engine.create_scratch_table("hardlinks")?;
+    let entries = engine.create_scratch_table("enumeration")?;
     let mut next_directory = 0_u64;
     let root_metadata = workspace.read_root_metadata()?;
     capture_directory(
@@ -669,10 +669,10 @@ pub(crate) fn live_hard_link_authority(
     root: layerfs_core::ObjectId,
 ) -> VfsResult<(DiskTable, DiskTable, OperationCounters)> {
     let mut counters = OperationCounters::default();
-    let paths = DiskTable::create_near(engine.path(), "live-hardlink-paths")?;
-    let topology = DiskTable::create_near(engine.path(), "live-topology-edges")?;
+    let paths = engine.create_scratch_table("live-hardlink-paths")?;
+    let topology = engine.create_scratch_table("live-topology-edges")?;
     seed_existing_paths(engine, root, &paths, Some(&topology), &mut counters)?;
-    let links = DiskTable::create_near(engine.path(), "live-hardlink-authority")?;
+    let links = engine.create_scratch_table("live-hardlink-authority")?;
     let directory = workspace.root_directory()?;
     seed_existing_hard_links(workspace, directory.as_ref(), &paths, &links, &[], false)?;
     counters.add_scratch(paths.observation()?)?;

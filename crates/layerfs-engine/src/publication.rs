@@ -38,7 +38,7 @@ impl Engine {
         self.mark_statement()?;
         let actual = read_ref_on_connection(&connection, name)?;
         if actual.as_ref() != expected {
-            let store_id = store_id(self, &connection)?;
+            let store_id = self.store_id()?;
             let discarded = finalize_rollback(self, &mut connection);
             if discarded {
                 let observed = super::read_ref_reconcile_readonly(&self.path, name, store_id);
@@ -64,12 +64,12 @@ impl Publication<'_> {
     pub fn allocate_inode_id(&mut self) -> EngineResult<InodeId> {
         self.ensure_active()?;
         self.engine.mark_statement()?;
-        let (store_id, serial) = self
+        let serial = self
             .connection
             .query_row(
-                "SELECT store_id, next_inode_serial FROM layerfs_authority WHERE authority_id = 1",
+                "SELECT next_inode_serial FROM layerfs_authority WHERE authority_id = 1",
                 [],
-                |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, i64>(1)?)),
+                |row| row.get::<_, i64>(0),
             )
             .map_err(map_sqlite_error)?;
         let serial =
@@ -82,10 +82,7 @@ impl Publication<'_> {
                 params![i64::try_from(next).map_err(|_| EngineError::CounterOverflow)?],
             )
             .map_err(map_sqlite_error)?;
-        Ok(InodeId::allocate(
-            ObjectId::from_bytes(&store_id)?.to_bytes(),
-            serial,
-        ))
+        Ok(InodeId::allocate(self.engine.store_id()?, serial))
     }
 
     pub fn put_object(&mut self, canonical: &[u8]) -> EngineResult<ObjectId> {
@@ -136,7 +133,7 @@ impl Publication<'_> {
         if let Some(expected) = &self.expected {
             if expected.root == root {
                 let expected = expected.clone();
-                let store_id = store_id(self.engine, &self.connection)?;
+                let store_id = self.engine.store_id()?;
                 let discarded = finalize_rollback(self.engine, &mut self.connection);
                 self.active = false;
                 if discarded {
@@ -159,8 +156,12 @@ impl Publication<'_> {
         if self.engine.mode == super::integrity::IntegrityMode::Verified
             && self.verified_retained_root != Some(root)
         {
-            let observation =
-                super::integrity::verify_root(&self.connection, &self.engine.path, root)?;
+            let observation = super::integrity::verify_root(
+                &self.connection,
+                &self.engine.path,
+                self.engine.store_id()?,
+                root,
+            )?;
             self.engine.bump(|counters| {
                 checked_add(&mut counters.root_verifications, 1)?;
                 checked_add(&mut counters.root_verification_objects, observation.objects)?;
@@ -231,7 +232,7 @@ impl Publication<'_> {
                 )
                 .map_err(map_sqlite_error)?;
         }
-        let store_id = store_id(self.engine, &self.connection)?;
+        let store_id = self.engine.store_id()?;
         self.engine.mark_statement()?;
         match self.engine.commit_dispatch.commit(&self.connection) {
             Ok(()) => {
@@ -330,7 +331,7 @@ impl ObjectStore for Publication<'_> {
 impl Drop for Publication<'_> {
     fn drop(&mut self) {
         if self.active {
-            let store_id = store_id(self.engine, &self.connection).ok();
+            let store_id = self.engine.store_id().ok();
             let discarded = finalize_rollback(self.engine, &mut self.connection);
             if discarded {
                 if let Some(store_id) = store_id {
@@ -352,19 +353,6 @@ impl Drop for Publication<'_> {
             self.active = false;
         }
     }
-}
-
-fn store_id(engine: &Engine, connection: &Connection) -> EngineResult<[u8; 32]> {
-    engine.mark_statement()?;
-    connection
-        .query_row(
-            "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
-            [],
-            |row| row.get::<_, Vec<u8>>(0),
-        )
-        .map_err(map_sqlite_error)?
-        .try_into()
-        .map_err(|_| EngineError::InvalidRecord("StoreId"))
 }
 
 fn finalize_rollback(engine: &Engine, connection: &mut ConnectionGuard<'_>) -> bool {

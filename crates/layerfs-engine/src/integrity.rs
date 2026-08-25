@@ -53,8 +53,9 @@ pub(crate) struct RetainedUnionObservation {
 pub(crate) fn verify_retained_union_observed(
     connection: &Connection,
     store: &Path,
+    store_id: [u8; 32],
 ) -> EngineResult<RetainedUnionObservation> {
-    let retained = retained_union(connection, store)?;
+    let retained = retained_union(connection, store, store_id)?;
     Ok(RetainedUnionObservation {
         verification: retained.observation,
         peak_bytes: retained.peak_bytes,
@@ -80,9 +81,9 @@ pub(crate) struct VerificationObservation {
 pub(crate) fn verify_root(
     connection: &Connection,
     store: &Path,
+    store_id: [u8; 32],
     root: ObjectId,
 ) -> EngineResult<VerificationObservation> {
-    let store_id = store_id(connection)?;
     let work = DiskTable::create_near_with_store_id(store, "publication-closure", store_id)?;
     let graph = DiskTable::create_near_with_store_id(store, "publication-graph", store_id)?;
     let records = graph.namespace(b"records")?;
@@ -178,35 +179,26 @@ impl VerificationObservation {
     }
 }
 
-fn store_id(connection: &Connection) -> EngineResult<[u8; 32]> {
-    connection
-        .query_row(
-            "SELECT store_id FROM layerfs_authority WHERE authority_id = 1",
-            [],
-            |row| row.get::<_, Vec<u8>>(0),
-        )
-        .map_err(super::map_sqlite_error)?
-        .try_into()
-        .map_err(|_| EngineError::InvalidRecord("StoreId"))
-}
-
 pub(crate) struct RetainedUnion {
     pub(crate) work: DiskTable,
     pub(crate) peak_bytes: u64,
     pub(crate) observation: VerificationObservation,
 }
 
-pub(crate) fn retained_union(connection: &Connection, store: &Path) -> EngineResult<RetainedUnion> {
-    let store_id = store_id(connection)?;
+pub(crate) fn retained_union(
+    connection: &Connection,
+    store: &Path,
+    store_id: [u8; 32],
+) -> EngineResult<RetainedUnion> {
     let work = DiskTable::create_near_with_store_id(store, "closure", store_id)?;
     let graph = DiskTable::create_near_with_store_id(store, "namespace-graph", store_id)?;
     let records = graph.namespace(b"records")?;
     let state = graph.namespace(b"state")?;
     let payload_lengths = graph.namespace(b"payload-lengths")?;
     let validated_roots = graph.namespace(b"validated-roots")?;
-    // StoreId admission plus the ordered ref scan below are real Store SQL.
+    // The ordered ref scan below is real Store SQL; StoreId was admitted once.
     let mut observation = VerificationObservation {
-        statements: 2,
+        statements: 1,
         ..VerificationObservation::default()
     };
     let mut peak_bytes = work.storage_bytes()?.saturating_add(graph.storage_bytes()?);

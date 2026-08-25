@@ -199,13 +199,13 @@ fn successful_live_scrub_clears_history_once_durably() {
         )
         .unwrap();
 
-    verified.store_id().unwrap();
+    assert_eq!(verified.read_ref("main").unwrap(), None);
     let first = verified.counters().unwrap();
     assert_eq!(first.retained_union_scrubs, 1);
     assert_eq!(first.integrity_transactions_started, 2);
     assert_eq!(first.integrity_transactions_committed, 1);
     assert_eq!(first.integrity_transactions_rolled_back, 1);
-    assert_eq!(first.integrity_statements, 10);
+    assert_eq!(first.integrity_statements, 9);
     assert_eq!(
         Connection::open(&path)
             .unwrap()
@@ -217,7 +217,7 @@ fn successful_live_scrub_clears_history_once_durably() {
             .unwrap(),
         0
     );
-    verified.store_id().unwrap();
+    assert_eq!(verified.read_ref("main").unwrap(), None);
     let second = verified.counters().unwrap();
     assert_eq!(second.retained_union_scrubs, 1);
     assert_eq!(second.integrity_transactions_started, 3);
