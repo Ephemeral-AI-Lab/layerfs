@@ -1275,33 +1275,70 @@ pub fn attribution_run(control: &Path, fixture: &Path, run: &Path) -> EvalResult
         let source = size.join("source-native").join(FILE_PATH);
         let identity = format!("b{:02}-{}-{}", block_index + 1, arm.name(), size_mib);
         let work = run.join(format!(".block-{identity}"));
+        let size_mib_arg = size_mib.to_string();
+        let argv = [
+            control.display().to_string(),
+            "stage1".to_owned(),
+            "materialize".to_owned(),
+            "attribution-block".to_owned(),
+            store.display().to_string(),
+            source.display().to_string(),
+            size_mib_arg.clone(),
+            arm.name().to_owned(),
+            work.display().to_string(),
+            identity.clone(),
+        ];
+        let argv_json = argv
+            .iter()
+            .map(|argument| format!("\"{}\"", json_escape(argument)))
+            .collect::<Vec<_>>()
+            .join(",");
+        let command_start_unix_ns = unix_ns()?;
         let started = Instant::now();
         let output = Command::new(&control)
             .args(["stage1", "materialize", "attribution-block"])
             .arg(&store)
             .arg(&source)
-            .arg(size_mib.to_string())
+            .arg(&size_mib_arg)
             .arg(arm.name())
             .arg(&work)
             .arg(&identity)
             .output()
             .map_err(io_error)?;
         let command_wall_ns = started.elapsed().as_nanos();
+        let command_end_unix_ns = unix_ns()?;
         append_sync(
             &run.join("commands.json"),
             &format!(
                 concat!(
                     "{{\"sequence\":{},\"block\":{},\"arm\":\"{}\",",
                     "\"size_mib\":{},\"identity\":\"{}\",",
-                    "\"executable_sha256\":\"{}\",\"wall_ns\":{},",
-                    "\"status\":{},\"stderr\":\"{}\"}}"
+                    "\"executable\":\"{}\",\"executable_sha256\":\"{}\",",
+                    "\"fixture_root\":\"{}\",\"store\":\"{}\",\"source\":\"{}\",",
+                    "\"work\":\"{}\",\"cwd\":\"{}\",\"argv\":[{}],",
+                    "\"start_unix_ns\":{},\"end_unix_ns\":{},\"wall_ns\":{},",
+                    "\"exit_code\":{},\"stderr\":\"{}\"}}"
                 ),
                 block_index + 1,
                 block_index + 1,
                 arm.name(),
                 size_mib,
                 identity,
+                json_escape(&control.display().to_string()),
                 control_sha256,
+                json_escape(&fixture.display().to_string()),
+                json_escape(&store.display().to_string()),
+                json_escape(&source.display().to_string()),
+                json_escape(&work.display().to_string()),
+                json_escape(
+                    &std::env::current_dir()
+                        .map_err(io_error)?
+                        .display()
+                        .to_string()
+                ),
+                argv_json,
+                command_start_unix_ns,
+                command_end_unix_ns,
                 command_wall_ns,
                 output.status.code().unwrap_or(-1),
                 json_escape(&String::from_utf8_lossy(&output.stderr)),
@@ -1955,6 +1992,23 @@ fn attribution_row_json(
     } else {
         "NotApplicable"
     };
+    let projection_through_row =
+        if matches!(observed_arm, AttributionArm::Null | AttributionArm::Digest) {
+            "{\"applicability\":\"NotApplicable\"}".to_owned()
+        } else {
+            format!(
+                "{{\"applicability\":\"Applicable\",\"facts\":{}}}",
+                projection_json(row.projection_total)
+            )
+        };
+    let materialize_inclusive = if observed_arm == AttributionArm::Complete {
+        format!(
+            "{{\"applicability\":\"Applicable\",\"nanoseconds\":{}}}",
+            operation.materialize_inclusive_ns
+        )
+    } else {
+        "{\"applicability\":\"NotApplicable\"}".to_owned()
+    };
     let operation_label = if row_kind == "warmup" {
         "first_open_fresh_destination"
     } else {
@@ -1988,14 +2042,16 @@ fn attribution_row_json(
             "\"rss_peak_bytes\":{},\"rss_current_bytes\":{},",
             "\"process_fd_baseline\":{},\"fd_before\":{},\"fd_after\":{},",
             "\"active_connections\":{},\"fd_terminal\":{},",
-            "\"connections_terminal\":{}}},",
+            "\"connections_terminal\":{},\"operation_q_high_water_bytes\":{},",
+            "\"operation_q_terminal_bytes\":{}}},",
             "\"equations\":{{\"engine_sql_sum\":{},\"engine_sql_exact\":{},",
             "\"scratch_sql_sum\":{},\"scratch_sql_exact\":{},",
             "\"fetched_auth_decode_exact\":{},\"trust_work_exact\":{},",
             "\"byte_equations_pass\":{},\"resource_gates_pass\":{},",
             "\"canonical_store_writer_transactions\":0,\"publication_commits\":{},",
             "\"canonical_cdc_bytes\":{},\"store_id_queries\":{},",
-            "\"payload_batch_maximum\":{},\"exclusive_leaf_ns\":{},",
+            "\"payload_batch_maximum\":{},\"materialize_inclusive\":{},",
+            "\"exclusive_leaf_ns\":{},",
             "\"vfs_dispatch_ns\":{},\"operation_residual_ns\":{}}},",
             "\"operation_q_terminal_bytes\":{},\"residue\":0}}"
         ),
@@ -2031,7 +2087,7 @@ fn attribution_row_json(
         engine_delta_json(&row.engine),
         scratch_observation_json(operation),
         projection_json(operation.projection),
-        projection_json(row.projection_total),
+        projection_through_row,
         operation.native.bytes_written,
         operation.native.temp_calls,
         operation.native.sync_calls,
@@ -2047,6 +2103,8 @@ fn attribution_row_json(
         row.active_connections,
         json_optional_u64(row.fd_terminal),
         json_optional_u64(row.connections_terminal),
+        operation.operation_q_high_water_bytes,
+        operation.operation_q_terminal_bytes,
         engine_sql,
         engine_sql == row.engine.statements,
         scratch_sql,
@@ -2059,6 +2117,7 @@ fn attribution_row_json(
         operation.rope.cdc_bytes_scanned,
         row.engine.store_id_queries,
         row.engine.payload_batch_maximum,
+        materialize_inclusive,
         leaf_ns,
         vfs_dispatch_ns,
         operation_residual_ns,
