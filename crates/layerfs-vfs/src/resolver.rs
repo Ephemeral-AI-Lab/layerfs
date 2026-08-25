@@ -18,6 +18,7 @@ use layerfs_core::namespace_codec::{
 use layerfs_core::{CanonicalName, CanonicalPath, ObjectId};
 use layerfs_engine::publication::Publication;
 use layerfs_engine::refs::RefState;
+use layerfs_engine::Engine;
 use std::io::{Read, Write};
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
@@ -201,17 +202,18 @@ impl LayerVfs {
         delete_len: u64,
         input: R,
     ) -> VfsResult<(RefState, OperationCounters)> {
-        self.replace_existing(expected, path, |publication, record, counters| {
-            let (content, rope) = replace(
-                publication,
-                FileStateRoot(record.content_root),
-                start,
-                delete_len,
-                input,
-            )?;
-            counters.add_rope(rope)?;
-            Ok(content)
-        })
+        let reservation = self.operation_q.reserve();
+        require_main(expected)?;
+        let (state, mut counters) = replace_range_at_ref(
+            self.engine.as_ref(),
+            expected,
+            path,
+            start,
+            delete_len,
+            input,
+        )?;
+        reservation.finish(&mut counters);
+        Ok((state, counters))
     }
 
     pub fn replace_range_for_refresh<R: Read>(
@@ -312,41 +314,43 @@ impl LayerVfs {
         reservation.finish(&mut counters);
         Ok((state, counters))
     }
+}
 
-    fn replace_existing(
-        &self,
-        expected: &RefState,
-        path: &CanonicalPath,
-        replace_content: impl FnOnce(
-            &mut Publication<'_>,
-            InodeRecordV1,
-            &mut OperationCounters,
-        ) -> VfsResult<FileStateRoot>,
-    ) -> VfsResult<(RefState, OperationCounters)> {
-        let reservation = self.operation_q.reserve();
-        require_main(expected)?;
-        let mut counters = OperationCounters::default();
-        let mut publication = self.engine.begin_publication(Some(expected), "main")?;
-        let namespace = namespace(&publication, expected.root)?;
-        let (inode, record) = resolve(&publication, namespace, path, &mut counters)?;
-        if record.kind != InodeKind::RegularFile {
-            return Err(VfsError::InvalidState);
-        }
-        let content = replace_content(&mut publication, record, &mut counters)?;
-        let namespace = update_record(
-            &mut publication,
-            namespace,
-            inode,
-            InodeRecordV1 {
-                content_root: content.0,
-                ..record
-            },
-            &mut counters,
-        )?;
-        let state = publication.publish_namespace(&encode_namespace_root(namespace)?)?;
-        reservation.finish(&mut counters);
-        Ok((state, counters))
+pub(crate) fn replace_range_at_ref<R: Read>(
+    engine: &Engine,
+    expected: &RefState,
+    path: &CanonicalPath,
+    start: u64,
+    delete_len: u64,
+    input: R,
+) -> VfsResult<(RefState, OperationCounters)> {
+    let mut counters = OperationCounters::default();
+    let mut publication = engine.begin_publication(Some(expected), &expected.name)?;
+    let namespace = namespace(&publication, expected.root)?;
+    let (inode, record) = resolve(&publication, namespace, path, &mut counters)?;
+    if record.kind != InodeKind::RegularFile {
+        return Err(VfsError::InvalidState);
     }
+    let (content, rope) = replace(
+        &mut publication,
+        FileStateRoot(record.content_root),
+        start,
+        delete_len,
+        input,
+    )?;
+    counters.add_rope(rope)?;
+    let namespace = update_record(
+        &mut publication,
+        namespace,
+        inode,
+        InodeRecordV1 {
+            content_root: content.0,
+            ..record
+        },
+        &mut counters,
+    )?;
+    let state = publication.publish_namespace(&encode_namespace_root(namespace)?)?;
+    Ok((state, counters))
 }
 
 fn require_main(expected: &RefState) -> VfsResult<()> {

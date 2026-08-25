@@ -131,6 +131,7 @@ mod linux {
         let executable_hash = hash_file(&executable)?;
         let workspace =
             MountedWorkspace::open(&store, ref_name, integrity, spool, executable_hash)?;
+        let mut connections_high_water = workspace.active_store_connections()?;
         let fuse = LayerFuse::new(workspace, uid, gid);
         let shared_workspace = fuse.shared_workspace();
         let shared_fuse_counters = fuse.shared_counters();
@@ -207,6 +208,7 @@ mod linux {
         let engine = workspace.engine_counters()?;
         let accepted = workspace.accepted().clone();
         let connections_before_drop = workspace.active_store_connections()?;
+        connections_high_water = connections_high_water.max(connections_before_drop);
         workspace.close_store_connection()?;
         let connections_terminal = workspace.active_store_connections()?;
         drop(workspace);
@@ -225,8 +227,8 @@ mod linux {
             "  \"executable_blake3\": \"{}\",\n",
             "  \"fs_bench_sha256\": \"{}\",\n",
             "  \"callbacks\": {{\"lookup\":{},\"getattr\":{},\"create\":{},\"read\":{},\"write\":{},\"flush\":{},\"release\":{},\"fsync\":{},\"fsyncdir\":{},\"readdir\":{},\"mount_lock_wait_ns\":{},\"invalidations_requested\":{},\"invalidations_succeeded\":{},\"invalidations_failed\":{},\"invalidations_unsupported\":{}}},\n",
-            "  \"mounted\": {{\"live_nodes\":{},\"live_nodes_high_water\":{},\"open_handles\":{},\"open_handles_high_water\":{},\"pending_nodes\":{},\"pending_nodes_high_water\":{},\"dirty_nodes\":{},\"dirty_nodes_high_water\":{},\"dirty_ranges\":{},\"dirty_ranges_high_water\":{},\"directory_cursors\":{},\"logical_workspace_bytes\":{},\"logical_workspace_high_water_bytes\":{},\"spool_appended_bytes\":{},\"spool_live_bytes\":{},\"spool_live_high_water_bytes\":{},\"spool_dead_bytes\":{},\"spool_physical_bytes\":{},\"spool_physical_high_water_bytes\":{},\"spool_resets\":{},\"largest_request_bytes\":{},\"operation_q_terminal_bytes\":{},\"operation_q_high_water_bytes\":{},\"materializations\":{},\"capture_scans\":{}}},\n",
-            "  \"engine\": {{\"transactions_started\":{},\"transactions_committed\":{},\"transactions_rolled_back\":{},\"publication_commits\":{},\"objects_created\":{},\"objects_reused\":{},\"object_bytes_read\":{},\"object_bytes_written\":{},\"statements\":{},\"fetched_rows\":{},\"busy_events\":{},\"locked_events\":{},\"connection_mutex_wait_ns\":{},\"connections_before_drop\":{},\"connections_terminal\":{}}}\n",
+            "  \"mounted\": {{\"checkpoints\":{},\"no_op_checkpoints\":{},\"created_then_deleted\":{},\"splices\":{},\"lookup_refs\":{},\"lookup_refs_high_water\":{},\"live_nodes\":{},\"live_nodes_high_water\":{},\"open_handles\":{},\"open_handles_high_water\":{},\"pending_nodes\":{},\"pending_nodes_high_water\":{},\"dirty_nodes\":{},\"dirty_nodes_high_water\":{},\"dirty_ranges\":{},\"dirty_ranges_high_water\":{},\"directory_cursors\":{},\"directory_changes\":{},\"directory_changes_high_water\":{},\"inode_mappings\":{},\"inode_mappings_high_water\":{},\"logical_workspace_bytes\":{},\"logical_workspace_high_water_bytes\":{},\"spool_appended_bytes\":{},\"spool_live_bytes\":{},\"spool_live_high_water_bytes\":{},\"spool_dead_bytes\":{},\"spool_physical_bytes\":{},\"spool_physical_high_water_bytes\":{},\"spool_resets\":{},\"spool_compactions\":{},\"largest_request_bytes\":{},\"operation_q_terminal_bytes\":{},\"operation_q_high_water_bytes\":{},\"materializations\":{},\"capture_scans\":{}}},\n",
+            "  \"engine\": {{\"transactions_started\":{},\"transactions_committed\":{},\"transactions_rolled_back\":{},\"publication_commits\":{},\"objects_created\":{},\"objects_reused\":{},\"object_bytes_read\":{},\"object_bytes_written\":{},\"statements\":{},\"fetched_rows\":{},\"busy_events\":{},\"locked_events\":{},\"connection_mutex_wait_ns\":{},\"connections_high_water\":{},\"connections_before_drop\":{},\"connections_terminal\":{}}}\n",
             "}}\n"
         ),
         status,
@@ -255,6 +257,12 @@ mod linux {
         fuse.invalidations_succeeded,
         fuse.invalidations_failed,
         fuse.invalidations_unsupported,
+        mounted.checkpoints,
+        mounted.no_op_checkpoints,
+        mounted.created_then_deleted,
+        mounted.splices,
+        mounted.lookup_refs,
+        mounted.lookup_refs_high_water,
         mounted.live_nodes,
         mounted.live_nodes_high_water,
         mounted.open_handles,
@@ -266,6 +274,10 @@ mod linux {
         mounted.dirty_ranges,
         mounted.dirty_ranges_high_water,
         mounted.directory_cursors,
+        mounted.directory_changes,
+        mounted.directory_changes_high_water,
+        mounted.inode_mappings,
+        mounted.inode_mappings_high_water,
         mounted.logical_workspace_bytes,
         mounted.logical_workspace_high_water_bytes,
         mounted.spool_appended_bytes,
@@ -275,6 +287,7 @@ mod linux {
         mounted.spool_physical_bytes,
         mounted.spool_physical_high_water_bytes,
         mounted.spool_resets,
+        mounted.spool_compactions,
         mounted.largest_request_bytes,
         mounted.operation_q_current_bytes,
         mounted.operation_q_high_water_bytes,
@@ -293,6 +306,7 @@ mod linux {
         engine.busy_events,
         engine.locked_events,
         engine.connection_mutex_wait_ns,
+        connections_high_water,
         connections_before_drop,
         connections_terminal,
     );

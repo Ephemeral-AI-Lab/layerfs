@@ -27,6 +27,7 @@ COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
 COPY containers/layerfs-fuse/fs-bench.sh /usr/local/bin/fs-bench.sh
 COPY containers/layerfs-fuse/verify_fs_bench.py /usr/local/bin/verify_fs_bench.py
 RUN echo "$LAYERFS_FS_BENCH_SHA256  /usr/local/bin/fs-bench.sh" | sha256sum -c - \
+ && python3 /usr/local/bin/verify_fs_bench.py --self-test \
  && chmod 0555 /usr/local/bin/fs-bench.sh /usr/local/bin/verify_fs_bench.py \
  && mkdir -p /workspace /var/lib/layerfs /var/tmp/layerfs-owned
 

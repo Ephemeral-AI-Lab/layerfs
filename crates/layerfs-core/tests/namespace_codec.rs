@@ -311,6 +311,10 @@ fn metadata_child_ranges_must_not_overlap() {
         metadata_tree_entries(&store, root),
         Err(CoreError::NonCanonicalOrdering)
     );
+    assert_eq!(
+        metadata_lookup(&store, root, &entries[100].key),
+        Err(CoreError::NonCanonicalOrdering)
+    );
 }
 
 #[test]

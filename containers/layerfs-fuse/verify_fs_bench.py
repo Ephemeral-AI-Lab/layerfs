@@ -2,6 +2,7 @@
 import hashlib
 import json
 import math
+import re
 import sys
 
 SCENARIOS = [
@@ -51,11 +52,39 @@ CLOUDFLARE = {
 }
 
 
+def stdout_checks(stdout_bytes):
+    stdout = re.sub(rb"\x1b\[[0-9;]*m", b"", stdout_bytes).decode(
+        "utf-8", errors="replace"
+    )
+    return {
+        "stdout_fail_markers": sum(
+            "FAIL" in line for line in stdout.splitlines()
+        )
+        == 0,
+        "stdout_network_scenarios": sum(
+            "git clone (shallow, ~1MB)" in line for line in stdout.splitlines()
+        )
+        == 0,
+    }
+
+
 def main():
-    if len(sys.argv) != 4 or sys.argv[2] not in CLOUDFLARE:
-        raise SystemExit("usage: verify_fs_bench.py RAW.json overlay|tmpfs OUTPUT.json")
-    raw_path, control, output_path = sys.argv[1:]
+    if sys.argv[1:] == ["--self-test"]:
+        assert all(stdout_checks(b"\x1b[32mOK\x1b[0m filtered\n").values())
+        assert not stdout_checks(b"\x1b[31mFAIL\x1b[0m hidden\n")[
+            "stdout_fail_markers"
+        ]
+        assert not stdout_checks(b"git clone (shallow, ~1MB)\n")[
+            "stdout_network_scenarios"
+        ]
+        return
+    if len(sys.argv) != 5 or sys.argv[3] not in CLOUDFLARE:
+        raise SystemExit(
+            "usage: verify_fs_bench.py RAW.json STDOUT overlay|tmpfs OUTPUT.json"
+        )
+    raw_path, stdout_path, control, output_path = sys.argv[1:]
     raw_bytes = open(raw_path, "rb").read()
+    stdout_bytes = open(stdout_path, "rb").read()
     raw = json.loads(raw_bytes)
     config = raw.get("config", {})
     checks = {
@@ -64,6 +93,7 @@ def main():
         "randomized": config.get("randomizeTargets") == 1,
         "mount": config.get("mount") == "/workspace",
         "base": config.get("base") == ("/var/tmp" if control == "overlay" else "/tmp"),
+        **stdout_checks(stdout_bytes),
     }
     rows = raw.get("results", [])
     by_key = {(row.get("scenario"), row.get("target")): row for row in rows}
@@ -120,10 +150,11 @@ def main():
     }
     status = "PASS_OPTIMIZED" if all(checks.values()) and all(gates.values()) else "REVISE"
     receipt = {
-        "schema": "layerfs-stage2-fs-bench-verification-v1",
+        "schema": "layerfs-stage2-fs-bench-verification-v2",
         "status": status,
         "control": control,
         "raw_sha256": hashlib.sha256(raw_bytes).hexdigest(),
+        "stdout_sha256": hashlib.sha256(stdout_bytes).hexdigest(),
         "checks": checks,
         "gates": gates,
         "aggregates": {

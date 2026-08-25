@@ -336,31 +336,17 @@ pub fn metadata_lookup<S: ObjectRead>(
     root: ObjectId,
     key: &MetadataKey,
 ) -> CoreResult<Option<MetadataEntryV1>> {
-    let mut id = root;
-    let mut root_page = true;
-    let mut expected_level = None;
-    let mut expected_max: Option<MetadataKey> = None;
-    loop {
-        let loaded =
-            load_metadata_shallow(store, id, root_page, expected_level, expected_max.as_ref())?;
-        match loaded.node {
-            MetadataNodeV1::Leaf { entries, .. } => {
-                return Ok(entries
-                    .binary_search_by(|entry| entry.key.cmp(key))
-                    .ok()
-                    .map(|index| entries[index].clone()));
-            }
-            MetadataNodeV1::Branch { children, .. } => {
-                let index = children
-                    .partition_point(|entry| entry.0 < *key)
-                    .min(children.len() - 1);
-                expected_level = Some(loaded.summary.level - 1);
-                expected_max = Some(children[index].0.clone());
-                id = children[index].1;
-                root_page = false;
-            }
+    let mut found = None;
+    visit_metadata_entries(store, root, |entries| {
+        if found.is_none() {
+            found = entries
+                .binary_search_by(|entry| entry.key.cmp(key))
+                .ok()
+                .map(|index| entries[index].clone());
         }
-    }
+        Ok(())
+    })?;
+    Ok(found)
 }
 
 pub fn visit_metadata_entries<S: ObjectRead>(

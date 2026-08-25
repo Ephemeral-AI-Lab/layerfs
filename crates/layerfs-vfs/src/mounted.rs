@@ -1,4 +1,5 @@
 use crate::capture::initialize_empty;
+use crate::{CanonicalPath, OperationCounters, VfsError};
 use layerfs_core::content::rope::{
     build, read_all_bounded, read_plan, read_range_with_plan, replace, state as rope_state,
     FileStateRoot, ObjectRead, ReadPlan, RopeCounters,
@@ -41,13 +42,14 @@ pub const MAX_HANDLES: usize = 8_192;
 pub const MAX_DIRTY_NODES: usize = 4_096;
 pub const MAX_DIRTY_RANGES: usize = 8_192;
 pub const MAX_DIRECTORY_CURSORS: usize = 4_096;
+pub const MAX_DIRECTORY_CHANGES: usize = 8_192;
 pub const SPOOL_QUOTA_BYTES: u64 = 512 * 1024 * 1024;
 pub const MAX_LIVE_SPOOL_BYTES: u64 = 320 * 1024 * 1024;
 pub const MAX_LOGICAL_FILE_BYTES: u64 = 320 * 1024 * 1024;
 pub const MAX_LOGICAL_WORKSPACE_BYTES: u64 = 512 * 1024 * 1024;
 const DIRECTORY_PAGE_ENTRIES: usize = 128;
 const DIRECTORY_PAGE_BYTES: usize = 256 * 1024;
-const MAX_DIRECTORY_CHANGES: usize = 8_192;
+const SPOOL_COMPACTION_SLACK_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_CHECKPOINT_METADATA_BYTES: usize = 1024 * 1024;
 const SPOOL_MAGIC: &[u8; 8] = b"LFSMNT1\0";
 const SPOOL_MARKER_BYTES: u64 = 88;
@@ -101,6 +103,7 @@ pub struct MountedCounters {
     pub opens: u64,
     pub reads: u64,
     pub writes: u64,
+    pub splices: u64,
     pub creates: u64,
     pub mkdirs: u64,
     pub unlinks: u64,
@@ -114,6 +117,8 @@ pub struct MountedCounters {
     pub checkpoints: u64,
     pub no_op_checkpoints: u64,
     pub created_then_deleted: u64,
+    pub lookup_refs: u64,
+    pub lookup_refs_high_water: u64,
     pub live_nodes: u64,
     pub live_nodes_high_water: u64,
     pub open_handles: u64,
@@ -125,6 +130,10 @@ pub struct MountedCounters {
     pub dirty_ranges: u64,
     pub dirty_ranges_high_water: u64,
     pub directory_cursors: u64,
+    pub directory_changes: u64,
+    pub directory_changes_high_water: u64,
+    pub inode_mappings: u64,
+    pub inode_mappings_high_water: u64,
     pub logical_workspace_bytes: u64,
     pub logical_workspace_high_water_bytes: u64,
     pub spool_appended_bytes: u64,
@@ -134,6 +143,7 @@ pub struct MountedCounters {
     pub spool_physical_bytes: u64,
     pub spool_physical_high_water_bytes: u64,
     pub spool_resets: u64,
+    pub spool_compactions: u64,
     pub largest_request_bytes: u64,
     pub operation_q_current_bytes: u64,
     pub operation_q_high_water_bytes: u64,
@@ -149,6 +159,13 @@ pub enum MountedLifecycle {
     Incomplete,
     Closing,
     Closed,
+}
+
+pub struct MountedSpliceReceipt {
+    pub before: RefState,
+    pub after: RefState,
+    pub counters: OperationCounters,
+    pub remount_required: bool,
 }
 
 #[derive(Debug)]
@@ -355,6 +372,13 @@ struct DirtyRange {
     spool_offset: u64,
 }
 
+struct SpoolRangeLocation {
+    node: MountedNodeId,
+    start: u64,
+    old_offset: u64,
+    len: u64,
+}
+
 #[derive(Clone)]
 enum NodeContent {
     File {
@@ -433,6 +457,7 @@ struct DirectoryMutation {
     parent: MountedNodeId,
     name: CanonicalName,
     normalized: Option<Option<MountedNodeId>>,
+    change_delta: i8,
     timestamp: (i64, u32),
 }
 
@@ -480,6 +505,17 @@ impl Spool {
         marker[8..40].copy_from_slice(&store_id);
         marker[40..72].copy_from_slice(&owner_id);
         marker[72..88].copy_from_slice(&session_id);
+        let compact = Self::compaction_path(&path);
+        if compact.exists() {
+            let mut prior = OpenOptions::new().read(true).open(&compact)?;
+            let mut actual = [0_u8; SPOOL_MARKER_BYTES as usize];
+            prior.read_exact(&mut actual)?;
+            if actual[..72] != marker[..72] {
+                return Err(MountedError::Corrupt);
+            }
+            drop(prior);
+            std::fs::remove_file(compact)?;
+        }
         if path.exists() {
             let mut prior = OpenOptions::new().read(true).open(&path)?;
             let mut actual = [0_u8; SPOOL_MARKER_BYTES as usize];
@@ -571,6 +607,12 @@ impl Spool {
     fn physical(&self) -> u64 {
         self.appended
     }
+
+    fn compaction_path(path: &Path) -> PathBuf {
+        let mut value = path.as_os_str().to_os_string();
+        value.push(".compact");
+        PathBuf::from(value)
+    }
 }
 
 struct SpoolSlice<'a> {
@@ -604,6 +646,8 @@ pub struct MountedWorkspace {
     dirty_nodes: HashSet<MountedNodeId>,
     pending_nodes: HashSet<MountedNodeId>,
     directory_cursors: usize,
+    directory_changes: usize,
+    lookup_refs: u64,
     logical_workspace_bytes: u64,
     spool: Spool,
     budget: Arc<ByteBudget>,
@@ -618,9 +662,6 @@ impl MountedWorkspace {
         spool: PathBuf,
         owner_id: [u8; 32],
     ) -> Result<Self, MountedError> {
-        if ref_name != "main" {
-            return Err(MountedError::Unsupported);
-        }
         let engine = Engine::open_with_mode(store, integrity)
             .map_err(|error| startup("engine open", error))?;
         let accepted = match engine
@@ -628,7 +669,10 @@ impl MountedWorkspace {
             .map_err(|error| startup("ref read", error))?
         {
             Some(state) => state,
-            None => initialize_empty(&engine).map_err(|error| startup("empty root", error))?,
+            None if ref_name == "main" => {
+                initialize_empty(&engine).map_err(|error| startup("empty root", error))?
+            }
+            None => return Err(MountedError::NotFound),
         };
         let namespace = engine
             .with_authenticated_canonical(accepted.root, decode_namespace_root)
@@ -666,6 +710,8 @@ impl MountedWorkspace {
             dirty_nodes: HashSet::new(),
             pending_nodes: HashSet::new(),
             directory_cursors: 0,
+            directory_changes: 0,
+            lookup_refs: 0,
             logical_workspace_bytes,
             spool,
             budget: Arc::new(ByteBudget::new(MAX_OPERATION_Q_BYTES)),
@@ -683,12 +729,55 @@ impl MountedWorkspace {
             .ok_or(MountedError::Corrupt)?;
         root.parent = ROOT_NODE;
         root.lookup_refs = 1;
+        workspace.lookup_refs = 1;
         workspace.observe_resources()?;
         Ok(workspace)
     }
 
     pub fn accepted(&self) -> &RefState {
         &self.accepted
+    }
+
+    pub fn splice_path(
+        &mut self,
+        path: &CanonicalPath,
+        start: u64,
+        delete_len: u64,
+        replacement: &[u8],
+    ) -> Result<MountedSpliceReceipt, MountedError> {
+        self.require_live()?;
+        if self.has_dirty_state() {
+            return Err(MountedError::Busy);
+        }
+        if replacement.len() > MAX_REQUEST_BYTES {
+            return Err(MountedError::ResourceExhausted);
+        }
+        let before = self.accepted.clone();
+        let reservation = self.budget.try_reserve(MAX_OPERATION_Q_BYTES)?;
+        let result = crate::resolver::replace_range_at_ref(
+            &self.engine,
+            &before,
+            path,
+            start,
+            delete_len,
+            Cursor::new(replacement),
+        );
+        drop(reservation);
+        let (after, mut counters) = result.map_err(mounted_vfs_error)?;
+        let (current, high) = self.budget.observation()?;
+        counters.operation_q_current_bytes = current as u64;
+        counters.operation_q_high_water_bytes = high as u64;
+        counters.operation_q_terminal_bytes = current as u64;
+        self.accepted = after.clone();
+        self.counters.splices += 1;
+        self.lifecycle = MountedLifecycle::Closed;
+        self.budget.shutdown();
+        Ok(MountedSpliceReceipt {
+            before,
+            after,
+            counters,
+            remount_required: true,
+        })
     }
 
     pub fn lifecycle(&self) -> MountedLifecycle {
@@ -746,6 +835,7 @@ impl MountedWorkspace {
             .ok_or(MountedError::NotFound)?;
         let entry = self.nodes.get_mut(&node).ok_or(MountedError::Corrupt)?;
         entry.lookup_refs = entry.lookup_refs.saturating_add(1);
+        self.lookup_refs = self.lookup_refs.saturating_add(1);
         self.counters.lookups += 1;
         Ok(entry.attr(node))
     }
@@ -755,7 +845,9 @@ impl MountedWorkspace {
             return;
         }
         if let Some(entry) = self.nodes.get_mut(&node) {
-            entry.lookup_refs = entry.lookup_refs.saturating_sub(count);
+            let forgotten = entry.lookup_refs.min(count);
+            entry.lookup_refs -= forgotten;
+            self.lookup_refs = self.lookup_refs.saturating_sub(forgotten);
         }
         self.reclaim_node(node);
     }
@@ -948,6 +1040,10 @@ impl MountedWorkspace {
         {
             return Err(MountedError::NoSpace);
         }
+        if let Err(error) = self.compact_spool_if_needed(bytes.len() as u64) {
+            self.lifecycle = MountedLifecycle::Incomplete;
+            return Err(error);
+        }
         let spool_offset = self.spool.next_offset(bytes.len())?;
         let timestamp = now_timestamp()?;
         let actual = match self.spool.append(bytes) {
@@ -961,6 +1057,10 @@ impl MountedWorkspace {
             self.lifecycle = MountedLifecycle::Incomplete;
             return Err(MountedError::Indeterminate);
         }
+        self.counters.spool_physical_high_water_bytes = self
+            .counters
+            .spool_physical_high_water_bytes
+            .max(self.spool.physical());
         let (old_count, new_count, removed, preserved) = {
             let entry = self.nodes.get_mut(&node).ok_or(MountedError::NotFound)?;
             let NodeContent::File {
@@ -1011,6 +1111,10 @@ impl MountedWorkspace {
         }
         self.sync_node_state(node);
         self.counters.writes += 1;
+        if let Err(error) = self.compact_spool_if_needed(0) {
+            self.lifecycle = MountedLifecycle::Incomplete;
+            return Err(error);
+        }
         self.observe_request(bytes.len())?;
         self.observe_resources()?;
         Ok(bytes.len())
@@ -1312,7 +1416,11 @@ impl MountedWorkspace {
             self.logical_workspace_bytes = projected;
         }
         self.sync_node_state(node);
-        if let Err(error) = self.reset_spool_if_unused() {
+        if let Err(error) = if self.spool.live == 0 {
+            self.reset_spool_if_unused()
+        } else {
+            self.compact_spool_if_needed(0)
+        } {
             self.lifecycle = MountedLifecycle::Incomplete;
             return Err(error);
         }
@@ -1689,6 +1797,8 @@ impl MountedWorkspace {
                     }
                     NodeContent::Directory { base, changes } => {
                         *base = Some(DirectoryStateRoot(record.content_root));
+                        self.directory_changes =
+                            self.directory_changes.saturating_sub(changes.len());
                         changes.clear();
                     }
                     NodeContent::Symlink { .. } => {}
@@ -1884,6 +1994,7 @@ impl MountedWorkspace {
                 content,
             },
         );
+        self.lookup_refs = self.lookup_refs.saturating_add(1);
         self.sync_node_state(id);
         self.apply_directory_mutations([mutation])?;
         self.observe_resources()?;
@@ -1922,15 +2033,13 @@ impl MountedWorkspace {
         name: CanonicalName,
         desired: Option<MountedNodeId>,
     ) -> Result<DirectoryMutation, MountedError> {
-        let (base, change_exists, change_count) = match &self
+        let (base, change_exists) = match &self
             .nodes
             .get(&parent)
             .ok_or(MountedError::NotFound)?
             .content
         {
-            NodeContent::Directory { base, changes } => {
-                (*base, changes.contains_key(&name), changes.len())
-            }
+            NodeContent::Directory { base, changes } => (*base, changes.contains_key(&name)),
             _ => return Err(MountedError::NotDirectory),
         };
         let base_inode = base
@@ -1946,13 +2055,16 @@ impl MountedWorkspace {
             Some(_) if base_inode.is_some() && desired_inode == base_inode => None,
             value => Some(value),
         };
-        if normalized.is_some() && !change_exists && change_count == MAX_DIRECTORY_CHANGES {
-            return Err(MountedError::ResourceExhausted);
-        }
+        let change_delta = match (change_exists, normalized.is_some()) {
+            (false, true) => 1,
+            (true, false) => -1,
+            _ => 0,
+        };
         Ok(DirectoryMutation {
             parent,
             name,
             normalized,
+            change_delta,
             timestamp: now_timestamp()?,
         })
     }
@@ -1961,6 +2073,18 @@ impl MountedWorkspace {
         &mut self,
         mutations: impl IntoIterator<Item = DirectoryMutation>,
     ) -> Result<(), MountedError> {
+        let mutations = mutations.into_iter().collect::<Vec<_>>();
+        let projected = mutations.iter().try_fold(
+            i64::try_from(self.directory_changes).map_err(|_| MountedError::ResourceExhausted)?,
+            |current, mutation| {
+                current
+                    .checked_add(i64::from(mutation.change_delta))
+                    .ok_or(MountedError::ResourceExhausted)
+            },
+        )?;
+        if !(0..=MAX_DIRECTORY_CHANGES as i64).contains(&projected) {
+            return Err(MountedError::ResourceExhausted);
+        }
         for mutation in mutations {
             let result = (|| {
                 let parent_node = self
@@ -1978,6 +2102,13 @@ impl MountedWorkspace {
                         changes.remove(&mutation.name);
                     }
                 }
+                self.directory_changes = usize::try_from(
+                    i64::try_from(self.directory_changes)
+                        .map_err(|_| MountedError::Indeterminate)?
+                        .checked_add(i64::from(mutation.change_delta))
+                        .ok_or(MountedError::Indeterminate)?,
+                )
+                .map_err(|_| MountedError::Indeterminate)?;
                 if parent_node.directory_mtime_before.is_none() {
                     parent_node.directory_mtime_before = Some((
                         parent_node.mtime_seconds,
@@ -2367,7 +2498,13 @@ impl MountedWorkspace {
         if reclaim {
             self.dirty_nodes.remove(&node);
             self.pending_nodes.remove(&node);
-            self.nodes.remove(&node);
+            if let Some(MountedNode {
+                content: NodeContent::Directory { changes, .. },
+                ..
+            }) = self.nodes.remove(&node)
+            {
+                self.directory_changes = self.directory_changes.saturating_sub(changes.len());
+            }
         }
     }
 
@@ -2402,6 +2539,117 @@ impl MountedWorkspace {
             self.counters.spool_resets += 1;
         }
         Ok(())
+    }
+
+    fn compact_spool_if_needed(&mut self, additional_live: u64) -> Result<(), MountedError> {
+        let projected_physical = self
+            .spool
+            .appended
+            .checked_add(additional_live)
+            .ok_or(MountedError::NoSpace)?;
+        let projected_live = self
+            .spool
+            .live
+            .checked_add(additional_live)
+            .ok_or(MountedError::NoSpace)?;
+        let steady_limit = projected_live
+            .checked_mul(2)
+            .and_then(|value| value.checked_add(SPOOL_COMPACTION_SLACK_BYTES))
+            .ok_or(MountedError::NoSpace)?;
+        if projected_physical > SPOOL_QUOTA_BYTES || projected_physical > steady_limit {
+            self.compact_spool()?;
+        }
+        Ok(())
+    }
+
+    fn compact_spool(&mut self) -> Result<(), MountedError> {
+        if self.spool.appended == self.spool.live {
+            return Ok(());
+        }
+        let _reservation = self.budget.try_reserve(
+            MAX_DIRTY_RANGES
+                .checked_mul(std::mem::size_of::<SpoolRangeLocation>())
+                .and_then(|bytes| bytes.checked_add(64 * 1024))
+                .ok_or(MountedError::ResourceExhausted)?,
+        )?;
+        let mut locations = Vec::with_capacity(self.live_ranges);
+        for (node, entry) in &self.nodes {
+            if let NodeContent::File { ranges, .. } = &entry.content {
+                for (start, range) in ranges {
+                    locations.push(SpoolRangeLocation {
+                        node: *node,
+                        start: *start,
+                        old_offset: range.spool_offset,
+                        len: range.end - *start,
+                    });
+                }
+            }
+        }
+        let live = locations.iter().try_fold(0_u64, |total, range| {
+            total
+                .checked_add(range.len)
+                .ok_or(MountedError::Indeterminate)
+        })?;
+        if live != self.spool.live || locations.len() != self.live_ranges {
+            return Err(MountedError::Indeterminate);
+        }
+        if live == 0 {
+            return self.reset_spool_if_unused();
+        }
+        let compact = Spool::compaction_path(&self.spool.path);
+        if compact.exists() {
+            return Err(MountedError::Corrupt);
+        }
+        let result = (|| {
+            let mut output = OpenOptions::new()
+                .create_new(true)
+                .read(true)
+                .write(true)
+                .open(&compact)?;
+            output.write_all(&self.spool.marker)?;
+            let input = self.spool.file.as_mut().ok_or(MountedError::Corrupt)?;
+            let mut buffer = [0_u8; 64 * 1024];
+            let mut next = SPOOL_MARKER_BYTES;
+            let mut offsets = Vec::with_capacity(locations.len());
+            for location in &locations {
+                input.seek(SeekFrom::Start(location.old_offset))?;
+                offsets.push(next);
+                let mut remaining = location.len;
+                while remaining != 0 {
+                    let count = buffer.len().min(remaining as usize);
+                    input.read_exact(&mut buffer[..count])?;
+                    output.write_all(&buffer[..count])?;
+                    remaining -= count as u64;
+                    next = next
+                        .checked_add(count as u64)
+                        .ok_or(MountedError::Indeterminate)?;
+                }
+            }
+            output.sync_data()?;
+            std::fs::rename(&compact, &self.spool.path)?;
+            let old = self.spool.file.replace(output);
+            drop(old);
+            for (location, offset) in locations.iter().zip(offsets) {
+                let entry = self
+                    .nodes
+                    .get_mut(&location.node)
+                    .ok_or(MountedError::Indeterminate)?;
+                let NodeContent::File { ranges, .. } = &mut entry.content else {
+                    return Err(MountedError::Indeterminate);
+                };
+                ranges
+                    .get_mut(&location.start)
+                    .ok_or(MountedError::Indeterminate)?
+                    .spool_offset = offset;
+            }
+            self.spool.appended = live;
+            self.counters.spool_compactions += 1;
+            Ok(())
+        })();
+        if result.is_err() && compact.exists() {
+            let _ = std::fs::remove_file(compact);
+        }
+        result
     }
 
     fn sync_node_state(&mut self, id: MountedNodeId) {
@@ -2510,6 +2758,11 @@ impl MountedWorkspace {
     }
 
     fn observe_resources(&mut self) -> Result<(), MountedError> {
+        self.counters.lookup_refs = self.lookup_refs;
+        self.counters.lookup_refs_high_water = self
+            .counters
+            .lookup_refs_high_water
+            .max(self.counters.lookup_refs);
         self.counters.live_nodes = self.nodes.len() as u64;
         self.counters.live_nodes_high_water = self
             .counters
@@ -2536,6 +2789,16 @@ impl MountedWorkspace {
             .dirty_ranges_high_water
             .max(self.counters.dirty_ranges);
         self.counters.directory_cursors = self.directory_cursors as u64;
+        self.counters.directory_changes = self.directory_changes as u64;
+        self.counters.directory_changes_high_water = self
+            .counters
+            .directory_changes_high_water
+            .max(self.counters.directory_changes);
+        self.counters.inode_mappings = self.by_inode.len() as u64;
+        self.counters.inode_mappings_high_water = self
+            .counters
+            .inode_mappings_high_water
+            .max(self.counters.inode_mappings);
         self.counters.logical_workspace_bytes = self.logical_workspace_bytes;
         self.counters.logical_workspace_high_water_bytes = self
             .counters
@@ -2835,6 +3098,22 @@ fn startup(step: &'static str, error: impl std::fmt::Debug) -> MountedError {
     MountedError::Startup(step, format!("{error:?}"))
 }
 
+fn mounted_vfs_error(error: VfsError) -> MountedError {
+    match error {
+        VfsError::Core(error) => error.into(),
+        VfsError::Engine(error) => error.into(),
+        VfsError::Io(error) => MountedError::Io(error),
+        VfsError::WorkspaceBusy => MountedError::Busy,
+        VfsError::CommittedCleanup { .. } => MountedError::CommittedCleanup,
+        VfsError::Indeterminate | VfsError::IncompleteDerived => MountedError::Indeterminate,
+        VfsError::Driver(_)
+        | VfsError::ExternalDirtyConflict
+        | VfsError::ExternalHardLinkBoundary
+        | VfsError::NativeProtected
+        | VfsError::InvalidState => MountedError::Corrupt,
+    }
+}
+
 fn merge_rope(target: &mut RopeCounters, source: RopeCounters) -> Result<(), MountedError> {
     target.payload_bytes_read = target
         .payload_bytes_read
@@ -2925,17 +3204,81 @@ mod tests {
     }
 
     #[test]
-    fn mounted_profile_scopes_branch_roots_to_offline_remount_control() {
+    fn existing_non_main_ref_remounts_and_diverges_from_main() {
         let (store, spool, directory) = paths("branch-scope");
-        assert!(matches!(
-            MountedWorkspace::open(
+        let main_at_fork = {
+            let mut mounted = MountedWorkspace::open(
+                &store,
+                "main",
+                IntegrityMode::TrustedLocalDev,
+                spool.clone(),
+                [0x90; 32],
+            )
+            .unwrap();
+            let (file, handle) = mounted.create_file(ROOT_NODE, b"file", 0o644).unwrap();
+            mounted.write(file.node, handle, 0, b"main-one").unwrap();
+            let first = mounted.fsync().unwrap();
+            let branch = mounted.fork_ref("branch").unwrap();
+            assert_eq!(branch.root, first.root);
+            mounted.write(file.node, handle, 0, b"main-two").unwrap();
+            mounted.truncate(file.node, 8).unwrap();
+            mounted.fsync().unwrap();
+            mounted.release(handle).unwrap();
+            mounted.shutdown().unwrap();
+            first
+        };
+        let branch_after = {
+            let mut mounted = MountedWorkspace::open(
                 &store,
                 "branch",
                 IntegrityMode::TrustedLocalDev,
-                spool,
+                directory.join("branch.spool"),
+                [0x90; 32],
+            )
+            .unwrap();
+            assert_eq!(mounted.accepted().root, main_at_fork.root);
+            let file = mounted.lookup_child(ROOT_NODE, b"file").unwrap();
+            let handle = mounted.open_file(file.node, false).unwrap();
+            assert_eq!(mounted.read(file.node, handle, 0, 32).unwrap(), b"main-one");
+            mounted.write(file.node, handle, 0, b"branch!!").unwrap();
+            let state = mounted.fsync().unwrap();
+            mounted.release(handle).unwrap();
+            mounted.shutdown().unwrap();
+            state
+        };
+        let mut main = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool,
+            [0x90; 32],
+        )
+        .unwrap();
+        let file = main.lookup_child(ROOT_NODE, b"file").unwrap();
+        let handle = main.open_file(file.node, false).unwrap();
+        assert_eq!(main.read(file.node, handle, 0, 32).unwrap(), b"main-two");
+        main.release(handle).unwrap();
+        main.shutdown().unwrap();
+        drop(main);
+        let branch = MountedWorkspace::open(
+            &store,
+            "branch",
+            IntegrityMode::TrustedLocalDev,
+            directory.join("branch-reopen.spool"),
+            [0x90; 32],
+        )
+        .unwrap();
+        assert_eq!(branch.accepted(), &branch_after);
+        drop(branch);
+        assert!(matches!(
+            MountedWorkspace::open(
+                &store,
+                "missing",
+                IntegrityMode::TrustedLocalDev,
+                directory.join("missing.spool"),
                 [0x90; 32]
             ),
-            Err(MountedError::Unsupported)
+            Err(MountedError::NotFound)
         ));
         std::fs::remove_dir_all(directory).unwrap();
     }
@@ -2953,6 +3296,180 @@ mod tests {
         closer.join().unwrap().unwrap();
         assert_eq!(budget.observation().unwrap().0, 0);
         assert!(matches!(budget.reserve(1), Err(MountedError::Busy)));
+    }
+
+    #[test]
+    fn mounted_splice_reuses_direct_range_replace_and_requires_remount() {
+        let (store, spool, directory) = paths("splice");
+        let original = (0..256 * 1024)
+            .map(|index| (index as u8).wrapping_mul(13))
+            .collect::<Vec<_>>();
+        let mut mounted = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool.clone(),
+            [0x8f; 32],
+        )
+        .unwrap();
+        let (file, handle) = mounted.create_file(ROOT_NODE, b"file", 0o644).unwrap();
+        mounted.write(file.node, handle, 0, &original).unwrap();
+        mounted.fsync().unwrap();
+        mounted.release(handle).unwrap();
+        let receipt = mounted
+            .splice_path(
+                &CanonicalPath::from_bytes(b"file").unwrap(),
+                64 * 1024,
+                0,
+                &[0x5a; 4096],
+            )
+            .unwrap();
+        assert!(receipt.remount_required);
+        assert_eq!(mounted.lifecycle(), MountedLifecycle::Closed);
+        assert_eq!(receipt.counters.rope.cdc_bytes_scanned, 4096);
+        assert_eq!(receipt.counters.content_payload_bytes_read(), Some(0));
+        assert!(receipt.counters.content_payload_bytes_written() <= Some(4096));
+        assert_eq!(receipt.counters.namespace.nodes_created, 0);
+        assert_eq!(receipt.counters.operation_q_terminal_bytes, 0);
+        assert_eq!(
+            receipt.counters.operation_q_high_water_bytes,
+            MAX_OPERATION_Q_BYTES as u64
+        );
+        assert_eq!(mounted.counters().unwrap().splices, 1);
+        assert!(matches!(
+            mounted.lookup_child(ROOT_NODE, b"file"),
+            Err(MountedError::StaleHandle)
+        ));
+        drop(mounted);
+
+        let engine = Engine::open_with_mode(&store, IntegrityMode::TrustedLocalDev).unwrap();
+        let namespace = crate::resolver::namespace(&engine, receipt.before.root).unwrap();
+        let (_, record) = crate::resolver::resolve(
+            &engine,
+            namespace,
+            &CanonicalPath::from_bytes(b"file").unwrap(),
+            &mut OperationCounters::default(),
+        )
+        .unwrap();
+        let mut rope = RopeCounters::default();
+        let plan = read_plan(&engine, FileStateRoot(record.content_root), &mut rope).unwrap();
+        let mut old = Vec::new();
+        read_range_with_plan(&engine, &plan, 0..plan.logical_len(), &mut old).unwrap();
+        assert_eq!(old, original);
+        drop(engine);
+
+        let mut expected = original;
+        expected.splice(64 * 1024..64 * 1024, [0x5a; 4096]);
+        let mut reopened = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool,
+            [0x8f; 32],
+        )
+        .unwrap();
+        assert_eq!(reopened.accepted(), &receipt.after);
+        let file = reopened.lookup_child(ROOT_NODE, b"file").unwrap();
+        let handle = reopened.open_file(file.node, false).unwrap();
+        assert_eq!(
+            reopened.read(file.node, handle, 0, expected.len()).unwrap(),
+            expected
+        );
+        reopened.release(handle).unwrap();
+        reopened.shutdown().unwrap();
+        drop(reopened);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn dirty_spool_compacts_inside_the_steady_physical_bound() {
+        let (store, spool, directory) = paths("spool-compact");
+        let mut mounted = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool,
+            [0x8e; 32],
+        )
+        .unwrap();
+        let (file, handle) = mounted.create_file(ROOT_NODE, b"file", 0o644).unwrap();
+        let mut bytes = vec![0_u8; MAX_REQUEST_BYTES];
+        for value in 0..70_u8 {
+            bytes.fill(value);
+            mounted.write(file.node, handle, 0, &bytes).unwrap();
+            let counters = mounted.counters().unwrap();
+            assert!(
+                counters.spool_physical_bytes
+                    <= counters.spool_live_bytes * 2 + SPOOL_COMPACTION_SLACK_BYTES
+            );
+        }
+        let counters = mounted.counters().unwrap();
+        assert!(counters.spool_compactions >= 1);
+        assert_eq!(counters.spool_live_bytes, MAX_REQUEST_BYTES as u64);
+        assert_eq!(
+            mounted
+                .read(file.node, handle, 0, MAX_REQUEST_BYTES)
+                .unwrap(),
+            bytes
+        );
+        mounted.unlink(ROOT_NODE, b"file").unwrap();
+        mounted.release(handle).unwrap();
+        mounted.forget(file.node, 1);
+        let counters = mounted.counters().unwrap();
+        assert_eq!(counters.spool_live_bytes, 0);
+        assert_eq!(counters.spool_physical_bytes, 0);
+        drop(mounted);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn mount_wide_directory_changes_and_inode_mappings_are_bounded_and_observed() {
+        let (store, spool, directory) = paths("directory-change-cap");
+        let mut mounted = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool,
+            [0x8d; 32],
+        )
+        .unwrap();
+        let file = mounted.mknod_file(ROOT_NODE, b"source", 0o644).unwrap();
+        for index in 1..MAX_DIRECTORY_CHANGES {
+            mounted
+                .link(file.node, ROOT_NODE, format!("alias-{index}").as_bytes())
+                .unwrap();
+        }
+        let before = mounted.counters().unwrap();
+        assert_eq!(before.directory_changes, MAX_DIRECTORY_CHANGES as u64);
+        assert_eq!(
+            before.directory_changes_high_water,
+            MAX_DIRECTORY_CHANGES as u64
+        );
+        assert!(before.inode_mappings <= MAX_MOUNTED_NODES as u64);
+        assert!(matches!(
+            mounted.link(file.node, ROOT_NODE, b"one-too-many"),
+            Err(MountedError::ResourceExhausted)
+        ));
+        assert_eq!(mounted.counters().unwrap(), before);
+        let mut nonce = 0_u64;
+        while mounted.by_inode.len() < MAX_MOUNTED_NODES {
+            let mut bytes = [0_u8; 32];
+            bytes[..8].copy_from_slice(&nonce.to_be_bytes());
+            mounted
+                .by_inode
+                .entry(InodeId(bytes))
+                .or_insert(MountedNodeId(u64::MAX - nonce));
+            nonce += 1;
+        }
+        assert!(matches!(
+            mounted.load_canonical_node(InodeId([0xff; 32]), MountedNodeId(u64::MAX / 2)),
+            Err(MountedError::ResourceExhausted)
+        ));
+        let mappings = mounted.counters().unwrap();
+        assert_eq!(mappings.inode_mappings, MAX_MOUNTED_NODES as u64);
+        assert_eq!(mappings.inode_mappings_high_water, MAX_MOUNTED_NODES as u64);
+        drop(mounted);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
