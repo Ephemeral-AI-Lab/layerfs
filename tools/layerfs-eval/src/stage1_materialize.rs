@@ -1256,7 +1256,7 @@ pub fn attribution_run(control: &Path, fixture: &Path, run: &Path) -> EvalResult
         )
         .as_bytes(),
     )?;
-    copy_attribution_manifests(run)?;
+    copy_attribution_manifests(run, &fixture)?;
     create_empty(&run.join("rows.jsonl"))?;
     create_empty(&run.join("commands.json"))?;
     append_sync(
@@ -1450,9 +1450,12 @@ fn attribution_campaign_failure(run: &Path, block: usize, reason: &str) -> EvalR
     ))
 }
 
-fn copy_attribution_manifests(run: &Path) -> EvalResult<()> {
-    let source = crate::stage1_fixture::workspace_root()
-        .join("target/layerfs-stage1m-custody/source-manifests");
+fn copy_attribution_manifests(run: &Path, fixture: &Path) -> EvalResult<()> {
+    let target = fixture
+        .parent()
+        .and_then(Path::parent)
+        .ok_or_else(|| "fixture is not below the target directory".to_owned())?;
+    let source = target.join("layerfs-stage1m-custody/source-manifests");
     for name in [
         "source-manifest-historical.json",
         "source-manifest-historical-harness.json",
