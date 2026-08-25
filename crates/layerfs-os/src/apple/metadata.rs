@@ -228,7 +228,7 @@ mod tests {
         assert!(super::super::ffi::list_xattrs_file(&file)
             .unwrap()
             .iter()
-            .any(|name| is_environmental(name)));
+            .any(is_environmental));
         let before = read(&file).unwrap();
         let _ = super::super::ffi::set_xattr_file(&file, b"com.apple.provenance", &[9, 8, 7]);
         let after = read(&file).unwrap();
