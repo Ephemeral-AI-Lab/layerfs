@@ -378,16 +378,48 @@ impl EngineTimings {
     }
 }
 
+#[derive(Default)]
+struct BatchTimings {
+    payload_query_ns: u64,
+    identity_authentication_ns: u64,
+    role_decode_ns: u64,
+    payload_callback_inclusive_ns: u64,
+    counter_merge_ns: u64,
+}
+
+impl BatchTimings {
+    fn record(self, timings: &EngineTimings) {
+        observe_value(&timings.payload_query_ns, self.payload_query_ns);
+        observe_value(
+            &timings.identity_authentication_ns,
+            self.identity_authentication_ns,
+        );
+        observe_value(&timings.role_decode_ns, self.role_decode_ns);
+        observe_value(
+            &timings.payload_callback_inclusive_ns,
+            self.payload_callback_inclusive_ns,
+        );
+        observe_value(&timings.counter_merge_ns, self.counter_merge_ns);
+    }
+}
+
 const SQL_FAMILY_NONE: u8 = 0;
 const SQL_FAMILY_PUBLICATION: u8 = 1;
 const SQL_FAMILY_LIVE_INTEGRITY: u8 = 2;
 const SQL_FAMILY_PRIMARY_READ: u8 = 3;
 
 fn observe_time(target: &AtomicU64, started: Instant) {
-    let elapsed = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    observe_value(target, elapsed_ns(started));
+}
+
+fn observe_value(target: &AtomicU64, elapsed: u64) {
     let _ = target.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
         Some(current.saturating_add(elapsed))
     });
+}
+
+fn elapsed_ns(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
 
 trait CommitDispatch: Send + Sync {
@@ -940,81 +972,97 @@ impl Engine {
         if ids.is_empty() {
             return Ok(());
         }
-        let counter_started = Instant::now();
-        self.bump(|counters| {
-            checked_add(&mut counters.payload_batch_queries, 1)?;
-            checked_add(
-                &mut counters.payload_batch_references,
-                u64::try_from(ids.len()).map_err(|_| EngineError::CounterOverflow)?,
-            )?;
-            counters.payload_batch_maximum = counters
-                .payload_batch_maximum
-                .max(u64::try_from(ids.len()).map_err(|_| EngineError::CounterOverflow)?);
-            Ok(())
-        })?;
-        observe_time(&self.timings.counter_merge_ns, counter_started);
-        let connection = self.lock_connection()?;
-        let sql = payload_batch_sql(ids.len())?;
-        let query_started = Instant::now();
-        self.mark_statement()?;
-        let mut statement = connection.prepare_cached(&sql).map_err(map_sqlite_error)?;
-        let mut rows = statement
-            .query(rusqlite::params_from_iter(
-                ids.iter().map(|id| id.as_bytes().as_slice()),
-            ))
-            .map_err(map_sqlite_error)?;
-        observe_time(&self.timings.payload_query_ns, query_started);
-        let mut ordinal = 0;
-        loop {
-            let step_started = Instant::now();
-            let row = rows.next().map_err(map_sqlite_error)?;
-            observe_time(&self.timings.payload_query_ns, step_started);
-            let Some(row) = row else { break };
-            let observed_ordinal = row.get::<_, i64>(0).map_err(map_sqlite_error)?;
-            if observed_ordinal != ordinal as i64 {
-                return if observed_ordinal > ordinal as i64 {
-                    Err(EngineError::MissingObject(ids[ordinal]))
-                } else {
-                    Err(EngineError::InvalidRecord("payload batch order"))
-                };
-            }
-            let id = ids[ordinal];
-            let kind = row
-                .get::<_, Option<i64>>(1)
-                .map_err(map_sqlite_error)?
-                .ok_or(EngineError::MissingObject(id))?;
-            let length = row
-                .get::<_, Option<i64>>(2)
-                .map_err(map_sqlite_error)?
-                .ok_or(EngineError::MissingObject(id))?;
-            let bytes = match row.get_ref(3).map_err(map_sqlite_error)? {
-                ValueRef::Blob(bytes) => bytes,
-                _ => return Err(EngineError::InvalidRecord("object bytes")),
-            };
-            let (payload, actual_length) =
-                validate_payload_borrowed(self, id, kind, length, bytes)?;
+        let mut timings = BatchTimings::default();
+        let result = (|| {
             let counter_started = Instant::now();
             self.bump(|counters| {
-                checked_add(&mut counters.objects_validated, 1)?;
-                checked_add(&mut counters.object_bytes_read, actual_length)?;
-                checked_add(&mut counters.fetched_rows, 1)?;
-                checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
-                checked_add(&mut counters.fetched_row_role_decode_passes, 1)
+                checked_add(&mut counters.payload_batch_queries, 1)?;
+                checked_add(
+                    &mut counters.payload_batch_references,
+                    u64::try_from(ids.len()).map_err(|_| EngineError::CounterOverflow)?,
+                )?;
+                counters.payload_batch_maximum = counters
+                    .payload_batch_maximum
+                    .max(u64::try_from(ids.len()).map_err(|_| EngineError::CounterOverflow)?);
+                Ok(())
             })?;
-            observe_time(&self.timings.counter_merge_ns, counter_started);
-            let callback_started = Instant::now();
-            let callback_result = callback(id, payload);
-            observe_time(
-                &self.timings.payload_callback_inclusive_ns,
-                callback_started,
-            );
-            callback_result?;
-            ordinal += 1;
-        }
-        if ordinal != ids.len() {
-            return Err(EngineError::MissingObject(ids[ordinal]));
-        }
-        Ok(())
+            timings.counter_merge_ns = timings
+                .counter_merge_ns
+                .saturating_add(elapsed_ns(counter_started));
+            let connection = self.lock_connection()?;
+            let sql = payload_batch_sql(ids.len())?;
+            let query_started = Instant::now();
+            self.mark_statement()?;
+            let mut statement = connection.prepare_cached(&sql).map_err(map_sqlite_error)?;
+            let mut rows = statement
+                .query(rusqlite::params_from_iter(
+                    ids.iter().map(|id| id.as_bytes().as_slice()),
+                ))
+                .map_err(map_sqlite_error)?;
+            timings.payload_query_ns = timings
+                .payload_query_ns
+                .saturating_add(elapsed_ns(query_started));
+            let mut ordinal = 0;
+            loop {
+                let step_started = Instant::now();
+                let row = rows.next().map_err(map_sqlite_error)?;
+                timings.payload_query_ns = timings
+                    .payload_query_ns
+                    .saturating_add(elapsed_ns(step_started));
+                let Some(row) = row else { break };
+                let observed_ordinal = row.get::<_, i64>(0).map_err(map_sqlite_error)?;
+                if observed_ordinal != ordinal as i64 {
+                    return if observed_ordinal > ordinal as i64 {
+                        Err(EngineError::MissingObject(ids[ordinal]))
+                    } else {
+                        Err(EngineError::InvalidRecord("payload batch order"))
+                    };
+                }
+                let id = ids[ordinal];
+                let kind = row
+                    .get::<_, Option<i64>>(1)
+                    .map_err(map_sqlite_error)?
+                    .ok_or(EngineError::MissingObject(id))?;
+                let length = row
+                    .get::<_, Option<i64>>(2)
+                    .map_err(map_sqlite_error)?
+                    .ok_or(EngineError::MissingObject(id))?;
+                let bytes = match row.get_ref(3).map_err(map_sqlite_error)? {
+                    ValueRef::Blob(bytes) => bytes,
+                    _ => return Err(EngineError::InvalidRecord("object bytes")),
+                };
+                let (payload, actual_length, authentication_ns, role_decode_ns) =
+                    validate_payload_borrowed(id, kind, length, bytes)?;
+                timings.identity_authentication_ns = timings
+                    .identity_authentication_ns
+                    .saturating_add(authentication_ns);
+                timings.role_decode_ns = timings.role_decode_ns.saturating_add(role_decode_ns);
+                let counter_started = Instant::now();
+                self.bump(|counters| {
+                    checked_add(&mut counters.objects_validated, 1)?;
+                    checked_add(&mut counters.object_bytes_read, actual_length)?;
+                    checked_add(&mut counters.fetched_rows, 1)?;
+                    checked_add(&mut counters.fetched_row_authentication_passes, 1)?;
+                    checked_add(&mut counters.fetched_row_role_decode_passes, 1)
+                })?;
+                timings.counter_merge_ns = timings
+                    .counter_merge_ns
+                    .saturating_add(elapsed_ns(counter_started));
+                let callback_started = Instant::now();
+                let callback_result = callback(id, payload);
+                timings.payload_callback_inclusive_ns = timings
+                    .payload_callback_inclusive_ns
+                    .saturating_add(elapsed_ns(callback_started));
+                callback_result?;
+                ordinal += 1;
+            }
+            if ordinal != ids.len() {
+                return Err(EngineError::MissingObject(ids[ordinal]));
+            }
+            Ok(())
+        })();
+        timings.record(&self.timings);
+        result
     }
 
     #[cfg(test)]
@@ -2164,20 +2212,16 @@ fn authenticate_borrowed(
     Ok(summary.kind)
 }
 
-fn validate_payload_borrowed<'a>(
-    engine: &Engine,
+fn validate_payload_borrowed(
     id: ObjectId,
     kind: i64,
     length: i64,
-    bytes: &'a [u8],
-) -> EngineResult<(&'a [u8], u64)> {
+    bytes: &[u8],
+) -> EngineResult<(&[u8], u64, u64, u64)> {
     let authentication_started = Instant::now();
     let summary = authenticate_identity(bytes, id)
         .map_err(|cause| EngineError::MalformedObject { id, cause })?;
-    observe_time(
-        &engine.timings.identity_authentication_ns,
-        authentication_started,
-    );
+    let authentication_ns = elapsed_ns(authentication_started);
     let role_started = Instant::now();
     let expected_kind = ObjectKind::try_from(
         u8::try_from(kind).map_err(|_| EngineError::InvalidRecord("object kind"))?,
@@ -2227,8 +2271,8 @@ fn validate_payload_borrowed<'a>(
     let payload = bytes
         .get(payload_start..)
         .ok_or(EngineError::InvalidRecord("payload length"))?;
-    observe_time(&engine.timings.role_decode_ns, role_started);
-    Ok((payload, actual_length))
+    let role_decode_ns = elapsed_ns(role_started);
+    Ok((payload, actual_length, authentication_ns, role_decode_ns))
 }
 
 fn payload_batch_sql(count: usize) -> EngineResult<String> {
