@@ -1,12 +1,14 @@
 # LayerFS Apple/APFS PoC v1
 
-Status: **AppleWorkspaceV1 Stage 1.0 implementation closed after adversarial
-correctness repair; Stage 1.1 and Stage 1.2 verification remain prospective**.
+Status: **AppleWorkspaceV1 Stage 1.0 implementation and Stage 1.1 single-file
+APFS edge verification are closed; Stage 1.2 remains prospective**.
 The controlling closure and custody record is
 [17 — Stage 1.0 closure and accepted A02 exception](17-stage1-closure.md).
 The preserved A01–A17 campaign remains measured `REVISE`; its A02 latency miss
 is explicitly user-accepted and is not relabeled as a threshold PASS. Stage
-1.1 is the single-file APFS edge specification in `poc/16`; Stage 1.2 is the
+1.1 passed its source-bound 47-row/51-edit/34-transition campaign in
+13.517581334 seconds; its controlling result is recorded in `poc/16` and
+`poc/evidence/stage1.1-apple-edge-20260825`. Stage 1.2 is the
 npm/developer-workspace specification in `poc/15`. The prospective post-Stage-1
 LayerFS + Linux FUSE direct workspace is specified in `poc/19`, with Docker
 only as its Linux execution envelope. macFUSE and FSKit are not selected
@@ -14,7 +16,7 @@ dependencies.
 
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure
-Stage 1.1  poc/16 single-file APFS edge benchmark
+Stage 1.1  poc/16 single-file APFS edge benchmark — PASS / closed
 Stage 1.2  poc/15 npm/developer-workspace benchmark
 Stage 2    poc/19 LayerFS + Linux FUSE direct workspace after Stage 1.2
 ```

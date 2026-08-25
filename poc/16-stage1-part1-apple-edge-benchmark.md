@@ -1,7 +1,7 @@
 # Stage 1.1 Specification — Single-file APFS Edge Benchmark
 
-Status: **prospective controlling specification for Stage 1.1; implementation
-not started; measurement not authorized**
+Status: **CLOSED — attempt 014 passed the complete source-bound Stage 1.1
+campaign on 2026-08-25**
 Authority: controls only the Stage 1.1 workload, implementation shape,
 readiness and disposition; [10 — handoff freeze](10-handoff-freeze.md) and
 [17 — Stage 1.0 closure](17-stage1-closure.md) remain authoritative for
@@ -11,6 +11,27 @@ Scope: bounded supplemental single-file evidence after the completed A01–A17
 campaign and Stage 1.0 implementation closure
 Platform: Apple/APFS through the public `layerfs-sdk -> layerfs-vfs -> layerfs-os::AppleDriver` path
 Sequence: **Stage 1.0 closure -> Stage 1.1 -> Stage 1.2 -> mounted Stage Two**
+
+Accepted terminal result:
+
+```text
+source commit       f3dd4a32273a4c5cbe5e7ca2287c945ba4434c30
+source manifest     cacbe0497c05014a1966f152cbfed64f3ae6d4ce3e0656e459f1c1eb3a9ded84
+release executable  2a7c71cf51b09d4411c1c2cb4c0b33ca1ebc435232c577ddeba4d126aba44c31
+rows                47/47 PASS
+edit operations     51/51 exact
+transitions         34/34 exact
+complete wall       13.517581334 s
+rows SHA-256        7231c0a8d7dffb561adcc5aff23f77a5ffbdb645e473b62f023b09c62873fa37
+disposition         PASS
+```
+
+The compact closure receipt is
+`poc/evidence/stage1.1-apple-edge-20260825/terminal-receipt.md`; the immutable
+raw campaign remains under
+`target/layerfs-stage1-apple-edge-20260825-attempt-014` with its per-artifact
+hashes recorded there. This completion does not relabel the historical Stage
+1.0 A02 exception and does not start Stage 1.2.
 
 ## 0. Decision
 

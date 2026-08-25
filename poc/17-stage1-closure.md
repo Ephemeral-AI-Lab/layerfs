@@ -4,8 +4,8 @@ Status: **CLOSED after adversarial correctness repair, with the explicit A02
 performance exception retained**
 Date: 2026-08-24
 Scope: implemented Stage 1.0 product baseline and preserved A01–A17 evidence;
-Stage 1.1 (`poc/16`) and Stage 1.2 (`poc/15`) remain prospective verification
-specifications; mounted/write-intercepted macOS work remains Stage Two
+Stage 1.1 (`poc/16`) is closed PASS, Stage 1.2 (`poc/15`) remains prospective,
+and mounted/write-intercepted work remains Stage Two
 
 ## 1. Exact disposition
 
@@ -15,7 +15,7 @@ post-repair source closure/readiness  PASS; portable receipt below
 preserved pre-repair A01–A17 artifact REVISE
 A02 frozen latency target             measured miss, user-accepted exception
 all other measured hard targets       PASS
-Stage 1.1 APFS edge benchmark         not started; prospective
+Stage 1.1 APFS edge benchmark         PASS; 47 rows / 51 edits / 34 transitions
 Stage 1.2 npm/workspace benchmark     not started; prospective
 mounted Stage Two                     not started; separately specified later
 ```
@@ -172,7 +172,8 @@ target/layerfs-stage1-run-final-profile-20260824
 
 Stage 1.0 implementation is closed after the adversarial repairs. Reopening it
 requires a correctness, durability, authentication, custody, or hard-resource
-regression—not the accepted A02 latency values. Stage 1.1 and Stage 1.2 are
-separate source-bound verification specifications and cannot retroactively
-relabel the pre-repair campaign. Their accepted completion closes Stage One
-verification and makes a separately specified mounted Stage Two eligible.
+regression—not the accepted A02 latency values. Stage 1.1 is separately closed
+PASS by the source-bound attempt-014 receipt and does not retroactively relabel
+the pre-repair campaign. Stage 1.2 remains the next Stage One verification
+step; its accepted completion makes the separately specified mounted Stage Two
+eligible.

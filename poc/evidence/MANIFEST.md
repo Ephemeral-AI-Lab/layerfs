@@ -47,3 +47,13 @@ run-touched-closure-v5.zsh           677f069f74977b816aa2cfc119a3067687a7dadedc1
 readiness-v4-superseded.json         fb0579e3d107dff97549395a155c6b1fb1e3c03b32164b70992c9e53b848d6be
 readiness.json                       ecb99f0343265570f12f8a2e550d83cb54014a89a4e4de68ca331a5e9146bfff
 ```
+
+## Stage 1.1 Apple/APFS terminal receipt
+
+The compact receipt binds the exact source/executable/fixture and records the
+hashes of every immutable attempt-014 raw artifact. The raw 47-row campaign is
+retained under `target/layerfs-stage1-apple-edge-20260825-attempt-014`.
+
+```text
+stage1.1-apple-edge-20260825/terminal-receipt.md  0fe48f8cd68fc50a003d6e9d34a675efedee178e5997d5cb03a74d250b2f6e17
+```
