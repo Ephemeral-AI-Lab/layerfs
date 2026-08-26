@@ -42,11 +42,14 @@ under one CPU, 512 MiB, Verified integrity, and real FUSE: `/var/tmp` SL
 Rsum `2.133`, G `3.569`, Spread `1.021`. These rows remain live-mount
 diagnostics. A matched local native-ARM64 Cloudflare Computer campaign under
 the same one-CPU/512 MiB envelope closes at FUSE median sums `7.260 s` and
-`7.449 s`; LayerFS is `2.160x` and `2.258x` faster. The matched 64 MiB forced-
-restart oracle passes for LayerFS at `926.499 ms`; Cloudflare's local
-`673.020 ms` acknowledgement loses the file after a fresh-container restart.
+`7.449 s`; LayerFS is `2.160x` and `2.258x` faster. Restart diagnostics separate
+standalone Cloudflare process-local SQLite (expected state loss) from the shipped
+pull/reconcile/push path backed by a local file-SQLite authority, which rehydrates
+the exact 64 MiB payload after SIGKILL. LayerFS separately reopens exact bytes
+from its production Store. Their persistence timings are not compared because
+the commands, clocks, sync endpoints, media, and retention contracts differ.
 Cloud deployment and Durable Object synchronization are outside the explicit
-local-only scope. Current disposition: `PASS_LOCAL_ONLY`.
+local-only scope. Current diagnostic disposition: `PASS_LOCAL_ONLY`.
 
 ## Terminal success
 

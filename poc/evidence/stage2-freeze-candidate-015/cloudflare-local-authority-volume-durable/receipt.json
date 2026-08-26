@@ -1,0 +1,150 @@
+{
+  "authoritativeCleanup": {
+    "checkpoint": {
+      "busy": 0,
+      "checkpointed": 0,
+      "log": 0
+    },
+    "inventory": {
+      "entries": []
+    },
+    "pid": 106,
+    "pulled": 1
+  },
+  "classification": "DIAGNOSTIC_ONLY",
+  "cleanup": {
+    "containerAbsent": true,
+    "volumeAbsent": true,
+    "volumeRemoveArgv": [
+      "docker",
+      "volume",
+      "rm",
+      "cloudflare-local-durable-27144-store"
+    ],
+    "volumeRemoveStdout": "cloudflare-local-durable-27144-store"
+  },
+  "cloudflareDeploymentPresent": false,
+  "cloudflareDurableObjectPresent": false,
+  "containerId": "96a50f1ecf331dde3dcd0e57f19c8224df9f4032ac98ab3bf01e85b0b7865f35",
+  "envelope": {
+    "cpus": 1,
+    "memoryBytes": 536870912,
+    "memorySwapBytes": 536870912,
+    "network": "none",
+    "platform": "linux/arm64",
+    "workspace": "native FUSE"
+  },
+  "freshDbProcess": {
+    "entries": [
+      "payload.bin"
+    ],
+    "pid": 46,
+    "sha256": "f4c086f24352a6c9ee2e7bbb8bb2e811398bd2d828daf161434c3b9a82c30b1f",
+    "size": 67108864
+  },
+  "freshFuse": {
+    "inventory": "f payload.bin 67108864\n",
+    "mount": "fuse",
+    "sha256": "f4c086f24352a6c9ee2e7bbb8bb2e811398bd2d828daf161434c3b9a82c30b1f"
+  },
+  "image": "sha256:8c5100fabfd873de4ee7aabf908027e946b3fdac5328e15f9dabbf9731200bb0",
+  "imageLabels": {
+    "dev.layerfs.attempt": "docker-fuse-attempt-2",
+    "dev.layerfs.lane": "lane-a",
+    "dev.layerfs.owner": "layerfs-lane-a-cloudflare-attempt-2",
+    "dev.layerfs.parent-image": "sha256:c8467c6e10bfb9c7fa21a166d4bb9a5a9b23df288be9614c225529e2fe72cdd9",
+    "dev.layerfs.upstream-commit": "de87919a4fd37242e960e13b7b3ba802d1eef0a0",
+    "dev.layerfs.upstream-tree": "4fb409d7e1356e1098439293d77d2fdc2dbf2190"
+  },
+  "payload": {
+    "bytes": 67108864,
+    "sha256": "f4c086f24352a6c9ee2e7bbb8bb2e811398bd2d828daf161434c3b9a82c30b1f"
+  },
+  "persistenceClass": "LOCAL_AUTHORITATIVE_SQLITE_DURABLE",
+  "processIdentity": {
+    "after": {
+      "hostPid": 691,
+      "inside": "host_pid=0\npid1_start=868\npid:[4026532558]",
+      "startedAt": "2026-08-26T09:51:10.985214003Z"
+    },
+    "before": {
+      "hostPid": 497,
+      "inside": "host_pid=0\npid1_start=118\npid:[4026532558]",
+      "startedAt": "2026-08-26T09:51:03.481119583Z"
+    }
+  },
+  "pull": {
+    "checkpoint": {
+      "busy": 0,
+      "checkpointed": 0,
+      "log": 0
+    },
+    "inventory": {
+      "entries": [
+        "payload.bin"
+      ],
+      "sha256": "f4c086f24352a6c9ee2e7bbb8bb2e811398bd2d828daf161434c3b9a82c30b1f",
+      "size": 67108864
+    },
+    "pid": 61,
+    "pulled": 2
+  },
+  "restart": {
+    "containerId": "96a50f1ecf331dde3dcd0e57f19c8224df9f4032ac98ab3bf01e85b0b7865f35",
+    "stdout": "cloudflare-local-durable-27144"
+  },
+  "restore": {
+    "checkpoint": {
+      "busy": 0,
+      "checkpointed": 0,
+      "log": 0
+    },
+    "pid": 58,
+    "pushed": 2,
+    "reconciled": {
+      "fetchRevReset": true,
+      "pushRevReset": false
+    }
+  },
+  "schema": "cloudflare-local-authoritative-sqlite-durable-v1",
+  "source": "de87919a4fd37242e960e13b7b3ba802d1eef0a0",
+  "status": "PASS",
+  "stopped": {
+    "containerId": "96a50f1ecf331dde3dcd0e57f19c8224df9f4032ac98ab3bf01e85b0b7865f35",
+    "exitCode": 137
+  },
+  "terminalEligible": false,
+  "timingNs": {
+    "T_live": 2291927625,
+    "T_sync": 4558361375,
+    "T_to_durable": 6850289000
+  },
+  "tree": "4fb409d7e1356e1098439293d77d2fdc2dbf2190",
+  "volume": {
+    "createArgv": [
+      "docker",
+      "volume",
+      "create",
+      "--driver",
+      "local",
+      "--label",
+      "dev.layerfs.owner=cloudflare-local-durable-27144",
+      "--label",
+      "dev.layerfs.persistence-class=LOCAL_AUTHORITATIVE_SQLITE_DURABLE",
+      "cloudflare-local-durable-27144-store"
+    ],
+    "createStdout": "cloudflare-local-durable-27144-store",
+    "inspect": {
+      "CreatedAt": "2026-08-26T09:51:03Z",
+      "Driver": "local",
+      "Labels": {
+        "dev.layerfs.owner": "cloudflare-local-durable-27144",
+        "dev.layerfs.persistence-class": "LOCAL_AUTHORITATIVE_SQLITE_DURABLE"
+      },
+      "Mountpoint": "/var/lib/docker/volumes/cloudflare-local-durable-27144-store/_data",
+      "Name": "cloudflare-local-durable-27144-store",
+      "Options": null,
+      "Scope": "local"
+    }
+  }
+}

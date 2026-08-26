@@ -1,0 +1,14 @@
+{
+  "all_absent": true,
+  "containers": {
+    "layerfs-c015-lifecycle-immediate": {
+      "absent": true,
+      "remove_returncode": 0
+    }
+  },
+  "volume": {
+    "absent": true,
+    "name": "layerfs_c015_lifecycle_immediate_store",
+    "remove_returncode": 0
+  }
+}

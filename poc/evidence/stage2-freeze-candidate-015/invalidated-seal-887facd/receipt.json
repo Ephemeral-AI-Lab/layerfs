@@ -1,0 +1,22 @@
+{
+  "schema": "layerfs-stage2-015-invalidated-seal-v1",
+  "status": "INVALIDATED_HISTORICAL",
+  "custody_commit": "887facdbb94d06f3afd152977947da137f557212",
+  "custody_tree": "e48f1d750fa1df1c10243820afc6b3a3ca21af51",
+  "sha256sums_entries": 9487,
+  "sha256sums_sha256": "9a1df4e1ec00a71f0a57a49f165fc9a52ba042ddc961c763b25df09ed2b6ff43",
+  "invalidation_reason": [
+    "The Cloudflare harness removed the mutate container before launching a fresh container without retained storage or remote restore; ABSENT proves expected fresh-container process-local state loss, not a matched durability failure.",
+    "The 673.020 ms Cloudflare local acknowledgement and 926.499 ms LayerFS durable acknowledgement use different command bodies, clocks, samplers, persistence media, and retention contracts, so their numeric ranking is not controlling."
+  ],
+  "preserved_claims": [
+    "Matched local live fs-bench comparison",
+    "LayerFS local PASS_DURABLE evidence",
+    "Cloudflare fresh-container observation"
+  ],
+  "superseded_labels": [
+    "FAIL_DURABILITY",
+    "LAYERFS_ONLY_RESTART_DURABLE",
+    "numeric Cloudflare-local-ack versus LayerFS-durable-ack ranking"
+  ]
+}

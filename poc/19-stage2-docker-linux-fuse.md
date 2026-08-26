@@ -21,12 +21,16 @@ The candidate-015 unchanged-upstream live rerun also passes under one CPU,
 persistence-inclusive evidence. Under the same local native ARM64, one-CPU,
 512 MiB envelope, Cloudflare Computer's FUSE median sums are `7.260 s` and
 `7.449 s`; LayerFS is `2.160x` and `2.258x` faster respectively and uses lower
-whole-cgroup peak memory. The matched 64 MiB restart test is stronger: LayerFS
-acknowledges durable state in `926.499 ms` and reopens exact bytes after
-SIGKILL, while Cloudflare's `673.020 ms` local acknowledgement reopens as
-`ABSENT`. Cloud deployment and Durable Object sync are outside the user-
-selected scope. Current disposition is `PASS_LOCAL_ONLY`. Candidate 014 and
-candidate 013 are historical; candidate 012 remains superseded.
+whole-cgroup peak memory. Restart diagnostics now separate two Cloudflare
+persistence classes: standalone `computerd` predictably loses its process-local
+SQLite state, while the shipped pull/reconcile/push path backed by a local
+file-SQLite authority survives SIGKILL and rehydrates the exact 64 MiB payload
+through fresh native FUSE. LayerFS independently reopens exact bytes from its
+production Store. The persistence timings are not ranked because the commands,
+clocks, sync endpoints, media, and retention contracts differ. Cloud deployment
+and Durable Object sync are outside the user-selected scope. Current disposition
+is diagnostic `PASS_LOCAL_ONLY`. Candidate 014 and candidate 013 are historical;
+candidate 012 remains superseded.
 
 Entry sequence:
 

@@ -1,0 +1,26 @@
+{"detail": null, "event": "scenario-start", "monotonic_ns": 1504684934619375, "time_ns": 1787737923259378000, "time_utc": "2026-08-26T09:52:03.259382+00:00"}
+{"detail": {"returncode": 1, "timed_out": false}, "event": "command:preflight-container-layerfs-c015-lifecycle-immediate", "monotonic_ns": 1504684962183500, "time_ns": 1787737923286943000, "time_utc": "2026-08-26T09:52:03.286944+00:00"}
+{"detail": {"returncode": 1, "timed_out": false}, "event": "command:preflight-volume", "monotonic_ns": 1504684987973333, "time_ns": 1787737923312733000, "time_utc": "2026-08-26T09:52:03.312734+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:image-inspect", "monotonic_ns": 1504685030338041, "time_ns": 1787737923355099000, "time_utc": "2026-08-26T09:52:03.355099+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:product-diff", "monotonic_ns": 1504685043461625, "time_ns": 1787737923368222000, "time_utc": "2026-08-26T09:52:03.368223+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:volume-create", "monotonic_ns": 1504685065265500, "time_ns": 1787737923390027000, "time_utc": "2026-08-26T09:52:03.390027+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:volume-inspect", "monotonic_ns": 1504685086344375, "time_ns": 1787737923411106000, "time_utc": "2026-08-26T09:52:03.411107+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:daemon-launch", "monotonic_ns": 1504685214047000, "time_ns": 1787737923538810000, "time_utc": "2026-08-26T09:52:03.538811+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:daemon-running-inspect", "monotonic_ns": 1504685236721041, "time_ns": 1787737923561485000, "time_utc": "2026-08-26T09:52:03.561486+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:daemon-running-mountinfo", "monotonic_ns": 1504685301660125, "time_ns": 1787737923626425000, "time_utc": "2026-08-26T09:52:03.626426+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:daemon-running-proc-status", "monotonic_ns": 1504685364769333, "time_ns": 1787737923689535000, "time_utc": "2026-08-26T09:52:03.689536+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:daemon-running-top", "monotonic_ns": 1504685394456291, "time_ns": 1787737923719223000, "time_utc": "2026-08-26T09:52:03.719223+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:daemon-running-fuse-holders", "monotonic_ns": 1504685466839083, "time_ns": 1787737923791607000, "time_utc": "2026-08-26T09:52:03.791607+00:00"}
+{"detail": {"attempts": 1, "container": "layerfs-c015-lifecycle-immediate"}, "event": "ready:daemon", "monotonic_ns": 1504685491119583, "time_ns": 1787737923815887000, "time_utc": "2026-08-26T09:52:03.815888+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:term-delivery-1", "monotonic_ns": 1504685518445125, "time_ns": 1787737923843213000, "time_utc": "2026-08-26T09:52:03.843214+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:daemon-wait", "monotonic_ns": 1504685544723333, "time_ns": 1787737923869492000, "time_utc": "2026-08-26T09:52:03.869493+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:daemon-logs", "monotonic_ns": 1504685566890083, "time_ns": 1787737923891659000, "time_utc": "2026-08-26T09:52:03.891660+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:daemon-stopped-inspect", "monotonic_ns": 1504685588513666, "time_ns": 1787737923913283000, "time_utc": "2026-08-26T09:52:03.913284+00:00"}
+{"detail": {"returncode": 1, "timed_out": false}, "event": "command:daemon-post-stop-top", "monotonic_ns": 1504685611303416, "time_ns": 1787737923936073000, "time_utc": "2026-08-26T09:52:03.936074+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:daemon-terminal-copy", "monotonic_ns": 1504685637629750, "time_ns": 1787737923962400000, "time_utc": "2026-08-26T09:52:03.962401+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:cleanup-rm-layerfs-c015-lifecycle-immediate", "monotonic_ns": 1504685668731583, "time_ns": 1787737923993502000, "time_utc": "2026-08-26T09:52:03.993503+00:00"}
+{"detail": {"returncode": 1, "timed_out": false}, "event": "command:cleanup-inspect-layerfs-c015-lifecycle-immediate", "monotonic_ns": 1504685690365916, "time_ns": 1787737924015137000, "time_utc": "2026-08-26T09:52:04.015138+00:00"}
+{"detail": {"returncode": 0, "timed_out": false}, "event": "command:cleanup-volume-rm", "monotonic_ns": 1504685711757833, "time_ns": 1787737924036529000, "time_utc": "2026-08-26T09:52:04.036530+00:00"}
+{"detail": {"returncode": 1, "timed_out": false}, "event": "command:cleanup-volume-inspect", "monotonic_ns": 1504685732195750, "time_ns": 1787737924056968000, "time_utc": "2026-08-26T09:52:04.056968+00:00"}
+{"detail": {"all_absent": true}, "event": "cleanup-complete", "monotonic_ns": 1504685732426833, "time_ns": 1787737924057199000, "time_utc": "2026-08-26T09:52:04.057199+00:00"}
+{"detail": {"status": "PASS"}, "event": "scenario-complete", "monotonic_ns": 1504685732614291, "time_ns": 1787737924057386000, "time_utc": "2026-08-26T09:52:04.057386+00:00"}

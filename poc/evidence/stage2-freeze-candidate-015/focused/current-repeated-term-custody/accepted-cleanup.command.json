@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "docker",
+    "exec",
+    "layerfs-c015-lifecycle-repeat-reopen",
+    "python3",
+    "-c",
+    "import os\nos.unlink(\"/workspace/dirty.bin\")\ndirectory = os.open(\"/workspace\", os.O_RDONLY | os.O_DIRECTORY)\ntry:\n    os.fsync(directory)\nfinally:\n    os.close(directory)"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+  "elapsed_ns": 79764875,
+  "ended": {
+    "monotonic_ns": 1504687974776958,
+    "time_ns": 1787737926299584000,
+    "time_utc": "2026-08-26T09:52:06.299592+00:00"
+  },
+  "returncode": 0,
+  "started": {
+    "monotonic_ns": 1504687895012083,
+    "time_ns": 1787737926219819000,
+    "time_utc": "2026-08-26T09:52:06.219819+00:00"
+  },
+  "timed_out": false
+}

@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "docker",
+    "volume",
+    "create",
+    "layerfs_c015_lifecycle_busy_store"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+  "elapsed_ns": 21109667,
+  "ended": {
+    "monotonic_ns": 1504688382288000,
+    "time_ns": 1787737926707102000,
+    "time_utc": "2026-08-26T09:52:06.707109+00:00"
+  },
+  "returncode": 0,
+  "started": {
+    "monotonic_ns": 1504688361178333,
+    "time_ns": 1787737926685992000,
+    "time_utc": "2026-08-26T09:52:06.685993+00:00"
+  },
+  "timed_out": false
+}

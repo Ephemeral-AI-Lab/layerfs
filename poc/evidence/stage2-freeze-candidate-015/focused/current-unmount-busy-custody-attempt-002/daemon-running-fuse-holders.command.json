@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "docker",
+    "exec",
+    "layerfs-c015-lifecycle-busy",
+    "sh",
+    "-c",
+    "for p in /proc/[0-9]*; do c=$(readlink \"$p/cwd\" 2>/dev/null || :); case \"$c\" in /workspace*) printf \"%s %s\\n\" \"$p\" \"$c\";; esac; done"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+  "elapsed_ns": 55499708,
+  "ended": {
+    "monotonic_ns": 1504732053373208,
+    "time_ns": 1787737970378889000,
+    "time_utc": "2026-08-26T09:52:50.378895+00:00"
+  },
+  "returncode": 0,
+  "started": {
+    "monotonic_ns": 1504731997873500,
+    "time_ns": 1787737970323388000,
+    "time_utc": "2026-08-26T09:52:50.323389+00:00"
+  },
+  "timed_out": false
+}

@@ -1,0 +1,9 @@
+{
+  "acknowledged_unix_ns": 1787736409373074000,
+  "acknowledgement_to_kill_request_ns": 453000,
+  "command_started_unix_ns": 1787736408667913000,
+  "kill_completed_unix_ns": 1787736409425795000,
+  "kill_requested_unix_ns": 1787736409373527000,
+  "local_acknowledgement_ns": 705161000,
+  "wait_completed_unix_ns": 1787736409447041000
+}

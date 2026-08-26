@@ -1,0 +1,255 @@
+{
+  "schema": "layerfs-stage2-execution-custody-v1",
+  "scenario": "repeated-term-during-dirty-checkpoint-with-verified-reopen",
+  "status": "FAIL_REQUIRED_RAW_EVIDENCE_ABSENT",
+  "custody_complete": false,
+  "terminal_result": "PASS_SELF_REPORTED_WITH_EXACT_REOPEN_HASH",
+  "claim_disposition": "TERMINALS_AND_HASH_RETAINED_BUT_SIGNAL_SEQUENCE_AND_EXECUTION_NOT_RECONSTRUCTABLE",
+  "binding": {
+    "expected": {
+      "source_commit": "7e82abcd7320f6a214be336d82488ba0527b6025",
+      "source_tree": "df13d88eb7e7d2471971b0c58ca6425bb81b0b03",
+      "image_tag": "layerfs-fuse:frozen-7e82abc",
+      "image_id": "sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0"
+    },
+    "phase_direct": {
+      "source_commit_values": {
+        "value": [
+          "7e82abcd7320f6a214be336d82488ba0527b6025",
+          "7e82abcd7320f6a214be336d82488ba0527b6025"
+        ],
+        "provenance": [
+          "dirty-terminal.json.source_commit",
+          "reopen-terminal.json.source_commit"
+        ],
+        "classification": "DIRECT_RETAINED_RAW"
+      },
+      "source_tree_values": {
+        "value": [
+          "df13d88eb7e7d2471971b0c58ca6425bb81b0b03",
+          "df13d88eb7e7d2471971b0c58ca6425bb81b0b03"
+        ],
+        "provenance": [
+          "dirty-terminal.json.source_tree",
+          "reopen-terminal.json.source_tree"
+        ],
+        "classification": "DIRECT_RETAINED_RAW"
+      },
+      "executable_blake3_values": {
+        "value": [
+          "da9c5b4c5624156ee1c23de6829f4e9f52ba96c2997a8b86937a45dd55b7f3ae",
+          "da9c5b4c5624156ee1c23de6829f4e9f52ba96c2997a8b86937a45dd55b7f3ae"
+        ],
+        "classification": "DIRECT_RETAINED_RAW"
+      },
+      "image_id": {
+        "value": null,
+        "classification": "MISSING_PHASE_RAW",
+        "reason": "Neither phase retains a launch plan or Docker inspect."
+      }
+    },
+    "candidate_external_aggregate": {
+      "path": "../summary.json",
+      "sha256": "08561216848556ff9de0126df4a2be07cf2da7897810208c68d807fb7b3051fa",
+      "git_blob": "2f648a1e274eecd213459aee537c34b465070cc9",
+      "image_tag": "layerfs-fuse:frozen-7e82abc",
+      "image_id": "sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0",
+      "classification": "DIRECT_RETAINED_EXTERNAL_AGGREGATE_NOT_PHASE_INSPECTION"
+    },
+    "equations": {
+      "both_source_commits_exact": true,
+      "both_source_trees_exact": true,
+      "both_executables_match_candidate_aggregate": true,
+      "phase_images_exact": null
+    }
+  },
+  "execution": {
+    "launch": {
+      "dirty_phase_command_argv": null,
+      "reopen_phase_command_argv": null,
+      "container_names": null,
+      "volume_name": null,
+      "host_configs": null,
+      "daemon_argv": null,
+      "classification": "MISSING_REQUIRED_RAW"
+    },
+    "workload": {
+      "write_command_argv": null,
+      "reopen_hash_command_argv": null,
+      "cleanup_command_argv": null,
+      "direct_observations": {
+        "dirty_logical_workspace_bytes": 104857600,
+        "dirty_write_callbacks": 100,
+        "reopen_read_callbacks": 402,
+        "reopen_fsyncdir_callbacks": 1
+      },
+      "classification": "PARTIAL_DIRECT_OBSERVATION_COMMANDS_MISSING"
+    },
+    "trigger": {
+      "dirty_terminal_observed_signal": {
+        "value": 15,
+        "provenance": "dirty-terminal.json.signal",
+        "classification": "DIRECT_RETAINED_RAW"
+      },
+      "reopen_terminal_observed_signal": {
+        "value": 15,
+        "provenance": "reopen-terminal.json.signal",
+        "classification": "DIRECT_RETAINED_RAW"
+      },
+      "delivery_commands": null,
+      "dirty_phase_delivery_count": null,
+      "second_signal_delivery_receipt": null,
+      "signal_order_relative_to_checkpoint": null,
+      "classification": "MISSING_REQUIRED_RAW",
+      "note": "A terminal signal field cannot prove repeated delivery or delivery during the dirty checkpoint."
+    },
+    "timestamps": {
+      "dirty_launch_utc": null,
+      "dirty_ready_utc": null,
+      "write_complete_utc": null,
+      "signal_deliveries_utc": null,
+      "dirty_wait_complete_utc": null,
+      "reopen_launch_utc": null,
+      "reopen_ready_utc": null,
+      "reopen_wait_complete_utc": null,
+      "classification": "MISSING_REQUIRED_RAW",
+      "filesystem_metadata_observations": [
+        {
+          "path": "expected.sha256",
+          "current_mtime": "2026-08-26T15:08:15+08:00"
+        },
+        {
+          "path": "dirty-terminal.json",
+          "current_mtime": "2026-08-26T15:08:19+08:00"
+        },
+        {
+          "path": "reopen.sha256",
+          "current_mtime": "2026-08-26T15:08:49+08:00"
+        },
+        {
+          "path": "reopen-terminal.json",
+          "current_mtime": "2026-08-26T15:08:55+08:00"
+        }
+      ],
+      "filesystem_metadata_classification": "DERIVED_NONAUTHORITATIVE_CURRENT_FILESYSTEM_METADATA"
+    },
+    "wait": {
+      "dirty_readiness_wait_receipt": null,
+      "dirty_docker_wait_output": null,
+      "dirty_exit_code": null,
+      "reopen_readiness_wait_receipt": null,
+      "reopen_docker_wait_output": null,
+      "reopen_exit_code": null,
+      "bounded_elapsed_ns": null,
+      "classification": "MISSING_REQUIRED_RAW"
+    },
+    "inspection": {
+      "dirty_running_docker_inspect": null,
+      "dirty_stopped_docker_inspect": null,
+      "dirty_mountinfo": null,
+      "reopen_running_docker_inspect": null,
+      "reopen_stopped_docker_inspect": null,
+      "reopen_mountinfo": null,
+      "classification": "MISSING_REQUIRED_RAW"
+    },
+    "terminal": {
+      "dirty": {
+        "path": "dirty-terminal.json",
+        "sha256": "b89c1bc080994956131159502fa740587e91955794b3f4d9f916b2bc631ac9b2",
+        "git_blob": "5b3a52d914d5ff1d6e9b48b19de4997eaebc045a",
+        "classification": "DIRECT_RETAINED_RAW",
+        "observed": {
+          "status": "PASS",
+          "signal": 15,
+          "session_terminated": true,
+          "terminal_snapshot_complete": true,
+          "integrity": "Verified",
+          "generation": 1,
+          "checkpoints": 1,
+          "transactions_started": 2,
+          "transactions_committed": 2,
+          "transactions_rolled_back": 0,
+          "publication_commits": 2,
+          "operation_q_terminal_bytes": 0,
+          "spool_live_bytes": 0,
+          "connections_terminal": 0
+        }
+      },
+      "reopen": {
+        "path": "reopen-terminal.json",
+        "sha256": "92a88b1bb0880d77e90582c8273dfd2cd5c64080b99041e6a014dd0dbef87193",
+        "git_blob": "895f2b2bd01db19c33c51ca58fc41fdd5bd53038",
+        "classification": "DIRECT_RETAINED_RAW",
+        "observed": {
+          "status": "PASS",
+          "signal": 15,
+          "session_terminated": true,
+          "terminal_snapshot_complete": true,
+          "integrity": "Verified",
+          "generation": 2,
+          "logical_workspace_bytes": 0,
+          "operation_q_terminal_bytes": 0,
+          "spool_live_bytes": 0,
+          "connections_terminal": 0
+        }
+      }
+    },
+    "exact_reopen_hash": {
+      "expected_path": "expected.sha256",
+      "expected_file_sha256": "08e12c2288e066eb64c69dc79a676a1067b0899e13a63f3fe6d7a88591c97577",
+      "expected_git_blob": "394b31fa4d735d3d96d88a7e7a3181818c0ebfc8",
+      "reopen_path": "reopen.sha256",
+      "reopen_file_sha256": "08e12c2288e066eb64c69dc79a676a1067b0899e13a63f3fe6d7a88591c97577",
+      "reopen_git_blob": "394b31fa4d735d3d96d88a7e7a3181818c0ebfc8",
+      "payload_sha256": "d15c503357f4d672422729abba249faece3c3d7ac2f6414accda73ca30023d4a",
+      "payload_path": "/workspace/dirty.bin",
+      "classification": "DIRECT_RETAINED_RAW_PLUS_DERIVED_EQUALITY",
+      "equal": true
+    },
+    "cleanup": {
+      "accepted_cleanup_observed_in_reopen_terminal": {
+        "logical_workspace_bytes": 0,
+        "fsyncdir_callbacks": 1,
+        "classification": "DIRECT_RETAINED_RAW"
+      },
+      "exact_cleanup_command": null,
+      "container_removals": null,
+      "volume_removal": null,
+      "mount_absence": null,
+      "process_absence": null,
+      "classification": "PARTIAL_DIRECT_OBSERVATION_EXTERNAL_CLEANUP_MISSING"
+    }
+  },
+  "required_raw_policy": {
+    "equation": "custody_complete iff every required category is DIRECT_RETAINED_RAW",
+    "categories": {
+      "launch": false,
+      "workload_commands": false,
+      "repeated_signal_delivery_and_checkpoint_order": false,
+      "timestamps": false,
+      "wait_and_exit": false,
+      "inspection": false,
+      "terminals": true,
+      "exact_reopen_hash": true,
+      "cleanup": false,
+      "phase_image_binding": false
+    },
+    "missing_required": [
+      "launch",
+      "workload_commands",
+      "repeated_signal_delivery_and_checkpoint_order",
+      "timestamps",
+      "wait_and_exit",
+      "inspection",
+      "cleanup",
+      "phase_image_binding"
+    ],
+    "result": false
+  },
+  "git_custody": {
+    "containing_commit": "6e88db552fa8b240bb021d6da0110927065bd56b",
+    "containing_tree": "8083de14b0562e5db6ed6f403383469b215ffcdb",
+    "commit_time": "2026-08-26T15:50:14+08:00",
+    "classification": "DIRECT_RETAINED_GIT_CUSTODY_NOT_EXECUTION_TIME"
+  }
+}

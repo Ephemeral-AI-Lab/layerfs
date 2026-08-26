@@ -1,0 +1,4 @@
+PID                 PPID                STARTED             STAT                COMMAND             COMMAND
+1534                1510                Wed                 Aug                 26                  09:52:06 2026 Ss docker-init /sbin/docker-init -- /usr/local/bin/layerfs-fuse --store /var/lib/layerfs/store.sqlite --mount /workspace --spool /var/tmp/layerfs-owned/spool --receipt /var/tmp/layerfs-owned/terminal.json --ref main --integrity verified --uid 0 --gid 0
+1547                1534                Wed                 Aug                 26                  09:52:06 2026 Sl layerfs-fuse /usr/local/bin/layerfs-fuse --store /var/lib/layerfs/store.sqlite --mount /workspace --spool /var/tmp/layerfs-owned/spool --receipt /var/tmp/layerfs-owned/terminal.json --ref main --integrity verified --uid 0 --gid 0
+1635                1510                Wed                 Aug                 26                  09:52:06 2026 Ss sleep sleep 120

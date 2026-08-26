@@ -1,0 +1,9 @@
+{
+  "schema": "layerfs-stage2-015-evidence-supersession-v1",
+  "status": "SUPERSEDED_DIAGNOSTIC",
+  "reason": "The passing authority used a macOS host bind, which did not match LayerFS's Docker-volume persistence-media class.",
+  "raw_result_preserved": true,
+  "superseded_by": "../cloudflare-local-authority-volume-durable/receipt.json",
+  "controlling_wrapper_commit": "510b4850385c90311a7a12fcd6a5469812ef5fa0",
+  "controlling_wrapper_tree": "21ab7d1e269b3543d11a10068c15e74015929ee8"
+}

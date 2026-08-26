@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "docker",
+    "cp",
+    "layerfs-c015-lifecycle-repeat-reopen:/var/tmp/layerfs-owned/terminal.json",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/poc/evidence/stage2-freeze-candidate-015/focused/current-repeated-term-custody/reopen-terminal.json"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+  "elapsed_ns": 26786750,
+  "ended": {
+    "monotonic_ns": 1504688119030791,
+    "time_ns": 1787737926443841000,
+    "time_utc": "2026-08-26T09:52:06.443847+00:00"
+  },
+  "returncode": 0,
+  "started": {
+    "monotonic_ns": 1504688092244041,
+    "time_ns": 1787737926417054000,
+    "time_utc": "2026-08-26T09:52:06.417054+00:00"
+  },
+  "timed_out": false
+}

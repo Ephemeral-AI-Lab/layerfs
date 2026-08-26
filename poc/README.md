@@ -43,11 +43,14 @@ pass. Candidate 015's unchanged-upstream source-bound live rerun passes:
 `3.299 s`, Rsum `2.133`, G `3.569`, Spread `1.021`. These remain `LIVE_MOUNT`
 diagnostics. Under the same local native-ARM64, one-CPU, 512 MiB envelope,
 Cloudflare Computer's FUSE median sums are `7.260 s` and `7.449 s`; LayerFS is
-`2.160x` and `2.258x` faster. LayerFS also survives the matched high-entropy
-64 MiB forced restart with exact bytes; Cloudflare's local process state
-reopens as `ABSENT`. Deployment and Durable Object sync are outside the user-
-selected local scope. Current status is `PASS_LOCAL_ONLY`. Candidate 014 and
-013 are historical; candidate 012 is superseded.
+`2.160x` and `2.258x` faster. LayerFS survives a high-entropy 64 MiB forced
+restart from its production Store. Standalone Cloudflare process-local SQLite
+predictably reopens without that state, while the shipped sync path backed by a
+local file-SQLite authority rehydrates the exact bytes after SIGKILL. Those
+persistence timings are not numerically compared because their contracts differ.
+Deployment and Durable Object sync are outside the user-selected local scope.
+Current diagnostic status is `PASS_LOCAL_ONLY`. Candidate 014 and 013 are
+historical; candidate 012 is superseded.
 
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure

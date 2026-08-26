@@ -19,11 +19,15 @@ diagnostics. A fresh matched local Cloudflare Computer campaign uses the same
 native ARM64, one CPU, 512 MiB, network-none, real-FUSE envelope. Cloudflare's
 FUSE median sums are `7.260 s` against `/var/tmp` and `7.449 s` against `/tmp`;
 LayerFS is `2.160x` and `2.258x` faster. Normalized summed overhead is `45.5%`
-and `44.3%` of Cloudflare's. On the matched high-entropy 64 MiB restart test,
-LayerFS passes at `926.499 ms`; Cloudflare's faster `673.020 ms` local
-acknowledgement loses the file after container restart and is not a durable
-latency. Durable Object synchronization and deployment are outside the user-
-selected local scope. Current status is `PASS_LOCAL_ONLY`.
+and `44.3%` of Cloudflare's. Restart diagnostics are deliberately not ranked:
+standalone `computerd` predictably loses its process-local SQLite state, while
+Cloudflare's shipped pull/reconcile/push path backed by a harness file-SQLite
+authority rehydrates the exact 64 MiB payload after SIGKILL; LayerFS separately
+reopens exact bytes from its production Store. These use different commands,
+clocks, synchronization endpoints, persistence media, and retention contracts,
+so no durable-latency ratio is asserted. Durable Object synchronization and
+deployment are outside the user-selected local scope. Current diagnostic status
+is `PASS_LOCAL_ONLY`.
 
 Prepared: `2026-08-26`
 

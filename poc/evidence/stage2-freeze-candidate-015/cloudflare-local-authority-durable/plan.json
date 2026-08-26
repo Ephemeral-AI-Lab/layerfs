@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "node",
+    "--experimental-sqlite",
+    "--no-warnings",
+    "/Users/yifanxu/Ephemeral-AI-Lab/cloudflare-computer-bench/upstream/script/local-durable-fs-bench.mjs"
+  ],
+  "classification": "DIAGNOSTIC_ONLY",
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/cloudflare-computer-bench/upstream",
+  "harness_sha256": "bb4bdd2166e934c164dc5c7f08c8cb551f6152397fef40938768b6d4463dd032",
+  "schema": "layerfs-stage2-015-cloudflare-local-authority-plan-v1",
+  "test_sha256": "84b5519af8e4fbfea64ba611210db21c3dc04c069a316c7acaf269d42f6f2ab0",
+  "wrapper_commit": "cb201d083f52ad61af1e18b4a96746f860795fc1",
+  "wrapper_tree": "3de824b84da929940d26dde7c19e38ba6dfdbbac"
+}

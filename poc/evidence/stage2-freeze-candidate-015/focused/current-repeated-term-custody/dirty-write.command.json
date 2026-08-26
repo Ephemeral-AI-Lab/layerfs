@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "docker",
+    "exec",
+    "layerfs-c015-lifecycle-repeat-dirty",
+    "python3",
+    "-c",
+    "import hashlib, json, os\npath = \"/workspace/dirty.bin\"\ndigest = hashlib.sha256()\nblock = bytes(range(256)) * 4096\nwith open(path, \"wb\", buffering=0) as target:\n    for _ in range(100):\n        written = target.write(block)\n        if written != len(block):\n            raise RuntimeError(f\"short write: {written}\")\n        digest.update(block)\nwith open(\"/var/tmp/layerfs-owned/expected.json\", \"x\") as output:\n    json.dump({\"path\": path, \"size\": 100 * 1024 * 1024, \"sha256\": digest.hexdigest(), \"explicit_fsync\": False}, output, sort_keys=True)\n    output.write(\"\\n\")"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+  "elapsed_ns": 211076333,
+  "ended": {
+    "monotonic_ns": 1504686537458416,
+    "time_ns": 1787737924862243000,
+    "time_utc": "2026-08-26T09:52:04.862249+00:00"
+  },
+  "returncode": 0,
+  "started": {
+    "monotonic_ns": 1504686326382083,
+    "time_ns": 1787737924651163000,
+    "time_utc": "2026-08-26T09:52:04.651164+00:00"
+  },
+  "timed_out": false
+}

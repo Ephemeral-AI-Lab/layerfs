@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "docker",
+    "image",
+    "inspect",
+    "sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+  "elapsed_ns": 41458208,
+  "ended": {
+    "monotonic_ns": 1504685029578583,
+    "time_ns": 1787737923354339000,
+    "time_utc": "2026-08-26T09:52:03.354345+00:00"
+  },
+  "returncode": 0,
+  "started": {
+    "monotonic_ns": 1504684988120375,
+    "time_ns": 1787737923312880000,
+    "time_utc": "2026-08-26T09:52:03.312881+00:00"
+  },
+  "timed_out": false
+}

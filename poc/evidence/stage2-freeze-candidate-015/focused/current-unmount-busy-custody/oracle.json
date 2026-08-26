@@ -1,0 +1,22 @@
+{
+  "checks": {
+    "bounded_nonzero_exit": true,
+    "exact_envelope": true,
+    "external_unmount_failed_busy": false,
+    "fail_closed_busy_terminal": true,
+    "holder_owned_fuse_cwd": true,
+    "image_id_exact": true,
+    "native_arm64": true,
+    "owned_process_container_volume_cleanup": true,
+    "single_noop_checkpoint_before_busy": true,
+    "snapshot_q_spool_connections_zero": true,
+    "source_identity_exact": true,
+    "term_delivered_in_race": true,
+    "uncertain_session_not_released": true,
+    "upstream_fs_bench_identity": true,
+    "verified_integrity": true
+  },
+  "error": "OracleFailure: first failing equation: external_unmount_failed_busy",
+  "schema": "layerfs-stage2-lifecycle-custody-oracle-v1",
+  "status": "FAIL"
+}

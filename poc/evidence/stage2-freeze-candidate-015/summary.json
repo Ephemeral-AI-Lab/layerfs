@@ -1,5 +1,5 @@
 {
-  "schema": "layerfs-stage2-015-summary-v1",
+  "schema": "layerfs-stage2-015-summary-v2",
   "status": "PASS_LOCAL_ONLY",
   "terminal_comparison_status": "PASS_LOCAL_ONLY",
   "terminal_comparison_blocker": null,
@@ -24,7 +24,15 @@
     "external_unmount_dirty_single_checkpoint_verified_reopen": "PASS",
     "post_fsyncdir_metadata_sigkill_verified_reopen": "PASS",
     "post_fsyncdir_64_mib_sigkill_verified_reopen": "PASS",
-    "statvfs_four_state_oracle": "PASS"
+    "statvfs_four_state_oracle": "PASS",
+    "raw_execution_custody": {
+      "immediate_term": "focused/current-immediate-term-custody/oracle.json",
+      "repeated_term": "focused/current-repeated-term-custody/oracle.json",
+      "unmount_busy": "focused/current-unmount-busy-custody-attempt-002/oracle.json",
+      "status": "PASS",
+      "historical_incomplete_receipts_retained": true,
+      "failed_busy_race_attempt_retained": true
+    }
   },
   "durable_campaign": {
     "run": "durable/durable04",
@@ -80,7 +88,8 @@
       }
     },
     "durable_layerfs": "PASS_DURABLE_LOCAL",
-    "cloudflare_local_process_state": "FAIL_DURABILITY",
+    "cloudflare_local_process_state": "PASS_EXPECTED_PROCESS_LOCAL_STATE_LOSS_NEGATIVE_CONTROL",
+    "cloudflare_local_file_authority": "PASS_LOCAL_AUTHORITATIVE_SQLITE_DURABLE_DIAGNOSTIC",
     "cloudflare_full_product": "OUT_OF_SCOPE_USER_SELECTED_LOCAL_ONLY",
     "old_4_5s_rsum_g_thresholds_reused": false
   },
@@ -88,7 +97,7 @@
     "verification": "local-comparison.json",
     "status": "PASS_LOCAL_ONLY",
     "durable_restart": {
-      "workload": "64 MiB high-entropy write, SHA-256, explicit sync, immediate forced death, fresh-container reopen",
+      "workload": "64 MiB high-entropy write and exact restart-visible SHA-256 verification",
       "layerfs": {
         "status": "PASS_DURABLE",
         "T_live_ns": 398368500,
@@ -96,13 +105,35 @@
         "T_to_durable_ns": 926499125,
         "survived_restart": true
       },
-      "cloudflare_local": {
-        "status": "FAIL_DURABILITY",
-        "local_acknowledgement_ns": 673020000,
+      "cloudflare_process_local_negative_control": {
+        "status": "PASS_EXPECTED_PROCESS_LOCAL_STATE_LOSS",
+        "same_container_restart": true,
         "survived_restart": false,
-        "reopen_output": "ABSENT"
+        "reopen_output": "ABSENT",
+        "durability_claim": false
       },
-      "disposition": "LAYERFS_ONLY_RESTART_DURABLE"
+      "cloudflare_local_authoritative_sqlite": {
+        "status": "PASS",
+        "persistence_class": "LOCAL_AUTHORITATIVE_SQLITE_DURABLE",
+        "wrapper_commit": "510b4850385c90311a7a12fcd6a5469812ef5fa0",
+        "wrapper_tree": "21ab7d1e269b3543d11a10068c15e74015929ee8",
+        "authority_media": "DOCKER_LOCAL_NAMED_VOLUME",
+        "T_live_ns": 2291927625,
+        "T_sync_ns": 4558361375,
+        "T_to_durable_ns": 6850289000,
+        "pulled_objects": 2,
+        "rehydrated_objects": 2,
+        "same_container_restart": true,
+        "survived_restart": true,
+        "exact_fuse_bytes": true,
+        "cloudflare_durable_object_present": false,
+        "resource_metrics": null,
+        "resource_metrics_reason": "This focused authority/restart diagnostic did not capture attributable per-run CPU or RSS; resource comparisons remain limited to the matched live fs-bench populations."
+      },
+      "disposition": "BOTH_RESTART_VISIBLE_WITH_DIFFERENT_LOCAL_AUTHORITIES",
+      "diagnostic_only": true,
+      "persistence_latency_comparison_ns": null,
+      "persistence_latency_comparison_reason": "Undefined: commands, clocks, sync endpoints, persistence media, and retention contracts differ."
     },
     "live_var_tmp": {
       "layerfs_fuse_median_sum_ns": 3360647000,
@@ -123,8 +154,10 @@
   },
   "cloudflare_deploy_readiness": {
     "status": "OUT_OF_SCOPE_USER_SELECTED_LOCAL_ONLY",
-    "wrapper_commit": "151b053b514e7bd0eb4b64481fe89335c43e7109",
-    "wrapper_tree": "44456876b58e5ebb2652e999f48d9b015ec7ee5f",
+    "historical_wrapper_commit": "151b053b514e7bd0eb4b64481fe89335c43e7109",
+    "historical_wrapper_tree": "44456876b58e5ebb2652e999f48d9b015ec7ee5f",
+    "local_durability_wrapper_commit": "510b4850385c90311a7a12fcd6a5469812ef5fa0",
+    "local_durability_wrapper_tree": "21ab7d1e269b3543d11a10068c15e74015929ee8",
     "computerd_sha256": "a6f05d79cce84035b21f6377d7f37b799128c6bdb5e9a4fb92b403604fb49b7a",
     "deployed_samples": 0,
     "resource_metrics": null

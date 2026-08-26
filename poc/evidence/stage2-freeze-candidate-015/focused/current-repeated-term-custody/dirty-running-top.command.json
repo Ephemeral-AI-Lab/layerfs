@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "docker",
+    "top",
+    "layerfs-c015-lifecycle-repeat-dirty",
+    "-eo",
+    "pid,ppid,lstart,stat,comm,args"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+  "elapsed_ns": 26873208,
+  "ended": {
+    "monotonic_ns": 1504686275310458,
+    "time_ns": 1787737924600091000,
+    "time_utc": "2026-08-26T09:52:04.600097+00:00"
+  },
+  "returncode": 0,
+  "started": {
+    "monotonic_ns": 1504686248437250,
+    "time_ns": 1787737924573217000,
+    "time_utc": "2026-08-26T09:52:04.573218+00:00"
+  },
+  "timed_out": false
+}

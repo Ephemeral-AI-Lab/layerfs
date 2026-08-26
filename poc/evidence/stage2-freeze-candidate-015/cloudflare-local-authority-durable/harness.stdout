@@ -1,0 +1,112 @@
+{
+  "schema": "cloudflare-local-authoritative-sqlite-durable-v1",
+  "status": "PASS",
+  "persistenceClass": "LOCAL_AUTHORITATIVE_SQLITE_DURABLE",
+  "image": "sha256:8c5100fabfd873de4ee7aabf908027e946b3fdac5328e15f9dabbf9731200bb0",
+  "source": "de87919a4fd37242e960e13b7b3ba802d1eef0a0",
+  "tree": "4fb409d7e1356e1098439293d77d2fdc2dbf2190",
+  "envelope": {
+    "platform": "linux/arm64",
+    "cpus": 1,
+    "memoryBytes": 536870912,
+    "memorySwapBytes": 536870912,
+    "network": "none",
+    "workspace": "native FUSE"
+  },
+  "cleanup": {
+    "containerAbsent": true,
+    "stateAbsent": true
+  },
+  "imageLabels": {
+    "dev.layerfs.attempt": "docker-fuse-attempt-2",
+    "dev.layerfs.lane": "lane-a",
+    "dev.layerfs.owner": "layerfs-lane-a-cloudflare-attempt-2",
+    "dev.layerfs.parent-image": "sha256:c8467c6e10bfb9c7fa21a166d4bb9a5a9b23df288be9614c225529e2fe72cdd9",
+    "dev.layerfs.upstream-commit": "de87919a4fd37242e960e13b7b3ba802d1eef0a0",
+    "dev.layerfs.upstream-tree": "4fb409d7e1356e1098439293d77d2fdc2dbf2190"
+  },
+  "containerId": "ba4bbc06bed0a95a852181910c718a31bc4ce033c837d611df434ddf856c4011",
+  "timingNs": {
+    "T_live": 2247951333,
+    "T_sync": 5755424667,
+    "T_to_durable": 8003376000
+  },
+  "payload": {
+    "bytes": 67108864,
+    "sha256": "01d219f77cc9621492b77ea4cadc5929755d6d258492e7f017b460a27f8e8fc6"
+  },
+  "pull": {
+    "pulled": 2,
+    "inventory": {
+      "entries": [
+        "payload.bin"
+      ],
+      "size": 67108864,
+      "sha256": "01d219f77cc9621492b77ea4cadc5929755d6d258492e7f017b460a27f8e8fc6"
+    },
+    "checkpoint": {
+      "busy": 0,
+      "log": 0,
+      "checkpointed": 0
+    },
+    "pid": 61
+  },
+  "stopped": {
+    "exitCode": 137,
+    "containerId": "ba4bbc06bed0a95a852181910c718a31bc4ce033c837d611df434ddf856c4011"
+  },
+  "freshDbProcess": {
+    "entries": [
+      "payload.bin"
+    ],
+    "size": 67108864,
+    "sha256": "01d219f77cc9621492b77ea4cadc5929755d6d258492e7f017b460a27f8e8fc6",
+    "pid": 91379
+  },
+  "restart": {
+    "stdout": "cloudflare-local-durable-89340",
+    "containerId": "ba4bbc06bed0a95a852181910c718a31bc4ce033c837d611df434ddf856c4011"
+  },
+  "processIdentity": {
+    "before": {
+      "hostPid": 1868,
+      "startedAt": "2026-08-26T09:33:55.64444967Z",
+      "inside": "host_pid=0\npid1_start=42883\npid:[4026532558]"
+    },
+    "after": {
+      "hostPid": 2057,
+      "startedAt": "2026-08-26T09:34:04.382065008Z",
+      "inside": "host_pid=0\npid1_start=43757\npid:[4026532558]"
+    }
+  },
+  "restore": {
+    "reconciled": {
+      "fetchRevReset": true,
+      "pushRevReset": false
+    },
+    "pushed": 2,
+    "checkpoint": {
+      "busy": 0,
+      "log": 0,
+      "checkpointed": 0
+    },
+    "pid": 45
+  },
+  "freshFuse": {
+    "sha256": "01d219f77cc9621492b77ea4cadc5929755d6d258492e7f017b460a27f8e8fc6",
+    "inventory": "f payload.bin 67108864\n",
+    "mount": "fuse"
+  },
+  "authoritativeCleanup": {
+    "pulled": 1,
+    "inventory": {
+      "entries": []
+    },
+    "checkpoint": {
+      "busy": 0,
+      "log": 0,
+      "checkpointed": 0
+    },
+    "pid": 92
+  }
+}

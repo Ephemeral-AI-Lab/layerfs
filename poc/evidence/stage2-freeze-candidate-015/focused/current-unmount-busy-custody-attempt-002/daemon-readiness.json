@@ -1,0 +1,16 @@
+{
+  "attempts": 2,
+  "container": "layerfs-c015-lifecycle-busy",
+  "elapsed_ns": 98898666,
+  "ended": {
+    "monotonic_ns": 1504731834331666,
+    "time_ns": 1787737970159842000,
+    "time_utc": "2026-08-26T09:52:50.159850+00:00"
+  },
+  "matched_stdout_line": "{\"backend\":\"layerfs-fuse\",\"mount\":\"/workspace\",\"integrity\":\"Verified\",\"source_commit\":\"7e82abcd7320f6a214be336d82488ba0527b6025\",\"source_tree\":\"df13d88eb7e7d2471971b0c58ca6425bb81b0b03\",\"fs_bench_sha256\":\"0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef\"}",
+  "started": {
+    "monotonic_ns": 1504731735433000,
+    "time_ns": 1787737970060943000,
+    "time_utc": "2026-08-26T09:52:50.060944+00:00"
+  }
+}

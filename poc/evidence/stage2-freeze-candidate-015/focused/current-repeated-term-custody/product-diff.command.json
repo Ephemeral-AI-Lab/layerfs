@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "git",
+    "diff",
+    "--exit-code",
+    "7e82abcd7320f6a214be336d82488ba0527b6025",
+    "--",
+    "Cargo.toml",
+    "Cargo.lock",
+    "crates",
+    "containers",
+    "tools"
+  ],
+  "cwd": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty",
+  "elapsed_ns": 11962333,
+  "ended": {
+    "monotonic_ns": 1504685838735208,
+    "time_ns": 1787737924163508000,
+    "time_utc": "2026-08-26T09:52:04.163514+00:00"
+  },
+  "returncode": 0,
+  "started": {
+    "monotonic_ns": 1504685826772875,
+    "time_ns": 1787737924151546000,
+    "time_utc": "2026-08-26T09:52:04.151547+00:00"
+  },
+  "timed_out": false
+}
