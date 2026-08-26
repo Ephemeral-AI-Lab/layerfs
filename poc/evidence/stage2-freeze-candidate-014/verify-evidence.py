@@ -815,6 +815,7 @@ def main() -> None:
         "- The upstream matrices are `LIVE_MOUNT` diagnostics. Their Cloudflare thresholds do not control restart-durable performance.\n"
         f"- Persistence-inclusive campaign: {durable['status']}.\n"
         f"- Durable median sums: live {durable['aggregate']['sum_live_medians_ns'] / 1e9:.3f} s, checkpoint {durable['aggregate']['sum_checkpoint_medians_ns'] / 1e9:.3f} s, command-to-durable {durable['aggregate']['sum_to_durable_medians_ns'] / 1e9:.3f} s.\n"
+        "- Every measured sample satisfies the timing equation exactly; independently selected per-field medians need not add after aggregation.\n"
         "- Full-product Cloudflare comparison: unavailable without deployed Durable Object sync timing and restart authority.\n"
         "- No benchmark shim, backing tree, SDK/evaluator bypass, workload recognition, network row, tracing asymmetry, emulation, or storage-control shortcut was found. Stage 1.2 remained skipped.\n"
     )

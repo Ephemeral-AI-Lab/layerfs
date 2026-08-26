@@ -13,7 +13,9 @@ The exact `--cpus 1` `/var/tmp` population closes at SL `3.517 s`, Rsum
 The separate command-to-checkpoint-ack campaign now passes 36/36 measured
 samples plus 12 warmups: sum of `T_to_durable` medians `7.854 s` (`T_live`
 medians `3.524 s`, checkpoint medians `4.307 s`), with two SIGKILL/reopen
-proofs per sample. It has no fabricated numeric comparison gate. A deployed
+proofs per sample. Each sample's timing equation is exact; the three separately
+selected medians need not add after aggregation. It has no fabricated numeric
+comparison gate. A deployed
 Cloudflare post-exec Durable Object/restart population is unavailable, so this
 record is `PASS_DURABLE_LAYERFS_COMPARISON_UNAVAILABLE`, not terminal
 `PASS_OPTIMIZED`. Candidate 013 is historical live-mount evidence; candidate

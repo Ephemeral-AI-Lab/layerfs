@@ -13,8 +13,9 @@ matrices measure live mount latency and are now non-terminal diagnostics. A
 separate timer from command start through explicit whole-workspace durability
 acknowledgement, followed by kill/reopen state proof, controls the reopened
 closure. It passes 36/36 measured samples plus 12 warmups; summed durable
-medians are `7.854 s`, comprising separately aggregated live medians `3.524 s`
-and checkpoint medians `4.307 s`. The prior Cloudflare Docker ratios describe
+medians are `7.854 s`, reported alongside separately aggregated live medians
+`3.524 s` and checkpoint medians `4.307 s`. Every sample satisfies the timing
+equation exactly, but independently selected medians need not add. The prior Cloudflare Docker ratios describe
 local committed process-lifetime VFS work, not full Durable Object
 synchronization, so their thresholds are not reused as durable-persistence
 gates. Without a deployed post-pull/restart population the honest disposition

@@ -207,7 +207,7 @@
     "runtime/splice-oracle.sh": "994d55794f5d24a086c0e41fc5435348822ab17a88148bfa42a8d4626f71a9a8",
     "runtime/splice-request.txt": "2da678967bea2d2f872b187e62413bf1c4f21bef9ad24098c9a582f07d6fec95",
     "runtime/verify-durable.py": "ff21e7632255ebd7f076e7ee21c581de10a7474930855395e62c17f1d2080ce9",
-    "verify-evidence.py": "435ea2c49e10dcfa0d0994a165423a0856d1ff3257f97c30d75b5403a17255b3"
+    "verify-evidence.py": "d8050977456136c56e1fadcb9594dc0ac1a9387e8b83cdeba614c86fad1b18ac"
   },
   "status": "PASS"
 }

@@ -8,5 +8,6 @@ Product source `292be840c31052d85ab6e9441706298af3cd3d15` / tree `e3055bcd7a4192
 - The upstream matrices are `LIVE_MOUNT` diagnostics. Their Cloudflare thresholds do not control restart-durable performance.
 - Persistence-inclusive campaign: PASS_DURABLE.
 - Durable median sums: live 3.524 s, checkpoint 4.307 s, command-to-durable 7.854 s.
+- Every measured sample satisfies the timing equation exactly; independently selected per-field medians need not add after aggregation.
 - Full-product Cloudflare comparison: unavailable without deployed Durable Object sync timing and restart authority.
 - No benchmark shim, backing tree, SDK/evaluator bypass, workload recognition, network row, tracing asymmetry, emulation, or storage-control shortcut was found. Stage 1.2 remained skipped.
