@@ -26,7 +26,7 @@ use layerfs_engine::publication::Publication;
 use layerfs_engine::refs::RefState;
 use layerfs_engine::{Engine, EngineCounters, EngineError};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs::{File, OpenOptions};
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::ops::Bound::{Excluded, Unbounded};
@@ -47,6 +47,7 @@ pub const SPOOL_QUOTA_BYTES: u64 = 512 * 1024 * 1024;
 pub const MAX_LIVE_SPOOL_BYTES: u64 = 320 * 1024 * 1024;
 pub const MAX_LOGICAL_FILE_BYTES: u64 = 320 * 1024 * 1024;
 pub const MAX_LOGICAL_WORKSPACE_BYTES: u64 = 512 * 1024 * 1024;
+pub const MAX_COLD_LOOKUP_PRIMARY_STATEMENTS: u64 = 16;
 const DIRECTORY_PAGE_ENTRIES: usize = 128;
 const DIRECTORY_PAGE_BYTES: usize = 256 * 1024;
 const SPOOL_COMPACTION_SLACK_BYTES: u64 = 64 * 1024 * 1024;
@@ -286,11 +287,14 @@ impl ByteBudget {
         })
     }
 
-    fn try_reserve(self: &Arc<Self>, bytes: usize) -> Result<ByteReservation, MountedError> {
+    pub fn try_reserve(self: &Arc<Self>, bytes: usize) -> Result<ByteReservation, MountedError> {
         if bytes > self.limit {
             return Err(MountedError::ResourceExhausted);
         }
         let mut state = self.state.lock().map_err(|_| MountedError::Indeterminate)?;
+        if state.shutdown {
+            return Err(MountedError::Busy);
+        }
         if state.current + bytes > self.limit {
             return Err(MountedError::ResourceExhausted);
         }
@@ -639,6 +643,7 @@ pub struct MountedWorkspace {
     lifecycle: MountedLifecycle,
     nodes: HashMap<MountedNodeId, MountedNode>,
     by_inode: HashMap<InodeId, MountedNodeId>,
+    reclaimable_inode_mappings: BTreeSet<InodeId>,
     handles: HashMap<MountedHandleId, Handle>,
     next_node: u64,
     next_handle: u64,
@@ -705,6 +710,7 @@ impl MountedWorkspace {
             lifecycle: MountedLifecycle::Live,
             nodes: HashMap::new(),
             by_inode: HashMap::new(),
+            reclaimable_inode_mappings: BTreeSet::new(),
             handles: HashMap::new(),
             next_node: ROOT_NODE.0 + 1,
             next_handle: 1,
@@ -771,14 +777,7 @@ impl MountedWorkspace {
             Ok(result) => result,
             Err(error) => {
                 let mapped = mounted_vfs_error(error);
-                self.lifecycle = match mapped {
-                    MountedError::Conflict => MountedLifecycle::Conflict,
-                    MountedError::Indeterminate | MountedError::CommittedCleanup => {
-                        MountedLifecycle::Incomplete
-                    }
-                    _ => MountedLifecycle::Live,
-                };
-                return Err(mapped);
+                return Err(self.classify_publication_error(mapped));
             }
         };
         #[cfg(test)]
@@ -809,6 +808,17 @@ impl MountedWorkspace {
 
     pub fn mark_incomplete(&mut self) {
         self.lifecycle = MountedLifecycle::Incomplete;
+    }
+
+    fn classify_publication_error(&mut self, error: MountedError) -> MountedError {
+        self.lifecycle = match error {
+            MountedError::Conflict => MountedLifecycle::Conflict,
+            MountedError::Indeterminate | MountedError::CommittedCleanup => {
+                MountedLifecycle::Incomplete
+            }
+            _ => MountedLifecycle::Live,
+        };
+        error
     }
 
     pub fn byte_budget(&self) -> Arc<ByteBudget> {
@@ -1602,22 +1612,7 @@ impl MountedWorkspace {
                 self.counters.checkpoints += 1;
                 Ok(state)
             }
-            Err(MountedError::Indeterminate) => {
-                self.lifecycle = MountedLifecycle::Incomplete;
-                Err(MountedError::Indeterminate)
-            }
-            Err(MountedError::Conflict) => {
-                self.lifecycle = MountedLifecycle::Conflict;
-                Err(MountedError::Conflict)
-            }
-            Err(MountedError::CommittedCleanup) => {
-                self.lifecycle = MountedLifecycle::Incomplete;
-                Err(MountedError::CommittedCleanup)
-            }
-            Err(error) => {
-                self.lifecycle = MountedLifecycle::Live;
-                Err(error)
-            }
+            Err(error) => Err(self.classify_publication_error(error)),
         }
     }
 
@@ -1634,7 +1629,10 @@ impl MountedWorkspace {
         if self.has_dirty_state() || !self.handles.is_empty() {
             return Err(MountedError::Busy);
         }
-        let state = self.engine.move_ref(&self.accepted, target)?;
+        let state = match self.engine.move_ref(&self.accepted, target) {
+            Ok(state) => state,
+            Err(error) => return Err(self.classify_publication_error(error.into())),
+        };
         self.accepted = state.clone();
         self.lifecycle = MountedLifecycle::Closed;
         self.budget.shutdown();
@@ -1722,6 +1720,7 @@ impl MountedWorkspace {
         self.nodes.retain(|id, _| *id == ROOT_NODE);
         self.by_inode.clear();
         self.by_inode.insert(root_inode, ROOT_NODE);
+        self.reclaimable_inode_mappings.clear();
         self.lookup_refs = 1;
         self.observe_resources()
     }
@@ -1873,9 +1872,11 @@ impl MountedWorkspace {
                 .filter(|id| self.nodes.get(id).is_some_and(|node| node.deleted))
                 .collect::<Vec<_>>()
             {
+                self.drain_node_file_ranges(id)?;
                 if let Some(entry) = self.nodes.get_mut(&id) {
                     if let Some(inode) = entry.canonical.take() {
                         self.by_inode.remove(&inode);
+                        self.reclaimable_inode_mappings.remove(&inode);
                     }
                     entry.dirty_content = false;
                     entry.dirty_metadata = false;
@@ -2007,7 +2008,19 @@ impl MountedWorkspace {
             return Err(MountedError::NotDirectory);
         }
         if self.directory_changes == MAX_DIRECTORY_CHANGES {
-            return Err(MountedError::ResourceExhausted);
+            let NodeContent::Directory { changes, .. } = &self
+                .nodes
+                .get(&parent)
+                .ok_or(MountedError::NotFound)?
+                .content
+            else {
+                return Err(MountedError::NotDirectory);
+            };
+            match changes.get(&name) {
+                Some(None) => {}
+                Some(Some(_)) => return Err(MountedError::AlreadyExists),
+                None => return Err(MountedError::ResourceExhausted),
+            }
         }
         if self.find_child(parent, &name)?.is_some() {
             return Err(MountedError::AlreadyExists);
@@ -2419,13 +2432,21 @@ impl MountedWorkspace {
             return Err(MountedError::ResourceExhausted);
         }
         if !self.by_inode.contains_key(&inode) && self.by_inode.len() == MAX_MOUNTED_NODES {
-            let evict = self
-                .by_inode
-                .iter()
-                .find(|(_, node)| !self.nodes.contains_key(node))
-                .map(|(inode, _)| *inode)
-                .ok_or(MountedError::ResourceExhausted)?;
-            self.by_inode.remove(&evict);
+            let mut evicted = false;
+            while let Some(candidate) = self.reclaimable_inode_mappings.pop_first() {
+                let reclaimable = self
+                    .by_inode
+                    .get(&candidate)
+                    .is_some_and(|node| !self.nodes.contains_key(node));
+                if reclaimable {
+                    self.by_inode.remove(&candidate);
+                    evicted = true;
+                    break;
+                }
+            }
+            if !evicted {
+                return Err(MountedError::ResourceExhausted);
+            }
         }
         let mut counters = InodeTableCounters::default();
         let record_id = inode_table_lookup(
@@ -2578,12 +2599,15 @@ impl MountedWorkspace {
         if reclaim {
             self.dirty_nodes.remove(&node);
             self.pending_nodes.remove(&node);
-            if let Some(MountedNode {
-                content: NodeContent::Directory { changes, .. },
-                ..
-            }) = self.nodes.remove(&node)
-            {
-                self.directory_changes = self.directory_changes.saturating_sub(changes.len());
+            if let Some(removed) = self.nodes.remove(&node) {
+                if let NodeContent::Directory { changes, .. } = &removed.content {
+                    self.directory_changes = self.directory_changes.saturating_sub(changes.len());
+                }
+                if let Some(inode) = removed.canonical {
+                    if self.by_inode.get(&inode) == Some(&node) {
+                        self.reclaimable_inode_mappings.insert(inode);
+                    }
+                }
             }
         }
     }
@@ -2595,23 +2619,46 @@ impl MountedWorkspace {
         if !should_clear {
             return Ok(());
         }
+        self.drain_node_file_ranges(node)?;
         let entry = self.nodes.get_mut(&node).ok_or(MountedError::Corrupt)?;
-        let removed = match &mut entry.content {
-            NodeContent::File { ranges, .. } => {
-                let bytes = ranges.iter().map(|(start, range)| range.end - *start).sum();
-                self.live_ranges = self.live_ranges.saturating_sub(ranges.len());
-                ranges.clear();
-                bytes
-            }
-            _ => 0,
-        };
-        self.spool.live = self.spool.live.saturating_sub(removed);
         entry.dirty_content = false;
         entry.dirty_metadata = false;
         entry.dirty_links = false;
         entry.directory_mtime_before = None;
         self.sync_node_state(node);
         self.normalize_spool()
+    }
+
+    fn drain_node_file_ranges(&mut self, node: MountedNodeId) -> Result<(), MountedError> {
+        let (count, bytes) = match &self.nodes.get(&node).ok_or(MountedError::Corrupt)?.content {
+            NodeContent::File { ranges, .. } => (
+                ranges.len(),
+                ranges.iter().try_fold(0_u64, |total, (start, range)| {
+                    total
+                        .checked_add(range.end - *start)
+                        .ok_or(MountedError::Indeterminate)
+                })?,
+            ),
+            _ => return Ok(()),
+        };
+        let live_ranges = self
+            .live_ranges
+            .checked_sub(count)
+            .ok_or(MountedError::Indeterminate)?;
+        let spool_live = self
+            .spool
+            .live
+            .checked_sub(bytes)
+            .ok_or(MountedError::Indeterminate)?;
+        let entry = self.nodes.get_mut(&node).ok_or(MountedError::Corrupt)?;
+        let NodeContent::File { ranges, plan, .. } = &mut entry.content else {
+            return Err(MountedError::Indeterminate);
+        };
+        ranges.clear();
+        *plan = None;
+        self.live_ranges = live_ranges;
+        self.spool.live = spool_live;
+        Ok(())
     }
 
     fn normalize_spool(&mut self) -> Result<(), MountedError> {
@@ -3402,6 +3449,7 @@ mod tests {
         closer.join().unwrap().unwrap();
         assert_eq!(budget.observation().unwrap().0, 0);
         assert!(matches!(budget.reserve(1), Err(MountedError::Busy)));
+        assert!(matches!(budget.try_reserve(1), Err(MountedError::Busy)));
     }
 
     #[test]
@@ -3698,6 +3746,128 @@ mod tests {
     }
 
     #[test]
+    fn accepted_dirty_closed_unlink_drains_ranges_and_spool_after_checkpoint() {
+        let (store, spool, directory) = paths("accepted-dirty-unlink");
+        let mut mounted = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool.clone(),
+            [0x8e; 32],
+        )
+        .unwrap();
+        let (file, handle) = mounted.create_file(ROOT_NODE, b"file", 0o644).unwrap();
+        mounted.write(file.node, handle, 0, b"accepted").unwrap();
+        mounted.fsync().unwrap();
+        mounted.release(handle).unwrap();
+        let handle = mounted.open_file(file.node, false).unwrap();
+        mounted.write(file.node, handle, 0, b"modified").unwrap();
+        mounted.release(handle).unwrap();
+        assert!(mounted.counters().unwrap().dirty_ranges > 0);
+        assert!(mounted.counters().unwrap().spool_live_bytes > 0);
+        mounted.unlink(ROOT_NODE, b"file").unwrap();
+        let removed = mounted.fsync().unwrap();
+        let counters = mounted.counters().unwrap();
+        assert_eq!(counters.dirty_ranges, 0);
+        assert_eq!(counters.spool_live_bytes, 0);
+        assert_eq!(counters.spool_physical_bytes, 0);
+        mounted.reset_engine_counters().unwrap();
+        assert_eq!(mounted.fsync().unwrap(), removed);
+        let engine = mounted.engine_counters().unwrap();
+        assert_eq!(engine.transactions_started, 0);
+        assert_eq!(engine.transactions_committed, 0);
+        assert_eq!(engine.transactions_rolled_back, 0);
+        assert_eq!(engine.publication_commits, 0);
+        mounted.shutdown().unwrap();
+        drop(mounted);
+
+        let mut reopened = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool,
+            [0x8e; 32],
+        )
+        .unwrap();
+        assert!(matches!(
+            reopened.lookup_child(ROOT_NODE, b"file"),
+            Err(MountedError::NotFound)
+        ));
+        reopened.shutdown().unwrap();
+        drop(reopened);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn dirty_closed_rename_target_drains_ranges_and_spool_after_checkpoint() {
+        let (store, spool, directory) = paths("dirty-rename-target");
+        let mut mounted = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool.clone(),
+            [0x8e; 32],
+        )
+        .unwrap();
+        let (source, source_handle) = mounted.create_file(ROOT_NODE, b"source", 0o644).unwrap();
+        let (target, target_handle) = mounted.create_file(ROOT_NODE, b"target", 0o644).unwrap();
+        mounted
+            .write(source.node, source_handle, 0, b"source-bytes")
+            .unwrap();
+        mounted
+            .write(target.node, target_handle, 0, b"target-bytes")
+            .unwrap();
+        mounted.fsync().unwrap();
+        mounted.release(source_handle).unwrap();
+        mounted.release(target_handle).unwrap();
+        let target_handle = mounted.open_file(target.node, false).unwrap();
+        mounted
+            .write(target.node, target_handle, 0, b"dirty-target")
+            .unwrap();
+        mounted.release(target_handle).unwrap();
+        mounted
+            .rename(ROOT_NODE, b"source", ROOT_NODE, b"target", false)
+            .unwrap();
+        let replaced = mounted.fsync().unwrap();
+        let counters = mounted.counters().unwrap();
+        assert_eq!(counters.dirty_ranges, 0);
+        assert_eq!(counters.spool_live_bytes, 0);
+        assert_eq!(counters.spool_physical_bytes, 0);
+        mounted.reset_engine_counters().unwrap();
+        assert_eq!(mounted.fsync().unwrap(), replaced);
+        let engine = mounted.engine_counters().unwrap();
+        assert_eq!(engine.transactions_started, 0);
+        assert_eq!(engine.transactions_committed, 0);
+        assert_eq!(engine.transactions_rolled_back, 0);
+        assert_eq!(engine.publication_commits, 0);
+        mounted.shutdown().unwrap();
+        drop(mounted);
+
+        let mut reopened = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool,
+            [0x8e; 32],
+        )
+        .unwrap();
+        assert!(matches!(
+            reopened.lookup_child(ROOT_NODE, b"source"),
+            Err(MountedError::NotFound)
+        ));
+        let target = reopened.lookup_child(ROOT_NODE, b"target").unwrap();
+        let handle = reopened.open_file(target.node, false).unwrap();
+        assert_eq!(
+            reopened.read(target.node, handle, 0, 32).unwrap(),
+            b"source-bytes"
+        );
+        reopened.release(handle).unwrap();
+        reopened.shutdown().unwrap();
+        drop(reopened);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn mount_wide_directory_changes_and_inode_mappings_are_bounded_and_observed() {
         let (store, spool, directory) = paths("directory-change-cap");
         let mut mounted = MountedWorkspace::open(
@@ -3708,8 +3878,19 @@ mod tests {
             [0x8d; 32],
         )
         .unwrap();
+        let evictable = mounted.mknod_file(ROOT_NODE, b"evictable", 0o644).unwrap();
+        mounted.mknod_file(ROOT_NODE, b"victim", 0o644).unwrap();
+        mounted.fsync().unwrap();
+        let evictable_inode = mounted.nodes[&evictable.node].canonical.unwrap();
+        mounted.forget(evictable.node, 1);
+        assert!(!mounted.nodes.contains_key(&evictable.node));
+        assert!(mounted.by_inode.contains_key(&evictable_inode));
+        assert!(mounted
+            .reclaimable_inode_mappings
+            .contains(&evictable_inode));
+        mounted.unlink(ROOT_NODE, b"victim").unwrap();
         let file = mounted.mknod_file(ROOT_NODE, b"source", 0o644).unwrap();
-        for index in 1..MAX_DIRECTORY_CHANGES {
+        for index in 2..MAX_DIRECTORY_CHANGES {
             mounted
                 .link(file.node, ROOT_NODE, format!("alias-{index}").as_bytes())
                 .unwrap();
@@ -3802,6 +3983,11 @@ mod tests {
         );
         assert_eq!(mounted.counters().unwrap(), before);
         assert_eq!(mounted.engine_counters().unwrap(), engine_counters);
+        mounted.mknod_file(ROOT_NODE, b"victim", 0o644).unwrap();
+        assert_eq!(
+            mounted.counters().unwrap().directory_changes,
+            MAX_DIRECTORY_CHANGES as u64
+        );
         let mut nonce = 0_u64;
         while mounted.by_inode.len() < MAX_MOUNTED_NODES {
             let mut bytes = [0_u8; 32];
@@ -3818,6 +4004,7 @@ mod tests {
             mounted.load_canonical_node(InodeId([0xff; 32]), MountedNodeId(u64::MAX / 2)),
             Err(MountedError::Corrupt)
         ));
+        assert!(!mounted.by_inode.contains_key(&evictable_inode));
         let mappings = mounted.counters().unwrap();
         assert_eq!(mappings.inode_mappings, MAX_MOUNTED_NODES as u64 - 1);
         assert_eq!(mappings.inode_mappings_high_water, MAX_MOUNTED_NODES as u64);
@@ -4372,6 +4559,103 @@ mod tests {
     }
 
     #[test]
+    fn rollback_conflict_leaves_stale_mount_non_writable() {
+        let (store, spool, directory) = paths("rollback-conflict");
+        let target = {
+            let mut mounted = MountedWorkspace::open(
+                &store,
+                "main",
+                IntegrityMode::TrustedLocalDev,
+                spool.clone(),
+                [0x95; 32],
+            )
+            .unwrap();
+            let (file, handle) = mounted.create_file(ROOT_NODE, b"file", 0o644).unwrap();
+            mounted.write(file.node, handle, 0, b"version-one").unwrap();
+            let target = mounted.fsync().unwrap().root;
+            mounted.write(file.node, handle, 0, b"version-two").unwrap();
+            mounted.fsync().unwrap();
+            mounted.release(handle).unwrap();
+            mounted.shutdown().unwrap();
+            target
+        };
+        let mut winner = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool.clone(),
+            [0x95; 32],
+        )
+        .unwrap();
+        let mut loser = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            directory.join("loser.spool"),
+            [0x95; 32],
+        )
+        .unwrap();
+        winner.mknod_file(ROOT_NODE, b"winner", 0o644).unwrap();
+        winner.fsync().unwrap();
+        assert!(matches!(
+            loser.rollback(target),
+            Err(MountedError::Conflict)
+        ));
+        assert_eq!(loser.lifecycle(), MountedLifecycle::Conflict);
+        assert!(matches!(
+            loser.mknod_file(ROOT_NODE, b"late", 0o644),
+            Err(MountedError::Indeterminate)
+        ));
+        drop(loser);
+        winner.shutdown().unwrap();
+        drop(winner);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn rollback_ambiguity_leaves_mount_incomplete_and_non_writable() {
+        let (store, spool, directory) = paths("rollback-ambiguity");
+        let target = {
+            let mut mounted = MountedWorkspace::open(
+                &store,
+                "main",
+                IntegrityMode::TrustedLocalDev,
+                spool.clone(),
+                [0x95; 32],
+            )
+            .unwrap();
+            let (file, handle) = mounted.create_file(ROOT_NODE, b"file", 0o644).unwrap();
+            mounted.write(file.node, handle, 0, b"version-one").unwrap();
+            let target = mounted.fsync().unwrap().root;
+            mounted.write(file.node, handle, 0, b"version-two").unwrap();
+            mounted.fsync().unwrap();
+            mounted.release(handle).unwrap();
+            mounted.shutdown().unwrap();
+            target
+        };
+        let mut mounted = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool,
+            [0x95; 32],
+        )
+        .unwrap();
+        mounted.close_store_connection().unwrap();
+        assert!(matches!(
+            mounted.rollback(target),
+            Err(MountedError::Indeterminate)
+        ));
+        assert_eq!(mounted.lifecycle(), MountedLifecycle::Incomplete);
+        assert!(matches!(
+            mounted.mknod_file(ROOT_NODE, b"late", 0o644),
+            Err(MountedError::Indeterminate)
+        ));
+        drop(mounted);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn shutdown_closes_mutation_admission_before_and_after_checkpoint() {
         let (store, spool, directory) = paths("closed");
         let mut mounted = MountedWorkspace::open(
@@ -4711,7 +4995,7 @@ mod tests {
         let counters = mounted.engine_counters().unwrap();
         eprintln!("cold_lookup_primary_sql_statements={}", counters.statements);
         assert!(
-            counters.statements <= 16,
+            counters.statements <= MAX_COLD_LOOKUP_PRIMARY_STATEMENTS,
             "cold lookup used {} primary SQL statements",
             counters.statements
         );

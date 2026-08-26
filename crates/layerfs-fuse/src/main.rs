@@ -114,6 +114,8 @@ mod linux {
         replacement: Vec<u8>,
     }
 
+    const CONTROL_DECODE_Q_BYTES: usize = 6 * MAX_REQUEST_BYTES;
+
     pub fn main() {
         if let Err(error) = run() {
             eprintln!("{error}");
@@ -416,9 +418,13 @@ mod linux {
         paths: &ControlPaths,
     ) -> Result<(), String> {
         budget.pause_and_wait().map_err(|error| error.to_string())?;
+        let decode_reservation = budget
+            .try_reserve(CONTROL_DECODE_Q_BYTES)
+            .map_err(|error| error.to_string())?;
         let request = match read_splice_request(&paths.request) {
             Ok(request) => request,
             Err(error) => {
+                drop(decode_reservation);
                 if let Ok(mut workspace) = workspace.lock() {
                     workspace.mark_incomplete();
                 }
@@ -427,6 +433,7 @@ mod linux {
                 return Err(error);
             }
         };
+        drop(decode_reservation);
         let result = workspace
             .lock()
             .map_err(|_| "workspace lock poisoned".to_owned())?
