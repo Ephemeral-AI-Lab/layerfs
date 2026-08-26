@@ -9,6 +9,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+VERIFY_RECEIPTS = {
+    "SHA256SUMS.verify.stdout",
+    "SHA256SUMS.verify.stderr",
+    "SHA256SUMS.verify.exit",
+}
+
 
 def digest(path: Path) -> str:
     value = hashlib.sha256()
@@ -20,7 +26,13 @@ def digest(path: Path) -> str:
 
 def files(root: Path) -> list[Path]:
     manifest = root / "SHA256SUMS"
-    paths = sorted(path for path in root.rglob("*") if path.is_file() and path != manifest)
+    paths = sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file()
+        and path != manifest
+        and str(path.relative_to(root)) not in VERIFY_RECEIPTS
+    )
     if any(path.is_symlink() for path in paths):
         raise SystemExit("evidence seal refuses symlinks")
     return paths
@@ -44,7 +56,7 @@ def generate(root: Path) -> None:
     print(f"GENERATED {len(lines)}")
 
 
-def verify(root: Path) -> None:
+def verify_count(root: Path) -> int:
     manifest = root / "SHA256SUMS"
     entries: dict[str, str] = {}
     for line in manifest.read_text().splitlines():
@@ -58,7 +70,19 @@ def verify(root: Path) -> None:
         extra = sorted(set(entries) - set(actual))
         changed = sorted(name for name in set(entries) & set(actual) if entries[name] != actual[name])
         raise SystemExit(f"SHA256SUMS mismatch: missing={missing} extra={extra} changed={changed}")
-    print(f"VERIFIED {len(entries)}")
+    return len(entries)
+
+
+def verify(root: Path) -> None:
+    print(f"VERIFIED {verify_count(root)}")
+
+
+def record_verification(root: Path) -> None:
+    output = f"VERIFIED {verify_count(root)}\n"
+    (root / "SHA256SUMS.verify.stdout").write_text(output)
+    (root / "SHA256SUMS.verify.stderr").write_bytes(b"")
+    (root / "SHA256SUMS.verify.exit").write_text("0\n")
+    print(output, end="")
 
 
 def re_full_sha256(value: str) -> bool:
@@ -67,11 +91,16 @@ def re_full_sha256(value: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("generate", "verify"))
+    parser.add_argument("action", choices=("generate", "verify", "record-verify"))
     parser.add_argument("root", type=Path)
     args = parser.parse_args()
     root = args.root.resolve()
-    generate(root) if args.action == "generate" else verify(root)
+    if args.action == "generate":
+        generate(root)
+    elif args.action == "record-verify":
+        record_verification(root)
+    else:
+        verify(root)
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ run meeting every gate below.
 
 ## Closure record
 
-This handoff's current provisional correctness/resource and LayerFS
+This handoff's terminal local-only correctness/resource and LayerFS
 restart-durable qualification are complete. Product source is
 `7e82abcd7320f6a214be336d82488ba0527b6025`; the bound ARM64 image is
 `sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0`.
@@ -49,7 +49,9 @@ the exact 64 MiB payload after SIGKILL. LayerFS separately reopens exact bytes
 from its production Store. Their persistence timings are not compared because
 the commands, clocks, sync endpoints, media, and retention contracts differ.
 Cloud deployment and Durable Object synchronization are outside the explicit
-local-only scope. Current diagnostic disposition: `PASS_LOCAL_ONLY`.
+local-only scope. `PASS_LOCAL_ONLY` is terminal for the user-selected local-only
+scope; it is not global `PASS_OPTIMIZED`, deployed Cloudflare, Durable Object
+durability, or a persistence-latency comparison.
 
 ## Terminal success
 

@@ -3,7 +3,7 @@
 Status: **implemented; local correctness/resource, restart durability, and
 matched native-FUSE comparison pass**.
 
-Current provisional custody is
+Current terminal local-only custody is
 [candidate 015](evidence/stage2-freeze-candidate-015/summary.json): source
 `7e82abcd7320f6a214be336d82488ba0527b6025`, image
 `sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0`.
@@ -28,8 +28,10 @@ file-SQLite authority survives SIGKILL and rehydrates the exact 64 MiB payload
 through fresh native FUSE. LayerFS independently reopens exact bytes from its
 production Store. The persistence timings are not ranked because the commands,
 clocks, sync endpoints, media, and retention contracts differ. Cloud deployment
-and Durable Object sync are outside the user-selected scope. Current disposition
-is diagnostic `PASS_LOCAL_ONLY`. Candidate 014 and candidate 013 are historical;
+and Durable Object sync are outside the user-selected scope. `PASS_LOCAL_ONLY`
+is terminal for the user-selected local-only scope; it is not global
+`PASS_OPTIMIZED`, deployed Cloudflare, Durable Object durability, or a
+persistence-latency comparison. Candidate 014 and candidate 013 are historical;
 candidate 012 remains superseded.
 
 Entry sequence:

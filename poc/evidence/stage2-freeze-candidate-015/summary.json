@@ -3,6 +3,11 @@
   "status": "PASS_LOCAL_ONLY",
   "terminal_comparison_status": "PASS_LOCAL_ONLY",
   "terminal_comparison_blocker": null,
+  "terminal_scope": "USER_SELECTED_LOCAL_ONLY",
+  "not_global_pass_optimized": true,
+  "not_deployed_cloudflare": true,
+  "not_durable_object_durability": true,
+  "not_persistence_latency_comparison": true,
   "scope": "LOCAL_ONLY_NO_CLOUD_DEPLOYMENT_NO_DURABLE_OBJECT",
   "source": {
     "commit": "7e82abcd7320f6a214be336d82488ba0527b6025",
@@ -162,5 +167,5 @@
     "deployed_samples": 0,
     "resource_metrics": null
   },
-  "checksums_disposition": "Local-only SHA256SUMS is generated last and verified after all local evidence and documentation are frozen."
+  "checksums_disposition": "Local-only SHA256SUMS is generated last after all sealed evidence is frozen. SHA256SUMS.verify.{stdout,stderr,exit} records exit-zero verification and is intentionally excluded from the manifest to avoid self-reference."
 }

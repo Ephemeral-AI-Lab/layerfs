@@ -1,4 +1,4 @@
-c6ad483ba8c0d1cdb91ac2910c9ed60184c8064c4209d2e211a6db4e44b50f57  ./README.md
+f56413106a684e3d5749aa571b60c0fd8595045e64fca37c5649188b9dd4f0bd  ./README.md
 21f37ae0a8d24b9358439e92c0163ec8f05ca43409d51192f4fbc0f708dd3f2c  ./cloudflare-admission.json
 25f08167323cb5b63ad1e3552c2e7981409e0ebb880b48d2902b2138a606ab97  ./cloudflare-deploy-readiness.json
 7d2b3546e0942ef5bf78645391dabfc4178f6008437fb4d4e2bd2be359849784  ./cloudflare-local-512/authoritative-tmp/after-cpu.stat.txt
@@ -10023,10 +10023,10 @@ dac405404a492b3dccf67c372a4ed25008d27eb04b4d911ded86a1c189594c80  ./live-current
 9cacb93dccba4721a6ade413f1494ed691dab282036b21290a6c96652b44902f  ./live-current/authoritative-var/wall-end-unix-ns.txt
 1b84775021536239b2bf532a4f9f16888f5bdcfae5d56808fbbaefc4cad574af  ./live-current/authoritative-var/wall-start-unix-ns.txt
 1e432114e2f1c098caba42a077316eed25e829029ffde5dd6cb13ede3d821a7c  ./live-current/verification.json
-b2cf61f94c4d7894ac9cecb31695f69c9c3317f9dfaa83303ef5b54581b85887  ./local-comparison.json
+fd1b9603cca8595b11c1b0b60d21edf34236938f54c35cff297e6adb05b0ae4a  ./local-comparison.json
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./local-comparison.verify.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./local-comparison.verify.stderr
-b2cf61f94c4d7894ac9cecb31695f69c9c3317f9dfaa83303ef5b54581b85887  ./local-comparison.verify.stdout
+fd1b9603cca8595b11c1b0b60d21edf34236938f54c35cff297e6adb05b0ae4a  ./local-comparison.verify.stdout
 b89c1bc080994956131159502fa740587e91955794b3f4d9f916b2bc631ac9b2  ./repeated-term/dirty-terminal.json
 94813ed6bb38ff38415cef08b403d22fbc7e584aa1d38e81bdb96bb68c5322ff  ./repeated-term/execution-custody.json
 08e12c2288e066eb64c69dc79a676a1067b0899e13a63f3fe6d7a88591c97577  ./repeated-term/expected.sha256
@@ -10040,14 +10040,14 @@ e6f5cd8f760fb2fc5c7d2ff6a97f8f0453b878b8c9e985140ea419de08e5ffac  ./runtime/clou
 83ab813bd15aead0d15e8b2676a9291501d89761ddabe2a8c83cae95f7e63144  ./runtime/durable-fs-bench.py
 b2771b2be020238433b0dca39325c4fc78d27a49b302eeec40aee11a2ec3351e  ./runtime/lifecycle-custody.py
 53598ec21f874cbd71497a54084aa71e5e4260acc8ea0247fe68b4404fe716cf  ./runtime/live-fs-bench.py
-8e5361b5dc40c0ca0532d1c381a0911195b7ab934bc27b44b94c301b43591586  ./runtime/seal-local-only.py
+422ea176c0faab66d319bc2519c0bf2af38bacf877978c5f7f4bbf034d4bc91e  ./runtime/seal-local-only.py
 f162474083d1c4e9c4dad71ea53d34b6abd4ebe622394f0166660a3a144df057  ./runtime/verify-durable.py
 e92bc7e3cf0464f0da09b2b256fc69ec55b938da7d0042c41c513512d63511a2  ./runtime/verify-live.py
-cfcc6ee002cacda233d63bb4bf314b3b46f3c785a952c31cfae2f1d568393099  ./runtime/verify-local-comparison.py
+f0507b7eff76a3e355016bd37ba1aad6cce1dad52decd6b0232a5dd15532a0fe  ./runtime/verify-local-comparison.py
 7ffb4cbcfe877973ed0533c35540c2c1c0d30a69725b57127f9c7184732812cb  ./source-build-context.tar
 46351b37d15743507f6f215c2999d7c549182d5a876e6899fda4544c797d75a8  ./statvfs/statvfs.json
 421e5faaca3b07886133f3291eb56d58de682ed3ec1c8a3eea752fd8312e4165  ./statvfs/terminal.json
-c5ee8d1bbde9537bc736860659651789913677a31bfcff9fbf230fcb4762e1e5  ./summary.json
+3ffdf4eed65c97606226681c3edbbfb5061a6e4b6e890d198491ada12ca2b0a6  ./summary.json
 3a20919f0d429c6ae406993b4927cbe0ea60efff9069519863fd25ff2a9e96cd  ./unmount-busy/execution-custody.json
 49f873985c0c2510405cb81657130e3b40fb5ca32d5656bd96224c567f94071c  ./unmount-busy/terminal.json
 abd80da3a4a1200a683742ecbcf50f0e0a1842d7846955392bd23f2da1b773da  ./upstream-scenario-map.json

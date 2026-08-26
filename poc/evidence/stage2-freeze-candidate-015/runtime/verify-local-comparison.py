@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 LAYERFS_SOURCE = "7e82abcd7320f6a214be336d82488ba0527b6025"
+LAYERFS_TREE = "df13d88eb7e7d2471971b0c58ca6425bb81b0b03"
 LAYERFS_IMAGE = "sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0"
 CLOUDFLARE_SOURCE = "de87919a4fd37242e960e13b7b3ba802d1eef0a0"
 CLOUDFLARE_TREE = "4fb409d7e1356e1098439293d77d2fdc2dbf2190"
@@ -91,11 +92,16 @@ def cloudflare_population(root: Path, control: str) -> tuple[dict[str, dict[str,
     expected = {(scenario, target) for scenario in SCENARIOS for target in ("computerd", "base")}
     keys = {(row.get("scenario"), row.get("target")) for row in raw.get("results", [])}
     host = inspect["HostConfig"]
+    labels = inspect.get("Config", {}).get("Labels", {})
     stdout = ANSI.sub("", (directory / "benchmark.stdout").read_text())
     throttle_ns = (after_cpu.get("throttled_usec", 0) - before_cpu.get("throttled_usec", 0)) * 1000
     checks = {
         "source": plan.get("source") == CLOUDFLARE_SOURCE and plan.get("tree") == CLOUDFLARE_TREE,
         "image": plan.get("image_id") == CLOUDFLARE_IMAGE,
+        "raw_container_image": inspect.get("Image") == CLOUDFLARE_IMAGE,
+        "raw_container_source_labels": labels.get("dev.layerfs.upstream-commit")
+        == CLOUDFLARE_SOURCE
+        and labels.get("dev.layerfs.upstream-tree") == CLOUDFLARE_TREE,
         "fs_bench": plan.get("fs_bench_sha256") == FS_BENCH,
         "scope": plan.get("scope") == "LOCAL_NATIVE_FUSE_PROCESS_LOCAL_SQLITE",
         "capture": capture.get("status") == "CAPTURED" and capture.get("matrix_exact") is True,
@@ -139,6 +145,11 @@ def main() -> None:
     durable_root = args.candidate / "cloudflare-local-authority-volume-durable"
     cloudflare_negative = json.loads((negative_root / "receipt.json").read_text())
     cloudflare_durable = json.loads((durable_root / "receipt.json").read_text())
+    layerfs_durable_source_bound = (
+        layerfs_durable.get("source_commit") == LAYERFS_SOURCE
+        and layerfs_durable.get("source_tree") == LAYERFS_TREE
+        and layerfs_durable.get("image_id") == LAYERFS_IMAGE
+    )
     populations = []
     for control in ("var", "tmp"):
         cloudflare, cloudflare_checks = cloudflare_population(args.candidate / "cloudflare-local-512", control)
@@ -461,6 +472,7 @@ def main() -> None:
     durable_comparison = (
         "BOTH_RESTART_VISIBLE_WITH_DIFFERENT_LOCAL_AUTHORITIES"
         if layerfs_durable.get("status") == "PASS"
+        and layerfs_durable_source_bound
         and all(negative_checks.values())
         and all(durable_checks.values())
         else "REVISE"
@@ -468,7 +480,10 @@ def main() -> None:
     durable = {
         "workload": "64 MiB high-entropy write and restart-visible SHA-256 verification",
         "layerfs": {
-            "status": "PASS_DURABLE" if layerfs_durable.get("status") == "PASS" else "REVISE",
+            "status": "PASS_DURABLE"
+            if layerfs_durable.get("status") == "PASS" and layerfs_durable_source_bound
+            else "REVISE",
+            "source_bound": layerfs_durable_source_bound,
             "T_live_ns": layerfs_durable.get("T_live_ns"),
             "T_checkpoint_ns": layerfs_durable.get("T_checkpoint_ns"),
             "T_to_durable_ns": layerfs_durable.get("T_to_durable_ns"),

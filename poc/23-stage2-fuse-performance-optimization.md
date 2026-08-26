@@ -2,7 +2,7 @@
 
 Status: **local persistence and matched native-FUSE comparison pass**
 
-The current provisional candidate is
+The current terminal local-only candidate is
 [candidate 015](evidence/stage2-freeze-candidate-015/summary.json), source
 `7e82abcd7320f6a214be336d82488ba0527b6025`, image
 `sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0`.
@@ -26,8 +26,10 @@ authority rehydrates the exact 64 MiB payload after SIGKILL; LayerFS separately
 reopens exact bytes from its production Store. These use different commands,
 clocks, synchronization endpoints, persistence media, and retention contracts,
 so no durable-latency ratio is asserted. Durable Object synchronization and
-deployment are outside the user-selected local scope. Current diagnostic status
-is `PASS_LOCAL_ONLY`.
+deployment are outside the user-selected local scope. `PASS_LOCAL_ONLY` is
+terminal for the user-selected local-only scope; it is not global
+`PASS_OPTIMIZED`, deployed Cloudflare, Durable Object durability, or a
+persistence-latency comparison.
 
 Prepared: `2026-08-26`
 

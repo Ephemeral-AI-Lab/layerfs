@@ -1,6 +1,8 @@
-# Stage 2 candidate 015 provisional evidence index
+# Stage 2 candidate 015 terminal local-only evidence index
 
-Status: `PASS_LOCAL_ONLY`.
+Status: `PASS_LOCAL_ONLY`. This is terminal for the user-selected local-only
+scope; it is not global `PASS_OPTIMIZED`, deployed Cloudflare, Durable Object
+durability, or a persistence-latency comparison.
 
 This is the local-only custody selected by the user. Product source is
 `7e82abcd7320f6a214be336d82488ba0527b6025`, tree
@@ -20,6 +22,7 @@ custody scope.
 - [`live-current/verification.json`](live-current/verification.json): current-source `/var/tmp` and `/tmp` `PASS_LIVE_MOUNT` populations.
 - [`upstream-scenario-map.json`](upstream-scenario-map.json): independently derived exact 12-scenario mapping; zero network scenarios.
 - [`local-comparison.json`](local-comparison.json): matched native-ARM64, one-CPU, 512 MiB local live comparison and restart-durability disposition.
+- [`SHA256SUMS`](SHA256SUMS) plus `SHA256SUMS.verify.{stdout,stderr,exit}`: final manifest and explicit successful verification receipt; the three verification receipt files are intentionally outside the manifest to avoid self-reference.
 
 ## Current-source focused proofs
 

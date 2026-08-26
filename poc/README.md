@@ -30,7 +30,7 @@ evidence qualifications are recorded under
 workload reference. The direct successor is the LayerFS + Linux FUSE workspace
 specified in `poc/19`, with Docker only as its Linux execution envelope.
 macFUSE and FSKit are not selected dependencies.
-Stage 2 provisional product source
+Stage 2 terminal local-only product source
 `7e82abcd7320f6a214be336d82488ba0527b6025` and image
 `sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0`
 are controlled by `poc/evidence/stage2-freeze-candidate-015`. Its fresh-Store
@@ -49,8 +49,10 @@ predictably reopens without that state, while the shipped sync path backed by a
 local file-SQLite authority rehydrates the exact bytes after SIGKILL. Those
 persistence timings are not numerically compared because their contracts differ.
 Deployment and Durable Object sync are outside the user-selected local scope.
-Current diagnostic status is `PASS_LOCAL_ONLY`. Candidate 014 and 013 are
-historical; candidate 012 is superseded.
+`PASS_LOCAL_ONLY` is terminal for the user-selected local-only scope; it is not
+global `PASS_OPTIMIZED`, deployed Cloudflare, Durable Object durability, or a
+persistence-latency comparison. Candidate 014 and 013 are historical; candidate
+012 is superseded.
 
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure
