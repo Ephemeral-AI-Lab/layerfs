@@ -1,0 +1,34 @@
+{
+  "authoritative": {
+    "tmp": {
+      "benchmark_checkpoints": 0,
+      "genesis_publications": 1,
+      "genesis_transactions": 1
+    },
+    "var": {
+      "benchmark_checkpoints": 0,
+      "genesis_publications": 1,
+      "genesis_transactions": 1
+    }
+  },
+  "external_dirty_unmount": {
+    "checks": {
+      "external_signal_zero": true,
+      "independent_reopen_exact": true,
+      "one_dirty_checkpoint": true,
+      "one_dirty_transaction": true,
+      "owned_runtime_removed": true,
+      "reopen_pass": true,
+      "root_only_terminal": true,
+      "source_identity_exact": true,
+      "terminal_pass": true,
+      "terminal_resources_zero": true
+    },
+    "expected_sha256": "dd137fd71bc520b96910cbe64d515e3d7efb3ea0152d97c7e8f10187dcdace89",
+    "reopened_sha256": "dd137fd71bc520b96910cbe64d515e3d7efb3ea0152d97c7e8f10187dcdace89",
+    "schema": "layerfs-stage2-external-unmount-v1",
+    "status": "PASS"
+  },
+  "schema": "layerfs-stage2-publication-equations-v3",
+  "status": "PASS"
+}

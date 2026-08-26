@@ -1,0 +1,4 @@
+path=file
+start=3
+delete=2
+replacement_hex=58595a

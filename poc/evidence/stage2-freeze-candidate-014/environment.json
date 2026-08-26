@@ -1,0 +1,48 @@
+{
+  "capability": "SYS_ADMIN",
+  "cpu": "--cpus 1",
+  "cpu_max": "100000 100000",
+  "fuse_device": "/dev/fuse:rwm",
+  "integrity": "TrustedLocalDev (explicit)",
+  "launch_checks": {
+    "tmp": {
+      "arm64_image": true,
+      "fuse_device": true,
+      "image_exact": true,
+      "init": true,
+      "integrity_explicit": true,
+      "memory_3g": true,
+      "network_none": true,
+      "not_privileged": true,
+      "one_cpu_quota": true,
+      "pids_512": true,
+      "store_volume_only": true,
+      "sys_admin_only": true,
+      "tmpfs_exact": true,
+      "workspace_not_docker_mounted": true
+    },
+    "var": {
+      "arm64_image": true,
+      "fuse_device": true,
+      "image_exact": true,
+      "init": true,
+      "integrity_explicit": true,
+      "memory_3g": true,
+      "network_none": true,
+      "not_privileged": true,
+      "one_cpu_quota": true,
+      "pids_512": true,
+      "store_volume_only": true,
+      "sys_admin_only": true,
+      "tmpfs_exact": true,
+      "workspace_not_docker_mounted": true
+    }
+  },
+  "memory": "3g",
+  "network": "none",
+  "pids_limit": 512,
+  "platform": "linux/arm64",
+  "schema": "layerfs-stage2-environment-v3",
+  "status": "PASS",
+  "tmpfs": "/tmp:rw,nosuid,nodev,size=1g,mode=1777"
+}

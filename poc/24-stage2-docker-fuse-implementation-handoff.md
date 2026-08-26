@@ -27,16 +27,24 @@ run meeting every gate below.
 
 ## Closure record
 
-This handoff is complete. The terminal source is
-`bd1cd225e152a630a10520806ecca65593c71a6b`; the terminal ARM64 image is
-`sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139`.
+This handoff's correctness/resource and LayerFS restart-durable qualification
+are complete. The current source is
+`292be840c31052d85ab6e9441706298af3cd3d15`; the terminal ARM64 image is
+`sha256:62b459af3f03dc8bbe97419b8522ed3599ab6d562b12ebe8b8ed5efb7f22f5fc`.
 Both exact `--cpus 1` authoritative populations pass all numeric, row,
-resource, publication, and cleanup gates: `/var/tmp` closes at SL `2.920 s`,
-Rsum `2.049`, G `3.171`, Spread `1.010`; `/tmp` closes at SL `3.120 s`, Rsum
-`2.277`, G `3.821`, Spread `1.009`. The controlling evidence and raw custody
-are [candidate 013](evidence/stage2-freeze-candidate-013/summary.md). Candidate
-012 is superseded by later correctness/resource repairs and is not terminal
-evidence. Earlier source/image populations are not promoted by this record.
+resource, publication, and cleanup gates: `/var/tmp` closes at SL `3.517 s`,
+Rsum `2.040`, G `3.207`, Spread `1.041`; `/tmp` closes at SL `3.449 s`, Rsum
+`2.126`, G `3.691`, Spread `1.051`. Those results are now classified as
+`LIVE_MOUNT` diagnostics. The controlling evidence remains
+[candidate 014](evidence/stage2-freeze-candidate-014/summary.md), but it cannot
+be promoted to terminal `PASS_OPTIMIZED` from those rows. The separate
+command-start-to-checkpoint-ack campaign passes 36/36 measured samples plus 12
+warmups and two SIGKILL/reopen proofs per sample; summed durable medians are
+`7.854 s`. Cloudflare's published Docker baseline is local committed VFS
+evidence and excludes post-exec Durable Object pull, so it is not labeled fully
+restart-durable. A fair full-product Cloudflare population requires external
+deployment/restart authority that is unavailable here. Current disposition:
+`PASS_DURABLE_LAYERFS_COMPARISON_UNAVAILABLE`.
 
 ## Terminal success
 

@@ -1,0 +1,6 @@
+info: downloading component 'clippy'
+info: retrying download for 'https://static.rust-lang.org/dist/2025-03-18/clippy-1.85.1-aarch64-unknown-linux-gnu.tar.xz'
+info: retrying download for 'https://static.rust-lang.org/dist/2025-03-18/clippy-1.85.1-aarch64-unknown-linux-gnu.tar.xz'
+info: retrying download for 'https://static.rust-lang.org/dist/2025-03-18/clippy-1.85.1-aarch64-unknown-linux-gnu.tar.xz'
+info: retrying download for 'https://static.rust-lang.org/dist/2025-03-18/clippy-1.85.1-aarch64-unknown-linux-gnu.tar.xz'
+error: component download failed for clippy-aarch64-unknown-linux-gnu: could not download file from 'https://static.rust-lang.org/dist/2025-03-18/clippy-1.85.1-aarch64-unknown-linux-gnu.tar.xz' to '/usr/local/rustup/downloads/b86d7aee2eab156bd96a841a44e3cef98e802df142780fda796b9c7f649f23e2.partial': failed to make network request: error sending request for url (https://static.rust-lang.org/dist/2025-03-18/clippy-1.85.1-aarch64-unknown-linux-gnu.tar.xz): client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution: failed to lookup address information: Temporary failure in name resolution

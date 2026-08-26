@@ -1,0 +1,1 @@
+docker exec d35bd6357300c04ad5cd7a72adffa6ee6f22444e9fe927ee724793e71d48caac sha256sum /usr/local/bin/layerfs-fuse

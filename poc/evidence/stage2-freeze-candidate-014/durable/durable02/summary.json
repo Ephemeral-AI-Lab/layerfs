@@ -1,0 +1,467 @@
+{
+  "ended_unix_ns": 1787724602775097000,
+  "fresh_store_samples": 48,
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "history_oracle": {
+    "checks": {
+      "create_barrier_reopen_exact": true,
+      "create_generation_advanced": true,
+      "create_root_changed": true,
+      "delete_barrier_reopen_exact": true,
+      "delete_generation_advanced": true,
+      "delete_root_changed": true,
+      "final_namespace_empty": true,
+      "terminal_clean": true
+    },
+    "classification": "CREATE_AND_DELETE_PUBLISHED_IN_DISTINCT_BARRIERS",
+    "create_barrier_ns": 19090958,
+    "created_ref": {
+      "generation": 1,
+      "root": "b78f4fbf2c52db83c5fb0af611c952aedd2bf5feeabc41068bae967818cf4c25"
+    },
+    "delete_barrier_ns": 16700709,
+    "deleted_ref": {
+      "generation": 2,
+      "root": "5b63fc236c3ca7117fd231cc6a2e4e252456d9a9bdcce328ac83bb7a3309407d"
+    },
+    "pristine_ref": {
+      "generation": 0,
+      "root": "6871514f004d531267a2427c872b93621d4feefd5fad83d9a3b23191fda826ce"
+    },
+    "schema": "layerfs-stage2-014-two-barrier-history-v1",
+    "status": "PASS"
+  },
+  "image": "layerfs-fuse:frozen-292be84",
+  "image_id": "sha256:62b459af3f03dc8bbe97419b8522ed3599ab6d562b12ebe8b8ed5efb7f22f5fc",
+  "measured_samples": 36,
+  "reps": 3,
+  "scenarios_sha256": "ee96f7ce161f09e7a60a39d3893458fef9f6449827c08ce4db9b430fb986b61b",
+  "schema": "layerfs-stage2-014-durable-campaign-v1",
+  "source_commit": "292be840c31052d85ab6e9441706298af3cd3d15",
+  "source_tree": "e3055bcd7a41921879fa149c11918891517e4522",
+  "started_unix_ns": 1787724390182439000,
+  "status": "PASS",
+  "timings": {
+    "copy 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 295432834,
+        "mean": 290347847,
+        "median": 289190542,
+        "minimum": 286420167,
+        "samples": [
+          295432834,
+          289190542,
+          286420167
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 104789500,
+        "mean": 102698305,
+        "median": 102063917,
+        "minimum": 101241500,
+        "samples": [
+          102063917,
+          101241500,
+          104789500
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 397496751,
+        "mean": 393046153,
+        "median": 391209667,
+        "minimum": 390432042,
+        "samples": [
+          397496751,
+          390432042,
+          391209667
+        ]
+      }
+    },
+    "create 1000 files": {
+      "T_checkpoint_ns": {
+        "maximum": 890173042,
+        "mean": 882582972,
+        "median": 884197500,
+        "minimum": 873378375,
+        "samples": [
+          884197500,
+          873378375,
+          890173042
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 337945542,
+        "mean": 333013195,
+        "median": 331840834,
+        "minimum": 329253209,
+        "samples": [
+          329253209,
+          331840834,
+          337945542
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 1228118584,
+        "mean": 1215596167,
+        "median": 1213450709,
+        "minimum": 1205219209,
+        "samples": [
+          1213450709,
+          1205219209,
+          1228118584
+        ]
+      }
+    },
+    "find tree": {
+      "T_checkpoint_ns": {
+        "maximum": 688963500,
+        "mean": 684626903,
+        "median": 686172042,
+        "minimum": 678745167,
+        "samples": [
+          686172042,
+          678745167,
+          688963500
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 724532334,
+        "mean": 712589667,
+        "median": 709863084,
+        "minimum": 703373584,
+        "samples": [
+          724532334,
+          703373584,
+          709863084
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 1410704376,
+        "mean": 1397216570,
+        "median": 1398826584,
+        "minimum": 1382118751,
+        "samples": [
+          1410704376,
+          1382118751,
+          1398826584
+        ]
+      }
+    },
+    "git init + commit 100 files": {
+      "T_checkpoint_ns": {
+        "maximum": 247337334,
+        "mean": 241572333,
+        "median": 240038042,
+        "minimum": 237341625,
+        "samples": [
+          240038042,
+          247337334,
+          237341625
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 162300792,
+        "mean": 155897847,
+        "median": 159268917,
+        "minimum": 146123833,
+        "samples": [
+          146123833,
+          162300792,
+          159268917
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 409638126,
+        "mean": 397470181,
+        "median": 396610542,
+        "minimum": 386161875,
+        "samples": [
+          386161875,
+          409638126,
+          396610542
+        ]
+      }
+    },
+    "mkdir tree (10x10x10)": {
+      "T_checkpoint_ns": {
+        "maximum": 698312500,
+        "mean": 685705347,
+        "median": 681897000,
+        "minimum": 676906542,
+        "samples": [
+          676906542,
+          698312500,
+          681897000
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 707761167,
+        "mean": 695539570,
+        "median": 689661876,
+        "minimum": 689195667,
+        "samples": [
+          689195667,
+          689661876,
+          707761167
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 1389658167,
+        "mean": 1381244917,
+        "median": 1387974376,
+        "minimum": 1366102209,
+        "samples": [
+          1366102209,
+          1387974376,
+          1389658167
+        ]
+      }
+    },
+    "overwrite 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 160476333,
+        "mean": 158258152,
+        "median": 157973458,
+        "minimum": 156324666,
+        "samples": [
+          160476333,
+          156324666,
+          157973458
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 34735875,
+        "mean": 31851278,
+        "median": 30889376,
+        "minimum": 29928584,
+        "samples": [
+          30889376,
+          34735875,
+          29928584
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 191365709,
+        "mean": 190109430,
+        "median": 191060541,
+        "minimum": 187902042,
+        "samples": [
+          191365709,
+          191060541,
+          187902042
+        ]
+      }
+    },
+    "pure copy 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 167628750,
+        "mean": 163734847,
+        "median": 165271709,
+        "minimum": 158304084,
+        "samples": [
+          158304084,
+          165271709,
+          167628750
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 71926458,
+        "mean": 70277263,
+        "median": 69939250,
+        "minimum": 68966083,
+        "samples": [
+          69939250,
+          68966083,
+          71926458
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 239555208,
+        "mean": 234012111,
+        "median": 234237792,
+        "minimum": 228243334,
+        "samples": [
+          228243334,
+          234237792,
+          239555208
+        ]
+      }
+    },
+    "pure read 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 78125,
+        "mean": 65263,
+        "median": 62458,
+        "minimum": 55208,
+        "samples": [
+          62458,
+          78125,
+          55208
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 8280250,
+        "mean": 7644166,
+        "median": 7493291,
+        "minimum": 7158959,
+        "samples": [
+          8280250,
+          7493291,
+          7158959
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 8342708,
+        "mean": 7709430,
+        "median": 7571416,
+        "minimum": 7214167,
+        "samples": [
+          8342708,
+          7571416,
+          7214167
+        ]
+      }
+    },
+    "read 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 165151417,
+        "mean": 160614611,
+        "median": 161326167,
+        "minimum": 155366250,
+        "samples": [
+          161326167,
+          165151417,
+          155366250
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 40674458,
+        "mean": 40528555,
+        "median": 40672458,
+        "minimum": 40238750,
+        "samples": [
+          40674458,
+          40672458,
+          40238750
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 205823875,
+        "mean": 201143166,
+        "median": 202000625,
+        "minimum": 195605000,
+        "samples": [
+          202000625,
+          205823875,
+          195605000
+        ]
+      }
+    },
+    "rm 1000 files": {
+      "T_checkpoint_ns": {
+        "maximum": 62000,
+        "mean": 60472,
+        "median": 61041,
+        "minimum": 58375,
+        "samples": [
+          62000,
+          58375,
+          61041
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 487377417,
+        "mean": 433997098,
+        "median": 487074251,
+        "minimum": 327539626,
+        "samples": [
+          327539626,
+          487377417,
+          487074251
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 487435792,
+        "mean": 434057570,
+        "median": 487135292,
+        "minimum": 327601626,
+        "samples": [
+          327601626,
+          487435792,
+          487135292
+        ]
+      }
+    },
+    "stat 1000 files": {
+      "T_checkpoint_ns": {
+        "maximum": 899459917,
+        "mean": 887788931,
+        "median": 884438375,
+        "minimum": 879468501,
+        "samples": [
+          899459917,
+          884438375,
+          879468501
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 868195042,
+        "mean": 862852042,
+        "median": 860734709,
+        "minimum": 859626375,
+        "samples": [
+          859626375,
+          868195042,
+          860734709
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 1759086292,
+        "mean": 1750640973,
+        "median": 1752633417,
+        "minimum": 1740203210,
+        "samples": [
+          1759086292,
+          1752633417,
+          1740203210
+        ]
+      }
+    },
+    "write 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 158749041,
+        "mean": 156366541,
+        "median": 155960584,
+        "minimum": 154390000,
+        "samples": [
+          155960584,
+          154390000,
+          158749041
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 34918666,
+        "mean": 34114611,
+        "median": 34394542,
+        "minimum": 33030625,
+        "samples": [
+          34918666,
+          34394542,
+          33030625
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 191779666,
+        "mean": 190481152,
+        "median": 190879250,
+        "minimum": 188784542,
+        "samples": [
+          190879250,
+          188784542,
+          191779666
+        ]
+      }
+    }
+  },
+  "warmup": 1
+}

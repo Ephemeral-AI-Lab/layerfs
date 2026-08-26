@@ -1,0 +1,17 @@
+{
+  "checks": {
+    "connections_terminal_zero": true,
+    "dirty_terminal_zero": true,
+    "executable_blake3_exact": true,
+    "fs_bench_sha256_exact": true,
+    "handles_terminal_zero": true,
+    "operation_q_terminal_zero": true,
+    "root_only_ownership": true,
+    "source_commit_exact": true,
+    "source_tree_exact": true,
+    "spool_terminal_zero": true,
+    "status_pass": true
+  },
+  "schema": "layerfs-stage2-runtime-terminal-validation-v1",
+  "status": "PASS"
+}

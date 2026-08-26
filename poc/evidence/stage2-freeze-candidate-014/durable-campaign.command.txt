@@ -1,0 +1,7 @@
+preregistration=durable-preregistration.json
+attempt_001=poc/evidence/stage2-freeze-candidate-014/runtime/durable-fs-bench.py --owner freeze014 --run-id durable01
+attempt_001_disposition=PRESERVED_FAILURE before Docker launch; tag inspection lookup failed while immutable ID remained available
+attempt_002=poc/evidence/stage2-freeze-candidate-014/runtime/durable-fs-bench.py --owner freeze014 --run-id durable02
+attempt_002_disposition=PASS 48/48 samples, 36 measured, 12 warmups
+verification=poc/evidence/stage2-freeze-candidate-014/runtime/verify-durable.py --run-id durable02 --output poc/evidence/stage2-freeze-candidate-014/durable/verification.json
+verification_disposition=PASS_DURABLE

@@ -1,0 +1,620 @@
+{
+  "populations": {
+    "tmp": {
+      "aggregates": {
+        "G": 3.690712367413269,
+        "Rsum": 2.126352625319144,
+        "SB_ns": 1622155333,
+        "SL_ns": 3449274251,
+        "Spread": 1.0510132080535455
+      },
+      "checks": {
+        "G": true,
+        "Rsum": true,
+        "SL": true,
+        "Spread": true,
+        "benchmark_exit_zero": true,
+        "cloudflare_rows": true,
+        "config_exact": true,
+        "daemon_exit_zero": true,
+        "fail_markers_zero": true,
+        "independent_verifier_pass": true,
+        "matrix_exact": true,
+        "network_scenarios_zero": true,
+        "statistics_exact": true,
+        "stderr_empty": true
+      },
+      "resource_checks": {
+        "genesis_only_publication": true,
+        "memory_peak_under_512_mib": true,
+        "oom_zero": true,
+        "pids_bounded": true,
+        "terminal": true,
+        "throttle_under_5_percent": true
+      },
+      "resources": {
+        "callback_wall_ns": 2218479714,
+        "cgroup_memory_peak_bytes": 283369472,
+        "connection_mutex_wait_ns": 36377,
+        "cpu_usage_usec_delta": 21350329,
+        "mount_lock_wait_ns": 24504538,
+        "oom_delta": 0,
+        "oom_kill_delta": 0,
+        "pids_peak": 16,
+        "population_wall_ns": 24320696000,
+        "terminal": {
+          "busy_locked_zero": true,
+          "callback_wall_observed": true,
+          "connections_bounded": true,
+          "handles_pending_dirty_zero": true,
+          "invalidations_exact": true,
+          "largest_request_bounded": true,
+          "logical_workspace_zero": true,
+          "materialization_capture_zero": true,
+          "operation_q_hwm_bounded": true,
+          "operation_q_terminal_zero": true,
+          "root_only_ownership": true,
+          "source_commit_exact": true,
+          "source_tree_exact": true,
+          "spool_terminal_zero": true,
+          "status_pass": true,
+          "wait_ratio_bounded": true
+        },
+        "throttle_ratio": 0.015852876907799022,
+        "throttled_usec_delta": 385553
+      },
+      "rows": [
+        {
+          "base_median_ns": 8494000,
+          "base_samples_sorted_ns": [
+            8446875,
+            8494000,
+            8880000
+          ],
+          "cloudflare_limit": 116.44478433782116,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 105.85889485256469,
+          "layerfs_max_ns": 261951542,
+          "layerfs_median_ns": 260469584,
+          "layerfs_samples_sorted_ns": [
+            257139500,
+            260469584,
+            261951542
+          ],
+          "ratio": 30.66512644219449,
+          "scenario": "create 1000 files"
+        },
+        {
+          "base_median_ns": 543441042,
+          "base_samples_sorted_ns": [
+            542853334,
+            543441042,
+            567865833
+          ],
+          "cloudflare_limit": 3.241294152216497,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 2.9466310474695425,
+          "layerfs_max_ns": 865796626,
+          "layerfs_median_ns": 861205208,
+          "layerfs_samples_sorted_ns": [
+            857146834,
+            861205208,
+            865796626
+          ],
+          "ratio": 1.5847261090744045,
+          "scenario": "stat 1000 files"
+        },
+        {
+          "base_median_ns": 10904250,
+          "base_samples_sorted_ns": [
+            10503042,
+            10904250,
+            11501708
+          ],
+          "cloudflare_limit": 123.29161864388777,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 112.0832896762616,
+          "layerfs_max_ns": 376660917,
+          "layerfs_median_ns": 374824750,
+          "layerfs_samples_sorted_ns": [
+            373319542,
+            374824750,
+            376660917
+          ],
+          "ratio": 34.37418896301901,
+          "scenario": "rm 1000 files"
+        },
+        {
+          "base_median_ns": 444869708,
+          "base_samples_sorted_ns": [
+            441213001,
+            444869708,
+            456378417
+          ],
+          "cloudflare_limit": 3.263943374834449,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 2.9672212498494988,
+          "layerfs_max_ns": 698135125,
+          "layerfs_median_ns": 693399667,
+          "layerfs_samples_sorted_ns": [
+            693158876,
+            693399667,
+            698135125
+          ],
+          "ratio": 1.5586578598873717,
+          "scenario": "mkdir tree (10x10x10)"
+        },
+        {
+          "base_median_ns": 439446958,
+          "base_samples_sorted_ns": [
+            434981667,
+            439446958,
+            486744042
+          ],
+          "cloudflare_limit": 3.4183305288131174,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 3.1075732080119245,
+          "layerfs_max_ns": 804578959,
+          "layerfs_median_ns": 714782209,
+          "layerfs_samples_sorted_ns": [
+            706586333,
+            714782209,
+            804578959
+          ],
+          "ratio": 1.6265494526417907,
+          "scenario": "find tree"
+        },
+        {
+          "base_median_ns": 27481375,
+          "base_samples_sorted_ns": [
+            25851958,
+            27481375,
+            29219166
+          ],
+          "cloudflare_limit": 4.089799018910678,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 3.717999108100616,
+          "layerfs_max_ns": 55082292,
+          "layerfs_median_ns": 49555250,
+          "layerfs_samples_sorted_ns": [
+            44052042,
+            49555250,
+            55082292
+          ],
+          "ratio": 1.8032303696594512,
+          "scenario": "write 64 MiB"
+        },
+        {
+          "base_median_ns": 45805375,
+          "base_samples_sorted_ns": [
+            44406959,
+            45805375,
+            51379750
+          ],
+          "cloudflare_limit": 10.076642103783588,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 9.160583730712352,
+          "layerfs_max_ns": 190479542,
+          "layerfs_median_ns": 129553167,
+          "layerfs_samples_sorted_ns": [
+            121317583,
+            129553167,
+            190479542
+          ],
+          "ratio": 2.828339840029691,
+          "scenario": "copy 64 MiB"
+        },
+        {
+          "base_median_ns": 38740917,
+          "base_samples_sorted_ns": [
+            35347208,
+            38740917,
+            40605916
+          ],
+          "cloudflare_limit": 7.106203832579558,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 6.460185302345052,
+          "layerfs_max_ns": 68109875,
+          "layerfs_median_ns": 67377459,
+          "layerfs_samples_sorted_ns": [
+            67127916,
+            67377459,
+            68109875
+          ],
+          "ratio": 1.739180799463265,
+          "scenario": "read 64 MiB"
+        },
+        {
+          "base_median_ns": 12767500,
+          "base_samples_sorted_ns": [
+            11204458,
+            12767500,
+            12924667
+          ],
+          "cloudflare_limit": 11.700681124672272,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 10.636982840611156,
+          "layerfs_max_ns": 15770334,
+          "layerfs_median_ns": 14523833,
+          "layerfs_samples_sorted_ns": [
+            11332833,
+            14523833,
+            15770334
+          ],
+          "ratio": 1.1375627961621304,
+          "scenario": "pure read 64 MiB"
+        },
+        {
+          "base_median_ns": 18693875,
+          "base_samples_sorted_ns": [
+            17749458,
+            18693875,
+            19359167
+          ],
+          "cloudflare_limit": 22.118189039347104,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 20.107444581224637,
+          "layerfs_max_ns": 84100292,
+          "layerfs_median_ns": 81328750,
+          "layerfs_samples_sorted_ns": [
+            77845916,
+            81328750,
+            84100292
+          ],
+          "ratio": 4.350555997619542,
+          "scenario": "pure copy 64 MiB"
+        },
+        {
+          "base_median_ns": 22133250,
+          "base_samples_sorted_ns": [
+            19574625,
+            22133250,
+            24147167
+          ],
+          "cloudflare_limit": 8.536080194275101,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 7.7600729038864555,
+          "layerfs_max_ns": 45541833,
+          "layerfs_median_ns": 45486291,
+          "layerfs_samples_sorted_ns": [
+            45434834,
+            45486291,
+            45541833
+          ],
+          "ratio": 2.05511124665379,
+          "scenario": "overwrite 64 MiB"
+        },
+        {
+          "base_median_ns": 9377083,
+          "base_samples_sorted_ns": [
+            9203583,
+            9377083,
+            9898750
+          ],
+          "cloudflare_limit": 58.6868933921211,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 53.351721265564635,
+          "layerfs_max_ns": 159025459,
+          "layerfs_median_ns": 156768083,
+          "layerfs_samples_sorted_ns": [
+            152855834,
+            156768083,
+            159025459
+          ],
+          "ratio": 16.718214289027834,
+          "scenario": "git init + commit 100 files"
+        }
+      ],
+      "status": "LIVE_MOUNT_PASS"
+    },
+    "var": {
+      "aggregates": {
+        "G": 3.207003716976998,
+        "Rsum": 2.0401911320138906,
+        "SB_ns": 1723871126,
+        "SL_ns": 3517026584,
+        "Spread": 1.0408006586168017
+      },
+      "checks": {
+        "G": true,
+        "Rsum": true,
+        "SL": true,
+        "Spread": true,
+        "benchmark_exit_zero": true,
+        "cloudflare_rows": true,
+        "config_exact": true,
+        "daemon_exit_zero": true,
+        "fail_markers_zero": true,
+        "independent_verifier_pass": true,
+        "matrix_exact": true,
+        "network_scenarios_zero": true,
+        "statistics_exact": true,
+        "stderr_empty": true
+      },
+      "resource_checks": {
+        "genesis_only_publication": true,
+        "memory_peak_under_512_mib": true,
+        "oom_zero": true,
+        "pids_bounded": true,
+        "terminal": true,
+        "throttle_under_5_percent": true
+      },
+      "resources": {
+        "callback_wall_ns": 2246438549,
+        "cgroup_memory_peak_bytes": 284450816,
+        "connection_mutex_wait_ns": 33160,
+        "cpu_usage_usec_delta": 21851821,
+        "mount_lock_wait_ns": 18115478,
+        "oom_delta": 0,
+        "oom_kill_delta": 0,
+        "pids_peak": 16,
+        "population_wall_ns": 24813550000,
+        "terminal": {
+          "busy_locked_zero": true,
+          "callback_wall_observed": true,
+          "connections_bounded": true,
+          "handles_pending_dirty_zero": true,
+          "invalidations_exact": true,
+          "largest_request_bounded": true,
+          "logical_workspace_zero": true,
+          "materialization_capture_zero": true,
+          "operation_q_hwm_bounded": true,
+          "operation_q_terminal_zero": true,
+          "root_only_ownership": true,
+          "source_commit_exact": true,
+          "source_tree_exact": true,
+          "spool_terminal_zero": true,
+          "status_pass": true,
+          "wait_ratio_bounded": true
+        },
+        "throttle_ratio": 0.014005533267106077,
+        "throttled_usec_delta": 347527
+      },
+      "rows": [
+        {
+          "base_median_ns": 18329000,
+          "base_samples_sorted_ns": [
+            17912875,
+            18329000,
+            19393333
+          ],
+          "cloudflare_limit": 52.79850159931593,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 47.99863781755993,
+          "layerfs_max_ns": 305980792,
+          "layerfs_median_ns": 273975250,
+          "layerfs_samples_sorted_ns": [
+            268004084,
+            273975250,
+            305980792
+          ],
+          "ratio": 14.947637623438267,
+          "scenario": "create 1000 files"
+        },
+        {
+          "base_median_ns": 573794583,
+          "base_samples_sorted_ns": [
+            552036709,
+            573794583,
+            596906569
+          ],
+          "cloudflare_limit": 3.1197774209800406,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 2.8361612918000367,
+          "layerfs_max_ns": 878760834,
+          "layerfs_median_ns": 848227208,
+          "layerfs_samples_sorted_ns": [
+            812550459,
+            848227208,
+            878760834
+          ],
+          "ratio": 1.4782767790611924,
+          "scenario": "stat 1000 files"
+        },
+        {
+          "base_median_ns": 25895375,
+          "base_samples_sorted_ns": [
+            24932959,
+            25895375,
+            26750875
+          ],
+          "cloudflare_limit": 50.620726104120244,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 46.018841912836585,
+          "layerfs_max_ns": 392397500,
+          "layerfs_median_ns": 383479167,
+          "layerfs_samples_sorted_ns": [
+            380833584,
+            383479167,
+            392397500
+          ],
+          "ratio": 14.808789870778083,
+          "scenario": "rm 1000 files"
+        },
+        {
+          "base_median_ns": 470139166,
+          "base_samples_sorted_ns": [
+            456787208,
+            470139166,
+            471678333
+          ],
+          "cloudflare_limit": 3.2324395222415134,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 2.938581383855921,
+          "layerfs_max_ns": 729733459,
+          "layerfs_median_ns": 709513833,
+          "layerfs_samples_sorted_ns": [
+            706139126,
+            709513833,
+            729733459
+          ],
+          "ratio": 1.5091570418108922,
+          "scenario": "mkdir tree (10x10x10)"
+        },
+        {
+          "base_median_ns": 463381417,
+          "base_samples_sorted_ns": [
+            455023917,
+            463381417,
+            465387875
+          ],
+          "cloudflare_limit": 3.30089156626831,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 3.0008105147893724,
+          "layerfs_max_ns": 738198292,
+          "layerfs_median_ns": 737119292,
+          "layerfs_samples_sorted_ns": [
+            722852667,
+            737119292,
+            738198292
+          ],
+          "ratio": 1.590739863441697,
+          "scenario": "find tree"
+        },
+        {
+          "base_median_ns": 23828626,
+          "base_samples_sorted_ns": [
+            22975375,
+            23828626,
+            25894292
+          ],
+          "cloudflare_limit": 6.201160486314913,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 5.637418623922647,
+          "layerfs_max_ns": 53710833,
+          "layerfs_median_ns": 52580333,
+          "layerfs_samples_sorted_ns": [
+            52304667,
+            52580333,
+            53710833
+          ],
+          "ratio": 2.206603645548006,
+          "scenario": "write 64 MiB"
+        },
+        {
+          "base_median_ns": 46078458,
+          "base_samples_sorted_ns": [
+            38765583,
+            46078458,
+            47700125
+          ],
+          "cloudflare_limit": 12.383005548606773,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 11.257277771460702,
+          "layerfs_max_ns": 176771542,
+          "layerfs_median_ns": 137496542,
+          "layerfs_samples_sorted_ns": [
+            129622292,
+            137496542,
+            176771542
+          ],
+          "ratio": 2.983965782882752,
+          "scenario": "copy 64 MiB"
+        },
+        {
+          "base_median_ns": 34268334,
+          "base_samples_sorted_ns": [
+            32967667,
+            34268334,
+            37256666
+          ],
+          "cloudflare_limit": 8.13813559322034,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 7.398305084745763,
+          "layerfs_max_ns": 65040750,
+          "layerfs_median_ns": 61618459,
+          "layerfs_samples_sorted_ns": [
+            60916500,
+            61618459,
+            65040750
+          ],
+          "ratio": 1.7981165644060781,
+          "scenario": "read 64 MiB"
+        },
+        {
+          "base_median_ns": 13348042,
+          "base_samples_sorted_ns": [
+            13162333,
+            13348042,
+            15095041
+          ],
+          "cloudflare_limit": 12.138062170405115,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 11.034601973095558,
+          "layerfs_max_ns": 15717125,
+          "layerfs_median_ns": 14942209,
+          "layerfs_samples_sorted_ns": [
+            11712292,
+            14942209,
+            15717125
+          ],
+          "ratio": 1.1194307749406243,
+          "scenario": "pure read 64 MiB"
+        },
+        {
+          "base_median_ns": 23748541,
+          "base_samples_sorted_ns": [
+            21927208,
+            23748541,
+            24336834
+          ],
+          "cloudflare_limit": 18.554583701009367,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 16.867803364553968,
+          "layerfs_max_ns": 89338208,
+          "layerfs_median_ns": 86091000,
+          "layerfs_samples_sorted_ns": [
+            84106458,
+            86091000,
+            89338208
+          ],
+          "ratio": 3.625106906567439,
+          "scenario": "pure copy 64 MiB"
+        },
+        {
+          "base_median_ns": 16460250,
+          "base_samples_sorted_ns": [
+            15021917,
+            16460250,
+            17053000
+          ],
+          "cloudflare_limit": 15.364043576566841,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 13.967312342333491,
+          "layerfs_max_ns": 47850167,
+          "layerfs_median_ns": 45176666,
+          "layerfs_samples_sorted_ns": [
+            43215500,
+            45176666,
+            47850167
+          ],
+          "ratio": 2.744591728558193,
+          "scenario": "overwrite 64 MiB"
+        },
+        {
+          "base_median_ns": 14599334,
+          "base_samples_sorted_ns": [
+            14331667,
+            14599334,
+            15202750
+          ],
+          "cloudflare_limit": 37.49707651801345,
+          "cloudflare_pass": true,
+          "cloudflare_ratio": 34.088251380012224,
+          "layerfs_max_ns": 167024083,
+          "layerfs_median_ns": 166806625,
+          "layerfs_samples_sorted_ns": [
+            160129167,
+            166806625,
+            167024083
+          ],
+          "ratio": 11.425632498030389,
+          "scenario": "git init + commit 100 files"
+        }
+      ],
+      "status": "LIVE_MOUNT_PASS"
+    }
+  },
+  "schema": "layerfs-stage2-measurement-verification-v3",
+  "status": "LIVE_MOUNT_PASS"
+}

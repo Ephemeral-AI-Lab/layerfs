@@ -1,0 +1,66 @@
+{
+  "command": "dd if=/dev/zero of=big bs=1M count=64 status=none; cat big > /dev/null",
+  "command_returncodes": {
+    "base": 0,
+    "computerd": 0
+  },
+  "config": {
+    "base": "/var/tmp",
+    "external_exact_scenario": true,
+    "mount": "/workspace",
+    "randomizeTargets": 0,
+    "reps": 1,
+    "warmup": 0
+  },
+  "layerfs_cpu_measurement": {
+    "command_wall_ns": 62205333,
+    "daemon_pid": 7,
+    "schedstat_runtime_ns_after": {
+      "10": 201545381,
+      "11": 207824786,
+      "12": 201951512,
+      "13": 206849467,
+      "7": 8025581,
+      "8": 182791,
+      "9": 23250
+    },
+    "schedstat_runtime_ns_before": {
+      "10": 194668757,
+      "11": 200631536,
+      "12": 194793888,
+      "13": 200110592,
+      "7": 8025581,
+      "8": 182791,
+      "9": 23250
+    }
+  },
+  "prep": "",
+  "prep_returncodes": {
+    "base": 0,
+    "computerd": 0
+  },
+  "results": [
+    {
+      "maxNs": 62205333,
+      "meanNs": 62205333,
+      "medianNs": 62205333,
+      "minNs": 62205333,
+      "p95Ns": 62205333,
+      "samples": 1,
+      "scenario": "read 64 MiB",
+      "target": "computerd"
+    },
+    {
+      "maxNs": 36275792,
+      "meanNs": 36275792,
+      "medianNs": 36275792,
+      "minNs": 36275792,
+      "p95Ns": 36275792,
+      "samples": 1,
+      "scenario": "read 64 MiB",
+      "target": "base"
+    }
+  ],
+  "scenario": "read 64 MiB",
+  "schema": "layerfs-stage2-014-scenario-cpu-raw-v1"
+}

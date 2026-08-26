@@ -1,0 +1,2 @@
+drwxr-xr-x  0 0      0           0 Aug 26 13:29 ./
+-rw-r--r--  0 0      0        2134 Aug 26 13:29 ./terminal.json

@@ -1,0 +1,46 @@
+{
+  "T_checkpoint_ns": 698312500,
+  "T_live_ns": 689661876,
+  "T_to_durable_ns": 1387974376,
+  "acknowledged_ref": {
+    "generation": 2,
+    "root": "9074669c07c704feeaa3b8988e4a0fd9ad3024dd456cc5496307a834342ca962"
+  },
+  "checks": {
+    "acknowledged_reopen_exact": true,
+    "clean_final_state": true,
+    "prepared_reopen_exact": true,
+    "prepared_root_accepted_before_timing": true,
+    "terminal_pass": true
+  },
+  "classification": "CLEAN_FINAL_STATE_BARRIER_COMMITTED",
+  "clean_final_barrier_ns": 129128791,
+  "clean_final_ref": {
+    "generation": 3,
+    "root": "6fbf54b7efc3d7203d15478634351755559c65fb2eca922fc14362eb1e00f8a2"
+  },
+  "cleanup": {
+    "classification": "ACKNOWLEDGED_CLEANUP_OUTSIDE_TIMER",
+    "host_wall_ns": 280473000,
+    "path": "/workspace/scenario"
+  },
+  "command": "for a in $(seq 1 10); do for b in $(seq 1 10); do mkdir -p $a/$b; for c in $(seq 1 10); do touch $a/$b/$c; done; done; done",
+  "operation_history_oracle": "history-oracle/receipt.json",
+  "prep": "",
+  "prepared_barrier_ns": 19600833,
+  "prepared_ref": {
+    "generation": 1,
+    "root": "684c1a67bc082521745e1b4640ece91cb6ba3049af7e50d45655d6f3695a71c7"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "4e26e02eaa348a5b80af21bddda00cf33ba2384e56124f34adcfbab49e5f6d8e"
+  },
+  "repetition": 2,
+  "scenario": "mkdir tree (10x10x10)",
+  "schema": "layerfs-stage2-014-durable-sample-v1",
+  "status": "PASS",
+  "timed_durability_scope": "ACCEPTED_FINAL_STATE",
+  "timing_disposition": "MEASURED",
+  "warmup": false
+}

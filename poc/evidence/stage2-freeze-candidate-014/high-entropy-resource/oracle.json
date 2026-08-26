@@ -1,0 +1,16 @@
+{
+  "bytes": 104857600,
+  "checkpoint_cpu": {
+    "nr_throttled_delta": 1,
+    "throttled_usec_delta": 350,
+    "usage_usec_delta": 345748
+  },
+  "checkpoint_ns": 376645375,
+  "checks": {
+    "checkpoint_completed": true,
+    "exact_size": true
+  },
+  "schema": "layerfs-stage2-high-entropy-checkpoint-v1",
+  "sha256": "571e08cd72ac17e50e843094343b5a0555627ff26aebdaad869a4da20d14c4af",
+  "status": "PASS"
+}

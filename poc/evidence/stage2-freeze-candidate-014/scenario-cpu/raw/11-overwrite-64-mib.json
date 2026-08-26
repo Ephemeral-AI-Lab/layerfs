@@ -1,0 +1,66 @@
+{
+  "command": "dd if=/dev/zero of=big bs=1M count=64 status=none conv=notrunc",
+  "command_returncodes": {
+    "base": 0,
+    "computerd": 0
+  },
+  "config": {
+    "base": "/var/tmp",
+    "external_exact_scenario": true,
+    "mount": "/workspace",
+    "randomizeTargets": 0,
+    "reps": 1,
+    "warmup": 0
+  },
+  "layerfs_cpu_measurement": {
+    "command_wall_ns": 46000584,
+    "daemon_pid": 7,
+    "schedstat_runtime_ns_after": {
+      "10": 242665576,
+      "11": 245962965,
+      "12": 252193422,
+      "13": 243983677,
+      "7": 8025581,
+      "8": 182791,
+      "9": 23250
+    },
+    "schedstat_runtime_ns_before": {
+      "10": 236163282,
+      "11": 239655298,
+      "12": 245749465,
+      "13": 237600845,
+      "7": 8025581,
+      "8": 182791,
+      "9": 23250
+    }
+  },
+  "prep": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+  "prep_returncodes": {
+    "base": 0,
+    "computerd": 0
+  },
+  "results": [
+    {
+      "maxNs": 46000584,
+      "meanNs": 46000584,
+      "medianNs": 46000584,
+      "minNs": 46000584,
+      "p95Ns": 46000584,
+      "samples": 1,
+      "scenario": "overwrite 64 MiB",
+      "target": "computerd"
+    },
+    {
+      "maxNs": 13961416,
+      "meanNs": 13961416,
+      "medianNs": 13961416,
+      "minNs": 13961416,
+      "p95Ns": 13961416,
+      "samples": 1,
+      "scenario": "overwrite 64 MiB",
+      "target": "base"
+    }
+  ],
+  "scenario": "overwrite 64 MiB",
+  "schema": "layerfs-stage2-014-scenario-cpu-raw-v1"
+}

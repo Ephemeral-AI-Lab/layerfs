@@ -1,0 +1,26 @@
+{
+  "architecture": "arm64",
+  "environment": [
+    "PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "RUSTUP_HOME=/usr/local/rustup",
+    "CARGO_HOME=/usr/local/cargo",
+    "RUST_VERSION=1.85.1",
+    "LAYERFS_SOURCE_COMMIT=292be840c31052d85ab6e9441706298af3cd3d15",
+    "LAYERFS_SOURCE_TREE=e3055bcd7a41921879fa149c11918891517e4522",
+    "LAYERFS_FS_BENCH_SHA256=0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
+  ],
+  "executable_blake3": "425f3031d0d313f5996048cb8cab11958740cf107dfb13471e821aafccb22826",
+  "executable_sha256": "4dd6d900ed7bbb3d3fbcdb6f2fcf3ed6959b34c1867f8ff728f06c568c094d5e",
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "image_id": "sha256:62b459af3f03dc8bbe97419b8522ed3599ab6d562b12ebe8b8ed5efb7f22f5fc",
+  "labels": {
+    "org.opencontainers.image.layerfs.fs-bench-sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+    "org.opencontainers.image.layerfs.source-commit": "292be840c31052d85ab6e9441706298af3cd3d15",
+    "org.opencontainers.image.layerfs.source-tree": "e3055bcd7a41921879fa149c11918891517e4522",
+    "org.opencontainers.image.revision": "292be840c31052d85ab6e9441706298af3cd3d15",
+    "org.opencontainers.image.source": "https://github.com/Ephemeral-AI-Lab/layerfs-engine-lab"
+  },
+  "os": "linux",
+  "schema": "layerfs-stage2-image-manifest-v2",
+  "status": "PASS"
+}

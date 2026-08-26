@@ -1,0 +1,81 @@
+{
+  "authoritative": {
+    "tmp": {
+      "G": 3.690712367413269,
+      "Rsum": 2.126352625319144,
+      "SB_ns": 1622155333,
+      "SL_ns": 3449274251,
+      "Spread": 1.0510132080535455
+    },
+    "var": {
+      "G": 3.207003716976998,
+      "Rsum": 2.0401911320138906,
+      "SB_ns": 1723871126,
+      "SL_ns": 3517026584,
+      "Spread": 1.0408006586168017
+    }
+  },
+  "checks": {
+    "architecture": true,
+    "authoritative": true,
+    "cleanup": true,
+    "custody_docs": true,
+    "functional_restart_fault_splice": true,
+    "host_linux_closure": true,
+    "readiness": true,
+    "resources": true,
+    "scenario_cpu": true,
+    "smoke": true,
+    "source_binding": true
+  },
+  "executable_blake3": "425f3031d0d313f5996048cb8cab11958740cf107dfb13471e821aafccb22826",
+  "executable_sha256": "4dd6d900ed7bbb3d3fbcdb6f2fcf3ed6959b34c1867f8ff728f06c568c094d5e",
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "functional": {
+    "checkpoint_100mib_ns": 221505209,
+    "high_entropy_checkpoint_ns": 376645375,
+    "restart_read_mib_s": 637.2805962397258,
+    "same_daemon_read_mib_s": 1311.4252402960533,
+    "strict_zero_cfs_event": true,
+    "strict_zero_cfs_event_classification": "NONBLOCKING_DIAGNOSTIC"
+  },
+  "image_id": "sha256:62b459af3f03dc8bbe97419b8522ed3599ab6d562b12ebe8b8ed5efb7f22f5fc",
+  "readiness": {
+    "tmp": {
+      "SL_ns": 3378960821,
+      "checks": {
+        "config": true,
+        "fail_network_zero": true,
+        "matrix": true,
+        "stderr_empty": true,
+        "terminal": true
+      },
+      "status": "READY"
+    },
+    "var": {
+      "SL_ns": 3435769294,
+      "checks": {
+        "config": true,
+        "fail_network_zero": true,
+        "matrix": true,
+        "stderr_empty": true,
+        "terminal": true
+      },
+      "status": "READY"
+    }
+  },
+  "resources": {
+    "daemon_fd_hwm": 11,
+    "daemon_rss_hwm_bytes": 15454208,
+    "daemon_settled_rss_bytes": 5275648,
+    "daemon_threads_hwm": 7,
+    "tmp_cgroup_memory_peak_bytes": 283369472,
+    "tmp_throttle_ratio": 0.015852876907799022,
+    "var_cgroup_memory_peak_bytes": 284450816,
+    "var_throttle_ratio": 0.014005533267106077
+  },
+  "schema": "layerfs-stage2-final-summary-v3",
+  "source_commit": "292be840c31052d85ab6e9441706298af3cd3d15",
+  "source_tree": "e3055bcd7a41921879fa149c11918891517e4522",
+  "status": "PASS_OPTIMIZED"
+}

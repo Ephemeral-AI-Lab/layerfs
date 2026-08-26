@@ -1,0 +1,50 @@
+{
+  "attempts": [
+    {
+      "classification": "historical-pass-superseded-by-user-requalification",
+      "id": "candidate-013",
+      "reason": "Candidate 013 remains valid historical live-mount evidence; the later persistence-inclusive timing requirement supersedes its terminal classification."
+    },
+    {
+      "artifact": "full-linux-closure-attempt-001-network-fail.log",
+      "classification": "closed-missing-offline-registry",
+      "id": "linux-closure-attempt-001"
+    },
+    {
+      "artifact": "full-linux-closure-attempt-002-clippy-missing-fail.log",
+      "classification": "closed-clippy-component-missing",
+      "id": "linux-closure-attempt-002"
+    },
+    {
+      "artifact": "full-linux-closure-attempt-003-clippy-network-none-fail.log",
+      "classification": "closed-network-disabled-rustup",
+      "id": "linux-closure-attempt-003",
+      "superseded_by": "full-linux-closure.log"
+    },
+    {
+      "classification": "closed-wrong-process",
+      "id": "proc-1-resource-capture",
+      "reason": "The init shim was measured; exact /proc/*/exe daemon resolution supersedes it.",
+      "superseded_by": "high-entropy-resource/daemon-after.status"
+    },
+    {
+      "classification": "nonblocking-diagnostic",
+      "id": "checkpoint-strict-zero-cfs",
+      "reason": "The controlling gates are checkpoint <=400 ms and population throttled_usec/wall <=5%."
+    },
+    {
+      "artifact": "seal-receipt-live-only-pre-durable-invalidated.json",
+      "classification": "invalidated-before-checksum-seal",
+      "id": "candidate-014-live-only-terminal-claim",
+      "reason": "A later explicit requirement made command-to-durability-ack timing and restart proof controlling."
+    },
+    {
+      "artifact": "durable/durable01/failure.json",
+      "classification": "closed-docker-tag-inspect-admission",
+      "id": "durable01",
+      "superseded_by": "durable/durable02/summary.json"
+    }
+  ],
+  "schema": "layerfs-stage2-failure-ledger-v3",
+  "status": "CLOSED"
+}

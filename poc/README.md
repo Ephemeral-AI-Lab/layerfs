@@ -2,8 +2,9 @@
 
 Status: **AppleWorkspaceV1 Stage 1.0 and Stage 1.1 are closed; Stage 1.1M
 Verified correctness is closed and its performance result is
-`REVISE_NO_AUTHORIZED_OWNER`; Stage 1.2 is skipped; Stage 2 is closed at
-source-bound `PASS_OPTIMIZED`**.
+`REVISE_NO_AUTHORIZED_OWNER`; Stage 1.2 is skipped; Stage 2 LayerFS
+correctness/resource/restart-durable qualification passes while a full-product
+Cloudflare comparison is unavailable**.
 The controlling closure and custody record is
 [17 — Stage 1.0 closure and accepted A02 exception](17-stage1-closure.md).
 The preserved A01–A17 campaign remains measured `REVISE`; its A02 latency miss
@@ -29,13 +30,19 @@ evidence qualifications are recorded under
 workload reference. The direct successor is the LayerFS + Linux FUSE workspace
 specified in `poc/19`, with Docker only as its Linux execution envelope.
 macFUSE and FSKit are not selected dependencies.
-Stage 2 terminal source `bd1cd225e152a630a10520806ecca65593c71a6b`
-and image `sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139`
+Stage 2 terminal source `292be840c31052d85ab6e9441706298af3cd3d15`
+and image `sha256:62b459af3f03dc8bbe97419b8522ed3599ab6d562b12ebe8b8ed5efb7f22f5fc`
 pass both exact Docker `--cpus 1` authoritative populations: `/var/tmp` SL
-`2.920 s`, Rsum `2.049`, G `3.171`, Spread `1.010`; `/tmp` SL `3.120 s`,
-Rsum `2.277`, G `3.821`, Spread `1.009`. Controlling custody is
-`poc/evidence/stage2-freeze-candidate-013`. Candidate 012 is superseded and is
-not terminal evidence.
+`3.517 s`, Rsum `2.040`, G `3.207`, Spread `1.041`; `/tmp` SL `3.449 s`,
+Rsum `2.126`, G `3.691`, Spread `1.051`. These are retained as `LIVE_MOUNT`
+diagnostics. Controlling custody is
+`poc/evidence/stage2-freeze-candidate-014`, whose terminal status is reopened
+The separate command-to-checkpoint-ack campaign passes 36/36 measured samples
+plus 12 warmups and two SIGKILL/reopen proofs per sample, with a `7.854 s` sum
+of durable medians. A deployed Cloudflare post-exec Durable Object/restart
+population is unavailable, so the honest disposition is
+`PASS_DURABLE_LAYERFS_COMPARISON_UNAVAILABLE`, not `PASS_OPTIMIZED`. Candidate
+013 is historical live-mount evidence; candidate 012 is superseded.
 
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure
@@ -43,7 +50,7 @@ Stage 1.1  poc/16 single-file APFS edge benchmark — PASS / closed
 Stage 1.1M poc/20 Verified correctness/accounting closed; performance REVISE
 Stage 1.1T poc/22 explicit TrustedLocalDev product class — audited primary class PASS; fixed-cost miss retained
 Stage 1.2  SKIPPED — poc/15 retained as a workload reference only
-Stage 2    poc/19 LayerFS + Linux FUSE direct workspace — PASS_OPTIMIZED / closed
+Stage 2    poc/19 LayerFS + Linux FUSE direct workspace — PASS_DURABLE_LAYERFS / full comparison unavailable
 ```
 
 The PoC collapses the remaining G6 and project Phase 5–8 work into one vertical

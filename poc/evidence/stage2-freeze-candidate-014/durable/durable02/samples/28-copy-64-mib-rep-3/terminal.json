@@ -1,0 +1,17 @@
+{
+  "schema": "layerfs-fuse-terminal-v1",
+  "status": "PASS",
+  "signal": 15,
+  "backend": "layerfs-fuse",
+  "integrity": "Verified",
+  "ref": "main",
+  "generation": 3,
+  "root": "708f9da0f6daec67402cbb05e68cd0cd496d15c48aee8d08325080c844b3155d",
+  "executable_blake3": "425f3031d0d313f5996048cb8cab11958740cf107dfb13471e821aafccb22826",
+  "source_commit": "292be840c31052d85ab6e9441706298af3cd3d15",
+  "source_tree": "e3055bcd7a41921879fa149c11918891517e4522",
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "callbacks": {"lookup":3,"getattr":4,"create":0,"read":1024,"write":0,"flush":2,"release":2,"fsync":0,"fsyncdir":1,"readdir":8,"callback_wall_ns":339310683,"mount_lock_wait_ns":124844419,"invalidations_requested":2,"invalidations_succeeded":2,"invalidations_failed":0,"invalidations_unsupported":0},
+  "mounted": {"checkpoints":1,"no_op_checkpoints":1,"created_then_deleted":0,"splices":0,"lookup_refs":1,"lookup_refs_high_water":4,"live_nodes":1,"live_nodes_high_water":4,"open_handles":0,"open_handles_high_water":1,"pending_nodes":0,"pending_nodes_high_water":0,"dirty_nodes":0,"dirty_nodes_high_water":4,"dirty_ranges":0,"dirty_ranges_high_water":0,"directory_cursors":0,"directory_changes":0,"directory_changes_high_water":3,"inode_mappings":1,"inode_mappings_high_water":4,"logical_workspace_bytes":0,"logical_workspace_high_water_bytes":134217728,"spool_appended_bytes":0,"spool_live_bytes":0,"spool_live_high_water_bytes":0,"spool_dead_bytes":0,"spool_physical_bytes":0,"spool_physical_high_water_bytes":0,"spool_resets":0,"spool_compactions":0,"largest_request_bytes":131072,"operation_q_terminal_bytes":0,"operation_q_high_water_bytes":8388607,"materializations":0,"capture_scans":0},
+  "engine": {"transactions_started":1,"transactions_committed":1,"transactions_rolled_back":0,"publication_commits":1,"objects_created":10,"objects_reused":5,"object_bytes_read":139581410,"object_bytes_written":1393,"statements":8779,"fetched_rows":5294,"busy_events":0,"locked_events":0,"connection_mutex_wait_ns":82440,"connections_high_water":1,"connections_before_drop":1,"connections_terminal":0}
+}

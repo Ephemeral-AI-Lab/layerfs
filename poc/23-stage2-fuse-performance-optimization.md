@@ -1,16 +1,24 @@
 # Stage 2P Specification — Portable LayerFS FUSE Performance Optimization
 
-Status: **implemented and closed at source-bound `PASS_OPTIMIZED`**
+Status: **LayerFS persistence-inclusive campaign passes; full-product comparison unavailable**
 
-The terminal result is [candidate 013](evidence/stage2-freeze-candidate-013/summary.md),
-source `bd1cd225e152a630a10520806ecca65593c71a6b`, image
-`sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139`,
+The current candidate is [candidate 014](evidence/stage2-freeze-candidate-014/summary.md),
+source `292be840c31052d85ab6e9441706298af3cd3d15`, image
+`sha256:62b459af3f03dc8bbe97419b8522ed3599ab6d562b12ebe8b8ed5efb7f22f5fc`,
 using the unchanged upstream benchmark, exact 12-scenario filter, and
 controlling Docker `--cpus 1` quota envelope. `/var/tmp` closes at SL
-`2.920 s`, Rsum `2.049`, G `3.171`, Spread `1.010`; `/tmp` closes at SL
-`3.120 s`, Rsum `2.277`, G `3.821`, Spread `1.009`. Candidate 012 is
-superseded and is not terminal evidence. Candidate 011's cpuset numbers remain
-non-authoritative diagnostics.
+`3.517 s`, Rsum `2.040`, G `3.207`, Spread `1.041`; `/tmp` closes at SL
+`3.449 s`, Rsum `2.126`, G `3.691`, Spread `1.051`. These unchanged-upstream
+matrices measure live mount latency and are now non-terminal diagnostics. A
+separate timer from command start through explicit whole-workspace durability
+acknowledgement, followed by kill/reopen state proof, controls the reopened
+closure. It passes 36/36 measured samples plus 12 warmups; summed durable
+medians are `7.854 s`, comprising separately aggregated live medians `3.524 s`
+and checkpoint medians `4.307 s`. The prior Cloudflare Docker ratios describe
+local committed process-lifetime VFS work, not full Durable Object
+synchronization, so their thresholds are not reused as durable-persistence
+gates. Without a deployed post-pull/restart population the honest disposition
+is `PASS_DURABLE_LAYERFS_COMPARISON_UNAVAILABLE`, not `PASS_OPTIMIZED`.
 
 Prepared: `2026-08-26`
 

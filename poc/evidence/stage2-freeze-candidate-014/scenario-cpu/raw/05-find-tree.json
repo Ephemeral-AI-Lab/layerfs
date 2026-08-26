@@ -1,0 +1,66 @@
+{
+  "command": "for a in $(seq 1 10); do for b in $(seq 1 10); do mkdir -p $a/$b; for c in $(seq 1 10); do touch $a/$b/$c; done; done; done; find . -type f | wc -l",
+  "command_returncodes": {
+    "base": 0,
+    "computerd": 0
+  },
+  "config": {
+    "base": "/var/tmp",
+    "external_exact_scenario": true,
+    "mount": "/workspace",
+    "randomizeTargets": 0,
+    "reps": 1,
+    "warmup": 0
+  },
+  "layerfs_cpu_measurement": {
+    "command_wall_ns": 809632500,
+    "daemon_pid": 7,
+    "schedstat_runtime_ns_after": {
+      "10": 161011675,
+      "11": 159900186,
+      "12": 160006052,
+      "13": 162397566,
+      "7": 8025581,
+      "8": 182791,
+      "9": 23250
+    },
+    "schedstat_runtime_ns_before": {
+      "10": 134534438,
+      "11": 133245820,
+      "12": 133757321,
+      "13": 135978437,
+      "7": 8025581,
+      "8": 182791,
+      "9": 23250
+    }
+  },
+  "prep": "",
+  "prep_returncodes": {
+    "base": 0,
+    "computerd": 0
+  },
+  "results": [
+    {
+      "maxNs": 809632500,
+      "meanNs": 809632500,
+      "medianNs": 809632500,
+      "minNs": 809632500,
+      "p95Ns": 809632500,
+      "samples": 1,
+      "scenario": "find tree",
+      "target": "computerd"
+    },
+    {
+      "maxNs": 503647751,
+      "meanNs": 503647751,
+      "medianNs": 503647751,
+      "minNs": 503647751,
+      "p95Ns": 503647751,
+      "samples": 1,
+      "scenario": "find tree",
+      "target": "base"
+    }
+  ],
+  "scenario": "find tree",
+  "schema": "layerfs-stage2-014-scenario-cpu-raw-v1"
+}

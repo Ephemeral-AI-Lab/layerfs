@@ -1,0 +1,46 @@
+{
+  "T_checkpoint_ns": 237341625,
+  "T_live_ns": 159268917,
+  "T_to_durable_ns": 396610542,
+  "acknowledged_ref": {
+    "generation": 2,
+    "root": "57c3dc328a8cb0d4b59022aa98baf43129395057b7a83cf7d320eba5d1eabcf2"
+  },
+  "checks": {
+    "acknowledged_reopen_exact": true,
+    "clean_final_state": true,
+    "prepared_reopen_exact": true,
+    "prepared_root_accepted_before_timing": true,
+    "terminal_pass": true
+  },
+  "classification": "CLEAN_FINAL_STATE_BARRIER_COMMITTED",
+  "clean_final_barrier_ns": 42830625,
+  "clean_final_ref": {
+    "generation": 3,
+    "root": "5d15d022c6c8dc22163d2382b62e9c5962af7a362bf5a55dec4b20995e9dc739"
+  },
+  "cleanup": {
+    "classification": "ACKNOWLEDGED_CLEANUP_OUTSIDE_TIMER",
+    "host_wall_ns": 133270000,
+    "path": "/workspace/scenario"
+  },
+  "command": "git init -q; for i in $(seq 1 100); do echo $i > f$i; done; git add -A; git -c user.email=a@b -c user.name=a commit -qm init",
+  "operation_history_oracle": "history-oracle/receipt.json",
+  "prep": "",
+  "prepared_barrier_ns": 17250000,
+  "prepared_ref": {
+    "generation": 1,
+    "root": "29ab7c69e6a1193ca7394fc86eb49dbaee0728c1acee05320bdaa2f4f1aa5e9b"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "8fce6138706a56352d7528f3898e74acfea7873e7793f69c0abd6730cb893414"
+  },
+  "repetition": 3,
+  "scenario": "git init + commit 100 files",
+  "schema": "layerfs-stage2-014-durable-sample-v1",
+  "status": "PASS",
+  "timed_durability_scope": "ACCEPTED_FINAL_STATE",
+  "timing_disposition": "MEASURED",
+  "warmup": false
+}

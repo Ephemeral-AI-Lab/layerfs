@@ -1,0 +1,66 @@
+{
+  "command": "for i in $(seq 1 1000); do echo $i > f$i; done; for i in $(seq 1 1000); do stat f$i; done",
+  "command_returncodes": {
+    "base": 0,
+    "computerd": 0
+  },
+  "config": {
+    "base": "/var/tmp",
+    "external_exact_scenario": true,
+    "mount": "/workspace",
+    "randomizeTargets": 0,
+    "reps": 1,
+    "warmup": 0
+  },
+  "layerfs_cpu_measurement": {
+    "command_wall_ns": 862861876,
+    "daemon_pid": 7,
+    "schedstat_runtime_ns_after": {
+      "10": 56368605,
+      "11": 56057570,
+      "12": 56580577,
+      "13": 55931572,
+      "7": 8025581,
+      "8": 182791,
+      "9": 23250
+    },
+    "schedstat_runtime_ns_before": {
+      "10": 30460303,
+      "11": 30632245,
+      "12": 30767529,
+      "13": 30103127,
+      "7": 8025581,
+      "8": 182791,
+      "9": 23250
+    }
+  },
+  "prep": "",
+  "prep_returncodes": {
+    "base": 0,
+    "computerd": 0
+  },
+  "results": [
+    {
+      "maxNs": 862861876,
+      "meanNs": 862861876,
+      "medianNs": 862861876,
+      "minNs": 862861876,
+      "p95Ns": 862861876,
+      "samples": 1,
+      "scenario": "stat 1000 files",
+      "target": "computerd"
+    },
+    {
+      "maxNs": 552046250,
+      "meanNs": 552046250,
+      "medianNs": 552046250,
+      "minNs": 552046250,
+      "p95Ns": 552046250,
+      "samples": 1,
+      "scenario": "stat 1000 files",
+      "target": "base"
+    }
+  ],
+  "scenario": "stat 1000 files",
+  "schema": "layerfs-stage2-014-scenario-cpu-raw-v1"
+}

@@ -1,0 +1,46 @@
+{
+  "T_checkpoint_ns": 158749083,
+  "T_live_ns": 63435417,
+  "T_to_durable_ns": 222184500,
+  "acknowledged_ref": {
+    "generation": 2,
+    "root": "fad37f662a307e995b6d22922de37542685ed7b3c720c44247b30b5cdcb5616f"
+  },
+  "checks": {
+    "acknowledged_reopen_exact": true,
+    "clean_final_state": true,
+    "prepared_reopen_exact": true,
+    "prepared_root_accepted_before_timing": true,
+    "terminal_pass": true
+  },
+  "classification": "CLEAN_FINAL_STATE_BARRIER_COMMITTED",
+  "clean_final_barrier_ns": 21007709,
+  "clean_final_ref": {
+    "generation": 3,
+    "root": "bc5073075c893ed959bd1dd3f7b50e2eec9209b9677f87d71c551a2c25bca34c"
+  },
+  "cleanup": {
+    "classification": "ACKNOWLEDGED_CLEANUP_OUTSIDE_TIMER",
+    "host_wall_ns": 87752000,
+    "path": "/workspace/scenario"
+  },
+  "command": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+  "operation_history_oracle": "history-oracle/receipt.json",
+  "prep": "",
+  "prepared_barrier_ns": 21193625,
+  "prepared_ref": {
+    "generation": 1,
+    "root": "dcac123bceea6cb9808c6a26ffa0392b8da4a9d126b2236ca206a08678bce34d"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "1980ac2e4bf323e32c5e1500b9e14b930122cbbe0c228a2ed86cbbca2a4ade62"
+  },
+  "repetition": 0,
+  "scenario": "write 64 MiB",
+  "schema": "layerfs-stage2-014-durable-sample-v1",
+  "status": "PASS",
+  "timed_durability_scope": "ACCEPTED_FINAL_STATE",
+  "timing_disposition": "WARMUP_EXCLUDED",
+  "warmup": true
+}

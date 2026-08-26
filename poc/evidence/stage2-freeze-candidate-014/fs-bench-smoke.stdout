@@ -1,0 +1,24 @@
+config: REPS=1 WARMUP=1 RANDOMIZE_TARGETS=0 targets=/workspace /var/tmp
+
+[1m=== tiny file churn (1000 files) ===[0m
+  [32mOK[0m    create 1000 files              computerd  mean=263.1 med=263.1 p95=263.1 ms (n=1)
+  [32mOK[0m    create 1000 files              base  mean=18.2 med=18.2 p95=18.2 ms (n=1)
+  [32mOK[0m    stat 1000 files                computerd  mean=816.9 med=816.9 p95=816.9 ms (n=1)
+  [32mOK[0m    stat 1000 files                base  mean=527.4 med=527.4 p95=527.4 ms (n=1)
+
+[1m=== directory traversal ===[0m
+
+[1m=== large file I/O ===[0m
+  [32mOK[0m    pure read 64 MiB               computerd  mean=13.8 med=13.8 p95=13.8 ms (n=1)
+  [32mOK[0m    pure read 64 MiB               base  mean=12.7 med=12.7 p95=12.7 ms (n=1)
+
+[1m=== git ===[0m
+  SKIP  npm scenarios (npm not installed)
+  SKIP  go scenarios (go not installed)
+
+[1m=== summary ===[0m
+  scenario                       computerd mean computerd p95    base mean     base p95      ratio
+  create 1000 files                  263.1 ms     263.1 ms      18.2 ms      18.2 ms     14.48x
+  pure read 64 MiB                    13.8 ms      13.8 ms      12.7 ms      12.7 ms      1.08x
+  stat 1000 files                    816.9 ms     816.9 ms     527.4 ms     527.4 ms      1.55x
+wrote JSON summary to /var/tmp/layerfs-owned/fs-bench-smoke.json

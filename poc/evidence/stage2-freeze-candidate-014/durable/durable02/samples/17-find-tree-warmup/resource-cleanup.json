@@ -1,0 +1,7 @@
+{
+  "container": "layerfs-stage2-final014-dur-freeze014-durable02-s17-02-verify",
+  "container_remove_exit": 0,
+  "status": "PASS",
+  "volume": "layerfs_stage2_final014_dur_freeze014_durable02_s17_store",
+  "volume_remove_exit": 0
+}

@@ -1,0 +1,66 @@
+{
+  "command": "cp big big2",
+  "command_returncodes": {
+    "base": 0,
+    "computerd": 0
+  },
+  "config": {
+    "base": "/var/tmp",
+    "external_exact_scenario": true,
+    "mount": "/workspace",
+    "randomizeTargets": 0,
+    "reps": 1,
+    "warmup": 0
+  },
+  "layerfs_cpu_measurement": {
+    "command_wall_ns": 83840333,
+    "daemon_pid": 7,
+    "schedstat_runtime_ns_after": {
+      "10": 228241824,
+      "11": 231413130,
+      "12": 230583503,
+      "13": 229318013,
+      "7": 8025581,
+      "8": 182791,
+      "9": 23250
+    },
+    "schedstat_runtime_ns_before": {
+      "10": 219678426,
+      "11": 222437328,
+      "12": 221529221,
+      "13": 220799348,
+      "7": 8025581,
+      "8": 182791,
+      "9": 23250
+    }
+  },
+  "prep": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+  "prep_returncodes": {
+    "base": 0,
+    "computerd": 0
+  },
+  "results": [
+    {
+      "maxNs": 83840333,
+      "meanNs": 83840333,
+      "medianNs": 83840333,
+      "minNs": 83840333,
+      "p95Ns": 83840333,
+      "samples": 1,
+      "scenario": "pure copy 64 MiB",
+      "target": "computerd"
+    },
+    {
+      "maxNs": 20792292,
+      "meanNs": 20792292,
+      "medianNs": 20792292,
+      "minNs": 20792292,
+      "p95Ns": 20792292,
+      "samples": 1,
+      "scenario": "pure copy 64 MiB",
+      "target": "base"
+    }
+  ],
+  "scenario": "pure copy 64 MiB",
+  "schema": "layerfs-stage2-014-scenario-cpu-raw-v1"
+}

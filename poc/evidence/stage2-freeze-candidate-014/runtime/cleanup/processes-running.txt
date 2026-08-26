@@ -1,0 +1,3 @@
+PID                 PPID                STAT                STARTED             COMMAND
+37547               37524               Ss                  Wed                 Aug 26 05:29:39 2026 /sbin/docker-init -- /usr/local/bin/layerfs-fuse --store /var/lib/layerfs/store.sqlite --mount /workspace --spool /var/tmp/layerfs-owned/spool --receipt /var/tmp/layerfs-owned/terminal.json --ref main --integrity trusted --uid 0 --gid 0
+37560               37547               Sl                  Wed                 Aug 26 05:29:39 2026 /usr/local/bin/layerfs-fuse --store /var/lib/layerfs/store.sqlite --mount /workspace --spool /var/tmp/layerfs-owned/spool --receipt /var/tmp/layerfs-owned/terminal.json --ref main --integrity trusted --uid 0 --gid 0

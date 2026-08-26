@@ -1,0 +1,16 @@
+{
+  "checks": {
+    "fd_high_water_bounded": true,
+    "samples_nonzero": true,
+    "threads_high_water_bounded": true
+  },
+  "daemon_rss_high_water_kib": 10136,
+  "fd_baseline": 10,
+  "fd_high_water": 11,
+  "fd_limit": 74,
+  "interval_ms": 50,
+  "samples": 121,
+  "schema": "layerfs-stage2-process-highwater-v2",
+  "status": "PASS",
+  "threads_high_water": 7
+}

@@ -1,0 +1,62 @@
+{
+  "schema": "layerfs-stage2-durable-preregistration-v1",
+  "registered_before_campaign": true,
+  "image_id": "sha256:62b459af3f03dc8bbe97419b8522ed3599ab6d562b12ebe8b8ed5efb7f22f5fc",
+  "source_commit": "292be840c31052d85ab6e9441706298af3cd3d15",
+  "source_tree": "e3055bcd7a41921879fa149c11918891517e4522",
+  "integrity": "Verified",
+  "reps": 3,
+  "warmup": 1,
+  "fresh_store_per_sample": true,
+  "timer": {
+    "start": "immediately before exact scenario command",
+    "live_end": "exact scenario command process return",
+    "durable_end": "return from fsync on a pre-opened /workspace directory descriptor",
+    "T_live": "live_end - start",
+    "T_checkpoint": "durable_end - live_end",
+    "T_to_durable": "durable_end - start",
+    "equation": "T_to_durable == T_live + T_checkpoint"
+  },
+  "acceptance": {
+    "timing_equations_exact": true,
+    "all_36_measured_samples_complete": true,
+    "prep_checkpoint_survives_sigkill_and_verified_reopen": true,
+    "timed_checkpoint_survives_sigkill_and_verified_reopen": true,
+    "accepted_generation_and_root_exact_after_reopen": true,
+    "recursive_type_mode_size_sha256_inventory_exact_after_reopen": true,
+    "acknowledged_cleanup_and_terminal_resource_equations": true,
+    "owned_container_volume_mount_process_residue_zero": true,
+    "two_barrier_create_delete_history_oracle": true,
+    "numeric_latency_gate": null,
+    "numeric_latency_gate_reason": "No deployed restart-durable Cloudflare population exists. Live/transient thresholds are not reused."
+  },
+  "scenario_generation_delta": {
+    "create 1000 files": 1,
+    "stat 1000 files": 1,
+    "rm 1000 files": 0,
+    "mkdir tree (10x10x10)": 1,
+    "find tree": 1,
+    "write 64 MiB": 1,
+    "copy 64 MiB": 1,
+    "read 64 MiB": 1,
+    "pure read 64 MiB": 0,
+    "pure copy 64 MiB": 1,
+    "overwrite 64 MiB": 1,
+    "git init + commit 100 files": "at least 1; Git may acknowledge internal fsyncs during T_live"
+  },
+  "zero_final_state_policy": {
+    "rm_row": "final-state durability only; explicit no-op/final barrier is still timed",
+    "operation_history_claimed_by_rm_row": false,
+    "separate_history_oracle": "create -> barrier -> delete -> barrier -> SIGKILL -> verified reopen"
+  },
+  "cloudflare_policy": {
+    "published_docker_rows": "local committed VFS / process-lifetime SQLite",
+    "full_product_comparison_requires": "deployed post-exec Durable Object pull plus restart proof",
+    "reuse_4_5s_rsum_g_spread_or_row_thresholds": false,
+    "terminal_optimized_comparison_available": false
+  },
+  "npm": {
+    "in_exact_12_scenario_scope": false,
+    "reason": "The controlling exact filter excludes npm and the image does not install npm; no npm row is added to this matrix."
+  }
+}
