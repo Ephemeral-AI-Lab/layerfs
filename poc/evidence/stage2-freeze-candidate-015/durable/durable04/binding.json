@@ -1,0 +1,20 @@
+{
+  "checks": {
+    "architecture_arm64": true,
+    "fs_bench_environment_exact": true,
+    "fs_bench_label_exact": true,
+    "image_id_exact": true,
+    "source_commit_environment_exact": true,
+    "source_commit_label_exact": true,
+    "source_tree_environment_exact": true,
+    "source_tree_label_exact": true
+  },
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "harness_sha256": "83ab813bd15aead0d15e8b2676a9291501d89761ddabe2a8c83cae95f7e63144",
+  "image": "layerfs-fuse:frozen-7e82abc",
+  "image_id": "sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0",
+  "schema": "layerfs-stage2-015-durable-binding-v1",
+  "source_commit": "7e82abcd7320f6a214be336d82488ba0527b6025",
+  "source_tree": "df13d88eb7e7d2471971b0c58ca6425bb81b0b03",
+  "status": "PASS"
+}

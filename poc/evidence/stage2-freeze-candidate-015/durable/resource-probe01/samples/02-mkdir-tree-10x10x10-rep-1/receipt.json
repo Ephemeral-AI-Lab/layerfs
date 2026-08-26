@@ -1,0 +1,82 @@
+{
+  "T_checkpoint_ns": 689837209,
+  "T_live_ns": 708447750,
+  "T_to_durable_ns": 1398284959,
+  "acknowledged_ref": {
+    "generation": 2,
+    "root": "11d1c263090a12d2585f3e96cc4b2ae85be62c7330b53ce12b0ee710bef65c45"
+  },
+  "checks": {
+    "acknowledged_ref_exact_before_terminal": true,
+    "acknowledged_reopen_exact": true,
+    "clean_final_state": true,
+    "prepared_root_accepted_before_timing": true,
+    "terminal_pass": true,
+    "timed_resources_pass": true,
+    "timed_terminal_pass": true
+  },
+  "classification": "CLEAN_FINAL_STATE_BARRIER_COMMITTED",
+  "clean_final_barrier_ns": 127539125,
+  "clean_final_ref": {
+    "generation": 3,
+    "root": "b60d15dc796fdce061894895512a830f2554d20e76438df07680058d7c37423c"
+  },
+  "cleanup": {
+    "classification": "ACKNOWLEDGED_CLEANUP_OUTSIDE_TIMER",
+    "host_wall_ns": 255362000,
+    "path": "/workspace/scenario"
+  },
+  "command": "for a in $(seq 1 10); do for b in $(seq 1 10); do mkdir -p $a/$b; for c in $(seq 1 10); do touch $a/$b/$c; done; done; done",
+  "operation_history_oracle": "history-oracle/receipt.json",
+  "prep": "",
+  "prepared_barrier_ns": 18160459,
+  "prepared_ref": {
+    "generation": 1,
+    "root": "0fa88be48d77efb93cad5d72dc4ed5fc68dab44c49a4ffcfa3aec2d02fa15239"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "39295b553ad6b8d6a48b4607a59a1bef843de0bf1eb571d37522cf02a03bb5ba"
+  },
+  "repetition": 1,
+  "resources": {
+    "callback_wall_positive": true,
+    "cgroup_memory_peak_bounded": true,
+    "cgroup_memory_peak_bytes": 28164096,
+    "connections_bounded": true,
+    "daemon_cpu_bounded": true,
+    "daemon_cpu_limit_ns": 1473199206,
+    "daemon_cpu_ns": 745218885,
+    "daemon_rss_delta_bounded": true,
+    "daemon_rss_upper_bound_bytes": 8802304,
+    "fd_baseline": 10,
+    "fd_bounded": true,
+    "fd_high_water": 15,
+    "mount_lock_ratio_bounded": true,
+    "oom_delta": 0,
+    "oom_kill_delta": 0,
+    "oom_zero": true,
+    "operation_q_bounded": true,
+    "request_buffer_bounded": true,
+    "request_buffer_scope": "largest admitted FUSE request; not a product-wide allocation claim",
+    "sampler_covers_timer": true,
+    "samples_nonzero": true,
+    "schedstat_monotonic": true,
+    "spool_steady_bound": true,
+    "spool_terminal_zero": true,
+    "sqlite_contention_zero": true,
+    "status": "PASS",
+    "task_set_stable": true,
+    "threads_bounded": true,
+    "threads_high_water": 7,
+    "throttle_ratio_bounded": true,
+    "throttled_usec_delta": 5018,
+    "timed_terminal_clean": true
+  },
+  "scenario": "mkdir tree (10x10x10)",
+  "schema": "layerfs-stage2-015-durable-sample-v1",
+  "status": "PASS",
+  "timed_durability_scope": "ACCEPTED_FINAL_STATE",
+  "timing_disposition": "MEASURED",
+  "warmup": false
+}

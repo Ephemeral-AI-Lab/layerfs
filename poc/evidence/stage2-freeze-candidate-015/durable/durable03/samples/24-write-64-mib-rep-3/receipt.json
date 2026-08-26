@@ -1,0 +1,82 @@
+{
+  "T_checkpoint_ns": 154846708,
+  "T_live_ns": 33139667,
+  "T_to_durable_ns": 187986375,
+  "acknowledged_ref": {
+    "generation": 2,
+    "root": "8b0fe738afaff7a309f87e036907a75985e8f2c3c11c19bea667232895a96778"
+  },
+  "checks": {
+    "acknowledged_ref_exact_before_terminal": true,
+    "acknowledged_reopen_exact": true,
+    "clean_final_state": true,
+    "prepared_root_accepted_before_timing": true,
+    "terminal_pass": true,
+    "timed_resources_pass": true,
+    "timed_terminal_pass": true
+  },
+  "classification": "CLEAN_FINAL_STATE_BARRIER_COMMITTED",
+  "clean_final_barrier_ns": 17878083,
+  "clean_final_ref": {
+    "generation": 3,
+    "root": "e45ca2fe32738b2975fdb3f734e3f71dbc9e7db114f1da814de35c5d227800bb"
+  },
+  "cleanup": {
+    "classification": "ACKNOWLEDGED_CLEANUP_OUTSIDE_TIMER",
+    "host_wall_ns": 68311000,
+    "path": "/workspace/scenario"
+  },
+  "command": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+  "operation_history_oracle": "history-oracle/receipt.json",
+  "prep": "",
+  "prepared_barrier_ns": 17919959,
+  "prepared_ref": {
+    "generation": 1,
+    "root": "2da47bfe8a9d73d319eb91598c0312e2aedc211fc9fc66461bb8bec7c905f978"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "91adb8e9514ab83ab9141e8302a79967a42b23c469cc7295cdc4ee16e41a1e60"
+  },
+  "repetition": 3,
+  "resources": {
+    "callback_wall_positive": true,
+    "cgroup_memory_peak_bounded": true,
+    "cgroup_memory_peak_bytes": 149209088,
+    "connections_bounded": true,
+    "daemon_cpu_bounded": true,
+    "daemon_cpu_limit_ns": 202385693,
+    "daemon_cpu_ns": 155624666,
+    "daemon_rss_delta_bounded": true,
+    "daemon_rss_upper_bound_bytes": 4448256,
+    "fd_baseline": 10,
+    "fd_bounded": true,
+    "fd_high_water": 16,
+    "mount_lock_ratio_bounded": true,
+    "oom_delta": 0,
+    "oom_kill_delta": 0,
+    "oom_zero": true,
+    "operation_q_bounded": true,
+    "request_buffer_bounded": true,
+    "request_buffer_scope": "largest admitted FUSE request; not a product-wide allocation claim",
+    "sampler_covers_timer": true,
+    "samples_nonzero": true,
+    "schedstat_monotonic": true,
+    "spool_steady_bound": true,
+    "spool_terminal_zero": true,
+    "sqlite_contention_zero": true,
+    "status": "PASS",
+    "task_set_stable": true,
+    "threads_bounded": true,
+    "threads_high_water": 7,
+    "throttle_ratio_bounded": true,
+    "throttled_usec_delta": 36,
+    "timed_terminal_clean": true
+  },
+  "scenario": "write 64 MiB",
+  "schema": "layerfs-stage2-015-durable-sample-v1",
+  "status": "PASS",
+  "timed_durability_scope": "ACCEPTED_FINAL_STATE",
+  "timing_disposition": "MEASURED",
+  "warmup": false
+}

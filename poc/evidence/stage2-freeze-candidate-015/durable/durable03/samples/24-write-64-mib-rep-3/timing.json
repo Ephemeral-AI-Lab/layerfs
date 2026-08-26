@@ -1,0 +1,93 @@
+{
+  "T_checkpoint_ns": 154846708,
+  "T_live_ns": 33139667,
+  "T_to_durable_ns": 187986375,
+  "command_returncode": 0,
+  "resources": {
+    "after": {
+      "cpu_stat": {
+        "burst_usec": 0,
+        "nice_usec": 0,
+        "nr_bursts": 0,
+        "nr_periods": 5,
+        "nr_throttled": 1,
+        "system_usec": 60146,
+        "throttled_usec": 36,
+        "usage_usec": 259321,
+        "user_usec": 199174
+      },
+      "daemon_status": {
+        "Threads": 7,
+        "VmHWM": 9588736,
+        "VmRSS": 9588736
+      },
+      "memory_current_bytes": 79712256,
+      "memory_events": {
+        "high": 0,
+        "low": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_group_kill": 0,
+        "oom_kill": 0
+      },
+      "memory_peak_bytes": 149209088,
+      "schedstat_runtime_ns": {
+        "10": 142884208,
+        "11": 4868500,
+        "12": 4066831,
+        "13": 25875,
+        "7": 4018374,
+        "8": 137625,
+        "9": 4126460
+      }
+    },
+    "before": {
+      "cpu_stat": {
+        "burst_usec": 0,
+        "nice_usec": 0,
+        "nr_bursts": 0,
+        "nr_periods": 3,
+        "nr_throttled": 0,
+        "system_usec": 20687,
+        "throttled_usec": 0,
+        "usage_usec": 86689,
+        "user_usec": 66002
+      },
+      "daemon_status": {
+        "Threads": 7,
+        "VmHWM": 5140480,
+        "VmRSS": 5140480
+      },
+      "memory_current_bytes": 7716864,
+      "memory_events": {
+        "high": 0,
+        "low": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_group_kill": 0,
+        "oom_kill": 0
+      },
+      "memory_peak_bytes": 7725056,
+      "schedstat_runtime_ns": {
+        "10": 101917,
+        "11": 54041,
+        "12": 51333,
+        "13": 25875,
+        "7": 4018374,
+        "8": 137625,
+        "9": 114042
+      }
+    },
+    "command_returned_ns": 280935657834,
+    "command_started_ns": 280902518167,
+    "daemon_pid": 7,
+    "daemon_rss_high_water_bytes": 9588736,
+    "durability_acknowledged_ns": 281090504542,
+    "fd_baseline": 10,
+    "fd_high_water": 16,
+    "sampler_ended_ns": 281091037709,
+    "sampler_started_ns": 280902103500,
+    "samples": 28,
+    "threads_high_water": 7
+  }
+}

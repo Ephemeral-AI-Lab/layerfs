@@ -1,0 +1,86 @@
+{
+  "T_checkpoint_ns": 159772708,
+  "T_live_ns": 49318209,
+  "T_to_durable_ns": 209090917,
+  "acknowledged_ref": {
+    "generation": 2,
+    "root": "680d1d6559b13aa550e36d8c2fffe24fb3951581ebbeba800e18b6e222ea7c7b"
+  },
+  "checks": {
+    "acknowledged_ref_exact_before_terminal": true,
+    "acknowledged_reopen_exact": true,
+    "clean_final_state": true,
+    "prepared_root_accepted_before_timing": true,
+    "terminal_pass": true,
+    "timed_resources_pass": true,
+    "timed_terminal_pass": true
+  },
+  "classification": "CLEAN_FINAL_STATE_BARRIER_COMMITTED",
+  "clean_final_barrier_ns": 17002375,
+  "clean_final_ref": {
+    "generation": 3,
+    "root": "83f663aedcd366ecdc2348497d697290bbc37d1a2972e45299e22922125dd555"
+  },
+  "cleanup": {
+    "classification": "ACKNOWLEDGED_CLEANUP_OUTSIDE_TIMER",
+    "host_wall_ns": 67788000,
+    "path": "/workspace/scenario"
+  },
+  "command": "dd if=/dev/zero of=big bs=1M count=64 status=none conv=notrunc",
+  "operation_history_oracle": "history-oracle/receipt.json",
+  "prep": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+  "prepared_barrier_ns": 163164708,
+  "prepared_ref": {
+    "generation": 1,
+    "root": "3e27784cbb1266b7cb9007f190428265e4575fb4e0f0e5ccc06d0d5c9f16d571"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "30e1816fdf2f386eaebaf37681ce8d8817e3b32de049bb5c979481cf331aefe6"
+  },
+  "repetition": 0,
+  "resource_disposition": "WARMUP_DIAGNOSTIC",
+  "resources": {
+    "callback_wall_ns": 180008964,
+    "callback_wall_positive": true,
+    "cgroup_memory_peak_bounded": true,
+    "cgroup_memory_peak_bytes": 149368832,
+    "connections_bounded": true,
+    "daemon_cpu_bounded": true,
+    "daemon_cpu_limit_ns": 224545462,
+    "daemon_cpu_ns": 173002751,
+    "daemon_rss_delta_bounded": true,
+    "daemon_rss_upper_bound_bytes": 4448256,
+    "fd_baseline": 10,
+    "fd_bounded": true,
+    "fd_high_water": 16,
+    "mount_lock_ratio_bounded": true,
+    "mount_lock_wait_ns": 7829,
+    "oom_delta": 0,
+    "oom_kill_delta": 0,
+    "oom_zero": true,
+    "operation_q_bounded": true,
+    "quota_period_aligned": true,
+    "request_buffer_bounded": true,
+    "request_buffer_scope": "largest admitted FUSE request; not a product-wide allocation claim",
+    "sampler_covers_timer": true,
+    "samples_nonzero": true,
+    "schedstat_monotonic": true,
+    "spool_steady_bound": true,
+    "spool_terminal_zero": true,
+    "sqlite_contention_zero": true,
+    "status": "PASS",
+    "task_set_stable": true,
+    "threads_bounded": true,
+    "threads_high_water": 7,
+    "throttle_ratio_bounded": true,
+    "throttled_usec_delta": 0,
+    "timed_terminal_clean": true
+  },
+  "scenario": "overwrite 64 MiB",
+  "schema": "layerfs-stage2-015-durable-sample-v1",
+  "status": "PASS",
+  "timed_durability_scope": "ACCEPTED_FINAL_STATE",
+  "timing_disposition": "WARMUP_EXCLUDED",
+  "warmup": true
+}

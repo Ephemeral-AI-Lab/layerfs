@@ -1,0 +1,100 @@
+{
+  "T_checkpoint_ns": 56125,
+  "T_live_ns": 105870625,
+  "T_to_durable_ns": 105926750,
+  "command_returncode": 0,
+  "resources": {
+    "after": {
+      "cpu_stat": {
+        "burst_usec": 0,
+        "nice_usec": 0,
+        "nr_bursts": 0,
+        "nr_periods": 7,
+        "nr_throttled": 1,
+        "system_usec": 49241,
+        "throttled_usec": 35559,
+        "usage_usec": 198935,
+        "user_usec": 149694
+      },
+      "daemon_status": {
+        "Threads": 7,
+        "VmHWM": 7507968,
+        "VmRSS": 7507968
+      },
+      "memory_current_bytes": 77733888,
+      "memory_events": {
+        "high": 0,
+        "low": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_group_kill": 0,
+        "oom_kill": 0
+      },
+      "memory_peak_bytes": 77963264,
+      "schedstat_runtime_ns": {
+        "10": 24066249,
+        "11": 24220382,
+        "12": 24010829,
+        "13": 23811116,
+        "7": 3977084,
+        "8": 154209,
+        "9": 47541
+      }
+    },
+    "before": {
+      "cpu_stat": {
+        "burst_usec": 0,
+        "nice_usec": 0,
+        "nr_bursts": 0,
+        "nr_periods": 6,
+        "nr_throttled": 0,
+        "system_usec": 20298,
+        "throttled_usec": 0,
+        "usage_usec": 87958,
+        "user_usec": 67660
+      },
+      "daemon_status": {
+        "Threads": 7,
+        "VmHWM": 5148672,
+        "VmRSS": 5148672
+      },
+      "memory_current_bytes": 7630848,
+      "memory_events": {
+        "high": 0,
+        "low": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_group_kill": 0,
+        "oom_kill": 0
+      },
+      "memory_peak_bytes": 7888896,
+      "schedstat_runtime_ns": {
+        "10": 72084,
+        "11": 80750,
+        "12": 86082,
+        "13": 63625,
+        "7": 3977084,
+        "8": 154209,
+        "9": 47541
+      }
+    },
+    "command_returned_ns": 995549740576,
+    "command_started_ns": 995443869951,
+    "daemon_pid": 7,
+    "daemon_rss_high_water_bytes": 7507968,
+    "daemon_status_at_sampler_start": {
+      "Threads": 7,
+      "VmHWM": 5148672,
+      "VmRSS": 5148672
+    },
+    "durability_acknowledged_ns": 995549796701,
+    "fd_baseline": 10,
+    "fd_high_water": 10,
+    "quota_period_after_alignment": 6,
+    "quota_period_before_alignment": 5,
+    "sampler_ended_ns": 995566625868,
+    "sampler_started_ns": 995311631534,
+    "samples": 42,
+    "threads_high_water": 7
+  }
+}

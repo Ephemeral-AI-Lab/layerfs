@@ -1,0 +1,485 @@
+{
+  "ended_unix_ns": 1787730300267873000,
+  "fresh_store_samples": 48,
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "history_oracle": {
+    "checks": {
+      "create_barrier_reopen_exact": true,
+      "create_generation_advanced": true,
+      "create_root_changed": true,
+      "delete_barrier_reopen_exact": true,
+      "delete_generation_advanced": true,
+      "delete_root_changed": true,
+      "final_namespace_empty": true,
+      "terminal_clean": true
+    },
+    "classification": "CREATE_AND_DELETE_PUBLISHED_IN_DISTINCT_BARRIERS",
+    "create_barrier_ns": 19391917,
+    "created_ref": {
+      "generation": 1,
+      "root": "f54090dab2150eb48b330ee1b6863fd5aa073d2eb88542b10f5ef12841f33120"
+    },
+    "delete_barrier_ns": 17148958,
+    "deleted_ref": {
+      "generation": 2,
+      "root": "7ac2a8f9abffc8e1f501aea24eacf3f32ce87971dd41a5a6d746d7e112094e67"
+    },
+    "pristine_ref": {
+      "generation": 0,
+      "root": "6d1ba43990118a410e3f218bc81d99f21a081b4fdfdcc399d61774ab4d89a3b0"
+    },
+    "schema": "layerfs-stage2-015-two-barrier-history-v1",
+    "status": "PASS"
+  },
+  "image": "layerfs-fuse:frozen-7e82abc",
+  "image_id": "sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0",
+  "measured_samples": 36,
+  "probe": false,
+  "reps": 3,
+  "resources": {
+    "callback_wall_ns": 16031558296,
+    "checks": {
+      "aggregate_mount_lock_bounded": true,
+      "aggregate_throttle_bounded": true,
+      "all_per_row_resource_gates_pass": true,
+      "measured_rows_nonempty": true,
+      "probe_rows_individually_bounded": true
+    },
+    "durable_wall_ns": 24707810597,
+    "measured_rows": 36,
+    "mount_lock_ratio": 0.02608870106559478,
+    "mount_lock_wait_ns": 418242532,
+    "status": "PASS",
+    "throttle_ratio": 0.004777719965780099,
+    "throttled_ns": 118047000
+  },
+  "scenarios_sha256": "ee96f7ce161f09e7a60a39d3893458fef9f6449827c08ce4db9b430fb986b61b",
+  "schema": "layerfs-stage2-015-durable-campaign-v1",
+  "source_commit": "7e82abcd7320f6a214be336d82488ba0527b6025",
+  "source_tree": "df13d88eb7e7d2471971b0c58ca6425bb81b0b03",
+  "started_unix_ns": 1787730036921206000,
+  "status": "PASS",
+  "timings": {
+    "copy 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 300112792,
+        "mean": 299512306,
+        "median": 299413042,
+        "minimum": 299011084,
+        "samples": [
+          299413042,
+          299011084,
+          300112792
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 125299292,
+        "mean": 124594750,
+        "median": 124545042,
+        "minimum": 123939917,
+        "samples": [
+          125299292,
+          124545042,
+          123939917
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 424712334,
+        "mean": 424107056,
+        "median": 424052709,
+        "minimum": 423556126,
+        "samples": [
+          424712334,
+          423556126,
+          424052709
+        ]
+      }
+    },
+    "create 1000 files": {
+      "T_checkpoint_ns": {
+        "maximum": 882104750,
+        "mean": 881039222,
+        "median": 880603292,
+        "minimum": 880409626,
+        "samples": [
+          880603292,
+          882104750,
+          880409626
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 347223875,
+        "mean": 344033750,
+        "median": 342747875,
+        "minimum": 342129500,
+        "samples": [
+          347223875,
+          342129500,
+          342747875
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 1227827167,
+        "mean": 1225072972,
+        "median": 1224234250,
+        "minimum": 1223157501,
+        "samples": [
+          1227827167,
+          1224234250,
+          1223157501
+        ]
+      }
+    },
+    "find tree": {
+      "T_checkpoint_ns": {
+        "maximum": 690346708,
+        "mean": 686630833,
+        "median": 688932708,
+        "minimum": 680613084,
+        "samples": [
+          688932708,
+          680613084,
+          690346708
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 740676959,
+        "mean": 737204097,
+        "median": 736050333,
+        "minimum": 734885001,
+        "samples": [
+          734885001,
+          736050333,
+          740676959
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 1431023667,
+        "mean": 1423834931,
+        "median": 1423817709,
+        "minimum": 1416663417,
+        "samples": [
+          1423817709,
+          1416663417,
+          1431023667
+        ]
+      }
+    },
+    "git init + commit 100 files": {
+      "T_checkpoint_ns": {
+        "maximum": 246933750,
+        "mean": 245499875,
+        "median": 246365417,
+        "minimum": 243200459,
+        "samples": [
+          246933750,
+          243200459,
+          246365417
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 165525333,
+        "mean": 160346097,
+        "median": 160773916,
+        "minimum": 154739042,
+        "samples": [
+          154739042,
+          160773916,
+          165525333
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 411890750,
+        "mean": 405845972,
+        "median": 403974375,
+        "minimum": 401672792,
+        "samples": [
+          401672792,
+          403974375,
+          411890750
+        ]
+      }
+    },
+    "mkdir tree (10x10x10)": {
+      "T_checkpoint_ns": {
+        "maximum": 688556709,
+        "mean": 686408250,
+        "median": 687772792,
+        "minimum": 682895251,
+        "samples": [
+          687772792,
+          688556709,
+          682895251
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 718134667,
+        "mean": 713536403,
+        "median": 713599250,
+        "minimum": 708875292,
+        "samples": [
+          718134667,
+          708875292,
+          713599250
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 1405907459,
+        "mean": 1399944653,
+        "median": 1397432001,
+        "minimum": 1396494501,
+        "samples": [
+          1405907459,
+          1397432001,
+          1396494501
+        ]
+      }
+    },
+    "overwrite 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 164090875,
+        "mean": 162257875,
+        "median": 161636458,
+        "minimum": 161046292,
+        "samples": [
+          161636458,
+          161046292,
+          164090875
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 51045833,
+        "mean": 50046180,
+        "median": 50088000,
+        "minimum": 49004709,
+        "samples": [
+          51045833,
+          50088000,
+          49004709
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 213095584,
+        "mean": 212304055,
+        "median": 212682291,
+        "minimum": 211134292,
+        "samples": [
+          212682291,
+          211134292,
+          213095584
+        ]
+      }
+    },
+    "pure copy 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 164225958,
+        "mean": 162859750,
+        "median": 162520750,
+        "minimum": 161832542,
+        "samples": [
+          161832542,
+          162520750,
+          164225958
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 171878584,
+        "mean": 171668931,
+        "median": 171740875,
+        "minimum": 171387334,
+        "samples": [
+          171740875,
+          171878584,
+          171387334
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 335613292,
+        "mean": 334528681,
+        "median": 334399334,
+        "minimum": 333573417,
+        "samples": [
+          333573417,
+          334399334,
+          335613292
+        ]
+      }
+    },
+    "pure read 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 70333,
+        "mean": 62375,
+        "median": 60667,
+        "minimum": 56125,
+        "samples": [
+          56125,
+          60667,
+          70333
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 109022875,
+        "mean": 107179361,
+        "median": 106644583,
+        "minimum": 105870625,
+        "samples": [
+          105870625,
+          109022875,
+          106644583
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 109083542,
+        "mean": 107241736,
+        "median": 106714916,
+        "minimum": 105926750,
+        "samples": [
+          105926750,
+          109083542,
+          106714916
+        ]
+      }
+    },
+    "read 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 162159292,
+        "mean": 160733792,
+        "median": 161664417,
+        "minimum": 158377667,
+        "samples": [
+          161664417,
+          162159292,
+          158377667
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 59027750,
+        "mean": 54877764,
+        "median": 53706084,
+        "minimum": 51899458,
+        "samples": [
+          51899458,
+          53706084,
+          59027750
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 217405417,
+        "mean": 215611556,
+        "median": 215865376,
+        "minimum": 213563875,
+        "samples": [
+          213563875,
+          215865376,
+          217405417
+        ]
+      }
+    },
+    "rm 1000 files": {
+      "T_checkpoint_ns": {
+        "maximum": 85583,
+        "mean": 72361,
+        "median": 73667,
+        "minimum": 57834,
+        "samples": [
+          57834,
+          73667,
+          85583
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 502913167,
+        "mean": 500042597,
+        "median": 502077583,
+        "minimum": 495137042,
+        "samples": [
+          502077583,
+          495137042,
+          502913167
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 502998750,
+        "mean": 500114958,
+        "median": 502135417,
+        "minimum": 495210709,
+        "samples": [
+          502135417,
+          495210709,
+          502998750
+        ]
+      }
+    },
+    "stat 1000 files": {
+      "T_checkpoint_ns": {
+        "maximum": 903739542,
+        "mean": 890389167,
+        "median": 885801459,
+        "minimum": 881626500,
+        "samples": [
+          903739542,
+          885801459,
+          881626500
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 889902292,
+        "mean": 884738222,
+        "median": 886267209,
+        "minimum": 878045167,
+        "samples": [
+          878045167,
+          886267209,
+          889902292
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 1781784709,
+        "mean": 1775127389,
+        "median": 1772068668,
+        "minimum": 1771528792,
+        "samples": [
+          1781784709,
+          1772068668,
+          1771528792
+        ]
+      }
+    },
+    "write 64 MiB": {
+      "T_checkpoint_ns": {
+        "maximum": 165355875,
+        "mean": 162964361,
+        "median": 162068000,
+        "minimum": 161469208,
+        "samples": [
+          161469208,
+          162068000,
+          165355875
+        ]
+      },
+      "T_live_ns": {
+        "maximum": 50932500,
+        "mean": 49238541,
+        "median": 49394375,
+        "minimum": 47388750,
+        "samples": [
+          47388750,
+          49394375,
+          50932500
+        ]
+      },
+      "T_to_durable_ns": {
+        "maximum": 216288375,
+        "mean": 212202902,
+        "median": 211462375,
+        "minimum": 208857958,
+        "samples": [
+          208857958,
+          211462375,
+          216288375
+        ]
+      }
+    }
+  },
+  "warmup": 1
+}

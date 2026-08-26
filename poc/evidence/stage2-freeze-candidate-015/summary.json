@@ -1,0 +1,64 @@
+{
+  "schema": "layerfs-stage2-015-summary-v1",
+  "status": "PASS_DURABLE_LAYERFS_CLOUDFLARE_BLOCKED_EXTERNAL",
+  "terminal_comparison_status": "REVISE",
+  "terminal_comparison_blocker": "The authenticated Cloudflare account lacks Workers Paid / Containers entitlement, so no deployed Durable Object sync plus container-restart population exists.",
+  "source": {
+    "commit": "7e82abcd7320f6a214be336d82488ba0527b6025",
+    "tree": "df13d88eb7e7d2471971b0c58ca6425bb81b0b03",
+    "archive_sha256": "7ffb4cbcfe877973ed0533c35540c2c1c0d30a69725b57127f9c7184732812cb"
+  },
+  "image": {
+    "tag": "layerfs-fuse:frozen-7e82abc",
+    "id": "sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0",
+    "architecture": "arm64",
+    "executable_sha256": "8b14ed5a895823bb1ffdbf418115ccc530755c483a4ba35639055d8dfedbcfad",
+    "executable_blake3": "da9c5b4c5624156ee1c23de6829f4e9f52ba96c2997a8b86937a45dd55b7f3ae",
+    "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
+  },
+  "lifecycle": {
+    "immediate_term_after_readiness": "PASS",
+    "repeated_term_dirty_100_mib_verified_reopen": "PASS",
+    "unmount_busy_bounded_fail_closed": "PASS",
+    "statvfs_four_state_oracle": "PASS"
+  },
+  "durable_campaign": {
+    "run": "durable/durable04",
+    "verification": "durable/verification05.json",
+    "status": "PASS_DURABLE",
+    "fresh_store_samples": 48,
+    "warmups": 12,
+    "measured_samples": 36,
+    "sum_live_medians_ns": 3897635125,
+    "sum_checkpoint_medians_ns": 4336912669,
+    "sum_to_durable_medians_ns": 8228839421,
+    "median_aggregation_note": "Each field is independently median-selected per scenario, so the three aggregate sums are not asserted to be algebraically additive.",
+    "history_oracle": "PASS",
+    "two_sigkill_verified_reopen_chains_per_sample": true,
+    "final_owned_runtime_residue_zero": true
+  },
+  "resources": {
+    "per_measured_row_equations": "PASS",
+    "aggregate_throttle_ratio": 0.004777719965780099,
+    "aggregate_throttle_limit": 0.05,
+    "aggregate_mount_lock_ratio": 0.02608870106559478,
+    "aggregate_mount_lock_limit": 0.1,
+    "daemon_rss_upper_bound_max_bytes": 9469952,
+    "daemon_rss_delta_limit_bytes": 67108864,
+    "whole_cgroup_peak_max_bytes": 285024256,
+    "whole_cgroup_peak_limit_bytes": 536870912,
+    "threads_high_water_max": 7,
+    "fd_growth_high_water_max": 6,
+    "oom_and_oom_kill": 0,
+    "operation_q_terminal": 0,
+    "store_connections_terminal": 0,
+    "request_buffer_scope": "largest admitted FUSE request <= 1 MiB; no product-wide allocation claim"
+  },
+  "performance_disposition": {
+    "live_upstream_fs_bench": "LIVE_MOUNT_DIAGNOSTIC_ONLY",
+    "durable_layerfs": "PASS_DURABLE_WITHOUT_CLOUDFLARE_NUMERIC_GATE",
+    "cloudflare_full_product": "UNAVAILABLE_EXTERNAL_ENTITLEMENT",
+    "old_4_5s_rsum_g_thresholds_reused": false
+  },
+  "checksums_disposition": "SHA256SUMS intentionally deferred until the deployed Cloudflare comparison and terminal custody are complete."
+}

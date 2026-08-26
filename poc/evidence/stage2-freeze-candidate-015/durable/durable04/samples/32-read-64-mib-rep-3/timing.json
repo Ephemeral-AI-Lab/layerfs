@@ -1,0 +1,100 @@
+{
+  "T_checkpoint_ns": 158377667,
+  "T_live_ns": 59027750,
+  "T_to_durable_ns": 217405417,
+  "command_returncode": 0,
+  "resources": {
+    "after": {
+      "cpu_stat": {
+        "burst_usec": 0,
+        "nice_usec": 0,
+        "nr_bursts": 0,
+        "nr_periods": 8,
+        "nr_throttled": 0,
+        "system_usec": 96727,
+        "throttled_usec": 0,
+        "usage_usec": 287222,
+        "user_usec": 190494
+      },
+      "daemon_status": {
+        "Threads": 7,
+        "VmHWM": 9605120,
+        "VmRSS": 9605120
+      },
+      "memory_current_bytes": 79499264,
+      "memory_events": {
+        "high": 0,
+        "low": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_group_kill": 0,
+        "oom_kill": 0
+      },
+      "memory_peak_bytes": 149327872,
+      "schedstat_runtime_ns": {
+        "10": 149532411,
+        "11": 7174914,
+        "12": 40125,
+        "13": 5450459,
+        "7": 4043458,
+        "8": 136084,
+        "9": 5521541
+      }
+    },
+    "before": {
+      "cpu_stat": {
+        "burst_usec": 0,
+        "nice_usec": 0,
+        "nr_bursts": 0,
+        "nr_periods": 6,
+        "nr_throttled": 0,
+        "system_usec": 22287,
+        "throttled_usec": 0,
+        "usage_usec": 88181,
+        "user_usec": 65894
+      },
+      "daemon_status": {
+        "Threads": 7,
+        "VmHWM": 5144576,
+        "VmRSS": 5144576
+      },
+      "memory_current_bytes": 7323648,
+      "memory_events": {
+        "high": 0,
+        "low": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_group_kill": 0,
+        "oom_kill": 0
+      },
+      "memory_peak_bytes": 7327744,
+      "schedstat_runtime_ns": {
+        "10": 90500,
+        "11": 83416,
+        "12": 40125,
+        "13": 47500,
+        "7": 4043458,
+        "8": 136084,
+        "9": 101667
+      }
+    },
+    "command_returned_ns": 986448067864,
+    "command_started_ns": 986389040114,
+    "daemon_pid": 7,
+    "daemon_rss_high_water_bytes": 9605120,
+    "daemon_status_at_sampler_start": {
+      "Threads": 7,
+      "VmHWM": 5144576,
+      "VmRSS": 5144576
+    },
+    "durability_acknowledged_ns": 986606445531,
+    "fd_baseline": 10,
+    "fd_high_water": 16,
+    "quota_period_after_alignment": 6,
+    "quota_period_before_alignment": 5,
+    "sampler_ended_ns": 986620529447,
+    "sampler_started_ns": 986235695239,
+    "samples": 58,
+    "threads_high_water": 7
+  }
+}

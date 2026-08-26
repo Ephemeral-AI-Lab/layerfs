@@ -1,0 +1,29 @@
+{
+  "checks": {
+    "create_barrier_reopen_exact": true,
+    "create_generation_advanced": true,
+    "create_root_changed": true,
+    "delete_barrier_reopen_exact": true,
+    "delete_generation_advanced": true,
+    "delete_root_changed": true,
+    "final_namespace_empty": true,
+    "terminal_clean": true
+  },
+  "classification": "CREATE_AND_DELETE_PUBLISHED_IN_DISTINCT_BARRIERS",
+  "create_barrier_ns": 19391917,
+  "created_ref": {
+    "generation": 1,
+    "root": "f54090dab2150eb48b330ee1b6863fd5aa073d2eb88542b10f5ef12841f33120"
+  },
+  "delete_barrier_ns": 17148958,
+  "deleted_ref": {
+    "generation": 2,
+    "root": "7ac2a8f9abffc8e1f501aea24eacf3f32ce87971dd41a5a6d746d7e112094e67"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "6d1ba43990118a410e3f218bc81d99f21a081b4fdfdcc399d61774ab4d89a3b0"
+  },
+  "schema": "layerfs-stage2-015-two-barrier-history-v1",
+  "status": "PASS"
+}

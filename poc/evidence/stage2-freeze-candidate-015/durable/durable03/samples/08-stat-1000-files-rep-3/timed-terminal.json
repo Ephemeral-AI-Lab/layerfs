@@ -1,0 +1,21 @@
+{
+  "schema": "layerfs-fuse-terminal-v1",
+  "status": "PASS",
+  "signal": 15,
+  "session_terminated": true,
+  "kernel_cache_released": true,
+  "terminal_snapshot_complete": true,
+  "error": null,
+  "backend": "layerfs-fuse",
+  "integrity": "Verified",
+  "ref": "main",
+  "generation": 2,
+  "root": "10ebbc57d39ce322008e68388008fe77d275e246c3949f7ca56ef0987e7dba95",
+  "executable_blake3": "da9c5b4c5624156ee1c23de6829f4e9f52ba96c2997a8b86937a45dd55b7f3ae",
+  "source_commit": "7e82abcd7320f6a214be336d82488ba0527b6025",
+  "source_tree": "df13d88eb7e7d2471971b0c58ca6425bb81b0b03",
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "callbacks": {"init":1,"destroy":1,"lookup":1001,"getattr":2001,"create":1000,"read":0,"write":1000,"flush":2000,"release":1000,"fsync":0,"fsyncdir":1,"statfs":0,"readdir":0,"callback_wall_ns":1010598634,"mount_lock_wait_ns":505913,"invalidations_requested":2,"invalidations_succeeded":2,"invalidations_failed":0,"invalidations_unsupported":0},
+  "mounted": {"checkpoints":1,"no_op_checkpoints":1,"created_then_deleted":0,"splices":0,"lookup_refs":1,"lookup_refs_high_water":1002,"live_nodes":1,"live_nodes_high_water":1002,"open_handles":0,"open_handles_high_water":2,"pending_nodes":0,"pending_nodes_high_water":1000,"dirty_nodes":0,"dirty_nodes_high_water":1001,"dirty_ranges":0,"dirty_ranges_high_water":1000,"directory_cursors":0,"directory_changes":0,"directory_changes_high_water":1000,"inode_mappings":1,"inode_mappings_high_water":1002,"logical_workspace_bytes":3893,"logical_workspace_high_water_bytes":3893,"spool_appended_bytes":3893,"spool_live_bytes":0,"spool_live_high_water_bytes":3893,"spool_dead_bytes":0,"spool_physical_bytes":0,"spool_physical_high_water_bytes":3893,"spool_resets":1,"spool_compactions":0,"largest_request_bytes":5,"operation_q_terminal_bytes":0,"operation_q_high_water_bytes":8388607,"materializations":0,"capture_scans":0},
+  "engine": {"transactions_started":1,"transactions_committed":1,"transactions_rolled_back":0,"publication_commits":1,"objects_created":12683,"objects_reused":5006,"object_bytes_read":34249048,"object_bytes_written":12843388,"statements":114831,"fetched_rows":52272,"busy_events":0,"locked_events":0,"connection_mutex_wait_ns":308374,"connections_high_water":1,"connections_before_drop":1,"connections_terminal":0}
+}

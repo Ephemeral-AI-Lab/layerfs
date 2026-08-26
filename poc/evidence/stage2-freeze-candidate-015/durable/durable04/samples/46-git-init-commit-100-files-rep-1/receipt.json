@@ -1,0 +1,86 @@
+{
+  "T_checkpoint_ns": 246933750,
+  "T_live_ns": 154739042,
+  "T_to_durable_ns": 401672792,
+  "acknowledged_ref": {
+    "generation": 2,
+    "root": "04510033895038d77903e0241aaacee76710d0789705d2f01b83a19483381292"
+  },
+  "checks": {
+    "acknowledged_ref_exact_before_terminal": true,
+    "acknowledged_reopen_exact": true,
+    "clean_final_state": true,
+    "prepared_root_accepted_before_timing": true,
+    "terminal_pass": true,
+    "timed_resources_pass": true,
+    "timed_terminal_pass": true
+  },
+  "classification": "CLEAN_FINAL_STATE_BARRIER_COMMITTED",
+  "clean_final_barrier_ns": 42229667,
+  "clean_final_ref": {
+    "generation": 3,
+    "root": "4aec7992b886de781d0c0acc9d52f9e7921979357e6ecabdfdcfc2d3a7f7fbf3"
+  },
+  "cleanup": {
+    "classification": "ACKNOWLEDGED_CLEANUP_OUTSIDE_TIMER",
+    "host_wall_ns": 142298000,
+    "path": "/workspace/scenario"
+  },
+  "command": "git init -q; for i in $(seq 1 100); do echo $i > f$i; done; git add -A; git -c user.email=a@b -c user.name=a commit -qm init",
+  "operation_history_oracle": "history-oracle/receipt.json",
+  "prep": "",
+  "prepared_barrier_ns": 19326125,
+  "prepared_ref": {
+    "generation": 1,
+    "root": "d73c9136df2cf4e8c0aefefff5624718c687d7d4c11fd3d45cadd832d774e0fe"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "3faf67af5ca7c36a53166a527b7f094f91f9e1fd441cd512e73906d2ed6e3d73"
+  },
+  "repetition": 1,
+  "resource_disposition": "CONTROLLING",
+  "resources": {
+    "callback_wall_ns": 279884920,
+    "callback_wall_positive": true,
+    "cgroup_memory_peak_bounded": true,
+    "cgroup_memory_peak_bytes": 17207296,
+    "connections_bounded": true,
+    "daemon_cpu_bounded": true,
+    "daemon_cpu_limit_ns": 426756431,
+    "daemon_cpu_ns": 279572116,
+    "daemon_rss_delta_bounded": true,
+    "daemon_rss_upper_bound_bytes": 5189632,
+    "fd_baseline": 10,
+    "fd_bounded": true,
+    "fd_high_water": 16,
+    "mount_lock_ratio_bounded": true,
+    "mount_lock_wait_ns": 256196,
+    "oom_delta": 0,
+    "oom_kill_delta": 0,
+    "oom_zero": true,
+    "operation_q_bounded": true,
+    "quota_period_aligned": true,
+    "request_buffer_bounded": true,
+    "request_buffer_scope": "largest admitted FUSE request; not a product-wide allocation claim",
+    "sampler_covers_timer": true,
+    "samples_nonzero": true,
+    "schedstat_monotonic": true,
+    "spool_steady_bound": true,
+    "spool_terminal_zero": true,
+    "sqlite_contention_zero": true,
+    "status": "PASS",
+    "task_set_stable": true,
+    "threads_bounded": true,
+    "threads_high_water": 7,
+    "throttle_ratio_bounded": true,
+    "throttled_usec_delta": 0,
+    "timed_terminal_clean": true
+  },
+  "scenario": "git init + commit 100 files",
+  "schema": "layerfs-stage2-015-durable-sample-v1",
+  "status": "PASS",
+  "timed_durability_scope": "ACCEPTED_FINAL_STATE",
+  "timing_disposition": "MEASURED",
+  "warmup": false
+}

@@ -1,0 +1,50 @@
+{
+  "checkpointed": {
+    "f_bavail": 81920,
+    "f_bfree": 81920,
+    "f_blocks": 131072,
+    "f_bsize": 4096,
+    "f_favail": 4096,
+    "f_ffree": 4096,
+    "f_files": 65536,
+    "f_flag": 1030,
+    "f_frsize": 4096,
+    "f_namemax": 255
+  },
+  "cleaned": {
+    "f_bavail": 81920,
+    "f_bfree": 81920,
+    "f_blocks": 131072,
+    "f_bsize": 4096,
+    "f_favail": 4096,
+    "f_ffree": 4096,
+    "f_files": 65536,
+    "f_flag": 1030,
+    "f_frsize": 4096,
+    "f_namemax": 255
+  },
+  "dirty": {
+    "f_bavail": 81664,
+    "f_bfree": 81664,
+    "f_blocks": 131072,
+    "f_bsize": 4096,
+    "f_favail": 4094,
+    "f_ffree": 4094,
+    "f_files": 65536,
+    "f_flag": 1030,
+    "f_frsize": 4096,
+    "f_namemax": 255
+  },
+  "initial": {
+    "f_bavail": 81920,
+    "f_bfree": 81920,
+    "f_blocks": 131072,
+    "f_bsize": 4096,
+    "f_favail": 4096,
+    "f_ffree": 4096,
+    "f_files": 65536,
+    "f_flag": 1030,
+    "f_frsize": 4096,
+    "f_namemax": 255
+  }
+}

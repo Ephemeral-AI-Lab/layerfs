@@ -1,0 +1,82 @@
+{
+  "T_checkpoint_ns": 884999958,
+  "T_live_ns": 341084751,
+  "T_to_durable_ns": 1226084709,
+  "acknowledged_ref": {
+    "generation": 2,
+    "root": "f33decb7e1494e03a1eefbbe4b1a7447da13e88a458d6b108fa296e7734b7bb1"
+  },
+  "checks": {
+    "acknowledged_ref_exact_before_terminal": true,
+    "acknowledged_reopen_exact": true,
+    "clean_final_state": true,
+    "prepared_root_accepted_before_timing": true,
+    "terminal_pass": true,
+    "timed_resources_pass": true,
+    "timed_terminal_pass": true
+  },
+  "classification": "CLEAN_FINAL_STATE_BARRIER_COMMITTED",
+  "clean_final_barrier_ns": 114846583,
+  "clean_final_ref": {
+    "generation": 3,
+    "root": "73cb87289ae423174aef81ab9ad1ab8f179b15354926c204827e86341a9174a0"
+  },
+  "cleanup": {
+    "classification": "ACKNOWLEDGED_CLEANUP_OUTSIDE_TIMER",
+    "host_wall_ns": 283585000,
+    "path": "/workspace/scenario"
+  },
+  "command": "for i in $(seq 1 1000); do echo $i > f$i; done",
+  "operation_history_oracle": "history-oracle/receipt.json",
+  "prep": "",
+  "prepared_barrier_ns": 17895875,
+  "prepared_ref": {
+    "generation": 1,
+    "root": "f700f3a01cc93dfd63fd200e59b3cadcff4354dfae0fdcf72f4079f485e792f4"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "ebde81d68a8622e5e5f04d5555b48377d946a688235a3a02ae85d3f8612680a3"
+  },
+  "repetition": 2,
+  "resources": {
+    "callback_wall_positive": true,
+    "cgroup_memory_peak_bounded": true,
+    "cgroup_memory_peak_bytes": 38428672,
+    "connections_bounded": true,
+    "daemon_cpu_bounded": true,
+    "daemon_cpu_limit_ns": 1292388944,
+    "daemon_cpu_ns": 1020531645,
+    "daemon_rss_delta_bounded": true,
+    "daemon_rss_upper_bound_bytes": 8945664,
+    "fd_baseline": 10,
+    "fd_bounded": true,
+    "fd_high_water": 16,
+    "mount_lock_ratio_bounded": true,
+    "oom_delta": 0,
+    "oom_kill_delta": 0,
+    "oom_zero": true,
+    "operation_q_bounded": true,
+    "request_buffer_bounded": true,
+    "request_buffer_scope": "largest admitted FUSE request; not a product-wide allocation claim",
+    "sampler_covers_timer": true,
+    "samples_nonzero": true,
+    "schedstat_monotonic": true,
+    "spool_steady_bound": true,
+    "spool_terminal_zero": true,
+    "sqlite_contention_zero": true,
+    "status": "PASS",
+    "task_set_stable": true,
+    "threads_bounded": true,
+    "threads_high_water": 7,
+    "throttle_ratio_bounded": true,
+    "throttled_usec_delta": 4401,
+    "timed_terminal_clean": true
+  },
+  "scenario": "create 1000 files",
+  "schema": "layerfs-stage2-015-durable-sample-v1",
+  "status": "PASS",
+  "timed_durability_scope": "ACCEPTED_FINAL_STATE",
+  "timing_disposition": "MEASURED",
+  "warmup": false
+}

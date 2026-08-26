@@ -1,0 +1,10 @@
+{"event":"campaign-start","unix_ns":1787729973317167000}
+{"event":"sample-start","ordinal":1,"scenario":"stat 1000 files","warmup":false}
+{"event":"sample-pass","ordinal":1}
+{"event":"sample-start","ordinal":2,"scenario":"mkdir tree (10x10x10)","warmup":false}
+{"event":"sample-pass","ordinal":2}
+{"event":"sample-start","ordinal":3,"scenario":"copy 64 MiB","warmup":false}
+{"event":"sample-pass","ordinal":3}
+{"event":"sample-start","ordinal":4,"scenario":"overwrite 64 MiB","warmup":false}
+{"event":"sample-pass","ordinal":4}
+{"event":"campaign-pass","unix_ns":1787729997356375000}

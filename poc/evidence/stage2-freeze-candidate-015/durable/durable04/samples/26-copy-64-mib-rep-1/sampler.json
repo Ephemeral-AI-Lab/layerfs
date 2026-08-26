@@ -1,0 +1,1 @@
+{"daemon_pid": 7, "daemon_rss_high_water_bytes": 9605120, "daemon_status_at_sampler_start": {"Threads": 7, "VmHWM": 5124096, "VmRSS": 5124096}, "fd_baseline": 10, "fd_high_water": 16, "sampler_ended_ns": 959052546976, "sampler_started_ns": 958538970184, "samples": 78, "threads_high_water": 7}

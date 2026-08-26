@@ -1,0 +1,3 @@
+{"event":"campaign-start","unix_ns":1787729234999716000}
+{"event":"sample-start","ordinal":1,"scenario":"stat 1000 files","warmup":false}
+{"error":"HarnessError: resource sampler did not become ready: layerfs-stage2-final015-dur-audit015-resource-probe02-s01-01-timed-sampler","event":"campaign-failure","schema":"layerfs-stage2-015-durable-campaign-failure-v1","status":"PRESERVED_FAILURE","unix_ns":1787729258430696000}

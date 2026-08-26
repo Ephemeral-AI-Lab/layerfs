@@ -1,0 +1,19 @@
+{
+  "ref": {
+    "generation": 3,
+    "root": "bd14b3644661e4ca737d62bb68b434bd2f3243dd07c78db4171786091ea1e8d6"
+  },
+  "snapshot": {
+    "descendant_count": 0,
+    "entries": [
+      {
+        "mode": 493,
+        "mtime_ns": 1787728725558539634,
+        "nlink": 0,
+        "path_hex": "2e",
+        "type": "directory"
+      }
+    ],
+    "entries_sha256": "f345d6883ca419c75f0a118e483a2494b162afe535588314018499cf364d6f8c"
+  }
+}

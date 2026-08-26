@@ -1,0 +1,86 @@
+{
+  "T_checkpoint_ns": 688556709,
+  "T_live_ns": 708875292,
+  "T_to_durable_ns": 1397432001,
+  "acknowledged_ref": {
+    "generation": 2,
+    "root": "1c13ddeae21dd48297ee259c0948a1acea5d9070af8367c43f6f03c5031ae667"
+  },
+  "checks": {
+    "acknowledged_ref_exact_before_terminal": true,
+    "acknowledged_reopen_exact": true,
+    "clean_final_state": true,
+    "prepared_root_accepted_before_timing": true,
+    "terminal_pass": true,
+    "timed_resources_pass": true,
+    "timed_terminal_pass": true
+  },
+  "classification": "CLEAN_FINAL_STATE_BARRIER_COMMITTED",
+  "clean_final_barrier_ns": 133644125,
+  "clean_final_ref": {
+    "generation": 3,
+    "root": "ffd2868624a8a0511fd42cb9a869e6aed3f4b0c88112bea084423211cac97282"
+  },
+  "cleanup": {
+    "classification": "ACKNOWLEDGED_CLEANUP_OUTSIDE_TIMER",
+    "host_wall_ns": 274292000,
+    "path": "/workspace/scenario"
+  },
+  "command": "for a in $(seq 1 10); do for b in $(seq 1 10); do mkdir -p $a/$b; for c in $(seq 1 10); do touch $a/$b/$c; done; done; done",
+  "operation_history_oracle": "history-oracle/receipt.json",
+  "prep": "",
+  "prepared_barrier_ns": 18181791,
+  "prepared_ref": {
+    "generation": 1,
+    "root": "7a2a8dfb153d1c58f0050f55e5a7df43aa8bdf4c81e8443f51af38bd8eb24fb0"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "db4bf524d86a5075aca87ce2b5e1dbb498184122636fd84ca64a0d258a246516"
+  },
+  "repetition": 2,
+  "resource_disposition": "CONTROLLING",
+  "resources": {
+    "callback_wall_ns": 730954539,
+    "callback_wall_positive": true,
+    "cgroup_memory_peak_bounded": true,
+    "cgroup_memory_peak_bytes": 27869184,
+    "connections_bounded": true,
+    "daemon_cpu_bounded": true,
+    "daemon_cpu_limit_ns": 1472303601,
+    "daemon_cpu_ns": 755782301,
+    "daemon_rss_delta_bounded": true,
+    "daemon_rss_upper_bound_bytes": 9011200,
+    "fd_baseline": 10,
+    "fd_bounded": true,
+    "fd_high_water": 15,
+    "mount_lock_ratio_bounded": true,
+    "mount_lock_wait_ns": 558075,
+    "oom_delta": 0,
+    "oom_kill_delta": 0,
+    "oom_zero": true,
+    "operation_q_bounded": true,
+    "quota_period_aligned": true,
+    "request_buffer_bounded": true,
+    "request_buffer_scope": "largest admitted FUSE request; not a product-wide allocation claim",
+    "sampler_covers_timer": true,
+    "samples_nonzero": true,
+    "schedstat_monotonic": true,
+    "spool_steady_bound": true,
+    "spool_terminal_zero": true,
+    "sqlite_contention_zero": true,
+    "status": "PASS",
+    "task_set_stable": true,
+    "threads_bounded": true,
+    "threads_high_water": 7,
+    "throttle_ratio_bounded": true,
+    "throttled_usec_delta": 0,
+    "timed_terminal_clean": true
+  },
+  "scenario": "mkdir tree (10x10x10)",
+  "schema": "layerfs-stage2-015-durable-sample-v1",
+  "status": "PASS",
+  "timed_durability_scope": "ACCEPTED_FINAL_STATE",
+  "timing_disposition": "MEASURED",
+  "warmup": false
+}

@@ -1,0 +1,6 @@
+{
+  "error": "HarnessError: timed resource gates failed: {'sampler_covers_timer': True, 'samples_nonzero': True, 'task_set_stable': True, 'schedstat_monotonic': True, 'daemon_cpu_ns': 92298626, 'daemon_cpu_limit_ns': 116255725, 'daemon_cpu_bounded': True, 'throttled_usec_delta': 44140, 'throttle_ratio_bounded': False, 'oom_delta': 0, 'oom_kill_delta': 0, 'oom_zero': True, 'daemon_rss_upper_bound_bytes': 2359296, 'daemon_rss_delta_bounded': True, 'cgroup_memory_peak_bytes': 78368768, 'cgroup_memory_peak_bounded': True, 'threads_high_water': 7, 'threads_bounded': True, 'fd_baseline': 10, 'fd_high_water': 10, 'fd_bounded': True, 'connections_bounded': True, 'operation_q_bounded': True, 'request_buffer_bounded': True, 'request_buffer_scope': 'largest admitted FUSE request; not a product-wide allocation claim', 'callback_wall_positive': True, 'mount_lock_ratio_bounded': False, 'sqlite_contention_zero': True, 'spool_terminal_zero': True, 'spool_steady_bound': True, 'timed_terminal_clean': True, 'status': 'FAIL'}",
+  "schema": "layerfs-stage2-015-durable-campaign-failure-v1",
+  "status": "PRESERVED_FAILURE",
+  "unix_ns": 1787728873512986000
+}

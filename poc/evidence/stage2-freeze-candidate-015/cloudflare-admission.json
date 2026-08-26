@@ -1,0 +1,16 @@
+{
+  "schema": "layerfs-stage2-015-cloudflare-admission-v1",
+  "status": "BLOCKED_EXTERNAL",
+  "authenticated": true,
+  "account_count": 1,
+  "required_oauth_scopes_present": true,
+  "containers_entitlement": false,
+  "containers_error": "Unauthorized: You do not have access to Cloudflare Containers. Deploying containers requires the Workers Paid plan.",
+  "r2_entitlement": false,
+  "r2_required_for_benchmark": false,
+  "deployment_attempted": false,
+  "reason_deployment_not_attempted": "The read-only Containers admission check failed. Deploying before entitlement and before the authenticated benchmark wrapper is locally verified would be unsafe and cannot succeed.",
+  "cloudflare_source_commit": "de87919a4fd37242e960e13b7b3ba802d1eef0a0",
+  "cloudflare_source_tree": "4fb409d7e1356e1098439293d77d2fdc2dbf2190",
+  "credentials_or_account_identity_retained": false
+}

@@ -1,0 +1,86 @@
+{
+  "T_checkpoint_ns": 162520750,
+  "T_live_ns": 171878584,
+  "T_to_durable_ns": 334399334,
+  "acknowledged_ref": {
+    "generation": 2,
+    "root": "1a9bec6436bc40872bfb2e1714cc52289159aa157dd20d8668358307a861ad9a"
+  },
+  "checks": {
+    "acknowledged_ref_exact_before_terminal": true,
+    "acknowledged_reopen_exact": true,
+    "clean_final_state": true,
+    "prepared_root_accepted_before_timing": true,
+    "terminal_pass": true,
+    "timed_resources_pass": true,
+    "timed_terminal_pass": true
+  },
+  "classification": "CLEAN_FINAL_STATE_BARRIER_COMMITTED",
+  "clean_final_barrier_ns": 19575084,
+  "clean_final_ref": {
+    "generation": 3,
+    "root": "83735802e511dced086ab8c6aa4c3ad926dea59ed2cbcc8c3b8d621b4be679cd"
+  },
+  "cleanup": {
+    "classification": "ACKNOWLEDGED_CLEANUP_OUTSIDE_TIMER",
+    "host_wall_ns": 92949000,
+    "path": "/workspace/scenario"
+  },
+  "command": "cp big big2",
+  "operation_history_oracle": "history-oracle/receipt.json",
+  "prep": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+  "prepared_barrier_ns": 162566125,
+  "prepared_ref": {
+    "generation": 1,
+    "root": "7e7d30e460197d91de8cebb69c10031a18aaad3e2cb1701485cd0e3d7b576317"
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "c42dba4292aeea8224294890d18a47bfb9ba6f77b5d62594f36e59d15c129c12"
+  },
+  "repetition": 2,
+  "resource_disposition": "CONTROLLING",
+  "resources": {
+    "callback_wall_ns": 361532710,
+    "callback_wall_positive": true,
+    "cgroup_memory_peak_bounded": true,
+    "cgroup_memory_peak_bytes": 214003712,
+    "connections_bounded": true,
+    "daemon_cpu_bounded": true,
+    "daemon_cpu_limit_ns": 356119300,
+    "daemon_cpu_ns": 279897195,
+    "daemon_rss_delta_bounded": true,
+    "daemon_rss_upper_bound_bytes": 2592768,
+    "fd_baseline": 10,
+    "fd_bounded": true,
+    "fd_high_water": 16,
+    "mount_lock_ratio_bounded": false,
+    "mount_lock_wait_ns": 79847468,
+    "oom_delta": 0,
+    "oom_kill_delta": 0,
+    "oom_zero": true,
+    "operation_q_bounded": true,
+    "quota_period_aligned": true,
+    "request_buffer_bounded": true,
+    "request_buffer_scope": "largest admitted FUSE request; not a product-wide allocation claim",
+    "sampler_covers_timer": true,
+    "samples_nonzero": true,
+    "schedstat_monotonic": true,
+    "spool_steady_bound": true,
+    "spool_terminal_zero": true,
+    "sqlite_contention_zero": true,
+    "status": "PASS",
+    "task_set_stable": true,
+    "threads_bounded": true,
+    "threads_high_water": 7,
+    "throttle_ratio_bounded": true,
+    "throttled_usec_delta": 0,
+    "timed_terminal_clean": true
+  },
+  "scenario": "pure copy 64 MiB",
+  "schema": "layerfs-stage2-015-durable-sample-v1",
+  "status": "PASS",
+  "timed_durability_scope": "ACCEPTED_FINAL_STATE",
+  "timing_disposition": "MEASURED",
+  "warmup": false
+}

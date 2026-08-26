@@ -1,0 +1,237 @@
+{
+  "AppArmorProfile": "",
+  "Args": [
+    "-c",
+    "\nimport json, os, sys, time\n\nready_path, stop_path, output_path = sys.argv[1:]\n\ndef daemon_pid():\n    matches = []\n    for name in os.listdir(\"/proc\"):\n        if not name.isdigit():\n            continue\n        try:\n            if os.path.realpath(f\"/proc/{name}/exe\") == \"/usr/local/bin/layerfs-fuse\":\n                matches.append(int(name))\n        except (FileNotFoundError, PermissionError):\n            pass\n    if len(matches) != 1:\n        raise RuntimeError(f\"expected one LayerFS daemon, found {matches}\")\n    return matches[0]\n\ndef status(pid):\n    wanted = {\"Threads\", \"VmHWM\", \"VmRSS\"}\n    result = {}\n    with open(f\"/proc/{pid}/status\") as source:\n        for line in source:\n            fields = line.split()\n            if fields and fields[0].rstrip(\":\") in wanted:\n                key = fields[0].rstrip(\":\")\n                result[key] = int(fields[1]) * (1024 if key.startswith(\"Vm\") else 1)\n    return result\n\npid = daemon_pid()\nbaseline = status(pid)\nresult = {\n    \"daemon_pid\": pid,\n    \"fd_baseline\": len(os.listdir(f\"/proc/{pid}/fd\")),\n    \"fd_high_water\": 0,\n    \"threads_high_water\": 0,\n    \"daemon_rss_high_water_bytes\": 0,\n    \"samples\": 0,\n    \"sampler_started_ns\": time.perf_counter_ns(),\n}\nwith open(ready_path, \"x\") as ready:\n    ready.write(\"ready\\n\")\nwhile not os.path.exists(stop_path):\n    current = status(pid)\n    result[\"fd_high_water\"] = max(\n        result[\"fd_high_water\"], len(os.listdir(f\"/proc/{pid}/fd\"))\n    )\n    result[\"threads_high_water\"] = max(result[\"threads_high_water\"], current[\"Threads\"])\n    result[\"daemon_rss_high_water_bytes\"] = max(\n        result[\"daemon_rss_high_water_bytes\"], current[\"VmRSS\"], current[\"VmHWM\"]\n    )\n    result[\"samples\"] += 1\n    time.sleep(0.005)\nresult[\"sampler_ended_ns\"] = time.perf_counter_ns()\nresult[\"daemon_status_at_sampler_start\"] = baseline\nwith open(output_path, \"x\") as output:\n    json.dump(result, output, sort_keys=True)\n    output.write(\"\\n\")\n",
+    "/evidence/sampler-ready",
+    "/evidence/sampler-stop",
+    "/evidence/sampler.json"
+  ],
+  "Config": {
+    "AttachStderr": false,
+    "AttachStdin": false,
+    "AttachStdout": false,
+    "Cmd": [
+      "-c",
+      "\nimport json, os, sys, time\n\nready_path, stop_path, output_path = sys.argv[1:]\n\ndef daemon_pid():\n    matches = []\n    for name in os.listdir(\"/proc\"):\n        if not name.isdigit():\n            continue\n        try:\n            if os.path.realpath(f\"/proc/{name}/exe\") == \"/usr/local/bin/layerfs-fuse\":\n                matches.append(int(name))\n        except (FileNotFoundError, PermissionError):\n            pass\n    if len(matches) != 1:\n        raise RuntimeError(f\"expected one LayerFS daemon, found {matches}\")\n    return matches[0]\n\ndef status(pid):\n    wanted = {\"Threads\", \"VmHWM\", \"VmRSS\"}\n    result = {}\n    with open(f\"/proc/{pid}/status\") as source:\n        for line in source:\n            fields = line.split()\n            if fields and fields[0].rstrip(\":\") in wanted:\n                key = fields[0].rstrip(\":\")\n                result[key] = int(fields[1]) * (1024 if key.startswith(\"Vm\") else 1)\n    return result\n\npid = daemon_pid()\nbaseline = status(pid)\nresult = {\n    \"daemon_pid\": pid,\n    \"fd_baseline\": len(os.listdir(f\"/proc/{pid}/fd\")),\n    \"fd_high_water\": 0,\n    \"threads_high_water\": 0,\n    \"daemon_rss_high_water_bytes\": 0,\n    \"samples\": 0,\n    \"sampler_started_ns\": time.perf_counter_ns(),\n}\nwith open(ready_path, \"x\") as ready:\n    ready.write(\"ready\\n\")\nwhile not os.path.exists(stop_path):\n    current = status(pid)\n    result[\"fd_high_water\"] = max(\n        result[\"fd_high_water\"], len(os.listdir(f\"/proc/{pid}/fd\"))\n    )\n    result[\"threads_high_water\"] = max(result[\"threads_high_water\"], current[\"Threads\"])\n    result[\"daemon_rss_high_water_bytes\"] = max(\n        result[\"daemon_rss_high_water_bytes\"], current[\"VmRSS\"], current[\"VmHWM\"]\n    )\n    result[\"samples\"] += 1\n    time.sleep(0.005)\nresult[\"sampler_ended_ns\"] = time.perf_counter_ns()\nresult[\"daemon_status_at_sampler_start\"] = baseline\nwith open(output_path, \"x\") as output:\n    json.dump(result, output, sort_keys=True)\n    output.write(\"\\n\")\n",
+      "/evidence/sampler-ready",
+      "/evidence/sampler-stop",
+      "/evidence/sampler.json"
+    ],
+    "Domainname": "",
+    "Entrypoint": [
+      "python3"
+    ],
+    "Env": [
+      "NO_PROXY=localhost,127.0.0.1,::1",
+      "no_proxy=localhost,127.0.0.1,::1",
+      "HTTP_PROXY=http://http.docker.internal:3128",
+      "http_proxy=http://http.docker.internal:3128",
+      "HTTPS_PROXY=http://http.docker.internal:3128",
+      "https_proxy=http://http.docker.internal:3128",
+      "PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "RUSTUP_HOME=/usr/local/rustup",
+      "CARGO_HOME=/usr/local/cargo",
+      "RUST_VERSION=1.85.1",
+      "LAYERFS_SOURCE_COMMIT=1111111111111111111111111111111111111111",
+      "LAYERFS_SOURCE_TREE=2222222222222222222222222222222222222222",
+      "LAYERFS_FS_BENCH_SHA256=0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
+    ],
+    "Hostname": "c08039067755",
+    "Image": "layerfs-fuse:diagnostic-workers1",
+    "Labels": {
+      "org.opencontainers.image.layerfs.fs-bench-sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+      "org.opencontainers.image.layerfs.source-commit": "1111111111111111111111111111111111111111",
+      "org.opencontainers.image.layerfs.source-tree": "2222222222222222222222222222222222222222",
+      "org.opencontainers.image.revision": "1111111111111111111111111111111111111111",
+      "org.opencontainers.image.source": "https://github.com/Ephemeral-AI-Lab/layerfs-engine-lab"
+    },
+    "OpenStdin": false,
+    "StdinOnce": false,
+    "StopTimeout": 1,
+    "Tty": false,
+    "User": "",
+    "Volumes": null,
+    "WorkingDir": ""
+  },
+  "Created": "2026-08-26T07:33:08.940556427Z",
+  "Driver": "overlayfs",
+  "ExecIDs": null,
+  "HostConfig": {
+    "AutoRemove": false,
+    "Binds": null,
+    "BlkioDeviceReadBps": [],
+    "BlkioDeviceReadIOps": [],
+    "BlkioDeviceWriteBps": [],
+    "BlkioDeviceWriteIOps": [],
+    "BlkioWeight": 0,
+    "BlkioWeightDevice": [],
+    "CapAdd": [
+      "CAP_SYS_PTRACE"
+    ],
+    "CapDrop": null,
+    "Cgroup": "",
+    "CgroupParent": "",
+    "CgroupnsMode": "host",
+    "ConsoleSize": [
+      0,
+      0
+    ],
+    "ContainerIDFile": "",
+    "CpuCount": 0,
+    "CpuPercent": 0,
+    "CpuPeriod": 0,
+    "CpuQuota": 0,
+    "CpuRealtimePeriod": 0,
+    "CpuRealtimeRuntime": 0,
+    "CpuShares": 0,
+    "CpusetCpus": "",
+    "CpusetMems": "",
+    "DeviceCgroupRules": null,
+    "DeviceRequests": null,
+    "Devices": [],
+    "Dns": null,
+    "DnsOptions": [],
+    "DnsSearch": [],
+    "ExtraHosts": null,
+    "GroupAdd": null,
+    "IOMaximumBandwidth": 0,
+    "IOMaximumIOps": 0,
+    "IpcMode": "private",
+    "Isolation": "",
+    "Links": null,
+    "LogConfig": {
+      "Config": {},
+      "Type": "json-file"
+    },
+    "MaskedPaths": [
+      "/proc/acpi",
+      "/proc/asound",
+      "/proc/interrupts",
+      "/proc/kcore",
+      "/proc/keys",
+      "/proc/latency_stats",
+      "/proc/sched_debug",
+      "/proc/scsi",
+      "/proc/timer_list",
+      "/proc/timer_stats",
+      "/sys/devices/virtual/powercap",
+      "/sys/firmware"
+    ],
+    "Memory": 134217728,
+    "MemoryReservation": 0,
+    "MemorySwap": 268435456,
+    "MemorySwappiness": null,
+    "Mounts": [
+      {
+        "Source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/poc/evidence/stage2-freeze-candidate-015/durable/workers1-probe01/samples/01-stat-1000-files-rep-1",
+        "Target": "/evidence",
+        "Type": "bind"
+      }
+    ],
+    "NanoCpus": 250000000,
+    "NetworkMode": "none",
+    "OomKillDisable": null,
+    "OomScoreAdj": 0,
+    "PidMode": "container:0003be823bd1cbaf61ecc1b3a36cbab7531b6c336da797fb04d322a2e8b0015f",
+    "PidsLimit": 32,
+    "PortBindings": {},
+    "Privileged": false,
+    "PublishAllPorts": false,
+    "ReadonlyPaths": [
+      "/proc/bus",
+      "/proc/fs",
+      "/proc/irq",
+      "/proc/sys",
+      "/proc/sysrq-trigger"
+    ],
+    "ReadonlyRootfs": true,
+    "RestartPolicy": {
+      "MaximumRetryCount": 0,
+      "Name": "no"
+    },
+    "Runtime": "runc",
+    "SecurityOpt": null,
+    "ShmSize": 67108864,
+    "UTSMode": "",
+    "Ulimits": [],
+    "UsernsMode": "",
+    "VolumeDriver": "",
+    "VolumesFrom": null
+  },
+  "HostnamePath": "/var/lib/docker/containers/c080390677551f501be85800b254f5398a035f41a34bfb3540f60bccc23cd997/hostname",
+  "HostsPath": "/var/lib/docker/containers/c080390677551f501be85800b254f5398a035f41a34bfb3540f60bccc23cd997/hosts",
+  "Id": "c080390677551f501be85800b254f5398a035f41a34bfb3540f60bccc23cd997",
+  "Image": "sha256:7e87b32e51fa83e3b1589606cc1cf0c54427014bb21da34e3a0e69ade03f9801",
+  "ImageManifestDescriptor": {
+    "digest": "sha256:614501939c839052833f3f4964de4af2572a8d2f9f147afdcb5476cf5c45e038",
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "platform": {
+      "architecture": "arm64",
+      "os": "linux"
+    },
+    "size": 2015
+  },
+  "LogPath": "/var/lib/docker/containers/c080390677551f501be85800b254f5398a035f41a34bfb3540f60bccc23cd997/c080390677551f501be85800b254f5398a035f41a34bfb3540f60bccc23cd997-json.log",
+  "MountLabel": "",
+  "Mounts": [
+    {
+      "Destination": "/evidence",
+      "Mode": "",
+      "Propagation": "rprivate",
+      "RW": true,
+      "Source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/poc/evidence/stage2-freeze-candidate-015/durable/workers1-probe01/samples/01-stat-1000-files-rep-1",
+      "Type": "bind"
+    }
+  ],
+  "Name": "/layerfs-stage2-final015-dur-audit015-workers1-probe01-s01-01-timed-sampler",
+  "NetworkSettings": {
+    "Networks": {
+      "none": {
+        "Aliases": null,
+        "DNSNames": null,
+        "DriverOpts": null,
+        "EndpointID": "",
+        "Gateway": "",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "GwPriority": 0,
+        "IPAMConfig": null,
+        "IPAddress": "",
+        "IPPrefixLen": 0,
+        "IPv6Gateway": "",
+        "Links": null,
+        "MacAddress": "",
+        "NetworkID": "f0bd3491d07d53230058faf6447e79352c791728ab8ea5df344ae452fb1ae713"
+      }
+    },
+    "Ports": {},
+    "SandboxID": "",
+    "SandboxKey": ""
+  },
+  "Path": "python3",
+  "Platform": "linux",
+  "ProcessLabel": "",
+  "ResolvConfPath": "/var/lib/docker/containers/c080390677551f501be85800b254f5398a035f41a34bfb3540f60bccc23cd997/resolv.conf",
+  "RestartCount": 0,
+  "State": {
+    "Dead": false,
+    "Error": "",
+    "ExitCode": 0,
+    "FinishedAt": "2026-08-26T07:33:10.898294178Z",
+    "OOMKilled": false,
+    "Paused": false,
+    "Pid": 0,
+    "Restarting": false,
+    "Running": false,
+    "StartedAt": "2026-08-26T07:33:08.970378386Z",
+    "Status": "exited"
+  },
+  "Storage": {
+    "RootFS": {
+      "Snapshot": {
+        "Name": "overlayfs"
+      }
+    }
+  }
+}

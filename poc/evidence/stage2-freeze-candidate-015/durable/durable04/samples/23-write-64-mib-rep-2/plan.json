@@ -1,0 +1,14 @@
+{
+  "command": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+  "fresh_store": true,
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "image": "layerfs-fuse:frozen-7e82abc",
+  "prep": "",
+  "repetition": 2,
+  "scenario": "write 64 MiB",
+  "schema": "layerfs-stage2-015-durable-sample-plan-v1",
+  "source_commit": "7e82abcd7320f6a214be336d82488ba0527b6025",
+  "source_tree": "df13d88eb7e7d2471971b0c58ca6425bb81b0b03",
+  "volume": "layerfs_stage2_final015_dur_audit015_durable04_s23_store",
+  "warmup": false
+}

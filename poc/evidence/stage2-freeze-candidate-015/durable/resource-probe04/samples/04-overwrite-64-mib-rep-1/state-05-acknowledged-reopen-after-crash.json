@@ -1,0 +1,35 @@
+{
+  "ref": {
+    "generation": 2,
+    "root": "8425d36aa9db384a981cc38eca69f01b3e727831afd6f6fc5138a17361bff2df"
+  },
+  "snapshot": {
+    "descendant_count": 2,
+    "entries": [
+      {
+        "mode": 493,
+        "mtime_ns": 1787729993404015378,
+        "nlink": 0,
+        "path_hex": "2e",
+        "type": "directory"
+      },
+      {
+        "mode": 448,
+        "mtime_ns": 1787729993481763545,
+        "nlink": 1,
+        "path_hex": "7363656e6172696f",
+        "type": "directory"
+      },
+      {
+        "mode": 420,
+        "mtime_ns": 1787729994824949337,
+        "nlink": 1,
+        "path_hex": "7363656e6172696f2f626967",
+        "sha256": "3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351",
+        "size": 67108864,
+        "type": "file"
+      }
+    ],
+    "entries_sha256": "68b5db9deef2f3f944d19b40927cbbdb1194ecf050c220f39b121f1a7e365ff0"
+  }
+}

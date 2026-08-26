@@ -1,0 +1,9 @@
+{"event":"campaign-start","unix_ns":1787729700721702000}
+{"event":"sample-start","ordinal":1,"scenario":"stat 1000 files","warmup":false}
+{"event":"sample-pass","ordinal":1}
+{"event":"sample-start","ordinal":2,"scenario":"mkdir tree (10x10x10)","warmup":false}
+{"event":"sample-pass","ordinal":2}
+{"event":"sample-start","ordinal":3,"scenario":"copy 64 MiB","warmup":false}
+{"event":"sample-pass","ordinal":3}
+{"event":"sample-start","ordinal":4,"scenario":"pure read 64 MiB","warmup":false}
+{"error":"HarnessError: timed resource gates failed: {'quota_period_aligned': True, 'sampler_covers_timer': True, 'samples_nonzero': True, 'task_set_stable': True, 'schedstat_monotonic': True, 'daemon_cpu_ns': 86005918, 'daemon_cpu_limit_ns': 111243068, 'daemon_cpu_bounded': True, 'throttled_usec_delta': 12647, 'throttle_ratio_bounded': False, 'oom_delta': 0, 'oom_kill_delta': 0, 'oom_zero': True, 'daemon_rss_upper_bound_bytes': 593920, 'daemon_rss_delta_bounded': True, 'cgroup_memory_peak_bytes': 75669504, 'cgroup_memory_peak_bounded': True, 'threads_high_water': 4, 'threads_bounded': True, 'fd_baseline': 7, 'fd_high_water': 7, 'fd_bounded': True, 'connections_bounded': True, 'operation_q_bounded': True, 'request_buffer_bounded': True, 'request_buffer_scope': 'largest admitted FUSE request; not a product-wide allocation claim', 'callback_wall_positive': True, 'mount_lock_ratio_bounded': True, 'sqlite_contention_zero': True, 'spool_terminal_zero': True, 'spool_steady_bound': True, 'timed_terminal_clean': True, 'status': 'FAIL'}","event":"campaign-failure","schema":"layerfs-stage2-015-durable-campaign-failure-v1","status":"PRESERVED_FAILURE","unix_ns":1787729722530140000}

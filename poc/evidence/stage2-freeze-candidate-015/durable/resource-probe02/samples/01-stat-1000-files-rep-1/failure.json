@@ -1,0 +1,7 @@
+{
+  "container": "layerfs-stage2-final015-dur-audit015-resource-probe02-s01-01-timed",
+  "error": "HarnessError: resource sampler did not become ready: layerfs-stage2-final015-dur-audit015-resource-probe02-s01-01-timed-sampler",
+  "schema": "layerfs-stage2-015-durable-preserved-failure-v1",
+  "status": "PRESERVED_FAILURE",
+  "volume": "layerfs_stage2_final015_dur_audit015_resource_probe02_s01_store"
+}
