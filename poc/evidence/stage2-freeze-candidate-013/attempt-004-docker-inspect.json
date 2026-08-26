@@ -1,0 +1,272 @@
+[
+    {
+        "Id": "33f8d35ff3945078d267a1633a22617d2feaf0be6217439c3877eca9edeb0929",
+        "Created": "2026-08-26T01:35:59.011062709Z",
+        "Path": "/usr/local/bin/layerfs-fuse",
+        "Args": [
+            "--store",
+            "/var/lib/layerfs/store.sqlite",
+            "--mount",
+            "/workspace",
+            "--spool",
+            "/var/tmp/layerfs-owned/spool",
+            "--receipt",
+            "/var/tmp/layerfs-owned/terminal.json",
+            "--ref",
+            "main",
+            "--integrity",
+            "trusted",
+            "--uid",
+            "0",
+            "--gid",
+            "0"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 2080,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-08-26T01:35:59.044118376Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:509973e0296bf080c03f942623326862496e110ab5a401c18e6bed5b7d5f454c",
+        "ResolvConfPath": "/var/lib/docker/containers/33f8d35ff3945078d267a1633a22617d2feaf0be6217439c3877eca9edeb0929/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/33f8d35ff3945078d267a1633a22617d2feaf0be6217439c3877eca9edeb0929/hostname",
+        "HostsPath": "/var/lib/docker/containers/33f8d35ff3945078d267a1633a22617d2feaf0be6217439c3877eca9edeb0929/hosts",
+        "LogPath": "/var/lib/docker/containers/33f8d35ff3945078d267a1633a22617d2feaf0be6217439c3877eca9edeb0929/33f8d35ff3945078d267a1633a22617d2feaf0be6217439c3877eca9edeb0929-json.log",
+        "Name": "/layerfs-stage2-final013-functional-004",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/poc/evidence/stage2-freeze-candidate-012/functional-oracle.py:/oracle.py:ro",
+                "layerfs_stage2_final013_functional_store_004:/var/lib/layerfs"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "none",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "no",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": [
+                "CAP_SYS_ADMIN"
+            ],
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": [],
+            "DnsSearch": [],
+            "ExtraHosts": null,
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "Tmpfs": {
+                "/tmp": "rw,nosuid,nodev,size=1g,mode=1777"
+            },
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 3221225472,
+            "NanoCpus": 1000000000,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": [],
+            "BlkioDeviceReadBps": [],
+            "BlkioDeviceWriteBps": [],
+            "BlkioDeviceReadIOps": [],
+            "BlkioDeviceWriteIOps": [],
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": [
+                {
+                    "PathOnHost": "/dev/fuse",
+                    "PathInContainer": "/dev/fuse",
+                    "CgroupPermissions": "rwm"
+                }
+            ],
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 6442450944,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": 512,
+            "Ulimits": [],
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ],
+            "Init": true
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/poc/evidence/stage2-freeze-candidate-012/functional-oracle.py",
+                "Destination": "/oracle.py",
+                "Mode": "ro",
+                "RW": false,
+                "Propagation": "rprivate"
+            },
+            {
+                "Type": "volume",
+                "Name": "layerfs_stage2_final013_functional_store_004",
+                "Source": "/var/lib/docker/volumes/layerfs_stage2_final013_functional_store_004/_data",
+                "Destination": "/var/lib/layerfs",
+                "Driver": "local",
+                "Mode": "z",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "33f8d35ff394",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "https_proxy=http://http.docker.internal:3128",
+                "NO_PROXY=localhost,127.0.0.1,::1",
+                "no_proxy=localhost,127.0.0.1,::1",
+                "HTTP_PROXY=http://http.docker.internal:3128",
+                "http_proxy=http://http.docker.internal:3128",
+                "HTTPS_PROXY=http://http.docker.internal:3128",
+                "PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "RUSTUP_HOME=/usr/local/rustup",
+                "CARGO_HOME=/usr/local/cargo",
+                "RUST_VERSION=1.85.1",
+                "LAYERFS_FS_BENCH_SHA256=0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
+            ],
+            "Cmd": [
+                "--store",
+                "/var/lib/layerfs/store.sqlite",
+                "--mount",
+                "/workspace",
+                "--spool",
+                "/var/tmp/layerfs-owned/spool",
+                "--receipt",
+                "/var/tmp/layerfs-owned/terminal.json",
+                "--ref",
+                "main",
+                "--integrity",
+                "trusted",
+                "--uid",
+                "0",
+                "--gid",
+                "0"
+            ],
+            "Image": "layerfs-fuse:frozen-88d2da0",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/usr/local/bin/layerfs-fuse"
+            ],
+            "Labels": {
+                "org.opencontainers.image.layerfs.fs-bench-sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+                "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+            },
+            "StopTimeout": 1
+        },
+        "NetworkSettings": {
+            "SandboxID": "017ac4cdebbe9613eff1ca7243ca6ae0d90f1edb8e687c5cd060be643f63fe5b",
+            "SandboxKey": "/var/run/docker/netns/017ac4cdebbe",
+            "Ports": {},
+            "Networks": {
+                "none": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": null,
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "f0bd3491d07d53230058faf6447e79352c791728ab8ea5df344ae452fb1ae713",
+                    "EndpointID": "bff5fc800f89c9e9278b06d6f9a7bbb6425e49aeccf9e9681b9e15429cf14e3c",
+                    "Gateway": "",
+                    "IPAddress": "",
+                    "MacAddress": "",
+                    "IPPrefixLen": 0,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": null
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:dfffabc3f8d65406844869a5507d3ba6363f6e57d022292a90c34b720649fceb",
+            "size": 2014,
+            "platform": {
+                "architecture": "arm64",
+                "os": "linux"
+            }
+        }
+    }
+]

@@ -1,0 +1,11 @@
+source_commit=bd1cd225e152a630a10520806ecca65593c71a6b
+source_tree=211bdec5dd38ac281c9ec3d08d0ca9d659ad3dea
+command=docker run --rm --platform linux/arm64 -v /Users/yifanxu/Ephemeral-AI-Lab:/Users/yifanxu/Ephemeral-AI-Lab -v layerfs_stage2_final013_linux_target:/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target -v layerfs_stage2_final013_linux_cargo_registry:/usr/local/cargo/registry -w /Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty rust:1.85.1-bookworm sh -c 'apt-get update && apt-get install --no-install-recommends -y ruby && rustup component add clippy && cargo test --locked --workspace --all-targets -- --test-threads=1 && cargo clippy --locked --workspace --all-targets -- -D warnings'
+Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+Err:2 http://deb.debian.org/debian bookworm-updates InRelease
+  500  reading HTTP response body: unexpected EOF [IP: 192.168.65.1 3128]
+Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+Ign:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+Get:5 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [333 kB]
+Ign:4 http://deb.debian.org/debian bookworm/main arm64 Packages
+Ign:4 http://deb.debian.org/debian bookworm/main arm64 Packages

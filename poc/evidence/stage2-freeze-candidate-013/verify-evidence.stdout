@@ -1,0 +1,77 @@
+{
+  "authoritative": {
+    "tmp": {
+      "G": 3.820678995565439,
+      "Rsum": 2.2774824570241567,
+      "SB_ns": 1369981793,
+      "SL_ns": 3120109500,
+      "Spread": 1.0089794883801353
+    },
+    "var": {
+      "G": 3.170511444219848,
+      "Rsum": 2.0485676772808463,
+      "SB_ns": 1425480461,
+      "SL_ns": 2920193197,
+      "Spread": 1.0098853805390877
+    }
+  },
+  "checks": {
+    "authoritative_numeric": true,
+    "authoritative_resources": true,
+    "cleanup": true,
+    "dirty_shutdown": true,
+    "forced_death": true,
+    "functional_controlling": true,
+    "functional_strict_zero": false,
+    "high_entropy": true,
+    "launches": true,
+    "process_hwm": true,
+    "publication": true,
+    "readiness": true,
+    "restart": true,
+    "scenario_cpu": true,
+    "source_binding": true,
+    "splice": true
+  },
+  "executable_blake3": "cc6a76415e42fbef97f569310db6d805ffd08d301a0136198b87e052d8ffc1f3",
+  "executable_sha256": "fbe800c136a973430a3bf47dbb28ed861348e1f7fa135aead2558b40bcad7258",
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "functional": {
+    "checkpoint_100mib_ns": 224115542,
+    "checkpoint_cpu": {
+      "nr_throttled_delta": 2,
+      "throttled_usec_delta": 7038,
+      "usage_usec_delta": 214876
+    },
+    "controlling_checks": {
+      "accepted_orphan_mutation_read": true,
+      "checkpoint_throttle_le_5_percent": true,
+      "checkpoint_under_400ms": true,
+      "directory_cycle_refused": true,
+      "hardlink_identity_small": true,
+      "large_hardlink_identity": true,
+      "large_sha256_same_daemon": true,
+      "large_size": true,
+      "mmap": true,
+      "mode": true,
+      "mtime_ns": true,
+      "random_reads_exact": true,
+      "readdir": true,
+      "reextend": true,
+      "rename_replace": true,
+      "small_bytes": true,
+      "symlink": true,
+      "unlink_open_absent": true,
+      "write_after_shrink": true
+    },
+    "oracle_schema": "layerfs-stage2-functional-oracle-v4",
+    "restart_read_mib_s": 793.0987151174268,
+    "same_daemon_read_mib_s": 1392.70511367475,
+    "strict_zero_cfs_event": false
+  },
+  "image_id": "sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139",
+  "schema": "layerfs-stage2-final-summary-v2",
+  "source_commit": "bd1cd225e152a630a10520806ecca65593c71a6b",
+  "source_tree": "211bdec5dd38ac281c9ec3d08d0ca9d659ad3dea",
+  "status": "REVISE"
+}

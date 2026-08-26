@@ -1,0 +1,13 @@
+{
+  "checks": {
+    "dirty_preack_discarded": true,
+    "durable_postack_reopened": true,
+    "postack_sigkill_exit_137": true,
+    "preack_sigkill_exit_137": true,
+    "sigkill_terminal_absent": true,
+    "spool_absent_after_each_reopen": true
+  },
+  "image_id": "sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139",
+  "schema": "layerfs-stage2-forced-death-v1",
+  "status": "PASS"
+}

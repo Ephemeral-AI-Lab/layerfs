@@ -1,0 +1,11 @@
+{
+  "config": {"reps": 1, "warmup": 1, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
+  "results": [
+    {"scenario": "create 1000 files", "target": "computerd", "meanNs": 251821625, "medianNs": 251821625, "p95Ns": 251821625, "minNs": 251821625, "maxNs": 251821625, "samples": 1},
+    {"scenario": "create 1000 files", "target": "base", "meanNs": 18895125, "medianNs": 18895125, "p95Ns": 18895125, "minNs": 18895125, "maxNs": 18895125, "samples": 1},
+    {"scenario": "stat 1000 files", "target": "computerd", "meanNs": 733607834, "medianNs": 733607834, "p95Ns": 733607834, "minNs": 733607834, "maxNs": 733607834, "samples": 1},
+    {"scenario": "stat 1000 files", "target": "base", "meanNs": 463648750, "medianNs": 463648750, "p95Ns": 463648750, "minNs": 463648750, "maxNs": 463648750, "samples": 1},
+    {"scenario": "pure read 64 MiB", "target": "computerd", "meanNs": 11634125, "medianNs": 11634125, "p95Ns": 11634125, "minNs": 11634125, "maxNs": 11634125, "samples": 1},
+    {"scenario": "pure read 64 MiB", "target": "base", "meanNs": 10301333, "medianNs": 10301333, "p95Ns": 10301333, "minNs": 10301333, "maxNs": 10301333, "samples": 1}
+  ]
+}

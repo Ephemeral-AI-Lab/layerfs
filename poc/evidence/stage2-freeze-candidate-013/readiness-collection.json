@@ -1,0 +1,244 @@
+{
+  "authoritative_verifier_v2_disposition": "PRESERVED_INAPPLICABLE_DIAGNOSTIC",
+  "contract": "REPS=1 WARMUP=0 RANDOMIZE_TARGETS=1 forecast and cleanup validation",
+  "populations": {
+    "tmp": {
+      "aggregates": {
+        "G": 3.7409144267468233,
+        "Rsum": 2.2785926925658693,
+        "SB_ns": 1391994210,
+        "SL_ns": 3171787835,
+        "Spread": 1.0
+      },
+      "checks": {
+        "G_forecast": true,
+        "Rsum_forecast": true,
+        "SL_forecast": true,
+        "busy_locked_zero": true,
+        "config_exact": true,
+        "connections_zero": true,
+        "directory_changes_zero": true,
+        "dirty_nodes_zero": true,
+        "dirty_ranges_zero": true,
+        "fail_markers_zero": true,
+        "handles_zero": true,
+        "invalidation_exact": true,
+        "logical_workspace_zero": true,
+        "matrix_exact": true,
+        "network_scenarios_zero": true,
+        "operation_q_zero": true,
+        "pending_zero": true,
+        "resource_pass": true,
+        "root_lookup_only": true,
+        "root_mapping_only": true,
+        "root_node_only": true,
+        "row_count_24": true,
+        "sample_count_exact": true,
+        "spool_dead_zero": true,
+        "spool_live_zero": true,
+        "spool_physical_zero": true,
+        "status_pass": true
+      },
+      "control": "tmp",
+      "resource": {
+        "cgroup_cpu": {
+          "nr_throttled_delta": 15,
+          "throttle_ratio": 0.010555616916249287,
+          "throttled_usec_delta": 57795,
+          "usage_usec_delta": 4698503
+        },
+        "checks": {
+          "busy_locked_zero": true,
+          "cgroup_peak_le_512_mib": true,
+          "connections_bounded": true,
+          "connections_zero": true,
+          "daemon_rss_delta_le_64_mib": true,
+          "directory_changes_zero": true,
+          "dirty_nodes_zero": true,
+          "dirty_ranges_zero": true,
+          "handles_zero": true,
+          "invalidation_exact": true,
+          "logical_workspace_zero": true,
+          "lookup_terminal_root_only": true,
+          "mount_lock_le_10_percent": true,
+          "oom_zero": true,
+          "operation_q_zero": true,
+          "pending_zero": true,
+          "q_bounded_and_zero": true,
+          "root_lookup_only": true,
+          "root_mapping_only": true,
+          "root_node_only": true,
+          "spool_bounded_and_zero": true,
+          "spool_dead_zero": true,
+          "spool_live_zero": true,
+          "spool_physical_zero": true,
+          "status_pass": true,
+          "threads_le_8": true,
+          "throttle_le_5_percent": true
+        },
+        "connections": {
+          "high_water": 1,
+          "terminal": 0
+        },
+        "lock": {
+          "connection_mutex_wait_ns": 7503,
+          "mount_wait_ns": 4232367,
+          "mount_wait_ratio": 0.0007729949770910156
+        },
+        "lookup_refs": {
+          "high_water": 1202,
+          "terminal": 1
+        },
+        "memory": {
+          "cgroup_peak_bytes": 282263552,
+          "daemon_rss_delta_bytes": 6365184,
+          "daemon_rss_high_water_bytes": 11567104,
+          "daemon_rss_settled_after_bytes": 11567104,
+          "daemon_rss_settled_before_bytes": 5201920,
+          "oom_delta": 0,
+          "oom_kill_delta": 0
+        },
+        "operation_q": {
+          "high_water_bytes": 1048576,
+          "largest_request_bytes": 1048576,
+          "terminal_bytes": 0
+        },
+        "spool": {
+          "live_high_water_bytes": 134217728,
+          "physical_high_water_bytes": 134217728,
+          "terminal_live_bytes": 0,
+          "terminal_physical_bytes": 0
+        },
+        "status": "PASS",
+        "threads": {
+          "diagnostic_high_water": 6,
+          "settled_after": 6
+        },
+        "wall_ns": 5475283961
+      },
+      "status": "READY",
+      "verifier_v2_classification": "INAPPLICABLE_DIAGNOSTIC_REPS_1_WARMUP_0",
+      "verifier_v2_expected_non_authoritative_status": "REVISE"
+    },
+    "var": {
+      "aggregates": {
+        "G": 3.3026513518363134,
+        "Rsum": 2.195360258810908,
+        "SB_ns": 1428218629,
+        "SL_ns": 3135454419,
+        "Spread": 1.0
+      },
+      "checks": {
+        "G_forecast": true,
+        "Rsum_forecast": true,
+        "SL_forecast": true,
+        "busy_locked_zero": true,
+        "config_exact": true,
+        "connections_zero": true,
+        "directory_changes_zero": true,
+        "dirty_nodes_zero": true,
+        "dirty_ranges_zero": true,
+        "fail_markers_zero": true,
+        "handles_zero": true,
+        "invalidation_exact": true,
+        "logical_workspace_zero": true,
+        "matrix_exact": true,
+        "network_scenarios_zero": true,
+        "operation_q_zero": true,
+        "pending_zero": true,
+        "resource_pass": true,
+        "root_lookup_only": true,
+        "root_mapping_only": true,
+        "root_node_only": true,
+        "row_count_24": true,
+        "sample_count_exact": true,
+        "spool_dead_zero": true,
+        "spool_live_zero": true,
+        "spool_physical_zero": true,
+        "status_pass": true
+      },
+      "control": "var",
+      "resource": {
+        "cgroup_cpu": {
+          "nr_throttled_delta": 15,
+          "throttle_ratio": 0.013893069052444753,
+          "throttled_usec_delta": 76217,
+          "usage_usec_delta": 4728621
+        },
+        "checks": {
+          "busy_locked_zero": true,
+          "cgroup_peak_le_512_mib": true,
+          "connections_bounded": true,
+          "connections_zero": true,
+          "daemon_rss_delta_le_64_mib": true,
+          "directory_changes_zero": true,
+          "dirty_nodes_zero": true,
+          "dirty_ranges_zero": true,
+          "handles_zero": true,
+          "invalidation_exact": true,
+          "logical_workspace_zero": true,
+          "lookup_terminal_root_only": true,
+          "mount_lock_le_10_percent": true,
+          "oom_zero": true,
+          "operation_q_zero": true,
+          "pending_zero": true,
+          "q_bounded_and_zero": true,
+          "root_lookup_only": true,
+          "root_mapping_only": true,
+          "root_node_only": true,
+          "spool_bounded_and_zero": true,
+          "spool_dead_zero": true,
+          "spool_live_zero": true,
+          "spool_physical_zero": true,
+          "status_pass": true,
+          "threads_le_8": true,
+          "throttle_le_5_percent": true
+        },
+        "connections": {
+          "high_water": 1,
+          "terminal": 0
+        },
+        "lock": {
+          "connection_mutex_wait_ns": 6920,
+          "mount_wait_ns": 4208706,
+          "mount_wait_ratio": 0.0007671758673188205
+        },
+        "lookup_refs": {
+          "high_water": 1202,
+          "terminal": 1
+        },
+        "memory": {
+          "cgroup_peak_bytes": 282730496,
+          "daemon_rss_delta_bytes": 6332416,
+          "daemon_rss_high_water_bytes": 11538432,
+          "daemon_rss_settled_after_bytes": 11538432,
+          "daemon_rss_settled_before_bytes": 5206016,
+          "oom_delta": 0,
+          "oom_kill_delta": 0
+        },
+        "operation_q": {
+          "high_water_bytes": 1048576,
+          "largest_request_bytes": 1048576,
+          "terminal_bytes": 0
+        },
+        "spool": {
+          "live_high_water_bytes": 134217728,
+          "physical_high_water_bytes": 134217728,
+          "terminal_live_bytes": 0,
+          "terminal_physical_bytes": 0
+        },
+        "status": "PASS",
+        "threads": {
+          "diagnostic_high_water": 6,
+          "settled_after": 6
+        },
+        "wall_ns": 5485972877
+      },
+      "status": "READY",
+      "verifier_v2_classification": "INAPPLICABLE_DIAGNOSTIC_REPS_1_WARMUP_0",
+      "verifier_v2_expected_non_authoritative_status": "REVISE"
+    }
+  },
+  "schema": "layerfs-stage2-readiness-validation-v1",
+  "status": "READY"
+}

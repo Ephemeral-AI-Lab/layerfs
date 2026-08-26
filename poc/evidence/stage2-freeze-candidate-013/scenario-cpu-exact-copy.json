@@ -1,0 +1,35 @@
+{
+  "command": "dd if=/dev/zero of=big bs=1M count=64 status=none; cp big big2",
+  "config": {
+    "base": "/var/tmp",
+    "external_wrapper": true,
+    "mount": "/workspace",
+    "randomizeTargets": 0,
+    "reps": 1,
+    "warmup": 0
+  },
+  "requested_scenario": "copy 64 MiB",
+  "results": [
+    {
+      "maxNs": 130133833,
+      "meanNs": 130133833,
+      "medianNs": 130133833,
+      "minNs": 130133833,
+      "p95Ns": 130133833,
+      "samples": 1,
+      "scenario": "copy 64 MiB",
+      "target": "computerd"
+    },
+    {
+      "maxNs": 41231167,
+      "meanNs": 41231167,
+      "medianNs": 41231167,
+      "minNs": 41231167,
+      "p95Ns": 41231167,
+      "samples": 1,
+      "scenario": "copy 64 MiB",
+      "target": "base"
+    }
+  ],
+  "schema": "layerfs-stage2-exact-external-scenario-v1"
+}

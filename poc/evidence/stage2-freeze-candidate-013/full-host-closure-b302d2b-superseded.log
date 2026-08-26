@@ -1,0 +1,559 @@
+source_commit=b302d2bd77fce5ee9f56b9a5e96423578c92c166
+source_tree=5503025b9de5989f054a71d6d602907104741b7d
+command=cargo fmt --all -- --check && git diff --check && cargo test --workspace --all-targets -- --test-threads=1 && cargo clippy --workspace --all-targets -- -D warnings
+   Compiling layerfs-engine v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-engine)
+   Compiling layerfs-vfs v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-vfs)
+   Compiling layerfs-os v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-os)
+   Compiling layerfs-fuse v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-fuse)
+   Compiling layerfs-sdk v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-sdk)
+   Compiling layerfs-eval v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/tools/layerfs-eval)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.99s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_core-d5ec4e3437b86dcf)
+
+running 56 tests
+test canonical_v2::tests::literal_vectors_and_error_precedence_are_exact ... ok
+test canonical_v2::tests::native_v2_codecs_are_strict_and_never_translate_v1 ... ok
+test cas::tests::authenticated_range_returns_nothing_for_a_well_formed_identity_substitution ... ok
+test cas::tests::chunk_identity_authenticates_complete_canonical_bytes ... ok
+test cas::tests::chunk_storage_is_bounded_by_the_cdc_maximum ... ok
+test cas::tests::rejects_missing_malformed_and_unequal_replacement ... ok
+test cas::tests::scan_identity_deduplicates_and_preserves_callback_bytes ... ok
+test cdc::tests::callback_failure_is_propagated_exactly ... ok
+test cdc::tests::fragmentation_does_not_change_boundaries ... ok
+test cdc::tests::frozen_boundaries_are_deterministic ... ok
+test cdc::tests::scanner_buffer_capacity_is_fixed ... ok
+test cdc::tests::short_and_maximum_edges_are_bounded ... ok
+test content::tests::bounded_edits_reconstruct_and_reuse_authenticated_chunks ... ok
+test content::tests::bounded_rejoin_failure_is_typed ... ok
+test content::tests::empty_and_eof_ranges_are_explicit ... ok
+test content::tests::full_replace_is_a_separate_streaming_path ... ok
+test content::tests::reads_only_chunks_overlapping_a_cross_chunk_range ... ok
+test content::tests::reconstructs_exact_bytes_from_ordered_chunks ... ok
+test content::tests::rejects_invalid_declared_lengths ... ok
+test content::tests::rejects_missing_chunks ... ok
+test cow::mutate::tests::add_remove_replace_rename_and_metadata_have_exact_deltas ... ok
+test cow::mutate::tests::delta_application_is_authenticated_and_replay_is_safe ... ok
+test cow::mutate::tests::directory_entry_limits_are_typed ... ok
+test cow::mutate::tests::failed_mutations_leave_the_parent_unchanged ... ok
+test cow::mutate::tests::mutation_rebuilds_only_the_changed_ancestor_spine ... ok
+test cow::mutate::tests::one_byte_content_edits_keep_phase_two_reuse_and_range_locality ... ok
+test cow::persistence::tests::streaming_partition_rejects_slack_and_cross_page_duplicate ... ok
+test delta::tests::empty_delta_is_deterministic_and_idempotent ... ok
+test delta::tests::wrong_parent_and_wrong_target_fail_without_mutating_the_parent ... ok
+test format::path::tests::accepts_root_and_canonical_paths ... ok
+test format::path::tests::enforces_path_bounds ... ok
+test format::path::tests::orders_parents_and_components_by_bytes ... ok
+test format::path::tests::rejects_invalid_paths ... ok
+test identity::digest::tests::content_digest_writer_is_fragmentation_independent ... ok
+test identity::digest::tests::object_domain_is_not_unframed_hashing ... ok
+test identity::digest::tests::object_hash_is_fragmentation_independent ... ok
+test identity::ids::tests::ids_are_fixed_and_text_round_trips ... ok
+test legacy_selected_goldens::print_selected_golden_manifest ... ignored, prints the independently generated normative TSV
+test legacy_selected_goldens::selected_profile_rejects_representative_malformed_records ... ok
+test legacy_selected_goldens::selected_profile_success_vectors_match_independent_bytes_and_ids ... ok
+test namespace::tests::directory_pages_resume_without_rescanning_or_skipping ... ok
+test namespace::tests::variable_width_directory_borrows_until_both_branches_are_filled ... ok
+test object::codec::tests::borrowed_bytes_encoding_matches_owned_canonical_identity ... ok
+test object::codec::tests::canonical_vectors_are_fixed ... ok
+test object::codec::tests::directory_names_use_the_canonical_name_bound ... ok
+test object::codec::tests::identity_authenticates_supplied_bytes_before_decoding ... ok
+test object::codec::tests::object_id_matches_hash_of_canonical_encoding ... ok
+test object::codec::tests::rejects_declared_fields_larger_than_remaining_payload ... ok
+test object::codec::tests::rejects_malformed_and_noncanonical_bytes ... ok
+test object::codec::tests::rejects_manually_unsorted_directory_wire_bytes ... ok
+test object::codec::tests::rejects_truncated_payloads_and_invalid_fields ... ok
+test object::codec::tests::round_trips_and_streams_each_object_kind ... ok
+test object::codec::tests::shallow_authentication_defers_payload_rules_to_the_exact_role_decoder ... ok
+test object::codec::tests::streaming_decode_handles_fragmented_and_short_reads ... ok
+test validation::tests::exact_receipt_round_trip_and_boundaries ... ok
+test validation::tests::receipt_rejects_each_authority_binding ... ok
+
+test result: ok. 55 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.15s
+
+     Running tests/canonical_v2_fixture_oracle.rs (target/debug/deps/canonical_v2_fixture_oracle-a3dfc942d4721d75)
+
+running 1 test
+test independent_actual_fixture_oracle_freezes_complete_v2_corpus ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.04s
+
+     Running tests/canonical_v2_shadow.rs (target/debug/deps/canonical_v2_shadow-917e2cf97752e3e2)
+
+running 3 tests
+test canonical_v2_shadow_closes_format_authority_edit_and_range_questions ... ok
+test canonical_v2_shadow_covers_radix_and_range_boundaries ... ok
+test canonical_v2_shadow_freezes_vectors_and_retained_size_model ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/extent_codec.rs (target/debug/deps/extent_codec-bab0c647da2b4528)
+
+running 3 tests
+test literal_empty_leaf_and_file_state_are_exact ... ok
+test profile_digest_is_literal_and_malformed_framing_is_rejected ... ok
+test selected_nonempty_boundary_ids_are_literal ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/extent_model.rs (target/debug/deps/extent_model-d9d749ae620e28f8)
+
+running 19 tests
+test authenticated_child_summary_mismatch_and_underfull_nonroot_are_rejected ... ok
+test deep_splice_rejoins_boundary_fragments_before_they_become_nonroots ... ok
+test extent_visitor_streams_the_mapping_without_fetching_payload_bytes ... ok
+test extra_payload_batch_callback_is_rejected_without_panicking ... ok
+test fetched_identity_is_unconditional ... ok
+test fetched_payload_above_frozen_ceiling_is_rejected ... ok
+test frozen_three_mib_mapping_is_below_one_percent ... ok
+test full_empty_read_authenticates_and_binds_its_mapping_root ... ok
+test large_replacement_persists_no_flushed_unreachable_prefix_nodes ... ok
+test missing_payload_batch_callback_is_rejected ... ok
+test paired_diff_handles_unequal_height_and_partition_without_payload_reads ... ok
+test paired_diff_skips_equal_roots_and_length_mismatch_mappings ... ok
+test payload_batches_continue_across_mapping_leaf_boundaries ... ok
+test product_range_reader_uses_bounded_authenticated_payload_batches ... ok
+test replace_persists_no_new_unreachable_objects ... ok
+test splices_match_vec_and_preserve_retained_root_without_suffix_payload_reads ... ok
+test streamed_build_and_ranges_match_vec_oracle ... ok
+test two_thousand_randomized_splices_match_every_revision_and_retained_history ... ok
+test validation_binds_empty_state_and_visits_unread_children ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 53.23s
+
+     Running tests/namespace_codec.rs (target/debug/deps/namespace_codec-f4d6919c4bb7b153)
+
+running 7 tests
+test directory_inode_and_metadata_nodes_are_strict_and_ordered ... ok
+test exact_namespace_values_round_trip_and_reject_trailing_bytes ... ok
+test inode_decoder_rejects_size_count_and_level_before_entry_allocation ... ok
+test metadata_child_ranges_must_not_overlap ... ok
+test metadata_empty_root_is_canonical_and_one_child_root_is_not ... ok
+test persistent_metadata_tree_round_trips_multiple_levels ... ok
+test portable_and_apple_metadata_are_exact_and_order_preserving ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/namespace_model.rs (target/debug/deps/namespace_model-3237186aa4f34b32)
+
+running 18 tests
+test deterministic_mixed_directory_edits_preserve_periodic_roots ... ok
+test directory_and_inode_child_ranges_must_not_overlap ... ok
+test directory_diff_merges_unequal_canonical_heights_without_collecting_entries ... ok
+test directory_diff_streams_valid_unmatched_prefixes_tails_and_renames ... ok
+test directory_state_and_branch_summaries_are_authoritative ... ok
+test inode_branch_summary_and_occupancy_are_authoritative ... ok
+test inode_diff_merges_unequal_canonical_heights_without_collecting_entries ... ok
+test inode_remove_merges_collapses_and_preserves_retained_root ... ok
+test inode_table_scales_and_record_update_rewrites_only_its_spine ... ok
+test level_two_ranges_use_true_leftmost_leaf_minimum ... ok
+test paired_persistent_diffs_prune_unchanged_directory_and_inode_subtrees ... ok
+test remove_and_rename_persist_only_reachable_directory_and_inode_nodes ... ok
+test remove_merge_root_collapse_and_rename_match_oracle ... ok
+test repeated_child_levels_are_rejected_before_loading_grandchildren ... ok
+test ten_thousand_names_path_copy_and_retained_roots_match_ordered_oracle ... ok
+test underfull_middle_directory_borrows_right_before_merging_left ... ok
+test underfull_middle_inode_leaf_borrows_right_before_merging_left ... ok
+test variable_width_directory_borrows_until_both_leaves_are_filled ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.13s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_engine-f37adcef2f2507b3)
+
+running 63 tests
+test generation::tests::candidate_inspection_never_mutates_empty_or_foreign_sqlite ... ok
+test generation::tests::cleanup_waits_for_selected_verified_authority ... ok
+test generation::tests::compaction_authenticates_unreachable_objects_before_discarding_them ... ok
+test generation::tests::compaction_preflights_space_before_creating_candidate ... ok
+test generation::tests::compaction_rejects_nonempty_legacy_state_without_erasing_it ... ok
+test generation::tests::compaction_returns_the_callers_store_lifetime_mode ... ok
+test generation::tests::definitely_uninstalled_genesis_is_cleaned_in_the_same_call ... ok
+test generation::tests::exact_next_candidate_cleanup_preserves_valid_unrelated_temporary_selector ... ok
+test generation::tests::exact_next_generation_without_selector_is_reported_and_preserved ... 
+running 1 test
+ok
+test generation::tests::exclusive_maintenance_recovers_child_exit_hot_scratch ... 
+running 1 test
+ok
+test generation::tests::failed_selector_install_recovers_prior_and_removes_only_owned_candidate ... ok
+test generation::tests::genesis_current_compaction_and_reopen_preserve_store_identity ... ok
+test generation::tests::genesis_handoff_reopens_the_generation_selected_after_maintenance ... ok
+test generation::tests::maintenance_lock_blocks_cleanup_and_lost_ack_reconciles_requested_selector ... ok
+test generation::tests::mismatched_compaction_source_never_cleans_target_residue ... ok
+test generation::tests::missing_selector_fails_closed_and_exact_candidate_residue_recovers ... ok
+test generation::tests::port_is_object_safe_and_preserves_install_then_sync_order ... ok
+test generation::tests::post_visible_cleanup_sync_failure_is_ambiguous ... ok
+test generation::tests::preseeded_wal_maintenance_is_admitted_reconfigured_and_pinned ... ok
+test generation::tests::scratch_crash_child ... ok
+test generation::tests::selector_cleanup_refuses_path_substitution_after_inspection ... ok
+test generation::tests::selector_directory_sync_failure_is_ambiguous_and_preserves_prior_generation ... ok
+test generation::tests::selector_is_exact_154_bytes_and_strictly_checksummed ... ok
+test generation::tests::selector_reader_rejects_oversize_without_read_to_end ... ok
+test generation::tests::trusted_recovery_reopens_in_the_requested_store_lifetime_mode ... ok
+test generation::tests::unselected_generation_crash_child ... ok
+test publication::tests::lost_commit_acknowledgement_counts_reconciliation_and_reopen_sql ... ok
+test publication::tests::publication_crash_child ... ok
+test publication::tests::publication_t0_through_t6_survive_real_process_exit_and_reopen ... 
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+
+running 1 test
+test publication::tests::publication_crash_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 62 filtered out; finished in 0.00s
+
+
+running 1 test
+test publication::tests::publication_crash_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 62 filtered out; finished in 0.00s
+
+
+running 1 test
+test publication::tests::publication_crash_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 62 filtered out; finished in 0.00s
+
+
+running 1 test
+test publication::tests::publication_crash_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 62 filtered out; finished in 0.01s
+
+
+running 1 test
+test publication::tests::publication_crash_child ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 62 filtered out; finished in 0.00s
+
+ok
+test publication::tests::restore_primary_rejects_same_store_id_stale_path_replacement ... ok
+test scratch::tests::constructor_failure_removes_exact_owned_files ... ok
+test scratch::tests::drop_closes_connection_and_removes_exact_owned_files ... ok
+test scratch::tests::exclusive_recovery_removes_only_authenticated_unlocked_crash_scratch ... ok
+test scratch::tests::failed_operation_finish_observes_rollback_only_after_execution ... ok
+test scratch::tests::namespace_ordered_batch_is_bounded_ordered_and_counts_present_rows ... ok
+test scratch::tests::namespace_write_failure_still_removes_exact_owned_files ... ok
+test scratch::tests::namespaces_share_one_connection_and_isolate_keys_and_queues ... ok
+test scratch::tests::observation_exposes_hidden_store_inspection_and_sql_families ... ok
+test scratch::tests::recovery_preserves_same_marker_impostor_schema ... ok
+test scratch::tests::store_bound_creation_does_not_reopen_exclusively_locked_authority ... ok
+test tests::admission_never_mutates_foreign_or_incomplete_databases ... ok
+test tests::admitted_store_id_is_cached_and_scratch_reuses_it_without_store_sql ... ok
+test tests::cache_spill_requires_enable_before_threshold ... ok
+test tests::capture_is_atomic_and_durable ... ok
+test tests::empty_compaction_counts_every_statement_in_its_disjoint_family ... ok
+test tests::explicit_primary_close_reports_zero_terminal_connections ... ok
+test tests::failed_initial_scrub_preserves_its_complete_admission_equation ... ok
+test tests::failed_live_scrub_rollback_drops_the_ambiguous_primary ... ok
+test tests::failed_ordered_batch_preserves_each_completed_counter_phase ... ok
+test tests::failed_retained_union_assigns_completed_sql_to_compaction ... ok
+test tests::failed_single_callback_preserves_completed_fetch_and_authentication_only ... ok
+test tests::foreign_hot_journal_child ... ok
+test tests::immutable_reuse_and_tamper_are_distinct ... ok
+test tests::partial_compaction_metadata_copy_counts_only_attempted_statements ... ok
+test tests::payload_batch_union_preserves_order_without_sorting ... ok
+test tests::post_retained_copy_failure_finishes_and_merges_source_scratch ... ok
+test tests::profile_range_reopen_and_counters ... ok
+test tests::read_only_admission_preserves_foreign_hot_journal_bytes ... 
+running 1 test
+ok
+test tests::reconciliation_read_never_creates_missing_or_accepts_replaced_store ... ok
+test tests::sqlite_error_mapping_preserves_required_classes ... ok
+test tests::storage_observation_counts_its_three_queries_as_primary_reads ... ok
+test tests::two_verified_snapshot_readers_coexist ... ok
+test tests::verified_read_attribution_closes_sql_and_timer_facts ... ok
+
+test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.51s
+
+     Running tests/faults_and_reopen.rs (target/debug/deps/faults_and_reopen-9a25f35f173eeea8)
+
+running 7 tests
+test commit_busy_rolls_back_primary_before_reconciliation_and_engine_reuse ... ok
+test explicit_trusted_open_marks_history_and_verified_reopen_scrubs ... ok
+test initial_verified_scrub_serializes_against_trusted_writer ... ok
+test live_verified_handle_rechecks_history_written_by_trusted_handle ... ok
+test successful_live_scrub_clears_history_once_durably ... ok
+test trusted_ref_with_missing_inode_table_never_becomes_verified_authority ... ok
+test verified_reopen_rejects_invalid_ref_rows_before_closure ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/store_and_publication.rs (target/debug/deps/store_and_publication-902684f57dd8f3f2)
+
+running 17 tests
+test canonical_rope_objects_share_the_publication_transaction ... ok
+test one_thousand_tiny_revisions_remain_directly_readable_after_reopen ... ok
+test publication_is_one_guarded_commit_and_fork_rollback_copy_no_objects ... ok
+test publication_reuse_authenticates_the_exact_derived_candidate_without_rehashing ... ok
+test retained_union_rejects_bad_link_count_and_unreachable_inode_without_residue ... ok
+test retained_union_rejects_corrupt_canonical_roles_and_ref_rows_without_residue ... ok
+test retained_union_reuses_two_scratch_tables_at_five_fifteen_and_thirty_five_roots ... ok
+test trusted_borrowed_load_and_ordered_batch_skip_identity_authentication ... ok
+test trusted_reads_are_weaker_but_incumbent_writes_and_verified_reads_authenticate ... ok
+test trusted_valid_substitution_is_rejected_by_verified_retained_union_scrub ... ok
+test verified_fork_rejects_unretained_orphan_root ... ok
+test verified_open_accounts_schema_profile_authority_and_admission_transaction ... ok
+test verified_publication_counts_every_integrity_fetch_authentication_and_role_decode ... ok
+test verified_publication_rejects_all_hashes_correct_unreachable_inode ... ok
+test verified_publication_rejects_missing_reachable_inode_table_before_visibility ... ok
+test verified_publication_rejects_present_zero_bsd_flags ... ok
+test verified_publication_survives_cache_spill_without_reopening_store ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.15s
+
+     Running unittests src/main.rs (target/debug/deps/layerfs_eval-b86318e381c22035)
+
+running 53 tests
+test stage1::tests::artifact_json_is_valid ... ok
+test stage1::tests::content_locality_excludes_observed_metadata_ropes ... ok
+test stage1::tests::earlier_failure_appends_an_unavailable_a16_row ... ok
+test stage1::tests::failing_a16_is_appended_before_the_gate_error ... ok
+test stage1::tests::failure_summary_retains_partial_statistics_targets_and_resources ... ok
+test stage1::tests::frozen_reset_and_edit_populations_are_exact ... ok
+test stage1::tests::frozen_statistics_use_one_based_order_rules ... ok
+test stage1::tests::full_import_reports_the_phase_that_owns_peak_rss ... ignored, requires the prepared 100 MiB APFS fixture
+test stage1::tests::large_authenticated_read_and_materialization_attribution ... ignored, requires the prepared 100 MiB APFS fixture
+test stage1::tests::random_ranges_are_globally_non_overlapping ... ok
+test stage1::tests::random_ranges_reuse_the_exact_file_read_plan ... ignored, requires the prepared 100 MiB APFS fixture
+test stage1::tests::readiness_artifacts_are_append_only ... ok
+test stage1::tests::sdk_q_and_native_call_observations_are_not_zeroed_by_serialization ... ok
+test stage1_edge::tests::all_47_common_rows_round_trip_in_frozen_order ... ok
+test stage1_edge::tests::all_51_exact_edits_match_the_independent_vec_digest_after_every_operation ... ignored, full 24 MiB x 51 exact differential proof; run once at source closure
+test stage1_edge::tests::between_rows_budget_failure_does_not_fabricate_the_next_row ... ok
+test stage1_edge::tests::failed_rows_and_failure_reports_are_schema_valid_and_append_only ... ok
+test stage1_edge::tests::generated_pass_summary_is_valid_row_derived_and_rejects_resource_mutation ... ok
+test stage1_edge::tests::hard_gate_failures_cannot_be_promoted ... ok
+test stage1_edge::tests::live_and_fresh_single_file_inventory_and_metadata_are_independently_gated ... ok
+test stage1_edge::tests::nearest_rank_statistics_retain_raw_and_sorted_arrays ... ok
+test stage1_edge::tests::operation_only_phase_preserves_peak_and_actual_connections ... ok
+test stage1_edge::tests::piece_cursor_generates_each_original_mebibyte_once ... ok
+test stage1_edge::tests::piece_table_matches_a_reduced_vec_after_every_splice ... ok
+test stage1_edge::tests::report_heading_and_campaign_timer_contracts_are_exact ... ok
+test stage1_edge::tests::residue_and_storage_regressions_fail_before_cleanup_or_null_coercion ... ok
+test stage1_edge::tests::row_contract_is_valid_json_and_retains_null_unavailable_observations ... ok
+test stage1_edge::tests::row_join_adds_disjoint_engine_and_vfs_scratch_but_maxes_peak ... ok
+test stage1_edge::tests::schedule_and_piece_table_close_the_frozen_population ... ok
+test stage1_edge::tests::schedule_json_retains_every_edit_and_row_in_execution_order ... ok
+test stage1_edge::tests::small_real_apple_routes_cover_both_directions_burst_history_and_metadata ... ok
+test stage1_edge::tests::source_custody_includes_every_workspace_manifest ... ok
+test stage1_edge::tests::storage_observation_is_a_disjoint_phase_counter_owner ... ok
+test stage1_fixture::fixture_cdc::tests::oracle_uses_frozen_core_profile_and_literal_raw_sequence ... ok
+test stage1_fixture::tests::apfs_parser_rejects_deceptive_personality_text ... ok
+test stage1_fixture::tests::apfs_preflight_resolves_the_containing_volume ... ok
+test stage1_fixture::tests::clone_id_proves_apfs_copy_on_write_pair ... ok
+test stage1_fixture::tests::failed_attempt_admission_cleans_its_owned_clone ... ok
+test stage1_fixture::tests::inventory_digest_normalizes_the_sealed_permission_contract ... ok
+test stage1_fixture::tests::json_helpers_read_nested_objects ... ok
+test stage1_fixture::tests::preparation_failure_receipts_are_append_only_and_context_bound ... ok
+test stage1_fixture::tests::preparation_reopen_source_uses_private_fixture_root ... ok
+test stage1_fixture::tests::retained_generator_is_chunk_stable ... ok
+test stage1_fixture::tests::retained_generator_matches_frozen_digest ... ok
+test stage1_materialize::tests::acceptance_schedule_statistics_and_gates_are_frozen ... ok
+test stage1_materialize::tests::attribution_model_uses_t0_and_the_frozen_24_to_96_slope ... ok
+test stage1_materialize::tests::attribution_row_wall_requires_product_oracle_cleanup_and_residual ... ok
+test stage1_materialize::tests::attribution_schedule_is_the_frozen_interleaved_population ... ok
+test stage1_materialize::tests::attribution_uses_the_frozen_n3_estimator_and_taxonomy ... ok
+test stage1_materialize::tests::delta_rejects_backwards_counters ... ok
+test stage1_materialize::tests::projection_fact_mutation_rejects_hidden_or_missing_syncs ... ok
+test stage1_materialize::tests::terminal_scratch_cleanup_closes_the_complete_row_sql_equation ... ok
+test stage1_materialize::tests::trusted_schedule_and_counter_equation_are_explicit ... ok
+
+test result: ok. 49 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 9.23s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_fuse-69d0bf121471d9c3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/layerfs_fuse-566536eb52f2bfa9)
+
+running 1 test
+test tests::store_spool_and_receipt_are_distinct_and_outside_mount ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_os-c3fda9a4e2d8003b)
+
+running 29 tests
+test apple::ffi::tests::apfs_clone_temp_supports_independent_same_offset_patch ... ok
+test apple::ffi::tests::compact_xattr_name_index_sorts_without_per_name_allocations ... ok
+test apple::ffi::tests::entry_token_changes_for_an_in_place_live_writer ... ok
+test apple::ffi::tests::private_cleanup_neutralizes_mode_zero_and_deny_delete_acl ... ok
+test apple::ffi::tests::verified_tombstone_cleanup_clears_immutable_and_append_flags ... ok
+test apple::metadata::tests::many_xattrs_have_one_aggregate_memory_ceiling ... ok
+test apple::metadata::tests::metadata_read_stays_bound_to_the_open_descriptor_after_substitution ... ok
+test apple::metadata::tests::only_exact_provenance_is_environmental ... ok
+test apple::metadata::tests::ordered_extended_acl_round_trips_exactly ... ok
+test apple::metadata::tests::provenance_is_filtered_while_supported_xattrs_round_trip ... ok
+test apple::metadata::tests::provenance_value_is_not_canonical_input_and_exclusions_stay_fatal ... ok
+test apple::metadata::tests::refusal_happens_before_any_metadata_mutation ... ok
+test apple::metadata::tests::setuid_and_setgid_are_rejected_before_mode_projection ... ok
+test apple::workspace::tests::apfs_preflight_rejects_case_and_normalization_collisions ... ok
+test apple::workspace::tests::discard_owned_root_uses_retained_identity_and_preserves_external_roots ... ok
+test apple::workspace::tests::entry_displacement_is_detected_by_the_release_identity_checks ... ok
+test apple::workspace::tests::failed_open_workspace_preserves_external_root_at_every_applicable_setup_cut ... ok
+test apple::workspace::tests::failed_open_workspace_removes_staging_and_managed_root_at_every_setup_cut ... ok
+test apple::workspace::tests::fresh_materialization_batches_barriers_and_preserves_hard_link_syncs ... ok
+test apple::workspace::tests::managed_owned_root_collision_preserves_preexisting_tree ... ok
+test apple::workspace::tests::native_n0_and_n4_n5_cleanup_and_reconciliation_matrix ... ok
+test apple::workspace::tests::owned_recovery_crash_child ... ok
+test apple::workspace::tests::projection_facts_close_setup_content_metadata_sync_replace_and_cleanup ... ok
+test apple::workspace::tests::reopen_removes_only_unlocked_store_bound_owned_workspace ... 
+running 1 test
+ok
+test apple::workspace::tests::same_size_clone_patch_replaces_an_existing_single_link_destination ... ok
+test apple::workspace::tests::symlink_metadata_survives_reopen_and_lost_parent_sync_ack_is_ambiguous ... ok
+test apple::workspace::tests::top_level_workspace_admission_never_follows_a_symlink ... ok
+test apple::workspace::tests::workspace_admission_never_follows_parent_symlinks ... ok
+test apple::workspace::tests::workspace_metadata_refusal_precedes_permission_mutation ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+     Running tests/apple_stage1.rs (target/debug/deps/apple_stage1-f51b4c96ae923c63)
+
+running 5 tests
+test identity_checked_removal_never_unlinks_a_replacement ... ok
+test nested_directory_delta_applies_when_root_directory_mapping_is_equal ... ok
+test refresh_covers_lifecycle_metadata_and_hard_links ... ok
+test selective_refresh_resolves_more_than_sixteen_topology_edges ... ok
+test symlink_metadata_only_refresh_syncs_parent_and_survives_fresh_open ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_sdk-851ea5ffee31a64d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/external_identity.rs (target/debug/deps/external_identity-ea84091b15c8b43b)
+
+running 1 test
+test external_capture_reuses_unchanged_file_roots_and_cdc_scans_only_changes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running tests/managed_mixed_edits.rs (target/debug/deps/managed_mixed_edits-b54c47847a37b9e5)
+
+running 4 tests
+test checkpoint_syncs_the_final_token_after_mixed_same_path_edits ... ok
+test equal_root_refresh_revalidates_the_native_root_binding ... ok
+test live_noop_revalidates_the_native_root_binding_in_constant_work ... ok
+test rename_collision_is_refused_before_visibility_and_preserves_authority ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+     Running tests/materialization_attribution.rs (target/debug/deps/materialization_attribution-47a55c693dbdbfe5)
+
+running 2 tests
+test attribution_arms_reuse_full_source_and_native_routes ... ok
+test trusted_materialization_skips_read_hashes_and_verified_reopen_scrubs ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running tests/stage1_routes.rs (target/debug/deps/stage1_routes-239f4dfb456f4d7d)
+
+running 7 tests
+test accepted_eof_append_and_truncate_skip_the_clone_without_skipping_durability ... ok
+test accepted_random_splices_refresh_without_full_fallback ... ok
+test accepted_splice_prioritizes_the_edited_hard_link_alias ... ok
+test managed_refresh_applies_only_the_changed_canonical_range ... ok
+test managed_workspace_rotates_one_hundred_checkpoints_without_rematerializing ... ok
+test public_direct_routes_stream_and_preserve_history ... ok
+test repeated_ranges_reuse_only_the_exact_resolved_root_and_path ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.35s
+
+     Running tests/workflow.rs (target/debug/deps/workflow-1bcfa20512f3f2c7)
+
+running 12 tests
+test hard_link_flags_are_finalized_after_the_last_alias_and_owned_discard_clears_them ... ok
+test historical_external_projection_cannot_publish_over_current_main ... ok
+test into_external_preserves_inode_after_clone_and_in_place_fallback ... ok
+test into_external_rename_preserves_inode_by_native_hard_link_key ... ok
+test live_hard_link_split_never_reuses_one_inode_for_two_native_keys ... ok
+test new_earlier_hard_link_alias_preserves_only_live_topology_authority ... ok
+test ordinary_apple_workspace_captures_bash_reopens_and_reads_history ... ok
+test provenance_value_does_not_change_the_canonical_root ... ok
+test restrictive_file_allows_exact_noop_refuses_mutation_and_captures_read_only ... ok
+test rollback_rejects_a_stale_caller_decision ... ok
+test stale_managed_replay_marks_native_mutation_dirty_and_retry_fails_closed ... ok
+test warm_materialization_is_exact_no_rewrite_and_mismatch_rolls_back ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.80s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_vfs-73ad05557387cee9)
+
+running 54 tests
+test driver::tests::checked_live_refresh_install_keeps_immediate_parent_durability ... ok
+test driver::tests::erased_driver_and_handles_are_object_safe ... ok
+test driver::tests::fresh_hard_link_cut_matrix_preserves_two_sync_order_and_cleans_residue ... ok
+test driver::tests::fresh_materializer_accepts_short_writes_and_completes_exact_bytes ... ok
+test driver::tests::fresh_materializer_faults_never_return_complete_or_leave_owned_residue ... ok
+test driver::tests::fresh_nested_tree_barriers_are_once_per_directory_and_bottom_up ... ok
+test driver::tests::managed_root_handle_failure_discards_the_exact_opened_workspace ... ok
+test driver::tests::managed_root_identity_failure_discards_the_exact_opened_workspace ... ok
+test driver::tests::native_xattrs_are_compact_ordered_and_round_trip_the_full_envelope ... ok
+test driver::tests::portable_deferred_install_falls_back_to_safe_immediate_and_preserves_failure ... ok
+test driver::tests::projection_facts_delta_is_checked_and_preserves_unavailable_timers ... ok
+test managed_edit::tests::managed_inode_record_uses_the_borrowed_authenticated_route ... ok
+test managed_edit::tests::managed_metadata_spool_streams_the_full_xattr_envelope_and_rejects_one_over ... ok
+test mounted::tests::accepted_dirty_closed_unlink_drains_ranges_and_spool_after_checkpoint ... ok
+test mounted::tests::closing_budget_cancels_waiters_and_drains_existing_reservations ... ok
+test mounted::tests::cold_lookup_and_returned_attrs_stay_inside_the_sql_gate ... ok
+test mounted::tests::dirty_closed_rename_target_drains_ranges_and_spool_after_checkpoint ... ok
+test mounted::tests::dirty_spool_compacts_inside_the_steady_physical_bound ... ok
+test mounted::tests::existing_non_main_ref_remounts_and_diverges_from_main ... ok
+test mounted::tests::forced_drop_discards_unacknowledged_dirty_spool_on_exact_reopen ... ok
+test mounted::tests::later_checkpoints_preserve_untouched_hard_link_content ... ok
+test mounted::tests::live_byte_decreases_normalize_spool_for_removal_and_open_orphan_checkpoint ... ok
+test mounted::tests::lost_commit_acknowledgement_reconciles_candidate_and_clears_dirty_state ... ok
+test mounted::tests::maximum_admitted_dirty_population_is_checkpointable_inside_q ... ok
+test mounted::tests::mount_wide_directory_changes_and_inode_mappings_are_bounded_and_observed ... ok
+test mounted::tests::mounted_splice_conflict_and_post_visibility_uncertainty_fail_closed ... ok
+test mounted::tests::mounted_splice_reuses_direct_range_replace_and_requires_remount ... ok
+test mounted::tests::one_checkpoint_reopens_nested_bytes_and_hard_link_identity ... ok
+test mounted::tests::open_orphan_retains_dirty_bytes_through_delete_checkpoint_until_release ... ok
+test mounted::tests::paused_budget_allows_one_dirty_graceful_shutdown_checkpoint ... ok
+test mounted::tests::pending_directory_cursor_is_complete_and_resumable ... ok
+test mounted::tests::pending_write_overlap_unlink_open_cancels_without_publication ... ok
+test mounted::tests::post_commit_spool_cleanup_failure_is_incomplete_not_retryable ... ok
+test mounted::tests::post_unmount_cache_release_is_root_only_and_logically_empty ... ok
+test mounted::tests::pre_commit_spool_failure_rolls_back_and_preserves_retryable_dirty_state ... ok
+test mounted::tests::publication_conflict_leaves_mount_non_writable ... ok
+test mounted::tests::readdir_pending_entry_reclaims_nodes_without_changing_inode_identity ... ok
+test mounted::tests::repeated_fsync_of_accepted_unlinked_open_orphan_is_exact ... ok
+test mounted::tests::replacement_rename_reclaims_directory_changes_after_checkpoint ... ok
+test mounted::tests::resource_limit_failures_leave_namespace_content_and_spool_atomic ... ok
+test mounted::tests::retained_roots_fork_and_rollback_reopen_exact_versions ... ok
+test mounted::tests::rollback_ambiguity_leaves_mount_incomplete_and_non_writable ... ok
+test mounted::tests::rollback_conflict_leaves_stale_mount_non_writable ... ok
+test mounted::tests::shrink_then_extend_or_write_never_reveals_truncated_base_bytes ... ok
+test mounted::tests::shutdown_closes_mutation_admission_before_and_after_checkpoint ... ok
+test operation_counter_tests::content_payload_facts_exclude_metadata_ropes_and_detect_bad_accounting ... ok
+test operation_counter_tests::operation_counters_preserve_structural_and_native_facts ... ok
+test operation_counter_tests::sequential_receipts_take_scratch_peak_while_distinct_tables_add ... ok
+test refresh::tests::ambiguous_driver_failures_mark_possible_visibility ... ok
+test refresh::tests::ordered_paths_support_the_valid_256_component_depth ... ok
+test workspace::lease_tests::initial_spool_seek_failure_is_fail_closed ... ok
+test workspace::lease_tests::post_append_spool_observation_failure_is_fail_closed ... ok
+test workspace::lease_tests::post_visibility_refresh_failure_requires_discard_or_rebuild ... ok
+test workspace::lease_tests::writer_and_capture_admission_are_one_atomic_state_transition ... ok
+
+test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.53s
+
+    Checking layerfs-engine v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-engine)
+    Checking layerfs-vfs v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-vfs)
+    Checking layerfs-os v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-os)
+    Checking layerfs-fuse v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-fuse)
+    Checking layerfs-sdk v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-sdk)
+    Checking layerfs-eval v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/tools/layerfs-eval)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.25s

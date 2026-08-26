@@ -1,0 +1,122 @@
+{
+  "checks": {
+    "all_cpu_pairs_pass": true,
+    "all_outputs_present": true,
+    "complete_12": true,
+    "no_fail_markers": true,
+    "no_network_scenarios": true
+  },
+  "pairs": [
+    {
+      "daemon_cpu_ns": 100000000,
+      "index": 1,
+      "limit_ns": 404831775,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "create 1000 files",
+      "wall_ns": 380792167
+    },
+    {
+      "daemon_cpu_ns": 120000000,
+      "index": 2,
+      "limit_ns": 1419560613,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "stat 1000 files",
+      "wall_ns": 1347200584
+    },
+    {
+      "daemon_cpu_ns": 130000000,
+      "index": 3,
+      "limit_ns": 435531500,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "rm 1000 files",
+      "wall_ns": 410030000
+    },
+    {
+      "daemon_cpu_ns": 120000000,
+      "index": 4,
+      "limit_ns": 1280102631,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "mkdir tree (10x10x10)",
+      "wall_ns": 1214383459
+    },
+    {
+      "daemon_cpu_ns": 140000000,
+      "index": 5,
+      "limit_ns": 1310623505,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "find tree",
+      "wall_ns": 1243450958
+    },
+    {
+      "daemon_cpu_ns": 90000000,
+      "index": 6,
+      "limit_ns": 253324650,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "write 64 MiB",
+      "wall_ns": 236499667
+    },
+    {
+      "daemon_cpu_ns": 130000000,
+      "index": 7,
+      "limit_ns": 432115894,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "copy 64 MiB",
+      "wall_ns": 406777042
+    },
+    {
+      "daemon_cpu_ns": 60000000,
+      "index": 8,
+      "limit_ns": 243147875,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "read 64 MiB",
+      "wall_ns": 226807500
+    },
+    {
+      "daemon_cpu_ns": 20000000,
+      "index": 9,
+      "limit_ns": 127353830,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "pure read 64 MiB",
+      "wall_ns": 116527458
+    },
+    {
+      "daemon_cpu_ns": 70000000,
+      "index": 10,
+      "limit_ns": 216999813,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "pure copy 64 MiB",
+      "wall_ns": 201904584
+    },
+    {
+      "daemon_cpu_ns": 50000000,
+      "index": 11,
+      "limit_ns": 163684575,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "overwrite 64 MiB",
+      "wall_ns": 151128167
+    },
+    {
+      "daemon_cpu_ns": 60000000,
+      "index": 12,
+      "limit_ns": 227786944,
+      "pass": true,
+      "returncode": 0,
+      "scenario": "git init + commit 100 files",
+      "wall_ns": 212178042
+    }
+  ],
+  "schema": "layerfs-stage2-scenario-cpu-v1",
+  "status": "PASS",
+  "ticks_per_second": 100
+}

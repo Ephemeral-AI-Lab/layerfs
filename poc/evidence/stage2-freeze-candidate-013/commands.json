@@ -1,0 +1,52 @@
+{
+  "benchmark_commands": {
+    "full_scenario_environment": {
+      "BASE": {
+        "tmp": "/tmp",
+        "var": "/var/tmp"
+      },
+      "MOUNT": "/workspace",
+      "RANDOMIZE_TARGETS": 1,
+      "REPS": {
+        "authoritative": 3,
+        "readiness": 1
+      },
+      "SCENARIOS": "create 1000 files,stat 1000 files,rm 1000 files,mkdir tree (10x10x10),find tree,write 64 MiB,copy 64 MiB,read 64 MiB,pure read 64 MiB,pure copy 64 MiB,overwrite 64 MiB,git init + commit 100 files",
+      "WARMUP": {
+        "authoritative": 1,
+        "readiness": 0
+      }
+    },
+    "full_shell_source": "recapture-benchmark-stderr.sh",
+    "runtime_launch_receipt": "launch-receipts.json"
+  },
+  "checks": {
+    "closure_commands_present": true,
+    "scripts_nonempty": true,
+    "stderr_recapture_has_exact_quota": true,
+    "stderr_recapture_has_exact_scenario_env": true
+  },
+  "commands": {
+    "host_full_closure": {
+      "artifact": "full-host-closure.log",
+      "command": "cargo fmt --all -- --check && git diff --check && cargo test --workspace --all-targets -- --test-threads=1 && cargo clippy --workspace --all-targets -- -D warnings"
+    },
+    "linux_full_closure": {
+      "artifact": "full-linux-closure.log",
+      "command": "docker run --rm --platform linux/arm64 -v /Users/yifanxu/Ephemeral-AI-Lab:/Users/yifanxu/Ephemeral-AI-Lab -v layerfs_stage2_final013_linux_target:/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target -v layerfs_stage2_final013_linux_cargo_registry:/usr/local/cargo/registry -w /Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty layerfs-closure-tools:rust1.85.1-ruby3.3-v2 sh -c 'rustup component add clippy && git rev-parse HEAD && /usr/bin/ruby --version && cargo test --locked --workspace --all-targets -- --test-threads=1 && cargo clippy --locked -p layerfs-fuse --all-targets -- -D warnings'"
+    },
+    "uncached_image_build": {
+      "artifact": "linux-image-build-uncached.log",
+      "command": "docker build --no-cache --platform linux/arm64 -t layerfs-fuse:frozen-bd1cd22 -f containers/layerfs-fuse/Dockerfile ."
+    }
+  },
+  "schema": "layerfs-stage2-command-custody-v1",
+  "script_sha256": {
+    "exact-collision-cpu-oracle.py": "8efaebddc252f4484559ebc65fc85950e21b15c2aad1938f334cdc83b31caaa6",
+    "forced-death-oracle.sh": "bc462fe9290881fb2466a9fb426f43cee6a678c1c2c82e7e3cf06e4b21e33c53",
+    "recapture-benchmark-stderr.sh": "3c1adeace9e5ee8cc8dae244e15e12b80fcb6ff0452c7b21188f2a0701837baa",
+    "splice-oracle.sh": "13256d45c08e098729fcc77ec98c4742a7648142538ea50c0d733498a7bbdedf",
+    "verify-evidence.py": "ccfa5d5cc04111d2e056610bb14685ff83e8c48b7fa1b6f7943fee2985b95594"
+  },
+  "status": "PASS"
+}

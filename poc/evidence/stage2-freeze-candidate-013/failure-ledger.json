@@ -1,0 +1,68 @@
+{
+  "attempts": [
+    {
+      "artifact": "../stage2-freeze-candidate-012",
+      "classification": "superseded",
+      "id": "candidate-012",
+      "reason": "product source predates dirty graceful shutdown, open-orphan, and bounded exact-reuse repairs"
+    },
+    {
+      "artifacts": [
+        "functional-final-attempt-001-oracle.json",
+        "functional-final-attempt-002-oracle.json",
+        "functional-final-attempt-003-oracle.json",
+        "functional-final-attempt-004-oracle.json",
+        "functional-final-attempt-005-oracle.json",
+        "functional-v4-attempt-001-oracle.json",
+        "functional-v4-attempt-002-oracle.json"
+      ],
+      "classification": "closed-nonblocking-diagnostic",
+      "id": "candidate-013-functional-strict-zero",
+      "reason": "poc/23 and poc/24 control checkpoint latency and population throttle <=5%; they do not require a checkpoint-local zero CFS event"
+    },
+    {
+      "artifacts": [
+        "full-linux-closure-6dff166-fail.log",
+        "full-linux-closure-attempt-001-fail.log",
+        "full-linux-closure-bd1-attempt-001-network-fail.log",
+        "full-linux-closure-bd1-attempt-002-ruby-path-fail.log",
+        "full-linux-closure-bd1-attempt-003-workspace-clippy-fail.log"
+      ],
+      "classification": "closed-evidence-environment",
+      "id": "linux-closure-context-repairs",
+      "reason": "absolute worktree/.git/evidence mounts and the real /usr/bin/ruby path close prior layerfs-eval environment failures",
+      "superseded_by": "full-linux-closure.log"
+    },
+    {
+      "artifact": "scenario-cpu-attempt-001-wrapper-fail.txt",
+      "classification": "closed-diagnostic-serializer",
+      "id": "scenario-cpu-wrapper-001",
+      "superseded_by": "scenario-cpu-pairs.json"
+    },
+    {
+      "artifacts": [
+        "scenario-cpu-06.json",
+        "scenario-cpu-07.json",
+        "scenario-cpu-08.json"
+      ],
+      "classification": "closed-evidence-filter",
+      "id": "scenario-cpu-substring-collisions",
+      "reason": "write/copy/read substring filters emitted sibling scenarios; final synthesis requires singleton raw scenario sets and two rows",
+      "superseded_by": "scenario-cpu-pairs-exact.json"
+    },
+    {
+      "classification": "closed-targeted-recapture",
+      "id": "benchmark-stderr-original-streams",
+      "reason": "original 2>&1 pipelines made separate stderr unrecoverable; only the five required source/image/environment-identical commands were rerun for stream custody",
+      "superseded_by": "stderr-custody.json"
+    },
+    {
+      "classification": "closed-inapplicable-diagnostic",
+      "id": "readiness-verifier-v2",
+      "reason": "the authoritative verifier requires REPS=3/WARMUP=1; readiness is validated under its REPS=1/WARMUP=0 forecast contract",
+      "superseded_by": "readiness-validation.json"
+    }
+  ],
+  "schema": "layerfs-stage2-failure-ledger-v2",
+  "status": "CLOSED"
+}

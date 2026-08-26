@@ -1,0 +1,62 @@
+[
+    {
+        "Id": "sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139",
+        "RepoTags": [
+            "layerfs-fuse:frozen-bd1cd22"
+        ],
+        "RepoDigests": [
+            "layerfs-fuse@sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139"
+        ],
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-08-26T02:43:21.560620674Z",
+        "Config": {
+            "Env": [
+                "PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "RUSTUP_HOME=/usr/local/rustup",
+                "CARGO_HOME=/usr/local/cargo",
+                "RUST_VERSION=1.85.1",
+                "LAYERFS_FS_BENCH_SHA256=0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
+            ],
+            "Entrypoint": [
+                "/usr/local/bin/layerfs-fuse"
+            ],
+            "Labels": {
+                "org.opencontainers.image.layerfs.fs-bench-sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+                "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+            }
+        },
+        "Architecture": "arm64",
+        "Os": "linux",
+        "Size": 598712158,
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:948048d45864d1f64cd70b0341fd6c927cd3fa13f1d56b0054064b3ba2b2b467",
+                "sha256:f8e34ba5db3916c38ce4918304394347cc2403a5c92006a1e550a72977e0ac2a",
+                "sha256:b8974bf4470658c9b2f2bcc4d91db2ab6abc4a3c63ac1944b38519dbebfb53a0",
+                "sha256:77122155c2dc59977416cf2f760eb52aed66fd82acb25b7b006e0ad7f989ff55",
+                "sha256:d7e47cd44dcd84a04c1dbba8965d45f33ca701efbde788880cdff56e7d58eacc",
+                "sha256:3e3c80b1916092423374cd69290ed14ab7419a94b5d6f02e05bde74aba0819fb",
+                "sha256:97fb80a689e5d0f86f7b9288644c1ad19776c1ca383ae580463c280382282721",
+                "sha256:810624b86c18a2b4bc6e2bc07b49e8c105dfde892539aff3e07c56057cb58b70",
+                "sha256:a490e4c24b02eca8b680ba9050064b47175633751e39cf83c3c5ea2b67b22aa0"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "2026-08-26T02:43:21.674756341Z"
+        },
+        "Descriptor": {
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "digest": "sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139",
+            "size": 856
+        },
+        "Identity": {
+            "Build": [
+                {
+                    "Ref": "2giow21shxbnbfzcr0kpqhr58",
+                    "CreatedAt": "2026-08-26T02:43:21.703978716Z"
+                }
+            ]
+        }
+    }
+]

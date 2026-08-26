@@ -1,0 +1,282 @@
+{
+  "checks": {
+    "all_outputs_singleton": true,
+    "all_pairs_pass": true,
+    "complete_12": true,
+    "scenario_set_exact": true
+  },
+  "pairs": [
+    {
+      "actual_scenarios": [
+        "copy 64 MiB"
+      ],
+      "checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "returncodes_zero": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "daemon_cpu_ns": 70000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "actual_scenario_singleton_recomputed": true,
+        "cpu_within_gate": true,
+        "returncodes_zero": true,
+        "row_count_two": true,
+        "row_count_two_recomputed": true,
+        "targets_exact": true,
+        "targets_exact_recomputed": true
+      },
+      "limit_ns": 204414118,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-exact-copy.json",
+      "scenario": "copy 64 MiB",
+      "wall_ns": 189918208
+    },
+    {
+      "actual_scenarios": [
+        "create 1000 files"
+      ],
+      "daemon_cpu_ns": 100000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "original_pair_pass": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "index": 1,
+      "limit_ns": 404831775,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-01.json",
+      "returncode": 0,
+      "scenario": "create 1000 files",
+      "wall_ns": 380792167
+    },
+    {
+      "actual_scenarios": [
+        "find tree"
+      ],
+      "daemon_cpu_ns": 140000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "original_pair_pass": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "index": 5,
+      "limit_ns": 1310623505,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-05.json",
+      "returncode": 0,
+      "scenario": "find tree",
+      "wall_ns": 1243450958
+    },
+    {
+      "actual_scenarios": [
+        "git init + commit 100 files"
+      ],
+      "daemon_cpu_ns": 60000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "original_pair_pass": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "index": 12,
+      "limit_ns": 227786944,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-12.json",
+      "returncode": 0,
+      "scenario": "git init + commit 100 files",
+      "wall_ns": 212178042
+    },
+    {
+      "actual_scenarios": [
+        "mkdir tree (10x10x10)"
+      ],
+      "daemon_cpu_ns": 120000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "original_pair_pass": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "index": 4,
+      "limit_ns": 1280102631,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-04.json",
+      "returncode": 0,
+      "scenario": "mkdir tree (10x10x10)",
+      "wall_ns": 1214383459
+    },
+    {
+      "actual_scenarios": [
+        "overwrite 64 MiB"
+      ],
+      "daemon_cpu_ns": 50000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "original_pair_pass": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "index": 11,
+      "limit_ns": 163684575,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-11.json",
+      "returncode": 0,
+      "scenario": "overwrite 64 MiB",
+      "wall_ns": 151128167
+    },
+    {
+      "actual_scenarios": [
+        "pure copy 64 MiB"
+      ],
+      "daemon_cpu_ns": 70000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "original_pair_pass": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "index": 10,
+      "limit_ns": 216999813,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-10.json",
+      "returncode": 0,
+      "scenario": "pure copy 64 MiB",
+      "wall_ns": 201904584
+    },
+    {
+      "actual_scenarios": [
+        "pure read 64 MiB"
+      ],
+      "daemon_cpu_ns": 20000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "original_pair_pass": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "index": 9,
+      "limit_ns": 127353830,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-09.json",
+      "returncode": 0,
+      "scenario": "pure read 64 MiB",
+      "wall_ns": 116527458
+    },
+    {
+      "actual_scenarios": [
+        "read 64 MiB"
+      ],
+      "checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "returncodes_zero": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "daemon_cpu_ns": 20000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "actual_scenario_singleton_recomputed": true,
+        "cpu_within_gate": true,
+        "returncodes_zero": true,
+        "row_count_two": true,
+        "row_count_two_recomputed": true,
+        "targets_exact": true,
+        "targets_exact_recomputed": true
+      },
+      "limit_ns": 100202712,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-exact-read.json",
+      "scenario": "read 64 MiB",
+      "wall_ns": 90669250
+    },
+    {
+      "actual_scenarios": [
+        "rm 1000 files"
+      ],
+      "daemon_cpu_ns": 130000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "original_pair_pass": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "index": 3,
+      "limit_ns": 435531500,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-03.json",
+      "returncode": 0,
+      "scenario": "rm 1000 files",
+      "wall_ns": 410030000
+    },
+    {
+      "actual_scenarios": [
+        "stat 1000 files"
+      ],
+      "daemon_cpu_ns": 120000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "original_pair_pass": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "index": 2,
+      "limit_ns": 1419560613,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-02.json",
+      "returncode": 0,
+      "scenario": "stat 1000 files",
+      "wall_ns": 1347200584
+    },
+    {
+      "actual_scenarios": [
+        "write 64 MiB"
+      ],
+      "checks": {
+        "actual_scenario_singleton": true,
+        "cpu_within_gate": true,
+        "returncodes_zero": true,
+        "row_count_two": true,
+        "targets_exact": true
+      },
+      "daemon_cpu_ns": 20000000,
+      "exact_output_checks": {
+        "actual_scenario_singleton": true,
+        "actual_scenario_singleton_recomputed": true,
+        "cpu_within_gate": true,
+        "returncodes_zero": true,
+        "row_count_two": true,
+        "row_count_two_recomputed": true,
+        "targets_exact": true,
+        "targets_exact_recomputed": true
+      },
+      "limit_ns": 82524125,
+      "pass": true,
+      "raw_artifact": "scenario-cpu-exact-write.json",
+      "scenario": "write 64 MiB",
+      "wall_ns": 73832500
+    }
+  ],
+  "replacement_receipt": "scenario-cpu-exact-collisions.json",
+  "schema": "layerfs-stage2-scenario-cpu-exact-v2",
+  "status": "PASS",
+  "superseded_contaminated_pairs": [
+    "scenario-cpu-06.json",
+    "scenario-cpu-07.json",
+    "scenario-cpu-08.json"
+  ]
+}

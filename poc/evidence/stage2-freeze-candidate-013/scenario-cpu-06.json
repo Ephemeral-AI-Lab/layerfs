@@ -1,0 +1,9 @@
+{
+  "config": {"reps": 1, "warmup": 0, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
+  "results": [
+    {"scenario": "write 64 MiB", "target": "computerd", "meanNs": 46637459, "medianNs": 46637459, "p95Ns": 46637459, "minNs": 46637459, "maxNs": 46637459, "samples": 1},
+    {"scenario": "write 64 MiB", "target": "base", "meanNs": 18867125, "medianNs": 18867125, "p95Ns": 18867125, "minNs": 18867125, "maxNs": 18867125, "samples": 1},
+    {"scenario": "overwrite 64 MiB", "target": "computerd", "meanNs": 43739958, "medianNs": 43739958, "p95Ns": 43739958, "minNs": 43739958, "maxNs": 43739958, "samples": 1},
+    {"scenario": "overwrite 64 MiB", "target": "base", "meanNs": 13198000, "medianNs": 13198000, "p95Ns": 13198000, "minNs": 13198000, "maxNs": 13198000, "samples": 1}
+  ]
+}

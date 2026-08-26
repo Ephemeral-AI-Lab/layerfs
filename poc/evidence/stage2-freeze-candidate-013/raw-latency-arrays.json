@@ -1,0 +1,539 @@
+{
+  "derivation": "for n=3, the exact sorted sample array is [minNs, medianNs, maxNs]",
+  "populations": {
+    "tmp": [
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          241790792,
+          242863917,
+          246262084
+        ],
+        "scenario": "create 1000 files",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          8167000,
+          8261292,
+          8409209
+        ],
+        "scenario": "create 1000 files",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          720719458,
+          726137375,
+          728525375
+        ],
+        "scenario": "stat 1000 files",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          447931500,
+          449001209,
+          451166042
+        ],
+        "scenario": "stat 1000 files",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          359062292,
+          365609000,
+          367061167
+        ],
+        "scenario": "rm 1000 files",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          9863833,
+          10473166,
+          10719542
+        ],
+        "scenario": "rm 1000 files",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          625366417,
+          628118208,
+          630231750
+        ],
+        "scenario": "mkdir tree (10x10x10)",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          369935417,
+          373894626,
+          375764375
+        ],
+        "scenario": "mkdir tree (10x10x10)",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          646812750,
+          650336542,
+          651198903
+        ],
+        "scenario": "find tree",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          374717917,
+          377058833,
+          382084750
+        ],
+        "scenario": "find tree",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          41158167,
+          42757416,
+          43155041
+        ],
+        "scenario": "write 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          22145917,
+          22489167,
+          22749250
+        ],
+        "scenario": "write 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          125581000,
+          128180792,
+          133373125
+        ],
+        "scenario": "copy 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          40040792,
+          40925292,
+          42208000
+        ],
+        "scenario": "copy 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          50585042,
+          53498417,
+          55621416
+        ],
+        "scenario": "read 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          31714834,
+          32732875,
+          35033625
+        ],
+        "scenario": "read 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          10940958,
+          11227375,
+          12628250
+        ],
+        "scenario": "pure read 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          9625500,
+          9695167,
+          10051250
+        ],
+        "scenario": "pure read 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          83966292,
+          86666125,
+          92779667
+        ],
+        "scenario": "pure copy 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          18833083,
+          18957541,
+          19462792
+        ],
+        "scenario": "pure copy 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          39069000,
+          39297125,
+          39907500
+        ],
+        "scenario": "overwrite 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          17674500,
+          18643375,
+          19480875
+        ],
+        "scenario": "overwrite 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          145415208,
+          145417208,
+          147382209
+        ],
+        "scenario": "git init + commit 100 files",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          7796375,
+          7849250,
+          7902959
+        ],
+        "scenario": "git init + commit 100 files",
+        "target": "base"
+      }
+    ],
+    "var": [
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          140149542,
+          140291917,
+          142089834
+        ],
+        "scenario": "create 1000 files",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          17007500,
+          17787875,
+          18014126
+        ],
+        "scenario": "create 1000 files",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          623811584,
+          624434834,
+          632342125
+        ],
+        "scenario": "stat 1000 files",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          462847250,
+          464078001,
+          466086084
+        ],
+        "scenario": "stat 1000 files",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          364753208,
+          366263528,
+          366982917
+        ],
+        "scenario": "rm 1000 files",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          23678416,
+          23816458,
+          24203916
+        ],
+        "scenario": "rm 1000 files",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          626731376,
+          627815209,
+          631745542
+        ],
+        "scenario": "mkdir tree (10x10x10)",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          384501959,
+          385778792,
+          388600626
+        ],
+        "scenario": "mkdir tree (10x10x10)",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          643956417,
+          649845542,
+          654062625
+        ],
+        "scenario": "find tree",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          388126751,
+          390608333,
+          390998417
+        ],
+        "scenario": "find tree",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          40170333,
+          41617375,
+          43295750
+        ],
+        "scenario": "write 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          18391792,
+          19028500,
+          19030167
+        ],
+        "scenario": "write 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          127305834,
+          129611792,
+          131975000
+        ],
+        "scenario": "copy 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          37415417,
+          39563459,
+          39870708
+        ],
+        "scenario": "copy 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          52945875,
+          54901250,
+          56175084
+        ],
+        "scenario": "read 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          27449583,
+          28116833,
+          29787916
+        ],
+        "scenario": "read 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          10586375,
+          10959750,
+          13332791
+        ],
+        "scenario": "pure read 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          9708292,
+          10277959,
+          11626958
+        ],
+        "scenario": "pure read 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          86502458,
+          86948500,
+          89131875
+        ],
+        "scenario": "pure copy 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          20607167,
+          21008750,
+          21204708
+        ],
+        "scenario": "pure copy 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          38321750,
+          41958042,
+          42006000
+        ],
+        "scenario": "overwrite 64 MiB",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          12644292,
+          12715834,
+          13407209
+        ],
+        "scenario": "overwrite 64 MiB",
+        "target": "base"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          145418292,
+          145545458,
+          145920875
+        ],
+        "scenario": "git init + commit 100 files",
+        "target": "computerd"
+      },
+      {
+        "execution_order": null,
+        "execution_order_reason": "fs-bench emits min/median/max for n=3 but does not emit the unseeded shuf execution order",
+        "samples_sorted_ns": [
+          12472708,
+          12699667,
+          12851083
+        ],
+        "scenario": "git init + commit 100 files",
+        "target": "base"
+      }
+    ]
+  },
+  "schema": "layerfs-stage2-raw-latency-arrays-v1",
+  "status": "PASS"
+}

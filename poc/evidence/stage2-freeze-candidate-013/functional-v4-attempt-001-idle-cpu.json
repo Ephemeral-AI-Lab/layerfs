@@ -1,0 +1,12 @@
+{
+  "checks": {
+    "daemon_idle_cpu_le_25ms": true,
+    "wall_at_least_10s": true
+  },
+  "daemon_cpu_ns": 0,
+  "schema": "layerfs-stage2-idle-cpu-v1",
+  "status": "PASS",
+  "ticks_delta": 0,
+  "ticks_per_second": 100,
+  "wall_ns": 10007867713
+}

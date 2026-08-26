@@ -1,0 +1,44 @@
+{
+  "artifact_count_excluding_sha256sums": 450,
+  "artifact_count_including_sha256sums": 451,
+  "checks": {
+    "all_controlling_equations_pass": true,
+    "all_json_parse": true,
+    "all_required_receipts_present": true,
+    "all_scripts_parse": true,
+    "authoritative_campaigns_source_bound": true,
+    "cleanup_external_and_root_only": true,
+    "product_tree_unchanged_after_freeze": true,
+    "sha256sums_generated_last": true,
+    "sha256sums_verified": true
+  },
+  "custody_actions_after_freeze": [
+    "three exact singleton per-scenario CPU diagnostics",
+    "five source/image/environment-identical benchmark stderr recaptures",
+    "machine-checkable evidence synthesis and checksum seal"
+  ],
+  "final_receipts": [
+    "summary.json",
+    "source-manifest.json",
+    "image-manifest.json",
+    "tool-versions.json",
+    "environment.json",
+    "commands.json",
+    "resource-equations.json",
+    "publication-equations.json",
+    "readiness-validation.json",
+    "stderr-custody.json",
+    "launch-receipts.json",
+    "cleanup.json",
+    "failure-ledger.json",
+    "architecture-admission.json"
+  ],
+  "frozen_image_id": "sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139",
+  "frozen_product_commit": "bd1cd225e152a630a10520806ecca65593c71a6b",
+  "frozen_product_tree": "211bdec5dd38ac281c9ec3d08d0ca9d659ad3dea",
+  "generated_at_utc": "2026-08-26T03:25:56Z",
+  "product_edits_after_freeze": 0,
+  "schema": "layerfs-stage2-evidence-seal-v1",
+  "sha256sums_entries": 450,
+  "status": "PASS_OPTIMIZED"
+}

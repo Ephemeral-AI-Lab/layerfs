@@ -1,0 +1,7 @@
+{
+  "config": {"reps": 1, "warmup": 0, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
+  "results": [
+    {"scenario": "create 1000 files", "target": "computerd", "meanNs": 254767917, "medianNs": 254767917, "p95Ns": 254767917, "minNs": 254767917, "maxNs": 254767917, "samples": 1},
+    {"scenario": "create 1000 files", "target": "base", "meanNs": 17973458, "medianNs": 17973458, "p95Ns": 17973458, "minNs": 17973458, "maxNs": 17973458, "samples": 1}
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "populations": {
+    "tmp": {
+      "control": "tmp",
+      "equations": {
+        "busy_locked_zero": true,
+        "campaign_checkpoint_zero": true,
+        "connections_zero": true,
+        "directory_changes_zero": true,
+        "dirty_nodes_zero": true,
+        "dirty_ranges_zero": true,
+        "fresh_generation_zero": true,
+        "handles_zero": true,
+        "invalidation_exact": true,
+        "logical_workspace_zero": true,
+        "one_genesis_publication": true,
+        "operation_q_zero": true,
+        "pending_zero": true,
+        "rollback_zero": true,
+        "root_lookup_only": true,
+        "root_mapping_only": true,
+        "root_node_only": true,
+        "spool_dead_zero": true,
+        "spool_live_zero": true,
+        "spool_physical_zero": true,
+        "status_pass": true,
+        "transaction_start_commit_exact": true
+      },
+      "status": "PASS"
+    },
+    "var": {
+      "control": "var",
+      "equations": {
+        "busy_locked_zero": true,
+        "campaign_checkpoint_zero": true,
+        "connections_zero": true,
+        "directory_changes_zero": true,
+        "dirty_nodes_zero": true,
+        "dirty_ranges_zero": true,
+        "fresh_generation_zero": true,
+        "handles_zero": true,
+        "invalidation_exact": true,
+        "logical_workspace_zero": true,
+        "one_genesis_publication": true,
+        "operation_q_zero": true,
+        "pending_zero": true,
+        "rollback_zero": true,
+        "root_lookup_only": true,
+        "root_mapping_only": true,
+        "root_node_only": true,
+        "spool_dead_zero": true,
+        "spool_live_zero": true,
+        "spool_physical_zero": true,
+        "status_pass": true,
+        "transaction_start_commit_exact": true
+      },
+      "status": "PASS"
+    }
+  },
+  "schema": "layerfs-stage2-publication-equations-v2",
+  "status": "PASS"
+}

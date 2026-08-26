@@ -1,0 +1,301 @@
+source_commit=b302d2bd77fce5ee9f56b9a5e96423578c92c166
+source_tree=5503025b9de5989f054a71d6d602907104741b7d
+command=docker build --no-cache --platform linux/arm64 -t layerfs-fuse:frozen-b302d2b -f containers/layerfs-fuse/Dockerfile .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.65kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/rust:1.85.1-bookworm
+#2 DONE 0.1s
+
+#3 [internal] load .dockerignore
+#3 transferring context:
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [build 2/6] WORKDIR /src
+#4 CACHED
+
+#5 [build 1/6] FROM docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#5 resolve docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 0.0s done
+#5 CACHED
+
+#6 [internal] load build context
+#6 transferring context: 6.87kB 0.0s done
+#6 DONE 0.0s
+
+#7 [build 3/6] COPY Cargo.toml Cargo.lock ./
+#7 DONE 0.0s
+
+#8 [build 4/6] COPY crates ./crates
+#8 DONE 0.0s
+
+#9 [build 5/6] COPY tools ./tools
+#9 DONE 0.0s
+
+#10 [build 6/6] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     case "arm64" in       arm64) rustup target add aarch64-unknown-linux-gnu; target=aarch64-unknown-linux-gnu ;;       amd64) rustup target add x86_64-unknown-linux-gnu; target=x86_64-unknown-linux-gnu ;;       *) exit 1 ;;     esac  && rustup component add clippy  && cargo test --locked --target "$target" -p layerfs-fuse  && cargo clippy --locked --target "$target" -p layerfs-fuse --all-targets -- -D warnings  && cargo build --locked --release --target "$target" -p layerfs-fuse  && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
+#10 0.183 info: component 'rust-std' for target 'aarch64-unknown-linux-gnu' is up to date
+#10 0.267 info: downloading component 'clippy'
+#10 17.09 info: installing component 'clippy'
+#10 17.45     Updating crates.io index
+#10 37.46  Downloading crates ...
+#10 40.28   Downloaded fuser v0.18.0
+#10 40.52   Downloaded shlex v2.0.1
+#10 40.84   Downloaded cfg_aliases v0.2.2
+#10 40.84   Downloaded arrayref v0.3.9
+#10 40.84   Downloaded num_enum_derive v0.7.6
+#10 40.96   Downloaded rustversion v1.0.23
+#10 40.97   Downloaded bitflags v2.13.1
+#10 40.98   Downloaded vcpkg v0.2.15
+#10 41.00   Downloaded cc v1.4.3
+#10 41.00   Downloaded autocfg v1.5.1
+#10 41.00   Downloaded ref-cast v1.0.27
+#10 41.00   Downloaded arrayvec v0.7.8
+#10 41.04   Downloaded cfg-if v1.0.4
+#10 41.04   Downloaded constant_time_eq v0.4.2
+#10 41.26   Downloaded proc-macro-crate v3.5.0
+#10 41.29   Downloaded page_size v0.6.0
+#10 41.30   Downloaded fallible-streaming-iterator v0.1.9
+#10 41.31   Downloaded equivalent v1.0.2
+#10 41.35   Downloaded errno v0.3.14
+#10 41.39   Downloaded scopeguard v1.2.0
+#10 41.39   Downloaded signal-hook-registry v1.4.8
+#10 41.40   Downloaded toml_datetime v1.1.1+spec-1.1.0
+#10 41.40   Downloaded hashlink v0.12.0
+#10 41.40   Downloaded find-msvc-tools v0.1.11
+#10 41.40   Downloaded num_enum v0.7.6
+#10 41.40   Downloaded lock_api v0.4.14
+#10 41.41   Downloaded foldhash v0.2.0
+#10 41.41   Downloaded ref-cast-impl v1.0.27
+#10 41.41   Downloaded pkg-config v0.3.34
+#10 41.41   Downloaded smallvec v1.15.2
+#10 41.41   Downloaded memoffset v0.9.1
+#10 41.44   Downloaded parking_lot_core v0.9.12
+#10 41.46   Downloaded fallible-iterator v0.3.0
+#10 41.46   Downloaded toml_parser v1.1.3+spec-1.1.0
+#10 41.48   Downloaded log v0.4.34
+#10 41.49   Downloaded unicode-ident v1.0.24
+#10 41.49   Downloaded proc-macro2 v1.0.107
+#10 41.49   Downloaded parking_lot v0.12.5
+#10 41.50   Downloaded serde_core v1.0.229
+#10 41.51   Downloaded quote v1.0.47
+#10 41.52   Downloaded signal-hook v0.3.18
+#10 41.52   Downloaded toml_edit v0.25.13+spec-1.1.0
+#10 43.72   Downloaded memchr v2.8.3
+#10 43.73   Downloaded zerocopy-derive v0.8.56
+#10 43.73   Downloaded indexmap v2.14.0
+#10 43.95   Downloaded blake3 v1.8.5
+#10 43.96   Downloaded rusqlite v0.40.2
+#10 43.97   Downloaded winnow v1.0.4
+#10 43.97   Downloaded syn v3.0.4
+#10 43.98   Downloaded hashbrown v0.17.1
+#10 43.99   Downloaded zerocopy v0.8.56
+#10 44.00   Downloaded syn v2.0.119
+#10 44.01   Downloaded nix v0.31.3
+#10 44.09   Downloaded libc v0.2.189
+#10 44.74   Downloaded libsqlite3-sys v0.38.2
+#10 44.87    Compiling proc-macro2 v1.0.107
+#10 44.87    Compiling unicode-ident v1.0.24
+#10 44.87    Compiling quote v1.0.47
+#10 44.87    Compiling libc v0.2.189
+#10 44.93    Compiling pkg-config v0.3.34
+#10 45.06    Compiling cfg-if v1.0.4
+#10 45.09    Compiling find-msvc-tools v0.1.11
+#10 45.28    Compiling shlex v2.0.1
+#10 45.39    Compiling cc v1.4.3
+#10 45.60    Compiling equivalent v1.0.2
+#10 45.62    Compiling hashbrown v0.17.1
+#10 45.69    Compiling vcpkg v0.2.15
+#10 45.98    Compiling smallvec v1.15.2
+#10 46.09    Compiling winnow v1.0.4
+#10 46.16    Compiling indexmap v2.14.0
+#10 46.36    Compiling libsqlite3-sys v0.38.2
+#10 46.56    Compiling syn v2.0.119
+#10 46.60    Compiling bitflags v2.13.1
+#10 46.66    Compiling blake3 v1.8.5
+#10 46.70    Compiling autocfg v1.5.1
+#10 46.95    Compiling toml_parser v1.1.3+spec-1.1.0
+#10 46.95    Compiling toml_datetime v1.1.1+spec-1.1.0
+#10 47.05    Compiling foldhash v0.2.0
+#10 47.10    Compiling memoffset v0.9.1
+#10 47.22    Compiling toml_edit v0.25.13+spec-1.1.0
+#10 47.50    Compiling parking_lot_core v0.9.12
+#10 47.62    Compiling rustversion v1.0.23
+#10 47.77    Compiling cfg_aliases v0.2.2
+#10 47.80    Compiling arrayref v0.3.9
+#10 47.82    Compiling constant_time_eq v0.4.2
+#10 47.90    Compiling arrayvec v0.7.8
+#10 47.93    Compiling nix v0.31.3
+#10 48.17    Compiling proc-macro-crate v3.5.0
+#10 48.35    Compiling hashlink v0.12.0
+#10 48.39    Compiling syn v3.0.4
+#10 48.51    Compiling fallible-iterator v0.3.0
+#10 48.70    Compiling fallible-streaming-iterator v0.1.9
+#10 48.71    Compiling scopeguard v1.2.0
+#10 48.74    Compiling zerocopy v0.8.56
+#10 48.76    Compiling ref-cast v1.0.27
+#10 48.98    Compiling rusqlite v0.40.2
+#10 49.02    Compiling lock_api v0.4.14
+#10 49.33    Compiling layerfs-core v0.1.0 (/src/crates/layerfs-core)
+#10 50.45    Compiling errno v0.3.14
+#10 50.51    Compiling fuser v0.18.0
+#10 50.52    Compiling ref-cast-impl v1.0.27
+#10 50.66    Compiling signal-hook v0.3.18
+#10 50.72    Compiling num_enum_derive v0.7.6
+#10 50.78    Compiling zerocopy-derive v0.8.56
+#10 51.00    Compiling signal-hook-registry v1.4.8
+#10 51.19    Compiling layerfs-engine v0.1.0 (/src/crates/layerfs-engine)
+#10 51.61    Compiling parking_lot v0.12.5
+#10 51.94    Compiling num_enum v0.7.6
+#10 51.97    Compiling page_size v0.6.0
+#10 52.01    Compiling memchr v2.8.3
+#10 52.34    Compiling log v0.4.34
+#10 52.43    Compiling layerfs-vfs v0.1.0 (/src/crates/layerfs-vfs)
+#10 56.55    Compiling layerfs-fuse v0.1.0 (/src/crates/layerfs-fuse)
+#10 57.87     Finished `test` profile [unoptimized + debuginfo] target(s) in 40.46s
+#10 57.88      Running unittests src/lib.rs (target/aarch64-unknown-linux-gnu/debug/deps/layerfs_fuse-1cc834144ad72029)
+#10 57.88 
+#10 57.88 running 2 tests
+#10 58.06 test tests::notifier_success_and_failure_counters_are_exact_and_failure_is_incomplete ... ok
+#10 58.06 test tests::missing_entry_and_inode_notifier_fail_closed ... ok
+#10 58.06 
+#10 58.06 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+#10 58.06 
+#10 58.06      Running unittests src/main.rs (target/aarch64-unknown-linux-gnu/debug/deps/layerfs_fuse-e87e9cee1ae034f1)
+#10 58.06 
+#10 58.06 running 2 tests
+#10 58.06 test tests::store_spool_and_receipt_are_distinct_and_outside_mount ... ok
+#10 58.13 test linux::tests::splice_control_request_is_bounded_and_exact ... ok
+#10 58.13 
+#10 58.13 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+#10 58.13 
+#10 58.13    Doc-tests layerfs_fuse
+#10 58.15 
+#10 58.15 running 0 tests
+#10 58.15 
+#10 58.15 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#10 58.15 
+#10 58.27     Checking cfg-if v1.0.4
+#10 58.27     Checking libc v0.2.189
+#10 58.27     Checking smallvec v1.15.2
+#10 58.28     Checking foldhash v0.2.0
+#10 58.30     Checking bitflags v2.13.1
+#10 58.33     Checking hashbrown v0.17.1
+#10 58.37     Checking arrayvec v0.7.8
+#10 58.38     Checking constant_time_eq v0.4.2
+#10 58.42     Checking arrayref v0.3.9
+#10 58.44     Checking libsqlite3-sys v0.38.2
+#10 58.46     Checking blake3 v1.8.5
+#10 58.54     Checking fallible-iterator v0.3.0
+#10 58.60     Checking fallible-streaming-iterator v0.1.9
+#10 58.65     Checking scopeguard v1.2.0
+#10 58.67     Checking hashlink v0.12.0
+#10 58.68     Checking lock_api v0.4.14
+#10 58.70     Checking layerfs-core v0.1.0 (/src/crates/layerfs-core)
+#10 58.78     Checking memoffset v0.9.1
+#10 58.80     Checking zerocopy v0.8.56
+#10 58.82     Checking rusqlite v0.40.2
+#10 59.21     Checking errno v0.3.14
+#10 59.25     Checking parking_lot_core v0.9.12
+#10 59.32     Checking signal-hook-registry v1.4.8
+#10 59.34     Checking parking_lot v0.12.5
+#10 59.40     Checking page_size v0.6.0
+#10 59.42     Checking nix v0.31.3
+#10 59.43     Checking num_enum v0.7.6
+#10 59.47     Checking ref-cast v1.0.27
+#10 59.49     Checking log v0.4.34
+#10 59.55     Checking memchr v2.8.3
+#10 59.77     Checking signal-hook v0.3.18
+#10 60.02     Checking layerfs-engine v0.1.0 (/src/crates/layerfs-engine)
+#10 60.84     Checking layerfs-vfs v0.1.0 (/src/crates/layerfs-vfs)
+#10 61.16     Checking fuser v0.18.0
+#10 62.61     Checking layerfs-fuse v0.1.0 (/src/crates/layerfs-fuse)
+#10 62.93     Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.72s
+#10 63.01    Compiling proc-macro2 v1.0.107
+#10 63.01    Compiling unicode-ident v1.0.24
+#10 63.01    Compiling quote v1.0.47
+#10 63.01    Compiling libc v0.2.189
+#10 63.06    Compiling pkg-config v0.3.34
+#10 63.14    Compiling cfg-if v1.0.4
+#10 63.16    Compiling shlex v2.0.1
+#10 63.24    Compiling find-msvc-tools v0.1.11
+#10 63.37    Compiling cc v1.4.3
+#10 63.38    Compiling winnow v1.0.4
+#10 63.75    Compiling smallvec v1.15.2
+#10 63.89    Compiling equivalent v1.0.2
+#10 63.91    Compiling vcpkg v0.2.15
+#10 64.17    Compiling hashbrown v0.17.1
+#10 64.27    Compiling toml_parser v1.1.3+spec-1.1.0
+#10 64.33    Compiling blake3 v1.8.5
+#10 64.37    Compiling libsqlite3-sys v0.38.2
+#10 64.51    Compiling indexmap v2.14.0
+#10 64.52    Compiling syn v2.0.119
+#10 64.53    Compiling autocfg v1.5.1
+#10 64.66    Compiling toml_datetime v1.1.1+spec-1.1.0
+#10 64.77    Compiling foldhash v0.2.0
+#10 64.80    Compiling bitflags v2.13.1
+#10 64.90    Compiling toml_edit v0.25.13+spec-1.1.0
+#10 64.99    Compiling memoffset v0.9.1
+#10 65.35    Compiling parking_lot_core v0.9.12
+#10 65.38    Compiling rustversion v1.0.23
+#10 65.45    Compiling arrayref v0.3.9
+#10 65.48    Compiling arrayvec v0.7.8
+#10 65.55    Compiling cfg_aliases v0.2.2
+#10 65.57    Compiling constant_time_eq v0.4.2
+#10 65.59    Compiling nix v0.31.3
+#10 65.62    Compiling hashlink v0.12.0
+#10 65.84    Compiling proc-macro-crate v3.5.0
+#10 65.96    Compiling syn v3.0.4
+#10 66.18    Compiling ref-cast v1.0.27
+#10 66.29    Compiling fallible-iterator v0.3.0
+#10 66.31    Compiling zerocopy v0.8.56
+#10 66.49    Compiling fallible-streaming-iterator v0.1.9
+#10 66.50    Compiling scopeguard v1.2.0
+#10 66.53    Compiling lock_api v0.4.14
+#10 66.57    Compiling rusqlite v0.40.2
+#10 66.72    Compiling layerfs-core v0.1.0 (/src/crates/layerfs-core)
+#10 67.65    Compiling ref-cast-impl v1.0.27
+#10 67.73    Compiling num_enum_derive v0.7.6
+#10 67.97    Compiling zerocopy-derive v0.8.56
+#10 68.74    Compiling errno v0.3.14
+#10 68.81    Compiling fuser v0.18.0
+#10 68.92    Compiling signal-hook v0.3.18
+#10 68.99    Compiling signal-hook-registry v1.4.8
+#10 69.01    Compiling num_enum v0.7.6
+#10 69.05    Compiling parking_lot v0.12.5
+#10 69.81    Compiling layerfs-engine v0.1.0 (/src/crates/layerfs-engine)
+#10 71.03    Compiling page_size v0.6.0
+#10 71.09    Compiling log v0.4.34
+#10 71.21    Compiling memchr v2.8.3
+#10 71.78    Compiling layerfs-vfs v0.1.0 (/src/crates/layerfs-vfs)
+#10 74.73    Compiling layerfs-fuse v0.1.0 (/src/crates/layerfs-fuse)
+#10 80.84     Finished `release` profile [optimized] target(s) in 17.90s
+#10 DONE 80.9s
+
+#11 [stage-1 2/5] COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
+#11 DONE 0.0s
+
+#12 [stage-1 3/5] COPY containers/layerfs-fuse/fs-bench.sh /usr/local/bin/fs-bench.sh
+#12 DONE 0.0s
+
+#13 [stage-1 4/5] COPY containers/layerfs-fuse/verify_fs_bench.py /usr/local/bin/verify_fs_bench.py
+#13 DONE 0.0s
+
+#14 [stage-1 5/5] RUN echo "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef  /usr/local/bin/fs-bench.sh" | sha256sum -c -  && python3 /usr/local/bin/verify_fs_bench.py --self-test  && chmod 0555 /usr/local/bin/fs-bench.sh /usr/local/bin/verify_fs_bench.py  && mkdir -p /workspace /var/lib/layerfs /var/tmp/layerfs-owned
+#14 0.075 /usr/local/bin/fs-bench.sh: OK
+#14 DONE 0.1s
+
+#15 exporting to image
+#15 exporting layers 0.1s done
+#15 exporting manifest sha256:87d609e0b237c7b4bae09de0f2583d1277047df7985799d0ed3a4ea8c266e349
+#15 exporting manifest sha256:87d609e0b237c7b4bae09de0f2583d1277047df7985799d0ed3a4ea8c266e349 done
+#15 exporting config sha256:95189cb4b7c617dee00912a51e7b7f2a40787a3aa035cb6ff607853fbe1a0eaf done
+#15 exporting attestation manifest sha256:bb182df7fa1345ab19ae363671127cd6bf1207e991bf9e29023108ce052f8a6b done
+#15 exporting manifest list sha256:1f8a2bbe70a87d5e90d5f804f9cf53836c49c184c3b4ce4b51d696edd76ef6c8 done
+#15 naming to docker.io/library/layerfs-fuse:frozen-b302d2b done
+#15 unpacking to docker.io/library/layerfs-fuse:frozen-b302d2b 0.0s done
+#15 DONE 0.2s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/9y2qqttlj2l83g6g86e40p2g7
