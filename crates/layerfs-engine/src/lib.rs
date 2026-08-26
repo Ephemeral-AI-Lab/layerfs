@@ -2653,7 +2653,14 @@ fn put_object_on_connection(
 ) -> EngineResult<PutOutcome> {
     let object = validate_identity(canonical_bytes, id)
         .map_err(|cause| EngineError::MalformedObject { id, cause })?;
-    put_validated_object_on_connection(engine, connection, id, object.kind(), canonical_bytes)
+    put_validated_object_on_connection(
+        engine,
+        connection,
+        id,
+        object.kind(),
+        canonical_bytes,
+        false,
+    )
 }
 
 fn put_canonical_object_on_connection(
@@ -2664,8 +2671,14 @@ fn put_canonical_object_on_connection(
     let id = ObjectId::for_bytes(canonical_bytes);
     let object = decode_object(canonical_bytes)
         .map_err(|cause| EngineError::MalformedObject { id, cause })?;
-    let outcome =
-        put_validated_object_on_connection(engine, connection, id, object.kind(), canonical_bytes)?;
+    let outcome = put_validated_object_on_connection(
+        engine,
+        connection,
+        id,
+        object.kind(),
+        canonical_bytes,
+        true,
+    )?;
     Ok((id, outcome))
 }
 
@@ -2675,6 +2688,7 @@ fn put_validated_object_on_connection(
     id: ObjectId,
     kind: ObjectKind,
     canonical_bytes: &[u8],
+    candidate_id_derived: bool,
 ) -> EngineResult<PutOutcome> {
     let canonical_len =
         u64::try_from(canonical_bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
@@ -2683,19 +2697,22 @@ fn put_validated_object_on_connection(
         checked_add(&mut counters.new_object_authentication_passes, 1)?;
         checked_add(&mut counters.put_lookup_statements, 1)
     })?;
-    match with_authenticated_canonical_on_connection(
-        engine,
-        connection,
-        id,
-        false,
-        false,
-        |stored_kind, stored| {
-            if stored_kind != kind || stored != canonical_bytes {
-                return Err(EngineError::ImmutableConflict("object", id));
+    let incumbent = if candidate_id_derived {
+        match exact_candidate_on_connection(engine, connection, id, kind, canonical_bytes)? {
+            Some(true) => {
+                engine.bump(|counters| {
+                    checked_add(&mut counters.objects_validated, 1)?;
+                    checked_add(&mut counters.object_bytes_read, canonical_len)
+                })?;
+                Ok(())
             }
-            Ok(())
-        },
-    ) {
+            Some(false) => authenticate_incumbent(engine, connection, id, kind, canonical_bytes),
+            None => Err(EngineError::MissingObject(id)),
+        }
+    } else {
+        authenticate_incumbent(engine, connection, id, kind, canonical_bytes)
+    };
+    match incumbent {
         Ok(()) => {
             engine.bump(|counters| {
                 checked_add(&mut counters.objects_reused, 1)?;
@@ -2731,6 +2748,55 @@ fn put_validated_object_on_connection(
         checked_add(&mut counters.logical_object_bytes, canonical_len)
     })?;
     Ok(PutOutcome::Created)
+}
+
+fn exact_candidate_on_connection(
+    engine: &Engine,
+    connection: &Connection,
+    id: ObjectId,
+    kind: ObjectKind,
+    canonical_bytes: &[u8],
+) -> EngineResult<Option<bool>> {
+    let query_started = Instant::now();
+    engine.mark_statement()?;
+    let result = connection
+        .query_row(
+            "SELECT kind = ?2 AND canonical_length = ?3 AND canonical_bytes = ?4
+             FROM layerfs_objects WHERE object_id = ?1",
+            params![
+                id.as_bytes().as_slice(),
+                i64::from(kind as u8),
+                i64::try_from(canonical_bytes.len()).map_err(|_| EngineError::CounterOverflow)?,
+                canonical_bytes,
+            ],
+            |row| row.get::<_, bool>(0),
+        )
+        .optional()
+        .map_err(map_sqlite_error);
+    observe_time(&engine.timings.nonpayload_query_ns, query_started);
+    result
+}
+
+fn authenticate_incumbent(
+    engine: &Engine,
+    connection: &Connection,
+    id: ObjectId,
+    kind: ObjectKind,
+    canonical_bytes: &[u8],
+) -> EngineResult<()> {
+    with_authenticated_canonical_on_connection(
+        engine,
+        connection,
+        id,
+        false,
+        false,
+        |stored_kind, stored| {
+            if stored_kind != kind || stored != canonical_bytes {
+                return Err(EngineError::ImmutableConflict("object", id));
+            }
+            Ok(())
+        },
+    )
 }
 
 #[cfg(test)]

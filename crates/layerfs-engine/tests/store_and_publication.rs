@@ -18,6 +18,35 @@ use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
+fn publication_reuse_authenticates_the_exact_derived_candidate_without_rehashing() {
+    let path = std::env::temp_dir().join(format!(
+        "layerfs-derived-reuse-{}-{}.sqlite",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let engine = Engine::open_with_mode(&path, IntegrityMode::TrustedLocalDev).unwrap();
+    let canonical = encode_bytes_object(b"same canonical bytes").unwrap();
+    let mut publication = engine.begin_publication(None, "main").unwrap();
+    let expected = publication.put_object(&canonical).unwrap();
+
+    engine.reset_counters().unwrap();
+    assert_eq!(publication.put_object(&canonical).unwrap(), expected);
+    let counters = engine.counters().unwrap();
+    assert_eq!(counters.objects_validated, 2);
+    assert_eq!(counters.objects_reused, 1);
+    assert_eq!(counters.object_bytes_read, canonical.len() as u64);
+    assert_eq!(counters.incumbent_authentication_passes, 1);
+    assert_eq!(counters.identity_authentication_ns, 0);
+
+    drop(publication);
+    drop(engine);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
 fn trusted_borrowed_load_and_ordered_batch_skip_identity_authentication() {
     let path = std::env::temp_dir().join(format!(
         "layerfs-store-test-{}-{}.sqlite",
