@@ -35,7 +35,11 @@ impl layerfs_vfs::driver::ProjectionDriver for HostDriver {
 }
 
 pub fn host_driver() -> std::sync::Arc<dyn layerfs_vfs::driver::ProjectionDriver> {
-    std::sync::Arc::new(HostDriver::default())
+    #[cfg(target_os = "macos")]
+    let driver = HostDriver::default();
+    #[cfg(not(target_os = "macos"))]
+    let driver = HostDriver;
+    std::sync::Arc::new(driver)
 }
 
 #[cfg(target_os = "macos")]

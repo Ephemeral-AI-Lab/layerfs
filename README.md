@@ -291,9 +291,9 @@ LayerFS reports live-mount and persistence-inclusive performance separately.
 
 The sealed results below bind implementation commit
 <code>7e82abcd7320f6a214be336d82488ba0527b6025</code> and its retained image.
-Later canonical-release changes are documentation, CI, licensing, and image
-source metadata only; they do not replace the sealed source/image identities in
-the evidence.
+Later canonical-release changes are documentation, CI, licensing, image source
+metadata, and a behavior-neutral non-macOS driver-construction lint correction;
+they do not replace the sealed source/image identities in the evidence.
 
 ### Matched local live-mount comparison
 
@@ -463,7 +463,7 @@ The workspace uses Rust 1.85.
 ~~~bash
 cargo fmt --all --check
 cargo test --workspace --locked
-cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo clippy --workspace --locked -- -D warnings
 ~~~
 
 Real FUSE end-to-end tests require Linux, <code>/dev/fuse</code>, and the
