@@ -88,8 +88,7 @@ impl Publication<'_> {
 
     pub fn put_object(&mut self, canonical: &[u8]) -> EngineResult<ObjectId> {
         self.ensure_active()?;
-        let id = ObjectId::for_bytes(canonical);
-        put_object_on_connection(self.engine, &self.connection, id, canonical)?;
+        let (id, _) = put_canonical_object_on_connection(self.engine, &self.connection, canonical)?;
         Ok(id)
     }
 

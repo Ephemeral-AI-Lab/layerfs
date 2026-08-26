@@ -4,8 +4,8 @@
 
 use layerfs_core::content::rope::ObjectRead;
 use layerfs_core::{
-    authenticate_identity, decode_bytes_object, validate_identity, validate_object_from, CoreError,
-    ObjectId, ObjectKind, ObjectSummary,
+    authenticate_identity, decode_bytes_object, decode_object, validate_identity,
+    validate_object_from, CoreError, ObjectId, ObjectKind, ObjectSummary,
 };
 use rusqlite::types::ValueRef;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
@@ -2644,6 +2644,7 @@ fn authenticate_borrowed_unaccounted(
     Ok((object, actual_length))
 }
 
+#[cfg(test)]
 fn put_object_on_connection(
     engine: &Engine,
     connection: &Connection,
@@ -2652,6 +2653,29 @@ fn put_object_on_connection(
 ) -> EngineResult<PutOutcome> {
     let object = validate_identity(canonical_bytes, id)
         .map_err(|cause| EngineError::MalformedObject { id, cause })?;
+    put_validated_object_on_connection(engine, connection, id, object.kind(), canonical_bytes)
+}
+
+fn put_canonical_object_on_connection(
+    engine: &Engine,
+    connection: &Connection,
+    canonical_bytes: &[u8],
+) -> EngineResult<(ObjectId, PutOutcome)> {
+    let id = ObjectId::for_bytes(canonical_bytes);
+    let object = decode_object(canonical_bytes)
+        .map_err(|cause| EngineError::MalformedObject { id, cause })?;
+    let outcome =
+        put_validated_object_on_connection(engine, connection, id, object.kind(), canonical_bytes)?;
+    Ok((id, outcome))
+}
+
+fn put_validated_object_on_connection(
+    engine: &Engine,
+    connection: &Connection,
+    id: ObjectId,
+    kind: ObjectKind,
+    canonical_bytes: &[u8],
+) -> EngineResult<PutOutcome> {
     let canonical_len =
         u64::try_from(canonical_bytes.len()).map_err(|_| EngineError::CounterOverflow)?;
     engine.bump(|counters| {
@@ -2665,8 +2689,8 @@ fn put_object_on_connection(
         id,
         false,
         false,
-        |kind, stored| {
-            if kind != object.kind() || stored != canonical_bytes {
+        |stored_kind, stored| {
+            if stored_kind != kind || stored != canonical_bytes {
                 return Err(EngineError::ImmutableConflict("object", id));
             }
             Ok(())
@@ -2695,7 +2719,7 @@ fn put_object_on_connection(
     insert
         .execute(params![
             id.as_bytes().as_slice(),
-            i64::from(object.kind() as u8),
+            i64::from(kind as u8),
             i64::try_from(canonical_len).map_err(|_| EngineError::CounterOverflow)?,
             canonical_bytes,
         ])
