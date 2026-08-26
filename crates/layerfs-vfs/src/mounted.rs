@@ -4595,6 +4595,40 @@ mod tests {
     }
 
     #[test]
+    fn capacity_tracks_public_dirty_checkpoint_and_cleanup_transitions() {
+        let (store, spool, directory) = paths("capacity-transitions");
+        let mut mounted = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool,
+            [0x9f; 32],
+        )
+        .unwrap();
+        let initial = mounted.capacity().unwrap();
+
+        let (file, handle) = mounted.create_file(ROOT_NODE, b"file", 0o644).unwrap();
+        mounted
+            .write(file.node, handle, 0, &vec![0x5a; 1024 * 1024])
+            .unwrap();
+        mounted.release(handle).unwrap();
+        let dirty = mounted.capacity().unwrap();
+        assert_eq!(dirty.free_bytes, initial.free_bytes - 1024 * 1024);
+        assert_eq!(dirty.free_files, initial.free_files - 2);
+
+        mounted.fsyncdir().unwrap();
+        assert_eq!(mounted.capacity().unwrap(), initial);
+
+        mounted.unlink(ROOT_NODE, b"file").unwrap();
+        mounted.fsyncdir().unwrap();
+        assert_eq!(mounted.capacity().unwrap(), initial);
+
+        mounted.shutdown().unwrap();
+        drop(mounted);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn maximum_admitted_dirty_population_is_checkpointable_inside_q() {
         let (store, spool, directory) = paths("maximum-checkpoint");
         let mut mounted = MountedWorkspace::open(

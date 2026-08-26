@@ -129,7 +129,7 @@ fn same_existing_file(
 #[cfg(target_os = "linux")]
 mod linux {
     use fuser::{Config, INodeNo, MountOption};
-    use layerfs_fuse::{LayerFuse, LayerFuseEvent, SessionEndNotifier, FS_BENCH_SHA256};
+    use layerfs_fuse::{LayerFuse, LayerFuseEvent, FS_BENCH_SHA256};
     use layerfs_vfs::mounted::{
         ByteBudget, MountedLifecycle, MountedSpliceReceipt, MountedWorkspace, MAX_REQUEST_BYTES,
     };
@@ -154,14 +154,6 @@ mod linux {
         start: u64,
         delete_len: u64,
         replacement: Vec<u8>,
-    }
-
-    struct SessionEndGuard(SessionEndNotifier);
-
-    impl Drop for SessionEndGuard {
-        fn drop(&mut self) {
-            self.0.notify();
-        }
     }
 
     const CONTROL_DECODE_Q_BYTES: usize = 2 * MAX_REQUEST_BYTES;
@@ -224,10 +216,10 @@ mod linux {
         let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
         fuse.set_lifecycle_sender(stop_sender.clone())
             .map_err(|_| "FUSE lifecycle sender initialized twice")?;
-        let session_end = fuse.session_end_notifier();
-        let mut session = fuser::Session::new(fuse, &mount, &config)?;
+        let mut signals = Signals::new([SIGTERM, SIGINT, SIGHUP])?;
+        let signal_handle = signals.handle();
+        let session = fuser::Session::new(fuse, &mount, &config)?;
         let notifier = session.notifier();
-        let mut unmounter = session.unmount_callable();
         notifier_slot
             .set(notifier.clone())
             .map_err(|_| "FUSE notifier initialized twice")?;
@@ -254,6 +246,16 @@ mod linux {
                 .mark_incomplete();
             return Err("FUSE invalidation admission failed".into());
         }
+        let background_session = session.spawn()?;
+        let signal_thread = std::thread::spawn(move || {
+            let mut forwarded = false;
+            for signal in signals.forever() {
+                if !forwarded {
+                    let _ = stop_sender.send(LayerFuseEvent::Signal(signal));
+                    forwarded = true;
+                }
+            }
+        });
         println!(
             "{{\"backend\":\"layerfs-fuse\",\"mount\":\"{}\",\"integrity\":\"{}\",\"source_commit\":\"{}\",\"source_tree\":\"{}\",\"fs_bench_sha256\":\"{}\"}}",
             json(mount.to_string_lossy().as_ref()),
@@ -266,24 +268,8 @@ mod linux {
             FS_BENCH_SHA256,
         );
         std::io::stdout().flush()?;
-        let mut signals = Signals::new([SIGTERM, SIGINT, SIGHUP])?;
-        let signal_handle = signals.handle();
-        let session_thread = std::thread::spawn(move || {
-            let _session_end = SessionEndGuard(session_end);
-            session.run()
-        });
-        let signal_thread = std::thread::spawn(move || {
-            if let Some(signal) = signals.forever().next() {
-                let _ = stop_sender.send(LayerFuseEvent::Signal(signal));
-            }
-        });
         let stop = stop_receiver.recv().map_err(|_| "stop channel closed")?;
-        signal_handle.close();
-        let signal_thread_error = signal_thread
-            .join()
-            .err()
-            .map(|_| "signal thread panicked".to_owned());
-        let (signal, lifecycle_error, unmount_error) = match stop {
+        let (signal, lifecycle_error, session_terminated, session_error) = match stop {
             LayerFuseEvent::Signal(signal) => {
                 let lifecycle_error = match (signal, control.as_ref()) {
                     (SIGHUP, Some(control)) => {
@@ -291,19 +277,25 @@ mod linux {
                     }
                     _ => shutdown_workspace(&shared_workspace, &byte_budget).err(),
                 };
-                let unmount_error = unmounter.unmount().map_err(|error| error.to_string()).err();
-                (signal, lifecycle_error, unmount_error)
+                match background_session.umount_and_join() {
+                    Ok(()) => (signal, lifecycle_error, true, None),
+                    Err(error) => (signal, lifecycle_error, false, Some(error.to_string())),
+                }
             }
-            LayerFuseEvent::SessionEnded => (
-                0,
-                shutdown_workspace(&shared_workspace, &byte_budget).err(),
-                None,
-            ),
+            LayerFuseEvent::SessionEnded => {
+                let lifecycle_error = shutdown_workspace(&shared_workspace, &byte_budget).err();
+                let session_error = background_session
+                    .join()
+                    .map_err(|error| error.to_string())
+                    .err();
+                (0, lifecycle_error, true, session_error)
+            }
         };
-        let session_error = match session_thread.join() {
-            Ok(result) => result.map_err(|error| error.to_string()).err(),
-            Err(_) => Some("FUSE session thread panicked".to_owned()),
-        };
+        signal_handle.close();
+        let signal_thread_error = signal_thread
+            .join()
+            .err()
+            .map(|_| "signal thread panicked".to_owned());
         drop(notifier_slot);
         let fuse = *shared_fuse_counters
             .lock()
@@ -312,7 +304,9 @@ mod linux {
         let mut workspace = shared_workspace
             .lock()
             .map_err(|_| "workspace lock poisoned")?;
-        let cleanup_error = if lifecycle_error.is_none() {
+        let cleanup_allowed =
+            lifecycle_error.is_none() && session_terminated && session_error.is_none();
+        let cleanup_error = if cleanup_allowed {
             workspace
                 .release_kernel_cache_ownership()
                 .map_err(|error| error.to_string())
@@ -328,22 +322,32 @@ mod linux {
         workspace.close_store_connection()?;
         let connections_terminal = workspace.active_store_connections()?;
         drop(workspace);
+        let kernel_cache_released = cleanup_allowed && cleanup_error.is_none();
         let terminal_error = lifecycle_error
-            .or(unmount_error)
-            .or(session_error)
-            .or(signal_thread_error)
-            .or(cleanup_error);
+            .as_ref()
+            .or(session_error.as_ref())
+            .or(signal_thread_error.as_ref())
+            .or(cleanup_error.as_ref())
+            .cloned();
         let status = if terminal_error.is_none() {
             "PASS"
         } else {
             "FAIL"
         };
+        let terminal_error_json = terminal_error
+            .as_deref()
+            .map(|error| format!("\"{}\"", json(error)))
+            .unwrap_or_else(|| "null".to_owned());
         let body = format!(
         concat!(
             "{{\n",
             "  \"schema\": \"layerfs-fuse-terminal-v1\",\n",
             "  \"status\": \"{}\",\n",
             "  \"signal\": {},\n",
+            "  \"session_terminated\": {},\n",
+            "  \"kernel_cache_released\": {},\n",
+            "  \"terminal_snapshot_complete\": {},\n",
+            "  \"error\": {},\n",
             "  \"backend\": \"layerfs-fuse\",\n",
             "  \"integrity\": \"{}\",\n",
             "  \"ref\": \"{}\",\n",
@@ -353,13 +357,17 @@ mod linux {
             "  \"source_commit\": \"{}\",\n",
             "  \"source_tree\": \"{}\",\n",
             "  \"fs_bench_sha256\": \"{}\",\n",
-            "  \"callbacks\": {{\"lookup\":{},\"getattr\":{},\"create\":{},\"read\":{},\"write\":{},\"flush\":{},\"release\":{},\"fsync\":{},\"fsyncdir\":{},\"readdir\":{},\"callback_wall_ns\":{},\"mount_lock_wait_ns\":{},\"invalidations_requested\":{},\"invalidations_succeeded\":{},\"invalidations_failed\":{},\"invalidations_unsupported\":{}}},\n",
+            "  \"callbacks\": {{\"init\":{},\"destroy\":{},\"lookup\":{},\"getattr\":{},\"create\":{},\"read\":{},\"write\":{},\"flush\":{},\"release\":{},\"fsync\":{},\"fsyncdir\":{},\"statfs\":{},\"readdir\":{},\"callback_wall_ns\":{},\"mount_lock_wait_ns\":{},\"invalidations_requested\":{},\"invalidations_succeeded\":{},\"invalidations_failed\":{},\"invalidations_unsupported\":{}}},\n",
             "  \"mounted\": {{\"checkpoints\":{},\"no_op_checkpoints\":{},\"created_then_deleted\":{},\"splices\":{},\"lookup_refs\":{},\"lookup_refs_high_water\":{},\"live_nodes\":{},\"live_nodes_high_water\":{},\"open_handles\":{},\"open_handles_high_water\":{},\"pending_nodes\":{},\"pending_nodes_high_water\":{},\"dirty_nodes\":{},\"dirty_nodes_high_water\":{},\"dirty_ranges\":{},\"dirty_ranges_high_water\":{},\"directory_cursors\":{},\"directory_changes\":{},\"directory_changes_high_water\":{},\"inode_mappings\":{},\"inode_mappings_high_water\":{},\"logical_workspace_bytes\":{},\"logical_workspace_high_water_bytes\":{},\"spool_appended_bytes\":{},\"spool_live_bytes\":{},\"spool_live_high_water_bytes\":{},\"spool_dead_bytes\":{},\"spool_physical_bytes\":{},\"spool_physical_high_water_bytes\":{},\"spool_resets\":{},\"spool_compactions\":{},\"largest_request_bytes\":{},\"operation_q_terminal_bytes\":{},\"operation_q_high_water_bytes\":{},\"materializations\":{},\"capture_scans\":{}}},\n",
             "  \"engine\": {{\"transactions_started\":{},\"transactions_committed\":{},\"transactions_rolled_back\":{},\"publication_commits\":{},\"objects_created\":{},\"objects_reused\":{},\"object_bytes_read\":{},\"object_bytes_written\":{},\"statements\":{},\"fetched_rows\":{},\"busy_events\":{},\"locked_events\":{},\"connection_mutex_wait_ns\":{},\"connections_high_water\":{},\"connections_before_drop\":{},\"connections_terminal\":{}}}\n",
             "}}\n"
         ),
         status,
         signal,
+        session_terminated,
+        kernel_cache_released,
+        session_terminated,
+        terminal_error_json,
         match integrity {
             IntegrityMode::Verified => "Verified",
             IntegrityMode::TrustedLocalDev => "TrustedLocalDev",
@@ -371,6 +379,8 @@ mod linux {
         json(source_commit),
         json(source_tree),
         FS_BENCH_SHA256,
+        fuse.init,
+        fuse.destroy,
         fuse.lookup,
         fuse.getattr,
         fuse.create,
@@ -380,6 +390,7 @@ mod linux {
         fuse.release,
         fuse.fsync,
         fuse.fsyncdir,
+        fuse.statfs,
         fuse.readdir,
         fuse.callback_wall_ns,
         fuse.mount_lock_wait_ns,
