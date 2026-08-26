@@ -1,0 +1,19 @@
+{
+  "ack_to_kill_request_ns": 12716080,
+  "checks": {
+    "ack_to_kill_request_under_250ms": true,
+    "exit_137": true,
+    "helper_return_to_kill_request_under_20ms": true,
+    "kill_command_succeeded": true,
+    "no_graceful_terminal_receipt": true,
+    "not_oom_killed": true
+  },
+  "durability_acknowledged_unix_ns": 1787733220078914920,
+  "helper_return_to_kill_request_ns": 765000,
+  "helper_returned_unix_ns": 1787733220090866000,
+  "kill_requested_unix_ns": 1787733220091631000,
+  "kill_returned_unix_ns": 1787733220139306000,
+  "schema": "layerfs-stage2-015-focused-crash-window-v1",
+  "status": "PASS",
+  "wait_returned_unix_ns": 1787733220162004000
+}

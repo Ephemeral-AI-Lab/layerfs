@@ -1,0 +1,52 @@
+{
+  "T_checkpoint_ns": 696872584,
+  "T_live_ns": 756075250,
+  "T_to_durable_ns": 1452947834,
+  "accepted_ref": {
+    "generation": 1,
+    "root": "463d5a884c1dc80cde2b489218e3e41c53a7313f1859094d50d4b47008ebd0d2"
+  },
+  "ack_to_kill_request_ns": 14275406,
+  "case": "metadata",
+  "cleanup_checks": {
+    "clean_inventory_empty": true,
+    "cleanup_barrier_returned": true,
+    "cleanup_command_succeeded": true,
+    "owned_containers_absent": true,
+    "owned_volume_absent": true,
+    "sampler_absent": true,
+    "terminal_resources_clean": true,
+    "terminal_root_exact": true
+  },
+  "image_id": "sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0",
+  "pristine_ref": {
+    "generation": 0,
+    "root": "0ba3ea6ea4a6985c8b52d780ab51024f0aa58e64b15609defc7800593e4f553f"
+  },
+  "resource_checks": {
+    "cgroup_memory_peak_bounded": true,
+    "fd_bounded": true,
+    "oom_zero": true,
+    "sampler_samples_nonzero": true,
+    "sampler_started_before_command": true,
+    "schedstat_monotonic": true,
+    "task_set_stable": true,
+    "threads_bounded": true
+  },
+  "schema": "layerfs-stage2-015-focused-current-crash-v1",
+  "source_commit": "7e82abcd7320f6a214be336d82488ba0527b6025",
+  "source_tree": "df13d88eb7e7d2471971b0c58ca6425bb81b0b03",
+  "status": "PASS",
+  "verification": {
+    "acknowledged_ref_exact_after_reopen": true,
+    "crash_window_pass": true,
+    "generation_advanced_exactly_once": true,
+    "metadata_descendant_count_exact": true,
+    "metadata_file_bytes_exact": true,
+    "metadata_inventory_exact": true,
+    "resources_pass": true,
+    "root_changed": true,
+    "verified_startup": true
+  },
+  "verified_entries_sha256": "31b9f1945f2fc48966ad4a1633fe8e758e57ed4fb1f75db539e0014dd72dd5a5"
+}

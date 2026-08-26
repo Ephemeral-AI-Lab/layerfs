@@ -30,19 +30,24 @@ evidence qualifications are recorded under
 workload reference. The direct successor is the LayerFS + Linux FUSE workspace
 specified in `poc/19`, with Docker only as its Linux execution envelope.
 macFUSE and FSKit are not selected dependencies.
-Stage 2 terminal source `292be840c31052d85ab6e9441706298af3cd3d15`
-and image `sha256:62b459af3f03dc8bbe97419b8522ed3599ab6d562b12ebe8b8ed5efb7f22f5fc`
-pass both exact Docker `--cpus 1` authoritative populations: `/var/tmp` SL
-`3.517 s`, Rsum `2.040`, G `3.207`, Spread `1.041`; `/tmp` SL `3.449 s`,
-Rsum `2.126`, G `3.691`, Spread `1.051`. These are retained as `LIVE_MOUNT`
-diagnostics. Controlling custody is
-`poc/evidence/stage2-freeze-candidate-014`, whose terminal status is reopened
-The separate command-to-checkpoint-ack campaign passes 36/36 measured samples
-plus 12 warmups and two SIGKILL/reopen proofs per sample, with a `7.854 s` sum
-of durable medians. A deployed Cloudflare post-exec Durable Object/restart
-population is unavailable, so the honest disposition is
-`PASS_DURABLE_LAYERFS_COMPARISON_UNAVAILABLE`, not `PASS_OPTIMIZED`. Candidate
-013 is historical live-mount evidence; candidate 012 is superseded.
+Stage 2 provisional product source
+`7e82abcd7320f6a214be336d82488ba0527b6025` and image
+`sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0`
+are controlled by `poc/evidence/stage2-freeze-candidate-015`. Its fresh-Store
+persistence campaign passes 36/36 measured samples plus 12 warmups, with an
+`8.229 s` sum of durable medians, two independent crash/reopen chains per
+sample, bounded resources, and zero residue. Current-source successful dirty
+external-unmount and focused metadata/payload post-ack SIGKILL proofs also
+pass. Candidate 015's unchanged-upstream source-bound live rerun passes:
+`/var/tmp` SL `3.361 s`, Rsum `2.193`, G `3.372`, Spread `1.058`; `/tmp` SL
+`3.299 s`, Rsum `2.133`, G `3.569`, Spread `1.021`. These remain `LIVE_MOUNT`
+diagnostics. The matched Cloudflare wrapper is locally validated at commit
+`151b053b`, but
+the authenticated account lacks Workers Paid/Containers entitlement, so there
+are zero deployed comparison samples and resource metrics remain null. Current
+status is `PASS_DURABLE_LAYERFS + CLOUDFLARE_COMPARISON_BLOCKED_EXTERNAL +
+REVISE`, not `PASS_OPTIMIZED`. Candidate 014 and 013 are historical; candidate
+012 is superseded.
 
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure

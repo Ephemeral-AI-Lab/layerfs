@@ -1,0 +1,7 @@
+{
+  "container": "lfs-c015-crash-metadata-01-verify",
+  "container_remove_exit": 0,
+  "status": "PASS",
+  "volume": "lfs_c015_crash_metadata_store",
+  "volume_remove_exit": 0
+}

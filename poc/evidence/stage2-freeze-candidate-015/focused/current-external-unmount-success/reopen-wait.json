@@ -1,0 +1,8 @@
+{
+  "attempts": 1,
+  "container": "layerfs-c015-focus-external-reopen",
+  "elapsed_ns": 118103000,
+  "ended_ns": 1787733032964957000,
+  "ready_time_utc": "2026-08-26T08:30:32.964965+00:00",
+  "started_ns": 1787733032846854000
+}

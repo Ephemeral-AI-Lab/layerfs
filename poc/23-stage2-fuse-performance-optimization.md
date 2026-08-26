@@ -2,24 +2,28 @@
 
 Status: **LayerFS persistence-inclusive campaign passes; full-product comparison unavailable**
 
-The current candidate is [candidate 014](evidence/stage2-freeze-candidate-014/summary.md),
-source `292be840c31052d85ab6e9441706298af3cd3d15`, image
-`sha256:62b459af3f03dc8bbe97419b8522ed3599ab6d562b12ebe8b8ed5efb7f22f5fc`,
-using the unchanged upstream benchmark, exact 12-scenario filter, and
-controlling Docker `--cpus 1` quota envelope. `/var/tmp` closes at SL
-`3.517 s`, Rsum `2.040`, G `3.207`, Spread `1.041`; `/tmp` closes at SL
-`3.449 s`, Rsum `2.126`, G `3.691`, Spread `1.051`. These unchanged-upstream
-matrices measure live mount latency and are now non-terminal diagnostics. A
-separate timer from command start through explicit whole-workspace durability
-acknowledgement, followed by kill/reopen state proof, controls the reopened
-closure. It passes 36/36 measured samples plus 12 warmups; summed durable
-medians are `7.854 s`, reported alongside separately aggregated live medians
-`3.524 s` and checkpoint medians `4.307 s`. Every sample satisfies the timing
-equation exactly, but independently selected medians need not add. The prior Cloudflare Docker ratios describe
-local committed process-lifetime VFS work, not full Durable Object
-synchronization, so their thresholds are not reused as durable-persistence
-gates. Without a deployed post-pull/restart population the honest disposition
-is `PASS_DURABLE_LAYERFS_COMPARISON_UNAVAILABLE`, not `PASS_OPTIMIZED`.
+The current provisional candidate is
+[candidate 015](evidence/stage2-freeze-candidate-015/summary.json), source
+`7e82abcd7320f6a214be336d82488ba0527b6025`, image
+`sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0`.
+The fresh-Store persistence-inclusive campaign passes 36/36 measured samples
+plus 12 warmups; summed durable medians are `8.229 s`, reported alongside
+separately selected live medians `3.898 s` and durability-residual medians
+`4.337 s`. Every sample has two independent SIGKILL/Verified-reopen proofs.
+Focused current-image external-unmount, metadata-heavy crash, and high-entropy
+64 MiB crash proofs also pass with exact accepted generation/root/state and
+zero residue. Candidate 015's unchanged-upstream source-bound live rerun passes:
+`/var/tmp` SL `3.361 s`, Rsum `2.193`, G `3.372`, Spread `1.058`; `/tmp` SL
+`3.299 s`, Rsum `2.133`, G `3.569`, Spread `1.021`. These are `LIVE_MOUNT`
+diagnostics, not durable-comparison numbers. The prior Cloudflare Docker ratios
+describe local process-lifetime VFS work, not full
+Durable Object synchronization, so their thresholds are not reused as durable
+gates. The locally validated matched wrapper at commit `151b053b` requires
+prep acknowledgement plus restart, timed DO acknowledgement, a second restart,
+scenario-specific exact state, and external platform resource metrics. The
+authenticated account lacks Containers entitlement, so no deployed sample
+exists. Current status is `PASS_DURABLE_LAYERFS +
+CLOUDFLARE_COMPARISON_BLOCKED_EXTERNAL + REVISE`, not `PASS_OPTIMIZED`.
 
 Prepared: `2026-08-26`
 

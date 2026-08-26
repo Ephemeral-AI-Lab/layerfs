@@ -1,0 +1,3 @@
+sed -n '234,419p' run.sh | python3 - EVIDENCE 7e82abcd7320f6a214be336d82488ba0527b6025 df13d88eb7e7d2471971b0c58ca6425bb81b0b03 sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0 layerfs_stage2_c015_focus_external_success_store layerfs-c015-focus-external-init layerfs-c015-focus-external-dirty layerfs-c015-focus-external-reopen
+
+EVIDENCE is the absolute current-external-unmount-success directory. This reruns only the corrected read-only verifier after the original verifier used direct HostConfig["Tmpfs"] indexing against a Docker inspect document where the absent field correctly meant no tmpfs.

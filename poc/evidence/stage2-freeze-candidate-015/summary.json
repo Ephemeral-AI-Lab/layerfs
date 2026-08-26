@@ -20,6 +20,9 @@
     "immediate_term_after_readiness": "PASS",
     "repeated_term_dirty_100_mib_verified_reopen": "PASS",
     "unmount_busy_bounded_fail_closed": "PASS",
+    "external_unmount_dirty_single_checkpoint_verified_reopen": "PASS",
+    "post_fsyncdir_metadata_sigkill_verified_reopen": "PASS",
+    "post_fsyncdir_64_mib_sigkill_verified_reopen": "PASS",
     "statvfs_four_state_oracle": "PASS"
   },
   "durable_campaign": {
@@ -55,10 +58,37 @@
     "request_buffer_scope": "largest admitted FUSE request <= 1 MiB; no product-wide allocation claim"
   },
   "performance_disposition": {
-    "live_upstream_fs_bench": "LIVE_MOUNT_DIAGNOSTIC_ONLY",
+    "live_upstream_fs_bench": "PASS_LIVE_MOUNT_DIAGNOSTIC_ONLY",
+    "live_current_source": {
+      "verification": "live-current/verification.json",
+      "var_tmp": {
+        "sl_ns": 3360647000,
+        "rsum": 2.1926323701120602,
+        "geometric_mean_ratio": 3.3717840126319927,
+        "spread": 1.0579269295466023,
+        "population_throttle_ratio": 0.011845181016920133,
+        "mount_lock_ratio": 0.0115276398251672
+      },
+      "tmp": {
+        "sl_ns": 3299381404,
+        "rsum": 2.13311132144515,
+        "geometric_mean_ratio": 3.568670474216545,
+        "spread": 1.021414195677512,
+        "population_throttle_ratio": 0.013024100447766031,
+        "mount_lock_ratio": 0.008003406873257794
+      }
+    },
     "durable_layerfs": "PASS_DURABLE_WITHOUT_CLOUDFLARE_NUMERIC_GATE",
     "cloudflare_full_product": "UNAVAILABLE_EXTERNAL_ENTITLEMENT",
     "old_4_5s_rsum_g_thresholds_reused": false
+  },
+  "cloudflare_deploy_readiness": {
+    "status": "LOCAL_VALIDATION_PASS_DEPLOYMENT_BLOCKED_EXTERNAL",
+    "wrapper_commit": "151b053b514e7bd0eb4b64481fe89335c43e7109",
+    "wrapper_tree": "44456876b58e5ebb2652e999f48d9b015ec7ee5f",
+    "computerd_sha256": "a6f05d79cce84035b21f6377d7f37b799128c6bdb5e9a4fb92b403604fb49b7a",
+    "deployed_samples": 0,
+    "resource_metrics": null
   },
   "checksums_disposition": "SHA256SUMS intentionally deferred until the deployed Cloudflare comparison and terminal custody are complete."
 }

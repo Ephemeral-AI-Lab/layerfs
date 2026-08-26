@@ -1,0 +1,30 @@
+{
+  "acknowledged_ref": {
+    "generation": 1,
+    "root": "1628513f690b87be7383dc404d51352498f370aaef336675be52e1a6504b071e"
+  },
+  "checks": {
+    "acknowledged_ref_exact_after_reopen": true,
+    "crash_window_pass": true,
+    "generation_advanced_exactly_once": true,
+    "payload_command_digest_parsed": true,
+    "payload_high_entropy": true,
+    "payload_inventory_exact": true,
+    "payload_sha256_exact": true,
+    "payload_size_exact": true,
+    "resources_pass": true,
+    "root_changed": true,
+    "verified_startup": true
+  },
+  "pristine_ref": {
+    "generation": 0,
+    "root": "e9433e92779aa044c88d4c28e289db6f12410dc3d08447ebec0f6e1194fca596"
+  },
+  "schema": "layerfs-stage2-015-focused-crash-verification-v1",
+  "status": "PASS",
+  "verified_entries_sha256": "a1a912e8721a6c70645a969497873ee0b2563b853924e6219dd0474361c91e12",
+  "verified_ref": {
+    "generation": 1,
+    "root": "1628513f690b87be7383dc404d51352498f370aaef336675be52e1a6504b071e"
+  }
+}

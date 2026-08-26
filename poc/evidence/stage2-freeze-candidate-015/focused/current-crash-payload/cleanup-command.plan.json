@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "docker",
+    "exec",
+    "lfs-c015-crash-payload-01-verify",
+    "python3",
+    "-c",
+    "import shutil; shutil.rmtree('/workspace/crash-case')"
+  ]
+}

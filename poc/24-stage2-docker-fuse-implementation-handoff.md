@@ -27,24 +27,25 @@ run meeting every gate below.
 
 ## Closure record
 
-This handoff's correctness/resource and LayerFS restart-durable qualification
-are complete. The current source is
-`292be840c31052d85ab6e9441706298af3cd3d15`; the terminal ARM64 image is
-`sha256:62b459af3f03dc8bbe97419b8522ed3599ab6d562b12ebe8b8ed5efb7f22f5fc`.
-Both exact `--cpus 1` authoritative populations pass all numeric, row,
-resource, publication, and cleanup gates: `/var/tmp` closes at SL `3.517 s`,
-Rsum `2.040`, G `3.207`, Spread `1.041`; `/tmp` closes at SL `3.449 s`, Rsum
-`2.126`, G `3.691`, Spread `1.051`. Those results are now classified as
-`LIVE_MOUNT` diagnostics. The controlling evidence remains
-[candidate 014](evidence/stage2-freeze-candidate-014/summary.md), but it cannot
-be promoted to terminal `PASS_OPTIMIZED` from those rows. The separate
-command-start-to-checkpoint-ack campaign passes 36/36 measured samples plus 12
-warmups and two SIGKILL/reopen proofs per sample; summed durable medians are
-`7.854 s`. Cloudflare's published Docker baseline is local committed VFS
-evidence and excludes post-exec Durable Object pull, so it is not labeled fully
-restart-durable. A fair full-product Cloudflare population requires external
-deployment/restart authority that is unavailable here. Current disposition:
-`PASS_DURABLE_LAYERFS_COMPARISON_UNAVAILABLE`.
+This handoff's current provisional correctness/resource and LayerFS
+restart-durable qualification are complete. Product source is
+`7e82abcd7320f6a214be336d82488ba0527b6025`; the bound ARM64 image is
+`sha256:f8647b84580c75d4688a18665e4c60cd6dcf5b2d3092cf22bce34dfbd86b59b0`.
+[Candidate 015](evidence/stage2-freeze-candidate-015/summary.json) passes 36/36
+fresh-Store measured samples plus 12 warmups, two independent crash/reopen
+proofs per sample, summed durable medians `8.229 s`, separately selected live
+medians `3.898 s`, bounded resources, and zero residue. Its focused current-
+image successful dirty-unmount, metadata-heavy crash, and 64 MiB high-entropy
+crash proofs also pass. Its unchanged-upstream source-bound live rerun passes
+under one CPU, 512 MiB, Verified integrity, and real FUSE: `/var/tmp` SL
+`3.361 s`, Rsum `2.193`, G `3.372`, Spread `1.058`; `/tmp` SL `3.299 s`,
+Rsum `2.133`, G `3.569`, Spread `1.021`. These rows remain live-mount
+diagnostics. The matched deployed Cloudflare wrapper is locally validated and
+committed as `151b053b514e7bd0eb4b64481fe89335c43e7109`, but
+the authenticated account lacks Workers Paid/Containers entitlement. No
+Cloudflare timed sample or attributable CPU/memory HWM metric exists. Current
+disposition: `PASS_DURABLE_LAYERFS + CLOUDFLARE_COMPARISON_BLOCKED_EXTERNAL +
+REVISE`.
 
 ## Terminal success
 

@@ -12,5 +12,9 @@
   "reason_deployment_not_attempted": "The read-only Containers admission check failed. Deploying before entitlement and before the authenticated benchmark wrapper is locally verified would be unsafe and cannot succeed.",
   "cloudflare_source_commit": "de87919a4fd37242e960e13b7b3ba802d1eef0a0",
   "cloudflare_source_tree": "4fb409d7e1356e1098439293d77d2fdc2dbf2190",
+  "deploy_ready_wrapper_commit": "151b053b514e7bd0eb4b64481fe89335c43e7109",
+  "deploy_ready_wrapper_tree": "44456876b58e5ebb2652e999f48d9b015ec7ee5f",
+  "deploy_ready_wrapper_status": "LOCAL_VALIDATION_PASS_DEPLOYMENT_BLOCKED_EXTERNAL",
+  "wrangler_version": "4.115.0",
   "credentials_or_account_identity_retained": false
 }

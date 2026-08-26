@@ -1,0 +1,23 @@
+{
+  "schema": "layerfs-stage2-focused-verification-history-v1",
+  "product_execution_count": 1,
+  "product_rerun_after_successful_execution": false,
+  "execution_result": "PASS",
+  "attempts": [
+    {
+      "artifact": "run.stderr",
+      "classification": "VERIFIER_ERROR",
+      "detail": "The product execution, Verified reopen, cleanup, container removals, and volume removal completed before the embedded verifier indexed an absent Docker HostConfig Tmpfs field directly. An absent field means no tmpfs."
+    },
+    {
+      "artifact": "oracle-attempt-001.json",
+      "classification": "VERIFIER_EXPECTATION_ERROR",
+      "detail": "The first recovery used three incorrect evidence literals: mountinfo reports '- fuse layerfs', Docker reports CAP_SYS_ADMIN, and create-then-delete legitimately changes root metadata while returning logical inventory to empty. Raw product equations all passed."
+    },
+    {
+      "artifact": "oracle.json",
+      "classification": "PASS",
+      "detail": "The corrected read-only verifier consumed the original raw artifacts. No product, image, mount, write, unmount, reopen, or cleanup command was rerun."
+    }
+  ]
+}
