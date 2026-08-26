@@ -1872,7 +1872,13 @@ impl MountedWorkspace {
                 .filter(|id| self.nodes.get(id).is_some_and(|node| node.deleted))
                 .collect::<Vec<_>>()
             {
-                self.drain_node_file_ranges(id)?;
+                if self
+                    .nodes
+                    .get(&id)
+                    .is_some_and(|entry| entry.open_refs == 0)
+                {
+                    self.drain_node_file_ranges(id)?;
+                }
                 if let Some(entry) = self.nodes.get_mut(&id) {
                     if let Some(inode) = entry.canonical.take() {
                         self.by_inode.remove(&inode);
@@ -4352,6 +4358,78 @@ mod tests {
     }
 
     #[test]
+    fn open_orphan_retains_dirty_bytes_through_delete_checkpoint_until_release() {
+        for write_before_unlink in [true, false] {
+            let label = if write_before_unlink {
+                "orphan-write-before-unlink"
+            } else {
+                "orphan-unlink-before-write"
+            };
+            let (store, spool, directory) = paths(label);
+            let mut mounted = MountedWorkspace::open(
+                &store,
+                "main",
+                IntegrityMode::TrustedLocalDev,
+                spool.clone(),
+                [0x97; 32],
+            )
+            .unwrap();
+            let (file, handle) = mounted.create_file(ROOT_NODE, b"orphan", 0o644).unwrap();
+            mounted.write(file.node, handle, 0, b"version-one").unwrap();
+            mounted.fsync().unwrap();
+            if write_before_unlink {
+                mounted.write(file.node, handle, 0, b"version-two").unwrap();
+                mounted.unlink(ROOT_NODE, b"orphan").unwrap();
+            } else {
+                mounted.unlink(ROOT_NODE, b"orphan").unwrap();
+                mounted.write(file.node, handle, 0, b"version-two").unwrap();
+            }
+            let removed = mounted.fsync().unwrap();
+            assert_eq!(
+                mounted.read(file.node, handle, 0, 32).unwrap(),
+                b"version-two"
+            );
+            let retained = mounted.counters().unwrap();
+            assert!(retained.dirty_ranges > 0);
+            assert!(retained.spool_live_bytes > 0);
+            mounted.reset_engine_counters().unwrap();
+            assert_eq!(mounted.fsync().unwrap(), removed);
+            let engine = mounted.engine_counters().unwrap();
+            assert_eq!(engine.transactions_started, 0);
+            assert_eq!(engine.transactions_committed, 0);
+            assert_eq!(engine.transactions_rolled_back, 0);
+            assert_eq!(engine.publication_commits, 0);
+            mounted.release(handle).unwrap();
+            mounted.forget(file.node, 1);
+            let released = mounted.counters().unwrap();
+            assert_eq!(released.dirty_ranges, 0);
+            assert_eq!(released.spool_live_bytes, 0);
+            assert_eq!(released.spool_physical_bytes, 0);
+            assert_eq!(released.pending_nodes, 0);
+            assert_eq!(released.dirty_nodes, 0);
+            assert!(!mounted.nodes.contains_key(&file.node));
+            mounted.shutdown().unwrap();
+            drop(mounted);
+
+            let mut reopened = MountedWorkspace::open(
+                &store,
+                "main",
+                IntegrityMode::TrustedLocalDev,
+                spool,
+                [0x97; 32],
+            )
+            .unwrap();
+            assert!(matches!(
+                reopened.lookup_child(ROOT_NODE, b"orphan"),
+                Err(MountedError::NotFound)
+            ));
+            reopened.shutdown().unwrap();
+            drop(reopened);
+            std::fs::remove_dir_all(directory).unwrap();
+        }
+    }
+
+    #[test]
     fn resource_limit_failures_leave_namespace_content_and_spool_atomic() {
         let (store, spool, directory) = paths("resource-preflight");
         let mut mounted = MountedWorkspace::open(
@@ -4675,6 +4753,54 @@ mod tests {
         ));
         assert_eq!(mounted.shutdown().unwrap(), first);
         drop(mounted);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn paused_budget_allows_one_dirty_graceful_shutdown_checkpoint() {
+        let (store, spool, directory) = paths("paused-dirty-shutdown");
+        let mut mounted = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool.clone(),
+            [0x98; 32],
+        )
+        .unwrap();
+        let (file, handle) = mounted.create_file(ROOT_NODE, b"dirty", 0o644).unwrap();
+        mounted
+            .write(file.node, handle, 0, b"graceful-dirty-bytes")
+            .unwrap();
+        mounted.release(handle).unwrap();
+        let budget = mounted.byte_budget();
+        budget.pause_and_wait().unwrap();
+        mounted.shutdown().unwrap();
+        budget.close_and_wait().unwrap();
+        let counters = mounted.counters().unwrap();
+        assert_eq!(counters.checkpoints, 1);
+        assert_eq!(counters.operation_q_current_bytes, 0);
+        assert_eq!(counters.dirty_nodes, 0);
+        assert_eq!(counters.dirty_ranges, 0);
+        assert_eq!(counters.spool_live_bytes, 0);
+        drop(mounted);
+
+        let mut reopened = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool,
+            [0x98; 32],
+        )
+        .unwrap();
+        let file = reopened.lookup_child(ROOT_NODE, b"dirty").unwrap();
+        let handle = reopened.open_file(file.node, false).unwrap();
+        assert_eq!(
+            reopened.read(file.node, handle, 0, 64).unwrap(),
+            b"graceful-dirty-bytes"
+        );
+        reopened.release(handle).unwrap();
+        reopened.shutdown().unwrap();
+        drop(reopened);
         std::fs::remove_dir_all(directory).unwrap();
     }
 

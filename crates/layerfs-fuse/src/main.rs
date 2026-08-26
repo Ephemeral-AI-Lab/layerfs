@@ -98,7 +98,7 @@ mod linux {
     use std::ffi::OsStr;
     use std::fmt::Write as _;
     use std::fs::{File, OpenOptions};
-    use std::io::{Read, Write};
+    use std::io::{BufRead, BufReader, Read, Write};
     use std::path::{Path, PathBuf};
 
     struct ControlPaths {
@@ -114,7 +114,9 @@ mod linux {
         replacement: Vec<u8>,
     }
 
-    const CONTROL_DECODE_Q_BYTES: usize = 6 * MAX_REQUEST_BYTES;
+    const CONTROL_DECODE_Q_BYTES: usize = 2 * MAX_REQUEST_BYTES;
+    const CONTROL_HEX_CHUNK_BYTES: usize = 64 * 1024;
+    const CONTROL_PATH_BYTES: usize = 4096;
 
     pub fn main() {
         if let Err(error) = run() {
@@ -212,18 +214,23 @@ mod linux {
             (SIGHUP, Some(control)) => {
                 execute_splice_control(&shared_workspace, &byte_budget, control).err()
             }
-            _ => byte_budget
-                .close_and_wait()
-                .map_err(|error| error.to_string())
-                .and_then(|()| {
-                    shared_workspace
-                        .lock()
-                        .map_err(|_| "workspace lock poisoned".to_owned())?
-                        .shutdown()
-                        .map(|_| ())
-                        .map_err(|error| error.to_string())
-                })
-                .err(),
+            _ => {
+                let shutdown = byte_budget
+                    .pause_and_wait()
+                    .map_err(|error| error.to_string())
+                    .and_then(|()| {
+                        shared_workspace
+                            .lock()
+                            .map_err(|_| "workspace lock poisoned".to_owned())?
+                            .shutdown()
+                            .map(|_| ())
+                            .map_err(|error| error.to_string())
+                    });
+                let close = byte_budget
+                    .close_and_wait()
+                    .map_err(|error| error.to_string());
+                shutdown.and(close).err()
+            }
         };
         drop(session);
         drop(notifier_slot);
@@ -468,55 +475,17 @@ mod linux {
     }
 
     fn read_splice_request(path: &Path) -> Result<SpliceRequest, String> {
-        let limit = MAX_REQUEST_BYTES
-            .checked_mul(2)
-            .and_then(|bytes| bytes.checked_add(4096))
-            .ok_or_else(|| "control request limit overflow".to_owned())?;
-        let mut input = String::new();
-        File::open(path)
-            .map_err(|error| error.to_string())?
-            .take(limit as u64 + 1)
-            .read_to_string(&mut input)
-            .map_err(|error| error.to_string())?;
-        if input.len() > limit {
-            return Err("control request is too large".to_owned());
-        }
-        let mut fields = HashMap::new();
-        for line in input.lines() {
-            let (key, value) = line
-                .split_once('=')
-                .ok_or_else(|| "control request lines must be key=value".to_owned())?;
-            if !matches!(key, "path" | "start" | "delete" | "replacement_hex") {
-                return Err(format!("unknown control request field {key}"));
-            }
-            if fields.insert(key, value).is_some() {
-                return Err(format!("duplicate control request field {key}"));
-            }
-        }
-        let path_text = fields
-            .get("path")
-            .ok_or_else(|| "missing control request path".to_owned())?
-            .to_string();
+        let mut reader = BufReader::new(File::open(path).map_err(|error| error.to_string())?);
+        let path_text = read_control_field(&mut reader, "path", CONTROL_PATH_BYTES)?;
         let path = CanonicalPath::from_bytes(path_text.as_bytes())
             .map_err(|_| "invalid canonical control path".to_owned())?;
-        let start = fields
-            .get("start")
-            .ok_or_else(|| "missing control request start".to_owned())?
+        let start = read_control_field(&mut reader, "start", 20)?
             .parse()
             .map_err(|_| "invalid control request start".to_owned())?;
-        let delete_len = fields
-            .get("delete")
-            .ok_or_else(|| "missing control request delete".to_owned())?
+        let delete_len = read_control_field(&mut reader, "delete", 20)?
             .parse()
             .map_err(|_| "invalid control request delete".to_owned())?;
-        let replacement = decode_hex(
-            fields
-                .get("replacement_hex")
-                .ok_or_else(|| "missing control request replacement_hex".to_owned())?,
-        )?;
-        if replacement.len() > MAX_REQUEST_BYTES {
-            return Err("control replacement exceeds the request limit".to_owned());
-        }
+        let replacement = read_control_hex(&mut reader)?;
         Ok(SpliceRequest {
             path,
             path_text,
@@ -526,19 +495,83 @@ mod linux {
         })
     }
 
-    fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
-        if value.len() % 2 != 0 {
+    fn read_control_field(
+        reader: &mut impl BufRead,
+        name: &str,
+        max_value_bytes: usize,
+    ) -> Result<String, String> {
+        let prefix = format!("{name}=");
+        let limit = prefix.len() + max_value_bytes + 1;
+        let mut line = Vec::with_capacity(limit);
+        reader
+            .by_ref()
+            .take(limit as u64)
+            .read_until(b'\n', &mut line)
+            .map_err(|error| error.to_string())?;
+        if line.last() != Some(&b'\n') {
+            return Err(format!("control request {name} is missing or too large"));
+        }
+        line.pop();
+        let value = line
+            .strip_prefix(prefix.as_bytes())
+            .ok_or_else(|| format!("expected control request field {name}"))?;
+        String::from_utf8(value.to_vec())
+            .map_err(|_| format!("control request {name} is not UTF-8"))
+    }
+
+    fn read_control_hex(reader: &mut impl Read) -> Result<Vec<u8>, String> {
+        const PREFIX: &[u8] = b"replacement_hex=";
+        let mut prefix = [0_u8; PREFIX.len()];
+        reader
+            .read_exact(&mut prefix)
+            .map_err(|_| "missing control request replacement_hex".to_owned())?;
+        if prefix != PREFIX {
+            return Err("expected control request field replacement_hex".to_owned());
+        }
+        let mut replacement = Vec::new();
+        let mut encoded = [0_u8; CONTROL_HEX_CHUNK_BYTES];
+        let mut high = None;
+        loop {
+            let read = reader
+                .read(&mut encoded)
+                .map_err(|error| error.to_string())?;
+            if read == 0 {
+                break;
+            }
+            for (index, byte) in encoded[..read].iter().copied().enumerate() {
+                if byte == b'\n' {
+                    if high.is_some() {
+                        return Err("replacement_hex must have even length".to_owned());
+                    }
+                    if index + 1 != read {
+                        return Err("replacement_hex must be the final control field".to_owned());
+                    }
+                    let mut trailing = [0_u8; 1];
+                    if reader
+                        .read(&mut trailing)
+                        .map_err(|error| error.to_string())?
+                        != 0
+                    {
+                        return Err("replacement_hex must be the final control field".to_owned());
+                    }
+                    return Ok(replacement);
+                }
+                let digit = hex_digit(byte)?;
+                match high.take() {
+                    Some(high) => {
+                        if replacement.len() == MAX_REQUEST_BYTES {
+                            return Err("control replacement exceeds the request limit".to_owned());
+                        }
+                        replacement.push((high << 4) | digit);
+                    }
+                    None => high = Some(digit),
+                }
+            }
+        }
+        if high.is_some() {
             return Err("replacement_hex must have even length".to_owned());
         }
-        value
-            .as_bytes()
-            .chunks_exact(2)
-            .map(|pair| {
-                let high = hex_digit(pair[0])?;
-                let low = hex_digit(pair[1])?;
-                Ok((high << 4) | low)
-            })
-            .collect()
+        Ok(replacement)
     }
 
     fn hex_digit(value: u8) -> Result<u8, String> {
@@ -724,6 +757,14 @@ mod linux {
             assert_eq!(parsed.start, 7);
             assert_eq!(parsed.delete_len, 3);
             assert_eq!(parsed.replacement, [0x00, 0xab, 0xff]);
+            let mut maximum = b"path=dir/file\nstart=7\ndelete=3\nreplacement_hex=".to_vec();
+            maximum.extend("ab".repeat(MAX_REQUEST_BYTES).bytes());
+            maximum.push(b'\n');
+            std::fs::write(&request, maximum).unwrap();
+            assert_eq!(
+                read_splice_request(&request).unwrap().replacement.len(),
+                MAX_REQUEST_BYTES
+            );
             std::fs::write(
                 &request,
                 b"path=dir/file\nstart=7\ndelete=3\nreplacement_hex=0\n",
