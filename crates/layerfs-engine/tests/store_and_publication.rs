@@ -47,6 +47,58 @@ fn publication_reuse_authenticates_the_exact_derived_candidate_without_rehashing
 }
 
 #[test]
+fn publication_reuse_over_one_mib_falls_back_and_rejects_corrupt_incumbent() {
+    let path = std::env::temp_dir().join(format!(
+        "layerfs-large-derived-reuse-{}-{}.sqlite",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let engine = Engine::open_with_mode(&path, IntegrityMode::TrustedLocalDev).unwrap();
+    let canonical = encode_bytes_object(&vec![0x5a; 1_048_577]).unwrap();
+    let corrupt = encode_bytes_object(&vec![0xa5; 1_048_577]).unwrap();
+    let mut publication = engine.begin_publication(None, "main").unwrap();
+    let id = publication.put_object(&canonical).unwrap();
+    let state = publication
+        .publish_namespace(
+            &encode_namespace_root(NamespaceRootV1 {
+                profile_id: profile_id(),
+                root_directory_inode: InodeId::allocate([0x71; 32], 0),
+                inode_table_root: ObjectId::for_bytes(b"large-fallback-table"),
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE layerfs_objects SET canonical_bytes = ?1 WHERE object_id = ?2",
+            params![corrupt, id.as_bytes().as_slice()],
+        )
+        .unwrap();
+
+    let mut publication = engine.begin_publication(Some(&state), "main").unwrap();
+    engine.reset_counters().unwrap();
+    assert!(matches!(
+        publication.put_object(&canonical),
+        Err(EngineError::MalformedObject { .. })
+    ));
+    let counters = engine.counters().unwrap();
+    assert_eq!(counters.put_lookup_statements, 1);
+    assert_eq!(counters.objects_validated, 1);
+    assert_eq!(counters.new_object_authentication_passes, 1);
+    assert_eq!(counters.incumbent_authentication_passes, 0);
+    assert_eq!(counters.object_bytes_read, 0);
+    assert!(counters.identity_authentication_ns > 0);
+
+    drop(publication);
+    drop(engine);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
 fn trusted_borrowed_load_and_ordered_batch_skip_identity_authentication() {
     let path = std::env::temp_dir().join(format!(
         "layerfs-store-test-{}-{}.sqlite",

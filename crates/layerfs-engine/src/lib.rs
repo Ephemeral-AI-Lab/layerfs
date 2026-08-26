@@ -2697,7 +2697,7 @@ fn put_validated_object_on_connection(
         checked_add(&mut counters.new_object_authentication_passes, 1)?;
         checked_add(&mut counters.put_lookup_statements, 1)
     })?;
-    let incumbent = if candidate_id_derived {
+    let incumbent = if candidate_id_derived && canonical_bytes.len() <= 1_048_576 {
         match exact_candidate_on_connection(engine, connection, id, kind, canonical_bytes)? {
             Some(true) => {
                 engine.bump(|counters| {
