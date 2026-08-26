@@ -29,7 +29,7 @@ FROM rust:1.85.1-bookworm
 
 ARG LAYERFS_SOURCE_COMMIT
 ARG LAYERFS_SOURCE_TREE
-LABEL org.opencontainers.image.source="https://github.com/Ephemeral-AI-Lab/layerfs-engine-lab" \
+LABEL org.opencontainers.image.source="https://github.com/Ephemeral-AI-Lab/layerfs" \
       org.opencontainers.image.revision="$LAYERFS_SOURCE_COMMIT" \
       org.opencontainers.image.layerfs.source-commit="$LAYERFS_SOURCE_COMMIT" \
       org.opencontainers.image.layerfs.source-tree="$LAYERFS_SOURCE_TREE" \
