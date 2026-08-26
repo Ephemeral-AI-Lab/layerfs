@@ -57,7 +57,7 @@ f3d2fecdc6078519b2ff6c1d073af87b3f22af5e43c47afd1f85fe4d9dc44bb1  poc/evidence/s
 f29ffb02df3117c197fda9109a187425a6af16e2559107e4febede9734f63c48  poc/evidence/stage2-freeze-candidate-013/authoritative-var-wall-end-ns.txt
 b8a162b239a44e8c7a50647ba94cae91f02c4e53dd3337a913543a70a992e0e8  poc/evidence/stage2-freeze-candidate-013/authoritative-var-wall-start-ns.txt
 e65832196410ab4340e77a24dd180da808f67586b82e8ececd45605be0693f7e  poc/evidence/stage2-freeze-candidate-013/cleanup.json
-f88993c5f8deec0218348e947c8b6ff7c01665a1f4abac70cb308965c04d5766  poc/evidence/stage2-freeze-candidate-013/commands.json
+9ef73809ba76828c31e45699990e90ca75f3348a627e26515c1800533b781d95  poc/evidence/stage2-freeze-candidate-013/commands.json
 d9ca7c66b1dc6b10856d0c7466791e5efd6c9d4f19df87e3da6c13340d465169  poc/evidence/stage2-freeze-candidate-013/diagnostic-empty-rope-functional-cpu-after.txt
 3ad256b4c1514d629c2a02f21c4d781536911aaebfff204200918d7fa742af76  poc/evidence/stage2-freeze-candidate-013/diagnostic-empty-rope-functional-cpu-before.txt
 4b920f54c65c03f131813c5511e2ea99da1ffee7f30ec218012a84c1e3c8f7db  poc/evidence/stage2-freeze-candidate-013/diagnostic-empty-rope-functional-fail.json
@@ -360,7 +360,7 @@ b94eb22257c29b347ea68a82591ccf6017ccab4356d8984089d867c1ceaa54ef  poc/evidence/s
 78c8216bbb3e98a54106c24f852056da397e3c8b55160f91adba3f54e76500d6  poc/evidence/stage2-freeze-candidate-013/scenario-cpu-pairs.json
 2ecacad67633f49c7f0bbe808d1a4f78545340edeaa872096582235398b25eae  poc/evidence/stage2-freeze-candidate-013/scenario-cpu-terminal.json
 ab14d7573bb7a19a6bd944a0610be9f771910c685f781abeb922149c722f614e  poc/evidence/stage2-freeze-candidate-013/scenario-cpu.stdout
-511c46069a8fba7f12aef1875556b47230dd6b911b2ce3262f2309037b2863e3  poc/evidence/stage2-freeze-candidate-013/seal-receipt.json
+d2e8c8e4ef6719053fe18f5569c529a61a7cf179217ce45b97848d292d7ee964  poc/evidence/stage2-freeze-candidate-013/seal-receipt.json
 f96a207d56b2425647fbace4e703863bafd0d3288a7781c18b7d73f952ae611a  poc/evidence/stage2-freeze-candidate-013/smoke-cpu-after.txt
 98a3d1493f895383e736124f4b8e55d096b9ec6259b45334a31417cfb26d0a87  poc/evidence/stage2-freeze-candidate-013/smoke-cpu-before.txt
 261369fa24cb11ef3776980c85360401b9cdc7cf51aaa7a27e7acad94d662607  poc/evidence/stage2-freeze-candidate-013/smoke-cpu.max.txt
@@ -372,7 +372,7 @@ d1f4d0e74c74ec91d01564bd964abb61a5ea1da6aeb208c5d5c1db6090582903  poc/evidence/s
 5512ce8d7abf49d5a8bfa0c554dfd36d4b08a29e541a5995902857e3892742f7  poc/evidence/stage2-freeze-candidate-013/smoke-terminal.json
 2d5f94f7b5542ba97eec83c5507f93cf02f173a2111442cb43f36a17fe4784cb  poc/evidence/stage2-freeze-candidate-013/smoke-wall-end-ns.txt
 b99bc7c301f23442ee0eb6b71b5be22eeac27354f4a5b0ed6090bbd560f25f27  poc/evidence/stage2-freeze-candidate-013/smoke-wall-start-ns.txt
-75081eb089c3f31d381bbe36f82436d66409a26cedcc502b08e414365ae9d5c8  poc/evidence/stage2-freeze-candidate-013/source-manifest.json
+e79844ebcfa1fd15c86f8a0b22711a13a3963adce474f1ae20c9daac6a941aaf  poc/evidence/stage2-freeze-candidate-013/source-manifest.json
 78e27263cbc8bd730fa4b64cf679822e78821c467a2a793dd2cd56aa9707fac0  poc/evidence/stage2-freeze-candidate-013/splice-baseline-terminal.json
 e3d31040f9dbb487b64b14a99e7df7bd55b782176e8b7e88086e1d816560bba9  poc/evidence/stage2-freeze-candidate-013/splice-control-terminal.json
 1cf8d423a13ae28b845f813e83c6b93b50d138dfaead86b8ec806c287847fde5  poc/evidence/stage2-freeze-candidate-013/splice-oracle.json
@@ -438,13 +438,13 @@ daa2a827aef68e02c21c9affb30ff19eb1b2d79cb6f43a216413099544d8189f  poc/evidence/s
 de430f0fa8138d1f1a9919baed9937da5db111f12ebcb477dab99cfa154d551b  poc/evidence/stage2-freeze-candidate-013/stderr-recapture-smoke-docker-inspect.json
 dace2aadb405e739391129a69b01b9a8e6c364f82ce99b73f8a1110696b0015d  poc/evidence/stage2-freeze-candidate-013/stderr-recapture-smoke-mountinfo.txt
 c471dcd4940522eb536a167897484247685b9d7e58d9297ae7a74f73d029dc4b  poc/evidence/stage2-freeze-candidate-013/stderr-recapture-smoke-terminal.json
-ce570b9a845c75ece1c84ead79b49bb78e6f32aec364a2a1814b710c1acecefa  poc/evidence/stage2-freeze-candidate-013/summary.json
+91104d894710f8b8f2a43fdb5308db5031a052e693b12ba11566d0248231899a  poc/evidence/stage2-freeze-candidate-013/summary.json
 f40ea5dbfe72b4f9ed64627ef0a986f9cf8ea7920c5cdfa6c868bc65c23eebe2  poc/evidence/stage2-freeze-candidate-013/summary.md
 c7dc4be762ab57512aa7f588a8b9205e1bde3dfe0b239f6d003c0af89ead219d  poc/evidence/stage2-freeze-candidate-013/thread-hwm-sampler.py
 8a870f219cf7d0e20a9e35bb78592c5348887c49ffa917312f2aca4d7ba783c5  poc/evidence/stage2-freeze-candidate-013/thread-hwm.json
-8da69dcc14e1950ef003407a3ab35676c6998b26a73dfd2a9f76df22d7b6d71e  poc/evidence/stage2-freeze-candidate-013/tool-versions.json
+39f4f53fdae184109db147f422bb632f36bc384dd0a88748032202d23800ffa3  poc/evidence/stage2-freeze-candidate-013/tool-versions.json
 6a6d3391841d52996e675792cb166091ce0ceefb1e2dab3e224067ff1202acdc  poc/evidence/stage2-freeze-candidate-013/verification-tmp.json
 adb042893b9a5f0cbb1f8a7b9dd195f541d2c5490e9d58fbef32240f4db34677  poc/evidence/stage2-freeze-candidate-013/verification-var.json
-ccfa5d5cc04111d2e056610bb14685ff83e8c48b7fa1b6f7943fee2985b95594  poc/evidence/stage2-freeze-candidate-013/verify-evidence.py
+8ca3f85f4e6b3bb5b14da24204b79fdd2008cbb83986cd4d836fd97b9794f83b  poc/evidence/stage2-freeze-candidate-013/verify-evidence.py
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  poc/evidence/stage2-freeze-candidate-013/verify-evidence.stderr
-4b7a11755a0107ec6899330d4c12075881f92de0b4c34cdfbfe57656c18f3217  poc/evidence/stage2-freeze-candidate-013/verify-evidence.stdout
+91104d894710f8b8f2a43fdb5308db5031a052e693b12ba11566d0248231899a  poc/evidence/stage2-freeze-candidate-013/verify-evidence.stdout

@@ -29,9 +29,13 @@ evidence qualifications are recorded under
 workload reference. The direct successor is the LayerFS + Linux FUSE workspace
 specified in `poc/19`, with Docker only as its Linux execution envelope.
 macFUSE and FSKit are not selected dependencies.
-Stage 2 terminal source `88e12ff0268afb380f0f8f44d3ca9d4639be65cc`
-passes both exact Docker `--cpus 1` authoritative populations; controlling
-custody is `poc/evidence/stage2-freeze-candidate-012`.
+Stage 2 terminal source `bd1cd225e152a630a10520806ecca65593c71a6b`
+and image `sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139`
+pass both exact Docker `--cpus 1` authoritative populations: `/var/tmp` SL
+`2.920 s`, Rsum `2.049`, G `3.171`, Spread `1.010`; `/tmp` SL `3.120 s`,
+Rsum `2.277`, G `3.821`, Spread `1.009`. Controlling custody is
+`poc/evidence/stage2-freeze-candidate-013`. Candidate 012 is superseded and is
+not terminal evidence.
 
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure

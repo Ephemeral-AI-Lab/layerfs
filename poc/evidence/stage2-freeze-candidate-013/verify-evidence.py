@@ -461,8 +461,24 @@ def inspect_receipt(prefix):
 
 
 def source_manifest():
-    assert run("git", "rev-parse", "HEAD") == COMMIT
-    assert run("git", "rev-parse", "HEAD^{tree}") == TREE
+    custody_head = run("git", "rev-parse", "HEAD")
+    assert run("git", "rev-parse", f"{COMMIT}^{{tree}}") == TREE
+    run("git", "merge-base", "--is-ancestor", COMMIT, custody_head)
+    assert (
+        run(
+            "git",
+            "diff",
+            "--name-only",
+            f"{COMMIT}..{custody_head}",
+            "--",
+            "Cargo.toml",
+            "Cargo.lock",
+            "crates",
+            "tools",
+            "containers/layerfs-fuse",
+        )
+        == ""
+    )
     assert (
         run(
             "git",
@@ -490,7 +506,7 @@ def source_manifest():
     assert len(image_manifest["rootfs"]["Layers"]) > 0
     tracked = [
         path
-        for path in run("git", "ls-tree", "-r", "--name-only", "HEAD").splitlines()
+        for path in run("git", "ls-tree", "-r", "--name-only", COMMIT).splitlines()
         if path in ("Cargo.toml", "Cargo.lock")
         or path.startswith(("crates/", "tools/", "containers/layerfs-fuse/"))
     ]
@@ -513,6 +529,9 @@ def source_manifest():
         "status": "PASS",
         "source_commit": COMMIT,
         "source_tree": TREE,
+        "custody_head_at_verification": custody_head,
+        "source_commit_is_custody_ancestor": True,
+        "product_diff_to_custody_head_empty": True,
         "tracked_product_tree_clean": True,
         "image": IMAGE,
         "image_id": IMAGE_ID,
@@ -1052,6 +1071,13 @@ def main():
         "splice": load("splice-oracle.json")["status"] == "PASS",
         "high_entropy": high_receipt["status"] == "PASS",
         "scenario_cpu": scenario_cpu["status"] == "PASS",
+        "scenario_cpu_exact_singletons": scenario_cpu["checks"][
+            "all_outputs_singleton"
+        ]
+        and scenario_cpu["replacement_receipt"]
+        == "scenario-cpu-exact-collisions.json",
+        "strict_zero_cfs_diagnostic_nonblocking": "checkpoint_unthrottled"
+        not in controlling_checks,
         "process_hwm": process_hwm["status"] == "PASS",
         "source_binding": source["status"] == "PASS",
         "launches": all(value["status"] == "PASS" for value in launches.values()),

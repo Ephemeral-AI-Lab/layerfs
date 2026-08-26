@@ -7,14 +7,21 @@
     "all_required_receipts_present": true,
     "all_scripts_parse": true,
     "authoritative_campaigns_source_bound": true,
+    "canonical_verifier_stderr_empty": true,
+    "canonical_verifier_stdout_pass_optimized": true,
+    "closure_records_bind_candidate_013": true,
     "cleanup_external_and_root_only": true,
+    "exact_cpu_singleton_check_explicit": true,
     "product_tree_unchanged_after_freeze": true,
     "sha256sums_generated_last": true,
-    "sha256sums_verified": true
+    "sha256sums_verified": true,
+    "strict_zero_cfs_diagnostic_nonblocking": true
   },
   "custody_actions_after_freeze": [
     "three exact singleton per-scenario CPU diagnostics",
     "five source/image/environment-identical benchmark stderr recaptures",
+    "canonical PASS_OPTIMIZED verifier stdout and empty stderr refresh",
+    "candidate 013 controlling closure-record correction",
     "machine-checkable evidence synthesis and checksum seal"
   ],
   "final_receipts": [
@@ -31,14 +38,18 @@
     "launch-receipts.json",
     "cleanup.json",
     "failure-ledger.json",
-    "architecture-admission.json"
+    "architecture-admission.json",
+    "verify-evidence.stdout",
+    "verify-evidence.stderr"
   ],
   "frozen_image_id": "sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139",
   "frozen_product_commit": "bd1cd225e152a630a10520806ecca65593c71a6b",
   "frozen_product_tree": "211bdec5dd38ac281c9ec3d08d0ca9d659ad3dea",
-  "generated_at_utc": "2026-08-26T03:25:56Z",
+  "generated_at_utc": "2026-08-26T04:04:57Z",
+  "prior_custody_commit": "a1f531986c015e5d066e89cae63061803043a554",
   "product_edits_after_freeze": 0,
   "schema": "layerfs-stage2-evidence-seal-v1",
   "sha256sums_entries": 450,
-  "status": "PASS_OPTIMIZED"
+  "status": "PASS_OPTIMIZED",
+  "verification_custody_head": "a1f531986c015e5d066e89cae63061803043a554"
 }

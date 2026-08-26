@@ -1,5 +1,6 @@
 {
   "architecture": "arm64",
+  "custody_head_at_verification": "a1f531986c015e5d066e89cae63061803043a554",
   "executable_blake3": "cc6a76415e42fbef97f569310db6d805ffd08d301a0136198b87e052d8ffc1f3",
   "executable_sha256": "fbe800c136a973430a3bf47dbb28ed861348e1f7fa135aead2558b40bcad7258",
   "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
@@ -14,8 +15,10 @@
     "schema": "layerfs-stage2-local-docker-image-manifest-v1"
   },
   "os": "linux",
+  "product_diff_to_custody_head_empty": true,
   "schema": "layerfs-stage2-source-manifest-v2",
   "source_commit": "bd1cd225e152a630a10520806ecca65593c71a6b",
+  "source_commit_is_custody_ancestor": true,
   "source_files_sha256": {
     "Cargo.lock": "932467147e490c83a0f769c60cd311d4d19de7d22aa7de604a8a724f884ea358",
     "Cargo.toml": "33896bb509361dcf0edf5fe43105b6b973a697b92481a639a52c76c0bf850291",

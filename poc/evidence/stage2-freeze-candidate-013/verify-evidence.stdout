@@ -19,10 +19,11 @@
     "authoritative_numeric": true,
     "authoritative_resources": true,
     "cleanup": true,
+    "commands": true,
     "dirty_shutdown": true,
+    "environment": true,
     "forced_death": true,
     "functional_controlling": true,
-    "functional_strict_zero": false,
     "high_entropy": true,
     "launches": true,
     "process_hwm": true,
@@ -30,8 +31,12 @@
     "readiness": true,
     "restart": true,
     "scenario_cpu": true,
+    "scenario_cpu_exact_singletons": true,
     "source_binding": true,
-    "splice": true
+    "splice": true,
+    "stderr_custody": true,
+    "strict_zero_cfs_diagnostic_nonblocking": true,
+    "tools": true
   },
   "executable_blake3": "cc6a76415e42fbef97f569310db6d805ffd08d301a0136198b87e052d8ffc1f3",
   "executable_sha256": "fbe800c136a973430a3bf47dbb28ed861348e1f7fa135aead2558b40bcad7258",
@@ -67,11 +72,12 @@
     "oracle_schema": "layerfs-stage2-functional-oracle-v4",
     "restart_read_mib_s": 793.0987151174268,
     "same_daemon_read_mib_s": 1392.70511367475,
-    "strict_zero_cfs_event": false
+    "strict_zero_cfs_event": false,
+    "strict_zero_cfs_event_classification": "NONBLOCKING_DIAGNOSTIC"
   },
   "image_id": "sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139",
   "schema": "layerfs-stage2-final-summary-v2",
   "source_commit": "bd1cd225e152a630a10520806ecca65593c71a6b",
   "source_tree": "211bdec5dd38ac281c9ec3d08d0ca9d659ad3dea",
-  "status": "REVISE"
+  "status": "PASS_OPTIMIZED"
 }

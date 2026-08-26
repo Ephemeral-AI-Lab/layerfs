@@ -2,11 +2,14 @@
 
 Status: **implemented and source-bound `PASS_OPTIMIZED` on Linux/ARM64**.
 
-Terminal custody is [candidate 012](evidence/stage2-freeze-candidate-012/summary.md):
-source `88e12ff0268afb380f0f8f44d3ca9d4639be65cc`, image
-`sha256:39d13adfb9f2f1a20313d09f23ea1d3be7fcd5535a12eb1afd3a6698b1800fc1`,
-with exact `--cpus 1` `/var/tmp` and `/tmp` populations both
-`PASS_OPTIMIZED`. Earlier candidates remain diagnostic or invalidated evidence.
+Terminal custody is [candidate 013](evidence/stage2-freeze-candidate-013/summary.md):
+source `bd1cd225e152a630a10520806ecca65593c71a6b`, image
+`sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139`.
+The exact `--cpus 1` `/var/tmp` population closes at SL `2.920 s`, Rsum
+`2.049`, G `3.171`, Spread `1.010`; `/tmp` closes at SL `3.120 s`, Rsum
+`2.277`, G `3.821`, Spread `1.009`. Both are `PASS_OPTIMIZED`. Candidate 012
+is superseded by the later correctness/resource repairs and is not terminal
+evidence; earlier candidates remain diagnostic or invalidated evidence.
 
 Entry sequence:
 

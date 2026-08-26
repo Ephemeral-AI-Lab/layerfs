@@ -20,7 +20,7 @@
     "git version 2.39.5",
     "GNU bash, version 5.2.15(1)-release (aarch64-unknown-linux-gnu)",
     "sha256sum (GNU coreutils) 9.1",
-    "Linux b734f453c629 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux"
+    "Linux b388e77b13a8 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux"
   ],
   "schema": "layerfs-stage2-tool-versions-v2",
   "status": "PASS",

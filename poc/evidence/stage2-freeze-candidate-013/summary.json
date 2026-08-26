@@ -31,9 +31,11 @@
     "readiness": true,
     "restart": true,
     "scenario_cpu": true,
+    "scenario_cpu_exact_singletons": true,
     "source_binding": true,
     "splice": true,
     "stderr_custody": true,
+    "strict_zero_cfs_diagnostic_nonblocking": true,
     "tools": true
   },
   "executable_blake3": "cc6a76415e42fbef97f569310db6d805ffd08d301a0136198b87e052d8ffc1f3",

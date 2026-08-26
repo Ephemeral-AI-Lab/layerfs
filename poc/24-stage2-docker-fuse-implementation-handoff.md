@@ -28,12 +28,15 @@ run meeting every gate below.
 ## Closure record
 
 This handoff is complete. The terminal source is
-`88e12ff0268afb380f0f8f44d3ca9d4639be65cc`; the terminal ARM64 image is
-`sha256:39d13adfb9f2f1a20313d09f23ea1d3be7fcd5535a12eb1afd3a6698b1800fc1`.
+`bd1cd225e152a630a10520806ecca65593c71a6b`; the terminal ARM64 image is
+`sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139`.
 Both exact `--cpus 1` authoritative populations pass all numeric, row,
-resource, publication, and cleanup gates. The controlling evidence and raw
-custody are [candidate 012](evidence/stage2-freeze-candidate-012/summary.md).
-Earlier source/image populations are not promoted by this record.
+resource, publication, and cleanup gates: `/var/tmp` closes at SL `2.920 s`,
+Rsum `2.049`, G `3.171`, Spread `1.010`; `/tmp` closes at SL `3.120 s`, Rsum
+`2.277`, G `3.821`, Spread `1.009`. The controlling evidence and raw custody
+are [candidate 013](evidence/stage2-freeze-candidate-013/summary.md). Candidate
+012 is superseded by later correctness/resource repairs and is not terminal
+evidence. Earlier source/image populations are not promoted by this record.
 
 ## Terminal success
 

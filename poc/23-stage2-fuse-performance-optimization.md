@@ -2,10 +2,15 @@
 
 Status: **implemented and closed at source-bound `PASS_OPTIMIZED`**
 
-The terminal result is [candidate 012](evidence/stage2-freeze-candidate-012/summary.md),
-using the unchanged upstream benchmark, the exact 12-scenario filter, and the
-controlling Docker `--cpus 1` quota envelope. Candidate 011's cpuset numbers
-are retained only as non-authoritative diagnostics.
+The terminal result is [candidate 013](evidence/stage2-freeze-candidate-013/summary.md),
+source `bd1cd225e152a630a10520806ecca65593c71a6b`, image
+`sha256:731f86a01661eb8dfd37910ee70509f4212d2cf1d2c7418d4d1b9b961f8e3139`,
+using the unchanged upstream benchmark, exact 12-scenario filter, and
+controlling Docker `--cpus 1` quota envelope. `/var/tmp` closes at SL
+`2.920 s`, Rsum `2.049`, G `3.171`, Spread `1.010`; `/tmp` closes at SL
+`3.120 s`, Rsum `2.277`, G `3.821`, Spread `1.009`. Candidate 012 is
+superseded and is not terminal evidence. Candidate 011's cpuset numbers remain
+non-authoritative diagnostics.
 
 Prepared: `2026-08-26`
 

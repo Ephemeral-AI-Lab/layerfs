@@ -46,7 +46,7 @@
     "forced-death-oracle.sh": "bc462fe9290881fb2466a9fb426f43cee6a678c1c2c82e7e3cf06e4b21e33c53",
     "recapture-benchmark-stderr.sh": "3c1adeace9e5ee8cc8dae244e15e12b80fcb6ff0452c7b21188f2a0701837baa",
     "splice-oracle.sh": "13256d45c08e098729fcc77ec98c4742a7648142538ea50c0d733498a7bbdedf",
-    "verify-evidence.py": "ccfa5d5cc04111d2e056610bb14685ff83e8c48b7fa1b6f7943fee2985b95594"
+    "verify-evidence.py": "8ca3f85f4e6b3bb5b14da24204b79fdd2008cbb83986cd4d836fd97b9794f83b"
   },
   "status": "PASS"
 }
