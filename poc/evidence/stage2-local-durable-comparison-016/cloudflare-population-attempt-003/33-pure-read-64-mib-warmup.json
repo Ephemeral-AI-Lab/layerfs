@@ -1,0 +1,312 @@
+{
+  "schema": "cloudflare-local-durable-population-sample-v1",
+  "status": "PASS",
+  "scenario_id": "pure-read-64-mib",
+  "scenario": "pure read 64 MiB",
+  "command": "cat big > /dev/null",
+  "prep": "dd if=/dev/zero of=big bs=1M count=64 status=none",
+  "repetition": 0,
+  "warmup": true,
+  "source": "de87919a4fd37242e960e13b7b3ba802d1eef0a0",
+  "tree": "4fb409d7e1356e1098439293d77d2fdc2dbf2190",
+  "image_id": "sha256:8c5100fabfd873de4ee7aabf908027e946b3fdac5328e15f9dabbf9731200bb0",
+  "envelope": {
+    "platform": "linux/arm64",
+    "cpus": 1,
+    "memory_bytes": 536870912,
+    "memory_swap_bytes": 536870912,
+    "network": "none",
+    "workspace": "native FUSE",
+    "authority": "Docker local named volume SQLite"
+  },
+  "cleanup": {
+    "container_absent": true,
+    "volume_absent": true
+  },
+  "launch_argv": [
+    "docker",
+    "run",
+    "-d",
+    "--name",
+    "cf-local-durable-pop-66179-pure-read-64-mib-0",
+    "--platform",
+    "linux/arm64",
+    "--init",
+    "--stop-timeout",
+    "1",
+    "--cpus",
+    "1",
+    "--memory",
+    "512m",
+    "--memory-swap",
+    "512m",
+    "--pids-limit",
+    "512",
+    "--device",
+    "/dev/fuse:rwm",
+    "--cap-add",
+    "SYS_ADMIN",
+    "--network",
+    "none",
+    "--tmpfs",
+    "/tmp:rw,nosuid,nodev,size=1g,mode=1777",
+    "--label",
+    "dev.layerfs.owner=cf-local-durable-pop-66179-pure-read-64-mib-0",
+    "--mount",
+    "type=volume,src=cf-local-durable-pop-66179-pure-read-64-mib-0-store,dst=/durable-state",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/cloudflare-computer-bench/upstream/script/local-durable-population.mjs,dst=/harness/local-durable-population.mjs,readonly",
+    "--mount",
+    "type=bind,src=/Users/yifanxu/Ephemeral-AI-Lab/cloudflare-computer-bench/upstream/script/local-durable-fs-bench.mjs,dst=/harness/local-durable-fs-bench.mjs,readonly",
+    "-e",
+    "FUSE_MOUNT=fuse",
+    "-e",
+    "MOUNT_POINT=/workspace",
+    "-e",
+    "PORT=45678",
+    "sha256:8c5100fabfd873de4ee7aabf908027e946b3fdac5328e15f9dabbf9731200bb0"
+  ],
+  "container_id": "35693e60ef36335219dadb0f39209c985426861508187ddd084c91ae1198cc8f",
+  "raw_container_image": "sha256:8c5100fabfd873de4ee7aabf908027e946b3fdac5328e15f9dabbf9731200bb0",
+  "raw_container_labels": {
+    "dev.layerfs.attempt": "docker-fuse-attempt-2",
+    "dev.layerfs.lane": "lane-a",
+    "dev.layerfs.owner": "cf-local-durable-pop-66179-pure-read-64-mib-0",
+    "dev.layerfs.parent-image": "sha256:c8467c6e10bfb9c7fa21a166d4bb9a5a9b23df288be9614c225529e2fe72cdd9",
+    "dev.layerfs.upstream-commit": "de87919a4fd37242e960e13b7b3ba802d1eef0a0",
+    "dev.layerfs.upstream-tree": "4fb409d7e1356e1098439293d77d2fdc2dbf2190"
+  },
+  "prepared": {
+    "pulled": 3,
+    "checkpoint": {
+      "busy": 0,
+      "log": 0,
+      "checkpointed": 0
+    },
+    "manifest": {
+      "rootExists": true,
+      "entries": 1,
+      "logicalBytes": 67108864,
+      "sha256": "de15393773edcfa4648711f202dc25521663399860c50a59e3ec7cc05b5f5b52"
+    }
+  },
+  "pre_timed_restart": {
+    "stoppedExitCode": 137,
+    "before": {
+      "hostPid": 78203,
+      "startedAt": "2026-08-26T10:31:36.407579338Z",
+      "inside": "94105\npid:[4026532558]"
+    },
+    "after": {
+      "hostPid": 78369,
+      "startedAt": "2026-08-26T10:31:37.341079172Z",
+      "inside": "94198\npid:[4026532558]"
+    },
+    "db": {
+      "rootExists": true,
+      "entries": 1,
+      "logicalBytes": 67108864,
+      "sha256": "de15393773edcfa4648711f202dc25521663399860c50a59e3ec7cc05b5f5b52"
+    },
+    "restore": {
+      "reconciled": {
+        "fetchRevReset": true,
+        "pushRevReset": false
+      },
+      "pushed": 3,
+      "checkpoint": {
+        "busy": 0,
+        "log": 0,
+        "checkpointed": 0
+      }
+    },
+    "fuse": {
+      "rootExists": true,
+      "entries": 1,
+      "logicalBytes": 67108864,
+      "sha256": "de15393773edcfa4648711f202dc25521663399860c50a59e3ec7cc05b5f5b52"
+    }
+  },
+  "timed": {
+    "T_live_ns": 11330166,
+    "T_persistence_ns": 44583709,
+    "T_to_durable_ns": 55913875,
+    "command_stdout_bytes": 0,
+    "command_stderr_bytes": 0,
+    "pulled": 0,
+    "checkpoint": {
+      "busy": 0,
+      "log": 0,
+      "checkpointed": 0
+    },
+    "manifest": {
+      "rootExists": true,
+      "entries": 1,
+      "logicalBytes": 67108864,
+      "sha256": "de15393773edcfa4648711f202dc25521663399860c50a59e3ec7cc05b5f5b52"
+    },
+    "resources": {
+      "daemonPid": "7",
+      "daemonBefore": {
+        "7": 178129916,
+        "9": 81167,
+        "10": 31080038,
+        "11": 18457087,
+        "12": 19846000,
+        "13": 19584831,
+        "14": 25458,
+        "16": 150666,
+        "17": 106793,
+        "18": 129999,
+        "19": 155251,
+        "27": 71083,
+        "28": 6040887,
+        "29": 6312194,
+        "87": 6062577,
+        "88": 299125
+      },
+      "daemonAfter": {
+        "7": 189415376,
+        "9": 81167,
+        "10": 31287996,
+        "11": 18457087,
+        "12": 19921958,
+        "13": 19584831,
+        "14": 25458,
+        "16": 227332,
+        "17": 154377,
+        "18": 217123,
+        "19": 232167,
+        "27": 71083,
+        "28": 6070679,
+        "29": 6385903,
+        "87": 6089619,
+        "88": 406791
+      },
+      "before": {
+        "cpu": {
+          "usage_usec": 782845,
+          "user_usec": 663272,
+          "system_usec": 119572,
+          "nice_usec": 0,
+          "nr_periods": 11,
+          "nr_throttled": 4,
+          "throttled_usec": 152311,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "memoryCurrent": 122843136,
+        "memoryPeak": 182530048,
+        "memoryMax": 536870912,
+        "pidsCurrent": 25,
+        "pidsPeak": 27,
+        "cpuMax": "100000 100000"
+      },
+      "after": {
+        "cpu": {
+          "usage_usec": 828119,
+          "user_usec": 696233,
+          "system_usec": 131885,
+          "nice_usec": 0,
+          "nr_periods": 12,
+          "nr_throttled": 5,
+          "throttled_usec": 173655,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memoryEvents": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0
+        },
+        "memoryCurrent": 119500800,
+        "memoryPeak": 182530048,
+        "memoryMax": 536870912,
+        "pidsCurrent": 29,
+        "pidsPeak": 29,
+        "cpuMax": "100000 100000"
+      }
+    }
+  },
+  "timed_resource_checks": {
+    "daemon_cpu_ns": 12095875,
+    "daemon_cpu_limit_ns": 63709568,
+    "daemon_cpu_bounded": true,
+    "daemon_task_set_accountable": true,
+    "daemon_tasks_added": [],
+    "daemon_tasks_removed": [],
+    "whole_cgroup_cpu_ns": 45274000,
+    "throttled_ns": 21344000,
+    "throttle_ratio": 0.3817299373366629,
+    "memory_peak_bytes": 182530048,
+    "memory_bounded": true,
+    "oom_delta": 0,
+    "oom_kill_delta": 0,
+    "oom_zero": true,
+    "pids_peak": 29,
+    "cpu_quota_exact": true,
+    "memory_limit_exact": true
+  },
+  "post_timed_restart": {
+    "stoppedExitCode": 137,
+    "before": {
+      "hostPid": 78369,
+      "startedAt": "2026-08-26T10:31:37.341079172Z",
+      "inside": "94198\npid:[4026532558]"
+    },
+    "after": {
+      "hostPid": 78638,
+      "startedAt": "2026-08-26T10:31:38.901007297Z",
+      "inside": "94355\npid:[4026532558]"
+    },
+    "db": {
+      "rootExists": true,
+      "entries": 1,
+      "logicalBytes": 67108864,
+      "sha256": "de15393773edcfa4648711f202dc25521663399860c50a59e3ec7cc05b5f5b52"
+    },
+    "restore": {
+      "reconciled": {
+        "fetchRevReset": true,
+        "pushRevReset": true
+      },
+      "pushed": 3,
+      "checkpoint": {
+        "busy": 0,
+        "log": 0,
+        "checkpointed": 0
+      }
+    },
+    "fuse": {
+      "rootExists": true,
+      "entries": 1,
+      "logicalBytes": 67108864,
+      "sha256": "de15393773edcfa4648711f202dc25521663399860c50a59e3ec7cc05b5f5b52"
+    }
+  },
+  "acknowledged_cleanup": {
+    "pulled": 2,
+    "checkpoint": {
+      "busy": 0,
+      "log": 0,
+      "checkpointed": 0
+    },
+    "manifest": {
+      "rootExists": false,
+      "entries": 0,
+      "logicalBytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

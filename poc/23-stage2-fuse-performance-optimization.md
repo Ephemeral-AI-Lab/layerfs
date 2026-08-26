@@ -31,6 +31,16 @@ terminal for the user-selected local-only scope; it is not global
 `PASS_OPTIMIZED`, deployed Cloudflare, Durable Object durability, or a
 persistence-latency comparison.
 
+The subsequent user-requested persistence-aware per-scenario comparison is
+retained in
+[local durable comparison 016](evidence/stage2-local-durable-comparison-016/README.md).
+All 48 Cloudflare samples pass correctness, physical authority barriers,
+post-ack restart, exact native-FUSE state, and cleanup. The comparison remains
+`REVISE_RESOURCE_THROTTLE_AND_ENVELOPE_MISMATCH`: Cloudflare's aggregate CFS
+throttle ratio is `10.307% > 5%`, and the retained LayerFS durable population
+used a 3 GiB hard memory limit versus Cloudflare's 512 MiB. The complete timing
+table is diagnostic and does not change the terminal local-live disposition.
+
 Prepared: `2026-08-26`
 
 Post-Stage-1.1 closure review: `2026-08-26`

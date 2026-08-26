@@ -1,0 +1,25 @@
+{
+  "schema": "layerfs-stage2-local-durable-comparison-attempts-v1",
+  "attempts": [
+    {
+      "path": "cloudflare-population",
+      "status": "INVALIDATED_HARNESS_RESOURCE_OWNER",
+      "rows_retained": 33,
+      "reason": "Applied a measured daemon-CPU equation to warmup and whole-cgroup CPU; stopped at pure-read warmup."
+    },
+    {
+      "path": "cloudflare-population-attempt-002",
+      "status": "INVALIDATED_HARNESS_TASK_ACCOUNTING",
+      "rows_retained": 2,
+      "reason": "Required an identical computerd task set even though one worker task was created during the interval."
+    },
+    {
+      "path": "cloudflare-population-attempt-003",
+      "status": "COMPLETE_REVISE_RESOURCE_THROTTLE",
+      "rows_retained": 48,
+      "all_sample_correctness_and_durability_pass": true,
+      "aggregate_throttle_ratio": 0.10307112334842584,
+      "aggregate_throttle_limit": 0.05
+    }
+  ]
+}

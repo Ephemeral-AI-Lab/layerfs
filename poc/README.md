@@ -54,6 +54,13 @@ global `PASS_OPTIMIZED`, deployed Cloudflare, Durable Object durability, or a
 persistence-latency comparison. Candidate 014 and 013 are historical; candidate
 012 is superseded.
 
+The later user-requested
+[persistence-aware per-scenario comparison](evidence/stage2-local-durable-comparison-016/README.md)
+retains a complete 48-sample Cloudflare local-authority population, but its
+cross-product timing status is `REVISE`: Cloudflare exceeds the preregistered
+aggregate throttle limit and the retained LayerFS/Cloudflare hard memory limits
+are not identical. No durable speed ratio is promoted from that diagnostic.
+
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure
 Stage 1.1  poc/16 single-file APFS edge benchmark — PASS / closed
