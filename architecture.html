@@ -407,14 +407,14 @@
       <div>
         <p class="eyebrow">LayerFS / System architecture</p>
         <h1>One immutable graph.<br>Many isolated workspaces.</h1>
-        <p class="lede">A layered filesystem for parallel agents: platform-specific workspaces above, deterministic content and version identity below, with local speed and remote coordination joined by exact object IDs.</p>
+        <p class="lede">A layered filesystem for parallel agents: platform-specific workspaces above, deterministic content and version identity below, with Working speed and Durable coordination joined by exact object IDs.</p>
       </div>
       <div class="mark" aria-label="LayerFS mark"><span>L/</span></div>
     </header>
 
     <ul class="legend" aria-label="Architecture legend">
       <li><span class="legend-dot"></span> public and lifecycle control</li>
-      <li><span class="legend-dot blue"></span> workspace and VFS data plane</li>
+      <li><span class="legend-dot blue"></span> workspace and filesystem data plane</li>
       <li><span class="legend-dot green"></span> storage and distribution</li>
       <li><span class="legend-dot purple"></span> immutable canonical foundation</li>
     </ul>
@@ -456,8 +456,8 @@
             <div class="chips"><span class="chip">begin_operation</span><span class="chip">end_operation</span><span class="chip">OperationCommit</span></div>
           </div>
           <div class="card wide orange">
-            <div><p class="card-title">Version lifecycle</p><p class="card-copy">Fork, commit, merge and roll back through expected-head transitions.</p></div>
-            <div class="chips"><span class="chip">fork</span><span class="chip">BranchCommit</span><span class="chip">merge</span><span class="chip">rollback</span></div>
+            <div><p class="card-title">Version lifecycle</p><p class="card-copy">Qualified forks and head-directed merges use exact expected-head transitions.</p></div>
+            <div class="chips"><span class="chip">LayerBranchFork</span><span class="chip">ChildBranchFork</span><span class="chip">ChildBranchMerge</span><span class="chip">LayerStackMerge</span></div>
           </div>
         </div>
       </article>
@@ -491,19 +491,19 @@
       <article class="layer">
         <div class="layer-label">
           <span class="layer-index">L3</span>
-          <h2>VFS semantics</h2>
-          <p>Platform-independent filesystem meaning and workspace isolation.</p>
+          <h2>Core logical semantics</h2>
+          <p><code>layerfs-core::logical</code> owns platform-independent path, mutation, diff and merge meaning.</p>
         </div>
         <div class="layer-content">
           <div class="card full blue">
-            <div class="spine" aria-label="VFS semantic pipeline">
+            <div class="spine" aria-label="Core logical semantic pipeline">
               <div class="spine-item"><strong>Resolve</strong><span>path → InodeId</span></div>
               <div class="spine-item"><strong>Read / mutate</strong><span>logical ranges</span></div>
               <div class="spine-item"><strong>Normalize</strong><span>exact final state</span></div>
               <div class="spine-item"><strong>Diff</strong><span>changed Merkle spines</span></div>
               <div class="spine-item"><strong>Verify</strong><span>candidate RootId</span></div>
             </div>
-            <div class="chips"><span class="chip">namespace</span><span class="chip">inodes</span><span class="chip">hard links</span><span class="chip">symlinks</span><span class="chip">metadata</span></div>
+            <div class="chips"><span class="chip">ObjectRead</span><span class="chip">ObjectStore</span><span class="chip">namespace</span><span class="chip">hard links</span><span class="chip">no SQLite / platform / authority</span></div>
           </div>
         </div>
       </article>
@@ -537,17 +537,21 @@
       <article class="layer">
         <div class="layer-label">
           <span class="layer-index">L1</span>
-          <h2>Store &amp; distribution</h2>
-          <p>Authenticates immutable objects and coordinates only tiny mutable references.</p>
+          <h2>Storage policy &amp; explicit sync</h2>
+          <p>One Storage schema and algorithms; physically distinct Working and Durable databases.</p>
         </div>
         <div class="layer-content">
-          <div class="card wide green">
-            <div><p class="card-title">Local Store</p><p class="card-copy">Verified cache, durable local writeback and operation history in one SQLite database.</p></div>
-            <div class="chips"><span class="chip">CAS</span><span class="chip">integrity</span><span class="chip">publication</span></div>
+          <div class="card green">
+            <div><p class="card-title">WorkingStore</p><p class="card-copy"><code>layerfs-working-store</code> owns WorkingRecorded history, cache and host-recoverable candidates over StorageId W.</p></div>
+            <div class="chips"><span class="chip">working.sqlite</span><span class="chip">Working CAS</span><span class="chip">recovery</span></div>
           </div>
-          <div class="card wide green">
-            <div><p class="card-title">Authoritative Store</p><p class="card-copy">Receives missing ObjectIds, authenticates roots, then applies atomic reference transactions.</p></div>
-            <div class="chips"><span class="chip">remote service</span><span class="chip">ref CAS</span><span class="chip">compaction</span></div>
+          <div class="card green">
+            <div><p class="card-title">Explicit Sync bridge</p><p class="card-copy"><code>layerfs-sync::client</code> and <code>::server</code> transfer accepted records and objects through the Service boundary.</p></div>
+            <div class="chips"><span class="chip">foreground only</span><span class="chip">no SQLite replication</span></div>
+          </div>
+          <div class="card green">
+            <div><p class="card-title">DurableStore</p><p class="card-copy"><code>layerfs-durable-store</code> owns DurablyAccepted heads, retention and backup over StorageId D.</p></div>
+            <div class="chips"><span class="chip">durable.sqlite</span><span class="chip">verified admission</span><span class="chip">head CAS</span></div>
           </div>
         </div>
       </article>
@@ -569,7 +573,7 @@
               <div class="spine-item"><strong>Persistent trees</strong><span>extent + namespace</span></div>
               <div class="spine-item"><strong>Root</strong><span>RootId</span></div>
             </div>
-            <div class="chips"><span class="chip">canonical codecs</span><span class="chip">B+ extent rope</span><span class="chip">inode table</span><span class="chip">metadata tree</span><span class="chip">role validation</span></div>
+            <div class="chips"><span class="chip">canonical codecs</span><span class="chip">B+ extent rope</span><span class="chip">logical/{resolver,read,mutate,diff,merge}</span><span class="chip">inode + metadata trees</span><span class="chip">typed object-role validation</span></div>
           </div>
         </div>
       </article>
@@ -587,7 +591,7 @@
       <div class="distributed">
         <article class="host">
           <h3>Agent host</h3>
-          <p>One local daemon and Store can serve many isolated operations.</p>
+          <p>One WorkingStore serves many isolated <code>layerfs-workspace</code> Operations.</p>
           <div class="agent-row">
             <div>
               <div class="agent">Agent A</div>
@@ -598,23 +602,23 @@
               <div class="workspace">Workspace B<br>base Root R0</div>
             </div>
           </div>
-          <div class="local-store"><strong>Local SQLite Store</strong><br><small>shared verified CAS + local history</small></div>
+          <div class="local-store"><strong>WorkingStore SQLite</strong><br><small>shared verified CAS + host-recoverable working history</small></div>
         </article>
 
         <div class="network" aria-label="Object and reference synchronization">
-          <span>missing objects</span>
+          <span>sync::client → service</span>
           <div class="arrows">⇄</div>
-          <span>expected-head CAS</span>
+          <span>sync::server → DurableStore</span>
         </div>
 
         <article class="authority">
-          <h3>Shared LayerFS authority</h3>
-          <p>The same engine and canonical identities behind a service boundary.</p>
+          <h3>Central DurableStore</h3>
+          <p>The system of record uses the same <code>layerfs-storage</code> schema with a distinct StorageId. Service alone opens it and delegates admitted requests to Sync server code.</p>
           <div class="authority-grid">
             <div class="authority-cell"><strong>Immutable CAS</strong>Chunks and Merkle nodes keyed by ObjectId.</div>
             <div class="authority-cell"><strong>Version graph</strong>Layers, Branches and OperationVersions.</div>
-            <div class="authority-cell"><strong>Reference authority</strong>Heads, generations and leases.</div>
-            <div class="authority-cell"><strong>One SQLite Store</strong>Objects and history share one transaction domain.</div>
+            <div class="authority-cell"><strong>Durable heads</strong>Branches, LayerStacks, generations and leases.</div>
+            <div class="authority-cell"><strong>Durable SQLite Store</strong>Objects, history, backup and recovery share one transaction domain; clients never open it directly.</div>
           </div>
         </article>
       </div>
@@ -624,29 +628,33 @@
       <div class="section-heading">
         <span class="section-number">02 / OWNERSHIP</span>
         <div>
-          <h2 id="ownership-title">Conceptual layers, not microcrates.</h2>
-          <p class="section-intro">Keep the atomic Store and version graph together. Split only where platform behavior genuinely changes.</p>
+          <h2 id="ownership-title">Explicit owners; one storage substrate.</h2>
+          <p class="section-intro">Storage implements one schema and transaction kernel. Working, Durable, Sync, Workspace and presentation crates add non-overlapping policy.</p>
         </div>
       </div>
 
       <div class="crate-grid">
-        <article class="crate"><code>layerfs-core</code><h3>Canonical foundation</h3><p>Object IDs, codecs, FastCDC and persistent extent, namespace, inode and metadata trees.</p></article>
-        <article class="crate"><code>layerfs-engine</code><h3>Store + version authority</h3><p>SQLite publication, integrity, refs, Layers, Branches, deltas, leases and compaction.</p></article>
-        <article class="crate"><code>layerfs-vfs</code><h3>Filesystem semantics</h3><p>Resolver, range I/O, OperationWorkspace, exact diff and capture/refresh planning.</p></article>
-        <article class="crate"><code>layerfs-mount/fuse</code><h3>Mounted presentation</h3><p>Translates FUSE requests into platform-free VFS operations. It does not own storage identity.</p></article>
-        <article class="crate"><code>layerfs-materialization/apfs</code><h3>Native presentation</h3><p>Builds, captures and refreshes real APFS workspaces without changing canonical meaning.</p></article>
-        <article class="crate"><code>layerfs-sdk</code><h3>Small public facade</h3><p>Typed lifecycle calls and receipts. Applications compose the selected workspace driver.</p></article>
+        <article class="crate"><code>layerfs-core</code><h3>Canonical + logical foundation</h3><p>IDs, codecs, FastCDC, persistent trees and <code>logical/{resolver,read,mutate,diff,merge}</code> over ObjectRead/ObjectStore.</p></article>
+        <article class="crate"><code>layerfs-storage</code><h3>Shared SQLite substrate</h3><p>One schema, object/version records, exact publication, integrity, retention primitives and generations. No Working/Durable runtime mode.</p></article>
+        <article class="crate"><code>layerfs-working-store</code><h3>Working policy</h3><p>WorkingRecorded history, cache, host-recoverable candidates/conflicts and recovery over a distinct StorageId.</p></article>
+        <article class="crate"><code>layerfs-durable-store</code><h3>Durable policy</h3><p>DurablyAccepted admission, authoritative heads, retention, backup and restore over a separate StorageId.</p></article>
+        <article class="crate"><code>layerfs-workspace</code><h3>Operation runtime</h3><p>Private per-Operation lifecycle, runtime guards, driver binding, quiescence, candidate custody and terminal receipts; WorkingStore owns the persistent base-version lease.</p></article>
+        <article class="crate"><code>layerfs-sync</code><h3>Client + server bridge</h3><p>Client invokes WorkingStore; server invokes DurableStore. Both share one explicit bounded protocol and reconciliation model.</p></article>
+        <article class="crate"><code>layerfs-mount/fuse</code><h3>Mounted driver</h3><p>Logical overlay, spool and FUSE callbacks translate into Core logical operations without owning canonical identity.</p></article>
+        <article class="crate"><code>layerfs-materialization/apfs</code><h3>Native driver</h3><p>Builds, captures and refreshes real APFS workspaces without changing canonical meaning or merge authority.</p></article>
+        <article class="crate"><code>layerfs-sdk</code><h3>Small public facade</h3><p>Typed lifecycle calls and receipts over WorkingStore, Workspace, Sync client and the selected concrete driver.</p></article>
+        <article class="crate"><code>layerfs-service</code><h3>Durable boundary</h3><p>The only production DurableStore opener: authenticates/transports, then delegates to Sync server code.</p></article>
       </div>
 
       <div class="rules">
-        <article class="rule"><strong>Portable boundary</strong><p><code>core</code>, <code>engine</code> and <code>vfs</code> contain no FUSE ABI, APFS syscall, native path authority or platform-specific canonical bytes.</p></article>
-        <article class="rule"><strong>Remote boundary</strong><p>Add <code>layerfs-service</code> only when remote synchronization is implemented. It wraps <code>engine</code>; it does not depend on mount or materialization.</p></article>
+        <article class="rule"><strong>Portable boundary</strong><p><code>core::logical</code> is generic over object access and contains no SQLite, FUSE/APFS, native path, workspace, Branch or authority policy.</p></article>
+        <article class="rule"><strong>Storage + Durable boundary</strong><p>Working and Durable use the same Storage schema in distinct databases/StorageIds—never a role switch or one-Store path. Service alone opens the Durable SQLite database and delegates admitted work to Sync server code.</p></article>
       </div>
     </section>
 
     <footer>
-      <strong>LayerFS architecture · initial abstraction split</strong>
-      <span>Immutable data plane / tiny mutable authority</span>
+      <strong>LayerFS architecture · target ownership</strong>
+      <span>Immutable objects / explicit Working → Durable acceptance</span>
     </footer>
   </main>
 </body>

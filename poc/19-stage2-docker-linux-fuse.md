@@ -48,7 +48,7 @@ final Stage 1.1 correctness/durability closure
 This document controls only the first direct **LayerFS + Linux FUSE**
 implementation, using Docker as its execution envelope, and its focused
 qualification. It does not authorize OCI import/export,
-containerd integration, remote synchronization, Windows, macFUSE, FSKit,
+containerd integration, Working/Durable Fetch/Push, Windows, macFUSE, FSKit,
 Kubernetes, or production packaging.
 
 ## 1. Authority and entry gate
@@ -118,9 +118,17 @@ LayerFS persistent namespace/inode/extent graph
 ```
 
 FUSE is not a second store, cache, overlay, or canonical representation. The
-LayerFS Store remains authoritative. The FUSE adapter must translate kernel
-requests into universal `layerfs-vfs` operations and must not implement a
-parallel filesystem model.
+execution host's WorkingStore serves the live mount; the central DurableStore is
+the true system of record. The FUSE adapter must translate kernel
+requests into universal `layerfs-core::logical` operations and must not
+implement a parallel filesystem model. Core logical remains generic over
+`ObjectRead`/`ObjectStore` and contains no FUSE, Linux, SQLite, workspace, or
+Working/Durable authority policy.
+
+The target product always has both physically distinct Stores. Filesystem
+syscalls and WorkingStore-only OperationCommit never synchronize implicitly;
+`Fetch` and `Push` run only at explicit durable
+Branch/child-Branch/merge boundaries.
 
 Docker's own OverlayFS/containerd snapshotter may implement the container's
 operating-system root. It is not the LayerFS workspace representation:
@@ -198,15 +206,21 @@ Linux applications
   -> kernel VFS
   -> FUSE
   -> thin layerfs-mount::fuse adapter
-  -> universal mounted workspace in layerfs-mount
-  -> filesystem semantics in layerfs-vfs
-  -> layerfs-engine/core
-  -> SQLite/CAS Store on the container's native volume
+  -> universal OperationWorkspace lifecycle in layerfs-workspace
+  -> concrete mounted driver in layerfs-mount
+  -> portable semantics in layerfs-core::logical
+  -> layerfs-storage ObjectRead/ObjectStore
+  -> layerfs-working-store on the container's native volume
+  -> explicit layerfs-sync + layerfs-service boundary
+  -> layerfs-durable-store system of record
 ```
 
-The measured subject is this complete product path. A benchmark-only in-memory
-filesystem, ordinary backing-file shim, or generic FUSE loopback does not
-measure LayerFS + FUSE and cannot satisfy a product gate.
+The retained Stage 2 mount campaign measured the path through WorkingStore and
+therefore qualifies that mechanism only, not the complete durable product.
+Product qualification must separately cover explicit Fetch/Push,
+DurableStore acknowledgement, conflict/reconciliation, and fresh-host recovery.
+A benchmark-only in-memory filesystem, ordinary backing-file shim, or generic
+FUSE loopback does not measure LayerFS + FUSE and cannot satisfy a product gate.
 
 The visible `/workspace/path` must not correspond to a separately materialized
 native `path` behind the mount.
@@ -259,12 +273,15 @@ macOS host
   Docker Desktop
     Linux VM
       developer container
-        LayerFS Store volume
-          /var/lib/layerfs/store.sqlite
+        WorkingStore volume
+          /var/lib/layerfs/working/layerfs.sqlite
+          /var/lib/layerfs/working/workspaces/<operation-id>-<nonce>/
+            owner / recovery / view / spool
 
-        layerfs-mount FUSE daemon
-          /workspace
-            direct mounted namespace root
+        layerfs-workspace
+          universal OperationWorkspace lifecycle
+          layerfs-mount::fuse concrete driver
+            private mount view exposed at /workspace
 
         tools
           bash
@@ -279,7 +296,7 @@ Request flow:
 read("/workspace/src/main.rs", offset, length)
   -> FUSE read
   -> mounted handle/inode
-  -> LayerFS range read
+  -> layerfs-core::logical range read through ObjectRead
   -> O(log E + intersecting extents + returned bytes)
   -> return bytes
 ```
@@ -287,18 +304,33 @@ read("/workspace/src/main.rs", offset, length)
 Write flow:
 
 ```text
-open
-  -> mount-owned inode/open-file state
+WorkingStore begin_operation
+  -> persist OperationId + exact BranchHead/base-version lease + recovery
+  -> single-use WorkspaceTicket
+
+layerfs-workspace + layerfs-mount driver
+  -> create private 0700 mount view and sibling bounded spool
 
 write / truncate
   -> bounded ordered dirty-range journal
   -> reads in the same mount observe dirty state
 
-fsync / required release boundary
-  -> one ordered LayerFS mutation batch
-  -> one expected-head publication
+workspace finalization
+  -> driver quiescence and exact dirty evidence
+  -> layerfs-core::logical candidate RootId/RootTransition
+  -> layerfs-storage object admission
+
+WorkingStore OperationCommit
+  -> bind Operation identity + RootTransition as OperationDelta
+  -> one expected-Branch-head publication
   -> one visibility COMMIT
-  -> accepted RefState
+  -> WorkingRecorded OperationVersion or Conflict
+
+explicit Push, outside the retained Stage 2 Working-only campaign
+  -> accepted canonical/version records only
+  -> DurableStore independently authenticates/verifies
+  -> one durable head transaction
+  -> DurablyAccepted | Conflict | Indeterminate
 ```
 
 Restart flow:
@@ -308,51 +340,69 @@ daemon/container stops
   -> no unacknowledged durable claim
 
 fresh daemon
-  -> open Store
-  -> read accepted RefState
+  -> open WorkingStore through layerfs-storage
+  -> read WorkingRecorded BranchHead/OperationVersion
   -> mount exact root
   -> old accepted roots remain directly readable
 ```
 
+The retained implementation/evidence may use current `RefState`, `checkpoint`,
+`layerfs-engine`, and `layerfs-vfs::mounted` names. Those are honest
+current-source labels, not target ownership or proof of DurableStore acceptance.
+
+Target workspace custody defaults to the WorkingStore-owned root adjacent to
+working SQLite:
+
+```text
+<working-root>/workspaces/<operation-id>-<nonce>/{owner,recovery,view,spool}
+```
+
+It is `0700`, marker-validated without following links, safely cleaned by exact
+ownership, and host-local. The mounted driver uses `view` as its private
+mountpoint and sibling `spool` for bounded dirty bytes. Sync never transfers
+these paths, markers, spools, mount/process/descriptor state, or native files;
+DurableStore never stores them.
+
 ## 6. Dependency law
 
-The existing law remains:
+The controlling target law is:
 
 ```text
-layerfs-core
-  no FUSE, libc, Linux syscall, Docker path, host inode, or platform cfg
+layerfs-core::logical
+  exact-version stat/list/read_range/stream/readlink
+  portable mutation, candidate RootId/RootTransition, root diff, merge
+  generic only over ObjectRead/ObjectStore
+  no SQLite, FUSE, libc, Docker path, workspace, sync, or authority policy
 
-layerfs-engine
-  no FUSE callback or Docker lifecycle
+layerfs-storage -> layerfs-core
+  one SQLite/object/schema/integrity/transaction/compaction mechanism
 
-layerfs-vfs
-  universal filesystem semantics and root/path/inode resolution
-  no Linux syscall or FUSE type
+layerfs-working-store -> layerfs-storage + layerfs-core
+  Operation identity, exact BranchHead/base lease, recovery record
+  WorkingRecorded OperationCommit and host-recoverable candidates
 
-layerfs-mount
-  platform-neutral mounted-session state
-  fuse/ owns Linux request translation and daemon lifecycle
-  no materialized native workspace logic
+layerfs-durable-store -> layerfs-storage + layerfs-core
+  independent verification and DurablyAccepted system-of-record policy
 
-layerfs-materialization
-  platform-neutral materialize/capture/refresh lifecycle
-  apfs/ owns the existing Apple projection and native syscalls
-  no mounted-session or FUSE logic
+layerfs-workspace -> layerfs-core + layerfs-working-store
+  universal private runtime lifecycle, admission, quiescence, custody, cleanup
+
+layerfs-mount -> layerfs-core + layerfs-workspace
+  logical COW overlay/spool; fuse/ owns Linux translation/session lifecycle
+
+layerfs-materialization -> layerfs-core + layerfs-workspace
+  physical materialize/capture/refresh; apfs/ owns Apple mechanics
+
+layerfs-sync -> layerfs-storage + layerfs-working-store + layerfs-durable-store
+layerfs-service -> layerfs-sync(server) + layerfs-durable-store
 ```
 
-The Stage 1 SDK is currently wired to `AppleDriver`. The Stage 2 mount must not
-copy Apple behavior or add Linux branches to Core/Engine/VFS. The smallest
-initial construction is:
-
-```text
-layerfs-mount::fuse
-  -> layerfs-mount + layerfs-vfs + layerfs-engine
-```
-
-using universal VFS operations and an adapter that returns typed `Unsupported`
-for ordinary native projection. A platform-neutral SDK constructor may be
-added only when a real public caller requires it; do not refactor the whole SDK
-before the first mounted proof.
+There is no target `layerfs-fs`, shared-role Engine, or runtime Store/workspace
+mode. Extract Workspace/FUSE/APFS ownership first, then move the remaining
+portable `layerfs-vfs` semantics directly into `layerfs-core::logical` and
+delete the old VFS implementation. Current `layerfs-engine`, `layerfs-vfs`,
+`layerfs-fuse`, and `layerfs-os` paths remain legitimate evidence names until
+that one-way migration completes.
 
 ## 7. Expected repository shape
 
@@ -362,16 +412,40 @@ The expected new and edited tree is:
 Cargo.toml
 
 crates/
-  layerfs-vfs/
+  layerfs-core/
     src/
-      lib.rs                 universal filesystem types and operations
-      resolver.rs            reuse canonical path/inode resolution
+      logical/
+        mod.rs               universal exact-version filesystem operations
+        resolver.rs          canonical path/inode resolution
+        read.rs              stat/list/range/stream/readlink
+        mutate.rs            portable logical mutations/candidates
+        diff.rs              Merkle/root diff
+        merge.rs             three-root merge candidates
+
+  layerfs-storage/
+    src/                      SQLite/object/schema/transaction mechanisms
+
+  layerfs-working-store/
+    src/                      host-recoverable operation/Branch policy
+
+  layerfs-durable-store/
+    src/                      independent durable admission/retention policy
+
+  layerfs-workspace/
+    src/
+      operation.rs           universal OperationWorkspace lifecycle
+      workspace.rs           private runtime/custody
+      direct.rs              no-path logical driver
+      driver.rs              concrete-driver contract
+      quiescence.rs          writer/process/mapping barrier
+      receipt.rs             terminal runtime receipt
 
   layerfs-mount/
     Cargo.toml               target-specific Linux FUSE dependency only
     src/
       lib.rs                 mounted capability exports
-      session.rs             one universal mounted workspace state
+      driver.rs              layerfs-workspace concrete mounted driver
+      session.rs             mounted logical COW overlay state
       fuse/
         mod.rs               callback translation and errno mapping
         daemon.rs            mount/unmount and request lifecycle
@@ -385,7 +459,7 @@ crates/
     Cargo.toml               target-specific Apple dependencies only
     src/
       lib.rs                 materialization capability exports
-      driver.rs              native projection boundary
+      driver.rs              layerfs-workspace concrete physical driver
       materialize.rs         canonical root -> native workspace
       capture.rs             native workspace -> canonical root
       refresh.rs             related-root native reconciliation
@@ -397,6 +471,15 @@ crates/
         metadata.rs          supported Apple metadata
         ffi.rs               Apple-only syscall boundary
         store.rs             Apple Store/open integration
+
+  layerfs-sync/
+    src/                      explicit bounded Fetch/Push bridge
+
+  layerfs-sdk/
+    src/                      thin snapshot/version/workspace facade
+
+  layerfs-service/
+    src/                      durable network/auth boundary
 
 containers/
   layerfs-mount/
@@ -416,12 +499,17 @@ poc/
 Expected existing product edits are limited to universal missing primitives in:
 
 ```text
-crates/layerfs-vfs/src/{lib,resolver}.rs
+crates/layerfs-core/src/logical/{mod,resolver,read,mutate,diff,merge}.rs
+crates/layerfs-workspace/src/{operation,workspace,direct,driver,quiescence,receipt}.rs
 crates/layerfs-mount/src/{lib,session}.rs
 crates/layerfs-mount/src/fuse/{mod,daemon}.rs
 crates/layerfs-materialization/src/{lib,driver,materialize,capture,refresh,workspace}.rs
 crates/layerfs-materialization/src/apfs/*
-crates/layerfs-engine/src/lib.rs             only if batch publication lacks a primitive
+crates/layerfs-storage/*                     migrated once from current Engine
+crates/layerfs-working-store/*               working Operation/Branch policy
+crates/layerfs-durable-store/*               independent durable policy
+crates/layerfs-sync/*                        explicit accepted-state transfer
+crates/layerfs-service/*                     durable network boundary
 crates/layerfs-sdk/src/lib.rs                 only after a concrete public caller
 ```
 
@@ -429,16 +517,25 @@ The Stage 2 source move is capability ownership, not an algorithm rewrite:
 
 ```text
 current layerfs-vfs/src/mounted.rs
-  -> layerfs-mount/src/session.rs
+  -> layerfs-workspace contract + layerfs-mount driver/session
 
 current layerfs-vfs/src/{driver,materialize,capture,refresh,workspace}.rs
   -> layerfs-materialization/src/
 
 current layerfs-os/src/apple/*
   -> layerfs-materialization/src/apfs/
+
+remaining current layerfs-vfs resolver/read/mutate/diff/merge semantics
+  -> layerfs-core/src/logical/
+  -> delete old layerfs-vfs after caller/root/counter conformance
+
+current layerfs-engine storage/version mechanisms
+  -> layerfs-storage once
+  -> distinct working/durable policy crates compose Storage
 ```
 
-Core canonical files should not change:
+Core canonical formats/codecs should not change while logical semantic code
+moves beside them:
 
 ```text
 content/extent.rs
@@ -449,10 +546,11 @@ metadata codecs
 object identity
 ```
 
-Do not add peer `layerfs-fuse`, `layerfs-os`, `layerfs-overlayfs`, a mount
-framework, a backend registry, or separate read/write representations. FUSE
-is a submodule of the mount capability; APFS is a submodule of the
-materialization capability.
+Do not add target `layerfs-fs`, peer `layerfs-fuse`, peer `layerfs-os`,
+`layerfs-overlayfs`, a mount framework, backend registry, or separate read/write
+representations. FUSE is a submodule of Mount; APFS is a submodule of
+Materialization. Current crates with those names remain source evidence until
+their migration, not target ownership.
 
 ## 8. FUSE dependency selection
 
@@ -556,15 +654,22 @@ The callback adapter owns:
 - mount/unmount/cancellation lifecycle; and
 - request counters.
 
-The VFS owns:
+`layerfs-core::logical` owns:
 
 - path resolution;
 - inode lookup;
 - namespace semantics;
 - metadata semantics;
 - range planning;
-- canonical object access; and
-- accepted-root authority.
+- portable logical mutation and Merkle/merge candidate construction; and
+- portable candidate construction through generic `ObjectRead`/`ObjectStore`.
+
+`layerfs-workspace` owns the universal private runtime lifecycle and the
+`layerfs-mount` driver owns mounted handles/overlay/spool/quiescence.
+`layerfs-working-store` owns WorkingRecorded Branch/Operation authority and
+delegates exact transactions to `layerfs-storage`. `layerfs-durable-store`
+independently owns DurablyAccepted authority after explicit Sync; Sync itself
+never moves a head.
 
 Read-only correctness corpus:
 
@@ -630,9 +735,10 @@ fsync/fsyncdir
 release
 ```
 
-### 11.1 One universal mounted-session state
+### 11.1 One universal workspace contract, one mounted driver state
 
-`layerfs-vfs::mounted` owns one mount-wide session:
+The current `layerfs-vfs::mounted` source owns one mount-wide session pending
+its move to `layerfs-mount`:
 
 ```text
 MountedWorkspace
@@ -645,8 +751,18 @@ MountedWorkspace
   lifecycle: Live | Checkpointing | Incomplete
 ```
 
-Do not implement state separately inside evaluator, FUSE callbacks, SDK, and
-Engine.
+Target ownership splits this current structure without copying it:
+
+```text
+layerfs-workspace        lifecycle, quiescence, finalization, cleanup receipt
+layerfs-mount            mounted inode/handle/dirty overlay/spool driver state
+layerfs-core::logical    portable reads/mutations/candidate construction
+layerfs-working-store    exact begin pin/recovery + WorkingRecorded publication
+layerfs-storage          object rows and transaction mechanics
+```
+
+Do not implement state separately inside evaluator, callbacks, SDK,
+WorkingStore, or Storage.
 
 ### 11.2 Dirty regular-file state
 
@@ -675,23 +791,25 @@ Requirements:
 - failure after possibly visible native/kernel state enters `Incomplete` and
   permits only discard/reopen according to the mounted contract.
 
-### 11.3 Checkpoint boundary
+### 11.3 Working OperationCommit boundary
 
-Ordinary `write` changes mounted dirty state but does not perform one durable
-SQLite publication per syscall.
+Ordinary `write`, `flush`, `release`, and tool-issued `fsync` change or persist
+only private OperationWorkspace state; they do not advance the Branch per
+syscall.
 
-Durability boundary:
+Target version boundary:
 
 ```text
-fsync
-explicit workspace checkpoint
-required release policy
+explicit workspace finalization
+  -> layerfs-core::logical candidate
+  -> WorkingStore OperationCommit
 ```
 
-Checkpoint applies the ordered dirty file and namespace changes through one
-expected-head mutation batch and returns the newly accepted `RefState`.
+OperationCommit applies the ordered dirty file and namespace changes through
+one expected-Branch-head batch and returns the WorkingRecorded
+OperationVersion/BranchHead.
 
-Required equations per checkpoint:
+Required equations per state-changing WorkingStore OperationCommit:
 
 ```text
 transactions_started      1
@@ -701,9 +819,16 @@ accepted generation       previous + 1
 expected root             exact previous accepted root
 ```
 
-Crash before a requested durability boundary may discard unacknowledged dirty
-state. After successful `fsync`, fresh reopen must expose the accepted root and
+Crash before WorkingRecorded OperationCommit may discard unacknowledged dirty
+state; operation-private fsync recovery is governed by the Workspace recovery
+record and does not imply a Branch version. After WorkingRecorded
+acknowledgement, fresh WorkingStore reopen must expose the accepted root and
 exact bytes.
+
+Retained Stage 2 source/evidence maps mounted `fsync` to its internal
+`checkpoint`/RefState publication. Keep those historical row labels and timer
+boundaries unchanged. The target universal Workspace migration routes private
+fsync behind OperationCommit rather than reinterpreting old evidence.
 
 ## 12. Stage 2.3 — count-changing and locality proof
 
@@ -922,6 +1047,11 @@ Unavailable is `null` plus an exact reason, never zero.
 
 ## 17. Resource gates
 
+In the target ownership, `layerfs-workspace` charges userspace `Q` and terminal
+lifecycle state; `layerfs-mount` charges dirty spool/handles/mount resources;
+`layerfs-storage` charges SQLite connections/journals. The retained numeric
+gates and measurements below do not change.
+
 ```text
 largest product payload buffer       <=1 MiB
 operation Q high-water               <=8 MiB
@@ -1028,28 +1158,30 @@ authorize a scope expansion.
 Only after this direct Linux mount passes:
 
 ```text
-Stage 3A
+Ownership migration
+  extract layerfs-workspace + mount/FUSE + materialization/APFS first
+  move residual portable VFS semantics directly into layerfs-core::logical
+  delete old VFS; never create layerfs-fs
+  extract layerfs-storage and layerfs-working-store
+
+Mandatory durability path
+  layerfs-durable-store independent admission
+  explicit layerfs-sync Fetch/Push
+  layerfs-service durable network boundary
+  fresh-host DurablyAccepted recovery
+
+Then, when requested
   OCI import/export
-
-Stage 3B
   containerd snapshotter and Docker workflow
-
-Stage 4A
-  remote read-only immutable object/ref client
-
-Stage 4B
-  remote single-writer expected-head publication
-  local container cache
-  inode serial leases
-  upload sessions and quotas
 
 Later, only with demand
   Windows WinFsp
   direct Apple FSKit
 ```
 
-The remote design synchronizes immutable objects and one accepted root. It does
-not copy Cloudflare Computer's mutable path-revision sync model.
+Sync transfers accepted canonical/version state and exact head requests only;
+it does not copy Cloudflare Computer's mutable path-revision model or any live
+workspace state.
 
 ## 22. Final planning statement
 
@@ -1059,11 +1191,14 @@ OverlayFS workspace. It is:
 ```text
 Docker/Linux
   + direct LayerFS FUSE at /workspace
-  + local LayerFS Store on the Linux volume
+  + layerfs-workspace + layerfs-mount concrete driver
+  + WorkingStore/layerfs-storage on the Linux volume
+  + portable semantics in layerfs-core::logical
   + ordinary tools inside the container
-  + one checkpoint/publication boundary
+  + one WorkingRecorded OperationCommit boundary
 ```
 
 The final Stage 1.1 closure is the immediate predecessor. This document defines
-the first direct-mounted proof; Stage 1.2 is not an entry gate or required
-baseline.
+the first direct-mounted WorkingStore proof; Stage 1.2 is not an entry gate or
+required baseline. Product readiness additionally requires explicit Sync and
+independent DurableStore acceptance under the controlling architecture.

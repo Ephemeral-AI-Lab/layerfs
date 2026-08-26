@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive LayerFS history and workspace demonstration.">
+  <title>LayerFS History</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f4f1eb;
+      --surface: #fffefa;
+      --surface-2: #faf8f3;
+      --ink: #1c1d1a;
+      --muted: #6c6d66;
+      --line: #d4d0c7;
+      --line-strong: #999990;
+      --orange: #ed6b3a;
+      --orange-soft: #fff0e7;
+      --blue: #4774bf;
+      --blue-soft: #edf3ff;
+      --purple: #7656a8;
+      --purple-soft: #f2edf9;
+      --green: #34765b;
+      --green-soft: #eaf5ef;
+      --shadow: 0 16px 44px rgba(42, 39, 31, .09);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { margin: 0; min-height: 100%; }
+    body { color: var(--ink); background: var(--paper); font: 14px/1.45 var(--sans); }
+    button, select { font: inherit; }
+    button { color: inherit; }
+    code { font-family: var(--mono); }
+
+    .app {
+      min-height: 100vh;
+      border-top: 4px solid var(--orange);
+      background:
+        linear-gradient(rgba(28, 29, 26, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(28, 29, 26, .025) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      min-height: 66px;
+      align-items: center;
+      gap: 22px;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 254, 250, .96);
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 760; letter-spacing: -.02em; }
+    .brand-mark {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      background: var(--ink);
+      color: var(--surface);
+      font: 800 13px/1 var(--mono);
+    }
+
+    .context { min-width: 0; }
+    .context-path { color: var(--muted); font: 11px/1.2 var(--mono); }
+    .context-title { overflow: hidden; margin-top: 4px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .sync { display: flex; align-items: center; gap: 7px; color: var(--green); font-size: 12px; font-weight: 650; }
+    .sync::before { width: 7px; height: 7px; border-radius: 50%; background: currentColor; content: ""; }
+
+    .link, .action, .tab, .nav-leaf, .sidebar-control {
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .link {
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 300px minmax(620px, 1fr) 320px;
+      min-height: calc(100vh - 70px);
+    }
+
+    .sidebar, .inspector { background: rgba(255, 254, 250, .92); }
+    .sidebar { overflow: auto; padding: 16px 10px 28px; border-right: 1px solid var(--line); }
+    .inspector { padding: 20px; border-left: 1px solid var(--line); }
+    .sidebar-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 8px 12px; }
+    .sidebar-heading h2 { margin: 0; font-size: 13px; letter-spacing: -.01em; }
+    .sidebar-controls { display: flex; gap: 4px; }
+    .sidebar-control { padding: 4px 6px; color: var(--muted); font: 9px/1 var(--mono); }
+    .sidebar-control:hover { background: var(--surface-2); color: var(--ink); }
+    .nav-tree details { margin: 0; }
+    .nav-tree summary { list-style: none; }
+    .nav-tree summary::-webkit-details-marker { display: none; }
+    .nav-tree-row {
+      position: relative;
+      display: grid;
+      width: 100%;
+      grid-template-columns: 12px 18px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 7px;
+      border-left: 2px solid transparent;
+      cursor: pointer;
+      text-align: left;
+    }
+    summary.nav-tree-row::before { color: var(--muted); content: "›"; font: 700 13px/1 var(--mono); transition: transform .12s ease; }
+    details[open] > summary.nav-tree-row::before { transform: rotate(90deg); }
+    .nav-leaf::before { content: ""; }
+    .nav-tree-row:hover, .nav-tree-row.is-selected { background: var(--surface-2); }
+    .nav-tree-row.is-selected { border-left-color: var(--orange); }
+    .nav-tree-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+    .nav-tree-children { margin-left: 14px; padding-left: 8px; border-left: 1px solid var(--line); }
+    .nav-glyph { font-family: var(--mono); text-align: center; }
+    .nav-glyph.stack, .nav-glyph.candidate { color: var(--orange); }
+    .nav-glyph.branch, .nav-glyph.operation { color: var(--blue); }
+    .nav-glyph.child { color: var(--purple); }
+    .nav-glyph.running { color: var(--green); }
+    .nav-copy { min-width: 0; }
+    .nav-copy strong { display: block; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .nav-copy small { display: block; overflow: hidden; margin-top: 2px; color: var(--muted); font: 9px/1.25 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+    .nav-count { color: var(--muted); font: 9px/1 var(--mono); }
+
+    .main { min-width: 0; background: rgba(244, 241, 235, .7); }
+    .toolbar {
+      display: flex;
+      min-height: 54px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 254, 250, .86);
+    }
+
+    .tabs { display: flex; align-self: stretch; }
+    .tab { position: relative; padding: 0 15px; color: var(--muted); font-weight: 650; }
+    .tab[aria-selected="true"] { color: var(--ink); }
+    .tab[aria-selected="true"]::after { position: absolute; right: 12px; bottom: 0; left: 12px; height: 2px; background: var(--orange); content: ""; }
+    .toolbar-meta { color: var(--muted); font: 10px/1 var(--mono); }
+    .view { padding: 18px 20px 40px; }
+
+    .history-tree { padding: 18px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); }
+    .tree-row {
+      display: grid;
+      width: 100%;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    .tree-row:hover, .tree-row.is-selected { border-color: var(--line); background: var(--surface-2); }
+    .tree-row:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    .tree-icon { display: grid; width: 22px; height: 22px; place-items: center; font: 700 13px/1 var(--mono); }
+    .tree-title { min-width: 0; }
+    .tree-title strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .tree-title span { display: block; margin-top: 3px; color: var(--muted); font: 10px/1.3 var(--mono); }
+    .tree-meta { color: var(--muted); font: 10px/1.3 var(--mono); text-align: right; }
+    .stack-row { border-color: #efc7b4; background: var(--orange-soft); }
+    .stack-row .tree-icon { color: var(--orange); }
+    .tree-list, .operation-list { margin: 0 0 0 24px; padding: 0 0 0 24px; border-left: 1px solid var(--line); list-style: none; }
+    .tree-list { margin-top: 14px; }
+    .tree-branch, .tree-operation { position: relative; padding: 4px 0; }
+    .tree-branch::before, .tree-operation::before { position: absolute; top: 27px; left: -24px; width: 24px; height: 1px; background: var(--line); content: ""; }
+    .branch-row { background: var(--blue-soft); }
+    .branch-row .tree-icon { color: var(--blue); }
+    .layer-version-row .tree-icon { color: var(--orange); }
+    .layer-version-row.current-layer { border-color: #efc7b4; background: #fff8f3; }
+    .child-branch { margin: 8px 0; }
+    .child-branch > .branch-row { background: var(--purple-soft); }
+    .child-branch > .branch-row .tree-icon { color: var(--purple); }
+    .operation-row .tree-icon { color: var(--blue); }
+    .child-operation .tree-icon { color: var(--purple); }
+    .candidate-row { background: var(--orange-soft); }
+    .candidate-row .tree-icon { color: var(--orange); }
+    .running-row { background: var(--green-soft); }
+    .running-row .tree-icon { color: var(--green); }
+    .tree-relation { margin: 5px 0 3px 14px; color: var(--muted); font: 9px/1.3 var(--mono); }
+    .tree-key { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; color: var(--muted); font-size: 11px; }
+    .tree-key span { display: flex; align-items: center; gap: 6px; }
+    .fork-hint { margin: 10px 0 0; color: var(--muted); font-size: 11px; }
+    .fork-hint strong { color: var(--ink); }
+
+    .empty-heading { margin: 0 0 5px; font-size: 20px; letter-spacing: -.03em; }
+    .view-copy { margin: 0 0 18px; color: var(--muted); }
+    .file-browser, .compare-panel { border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); }
+    .file-head, .compare-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+    .root-ref { color: var(--muted); font: 10px/1 var(--mono); }
+    .file-list { margin: 0; padding: 8px 0; list-style: none; }
+    .file-row { display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: center; padding: 9px 18px; }
+    .file-row:hover { background: var(--surface-2); }
+    .file-icon { color: var(--muted); font-family: var(--mono); }
+    .file-path { font-family: var(--mono); font-size: 12px; }
+    .file-state { min-width: 22px; color: var(--muted); font: 700 10px/1 var(--mono); text-align: right; }
+    .file-state.added { color: var(--green); }
+    .file-state.modified { color: var(--orange); }
+    .file-state.renamed { color: var(--purple); }
+
+    .compare-controls { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: end; padding: 18px; }
+    .field label { display: block; margin-bottom: 6px; color: var(--muted); font: 700 10px/1 var(--mono); text-transform: uppercase; }
+    .field select { width: 100%; padding: 9px 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+    .compare-arrow { padding-bottom: 10px; color: var(--orange); font: 700 18px/1 var(--mono); }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .metric { padding: 16px 18px; }
+    .metric + .metric { border-left: 1px solid var(--line); }
+    .metric strong { display: block; font-size: 20px; letter-spacing: -.03em; }
+    .metric span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+
+    .inspector-type { color: var(--orange); font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .inspector h2 { margin: 8px 0 4px; font-size: 22px; letter-spacing: -.04em; }
+    .state { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--green); font-size: 11px; font-weight: 700; }
+    .state::before { width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ""; }
+    .state.running { color: var(--green); }
+    .state.candidate { color: var(--orange); }
+    .details { margin: 22px 0 0; }
+    .details div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+    .details dt { color: var(--muted); font-size: 11px; }
+    .details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font: 11px/1.4 var(--mono); }
+    .delta { margin-top: 22px; padding: 15px; border: 1px solid var(--line); background: var(--surface-2); }
+    .delta h3 { margin: 0 0 12px; font-size: 13px; }
+    .delta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .delta-value strong { display: block; font: 700 15px/1 var(--mono); }
+    .delta-value span { color: var(--muted); font-size: 10px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+    .action { padding: 8px 10px; border: 1px solid var(--line); background: var(--surface); font-size: 11px; font-weight: 650; }
+    .action:hover { border-color: var(--line-strong); }
+    .action.primary { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+    .receipt { margin-top: 22px; color: var(--muted); font: 9px/1.5 var(--mono); }
+
+    @media (max-width: 1120px) {
+      .layout { grid-template-columns: 280px minmax(580px, 1fr); }
+      .inspector { grid-column: 1 / -1; border-top: 1px solid var(--line); border-left: 0; }
+      .inspector-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+    }
+
+    @media (max-width: 760px) {
+      .topbar { grid-template-columns: 1fr auto; padding: 0 12px; }
+      .context { display: none; }
+      .sync { display: none; }
+      .layout { display: block; }
+      .sidebar { max-height: 430px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .main { min-width: 0; }
+      .toolbar { padding: 0 10px; }
+      .toolbar-meta { display: none; }
+      .view { padding: 12px 10px 28px; }
+      .history-tree { padding: 10px; }
+      .tree-list { margin-left: 8px; padding-left: 12px; }
+      .operation-list { margin-left: 10px; padding-left: 12px; }
+      .tree-branch::before, .tree-operation::before { left: -12px; width: 12px; }
+      .tree-row { grid-template-columns: 22px minmax(0, 1fr); gap: 6px; padding: 10px 8px; }
+      .tree-meta { grid-column: 2; margin-top: -5px; text-align: left; }
+      .tree-relation { margin-left: 8px; overflow-wrap: anywhere; }
+      .inspector-inner { display: block; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .metric:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
+      .metric:nth-child(4) { border-top: 1px solid var(--line); }
+      .compare-controls { grid-template-columns: 1fr; }
+      .compare-arrow { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">L/</span><span>LayerFS</span></div>
+      <div class="context"><div class="context-path">LayerStack · production</div><div class="context-title">Current head: Layer L42 · Root 7cc1…e02</div></div>
+      <div class="top-actions"><span class="sync">Synced</span><a class="link" href="architecture.html">Architecture</a></div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar" aria-label="LayerFS navigator">
+        <div class="sidebar-heading">
+          <h2>LayerStacks</h2>
+          <div class="sidebar-controls">
+            <button class="sidebar-control" type="button" data-expand-all>Expand all</button>
+            <button class="sidebar-control" type="button" data-collapse-all>Collapse all</button>
+          </div>
+        </div>
+
+        <nav class="nav-tree" aria-label="LayerStack version-origin tree">
+          <details open>
+            <summary class="nav-tree-row is-selected" data-select="stack"><span class="nav-glyph stack">◆</span><span class="nav-copy"><strong>LayerStack · production</strong><small>current head · Layer L42</small></span><span class="nav-count">42</span></summary>
+            <div class="nav-tree-children">
+              <details open>
+                <summary class="nav-tree-row" data-select="l40"><span class="nav-glyph stack">◇</span><span class="nav-copy"><strong>Layer L40</strong><small>retained version · Root 129b…bb1</small></span><span class="nav-count">40</span></summary>
+                <div class="nav-tree-children">
+                  <details open>
+                    <summary class="nav-tree-row" data-select="branchParser"><span class="nav-glyph branch">●</span><span class="nav-copy"><strong>parser-refactor</strong><small>Branch · forked from L40</small></span><span class="nav-count">4</span></summary>
+                    <div class="nav-tree-children">
+                      <button class="nav-tree-row nav-leaf" type="button" data-select="a1"><span class="nav-glyph operation">○</span><span class="nav-copy"><strong>O17 · edit parser</strong><small>OperationVersion</small></span><span class="nav-count">1</span></button>
+
+                      <details open>
+                        <summary class="nav-tree-row" data-select="a2"><span class="nav-glyph operation">○</span><span class="nav-copy"><strong>O18 · add tests</strong><small>OperationVersion · fork source</small></span><span class="nav-count">2</span></summary>
+                        <div class="nav-tree-children">
+                          <details open>
+                            <summary class="nav-tree-row" data-select="branchTests"><span class="nav-glyph child">●</span><span class="nav-copy"><strong>parser-tests</strong><small>Child Branch · forked from O18</small></span><span class="nav-count">2</span></summary>
+                            <div class="nav-tree-children">
+                              <button class="nav-tree-row nav-leaf" type="button" data-select="c1"><span class="nav-glyph child">○</span><span class="nav-copy"><strong>O19 · experiment</strong><small>OperationVersion</small></span><span class="nav-count">1</span></button>
+                              <button class="nav-tree-row nav-leaf" type="button" data-select="c2"><span class="nav-glyph child">○</span><span class="nav-copy"><strong>O20 · verified</strong><small>OperationVersion · lease</small></span><span class="nav-count">2</span></button>
+                            </div>
+                          </details>
+                        </div>
+                      </details>
+
+                      <button class="nav-tree-row nav-leaf" type="button" data-select="a3"><span class="nav-glyph operation">○</span><span class="nav-copy"><strong>O21 · child merged</strong><small>OperationVersion</small></span><span class="nav-count">3</span></button>
+                      <button class="nav-tree-row nav-leaf" type="button" data-select="a4"><span class="nav-glyph operation">○</span><span class="nav-copy"><strong>O22 · build fixed</strong><small>OperationVersion · head</small></span><span class="nav-count">4</span></button>
+                      <button class="nav-tree-row nav-leaf" type="button" data-select="la"><span class="nav-glyph candidate">◇</span><span class="nav-copy"><strong>Candidate Layer LA</strong><small>candidate preparation · became L41</small></span><span class="nav-count"></span></button>
+                      <button class="nav-tree-row nav-leaf" type="button" data-select="op194"><span class="nav-glyph running">◉</span><span class="nav-copy"><strong>npm-install</strong><small>Running Operation · base O22</small></span><span class="nav-count">2m</span></button>
+                    </div>
+                  </details>
+
+                  <details open>
+                    <summary class="nav-tree-row" data-select="l41"><span class="nav-glyph stack">◇</span><span class="nav-copy"><strong>Layer L41</strong><small>next version · parent L40</small></span><span class="nav-count">41</span></summary>
+                    <div class="nav-tree-children">
+                      <details open>
+                        <summary class="nav-tree-row" data-select="l42"><span class="nav-glyph stack">◆</span><span class="nav-copy"><strong>Layer L42 · HEAD</strong><small>current version · parent L41</small></span><span class="nav-count">42</span></summary>
+                        <div class="nav-tree-children">
+                          <details open>
+                            <summary class="nav-tree-row" data-select="branchDeps"><span class="nav-glyph branch">●</span><span class="nav-copy"><strong>dependency-refresh</strong><small>Branch · forked from L42</small></span><span class="nav-count">2</span></summary>
+                            <div class="nav-tree-children">
+                              <button class="nav-tree-row nav-leaf" type="button" data-select="b1"><span class="nav-glyph operation">○</span><span class="nav-copy"><strong>O23 · dependency bump</strong><small>OperationVersion</small></span><span class="nav-count">1</span></button>
+                              <button class="nav-tree-row nav-leaf" type="button" data-select="b2"><span class="nav-glyph operation">○</span><span class="nav-copy"><strong>O24 · npm install</strong><small>OperationVersion · head</small></span><span class="nav-count">2</span></button>
+                              <button class="nav-tree-row nav-leaf" type="button" data-select="lb"><span class="nav-glyph candidate">◇</span><span class="nav-copy"><strong>Candidate Layer LB</strong><small>candidate preparation · retained</small></span><span class="nav-count"></span></button>
+                            </div>
+                          </details>
+                        </div>
+                      </details>
+                    </div>
+                  </details>
+                </div>
+              </details>
+            </div>
+          </details>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <div class="toolbar">
+          <div class="tabs" role="tablist" aria-label="LayerFS views">
+            <button class="tab" type="button" role="tab" aria-selected="true" data-view="history">History</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-view="files">Files</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-view="compare">Compare</button>
+          </div>
+          <span class="toolbar-meta">2 top-level Branches · 1 child Branch · 8 Operations</span>
+        </div>
+
+        <section class="view" id="history-view" aria-label="LayerStack Branch and Operation tree">
+          <div class="history-tree" role="tree" aria-label="production LayerStack organization">
+            <button class="tree-row stack-row is-selected" type="button" role="treeitem" aria-expanded="true" data-id="stack">
+              <span class="tree-icon">◆</span><span class="tree-title"><strong>LayerStack · production</strong><span>current head · Layer L42 · Root 7cc1…e02</span></span><span class="tree-meta">generation 42</span>
+            </button>
+
+            <ul class="tree-list" role="group">
+              <li class="tree-branch">
+                <button class="tree-row layer-version-row" type="button" role="treeitem" aria-expanded="true" data-id="l40"><span class="tree-icon">◇</span><span class="tree-title"><strong>Layer L40</strong><span>Root 129b…bb1 · retained version</span></span><span class="tree-meta">generation 40</span></button>
+                <ol class="operation-list" role="group">
+                  <li class="tree-branch">
+                    <button class="tree-row branch-row" type="button" role="treeitem" aria-expanded="true" data-id="branchParser"><span class="tree-icon">●</span><span class="tree-title"><strong>parser-refactor</strong><span>Branch · forked from Layer L40</span></span><span class="tree-meta">head O22</span></button>
+                    <ol class="operation-list" role="group">
+                      <li class="tree-operation"><button class="tree-row operation-row" type="button" role="treeitem" data-id="a1"><span class="tree-icon">○</span><span class="tree-title"><strong>O17 · edit parser</strong><span>OperationCommit · Root 201f…192</span></span><span class="tree-meta">version 1</span></button></li>
+                      <li class="tree-operation">
+                        <button class="tree-row operation-row" type="button" role="treeitem" aria-expanded="true" data-id="a2"><span class="tree-icon">○</span><span class="tree-title"><strong>O18 · add tests</strong><span>OperationCommit · Root 19b8…091 · fork source</span></span><span class="tree-meta">version 2</span></button>
+                        <ol class="operation-list" role="group">
+                          <li class="tree-branch child-branch">
+                            <button class="tree-row branch-row" type="button" role="treeitem" aria-expanded="true" data-id="branchTests"><span class="tree-icon">└●</span><span class="tree-title"><strong>parser-tests</strong><span>Child Branch · forked from OperationRecordRef O18</span></span><span class="tree-meta">merged</span></button>
+                            <ol class="operation-list" role="group">
+                              <li class="tree-operation"><button class="tree-row operation-row child-operation" type="button" role="treeitem" data-id="c1"><span class="tree-icon">○</span><span class="tree-title"><strong>O19 · experiment</strong><span>OperationCommit · Root 0fc3…e82</span></span><span class="tree-meta">version 1</span></button></li>
+                              <li class="tree-operation"><button class="tree-row operation-row child-operation" type="button" role="treeitem" data-id="c2"><span class="tree-icon">○</span><span class="tree-title"><strong>O20 · verified</strong><span>OperationCommit · Root 223a…f09</span></span><span class="tree-meta">version 2 · lease</span></button></li>
+                            </ol>
+                          </li>
+                        </ol>
+                      </li>
+                      <li class="tree-operation"><p class="tree-relation">ChildBranchMerge parser-tests → parser-refactor</p><button class="tree-row operation-row" type="button" role="treeitem" data-id="a3"><span class="tree-icon">○</span><span class="tree-title"><strong>O21 · child merged</strong><span>OperationVersion · Root 8d91…e41</span></span><span class="tree-meta">version 3</span></button></li>
+                      <li class="tree-operation"><button class="tree-row operation-row" type="button" role="treeitem" data-id="a4"><span class="tree-icon">○</span><span class="tree-title"><strong>O22 · build fixed</strong><span>OperationCommit · Root 46ab…771</span></span><span class="tree-meta">version 4</span></button></li>
+                      <li class="tree-operation"><button class="tree-row candidate-row" type="button" role="treeitem" data-id="la"><span class="tree-icon">◇</span><span class="tree-title"><strong>Candidate Layer LA</strong><span>candidate preparation · became Layer L41</span></span><span class="tree-meta">merged</span></button></li>
+                      <li class="tree-operation"><button class="tree-row running-row" type="button" role="treeitem" data-id="op194"><span class="tree-icon">◉</span><span class="tree-title"><strong>npm-install</strong><span>Running OperationWorkspace · base O22</span></span><span class="tree-meta">2m 17s</span></button></li>
+                    </ol>
+                  </li>
+
+                  <li class="tree-branch">
+                    <button class="tree-row layer-version-row" type="button" role="treeitem" aria-expanded="true" data-id="l41"><span class="tree-icon">◇</span><span class="tree-title"><strong>Layer L41</strong><span>Root 4aa2…c18 · parent Layer L40</span></span><span class="tree-meta">generation 41</span></button>
+                    <ol class="operation-list" role="group">
+                      <li class="tree-branch">
+                        <button class="tree-row layer-version-row current-layer" type="button" role="treeitem" aria-expanded="true" data-id="l42"><span class="tree-icon">◆</span><span class="tree-title"><strong>Layer L42 · HEAD</strong><span>Root 7cc1…e02 · parent Layer L41</span></span><span class="tree-meta">generation 42</span></button>
+                        <ol class="operation-list" role="group">
+                          <li class="tree-branch">
+                            <button class="tree-row branch-row" type="button" role="treeitem" aria-expanded="true" data-id="branchDeps"><span class="tree-icon">●</span><span class="tree-title"><strong>dependency-refresh</strong><span>Branch · forked from Layer L42</span></span><span class="tree-meta">head O24</span></button>
+                            <ol class="operation-list" role="group">
+                              <li class="tree-operation"><button class="tree-row operation-row" type="button" role="treeitem" data-id="b1"><span class="tree-icon">○</span><span class="tree-title"><strong>O23 · dependency bump</strong><span>OperationCommit · Root 901c…4ee</span></span><span class="tree-meta">version 1</span></button></li>
+                              <li class="tree-operation"><button class="tree-row operation-row" type="button" role="treeitem" data-id="b2"><span class="tree-icon">○</span><span class="tree-title"><strong>O24 · npm install</strong><span>OperationCommit · Root 390b…7d2</span></span><span class="tree-meta">version 2</span></button></li>
+                              <li class="tree-operation"><button class="tree-row candidate-row" type="button" role="treeitem" data-id="lb"><span class="tree-icon">◇</span><span class="tree-title"><strong>Candidate Layer LB</strong><span>candidate preparation · not yet merged</span></span><span class="tree-meta">candidate</span></button></li>
+                            </ol>
+                          </li>
+                        </ol>
+                      </li>
+                    </ol>
+                  </li>
+                </ol>
+              </li>
+            </ul>
+          </div>
+          <div class="tree-key" aria-label="Tree legend"><span>◆ LayerStack / current Layer</span><span>◇ historical / candidate Layer</span><span>● Branch from exact version</span><span>○ OperationVersion</span><span>◉ Running Operation</span></div>
+          <p class="fork-hint">Select any retained Layer to <strong>Fork Branch</strong>; select any OperationVersion to <strong>Fork child Branch</strong>.</p>
+        </section>
+
+        <section class="view" id="files-view" aria-label="Files at selected root" hidden>
+          <h2 class="empty-heading">Files at the selected root</h2>
+          <p class="view-copy">Browse the exact immutable filesystem represented by <span data-selected-label>Layer L42</span>.</p>
+          <div class="file-browser">
+            <div class="file-head"><strong>/</strong><span class="root-ref" data-selected-root>Root 7cc1…e02</span></div>
+            <ul class="file-list">
+              <li class="file-row"><span class="file-icon">▾</span><span class="file-path">src/</span><span class="file-state"></span></li>
+              <li class="file-row"><span class="file-icon">·</span><span class="file-path">&nbsp;&nbsp;index.ts</span><span class="file-state"></span></li>
+              <li class="file-row"><span class="file-icon">·</span><span class="file-path">&nbsp;&nbsp;parser.ts</span><span class="file-state modified">M</span></li>
+              <li class="file-row"><span class="file-icon">·</span><span class="file-path">&nbsp;&nbsp;storage.ts</span><span class="file-state"></span></li>
+              <li class="file-row"><span class="file-icon">▾</span><span class="file-path">test/</span><span class="file-state"></span></li>
+              <li class="file-row"><span class="file-icon">·</span><span class="file-path">&nbsp;&nbsp;parser.test.ts</span><span class="file-state added">A</span></li>
+              <li class="file-row"><span class="file-icon">·</span><span class="file-path">package.json</span><span class="file-state modified">M</span></li>
+              <li class="file-row"><span class="file-icon">·</span><span class="file-path">docs/archive.md</span><span class="file-state renamed">R</span></li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="view" id="compare-view" aria-label="Compare immutable roots" hidden>
+          <h2 class="empty-heading">Compare two immutable versions</h2>
+          <p class="view-copy">Merkle identity finds shared subtrees before payloads are read.</p>
+          <div class="compare-panel">
+            <div class="compare-controls">
+              <div class="field"><label for="compare-from">From</label><select id="compare-from"><option>OperationVersion O18 · 19b8…091</option><option>Layer L40 · 129b…bb1</option></select></div>
+              <span class="compare-arrow">→</span>
+              <div class="field"><label for="compare-to">To</label><select id="compare-to"><option>OperationVersion O21 · 8d91…e41</option><option>Layer L42 · 7cc1…e02</option></select></div>
+            </div>
+            <div class="metrics">
+              <div class="metric"><strong>14</strong><span>paths changed</span></div>
+              <div class="metric"><strong>48 KiB</strong><span>logical delta</span></div>
+              <div class="metric"><strong>36 KiB</strong><span>new payload</span></div>
+              <div class="metric"><strong>99.7%</strong><span>payload reused</span></div>
+            </div>
+            <ul class="file-list">
+              <li class="file-row"><span class="file-icon">·</span><span class="file-path">src/parser.ts</span><span class="file-state modified">M</span></li>
+              <li class="file-row"><span class="file-icon">·</span><span class="file-path">test/parser.test.ts</span><span class="file-state added">A</span></li>
+              <li class="file-row"><span class="file-icon">·</span><span class="file-path">old.md → docs/archive.md</span><span class="file-state renamed">R</span></li>
+            </ul>
+          </div>
+        </section>
+      </main>
+
+      <aside class="inspector" aria-label="Selected history item" aria-live="polite">
+        <div class="inspector-inner">
+          <div>
+            <div class="inspector-type" id="inspect-type">LayerStack</div>
+            <h2 id="inspect-title">LayerStack · production</h2>
+            <div class="state" id="inspect-state">Current LayerStack</div>
+            <dl class="details" id="inspect-details"></dl>
+          </div>
+          <div>
+            <div class="delta" id="inspect-delta"></div>
+            <div class="actions">
+              <button class="action primary" type="button" data-action="files">Browse files</button>
+              <button class="action" type="button" data-action="compare">Compare</button>
+              <button class="action" type="button" id="context-action">Fork Branch</button>
+            </div>
+            <p class="receipt" id="inspect-receipt">Receipt · generation 41 → 42 · verified · one visibility transaction</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const items = {
+      stack: { type: "LayerStack", title: "LayerStack · production", state: "Current LayerStack", stateClass: "", root: "7cc1…e02", fields: [["Current head", "Layer L42"], ["Generation", "42"], ["Branches", "2 top-level / 1 child"], ["Leases", "3"]], delta: ["42", "Layers", "2", "top-level Branches", "1", "child Branch", "8", "Operations"], action: "Fork Branch", receipt: "LayerStack head · Layer L42 · generation 42" },
+      l42: { type: "Layer", title: "Layer L42", state: "Current LayerStack head", stateClass: "", root: "7cc1…e02", fields: [["LayerStack", "production"], ["Parent", "Layer L41"], ["Created by", "LayerStackMerge LM20"], ["Generation", "42"], ["Leases", "3"]], delta: ["9", "paths changed", "28 KiB", "new payload", "99.9%", "objects reused", "6", "new tree nodes"], action: "Fork Branch", receipt: "LayerStackMerge · generation 41 → 42" },
+      l41: { type: "Layer", title: "Layer L41", state: "Historical Layer", stateClass: "", root: "4aa2…c18", fields: [["LayerStack", "production"], ["Parent", "Layer L40"], ["Created by", "LayerStackMerge LM19"], ["Generation", "41"]], delta: ["24", "paths changed", "82 KiB", "new payload", "99.3%", "objects reused", "18", "new tree nodes"], action: "Fork Branch", receipt: "LayerStackMerge · generation 40 → 41" },
+      l40: { type: "Layer", title: "Layer L40", state: "Retained historical Layer", stateClass: "", root: "129b…bb1", fields: [["LayerStack", "production"], ["Parent", "Layer L39"], ["Generation", "40"], ["Leases", "0"]], delta: ["18", "paths changed", "114 KiB", "new payload", "93%", "objects reused", "12", "new tree nodes"], action: "Fork Branch", receipt: "Retained ancestor · exact immutable RootId" },
+      branchParser: { type: "Branch", title: "parser-refactor", state: "Active Branch", stateClass: "", root: "46ab…771", fields: [["LayerStack", "production"], ["Origin", "Layer L40"], ["Head", "OperationVersion O22"], ["Operations", "4"], ["Child Branches", "1"]], delta: ["4", "Operations", "1", "child Branch", "24", "paths changed", "82 KiB", "new payload"], action: "OperationCommit", receipt: "Branch generation 4 · exact head O22" },
+      branchTests: { type: "Child Branch", title: "parser-tests", state: "Merged into parent Branch", stateClass: "", root: "223a…f09", fields: [["Parent Branch", "parser-refactor"], ["Fork record", "OperationRecordRef O18"], ["Head", "OperationVersion O20"], ["Operations", "2"]], delta: ["2", "Operations", "9", "paths changed", "39 KiB", "new payload", "1", "lease"], action: "Compare", receipt: "ChildBranchMerge · parser-tests → parser-refactor" },
+      branchDeps: { type: "Branch", title: "dependency-refresh", state: "Active Branch", stateClass: "", root: "390b…7d2", fields: [["LayerStack", "production"], ["Origin", "Layer L42"], ["Head", "OperationVersion O24"], ["Operations", "2"], ["Child Branches", "0"]], delta: ["2", "Operations", "1,285", "paths changed", "14 MiB", "new payload", "87%", "objects reused"], action: "OperationCommit", receipt: "Branch generation 2 · exact head O24" },
+      a1: { type: "OperationVersion", title: "O17 · edit parser", state: "Committed to parser-refactor", stateClass: "", root: "201f…192", fields: [["Branch", "parser-refactor"], ["Parent", "Layer L40"], ["Operation", "op-0188"], ["Sequence", "1"]], delta: ["1", "path changed", "4 KiB", "new payload", "99.9%", "objects reused", "4", "new tree nodes"], action: "Fork child Branch", receipt: "OperationCommit · branch generation 0 → 1" },
+      a2: { type: "OperationVersion", title: "O18 · add tests", state: "Committed to parser-refactor", stateClass: "", root: "19b8…091", fields: [["Branch", "parser-refactor"], ["Parent", "OperationVersion O17"], ["Operation", "op-0189"], ["Sequence", "2"]], delta: ["3", "paths changed", "24 KiB", "new payload", "99.2%", "objects reused", "7", "new tree nodes"], action: "Fork child Branch", receipt: "OperationCommit · branch generation 1 → 2" },
+      c1: { type: "OperationVersion", title: "O19 · experiment", state: "Committed to parser-tests", stateClass: "", root: "0fc3…e82", fields: [["Branch", "parser-tests"], ["Parent Branch", "parser-refactor"], ["Fork record", "OperationVersion O18"], ["Sequence", "1"]], delta: ["7", "paths changed", "31 KiB", "new payload", "98.8%", "objects reused", "9", "new tree nodes"], action: "Fork child Branch", receipt: "OperationCommit · child generation 0 → 1" },
+      c2: { type: "OperationVersion", title: "O20 · verified", state: "Committed to parser-tests · one lease", stateClass: "", root: "223a…f09", fields: [["Branch", "parser-tests"], ["Parent", "OperationVersion O19"], ["Lease", "materialization-027"], ["Sequence", "2"]], delta: ["2", "paths changed", "8 KiB", "new payload", "99.8%", "objects reused", "5", "new tree nodes"], action: "Fork child Branch", receipt: "OperationCommit · child generation 1 → 2" },
+      a3: { type: "OperationVersion", title: "O21 · child merged", state: "Committed to parser-refactor", stateClass: "", root: "8d91…e41", fields: [["Branch", "parser-refactor"], ["Parent", "OperationVersion O18"], ["Source", "Child Branch parser-tests"], ["Sequence", "3"]], delta: ["14", "paths changed", "48 KiB", "logical delta", "99.7%", "payload reused", "8", "new tree nodes"], action: "Fork child Branch", receipt: "ChildBranchMerge · branch generation 2 → 3" },
+      a4: { type: "OperationVersion", title: "O22 · build fixed", state: "Head of parser-refactor", stateClass: "", root: "46ab…771", fields: [["Branch", "parser-refactor"], ["Parent", "OperationVersion O21"], ["Operation", "op-0193"], ["Sequence", "4"]], delta: ["4", "paths changed", "16 KiB", "new payload", "99.8%", "objects reused", "6", "new tree nodes"], action: "Fork child Branch", receipt: "OperationCommit · branch generation 3 → 4" },
+      la: { type: "Candidate Layer", title: "Candidate Layer LA", state: "Merged as Layer L41", stateClass: "candidate", root: "4aa2…c18", fields: [["Source Branch", "parser-refactor"], ["Parent", "Layer L40"], ["Preparation", "CP19"], ["State", "merged"]], delta: ["24", "paths changed", "82 KiB", "new payload", "99.3%", "objects reused", "18", "new tree nodes"], action: "Compare", receipt: "LayerStackMerge · accepted as Layer L41" },
+      b1: { type: "OperationVersion", title: "O23 · dependency bump", state: "Committed to dependency-refresh", stateClass: "", root: "901c…4ee", fields: [["Branch", "dependency-refresh"], ["Parent", "Layer L42"], ["Operation", "op-0190"], ["Sequence", "1"]], delta: ["1", "path changed", "2 KiB", "new payload", "99.9%", "objects reused", "4", "new tree nodes"], action: "Fork child Branch", receipt: "OperationCommit · branch generation 0 → 1" },
+      b2: { type: "OperationVersion", title: "O24 · npm install", state: "Head of dependency-refresh", stateClass: "", root: "390b…7d2", fields: [["Branch", "dependency-refresh"], ["Parent", "OperationVersion O23"], ["Operation", "op-0191"], ["Sequence", "2"]], delta: ["1,284", "paths changed", "14 MiB", "new payload", "87%", "objects reused", "412", "new tree nodes"], action: "Fork child Branch", receipt: "OperationCommit · branch generation 1 → 2" },
+      lb: { type: "Candidate Layer", title: "Candidate Layer LB", state: "Not yet merged", stateClass: "candidate", root: "390b…7d2", fields: [["Source Branch", "dependency-refresh"], ["Parent", "Layer L42"], ["Preparation", "CP21"], ["State", "candidate"]], delta: ["1,285", "paths changed", "14 MiB", "new payload", "87%", "objects reused", "416", "new tree nodes"], action: "LayerStackMerge", receipt: "candidate CP21 retained · no LayerStack head changed" },
+      op194: { type: "Running Operation", title: "npm-install", state: "Running in parser-refactor", stateClass: "running", root: "pending", fields: [["Branch", "parser-refactor"], ["Base", "OperationVersion O22"], ["Workspace", "mounted"], ["Processes", "4"], ["Lease", "active"]], delta: ["27", "dirty paths", "3.2 MiB", "pending bytes", "4", "processes", "2m 17s", "elapsed"], action: "End operation", receipt: "No OperationVersion exists until OperationCommit" }
+    };
+
+    let selectedId = "stack";
+    const views = { history: document.querySelector("#history-view"), files: document.querySelector("#files-view"), compare: document.querySelector("#compare-view") };
+
+    function showView(name) {
+      Object.entries(views).forEach(([key, element]) => { element.hidden = key !== name; });
+      document.querySelectorAll("[data-view]").forEach(tab => tab.setAttribute("aria-selected", tab.dataset.view === name));
+    }
+
+    function selectItem(id) {
+      const item = items[id];
+      if (!item) return;
+      selectedId = id;
+      document.querySelectorAll("[data-id]").forEach(node => node.classList.toggle("is-selected", node.dataset.id === id));
+      document.querySelectorAll("[data-select]").forEach(node => node.classList.toggle("is-selected", node.dataset.select === id));
+      const navTarget = Array.from(document.querySelectorAll("[data-select]")).find(node => node.dataset.select === id);
+      if (navTarget) {
+        let parent = navTarget.parentElement;
+        while (parent && !parent.classList.contains("sidebar")) {
+          if (parent.tagName === "DETAILS") parent.open = true;
+          parent = parent.parentElement;
+        }
+        navTarget.scrollIntoView({ block: "nearest" });
+      }
+      document.querySelector("#inspect-type").textContent = item.type;
+      document.querySelector("#inspect-title").textContent = item.title;
+      const state = document.querySelector("#inspect-state");
+      state.textContent = item.state;
+      state.className = `state ${item.stateClass}`;
+      document.querySelector("#inspect-details").innerHTML = item.fields.map(([key, value]) => `<div><dt>${key}</dt><dd>${value}</dd></div>`).join("") + `<div><dt>Root</dt><dd>${item.root}</dd></div>`;
+      const summary = item.type === "LayerStack" ? "LayerStack summary" : item.type === "Layer" || item.type === "Candidate Layer" ? "Layer transition" : item.type.includes("Branch") ? "Branch summary" : item.type === "Running Operation" ? "Live workspace" : "OperationDelta";
+      document.querySelector("#inspect-delta").innerHTML = `<h3>${summary}</h3><div class="delta-grid">${Array.from({ length: 4 }, (_, index) => `<div class="delta-value"><strong>${item.delta[index * 2]}</strong><span>${item.delta[index * 2 + 1]}</span></div>`).join("")}</div>`;
+      document.querySelector("#context-action").textContent = item.action;
+      document.querySelector("#inspect-receipt").textContent = item.receipt;
+      document.querySelectorAll("[data-selected-label]").forEach(node => { node.textContent = item.title; });
+      document.querySelectorAll("[data-selected-root]").forEach(node => { node.textContent = `Root ${item.root}`; });
+    }
+
+    document.addEventListener("click", event => {
+      const select = event.target.closest("[data-id], [data-select]");
+      if (select) selectItem(select.dataset.id || select.dataset.select);
+      const view = event.target.closest("[data-view]");
+      if (view) showView(view.dataset.view);
+      const action = event.target.closest("[data-action]");
+      if (action) showView(action.dataset.action);
+    });
+
+    document.querySelector("#context-action").addEventListener("click", () => {
+      const item = items[selectedId];
+      document.querySelector("#inspect-receipt").textContent = `${item.action} selected · demonstration only · no reference changed`;
+    });
+
+    document.querySelector("[data-expand-all]").addEventListener("click", () => {
+      document.querySelectorAll(".nav-tree details").forEach(folder => { folder.open = true; });
+    });
+
+    document.querySelector("[data-collapse-all]").addEventListener("click", () => {
+      document.querySelectorAll(".nav-tree details").forEach(folder => { folder.open = false; });
+    });
+
+    selectItem("stack");
+  </script>
+</body>
+</html>
