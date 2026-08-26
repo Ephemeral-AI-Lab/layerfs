@@ -1,7 +1,7 @@
 # Stage 2 Specification — LayerFS + Linux FUSE Direct Workspace
 
-Status: **implemented; correctness/resource and LayerFS restart-durable timing
-pass; full-product Cloudflare comparison is unavailable**.
+Status: **implemented; local correctness/resource, restart durability, and
+matched native-FUSE comparison pass**.
 
 Current provisional custody is
 [candidate 015](evidence/stage2-freeze-candidate-015/summary.json): source
@@ -18,14 +18,15 @@ The candidate-015 unchanged-upstream live rerun also passes under one CPU,
 512 MiB, Verified integrity, and real FUSE: `/var/tmp` SL `3.361 s`, Rsum
 `2.193`, G `3.372`, Spread `1.058`; `/tmp` SL `3.299 s`, Rsum `2.133`, G
 `3.569`, Spread `1.021`. These remain `LIVE_MOUNT` diagnostics rather than
-persistence-inclusive comparison evidence. A locally validated full-product
-Cloudflare wrapper is frozen at
-commit `151b053b514e7bd0eb4b64481fe89335c43e7109`, but the authenticated account
-lacks Workers Paid/Containers entitlement. No deployed sample or platform
-resource metric exists. The honest disposition is therefore
-`PASS_DURABLE_LAYERFS + CLOUDFLARE_COMPARISON_BLOCKED_EXTERNAL + REVISE`, not
-terminal `PASS_OPTIMIZED`. Candidate 014 and candidate 013 are historical;
-candidate 012 remains superseded.
+persistence-inclusive evidence. Under the same local native ARM64, one-CPU,
+512 MiB envelope, Cloudflare Computer's FUSE median sums are `7.260 s` and
+`7.449 s`; LayerFS is `2.160x` and `2.258x` faster respectively and uses lower
+whole-cgroup peak memory. The matched 64 MiB restart test is stronger: LayerFS
+acknowledges durable state in `926.499 ms` and reopens exact bytes after
+SIGKILL, while Cloudflare's `673.020 ms` local acknowledgement reopens as
+`ABSENT`. Cloud deployment and Durable Object sync are outside the user-
+selected scope. Current disposition is `PASS_LOCAL_ONLY`. Candidate 014 and
+candidate 013 are historical; candidate 012 remains superseded.
 
 Entry sequence:
 

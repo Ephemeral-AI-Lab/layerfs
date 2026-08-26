@@ -1,0 +1,2 @@
+[info] FUSE_MOUNT=fuse resolved to backend=fuse
+computerd listening on 0.0.0.0:45678 mount=/workspace backend=fuse

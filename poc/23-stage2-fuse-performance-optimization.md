@@ -1,6 +1,6 @@
 # Stage 2P Specification — Portable LayerFS FUSE Performance Optimization
 
-Status: **LayerFS persistence-inclusive campaign passes; full-product comparison unavailable**
+Status: **local persistence and matched native-FUSE comparison pass**
 
 The current provisional candidate is
 [candidate 015](evidence/stage2-freeze-candidate-015/summary.json), source
@@ -15,15 +15,15 @@ Focused current-image external-unmount, metadata-heavy crash, and high-entropy
 zero residue. Candidate 015's unchanged-upstream source-bound live rerun passes:
 `/var/tmp` SL `3.361 s`, Rsum `2.193`, G `3.372`, Spread `1.058`; `/tmp` SL
 `3.299 s`, Rsum `2.133`, G `3.569`, Spread `1.021`. These are `LIVE_MOUNT`
-diagnostics, not durable-comparison numbers. The prior Cloudflare Docker ratios
-describe local process-lifetime VFS work, not full
-Durable Object synchronization, so their thresholds are not reused as durable
-gates. The locally validated matched wrapper at commit `151b053b` requires
-prep acknowledgement plus restart, timed DO acknowledgement, a second restart,
-scenario-specific exact state, and external platform resource metrics. The
-authenticated account lacks Containers entitlement, so no deployed sample
-exists. Current status is `PASS_DURABLE_LAYERFS +
-CLOUDFLARE_COMPARISON_BLOCKED_EXTERNAL + REVISE`, not `PASS_OPTIMIZED`.
+diagnostics. A fresh matched local Cloudflare Computer campaign uses the same
+native ARM64, one CPU, 512 MiB, network-none, real-FUSE envelope. Cloudflare's
+FUSE median sums are `7.260 s` against `/var/tmp` and `7.449 s` against `/tmp`;
+LayerFS is `2.160x` and `2.258x` faster. Normalized summed overhead is `45.5%`
+and `44.3%` of Cloudflare's. On the matched high-entropy 64 MiB restart test,
+LayerFS passes at `926.499 ms`; Cloudflare's faster `673.020 ms` local
+acknowledgement loses the file after container restart and is not a durable
+latency. Durable Object synchronization and deployment are outside the user-
+selected local scope. Current status is `PASS_LOCAL_ONLY`.
 
 Prepared: `2026-08-26`
 

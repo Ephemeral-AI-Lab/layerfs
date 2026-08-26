@@ -1,8 +1,9 @@
 {
   "schema": "layerfs-stage2-015-summary-v1",
-  "status": "PASS_DURABLE_LAYERFS_CLOUDFLARE_BLOCKED_EXTERNAL",
-  "terminal_comparison_status": "REVISE",
-  "terminal_comparison_blocker": "The authenticated Cloudflare account lacks Workers Paid / Containers entitlement, so no deployed Durable Object sync plus container-restart population exists.",
+  "status": "PASS_LOCAL_ONLY",
+  "terminal_comparison_status": "PASS_LOCAL_ONLY",
+  "terminal_comparison_blocker": null,
+  "scope": "LOCAL_ONLY_NO_CLOUD_DEPLOYMENT_NO_DURABLE_OBJECT",
   "source": {
     "commit": "7e82abcd7320f6a214be336d82488ba0527b6025",
     "tree": "df13d88eb7e7d2471971b0c58ca6425bb81b0b03",
@@ -78,17 +79,55 @@
         "mount_lock_ratio": 0.008003406873257794
       }
     },
-    "durable_layerfs": "PASS_DURABLE_WITHOUT_CLOUDFLARE_NUMERIC_GATE",
-    "cloudflare_full_product": "UNAVAILABLE_EXTERNAL_ENTITLEMENT",
+    "durable_layerfs": "PASS_DURABLE_LOCAL",
+    "cloudflare_local_process_state": "FAIL_DURABILITY",
+    "cloudflare_full_product": "OUT_OF_SCOPE_USER_SELECTED_LOCAL_ONLY",
     "old_4_5s_rsum_g_thresholds_reused": false
   },
+  "local_comparison": {
+    "verification": "local-comparison.json",
+    "status": "PASS_LOCAL_ONLY",
+    "durable_restart": {
+      "workload": "64 MiB high-entropy write, SHA-256, explicit sync, immediate forced death, fresh-container reopen",
+      "layerfs": {
+        "status": "PASS_DURABLE",
+        "T_live_ns": 398368500,
+        "T_checkpoint_ns": 528130625,
+        "T_to_durable_ns": 926499125,
+        "survived_restart": true
+      },
+      "cloudflare_local": {
+        "status": "FAIL_DURABILITY",
+        "local_acknowledgement_ns": 673020000,
+        "survived_restart": false,
+        "reopen_output": "ABSENT"
+      },
+      "disposition": "LAYERFS_ONLY_RESTART_DURABLE"
+    },
+    "live_var_tmp": {
+      "layerfs_fuse_median_sum_ns": 3360647000,
+      "cloudflare_fuse_median_sum_ns": 7259582293,
+      "cloudflare_to_layerfs_speed_ratio": 2.160174006076806,
+      "layerfs_normalized_rsum_ratio": 0.45498941222473155,
+      "layerfs_cgroup_peak_bytes": 307355648,
+      "cloudflare_cgroup_peak_bytes": 400953344
+    },
+    "live_tmp": {
+      "layerfs_fuse_median_sum_ns": 3299381404,
+      "cloudflare_fuse_median_sum_ns": 7448966405,
+      "cloudflare_to_layerfs_speed_ratio": 2.257685757690595,
+      "layerfs_normalized_rsum_ratio": 0.44295589865393464,
+      "layerfs_cgroup_peak_bytes": 283529216,
+      "cloudflare_cgroup_peak_bytes": 318402560
+    }
+  },
   "cloudflare_deploy_readiness": {
-    "status": "LOCAL_VALIDATION_PASS_DEPLOYMENT_BLOCKED_EXTERNAL",
+    "status": "OUT_OF_SCOPE_USER_SELECTED_LOCAL_ONLY",
     "wrapper_commit": "151b053b514e7bd0eb4b64481fe89335c43e7109",
     "wrapper_tree": "44456876b58e5ebb2652e999f48d9b015ec7ee5f",
     "computerd_sha256": "a6f05d79cce84035b21f6377d7f37b799128c6bdb5e9a4fb92b403604fb49b7a",
     "deployed_samples": 0,
     "resource_metrics": null
   },
-  "checksums_disposition": "SHA256SUMS intentionally deferred until the deployed Cloudflare comparison and terminal custody are complete."
+  "checksums_disposition": "Local-only SHA256SUMS is generated last and verified after all local evidence and documentation are frozen."
 }

@@ -3,8 +3,8 @@
 Status: **AppleWorkspaceV1 Stage 1.0 and Stage 1.1 are closed; Stage 1.1M
 Verified correctness is closed and its performance result is
 `REVISE_NO_AUTHORIZED_OWNER`; Stage 1.2 is skipped; Stage 2 LayerFS
-correctness/resource/restart-durable qualification passes while a full-product
-Cloudflare comparison is unavailable**.
+correctness/resource/restart-durable qualification and matched local
+Cloudflare Computer comparison pass**.
 The controlling closure and custody record is
 [17 — Stage 1.0 closure and accepted A02 exception](17-stage1-closure.md).
 The preserved A01–A17 campaign remains measured `REVISE`; its A02 latency miss
@@ -41,13 +41,13 @@ external-unmount and focused metadata/payload post-ack SIGKILL proofs also
 pass. Candidate 015's unchanged-upstream source-bound live rerun passes:
 `/var/tmp` SL `3.361 s`, Rsum `2.193`, G `3.372`, Spread `1.058`; `/tmp` SL
 `3.299 s`, Rsum `2.133`, G `3.569`, Spread `1.021`. These remain `LIVE_MOUNT`
-diagnostics. The matched Cloudflare wrapper is locally validated at commit
-`151b053b`, but
-the authenticated account lacks Workers Paid/Containers entitlement, so there
-are zero deployed comparison samples and resource metrics remain null. Current
-status is `PASS_DURABLE_LAYERFS + CLOUDFLARE_COMPARISON_BLOCKED_EXTERNAL +
-REVISE`, not `PASS_OPTIMIZED`. Candidate 014 and 013 are historical; candidate
-012 is superseded.
+diagnostics. Under the same local native-ARM64, one-CPU, 512 MiB envelope,
+Cloudflare Computer's FUSE median sums are `7.260 s` and `7.449 s`; LayerFS is
+`2.160x` and `2.258x` faster. LayerFS also survives the matched high-entropy
+64 MiB forced restart with exact bytes; Cloudflare's local process state
+reopens as `ABSENT`. Deployment and Durable Object sync are outside the user-
+selected local scope. Current status is `PASS_LOCAL_ONLY`. Candidate 014 and
+013 are historical; candidate 012 is superseded.
 
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure
@@ -55,7 +55,7 @@ Stage 1.1  poc/16 single-file APFS edge benchmark — PASS / closed
 Stage 1.1M poc/20 Verified correctness/accounting closed; performance REVISE
 Stage 1.1T poc/22 explicit TrustedLocalDev product class — audited primary class PASS; fixed-cost miss retained
 Stage 1.2  SKIPPED — poc/15 retained as a workload reference only
-Stage 2    poc/19 LayerFS + Linux FUSE direct workspace — PASS_DURABLE_LAYERFS / full comparison unavailable
+Stage 2    poc/19 LayerFS + Linux FUSE direct workspace — PASS_LOCAL_ONLY
 ```
 
 The PoC collapses the remaining G6 and project Phase 5–8 work into one vertical

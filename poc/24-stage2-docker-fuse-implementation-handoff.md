@@ -40,12 +40,13 @@ crash proofs also pass. Its unchanged-upstream source-bound live rerun passes
 under one CPU, 512 MiB, Verified integrity, and real FUSE: `/var/tmp` SL
 `3.361 s`, Rsum `2.193`, G `3.372`, Spread `1.058`; `/tmp` SL `3.299 s`,
 Rsum `2.133`, G `3.569`, Spread `1.021`. These rows remain live-mount
-diagnostics. The matched deployed Cloudflare wrapper is locally validated and
-committed as `151b053b514e7bd0eb4b64481fe89335c43e7109`, but
-the authenticated account lacks Workers Paid/Containers entitlement. No
-Cloudflare timed sample or attributable CPU/memory HWM metric exists. Current
-disposition: `PASS_DURABLE_LAYERFS + CLOUDFLARE_COMPARISON_BLOCKED_EXTERNAL +
-REVISE`.
+diagnostics. A matched local native-ARM64 Cloudflare Computer campaign under
+the same one-CPU/512 MiB envelope closes at FUSE median sums `7.260 s` and
+`7.449 s`; LayerFS is `2.160x` and `2.258x` faster. The matched 64 MiB forced-
+restart oracle passes for LayerFS at `926.499 ms`; Cloudflare's local
+`673.020 ms` acknowledgement loses the file after a fresh-container restart.
+Cloud deployment and Durable Object synchronization are outside the explicit
+local-only scope. Current disposition: `PASS_LOCAL_ONLY`.
 
 ## Terminal success
 

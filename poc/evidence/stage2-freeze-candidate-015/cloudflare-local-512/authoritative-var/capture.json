@@ -1,0 +1,10 @@
+{
+  "benchmark_exit": 0,
+  "copy_exit": 0,
+  "fail_markers": 0,
+  "matrix_exact": true,
+  "row_count": 24,
+  "schema": "layerfs-stage2-015-cloudflare-local-capture-v1",
+  "status": "CAPTURED",
+  "wall_ns": 43086624000
+}

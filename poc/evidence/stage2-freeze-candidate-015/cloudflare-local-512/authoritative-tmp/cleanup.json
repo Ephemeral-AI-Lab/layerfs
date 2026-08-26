@@ -1,0 +1,8 @@
+{
+  "container_absent": true,
+  "container_exit": "143",
+  "kill_exit": 0,
+  "remove_exit": 0,
+  "status": "PASS",
+  "wait_exit": 0
+}
