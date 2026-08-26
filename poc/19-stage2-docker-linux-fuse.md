@@ -197,8 +197,9 @@ Success requires:
 Linux applications
   -> kernel VFS
   -> FUSE
-  -> thin layerfs-fuse adapter
-  -> universal mounted workspace in layerfs-vfs
+  -> thin layerfs-mount::fuse adapter
+  -> universal mounted workspace in layerfs-mount
+  -> filesystem semantics in layerfs-vfs
   -> layerfs-engine/core
   -> SQLite/CAS Store on the container's native volume
 ```
@@ -261,7 +262,7 @@ macOS host
         LayerFS Store volume
           /var/lib/layerfs/store.sqlite
 
-        layerfs-fuse daemon
+        layerfs-mount FUSE daemon
           /workspace
             direct mounted namespace root
 
@@ -325,15 +326,18 @@ layerfs-engine
   no FUSE callback or Docker lifecycle
 
 layerfs-vfs
-  universal mounted state and filesystem semantics
+  universal filesystem semantics and root/path/inode resolution
   no Linux syscall or FUSE type
 
-layerfs-fuse
-  Linux/FUSE request translation and daemon lifecycle
+layerfs-mount
+  platform-neutral mounted-session state
+  fuse/ owns Linux request translation and daemon lifecycle
+  no materialized native workspace logic
 
-layerfs-os
-  existing Apple projection remains
-  Linux host observation only unless a concrete later native operation needs it
+layerfs-materialization
+  platform-neutral materialize/capture/refresh lifecycle
+  apfs/ owns the existing Apple projection and native syscalls
+  no mounted-session or FUSE logic
 ```
 
 The Stage 1 SDK is currently wired to `AppleDriver`. The Stage 2 mount must not
@@ -341,8 +345,8 @@ copy Apple behavior or add Linux branches to Core/Engine/VFS. The smallest
 initial construction is:
 
 ```text
-layerfs-fuse
-  -> layerfs-vfs + layerfs-engine
+layerfs-mount::fuse
+  -> layerfs-mount + layerfs-vfs + layerfs-engine
 ```
 
 using universal VFS operations and an adapter that returns typed `Unsupported`
@@ -360,21 +364,44 @@ Cargo.toml
 crates/
   layerfs-vfs/
     src/
-      lib.rs                 export mounted session types
+      lib.rs                 universal filesystem types and operations
       resolver.rs            reuse canonical path/inode resolution
-      mounted.rs             one universal mounted workspace state
 
-  layerfs-fuse/
-    Cargo.toml               one selected FUSE binding only
+  layerfs-mount/
+    Cargo.toml               target-specific Linux FUSE dependency only
     src/
-      lib.rs                 callback translation and errno mapping
-      main.rs                minimal daemon/mount entrypoint
+      lib.rs                 mounted capability exports
+      session.rs             one universal mounted workspace state
+      fuse/
+        mod.rs               callback translation and errno mapping
+        daemon.rs            mount/unmount and request lifecycle
+      bin/
+        layerfs-mount-fuse.rs
     tests/
-      mounted_routes.rs      focused real-FUSE container tests
+      mounted_routes.rs      platform-neutral mounted-session tests
+      fuse_routes.rs         focused real-FUSE container tests
+
+  layerfs-materialization/
+    Cargo.toml               target-specific Apple dependencies only
+    src/
+      lib.rs                 materialization capability exports
+      driver.rs              native projection boundary
+      materialize.rs         canonical root -> native workspace
+      capture.rs             native workspace -> canonical root
+      refresh.rs             related-root native reconciliation
+      workspace.rs           managed/external workspace authority
+      apfs/
+        mod.rs               Apple adapter export
+        workspace.rs         parent-handle APFS workspace
+        apfs.rs              clone/patch/native helpers
+        metadata.rs          supported Apple metadata
+        ffi.rs               Apple-only syscall boundary
+        store.rs             Apple Store/open integration
 
 containers/
-  layerfs-fuse/
-    Dockerfile               Linux arm64/x64 build/runtime image
+  layerfs-mount/
+    fuse/
+      Dockerfile             Linux arm64/x64 build/runtime image
 
 tools/
   layerfs-eval/
@@ -389,9 +416,26 @@ poc/
 Expected existing product edits are limited to universal missing primitives in:
 
 ```text
-crates/layerfs-vfs/src/{lib,resolver,mounted}.rs
+crates/layerfs-vfs/src/{lib,resolver}.rs
+crates/layerfs-mount/src/{lib,session}.rs
+crates/layerfs-mount/src/fuse/{mod,daemon}.rs
+crates/layerfs-materialization/src/{lib,driver,materialize,capture,refresh,workspace}.rs
+crates/layerfs-materialization/src/apfs/*
 crates/layerfs-engine/src/lib.rs             only if batch publication lacks a primitive
 crates/layerfs-sdk/src/lib.rs                 only after a concrete public caller
+```
+
+The Stage 2 source move is capability ownership, not an algorithm rewrite:
+
+```text
+current layerfs-vfs/src/mounted.rs
+  -> layerfs-mount/src/session.rs
+
+current layerfs-vfs/src/{driver,materialize,capture,refresh,workspace}.rs
+  -> layerfs-materialization/src/
+
+current layerfs-os/src/apple/*
+  -> layerfs-materialization/src/apfs/
 ```
 
 Core canonical files should not change:
@@ -405,8 +449,10 @@ metadata codecs
 object identity
 ```
 
-Do not add `layerfs-overlayfs`, `layerfs-mount-framework`, a backend registry,
-or separate read/write representations.
+Do not add peer `layerfs-fuse`, `layerfs-os`, `layerfs-overlayfs`, a mount
+framework, a backend registry, or separate read/write representations. FUSE
+is a submodule of the mount capability; APFS is a submodule of the
+materialization capability.
 
 ## 8. FUSE dependency selection
 
@@ -426,7 +472,8 @@ that provide:
 - no async runtime requirement unless the binding itself requires it.
 
 Select exactly one dependency and record its version/license/API reasons in the
-Stage 2 readiness receipt. Do not add a generic adapter around multiple FUSE
+Stage 2 readiness receipt. Keep it target-specific and private to
+`layerfs-mount::fuse`. Do not add a generic adapter around multiple FUSE
 libraries.
 
 ## 9. Stage 2.0 — Docker/FUSE admission

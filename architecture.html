@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="LayerFS abstraction layers, distributed agent execution, and crate ownership.">
+  <title>LayerFS Architecture</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f6f4ef;
+      --surface: #fffefa;
+      --ink: #191a18;
+      --muted: #676861;
+      --line: #c9c7bf;
+      --line-strong: #8f9089;
+      --orange: #f06d3d;
+      --orange-soft: #fff0e8;
+      --blue: #3f6fc2;
+      --blue-soft: #edf3ff;
+      --green: #397d62;
+      --green-soft: #eaf5ef;
+      --purple: #775aa6;
+      --purple-soft: #f2edf9;
+      --shadow: 0 16px 48px rgba(36, 34, 28, .08);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(25, 26, 24, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(25, 26, 24, .025) 1px, transparent 1px),
+        var(--paper);
+      background-size: 24px 24px;
+      font: 15px/1.5 var(--sans);
+    }
+
+    a { color: inherit; }
+    code { font-family: var(--mono); }
+    .page { width: min(1460px, calc(100% - 48px)); margin: 0 auto; padding: 44px 0 72px; }
+
+    .masthead {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 32px;
+      align-items: end;
+      padding: 0 2px 30px;
+      border-top: 4px solid var(--orange);
+    }
+
+    .eyebrow {
+      margin: 22px 0 12px;
+      color: var(--orange);
+      font: 700 12px/1 var(--mono);
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 940px;
+      margin: 0;
+      font-size: clamp(2.7rem, 6vw, 6.5rem);
+      line-height: .94;
+      letter-spacing: -.065em;
+    }
+
+    .lede {
+      max-width: 850px;
+      margin: 22px 0 0;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.6vw, 1.28rem);
+    }
+
+    .mark {
+      display: grid;
+      width: 102px;
+      aspect-ratio: 1;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .mark span {
+      color: var(--orange);
+      font: 800 29px/1 var(--mono);
+      letter-spacing: -.12em;
+      transform: translateX(-2px);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      margin: 0 0 18px;
+      padding: 0;
+      list-style: none;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .legend li { display: flex; align-items: center; gap: 7px; }
+    .legend-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--orange); }
+    .legend-dot.blue { background: var(--blue); }
+    .legend-dot.green { background: var(--green); }
+    .legend-dot.purple { background: var(--purple); }
+
+    .architecture {
+      padding: 22px;
+      border: 1px solid var(--line);
+      background: rgba(255, 254, 250, .74);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+
+    .layer {
+      position: relative;
+      display: grid;
+      grid-template-columns: 230px minmax(0, 1fr);
+      min-height: 150px;
+      border: 1px dashed var(--line-strong);
+      background: var(--surface);
+    }
+
+    .layer + .connector + .layer { margin-top: 0; }
+
+    .layer-label {
+      padding: 22px;
+      border-right: 1px solid var(--line);
+      background: #fbfaf6;
+    }
+
+    .layer-index {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--orange);
+      font: 700 12px/1 var(--mono);
+      letter-spacing: .08em;
+    }
+
+    .layer h2 { margin: 0 0 8px; font-size: 19px; line-height: 1.15; letter-spacing: -.025em; }
+    .layer-label p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .layer-content {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 12px;
+      align-items: stretch;
+      padding: 22px;
+    }
+
+    .card {
+      grid-column: span 4;
+      display: flex;
+      min-width: 0;
+      min-height: 104px;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 17px 18px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .card.wide { grid-column: span 6; }
+    .card.full { grid-column: 1 / -1; min-height: auto; }
+    .card.blue { border-color: #b9c9e8; background: var(--blue-soft); }
+    .card.green { border-color: #b8d7c9; background: var(--green-soft); }
+    .card.purple { border-color: #d4c7e7; background: var(--purple-soft); }
+    .card.orange { border-color: #efc4af; background: var(--orange-soft); }
+
+    .card-title { margin: 0; font-size: 16px; font-weight: 720; line-height: 1.2; }
+    .card-copy { margin: 5px 0 0; color: var(--muted); font-size: 12.5px; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      padding: 4px 7px;
+      border: 1px solid rgba(25, 26, 24, .18);
+      background: rgba(255,255,255,.68);
+      font: 600 10px/1.15 var(--mono);
+      letter-spacing: .02em;
+    }
+
+    .connector {
+      position: relative;
+      height: 40px;
+    }
+
+    .connector::before {
+      position: absolute;
+      top: 0;
+      left: calc(230px + (100% - 230px) / 2);
+      width: 1px;
+      height: 28px;
+      background: var(--ink);
+      content: "";
+    }
+
+    .connector::after {
+      position: absolute;
+      top: 24px;
+      left: calc(230px + (100% - 230px) / 2 - 4px);
+      width: 7px;
+      height: 7px;
+      border-right: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      content: "";
+      transform: rotate(45deg);
+    }
+
+    .spine {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0;
+      align-items: center;
+    }
+
+    .spine-item { position: relative; padding: 12px; text-align: center; }
+    .spine-item:not(:last-child)::after {
+      position: absolute;
+      z-index: 0;
+      top: 50%;
+      right: -11px;
+      width: 22px;
+      height: 1px;
+      background: var(--line-strong);
+      content: "";
+    }
+
+    .spine-item strong { position: relative; z-index: 1; display: block; font-size: 13px; }
+    .spine-item span { display: block; margin-top: 4px; color: var(--muted); font: 10px/1.3 var(--mono); }
+
+    .section {
+      margin-top: 64px;
+      padding-top: 28px;
+      border-top: 1px solid var(--line);
+    }
+
+    .section-heading {
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .section-number { color: var(--orange); font: 700 12px/1 var(--mono); letter-spacing: .09em; }
+    .section h2 { margin: 0; font-size: clamp(1.8rem, 3.5vw, 3.6rem); line-height: 1; letter-spacing: -.05em; }
+    .section-intro { max-width: 760px; margin: 14px 0 0; color: var(--muted); }
+
+    .distributed {
+      display: grid;
+      grid-template-columns: 1fr 100px 1fr;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .host, .authority {
+      min-width: 0;
+      padding: 20px;
+      border: 1px dashed var(--line-strong);
+      background: var(--surface);
+    }
+
+    .host h3, .authority h3 { margin: 0 0 4px; font-size: 17px; }
+    .host > p, .authority > p { margin: 0 0 18px; color: var(--muted); font-size: 12.5px; }
+
+    .agent-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .agent {
+      padding: 13px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-weight: 650;
+      text-align: center;
+    }
+
+    .workspace {
+      margin-top: 8px;
+      padding: 11px;
+      border: 1px solid #b9c9e8;
+      background: var(--blue-soft);
+      color: #304e83;
+      font: 600 11px/1.3 var(--mono);
+      text-align: center;
+    }
+
+    .local-store {
+      margin-top: 14px;
+      padding: 13px;
+      border: 1px solid #b8d7c9;
+      background: var(--green-soft);
+      text-align: center;
+    }
+
+    .network {
+      position: relative;
+      color: var(--muted);
+      font: 600 10px/1.35 var(--mono);
+      text-align: center;
+    }
+
+    .network::before, .network::after {
+      display: block;
+      width: 100%;
+      height: 1px;
+      margin: 10px 0;
+      background: var(--ink);
+      content: "";
+    }
+
+    .network .arrows { color: var(--orange); font-size: 18px; line-height: 1; }
+
+    .authority-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .authority-cell {
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-size: 12px;
+    }
+    .authority-cell strong { display: block; margin-bottom: 4px; }
+
+    .crate-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .crate {
+      min-height: 148px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .crate code { color: var(--orange); font-size: 13px; font-weight: 700; }
+    .crate h3 { margin: 16px 0 6px; font-size: 17px; }
+    .crate p { margin: 0; color: var(--muted); font-size: 12.5px; }
+
+    .rules {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .rule { padding: 18px; border: 1px solid var(--line); background: #fff; }
+    .rule strong { display: block; margin-bottom: 7px; }
+    .rule p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      margin-top: 64px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font: 11px/1.4 var(--mono);
+    }
+
+    @media (max-width: 1000px) {
+      .layer { grid-template-columns: 180px minmax(0, 1fr); }
+      .connector::before { left: calc(180px + (100% - 180px) / 2); }
+      .connector::after { left: calc(180px + (100% - 180px) / 2 - 4px); }
+      .card { grid-column: span 6; }
+      .card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+      .distributed { grid-template-columns: 1fr 70px 1fr; }
+      .crate-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 720px) {
+      .page { width: min(100% - 24px, 1460px); padding-top: 24px; }
+      .masthead { grid-template-columns: 1fr; }
+      .mark { display: none; }
+      .architecture { padding: 10px; }
+      .layer { display: block; }
+      .layer-label { border-right: 0; border-bottom: 1px solid var(--line); }
+      .layer-content { grid-template-columns: 1fr; padding: 12px; }
+      .card, .card.wide, .card.full { grid-column: auto; }
+      .connector::before { left: 50%; }
+      .connector::after { left: calc(50% - 4px); }
+      .spine { grid-template-columns: 1fr; gap: 8px; }
+      .spine-item:not(:last-child)::after { top: auto; right: 50%; bottom: -5px; width: 1px; height: 10px; }
+      .section-heading { display: block; }
+      .section-number { display: block; margin-bottom: 16px; }
+      .distributed { grid-template-columns: 1fr; }
+      .network { padding: 4px 30%; }
+      .crate-grid, .rules { grid-template-columns: 1fr; }
+      footer { display: block; }
+      footer span { display: block; margin-top: 8px; }
+    }
+
+    @media print {
+      body { background: #fff; }
+      .page { width: 100%; padding: 0; }
+      .architecture, .host, .authority, .crate, .rule { box-shadow: none; break-inside: avoid; }
+      .section { break-before: page; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">LayerFS / System architecture</p>
+        <h1>One immutable graph.<br>Many isolated workspaces.</h1>
+        <p class="lede">A layered filesystem for parallel agents: platform-specific workspaces above, deterministic content and version identity below, with local speed and remote coordination joined by exact object IDs.</p>
+      </div>
+      <div class="mark" aria-label="LayerFS mark"><span>L/</span></div>
+    </header>
+
+    <ul class="legend" aria-label="Architecture legend">
+      <li><span class="legend-dot"></span> public and lifecycle control</li>
+      <li><span class="legend-dot blue"></span> workspace and VFS data plane</li>
+      <li><span class="legend-dot green"></span> storage and distribution</li>
+      <li><span class="legend-dot purple"></span> immutable canonical foundation</li>
+    </ul>
+
+    <section class="architecture" aria-label="LayerFS abstraction stack">
+      <article class="layer">
+        <div class="layer-label">
+          <span class="layer-index">L6</span>
+          <h2>Agents &amp; applications</h2>
+          <p>Use files and operation boundaries. Never depend on storage internals.</p>
+        </div>
+        <div class="layer-content">
+          <div class="card">
+            <div><p class="card-title">AI agents</p><p class="card-copy">Parallel tools, nested work and speculative branches.</p></div>
+            <div class="chips"><span class="chip">edit</span><span class="chip">read</span><span class="chip">bash</span></div>
+          </div>
+          <div class="card">
+            <div><p class="card-title">Developer tools</p><p class="card-copy">Compilers, package managers, test runners and IDEs.</p></div>
+            <div class="chips"><span class="chip">npm</span><span class="chip">git</span><span class="chip">cargo</span></div>
+          </div>
+          <div class="card">
+            <div><p class="card-title">Apps &amp; CLI</p><p class="card-copy">Inspect, fork, commit, merge and roll back.</p></div>
+            <div class="chips"><span class="chip">SDK</span><span class="chip">CLI</span><span class="chip">service</span></div>
+          </div>
+        </div>
+      </article>
+
+      <div class="connector" aria-hidden="true"></div>
+
+      <article class="layer">
+        <div class="layer-label">
+          <span class="layer-index">L5</span>
+          <h2>Public LayerFS API</h2>
+          <p>Describes lifecycle and exact receipts, not the kind of tool being run.</p>
+        </div>
+        <div class="layer-content">
+          <div class="card wide orange">
+            <div><p class="card-title">Operation lifecycle</p><p class="card-copy">Create an isolated view, perform arbitrary work, then commit the exact filesystem effect.</p></div>
+            <div class="chips"><span class="chip">begin_operation</span><span class="chip">end_operation</span><span class="chip">OperationCommit</span></div>
+          </div>
+          <div class="card wide orange">
+            <div><p class="card-title">Version lifecycle</p><p class="card-copy">Fork, commit, merge and roll back through expected-head transitions.</p></div>
+            <div class="chips"><span class="chip">fork</span><span class="chip">BranchCommit</span><span class="chip">merge</span><span class="chip">rollback</span></div>
+          </div>
+        </div>
+      </article>
+
+      <div class="connector" aria-hidden="true"></div>
+
+      <article class="layer">
+        <div class="layer-label">
+          <span class="layer-index">L4</span>
+          <h2>Workspace presentations</h2>
+          <p>Three ways to see one filesystem. All converge on one OperationWorkspace contract.</p>
+        </div>
+        <div class="layer-content">
+          <div class="card blue">
+            <div><p class="card-title">Direct logical API</p><p class="card-copy">No native workspace. Fast canonical range reads and logical edits.</p></div>
+            <div class="chips"><span class="chip">SDK</span><span class="chip">zero materialization</span></div>
+          </div>
+          <div class="card blue">
+            <div><p class="card-title">Mounted workspace</p><p class="card-copy"><code>layerfs-mount/fuse</code> presents logical objects as ordinary files.</p></div>
+            <div class="chips"><span class="chip">syscalls</span><span class="chip">dirty overlay</span></div>
+          </div>
+          <div class="card blue">
+            <div><p class="card-title">Native workspace</p><p class="card-copy"><code>layerfs-materialization/apfs</code> derives real files and captures their final state.</p></div>
+            <div class="chips"><span class="chip">APFS</span><span class="chip">capture</span><span class="chip">refresh</span></div>
+          </div>
+        </div>
+      </article>
+
+      <div class="connector" aria-hidden="true"></div>
+
+      <article class="layer">
+        <div class="layer-label">
+          <span class="layer-index">L3</span>
+          <h2>VFS semantics</h2>
+          <p>Platform-independent filesystem meaning and workspace isolation.</p>
+        </div>
+        <div class="layer-content">
+          <div class="card full blue">
+            <div class="spine" aria-label="VFS semantic pipeline">
+              <div class="spine-item"><strong>Resolve</strong><span>path → InodeId</span></div>
+              <div class="spine-item"><strong>Read / mutate</strong><span>logical ranges</span></div>
+              <div class="spine-item"><strong>Normalize</strong><span>exact final state</span></div>
+              <div class="spine-item"><strong>Diff</strong><span>changed Merkle spines</span></div>
+              <div class="spine-item"><strong>Verify</strong><span>candidate RootId</span></div>
+            </div>
+            <div class="chips"><span class="chip">namespace</span><span class="chip">inodes</span><span class="chip">hard links</span><span class="chip">symlinks</span><span class="chip">metadata</span></div>
+          </div>
+        </div>
+      </article>
+
+      <div class="connector" aria-hidden="true"></div>
+
+      <article class="layer">
+        <div class="layer-label">
+          <span class="layer-index">L2</span>
+          <h2>Version graph &amp; control</h2>
+          <p>Defines legal history transitions. It does not copy files.</p>
+        </div>
+        <div class="layer-content">
+          <div class="card orange">
+            <div><p class="card-title">Versions</p><p class="card-copy">Immutable Layers and branch-level OperationVersions.</p></div>
+            <div class="chips"><span class="chip">LayerStack</span><span class="chip">Layer</span><span class="chip">OperationVersion</span></div>
+          </div>
+          <div class="card orange">
+            <div><p class="card-title">Three delta scopes</p><p class="card-copy">One operation, one branch result, and one Layer transition.</p></div>
+            <div class="chips"><span class="chip">OperationDelta</span><span class="chip">BranchDelta</span><span class="chip">LayerDelta</span></div>
+          </div>
+          <div class="card orange">
+            <div><p class="card-title">Authority</p><p class="card-copy">Short CAS transactions protect parallel commits and hard rollback.</p></div>
+            <div class="chips"><span class="chip">expected head</span><span class="chip">leases</span><span class="chip">receipts</span></div>
+          </div>
+        </div>
+      </article>
+
+      <div class="connector" aria-hidden="true"></div>
+
+      <article class="layer">
+        <div class="layer-label">
+          <span class="layer-index">L1</span>
+          <h2>Store &amp; distribution</h2>
+          <p>Authenticates immutable objects and coordinates only tiny mutable references.</p>
+        </div>
+        <div class="layer-content">
+          <div class="card wide green">
+            <div><p class="card-title">Local Store</p><p class="card-copy">Verified cache, durable local writeback and operation history in one SQLite database.</p></div>
+            <div class="chips"><span class="chip">CAS</span><span class="chip">integrity</span><span class="chip">publication</span></div>
+          </div>
+          <div class="card wide green">
+            <div><p class="card-title">Authoritative Store</p><p class="card-copy">Receives missing ObjectIds, authenticates roots, then applies atomic reference transactions.</p></div>
+            <div class="chips"><span class="chip">remote service</span><span class="chip">ref CAS</span><span class="chip">compaction</span></div>
+          </div>
+        </div>
+      </article>
+
+      <div class="connector" aria-hidden="true"></div>
+
+      <article class="layer">
+        <div class="layer-label">
+          <span class="layer-index">L0</span>
+          <h2>Canonical LayerFS core</h2>
+          <p>Pure, deterministic and portable. Equal meaning produces equal identity everywhere.</p>
+        </div>
+        <div class="layer-content">
+          <div class="card full purple">
+            <div class="spine" aria-label="Canonical object pipeline">
+              <div class="spine-item"><strong>Bytes</strong><span>logical stream</span></div>
+              <div class="spine-item"><strong>FastCDC</strong><span>8 / 16 / 32 KiB</span></div>
+              <div class="spine-item"><strong>Chunks</strong><span>ObjectId</span></div>
+              <div class="spine-item"><strong>Persistent trees</strong><span>extent + namespace</span></div>
+              <div class="spine-item"><strong>Root</strong><span>RootId</span></div>
+            </div>
+            <div class="chips"><span class="chip">canonical codecs</span><span class="chip">B+ extent rope</span><span class="chip">inode table</span><span class="chip">metadata tree</span><span class="chip">role validation</span></div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="section" aria-labelledby="distributed-title">
+      <div class="section-heading">
+        <span class="section-number">01 / DISTRIBUTED EXECUTION</span>
+        <div>
+          <h2 id="distributed-title">Parallel work; serialized references.</h2>
+          <p class="section-intro">Agents never collaborate by sharing a dirty directory. Each operation receives a pinned private workspace, while immutable objects move independently and only branch heads require coordination.</p>
+        </div>
+      </div>
+
+      <div class="distributed">
+        <article class="host">
+          <h3>Agent host</h3>
+          <p>One local daemon and Store can serve many isolated operations.</p>
+          <div class="agent-row">
+            <div>
+              <div class="agent">Agent A</div>
+              <div class="workspace">Workspace A<br>base Root R0</div>
+            </div>
+            <div>
+              <div class="agent">Agent B</div>
+              <div class="workspace">Workspace B<br>base Root R0</div>
+            </div>
+          </div>
+          <div class="local-store"><strong>Local SQLite Store</strong><br><small>shared verified CAS + local history</small></div>
+        </article>
+
+        <div class="network" aria-label="Object and reference synchronization">
+          <span>missing objects</span>
+          <div class="arrows">⇄</div>
+          <span>expected-head CAS</span>
+        </div>
+
+        <article class="authority">
+          <h3>Shared LayerFS authority</h3>
+          <p>The same engine and canonical identities behind a service boundary.</p>
+          <div class="authority-grid">
+            <div class="authority-cell"><strong>Immutable CAS</strong>Chunks and Merkle nodes keyed by ObjectId.</div>
+            <div class="authority-cell"><strong>Version graph</strong>Layers, Branches and OperationVersions.</div>
+            <div class="authority-cell"><strong>Reference authority</strong>Heads, generations and leases.</div>
+            <div class="authority-cell"><strong>One SQLite Store</strong>Objects and history share one transaction domain.</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="ownership-title">
+      <div class="section-heading">
+        <span class="section-number">02 / OWNERSHIP</span>
+        <div>
+          <h2 id="ownership-title">Conceptual layers, not microcrates.</h2>
+          <p class="section-intro">Keep the atomic Store and version graph together. Split only where platform behavior genuinely changes.</p>
+        </div>
+      </div>
+
+      <div class="crate-grid">
+        <article class="crate"><code>layerfs-core</code><h3>Canonical foundation</h3><p>Object IDs, codecs, FastCDC and persistent extent, namespace, inode and metadata trees.</p></article>
+        <article class="crate"><code>layerfs-engine</code><h3>Store + version authority</h3><p>SQLite publication, integrity, refs, Layers, Branches, deltas, leases and compaction.</p></article>
+        <article class="crate"><code>layerfs-vfs</code><h3>Filesystem semantics</h3><p>Resolver, range I/O, OperationWorkspace, exact diff and capture/refresh planning.</p></article>
+        <article class="crate"><code>layerfs-mount/fuse</code><h3>Mounted presentation</h3><p>Translates FUSE requests into platform-free VFS operations. It does not own storage identity.</p></article>
+        <article class="crate"><code>layerfs-materialization/apfs</code><h3>Native presentation</h3><p>Builds, captures and refreshes real APFS workspaces without changing canonical meaning.</p></article>
+        <article class="crate"><code>layerfs-sdk</code><h3>Small public facade</h3><p>Typed lifecycle calls and receipts. Applications compose the selected workspace driver.</p></article>
+      </div>
+
+      <div class="rules">
+        <article class="rule"><strong>Portable boundary</strong><p><code>core</code>, <code>engine</code> and <code>vfs</code> contain no FUSE ABI, APFS syscall, native path authority or platform-specific canonical bytes.</p></article>
+        <article class="rule"><strong>Remote boundary</strong><p>Add <code>layerfs-service</code> only when remote synchronization is implemented. It wraps <code>engine</code>; it does not depend on mount or materialization.</p></article>
+      </div>
+    </section>
+
+    <footer>
+      <strong>LayerFS architecture · initial abstraction split</strong>
+      <span>Immutable data plane / tiny mutable authority</span>
+    </footer>
+  </main>
+</body>
+</html>
