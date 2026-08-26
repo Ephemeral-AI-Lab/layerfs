@@ -1,0 +1,6 @@
+{"command": "git diff --check && cargo fmt --all -- --check && cargo check --workspace --all-targets && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings", "phase": "host-closure", "status": 0}
+{"command": "docker build --platform linux/arm64 -f containers/layerfs-fuse/Dockerfile ...", "phase": "linux-build", "status": 0}
+{"command": "native same-daemon 100 MiB/hardlink/orphan/mmap corpus", "phase": "functional", "status": 0}
+{"command": "native fresh-daemon reopen corpus", "phase": "restart", "status": 0}
+{"command": "REPS=3 WARMUP=1 RANDOMIZE_TARGETS=1 MOUNT=/workspace BASE=/var/tmp bash fs-bench.sh", "phase": "authoritative-var", "status": 0}
+{"command": "REPS=3 WARMUP=1 RANDOMIZE_TARGETS=1 MOUNT=/workspace BASE=/tmp bash fs-bench.sh", "phase": "authoritative-tmp", "status": 0}

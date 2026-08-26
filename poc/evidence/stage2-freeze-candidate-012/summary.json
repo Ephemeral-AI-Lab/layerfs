@@ -1,0 +1,43 @@
+{
+  "authoritative": {
+    "tmp": {
+      "G": 3.575418690034854,
+      "Rsum": 2.242799205186984,
+      "SB_ns": 1334590625,
+      "SL_ns": 2993218793,
+      "Spread": 1.0146319631235858
+    },
+    "var": {
+      "G": 3.2028157181643055,
+      "Rsum": 2.1750693594173884,
+      "SB_ns": 1378917292,
+      "SL_ns": 2999240751,
+      "Spread": 1.005618478941506
+    }
+  },
+  "checks": {
+    "cleanup": true,
+    "forced_death": true,
+    "functional": true,
+    "idle_cpu": true,
+    "numeric": true,
+    "publication": true,
+    "readiness": true,
+    "resources": true,
+    "restart": true,
+    "source_binding": true,
+    "splice": true
+  },
+  "executable_blake3": "4e0b899aff1dcd26d494bef941162ee04c60db9646458e496fe5c38915429bf8",
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "functional": {
+    "checkpoint_100mib_ns": 362257292,
+    "restart_read_mib_s": 842.2586428897051,
+    "same_daemon_read_mib_s": 1640.4345327348547
+  },
+  "image_id": "sha256:39d13adfb9f2f1a20313d09f23ea1d3be7fcd5535a12eb1afd3a6698b1800fc1",
+  "schema": "layerfs-stage2-final-summary-v1",
+  "source_commit": "88e12ff0268afb380f0f8f44d3ca9d4639be65cc",
+  "source_tree": "d5f459921e8f8347a83062747e08905ed7bfec21",
+  "status": "PASS_OPTIMIZED"
+}

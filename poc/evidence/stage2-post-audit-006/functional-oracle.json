@@ -1,0 +1,68 @@
+{
+  "checkpoint_100mib_ns": 367141250,
+  "checks": {
+    "directory_cycle_refused": true,
+    "hardlink_identity_small": true,
+    "large_hardlink_identity": true,
+    "large_sha256_same_daemon": true,
+    "large_size": true,
+    "mmap": true,
+    "mode": true,
+    "mtime_ns": true,
+    "random_reads_exact": true,
+    "readdir": true,
+    "reextend": true,
+    "rename_replace": true,
+    "small_bytes": true,
+    "symlink": true,
+    "unlink_open_absent": true,
+    "unlink_open_read": true,
+    "write-after-shrink": true
+  },
+  "expected_large_sha256": "4cbf988462cc3ba2e10e3aae9f5268546aa79016359fb45be7dd199c073125c0",
+  "orphan_fsync_ns": [
+    1104167,
+    31542
+  ],
+  "random_64k_ns": {
+    "count": 300,
+    "max": 182375,
+    "p50": 82625,
+    "p95": 114792
+  },
+  "resources": {
+    "cpu_stat": [
+      "usage_usec 717583",
+      "user_usec 559988",
+      "system_usec 157595",
+      "nice_usec 0",
+      "nr_periods 18",
+      "nr_throttled 2",
+      "throttled_usec 13895",
+      "nr_bursts 0",
+      "burst_usec 0"
+    ],
+    "daemon_fds": 10,
+    "daemon_pid": 6,
+    "daemon_status": {
+      "Threads": "6",
+      "VmHWM": "10332 kB",
+      "VmRSS": "10332 kB"
+    },
+    "memory_events": [
+      "low 0",
+      "high 0",
+      "max 0",
+      "oom 0",
+      "oom_kill 0",
+      "oom_group_kill 0"
+    ],
+    "mountinfo": [
+      "86 140 0:64 / /workspace rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions"
+    ]
+  },
+  "schema": "layerfs-stage2-functional-oracle-v1",
+  "sequential_read_100mib_ns": 103956459,
+  "sequential_read_mib_s": 961.9411911673521,
+  "status": "PASS"
+}

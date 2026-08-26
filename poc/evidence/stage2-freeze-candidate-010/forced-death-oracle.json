@@ -1,0 +1,25 @@
+{
+  "image_id": "sha256:227a27ff8913743011d046db4b919e0b5d183160f4c758a18cd46bbf27dd4e68",
+  "post_ack": {
+    "bytes_hex": "61636b6e6f776c65646765642d64757261626c652d6279746573",
+    "fsync_ns": null,
+    "fsync_ns_unavailable_reason": "the final exact-image oracle asserts fsync completion and crash durability but does not time the post-ack call",
+    "kill_exit_code": 137,
+    "pre_ack_file_absent_after_reopen": true,
+    "present_and_exact_after_reopen": true,
+    "spool_absent_after_ack": true,
+    "spool_absent_after_reopen": true,
+    "raw_log": "forced-death.log"
+  },
+  "pre_ack": {
+    "absent_after_reopen": true,
+    "bytes_hex": "756e61636b6e6f776c65646765642d64697274792d6279746573",
+    "kill_exit_code": 137,
+    "spool_bytes_before_kill": 114,
+    "spool_absent_after_reopen": true,
+    "raw_log": "forced-death.log"
+  },
+  "schema": "layerfs-stage2-forced-death-oracle-v2",
+  "source_commit": "1e33b7188a4579a540e552747401693d0e91349e",
+  "status": "PASS"
+}

@@ -24,8 +24,8 @@ Primary contracts:
 - [Stage 1.0 closure and custody](17-stage1-closure.md)
 - [Stage 1.1 single-file APFS edge specification](16-stage1-part1-apple-edge-benchmark.md)
 - [Stage 1.1 result and handoff template](18-stage1.1-result-template.md)
-- [Stage 1.2 npm/developer-workspace specification](15-stage1-workspace-benchmark.md)
 - [Stage 2 LayerFS + Linux FUSE direct workspace](19-stage2-docker-linux-fuse.md)
+- [Stage 2P portable FUSE performance optimization](23-stage2-fuse-performance-optimization.md)
 
 Current native disposition (2026-08-24): **PASS for the frozen
 AppleWorkspaceV1 PoC scope**. The active host synthesizes exact
@@ -46,8 +46,10 @@ exclusion rather than an implemented claim.
 That exclusion describes the completed AppleWorkspaceV1 baseline. Stage 1.0
 implemented changed-root refresh, direct canonical SDK operations, repeatable
 managed checkpoints, and the operation campaign under documents 12–14 and 17.
-Stage 1.1 (`poc/16`) and Stage 1.2 (`poc/15`) are the remaining source-bound
-verification specifications; neither retroactively relabels the v1 evidence.
+Stage 1.1 (`poc/16`) is closed. Stage 1.2 (`poc/15`) was explicitly skipped on
+`2026-08-26` and is retained only as workload reference material. Stage 2
+(`poc/19` and `poc/23`) is the next active source-bound implementation and
+verification stage; none retroactively relabels the v1 evidence.
 
 ## 1. Completion definition
 

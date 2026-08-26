@@ -1,0 +1,24 @@
+{
+  "cargo_lock_sha256": "932467147e490c83a0f769c60cd311d4d19de7d22aa7de604a8a724f884ea358",
+  "dockerfile_sha256": "8bc0b343e6710988e1696b9b0ea1dac5cfb6cc4ef90fc593fb2f94a9eac008e7",
+  "executable_blake3": "c7181a8eda499c5979e778633c6e9f91cfc2e27dc10813e2357dd8fe57fb22d5",
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "image_architecture": "arm64",
+  "image_id": "sha256:4248624c903931181bb71f29e8b99f4c6c5a5bec470a706eab96d0f0ccac2071",
+  "image_labels": {
+    "org.opencontainers.image.layerfs.fs-bench-sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+    "org.opencontainers.image.layerfs.source-tree": "d79a178fd9224b6579d02e1de9135b645e443490",
+    "org.opencontainers.image.revision": "9d4fc28cc9b6d3f63d1ea601e6f87ce1cef4a8ec",
+    "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+  },
+  "image_os": "linux",
+  "image_repo_digests": [
+    "layerfs-fuse@sha256:4248624c903931181bb71f29e8b99f4c6c5a5bec470a706eab96d0f0ccac2071"
+  ],
+  "image_repo_tags": [
+    "layerfs-fuse:frozen-9d4fc28cc9b6"
+  ],
+  "schema": "layerfs-stage2-executables-images-v1",
+  "source_commit": "9d4fc28cc9b6d3f63d1ea601e6f87ce1cef4a8ec",
+  "source_tree": "d79a178fd9224b6579d02e1de9135b645e443490"
+}

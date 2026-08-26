@@ -1,0 +1,13 @@
+{
+  "schema": "layerfs-fuse-splice-v1",
+  "status": "PASS",
+  "path": "file",
+  "start": 3,
+  "delete_bytes": 2,
+  "insert_bytes": 3,
+  "before": {"generation":1,"root":"bdad49b3574827b9c3644cf18c95d316ce8c60f3a790ec2d26705eb8fbc3001f"},
+  "after": {"generation":2,"root":"2721c87910c546eda5507e3c968fd6835b107d4170821be343ad69c6bd73b69e"},
+  "remount_required": true,
+  "locality": {"cdc_bytes_scanned":3,"content_payload_bytes_read":0,"content_payload_bytes_written":3,"rope_nodes_created":1,"namespace_nodes_created":0,"inode_nodes_created":1},
+  "operation_q": {"terminal_bytes":0,"high_water_bytes":8388607}
+}

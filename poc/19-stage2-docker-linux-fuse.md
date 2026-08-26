@@ -1,13 +1,17 @@
 # Stage 2 Specification — LayerFS + Linux FUSE Direct Workspace
 
-Status: **prospective post-Stage-1 controlling plan; implementation and
-measurement have not started**.
+Status: **implemented and source-bound `PASS_OPTIMIZED` on Linux/ARM64**.
+
+Terminal custody is [candidate 012](evidence/stage2-freeze-candidate-012/summary.md):
+source `88e12ff0268afb380f0f8f44d3ca9d4639be65cc`, image
+`sha256:39d13adfb9f2f1a20313d09f23ea1d3be7fcd5535a12eb1afd3a6698b1800fc1`,
+with exact `--cpus 1` `/var/tmp` and `/tmp` populations both
+`PASS_OPTIMIZED`. Earlier candidates remain diagnostic or invalidated evidence.
 
 Entry sequence:
 
 ```text
-accepted Stage 1.1 optimization closure
-  -> accepted Stage 1.2 APFS developer-workspace result
+final Stage 1.1 correctness/durability closure
   -> Stage 2.0 Docker/FUSE admission
   -> Stage 2.1 read-only LayerFS FUSE
   -> Stage 2.2 writable mounted workspace
@@ -30,12 +34,15 @@ Authority order:
    durability, metadata, and compaction.
 2. [09 — Portability and Apple completeness](09-portability-and-apple-completeness.md)
    remains authoritative for the dependency direction and platform boundary.
-3. The accepted Stage 1.1 source/artifact remains the algorithm and performance
-   control for direct logical edits, reads, history, and Apple projection.
-4. [15 — Stage 1.2 developer-workspace benchmark](15-stage1-workspace-benchmark.md)
-   must reach an accepted terminal disposition before Stage 2 source work.
+3. The final Stage 1.1 source/artifact remains the correctness, algorithm, and
+   resource control for direct logical edits, reads, history, and Apple
+   projection. Its Verified performance REVISE remains preserved; the explicit
+   TrustedLocalDev class is the admitted local developer-loop mode.
+4. The explicit user decision on `2026-08-26` skips Stage 1.2. The retained
+   [15 — developer-workspace workload](15-stage1-workspace-benchmark.md) is a
+   non-gating historical workload reference only.
 5. This document controls Stage 2 LayerFS + Linux FUSE scope, files, algorithms,
-   tests, measurements, and stop rules after those gates.
+   tests, measurements, and stop rules after the final Stage 1.1 closure.
 
 Research input:
 
@@ -46,16 +53,18 @@ Research input:
 Entry requires:
 
 ```text
-Stage 1.1 Engine/read optimization       accepted and source-bound
-Stage 1.2 APFS workspace                 accepted with raw results
+Stage 1.1 correctness/durability          closed and source-bound
+Stage 1.1 Verified performance REVISE     preserved without relabeling
+Stage 1.1 TrustedLocalDev class           admitted for the local loop
+Stage 1.2                                 skipped; not an entry gate
 canonical codecs                         unchanged or explicitly re-frozen
 working tree                             committed/clean for Stage 2 ownership
 Docker host                              admitted separately
 Linux FUSE                               admitted separately
 ```
 
-Do not begin Stage 2 in the current shared dirty source while Stage 1 work is
-active.
+Begin Stage 2 only from a committed clean product baseline while preserving
+unrelated user specifications and evidence.
 
 ## 2. Decision
 
@@ -690,9 +699,10 @@ the application supplied ancestry or change intent.
 
 ## 13. Stage 2.4 — real container workspace
 
-Reuse the accepted Stage 1.2 logical workload class, adapted to Linux and the
-direct mount. Do not import the Stage 1.2 APFS reset/capture mechanism into the
-mounted route.
+Use the bounded offline developer-workspace workload retained in document 15
+as fixture input only, adapted directly to Linux and the mount. Stage 1.2 is
+skipped: no APFS execution or accepted APFS baseline is required. Do not import
+its APFS reset/capture mechanism into the mounted route.
 
 Budgets:
 
@@ -981,5 +991,6 @@ Docker/Linux
   + one checkpoint/publication boundary
 ```
 
-Stage 1.2 remains the immediate predecessor and APFS baseline. This document
-defines the first direct-mounted proof after that baseline closes.
+The final Stage 1.1 closure is the immediate predecessor. This document defines
+the first direct-mounted proof; Stage 1.2 is not an entry gate or required
+baseline.

@@ -2,7 +2,8 @@
 
 Status: **AppleWorkspaceV1 Stage 1.0 and Stage 1.1 are closed; Stage 1.1M
 Verified correctness is closed and its performance result is
-`REVISE_NO_AUTHORIZED_OWNER`; Stage 1.2 remains prospective**.
+`REVISE_NO_AUTHORIZED_OWNER`; Stage 1.2 is skipped; Stage 2 is closed at
+source-bound `PASS_OPTIMIZED`**.
 The controlling closure and custody record is
 [17 — Stage 1.0 closure and accepted A02 exception](17-stage1-closure.md).
 The preserved A01–A17 campaign remains measured `REVISE`; its A02 latency miss
@@ -23,19 +24,22 @@ audited current-source attempt-024 (`47/51/34`) after preserving attempt-021,
 attempt-022, and independently rejected attempt-023 evidence.
 The final three-lane source and raw audit reports P0=0/P1=0; its five narrow P2
 evidence qualifications are recorded under
-`poc/evidence/stage1.1-terminal-audit-20260826`. Stage 1.2 is the
-npm/developer-workspace specification in `poc/15`. The prospective post-Stage-1
-LayerFS + Linux FUSE direct workspace is specified in `poc/19`, with Docker
-only as its Linux execution envelope. macFUSE and FSKit are not selected
-dependencies.
+`poc/evidence/stage1.1-terminal-audit-20260826`. The explicit user decision on
+`2026-08-26` skips Stage 1.2; `poc/15` is retained only as a bounded offline
+workload reference. The direct successor is the LayerFS + Linux FUSE workspace
+specified in `poc/19`, with Docker only as its Linux execution envelope.
+macFUSE and FSKit are not selected dependencies.
+Stage 2 terminal source `88e12ff0268afb380f0f8f44d3ca9d4639be65cc`
+passes both exact Docker `--cpus 1` authoritative populations; controlling
+custody is `poc/evidence/stage2-freeze-candidate-012`.
 
 ```text
 Stage 1.0  implemented product baseline and A01–A17 closure
 Stage 1.1  poc/16 single-file APFS edge benchmark — PASS / closed
 Stage 1.1M poc/20 Verified correctness/accounting closed; performance REVISE
 Stage 1.1T poc/22 explicit TrustedLocalDev product class — audited primary class PASS; fixed-cost miss retained
-Stage 1.2  poc/15 npm/developer-workspace — trust handoff admitted; not started
-Stage 2    poc/19 LayerFS + Linux FUSE direct workspace after Stage 1.2
+Stage 1.2  SKIPPED — poc/15 retained as a workload reference only
+Stage 2    poc/19 LayerFS + Linux FUSE direct workspace — PASS_OPTIMIZED / closed
 ```
 
 The PoC collapses the remaining G6 and project Phase 5–8 work into one vertical
@@ -79,8 +83,10 @@ programs for each small implementation repair.
 | [18 — Stage 1.1 result and handoff template](18-stage1.1-result-template.md) | Exact summary tables, JSONL row schema, availability rules, timer receipt and final response | Stage 1.1 evaluator |
 | [20 — Stage 1.1M portable full-materialization optimization](20-stage1.1-full-materialization-optimization.md) | Guarded Verified reads, derived scratch, portable native facts, fixed/stream attribution, CPU/memory gates and 0/24/96 MiB targets | Engine + VFS + OS + evaluator |
 | [22 — Stage 1.1T explicit TrustedLocalDev materialization](22-stage1.1-trusted-localdev-materialization.md) | Separate explicit weaker-trust developer-loop reads, close/reopen/Verified-scrub promotion boundary, corrected 0/24/96 MiB comparison, and terminal custody audit | Engine + evaluator |
-| [15 — Stage 1.2 npm/developer-workspace specification](15-stage1-workspace-benchmark.md) | Reusable <=300 MiB offline npm/build/search/capture workflow | Stage 1.2 evaluator |
+| [15 — Skipped Stage 1.2 workload reference](15-stage1-workspace-benchmark.md) | Retained <=300 MiB offline npm/build/search command corpus; no APFS execution gate | Stage 2 fixture input only |
 | [19 — Stage 2 LayerFS + Linux FUSE workspace](19-stage2-docker-linux-fuse.md) | Post-Stage-1 container admission, direct mounted read/write/locality proof, real workspace gates, and strict exclusions | LayerFS VFS + thin Linux FUSE adapter |
+| [23 — Stage 2P portable FUSE performance optimization](23-stage2-fuse-performance-optimization.md) | Portable mounted state, CPU/memory safety, Cloudflare comparison and optimized performance targets | LayerFS VFS + thin Linux FUSE adapter + evaluator |
+| [24 — Stage 2 Docker/FUSE implementation handoff](24-stage2-docker-fuse-implementation-handoff.md) | Self-contained production implementation, continuation, benchmark and terminal-success prompt | Handoff implementation agent |
 
 ## 2. Reading order
 
@@ -105,8 +111,9 @@ programs for each small implementation repair.
   -> 18 Stage 1.1 result and handoff template
   -> 20 Stage 1.1M portable full-materialization optimization
   -> 22 Stage 1.1T explicit TrustedLocalDev materialization
-  -> 15 Stage 1.2 npm/developer-workspace specification
   -> 19 Stage 2 LayerFS + Linux FUSE direct workspace
+  -> 23 Stage 2P portable FUSE performance optimization
+  -> 24 Stage 2 Docker/FUSE implementation handoff
 ```
 
 Do not begin with the benchmark. Implement and model-check the selected

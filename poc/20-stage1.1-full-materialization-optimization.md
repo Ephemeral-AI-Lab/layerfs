@@ -7,7 +7,9 @@ Canonical, trust, durability, and Apple authority: [10 — handoff freeze](10-ha
 Historical accepted source: `f3dd4a32273a4c5cbe5e7ca2287c945ba4434c30`
 Verified performance operand: `9800f8650bbb5f1ae89fe8de2724bcd7e331716a`
 Current-source correctness closure: `36d05d844b36eb73598ba4e2a5decafd152df6d1`
-Sequence: **Stage 1.1 accepted baseline -> Stage 1.1M attribution and repair -> Stage 1.2**
+Sequence: **Stage 1.1 accepted baseline -> Stage 1.1M attribution and repair ->
+direct Stage 2 Docker/Linux FUSE**. Stage 1.2 was explicitly skipped on
+`2026-08-26`.
 
 ## M1 execution-authority correction
 
@@ -189,7 +191,7 @@ no cache purge or controlled-device-cold claim
 maximum user input/materialized/oracle file =96 MiB
 SQLite Store authority files may exceed 100 MiB through framing/index overhead;
   report them separately and never treat them as user payload
-no Stage 1.2 npm/workspace execution
+no mounted Stage 2 workspace execution in this Stage 1.1M scope
 ```
 
 ## 3. Portable ownership boundary
@@ -1178,8 +1180,9 @@ retained A-to-B refresh
   same-size p50 <=25 ms
 ```
 
-Large-file throughput targets do not apply to many-small-file Stage 1.2. That
-campaign reports files/s, fixed cost, per-directory syncs, and byte throughput.
+Large-file throughput targets do not apply to the many-small-file Stage 2 FUSE
+campaign. That campaign reports files/s, fixed cost, callback and checkpoint
+work, and byte throughput.
 
 ## 17. Fault and correctness matrix
 

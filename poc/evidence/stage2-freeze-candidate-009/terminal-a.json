@@ -1,0 +1,15 @@
+{
+  "schema": "layerfs-fuse-terminal-v1",
+  "status": "PASS",
+  "signal": 15,
+  "backend": "layerfs-fuse",
+  "integrity": "TrustedLocalDev",
+  "ref": "main",
+  "generation": 9,
+  "root": "7cc8e9b0ada00469dc7c2b9167e69f9c8f7fad26d2c5803a20d14b59bdb2017e",
+  "executable_blake3": "c7181a8eda499c5979e778633c6e9f91cfc2e27dc10813e2357dd8fe57fb22d5",
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "callbacks": {"lookup":329,"getattr":24,"create":9,"read":6,"write":111,"flush":16,"release":15,"fsync":12,"fsyncdir":0,"readdir":2,"mount_lock_wait_ns":58789,"invalidations_requested":2,"invalidations_succeeded":2,"invalidations_failed":0,"invalidations_unsupported":0},
+  "mounted": {"live_nodes":14,"live_nodes_high_water":14,"open_handles":0,"open_handles_high_water":1,"pending_nodes":0,"pending_nodes_high_water":8,"dirty_nodes":0,"dirty_nodes_high_water":9,"dirty_ranges":0,"dirty_ranges_high_water":3,"directory_cursors":0,"logical_workspace_bytes":104857668,"logical_workspace_high_water_bytes":104857668,"spool_appended_bytes":104857714,"spool_live_bytes":0,"spool_live_high_water_bytes":104857600,"spool_dead_bytes":0,"spool_physical_bytes":0,"spool_physical_high_water_bytes":104857600,"spool_resets":8,"largest_request_bytes":1048576,"operation_q_terminal_bytes":0,"operation_q_high_water_bytes":8388607,"materializations":0,"capture_scans":0},
+  "engine": {"transactions_started":10,"transactions_committed":10,"transactions_rolled_back":0,"publication_commits":10,"objects_created":242,"objects_reused":3287,"object_bytes_read":105071115,"object_bytes_written":75691,"statements":4759,"fetched_rows":900,"busy_events":0,"locked_events":0,"connection_mutex_wait_ns":25946,"connections_before_drop":1,"connections_terminal":0}
+}

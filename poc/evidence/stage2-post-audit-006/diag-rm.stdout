@@ -1,0 +1,18 @@
+config: REPS=1 WARMUP=0 RANDOMIZE_TARGETS=0 targets=/workspace /var/tmp
+
+[1m=== tiny file churn (1000 files) ===[0m
+  [32mOK[0m    rm 1000 files                  computerd  mean=602.2 med=602.2 p95=602.2 ms (n=1)
+  [32mOK[0m    rm 1000 files                  base  mean=25.3 med=25.3 p95=25.3 ms (n=1)
+
+[1m=== directory traversal ===[0m
+
+[1m=== large file I/O ===[0m
+
+[1m=== git ===[0m
+  SKIP  npm scenarios (npm not installed)
+  SKIP  go scenarios (go not installed)
+
+[1m=== summary ===[0m
+  scenario                       computerd mean computerd p95    base mean     base p95      ratio
+  rm 1000 files                      602.2 ms     602.2 ms      25.3 ms      25.3 ms     23.78x
+wrote JSON summary to /var/tmp/layerfs-owned/rm.json

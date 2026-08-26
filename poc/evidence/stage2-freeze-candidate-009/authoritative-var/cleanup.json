@@ -1,0 +1,19 @@
+{
+  "dev_fuse_holders": [],
+  "layerfs_process_absent": true,
+  "schema": "layerfs-stage2-external-cleanup-v1",
+  "spool_absent": true,
+  "sqlite_sidecars": [],
+  "status": "PASS",
+  "store_files": [
+    "store.sqlite"
+  ],
+  "terminal_connections": 0,
+  "terminal_open_handles": 0,
+  "terminal_q": 0,
+  "terminal_status": "PASS",
+  "time_ns": 1787696622037031253,
+  "workspace_directory_empty": true,
+  "workspace_findmnt_absent": true,
+  "workspace_mountinfo_absent": true
+}

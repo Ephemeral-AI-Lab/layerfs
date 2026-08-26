@@ -1,0 +1,160 @@
+{
+  "populations": {
+    "tmp": {
+      "aggregates": {
+        "G": 3.498042746599031,
+        "Rsum": 2.2469001996643283,
+        "SB_ns": 1330855153,
+        "SL_ns": 2990298709
+      },
+      "checks": {
+        "config": true,
+        "connections_zero": true,
+        "directory_changes_zero": true,
+        "dirty_nodes_zero": true,
+        "dirty_ranges_zero": true,
+        "fail_markers_zero": true,
+        "handles_zero": true,
+        "invalidation_exact": true,
+        "logical_workspace_zero": true,
+        "matrix": true,
+        "network_scenarios_zero": true,
+        "pending_zero": true,
+        "q_zero": true,
+        "rollback_zero": true,
+        "root_lookup_only": true,
+        "root_mapping_only": true,
+        "root_node_only": true,
+        "row_count": true,
+        "samples": true,
+        "spool_dead_zero": true,
+        "spool_live_zero": true,
+        "spool_physical_zero": true,
+        "status": true
+      },
+      "control": "tmp",
+      "forecast_numeric_gates": {
+        "G": true,
+        "Rsum": true,
+        "SL": true
+      },
+      "resource": {
+        "cgroup_cpu": {
+          "throttle_ratio": 0.010627404191669174,
+          "throttled_usec_delta": 54801,
+          "usage_usec_delta": 4405301
+        },
+        "checks": {
+          "connections": true,
+          "lookup_terminal": true,
+          "memory_peak": true,
+          "mount_lock": true,
+          "oom": true,
+          "throttle": true
+        },
+        "connections": {
+          "high_water": 1,
+          "terminal": 0
+        },
+        "lock": {
+          "connection_mutex_wait_ns": 8961,
+          "mount_wait_ns": 3958683,
+          "mount_wait_ratio": 0.0007676962885292148
+        },
+        "lookup_refs": {
+          "high_water": 1202,
+          "terminal": 1
+        },
+        "memory": {
+          "cgroup_peak_bytes": 282152960,
+          "oom_delta": 0,
+          "oom_kill_delta": 0,
+          "rss_high_water_bytes": null,
+          "rss_reason": "authoritative memory HWM is kernel cgroup memory.peak; no concurrent sampler ran inside the quota cgroup"
+        },
+        "status": "PASS",
+        "wall_ns": 5156574363
+      },
+      "status": "READY"
+    },
+    "var": {
+      "aggregates": {
+        "G": 3.2190728381365843,
+        "Rsum": 2.1716696285326083,
+        "SB_ns": 1386743497,
+        "SL_ns": 3011548735
+      },
+      "checks": {
+        "config": true,
+        "connections_zero": true,
+        "directory_changes_zero": true,
+        "dirty_nodes_zero": true,
+        "dirty_ranges_zero": true,
+        "fail_markers_zero": true,
+        "handles_zero": true,
+        "invalidation_exact": true,
+        "logical_workspace_zero": true,
+        "matrix": true,
+        "network_scenarios_zero": true,
+        "pending_zero": true,
+        "q_zero": true,
+        "rollback_zero": true,
+        "root_lookup_only": true,
+        "root_mapping_only": true,
+        "root_node_only": true,
+        "row_count": true,
+        "samples": true,
+        "spool_dead_zero": true,
+        "spool_live_zero": true,
+        "spool_physical_zero": true,
+        "status": true
+      },
+      "control": "var",
+      "forecast_numeric_gates": {
+        "G": true,
+        "Rsum": true,
+        "SL": true
+      },
+      "resource": {
+        "cgroup_cpu": {
+          "throttle_ratio": 0.013620253135866466,
+          "throttled_usec_delta": 71486,
+          "usage_usec_delta": 4484976
+        },
+        "checks": {
+          "connections": true,
+          "lookup_terminal": true,
+          "memory_peak": true,
+          "mount_lock": true,
+          "oom": true,
+          "throttle": true
+        },
+        "connections": {
+          "high_water": 1,
+          "terminal": 0
+        },
+        "lock": {
+          "connection_mutex_wait_ns": 8703,
+          "mount_wait_ns": 4062023,
+          "mount_wait_ratio": 0.0007739386943417132
+        },
+        "lookup_refs": {
+          "high_water": 1202,
+          "terminal": 1
+        },
+        "memory": {
+          "cgroup_peak_bytes": 283582464,
+          "oom_delta": 0,
+          "oom_kill_delta": 0,
+          "rss_high_water_bytes": null,
+          "rss_reason": "authoritative memory HWM is kernel cgroup memory.peak; no concurrent sampler ran inside the quota cgroup"
+        },
+        "status": "PASS",
+        "wall_ns": 5248507446
+      },
+      "status": "READY"
+    }
+  },
+  "schema": "layerfs-stage2-readiness-collection-v1",
+  "status": "READY"
+}

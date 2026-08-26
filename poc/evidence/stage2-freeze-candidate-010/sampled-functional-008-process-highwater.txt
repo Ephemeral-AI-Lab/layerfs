@@ -1,0 +1,5 @@
+daemon_pid=7
+fd_high_water=9
+threads_high_water=3
+rss_high_water_kb=5804
+vmhwm_high_water_kb=5804

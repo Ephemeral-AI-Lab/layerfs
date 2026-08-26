@@ -1,0 +1,36 @@
+{
+  "attempts": [
+    {
+      "attempt": "001",
+      "failure": "Linux Engine startup Corrupt",
+      "repair": "isolated exact SQLite profile"
+    },
+    {
+      "attempt": "002-003",
+      "failure": "cache_spill profile mismatch",
+      "repair": "cache_size then cache_spill=ON; focused regression"
+    },
+    {
+      "attempt": "004",
+      "failure": "same-daemon post-checkpoint zero reads; timings invalidated",
+      "repair": "lazy shared-inode ReadPlan rebuild"
+    },
+    {
+      "attempt": "006",
+      "failure": "namespace REVISE and terminal Arc::try_unwrap race",
+      "repair": "exact invalidation admission/coherent TTL and explicit Engine close"
+    },
+    {
+      "attempt": "007",
+      "failure": "synchronous reverse invalidation from callback deadlocked Linux FUSE",
+      "repair": "out-of-callback mount admission; kernel-coherent in-flight mutations; Docker Desktop recovered"
+    },
+    {
+      "attempt": "009",
+      "failure": null,
+      "repair": "PASS_OPTIMIZED"
+    }
+  ],
+  "schema": "layerfs-stage2-failure-ledger-v1",
+  "status": "CLOSED"
+}

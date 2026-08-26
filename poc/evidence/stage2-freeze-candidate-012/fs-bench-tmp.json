@@ -1,0 +1,29 @@
+{
+  "config": {"reps": 3, "warmup": 1, "randomizeTargets": 1, "mount": "/workspace", "base": "/tmp"},
+  "results": [
+    {"scenario": "create 1000 files", "target": "computerd", "meanNs": 245457903, "medianNs": 243206417, "p95Ns": 250613917, "minNs": 242553375, "maxNs": 250613917, "samples": 3},
+    {"scenario": "create 1000 files", "target": "base", "meanNs": 7607167, "medianNs": 7585167, "p95Ns": 7937792, "minNs": 7298542, "maxNs": 7937792, "samples": 3},
+    {"scenario": "stat 1000 files", "target": "computerd", "meanNs": 722848097, "medianNs": 716408750, "p95Ns": 740118125, "minNs": 712017417, "maxNs": 740118125, "samples": 3},
+    {"scenario": "stat 1000 files", "target": "base", "meanNs": 443908389, "medianNs": 445783958, "p95Ns": 446948750, "minNs": 438992459, "maxNs": 446948750, "samples": 3},
+    {"scenario": "rm 1000 files", "target": "computerd", "meanNs": 359919250, "medianNs": 359060667, "p95Ns": 361876208, "minNs": 358820875, "maxNs": 361876208, "samples": 3},
+    {"scenario": "rm 1000 files", "target": "base", "meanNs": 10238833, "medianNs": 10212417, "p95Ns": 10494583, "minNs": 10009500, "maxNs": 10494583, "samples": 3},
+    {"scenario": "mkdir tree (10x10x10)", "target": "computerd", "meanNs": 620587069, "medianNs": 620583375, "p95Ns": 622746167, "minNs": 618431667, "maxNs": 622746167, "samples": 3},
+    {"scenario": "mkdir tree (10x10x10)", "target": "base", "meanNs": 371651153, "medianNs": 368538667, "p95Ns": 378015458, "minNs": 368399334, "maxNs": 378015458, "samples": 3},
+    {"scenario": "find tree", "target": "computerd", "meanNs": 640140278, "medianNs": 640386667, "p95Ns": 642074084, "minNs": 637960084, "maxNs": 642074084, "samples": 3},
+    {"scenario": "find tree", "target": "base", "meanNs": 375937541, "medianNs": 375136875, "p95Ns": 381267416, "minNs": 371408334, "maxNs": 381267416, "samples": 3},
+    {"scenario": "write 64 MiB", "target": "computerd", "meanNs": 29855347, "medianNs": 29717041, "p95Ns": 30894333, "minNs": 28954667, "maxNs": 30894333, "samples": 3},
+    {"scenario": "write 64 MiB", "target": "base", "meanNs": 19711111, "medianNs": 19331500, "p95Ns": 20483708, "minNs": 19318125, "maxNs": 20483708, "samples": 3},
+    {"scenario": "copy 64 MiB", "target": "computerd", "meanNs": 96764500, "medianNs": 98278417, "p95Ns": 100285417, "minNs": 91729667, "maxNs": 100285417, "samples": 3},
+    {"scenario": "copy 64 MiB", "target": "base", "meanNs": 32636875, "medianNs": 32994208, "p95Ns": 34412333, "minNs": 30504084, "maxNs": 34412333, "samples": 3},
+    {"scenario": "read 64 MiB", "target": "computerd", "meanNs": 37677986, "medianNs": 38031666, "p95Ns": 38688417, "minNs": 36313875, "maxNs": 38688417, "samples": 3},
+    {"scenario": "read 64 MiB", "target": "base", "meanNs": 27922930, "medianNs": 29103708, "p95Ns": 30022583, "minNs": 24642500, "maxNs": 30022583, "samples": 3},
+    {"scenario": "pure read 64 MiB", "target": "computerd", "meanNs": 7043013, "medianNs": 7202625, "p95Ns": 7338375, "minNs": 6588041, "maxNs": 7338375, "samples": 3},
+    {"scenario": "pure read 64 MiB", "target": "base", "meanNs": 8521542, "medianNs": 8475250, "p95Ns": 9366751, "minNs": 7722625, "maxNs": 9366751, "samples": 3},
+    {"scenario": "pure copy 64 MiB", "target": "computerd", "meanNs": 68365056, "medianNs": 68827584, "p95Ns": 68962042, "minNs": 67305542, "maxNs": 68962042, "samples": 3},
+    {"scenario": "pure copy 64 MiB", "target": "base", "meanNs": 12070125, "medianNs": 12168792, "p95Ns": 12275791, "minNs": 11765792, "maxNs": 12275791, "samples": 3},
+    {"scenario": "overwrite 64 MiB", "target": "computerd", "meanNs": 27882514, "medianNs": 27766917, "p95Ns": 28659500, "minNs": 27221125, "maxNs": 28659500, "samples": 3},
+    {"scenario": "overwrite 64 MiB", "target": "base", "meanNs": 17308236, "medianNs": 17376875, "p95Ns": 18607708, "minNs": 15940125, "maxNs": 18607708, "samples": 3},
+    {"scenario": "git init + commit 100 files", "target": "computerd", "meanNs": 141464055, "medianNs": 143748667, "p95Ns": 144758875, "minNs": 135884625, "maxNs": 144758875, "samples": 3},
+    {"scenario": "git init + commit 100 files", "target": "base", "meanNs": 7832819, "medianNs": 7883208, "p95Ns": 7909875, "minNs": 7705375, "maxNs": 7909875, "samples": 3}
+  ]
+}

@@ -1,0 +1,345 @@
+{
+  "authoritative": false,
+  "reports": {
+    "tmp": {
+      "aggregates": {
+        "G": 3.6712182521960868,
+        "Rsum": 2.182130050795809,
+        "SB_ns": 1515026377,
+        "SL_ns": 3305984585,
+        "Spread": 1.0
+      },
+      "checks": {
+        "matrix": true,
+        "rows": true,
+        "stats:copy 64 MiB:base": true,
+        "stats:copy 64 MiB:computerd": true,
+        "stats:create 1000 files:base": true,
+        "stats:create 1000 files:computerd": true,
+        "stats:find tree:base": true,
+        "stats:find tree:computerd": true,
+        "stats:git init + commit 100 files:base": true,
+        "stats:git init + commit 100 files:computerd": true,
+        "stats:mkdir tree (10x10x10):base": true,
+        "stats:mkdir tree (10x10x10):computerd": true,
+        "stats:overwrite 64 MiB:base": true,
+        "stats:overwrite 64 MiB:computerd": true,
+        "stats:pure copy 64 MiB:base": true,
+        "stats:pure copy 64 MiB:computerd": true,
+        "stats:pure read 64 MiB:base": true,
+        "stats:pure read 64 MiB:computerd": true,
+        "stats:read 64 MiB:base": true,
+        "stats:read 64 MiB:computerd": true,
+        "stats:rm 1000 files:base": true,
+        "stats:rm 1000 files:computerd": true,
+        "stats:stat 1000 files:base": true,
+        "stats:stat 1000 files:computerd": true,
+        "stats:write 64 MiB:base": true,
+        "stats:write 64 MiB:computerd": true,
+        "unique": true
+      },
+      "gates": {
+        "G": true,
+        "Rsum": true,
+        "SL": true,
+        "Spread": true,
+        "cloudflare_rows": true
+      },
+      "readiness": "READY",
+      "rows": [
+        {
+          "base_ns": 8280583,
+          "budget_ns": 300000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 116.44478433782116,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 252144833,
+          "ratio": 30.450130504096148,
+          "scenario": "create 1000 files"
+        },
+        {
+          "base_ns": 494150917,
+          "budget_ns": 900000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 3.241294152216497,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 775498543,
+          "ratio": 1.56935566913053,
+          "scenario": "stat 1000 files"
+        },
+        {
+          "base_ns": 10424292,
+          "budget_ns": 400000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 123.29161864388777,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 372807125,
+          "ratio": 35.763304116960654,
+          "scenario": "rm 1000 files"
+        },
+        {
+          "base_ns": 430750959,
+          "budget_ns": 850000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 3.263943374834449,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 688468875,
+          "ratio": 1.5982991113897904,
+          "scenario": "mkdir tree (10x10x10)"
+        },
+        {
+          "base_ns": 417263500,
+          "budget_ns": 950000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 3.4183305288131174,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 709741292,
+          "ratio": 1.700942670518749,
+          "scenario": "find tree"
+        },
+        {
+          "base_ns": 28816417,
+          "budget_ns": 80000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 4.089799018910678,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 37938125,
+          "ratio": 1.3165455302787992,
+          "scenario": "write 64 MiB"
+        },
+        {
+          "base_ns": 40389875,
+          "budget_ns": 250000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 10.076642103783588,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 115325125,
+          "ratio": 2.8552978933457953,
+          "scenario": "copy 64 MiB"
+        },
+        {
+          "base_ns": 31225917,
+          "budget_ns": 130000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 7.106203832579558,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 47014958,
+          "ratio": 1.5056389857181776,
+          "scenario": "read 64 MiB"
+        },
+        {
+          "base_ns": 7664042,
+          "budget_ns": 55000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 11.700681124672272,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 10246459,
+          "ratio": 1.336952354906197,
+          "scenario": "pure read 64 MiB"
+        },
+        {
+          "base_ns": 14548042,
+          "budget_ns": 180000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 22.118189039347104,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 76625958,
+          "ratio": 5.26709766166471,
+          "scenario": "pure copy 64 MiB"
+        },
+        {
+          "base_ns": 22080666,
+          "budget_ns": 100000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 8.536080194275101,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 36749667,
+          "ratio": 1.664336890925301,
+          "scenario": "overwrite 64 MiB"
+        },
+        {
+          "base_ns": 9431167,
+          "budget_ns": 300000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 58.6868933921211,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 183423625,
+          "ratio": 19.448666851090646,
+          "scenario": "git init + commit 100 files"
+        }
+      ],
+      "status": "PASS_VALIDATION"
+    },
+    "var_tmp": {
+      "aggregates": {
+        "G": 3.104276203309186,
+        "Rsum": 2.1374041691663166,
+        "SB_ns": 1573537130,
+        "SL_ns": 3363284822,
+        "Spread": 1.0
+      },
+      "checks": {
+        "matrix": true,
+        "rows": true,
+        "stats:copy 64 MiB:base": true,
+        "stats:copy 64 MiB:computerd": true,
+        "stats:create 1000 files:base": true,
+        "stats:create 1000 files:computerd": true,
+        "stats:find tree:base": true,
+        "stats:find tree:computerd": true,
+        "stats:git init + commit 100 files:base": true,
+        "stats:git init + commit 100 files:computerd": true,
+        "stats:mkdir tree (10x10x10):base": true,
+        "stats:mkdir tree (10x10x10):computerd": true,
+        "stats:overwrite 64 MiB:base": true,
+        "stats:overwrite 64 MiB:computerd": true,
+        "stats:pure copy 64 MiB:base": true,
+        "stats:pure copy 64 MiB:computerd": true,
+        "stats:pure read 64 MiB:base": true,
+        "stats:pure read 64 MiB:computerd": true,
+        "stats:read 64 MiB:base": true,
+        "stats:read 64 MiB:computerd": true,
+        "stats:rm 1000 files:base": true,
+        "stats:rm 1000 files:computerd": true,
+        "stats:stat 1000 files:base": true,
+        "stats:stat 1000 files:computerd": true,
+        "stats:write 64 MiB:base": true,
+        "stats:write 64 MiB:computerd": true,
+        "unique": true
+      },
+      "gates": {
+        "G": true,
+        "Rsum": true,
+        "SL": true,
+        "Spread": true,
+        "cloudflare_rows": true
+      },
+      "readiness": "READY",
+      "rows": [
+        {
+          "base_ns": 18243459,
+          "budget_ns": 300000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 52.79850159931593,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 259583292,
+          "ratio": 14.228841800230976,
+          "scenario": "create 1000 files"
+        },
+        {
+          "base_ns": 519832959,
+          "budget_ns": 900000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 3.1197774209800406,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 781314583,
+          "ratio": 1.5030108604560413,
+          "scenario": "stat 1000 files"
+        },
+        {
+          "base_ns": 24735084,
+          "budget_ns": 400000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 50.620726104120244,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 373362834,
+          "ratio": 15.094463960583274,
+          "scenario": "rm 1000 files"
+        },
+        {
+          "base_ns": 425937792,
+          "budget_ns": 850000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 3.2324395222415134,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 753909944,
+          "ratio": 1.770000122459197,
+          "scenario": "mkdir tree (10x10x10)"
+        },
+        {
+          "base_ns": 430753751,
+          "budget_ns": 950000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 3.30089156626831,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 700804958,
+          "ratio": 1.6269271164164512,
+          "scenario": "find tree"
+        },
+        {
+          "base_ns": 26948292,
+          "budget_ns": 80000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 6.201160486314913,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 42622875,
+          "ratio": 1.5816540432321278,
+          "scenario": "write 64 MiB"
+        },
+        {
+          "base_ns": 42103583,
+          "budget_ns": 250000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 12.383005548606773,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 122268584,
+          "ratio": 2.9039947502805163,
+          "scenario": "copy 64 MiB"
+        },
+        {
+          "base_ns": 26362709,
+          "budget_ns": 130000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 8.13813559322034,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 48193542,
+          "ratio": 1.828095208273171,
+          "scenario": "read 64 MiB"
+        },
+        {
+          "base_ns": 12418334,
+          "budget_ns": 55000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 12.138062170405115,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 9346625,
+          "ratio": 0.752647255259844,
+          "scenario": "pure read 64 MiB"
+        },
+        {
+          "base_ns": 18127792,
+          "budget_ns": 180000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 18.554583701009367,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 81091917,
+          "ratio": 4.473347719347177,
+          "scenario": "pure copy 64 MiB"
+        },
+        {
+          "base_ns": 12178792,
+          "budget_ns": 100000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 15.364043576566841,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 38814667,
+          "ratio": 3.187070359687562,
+          "scenario": "overwrite 64 MiB"
+        },
+        {
+          "base_ns": 15894583,
+          "budget_ns": 300000000,
+          "budget_pass": true,
+          "cloudflare_ratio_limit": 37.49707651801345,
+          "cloudflare_ratio_pass": true,
+          "layerfs_ns": 151971001,
+          "ratio": 9.561182007731816,
+          "scenario": "git init + commit 100 files"
+        }
+      ],
+      "status": "PASS_VALIDATION"
+    }
+  },
+  "schema": "layerfs-stage2-readiness-n1-v2",
+  "target_order": "unavailable: RANDOMIZE_TARGETS=1 uses unseeded coreutils shuf"
+}

@@ -1,0 +1,10 @@
+{
+  "fd_baseline": 10,
+  "fd_high_water": 11,
+  "fd_limit": 74,
+  "interval_ms": 50,
+  "rss_high_water_bytes": 0,
+  "samples": 104,
+  "schema": "layerfs-stage2-process-highwater-v1",
+  "status": "PASS"
+}

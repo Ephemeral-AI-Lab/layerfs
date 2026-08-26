@@ -4,8 +4,9 @@ Status: **CLOSED after adversarial correctness repair, with the explicit A02
 performance exception retained**
 Date: 2026-08-24
 Scope: implemented Stage 1.0 product baseline and preserved A01–A17 evidence;
-Stage 1.1 (`poc/16`) is closed PASS, Stage 1.2 (`poc/15`) remains prospective,
-and mounted/write-intercepted work remains Stage Two
+Stage 1.1 (`poc/16`) is closed PASS; a later explicit user decision on
+`2026-08-26` skips Stage 1.2 (`poc/15`) and makes mounted/write-intercepted
+Stage Two the direct successor
 
 ## 1. Exact disposition
 
@@ -16,8 +17,8 @@ preserved pre-repair A01–A17 artifact REVISE
 A02 frozen latency target             measured miss, user-accepted exception
 all other measured hard targets       PASS
 Stage 1.1 APFS edge benchmark         PASS; 47 rows / 51 edits / 34 transitions
-Stage 1.2 npm/workspace benchmark     not started; prospective
-mounted Stage Two                     not started; separately specified later
+Stage 1.2 npm/workspace benchmark     SKIPPED; retained workload reference only
+mounted Stage Two                     not started; direct successor
 ```
 
 The A02 latency miss is closed only by explicit user acceptance. Correctness,
@@ -174,6 +175,7 @@ Stage 1.0 implementation is closed after the adversarial repairs. Reopening it
 requires a correctness, durability, authentication, custody, or hard-resource
 regression—not the accepted A02 latency values. Stage 1.1 is separately closed
 PASS by the source-bound attempt-014 receipt and does not retroactively relabel
-the pre-repair campaign. Stage 1.2 remains the next Stage One verification
-step; its accepted completion makes the separately specified mounted Stage Two
-eligible.
+the pre-repair campaign. The later explicit user decision skips Stage 1.2.
+Mounted Stage Two is eligible directly from the final Stage 1.1
+correctness/durability closure while preserving the Verified performance
+REVISE and explicit TrustedLocalDev boundary.

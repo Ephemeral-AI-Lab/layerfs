@@ -1,0 +1,52 @@
+{
+  "cgroup_cpu": {
+    "throttle_ratio": 0.014019823911347673,
+    "throttled_usec_delta": 285404,
+    "usage_usec_delta": 17207836
+  },
+  "checks": {
+    "connections": true,
+    "daemon_cpu": true,
+    "lookup_terminal": true,
+    "memory_peak": true,
+    "mount_lock": true,
+    "oom": true,
+    "throttle": true
+  },
+  "connections": {
+    "high_water": 1,
+    "terminal": 0
+  },
+  "daemon_cpu": {
+    "clock_ticks_per_second": 100,
+    "limit_ns": 21380033088,
+    "system_ticks": 273,
+    "total_ns": 3460000000,
+    "user_ticks": 73
+  },
+  "fd": {
+    "baseline": 10,
+    "high_water": null,
+    "high_water_reason": "measured in separate resource-diagnostic.json to avoid authoritative in-cgroup sampler overhead",
+    "terminal": 0,
+    "terminal_reason": "daemon process absent after successful container removal"
+  },
+  "lock": {
+    "connection_mutex_wait_ns": 35514,
+    "mount_wait_ns": 17225898,
+    "mount_wait_ratio": 0.0008461831532663735
+  },
+  "lookup_refs": {
+    "high_water": 1202,
+    "terminal": 1
+  },
+  "memory": {
+    "cgroup_peak_bytes": 282300416,
+    "oom_delta": 0,
+    "oom_kill_delta": 0,
+    "rss_high_water_bytes": null,
+    "rss_reason": "authoritative memory HWM is kernel cgroup memory.peak; no concurrent sampler ran inside the quota cgroup"
+  },
+  "status": "PASS",
+  "wall_ns": 20357174370
+}

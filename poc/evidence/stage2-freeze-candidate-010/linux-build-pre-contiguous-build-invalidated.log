@@ -1,0 +1,102 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.65kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/rust:1.85.1-bookworm
+#2 DONE 2.4s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [build 1/6] FROM docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#4 resolve docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 228.53kB 0.0s done
+#5 DONE 0.0s
+
+#6 [build 2/6] WORKDIR /src
+#6 CACHED
+
+#7 [build 3/6] COPY Cargo.toml Cargo.lock ./
+#7 CACHED
+
+#8 [build 4/6] COPY crates ./crates
+#8 DONE 0.0s
+
+#9 [build 5/6] COPY tools ./tools
+#9 DONE 0.0s
+
+#10 [build 6/6] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     case "arm64" in       arm64) rustup target add aarch64-unknown-linux-gnu; target=aarch64-unknown-linux-gnu ;;       amd64) rustup target add x86_64-unknown-linux-gnu; target=x86_64-unknown-linux-gnu ;;       *) exit 1 ;;     esac  && rustup component add clippy  && cargo test --locked --target "$target" -p layerfs-fuse  && cargo clippy --locked --target "$target" -p layerfs-fuse --all-targets -- -D warnings  && cargo build --locked --release --target "$target" -p layerfs-fuse  && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
+#10 0.194 info: component 'rust-std' for target 'aarch64-unknown-linux-gnu' is up to date
+#10 0.286 info: downloading component 'clippy'
+#10 3.130 info: installing component 'clippy'
+#10 3.619    Compiling layerfs-core v0.1.0 (/src/crates/layerfs-core)
+#10 4.328    Compiling layerfs-engine v0.1.0 (/src/crates/layerfs-engine)
+#10 4.578    Compiling layerfs-vfs v0.1.0 (/src/crates/layerfs-vfs)
+#10 5.400    Compiling layerfs-fuse v0.1.0 (/src/crates/layerfs-fuse)
+#10 7.208     Finished `test` profile [unoptimized + debuginfo] target(s) in 3.72s
+#10 7.212      Running unittests src/lib.rs (target/aarch64-unknown-linux-gnu/debug/deps/layerfs_fuse-1cc834144ad72029)
+#10 7.213 
+#10 7.213 running 2 tests
+#10 7.285 test tests::missing_entry_and_inode_notifier_fail_closed ... ok
+#10 7.287 test tests::notifier_success_and_failure_counters_are_exact_and_failure_is_incomplete ... ok
+#10 7.287 
+#10 7.287 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+#10 7.287 
+#10 7.287      Running unittests src/main.rs (target/aarch64-unknown-linux-gnu/debug/deps/layerfs_fuse-e87e9cee1ae034f1)
+#10 7.288 
+#10 7.288 running 1 test
+#10 7.288 test tests::store_spool_and_receipt_are_distinct_and_outside_mount ... ok
+#10 7.288 
+#10 7.288 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#10 7.288 
+#10 7.288    Doc-tests layerfs_fuse
+#10 7.328 
+#10 7.328 running 0 tests
+#10 7.328 
+#10 7.328 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#10 7.328 
+#10 7.475     Checking layerfs-core v0.1.0 (/src/crates/layerfs-core)
+#10 8.114     Checking layerfs-engine v0.1.0 (/src/crates/layerfs-engine)
+#10 8.515     Checking layerfs-vfs v0.1.0 (/src/crates/layerfs-vfs)
+#10 9.507     Checking layerfs-fuse v0.1.0 (/src/crates/layerfs-fuse)
+#10 9.833     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.45s
+#10 9.946    Compiling layerfs-core v0.1.0 (/src/crates/layerfs-core)
+#10 11.29    Compiling layerfs-engine v0.1.0 (/src/crates/layerfs-engine)
+#10 12.46    Compiling layerfs-vfs v0.1.0 (/src/crates/layerfs-vfs)
+#10 14.71    Compiling layerfs-fuse v0.1.0 (/src/crates/layerfs-fuse)
+#10 20.71     Finished `release` profile [optimized] target(s) in 10.86s
+#10 DONE 20.8s
+
+#4 [build 1/6] FROM docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#4 CACHED
+
+#11 [stage-1 2/5] COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
+#11 DONE 0.0s
+
+#12 [stage-1 3/5] COPY containers/layerfs-fuse/fs-bench.sh /usr/local/bin/fs-bench.sh
+#12 DONE 0.0s
+
+#13 [stage-1 4/5] COPY containers/layerfs-fuse/verify_fs_bench.py /usr/local/bin/verify_fs_bench.py
+#13 DONE 0.0s
+
+#14 [stage-1 5/5] RUN echo "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef  /usr/local/bin/fs-bench.sh" | sha256sum -c -  && python3 /usr/local/bin/verify_fs_bench.py --self-test  && chmod 0555 /usr/local/bin/fs-bench.sh /usr/local/bin/verify_fs_bench.py  && mkdir -p /workspace /var/lib/layerfs /var/tmp/layerfs-owned
+#14 0.074 /usr/local/bin/fs-bench.sh: OK
+#14 DONE 0.1s
+
+#15 exporting to image
+#15 exporting layers 0.1s done
+#15 exporting manifest sha256:a05aeccd75d7a49852ad2a489abcdd7b82a9da0adba96912880acd5e2e156f45 done
+#15 exporting config sha256:ce367aa0a26b19b585943701fb880b95c908c87cdb7d2ef2faa04ee0121f6ff4 done
+#15 exporting attestation manifest sha256:fb84d1eadbdad623ed47a98a3d20ac4de4181c467ba80924a2c5cb5f9c6acabe done
+#15 exporting manifest list sha256:4c80379d30d53d79c8ad9b8ccac915756cce7b55cb83bbf891bd71bb459c7f43 done
+#15 naming to docker.io/library/layerfs-fuse:frozen-1393f7294967 done
+#15 unpacking to docker.io/library/layerfs-fuse:frozen-1393f7294967 0.0s done
+#15 DONE 0.2s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/wb5piswej2rsvokc2pob5eu19

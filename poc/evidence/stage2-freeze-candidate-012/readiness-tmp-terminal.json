@@ -1,0 +1,15 @@
+{
+  "schema": "layerfs-fuse-terminal-v1",
+  "status": "PASS",
+  "signal": 15,
+  "backend": "layerfs-fuse",
+  "integrity": "TrustedLocalDev",
+  "ref": "main",
+  "generation": 0,
+  "root": "6a71876d18101c4e88ad553cb58ae8b3572b9c74479b57506d0dd08d376efa57",
+  "executable_blake3": "4e0b899aff1dcd26d494bef941162ee04c60db9646458e496fe5c38915429bf8",
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "callbacks": {"lookup":6405,"getattr":13684,"create":5239,"read":110,"write":5731,"flush":10580,"release":5473,"fsync":0,"fsyncdir":0,"readdir":1267,"mount_lock_wait_ns":3958683,"invalidations_requested":2,"invalidations_succeeded":2,"invalidations_failed":0,"invalidations_unsupported":0},
+  "mounted": {"checkpoints":0,"no_op_checkpoints":1,"created_then_deleted":5570,"splices":0,"lookup_refs":1,"lookup_refs_high_water":1202,"live_nodes":1,"live_nodes_high_water":1112,"open_handles":0,"open_handles_high_water":5,"pending_nodes":0,"pending_nodes_high_water":1111,"dirty_nodes":0,"dirty_nodes_high_water":1112,"dirty_ranges":0,"dirty_ranges_high_water":1000,"directory_cursors":0,"directory_changes":0,"directory_changes_high_water":1111,"inode_mappings":1,"inode_mappings_high_water":1,"logical_workspace_bytes":0,"logical_workspace_high_water_bytes":134217728,"spool_appended_bytes":604034945,"spool_live_bytes":0,"spool_live_high_water_bytes":134217728,"spool_dead_bytes":0,"spool_physical_bytes":0,"spool_physical_high_water_bytes":134217728,"spool_resets":10,"spool_compactions":0,"largest_request_bytes":1048576,"operation_q_terminal_bytes":0,"operation_q_high_water_bytes":1048576,"materializations":0,"capture_scans":0},
+  "engine": {"transactions_started":1,"transactions_committed":1,"transactions_rolled_back":0,"publication_commits":1,"objects_created":12,"objects_reused":0,"object_bytes_read":13835,"object_bytes_written":1034,"statements":208,"fetched_rows":175,"busy_events":0,"locked_events":0,"connection_mutex_wait_ns":8961,"connections_high_water":1,"connections_before_drop":1,"connections_terminal":0}
+}

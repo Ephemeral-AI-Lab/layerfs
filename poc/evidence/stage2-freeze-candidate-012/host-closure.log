@@ -1,0 +1,45 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_vfs-73ad05557387cee9)
+
+running 30 tests
+test mounted::tests::accepted_dirty_closed_unlink_drains_ranges_and_spool_after_checkpoint ... ok
+test mounted::tests::closing_budget_cancels_waiters_and_drains_existing_reservations ... ok
+test mounted::tests::cold_lookup_and_returned_attrs_stay_inside_the_sql_gate ... cold_lookup_primary_sql_statements=14
+ok
+test mounted::tests::dirty_closed_rename_target_drains_ranges_and_spool_after_checkpoint ... ok
+test mounted::tests::dirty_spool_compacts_inside_the_steady_physical_bound ... ok
+test mounted::tests::existing_non_main_ref_remounts_and_diverges_from_main ... ok
+test mounted::tests::forced_drop_discards_unacknowledged_dirty_spool_on_exact_reopen ... ok
+test mounted::tests::later_checkpoints_preserve_untouched_hard_link_content ... ok
+test mounted::tests::live_byte_decreases_normalize_spool_for_removal_and_open_orphan_checkpoint ... ok
+test mounted::tests::lost_commit_acknowledgement_reconciles_candidate_and_clears_dirty_state ... ok
+test mounted::tests::maximum_admitted_dirty_population_is_checkpointable_inside_q ... ok
+test mounted::tests::mount_wide_directory_changes_and_inode_mappings_are_bounded_and_observed ... ok
+test mounted::tests::mounted_splice_conflict_and_post_visibility_uncertainty_fail_closed ... ok
+test mounted::tests::mounted_splice_reuses_direct_range_replace_and_requires_remount ... ok
+test mounted::tests::one_checkpoint_reopens_nested_bytes_and_hard_link_identity ... ok
+test mounted::tests::pending_directory_cursor_is_complete_and_resumable ... ok
+test mounted::tests::pending_write_overlap_unlink_open_cancels_without_publication ... ok
+test mounted::tests::post_commit_spool_cleanup_failure_is_incomplete_not_retryable ... ok
+test mounted::tests::post_unmount_cache_release_is_root_only_and_logically_empty ... ok
+test mounted::tests::pre_commit_spool_failure_rolls_back_and_preserves_retryable_dirty_state ... ok
+test mounted::tests::publication_conflict_leaves_mount_non_writable ... ok
+test mounted::tests::readdir_pending_entry_reclaims_nodes_without_changing_inode_identity ... ok
+test mounted::tests::repeated_fsync_of_accepted_unlinked_open_orphan_is_exact ... ok
+test mounted::tests::replacement_rename_reclaims_directory_changes_after_checkpoint ... ok
+test mounted::tests::resource_limit_failures_leave_namespace_content_and_spool_atomic ... ok
+test mounted::tests::retained_roots_fork_and_rollback_reopen_exact_versions ... ok
+test mounted::tests::rollback_ambiguity_leaves_mount_incomplete_and_non_writable ... ok
+test mounted::tests::rollback_conflict_leaves_stale_mount_non_writable ... ok
+test mounted::tests::shrink_then_extend_or_write_never_reveals_truncated_base_bytes ... ok
+test mounted::tests::shutdown_closes_mutation_admission_before_and_after_checkpoint ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 20.21s
+
+    Checking layerfs-vfs v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-vfs)
+    Checking layerfs-os v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-os)
+    Checking layerfs-fuse v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-fuse)
+    Checking layerfs-sdk v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/crates/layerfs-sdk)
+    Checking layerfs-eval v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/tools/layerfs-eval)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.66s

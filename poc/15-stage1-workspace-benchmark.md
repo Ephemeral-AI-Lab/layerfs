@@ -1,9 +1,21 @@
-# Stage 1.2 Specification — npm / Developer Workspace Benchmark
+# Skipped Stage 1.2 — Retained npm / Developer Workspace Workload
 
-Status: **prospective controlling specification for Stage 1.2; Stage 1.1T
-trust handoff admitted; implementation not started; measurement not authorized**
-Authority: controls only the Stage 1.2 workload, fixture, readiness and
-disposition; [10 — handoff freeze](10-handoff-freeze.md),
+Status: **SKIPPED by explicit user decision on `2026-08-26`; not an entry gate,
+execution stage, or required baseline; retained only as a historical bounded
+offline workload definition for direct Stage 2 qualification**
+
+The active sequence is:
+
+```text
+final Stage 1.1 closure -> Stage 2 Docker/Linux FUSE
+```
+
+Nothing below authorizes an APFS Stage 1.2 campaign. Stage 2 may reuse the
+bounded fixture and command corpus, but not the materialize/capture lifecycle
+or a nonexistent Stage 1.2 result.
+
+Historical authority: this document previously controlled only the Stage 1.2
+workload, fixture, readiness and disposition; [10 — handoff freeze](10-handoff-freeze.md),
 [17 — Stage 1.0 closure](17-stage1-closure.md), and the accepted Stage 1.1
 terminal artifact remain authoritative for product correctness and custody;
 [20 — Stage 1.1M](20-stage1.1-full-materialization-optimization.md) preserves
@@ -13,8 +25,9 @@ separate explicit TrustedLocalDev handoff
 Purpose: exercise an ordinary APFS code workspace through real shell, Node,
 npm, search, edit, build, capture, reopen, history, and rematerialization.
 
-Sequence: **accepted Stage 1.1 -> closed Verified Stage 1.1M + admitted
-TrustedLocalDev Stage 1.1T handoff -> Stage 1.2 -> mounted Stage Two**.
+Historical sequence, now superseded: **accepted Stage 1.1 -> closed Verified
+Stage 1.1M + admitted TrustedLocalDev Stage 1.1T handoff -> Stage 1.2 ->
+mounted Stage Two**.
 The historical filename number does not define execution order: `poc/16` is
 Stage 1.1 and this `poc/15` document is Stage 1.2.
 

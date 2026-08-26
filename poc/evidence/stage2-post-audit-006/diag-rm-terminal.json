@@ -1,0 +1,15 @@
+{
+  "schema": "layerfs-fuse-terminal-v1",
+  "status": "PASS",
+  "signal": 15,
+  "backend": "layerfs-fuse",
+  "integrity": "TrustedLocalDev",
+  "ref": "main",
+  "generation": 0,
+  "root": "114d59d7ebd8b896c35395258236add5b025e559e9044618ce1ccad597b41e55",
+  "executable_blake3": "62863c44037d7face532e836cb6323078cd5bc07ceafa3cb9b605121409106a7",
+  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "callbacks": {"lookup":3008,"getattr":7023,"create":1000,"read":0,"write":1000,"flush":2000,"release":1000,"fsync":0,"fsyncdir":0,"readdir":19,"mount_lock_wait_ns":1263672},
+  "mounted": {"live_nodes":1,"open_handles":0,"pending_nodes":0,"dirty_nodes":0,"dirty_ranges":0,"directory_cursors":0,"logical_workspace_bytes":0,"spool_appended_bytes":0,"spool_live_bytes":0,"spool_dead_bytes":0,"spool_physical_bytes":0,"spool_resets":1,"largest_request_bytes":5,"operation_q_terminal_bytes":0,"operation_q_high_water_bytes":1048576,"materializations":0,"capture_scans":0},
+  "engine": {"transactions_started":1,"transactions_committed":1,"transactions_rolled_back":0,"publication_commits":1,"objects_created":12,"objects_reused":0,"object_bytes_read":2093,"object_bytes_written":1034,"statements":58,"fetched_rows":25,"busy_events":0,"locked_events":0,"connection_mutex_wait_ns":1586,"connections_before_drop":1,"connections_terminal":0}
+}

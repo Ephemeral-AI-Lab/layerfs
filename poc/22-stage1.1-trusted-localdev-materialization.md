@@ -172,11 +172,12 @@ fitted fixed cost <20 ms                 report against Verified gate
 Every miss remains a miss. The measured Verified identity-authentication owner
 is an upper bound, not a promised Trusted saving.
 
-## 7. Stage 1.2 handoff rule
+## 7. Direct Stage 2 handoff rule
 
-Only a material source-bound Trusted gain authorizes a Stage 1.2 handoff. The
-handoff may use explicit TrustedLocalDev for repeated local developer-loop
-operations, but capture/publish/export/share promotion must use:
+The material source-bound Trusted gain authorizes the explicitly labeled local
+developer-loop class used by direct Stage 2. Stage 1.2 was skipped by explicit
+user decision on `2026-08-26`. Stage 2 may use explicit TrustedLocalDev for
+repeated local operations, but publish/export/share promotion must use:
 
 ```text
 close TrustedLocalDev
@@ -185,7 +186,8 @@ close TrustedLocalDev
 -> only then publish/export/share
 ```
 
-Stage 1.2 execution is outside this document unless separately assigned.
+Mounted Stage 2 execution remains outside this document unless separately
+assigned.
 
 ## 8. Historical attempt-002 result — superseded for timer/custody
 
@@ -230,7 +232,7 @@ zero differs from that intercept by `5.307875 ms`; fixed cost also remains an
 Relative to the frozen Verified population, Trusted saved
 `18.686626/20.573417 ms` at 24 MiB p50/p95 and
 `90.127292/80.988833 ms` at 96 MiB. The result is a material source-bound gain
-and admits only the narrow Stage 1.2 trust handoff in section 7.
+and admits only the narrow direct Stage 2 trust handoff in section 7.
 
 ## 9. Corrected and audited attempt-003
 
@@ -287,5 +289,6 @@ current-source correctness through independently audited attempt-024
 (`47/51/34`), including
 authenticated writes and seven Verified-after-Trusted scrubs. The complete
 source/raw receipts are under
-`poc/evidence/stage1.1-terminal-audit-20260826`. Stage 1.2 and Docker/FUSE were
-not started or resequenced by this audit.
+`poc/evidence/stage1.1-terminal-audit-20260826`. Docker/FUSE was not started by
+this audit; the later explicit user decision skipped Stage 1.2 and made Stage 2
+the direct successor.

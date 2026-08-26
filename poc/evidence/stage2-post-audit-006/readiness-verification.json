@@ -1,0 +1,280 @@
+{
+  "authoritative": false,
+  "reports": {
+    "tmp": {
+      "aggregates": {
+        "G": 5.117034964003678,
+        "Rsum": 3.075918352819467,
+        "SB_ns": 1489423042,
+        "SL_ns": 4581343670,
+        "Spread": 1.0
+      },
+      "checks": {
+        "matrix": true,
+        "rows": true,
+        "stats:copy 64 MiB:base": true,
+        "stats:copy 64 MiB:computerd": true,
+        "stats:create 1000 files:base": true,
+        "stats:create 1000 files:computerd": true,
+        "stats:find tree:base": true,
+        "stats:find tree:computerd": true,
+        "stats:git init + commit 100 files:base": true,
+        "stats:git init + commit 100 files:computerd": true,
+        "stats:mkdir tree (10x10x10):base": true,
+        "stats:mkdir tree (10x10x10):computerd": true,
+        "stats:overwrite 64 MiB:base": true,
+        "stats:overwrite 64 MiB:computerd": true,
+        "stats:pure copy 64 MiB:base": true,
+        "stats:pure copy 64 MiB:computerd": true,
+        "stats:pure read 64 MiB:base": true,
+        "stats:pure read 64 MiB:computerd": true,
+        "stats:read 64 MiB:base": true,
+        "stats:read 64 MiB:computerd": true,
+        "stats:rm 1000 files:base": true,
+        "stats:rm 1000 files:computerd": true,
+        "stats:stat 1000 files:base": true,
+        "stats:stat 1000 files:computerd": true,
+        "stats:write 64 MiB:base": true,
+        "stats:write 64 MiB:computerd": true,
+        "unique": true
+      },
+      "rows": [
+        {
+          "base_ns": 8415500,
+          "budget_ns": 300000000,
+          "budget_pass": false,
+          "layerfs_ns": 368228042,
+          "ratio": 43.755931554868994,
+          "scenario": "create 1000 files"
+        },
+        {
+          "base_ns": 487951292,
+          "budget_ns": 900000000,
+          "budget_pass": false,
+          "layerfs_ns": 920269334,
+          "ratio": 1.8859860586248842,
+          "scenario": "stat 1000 files"
+        },
+        {
+          "base_ns": 10579208,
+          "budget_ns": 400000000,
+          "budget_pass": false,
+          "layerfs_ns": 574794166,
+          "ratio": 54.332438307291056,
+          "scenario": "rm 1000 files"
+        },
+        {
+          "base_ns": 424442042,
+          "budget_ns": 850000000,
+          "budget_pass": false,
+          "layerfs_ns": 946320543,
+          "ratio": 2.2295636373363785,
+          "scenario": "mkdir tree (10x10x10)"
+        },
+        {
+          "base_ns": 423566875,
+          "budget_ns": 950000000,
+          "budget_pass": false,
+          "layerfs_ns": 993335293,
+          "ratio": 2.3451675558906726,
+          "scenario": "find tree"
+        },
+        {
+          "base_ns": 21388000,
+          "budget_ns": 80000000,
+          "budget_pass": true,
+          "layerfs_ns": 34891583,
+          "ratio": 1.631362586497101,
+          "scenario": "write 64 MiB"
+        },
+        {
+          "base_ns": 34600875,
+          "budget_ns": 250000000,
+          "budget_pass": true,
+          "layerfs_ns": 120845916,
+          "ratio": 3.4925682081739264,
+          "scenario": "copy 64 MiB"
+        },
+        {
+          "base_ns": 28498625,
+          "budget_ns": 130000000,
+          "budget_pass": true,
+          "layerfs_ns": 50197917,
+          "ratio": 1.7614154016202537,
+          "scenario": "read 64 MiB"
+        },
+        {
+          "base_ns": 7472834,
+          "budget_ns": 55000000,
+          "budget_pass": true,
+          "layerfs_ns": 19101458,
+          "ratio": 2.5561196729380047,
+          "scenario": "pure read 64 MiB"
+        },
+        {
+          "base_ns": 12236708,
+          "budget_ns": 180000000,
+          "budget_pass": true,
+          "layerfs_ns": 85269792,
+          "ratio": 6.96836044465554,
+          "scenario": "pure copy 64 MiB"
+        },
+        {
+          "base_ns": 21606500,
+          "budget_ns": 100000000,
+          "budget_pass": true,
+          "layerfs_ns": 33095750,
+          "ratio": 1.5317497049498994,
+          "scenario": "overwrite 64 MiB"
+        },
+        {
+          "base_ns": 8664583,
+          "budget_ns": 300000000,
+          "budget_pass": false,
+          "layerfs_ns": 434993876,
+          "ratio": 50.20367119802534,
+          "scenario": "git init + commit 100 files"
+        }
+      ],
+      "status": "PASS"
+    },
+    "var_tmp": {
+      "aggregates": {
+        "G": 4.369992085994666,
+        "Rsum": 2.9236610929661144,
+        "SB_ns": 1580862167,
+        "SL_ns": 4621905211,
+        "Spread": 1.0
+      },
+      "checks": {
+        "matrix": true,
+        "rows": true,
+        "stats:copy 64 MiB:base": true,
+        "stats:copy 64 MiB:computerd": true,
+        "stats:create 1000 files:base": true,
+        "stats:create 1000 files:computerd": true,
+        "stats:find tree:base": true,
+        "stats:find tree:computerd": true,
+        "stats:git init + commit 100 files:base": true,
+        "stats:git init + commit 100 files:computerd": true,
+        "stats:mkdir tree (10x10x10):base": true,
+        "stats:mkdir tree (10x10x10):computerd": true,
+        "stats:overwrite 64 MiB:base": true,
+        "stats:overwrite 64 MiB:computerd": true,
+        "stats:pure copy 64 MiB:base": true,
+        "stats:pure copy 64 MiB:computerd": true,
+        "stats:pure read 64 MiB:base": true,
+        "stats:pure read 64 MiB:computerd": true,
+        "stats:read 64 MiB:base": true,
+        "stats:read 64 MiB:computerd": true,
+        "stats:rm 1000 files:base": true,
+        "stats:rm 1000 files:computerd": true,
+        "stats:stat 1000 files:base": true,
+        "stats:stat 1000 files:computerd": true,
+        "stats:write 64 MiB:base": true,
+        "stats:write 64 MiB:computerd": true,
+        "unique": true
+      },
+      "rows": [
+        {
+          "base_ns": 19380375,
+          "budget_ns": 300000000,
+          "budget_pass": false,
+          "layerfs_ns": 325975417,
+          "ratio": 16.819871493714647,
+          "scenario": "create 1000 files"
+        },
+        {
+          "base_ns": 527198333,
+          "budget_ns": 900000000,
+          "budget_pass": false,
+          "layerfs_ns": 940978459,
+          "ratio": 1.7848661501742646,
+          "scenario": "stat 1000 files"
+        },
+        {
+          "base_ns": 26096167,
+          "budget_ns": 400000000,
+          "budget_pass": false,
+          "layerfs_ns": 606265292,
+          "ratio": 23.231967054778583,
+          "scenario": "rm 1000 files"
+        },
+        {
+          "base_ns": 441364875,
+          "budget_ns": 850000000,
+          "budget_pass": false,
+          "layerfs_ns": 902569501,
+          "ratio": 2.044950905982267,
+          "scenario": "mkdir tree (10x10x10)"
+        },
+        {
+          "base_ns": 433639500,
+          "budget_ns": 950000000,
+          "budget_pass": false,
+          "layerfs_ns": 1060677084,
+          "ratio": 2.4459881629786953,
+          "scenario": "find tree"
+        },
+        {
+          "base_ns": 16451042,
+          "budget_ns": 80000000,
+          "budget_pass": true,
+          "layerfs_ns": 32128750,
+          "ratio": 1.95299179225243,
+          "scenario": "write 64 MiB"
+        },
+        {
+          "base_ns": 30200584,
+          "budget_ns": 250000000,
+          "budget_pass": true,
+          "layerfs_ns": 118004583,
+          "ratio": 3.907360963615803,
+          "scenario": "copy 64 MiB"
+        },
+        {
+          "base_ns": 22998875,
+          "budget_ns": 130000000,
+          "budget_pass": true,
+          "layerfs_ns": 54730417,
+          "ratio": 2.3796997461832374,
+          "scenario": "read 64 MiB"
+        },
+        {
+          "base_ns": 7333417,
+          "budget_ns": 55000000,
+          "budget_pass": true,
+          "layerfs_ns": 18479208,
+          "ratio": 2.519863250651095,
+          "scenario": "pure read 64 MiB"
+        },
+        {
+          "base_ns": 13437916,
+          "budget_ns": 180000000,
+          "budget_pass": true,
+          "layerfs_ns": 91829041,
+          "ratio": 6.833577542827325,
+          "scenario": "pure copy 64 MiB"
+        },
+        {
+          "base_ns": 10265875,
+          "budget_ns": 100000000,
+          "budget_pass": true,
+          "layerfs_ns": 33997334,
+          "ratio": 3.311684001607267,
+          "scenario": "overwrite 64 MiB"
+        },
+        {
+          "base_ns": 32495208,
+          "budget_ns": 300000000,
+          "budget_pass": false,
+          "layerfs_ns": 436270125,
+          "ratio": 13.425675718093572,
+          "scenario": "git init + commit 100 files"
+        }
+      ],
+      "status": "PASS"
+    }
+  },
+  "schema": "layerfs-stage2-readiness-n1-v1"
+}

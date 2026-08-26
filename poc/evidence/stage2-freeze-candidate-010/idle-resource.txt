@@ -1,0 +1,10 @@
+pid=7
+clock_ticks_per_second=100
+before_ticks=0
+after_ticks=0
+wall_before_ns=1787700645732877513
+wall_after_ns=1787700655744945503
+fd_baseline=7
+threads_baseline=3
+rss_baseline_kb=4632
+vmhwm_baseline_kb=4632

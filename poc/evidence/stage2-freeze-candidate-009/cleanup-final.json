@@ -1,0 +1,11 @@
+{
+  "captured_unix_ns": 1787696912647824000,
+  "intermediate_images": [],
+  "owned_containers": [],
+  "owned_volumes": [],
+  "remaining_frozen_image": [
+    "layerfs-fuse:frozen-9d4fc28cc9b6 4248624c9039"
+  ],
+  "schema": "layerfs-stage2-final-host-cleanup-v1",
+  "status": "PASS"
+}
