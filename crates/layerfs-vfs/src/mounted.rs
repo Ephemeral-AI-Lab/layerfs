@@ -89,6 +89,14 @@ pub struct MountedAttr {
     pub links: u32,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MountedCapacity {
+    pub total_bytes: u64,
+    pub free_bytes: u64,
+    pub total_files: u64,
+    pub free_files: u64,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MountedDirEntry {
     pub node: MountedNodeId,
@@ -828,6 +836,23 @@ impl MountedWorkspace {
     pub fn counters(&mut self) -> Result<MountedCounters, MountedError> {
         self.observe_resources()?;
         Ok(self.counters)
+    }
+
+    pub fn capacity(&self) -> Result<MountedCapacity, MountedError> {
+        self.require_live_or_incomplete_read()?;
+        let free_bytes = MAX_LOGICAL_WORKSPACE_BYTES
+            .saturating_sub(self.logical_workspace_bytes)
+            .min(MAX_LIVE_SPOOL_BYTES.saturating_sub(self.spool.live));
+        let free_files = MAX_MOUNTED_NODES
+            .saturating_sub(self.nodes.len())
+            .min(MAX_DIRTY_NODES.saturating_sub(self.dirty_nodes.len()))
+            .min(MAX_DIRECTORY_CHANGES.saturating_sub(self.directory_changes));
+        Ok(MountedCapacity {
+            total_bytes: MAX_LOGICAL_WORKSPACE_BYTES,
+            free_bytes,
+            total_files: MAX_MOUNTED_NODES as u64,
+            free_files: free_files as u64,
+        })
     }
 
     pub fn engine_counters(&self) -> Result<EngineCounters, MountedError> {
@@ -4525,6 +4550,44 @@ mod tests {
         assert_eq!(mounted.getattr(second.node).unwrap().size, 0);
         mounted.truncate(file.node, 4).unwrap();
         mounted.unlink(ROOT_NODE, b"workspace-limit").unwrap();
+
+        mounted.shutdown().unwrap();
+        drop(mounted);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn capacity_tracks_logical_spool_node_and_dirty_limits() {
+        let (store, spool, directory) = paths("capacity");
+        let mut mounted = MountedWorkspace::open(
+            &store,
+            "main",
+            IntegrityMode::TrustedLocalDev,
+            spool,
+            [0x9d; 32],
+        )
+        .unwrap();
+        let initial = mounted.capacity().unwrap();
+        assert_eq!(initial.total_bytes, MAX_LOGICAL_WORKSPACE_BYTES);
+        assert_eq!(initial.free_bytes, MAX_LIVE_SPOOL_BYTES);
+        assert_eq!(initial.total_files, MAX_MOUNTED_NODES as u64);
+        assert_eq!(initial.free_files, MAX_DIRTY_NODES as u64);
+
+        mounted.logical_workspace_bytes = MAX_LOGICAL_WORKSPACE_BYTES;
+        assert_eq!(mounted.capacity().unwrap().free_bytes, 0);
+        mounted.logical_workspace_bytes = 0;
+        mounted.spool.live = MAX_LIVE_SPOOL_BYTES;
+        assert_eq!(mounted.capacity().unwrap().free_bytes, 0);
+        mounted.spool.live = 0;
+
+        mounted
+            .dirty_nodes
+            .extend((0..MAX_DIRTY_NODES).map(|index| MountedNodeId(u64::MAX - index as u64)));
+        assert_eq!(mounted.capacity().unwrap().free_files, 0);
+        mounted.dirty_nodes.clear();
+        mounted.directory_changes = MAX_DIRECTORY_CHANGES;
+        assert_eq!(mounted.capacity().unwrap().free_files, 0);
+        mounted.directory_changes = 0;
 
         mounted.shutdown().unwrap();
         drop(mounted);

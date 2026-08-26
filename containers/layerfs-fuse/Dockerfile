@@ -1,13 +1,20 @@
 FROM --platform=$BUILDPLATFORM rust:1.85.1-bookworm AS build
 
 ARG TARGETARCH
+ARG LAYERFS_SOURCE_COMMIT
+ARG LAYERFS_SOURCE_TREE
+ENV LAYERFS_SOURCE_COMMIT="$LAYERFS_SOURCE_COMMIT" \
+    LAYERFS_SOURCE_TREE="$LAYERFS_SOURCE_TREE"
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY tools ./tools
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    case "$TARGETARCH" in \
+    test "${#LAYERFS_SOURCE_COMMIT}" -eq 40 \
+ && test "${#LAYERFS_SOURCE_TREE}" -eq 40 \
+ && case "$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE" in *[!0-9a-f]*) exit 1 ;; esac \
+ && case "$TARGETARCH" in \
       arm64) rustup target add aarch64-unknown-linux-gnu; target=aarch64-unknown-linux-gnu ;; \
       amd64) rustup target add x86_64-unknown-linux-gnu; target=x86_64-unknown-linux-gnu ;; \
       *) exit 1 ;; \
@@ -20,8 +27,16 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 FROM rust:1.85.1-bookworm
 
-LABEL org.opencontainers.image.layerfs.fs-bench-sha256="0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
-ENV LAYERFS_FS_BENCH_SHA256="0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
+ARG LAYERFS_SOURCE_COMMIT
+ARG LAYERFS_SOURCE_TREE
+LABEL org.opencontainers.image.source="https://github.com/Ephemeral-AI-Lab/layerfs-engine-lab" \
+      org.opencontainers.image.revision="$LAYERFS_SOURCE_COMMIT" \
+      org.opencontainers.image.layerfs.source-commit="$LAYERFS_SOURCE_COMMIT" \
+      org.opencontainers.image.layerfs.source-tree="$LAYERFS_SOURCE_TREE" \
+      org.opencontainers.image.layerfs.fs-bench-sha256="0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
+ENV LAYERFS_SOURCE_COMMIT="$LAYERFS_SOURCE_COMMIT" \
+    LAYERFS_SOURCE_TREE="$LAYERFS_SOURCE_TREE" \
+    LAYERFS_FS_BENCH_SHA256="0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
 
 COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
 COPY containers/layerfs-fuse/fs-bench.sh /usr/local/bin/fs-bench.sh

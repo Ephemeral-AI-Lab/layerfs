@@ -8,6 +8,48 @@ struct ValidatedPaths {
 }
 
 #[cfg(any(target_os = "linux", test))]
+const SOURCE_COMMIT: &str = match option_env!("LAYERFS_SOURCE_COMMIT") {
+    Some(value) => value,
+    None => "UNBOUND",
+};
+#[cfg(any(target_os = "linux", test))]
+const SOURCE_TREE: &str = match option_env!("LAYERFS_SOURCE_TREE") {
+    Some(value) => value,
+    None => "UNBOUND",
+};
+
+#[cfg(any(target_os = "linux", test))]
+fn required_integrity(
+    arguments: &std::collections::HashMap<String, String>,
+) -> Result<layerfs_vfs::IntegrityMode, Box<dyn std::error::Error>> {
+    match arguments.get("integrity").map(String::as_str) {
+        Some("trusted") => Ok(layerfs_vfs::IntegrityMode::TrustedLocalDev),
+        Some("verified") => Ok(layerfs_vfs::IntegrityMode::Verified),
+        Some(value) => Err(format!("unsupported integrity mode {value}").into()),
+        None => Err("missing --integrity".into()),
+    }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn source_identity(
+    allow_unbound: bool,
+    commit: &'static str,
+    tree: &'static str,
+) -> Result<(&'static str, &'static str), Box<dyn std::error::Error>> {
+    let valid = |value: &str| {
+        value.len() == 40
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    };
+    if valid(commit) && valid(tree) || allow_unbound && commit == "UNBOUND" && tree == "UNBOUND" {
+        Ok((commit, tree))
+    } else {
+        Err("invalid embedded LayerFS source identity".into())
+    }
+}
+
+#[cfg(any(target_os = "linux", test))]
 fn prepare_paths(
     store: &std::path::Path,
     mount: &std::path::Path,
@@ -87,7 +129,7 @@ fn same_existing_file(
 #[cfg(target_os = "linux")]
 mod linux {
     use fuser::{Config, INodeNo, MountOption};
-    use layerfs_fuse::{LayerFuse, FS_BENCH_SHA256};
+    use layerfs_fuse::{LayerFuse, LayerFuseEvent, SessionEndNotifier, FS_BENCH_SHA256};
     use layerfs_vfs::mounted::{
         ByteBudget, MountedLifecycle, MountedSpliceReceipt, MountedWorkspace, MAX_REQUEST_BYTES,
     };
@@ -114,6 +156,14 @@ mod linux {
         replacement: Vec<u8>,
     }
 
+    struct SessionEndGuard(SessionEndNotifier);
+
+    impl Drop for SessionEndGuard {
+        fn drop(&mut self) {
+            self.0.notify();
+        }
+    }
+
     const CONTROL_DECODE_Q_BYTES: usize = 2 * MAX_REQUEST_BYTES;
     const CONTROL_HEX_CHUNK_BYTES: usize = 64 * 1024;
     const CONTROL_PATH_BYTES: usize = 4096;
@@ -127,6 +177,12 @@ mod linux {
 
     fn run() -> Result<(), Box<dyn std::error::Error>> {
         let arguments = parse_arguments()?;
+        let integrity = super::required_integrity(&arguments)?;
+        let (source_commit, source_tree) = super::source_identity(
+            cfg!(debug_assertions),
+            super::SOURCE_COMMIT,
+            super::SOURCE_TREE,
+        )?;
         let store = required_path(&arguments, "store")?;
         let mount = required_path(&arguments, "mount")?;
         let spool = required_path(&arguments, "spool")?;
@@ -140,11 +196,6 @@ mod linux {
             receipt,
         } = paths;
         let ref_name = arguments.get("ref").map_or("main", String::as_str);
-        let integrity = match arguments.get("integrity").map(String::as_str) {
-            None | Some("trusted") => IntegrityMode::TrustedLocalDev,
-            Some("verified") => IntegrityMode::Verified,
-            Some(value) => return Err(format!("unsupported integrity mode {value}").into()),
-        };
         let uid = number(&arguments, "uid", 0)?;
         let gid = number(&arguments, "gid", 0)?;
         let executable = std::env::current_exe()?;
@@ -170,8 +221,13 @@ mod linux {
         ];
         config.n_threads = Some(4);
         config.clone_fd = true;
-        let session = fuser::spawn_mount(fuse, &mount, &config)?;
+        let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
+        fuse.set_lifecycle_sender(stop_sender.clone())
+            .map_err(|_| "FUSE lifecycle sender initialized twice")?;
+        let session_end = fuse.session_end_notifier();
+        let mut session = fuser::Session::new(fuse, &mount, &config)?;
         let notifier = session.notifier();
+        let mut unmounter = session.unmount_callable();
         notifier_slot
             .set(notifier.clone())
             .map_err(|_| "FUSE notifier initialized twice")?;
@@ -199,40 +255,55 @@ mod linux {
             return Err("FUSE invalidation admission failed".into());
         }
         println!(
-            "{{\"backend\":\"layerfs-fuse\",\"mount\":\"{}\",\"integrity\":\"{}\",\"fs_bench_sha256\":\"{}\"}}",
+            "{{\"backend\":\"layerfs-fuse\",\"mount\":\"{}\",\"integrity\":\"{}\",\"source_commit\":\"{}\",\"source_tree\":\"{}\",\"fs_bench_sha256\":\"{}\"}}",
             json(mount.to_string_lossy().as_ref()),
             match integrity {
                 IntegrityMode::Verified => "Verified",
                 IntegrityMode::TrustedLocalDev => "TrustedLocalDev",
             },
+            json(source_commit),
+            json(source_tree),
             FS_BENCH_SHA256,
         );
         std::io::stdout().flush()?;
         let mut signals = Signals::new([SIGTERM, SIGINT, SIGHUP])?;
-        let signal = signals.forever().next().ok_or("signal iterator ended")?;
-        let lifecycle_error = match (signal, control.as_ref()) {
-            (SIGHUP, Some(control)) => {
-                execute_splice_control(&shared_workspace, &byte_budget, control).err()
+        let signal_handle = signals.handle();
+        let session_thread = std::thread::spawn(move || {
+            let _session_end = SessionEndGuard(session_end);
+            session.run()
+        });
+        let signal_thread = std::thread::spawn(move || {
+            if let Some(signal) = signals.forever().next() {
+                let _ = stop_sender.send(LayerFuseEvent::Signal(signal));
             }
-            _ => {
-                let shutdown = byte_budget
-                    .pause_and_wait()
-                    .map_err(|error| error.to_string())
-                    .and_then(|()| {
-                        shared_workspace
-                            .lock()
-                            .map_err(|_| "workspace lock poisoned".to_owned())?
-                            .shutdown()
-                            .map(|_| ())
-                            .map_err(|error| error.to_string())
-                    });
-                let close = byte_budget
-                    .close_and_wait()
-                    .map_err(|error| error.to_string());
-                shutdown.and(close).err()
+        });
+        let stop = stop_receiver.recv().map_err(|_| "stop channel closed")?;
+        signal_handle.close();
+        let signal_thread_error = signal_thread
+            .join()
+            .err()
+            .map(|_| "signal thread panicked".to_owned());
+        let (signal, lifecycle_error, unmount_error) = match stop {
+            LayerFuseEvent::Signal(signal) => {
+                let lifecycle_error = match (signal, control.as_ref()) {
+                    (SIGHUP, Some(control)) => {
+                        execute_splice_control(&shared_workspace, &byte_budget, control).err()
+                    }
+                    _ => shutdown_workspace(&shared_workspace, &byte_budget).err(),
+                };
+                let unmount_error = unmounter.unmount().map_err(|error| error.to_string()).err();
+                (signal, lifecycle_error, unmount_error)
             }
+            LayerFuseEvent::SessionEnded => (
+                0,
+                shutdown_workspace(&shared_workspace, &byte_budget).err(),
+                None,
+            ),
         };
-        drop(session);
+        let session_error = match session_thread.join() {
+            Ok(result) => result.map_err(|error| error.to_string()).err(),
+            Err(_) => Some("FUSE session thread panicked".to_owned()),
+        };
         drop(notifier_slot);
         let fuse = *shared_fuse_counters
             .lock()
@@ -257,7 +328,11 @@ mod linux {
         workspace.close_store_connection()?;
         let connections_terminal = workspace.active_store_connections()?;
         drop(workspace);
-        let terminal_error = lifecycle_error.or(cleanup_error);
+        let terminal_error = lifecycle_error
+            .or(unmount_error)
+            .or(session_error)
+            .or(signal_thread_error)
+            .or(cleanup_error);
         let status = if terminal_error.is_none() {
             "PASS"
         } else {
@@ -275,8 +350,10 @@ mod linux {
             "  \"generation\": {},\n",
             "  \"root\": \"{}\",\n",
             "  \"executable_blake3\": \"{}\",\n",
+            "  \"source_commit\": \"{}\",\n",
+            "  \"source_tree\": \"{}\",\n",
             "  \"fs_bench_sha256\": \"{}\",\n",
-            "  \"callbacks\": {{\"lookup\":{},\"getattr\":{},\"create\":{},\"read\":{},\"write\":{},\"flush\":{},\"release\":{},\"fsync\":{},\"fsyncdir\":{},\"readdir\":{},\"mount_lock_wait_ns\":{},\"invalidations_requested\":{},\"invalidations_succeeded\":{},\"invalidations_failed\":{},\"invalidations_unsupported\":{}}},\n",
+            "  \"callbacks\": {{\"lookup\":{},\"getattr\":{},\"create\":{},\"read\":{},\"write\":{},\"flush\":{},\"release\":{},\"fsync\":{},\"fsyncdir\":{},\"readdir\":{},\"callback_wall_ns\":{},\"mount_lock_wait_ns\":{},\"invalidations_requested\":{},\"invalidations_succeeded\":{},\"invalidations_failed\":{},\"invalidations_unsupported\":{}}},\n",
             "  \"mounted\": {{\"checkpoints\":{},\"no_op_checkpoints\":{},\"created_then_deleted\":{},\"splices\":{},\"lookup_refs\":{},\"lookup_refs_high_water\":{},\"live_nodes\":{},\"live_nodes_high_water\":{},\"open_handles\":{},\"open_handles_high_water\":{},\"pending_nodes\":{},\"pending_nodes_high_water\":{},\"dirty_nodes\":{},\"dirty_nodes_high_water\":{},\"dirty_ranges\":{},\"dirty_ranges_high_water\":{},\"directory_cursors\":{},\"directory_changes\":{},\"directory_changes_high_water\":{},\"inode_mappings\":{},\"inode_mappings_high_water\":{},\"logical_workspace_bytes\":{},\"logical_workspace_high_water_bytes\":{},\"spool_appended_bytes\":{},\"spool_live_bytes\":{},\"spool_live_high_water_bytes\":{},\"spool_dead_bytes\":{},\"spool_physical_bytes\":{},\"spool_physical_high_water_bytes\":{},\"spool_resets\":{},\"spool_compactions\":{},\"largest_request_bytes\":{},\"operation_q_terminal_bytes\":{},\"operation_q_high_water_bytes\":{},\"materializations\":{},\"capture_scans\":{}}},\n",
             "  \"engine\": {{\"transactions_started\":{},\"transactions_committed\":{},\"transactions_rolled_back\":{},\"publication_commits\":{},\"objects_created\":{},\"objects_reused\":{},\"object_bytes_read\":{},\"object_bytes_written\":{},\"statements\":{},\"fetched_rows\":{},\"busy_events\":{},\"locked_events\":{},\"connection_mutex_wait_ns\":{},\"connections_high_water\":{},\"connections_before_drop\":{},\"connections_terminal\":{}}}\n",
             "}}\n"
@@ -291,6 +368,8 @@ mod linux {
         accepted.generation,
         accepted.root,
         hex(&executable_hash),
+        json(source_commit),
+        json(source_tree),
         FS_BENCH_SHA256,
         fuse.lookup,
         fuse.getattr,
@@ -302,6 +381,7 @@ mod linux {
         fuse.fsync,
         fuse.fsyncdir,
         fuse.readdir,
+        fuse.callback_wall_ns,
         fuse.mount_lock_wait_ns,
         fuse.invalidations_requested,
         fuse.invalidations_succeeded,
@@ -417,6 +497,25 @@ mod linux {
             return Err("control request and receipt must be distinct".into());
         }
         Ok(Some(ControlPaths { request, receipt }))
+    }
+
+    fn shutdown_workspace(
+        workspace: &std::sync::Arc<std::sync::Mutex<MountedWorkspace>>,
+        budget: &std::sync::Arc<ByteBudget>,
+    ) -> Result<(), String> {
+        let shutdown = budget
+            .pause_and_wait()
+            .map_err(|error| error.to_string())
+            .and_then(|()| {
+                workspace
+                    .lock()
+                    .map_err(|_| "workspace lock poisoned".to_owned())?
+                    .shutdown()
+                    .map(|_| ())
+                    .map_err(|error| error.to_string())
+            });
+        let close = budget.close_and_wait().map_err(|error| error.to_string());
+        shutdown.and(close)
     }
 
     fn execute_splice_control(
@@ -679,7 +778,7 @@ mod linux {
     }
 
     fn usage() -> String {
-        "usage: layerfs-fuse --store PATH --mount PATH --spool PATH --receipt PATH [--ref main] [--integrity trusted|verified] [--uid N] [--gid N] [--control-request PATH --control-receipt PATH]".to_owned()
+        "usage: layerfs-fuse --store PATH --mount PATH --spool PATH --receipt PATH --integrity trusted|verified [--ref main] [--uid N] [--gid N] [--control-request PATH --control-receipt PATH]".to_owned()
     }
 
     fn required_path(
@@ -736,6 +835,42 @@ mod linux {
         use super::*;
 
         #[test]
+        fn lifecycle_coordinator_checkpoints_dirty_workspace_once() {
+            let root = std::env::temp_dir().join(format!(
+                "layerfs-lifecycle-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            std::fs::create_dir(&root).unwrap();
+            let mut workspace = MountedWorkspace::open(
+                &root.join("store.sqlite"),
+                "main",
+                IntegrityMode::TrustedLocalDev,
+                root.join("spool"),
+                [0xb1; 32],
+            )
+            .unwrap();
+            let (file, handle) = workspace
+                .create_file(layerfs_vfs::mounted::ROOT_NODE, b"dirty", 0o644)
+                .unwrap();
+            workspace.write(file.node, handle, 0, b"data").unwrap();
+            workspace.release(handle).unwrap();
+            let workspace = std::sync::Arc::new(std::sync::Mutex::new(workspace));
+            let budget = workspace.lock().unwrap().byte_budget();
+            shutdown_workspace(&workspace, &budget).unwrap();
+            let mut terminal = workspace.lock().unwrap();
+            assert_eq!(terminal.lifecycle(), MountedLifecycle::Closed);
+            assert_eq!(terminal.counters().unwrap().checkpoints, 1);
+            terminal.close_store_connection().unwrap();
+            drop(terminal);
+            drop(workspace);
+            std::fs::remove_dir_all(root).unwrap();
+        }
+
+        #[test]
         fn splice_control_request_is_bounded_and_exact() {
             let root = std::env::temp_dir().join(format!(
                 "layerfs-splice-control-{}-{}",
@@ -789,6 +924,35 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integrity_is_explicit_and_validated() {
+        let mut arguments = std::collections::HashMap::new();
+        assert!(required_integrity(&arguments).is_err());
+        arguments.insert("integrity".to_owned(), "trusted".to_owned());
+        assert_eq!(
+            required_integrity(&arguments).unwrap(),
+            layerfs_vfs::IntegrityMode::TrustedLocalDev
+        );
+        arguments.insert("integrity".to_owned(), "verified".to_owned());
+        assert_eq!(
+            required_integrity(&arguments).unwrap(),
+            layerfs_vfs::IntegrityMode::Verified
+        );
+        arguments.insert("integrity".to_owned(), "other".to_owned());
+        assert!(required_integrity(&arguments).is_err());
+    }
+
+    #[test]
+    fn release_source_identity_must_be_a_complete_bound_pair() {
+        let oid = "0123456789abcdef0123456789abcdef01234567";
+        assert!(source_identity(true, SOURCE_COMMIT, SOURCE_TREE).is_ok());
+        assert_eq!(source_identity(false, oid, oid).unwrap(), (oid, oid));
+        assert!(source_identity(false, "UNBOUND", "UNBOUND").is_err());
+        assert!(source_identity(true, "UNBOUND", "UNBOUND").is_ok());
+        assert!(source_identity(true, oid, "UNBOUND").is_err());
+        assert!(source_identity(true, "0123", oid).is_err());
+    }
 
     #[test]
     fn store_spool_and_receipt_are_distinct_and_outside_mount() {

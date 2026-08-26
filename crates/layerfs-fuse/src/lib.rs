@@ -8,11 +8,13 @@ use fuser::{
 };
 use layerfs_vfs::mounted::{
     ByteBudget, MountedAttr, MountedError, MountedFileType, MountedHandleId, MountedNodeId,
-    MountedWorkspace, MAX_REQUEST_BYTES, ROOT_NODE, SPOOL_QUOTA_BYTES,
+    MountedWorkspace, MAX_REQUEST_BYTES, ROOT_NODE,
 };
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -22,6 +24,28 @@ const O_DSYNC: i32 = 0o10000;
 const O_SYNC: i32 = 0o4010000;
 pub const FS_BENCH_SHA256: &str =
     "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LayerFuseEvent {
+    Signal(i32),
+    SessionEnded,
+}
+
+#[derive(Clone)]
+pub struct SessionEndNotifier {
+    sender: Arc<OnceLock<Sender<LayerFuseEvent>>>,
+    sent: Arc<AtomicBool>,
+}
+
+impl SessionEndNotifier {
+    pub fn notify(&self) {
+        if let Some(sender) = self.sender.get() {
+            if !self.sent.swap(true, Ordering::AcqRel) {
+                let _ = sender.send(LayerFuseEvent::SessionEnded);
+            }
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct FuseCounters {
@@ -52,6 +76,7 @@ pub struct FuseCounters {
     pub statfs: u64,
     pub access: u64,
     pub create: u64,
+    pub callback_wall_ns: u64,
     pub mount_lock_wait_ns: u64,
     pub invalidations_requested: u64,
     pub invalidations_succeeded: u64,
@@ -64,6 +89,7 @@ pub struct LayerFuse {
     budget: Arc<ByteBudget>,
     counters: Arc<Mutex<FuseCounters>>,
     notifier: Arc<OnceLock<Notifier>>,
+    session_end: SessionEndNotifier,
     uid: u32,
     gid: u32,
 }
@@ -76,6 +102,10 @@ impl LayerFuse {
             budget,
             counters: Arc::new(Mutex::new(FuseCounters::default())),
             notifier: Arc::new(OnceLock::new()),
+            session_end: SessionEndNotifier {
+                sender: Arc::new(OnceLock::new()),
+                sent: Arc::new(AtomicBool::new(false)),
+            },
             uid,
             gid,
         }
@@ -95,6 +125,24 @@ impl LayerFuse {
 
     pub fn byte_budget(&self) -> Arc<ByteBudget> {
         self.budget.clone()
+    }
+
+    pub fn set_lifecycle_sender(
+        &self,
+        sender: Sender<LayerFuseEvent>,
+    ) -> Result<(), Sender<LayerFuseEvent>> {
+        self.session_end.sender.set(sender)
+    }
+
+    pub fn session_end_notifier(&self) -> SessionEndNotifier {
+        self.session_end.clone()
+    }
+
+    fn callback(&self) -> CallbackTimer<'_> {
+        CallbackTimer {
+            counters: &self.counters,
+            started: Instant::now(),
+        }
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, MountedWorkspace>, fuser::Errno> {
@@ -194,8 +242,24 @@ impl LayerFuse {
     }
 }
 
+struct CallbackTimer<'a> {
+    counters: &'a Mutex<FuseCounters>,
+    started: Instant,
+}
+
+impl Drop for CallbackTimer<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut counters) = self.counters.lock() {
+            counters.callback_wall_ns = counters
+                .callback_wall_ns
+                .saturating_add(self.started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64);
+        }
+    }
+}
+
 impl Filesystem for LayerFuse {
     fn init(&mut self, _request: &Request, config: &mut KernelConfig) -> std::io::Result<()> {
+        let _callback = self.callback();
         self.count(|counters| counters.init += 1);
         config
             .set_max_write(MAX_REQUEST_BYTES as u32)
@@ -213,13 +277,13 @@ impl Filesystem for LayerFuse {
     }
 
     fn destroy(&mut self) {
+        let _callback = self.callback();
         self.count(|counters| counters.destroy += 1);
-        if let Ok(mut workspace) = self.workspace.lock() {
-            let _ = workspace.shutdown();
-        }
+        self.session_end.notify();
     }
 
     fn lookup(&self, _request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
+        let _callback = self.callback();
         self.count(|counters| counters.lookup += 1);
         let result = self
             .lock()
@@ -236,6 +300,7 @@ impl Filesystem for LayerFuse {
     }
 
     fn forget(&self, _request: &Request, ino: INodeNo, nlookup: u64) {
+        let _callback = self.callback();
         self.count(|counters| counters.forget += 1);
         if let Ok(mut workspace) = self.workspace.lock() {
             workspace.forget(MountedNodeId(ino.0), nlookup);
@@ -249,6 +314,7 @@ impl Filesystem for LayerFuse {
         _handle: Option<FileHandle>,
         reply: ReplyAttr,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.getattr += 1);
         match self
             .lock()
@@ -278,6 +344,7 @@ impl Filesystem for LayerFuse {
         flags: Option<BsdFileFlags>,
         reply: ReplyAttr,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.setattr += 1);
         if uid.is_some() || gid.is_some() || flags.is_some() {
             reply.error(fuser::Errno::EOPNOTSUPP);
@@ -310,6 +377,7 @@ impl Filesystem for LayerFuse {
     }
 
     fn readlink(&self, _request: &Request, ino: INodeNo, reply: ReplyData) {
+        let _callback = self.callback();
         self.count(|counters| counters.readlink += 1);
         match self
             .lock()
@@ -330,6 +398,7 @@ impl Filesystem for LayerFuse {
         rdev: u32,
         reply: ReplyEntry,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.mknod += 1);
         if rdev != 0 || mode & 0o170000 != 0o100000 {
             reply.error(fuser::Errno::EOPNOTSUPP);
@@ -355,6 +424,7 @@ impl Filesystem for LayerFuse {
         umask: u32,
         reply: ReplyEntry,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.mkdir += 1);
         let result = self.lock().and_then(|mut workspace| {
             workspace
@@ -368,6 +438,7 @@ impl Filesystem for LayerFuse {
     }
 
     fn unlink(&self, _request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        let _callback = self.callback();
         self.count(|counters| counters.unlink += 1);
         let result = self.lock().and_then(|mut workspace| {
             workspace
@@ -381,6 +452,7 @@ impl Filesystem for LayerFuse {
     }
 
     fn rmdir(&self, _request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        let _callback = self.callback();
         self.count(|counters| counters.rmdir += 1);
         let result = self.lock().and_then(|mut workspace| {
             workspace
@@ -401,6 +473,7 @@ impl Filesystem for LayerFuse {
         target: &Path,
         reply: ReplyEntry,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.symlink += 1);
         let result = self.lock().and_then(|mut workspace| {
             workspace
@@ -427,6 +500,7 @@ impl Filesystem for LayerFuse {
         flags: RenameFlags,
         reply: ReplyEmpty,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.rename += 1);
         if flags.intersects(RenameFlags::RENAME_EXCHANGE | RenameFlags::RENAME_WHITEOUT) {
             reply.error(fuser::Errno::EOPNOTSUPP);
@@ -457,6 +531,7 @@ impl Filesystem for LayerFuse {
         new_name: &OsStr,
         reply: ReplyEntry,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.link += 1);
         let result = self.lock().and_then(|mut workspace| {
             workspace
@@ -474,6 +549,7 @@ impl Filesystem for LayerFuse {
     }
 
     fn open(&self, _request: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
+        let _callback = self.callback();
         self.count(|counters| counters.open += 1);
         if let Err(error) = Self::reject_sync_flags(flags.0) {
             reply.error(error);
@@ -501,6 +577,7 @@ impl Filesystem for LayerFuse {
         _lock_owner: Option<LockOwner>,
         reply: ReplyData,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.read += 1);
         let reservation = match self.budget.reserve(size as usize) {
             Ok(reservation) => reservation,
@@ -539,6 +616,7 @@ impl Filesystem for LayerFuse {
         _lock_owner: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.write += 1);
         if let Err(error) = Self::reject_sync_flags(flags.0) {
             reply.error(error);
@@ -576,6 +654,7 @@ impl Filesystem for LayerFuse {
         _lock_owner: LockOwner,
         reply: ReplyEmpty,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.flush += 1);
         match self
             .lock()
@@ -596,6 +675,7 @@ impl Filesystem for LayerFuse {
         _flush: bool,
         reply: ReplyEmpty,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.release += 1);
         match self
             .lock()
@@ -614,6 +694,7 @@ impl Filesystem for LayerFuse {
         _datasync: bool,
         reply: ReplyEmpty,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.fsync += 1);
         if let Err(error) = self.budget.pause_and_wait() {
             reply.error(errno(error));
@@ -630,6 +711,7 @@ impl Filesystem for LayerFuse {
     }
 
     fn opendir(&self, _request: &Request, ino: INodeNo, _flags: OpenFlags, reply: ReplyOpen) {
+        let _callback = self.callback();
         self.count(|counters| counters.opendir += 1);
         match self.lock().and_then(|mut workspace| {
             workspace
@@ -649,6 +731,7 @@ impl Filesystem for LayerFuse {
         offset: u64,
         mut reply: ReplyDirectory,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.readdir += 1);
         let reservation = match self.budget.reserve(MAX_REQUEST_BYTES) {
             Ok(reservation) => reservation,
@@ -703,6 +786,7 @@ impl Filesystem for LayerFuse {
         _flags: OpenFlags,
         reply: ReplyEmpty,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.releasedir += 1);
         match self
             .lock()
@@ -721,6 +805,7 @@ impl Filesystem for LayerFuse {
         _datasync: bool,
         reply: ReplyEmpty,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.fsyncdir += 1);
         if let Err(error) = self.budget.pause_and_wait() {
             reply.error(errno(error));
@@ -737,12 +822,28 @@ impl Filesystem for LayerFuse {
     }
 
     fn statfs(&self, _request: &Request, _ino: INodeNo, reply: ReplyStatfs) {
+        let _callback = self.callback();
         self.count(|counters| counters.statfs += 1);
-        let blocks = SPOOL_QUOTA_BYTES / 4096;
-        reply.statfs(blocks, blocks, blocks, 65_536, 65_536, 4096, 255, 4096);
+        match self
+            .lock()
+            .and_then(|workspace| workspace.capacity().map_err(errno))
+        {
+            Ok(capacity) => reply.statfs(
+                capacity.total_bytes / 4096,
+                capacity.free_bytes / 4096,
+                capacity.free_bytes / 4096,
+                capacity.total_files,
+                capacity.free_files,
+                4096,
+                255,
+                4096,
+            ),
+            Err(error) => reply.error(error),
+        }
     }
 
     fn access(&self, _request: &Request, ino: INodeNo, _mask: AccessFlags, reply: ReplyEmpty) {
+        let _callback = self.callback();
         self.count(|counters| counters.access += 1);
         match self
             .lock()
@@ -763,6 +864,7 @@ impl Filesystem for LayerFuse {
         flags: i32,
         reply: ReplyCreate,
     ) {
+        let _callback = self.callback();
         self.count(|counters| counters.create += 1);
         if let Err(error) = Self::reject_sync_flags(flags) {
             reply.error(error);
@@ -914,6 +1016,50 @@ mod tests {
             fuse.shared_workspace().lock().unwrap().lifecycle(),
             layerfs_vfs::mounted::MountedLifecycle::Incomplete
         );
+        drop(fuse);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn callback_wall_includes_workspace_lock_wait() {
+        let (fuse, directory) = fuse("callback-wall");
+        {
+            let _callback = fuse.callback();
+            let workspace = fuse.lock().unwrap();
+            drop(workspace);
+        }
+        let counters = *fuse.shared_counters().lock().unwrap();
+        assert!(counters.callback_wall_ns > 0);
+        assert!(counters.mount_lock_wait_ns <= counters.callback_wall_ns);
+        drop(fuse);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn destroy_only_emits_one_session_end_event() {
+        let (mut fuse, directory) = fuse("destroy-event");
+        let workspace = fuse.shared_workspace();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        fuse.set_lifecycle_sender(sender).unwrap();
+        {
+            let mut workspace = workspace.lock().unwrap();
+            let (file, handle) = workspace.create_file(ROOT_NODE, b"dirty", 0o644).unwrap();
+            workspace.write(file.node, handle, 0, b"data").unwrap();
+            workspace.release(handle).unwrap();
+        }
+        Filesystem::destroy(&mut fuse);
+        Filesystem::destroy(&mut fuse);
+        assert_eq!(receiver.recv().unwrap(), LayerFuseEvent::SessionEnded);
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        ));
+        assert_eq!(
+            workspace.lock().unwrap().lifecycle(),
+            layerfs_vfs::mounted::MountedLifecycle::Live
+        );
+        workspace.lock().unwrap().shutdown().unwrap();
+        drop(workspace);
         drop(fuse);
         std::fs::remove_dir_all(directory).unwrap();
     }
