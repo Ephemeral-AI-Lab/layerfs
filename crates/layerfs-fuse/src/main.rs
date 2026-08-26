@@ -88,8 +88,10 @@ fn same_existing_file(
 mod linux {
     use fuser::{Config, INodeNo, MountOption};
     use layerfs_fuse::{LayerFuse, FS_BENCH_SHA256};
-    use layerfs_vfs::mounted::MountedWorkspace;
-    use layerfs_vfs::IntegrityMode;
+    use layerfs_vfs::mounted::{
+        ByteBudget, MountedLifecycle, MountedSpliceReceipt, MountedWorkspace, MAX_REQUEST_BYTES,
+    };
+    use layerfs_vfs::{CanonicalPath, IntegrityMode};
     use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
     use signal_hook::iterator::Signals;
     use std::collections::HashMap;
@@ -98,6 +100,19 @@ mod linux {
     use std::fs::{File, OpenOptions};
     use std::io::{Read, Write};
     use std::path::{Path, PathBuf};
+
+    struct ControlPaths {
+        request: PathBuf,
+        receipt: PathBuf,
+    }
+
+    struct SpliceRequest {
+        path: CanonicalPath,
+        path_text: String,
+        start: u64,
+        delete_len: u64,
+        replacement: Vec<u8>,
+    }
 
     pub fn main() {
         if let Err(error) = run() {
@@ -113,6 +128,7 @@ mod linux {
         let spool = required_path(&arguments, "spool")?;
         let receipt = required_path(&arguments, "receipt")?;
         let paths = super::prepare_paths(&store, &mount, &spool, &receipt)?;
+        let control = control_paths(&arguments, &paths)?;
         let super::ValidatedPaths {
             store,
             mount,
@@ -190,11 +206,23 @@ mod linux {
         std::io::stdout().flush()?;
         let mut signals = Signals::new([SIGTERM, SIGINT, SIGHUP])?;
         let signal = signals.forever().next().ok_or("signal iterator ended")?;
-        byte_budget.close_and_wait()?;
-        let shutdown = shared_workspace
-            .lock()
-            .map_err(|_| "workspace lock poisoned")?
-            .shutdown();
+        let lifecycle_error = match (signal, control.as_ref()) {
+            (SIGHUP, Some(control)) => {
+                execute_splice_control(&shared_workspace, &byte_budget, control).err()
+            }
+            _ => byte_budget
+                .close_and_wait()
+                .map_err(|error| error.to_string())
+                .and_then(|()| {
+                    shared_workspace
+                        .lock()
+                        .map_err(|_| "workspace lock poisoned".to_owned())?
+                        .shutdown()
+                        .map(|_| ())
+                        .map_err(|error| error.to_string())
+                })
+                .err(),
+        };
         drop(session);
         drop(notifier_slot);
         let fuse = *shared_fuse_counters
@@ -204,6 +232,14 @@ mod linux {
         let mut workspace = shared_workspace
             .lock()
             .map_err(|_| "workspace lock poisoned")?;
+        let cleanup_error = if lifecycle_error.is_none() {
+            workspace
+                .release_kernel_cache_ownership()
+                .map_err(|error| error.to_string())
+                .err()
+        } else {
+            None
+        };
         let mounted = workspace.counters()?;
         let engine = workspace.engine_counters()?;
         let accepted = workspace.accepted().clone();
@@ -212,7 +248,12 @@ mod linux {
         workspace.close_store_connection()?;
         let connections_terminal = workspace.active_store_connections()?;
         drop(workspace);
-        let status = if shutdown.is_ok() { "PASS" } else { "FAIL" };
+        let terminal_error = lifecycle_error.or(cleanup_error);
+        let status = if terminal_error.is_none() {
+            "PASS"
+        } else {
+            "FAIL"
+        };
         let body = format!(
         concat!(
             "{{\n",
@@ -316,7 +357,270 @@ mod linux {
             .open(receipt)?;
         output.write_all(body.as_bytes())?;
         output.sync_all()?;
-        shutdown.map(|_| ()).map_err(|error| error.into())
+        match terminal_error {
+            Some(error) => Err(error.into()),
+            None => Ok(()),
+        }
+    }
+
+    fn control_paths(
+        arguments: &HashMap<String, String>,
+        paths: &super::ValidatedPaths,
+    ) -> Result<Option<ControlPaths>, Box<dyn std::error::Error>> {
+        let (request, receipt) = match (
+            arguments.get("control-request"),
+            arguments.get("control-receipt"),
+        ) {
+            (None, None) => return Ok(None),
+            (Some(request), Some(receipt)) => (request, receipt),
+            _ => {
+                return Err(
+                    "--control-request and --control-receipt must be supplied together".into(),
+                )
+            }
+        };
+        let request = super::canonical_target(Path::new(request))?;
+        let receipt = super::canonical_target(Path::new(receipt))?;
+        if !request.is_file() {
+            return Err(format!(
+                "control request must be an existing file: {}",
+                request.display()
+            )
+            .into());
+        }
+        if receipt.exists() {
+            return Err(format!("control receipt already exists: {}", receipt.display()).into());
+        }
+        let existing = [&paths.store, &paths.spool, &paths.receipt];
+        for path in [&request, &receipt] {
+            if path.starts_with(&paths.mount) {
+                return Err(
+                    format!("control path must be outside mount: {}", path.display()).into(),
+                );
+            }
+            for other in existing.iter().copied() {
+                if path == other || super::same_existing_file(path, other)? {
+                    return Err(format!("control path must be distinct: {}", path.display()).into());
+                }
+            }
+        }
+        if request == receipt || super::same_existing_file(&request, &receipt)? {
+            return Err("control request and receipt must be distinct".into());
+        }
+        Ok(Some(ControlPaths { request, receipt }))
+    }
+
+    fn execute_splice_control(
+        workspace: &std::sync::Arc<std::sync::Mutex<MountedWorkspace>>,
+        budget: &std::sync::Arc<ByteBudget>,
+        paths: &ControlPaths,
+    ) -> Result<(), String> {
+        budget.pause_and_wait().map_err(|error| error.to_string())?;
+        let request = match read_splice_request(&paths.request) {
+            Ok(request) => request,
+            Err(error) => {
+                if let Ok(mut workspace) = workspace.lock() {
+                    workspace.mark_incomplete();
+                }
+                let _ = budget.close_and_wait();
+                let _ = write_control_failure(&paths.receipt, MountedLifecycle::Incomplete, &error);
+                return Err(error);
+            }
+        };
+        let result = workspace
+            .lock()
+            .map_err(|_| "workspace lock poisoned".to_owned())?
+            .splice_path(
+                &request.path,
+                request.start,
+                request.delete_len,
+                &request.replacement,
+            );
+        match result {
+            Ok(receipt) => {
+                if let Err(error) = write_control_success(&paths.receipt, &request, &receipt) {
+                    if let Ok(mut workspace) = workspace.lock() {
+                        workspace.mark_incomplete();
+                    }
+                    return Err(error);
+                }
+                Ok(())
+            }
+            Err(error) => {
+                let lifecycle = workspace
+                    .lock()
+                    .map_err(|_| "workspace lock poisoned".to_owned())?
+                    .lifecycle();
+                let _ = budget.close_and_wait();
+                let message = error.to_string();
+                write_control_failure(&paths.receipt, lifecycle, &message)
+                    .map_err(|receipt_error| format!("{message}; {receipt_error}"))?;
+                Err(message)
+            }
+        }
+    }
+
+    fn read_splice_request(path: &Path) -> Result<SpliceRequest, String> {
+        let limit = MAX_REQUEST_BYTES
+            .checked_mul(2)
+            .and_then(|bytes| bytes.checked_add(4096))
+            .ok_or_else(|| "control request limit overflow".to_owned())?;
+        let mut input = String::new();
+        File::open(path)
+            .map_err(|error| error.to_string())?
+            .take(limit as u64 + 1)
+            .read_to_string(&mut input)
+            .map_err(|error| error.to_string())?;
+        if input.len() > limit {
+            return Err("control request is too large".to_owned());
+        }
+        let mut fields = HashMap::new();
+        for line in input.lines() {
+            let (key, value) = line
+                .split_once('=')
+                .ok_or_else(|| "control request lines must be key=value".to_owned())?;
+            if !matches!(key, "path" | "start" | "delete" | "replacement_hex") {
+                return Err(format!("unknown control request field {key}"));
+            }
+            if fields.insert(key, value).is_some() {
+                return Err(format!("duplicate control request field {key}"));
+            }
+        }
+        let path_text = fields
+            .get("path")
+            .ok_or_else(|| "missing control request path".to_owned())?
+            .to_string();
+        let path = CanonicalPath::from_bytes(path_text.as_bytes())
+            .map_err(|_| "invalid canonical control path".to_owned())?;
+        let start = fields
+            .get("start")
+            .ok_or_else(|| "missing control request start".to_owned())?
+            .parse()
+            .map_err(|_| "invalid control request start".to_owned())?;
+        let delete_len = fields
+            .get("delete")
+            .ok_or_else(|| "missing control request delete".to_owned())?
+            .parse()
+            .map_err(|_| "invalid control request delete".to_owned())?;
+        let replacement = decode_hex(
+            fields
+                .get("replacement_hex")
+                .ok_or_else(|| "missing control request replacement_hex".to_owned())?,
+        )?;
+        if replacement.len() > MAX_REQUEST_BYTES {
+            return Err("control replacement exceeds the request limit".to_owned());
+        }
+        Ok(SpliceRequest {
+            path,
+            path_text,
+            start,
+            delete_len,
+            replacement,
+        })
+    }
+
+    fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
+        if value.len() % 2 != 0 {
+            return Err("replacement_hex must have even length".to_owned());
+        }
+        value
+            .as_bytes()
+            .chunks_exact(2)
+            .map(|pair| {
+                let high = hex_digit(pair[0])?;
+                let low = hex_digit(pair[1])?;
+                Ok((high << 4) | low)
+            })
+            .collect()
+    }
+
+    fn hex_digit(value: u8) -> Result<u8, String> {
+        match value {
+            b'0'..=b'9' => Ok(value - b'0'),
+            b'a'..=b'f' => Ok(value - b'a' + 10),
+            b'A'..=b'F' => Ok(value - b'A' + 10),
+            _ => Err("replacement_hex contains a non-hex digit".to_owned()),
+        }
+    }
+
+    fn write_control_success(
+        path: &Path,
+        request: &SpliceRequest,
+        receipt: &MountedSpliceReceipt,
+    ) -> Result<(), String> {
+        let counters = &receipt.counters;
+        let body = format!(
+            concat!(
+                "{{\n",
+                "  \"schema\": \"layerfs-fuse-splice-v1\",\n",
+                "  \"status\": \"PASS\",\n",
+                "  \"path\": \"{}\",\n",
+                "  \"start\": {},\n",
+                "  \"delete_bytes\": {},\n",
+                "  \"insert_bytes\": {},\n",
+                "  \"before\": {{\"generation\":{},\"root\":\"{}\"}},\n",
+                "  \"after\": {{\"generation\":{},\"root\":\"{}\"}},\n",
+                "  \"remount_required\": {},\n",
+                "  \"locality\": {{\"cdc_bytes_scanned\":{},\"content_payload_bytes_read\":{},\"content_payload_bytes_written\":{},\"rope_nodes_created\":{},\"namespace_nodes_created\":{},\"inode_nodes_created\":{}}},\n",
+                "  \"operation_q\": {{\"terminal_bytes\":{},\"high_water_bytes\":{}}}\n",
+                "}}\n"
+            ),
+            json(&request.path_text),
+            request.start,
+            request.delete_len,
+            request.replacement.len(),
+            receipt.before.generation,
+            receipt.before.root,
+            receipt.after.generation,
+            receipt.after.root,
+            receipt.remount_required,
+            counters.rope.cdc_bytes_scanned,
+            json_number(counters.content_payload_bytes_read()),
+            json_number(counters.content_payload_bytes_written()),
+            counters.rope.nodes_created,
+            counters.namespace.nodes_created,
+            counters.inode_table.nodes_created,
+            counters.operation_q_terminal_bytes,
+            counters.operation_q_high_water_bytes,
+        );
+        write_new(path, &body)
+    }
+
+    fn write_control_failure(
+        path: &Path,
+        lifecycle: MountedLifecycle,
+        error: &str,
+    ) -> Result<(), String> {
+        let body = format!(
+            concat!(
+                "{{\n",
+                "  \"schema\": \"layerfs-fuse-splice-v1\",\n",
+                "  \"status\": \"FAIL\",\n",
+                "  \"lifecycle\": \"{:?}\",\n",
+                "  \"error\": \"{}\",\n",
+                "  \"remount_required\": true\n",
+                "}}\n"
+            ),
+            lifecycle,
+            json(error),
+        );
+        write_new(path, &body)
+    }
+
+    fn write_new(path: &Path, body: &str) -> Result<(), String> {
+        let mut output = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(path)
+            .map_err(|error| error.to_string())?;
+        output
+            .write_all(body.as_bytes())
+            .and_then(|()| output.sync_all())
+            .map_err(|error| error.to_string())
+    }
+
+    fn json_number(value: Option<u64>) -> String {
+        value.map_or_else(|| "null".to_owned(), |value| value.to_string())
     }
 
     fn parse_arguments() -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
@@ -335,7 +639,7 @@ mod linux {
     }
 
     fn usage() -> String {
-        "usage: layerfs-fuse --store PATH --mount PATH --spool PATH --receipt PATH [--ref main] [--integrity trusted|verified] [--uid N] [--gid N]".to_owned()
+        "usage: layerfs-fuse --store PATH --mount PATH --spool PATH --receipt PATH [--ref main] [--integrity trusted|verified] [--uid N] [--gid N] [--control-request PATH --control-receipt PATH]".to_owned()
     }
 
     fn required_path(
@@ -385,6 +689,42 @@ mod linux {
             .replace('\\', "\\\\")
             .replace('"', "\\\"")
             .replace('\n', "\\n")
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn splice_control_request_is_bounded_and_exact() {
+            let root = std::env::temp_dir().join(format!(
+                "layerfs-splice-control-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            std::fs::create_dir(&root).unwrap();
+            let request = root.join("request");
+            std::fs::write(
+                &request,
+                b"path=dir/file\nstart=7\ndelete=3\nreplacement_hex=00aBff\n",
+            )
+            .unwrap();
+            let parsed = read_splice_request(&request).unwrap();
+            assert_eq!(parsed.path_text, "dir/file");
+            assert_eq!(parsed.start, 7);
+            assert_eq!(parsed.delete_len, 3);
+            assert_eq!(parsed.replacement, [0x00, 0xab, 0xff]);
+            std::fs::write(
+                &request,
+                b"path=dir/file\nstart=7\ndelete=3\nreplacement_hex=0\n",
+            )
+            .unwrap();
+            assert!(read_splice_request(&request).is_err());
+            std::fs::remove_dir_all(root).unwrap();
+        }
     }
 }
 
