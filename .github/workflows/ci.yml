@@ -14,10 +14,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust 1.85.1
+      - name: Install Rust toolchains
         run: |
-          rustup toolchain install 1.85.1 --profile minimal --component rustfmt,clippy
-          rustup default 1.85.1
-      - run: cargo fmt --all --check
-      - run: cargo test --workspace --locked
-      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+          rustup toolchain install 1.85.1 --profile minimal
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - run: cargo +stable fmt --all --check
+      - run: cargo +1.85.1 test --workspace --locked
+      - run: cargo +stable clippy --workspace --all-targets --locked -- -D warnings
