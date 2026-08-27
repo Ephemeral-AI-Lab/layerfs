@@ -2,12 +2,15 @@
 resolver = "2"
 members = [
     "crates/layerfs-core",
-    "crates/layerfs-engine",
-    "crates/layerfs-os",
-    "crates/layerfs-vfs",
-    "crates/layerfs-fuse",
+    "crates/layerfs-storage",
+    "crates/layerfs-working-store",
+    "crates/layerfs-durable-store",
+    "crates/layerfs-sync",
+    "crates/layerfs-service",
+    "crates/layerfs-workspace",
+    "crates/layerfs-materialization",
+    "crates/layerfs-mount",
     "crates/layerfs-sdk",
-    "tools/layerfs-eval",
 ]
 
 [workspace.package]
@@ -18,3 +21,5 @@ license = "MIT"
 
 [workspace.dependencies]
 blake3 = { version = "=1.8.5", default-features = false }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"

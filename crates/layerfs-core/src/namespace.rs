@@ -240,6 +240,75 @@ pub fn diff_directory_entries<S: ObjectRead>(
     Ok(counters)
 }
 
+/// Merges entry-wise changes from `base -> source` onto `destination` without
+/// retaining a directory inventory. Conflicting changes to the same name
+/// return `None`.
+pub fn merge_directory_roots<S: ObjectStore>(
+    store: &mut S,
+    base: DirectoryStateRoot,
+    source: DirectoryStateRoot,
+    destination: DirectoryStateRoot,
+) -> CoreResult<Option<(DirectoryStateRoot, NamespaceCounters)>> {
+    let mut counters = NamespaceCounters::default();
+    if source == base || source == destination {
+        return Ok(Some((destination, counters)));
+    }
+    if destination == base {
+        return Ok(Some((source, counters)));
+    }
+    let base_state = load_directory_state(store, base, &mut counters)?;
+    let source_state = load_directory_state(store, source, &mut counters)?;
+    let destination_state = load_directory_state(store, destination, &mut counters)?;
+    for state in [&source_state, &destination_state] {
+        if state.profile_id != base_state.profile_id {
+            return Err(CoreError::InvalidRecord("directory profile"));
+        }
+    }
+    let mut diffs = StreamingDirectoryDiff::new(base_state.mapping_root, source_state.mapping_root);
+    let mut merged = destination;
+    while let Some(change) = diffs.next(store, &mut counters)? {
+        let mut visits = NamespaceCounters::default();
+        let current = directory_lookup(store, merged, &change.name, &mut visits)?;
+        add_namespace_counters(&mut counters, visits)?;
+        let selected = if change.after == change.before || change.after == current {
+            current
+        } else if current == change.before {
+            change.after
+        } else {
+            return Ok(None);
+        };
+        if selected == current {
+            continue;
+        }
+        if current.is_some() {
+            let (next, _, visits) = directory_remove(store, merged, &change.name)?;
+            add_namespace_counters(&mut counters, visits)?;
+            merged = next;
+        }
+        if let Some(inode) = selected {
+            let (next, visits) = directory_insert(store, merged, change.name, inode)?;
+            add_namespace_counters(&mut counters, visits)?;
+            merged = next;
+        }
+    }
+    Ok(Some((merged, counters)))
+}
+
+fn add_namespace_counters(
+    target: &mut NamespaceCounters,
+    source: NamespaceCounters,
+) -> CoreResult<()> {
+    target.nodes_read = target
+        .nodes_read
+        .checked_add(source.nodes_read)
+        .ok_or(CoreError::LengthOverflow)?;
+    target.nodes_created = target
+        .nodes_created
+        .checked_add(source.nodes_created)
+        .ok_or(CoreError::LengthOverflow)?;
+    Ok(())
+}
+
 pub fn directory_insert<S: ObjectStore>(
     store: &mut S,
     root: DirectoryStateRoot,
@@ -1231,6 +1300,158 @@ struct DirectoryWalkItem {
     root: bool,
     expected_level: Option<u8>,
     expected_max: Option<CanonicalName>,
+}
+
+struct StreamingDirectoryDiff {
+    base: StreamingDirectoryCursor,
+    source: StreamingDirectoryCursor,
+    base_entry: Option<(CanonicalName, InodeId)>,
+    source_entry: Option<(CanonicalName, InodeId)>,
+    initialized: bool,
+}
+
+impl StreamingDirectoryDiff {
+    fn new(base: ObjectId, source: ObjectId) -> Self {
+        Self {
+            base: StreamingDirectoryCursor::new(base),
+            source: StreamingDirectoryCursor::new(source),
+            base_entry: None,
+            source_entry: None,
+            initialized: false,
+        }
+    }
+
+    fn next<S: ObjectRead>(
+        &mut self,
+        store: &S,
+        counters: &mut NamespaceCounters,
+    ) -> CoreResult<Option<DirectoryEntryDiff>> {
+        if !self.initialized {
+            self.base_entry = self.base.next(store, counters)?;
+            self.source_entry = self.source.next(store, counters)?;
+            self.initialized = true;
+        }
+        loop {
+            match (&self.base_entry, &self.source_entry) {
+                (None, None) => return Ok(None),
+                (Some((base_name, before)), Some((source_name, after)))
+                    if base_name == source_name =>
+                {
+                    let name = base_name.clone();
+                    let (before, after) = (*before, *after);
+                    self.base_entry = self.base.next(store, counters)?;
+                    self.source_entry = self.source.next(store, counters)?;
+                    if before != after {
+                        return Ok(Some(DirectoryEntryDiff {
+                            name,
+                            before: Some(before),
+                            after: Some(after),
+                        }));
+                    }
+                }
+                (Some((base_name, before)), Some((source_name, _))) if base_name < source_name => {
+                    let change = DirectoryEntryDiff {
+                        name: base_name.clone(),
+                        before: Some(*before),
+                        after: None,
+                    };
+                    self.base_entry = self.base.next(store, counters)?;
+                    return Ok(Some(change));
+                }
+                (Some(_), Some((source_name, after))) => {
+                    let change = DirectoryEntryDiff {
+                        name: source_name.clone(),
+                        before: None,
+                        after: Some(*after),
+                    };
+                    self.source_entry = self.source.next(store, counters)?;
+                    return Ok(Some(change));
+                }
+                (Some((base_name, before)), None) => {
+                    let change = DirectoryEntryDiff {
+                        name: base_name.clone(),
+                        before: Some(*before),
+                        after: None,
+                    };
+                    self.base_entry = self.base.next(store, counters)?;
+                    return Ok(Some(change));
+                }
+                (None, Some((source_name, after))) => {
+                    let change = DirectoryEntryDiff {
+                        name: source_name.clone(),
+                        before: None,
+                        after: Some(*after),
+                    };
+                    self.source_entry = self.source.next(store, counters)?;
+                    return Ok(Some(change));
+                }
+            }
+        }
+    }
+}
+
+struct StreamingDirectoryCursor {
+    stack: Vec<DirectoryWalkItem>,
+    leaf: std::vec::IntoIter<(CanonicalName, InodeId)>,
+}
+
+impl StreamingDirectoryCursor {
+    fn new(root: ObjectId) -> Self {
+        Self {
+            stack: vec![DirectoryWalkItem {
+                id: root,
+                root: true,
+                expected_level: None,
+                expected_max: None,
+            }],
+            leaf: Vec::new().into_iter(),
+        }
+    }
+
+    fn next<S: ObjectRead>(
+        &mut self,
+        store: &S,
+        counters: &mut NamespaceCounters,
+    ) -> CoreResult<Option<(CanonicalName, InodeId)>> {
+        loop {
+            if let Some(entry) = self.leaf.next() {
+                return Ok(Some(entry));
+            }
+            let Some(item) = self.stack.pop() else {
+                return Ok(None);
+            };
+            let loaded = load_directory_node_shallow(store, item.id, item.root, None, counters)?;
+            if item
+                .expected_level
+                .is_some_and(|level| loaded.summary.level != level)
+                || item
+                    .expected_max
+                    .as_ref()
+                    .is_some_and(|maximum| loaded.summary.max.as_ref() != Some(maximum))
+            {
+                return Err(CoreError::InvalidRecord("directory child summary"));
+            }
+            match loaded.node {
+                DirectoryNodeV1::Leaf { entries, .. } => self.leaf = entries.into_iter(),
+                DirectoryNodeV1::Branch {
+                    level, children, ..
+                } => {
+                    let child_level = level
+                        .checked_sub(1)
+                        .ok_or(CoreError::InvalidRecord("directory child summary"))?;
+                    self.stack
+                        .extend(children.into_iter().rev().map(|(maximum, id)| {
+                            DirectoryWalkItem {
+                                id,
+                                root: false,
+                                expected_level: Some(child_level),
+                                expected_max: Some(maximum),
+                            }
+                        }));
+                }
+            }
+        }
+    }
 }
 
 struct DirectoryEntryCursor<'a, S> {

@@ -5,13 +5,18 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+test-hooks = ["layerfs-materialization/test-hooks", "layerfs-workspace/test-hooks"]
+
 [dependencies]
-layerfs-os = { path = "../layerfs-os" }
-layerfs-vfs = { path = "../layerfs-vfs" }
+layerfs-core = { path = "../layerfs-core" }
+layerfs-materialization = { path = "../layerfs-materialization" }
+layerfs-sync = { path = "../layerfs-sync" }
+layerfs-working-store = { path = "../layerfs-working-store" }
+layerfs-workspace = { path = "../layerfs-workspace" }
 
 [lib]
 path = "src/lib.rs"
 
 [dev-dependencies]
-layerfs-core = { path = "../layerfs-core" }
-layerfs-engine = { path = "../layerfs-engine" }
+layerfs-service = { path = "../layerfs-service" }

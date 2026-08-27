@@ -53,10 +53,6 @@ impl ObjectHashWriter {
     pub(crate) fn finish(self) -> [u8; DIGEST_BYTES] {
         *self.hasher.finalize().as_bytes()
     }
-
-    pub(crate) fn update(&mut self, bytes: &[u8]) {
-        self.hasher.update(bytes);
-    }
 }
 
 impl Write for ObjectHashWriter {

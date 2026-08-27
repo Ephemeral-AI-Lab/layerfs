@@ -80,6 +80,12 @@ pub struct MetadataEntryV1 {
     pub value_file_root: ObjectId,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct MetadataCounters {
+    pub nodes_read: u64,
+    pub nodes_created: u64,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum AppleAclTag {
@@ -181,37 +187,9 @@ struct ValidatedMetadataNode {
     summary: MetadataSummary,
 }
 
-const SUMMARY_CHUNK_BYTES: usize = 8 * 1024;
-const SUMMARIES_PER_CHUNK: usize = SUMMARY_CHUNK_BYTES / std::mem::size_of::<MetadataSummary>();
-
 #[derive(Default)]
-struct MetadataLevel {
-    chunks: Vec<Vec<MetadataSummary>>,
-    len: usize,
-    level: Option<u8>,
-}
-
-impl MetadataLevel {
-    fn push(&mut self, summary: MetadataSummary) -> CoreResult<()> {
-        if self.level.is_some_and(|level| level != summary.level) {
-            return Err(CoreError::InvalidRecord("metadata level"));
-        }
-        self.level = Some(summary.level);
-        if self
-            .chunks
-            .last()
-            .is_none_or(|chunk| chunk.len() == SUMMARIES_PER_CHUNK)
-        {
-            self.chunks.push(Vec::with_capacity(SUMMARIES_PER_CHUNK));
-        }
-        self.chunks.last_mut().unwrap().push(summary);
-        self.len = self.len.checked_add(1).ok_or(CoreError::LengthOverflow)?;
-        Ok(())
-    }
-
-    fn into_summaries(self) -> impl Iterator<Item = MetadataSummary> {
-        self.chunks.into_iter().flatten()
-    }
+struct MetadataBranchPending {
+    groups: Vec<Vec<MetadataSummary>>,
 }
 
 pub fn build_metadata_tree<S: ObjectStore>(
@@ -227,8 +205,10 @@ pub fn build_metadata_tree<S: ObjectStore>(
 
 pub struct MetadataTreeBuilder {
     groups: Vec<Vec<MetadataEntryV1>>,
-    leaves: MetadataLevel,
+    branches: Vec<MetadataBranchPending>,
     previous: Option<MetadataKey>,
+    peak_pending_entries: usize,
+    peak_pending_summaries: usize,
 }
 
 impl Default for MetadataTreeBuilder {
@@ -241,9 +221,19 @@ impl MetadataTreeBuilder {
     pub fn new() -> Self {
         Self {
             groups: Vec::new(),
-            leaves: MetadataLevel::default(),
+            branches: Vec::new(),
             previous: None,
+            peak_pending_entries: 0,
+            peak_pending_summaries: 0,
         }
+    }
+
+    pub fn peak_pending_entries(&self) -> usize {
+        self.peak_pending_entries
+    }
+
+    pub fn peak_pending_summaries(&self) -> usize {
+        self.peak_pending_summaries
     }
 
     pub fn push<S: ObjectStore>(
@@ -265,9 +255,18 @@ impl MetadataTreeBuilder {
         }
         if self.groups.len() == 3 {
             let sealed = self.groups.remove(0);
-            self.leaves
-                .push(emit_metadata(store, metadata_leaf(sealed)?)?)?;
+            let summary = emit_metadata(store, metadata_leaf(sealed)?)?;
+            push_metadata_summary(
+                store,
+                &mut self.branches,
+                0,
+                summary,
+                &mut self.peak_pending_summaries,
+            )?;
         }
+        self.peak_pending_entries = self
+            .peak_pending_entries
+            .max(self.groups.iter().map(Vec::len).sum());
         Ok(())
     }
 
@@ -277,46 +276,93 @@ impl MetadataTreeBuilder {
         }
         rebalance_leaf_tail(&mut self.groups)?;
         for group in self.groups {
-            self.leaves
-                .push(emit_metadata(store, metadata_leaf(group)?)?)?;
+            let summary = emit_metadata(store, metadata_leaf(group)?)?;
+            push_metadata_summary(
+                store,
+                &mut self.branches,
+                0,
+                summary,
+                &mut self.peak_pending_summaries,
+            )?;
         }
-        let mut level = self.leaves;
-        while level.len > 1 {
-            let next_level = level
-                .level
-                .ok_or(CoreError::InvalidRecord("empty metadata level"))?
+        let mut index = 0_usize;
+        loop {
+            let pending = self
+                .branches
+                .get(index)
+                .ok_or(CoreError::InvalidRecord("empty metadata level"))?;
+            let children = pending.groups.iter().map(Vec::len).sum::<usize>();
+            let higher = self.branches[index + 1..]
+                .iter()
+                .any(|pending| !pending.groups.is_empty());
+            if children == 1 && !higher {
+                return Ok(pending.groups[0][0].id);
+            }
+            if children == 0 {
+                index = index
+                    .checked_add(1)
+                    .ok_or(CoreError::MappingDepthExceeded)?;
+                continue;
+            }
+            let level = u8::try_from(index + 1).map_err(|_| CoreError::MappingDepthExceeded)?;
+            let mut groups = std::mem::take(&mut self.branches[index].groups);
+            rebalance_branch_tail(level, &mut groups)?;
+            for group in groups {
+                let summary = emit_metadata(store, metadata_branch(level, &group)?)?;
+                push_metadata_summary(
+                    store,
+                    &mut self.branches,
+                    index + 1,
+                    summary,
+                    &mut self.peak_pending_summaries,
+                )?;
+            }
+            index = index
                 .checked_add(1)
                 .ok_or(CoreError::MappingDepthExceeded)?;
-            let mut groups: Vec<Vec<MetadataSummary>> = Vec::new();
-            let mut next = MetadataLevel::default();
-            for child in level.into_summaries() {
-                if groups.is_empty() {
-                    groups.push(Vec::new());
-                }
-                groups.last_mut().unwrap().push(child);
-                if encode_metadata_node(&metadata_branch(next_level, groups.last().unwrap())?)
-                    .is_err()
-                {
-                    let child = groups.last_mut().unwrap().pop().unwrap();
-                    groups.push(vec![child]);
-                }
-                if groups.len() == 3 {
-                    let sealed = groups.remove(0);
-                    next.push(emit_metadata(store, metadata_branch(next_level, &sealed)?)?)?;
-                }
-            }
-            rebalance_branch_tail(next_level, &mut groups)?;
-            for group in groups {
-                next.push(emit_metadata(store, metadata_branch(next_level, &group)?)?)?;
-            }
-            level = next;
         }
-        Ok(level
-            .into_summaries()
-            .next()
-            .ok_or(CoreError::InvalidRecord("empty metadata level"))?
-            .id)
     }
+}
+
+fn push_metadata_summary<S: ObjectStore>(
+    store: &mut S,
+    levels: &mut Vec<MetadataBranchPending>,
+    index: usize,
+    summary: MetadataSummary,
+    peak: &mut usize,
+) -> CoreResult<()> {
+    if summary.level as usize != index {
+        return Err(CoreError::InvalidRecord("metadata level"));
+    }
+    while levels.len() <= index {
+        levels.push(MetadataBranchPending::default());
+    }
+    let sealed = {
+        let groups = &mut levels[index].groups;
+        if groups.is_empty() {
+            groups.push(Vec::new());
+        }
+        groups.last_mut().unwrap().push(summary);
+        let branch_level = u8::try_from(index + 1).map_err(|_| CoreError::MappingDepthExceeded)?;
+        if encode_metadata_node(&metadata_branch(branch_level, groups.last().unwrap())?).is_err() {
+            let summary = groups.last_mut().unwrap().pop().unwrap();
+            groups.push(vec![summary]);
+        }
+        (groups.len() == 3).then(|| groups.remove(0))
+    };
+    *peak = (*peak).max(
+        levels
+            .iter()
+            .flat_map(|pending| &pending.groups)
+            .map(Vec::len)
+            .sum(),
+    );
+    if let Some(sealed) = sealed {
+        let branch_level = u8::try_from(index + 1).map_err(|_| CoreError::MappingDepthExceeded)?;
+        let parent = emit_metadata(store, metadata_branch(branch_level, &sealed)?)?;
+        push_metadata_summary(store, levels, index + 1, parent, peak)?;
+    }
+    Ok(())
 }
 
 pub fn metadata_tree_entries<S: ObjectRead>(
@@ -336,17 +382,301 @@ pub fn metadata_lookup<S: ObjectRead>(
     root: ObjectId,
     key: &MetadataKey,
 ) -> CoreResult<Option<MetadataEntryV1>> {
-    let mut found = None;
-    visit_metadata_entries(store, root, |entries| {
-        if found.is_none() {
-            found = entries
-                .binary_search_by(|entry| entry.key.cmp(key))
-                .ok()
-                .map(|index| entries[index].clone());
+    metadata_lookup_with_counters(store, root, key, &mut MetadataCounters::default())
+}
+
+pub fn metadata_lookup_with_counters<S: ObjectRead>(
+    store: &S,
+    root: ObjectId,
+    key: &MetadataKey,
+    counters: &mut MetadataCounters,
+) -> CoreResult<Option<MetadataEntryV1>> {
+    let mut id = root;
+    let mut is_root = true;
+    let mut expected_level = None;
+    let mut expected_max = None;
+    let mut exclusive_minimum = None;
+    let mut ancestors = Vec::new();
+    loop {
+        if ancestors.contains(&id) {
+            return Err(CoreError::MappingCycle);
         }
-        Ok(())
-    })?;
-    Ok(found)
+        ancestors.push(id);
+        let loaded = load_metadata_counted(
+            store,
+            id,
+            is_root,
+            expected_level,
+            expected_max.as_ref(),
+            exclusive_minimum.as_ref(),
+            counters,
+        )?;
+        match loaded.node {
+            MetadataNodeV1::Leaf { entries, .. } => {
+                return Ok(entries
+                    .binary_search_by(|entry| entry.key.cmp(key))
+                    .ok()
+                    .map(|index| entries[index].clone()));
+            }
+            MetadataNodeV1::Branch {
+                level, children, ..
+            } => {
+                let index = children.partition_point(|(maximum, _)| maximum < key);
+                let Some((maximum, child)) = children.get(index) else {
+                    return Ok(None);
+                };
+                exclusive_minimum = index
+                    .checked_sub(1)
+                    .map(|previous| children[previous].0.clone())
+                    .or(exclusive_minimum);
+                id = *child;
+                is_root = false;
+                expected_level = Some(
+                    level
+                        .checked_sub(1)
+                        .ok_or(CoreError::InvalidRecord("metadata child summary"))?,
+                );
+                expected_max = Some(maximum.clone());
+            }
+        }
+    }
+}
+
+pub fn replace_metadata_entry<S: ObjectStore>(
+    store: &mut S,
+    root: ObjectId,
+    entry: MetadataEntryV1,
+    counters: &mut MetadataCounters,
+) -> CoreResult<ObjectId> {
+    Ok(replace_metadata_node(store, root, true, None, None, None, &entry, counters)?.id)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn replace_metadata_node<S: ObjectStore>(
+    store: &mut S,
+    id: ObjectId,
+    root: bool,
+    expected_level: Option<u8>,
+    expected_max: Option<&MetadataKey>,
+    exclusive_minimum: Option<&MetadataKey>,
+    entry: &MetadataEntryV1,
+    counters: &mut MetadataCounters,
+) -> CoreResult<MetadataSummary> {
+    let loaded = load_metadata_counted(
+        store,
+        id,
+        root,
+        expected_level,
+        expected_max,
+        exclusive_minimum,
+        counters,
+    )?;
+    match loaded.node {
+        MetadataNodeV1::Leaf {
+            subtree_encoded_bytes,
+            mut entries,
+        } => {
+            let index = entries
+                .binary_search_by(|candidate| candidate.key.cmp(&entry.key))
+                .map_err(|_| CoreError::InvalidRecord("metadata key missing"))?;
+            if entries[index] == *entry {
+                return Ok(loaded.summary);
+            }
+            entries[index] = entry.clone();
+            emit_metadata_counted(
+                store,
+                MetadataNodeV1::Leaf {
+                    subtree_encoded_bytes,
+                    entries,
+                },
+                counters,
+            )
+        }
+        MetadataNodeV1::Branch {
+            level,
+            subtree_entry_count,
+            subtree_encoded_bytes,
+            mut children,
+        } => {
+            let index = children.partition_point(|(maximum, _)| maximum < &entry.key);
+            let (maximum, child) = children
+                .get(index)
+                .cloned()
+                .ok_or(CoreError::InvalidRecord("metadata key missing"))?;
+            let minimum = index
+                .checked_sub(1)
+                .map(|previous| &children[previous].0)
+                .or(exclusive_minimum);
+            let replacement = replace_metadata_node(
+                store,
+                child,
+                false,
+                Some(
+                    level
+                        .checked_sub(1)
+                        .ok_or(CoreError::InvalidRecord("metadata child summary"))?,
+                ),
+                Some(&maximum),
+                minimum,
+                entry,
+                counters,
+            )?;
+            if replacement.id == child {
+                return Ok(loaded.summary);
+            }
+            if replacement.max.as_ref() != Some(&maximum) {
+                return Err(CoreError::InvalidRecord("metadata replacement summary"));
+            }
+            children[index].1 = replacement.id;
+            emit_metadata_counted(
+                store,
+                MetadataNodeV1::Branch {
+                    level,
+                    subtree_entry_count,
+                    subtree_encoded_bytes,
+                    children,
+                },
+                counters,
+            )
+        }
+    }
+}
+
+/// Three-way merges ordered metadata entries with only bounded tree frontiers.
+/// Conflicting values for the same key return `None`.
+pub fn merge_metadata_roots<S: ObjectStore>(
+    store: &mut S,
+    base: ObjectId,
+    source: ObjectId,
+    destination: ObjectId,
+) -> CoreResult<Option<ObjectId>> {
+    if source == base || source == destination {
+        return Ok(Some(destination));
+    }
+    if destination == base {
+        return Ok(Some(source));
+    }
+    let mut base_cursor = MetadataCursor::new(base);
+    let mut source_cursor = MetadataCursor::new(source);
+    let mut destination_cursor = MetadataCursor::new(destination);
+    let mut base_entry = base_cursor.next(store)?;
+    let mut source_entry = source_cursor.next(store)?;
+    let mut destination_entry = destination_cursor.next(store)?;
+    let mut builder = MetadataTreeBuilder::new();
+    loop {
+        let key = [
+            base_entry.as_ref().map(|entry| &entry.key),
+            source_entry.as_ref().map(|entry| &entry.key),
+            destination_entry.as_ref().map(|entry| &entry.key),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+        .cloned();
+        let Some(key) = key else {
+            return builder.finish(store).map(Some);
+        };
+        let base_value = if base_entry.as_ref().is_some_and(|entry| entry.key == key) {
+            let value = base_entry.take();
+            base_entry = base_cursor.next(store)?;
+            value
+        } else {
+            None
+        };
+        let source_value = if source_entry.as_ref().is_some_and(|entry| entry.key == key) {
+            let value = source_entry.take();
+            source_entry = source_cursor.next(store)?;
+            value
+        } else {
+            None
+        };
+        let destination_value = if destination_entry
+            .as_ref()
+            .is_some_and(|entry| entry.key == key)
+        {
+            let value = destination_entry.take();
+            destination_entry = destination_cursor.next(store)?;
+            value
+        } else {
+            None
+        };
+        let selected = if source_value == base_value || source_value == destination_value {
+            destination_value
+        } else if destination_value == base_value {
+            source_value
+        } else {
+            return Ok(None);
+        };
+        if let Some(entry) = selected {
+            builder.push(store, entry)?;
+        }
+    }
+}
+
+struct MetadataCursor {
+    stack: Vec<MetadataWalkItem>,
+    leaf: std::vec::IntoIter<MetadataEntryV1>,
+}
+
+struct MetadataWalkItem {
+    id: ObjectId,
+    root: bool,
+    expected_level: Option<u8>,
+    expected_max: Option<MetadataKey>,
+}
+
+impl MetadataCursor {
+    fn new(root: ObjectId) -> Self {
+        Self {
+            stack: vec![MetadataWalkItem {
+                id: root,
+                root: true,
+                expected_level: None,
+                expected_max: None,
+            }],
+            leaf: Vec::new().into_iter(),
+        }
+    }
+
+    fn next<S: ObjectRead>(&mut self, store: &S) -> CoreResult<Option<MetadataEntryV1>> {
+        loop {
+            if let Some(entry) = self.leaf.next() {
+                return Ok(Some(entry));
+            }
+            let Some(item) = self.stack.pop() else {
+                return Ok(None);
+            };
+            let loaded = load_metadata_shallow(
+                store,
+                item.id,
+                item.root,
+                item.expected_level,
+                item.expected_max.as_ref(),
+            )?;
+            match loaded.node {
+                MetadataNodeV1::Leaf { entries, .. } => self.leaf = entries.into_iter(),
+                MetadataNodeV1::Branch {
+                    level, children, ..
+                } => {
+                    let child_level = level
+                        .checked_sub(1)
+                        .ok_or(CoreError::InvalidRecord("metadata child summary"))?;
+                    self.stack
+                        .extend(
+                            children
+                                .into_iter()
+                                .rev()
+                                .map(|(maximum, id)| MetadataWalkItem {
+                                    id,
+                                    root: false,
+                                    expected_level: Some(child_level),
+                                    expected_max: Some(maximum),
+                                }),
+                        );
+                }
+            }
+        }
+    }
 }
 
 pub fn visit_metadata_entries<S: ObjectRead>(
@@ -461,6 +791,30 @@ fn load_metadata_shallow<S: ObjectRead>(
         return Err(CoreError::InvalidRecord("metadata child summary"));
     }
     Ok(ValidatedMetadataNode { node, summary })
+}
+
+fn load_metadata_counted<S: ObjectRead>(
+    store: &S,
+    id: ObjectId,
+    root: bool,
+    expected_level: Option<u8>,
+    expected_max: Option<&MetadataKey>,
+    exclusive_minimum: Option<&MetadataKey>,
+    counters: &mut MetadataCounters,
+) -> CoreResult<ValidatedMetadataNode> {
+    let loaded = load_metadata_shallow(store, id, root, expected_level, expected_max)?;
+    counters.nodes_read = counters
+        .nodes_read
+        .checked_add(1)
+        .ok_or(CoreError::LengthOverflow)?;
+    if matches!(loaded.node, MetadataNodeV1::Leaf { .. })
+        && exclusive_minimum
+            .zip(loaded.summary.min.as_ref())
+            .is_some_and(|(minimum, actual)| actual <= minimum)
+    {
+        return Err(CoreError::NonCanonicalOrdering);
+    }
+    Ok(loaded)
 }
 
 fn metadata_node_shape(
@@ -588,6 +942,19 @@ fn emit_metadata<S: ObjectStore>(
         encoded_bytes,
         level,
     })
+}
+
+fn emit_metadata_counted<S: ObjectStore>(
+    store: &mut S,
+    node: MetadataNodeV1,
+    counters: &mut MetadataCounters,
+) -> CoreResult<MetadataSummary> {
+    let summary = emit_metadata(store, node)?;
+    counters.nodes_created = counters
+        .nodes_created
+        .checked_add(1)
+        .ok_or(CoreError::LengthOverflow)?;
+    Ok(summary)
 }
 
 fn metadata_node_min(node: &MetadataNodeV1) -> Option<MetadataKey> {

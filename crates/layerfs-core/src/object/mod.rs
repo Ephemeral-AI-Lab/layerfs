@@ -1,3 +1,4 @@
+pub mod access;
 mod codec;
 mod model;
 

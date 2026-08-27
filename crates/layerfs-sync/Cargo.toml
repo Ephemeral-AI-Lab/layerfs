@@ -1,0 +1,21 @@
+[package]
+name = "layerfs-sync"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3 = { workspace = true }
+layerfs-core = { path = "../layerfs-core" }
+layerfs-working-store = { path = "../layerfs-working-store" }
+layerfs-durable-store = { path = "../layerfs-durable-store" }
+layerfs-storage = { path = "../layerfs-storage" }
+serde.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+layerfs-storage = { path = "../layerfs-storage", features = ["test-hooks"] }
+layerfs-working-store = { path = "../layerfs-working-store", features = ["test-hooks"] }

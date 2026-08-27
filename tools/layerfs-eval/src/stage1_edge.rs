@@ -13094,10 +13094,15 @@ mod tests {
             "Cargo.toml",
             "Cargo.lock",
             "crates/layerfs-core/Cargo.toml",
-            "crates/layerfs-engine/Cargo.toml",
-            "crates/layerfs-os/Cargo.toml",
+            "crates/layerfs-storage/Cargo.toml",
+            "crates/layerfs-working-store/Cargo.toml",
+            "crates/layerfs-durable-store/Cargo.toml",
+            "crates/layerfs-sync/Cargo.toml",
+            "crates/layerfs-workspace/Cargo.toml",
+            "crates/layerfs-mount/Cargo.toml",
+            "crates/layerfs-materialization/Cargo.toml",
             "crates/layerfs-sdk/Cargo.toml",
-            "crates/layerfs-vfs/Cargo.toml",
+            "crates/layerfs-service/Cargo.toml",
             "tools/layerfs-eval/Cargo.toml",
         ] {
             assert!(paths.iter().any(|path| path == manifest), "{manifest}");

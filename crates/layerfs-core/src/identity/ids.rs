@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::{self, Write};
 use std::str::FromStr;
 
@@ -5,7 +6,7 @@ use super::digest::{digest_from_bytes, hash_object_bytes, hash_object_reader};
 use super::DIGEST_BYTES;
 use crate::error::{CoreError, CoreResult};
 
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Copy, Deserialize, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct ObjectId([u8; DIGEST_BYTES]);
 
 impl ObjectId {

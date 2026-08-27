@@ -2,8 +2,9 @@ use layerfs_core::content::rope::ObjectStore;
 use layerfs_core::inode::{InodeId, InodeKind, InodeRecordV1};
 use layerfs_core::metadata::{
     build_metadata_tree, decode_apple_acl, encode_apple_acl, metadata_lookup,
-    metadata_tree_entries, AppleAclEntryV1, AppleAclTag, MetadataEntryV1, MetadataKey,
-    MetadataTreeBuilder, PortableMetadataV1,
+    metadata_lookup_with_counters, metadata_tree_entries, replace_metadata_entry, AppleAclEntryV1,
+    AppleAclTag, MetadataCounters, MetadataEntryV1, MetadataKey, MetadataTreeBuilder,
+    PortableMetadataV1,
 };
 use layerfs_core::namespace::{DirectoryStateV1, NamespaceRootV1, SymlinkStateV1};
 use layerfs_core::namespace_codec::*;
@@ -220,6 +221,40 @@ fn persistent_metadata_tree_round_trips_multiple_levels() {
 }
 
 #[test]
+fn metadata_lookup_and_fixed_key_replacement_touch_only_one_cow_spine() {
+    let entries = (0..300_u16)
+        .map(|index| MetadataEntryV1 {
+            key: MetadataKey::new(
+                "apple.xattr".into(),
+                format!("user.attribute-{index:04}").into_bytes(),
+            )
+            .unwrap(),
+            value_file_root: ObjectId::for_bytes(&index.to_be_bytes()),
+        })
+        .collect::<Vec<_>>();
+    let mut store = MemoryStore::default();
+    let root = build_metadata_tree(&mut store, &entries).unwrap();
+    let mut lookup = MetadataCounters::default();
+    assert_eq!(
+        metadata_lookup_with_counters(&store, root, &entries[173].key, &mut lookup).unwrap(),
+        Some(entries[173].clone())
+    );
+    assert!(lookup.nodes_read < 10, "{lookup:?}");
+
+    let mut expected = entries.clone();
+    expected[173].value_file_root = ObjectId::for_bytes(b"replacement-value");
+    let rebuilt = build_metadata_tree(&mut store, &expected).unwrap();
+    let mut replace = MetadataCounters::default();
+    let replaced =
+        replace_metadata_entry(&mut store, root, expected[173].clone(), &mut replace).unwrap();
+    assert_eq!(replaced, rebuilt);
+    assert!(replace.nodes_read < 10, "{replace:?}");
+    assert!(replace.nodes_created <= replace.nodes_read, "{replace:?}");
+    assert_eq!(metadata_tree_entries(&store, root).unwrap(), entries);
+    assert_eq!(metadata_tree_entries(&store, replaced).unwrap(), expected);
+}
+
+#[test]
 fn metadata_empty_root_is_canonical_and_one_child_root_is_not() {
     let mut store = MemoryStore::default();
     let empty = build_metadata_tree(&mut store, &[]).unwrap();
@@ -348,4 +383,35 @@ fn inode_decoder_rejects_size_count_and_level_before_entry_allocation() {
         decode_metadata_node(&header(b"LFS4MET\0", 9, 0, 1000)),
         Err(CoreError::UnexpectedEof)
     );
+}
+
+#[test]
+fn metadata_builder_keeps_only_bounded_tail_summaries() {
+    let mut store = MemoryStore::default();
+    let mut builder = MetadataTreeBuilder::new();
+    for index in 0..20_000_u32 {
+        builder
+            .push(
+                &mut store,
+                MetadataEntryV1 {
+                    key: MetadataKey::new(
+                        "apple.xattr".to_owned(),
+                        format!("x{index:08}").into_bytes(),
+                    )
+                    .unwrap(),
+                    value_file_root: ObjectId::for_bytes(&index.to_be_bytes()),
+                },
+            )
+            .unwrap();
+        assert!(builder.peak_pending_entries() < 512);
+        assert!(builder.peak_pending_summaries() < 512);
+    }
+    let root = builder.finish(&mut store).unwrap();
+    let mut observed = 0_usize;
+    layerfs_core::metadata::visit_metadata_entries(&store, root, |entries| {
+        observed += entries.len();
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(observed, 20_000);
 }

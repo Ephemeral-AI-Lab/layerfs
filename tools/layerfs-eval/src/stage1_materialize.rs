@@ -1202,10 +1202,15 @@ fn is_product_source(path: &str) -> bool {
         || path == "Cargo.lock"
         || [
             "crates/layerfs-core/",
-            "crates/layerfs-engine/",
-            "crates/layerfs-vfs/",
-            "crates/layerfs-os/",
+            "crates/layerfs-storage/",
+            "crates/layerfs-working-store/",
+            "crates/layerfs-durable-store/",
+            "crates/layerfs-sync/",
+            "crates/layerfs-workspace/",
+            "crates/layerfs-mount/",
+            "crates/layerfs-materialization/",
             "crates/layerfs-sdk/",
+            "crates/layerfs-service/",
         ]
         .iter()
         .any(|prefix| path.starts_with(prefix))
