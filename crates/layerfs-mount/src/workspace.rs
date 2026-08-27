@@ -41,7 +41,7 @@ pub const MAX_DIRECTORY_CHANGES: usize = 8_192;
 pub const SPOOL_QUOTA_BYTES: u64 = 512 * 1024 * 1024;
 pub const MAX_LIVE_SPOOL_BYTES: u64 = 320 * 1024 * 1024;
 pub const MAX_LOGICAL_FILE_BYTES: u64 = 320 * 1024 * 1024;
-pub const MAX_LOGICAL_WORKSPACE_BYTES: u64 = 512 * 1024 * 1024;
+pub const MAX_LOGICAL_WORKSPACE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 pub const MAX_COLD_LOOKUP_PRIMARY_STATEMENTS: u64 = 16;
 const DIRECTORY_PAGE_ENTRIES: usize = 128;
 const DIRECTORY_PAGE_BYTES: usize = 256 * 1024;
@@ -842,6 +842,14 @@ impl MountedWorkspace {
             total_files: MAX_MOUNTED_NODES as u64,
             free_files: free_files as u64,
         })
+    }
+
+    pub fn automatic_checkpoint_needed(&self) -> bool {
+        self.lifecycle == MountedLifecycle::Live
+            && (self.dirty_nodes.len() >= MAX_DIRTY_NODES * 3 / 4
+                || self.live_ranges >= MAX_DIRTY_RANGES * 3 / 4
+                || self.directory_changes >= MAX_DIRECTORY_CHANGES * 3 / 4
+                || self.spool.live >= MAX_LIVE_SPOOL_BYTES * 3 / 4)
     }
 
     pub fn engine_counters(&self) -> Result<EngineCounters, MountedError> {
@@ -3478,6 +3486,58 @@ mod product_tests {
         mounted.shutdown().unwrap();
         budget.close_and_wait().unwrap();
         assert_eq!(mounted.counters().unwrap().dirty_nodes, 0);
+        drop(mounted);
+        drop(working);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn automatic_checkpoint_watermark_precedes_dirty_node_limit() {
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-mount-checkpoint-watermark-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let working_root = directory.join("working");
+        let working = WorkingStore::open(&working_root, IntegrityMode::TrustedLocalDev).unwrap();
+        let root = empty_root(&working);
+        let stack = working
+            .create_layer_stack(
+                LayerStackId::from_bytes([0x41; 32]),
+                LayerId::from_bytes([0x42; 32]),
+                "stack",
+                root,
+            )
+            .unwrap();
+        let head = working
+            .create_top_level_branch(BranchId::from_bytes([0x43; 32]), Some("main"), stack)
+            .unwrap();
+        let admission = working.begin_operation(head).unwrap();
+        let mut mounted = MountedWorkspace::open(
+            &working_root,
+            admission,
+            IntegrityMode::TrustedLocalDev,
+            directory.join("spool"),
+        )
+        .unwrap();
+        let watermark = MAX_DIRTY_NODES * 3 / 4;
+        for index in 0..watermark - 2 {
+            mounted
+                .mknod_file(ROOT_NODE, format!("file-{index:04}").as_bytes(), 0o644)
+                .unwrap();
+        }
+        assert!(!mounted.automatic_checkpoint_needed());
+        mounted
+            .mknod_file(ROOT_NODE, b"at-watermark", 0o644)
+            .unwrap();
+        assert!(mounted.automatic_checkpoint_needed());
+        mounted.fsync().unwrap();
+        assert!(!mounted.automatic_checkpoint_needed());
+        mounted.shutdown().unwrap();
         drop(mounted);
         drop(working);
         std::fs::remove_dir_all(directory).unwrap();

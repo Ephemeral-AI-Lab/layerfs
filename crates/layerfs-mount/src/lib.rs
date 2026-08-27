@@ -89,6 +89,7 @@ pub struct FuseCounters {
 pub struct LayerFuse {
     workspace: Arc<Mutex<MountedWorkspace>>,
     budget: Arc<ByteBudget>,
+    checkpoint: Mutex<()>,
     counters: Arc<Mutex<FuseCounters>>,
     notifier: Arc<OnceLock<Notifier>>,
     session_end: SessionEndNotifier,
@@ -106,6 +107,7 @@ impl LayerFuse {
         Self {
             workspace,
             budget,
+            checkpoint: Mutex::new(()),
             counters: Arc::new(Mutex::new(FuseCounters::default())),
             notifier: Arc::new(OnceLock::new()),
             session_end: SessionEndNotifier {
@@ -194,6 +196,35 @@ impl LayerFuse {
         } else {
             Ok(())
         }
+    }
+
+    fn checkpoint_if_needed(&self) -> Result<(), fuser::Errno> {
+        if !self.lock()?.automatic_checkpoint_needed() {
+            return Ok(());
+        }
+
+        // ponytail: one mount-wide gate; shard only if checkpoint contention is measurable.
+        let _checkpoint = self.checkpoint.lock().map_err(|_| fuser::Errno::EIO)?;
+        if !self.lock()?.automatic_checkpoint_needed() {
+            return Ok(());
+        }
+        let result = self.budget.pause_and_wait().map_err(errno).and_then(|()| {
+            self.lock()
+                .and_then(|mut workspace| workspace.checkpoint().map_err(errno))
+        });
+        self.budget.resume();
+        result.map(|_| ())
+    }
+
+    fn finish_mutation<T>(&self, result: Result<T, fuser::Errno>) -> Result<T, fuser::Errno> {
+        let value = result?;
+        self.checkpoint_if_needed()?;
+        Ok(value)
+    }
+
+    fn release_handle(&self, handle: MountedHandleId) -> Result<(), fuser::Errno> {
+        self.lock()?.release(handle).map_err(errno)?;
+        self.checkpoint_if_needed()
     }
 }
 
@@ -301,7 +332,10 @@ impl Filesystem for LayerFuse {
     ) {
         let _callback = self.callback();
         self.count(|counters| counters.setattr += 1);
-        if uid.is_some() || gid.is_some() || flags.is_some() {
+        if uid.is_some_and(|uid| uid != self.uid)
+            || gid.is_some_and(|gid| gid != self.gid)
+            || flags.is_some()
+        {
             reply.error(fuser::Errno::EOPNOTSUPP);
             return;
         }
@@ -325,6 +359,7 @@ impl Filesystem for LayerFuse {
             }
             workspace.getattr(node).map_err(errno)
         });
+        let result = self.finish_mutation(result);
         match result {
             Ok(attr) => reply.attr(&TTL, &self.attr(attr)),
             Err(error) => reply.error(error),
@@ -364,6 +399,7 @@ impl Filesystem for LayerFuse {
                 .mknod_file(MountedNodeId(parent.0), name.as_bytes(), mode & !umask)
                 .map_err(errno)
         });
+        let result = self.finish_mutation(result);
         match result {
             Ok(attr) => reply.entry(&TTL, &self.attr(attr), Generation(0)),
             Err(error) => reply.error(error),
@@ -386,6 +422,7 @@ impl Filesystem for LayerFuse {
                 .mkdir(MountedNodeId(parent.0), name.as_bytes(), mode & !umask)
                 .map_err(errno)
         });
+        let result = self.finish_mutation(result);
         match result {
             Ok(attr) => reply.entry(&TTL, &self.attr(attr), Generation(0)),
             Err(error) => reply.error(error),
@@ -400,6 +437,7 @@ impl Filesystem for LayerFuse {
                 .unlink(MountedNodeId(parent.0), name.as_bytes())
                 .map_err(errno)
         });
+        let result = self.finish_mutation(result);
         match result {
             Ok(()) => reply.ok(),
             Err(error) => reply.error(error),
@@ -414,6 +452,7 @@ impl Filesystem for LayerFuse {
                 .rmdir(MountedNodeId(parent.0), name.as_bytes())
                 .map_err(errno)
         });
+        let result = self.finish_mutation(result);
         match result {
             Ok(()) => reply.ok(),
             Err(error) => reply.error(error),
@@ -439,6 +478,7 @@ impl Filesystem for LayerFuse {
                 )
                 .map_err(errno)
         });
+        let result = self.finish_mutation(result);
         match result {
             Ok(attr) => reply.entry(&TTL, &self.attr(attr), Generation(0)),
             Err(error) => reply.error(error),
@@ -472,6 +512,7 @@ impl Filesystem for LayerFuse {
                 )
                 .map_err(errno)
         });
+        let result = self.finish_mutation(result);
         match result {
             Ok(()) => reply.ok(),
             Err(error) => reply.error(error),
@@ -497,6 +538,7 @@ impl Filesystem for LayerFuse {
                 )
                 .map_err(errno)
         });
+        let result = self.finish_mutation(result);
         match result {
             Ok(attr) => reply.entry(&TTL, &self.attr(attr), Generation(0)),
             Err(error) => reply.error(error),
@@ -594,11 +636,12 @@ impl Filesystem for LayerFuse {
                 )
                 .map_err(errno)
         });
+        drop(reservation);
+        let result = self.finish_mutation(result);
         match result {
             Ok(size) => reply.written(size as u32),
             Err(error) => reply.error(error),
         }
-        drop(reservation);
     }
 
     fn flush(
@@ -632,10 +675,7 @@ impl Filesystem for LayerFuse {
     ) {
         let _callback = self.callback();
         self.count(|counters| counters.release += 1);
-        match self
-            .lock()
-            .and_then(|mut workspace| workspace.release(MountedHandleId(handle.0)).map_err(errno))
-        {
+        match self.release_handle(MountedHandleId(handle.0)) {
             Ok(()) => reply.ok(),
             Err(error) => reply.error(error),
         }
@@ -743,10 +783,7 @@ impl Filesystem for LayerFuse {
     ) {
         let _callback = self.callback();
         self.count(|counters| counters.releasedir += 1);
-        match self
-            .lock()
-            .and_then(|mut workspace| workspace.release(MountedHandleId(handle.0)).map_err(errno))
-        {
+        match self.release_handle(MountedHandleId(handle.0)) {
             Ok(()) => reply.ok(),
             Err(error) => reply.error(error),
         }
@@ -830,6 +867,7 @@ impl Filesystem for LayerFuse {
                 .create_file(MountedNodeId(parent.0), name.as_bytes(), mode & !umask)
                 .map_err(errno)
         });
+        let result = self.finish_mutation(result);
         match result {
             Ok((attr, handle)) => reply.created(
                 &TTL,
