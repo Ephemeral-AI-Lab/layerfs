@@ -249,7 +249,7 @@ impl From<WorkingError> for MountedError {
 struct BudgetState {
     current: usize,
     high: usize,
-    paused: bool,
+    pauses: usize,
     shutdown: bool,
 }
 
@@ -273,7 +273,7 @@ impl ByteBudget {
             return Err(MountedError::ResourceExhausted);
         }
         let mut state = self.state.lock().map_err(|_| MountedError::Indeterminate)?;
-        while !state.shutdown && (state.paused || state.current + bytes > self.limit) {
+        while !state.shutdown && (state.pauses != 0 || state.current + bytes > self.limit) {
             state = self
                 .available
                 .wait(state)
@@ -319,7 +319,10 @@ impl ByteBudget {
         if state.shutdown {
             return Err(MountedError::Busy);
         }
-        state.paused = true;
+        state.pauses = state
+            .pauses
+            .checked_add(1)
+            .ok_or(MountedError::ResourceExhausted)?;
         while state.current != 0 {
             state = self
                 .available
@@ -332,8 +335,10 @@ impl ByteBudget {
     pub fn resume(&self) {
         if let Ok(mut state) = self.state.lock() {
             if !state.shutdown {
-                state.paused = false;
-                self.available.notify_all();
+                state.pauses = state.pauses.saturating_sub(1);
+                if state.pauses == 0 {
+                    self.available.notify_all();
+                }
             }
         }
     }
@@ -3541,6 +3546,18 @@ mod product_tests {
         drop(mounted);
         drop(working);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn overlapping_budget_pauses_require_matching_resumes() {
+        let budget = Arc::new(ByteBudget::new(1));
+        budget.pause_and_wait().unwrap();
+        budget.pause_and_wait().unwrap();
+        assert_eq!(budget.state.lock().unwrap().pauses, 2);
+        budget.resume();
+        assert_eq!(budget.state.lock().unwrap().pauses, 1);
+        budget.resume();
+        assert_eq!(budget.state.lock().unwrap().pauses, 0);
     }
 
     #[test]

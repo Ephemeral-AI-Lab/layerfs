@@ -218,13 +218,34 @@ impl LayerFuse {
 
     fn finish_mutation<T>(&self, result: Result<T, fuser::Errno>) -> Result<T, fuser::Errno> {
         let value = result?;
-        self.checkpoint_if_needed()?;
+        if self.checkpoint_if_needed().is_err() {
+            if let Ok(mut workspace) = self.workspace.lock() {
+                workspace.mark_incomplete();
+            }
+        }
         Ok(value)
     }
 
     fn release_handle(&self, handle: MountedHandleId) -> Result<(), fuser::Errno> {
-        self.lock()?.release(handle).map_err(errno)?;
-        self.checkpoint_if_needed()
+        let result = self
+            .lock()
+            .and_then(|mut workspace| workspace.release(handle).map_err(errno));
+        self.finish_mutation(result)
+    }
+
+    fn explicit_checkpoint(&self, directory: bool) -> Result<(), fuser::Errno> {
+        let _checkpoint = self.checkpoint.lock().map_err(|_| fuser::Errno::EIO)?;
+        self.budget.pause_and_wait().map_err(errno)?;
+        let result = self.lock().and_then(|mut workspace| {
+            if directory {
+                workspace.fsyncdir()
+            } else {
+                workspace.fsync()
+            }
+            .map_err(errno)
+        });
+        self.budget.resume();
+        result.map(|_| ())
     }
 }
 
@@ -557,6 +578,11 @@ impl Filesystem for LayerFuse {
                 .open_file(MountedNodeId(ino.0), flags.0 & O_TRUNC != 0)
                 .map_err(errno)
         });
+        let result = if flags.0 & O_TRUNC != 0 {
+            self.finish_mutation(result)
+        } else {
+            result
+        };
         match result {
             Ok(handle) => reply.opened(FileHandle(handle.0), FopenFlags::FOPEN_KEEP_CACHE),
             Err(error) => reply.error(error),
@@ -691,16 +717,8 @@ impl Filesystem for LayerFuse {
     ) {
         let _callback = self.callback();
         self.count(|counters| counters.fsync += 1);
-        if let Err(error) = self.budget.pause_and_wait() {
-            reply.error(errno(error));
-            return;
-        }
-        let result = self
-            .lock()
-            .and_then(|mut workspace| workspace.fsync().map_err(errno));
-        self.budget.resume();
-        match result {
-            Ok(_) => reply.ok(),
+        match self.explicit_checkpoint(false) {
+            Ok(()) => reply.ok(),
             Err(error) => reply.error(error),
         }
     }
@@ -799,16 +817,8 @@ impl Filesystem for LayerFuse {
     ) {
         let _callback = self.callback();
         self.count(|counters| counters.fsyncdir += 1);
-        if let Err(error) = self.budget.pause_and_wait() {
-            reply.error(errno(error));
-            return;
-        }
-        let result = self
-            .lock()
-            .and_then(|mut workspace| workspace.fsyncdir().map_err(errno));
-        self.budget.resume();
-        match result {
-            Ok(_) => reply.ok(),
+        match self.explicit_checkpoint(true) {
+            Ok(()) => reply.ok(),
             Err(error) => reply.error(error),
         }
     }
