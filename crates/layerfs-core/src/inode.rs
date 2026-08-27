@@ -563,23 +563,79 @@ pub fn inode_table_remove<S: ObjectStore>(
     Ok((InodeTableRoot(next.id), removed, counters))
 }
 
-struct DeferredInodes<'a, S> {
+pub(crate) struct DeferredInodes<'a, S> {
     store: &'a mut S,
     nodes: BTreeMap<ObjectId, Vec<u8>>,
+    charged_bytes: usize,
+    peak_charged_bytes: usize,
+    prunes: u64,
 }
 
+const DEFERRED_INODE_PRUNE_BYTES: usize = 4 * 1024 * 1024;
+pub(crate) const DEFERRED_INODE_MAX_BYTES: usize = 8 * 1024 * 1024 - 1;
+const DEFERRED_OBJECT_CHARGE_BYTES: usize = 128;
+
 impl<'a, S: ObjectStore> DeferredInodes<'a, S> {
-    fn new(store: &'a mut S) -> Self {
+    pub(crate) fn new(store: &'a mut S) -> Self {
         Self {
             store,
             nodes: BTreeMap::new(),
+            charged_bytes: 0,
+            peak_charged_bytes: 0,
+            prunes: 0,
         }
     }
 
-    fn commit(&mut self, root: ObjectId) -> CoreResult<u64> {
+    pub(crate) fn prune_to(&mut self, root: ObjectId) -> CoreResult<()> {
+        if self.charged_bytes <= DEFERRED_INODE_PRUNE_BYTES {
+            return Ok(());
+        }
+        let mut reachable = BTreeSet::new();
+        self.collect_node(root, &mut reachable)?;
+        self.nodes.retain(|id, _| reachable.contains(id));
+        self.charged_bytes = self.nodes.values().try_fold(0_usize, |total, bytes| {
+            total
+                .checked_add(object_charge(bytes.len())?)
+                .ok_or(CoreError::LengthOverflow)
+        })?;
+        self.prunes = self
+            .prunes
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        Ok(())
+    }
+
+    fn collect_node(&self, id: ObjectId, reachable: &mut BTreeSet<ObjectId>) -> CoreResult<()> {
+        let Some(canonical) = self.nodes.get(&id) else {
+            return Ok(());
+        };
+        if !reachable.insert(id) {
+            return Ok(());
+        }
+        if let InodeTableNodeV1::Branch { children, .. } = decode_inode_table_node(canonical)? {
+            for (_, child) in children {
+                self.collect_node(child, reachable)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn peak_charged_bytes(&self) -> usize {
+        self.peak_charged_bytes
+    }
+
+    pub(crate) fn prunes(&self) -> u64 {
+        self.prunes
+    }
+
+    pub(crate) fn commit(&mut self, root: ObjectId) -> CoreResult<u64> {
         let mut committed = BTreeSet::new();
         self.commit_node(root, &mut committed)?;
         u64::try_from(committed.len()).map_err(|_| CoreError::LengthOverflow)
+    }
+
+    pub(crate) fn put_persistent(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+        self.store.put(canonical)
     }
 
     fn commit_node(&mut self, id: ObjectId, committed: &mut BTreeSet<ObjectId>) -> CoreResult<()> {
@@ -611,13 +667,22 @@ impl<S: ObjectStore> ObjectStore for DeferredInodes<'_, S> {
 
     fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
         let id = ObjectId::for_bytes(canonical);
-        if self
-            .nodes
-            .insert(id, canonical.to_vec())
-            .is_some_and(|prior| prior != canonical)
-        {
-            return Err(CoreError::IdentityMismatch);
+        match self.nodes.get(&id) {
+            Some(prior) if prior != canonical => return Err(CoreError::IdentityMismatch),
+            Some(_) => return Ok(id),
+            None => {}
         }
+        let charged = object_charge(canonical.len())?;
+        let next = self
+            .charged_bytes
+            .checked_add(charged)
+            .ok_or(CoreError::LengthOverflow)?;
+        if next > DEFERRED_INODE_MAX_BYTES {
+            return Err(CoreError::ObjectLimitExceeded);
+        }
+        self.nodes.insert(id, canonical.to_vec());
+        self.charged_bytes = next;
+        self.peak_charged_bytes = self.peak_charged_bytes.max(next);
         Ok(id)
     }
 
@@ -631,6 +696,12 @@ impl<S: ObjectStore> ObjectStore for DeferredInodes<'_, S> {
             None => self.store.with_authenticated_canonical(id, callback),
         }
     }
+}
+
+fn object_charge(canonical_bytes: usize) -> CoreResult<usize> {
+    canonical_bytes
+        .checked_add(DEFERRED_OBJECT_CHARGE_BYTES)
+        .ok_or(CoreError::LengthOverflow)
 }
 
 pub fn generated_inode_table_from_root<S: ObjectStore>(

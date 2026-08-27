@@ -363,6 +363,18 @@ Across the 36 measured durable samples:
 The largest admitted FUSE request is bounded at 1 MiB. Large dirty payloads use
 the disk spool rather than workspace-sized resident memory.
 
+The current mounted-workspace limits are explicit in every startup and terminal
+receipt: 2 GiB per logical file and per logical workspace, 320 MiB live dirty
+spool bytes, and 512 MiB physical spool bytes. These are admission ceilings,
+not claims that every host has qualified the largest possible file.
+
+`layerfsctl compact WORKING_ROOT trusted|verified` is an offline WorkingStore
+maintenance command. Run it only after mounts and other WorkingStore handles
+have closed; an active maintenance pin is rejected as busy. Its JSON separates
+logical canonical-object bytes from apparent generation-file bytes. Allocated
+filesystem blocks require an external `stat`/`du` observation. This command is
+not online GC and does not qualify DurableStore compaction.
+
 ### Evidence
 
 - [Stage 2 specification](poc/19-stage2-docker-linux-fuse.md)

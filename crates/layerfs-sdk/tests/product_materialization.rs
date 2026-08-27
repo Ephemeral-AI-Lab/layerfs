@@ -318,6 +318,10 @@ fn mixed_managed_and_external_changes_are_both_captured() {
         Some(layerfs_sdk::NativeRoute::CloneShift | layerfs_sdk::NativeRoute::FullFallback)
     ));
     assert!(shifted.native.suffix_bytes_shifted >= 4);
+    let expected_full_fallbacks = native
+        .full_fallback_files
+        .checked_add(shifted.full_fallback_files)
+        .unwrap();
     assert_eq!(fs::read(managed.path().join("moved")).unwrap(), b"ab++XYef");
     assert!(!managed.path().join("file").exists());
     fs::write(managed.path().join("external"), b"outside").unwrap();
@@ -325,7 +329,10 @@ fn mixed_managed_and_external_changes_are_both_captured() {
     assert!(receipt.cleanup.is_ok());
     assert_eq!(receipt.counters.authority_full_scans, 1);
     assert_eq!(receipt.counters.native.patch_bytes, 4);
-    assert!(receipt.counters.full_fallback_files >= 1);
+    assert_eq!(
+        receipt.counters.full_fallback_files,
+        expected_full_fallbacks
+    );
     assert!(receipt.timers.equation_closed);
     assert_eq!(
         receipt.timers.complete_wall_ns,

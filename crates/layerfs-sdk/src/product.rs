@@ -17,9 +17,9 @@ use layerfs_sync::{DurableControlEndpoint, DurableEndpoint};
 use layerfs_working_store::{BeginOperation, WorkingStore};
 pub use layerfs_working_store::{
     BranchHead, BranchId, BranchPushOutcome, BranchRollbackResult, ChildMergeResult, CommitResult,
-    EngineCounters, IntegrityMode, LayerCandidate, LayerId, LayerPreparationResult, LayerStackHead,
-    LayerStackId, OperationId, OperationRecordRef, OperationVersionId, RecoverableOperation,
-    VersionRef,
+    CompactionStorageObservation, EngineCounters, IntegrityMode, LayerCandidate, LayerId,
+    LayerPreparationResult, LayerStackHead, LayerStackId, OperationId, OperationRecordRef,
+    OperationVersionId, RecoverableOperation, VersionRef,
 };
 pub use layerfs_workspace::LeaseKind;
 use layerfs_workspace::{
@@ -111,6 +111,10 @@ impl LayerFs {
         Ok(Self {
             working: self.working.compact()?,
         })
+    }
+
+    pub fn last_compaction_observation(&self) -> Option<CompactionStorageObservation> {
+        self.working.last_compaction_observation()
     }
 
     pub fn object_ids_page(&self, after: Option<ObjectId>, limit: usize) -> Result<Vec<ObjectId>> {

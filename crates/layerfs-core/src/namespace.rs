@@ -390,25 +390,88 @@ pub fn directory_rename<S: ObjectStore>(
     Ok((renamed, counters))
 }
 
-struct DeferredDirectory<'a, S> {
+pub(crate) struct DeferredDirectory<'a, S> {
     store: &'a mut S,
     objects: BTreeMap<ObjectId, Vec<u8>>,
+    charged_bytes: usize,
+    peak_charged_bytes: usize,
+    prunes: u64,
 }
 
+const DEFERRED_DIRECTORY_PRUNE_BYTES: usize = 4 * 1024 * 1024;
+pub(crate) const DEFERRED_DIRECTORY_MAX_BYTES: usize = 8 * 1024 * 1024 - 1;
+const DEFERRED_OBJECT_CHARGE_BYTES: usize = 128;
+
 impl<'a, S: ObjectStore> DeferredDirectory<'a, S> {
-    fn new(store: &'a mut S) -> Self {
+    pub(crate) fn new(store: &'a mut S) -> Self {
         Self {
             store,
             objects: BTreeMap::new(),
+            charged_bytes: 0,
+            peak_charged_bytes: 0,
+            prunes: 0,
         }
     }
 
-    fn commit(&mut self, root: DirectoryStateRoot) -> CoreResult<u64> {
-        let state_bytes = self
-            .objects
-            .get(&root.0)
-            .cloned()
-            .ok_or(CoreError::MissingObject)?;
+    pub(crate) fn prune_to(&mut self, root: DirectoryStateRoot) -> CoreResult<()> {
+        if self.charged_bytes <= DEFERRED_DIRECTORY_PRUNE_BYTES {
+            return Ok(());
+        }
+        let mut reachable = BTreeSet::new();
+        self.collect_state(root, &mut reachable)?;
+        self.objects.retain(|id, _| reachable.contains(id));
+        self.charged_bytes = self.objects.values().try_fold(0_usize, |total, bytes| {
+            total
+                .checked_add(object_charge(bytes.len())?)
+                .ok_or(CoreError::LengthOverflow)
+        })?;
+        self.prunes = self
+            .prunes
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        Ok(())
+    }
+
+    fn collect_state(
+        &self,
+        root: DirectoryStateRoot,
+        reachable: &mut BTreeSet<ObjectId>,
+    ) -> CoreResult<()> {
+        let Some(canonical) = self.objects.get(&root.0) else {
+            return Ok(());
+        };
+        reachable.insert(root.0);
+        let state = decode_directory_state(canonical)?;
+        self.collect_node(state.mapping_root, reachable)
+    }
+
+    fn collect_node(&self, id: ObjectId, reachable: &mut BTreeSet<ObjectId>) -> CoreResult<()> {
+        let Some(canonical) = self.objects.get(&id) else {
+            return Ok(());
+        };
+        if !reachable.insert(id) {
+            return Ok(());
+        }
+        if let DirectoryNodeV1::Branch { children, .. } = decode_directory_node(canonical)? {
+            for (_, child) in children {
+                self.collect_node(child, reachable)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn peak_charged_bytes(&self) -> usize {
+        self.peak_charged_bytes
+    }
+
+    pub(crate) fn prunes(&self) -> u64 {
+        self.prunes
+    }
+
+    pub(crate) fn commit(&mut self, root: DirectoryStateRoot) -> CoreResult<u64> {
+        let Some(state_bytes) = self.objects.get(&root.0).cloned() else {
+            return Ok(0);
+        };
         let state = decode_directory_state(&state_bytes)?;
         let mut committed = BTreeSet::new();
         self.commit_node(state.mapping_root, &mut committed)?;
@@ -447,13 +510,22 @@ impl<S: ObjectStore> ObjectStore for DeferredDirectory<'_, S> {
 
     fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
         let id = ObjectId::for_bytes(canonical);
-        if self
-            .objects
-            .insert(id, canonical.to_vec())
-            .is_some_and(|prior| prior != canonical)
-        {
-            return Err(CoreError::IdentityMismatch);
+        match self.objects.get(&id) {
+            Some(prior) if prior != canonical => return Err(CoreError::IdentityMismatch),
+            Some(_) => return Ok(id),
+            None => {}
         }
+        let charged = object_charge(canonical.len())?;
+        let next = self
+            .charged_bytes
+            .checked_add(charged)
+            .ok_or(CoreError::LengthOverflow)?;
+        if next > DEFERRED_DIRECTORY_MAX_BYTES {
+            return Err(CoreError::ObjectLimitExceeded);
+        }
+        self.objects.insert(id, canonical.to_vec());
+        self.charged_bytes = next;
+        self.peak_charged_bytes = self.peak_charged_bytes.max(next);
         Ok(id)
     }
 
@@ -467,6 +539,12 @@ impl<S: ObjectStore> ObjectStore for DeferredDirectory<'_, S> {
             None => self.store.with_authenticated_canonical(id, callback),
         }
     }
+}
+
+fn object_charge(canonical_bytes: usize) -> CoreResult<usize> {
+    canonical_bytes
+        .checked_add(DEFERRED_OBJECT_CHARGE_BYTES)
+        .ok_or(CoreError::LengthOverflow)
 }
 
 fn remove_node<S: ObjectStore>(

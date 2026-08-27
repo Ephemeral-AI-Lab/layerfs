@@ -11,6 +11,8 @@ pub struct LogicalCounters {
     pub namespace: NamespaceCounters,
     pub inode_table: InodeTableCounters,
     pub rope: crate::content::rope::RopeCounters,
+    pub structural_deferred_peak_bytes: u64,
+    pub structural_deferred_prunes: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

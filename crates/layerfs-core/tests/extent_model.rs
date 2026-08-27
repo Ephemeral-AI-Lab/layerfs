@@ -2,17 +2,17 @@ use layerfs_core::content::extent::{ChildDescriptorV3, ExtentNodeV3, ExtentSlice
 use layerfs_core::content::extent_codec::{
     decode_file_state, decode_node_with_context, encode_file_state, encode_node, profile_id,
 };
-use layerfs_core::content::rope::FileStateRoot;
 use layerfs_core::content::rope::{
     build, diff_ranges, read_all, read_range, replace, validate_file, visit_extents, ObjectRead,
     ObjectStore,
 };
+use layerfs_core::content::rope::{FileMutationBatch, FileStateRoot};
 use layerfs_core::{decode_bytes_object, encode_bytes_object};
 use layerfs_core::{CoreError, CoreResult, ObjectId};
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct MemoryStore(BTreeMap<ObjectId, Vec<u8>>);
 
 impl ObjectStore for MemoryStore {
@@ -463,6 +463,94 @@ fn replace_persists_no_new_unreachable_objects() {
     let reachable = rope_reachable(&store, next);
     let unreachable = created.difference(&reachable).copied().collect::<Vec<_>>();
     assert!(unreachable.is_empty(), "unreachable: {unreachable:?}");
+}
+
+#[test]
+fn mutation_batch_preserves_root_and_persists_only_final_extent_spines() {
+    let original = (0..4_000_000)
+        .map(|index| (index as u64).wrapping_mul(0x9e37_79b9) as u8)
+        .collect::<Vec<_>>();
+    let mut base = MemoryStore::default();
+    let (root, _) = build(&mut base, original.as_slice()).unwrap();
+    let baseline_objects = base.0.len();
+    let baseline_ids = base.0.keys().copied().collect::<BTreeSet<_>>();
+
+    let edits = (0..128)
+        .map(|index| {
+            let start = 4096 + index * 24_000;
+            (start as u64, 1024, vec![index as u8; 1024])
+        })
+        .chain([
+            (3_200_000, 0, vec![0x5a; 4096]),
+            (3_500_000, 8192, vec![0xa5; 1024]),
+        ])
+        .collect::<Vec<_>>();
+
+    let mut sequential = base.clone();
+    let mut sequential_root = root;
+    for (start, delete_len, replacement) in &edits {
+        sequential_root = replace(
+            &mut sequential,
+            sequential_root,
+            *start,
+            *delete_len,
+            replacement.as_slice(),
+        )
+        .unwrap()
+        .0;
+    }
+
+    let mut deferred = base;
+    let (deferred_root, counters) = {
+        let mut batch = FileMutationBatch::new(&mut deferred, Some(root)).unwrap();
+        for (start, delete_len, replacement) in &edits {
+            batch
+                .replace(*start, *delete_len, replacement.as_slice())
+                .unwrap();
+        }
+        batch.finish().unwrap()
+    };
+
+    assert_eq!(deferred_root, sequential_root);
+    let sequential_created = sequential.0.len() - baseline_objects;
+    let deferred_created = deferred.0.len() - baseline_objects;
+    assert!(
+        deferred_created * 4 < sequential_created,
+        "sequential={sequential_created}, deferred={deferred_created}"
+    );
+    assert!(counters.nodes_created > 0);
+    let mut retained = Vec::new();
+    read_all(&deferred, root, &mut retained).unwrap();
+    assert_eq!(retained, original);
+    let reachable = rope_reachable(&deferred, deferred_root);
+    assert!(
+        deferred
+            .0
+            .keys()
+            .find(|id| !baseline_ids.contains(id) && !reachable.contains(id))
+            .is_none(),
+        "batch persisted a new object outside the final rope"
+    );
+}
+
+#[test]
+fn mutation_batch_rejects_later_overlap_before_sealed_nodes_can_be_orphaned() {
+    let input = (0..2_000_000)
+        .map(|index| (index as u64).wrapping_mul(0x9e37_79b9) as u8)
+        .collect::<Vec<_>>();
+    let mut store = MemoryStore::default();
+    let mut batch = FileMutationBatch::new(&mut store, None).unwrap();
+    batch.replace(0, 0, input.as_slice()).unwrap();
+    assert!(matches!(
+        batch.replace(0, input.len() as u64, std::io::empty()),
+        Err(CoreError::InvalidRange { .. })
+    ));
+    let (root, _) = batch.finish().unwrap();
+    let reachable = rope_reachable(&store, root);
+    assert!(store.0.keys().all(|id| reachable.contains(id)));
+    let mut actual = Vec::new();
+    read_all(&store, root, &mut actual).unwrap();
+    assert_eq!(actual, input);
 }
 
 #[test]

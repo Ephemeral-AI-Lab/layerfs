@@ -1,13 +1,13 @@
 use super::resolver::{namespace, resolve, resolve_parent, LogicalCounters};
 use crate::content::rope::{build, replace, FileStateRoot};
 use crate::inode::{
-    inode_table_lookup, inode_table_remove, inode_table_upsert, InodeId, InodeKind, InodeRecordV1,
-    InodeTableRoot,
+    inode_table_lookup, inode_table_remove, inode_table_upsert, DeferredInodes, InodeId, InodeKind,
+    InodeRecordV1, InodeTableRoot,
 };
 use crate::namespace::SymlinkStateV1;
 use crate::namespace::{
     directory_insert, directory_lookup, directory_page_after, directory_remove, directory_rename,
-    empty_directory, DirectoryStateRoot, NamespaceRootV1,
+    empty_directory, DeferredDirectory, DirectoryStateRoot, NamespaceRootV1,
 };
 use crate::namespace_codec::{
     decode_inode_record, encode_inode_record, encode_namespace_root, encode_symlink,
@@ -206,54 +206,123 @@ pub fn apply_inode_mutations(
     root: ObjectId,
     mutations: impl IntoIterator<Item = InodeMutation>,
 ) -> CoreResult<CandidateRoot> {
+    Ok(apply_inode_mutations_deferred(store, root, mutations)?.value)
+}
+
+struct DeferredBatchResult<T> {
+    value: T,
+    peak_bytes: usize,
+    prunes: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct StructuralBatchCounters {
+    pub deferred_peak_bytes: u64,
+    pub deferred_prunes: u64,
+}
+
+fn apply_inode_mutations_deferred(
+    store: &mut impl ObjectStore,
+    root: ObjectId,
+    mutations: impl IntoIterator<Item = InodeMutation>,
+) -> CoreResult<DeferredBatchResult<CandidateRoot>> {
     let mut counters = LogicalCounters::default();
     let namespace = namespace(store, root)?;
     let mut table = InodeTableRoot(namespace.inode_table_root);
+    let mut deferred = DeferredInodes::new(store);
     for mutation in mutations {
         match mutation {
             InodeMutation::Upsert { inode, record } => {
-                let record = store.put(&encode_inode_record(record)?)?;
-                let (next, visits) = inode_table_upsert(store, table, inode, record)?;
+                let record = deferred.put_persistent(&encode_inode_record(record)?)?;
+                let (next, visits) = inode_table_upsert(&mut deferred, table, inode, record)?;
                 merge_inode(&mut counters, visits)?;
                 table = next;
             }
             InodeMutation::Remove { inode } => {
-                let (next, _, visits) = inode_table_remove(store, table, inode)?;
+                let (next, _, visits) = inode_table_remove(&mut deferred, table, inode)?;
                 merge_inode(&mut counters, visits)?;
                 table = next;
             }
         }
+        deferred.prune_to(table.0)?;
     }
-    let candidate = store.put(&encode_namespace_root(NamespaceRootV1 {
+    let peak_bytes = deferred.peak_charged_bytes();
+    let prunes = deferred.prunes();
+    counters.structural_deferred_peak_bytes = peak_bytes as u64;
+    counters.structural_deferred_prunes = prunes;
+    counters.inode_table.nodes_created = deferred.commit(table.0)?;
+    let candidate = deferred.put_persistent(&encode_namespace_root(NamespaceRootV1 {
         inode_table_root: table.0,
         ..namespace
     })?)?;
-    Ok(CandidateRoot {
-        parent_root: root,
-        root: candidate,
-        counters,
+    Ok(DeferredBatchResult {
+        value: CandidateRoot {
+            parent_root: root,
+            root: candidate,
+            counters,
+        },
+        peak_bytes,
+        prunes,
     })
 }
 
 pub fn apply_directory_changes(
     store: &mut impl ObjectStore,
-    mut root: DirectoryStateRoot,
+    root: DirectoryStateRoot,
     changes: impl IntoIterator<Item = (crate::CanonicalName, Option<InodeId>)>,
 ) -> CoreResult<(DirectoryStateRoot, crate::namespace::NamespaceCounters)> {
+    let (root, counters, _) = apply_directory_changes_observed(store, root, changes)?;
+    Ok((root, counters))
+}
+
+pub fn apply_directory_changes_observed(
+    store: &mut impl ObjectStore,
+    root: DirectoryStateRoot,
+    changes: impl IntoIterator<Item = (crate::CanonicalName, Option<InodeId>)>,
+) -> CoreResult<(
+    DirectoryStateRoot,
+    crate::namespace::NamespaceCounters,
+    StructuralBatchCounters,
+)> {
+    let result = apply_directory_changes_deferred(store, root, changes)?;
+    Ok((
+        result.value.0,
+        result.value.1,
+        StructuralBatchCounters {
+            deferred_peak_bytes: result.peak_bytes as u64,
+            deferred_prunes: result.prunes,
+        },
+    ))
+}
+
+fn apply_directory_changes_deferred(
+    store: &mut impl ObjectStore,
+    mut root: DirectoryStateRoot,
+    changes: impl IntoIterator<Item = (crate::CanonicalName, Option<InodeId>)>,
+) -> CoreResult<DeferredBatchResult<(DirectoryStateRoot, crate::namespace::NamespaceCounters)>> {
     let mut counters = crate::namespace::NamespaceCounters::default();
+    let mut deferred = DeferredDirectory::new(store);
     for (name, desired) in changes {
-        if directory_lookup(store, root, &name, &mut counters)?.is_some() {
-            let (next, _, visits) = directory_remove(store, root, &name)?;
+        if directory_lookup(&deferred, root, &name, &mut counters)?.is_some() {
+            let (next, _, visits) = directory_remove(&mut deferred, root, &name)?;
             merge_namespace_counters(&mut counters, visits)?;
             root = next;
         }
         if let Some(inode) = desired {
-            let (next, visits) = directory_insert(store, root, name, inode)?;
+            let (next, visits) = directory_insert(&mut deferred, root, name, inode)?;
             merge_namespace_counters(&mut counters, visits)?;
             root = next;
         }
+        deferred.prune_to(root)?;
     }
-    Ok((root, counters))
+    let peak_bytes = deferred.peak_charged_bytes();
+    let prunes = deferred.prunes();
+    counters.nodes_created = deferred.commit(root)?;
+    Ok(DeferredBatchResult {
+        value: (root, counters),
+        peak_bytes,
+        prunes,
+    })
 }
 
 pub fn symlink_content(store: &mut impl ObjectStore, target: Vec<u8>) -> CoreResult<ObjectId> {
@@ -610,4 +679,276 @@ fn merge_inode(
         .checked_add(source.nodes_created)
         .ok_or(CoreError::LengthOverflow)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::inode::{inode_table_entries, inode_table_from_root, InodeTableCounters};
+    use crate::namespace::{directory_entries, NamespaceCounters};
+    use crate::namespace_codec::{
+        decode_directory_node, decode_inode_table_node, encode_inode_record,
+    };
+    use std::collections::BTreeMap;
+
+    #[derive(Clone, Default)]
+    struct CountingStore {
+        objects: BTreeMap<ObjectId, Vec<u8>>,
+        inode_node_puts: u64,
+        directory_node_puts: u64,
+    }
+
+    impl CountingStore {
+        fn reset_puts(&mut self) {
+            self.inode_node_puts = 0;
+            self.directory_node_puts = 0;
+        }
+    }
+
+    impl ObjectStore for CountingStore {
+        fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+            self.objects
+                .get(&id)
+                .cloned()
+                .ok_or(CoreError::MissingObject)
+        }
+
+        fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+            let id = ObjectId::for_bytes(canonical);
+            if decode_inode_table_node(canonical).is_ok() {
+                self.inode_node_puts += 1;
+            }
+            if decode_directory_node(canonical).is_ok() {
+                self.directory_node_puts += 1;
+            }
+            self.objects.insert(id, canonical.to_vec());
+            Ok(id)
+        }
+    }
+
+    fn object(byte: u8) -> ObjectId {
+        ObjectId::from_bytes(&[byte; 32]).unwrap()
+    }
+
+    fn record(serial: usize) -> InodeRecordV1 {
+        InodeRecordV1 {
+            kind: InodeKind::RegularFile,
+            namespace_ref_count: 1,
+            content_root: object((serial % 251 + 1) as u8),
+            metadata_root: object((serial.wrapping_mul(17) % 251 + 1) as u8),
+        }
+    }
+
+    fn inode_fixture() -> (CountingStore, ObjectId, InodeId) {
+        let mut store = CountingStore::default();
+        let root_inode = InodeId::allocate([0x41; 32], 0);
+        let root_record = store
+            .put(
+                &encode_inode_record(InodeRecordV1 {
+                    kind: InodeKind::Directory,
+                    namespace_ref_count: 0,
+                    content_root: object(0x51),
+                    metadata_root: object(0x52),
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let table = inode_table_from_root(&mut store, root_inode, root_record).unwrap();
+        let root = store
+            .put(
+                &encode_namespace_root(NamespaceRootV1 {
+                    profile_id: crate::namespace_codec::profile_id(),
+                    root_directory_inode: root_inode,
+                    inode_table_root: table.0,
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        store.reset_puts();
+        (store, root, root_inode)
+    }
+
+    fn sequential_inode_mutations(
+        store: &mut CountingStore,
+        root: ObjectId,
+        mutations: impl IntoIterator<Item = InodeMutation>,
+    ) -> CoreResult<CandidateRoot> {
+        let mut counters = LogicalCounters::default();
+        let namespace = namespace(store, root)?;
+        let mut table = InodeTableRoot(namespace.inode_table_root);
+        for mutation in mutations {
+            match mutation {
+                InodeMutation::Upsert { inode, record } => {
+                    let record = store.put(&encode_inode_record(record)?)?;
+                    let (next, visits) = inode_table_upsert(store, table, inode, record)?;
+                    merge_inode(&mut counters, visits)?;
+                    table = next;
+                }
+                InodeMutation::Remove { inode } => {
+                    let (next, _, visits) = inode_table_remove(store, table, inode)?;
+                    merge_inode(&mut counters, visits)?;
+                    table = next;
+                }
+            }
+        }
+        let root = store.put(&encode_namespace_root(NamespaceRootV1 {
+            inode_table_root: table.0,
+            ..namespace
+        })?)?;
+        Ok(CandidateRoot::new(root, root, counters))
+    }
+
+    fn sequential_directory_changes(
+        store: &mut CountingStore,
+        mut root: DirectoryStateRoot,
+        changes: impl IntoIterator<Item = (crate::CanonicalName, Option<InodeId>)>,
+    ) -> CoreResult<(DirectoryStateRoot, NamespaceCounters)> {
+        let mut counters = NamespaceCounters::default();
+        for (name, desired) in changes {
+            if directory_lookup(store, root, &name, &mut counters)?.is_some() {
+                let (next, _, visits) = directory_remove(store, root, &name)?;
+                merge_namespace_counters(&mut counters, visits)?;
+                root = next;
+            }
+            if let Some(inode) = desired {
+                let (next, visits) = directory_insert(store, root, name, inode)?;
+                merge_namespace_counters(&mut counters, visits)?;
+                root = next;
+            }
+        }
+        Ok((root, counters))
+    }
+
+    fn orders() -> [Vec<usize>; 2] {
+        [
+            (0..512).collect(),
+            (0..512).map(|index| index * 73 % 512).collect(),
+        ]
+    }
+
+    #[test]
+    fn deferred_inode_batch_matches_sequential_roots_with_local_final_puts() {
+        for order in orders() {
+            let (baseline, root, _) = inode_fixture();
+            let mut mutations = order
+                .iter()
+                .copied()
+                .map(|serial| InodeMutation::Upsert {
+                    inode: InodeId::allocate([0x41; 32], serial as u64 + 1),
+                    record: record(serial),
+                })
+                .collect::<Vec<_>>();
+            mutations.extend(order.iter().copied().filter_map(|serial| match serial % 3 {
+                0 => Some(InodeMutation::Remove {
+                    inode: InodeId::allocate([0x41; 32], serial as u64 + 1),
+                }),
+                1 => Some(InodeMutation::Upsert {
+                    inode: InodeId::allocate([0x41; 32], serial as u64 + 1),
+                    record: record(serial + 1024),
+                }),
+                _ => None,
+            }));
+            let removed = order.iter().filter(|serial| **serial % 3 == 0).count();
+            let mut sequential = baseline.clone();
+            let expected =
+                sequential_inode_mutations(&mut sequential, root, mutations.clone()).unwrap();
+            let mut deferred = baseline.clone();
+            let outcome = apply_inode_mutations_deferred(&mut deferred, root, mutations).unwrap();
+            let actual = outcome.value;
+
+            assert_eq!(actual.root(), expected.root());
+            assert_eq!(
+                actual.counters().inode_table.nodes_read,
+                expected.counters().inode_table.nodes_read
+            );
+            let namespace = namespace(&deferred, actual.root()).unwrap();
+            let entries = inode_table_entries(
+                &deferred,
+                InodeTableRoot(namespace.inode_table_root),
+                &mut InodeTableCounters::default(),
+            )
+            .unwrap();
+            assert_eq!(entries.len(), 513 - removed);
+            assert_eq!(
+                entries,
+                inode_table_entries(
+                    &sequential,
+                    InodeTableRoot(namespace.inode_table_root),
+                    &mut InodeTableCounters::default(),
+                )
+                .unwrap()
+            );
+            assert_eq!(
+                actual.counters().inode_table.nodes_created,
+                deferred.inode_node_puts
+            );
+            assert!(
+                deferred.inode_node_puts * 8 < sequential.inode_node_puts,
+                "deferred={} sequential={}",
+                deferred.inode_node_puts,
+                sequential.inode_node_puts
+            );
+            assert!(outcome.peak_bytes <= crate::inode::DEFERRED_INODE_MAX_BYTES);
+            assert!(
+                outcome.prunes > 0,
+                "fixture did not cross inode prune watermark"
+            );
+        }
+    }
+
+    #[test]
+    fn deferred_directory_batch_matches_sequential_roots_with_local_final_puts() {
+        for order in orders() {
+            let mut baseline = CountingStore::default();
+            let root = empty_directory(&mut baseline).unwrap();
+            baseline.reset_puts();
+            let mut changes = order
+                .iter()
+                .copied()
+                .map(|serial| {
+                    (
+                        crate::CanonicalName::new(&format!("entry-{serial:04}")).unwrap(),
+                        Some(InodeId::allocate([0x61; 32], serial as u64)),
+                    )
+                })
+                .collect::<Vec<_>>();
+            changes.extend(order.iter().copied().filter_map(|serial| match serial % 3 {
+                0 => Some((
+                    crate::CanonicalName::new(&format!("entry-{serial:04}")).unwrap(),
+                    None,
+                )),
+                1 => Some((
+                    crate::CanonicalName::new(&format!("entry-{serial:04}")).unwrap(),
+                    Some(InodeId::allocate([0x62; 32], serial as u64)),
+                )),
+                _ => None,
+            }));
+            let mut sequential = baseline.clone();
+            let expected =
+                sequential_directory_changes(&mut sequential, root, changes.clone()).unwrap();
+            let mut deferred = baseline.clone();
+            let outcome = apply_directory_changes_deferred(&mut deferred, root, changes).unwrap();
+            let actual = outcome.value;
+
+            assert_eq!(actual.0, expected.0);
+            assert_eq!(actual.1.nodes_read, expected.1.nodes_read);
+            assert_eq!(
+                directory_entries(&deferred, actual.0, &mut NamespaceCounters::default()).unwrap(),
+                directory_entries(&sequential, expected.0, &mut NamespaceCounters::default())
+                    .unwrap()
+            );
+            assert_eq!(actual.1.nodes_created, deferred.directory_node_puts);
+            assert!(
+                deferred.directory_node_puts * 8 < sequential.directory_node_puts,
+                "deferred={} sequential={}",
+                deferred.directory_node_puts,
+                sequential.directory_node_puts
+            );
+            assert!(outcome.peak_bytes <= crate::namespace::DEFERRED_DIRECTORY_MAX_BYTES);
+            assert!(
+                outcome.prunes > 0,
+                "fixture did not cross directory prune watermark"
+            );
+        }
+    }
 }

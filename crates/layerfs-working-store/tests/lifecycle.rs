@@ -154,6 +154,15 @@ fn concurrent_exact_head_operations_record_one_winner_and_preserve_the_conflict(
     };
     assert_eq!(rolled_back.root, accepted2.root);
     assert_eq!(rolled_back.generation, accepted4.generation + 1);
+    let unreachable = {
+        let mut publication = working.begin_candidate_write().unwrap();
+        let unreachable = publication
+            .put(&layerfs_core::encode_bytes_object(b"unreachable compaction proof").unwrap())
+            .unwrap();
+        publication.commit_objects().unwrap();
+        unreachable
+    };
+    assert!(working.sync_has_object(unreachable).unwrap());
     drop(working);
 
     let reopened = WorkingStore::open(&root, IntegrityMode::TrustedLocalDev).unwrap();
@@ -167,6 +176,25 @@ fn concurrent_exact_head_operations_record_one_winner_and_preserve_the_conflict(
         .database_path()
         .ends_with("generation-0000000000000000.sqlite"));
     let reopened = reopened.compact().unwrap();
+    let observation = reopened.last_compaction_observation().unwrap();
+    assert_eq!(
+        observation.source_indexed_objects,
+        observation.retained_objects + observation.reclaimed_objects
+    );
+    assert_eq!(
+        observation.source_indexed_canonical_bytes,
+        observation.retained_canonical_bytes + observation.reclaimed_canonical_bytes
+    );
+    assert_eq!(
+        observation.candidate_indexed_objects,
+        observation.retained_objects
+    );
+    assert_eq!(
+        observation.candidate_indexed_canonical_bytes,
+        observation.retained_canonical_bytes
+    );
+    assert!(observation.reclaimed_objects > 0);
+    assert!(observation.reclaimed_canonical_bytes > 0);
     assert_eq!(reopened.storage_id(), storage_id);
     assert_eq!(
         reopened.branch_head(branch.branch_id).unwrap(),
@@ -178,6 +206,7 @@ fn concurrent_exact_head_operations_record_one_winner_and_preserve_the_conflict(
     assert!(!root
         .join("working.sqlite.generations/generation-0000000000000000.sqlite")
         .exists());
+    assert!(!reopened.sync_has_object(unreachable).unwrap());
     assert_eq!(
         fs::metadata(root.join("working.sqlite.generations/CURRENT"))
             .unwrap()

@@ -22,6 +22,8 @@ pub struct RopeCounters {
     pub chunks_created: u64,
     pub nodes_read: u64,
     pub nodes_created: u64,
+    pub deferred_peak_bytes: u64,
+    pub deferred_prunes: u64,
     pub tree_level_before: Option<u8>,
     pub logical_len_before: Option<u64>,
     pub logical_len_after: Option<u64>,
@@ -120,17 +122,25 @@ fn scan_mapping<S: ObjectStore, R: Read>(
     Ok((levels, counters, cdc.bytes_scanned))
 }
 
-fn scan_replacement_mapping<S: ObjectStore, R: Read>(
+fn scan_replacement_mapping_with<S, R, FP, FN>(
     store: &mut S,
     source: R,
-) -> CoreResult<ReplacementScan> {
+    mut put_payload: FP,
+    mut put_sealed_node: FN,
+) -> CoreResult<ReplacementScan>
+where
+    S: ObjectStore,
+    R: Read,
+    FP: FnMut(&mut S, &[u8]) -> CoreResult<ObjectId>,
+    FN: FnMut(&mut S, &[u8]) -> CoreResult<ObjectId>,
+{
     let mut deferred = DeferredNodes::new(store);
     let mut levels = vec![Pending::Extents(Vec::with_capacity(STREAM_FLUSH_AT + 1))];
     let mut counters = RopeCounters::default();
     let mut flushed = 0_u64;
     let cdc = FastCdc::new().scan(source, |chunk| {
         let canonical = encode_bytes_object(chunk)?;
-        let payload = deferred.store.put(&canonical)?;
+        let payload = put_payload(deferred.store, &canonical)?;
         counters.payload_bytes_written = add(counters.payload_bytes_written, chunk.len() as u64)?;
         counters.chunks_created = add(counters.chunks_created, 1)?;
         match &mut levels[0] {
@@ -140,7 +150,10 @@ fn scan_replacement_mapping<S: ObjectStore, R: Read>(
             Pending::Children(_) => unreachable!(),
         }
         flush_streaming(&mut deferred, &mut levels, 0, &mut counters)?;
-        flushed = add(flushed, deferred.flush_sealed(&levels)?)?;
+        flushed = add(
+            flushed,
+            deferred.flush_sealed_with(&levels, &mut put_sealed_node)?,
+        )?;
         Ok(())
     })?;
     counters.cdc_bytes_scanned = cdc.bytes_scanned;
@@ -390,6 +403,32 @@ pub fn replace<S: ObjectStore, R: Read>(
     delete_len: u64,
     replacement: R,
 ) -> CoreResult<(FileStateRoot, RopeCounters)> {
+    replace_with_sinks(
+        store,
+        root,
+        start,
+        delete_len,
+        replacement,
+        |store, canonical| store.put(canonical),
+        |store, canonical| store.put(canonical),
+    )
+}
+
+fn replace_with_sinks<S, R, FP, FN>(
+    store: &mut S,
+    root: FileStateRoot,
+    start: u64,
+    delete_len: u64,
+    replacement: R,
+    put_payload: FP,
+    put_sealed_node: FN,
+) -> CoreResult<(FileStateRoot, RopeCounters)>
+where
+    S: ObjectStore,
+    R: Read,
+    FP: FnMut(&mut S, &[u8]) -> CoreResult<ObjectId>,
+    FN: FnMut(&mut S, &[u8]) -> CoreResult<ObjectId>,
+{
     let mut counters = RopeCounters::default();
     let old = state(store, root, &mut counters)?;
     counters.tree_level_before = Some(old.tree_level);
@@ -410,7 +449,7 @@ pub fn replace<S: ObjectStore, R: Read>(
         extents: old.extent_count,
         level: old.tree_level,
     };
-    let scan = scan_replacement_mapping(store, replacement)?;
+    let scan = scan_replacement_mapping_with(store, replacement, put_payload, put_sealed_node)?;
     merge_counters(&mut counters, scan.counters)?;
     let persisted_nodes = scan.persisted_nodes;
     let mut levels = scan.levels;
@@ -444,6 +483,304 @@ pub fn replace<S: ObjectStore, R: Read>(
     Ok((FileStateRoot(id), counters))
 }
 
+/// Coalesces multiple ordered file edits in one private object overlay and
+/// publishes only the extent objects reachable from the final file state.
+/// The returned root is byte-identical to applying [`replace`] in the same
+/// order directly to the underlying store. Edits containing replacement bytes
+/// must describe non-overlapping final ranges in ascending order; callers must
+/// normalize repeated writes before constructing the batch.
+pub struct FileMutationBatch<'a, S> {
+    objects: DeferredFileObjects<'a, S>,
+    root: FileStateRoot,
+    counters: RopeCounters,
+    initial_level: u8,
+    initial_len: u64,
+    current_len: u64,
+    finalized_through: u64,
+}
+
+impl<'a, S: ObjectStore> FileMutationBatch<'a, S> {
+    pub fn new(store: &'a mut S, root: Option<FileStateRoot>) -> CoreResult<Self> {
+        let mut objects = DeferredFileObjects::new(store);
+        let (root, mut counters) = match root {
+            Some(root) => (root, RopeCounters::default()),
+            None => build(&mut objects, std::io::empty())?,
+        };
+        let state = state(&objects, root, &mut counters)?;
+        Ok(Self {
+            objects,
+            root,
+            counters,
+            initial_level: state.tree_level,
+            initial_len: state.logical_len,
+            current_len: state.logical_len,
+            finalized_through: 0,
+        })
+    }
+
+    pub fn logical_len(&self) -> CoreResult<u64> {
+        Ok(self.current_len)
+    }
+
+    pub fn deferred_peak_bytes(&self) -> u64 {
+        self.objects.peak_charged_bytes as u64
+    }
+
+    pub fn deferred_prunes(&self) -> u64 {
+        self.objects.prunes
+    }
+
+    pub fn replace<R: Read>(
+        &mut self,
+        start: u64,
+        delete_len: u64,
+        replacement: R,
+    ) -> CoreResult<()> {
+        if start < self.finalized_through {
+            return Err(CoreError::InvalidRange {
+                start,
+                end: start
+                    .checked_add(delete_len)
+                    .ok_or(CoreError::LengthOverflow)?,
+                length: self.current_len,
+            });
+        }
+        let (root, counters) = replace_with_sinks(
+            &mut self.objects,
+            self.root,
+            start,
+            delete_len,
+            replacement,
+            |objects, canonical| objects.put_payload(canonical),
+            |objects, canonical| objects.put_sealed_node(canonical),
+        )?;
+        self.objects.prune_to(root)?;
+        self.current_len = counters
+            .logical_len_after
+            .ok_or(CoreError::InvalidRecord("batch replacement length"))?;
+        if counters.cdc_bytes_scanned != 0 {
+            self.finalized_through = start
+                .checked_add(counters.cdc_bytes_scanned)
+                .ok_or(CoreError::LengthOverflow)?;
+        }
+        self.root = root;
+        merge_counters(&mut self.counters, counters)
+    }
+
+    pub fn finish(mut self) -> CoreResult<(FileStateRoot, RopeCounters)> {
+        let committed = self.objects.commit(self.root)?;
+        self.counters.nodes_created = add(self.objects.sealed_node_puts, committed)?;
+        self.counters.deferred_peak_bytes = self.objects.peak_charged_bytes as u64;
+        self.counters.deferred_prunes = self.objects.prunes;
+        self.counters.tree_level_before = Some(self.initial_level);
+        self.counters.logical_len_before = Some(self.initial_len);
+        self.counters.logical_len_after = Some(self.current_len);
+        Ok((self.root, self.counters))
+    }
+}
+
+struct DeferredFileObjects<'a, S> {
+    store: &'a mut S,
+    objects: BTreeMap<ObjectId, Vec<u8>>,
+    charged_bytes: usize,
+    peak_charged_bytes: usize,
+    prunes: u64,
+    sealed_node_puts: u64,
+}
+
+const DEFERRED_FILE_PRUNE_BYTES: usize = 4 * 1024 * 1024;
+pub const FILE_MUTATION_BATCH_MAX_DEFERRED_BYTES: usize = 8 * 1024 * 1024 - 1;
+const DEFERRED_OBJECT_CHARGE_BYTES: usize = 128;
+
+impl<'a, S: ObjectStore> DeferredFileObjects<'a, S> {
+    fn new(store: &'a mut S) -> Self {
+        Self {
+            store,
+            objects: BTreeMap::new(),
+            charged_bytes: 0,
+            peak_charged_bytes: 0,
+            prunes: 0,
+            sealed_node_puts: 0,
+        }
+    }
+
+    fn put_payload(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+        self.store.put(canonical)
+    }
+
+    fn put_sealed_node(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+        let id = self.store.put(canonical)?;
+        self.sealed_node_puts = self
+            .sealed_node_puts
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        Ok(id)
+    }
+
+    fn prune_to(&mut self, root: FileStateRoot) -> CoreResult<()> {
+        if self.charged_bytes <= DEFERRED_FILE_PRUNE_BYTES {
+            return Ok(());
+        }
+        let mut reachable = BTreeSet::new();
+        self.collect_state(root, &mut reachable)?;
+        self.objects.retain(|id, _| reachable.contains(id));
+        self.charged_bytes = self.objects.values().try_fold(0_usize, |total, bytes| {
+            total
+                .checked_add(deferred_object_charge(bytes.len())?)
+                .ok_or(CoreError::LengthOverflow)
+        })?;
+        self.prunes = self
+            .prunes
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
+        Ok(())
+    }
+
+    fn collect_state(
+        &self,
+        root: FileStateRoot,
+        reachable: &mut BTreeSet<ObjectId>,
+    ) -> CoreResult<()> {
+        let Some(canonical) = self.objects.get(&root.0) else {
+            return Ok(());
+        };
+        reachable.insert(root.0);
+        let state = decode_file_state(canonical)?;
+        self.collect_mapping(
+            Summary {
+                id: state.mapping_root,
+                bytes: state.logical_len,
+                extents: state.extent_count,
+                level: state.tree_level,
+            },
+            true,
+            reachable,
+        )
+    }
+
+    fn collect_mapping(
+        &self,
+        expected: Summary,
+        root: bool,
+        reachable: &mut BTreeSet<ObjectId>,
+    ) -> CoreResult<()> {
+        let Some(canonical) = self.objects.get(&expected.id) else {
+            return Ok(());
+        };
+        if !reachable.insert(expected.id) {
+            return Ok(());
+        }
+        let node = decode_node_with_context(canonical, root)?;
+        validate_summary(&node, expected)?;
+        if let ExtentNodeV3::Branch {
+            level, children, ..
+        } = &node
+        {
+            for child in child_summaries(children, *level - 1) {
+                self.collect_mapping(child, false, reachable)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn commit(&mut self, root: FileStateRoot) -> CoreResult<u64> {
+        let Some(canonical) = self.objects.get(&root.0).cloned() else {
+            return Ok(0);
+        };
+        let state = decode_file_state(&canonical)?;
+        let summary = Summary {
+            id: state.mapping_root,
+            bytes: state.logical_len,
+            extents: state.extent_count,
+            level: state.tree_level,
+        };
+        let mut visited = BTreeSet::new();
+        self.commit_mapping(summary, true, &mut visited)?;
+        if self.store.put(&canonical)? != root.0 {
+            return Err(CoreError::IdentityMismatch);
+        }
+        u64::try_from(visited.len()).map_err(|_| CoreError::LengthOverflow)
+    }
+
+    fn commit_mapping(
+        &mut self,
+        expected: Summary,
+        root: bool,
+        visited: &mut BTreeSet<ObjectId>,
+    ) -> CoreResult<()> {
+        if !visited.insert(expected.id) {
+            return Ok(());
+        }
+        let Some(canonical) = self.objects.get(&expected.id).cloned() else {
+            visited.remove(&expected.id);
+            return Ok(());
+        };
+        let node = decode_node_with_context(&canonical, root)?;
+        validate_summary(&node, expected)?;
+        match &node {
+            ExtentNodeV3::Leaf { .. } => {}
+            ExtentNodeV3::Branch {
+                level, children, ..
+            } => {
+                for child in child_summaries(children, *level - 1) {
+                    self.commit_mapping(child, false, visited)?;
+                }
+            }
+        }
+        if self.store.put(&canonical)? != expected.id {
+            return Err(CoreError::IdentityMismatch);
+        }
+        Ok(())
+    }
+}
+
+impl<S: ObjectStore> ObjectStore for DeferredFileObjects<'_, S> {
+    fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+        self.objects
+            .get(&id)
+            .cloned()
+            .map_or_else(|| self.store.get(id), Ok)
+    }
+
+    fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+        let id = ObjectId::for_bytes(canonical);
+        match self.objects.get(&id) {
+            Some(prior) if prior != canonical => return Err(CoreError::IdentityMismatch),
+            Some(_) => return Ok(id),
+            None => {}
+        }
+        let charged = deferred_object_charge(canonical.len())?;
+        let next = self
+            .charged_bytes
+            .checked_add(charged)
+            .ok_or(CoreError::LengthOverflow)?;
+        if next > FILE_MUTATION_BATCH_MAX_DEFERRED_BYTES {
+            return Err(CoreError::ObjectLimitExceeded);
+        }
+        self.objects.insert(id, canonical.to_vec());
+        self.charged_bytes = next;
+        self.peak_charged_bytes = self.peak_charged_bytes.max(next);
+        Ok(id)
+    }
+
+    fn with_authenticated_canonical<T, F>(&self, id: ObjectId, callback: F) -> CoreResult<T>
+    where
+        F: FnOnce(&[u8]) -> CoreResult<T>,
+    {
+        match self.objects.get(&id) {
+            Some(bytes) if ObjectId::for_bytes(bytes) == id => callback(bytes),
+            Some(_) => Err(CoreError::IdentityMismatch),
+            None => self.store.with_authenticated_canonical(id, callback),
+        }
+    }
+}
+
+fn deferred_object_charge(canonical_bytes: usize) -> CoreResult<usize> {
+    canonical_bytes
+        .checked_add(DEFERRED_OBJECT_CHARGE_BYTES)
+        .ok_or(CoreError::LengthOverflow)
+}
+
 struct DeferredNodes<'a, S> {
     store: &'a mut S,
     nodes: BTreeMap<ObjectId, Vec<u8>>,
@@ -465,7 +802,10 @@ impl<'a, S: ObjectStore> DeferredNodes<'a, S> {
         self.nodes
     }
 
-    fn flush_sealed(&mut self, levels: &[Pending]) -> CoreResult<u64> {
+    fn flush_sealed_with<F>(&mut self, levels: &[Pending], put: &mut F) -> CoreResult<u64>
+    where
+        F: FnMut(&mut S, &[u8]) -> CoreResult<ObjectId>,
+    {
         let mut protected = BTreeSet::new();
         for pending in levels {
             if let Pending::Children(children) = pending {
@@ -485,7 +825,7 @@ impl<'a, S: ObjectStore> DeferredNodes<'a, S> {
             .collect::<Vec<_>>();
         let mut flushed = BTreeSet::new();
         for id in sealed {
-            self.flush_node(id, &mut flushed)?;
+            self.flush_node_with(id, &mut flushed, put)?;
         }
         u64::try_from(flushed.len()).map_err(|_| CoreError::LengthOverflow)
     }
@@ -516,7 +856,15 @@ impl<'a, S: ObjectStore> DeferredNodes<'a, S> {
         Ok(())
     }
 
-    fn flush_node(&mut self, id: ObjectId, flushed: &mut BTreeSet<ObjectId>) -> CoreResult<()> {
+    fn flush_node_with<F>(
+        &mut self,
+        id: ObjectId,
+        flushed: &mut BTreeSet<ObjectId>,
+        put: &mut F,
+    ) -> CoreResult<()>
+    where
+        F: FnMut(&mut S, &[u8]) -> CoreResult<ObjectId>,
+    {
         if !flushed.insert(id) {
             return Ok(());
         }
@@ -529,10 +877,10 @@ impl<'a, S: ObjectStore> DeferredNodes<'a, S> {
         } = decode_node_with_context(&canonical, true)?
         {
             for child in child_summaries(&children, level - 1) {
-                self.flush_node(child.id, flushed)?;
+                self.flush_node_with(child.id, flushed, put)?;
             }
         }
-        if self.store.put(&canonical)? != id {
+        if put(self.store, &canonical)? != id {
             return Err(CoreError::IdentityMismatch);
         }
         self.nodes.remove(&id);
@@ -1467,6 +1815,8 @@ fn merge_counters(target: &mut RopeCounters, source: RopeCounters) -> CoreResult
     target.chunks_created = add(target.chunks_created, source.chunks_created)?;
     target.nodes_read = add(target.nodes_read, source.nodes_read)?;
     target.nodes_created = add(target.nodes_created, source.nodes_created)?;
+    target.deferred_peak_bytes = target.deferred_peak_bytes.max(source.deferred_peak_bytes);
+    target.deferred_prunes = add(target.deferred_prunes, source.deferred_prunes)?;
     target.tree_level_before = match (target.tree_level_before, source.tree_level_before) {
         (None, value) | (value, None) => value,
         (Some(left), Some(right)) if left == right => Some(left),
@@ -1776,4 +2126,118 @@ fn pending_len(pending: &Pending) -> usize {
 
 fn add(left: u64, right: u64) -> CoreResult<u64> {
     left.checked_add(right).ok_or(CoreError::LengthOverflow)
+}
+
+#[cfg(test)]
+mod batch_tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    struct XorShiftReader {
+        remaining: u64,
+        word: u64,
+    }
+
+    impl Read for XorShiftReader {
+        fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+            let count = output.len().min(self.remaining as usize);
+            for byte in &mut output[..count] {
+                self.word ^= self.word << 13;
+                self.word ^= self.word >> 7;
+                self.word ^= self.word << 17;
+                *byte = self.word as u8;
+            }
+            self.remaining -= count as u64;
+            Ok(count)
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct SharedStore {
+        objects: Rc<RefCell<BTreeMap<ObjectId, Vec<u8>>>>,
+        puts: Rc<RefCell<u64>>,
+    }
+
+    impl ObjectStore for SharedStore {
+        fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+            self.objects
+                .borrow()
+                .get(&id)
+                .cloned()
+                .ok_or(CoreError::MissingObject)
+        }
+
+        fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+            let id = ObjectId::for_bytes(canonical);
+            self.objects.borrow_mut().insert(id, canonical.to_vec());
+            *self.puts.borrow_mut() += 1;
+            Ok(id)
+        }
+    }
+
+    #[test]
+    fn file_batch_streams_payload_while_deferring_only_structural_objects() {
+        let mut store = SharedStore::default();
+        let observed = store.clone();
+        let mut word = 0x74a9_32bc_51de_8801_u64;
+        let input = (0..2 * 1024 * 1024)
+            .map(|_| {
+                word ^= word << 13;
+                word ^= word >> 7;
+                word ^= word << 17;
+                word as u8
+            })
+            .collect::<Vec<_>>();
+        let mut batch = FileMutationBatch::new(&mut store, None).unwrap();
+        batch.replace(0, 0, input.as_slice()).unwrap();
+
+        let persisted_bytes = observed
+            .objects
+            .borrow()
+            .values()
+            .map(Vec::len)
+            .sum::<usize>();
+        let deferred_bytes = batch.objects.objects.values().map(Vec::len).sum::<usize>();
+        assert!(persisted_bytes >= input.len());
+        assert!(deferred_bytes * 8 < input.len());
+
+        let puts_before_finish = *observed.puts.borrow();
+        let sealed_before_finish = batch.objects.sealed_node_puts;
+        let (root, counters) = batch.finish().unwrap();
+        assert_eq!(
+            *observed.puts.borrow() - puts_before_finish,
+            counters.nodes_created - sealed_before_finish + 1
+        );
+        let mut output = Vec::new();
+        read_all(&store, root, &mut output).unwrap();
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn file_batch_streams_large_replacement_below_structural_hard_bound() {
+        let mut store = SharedStore::default();
+        let mut batch = FileMutationBatch::new(&mut store, None).unwrap();
+        batch
+            .replace(
+                0,
+                0,
+                XorShiftReader {
+                    remaining: 64 * 1024 * 1024,
+                    word: 0x74a9_32bc_51de_8801,
+                },
+            )
+            .unwrap();
+        assert!(batch.deferred_peak_bytes() <= FILE_MUTATION_BATCH_MAX_DEFERRED_BYTES as u64);
+        assert!(batch.objects.sealed_node_puts > 0);
+        let (root, counters) = batch.finish().unwrap();
+        assert_eq!(counters.logical_len_after, Some(64 * 1024 * 1024));
+        assert!(counters.nodes_created > 0);
+        assert_eq!(
+            state(&store, root, &mut RopeCounters::default())
+                .unwrap()
+                .logical_len,
+            64 * 1024 * 1024
+        );
+    }
 }

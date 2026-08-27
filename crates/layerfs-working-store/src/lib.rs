@@ -17,8 +17,8 @@ pub use layerfs_storage::product::{
 };
 pub use layerfs_storage::scratch::ScratchObservation;
 pub use layerfs_storage::scratch::{DiskNamespace, DiskTable};
-pub use layerfs_storage::EngineCounters;
 pub use layerfs_storage::StorageError;
+pub use layerfs_storage::{CompactionStorageObservation, EngineCounters};
 use layerfs_storage::{EngineError, Storage};
 use std::fmt;
 use std::fs;
@@ -828,6 +828,10 @@ impl WorkingStore {
             &layerfs_storage::generation::NativeGenerationDriver,
         )?;
         Ok(Self { root, storage })
+    }
+
+    pub fn last_compaction_observation(&self) -> Option<CompactionStorageObservation> {
+        self.storage.last_compaction_observation()
     }
 
     pub fn sync_has_object(&self, id: layerfs_core::ObjectId) -> Result<bool> {

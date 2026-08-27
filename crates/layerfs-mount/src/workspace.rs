@@ -1,6 +1,6 @@
 use layerfs_core::content::rope::{
-    build, read_all_bounded, read_plan, read_range_with_plan, replace, state as rope_state,
-    FileStateRoot, ObjectRead, ReadPlan, RopeCounters,
+    build, read_all_bounded, read_plan, read_range_with_plan, state as rope_state,
+    FileMutationBatch, FileStateRoot, ObjectRead, ReadPlan, RopeCounters,
 };
 use layerfs_core::inode::{
     inode_table_lookup, visit_inode_table_entries, InodeId, InodeKind, InodeRecordV1,
@@ -40,8 +40,8 @@ pub const MAX_DIRECTORY_CURSORS: usize = 4_096;
 pub const MAX_DIRECTORY_CHANGES: usize = 8_192;
 pub const SPOOL_QUOTA_BYTES: u64 = 512 * 1024 * 1024;
 pub const MAX_LIVE_SPOOL_BYTES: u64 = 320 * 1024 * 1024;
-pub const MAX_LOGICAL_FILE_BYTES: u64 = 320 * 1024 * 1024;
 pub const MAX_LOGICAL_WORKSPACE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+pub const MAX_LOGICAL_FILE_BYTES: u64 = MAX_LOGICAL_WORKSPACE_BYTES;
 pub const MAX_COLD_LOOKUP_PRIMARY_STATEMENTS: u64 = 16;
 const DIRECTORY_PAGE_ENTRIES: usize = 128;
 const DIRECTORY_PAGE_BYTES: usize = 256 * 1024;
@@ -154,6 +154,8 @@ pub struct MountedCounters {
     pub capture_scans: u64,
     pub metadata_cow_nodes_read: u64,
     pub metadata_cow_nodes_created: u64,
+    pub structural_overlay_peak_bytes: u64,
+    pub structural_overlay_prunes: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -834,13 +836,8 @@ impl MountedWorkspace {
 
     pub fn capacity(&self) -> Result<MountedCapacity, MountedError> {
         self.require_live_or_incomplete_read()?;
-        let free_bytes = MAX_LOGICAL_WORKSPACE_BYTES
-            .saturating_sub(self.logical_workspace_bytes)
-            .min(MAX_LIVE_SPOOL_BYTES.saturating_sub(self.spool.live));
-        let free_files = MAX_MOUNTED_NODES
-            .saturating_sub(self.nodes.len())
-            .min(MAX_DIRTY_NODES.saturating_sub(self.dirty_nodes.len()))
-            .min(MAX_DIRECTORY_CHANGES.saturating_sub(self.directory_changes));
+        let free_bytes = MAX_LOGICAL_WORKSPACE_BYTES.saturating_sub(self.logical_workspace_bytes);
+        let free_files = MAX_MOUNTED_NODES.saturating_sub(self.nodes.len());
         Ok(MountedCapacity {
             total_bytes: MAX_LOGICAL_WORKSPACE_BYTES,
             free_bytes,
@@ -1784,6 +1781,8 @@ impl MountedWorkspace {
         }
         let mut persisted = HashMap::new();
         let mut mutations = Vec::with_capacity(dirty_ids.len());
+        let mut structural_overlay_peak_bytes = 0_u64;
+        let mut structural_overlay_prunes = 0_u64;
         for id in &dirty_ids {
             let node = self.nodes.get(id).ok_or(MountedError::Corrupt)?;
             if node.deleted {
@@ -1804,7 +1803,18 @@ impl MountedWorkspace {
             };
             let inode = *canonical_ids.get(id).ok_or(MountedError::Corrupt)?;
             let content_root = if snapshot.canonical.is_none() || snapshot.dirty_content {
-                Self::persist_content(&mut self.spool, &mut publication, &snapshot, &canonical_ids)?
+                let content = Self::persist_content(
+                    &mut self.spool,
+                    &mut publication,
+                    &snapshot,
+                    &canonical_ids,
+                )?;
+                structural_overlay_peak_bytes =
+                    structural_overlay_peak_bytes.max(content.structural_overlay_peak_bytes);
+                structural_overlay_prunes = structural_overlay_prunes
+                    .checked_add(content.structural_overlay_prunes)
+                    .ok_or(MountedError::ResourceExhausted)?;
+                content.root
             } else {
                 snapshot.record.ok_or(MountedError::Corrupt)?.content_root
             };
@@ -1844,6 +1854,21 @@ impl MountedWorkspace {
         }
         let candidate =
             publication.trusted_apply_inode_mutations(self.candidate_root, mutations)?;
+        let logical = candidate.counters();
+        structural_overlay_peak_bytes =
+            structural_overlay_peak_bytes.max(logical.structural_deferred_peak_bytes);
+        structural_overlay_prunes = structural_overlay_prunes
+            .checked_add(logical.structural_deferred_prunes)
+            .ok_or(MountedError::ResourceExhausted)?;
+        self.counters.structural_overlay_peak_bytes = self
+            .counters
+            .structural_overlay_peak_bytes
+            .max(structural_overlay_peak_bytes);
+        self.counters.structural_overlay_prunes = self
+            .counters
+            .structural_overlay_prunes
+            .checked_add(structural_overlay_prunes)
+            .ok_or(MountedError::ResourceExhausted)?;
         let root = candidate.root();
         let namespace = layerfs_core::logical::namespace(&publication, root)?;
         publication.commit_trusted_operation_candidate(self.admission.operation_id, candidate)?;
@@ -1935,7 +1960,7 @@ impl MountedWorkspace {
         publication: &mut WorkingCandidateWrite<'_>,
         node: &CheckpointNode,
         canonical_ids: &HashMap<MountedNodeId, InodeId>,
-    ) -> Result<ObjectId, MountedError> {
+    ) -> Result<PersistedContent, MountedError> {
         match &node.content {
             NodeContent::File {
                 base,
@@ -1944,19 +1969,10 @@ impl MountedWorkspace {
                 ranges,
                 ..
             } => {
-                let (mut root, mut current_len) = if let Some(root) = base {
-                    let mut counters = RopeCounters::default();
-                    let state =
-                        layerfs_core::content::rope::state(publication, *root, &mut counters)?;
-                    (*root, state.logical_len)
-                } else {
-                    let (root, _) = build(publication, Cursor::new(&[]))?;
-                    (root, 0)
-                };
+                let mut batch = FileMutationBatch::new(publication, *base)?;
+                let mut current_len = batch.logical_len()?;
                 if current_len > *base_visible_len {
-                    (root, _) = replace(
-                        publication,
-                        root,
+                    batch.replace(
                         *base_visible_len,
                         current_len - *base_visible_len,
                         Cursor::new(&[]),
@@ -1966,37 +1982,34 @@ impl MountedWorkspace {
                 for (start, range) in ranges {
                     if *start > current_len {
                         let gap = *start - current_len;
-                        (root, _) = replace(publication, root, current_len, 0, ZeroReader(gap))?;
+                        batch.replace(current_len, 0, ZeroReader(gap))?;
                         current_len = *start;
                     }
                     let length = range.end - *start;
                     let delete = length.min(current_len.saturating_sub(*start));
                     let slice = spool.slice(range.spool_offset, length)?;
-                    (root, _) = replace(publication, root, *start, delete, slice)?;
+                    batch.replace(*start, delete, slice)?;
                     current_len = current_len.max(range.end);
                 }
                 match current_len.cmp(logical_len) {
                     Ordering::Greater => {
-                        (root, _) = replace(
-                            publication,
-                            root,
+                        batch.replace(
                             *logical_len,
                             current_len - *logical_len,
                             Cursor::new(&[]),
                         )?;
                     }
                     Ordering::Less => {
-                        (root, _) = replace(
-                            publication,
-                            root,
-                            current_len,
-                            0,
-                            ZeroReader(*logical_len - current_len),
-                        )?;
+                        batch.replace(current_len, 0, ZeroReader(*logical_len - current_len))?;
                     }
                     Ordering::Equal => {}
                 }
-                Ok(root.0)
+                let (root, counters) = batch.finish()?;
+                Ok(PersistedContent {
+                    root: root.0,
+                    structural_overlay_peak_bytes: counters.deferred_peak_bytes,
+                    structural_overlay_prunes: counters.deferred_prunes,
+                })
             }
             NodeContent::Directory { base, changes } => {
                 let root = match base {
@@ -2015,16 +2028,22 @@ impl MountedWorkspace {
                         .transpose()?;
                     entries.push((name.clone(), inode));
                 }
-                Ok(
-                    layerfs_core::logical::apply_directory_changes(publication, root, entries)?
-                        .0
-                         .0,
-                )
+                let (root, _, counters) = layerfs_core::logical::apply_directory_changes_observed(
+                    publication,
+                    root,
+                    entries,
+                )?;
+                Ok(PersistedContent {
+                    root: root.0,
+                    structural_overlay_peak_bytes: counters.deferred_peak_bytes,
+                    structural_overlay_prunes: counters.deferred_prunes,
+                })
             }
-            NodeContent::Symlink { target } => Ok(layerfs_core::logical::symlink_content(
-                publication,
-                target.clone(),
-            )?),
+            NodeContent::Symlink { target } => Ok(PersistedContent {
+                root: layerfs_core::logical::symlink_content(publication, target.clone())?,
+                structural_overlay_peak_bytes: 0,
+                structural_overlay_prunes: 0,
+            }),
         }
     }
 
@@ -3030,6 +3049,12 @@ struct CheckpointNode {
     metadata_root: Option<ObjectId>,
 }
 
+struct PersistedContent {
+    root: ObjectId,
+    structural_overlay_peak_bytes: u64,
+    structural_overlay_prunes: u64,
+}
+
 fn persist_metadata(
     publication: &mut WorkingCandidateWrite<'_>,
     node: &CheckpointNode,
@@ -3542,6 +3567,68 @@ mod product_tests {
         assert!(mounted.automatic_checkpoint_needed());
         mounted.fsync().unwrap();
         assert!(!mounted.automatic_checkpoint_needed());
+        let counters = mounted.counters().unwrap();
+        assert!(counters.structural_overlay_peak_bytes <= MAX_OPERATION_Q_BYTES as u64);
+        assert!(counters.structural_overlay_prunes > 0);
+        mounted.shutdown().unwrap();
+        drop(mounted);
+        drop(working);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn logical_file_limit_matches_workspace_without_allocating_payload() {
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-mount-file-limit-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let working_root = directory.join("working");
+        let working = WorkingStore::open(&working_root, IntegrityMode::TrustedLocalDev).unwrap();
+        let root = empty_root(&working);
+        let stack = working
+            .create_layer_stack(
+                LayerStackId::from_bytes([0x51; 32]),
+                LayerId::from_bytes([0x52; 32]),
+                "stack",
+                root,
+            )
+            .unwrap();
+        let head = working
+            .create_top_level_branch(BranchId::from_bytes([0x53; 32]), Some("main"), stack)
+            .unwrap();
+        let admission = working.begin_operation(head).unwrap();
+        let mut mounted = MountedWorkspace::open(
+            &working_root,
+            admission,
+            IntegrityMode::TrustedLocalDev,
+            directory.join("spool"),
+        )
+        .unwrap();
+        let capacity = mounted.capacity().unwrap();
+        assert_eq!(capacity.total_bytes, MAX_LOGICAL_WORKSPACE_BYTES);
+        assert_eq!(capacity.free_bytes, MAX_LOGICAL_WORKSPACE_BYTES);
+        let file = mounted.mknod_file(ROOT_NODE, b"large", 0o644).unwrap();
+        mounted.truncate(file.node, MAX_LOGICAL_FILE_BYTES).unwrap();
+        assert_eq!(mounted.capacity().unwrap().free_bytes, 0);
+        assert_eq!(
+            mounted.getattr(file.node).unwrap().size,
+            MAX_LOGICAL_WORKSPACE_BYTES
+        );
+        assert!(matches!(
+            mounted.truncate(file.node, MAX_LOGICAL_FILE_BYTES + 1),
+            Err(MountedError::NoSpace)
+        ));
+        let second = mounted.mknod_file(ROOT_NODE, b"second", 0o644).unwrap();
+        assert!(matches!(
+            mounted.truncate(second.node, 1),
+            Err(MountedError::NoSpace)
+        ));
+        mounted.truncate(file.node, 0).unwrap();
         mounted.shutdown().unwrap();
         drop(mounted);
         drop(working);
@@ -4912,7 +4999,7 @@ mod legacy_tests {
     }
 
     #[test]
-    fn capacity_tracks_logical_spool_node_and_dirty_limits() {
+    fn capacity_reports_checkpointable_logical_limits() {
         let (store, spool, directory) = paths("capacity");
         let mut mounted = MountedWorkspace::open(
             &store,
@@ -4924,24 +5011,33 @@ mod legacy_tests {
         .unwrap();
         let initial = mounted.capacity().unwrap();
         assert_eq!(initial.total_bytes, MAX_LOGICAL_WORKSPACE_BYTES);
-        assert_eq!(initial.free_bytes, MAX_LIVE_SPOOL_BYTES);
+        assert_eq!(initial.free_bytes, MAX_LOGICAL_WORKSPACE_BYTES);
         assert_eq!(initial.total_files, MAX_MOUNTED_NODES as u64);
-        assert_eq!(initial.free_files, MAX_DIRTY_NODES as u64);
+        assert_eq!(initial.free_files, (MAX_MOUNTED_NODES - 1) as u64);
 
         mounted.logical_workspace_bytes = MAX_LOGICAL_WORKSPACE_BYTES;
         assert_eq!(mounted.capacity().unwrap().free_bytes, 0);
         mounted.logical_workspace_bytes = 0;
         mounted.spool.live = MAX_LIVE_SPOOL_BYTES;
-        assert_eq!(mounted.capacity().unwrap().free_bytes, 0);
+        assert_eq!(
+            mounted.capacity().unwrap().free_bytes,
+            MAX_LOGICAL_WORKSPACE_BYTES
+        );
         mounted.spool.live = 0;
 
         mounted
             .dirty_nodes
             .extend((0..MAX_DIRTY_NODES).map(|index| MountedNodeId(u64::MAX - index as u64)));
-        assert_eq!(mounted.capacity().unwrap().free_files, 0);
+        assert_eq!(
+            mounted.capacity().unwrap().free_files,
+            (MAX_MOUNTED_NODES - 1) as u64
+        );
         mounted.dirty_nodes.clear();
         mounted.directory_changes = MAX_DIRECTORY_CHANGES;
-        assert_eq!(mounted.capacity().unwrap().free_files, 0);
+        assert_eq!(
+            mounted.capacity().unwrap().free_files,
+            (MAX_MOUNTED_NODES - 1) as u64
+        );
         mounted.directory_changes = 0;
 
         mounted.shutdown().unwrap();
@@ -4969,7 +5065,7 @@ mod legacy_tests {
         mounted.release(handle).unwrap();
         let dirty = mounted.capacity().unwrap();
         assert_eq!(dirty.free_bytes, initial.free_bytes - 1024 * 1024);
-        assert_eq!(dirty.free_files, initial.free_files - 2);
+        assert_eq!(dirty.free_files, initial.free_files - 1);
 
         mounted.fsyncdir().unwrap();
         assert_eq!(mounted.capacity().unwrap(), initial);

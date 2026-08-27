@@ -337,6 +337,14 @@ pub struct StorageObservation {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CompactionStorageObservation {
+    pub source_indexed_objects: u64,
+    pub source_indexed_canonical_bytes: u64,
+    pub retained_objects: u64,
+    pub retained_canonical_bytes: u64,
+    pub reclaimed_objects: u64,
+    pub reclaimed_canonical_bytes: u64,
+    pub candidate_indexed_objects: u64,
+    pub candidate_indexed_canonical_bytes: u64,
     pub old_generation_bytes: u64,
     pub new_generation_bytes: u64,
     pub mark_database_bytes: u64,
@@ -824,6 +832,9 @@ impl Engine {
         reject_legacy_compaction_state(&source)?;
         self.mark_compaction_sql(1)?;
         authenticate_complete_object_index(&source)?;
+        self.mark_compaction_sql(1)?;
+        let (source_indexed_objects, source_indexed_canonical_bytes) =
+            object_index_totals(&source)?;
         let candidate = Connection::open(destination).map_err(map_sqlite_error)?;
         candidate
             .busy_timeout(BUSY_TIMEOUT)
@@ -909,6 +920,17 @@ impl Engine {
         })?;
         let verification_scratch_peak_bytes = verification.peak_bytes;
         self.mark_compaction_sql(1)?;
+        let (candidate_indexed_objects, candidate_indexed_canonical_bytes) =
+            object_index_totals(&candidate)?;
+        let retained_objects = candidate_indexed_objects;
+        let retained_canonical_bytes = candidate_indexed_canonical_bytes;
+        let reclaimed_objects = source_indexed_objects
+            .checked_sub(retained_objects)
+            .ok_or(EngineError::CounterOverflow)?;
+        let reclaimed_canonical_bytes = source_indexed_canonical_bytes
+            .checked_sub(retained_canonical_bytes)
+            .ok_or(EngineError::CounterOverflow)?;
+        self.mark_compaction_sql(1)?;
         candidate
             .execute_batch("DETACH DATABASE source")
             .map_err(map_sqlite_error)?;
@@ -926,6 +948,14 @@ impl Engine {
             .and_then(|value| value.checked_add(selector_temporary_bytes))
             .ok_or(EngineError::CounterOverflow)?;
         Ok(CompactionStorageObservation {
+            source_indexed_objects,
+            source_indexed_canonical_bytes,
+            retained_objects,
+            retained_canonical_bytes,
+            reclaimed_objects,
+            reclaimed_canonical_bytes,
+            candidate_indexed_objects,
+            candidate_indexed_canonical_bytes,
             old_generation_bytes,
             new_generation_bytes,
             mark_database_bytes,
@@ -2834,6 +2864,20 @@ fn authenticate_borrowed(
     Ok(summary.kind)
 }
 
+fn object_index_totals(connection: &Connection) -> EngineResult<(u64, u64)> {
+    let (objects, bytes) = connection
+        .query_row(
+            "SELECT COUNT(*), COALESCE(SUM(canonical_length), 0) FROM layerfs_objects",
+            [],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .map_err(map_sqlite_error)?;
+    Ok((
+        u64::try_from(objects).map_err(|_| EngineError::InvalidRecord("object count"))?,
+        u64::try_from(bytes).map_err(|_| EngineError::InvalidRecord("object bytes"))?,
+    ))
+}
+
 fn payload_batch_sql(count: usize) -> EngineResult<String> {
     if !(1..=64).contains(&count) {
         return Err(EngineError::InvalidRecord("payload batch size"));
@@ -3543,10 +3587,28 @@ mod tests {
             Engine::open_with_mode(&path, integrity::IntegrityMode::TrustedLocalDev).unwrap();
         engine.reset_counters().unwrap();
 
-        engine.compact_to(&destination).unwrap();
+        let observation = engine.compact_to_observed(&destination).unwrap();
+        assert_eq!(
+            observation.source_indexed_objects,
+            observation.retained_objects
+        );
+        assert_eq!(
+            observation.source_indexed_canonical_bytes,
+            observation.retained_canonical_bytes
+        );
+        assert_eq!(
+            observation.candidate_indexed_objects,
+            observation.retained_objects
+        );
+        assert_eq!(
+            observation.candidate_indexed_canonical_bytes,
+            observation.retained_canonical_bytes
+        );
+        assert_eq!(observation.reclaimed_objects, 0);
+        assert_eq!(observation.reclaimed_canonical_bytes, 0);
         let counters = engine.counters().unwrap();
-        assert_eq!(counters.statements, 92);
-        assert_eq!(counters.compaction_statements, 92);
+        assert_eq!(counters.statements, 94);
+        assert_eq!(counters.compaction_statements, 94);
         assert_eq!(counters.primary_read_statements, 0);
         assert_eq!(counters.publication_statements, 0);
         assert_eq!(counters.live_verified_integrity_statements, 0);
@@ -3554,7 +3616,7 @@ mod tests {
         assert_eq!(counters.scratch_tables, 4);
         assert_eq!(counters.scratch_statements, 73);
         assert_eq!(counters.scratch_rows, 4);
-        assert_eq!(counters.statements + counters.scratch_statements, 165);
+        assert_eq!(counters.statements + counters.scratch_statements, 167);
 
         drop(engine);
         std::fs::remove_file(path).unwrap();
@@ -3585,8 +3647,8 @@ mod tests {
             Err(EngineError::MissingObject(_)) | Err(EngineError::MalformedObject { .. })
         ));
         let counters = engine.counters().unwrap();
-        assert_eq!(counters.statements, 57);
-        assert_eq!(counters.compaction_statements, 57);
+        assert_eq!(counters.statements, 58);
+        assert_eq!(counters.compaction_statements, 58);
         assert_eq!(counters.primary_read_statements, 0);
         assert_eq!(counters.fetched_rows, 1);
         assert_eq!(counters.fetched_row_authentication_passes, 1);
