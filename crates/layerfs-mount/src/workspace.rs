@@ -32,6 +32,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub const ROOT_NODE: MountedNodeId = MountedNodeId(1);
 pub const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 pub const MAX_OPERATION_Q_BYTES: usize = 8 * 1024 * 1024 - 1;
+pub const MAX_STRUCTURAL_OVERLAY_BYTES: usize = MAX_OPERATION_Q_BYTES;
 pub const MAX_MOUNTED_NODES: usize = 65_536;
 pub const MAX_HANDLES: usize = 8_192;
 pub const MAX_DIRTY_NODES: usize = 4_096;

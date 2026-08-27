@@ -364,9 +364,11 @@ The largest admitted FUSE request is bounded at 1 MiB. Large dirty payloads use
 the disk spool rather than workspace-sized resident memory.
 
 The current mounted-workspace limits are explicit in every startup and terminal
-receipt: 2 GiB per logical file and per logical workspace, 320 MiB live dirty
-spool bytes, and 512 MiB physical spool bytes. These are admission ceilings,
-not claims that every host has qualified the largest possible file.
+receipt: 1 MiB per request; less than 8 MiB each for userspace operation Q and
+the structural COW overlay; 2 GiB per logical file and per logical workspace;
+320 MiB live dirty spool bytes; and 512 MiB physical spool bytes. These are
+admission ceilings, not claims that every host has qualified the largest
+possible file.
 
 `layerfsctl compact WORKING_ROOT trusted|verified` is an offline WorkingStore
 maintenance command. Run it only after mounts and other WorkingStore handles

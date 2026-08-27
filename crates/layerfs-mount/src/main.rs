@@ -132,7 +132,8 @@ mod linux {
     use layerfs_core::CanonicalPath;
     use layerfs_mount::workspace::{
         ByteBudget, MountedLifecycle, MountedSpliceReceipt, MountedWorkspace, MAX_LIVE_SPOOL_BYTES,
-        MAX_LOGICAL_FILE_BYTES, MAX_LOGICAL_WORKSPACE_BYTES, MAX_REQUEST_BYTES, SPOOL_QUOTA_BYTES,
+        MAX_LOGICAL_FILE_BYTES, MAX_LOGICAL_WORKSPACE_BYTES, MAX_OPERATION_Q_BYTES,
+        MAX_REQUEST_BYTES, MAX_STRUCTURAL_OVERLAY_BYTES, SPOOL_QUOTA_BYTES,
     };
     use layerfs_mount::{LayerFuse, LayerFuseEvent, MountDriver};
     use layerfs_workspace::{
@@ -284,7 +285,7 @@ mod linux {
             }
         });
         println!(
-            "{{\"backend\":\"layerfs-mount\",\"mount\":\"{}\",\"integrity\":\"{}\",\"source_commit\":\"{}\",\"source_tree\":\"{}\",\"limits\":{{\"request_bytes\":{},\"logical_file_bytes\":{},\"logical_workspace_bytes\":{},\"live_spool_bytes\":{},\"physical_spool_bytes\":{}}}}}",
+            "{{\"backend\":\"layerfs-mount\",\"mount\":\"{}\",\"integrity\":\"{}\",\"source_commit\":\"{}\",\"source_tree\":\"{}\",\"limits\":{{\"request_bytes\":{},\"operation_q_bytes\":{},\"structural_overlay_bytes\":{},\"logical_file_bytes\":{},\"logical_workspace_bytes\":{},\"live_spool_bytes\":{},\"physical_spool_bytes\":{}}}}}",
             json(published_mount.to_string_lossy().as_ref()),
             match integrity {
                 IntegrityMode::Verified => "Verified",
@@ -293,6 +294,8 @@ mod linux {
             json(source_commit),
             json(source_tree),
             MAX_REQUEST_BYTES,
+            MAX_OPERATION_Q_BYTES,
+            MAX_STRUCTURAL_OVERLAY_BYTES,
             MAX_LOGICAL_FILE_BYTES,
             MAX_LOGICAL_WORKSPACE_BYTES,
             MAX_LIVE_SPOOL_BYTES,
@@ -500,7 +503,7 @@ mod linux {
             "  \"executable_blake3\": \"{}\",\n",
             "  \"source_commit\": \"{}\",\n",
             "  \"source_tree\": \"{}\",\n",
-            "  \"limits\": {{\"request_bytes\":{},\"logical_file_bytes\":{},\"logical_workspace_bytes\":{},\"live_spool_bytes\":{},\"physical_spool_bytes\":{}}},\n",
+            "  \"limits\": {{\"request_bytes\":{},\"operation_q_bytes\":{},\"structural_overlay_bytes\":{},\"logical_file_bytes\":{},\"logical_workspace_bytes\":{},\"live_spool_bytes\":{},\"physical_spool_bytes\":{}}},\n",
             "  \"timers\": {{\"live_ns\":{},\"quiescence_ns\":{},\"candidate_ns\":{},\"working_commit_ns\":{},\"working_recorded_ns\":{},\"cleanup_ns\":{},\"complete_wall_ns\":{},\"working_recorded_equation_closed\":{}}},\n",
             "  \"callbacks\": {{\"init\":{},\"destroy\":{},\"lookup\":{},\"getattr\":{},\"create\":{},\"read\":{},\"write\":{},\"flush\":{},\"release\":{},\"fsync\":{},\"fsyncdir\":{},\"statfs\":{},\"readdir\":{},\"callback_wall_ns\":{},\"mount_lock_wait_ns\":{},\"invalidations_requested\":{},\"invalidations_succeeded\":{},\"invalidations_failed\":{},\"invalidations_unsupported\":{}}},\n",
             "  \"mounted\": {{\"checkpoints\":{},\"no_op_checkpoints\":{},\"created_then_deleted\":{},\"splices\":{},\"lookup_refs\":{},\"lookup_refs_high_water\":{},\"live_nodes\":{},\"live_nodes_high_water\":{},\"open_handles\":{},\"open_handles_high_water\":{},\"pending_nodes\":{},\"pending_nodes_high_water\":{},\"dirty_nodes\":{},\"dirty_nodes_high_water\":{},\"dirty_ranges\":{},\"dirty_ranges_high_water\":{},\"directory_cursors\":{},\"directory_changes\":{},\"directory_changes_high_water\":{},\"inode_mappings\":{},\"inode_mappings_high_water\":{},\"logical_workspace_bytes\":{},\"logical_workspace_high_water_bytes\":{},\"spool_appended_bytes\":{},\"spool_live_bytes\":{},\"spool_live_high_water_bytes\":{},\"spool_dead_bytes\":{},\"spool_physical_bytes\":{},\"spool_physical_high_water_bytes\":{},\"spool_resets\":{},\"spool_compactions\":{},\"largest_request_bytes\":{},\"operation_q_terminal_bytes\":{},\"operation_q_high_water_bytes\":{},\"materializations\":{},\"capture_scans\":{},\"structural_overlay_peak_bytes\":{},\"structural_overlay_prunes\":{}}},\n",
@@ -533,6 +536,8 @@ mod linux {
         json(source_commit),
         json(source_tree),
         MAX_REQUEST_BYTES,
+        MAX_OPERATION_Q_BYTES,
+        MAX_STRUCTURAL_OVERLAY_BYTES,
         MAX_LOGICAL_FILE_BYTES,
         MAX_LOGICAL_WORKSPACE_BYTES,
         MAX_LIVE_SPOOL_BYTES,
