@@ -375,6 +375,7 @@ fn directory_identity(_path: &Path) -> Result<[u64; 2]> {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
 
