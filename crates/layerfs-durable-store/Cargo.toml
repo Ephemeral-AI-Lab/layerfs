@@ -1,0 +1,16 @@
+[package]
+name = "layerfs-durable-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-core = { path = "../layerfs-core" }
+layerfs-storage = { path = "../layerfs-storage" }
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+layerfs-working-store = { path = "../layerfs-working-store" }

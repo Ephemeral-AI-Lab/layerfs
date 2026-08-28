@@ -1,0 +1,20 @@
+[package]
+name = "layerfs-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3.workspace = true
+layerfs-core = { path = "../layerfs-core" }
+layerfs-durable-store = { path = "../layerfs-durable-store" }
+layerfs-sync = { path = "../layerfs-sync" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+layerfs-working-store = { path = "../layerfs-working-store" }

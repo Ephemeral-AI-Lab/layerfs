@@ -3,659 +3,949 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="LayerFS abstraction layers, distributed agent execution, and crate ownership.">
-  <title>LayerFS Architecture</title>
+  <meta name="description" content="LayerFS target architecture: explicit Working and Durable stores, isolated OperationWorkspaces, canonical CAS and three filesystem presentations.">
+  <title>LayerFS Target Architecture</title>
   <style>
+    /* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
+    /* Hallmark · genre: modern-minimal · macrostructure: Map / Diagram · theme: warm technical · enrichment: none · contrast: pass (40–41) · nav: N1b · footer: Ft2 · slop: pass (42–49) · mobile: pass (34, 49–57) */
     :root {
       color-scheme: light;
-      --paper: #f6f4ef;
-      --surface: #fffefa;
-      --ink: #191a18;
-      --muted: #676861;
-      --line: #c9c7bf;
-      --line-strong: #8f9089;
-      --orange: #f06d3d;
-      --orange-soft: #fff0e8;
-      --blue: #3f6fc2;
-      --blue-soft: #edf3ff;
-      --green: #397d62;
-      --green-soft: #eaf5ef;
-      --purple: #775aa6;
-      --purple-soft: #f2edf9;
-      --shadow: 0 16px 48px rgba(36, 34, 28, .08);
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --color-paper: oklch(97.4% 0.008 80);
+      --color-paper-2: oklch(99.2% 0.004 82);
+      --color-surface: oklch(100% 0 0);
+      --color-ink: oklch(20% 0.012 75);
+      --color-ink-2: oklch(43% 0.014 75);
+      --color-muted: oklch(55% 0.012 75);
+      --color-rule: oklch(84% 0.012 78);
+      --color-rule-strong: oklch(67% 0.018 76);
+      --color-accent: oklch(65% 0.19 38);
+      --color-accent-soft: oklch(95% 0.036 45);
+      --color-accent-ink: oklch(32% 0.096 36);
+      --color-working: oklch(55% 0.095 230);
+      --color-working-ink: oklch(35% 0.085 230);
+      --color-working-soft: oklch(95.5% 0.025 235);
+      --color-durable: oklch(50% 0.075 155);
+      --color-durable-soft: oklch(95% 0.027 155);
+      --color-canonical: oklch(49% 0.09 305);
+      --color-canonical-soft: oklch(95% 0.028 305);
+      --color-danger-soft: oklch(95% 0.035 25);
+      --color-focus: oklch(51% 0.19 252);
+      --color-shadow: oklch(28% 0.02 75 / 10%);
+      --font-display: "Avenir Next", Avenir, ui-sans-serif, sans-serif;
+      --font-body: "Avenir Next", Avenir, ui-sans-serif, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --space-3xs: 0.25rem;
+      --space-2xs: 0.5rem;
+      --space-xs: 0.75rem;
+      --space-sm: 1rem;
+      --space-md: 1.5rem;
+      --space-lg: 2rem;
+      --space-xl: 3rem;
+      --space-2xl: 4.5rem;
+      --text-xs: 0.75rem;
+      --text-sm: 0.875rem;
+      --text-md: 1rem;
+      --text-lg: 1.25rem;
+      --text-xl: 1.75rem;
+      --text-2xl: clamp(2rem, 4vw, 3.6rem);
+      --text-display: clamp(3rem, 7vw, 6.8rem);
+      --rule: 1px;
+      --shadow-panel: 0 1.25rem 3.5rem var(--color-shadow);
     }
 
     * { box-sizing: border-box; }
+    html, body { overflow-x: clip; }
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      color: var(--ink);
+      color: var(--color-ink);
       background:
-        linear-gradient(rgba(25, 26, 24, .025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(25, 26, 24, .025) 1px, transparent 1px),
-        var(--paper);
-      background-size: 24px 24px;
-      font: 15px/1.5 var(--sans);
+        linear-gradient(var(--color-rule) var(--rule), transparent var(--rule)),
+        linear-gradient(90deg, var(--color-rule) var(--rule), transparent var(--rule)),
+        var(--color-paper);
+      background-size: 1.5rem 1.5rem;
+      font: 400 var(--text-md)/1.55 var(--font-body);
     }
+    a { color: inherit; text-decoration-thickness: var(--rule); text-underline-offset: 0.24em; }
+    a:hover, summary:hover { color: var(--color-accent-ink); }
+    a:active, summary:active { color: var(--color-accent-ink); }
+    a[aria-disabled="true"] { cursor: not-allowed; opacity: 0.55; pointer-events: none; }
+    a:focus-visible, summary:focus-visible {
+      outline: 0.18rem solid var(--color-focus);
+      outline-offset: 0.2rem;
+    }
+    code { font-family: var(--font-mono); font-size: 0.92em; overflow-wrap: anywhere; }
+    h1, h2, h3, h4, p { min-width: 0; overflow-wrap: anywhere; }
+    h1, h2, h3, h4 { font-family: var(--font-display); font-style: normal; }
 
-    a { color: inherit; }
-    code { font-family: var(--mono); }
-    .page { width: min(1460px, calc(100% - 48px)); margin: 0 auto; padding: 44px 0 72px; }
-
-    .masthead {
+    .page {
+      width: min(92rem, calc(100% - 3rem));
+      margin: 0 auto;
+      padding: var(--space-md) 0 var(--space-2xl);
+    }
+    .topbar {
       display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 32px;
-      align-items: end;
-      padding: 0 2px 30px;
-      border-top: 4px solid var(--orange);
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: var(--space-lg);
+      align-items: center;
+      min-height: 3.5rem;
+      border-top: 0.25rem solid var(--color-accent);
+      border-bottom: var(--rule) solid var(--color-rule);
     }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs);
+      min-height: 2.75rem;
+      color: var(--color-ink);
+      font: 750 var(--text-md)/1 var(--font-display);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .brand-mark {
+      display: grid;
+      width: 2rem;
+      height: 2rem;
+      place-items: center;
+      color: var(--color-accent);
+      border: var(--rule) solid var(--color-rule-strong);
+      background: var(--color-paper-2);
+      font: 760 var(--text-sm)/1 var(--font-mono);
+    }
+    .nav-links { display: flex; justify-content: center; gap: var(--space-lg); min-width: 0; }
+    .nav-links a, .status-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.75rem;
+      color: var(--color-ink-2);
+      font: 650 var(--text-sm)/1 var(--font-body);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .nav-links a[aria-current="page"] {
+      color: var(--color-ink);
+      box-shadow: inset 0 -0.14rem var(--color-accent);
+    }
+    .status-link { gap: var(--space-2xs); color: var(--color-accent-ink); }
+    .status-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--color-accent); }
 
-    .eyebrow {
-      margin: 22px 0 12px;
-      color: var(--orange);
-      font: 700 12px/1 var(--mono);
-      letter-spacing: .13em;
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.65fr) minmax(18rem, 0.75fr);
+      gap: var(--space-xl);
+      align-items: end;
+      padding: var(--space-xl) 0 var(--space-2xl);
+    }
+    .kicker, .section-kicker, .zone-kicker, .node-kind {
+      margin: 0;
+      color: var(--color-accent-ink);
+      font: 720 var(--text-xs)/1.2 var(--font-mono);
+      letter-spacing: 0.1em;
       text-transform: uppercase;
     }
-
     h1 {
-      max-width: 940px;
-      margin: 0;
-      font-size: clamp(2.7rem, 6vw, 6.5rem);
-      line-height: .94;
-      letter-spacing: -.065em;
+      max-width: 13ch;
+      margin: var(--space-sm) 0 0;
+      font-size: var(--text-display);
+      line-height: 0.92;
+      letter-spacing: -0.065em;
     }
-
-    .lede {
-      max-width: 850px;
-      margin: 22px 0 0;
-      color: var(--muted);
-      font-size: clamp(1rem, 1.6vw, 1.28rem);
-    }
-
-    .mark {
+    .hero-aside { padding-left: var(--space-lg); border-left: 0.2rem solid var(--color-accent); }
+    .hero-aside p { margin: 0; color: var(--color-ink-2); font-size: var(--text-lg); line-height: 1.45; }
+    .truth-list {
       display: grid;
-      width: 102px;
-      aspect-ratio: 1;
-      place-items: center;
-      border: 1px solid var(--line);
-      background: var(--surface);
-      box-shadow: var(--shadow);
-    }
-
-    .mark span {
-      color: var(--orange);
-      font: 800 29px/1 var(--mono);
-      letter-spacing: -.12em;
-      transform: translateX(-2px);
-    }
-
-    .legend {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 18px;
-      margin: 0 0 18px;
+      gap: var(--space-xs);
+      margin: var(--space-md) 0 0;
       padding: 0;
       list-style: none;
-      color: var(--muted);
-      font-size: 12px;
+      color: var(--color-muted);
+      font: 600 var(--text-sm)/1.35 var(--font-mono);
     }
-
-    .legend li { display: flex; align-items: center; gap: 7px; }
-    .legend-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--orange); }
-    .legend-dot.blue { background: var(--blue); }
-    .legend-dot.green { background: var(--green); }
-    .legend-dot.purple { background: var(--purple); }
-
-    .architecture {
-      padding: 22px;
-      border: 1px solid var(--line);
-      background: rgba(255, 254, 250, .74);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(8px);
-    }
-
-    .layer {
-      position: relative;
-      display: grid;
-      grid-template-columns: 230px minmax(0, 1fr);
-      min-height: 150px;
-      border: 1px dashed var(--line-strong);
-      background: var(--surface);
-    }
-
-    .layer + .connector + .layer { margin-top: 0; }
-
-    .layer-label {
-      padding: 22px;
-      border-right: 1px solid var(--line);
-      background: #fbfaf6;
-    }
-
-    .layer-index {
-      display: block;
-      margin-bottom: 14px;
-      color: var(--orange);
-      font: 700 12px/1 var(--mono);
-      letter-spacing: .08em;
-    }
-
-    .layer h2 { margin: 0 0 8px; font-size: 19px; line-height: 1.15; letter-spacing: -.025em; }
-    .layer-label p { margin: 0; color: var(--muted); font-size: 13px; }
-
-    .layer-content {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 12px;
-      align-items: stretch;
-      padding: 22px;
-    }
-
-    .card {
-      grid-column: span 4;
+    .truth-list li::before { content: "—"; margin-right: var(--space-2xs); color: var(--color-accent); }
+    .status-strip {
       display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-xs) var(--space-lg);
+      align-items: center;
+      margin-bottom: var(--space-xl);
+      padding: var(--space-sm) var(--space-md);
+      border: var(--rule) solid var(--color-rule);
+      background: var(--color-paper-2);
+      color: var(--color-ink-2);
+      font: 600 var(--text-sm)/1.35 var(--font-mono);
+    }
+    .status-strip strong { color: var(--color-accent-ink); }
+
+    .section { padding: var(--space-2xl) 0 0; }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(20rem, 1.05fr);
+      gap: var(--space-xl);
+      align-items: end;
+      margin-bottom: var(--space-lg);
+      padding-top: var(--space-md);
+      border-top: var(--rule) solid var(--color-rule-strong);
+    }
+    .section-head h2 {
+      max-width: 18ch;
+      margin: var(--space-xs) 0 0;
+      font-size: var(--text-2xl);
+      line-height: 1;
+      letter-spacing: -0.045em;
+    }
+    .section-intro { max-width: 46rem; margin: 0; color: var(--color-ink-2); font-size: var(--text-lg); }
+
+    .system-map {
+      margin: 0;
+      padding: var(--space-md);
+      border: var(--rule) solid var(--color-rule-strong);
+      background: var(--color-paper-2);
+      box-shadow: var(--shadow-panel);
+    }
+    .map-grid {
+      display: grid;
+      grid-template-columns: minmax(18rem, 0.8fr) minmax(7rem, 0.24fr) minmax(34rem, 1.55fr);
+      gap: var(--space-md);
+      align-items: stretch;
+    }
+    .zone {
       min-width: 0;
-      min-height: 104px;
-      flex-direction: column;
+      padding: var(--space-md);
+      border: var(--rule) solid var(--color-rule);
+      background: var(--color-surface);
+    }
+    .zone-durable { border-top: 0.3rem solid var(--color-durable); background: var(--color-durable-soft); }
+    .zone-working { border-top: 0.3rem solid var(--color-working); background: var(--color-working-soft); }
+    .zone-header, .workspace-head {
+      display: flex;
       justify-content: space-between;
-      gap: 18px;
-      padding: 17px 18px;
-      border: 1px solid var(--line);
-      background: #fff;
+      gap: var(--space-md);
+      align-items: start;
     }
-
-    .card.wide { grid-column: span 6; }
-    .card.full { grid-column: 1 / -1; min-height: auto; }
-    .card.blue { border-color: #b9c9e8; background: var(--blue-soft); }
-    .card.green { border-color: #b8d7c9; background: var(--green-soft); }
-    .card.purple { border-color: #d4c7e7; background: var(--purple-soft); }
-    .card.orange { border-color: #efc4af; background: var(--orange-soft); }
-
-    .card-title { margin: 0; font-size: 16px; font-weight: 720; line-height: 1.2; }
-    .card-copy { margin: 5px 0 0; color: var(--muted); font-size: 12.5px; }
-
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-    .chip {
-      padding: 4px 7px;
-      border: 1px solid rgba(25, 26, 24, .18);
-      background: rgba(255,255,255,.68);
-      font: 600 10px/1.15 var(--mono);
-      letter-spacing: .02em;
+    .zone-header { padding-bottom: var(--space-md); border-bottom: var(--rule) solid var(--color-rule); }
+    .zone-header h3 { margin: var(--space-2xs) 0 0; font-size: var(--text-xl); line-height: 1.05; letter-spacing: -0.035em; }
+    .store-id, .private-label {
+      flex: 0 0 auto;
+      padding: var(--space-2xs) var(--space-xs);
+      border: var(--rule) solid var(--color-rule-strong);
+      background: var(--color-paper-2);
+      color: var(--color-ink-2);
+      font: 650 var(--text-xs)/1.2 var(--font-mono);
+      white-space: nowrap;
     }
-
-    .connector {
-      position: relative;
-      height: 40px;
-    }
-
-    .connector::before {
-      position: absolute;
-      top: 0;
-      left: calc(230px + (100% - 230px) / 2);
-      width: 1px;
-      height: 28px;
-      background: var(--ink);
-      content: "";
-    }
-
-    .connector::after {
-      position: absolute;
-      top: 24px;
-      left: calc(230px + (100% - 230px) / 2 - 4px);
-      width: 7px;
-      height: 7px;
-      border-right: 1px solid var(--ink);
-      border-bottom: 1px solid var(--ink);
-      content: "";
-      transform: rotate(45deg);
-    }
-
-    .spine {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 0;
-      align-items: center;
-    }
-
-    .spine-item { position: relative; padding: 12px; text-align: center; }
-    .spine-item:not(:last-child)::after {
-      position: absolute;
-      z-index: 0;
-      top: 50%;
-      right: -11px;
-      width: 22px;
-      height: 1px;
-      background: var(--line-strong);
-      content: "";
-    }
-
-    .spine-item strong { position: relative; z-index: 1; display: block; font-size: 13px; }
-    .spine-item span { display: block; margin-top: 4px; color: var(--muted); font: 10px/1.3 var(--mono); }
-
-    .section {
-      margin-top: 64px;
-      padding-top: 28px;
-      border-top: 1px solid var(--line);
-    }
-
-    .section-heading {
-      display: grid;
-      grid-template-columns: 230px 1fr;
-      gap: 24px;
-      margin-bottom: 24px;
-    }
-
-    .section-number { color: var(--orange); font: 700 12px/1 var(--mono); letter-spacing: .09em; }
-    .section h2 { margin: 0; font-size: clamp(1.8rem, 3.5vw, 3.6rem); line-height: 1; letter-spacing: -.05em; }
-    .section-intro { max-width: 760px; margin: 14px 0 0; color: var(--muted); }
-
-    .distributed {
-      display: grid;
-      grid-template-columns: 1fr 100px 1fr;
-      gap: 18px;
-      align-items: center;
-    }
-
-    .host, .authority {
+    .private-label { color: var(--color-working-ink); border-color: var(--color-working); }
+    .flow { display: grid; gap: 0; margin-top: var(--space-md); }
+    .node {
       min-width: 0;
-      padding: 20px;
-      border: 1px dashed var(--line-strong);
-      background: var(--surface);
+      padding: var(--space-sm);
+      border: var(--rule) solid var(--color-rule);
+      background: var(--color-surface);
     }
-
-    .host h3, .authority h3 { margin: 0 0 4px; font-size: 17px; }
-    .host > p, .authority > p { margin: 0 0 18px; color: var(--muted); font-size: 12.5px; }
-
-    .agent-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .agent {
-      padding: 13px;
-      border: 1px solid var(--line);
-      background: #fff;
-      font-weight: 650;
+    .node h4 { margin: var(--space-2xs) 0 0; font-size: var(--text-md); line-height: 1.25; letter-spacing: -0.015em; }
+    .node p { margin: var(--space-2xs) 0 0; color: var(--color-ink-2); font-size: var(--text-sm); }
+    .node-accent { border-color: var(--color-accent); background: var(--color-accent-soft); }
+    .node-canonical { border-color: var(--color-canonical); background: var(--color-canonical-soft); }
+    .flow-arrow {
+      display: grid;
+      min-height: 2.5rem;
+      place-items: center;
+      color: var(--color-muted);
+      font: 620 var(--text-xs)/1.2 var(--font-mono);
       text-align: center;
     }
+    .flow-arrow::before { content: "↓"; display: block; color: var(--color-accent); font-size: var(--text-lg); line-height: 1; }
+    .workspace-node {
+      padding: var(--space-md);
+      border: 0.15rem solid var(--color-working);
+      background: var(--color-surface);
+    }
+    .workspace-head h3 { margin: var(--space-2xs) 0 0; font-size: var(--text-lg); line-height: 1.1; letter-spacing: -0.025em; }
+    .presentation-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-xs);
+      margin-top: var(--space-md);
+    }
+    .presentation-mini {
+      min-width: 0;
+      padding: var(--space-xs);
+      border-left: var(--rule) solid var(--color-rule-strong);
+      background: transparent;
+    }
+    .presentation-mini:first-child { border-left: 0; }
+    .presentation-mini strong, .presentation-mini span { display: block; }
+    .presentation-mini strong { font-size: var(--text-sm); }
+    .presentation-mini span { margin-top: var(--space-3xs); color: var(--color-ink-2); font-size: var(--text-xs); }
 
-    .workspace {
-      margin-top: 8px;
-      padding: 11px;
-      border: 1px solid #b9c9e8;
-      background: var(--blue-soft);
-      color: #304e83;
-      font: 600 11px/1.3 var(--mono);
+    .transfer-rail { display: grid; align-content: center; gap: var(--space-lg); min-width: 0; }
+    .transfer {
+      padding: var(--space-sm) var(--space-xs);
+      color: var(--color-ink-2);
+      border-top: var(--rule) solid var(--color-rule-strong);
+      border-bottom: var(--rule) solid var(--color-rule-strong);
+      background: var(--color-paper);
       text-align: center;
     }
-
-    .local-store {
-      margin-top: 14px;
-      padding: 13px;
-      border: 1px solid #b8d7c9;
-      background: var(--green-soft);
+    .transfer strong { display: block; color: var(--color-ink); font: 750 var(--text-sm)/1.2 var(--font-mono); }
+    .transfer span { display: block; margin-top: var(--space-2xs); font-size: var(--text-xs); line-height: 1.35; }
+    .transfer-arrow { display: block; margin: var(--space-xs) 0; color: var(--color-accent); font-size: var(--text-xl); line-height: 1; }
+    .rail-law {
+      padding: var(--space-sm) var(--space-xs);
+      border: var(--rule) solid var(--color-accent);
+      background: var(--color-accent-soft);
+      color: var(--color-accent-ink);
+      font: 720 var(--text-xs)/1.45 var(--font-mono);
       text-align: center;
     }
+    .map-caption {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--space-md);
+      align-items: center;
+      margin-top: var(--space-md);
+      padding-top: var(--space-md);
+      border-top: var(--rule) solid var(--color-rule);
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
+    }
+    .map-caption strong { color: var(--color-ink); }
+    .text-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.75rem;
+      color: var(--color-accent-ink);
+      font-weight: 700;
+      white-space: nowrap;
+    }
 
-    .network {
+    .presentation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-md); }
+    .presentation-card {
+      display: grid;
+      min-width: 0;
+      grid-template-rows: auto 1fr auto;
+      gap: var(--space-md);
+      padding: var(--space-lg);
+      border: var(--rule) solid var(--color-rule);
+      background: var(--color-surface);
+    }
+    .presentation-card:nth-child(1) { border-top: 0.3rem solid var(--color-canonical); }
+    .presentation-card:nth-child(2) { border-top: 0.3rem solid var(--color-working); }
+    .presentation-card:nth-child(3) { border-top: 0.3rem solid var(--color-accent); }
+    .presentation-card h3 { margin: var(--space-2xs) 0 0; font-size: var(--text-xl); line-height: 1.05; letter-spacing: -0.035em; }
+    .presentation-card > div > p { margin: var(--space-sm) 0 0; color: var(--color-ink-2); }
+    .fact-list, .ban-list { display: grid; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }
+    .fact-list li, .ban-list li {
       position: relative;
-      color: var(--muted);
-      font: 600 10px/1.35 var(--mono);
+      padding-left: 1.1rem;
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
+    }
+    .fact-list li::before, .ban-list li::before {
+      position: absolute;
+      left: 0;
+      color: var(--color-accent);
+      content: "•";
+    }
+    .cost-label {
+      padding-top: var(--space-sm);
+      border-top: var(--rule) solid var(--color-rule);
+      color: var(--color-ink);
+      font: 700 var(--text-xs)/1.4 var(--font-mono);
+    }
+
+    .history-law { display: grid; grid-template-columns: 0.8fr 1fr 1fr 1fr; gap: var(--space-md); }
+    .law-card { min-width: 0; padding: var(--space-lg); border: var(--rule) solid var(--color-rule); background: var(--color-surface); }
+    .law-count { color: var(--color-accent-ink); font: 760 var(--text-2xl)/0.9 var(--font-display); letter-spacing: -0.05em; }
+    .law-card h3 { margin: var(--space-sm) 0; font-size: var(--text-lg); }
+    .law-card p { margin: 0; color: var(--color-ink-2); font-size: var(--text-sm); }
+    .history-boundary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-md);
+      margin-top: var(--space-md);
+    }
+    .boundary-callout {
+      padding: var(--space-md);
+      border: var(--rule) solid var(--color-rule-strong);
+      background: var(--color-paper-2);
+    }
+    .boundary-callout strong { display: block; margin-bottom: var(--space-2xs); }
+    .boundary-callout p { margin: 0; color: var(--color-ink-2); font-size: var(--text-sm); }
+
+    .canonical-panel {
+      padding: var(--space-lg);
+      border: var(--rule) solid var(--color-canonical);
+      background: var(--color-canonical-soft);
+    }
+    .canonical-pipeline { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-sm); }
+    .pipeline-node {
+      position: relative;
+      min-width: 0;
+      padding: var(--space-md);
+      border: var(--rule) solid var(--color-rule);
+      background: var(--color-surface);
+    }
+    .pipeline-node:not(:last-child)::after {
+      position: absolute;
+      top: 50%;
+      right: calc(-1 * var(--space-sm));
+      z-index: 2;
+      width: var(--space-sm);
+      color: var(--color-canonical);
+      content: "→";
+      transform: translateY(-50%);
       text-align: center;
     }
-
-    .network::before, .network::after {
-      display: block;
-      width: 100%;
-      height: 1px;
-      margin: 10px 0;
-      background: var(--ink);
-      content: "";
-    }
-
-    .network .arrows { color: var(--orange); font-size: 18px; line-height: 1; }
-
-    .authority-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .authority-cell {
-      padding: 12px;
-      border: 1px solid var(--line);
-      background: #fff;
-      font-size: 12px;
-    }
-    .authority-cell strong { display: block; margin-bottom: 4px; }
-
-    .crate-grid {
+    .pipeline-node strong, .pipeline-node span { display: block; }
+    .pipeline-node strong { font-size: var(--text-sm); }
+    .pipeline-node span { margin-top: var(--space-2xs); color: var(--color-ink-2); font: 600 var(--text-xs)/1.35 var(--font-mono); }
+    .dedup-map {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
+      grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.45fr) minmax(0, 1fr);
+      gap: var(--space-md);
+      align-items: center;
+      margin-top: var(--space-lg);
     }
+    .dedup-store { padding: var(--space-md); border: var(--rule) solid var(--color-rule); background: var(--color-surface); }
+    .dedup-store strong, .dedup-store span { display: block; }
+    .dedup-store span { margin-top: var(--space-2xs); color: var(--color-ink-2); font-size: var(--text-sm); }
+    .dedup-bridge { color: var(--color-accent-ink); font: 700 var(--text-xs)/1.45 var(--font-mono); text-align: center; }
+    .dedup-bridge b { display: block; margin-bottom: var(--space-2xs); color: var(--color-accent); font-size: var(--text-xl); line-height: 1; }
 
-    .crate {
-      min-height: 148px;
-      padding: 18px;
-      border: 1px solid var(--line);
-      background: var(--surface);
+    .table-wrap { margin-top: var(--space-md); border: var(--rule) solid var(--color-rule); background: var(--color-surface); }
+    .cost-table { width: 100%; border-collapse: collapse; }
+    .cost-table th, .cost-table td {
+      padding: var(--space-sm) var(--space-md);
+      border-bottom: var(--rule) solid var(--color-rule);
+      vertical-align: top;
+      text-align: left;
     }
-    .crate code { color: var(--orange); font-size: 13px; font-weight: 700; }
-    .crate h3 { margin: 16px 0 6px; font-size: 17px; }
-    .crate p { margin: 0; color: var(--muted); font-size: 12.5px; }
+    .cost-table tr:last-child td { border-bottom: 0; }
+    .cost-table th {
+      color: var(--color-ink-2);
+      background: var(--color-paper-2);
+      font: 700 var(--text-xs)/1.3 var(--font-mono);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .cost-table td:first-child { width: 28%; color: var(--color-ink); font-weight: 700; }
+    .cost-table td { color: var(--color-ink-2); font-size: var(--text-sm); }
 
-    .rules {
+    .ownership-bands { display: grid; gap: var(--space-md); }
+    .owner-band {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-top: 12px;
+      grid-template-columns: 10rem minmax(0, 1fr);
+      gap: var(--space-md);
+      padding: var(--space-md);
+      border: var(--rule) solid var(--color-rule);
+      background: var(--color-surface);
     }
+    .owner-band > h3 { margin: 0; color: var(--color-ink-2); font: 740 var(--text-sm)/1.35 var(--font-mono); }
+    .owner-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-xs); }
+    .owner {
+      min-width: 0;
+      padding: var(--space-sm);
+      border-top: 0.18rem solid var(--color-accent);
+      background: var(--color-paper-2);
+    }
+    .owner code { color: var(--color-accent-ink); font-weight: 750; }
+    .owner p { margin: var(--space-2xs) 0 0; color: var(--color-ink-2); font-size: var(--text-sm); }
+    .boundary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-md);
+      margin-top: var(--space-md);
+    }
+    .boundary-card { padding: var(--space-md); border: var(--rule) solid var(--color-rule-strong); background: var(--color-paper-2); }
+    .boundary-card h3 { margin: 0 0 var(--space-sm); font-size: var(--text-md); }
 
-    .rule { padding: 18px; border: 1px solid var(--line); background: #fff; }
-    .rule strong { display: block; margin-bottom: 7px; }
-    .rule p { margin: 0; color: var(--muted); font-size: 13px; }
+    .sync-boundary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-md);
+      margin-top: var(--space-md);
+    }
+    .sync-box { padding: var(--space-lg); border: var(--rule) solid var(--color-rule); background: var(--color-surface); }
+    .sync-box h3 { margin: 0 0 var(--space-md); font-size: var(--text-lg); }
+    .sync-box.blocked { border-color: var(--color-accent); background: var(--color-danger-soft); }
+    details { margin-top: var(--space-md); border: var(--rule) solid var(--color-rule); background: var(--color-paper-2); }
+    summary { min-height: 2.75rem; padding: var(--space-sm) var(--space-md); cursor: pointer; color: var(--color-accent-ink); font-weight: 750; }
+    details > div { padding: 0 var(--space-md) var(--space-md); color: var(--color-ink-2); font-size: var(--text-sm); }
 
     footer {
       display: flex;
       justify-content: space-between;
-      gap: 24px;
-      margin-top: 64px;
-      padding-top: 18px;
-      border-top: 1px solid var(--line);
-      color: var(--muted);
-      font: 11px/1.4 var(--mono);
+      gap: var(--space-md);
+      align-items: center;
+      margin-top: var(--space-2xl);
+      padding: var(--space-md) 0;
+      border-top: var(--rule) solid var(--color-rule-strong);
+      color: var(--color-muted);
+      font: 600 var(--text-xs)/1.4 var(--font-mono);
     }
+    .footer-links { display: flex; gap: var(--space-md); }
+    .footer-links a { display: inline-flex; align-items: center; min-height: 2.75rem; white-space: nowrap; }
 
-    @media (max-width: 1000px) {
-      .layer { grid-template-columns: 180px minmax(0, 1fr); }
-      .connector::before { left: calc(180px + (100% - 180px) / 2); }
-      .connector::after { left: calc(180px + (100% - 180px) / 2 - 4px); }
-      .card { grid-column: span 6; }
-      .card:last-child:nth-child(odd) { grid-column: 1 / -1; }
-      .distributed { grid-template-columns: 1fr 70px 1fr; }
-      .crate-grid { grid-template-columns: 1fr 1fr; }
+    @media (max-width: 68rem) {
+      .map-grid { grid-template-columns: minmax(16rem, 0.82fr) minmax(6rem, 0.22fr) minmax(28rem, 1.45fr); }
+      .history-law { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .owner-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
-
-    @media (max-width: 720px) {
-      .page { width: min(100% - 24px, 1460px); padding-top: 24px; }
-      .masthead { grid-template-columns: 1fr; }
-      .mark { display: none; }
-      .architecture { padding: 10px; }
-      .layer { display: block; }
-      .layer-label { border-right: 0; border-bottom: 1px solid var(--line); }
-      .layer-content { grid-template-columns: 1fr; padding: 12px; }
-      .card, .card.wide, .card.full { grid-column: auto; }
-      .connector::before { left: 50%; }
-      .connector::after { left: calc(50% - 4px); }
-      .spine { grid-template-columns: 1fr; gap: 8px; }
-      .spine-item:not(:last-child)::after { top: auto; right: 50%; bottom: -5px; width: 1px; height: 10px; }
-      .section-heading { display: block; }
-      .section-number { display: block; margin-bottom: 16px; }
-      .distributed { grid-template-columns: 1fr; }
-      .network { padding: 4px 30%; }
-      .crate-grid, .rules { grid-template-columns: 1fr; }
-      footer { display: block; }
-      footer span { display: block; margin-top: 8px; }
+    @media (max-width: 52rem) {
+      .page { width: min(100% - 2rem, 48rem); }
+      .topbar { grid-template-columns: auto minmax(0, 1fr); }
+      .nav-links { justify-content: end; gap: var(--space-md); }
+      .status-link { display: none; }
+      .hero, .section-head, .map-grid { grid-template-columns: minmax(0, 1fr); }
+      .hero { gap: var(--space-lg); }
+      .hero-aside { padding: var(--space-md) 0 0; border-top: 0.2rem solid var(--color-accent); border-left: 0; }
+      .section-head { gap: var(--space-md); }
+      .transfer-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-xs); }
+      .transfer-arrow, .dedup-bridge b { transform: rotate(90deg); }
+      .presentation-grid, .canonical-pipeline, .dedup-map, .history-boundary, .boundary-grid, .sync-boundary { grid-template-columns: minmax(0, 1fr); }
+      .pipeline-node:not(:last-child)::after {
+        top: auto;
+        right: 50%;
+        bottom: calc(-1 * var(--space-sm));
+        width: auto;
+        transform: translate(50%, 50%) rotate(90deg);
+      }
+      .owner-band { grid-template-columns: minmax(0, 1fr); }
+      footer { align-items: start; flex-direction: column; }
     }
-
+    @media (max-width: 36rem) {
+      .page { width: min(100% - 1.25rem, 34rem); padding-top: var(--space-sm); }
+      .topbar { display: flex; flex-wrap: wrap; gap: 0 var(--space-md); }
+      .brand { margin-right: auto; }
+      .nav-links {
+        order: 2;
+        width: 100%;
+        justify-content: start;
+        gap: var(--space-lg);
+        overflow: hidden;
+        border-top: var(--rule) solid var(--color-rule);
+      }
+      .nav-links a { font-size: var(--text-xs); }
+      .hero { padding-top: var(--space-xl); }
+      h1 { font-size: clamp(2.7rem, 15vw, 4.6rem); }
+      .status-strip, .zone-header, .workspace-head { align-items: start; flex-direction: column; }
+      .system-map, .zone, .presentation-card, .law-card, .canonical-panel, .sync-box { padding: var(--space-sm); }
+      .map-caption, .presentation-mini-grid, .transfer-rail, .history-law, .owner-grid { grid-template-columns: minmax(0, 1fr); }
+      .cost-table, .cost-table tbody, .cost-table tr, .cost-table td { display: block; width: 100%; }
+      .cost-table thead { display: none; }
+      .cost-table tr { padding: var(--space-sm); border-bottom: var(--rule) solid var(--color-rule); }
+      .cost-table tr:last-child { border-bottom: 0; }
+      .cost-table td { padding: var(--space-3xs) 0; border: 0; }
+      .footer-links { flex-wrap: wrap; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
     @media print {
-      body { background: #fff; }
+      body { background: var(--color-surface); }
       .page { width: 100%; padding: 0; }
-      .architecture, .host, .authority, .crate, .rule { box-shadow: none; break-inside: avoid; }
+      .topbar, .footer-links { display: none; }
+      .hero { padding-top: var(--space-lg); }
+      .system-map, .presentation-card, .law-card, .canonical-panel, .owner-band, .sync-box {
+        break-inside: avoid;
+        box-shadow: none;
+      }
       .section { break-before: page; }
     }
   </style>
 </head>
 <body>
-  <main class="page">
-    <header class="masthead">
-      <div>
-        <p class="eyebrow">LayerFS / System architecture</p>
-        <h1>One immutable graph.<br>Many isolated workspaces.</h1>
-        <p class="lede">A layered filesystem for parallel agents: platform-specific workspaces above, deterministic content and version identity below, with Working speed and Durable coordination joined by exact object IDs.</p>
-      </div>
-      <div class="mark" aria-label="LayerFS mark"><span>L/</span></div>
+  <div class="page">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="LayerFS architecture home">
+        <span class="brand-mark" aria-hidden="true">L/</span>
+        <span>LayerFS</span>
+      </a>
+      <nav class="nav-links" aria-label="Architecture references">
+        <a href="#system-map" aria-current="page">Architecture</a>
+        <a href="history.html">History</a>
+        <a href="poc-product-ready/04-product-readiness/implementation-roadmap.md">Roadmap</a>
+      </nav>
+      <a class="status-link" href="poc-product-ready/README.md">
+        <span class="status-dot" aria-hidden="true"></span>
+        Target model
+      </a>
     </header>
 
-    <ul class="legend" aria-label="Architecture legend">
-      <li><span class="legend-dot"></span> public and lifecycle control</li>
-      <li><span class="legend-dot blue"></span> workspace and filesystem data plane</li>
-      <li><span class="legend-dot green"></span> storage and distribution</li>
-      <li><span class="legend-dot purple"></span> immutable canonical foundation</li>
-    </ul>
-
-    <section class="architecture" aria-label="LayerFS abstraction stack">
-      <article class="layer">
-        <div class="layer-label">
-          <span class="layer-index">L6</span>
-          <h2>Agents &amp; applications</h2>
-          <p>Use files and operation boundaries. Never depend on storage internals.</p>
-        </div>
-        <div class="layer-content">
-          <div class="card">
-            <div><p class="card-title">AI agents</p><p class="card-copy">Parallel tools, nested work and speculative branches.</p></div>
-            <div class="chips"><span class="chip">edit</span><span class="chip">read</span><span class="chip">bash</span></div>
-          </div>
-          <div class="card">
-            <div><p class="card-title">Developer tools</p><p class="card-copy">Compilers, package managers, test runners and IDEs.</p></div>
-            <div class="chips"><span class="chip">npm</span><span class="chip">git</span><span class="chip">cargo</span></div>
-          </div>
-          <div class="card">
-            <div><p class="card-title">Apps &amp; CLI</p><p class="card-copy">Inspect, fork, commit, merge and roll back.</p></div>
-            <div class="chips"><span class="chip">SDK</span><span class="chip">CLI</span><span class="chip">service</span></div>
-          </div>
-        </div>
-      </article>
-
-      <div class="connector" aria-hidden="true"></div>
-
-      <article class="layer">
-        <div class="layer-label">
-          <span class="layer-index">L5</span>
-          <h2>Public LayerFS API</h2>
-          <p>Describes lifecycle and exact receipts, not the kind of tool being run.</p>
-        </div>
-        <div class="layer-content">
-          <div class="card wide orange">
-            <div><p class="card-title">Operation lifecycle</p><p class="card-copy">Create an isolated view, perform arbitrary work, then commit the exact filesystem effect.</p></div>
-            <div class="chips"><span class="chip">begin_operation</span><span class="chip">end_operation</span><span class="chip">OperationCommit</span></div>
-          </div>
-          <div class="card wide orange">
-            <div><p class="card-title">Version lifecycle</p><p class="card-copy">Qualified forks and head-directed merges use exact expected-head transitions.</p></div>
-            <div class="chips"><span class="chip">LayerBranchFork</span><span class="chip">ChildBranchFork</span><span class="chip">ChildBranchMerge</span><span class="chip">LayerStackMerge</span></div>
-          </div>
-        </div>
-      </article>
-
-      <div class="connector" aria-hidden="true"></div>
-
-      <article class="layer">
-        <div class="layer-label">
-          <span class="layer-index">L4</span>
-          <h2>Workspace presentations</h2>
-          <p>Three ways to see one filesystem. All converge on one OperationWorkspace contract.</p>
-        </div>
-        <div class="layer-content">
-          <div class="card blue">
-            <div><p class="card-title">Direct logical API</p><p class="card-copy">No native workspace. Fast canonical range reads and logical edits.</p></div>
-            <div class="chips"><span class="chip">SDK</span><span class="chip">zero materialization</span></div>
-          </div>
-          <div class="card blue">
-            <div><p class="card-title">Mounted workspace</p><p class="card-copy"><code>layerfs-mount/fuse</code> presents logical objects as ordinary files.</p></div>
-            <div class="chips"><span class="chip">syscalls</span><span class="chip">dirty overlay</span></div>
-          </div>
-          <div class="card blue">
-            <div><p class="card-title">Native workspace</p><p class="card-copy"><code>layerfs-materialization/apfs</code> derives real files and captures their final state.</p></div>
-            <div class="chips"><span class="chip">APFS</span><span class="chip">capture</span><span class="chip">refresh</span></div>
-          </div>
-        </div>
-      </article>
-
-      <div class="connector" aria-hidden="true"></div>
-
-      <article class="layer">
-        <div class="layer-label">
-          <span class="layer-index">L3</span>
-          <h2>Core logical semantics</h2>
-          <p><code>layerfs-core::logical</code> owns platform-independent path, mutation, diff and merge meaning.</p>
-        </div>
-        <div class="layer-content">
-          <div class="card full blue">
-            <div class="spine" aria-label="Core logical semantic pipeline">
-              <div class="spine-item"><strong>Resolve</strong><span>path → InodeId</span></div>
-              <div class="spine-item"><strong>Read / mutate</strong><span>logical ranges</span></div>
-              <div class="spine-item"><strong>Normalize</strong><span>exact final state</span></div>
-              <div class="spine-item"><strong>Diff</strong><span>changed Merkle spines</span></div>
-              <div class="spine-item"><strong>Verify</strong><span>candidate RootId</span></div>
-            </div>
-            <div class="chips"><span class="chip">ObjectRead</span><span class="chip">ObjectStore</span><span class="chip">namespace</span><span class="chip">hard links</span><span class="chip">no SQLite / platform / authority</span></div>
-          </div>
-        </div>
-      </article>
-
-      <div class="connector" aria-hidden="true"></div>
-
-      <article class="layer">
-        <div class="layer-label">
-          <span class="layer-index">L2</span>
-          <h2>Version graph &amp; control</h2>
-          <p>Defines legal history transitions. It does not copy files.</p>
-        </div>
-        <div class="layer-content">
-          <div class="card orange">
-            <div><p class="card-title">Versions</p><p class="card-copy">Immutable Layers and branch-level OperationVersions.</p></div>
-            <div class="chips"><span class="chip">LayerStack</span><span class="chip">Layer</span><span class="chip">OperationVersion</span></div>
-          </div>
-          <div class="card orange">
-            <div><p class="card-title">Three delta scopes</p><p class="card-copy">One operation, one branch result, and one Layer transition.</p></div>
-            <div class="chips"><span class="chip">OperationDelta</span><span class="chip">BranchDelta</span><span class="chip">LayerDelta</span></div>
-          </div>
-          <div class="card orange">
-            <div><p class="card-title">Authority</p><p class="card-copy">Short CAS transactions protect parallel commits and hard rollback.</p></div>
-            <div class="chips"><span class="chip">expected head</span><span class="chip">leases</span><span class="chip">receipts</span></div>
-          </div>
-        </div>
-      </article>
-
-      <div class="connector" aria-hidden="true"></div>
-
-      <article class="layer">
-        <div class="layer-label">
-          <span class="layer-index">L1</span>
-          <h2>Storage policy &amp; explicit sync</h2>
-          <p>One Storage schema and algorithms; physically distinct Working and Durable databases.</p>
-        </div>
-        <div class="layer-content">
-          <div class="card green">
-            <div><p class="card-title">WorkingStore</p><p class="card-copy"><code>layerfs-working-store</code> owns WorkingRecorded history, cache and host-recoverable candidates over StorageId W.</p></div>
-            <div class="chips"><span class="chip">working.sqlite</span><span class="chip">Working CAS</span><span class="chip">recovery</span></div>
-          </div>
-          <div class="card green">
-            <div><p class="card-title">Explicit Sync bridge</p><p class="card-copy"><code>layerfs-sync::client</code> and <code>::server</code> transfer accepted records and objects through the Service boundary.</p></div>
-            <div class="chips"><span class="chip">foreground only</span><span class="chip">no SQLite replication</span></div>
-          </div>
-          <div class="card green">
-            <div><p class="card-title">DurableStore</p><p class="card-copy"><code>layerfs-durable-store</code> owns DurablyAccepted heads, retention and backup over StorageId D.</p></div>
-            <div class="chips"><span class="chip">durable.sqlite</span><span class="chip">verified admission</span><span class="chip">head CAS</span></div>
-          </div>
-        </div>
-      </article>
-
-      <div class="connector" aria-hidden="true"></div>
-
-      <article class="layer">
-        <div class="layer-label">
-          <span class="layer-index">L0</span>
-          <h2>Canonical LayerFS core</h2>
-          <p>Pure, deterministic and portable. Equal meaning produces equal identity everywhere.</p>
-        </div>
-        <div class="layer-content">
-          <div class="card full purple">
-            <div class="spine" aria-label="Canonical object pipeline">
-              <div class="spine-item"><strong>Bytes</strong><span>logical stream</span></div>
-              <div class="spine-item"><strong>FastCDC</strong><span>8 / 16 / 32 KiB</span></div>
-              <div class="spine-item"><strong>Chunks</strong><span>ObjectId</span></div>
-              <div class="spine-item"><strong>Persistent trees</strong><span>extent + namespace</span></div>
-              <div class="spine-item"><strong>Root</strong><span>RootId</span></div>
-            </div>
-            <div class="chips"><span class="chip">canonical codecs</span><span class="chip">B+ extent rope</span><span class="chip">logical/{resolver,read,mutate,diff,merge}</span><span class="chip">inode + metadata trees</span><span class="chip">typed object-role validation</span></div>
-          </div>
-        </div>
-      </article>
-    </section>
-
-    <section class="section" aria-labelledby="distributed-title">
-      <div class="section-heading">
-        <span class="section-number">01 / DISTRIBUTED EXECUTION</span>
+    <main id="top">
+      <section class="hero" aria-labelledby="page-title">
         <div>
-          <h2 id="distributed-title">Parallel work; serialized references.</h2>
-          <p class="section-intro">Agents never collaborate by sharing a dirty directory. Each operation receives a pinned private workspace, while immutable objects move independently and only branch heads require coordination.</p>
+          <p class="kicker">LayerFS / target system architecture</p>
+          <h1 id="page-title">One canonical filesystem. Many private operations.</h1>
         </div>
+        <div class="hero-aside">
+          <p>Working state stays close to execution. Durable authority moves only at explicit version-control boundaries.</p>
+          <ul class="truth-list">
+            <li>one portable filesystem meaning</li>
+            <li>one private workspace per operation</li>
+            <li>two physically distinct stores</li>
+          </ul>
+        </div>
+      </section>
+
+      <div class="status-strip" aria-label="Architecture status">
+        <strong>Target architecture</strong>
+        <span>Documentation frozen at <code>4fae2a2</code></span>
+        <span>Implementation in progress</span>
+        <span>Not a completion claim</span>
       </div>
 
-      <div class="distributed">
-        <article class="host">
-          <h3>Agent host</h3>
-          <p>One WorkingStore serves many isolated <code>layerfs-workspace</code> Operations.</p>
-          <div class="agent-row">
+      <section class="section" id="system-map" aria-labelledby="system-map-title">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">The operation loop</p>
+            <h2 id="system-map-title">Durable origin. Working execution. Exact acceptance.</h2>
+          </div>
+          <p class="section-intro">A version is fetched into a nearby WorkingStore. An arbitrary tool runs in one private view. Its final filesystem effect becomes a canonical candidate, then one exact-head commit either wins or preserves a conflict.</p>
+        </div>
+
+        <figure class="system-map">
+          <div class="map-grid">
+            <article class="zone zone-durable" aria-labelledby="durable-title">
+              <header class="zone-header">
+                <div>
+                  <p class="zone-kicker">Shared durable authority</p>
+                  <h3 id="durable-title">DurableStore</h3>
+                </div>
+                <span class="store-id">StorageId D</span>
+              </header>
+              <div class="flow">
+                <div class="node">
+                  <p class="node-kind">LayerStack</p>
+                  <h4>Layer L42 · immutable RootId</h4>
+                  <p>Ordered durable Layer history, not a “main Branch.”</p>
+                </div>
+                <div class="flow-arrow">LayerBranchFork</div>
+                <div class="node">
+                  <p class="node-kind">DurablyAccepted</p>
+                  <h4>Branch B · OperationVersion O17</h4>
+                  <p>Pushed Branch history may advance independently of the LayerStack.</p>
+                </div>
+                <div class="flow-arrow">optional exact-head LayerStackMerge</div>
+                <div class="node node-accent">
+                  <p class="node-kind">New durable version</p>
+                  <h4>Layer L43</h4>
+                  <p>The source Branch survives and remains active after merge.</p>
+                </div>
+              </div>
+            </article>
+
+            <aside class="transfer-rail" aria-label="Explicit synchronization boundary">
+              <div class="transfer">
+                <strong>Fetch</strong>
+                <span class="transfer-arrow" aria-hidden="true">→</span>
+                <span>exact durable version<br>missing objects only</span>
+              </div>
+              <div class="rail-law">No syscall or Working-only commit crosses this boundary.</div>
+              <div class="transfer">
+                <strong>Push</strong>
+                <span class="transfer-arrow" aria-hidden="true">←</span>
+                <span>WorkingRecorded closure<br>independent verification</span>
+              </div>
+            </aside>
+
+            <article class="zone zone-working" aria-labelledby="working-title">
+              <header class="zone-header">
+                <div>
+                  <p class="zone-kicker">Nearby execution authority</p>
+                  <h3 id="working-title">WorkingStore</h3>
+                </div>
+                <span class="store-id">StorageId W</span>
+              </header>
+              <div class="flow">
+                <div class="node">
+                  <p class="node-kind">Exact working head</p>
+                  <h4>Branch B · OperationVersion O17</h4>
+                  <p>Persist OperationId, base VersionRef, lease and recovery record before exposing a driver.</p>
+                </div>
+                <div class="flow-arrow">begin_operation</div>
+                <div class="workspace-node">
+                  <div class="workspace-head">
+                    <div>
+                      <p class="node-kind">One arbitrary operation</p>
+                      <h3>Private OperationWorkspace</h3>
+                    </div>
+                    <span class="private-label">siblings isolated</span>
+                  </div>
+                  <div class="presentation-mini-grid">
+                    <div class="presentation-mini">
+                      <strong>Direct logical</strong>
+                      <span>no physical path</span>
+                    </div>
+                    <div class="presentation-mini">
+                      <strong>Mount / FUSE</strong>
+                      <span>private mount + disk spool</span>
+                    </div>
+                    <div class="presentation-mini">
+                      <strong>Materialize / APFS</strong>
+                      <span>private real-file view</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="flow-arrow">quiesce writers, descriptors and mappings</div>
+                <div class="node node-canonical">
+                  <p class="node-kind">One portable candidate</p>
+                  <h4><code>layerfs-core::logical</code> → candidate RootId</h4>
+                  <p>Normalize final meaning, authenticate objects and path-copy only changed persistent-tree spines.</p>
+                </div>
+                <div class="flow-arrow">OperationCommit against exact Branch head</div>
+                <div class="node node-accent">
+                  <p class="node-kind">WorkingRecorded or Conflict</p>
+                  <h4>Branch B · OperationVersion O18</h4>
+                  <p>One winner advances. A stale loser preserves a host-recoverable candidate; no hidden retry or rebase.</p>
+                </div>
+              </div>
+            </article>
+          </div>
+          <figcaption class="map-caption">
+            <span><strong>Key distinction:</strong> Push may create or advance a durable Branch without changing a LayerStack. <code>LayerStackMerge</code> is a separate exact-head action.</span>
+            <a class="text-link" href="poc-product-ready/02-core/operations.md">Read transition law →</a>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="section" id="presentations" aria-labelledby="presentations-title">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Three presentations</p>
+            <h2 id="presentations-title">One candidate root; different physical costs.</h2>
+          </div>
+          <p class="section-intro">Direct, mounted and materialized operations share the same workspace lifecycle and canonical result. They deliberately retain different dirty representations and performance envelopes.</p>
+        </div>
+        <div class="presentation-grid">
+          <article class="presentation-card">
             <div>
-              <div class="agent">Agent A</div>
-              <div class="workspace">Workspace A<br>base Root R0</div>
+              <p class="node-kind">No path</p>
+              <h3>Direct logical</h3>
+              <p>Exact snapshot reads pin an immutable verified version without creating an Operation. Logical mutations use a private OperationWorkspace.</p>
             </div>
+            <ul class="fact-list">
+              <li>range reads touch intersecting extent paths and returned bytes</li>
+              <li>replacement and splice construct canonical changed spines directly</li>
+              <li>no native filesystem compatibility layer</li>
+            </ul>
+            <div class="cost-label">Expected-local edit: replacement bytes + changed tree height</div>
+          </article>
+          <article class="presentation-card">
             <div>
-              <div class="agent">Agent B</div>
-              <div class="workspace">Workspace B<br>base Root R0</div>
+              <p class="node-kind">Private filesystem path</p>
+              <h3>Mount / FUSE</h3>
+              <p>Ordinary POSIX tools, Bash and package managers operate on logical extents through a kernel mount backed by the nearby WorkingStore.</p>
+            </div>
+            <ul class="fact-list">
+              <li>bounded dirty ranges, namespace overlay and disk spool</li>
+              <li>no whole-file hydration, backing-tree materialization or capture</li>
+              <li>count-changing logical edits avoid ordinary native suffix rewrite</li>
+            </ul>
+            <div class="cost-label">Syscall plane: WorkingStore only · zero Durable RPCs</div>
+          </article>
+          <article class="presentation-card">
+            <div>
+              <p class="node-kind">Private real-file path</p>
+              <h3>Materialize / APFS</h3>
+              <p>Native macOS tools receive ordinary files. A quiescent capture converts the final physical result into the same canonical candidate.</p>
+            </div>
+            <ul class="fact-list">
+              <li>changed-path refresh and clone/patch only when semantics are safe</li>
+              <li>supported metadata and hard-link closure round-trip exactly</li>
+              <li>different-length and unsafe cases report explicit FullFallback</li>
+            </ul>
+            <div class="cost-label">Cold materialization and arbitrary capture may remain byte-linear</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="history-law" aria-labelledby="history-law-title">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">History and exact heads</p>
+            <h2 id="history-law-title">Strict destinations; no generic merge graph.</h2>
+          </div>
+          <p class="section-intro">LayerFS exposes filesystem version control, not search or agent-orchestration policy. Every accepted transition names an exact source, destination and expected head.</p>
+        </div>
+        <div class="history-law">
+          <article class="law-card">
+            <div class="law-count">1</div>
+            <h3>Commit</h3>
+            <p><code>OperationCommit</code> binds one OperationDelta, creates one OperationVersion and CASes one Branch head.</p>
+          </article>
+          <article class="law-card">
+            <div class="law-count">2</div>
+            <h3>Forks</h3>
+            <p><code>LayerBranchFork</code> starts from a retained Layer. <code>ChildBranchFork</code> starts from an exact completed parent OperationRecordRef.</p>
+          </article>
+          <article class="law-card">
+            <div class="law-count">2</div>
+            <h3>Merges</h3>
+            <p><code>ChildBranchMerge</code> targets only the immediate parent. <code>LayerStackMerge</code> targets the inherited originating LayerStack from any depth.</p>
+          </article>
+          <article class="law-card">
+            <div class="law-count">2</div>
+            <h3>Rollbacks</h3>
+            <p><code>BranchRollback</code> and <code>LayerStackRollback</code> preflight affected leases before moving an exact head.</p>
+          </article>
+        </div>
+        <div class="history-boundary">
+          <div class="boundary-callout">
+            <strong>No cross-tree Branch merge</strong>
+            <p>Sibling, cousin, grandparent-skipping, unrelated Branch and unrelated LayerStack destinations are rejected.</p>
+          </div>
+          <div class="boundary-callout">
+            <strong>Source Branch survives merge</strong>
+            <p>Its immutable fork-origin lease remains until explicit Branch drop, so later operations and repeated merges stay valid.</p>
+          </div>
+        </div>
+        <details>
+          <summary>Open the complete branching visualization</summary>
+          <div>
+            <p>The separate <a href="history.html">LayerFS history map</a> shows nested Branches, OperationVersions, exact fork sources, parent merges and LayerStack merges without overloading this runtime architecture.</p>
+          </div>
+        </details>
+      </section>
+
+      <section class="section" id="canonical" aria-labelledby="canonical-title">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">CAS + CDC + COW</p>
+            <h2 id="canonical-title">Equal meaning produces equal identity.</h2>
+          </div>
+          <p class="section-intro">Canonical objects are deduplicated independently inside each physical database. Equal ObjectIds also make cross-store missing-object negotiation precise, but do not imply one global physical copy.</p>
+        </div>
+        <div class="canonical-panel">
+          <div class="canonical-pipeline" aria-label="Canonical object construction pipeline">
+            <div class="pipeline-node"><strong>Logical bytes</strong><span>new or replacement stream</span></div>
+            <div class="pipeline-node"><strong>Frozen FastCDC</strong><span>8 / 16 / 32 KiB</span></div>
+            <div class="pipeline-node"><strong>Canonical objects</strong><span>domain-separated ObjectId</span></div>
+            <div class="pipeline-node"><strong>Persistent COW trees</strong><span>extent · namespace · inode · metadata</span></div>
+            <div class="pipeline-node"><strong>Immutable root</strong><span>directly readable RootId</span></div>
+          </div>
+          <div class="dedup-map">
+            <div class="dedup-store">
+              <strong>WorkingStore CAS</strong>
+              <span>One authenticated copy per unique object in StorageId W, shared by its authorized Branches and Operations.</span>
+            </div>
+            <div class="dedup-bridge"><b aria-hidden="true">⇄</b>ObjectId negotiation<br>missing/resumed/retransmitted bytes counted</div>
+            <div class="dedup-store">
+              <strong>DurableStore CAS</strong>
+              <span>One independently authenticated copy per unique accepted object in StorageId D.</span>
             </div>
           </div>
-          <div class="local-store"><strong>WorkingStore SQLite</strong><br><small>shared verified CAS + host-recoverable working history</small></div>
-        </article>
-
-        <div class="network" aria-label="Object and reference synchronization">
-          <span>sync::client → service</span>
-          <div class="arrows">⇄</div>
-          <span>sync::server → DurableStore</span>
         </div>
+        <div class="table-wrap">
+          <table class="cost-table">
+            <thead><tr><th scope="col">Route</th><th scope="col">Honest cost boundary</th></tr></thead>
+            <tbody>
+              <tr><td>Canonical range read</td><td>Path resolution plus <code>O(log E + X + R)</code> for extent lookup, intersecting extents and returned bytes.</td></tr>
+              <tr><td>Logical replacement or splice</td><td>Replacement bytes plus changed persistent-tree height; unaffected suffix payload reads and writes remain zero.</td></tr>
+              <tr><td>Mounted count-changing edit</td><td>Dirty bytes, bounded canonicalization and changed tree paths; no ordinary physical suffix shift.</td></tr>
+              <tr><td>Native materialization or capture</td><td>Honestly byte-linear when cold, arbitrary or explicitly FullFallback; safe changed-path refresh is reported separately.</td></tr>
+              <tr><td>Fetch or Push</td><td>Hash negotiation, closure traversal, missing/resumed/retransmitted objects, verification and exact durable publication.</td></tr>
+              <tr><td>Fork</td><td>Reference and lease metadata; never a workspace-size physical copy.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-        <article class="authority">
-          <h3>Central DurableStore</h3>
-          <p>The system of record uses the same <code>layerfs-storage</code> schema with a distinct StorageId. Service alone opens it and delegates admitted requests to Sync server code.</p>
-          <div class="authority-grid">
-            <div class="authority-cell"><strong>Immutable CAS</strong>Chunks and Merkle nodes keyed by ObjectId.</div>
-            <div class="authority-cell"><strong>Version graph</strong>Layers, Branches and OperationVersions.</div>
-            <div class="authority-cell"><strong>Durable heads</strong>Branches, LayerStacks, generations and leases.</div>
-            <div class="authority-cell"><strong>Durable SQLite Store</strong>Objects, history, backup and recovery share one transaction domain; clients never open it directly.</div>
+      <section class="section" id="ownership" aria-labelledby="ownership-title">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Target ownership</p>
+            <h2 id="ownership-title">One owner for every policy.</h2>
           </div>
-        </article>
-      </div>
-    </section>
-
-    <section class="section" aria-labelledby="ownership-title">
-      <div class="section-heading">
-        <span class="section-number">02 / OWNERSHIP</span>
-        <div>
-          <h2 id="ownership-title">Explicit owners; one storage substrate.</h2>
-          <p class="section-intro">Storage implements one schema and transaction kernel. Working, Durable, Sync, Workspace and presentation crates add non-overlapping policy.</p>
+          <p class="section-intro">The target migration moves existing mechanisms once, migrates callers and retires the former owner. New crate names do not count if old semantic implementations remain active underneath them.</p>
         </div>
-      </div>
+        <div class="ownership-bands">
+          <article class="owner-band">
+            <h3>Foundation</h3>
+            <div class="owner-grid">
+              <div class="owner"><code>layerfs-core</code><p>Canonical IDs, codecs, FastCDC, persistent trees and portable logical semantics.</p></div>
+              <div class="owner"><code>layerfs-storage</code><p>One SQLite schema, authenticated objects, records, exact publication and compaction mechanics.</p></div>
+            </div>
+          </article>
+          <article class="owner-band">
+            <h3>Store policy</h3>
+            <div class="owner-grid">
+              <div class="owner"><code>layerfs-working-store</code><p>WorkingRecorded Branch/Operation authority, candidates, conflicts, leases and recovery.</p></div>
+              <div class="owner"><code>layerfs-durable-store</code><p>Verified durable admission, LayerStacks, durable Branches, retention, backup and restore.</p></div>
+              <div class="owner"><code>layerfs-sync</code><p>Bounded resumable Fetch/Push client and server over one typed protocol.</p></div>
+            </div>
+          </article>
+          <article class="owner-band">
+            <h3>Execution</h3>
+            <div class="owner-grid">
+              <div class="owner"><code>layerfs-workspace</code><p>Operation admission, private lifecycle, quiescence, candidate custody and cleanup.</p></div>
+              <div class="owner"><code>layerfs-mount</code><p>Mounted logical overlay, handles, bounded spool and Linux FUSE translation.</p></div>
+              <div class="owner"><code>layerfs-materialization</code><p>Physical materialize, capture and refresh plus Apple/APFS host mechanics.</p></div>
+            </div>
+          </article>
+          <article class="owner-band">
+            <h3>Public boundary</h3>
+            <div class="owner-grid">
+              <div class="owner"><code>layerfs-sdk</code><p>Thin exact reads, Operation lifecycle, version actions, presentations, Fetch/Push and typed receipts.</p></div>
+              <div class="owner"><code>layerfs-service</code><p>Authenticated transport and the only production process allowed to open DurableStore.</p></div>
+            </div>
+          </article>
+        </div>
+        <div class="boundary-grid">
+          <article class="boundary-card">
+            <h3>Core boundary</h3>
+            <ul class="ban-list"><li>no SQLite</li><li>no platform or native path</li><li>no Branch, LayerStack or Store policy</li></ul>
+          </article>
+          <article class="boundary-card">
+            <h3>Storage boundary</h3>
+            <ul class="ban-list"><li>no Working/Durable role switch</li><li>no duplicated schema or SQL</li><li>no cross-Store transaction</li></ul>
+          </article>
+          <article class="boundary-card">
+            <h3>Workspace boundary</h3>
+            <ul class="ban-list"><li>no version SQL</li><li>no synchronization authority</li><li>no shared sibling dirty state</li></ul>
+          </article>
+        </div>
+      </section>
 
-      <div class="crate-grid">
-        <article class="crate"><code>layerfs-core</code><h3>Canonical + logical foundation</h3><p>IDs, codecs, FastCDC, persistent trees and <code>logical/{resolver,read,mutate,diff,merge}</code> over ObjectRead/ObjectStore.</p></article>
-        <article class="crate"><code>layerfs-storage</code><h3>Shared SQLite substrate</h3><p>One schema, object/version records, exact publication, integrity, retention primitives and generations. No Working/Durable runtime mode.</p></article>
-        <article class="crate"><code>layerfs-working-store</code><h3>Working policy</h3><p>WorkingRecorded history, cache, host-recoverable candidates/conflicts and recovery over a distinct StorageId.</p></article>
-        <article class="crate"><code>layerfs-durable-store</code><h3>Durable policy</h3><p>DurablyAccepted admission, authoritative heads, retention, backup and restore over a separate StorageId.</p></article>
-        <article class="crate"><code>layerfs-workspace</code><h3>Operation runtime</h3><p>Private per-Operation lifecycle, runtime guards, driver binding, quiescence, candidate custody and terminal receipts; WorkingStore owns the persistent base-version lease.</p></article>
-        <article class="crate"><code>layerfs-sync</code><h3>Client + server bridge</h3><p>Client invokes WorkingStore; server invokes DurableStore. Both share one explicit bounded protocol and reconciliation model.</p></article>
-        <article class="crate"><code>layerfs-mount/fuse</code><h3>Mounted driver</h3><p>Logical overlay, spool and FUSE callbacks translate into Core logical operations without owning canonical identity.</p></article>
-        <article class="crate"><code>layerfs-materialization/apfs</code><h3>Native driver</h3><p>Builds, captures and refreshes real APFS workspaces without changing canonical meaning or merge authority.</p></article>
-        <article class="crate"><code>layerfs-sdk</code><h3>Small public facade</h3><p>Typed lifecycle calls and receipts over WorkingStore, Workspace, Sync client and the selected concrete driver.</p></article>
-        <article class="crate"><code>layerfs-service</code><h3>Durable boundary</h3><p>The only production DurableStore opener: authenticates/transports, then delegates to Sync server code.</p></article>
-      </div>
-
-      <div class="rules">
-        <article class="rule"><strong>Portable boundary</strong><p><code>core::logical</code> is generic over object access and contains no SQLite, FUSE/APFS, native path, workspace, Branch or authority policy.</p></article>
-        <article class="rule"><strong>Storage + Durable boundary</strong><p>Working and Durable use the same Storage schema in distinct databases/StorageIds—never a role switch or one-Store path. Service alone opens the Durable SQLite database and delegates admitted work to Sync server code.</p></article>
-      </div>
-    </section>
+      <section class="section" id="sync-boundary" aria-labelledby="sync-boundary-title">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Explicit synchronization</p>
+            <h2 id="sync-boundary-title">Accepted records cross. Live work never does.</h2>
+          </div>
+          <p class="section-intro">The bridge carries immutable canonical identity and accepted version-control records. It does not replicate SQLite pages or serialize an active workspace.</p>
+        </div>
+        <div class="sync-boundary">
+          <article class="sync-box">
+            <h3>Fetch / Push may carry</h3>
+            <ul class="fact-list">
+              <li>canonical ObjectIds and negotiated missing objects</li>
+              <li>accepted RootTransitions and version/delta records</li>
+              <li>exact heads, publication requests and typed receipts</li>
+              <li>bounded resume and retransmission state</li>
+            </ul>
+          </article>
+          <article class="sync-box blocked">
+            <h3>Never synchronized</h3>
+            <ul class="ban-list">
+              <li>workspace paths, ownership markers or recovery directories</li>
+              <li>mountpoints, dirty maps, spools or native APFS files</li>
+              <li>processes, file descriptors or memory mappings</li>
+              <li>SQLite files, pages or database-local row IDs</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </main>
 
     <footer>
-      <strong>LayerFS architecture · target ownership</strong>
-      <span>Immutable objects / explicit Working → Durable acceptance</span>
+      <span>LayerFS target architecture · docs commit 4fae2a2</span>
+      <span class="footer-links">
+        <a href="history.html">History</a>
+        <a href="poc-product-ready/04-product-readiness/efficiency-and-benchmarks.md">Efficiency</a>
+        <a href="poc-product-ready/04-product-readiness/implementation-roadmap.md">Implementation roadmap</a>
+      </span>
     </footer>
-  </main>
+  </div>
 </body>
 </html>

@@ -1,0 +1,68 @@
+# path|single-owner disposition
+crates/layerfs-storage/tests/store_and_publication/retained_integrity.rs|Retained-union corruption and residue qualification; one integrity-test workflow.
+crates/layerfs-storage/tests/store_and_publication/publication.rs|Verified publication transaction and accounting qualification; one publication-test workflow.
+crates/layerfs-storage/tests/product_compaction/receipt.rs|Exact Push receipt replay identity and authority-preservation qualification; one receipt-test workflow.
+crates/layerfs-storage/tests/product_compaction/replay_identity.rs|LayerStack, Branch rollback, and child-merge same-request negative identity matrices; one replay-qualification suite.
+crates/layerfs-storage/src/full/branch/import.rs|Legacy bounded staged Branch-history admission; P4 must move semantic merge verification to DurableStore before final protocol qualification.
+crates/layerfs-storage/src/full/branch/fetch.rs|Legacy accepted Branch fetch persistence and qualification; P4 replaces copy-Fetch after layered-read proof.
+crates/layerfs-storage/src/full/branch/read.rs|Accepted Branch/head/history persistence reads; one Full Branch read aggregate.
+crates/layerfs-storage/src/full/branch/push_export.rs|Legacy bounded Branch Push page export; P4 replaces the payload contract without changing exact identity/CAS laws.
+crates/layerfs-storage/src/full/branch/publication.rs|Target Full ordinary Branch staged-page recheck, exact-head CAS, and terminal receipt/reconciliation transaction; one authoritative publication workflow.
+crates/layerfs-storage/src/full/branch/transition.rs|Accepted Branch Operation/Version/delta/transition row admission, including the target ordinary record and frozen legacy special-history records; one Branch transition persistence aggregate.
+crates/layerfs-storage/src/full/branch/transition.rs|Target ordinary OperationVersion admission and accepted Branch transition persistence; one Full Branch transition aggregate.
+crates/layerfs-storage/src/full/legacy_branch.rs|Transitional legacy_full staged Branch publication transaction; remove after the typed Full authority cutover and P4 atomic special-history replacement.
+crates/layerfs-storage/src/full/layer_stack/import.rs|Legacy bounded LayerStack snapshot admission; one accepted snapshot persistence workflow.
+crates/layerfs-storage/src/full/layer_stack/read.rs|Accepted Layer/LayerStack head and history persistence reads; one Full LayerStack read aggregate.
+crates/layerfs-storage/src/full/layer_stack/transition.rs|LayerStack creation/finalization CAS rows and exact same-request transition replay; one Full LayerStack transition aggregate.
+crates/layerfs-storage/src/full/legacy_store.rs|Legacy Full store aggregate, counters, identity, and transaction facade retained only until verified typed Full/Working migration and rollout remove legacy_full runtime operation.
+crates/layerfs-storage/src/full/store.rs|Typed Full create/open, immutable role and identity, file custody, profile admission, and verified selected-store reopen boundary.
+crates/layerfs-storage/src/full/compaction/copy.rs|Verified Full generation copy/backup pipeline; one crash-consistent compaction workflow.
+crates/layerfs-storage/src/full/compaction/verify.rs|Accepted Branch/LayerStack/history semantic invariants across the retained legacy source and folded Full candidate.
+crates/layerfs-storage/src/full/receipt.rs|Authoritative Push/fetch/reconciliation receipt persistence and exact identity validation; one receipt aggregate.
+crates/layerfs-storage/src/full/transfer/custody.rs|Authenticated Full object-batch admission, idempotent custody receipts, abort, and abandoned-transfer reclamation.
+crates/layerfs-storage/src/full/transfer/page.rs|Bounded legacy and target Full Branch page staging, exact replay identity, and transfer recovery rows.
+crates/layerfs-storage/src/tests/admission.rs|Schema/profile/read-only admission and legacy migration safety tests; one admission qualification suite.
+crates/layerfs-storage/src/working/operation/record.rs|Private Working Operation/Version persistence aggregate and replay record decoding.
+crates/layerfs-storage/src/working/layer_candidate.rs|Private prepared LayerStack-finalization candidate persistence aggregate.
+crates/layerfs-storage/src/working/branch/merge.rs|Private child-Branch merge persistence and exact same-request candidate replay validation; one Working Branch merge workflow.
+crates/layerfs-storage/src/sqlite/connection/open.rs|Verified SQLite open/reopen, immutable identity admission, and initial scrub boundary.
+crates/layerfs-storage/src/object/page.rs|Ordered ObjectId and payload-reference batch paging, including TrustedLocalDev incremental BLOB range decoding; one object-page workflow.
+crates/layerfs-storage/src/object/read.rs|Legacy bounded object/root/delta point and range reads plus the ObjectRead adapter; one read-persistence aggregate.
+crates/layerfs-storage/src/integrity/full/closure.rs|Authenticated Full object-closure and namespace graph verification; one bounded closure verifier.
+crates/layerfs-storage/src/integrity/full/history.rs|Accepted-root discovery, authenticated closure qualification, and exact Full tracking-membership verification.
+crates/layerfs-storage/src/publication.rs|Legacy generic publication transaction retained for P0 baseline and removed after typed-store migration.
+crates/layerfs-storage/src/generation/switch.rs|Verified atomic CURRENT selector switch and lost-ack recovery workflow.
+crates/layerfs-storage/src/generation/cleanup.rs|Owned stale/staging generation and crash-scratch reclamation workflow.
+crates/layerfs-storage/src/generation/selector.rs|CURRENT selector format, validation, and selected-generation reopen workflow.
+crates/layerfs-storage/src/generation/create.rs|Candidate generation creation, copy, verification, and preflight workflow.
+crates/layerfs-storage/src/tests/generation_switch.rs|Generation selector visibility, maintenance exclusion, retained rollback, crash residue, and lost-ack qualification; one generation-switch fault suite.
+crates/layerfs-storage/src/tests/full_branch.rs|Target Full staged-page, one-CAS publication, exact receipt replay, conflict, and authority-role qualification; one Branch publication test workflow.
+crates/layerfs-storage/src/migration/full.rs|Quiescent legacy_full-to-Full row transformation, fold, and candidate cleanup workflow.
+crates/layerfs-storage/src/migration/verify.rs|Independent legacy-to-Full semantic qualification, sealed candidate custody, and one-lock selector-switch gate.
+crates/layerfs-storage/src/full/legacy_layer_stack.rs|Transitional legacy_full Engine LayerStack bootstrap/finalization/replay compatibility; remove in P2/P7 after Working 14-table migration and typed Full Durable cutover.
+crates/layerfs-storage/src/full/legacy_branch.rs|Transitional legacy_full staged Branch Push transaction retained behavior-preservingly; remove after P4 atomic target publication qualification and P7 legacy_full retirement.
+crates/layerfs-storage/src/tests/full_branch.rs|Target Full Branch origin-qualified page staging, ordinary CAS, receipt replay/conflict, tamper, ancestry, and role qualification; one persistence workflow fixture suite.
+crates/layerfs-sync/tests/history_paging.rs|Bounded accepted-history paging, resume, and dependency qualification suite.
+crates/layerfs-sync/tests/transfer.rs|Bounded object transfer, retransmission, abort custody, and corruption qualification suite.
+crates/layerfs-sync/src/publication/branch.rs|Legacy Branch Push and ordered special-history replay workflow; P4 replaces segmented authority mutations with one terminal transaction.
+tools/layerfs-eval/src/stage1_edge/receipt_model.rs|Stage-one edge receipt schema and serialization model; one evidence-record aggregate.
+tools/layerfs-eval/src/stage1_edge/summary_json_contract.rs|Stage-one JSON contract assertions; one frozen-output contract suite.
+tools/layerfs-eval/src/stage1_edge/optimization.rs|Stage-one optimization and amplification evidence derivation; one evaluation policy.
+tools/layerfs-eval/src/stage1_edge/summary_json.rs|Stage-one JSON evidence rendering; one deterministic renderer.
+tools/layerfs-eval/src/stage1_edge/failure_artifacts.rs|Stage-one failure artifact custody and rendering; one failure-evidence workflow.
+tools/layerfs-eval/src/stage1_edge/tests/summary_contract.rs|Stage-one edge summary contract qualification; one output-contract test suite.
+tools/layerfs-eval/src/stage1_edge/fixture.rs|Stage-one edge fixture construction and immutable fixture identity; one fixture owner.
+tools/layerfs-eval/src/stage1_edge/run.rs|Stage-one edge campaign orchestration; one evaluation workflow.
+tools/layerfs-eval/src/stage1_edge/validate_locality.rs|Locality/storage-amplification acceptance validation; one gate policy.
+tools/layerfs-eval/src/stage1_edge/row_parse.rs|Bounded stage-one evidence-row decoding; one parser.
+tools/layerfs-eval/src/stage1_edge/oracle.rs|Frozen edge-workload expected-value oracle; one oracle policy.
+tools/layerfs-eval/src/stage1_edge/engine_counters.rs|Engine counter projection into stage-one evidence; one counter adapter.
+tools/layerfs-eval/src/stage1_edge/schedule_model.rs|Frozen edge edit schedule and piece-table oracle; one workload model.
+tools/layerfs-eval/src/legacy_full/refresh_legacy/delta.rs|Authenticated inode and namespace snapshot-diff enumeration; one refresh-delta planner.
+tools/layerfs-eval/src/legacy_full/refresh_legacy/topology.rs|Hard-link topology path expansion, rename planning, and topology rotation; one topology planner.
+tools/layerfs-eval/src/legacy_full/refresh_legacy/directory.rs|Planned native directory, rename, create, update, and symlink application; one entry-application workflow.
+tools/layerfs-eval/src/legacy_full/refresh_legacy/regular.rs|Native regular-file content update, accepted-splice optimization, and authenticated fallback; one file-content reconciler.
+tools/layerfs-eval/src/legacy_full/session_legacy/managed_edit.rs|ManagedWorkspace private edit journal, descriptor spool custody, and editability state guard; one managed-edit aggregate.
+tools/layerfs-eval/src/stage1_materialize/trusted/run.rs|Trusted materialization campaign orchestration; one route qualification workflow.
+tools/layerfs-eval/src/stage1_materialize/acceptance/run.rs|Materialization acceptance campaign orchestration; one acceptance workflow.
+tools/layerfs-eval/src/stage1_materialize/attribution/run.rs|Materialization attribution campaign orchestration; one attribution workflow.

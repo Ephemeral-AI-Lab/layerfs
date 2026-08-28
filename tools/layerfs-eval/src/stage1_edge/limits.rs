@@ -1,0 +1,15 @@
+pub(crate) const FILE_PATH: &str = "data/payload.bin";
+pub(crate) const INITIAL_BYTES: u64 = 25_165_824;
+pub(crate) const MAXIMUM_BYTES: u64 = 25_227_264;
+pub(crate) const MAX_USER_FILE_BYTES: u64 = 33_554_431;
+pub(crate) const BUFFER_BYTES: usize = 1_048_576;
+pub(crate) const REPLACEMENT_BACKING_BYTES: usize = 495_616;
+pub(crate) const FIXTURE_VERSION: &str = "apple-edge-v1";
+pub(crate) const FIXTURE_MODE: u32 = 0o644;
+pub(crate) const FIXTURE_MTIME_SECONDS: u64 = 1_700_000_123;
+pub(crate) const FIXTURE_MTIME_NANOSECONDS: u32 = 456_789_123;
+pub(crate) const RESET_LIMIT_NS: u128 = 5_000_000_000;
+pub(crate) const PREPARATION_LIMIT_NS: u128 = 30_000_000_000;
+pub(crate) const CAMPAIGN_LIMIT_NS: u128 = 60_000_000_000;
+pub(crate) const FROZEN_NON_RESET_FORECAST_NS: u128 = 45_000_000_000;
+pub(crate) const READINESS_SCHEMA: &str = "layerfs-stage1.1-readiness-v1";

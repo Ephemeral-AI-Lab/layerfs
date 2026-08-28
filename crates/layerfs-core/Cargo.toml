@@ -10,3 +10,4 @@ path = "src/lib.rs"
 
 [dependencies]
 blake3.workspace = true
+serde.workspace = true

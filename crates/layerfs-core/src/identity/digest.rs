@@ -6,6 +6,11 @@ pub const DIGEST_BYTES: usize = 32;
 const OBJECT_DOMAIN: &[u8] = b"layerfs/object\0";
 const CONTENT_DOMAIN: &[u8] = b"layerfs/content-bytes/v1\0";
 
+/// Chunk identities reuse the Phase 1 object domain over raw chunk bytes.
+pub fn chunk_id(bytes: &[u8]) -> super::ChunkId {
+    super::ObjectId::for_bytes(bytes)
+}
+
 pub struct ContentDigestWriter {
     hasher: blake3::Hasher,
 }
@@ -52,10 +57,6 @@ impl ObjectHashWriter {
 
     pub(crate) fn finish(self) -> [u8; DIGEST_BYTES] {
         *self.hasher.finalize().as_bytes()
-    }
-
-    pub(crate) fn update(&mut self, bytes: &[u8]) {
-        self.hasher.update(bytes);
     }
 }
 

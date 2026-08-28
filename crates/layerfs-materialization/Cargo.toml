@@ -1,0 +1,16 @@
+[package]
+name = "layerfs-materialization"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-core = { path = "../layerfs-core" }
+layerfs-workspace = { path = "../layerfs-workspace" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "=0.2.189"
+
+[lib]
+path = "src/lib.rs"

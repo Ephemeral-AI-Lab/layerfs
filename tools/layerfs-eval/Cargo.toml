@@ -8,7 +8,11 @@ license.workspace = true
 [dependencies]
 blake3.workspace = true
 layerfs-core = { path = "../../crates/layerfs-core" }
+layerfs-materialization = { path = "../../crates/layerfs-materialization" }
 layerfs-sdk = { path = "../../crates/layerfs-sdk" }
+layerfs-storage = { path = "../../crates/layerfs-storage" }
+layerfs-working-store = { path = "../../crates/layerfs-working-store" }
+layerfs-workspace = { path = "../../crates/layerfs-workspace" }
 
 [[bin]]
 name = "layerfs-eval"
