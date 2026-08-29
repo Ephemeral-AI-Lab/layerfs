@@ -67,23 +67,34 @@ impl SavedContext {
             }
             Err(error) => return Err(io(error)),
         };
+        let mut lines = contents.lines();
+        match lines.next() {
+            None => Ok(Self::default()),
+            Some("version 1") => Self::load_lines(lines, false),
+            Some("version 2") => Self::load_lines(lines, true),
+            Some(_) => Err(CliError::Context("context format".to_owned())),
+        }
+    }
+
+    fn load_lines<'a>(lines: impl Iterator<Item = &'a str>, named: bool) -> CliResult<Self> {
         let mut context = Self::default();
-        for line in contents.lines() {
+        for line in lines {
             let fields = line.split(' ').collect::<Vec<_>>();
-            match fields.as_slice() {
-                ["version", "1"] => {}
-                ["layer", path] => context.layer = Some(decode_path(path)?),
-                ["stack", path] => context.stacks.push(decode_path(path)?),
-                ["branch", path, "-"] => context.branches.push(SavedBranch {
-                    location: decode_path(path)?,
-                    parent_stack: None,
-                }),
-                ["branch", path, parent] => context.branches.push(SavedBranch {
-                    location: decode_path(path)?,
-                    parent_stack: Some(decode_path(parent)?),
-                }),
-                ["active-stack", path] => context.active_stack = Some(decode_path(path)?),
-                ["active-branch", path] => context.active_branch = Some(decode_path(path)?),
+            match (named, fields.as_slice()) {
+                (false, ["layer", path]) | (true, ["layer", _, path]) => {
+                    context.layer = Some(decode_path(path)?);
+                }
+                (false, ["stack", path]) | (true, ["stack", _, path]) => {
+                    context.stacks.push(decode_path(path)?);
+                }
+                (false, ["branch", path, parent]) | (true, ["branch", _, path, parent]) => {
+                    context.branches.push(SavedBranch {
+                        location: decode_path(path)?,
+                        parent_stack: (parent != &"-").then(|| decode_path(parent)).transpose()?,
+                    });
+                }
+                (_, ["active-stack", path]) => context.active_stack = Some(decode_path(path)?),
+                (_, ["active-branch", path]) => context.active_branch = Some(decode_path(path)?),
                 _ => return Err(CliError::Context("context format".to_owned())),
             }
         }
@@ -183,4 +194,44 @@ fn stable_hash(bytes: &[u8]) -> u64 {
 
 fn io(error: std::io::Error) -> CliError {
     CliError::Io(error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SavedContext;
+
+    #[test]
+    fn loads_named_version_two_contexts() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-context-v2-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let layer = root.join("layer.db");
+        let stack = root.join("stack.db");
+        let branch = root.join("branch.db");
+        let context = root.join("context");
+        std::fs::write(
+            &context,
+            format!(
+                "version 2\nlayer main {}\nstack release {}\nbranch feature {} {}\n",
+                super::encode_path(&layer),
+                super::encode_path(&stack),
+                super::encode_path(&branch),
+                super::encode_path(&stack),
+            ),
+        )
+        .unwrap();
+
+        let saved = SavedContext::load(&context).unwrap();
+        assert_eq!(saved.layer, Some(layer));
+        assert_eq!(saved.stacks, vec![stack.clone()]);
+        assert_eq!(saved.branches[0].location, branch);
+        assert_eq!(saved.branches[0].parent_stack, Some(stack));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
