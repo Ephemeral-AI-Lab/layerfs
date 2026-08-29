@@ -1,0 +1,46 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/ancestry.rs (target/debug/deps/ancestry-fd2d18dae0c2a1e3)
+
+running 1 test
+diamond merge-base plan:
+MATERIALIZE common
+COMPOUND QUERY
+LEFT-MOST SUBQUERY
+MATERIALIZE source_anc
+SETUP
+SCAN CONSTANT ROW
+RECURSIVE STEP
+COMPOUND QUERY
+LEFT-MOST SUBQUERY
+SCAN a
+SEARCH c USING INDEX sqlite_autoindex_commits_1 (commit_id=?)
+UNION ALL
+SCAN a
+SEARCH c USING INDEX sqlite_autoindex_commits_1 (commit_id=?)
+SCAN source_anc
+INTERSECT USING TEMP B-TREE
+MATERIALIZE target_anc
+SETUP
+SCAN CONSTANT ROW
+RECURSIVE STEP
+COMPOUND QUERY
+LEFT-MOST SUBQUERY
+SCAN a
+SEARCH c USING INDEX sqlite_autoindex_commits_1 (commit_id=?)
+UNION ALL
+SCAN a
+SEARCH c USING INDEX sqlite_autoindex_commits_1 (commit_id=?)
+SCAN target_anc
+SCAN common
+CORRELATED SCALAR SUBQUERY 9
+MULTI-INDEX OR
+INDEX 1
+SEARCH child USING INDEX commits_parent (parent_id=?)
+INDEX 2
+SEARCH child USING INDEX commits_merge_parent (merge_parent_id=?)
+BLOOM FILTER ON newer (id=?)
+SEARCH newer USING AUTOMATIC COVERING INDEX (id=?)
+USE TEMP B-TREE FOR ORDER BY
+test merge_base_filters_a_large_unrelated_descendant_subgraph_by_immediate_edges ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.46s

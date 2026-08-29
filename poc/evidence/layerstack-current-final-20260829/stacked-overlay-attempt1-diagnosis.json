@@ -1,0 +1,30 @@
+{
+  "status": "REVISE",
+  "aggregates": {
+    "G": 3.197332358060599,
+    "Rsum": 2.1567244023405743,
+    "SB_ns": 1440084458,
+    "SL_ns": 3105865292,
+    "Spread": 1.6852090824678303
+  },
+  "failed_checks": [
+    "statistics:copy 64 MiB:computerd"
+  ],
+  "failed_gates": [
+    "Spread"
+  ],
+  "copy": [
+    {
+      "base_median_ns": 29586083,
+      "budget_miss_ns": 0,
+      "cloudflare_ratio": 11.257277771460702,
+      "cloudflare_ratio_limit": 12.383005548606773,
+      "cloudflare_ratio_pass": true,
+      "layerfs_max_ns": 2147483647,
+      "layerfs_median_ns": 103815000,
+      "median_ratio": 3.5089132954842315,
+      "optimized_budget_ns": 250000000,
+      "scenario": "copy 64 MiB"
+    }
+  ]
+}

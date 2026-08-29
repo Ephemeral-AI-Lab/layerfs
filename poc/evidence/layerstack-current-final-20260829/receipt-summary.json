@@ -1,0 +1,86 @@
+[
+  {
+    "aggregates": {
+      "G": 3.294130370930769,
+      "Rsum": 2.239872974595734,
+      "SB_ns": 1442318417,
+      "SL_ns": 3230610043,
+      "Spread": 1.0304981179060861
+    },
+    "control": "overlay",
+    "file": "direct-overlay-receipt.json",
+    "gates": {
+      "G": true,
+      "Rsum": true,
+      "SL": true,
+      "Spread": true,
+      "cloudflare_rows": true
+    },
+    "raw_sha256": "a466d52ca214a033a824da36c47f2de155dc98a8069fa57f94d859bbee38ba8b",
+    "status": "PASS_OPTIMIZED",
+    "stdout_sha256": "1dc24f0355515d44158bb11723ec29488d75a145305c95e2b93df5f28ebbaa9d"
+  },
+  {
+    "aggregates": {
+      "G": 3.616484947515381,
+      "Rsum": 2.128263001167718,
+      "SB_ns": 1511798915,
+      "SL_ns": 3217505696,
+      "Spread": 1.05209852626163
+    },
+    "control": "tmpfs",
+    "file": "direct-tmpfs-receipt.json",
+    "gates": {
+      "G": true,
+      "Rsum": true,
+      "SL": true,
+      "Spread": true,
+      "cloudflare_rows": true
+    },
+    "raw_sha256": "28f5733a0a594a265afed39b5e717b4326bbc36c02073fa4bcf6deddb2af79d3",
+    "status": "PASS_OPTIMIZED",
+    "stdout_sha256": "9d0899a7bb91d36517e12082690374b7c5746e718606667c84e6564540829f69"
+  },
+  {
+    "aggregates": {
+      "G": 3.218702717749079,
+      "Rsum": 2.1273061221394447,
+      "SB_ns": 1663720043,
+      "SL_ns": 3539241833,
+      "Spread": 1.028066412719755
+    },
+    "control": "overlay",
+    "file": "stacked-overlay-receipt.json",
+    "gates": {
+      "G": true,
+      "Rsum": true,
+      "SL": true,
+      "Spread": true,
+      "cloudflare_rows": true
+    },
+    "raw_sha256": "9c29efab25eea3d06c621394506808f5c7ebbac7ebfe8ac6a8b92bcd3247055e",
+    "status": "PASS_OPTIMIZED",
+    "stdout_sha256": "5d92768651f7308d0656dc7230b8b03594d20ca9a68f1e4a5ccd6736c6360d06"
+  },
+  {
+    "aggregates": {
+      "G": 3.661883366769088,
+      "Rsum": 2.217158591753943,
+      "SB_ns": 1553383167,
+      "SL_ns": 3444096835,
+      "Spread": 1.0386276400965364
+    },
+    "control": "tmpfs",
+    "file": "stacked-tmpfs-receipt.json",
+    "gates": {
+      "G": true,
+      "Rsum": true,
+      "SL": true,
+      "Spread": true,
+      "cloudflare_rows": true
+    },
+    "raw_sha256": "a461379100253d34681d5d59d8519969d255c9d3f5fab8a9082dd8e81cc45134",
+    "status": "PASS_OPTIMIZED",
+    "stdout_sha256": "00297dcbe74f7a933a41a420ddfe24bbfa582b6c8d72aaed03f1b98de268b9bc"
+  }
+]

@@ -1,0 +1,262 @@
+[
+    {
+        "Id": "160fc39d3a33d10640c46289e51ffc074bf4ba00268606bc358d120dc1c9482a",
+        "Created": "2026-08-29T08:55:31.144964626Z",
+        "Path": "/usr/local/bin/layerfs-mount",
+        "Args": [
+            "--branch-db",
+            "/var/lib/layerfs/branch.sqlite",
+            "--stack-db",
+            "/var/lib/layerfs/stack.sqlite",
+            "--layer-db",
+            "/var/lib/layerfs/layer.sqlite",
+            "--branch",
+            "1101a04cbb2ffa72c69abfd7331434eadf",
+            "--mount",
+            "/workspace",
+            "--spool",
+            "/var/tmp/layerfs-owned/stacked",
+            "--commit-on-exit"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 60106,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-08-29T08:55:31.169325168Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:fc477aca0f63d3da3a7b5abe13b356e5eac4ca8380a33cd6b610cfd21d688a7c",
+        "ResolvConfPath": "/var/lib/docker/containers/160fc39d3a33d10640c46289e51ffc074bf4ba00268606bc358d120dc1c9482a/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/160fc39d3a33d10640c46289e51ffc074bf4ba00268606bc358d120dc1c9482a/hostname",
+        "HostsPath": "/var/lib/docker/containers/160fc39d3a33d10640c46289e51ffc074bf4ba00268606bc358d120dc1c9482a/hosts",
+        "LogPath": "/var/lib/docker/containers/160fc39d3a33d10640c46289e51ffc074bf4ba00268606bc358d120dc1c9482a/160fc39d3a33d10640c46289e51ffc074bf4ba00268606bc358d120dc1c9482a-json.log",
+        "Name": "/layerfs-current-stacked-1787993531",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "layerfs-current-stacked-1787993531:/var/lib/layerfs"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "none",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "no",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": [
+                "CAP_SYS_ADMIN"
+            ],
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": [],
+            "DnsSearch": [],
+            "ExtraHosts": null,
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "Tmpfs": {
+                "/tmp": "size=1g,mode=1777"
+            },
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 536870912,
+            "NanoCpus": 1000000000,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": [],
+            "BlkioDeviceReadBps": [],
+            "BlkioDeviceWriteBps": [],
+            "BlkioDeviceReadIOps": [],
+            "BlkioDeviceWriteIOps": [],
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": [
+                {
+                    "PathOnHost": "/dev/fuse",
+                    "PathInContainer": "/dev/fuse",
+                    "CgroupPermissions": "rwm"
+                }
+            ],
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 1073741824,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": 512,
+            "Ulimits": [],
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ],
+            "Init": true
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "layerfs-current-stacked-1787993531",
+                "Source": "/var/lib/docker/volumes/layerfs-current-stacked-1787993531/_data",
+                "Destination": "/var/lib/layerfs",
+                "Driver": "local",
+                "Mode": "z",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "160fc39d3a33",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "HTTPS_PROXY=http://http.docker.internal:3128",
+                "https_proxy=http://http.docker.internal:3128",
+                "NO_PROXY=localhost,127.0.0.1,::1",
+                "no_proxy=localhost,127.0.0.1,::1",
+                "HTTP_PROXY=http://http.docker.internal:3128",
+                "http_proxy=http://http.docker.internal:3128",
+                "PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "RUSTUP_HOME=/usr/local/rustup",
+                "CARGO_HOME=/usr/local/cargo",
+                "RUST_VERSION=1.85.1",
+                "LAYERFS_SOURCE_COMMIT=74a40a7ac070d2b0b4106c1d02306dfab866af79",
+                "LAYERFS_SOURCE_TREE=1ca2e7f6d6e5fa868febf479be91f93c0e7a4ea8",
+                "LAYERFS_FS_BENCH_SHA256=0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
+            ],
+            "Cmd": [
+                "--branch-db",
+                "/var/lib/layerfs/branch.sqlite",
+                "--stack-db",
+                "/var/lib/layerfs/stack.sqlite",
+                "--layer-db",
+                "/var/lib/layerfs/layer.sqlite",
+                "--branch",
+                "1101a04cbb2ffa72c69abfd7331434eadf",
+                "--mount",
+                "/workspace",
+                "--spool",
+                "/var/tmp/layerfs-owned/stacked",
+                "--commit-on-exit"
+            ],
+            "Image": "layerfs-fuse:final-1ca2e7f6",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/usr/local/bin/layerfs-mount"
+            ],
+            "Labels": {
+                "org.opencontainers.image.layerfs.fs-bench-sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+                "org.opencontainers.image.layerfs.source-commit": "74a40a7ac070d2b0b4106c1d02306dfab866af79",
+                "org.opencontainers.image.layerfs.source-tree": "1ca2e7f6d6e5fa868febf479be91f93c0e7a4ea8",
+                "org.opencontainers.image.revision": "74a40a7ac070d2b0b4106c1d02306dfab866af79",
+                "org.opencontainers.image.source": "https://github.com/Ephemeral-AI-Lab/layerfs"
+            },
+            "StopTimeout": 1
+        },
+        "NetworkSettings": {
+            "SandboxID": "cd2c6870cdeddf6b62a1d836ee5e34b4fbe9a15669e7305b9168c43ae7d58f3c",
+            "SandboxKey": "/var/run/docker/netns/cd2c6870cded",
+            "Ports": {},
+            "Networks": {
+                "none": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": null,
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "f0bd3491d07d53230058faf6447e79352c791728ab8ea5df344ae452fb1ae713",
+                    "EndpointID": "0c9f83f11628ea277aea0386ccaafa2e20d0cd4fc3ba94e60eb5be565fa52194",
+                    "Gateway": "",
+                    "IPAddress": "",
+                    "MacAddress": "",
+                    "IPPrefixLen": 0,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": null
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:8905a208b4a5f09a59d26cdb7d4f9c70775938dfe7ed36c217503ec807d81315",
+            "size": 2015,
+            "platform": {
+                "architecture": "arm64",
+                "os": "linux"
+            }
+        }
+    }
+]

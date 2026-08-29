@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running tests/fastcdc_shifted_stream.rs (target/debug/deps/fastcdc_shifted_stream-84ec8544eb401050)
+
+running 1 test
+FASTCDC_SHIFTED_STREAM source=216e99ff21dfd04b8f759392a9921584d7a4641ad8667ae38123ea8742eb045f prefix=edb531680306a36957ab75e11afef04abde6cb00d8881477158fc4a7f8cad60e original_chunks=220 shifted_chunks=220 shared_suffix_chunks=219 shared_suffix_bytes=4175722 shared_suffix_digest=61c91a10ca34fae310f4ab363fc5bfe35aa57a5fa2961d9fea3a11777509de2f fixed_shared_suffix_chunks=0
+test shifted_stream_retains_a_frozen_canonical_suffix_that_fixed_blocks_lose ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s

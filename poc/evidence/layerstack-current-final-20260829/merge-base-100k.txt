@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running tests/ancestry.rs (target/debug/deps/ancestry-fd2d18dae0c2a1e3)
+
+running 1 test
+100k linear merge-base elapsed=467.854042ms
+test merge_base_scales_over_one_hundred_thousand_linear_commits ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 8.09s
