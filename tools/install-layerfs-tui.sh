@@ -13,11 +13,13 @@ esac
 CARGO_TARGET_DIR="$repo_dir/target" cargo build \
     --locked \
     --manifest-path "$repo_dir/Cargo.toml" \
+    -p layerfs-cli \
     -p layerfs-tui
 
 install -d "$bin_dir"
+install -m 0755 "$repo_dir/target/debug/layerfs" "$bin_dir/layerfs"
 install -m 0755 "$repo_dir/target/debug/layerfs-tui" "$bin_dir/layerfs-tui"
-echo "installed $bin_dir/layerfs-tui"
+echo "installed $bin_dir/layerfs and $bin_dir/layerfs-tui"
 
 if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
     echo "add $bin_dir to PATH to run: layerfs-tui"
