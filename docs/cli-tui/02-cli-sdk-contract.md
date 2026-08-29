@@ -777,6 +777,8 @@ CliSession::complete(input: &str, cursor: usize) -> Result<Vec<Completion>>
 CliSession::snapshot(query: ViewQuery) -> Result<ViewSnapshot>
 
 OperationHandle::interrupt() -> Result<()>
+OperationHandle::next_event() -> Result<Option<CliEvent>>
+OperationHandle::try_next_event() -> Result<Option<CliEvent>>
 ```
 
 `CommandPlan` resolves the active route, Store/Branch targets, Workspace
