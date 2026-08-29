@@ -5,12 +5,13 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
-[features]
-test-hooks = []
-
 [dependencies]
+layerfs-branch-store = { path = "../layerfs-branch-store" }
 layerfs-core = { path = "../layerfs-core" }
-layerfs-working-store = { path = "../layerfs-working-store" }
+layerfs-storage-core = { path = "../layerfs-storage-core" }
 
 [lib]
 path = "src/lib.rs"
+
+[dev-dependencies]
+layerfs-layer-store = { path = "../layerfs-layer-store" }

@@ -207,7 +207,7 @@ old base without mutating it or adding lifecycle columns.
 | `create_stack_history_from_layer(layer_history_id, layer_id)` | StackStore | Create one StackHistory and immutable seed Stack sharing the Layer root |
 | `pull_layer_history(layer_history_id, through_layer_id)` | LayerStore serves | Pull exact Layer ancestry through the named Layer |
 | `pull_stack_history(stack_history_id, through_stack_id)` | LayerStore serves | Pull exact Stack ancestry through the named Stack |
-| `add_stack(stack_history_id, branch_id, commit_id)` | Creator StackStore | Three-way integrate one Branch Commit, create at most one Stack, and CAS the StackHistory head |
+| `add_stack(stack_history_id, branch_id, commit_id)` | Creator StackStore | Three-way integrate one Branch Commit, create exactly one Stack metadata node for a newly accepted Branch, and CAS the StackHistory head; equal-root nodes add no payload bytes |
 | `push_stack(stack_id)` | LayerStore | Transfer the missing Stack suffix plus each accepted Branch/AddResult/exact Commit/root provenance closure, then exact-CAS the verified copied Stack head |
 | `add_layer(layer_history_id, source)` | LayerStore | Create one Layer and CAS the LayerHistory head, or return conflict |
 
@@ -639,32 +639,34 @@ returns both `StackHistoryId` and seed `StackId`, and atomically sets
 
 ### StackHistory write authority
 
-Exactly one SDK-configured creator StackStore may execute `add_stack` for a
-StackHistory. `create_stack_history_from_layer` returns a writable SDK handle
+Exactly one configured creator StackStore may execute `add_stack` for a
+StackHistory. `create_stack_history_from_layer` returns the frozen ID records
 and atomically establishes a signing keypair:
 
 ```text
 StackHistoryId embeds H(verification_public_key)
 SDK configuration privately persists signing_private_key outside core SQLite
-writable handle binds history_id + signer
+add_stack(history_id, ...) checks H(configured public key) against history_id
 ```
 
 The private signer is not a store ID, database column, or user-managed
 credential. It is managed transparently by SDK deployment configuration:
 
 ```text
-creator StackStore      writable handle -> may CAS head_stack_id
-pulled StackStore       read-only handle -> cannot add_stack
-LayerStore copy         read-only -> cannot add_stack
+creator StackStore      matching configured key -> may CAS head_stack_id
+pulled StackStore       no matching private key -> cannot add_stack
+LayerStore copy         no writer key -> cannot add_stack
 ```
 
-`pull_stack_history` never transfers the signer and always returns a read-only
-handle. A copied ID, matching writer namespace, public key, or database row is
-insufficient to write. There is no authority-transfer verb or owner/lease
-column. Embedded local use automatically creates/reloads the signer and needs
-no user-managed credential. Cloning a writable StackStore database without
-its SDK signer yields a read-only copy; copying the signer and running two
-writers is unsupported. Deploy one writer or create separate StackHistories.
+`pull_stack_history` never transfers the signer. It returns the same
+`RefOutcome<StackId>`/ID surface as local history operations; no
+`OwnedStackHistory` or `ReadOnlyStackHistory` wrapper exists. A copied ID,
+matching writer namespace, public key, or database row is insufficient to
+write. There is no authority-transfer verb or owner/lease column. Embedded
+local use automatically creates/reloads the signer and needs no user-managed
+credential. Cloning a writable StackStore database without its signer yields a
+read-only copy; copying the signer and running two writers is unsupported.
+Deploy one writer or create separate StackHistories.
 
 ### `add_stack`
 
@@ -682,7 +684,7 @@ One joined indexed preflight loads the source AddResult, Branch/Commit, base
 Stack, StackHistory, and current Stack manifest. It MUST NOT query those
 relations one at a time.
 
-1. verify its writable SDK handle for `SH1`; pulled/read-only copies return
+1. verify its configured writer key for `SH1`; pulled/read-only copies return
    `ReadOnlyHistory<StackHistoryId>`;
 2. check `add_results` for Branch B; a mapped Stack in `SH1` returns the
    existing `AddResult<StackId>`, a Stack in another history is
@@ -1637,7 +1639,6 @@ Required traversal/shape indexes add no columns:
 ```text
 commits(parent_id)
 commits(merge_parent_id)
-branches(base_id)
 
 UNIQUE layers(history_id)            WHERE parent_id IS NULL
 UNIQUE layers(history_id, parent_id) WHERE parent_id IS NOT NULL
@@ -1773,7 +1774,7 @@ Required concurrency/conflict tests:
 | Queued clean `add_layer` | A completes first; B then reads A's Layer as current, evaluates once, and creates the next Layer |
 | Queued conflicting `add_layer` | A completes first; B then evaluates once and creates no Layer/mapping, returning the exact first deterministic conflicting path |
 | Injected Add CAS loss | Candidate Stack/Layer, AddResult, and head movement roll back together; return exact `HeadMoved` with no internal retry |
-| No-op additions | Atomically record `add_results` to current Stack/Layer and create no snapshot row |
+| Equal-root additions | A newly accepted Branch always creates a same-root child Stack plus AddResult/head CAS; Add Layer may map to the current Layer. Repeating an already mapped source writes nothing. |
 | Known-root Add | Normal/no-op Add authenticates typed source/root IDs but reads zero descendants for an already-admitted equal root; three-way visits only unequal frontier nodes |
 | Read-only StackHistory | Pulled copy and LayerStore copy reject `add_stack`; creator handle succeeds |
 | Remote writer attestation | Missing/forged key, signature, expected head, suffix digest, or request digest is rejected before metadata exposure/copied-head CAS |
@@ -1855,7 +1856,7 @@ instrumentation; they MUST NOT add metrics tables to production schemas.
 - [ ] Queued `add_layer` calls evaluate once in order; an injected CAS loss rolls back and returns `HeadMoved` without retry.
 - [ ] `add_layer` rejects a target LayerHistory different from the source base history.
 - [ ] Branch `merge` calls the one core merge-base resolver; Branch `merge`, `add_stack`, and `add_layer` call the same core three-way implementation.
-- [ ] No-op `add_stack`/`add_layer` still atomically records `add_results`.
+- [ ] A newly accepted equal-root Branch creates one same-root Stack provenance step; repeated mapped Add writes nothing, while equal-root Add Layer may record only its AddResult.
 - [ ] Repeated addition validates result kind and explicit history before returning `UpToDate`.
 - [ ] Push and Add stay separate; a subsequent corrected Add sends no payload already admitted by Push.
 - [ ] Local Commit performs no existence pre-query; cross-store admission performs one batched existence query per ID page.

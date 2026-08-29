@@ -26,34 +26,37 @@ when they prevent implementation drift.
 | Public operations | 14 |
 | Storage packages | 4 |
 | Separate transfer package | 0 |
-| Final workspace members | 9: eight crates plus `tools/layerfs-eval` |
+| Final workspace members | 10: nine crates plus `tools/layerfs-eval` |
 | BranchStore schema | 3 tables / 9 columns |
 | StackStore schema | 8 tables / 24 columns |
 | LayerStore schema | 8 tables / 24 columns |
 | Persistent topology records | 7 records + AddResult |
 | New storage production files | 42 including SDK composition, five thin `lib.rs`, two named binaries |
-| New/replacement storage production LOC | at most 6,100 |
-| Preferred file size | at most 300 LOC |
-| Review trigger / hard cap | 350 / 500 LOC |
+| New/replacement storage production LOC | approximately 6,100 review estimate; not a terminal gate |
+| File-size guidance | preserve cohesive files through 999 LOC; split on responsibility boundaries |
+| Hard per-file cap | 1,000 production LOC |
 
 The current checkout contains approximately 89,488 non-test Rust lines and
 112,294 total Rust lines across current crates/tools. Those lines and the ten
 current workspace crates are replacement input, not a structure or LOC floor
 to preserve.
 
-Final non-test workspace ceilings:
+Final non-test workspace review estimates:
 
 ```text
 layerfs-core                         11,500
 new storage packages + SDK           6,100
 layerfs-materialization              8,000
+layerfs-workspace                    1,000
 layerfs-mount                        8,000
 tools/layerfs-eval                      500
 ------------------------------------------
-maximum                              34,100 LOC
+estimated total                      35,100 LOC
 ```
 
-Tests are budgeted by invariant and may exceed this production ceiling. The
+These package and aggregate figures are review guidance, not automatic
+PASS/FAIL thresholds. Tests are budgeted by invariant and may exceed the
+production estimate. The
 plan does not preserve the current 35k-line evaluation tool or legacy topology
 fixtures merely because they exist.
 
@@ -75,7 +78,9 @@ fixtures merely because they exist.
    optional-table framework, or one-implementation interface.
 7. No HA, leader election, StackHistory authority transfer, GC, rollback,
    backup, migration, or offline queue work in this build.
-8. No Workspace/tool-operation persistence. COW before Commit is transient.
+8. No Workspace/tool-operation persistence. The retained `layerfs-workspace`
+   is a zero-table transient runtime for COW, spool, staged mutations, direct
+   commit/discard, and bounded resources only.
 9. Do not optimize benchmark changes inside noise. Correctness, asymptotic
    bounds, query plans, and bytes moved gate the build before wall-clock tuning.
 10. The experiment assumes no server/network failure. Incomplete frames are
@@ -116,7 +121,6 @@ crates/layerfs-working-store
 crates/layerfs-durable-store
 crates/layerfs-sync
 crates/layerfs-service
-crates/layerfs-workspace
 crates/layerfs-server   # if present
 ```
 
@@ -141,7 +145,8 @@ never compile by retaining old Store paths beside new ones.
 
 ### Preserve only proven primitives
 
-`layerfs-core` remains temporarily as the only workspace crate. Run its focused
+`layerfs-core` and the rewritten zero-table `layerfs-workspace` remain as
+primitives. Run Core's focused
 canonical codec, ObjectId, filesystem tree, and CDC tests. Storage/history/
 publication behavior found there is deleted or moved; the shared three-way and
 merge-base rules must be implemented fresh in `layerfs-storage-core`.
@@ -165,11 +170,12 @@ The grep must find no retained topology implementation. A manual/CI contract
 matrix must also show all fourteen operations unchanged and every binding
 DB/transfer requirement mapped to an exact source-tree owner before P1 begins.
 
-## 4. Exact production artifacts and LOC budgets
+## 4. Exact production artifacts and LOC review estimates
 
-The exact production files are frozen in `source-tree.md`. Budget by package:
+The exact production files are frozen in `source-tree.md`. Review estimates by
+package:
 
-| Package/module | LOC budget |
+| Package/module | LOC review estimate |
 |---|---:|
 | `layerfs-storage-core` total | 2,400 |
 | IDs + records | 250 |
@@ -184,7 +190,7 @@ The exact production files are frozen in `source-tree.md`. Budget by package:
 | Branch creation + Commit | 300 |
 | Cross-base merge | 300 |
 | Pull/Push Branch | 200 |
-| Transient workspace COW | 200 |
+| Branch snapshot/layered view | 200 |
 | `layerfs-stack-store` total | 1,150 |
 | Handle/open + signer | 250 |
 | History creation + pulls | 280 |
@@ -197,21 +203,28 @@ The exact production files are frozen in `source-tree.md`. Budget by package:
 | Pull/Push serving | 270 |
 | Remote endpoint + binary | 200 |
 | `layerfs-sdk` topology rewrite | 350 |
+| `layerfs-workspace` transient runtime | 1,000 |
 
-Consumer integration-delta ceilings, outside the 6,100 storage/API budget:
+Consumer integration-delta review estimates, outside the approximate 6,100
+storage/API figure:
 
 ```text
 layerfs-materialization <= 150 LOC
-layerfs-mount           <= 200 LOC
+layerfs-workspace       <= 1,000 LOC
+layerfs-mount           <= 1,000 LOC
 tools/layerfs-eval      <= 250 LOC
 ```
 
 If a consumer needs more, delete old topology-facing code before adding a new
 adapter layer.
 
-These are ceilings, not targets. Fewer lines win when tests and invariants are
-unchanged. Exceeding a crate budget requires removing duplication before asking
-for more budget.
+These are estimates, not targets or terminal gates. Do not compress correct
+code, create dense god files, move tests mechanically, or split/merge
+responsibilities to hit them. First delete duplicate algorithms, low-level
+public protocol, compatibility code, stubs, and wrong ownership. A current
+storage-plus-SDK count around 7.9k is a review signal only; architecture,
+canonical-model reuse, transaction/transfer correctness, measured speed/space,
+SRP, public API minimality, and test evidence take priority.
 
 Public-type budget across the four storage packages:
 
@@ -229,7 +242,10 @@ Public-type budget across the four storage packages:
 1 three-way outcome
 1 merge-base outcome
 --------------------------------
-27 public storage types maximum
+Public-type counts are review signals, not numeric gates. Application-facing
+access remains the fourteen domain operations; phase stats, counters,
+membership bitmaps, frames, and endpoint request/response values are internal
+implementation protocol and are not SDK surface.
 ```
 
 Do not create one request/result struct per operation unless a value crosses the
@@ -243,7 +259,7 @@ Dependency budget:
 | `rusqlite` | Reuse for all three schemas/WAL transactions; Store open requires SQLite >=3.35 for RETURNING. |
 | `blake3` | Reuse existing domain-separated content hashing. |
 | One audited public-signature crate | Allowed only for remotely verifiable StackHistory writer attestations. |
-| `serde` / `serde_json` | Do not use in the four storage crates; `wire.rs` uses the one manual canonical codec. |
+| `serde` / `serde_json` | Do not use in the four storage crates; `records.rs` owns the one manual bounded contract codec and `wire.rs` only frames bytes. |
 | Async/network runtime | None initially; standard `Read`/`Write` loopback is sufficient. |
 | UUID/random crate | None; `ids.rs` assembles UUIDv7 layout from `SystemTime` plus SQLite `randomblob` and tests the canonical bits. |
 
@@ -290,17 +306,20 @@ Reverse indexes exist only when used by a named query and confirmed by
 ```text
 commits(parent_id)
 commits(merge_parent_id)
-branches(base_id)
 add_results(result_id)
 ```
 
 Do not create duplicate Layer/Stack indexes when the unique indexes satisfy the
 same query plan. Do not add indices solely to collect benchmark statistics.
 
-Evaluate `objects WITHOUT ROWID` rather than assuming it is smaller. Compare
-database bytes, exact-ID lookup plans, and batched insert cost for ordinary
-rowid versus `WITHOUT ROWID`; select one schema before P1 freezes. Do not apply
-the result automatically to every table.
+The `objects` table keeps ordinary rowid layout. A 2026-08-29 local SQLite
+comparison inserted 100,000 random 32-byte IDs with 256-byte payloads in one
+FULL/WAL batch, five fresh databases per shape. Ordinary rowid had a 0.29 s
+median and 36,159,488-byte median; `WITHOUT ROWID` had a 0.34 s median and
+36,380,672-byte median. Exact-ID lookup was indexed in both (`sqlite_autoindex`
+versus `PRIMARY KEY`). On this binding workload ordinary rowid was about 15%
+faster and 0.6% smaller, so the current DDL is frozen; do not extrapolate that
+choice to other tables without evidence.
 
 Schema gate:
 
@@ -360,7 +379,7 @@ versions. Preserve generic `HeadMoved<I>`, `WrongHistory<H>`,
 | Merge | Fast-forward CAS, or merge Commit insert + target-head CAS |
 | Provision LayerHistory | Canonical-empty genesis Layer + LayerHistory/head |
 | Create StackHistory | Seed Stack + StackHistory/head |
-| Add Stack | Stack or no-op result + AddResult + exact Stack-head CAS |
+| Add Stack | One Stack per newly accepted Branch, including same-root Stack + AddResult + exact Stack-head CAS; repeated mapped source writes nothing |
 | Add Layer | Layer or no-op result + AddResult + exact Layer-head CAS |
 | Push Branch | After object closure and bounded immutable Commit admission, expose Branch ref/same-ID head in last bounded transaction |
 | Push Stack | Admit the signed Stack suffix plus every mapped frozen Branch ref, accepted Commit DAG, and root closure missing from LayerStore; fold copied-head CAS only after complete provenance |
@@ -785,7 +804,7 @@ local merge: canonical encode/hash once -> deferred -> clean admit -> verify -> 
 | BranchStore -> LayerStore Push Branch | cross-store flow | No Stack is synthesized and no authoritative head moves. |
 | StackStore -> LayerStore Push Stack | cross-store flow | LayerStore skips stored suffix/provenance facts and objects, validates every mapped frozen Branch/accepted Commit/root, verifies the signed frontier, then CASes copied-head metadata only. |
 | All reverse Pulls | cross-store flow with requester as receiver | Requested history/Commit prefix becomes visible only after closure verification. |
-| Add Stack/Add Layer | local merge flow; missing source data first uses transfer flow | Result root is reused. Equal-current no-op reads zero descendants and writes AddResult only; Conflict discards deferred objects and writes zero rows. |
+| Add Stack/Add Layer | local merge flow; missing source data first uses transfer flow | Result root is reused. A newly accepted equal-root Branch advances StackHistory with one same-root Stack; equal-current Add Layer may write only AddResult. Repeating a mapped source writes nothing. Conflict discards deferred objects and writes zero rows. |
 
 Push never deletes sender data. GC is deferred.
 
@@ -846,8 +865,8 @@ optional tuning notes.
 Dependency order:
 
 1. Tagged IDs and seven records plus AddResult.
-2. Measure rowid versus `WITHOUT ROWID` for `objects`, choose once, then freeze
-   exact DDL, constraints, manifest admission, and typed SQL.
+2. Preserve the measured ordinary-rowid `objects` choice and freeze exact DDL,
+   constraints, manifest admission, and typed SQL.
 3. Closure-complete object admission.
 4. Cross-base merge-base resolver: indexed recursive SQLite CTEs with `UNION`
    dedup/transient B-tree, paging only final maximal candidates; closest Commit,
@@ -855,8 +874,10 @@ Dependency order:
    outcomes without a Rust ancestor set.
 5. One lexicographic three-way/Merkle implementation returning Clean or the
    first `Conflict { path, base, current, candidate }` only.
-6. Fourteen-operation contract enums.
-7. Canonical byte codec/framing/batching in `wire.rs`.
+6. Fourteen-operation values plus internal phase envelopes in `contract.rs`.
+7. Manual bounded record/endpoint codec in `records.rs`; byte framing,
+   checksums, and incomplete-frame rejection only in `wire.rs`; membership and
+   batching remain in `admission.rs` and Store operations.
 
 P1 focused tests:
 
@@ -1055,14 +1076,16 @@ storage core or create a transport abstraction beforehand.
 Rewrite SDK composition with explicit arguments only:
 
 ```text
-direct(BranchStore, LayerEndpoint)
-stacked(BranchStore, StackStore, LayerEndpoint)
+direct(BranchStore, Layer publication endpoint)
+stacked(BranchStore, StackStore, Stack publication endpoint, Layer publication endpoint)
 ```
 
 No YAML, environment-driven hidden database, automatic local Store creation,
-or runtime route switching.
+or runtime route guessing. `Direct::from_parts` and `Stacked::from_parts` make
+embedded versus remote Add/Push publication explicit in code.
 
-Then re-add, one at a time:
+Retain the rewritten `layerfs-workspace` as the sole transient runtime, then
+re-add the remaining consumers one at a time:
 
 ```text
 layerfs-mount
@@ -1070,9 +1093,14 @@ tools/layerfs-eval
 layerfs-materialization
 ```
 
-Real Linux FUSE is the priority presentation for this implementation. Route the
-passing direct slice through `layerfs-mount` immediately after P2, keep it green
-while P3 is built, and route stacked mode through the same mount immediately
+The fixed presentation chain is
+`layerfs-mount -> layerfs-sdk -> layerfs-workspace -> layerfs-branch-store -> configured parent`.
+Mount owns only FUSE callbacks, kernel inode/open-handle mapping, errno/attribute
+translation, and session bootstrap. Workspace owns generic transient COW,
+change/spool state, direct commit/discard, and the spool bound. Neither
+may Push or Add. Real Linux FUSE remains the priority: route the passing direct
+slice through this chain immediately after P2, keep it green while P3 is built,
+and route stacked mode through the same mount immediately
 after P3. Close the real-FUSE functional oracle and focused `fs-bench` smoke for
 both topologies before spending implementation time on materialization/APFS.
 Materialization remains part of final workspace closure but may not delay or
@@ -1083,6 +1111,31 @@ history, or transfer behavior. Delete obsolete fixtures rather than adapting
 them to old semantics.
 
 ## 15. Performance and storage gates
+
+### Recorded cohesion review
+
+The old 350-line review trigger and 500-line hard cap are superseded. The
+handwritten production-file hard limit is 1,000 LOC. Cohesive files in the
+350–999 range are not split merely for size; SRP and one owner per invariant
+still require a split whenever unrelated responsibilities survive together.
+Total production LOC and deletion of duplicate algorithms take precedence over
+small-file targets.
+
+The following files remain material architecture review points because of
+their responsibilities, not their line counts:
+
+| File | Review result |
+|---|---|
+| `storage-core/schema.rs` | Cohesive Store open/owner queue, exact schema verification, and fixed statement preparation. |
+| `storage-core/sql.rs` | Cohesive typed Branch/Commit reads and ref/history transaction/CAS primitives. |
+| `storage-core/merge_base.rs` | Cohesive typed ancestry/base reads and indexed Commit/Stack/Layer base selection. |
+| `storage-core/merkle.rs` | Uses `layerfs-core` logical/Merkle/rope primitives, a bounded disposable object scratch, traversal/pruning, and logical equality support; no duplicate Snapshot/COW/codec/chunker remains. |
+| `storage-core/admission.rs` | Cohesive receiver membership, authentication, insert/race accounting, and fact validation. |
+| `storage-core/contract.rs` | Domain values/outcomes/errors plus internal operation-envelope values; no duplicate Operation model or public statistics return. |
+| `storage-core/wire.rs` | Byte framing/checksum/backpressure only; admission, transfer planning, manual record codec, and Store dispatch use their precise existing owners. |
+| `layer-store/transfer.rs` | Cohesive central endpoint serving plus signed Stack provenance verification. |
+| `workspace/overlay.rs` | Cohesive generic transient namespace and inode graph; file bytes/lifecycle remain split out. |
+| `mount/filesystem.rs` | One cohesive `fuser::Filesystem` callback implementation; state, mappings, translation, and session bootstrap remain split out. |
 
 These are correctness gates, not optional tuning:
 
@@ -1095,7 +1148,7 @@ These are correctness gates, not optional tuning:
 | Standalone FastCDC quality | From-scratch original/prefix-shifted deterministic streams freeze exact canonical payload-ID/byte reuse; fixed-block oracle fails; worst-case full churn remains allowed. |
 | Edit-history difference | Same final logical bytes via full write/one edit/multiple edits may have different roots/layouts; record overhead and prove exact three-digest semantic rules merge clean. |
 | Closure admission | Parent/root metadata is never visible before all children; known root presence certifies closure. |
-| Add pruning | Repeated/no-op Add performs zero descendant reads; divergent Add visits only unequal frontier. |
+| Add pruning | Repeated mapped Add and equal-root Add perform zero descendant reads; divergent Add visits only unequal frontier. Equal-root Add Stack still writes its required provenance node. |
 | Bounded conflict | Canonical lexicographic walk returns the first conflict only and stops; no Vec/truncation state or DB row. |
 | Merge-base memory | Indexed recursive CTE + UNION/transient B-tree finds maximal common candidates; no Rust ancestor set; page-cache/temp bytes remain within frozen bounds. |
 | Missing-only transfer | Announced, receiver-missing, sent, RETURNING-admitted, and raced-existing sets/bytes balance exactly; transfer CDC/re-encode counters are zero. |
@@ -1126,7 +1179,6 @@ object INSERT RETURNING -> admitted set, no follow-up existence query
 Branch/LayerHistory/StackHistory head CAS -> primary-key SEARCH
 Commit parent and merge-parent reverse lookup -> declared parent index
 merge-base recursive CTE -> parent indexes + transient dedup B-tree, no full Commit table scan
-branches(base_id) -> declared base index
 add_results source/reverse lookup -> source PK / result index
 normal Pull/Push -> no full objects, Commit, Stack, Layer, or history scan
 ```
@@ -1196,11 +1248,11 @@ Structure:
 
 ```text
 cargo metadata --no-deps
-rg -n 'name = "layerfs-storage"|layerfs-(working-store|durable-store|sync|service|workspace)' \
+rg -n 'name = "layerfs-storage"|layerfs-(working-store|durable-store|sync|service)' \
   Cargo.toml crates tools
-rg --files crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk} \
+rg --files crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk,workspace,mount} \
   | rg '(^|/)(mod|main|product|common|utils|manager|repository)\.rs$'
-find crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk} \
+find crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk,workspace,mount} \
   -name '*.rs' -print0 | xargs -0 wc -l
 ```
 
@@ -1209,10 +1261,10 @@ Expected:
 ```text
 no obsolete package/import hit
 no forbidden filename in target packages/SDK
-no production file above 500 LOC
-every file above 350 LOC has an explicit split review
-new storage production LOC <= 6,100
-full non-test workspace production LOC <= 34,100
+no handwritten production file above 1,000 LOC
+no cohesive 350–999-line file split only to satisfy a size target
+storage/package/workspace LOC estimates reviewed for unnecessary surviving lines
+aggregate LOC is not an automatic PASS/FAIL threshold
 ```
 
 Verification:
@@ -1225,6 +1277,7 @@ cargo test -p layerfs-branch-store
 cargo test -p layerfs-stack-store
 cargo test -p layerfs-layer-store
 cargo test -p layerfs-sdk
+cargo test -p layerfs-workspace
 cargo test -p layerfs-materialization
 cargo test -p layerfs-mount
 cargo test -p layerfs-eval

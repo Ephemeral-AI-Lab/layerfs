@@ -1,9 +1,18 @@
-//! Thin public facade over WorkingStore, OperationWorkspace, presentations, and explicit Sync.
-
 #![forbid(unsafe_code)]
 
-mod product;
+mod binding;
+mod direct;
+mod endpoint;
+mod stacked;
 
-pub use product::*;
-
-pub const COMPONENT: &str = "layerfs-sdk";
+pub use direct::Direct;
+pub use endpoint::RemoteEndpoint;
+pub use layerfs_storage_core::{
+    AddLayerSource, AddResult, BranchId, BranchRecord, Change, CommitId, LayerHistoryId,
+    LayerHistoryRecord, LayerId, LayerRecord, MergeOutcome, RefOutcome, Result, StackHistoryId,
+    StackHistoryRecord, StackId, StackRecord, StorageError,
+};
+pub use layerfs_workspace::{
+    Attr, Kind, NodeId, ReadPlan, ResourcePolicy, Workspace, WorkspaceState, ROOT,
+};
+pub use stacked::Stacked;

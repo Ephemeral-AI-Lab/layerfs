@@ -16,42 +16,46 @@ production owner; no owner may introduce a second mechanical contract.
 
 Four storage packages are sufficient:
 
-| Package | Sole responsibility | Production LOC budget |
+| Package | Sole responsibility | Production LOC review estimate |
 |---|---|---:|
 | `layerfs-storage-core` | Shared IDs/records, exact schemas/SQL, merge-base and three-way algorithms, CAS admission, contracts, and byte framing. | 2,400 |
-| `layerfs-branch-store` | Branch/Commit persistence, transient COW, Branch operations, and Branch transfer orchestration. | 1,250 |
+| `layerfs-branch-store` | Branch/Commit persistence, layered snapshot reads, Branch operations, and Branch transfer orchestration. | 1,250 |
 | `layerfs-stack-store` | Owned linear StackHistory creation/head CAS, history pulls, Stack transfer, signing, and optional remote endpoint. | 1,150 |
 | `layerfs-layer-store` | Complete central persistence, LayerHistory provisioning/head CAS, transfer serving, and optional remote endpoint. | 950 |
 
 Existing application integration remains in `layerfs-sdk`; it is not another
-storage owner. Its rewritten topology-composition files have a 350 production
-LOC budget, keeping the full new storage surface at or below 6,100 production
-LOC.
+storage owner. `layerfs-workspace` is retained as a zero-table, non-Store
+transient runtime between presentation and BranchStore. It owns generic COW,
+dirty spool and the direct commit/discard lifecycle, but no database or
+publication authority. The former SDK 350 LOC and storage-plus-SDK 6,100 LOC
+figures are review estimates, not automatic PASS/FAIL thresholds.
+
+Package and aggregate LOC estimates must never cause correct cohesive code to
+be compressed, tests to be moved mechanically, or responsibilities to be
+split/merged. Minimality means every surviving line has one necessary owner and
+duplicate algorithms, types, round trips, compatibility code, and stubs are
+deleted. Architecture, canonical-model reuse, transaction/transfer correctness,
+measured speed/space, SRP, public API minimality, and evidence take priority.
 
 ```text
-                       layerfs-sdk
-                            |
-          +-----------------+-----------------+
-          |                 |                 |
-          v                 v                 v
- layerfs-branch-store  layerfs-stack-store  layerfs-layer-store
-          |                 |                 |
-          +-----------------+-----------------+
-                            |
-                            v
-                 layerfs-storage-core
-                            |
-                            v
-                      layerfs-core
+layerfs-mount -> layerfs-sdk -> layerfs-workspace -> layerfs-branch-store -> configured parent
+application   -> layerfs-sdk       -> layerfs-branch-store -> configured parent
+
+configured parent = layerfs-layer-store
+                 or layerfs-stack-store -> layerfs-layer-store
+
+all three Stores -> layerfs-storage-core -> layerfs-core
 ```
 
 No store crate depends on another store crate.
 
 ### Why there is no `layerfs-transfer`
 
-The cold design needs one canonical contract codec, bounded framing, and
-missing-object batches. They fit in one cohesive `wire.rs` below 250 LOC inside
-the already-shared storage core. A separate crate would add a manifest,
+The cold design needs one manual contract codec, bounded framing, and
+missing-object batches. The codec stays with `records.rs`, membership and
+operation-scoped batching stay with `admission.rs` plus Store operations, and
+the small byte-only carrier stays in `wire.rs` inside the already-shared
+storage core. A separate crate would add a manifest,
 dependency edges, error conversions, public types, and test surface without an
 independent release boundary or consumer.
 
@@ -69,15 +73,15 @@ crates/
 │   └── src/
 │       ├── lib.rs                 # declarations/re-exports only; <= 80 LOC
 │       ├── ids.rs                 # storage IDs; validate/delegate ObjectId to layerfs-core
-│       ├── records.rs             # 7 records + AddResult; no behavior
-│       ├── schema.rs              # exact 3/9 and 8/24 DDL, indexes, admission
-│       ├── sql.rs                 # separate typed/Object membership, inserts/reads/CAS
-│       ├── merge_base.rs          # indexed recursive CTE Commit -> Stack -> Layer resolution
+│       ├── records.rs             # 7 records + AddResult + manual bounded endpoint codec
+│       ├── schema.rs              # Store open/owner queue, exact DDL/indexes, fixed prepares
+│       ├── sql.rs                 # typed Branch/Commit reads plus ref/history inserts and CAS
+│       ├── merge_base.rs          # indexed typed ancestry/base reads and base resolution
 │       ├── three_way.rs           # Clean or first lexicographic Conflict
 │       ├── merkle.rs              # tree walk/pruning/result + rare logical-file digest equality
-│       ├── admission.rs           # missing map, SQL batches, DeferredObjectStore
+│       ├── admission.rs           # typed/Object membership, authenticated admission, inserts
 │       ├── contract.rs            # 14-operation values, endpoint envelopes, shared errors
-│       └── wire.rs                # canonical large-transfer stream/framing/backpressure; <= 250 LOC
+│       └── wire.rs                # bounded frames, checksum, byte I/O, backpressure only
 │
 ├── layerfs-branch-store/
 │   ├── Cargo.toml
@@ -89,14 +93,14 @@ crates/
 │       ├── merge.rs               # merge-base + three-way + target-head CAS
 │       ├── branch_transfer.rs     # two-ID pull create/fast-forward + push orchestration
 │       ├── layered_read.rs        # local-new/parent streaming adapter; no materialization
-│       └── workspace.rs           # transient in-memory/mount COW only
+│       └── snapshot.rs            # Branch head/root view for Workspace and SDK callers
 │
 ├── layerfs-stack-store/
 │   ├── Cargo.toml
 │   └── src/
 │       ├── lib.rs                 # declarations/re-exports only; <= 60 LOC
 │       ├── stack_store.rs         # handle/open/schema admission
-│       ├── writer.rs              # signer config, owned/read-only capability
+│       ├── writer.rs              # signer config and StackHistoryId/key match
 │       ├── create_history.rs      # create_stack_history_from_layer
 │       ├── add_stack.rs           # accepted-Branch freeze + three-way + one head CAS
 │       ├── history_pull.rs        # pull_layer_history + pull_stack_history
@@ -119,19 +123,41 @@ crates/
 │       └── bin/
 │           └── layerfs-layer-store.rs # process bootstrap only; <= 80 LOC
 │
-└── layerfs-sdk/
+├── layerfs-sdk/
     ├── Cargo.toml
     └── src/
         ├── lib.rs                 # declarations/re-exports only
         ├── direct.rs              # BranchStore -> LayerStore composition
         ├── stacked.rs             # BranchStore -> StackStore -> LayerStore
-        ├── endpoint.rs            # explicit local/remote endpoint selection
-        └── binding.rs             # caller/workload -> BranchStore/Branch assignment
+        ├── endpoint.rs            # opaque endpoint re-export + Layer/Stack publication selection
+        └── binding.rs             # Workspace/materialization caller -> BranchStore/Branch binding
+│
+├── layerfs-workspace/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs                 # declarations/re-exports only
+│       ├── model.rs               # transient node/data model; no Store records
+│       ├── overlay.rs             # generic transient namespace/COW operations
+│       ├── file_io.rs             # layered reads, dirty spool, bounded write/truncate/fsync
+│       ├── changes.rs             # bounded final Change set and spool cleanup
+│       ├── lifecycle.rs           # direct Workspace commit/discard; no Store authority
+│       └── resource.rs            # bounded transient-memory/spool policy
+│
+└── layerfs-mount/
+    └── src/
+        ├── lib.rs                 # declarations/re-exports only
+        ├── adapter.rs             # shared FUSE state + attribute/errno translation
+        ├── filesystem.rs          # fuser callback implementation only
+        ├── inode_table.rs         # kernel inode-number mapping only
+        ├── handles.rs             # kernel open-handle mapping only
+        ├── mount_session.rs       # Linux FUSE session/bootstrap only
+        └── bin/layerfs-mount.rs   # process bootstrap only
 ```
 
-This target has 42 production Rust files including five `lib.rs` files and two
-named binaries. The previous draft had many one-struct, one-table, codec-adapter,
-and declaration-directory files that did not earn separate ownership.
+The four storage packages plus SDK retain 42 production Rust files including
+five `lib.rs` files and two named Store binaries. Workspace and mount are
+non-Store consumers with the separate thin trees above; neither changes the
+four-storage-package count or owns a database.
 
 ## 3. Fourteen operations and file ownership
 
@@ -155,37 +181,51 @@ operations share one cohesive file.
 | `push_stack` | `layerfs-stack-store/push_stack.rs`; receiver is `layerfs-layer-store/transfer.rs` |
 | `add_layer` | `layerfs-layer-store/add_layer.rs` |
 
-`contract.rs` owns only value types for these operations. It does not execute
-them. `wire.rs` only turns those values and opaque byte batches into canonical
-frames.
+The SDK route matrix is intentionally asymmetric: `Direct` exposes the seven
+legal direct operations (`create_branch_from_layer`,
+`create_branch_from_commit`, `commit`, `merge`, `pull_branch`, `push_branch`,
+and `add_layer`); `Stacked` exposes the other thirteen operations and does not
+expose `create_branch_from_layer`. Their union is the frozen fourteen, and the
+API doctest compile-fails the forbidden Stacked route.
+
+`contract.rs` owns domain values plus internal phase envelopes. It does not
+execute operations. `records.rs` owns their manual bounded codec; `wire.rs`
+frames opaque bytes and does not own record semantics.
 
 ## 4. One owner per invariant
 
 | Invariant | Sole production owner |
 |---|---|
 | Tagged topology identities + untagged ObjectId delegation | `layerfs-storage-core/ids.rs` |
-| Exact table/column/index manifests | `layerfs-storage-core/schema.rs` |
-| Separate typed-table/Object membership SQL shapes, prepared typed SQL, and CAS primitives | `layerfs-storage-core/sql.rs` |
-| Cross-base merge-base selection | `layerfs-storage-core/merge_base.rs` |
+| Store ownership queue, exact table/column/index manifests, fixed prepared shapes | `layerfs-storage-core/schema.rs` |
+| Typed Branch/Commit reads and ref/history insert/CAS primitives | `layerfs-storage-core/sql.rs` |
+| Typed ancestry/base reads and cross-base merge-base selection | `layerfs-storage-core/merge_base.rs` |
 | Entry-level Clean/first-conflict decision | `layerfs-storage-core/three_way.rs` |
 | Merkle traversal/pruning/build and unequal-root file digest fallback | `layerfs-storage-core/merkle.rs` |
-| Missing bitmap mapping, batched admission, and `DeferredObjectStore` lifecycle | `layerfs-storage-core/admission.rs` |
-| Already-filtered frame codec, large-transfer streaming/backpressure, checksum | `layerfs-storage-core/wire.rs` |
-| Public Store operation values and endpoint envelopes | `layerfs-storage-core/contract.rs` |
-| SDK local/remote endpoint selection | `layerfs-sdk/endpoint.rs` |
+| Receiver membership, authenticated admission, immutable insert and race partitioning | `layerfs-storage-core/admission.rs` |
+| Fixed bitmap/batch planning and operation-scoped missing-only frontier | `layerfs-storage-core/admission.rs` plus the calling Store operation |
+| Framing, checksum, bounded byte I/O, and backpressure only | `layerfs-storage-core/wire.rs` |
+| Domain operation values plus internal endpoint envelopes | `layerfs-storage-core/contract.rs` |
+| SDK embedded/remote composition | `layerfs-sdk/endpoint.rs`; `Direct::from_parts` and `Stacked::from_parts` route Add Layer and Add/Push Stack through explicit opaque endpoints, while the reusable TCP client remains owned by `stack-store/remote.rs` |
 | StackStore/LayerStore endpoint dispatch | each Store's `remote.rs` |
 | Branch target-head transaction | `layerfs-branch-store/merge.rs` |
 | Pull Branch fresh insert/ancestor-only local CAS | `layerfs-branch-store/branch_transfer.rs` |
-| StackHistory writer capability | `layerfs-stack-store/writer.rs` |
+| StackHistory ID-based writer-key check | `layerfs-stack-store/writer.rs` |
 | Accepted Branch freeze + single StackHistory head transaction | `layerfs-stack-store/add_stack.rs` |
 | Accepted Branch freeze + single LayerHistory head transaction | `layerfs-layer-store/add_layer.rs` |
 | Read-only LayerStore copy of Stack head | `layerfs-layer-store/transfer.rs` |
 | Signed Stack suffix provenance enumeration | `layerfs-stack-store/push_stack.rs` |
 | Missing-only provenance validation/admission before copied head | `layerfs-layer-store/transfer.rs` |
+| Generic transient COW, dirty spool, staged mutations, commit/discard | `layerfs-workspace/overlay.rs` + `lifecycle.rs` |
+| Kernel inode/open-handle mappings and FUSE translation | `layerfs-mount/inode_table.rs` + `handles.rs` + `filesystem.rs` |
 
 Store operations supply verified roots, own their transaction/CAS, and
 interpret shared outcomes. No store may copy merge-base, three-way, Merkle,
 identity, schema, or admission logic.
+
+`layerfs-workspace` calls BranchStore snapshot/object/Commit APIs but never
+opens SQLite or calls Push/Add. `layerfs-mount` calls Workspace only; it owns
+kernel presentation state, not the generic overlay or spool algorithm.
 
 Existing `layerfs-core` files remain the only large-file content owners; they
 are reused, not duplicated into the new storage tree:
@@ -205,7 +245,9 @@ are reused, not duplicated into the new storage tree:
 | `layerfs-branch-store` | `layerfs-storage-core`, `layerfs-core` | StackStore or LayerStore crate |
 | `layerfs-stack-store` | `layerfs-storage-core`, `layerfs-core`, one audited signature crate | BranchStore or LayerStore crate |
 | `layerfs-layer-store` | `layerfs-storage-core`, `layerfs-core`, the same signature crate | BranchStore or StackStore crate |
-| `layerfs-sdk` | The three Store crates | SQLite internals, hidden store creation, old storage crates |
+| `layerfs-sdk` | The three Store crates, `layerfs-storage-core` domain types/endpoints, `layerfs-workspace`, and `layerfs-materialization`; `layerfs-core` only in tests | Direct SQLite access, old storage crates |
+| `layerfs-workspace` | `layerfs-branch-store`, `layerfs-storage-core`, `layerfs-core` | SQLite, StackStore/LayerStore mutation, Push/Add, transport |
+| `layerfs-mount` | `layerfs-sdk`, `fuser`, signal handling | Store SQL, generic COW/change generation, Push/Add |
 
 Remote endpoints exchange `layerfs-storage-core::contract` values through
 `wire.rs`; stores communicate by local typed endpoint values or bytes, never by
@@ -246,14 +288,15 @@ or endpoint-specific duplicate.
 
 The fixed tree already has every owner needed for efficient multi-DB transfer:
 
-| Requirement | Existing file and hard budget |
+| Requirement | Existing owner and review estimate |
 |---|---|
 | Set-based query/bitmap, SQLite batch adapter, deferred scratch, idempotent object/fact admission | `storage-core/admission.rs`, <= 320 LOC |
 | Prepared typed SQL and final CAS statements | `storage-core/sql.rs`, <= 225 LOC |
-| Count/byte bounds, coalesced typed/Object one-turn-ahead pipeline, canonical frame/checksum | `storage-core/wire.rs`, <= 250 LOC |
-| Direct Branch Push/Pull stream reuse | `branch-store/branch_transfer.rs`, within its 200 LOC module budget |
+| Count/byte bounds and coalesced typed/Object one-turn-ahead pipeline | `storage-core/admission.rs` plus Store operation owners |
+| Canonical frame/checksum/backpressure | `storage-core/wire.rs` |
+| Direct Branch Push/Pull stream reuse | `branch-store/branch_transfer.rs`; keep the two-ID pull and operation-scoped push flow cohesive rather than targeting a small-file number |
 | Stack history/dependency Pulls | `stack-store/history_pull.rs` + `commit_pull.rs`, within 280 LOC combined |
-| Stack Push, frozen Branch/Commit provenance, and LayerStore copy result | `stack-store/push_stack.rs` + `layer-store/transfer.rs`, within existing transfer budgets |
+| Stack Push, frozen Branch/Commit provenance, and LayerStore copy result | `stack-store/push_stack.rs` + `layer-store/transfer.rs`; split only if distinct surviving responsibilities emerge |
 | One SQLite connection per Store handle | existing `*_store.rs` handle field; no connection class/pool |
 | One TCP stream per operation/Push-Add sequence | existing `remote.rs`; no semantic session object/table |
 
@@ -343,7 +386,7 @@ for later `pull_commit_history`; no new operation, record, or file is needed.
 
 `admission.rs` establishes root-presence-as-closure-certificate during first
 admission. `merkle.rs` trusts that certificate on normal Add, reads zero
-descendants for a repeated/no-op result, and walks only unequal frontier nodes
+descendants for a repeated mapping or equal-root result, and walks only unequal frontier nodes
 for divergence. Full traversal belongs to first admission; scrub/recovery is
 deferred.
 
@@ -379,15 +422,16 @@ Tests count application buffers, SQLite page-cache high-water, and temp bytes.
 
 ## 7. Writer configuration and binaries
 
-`layerfs-stack-store/writer.rs` generates/loads the SDK-managed signing key,
-returns owned or read-only history handles, signs Stack suffix pushes, and
-verifies local ownership. The public verification digest is embedded in
-`StackHistoryId`; the private key never enters SQLite or transfer payloads.
+`layerfs-stack-store/writer.rs` generates/loads the configured signing key,
+checks each supplied `StackHistoryId` against that key, and signs Stack suffix
+pushes. There are no `OwnedStackHistory` or `ReadOnlyStackHistory` wrapper
+types. The public verification digest is embedded in `StackHistoryId`; the
+private key never enters SQLite or transfer payloads.
 
 ```text
-embedded create -> transparent signer generation/persistence
+embedded create -> transparent signer generation/persistence + IDs
 local reopen    -> same signer reload
-pull history    -> read-only handle, no signer
+pull history    -> same public IDs, no signer transfer
 clone writable DB -> unsupported
 ```
 
@@ -400,17 +444,18 @@ history logic, merge, CAS traversal, or transfer planning belongs in a binary.
 | Gate | Requirement |
 |---|---|
 | Cohesion | A file may group short functions only when they share one invariant and data flow. |
-| Review trigger | Any handwritten `.rs` file above 350 lines requires a recorded split review. |
-| Hard cap | CI rejects any handwritten `.rs` file above 500 lines. |
-| Preferred ceiling | New production files target 300 lines or fewer. |
+| Cohesion review | File size alone is not a split trigger; review and split only when distinct surviving responsibilities remain. |
+| Hard cap | CI rejects any handwritten production `.rs` file above 1,000 lines. |
+| Size guidance | Do not split a cohesive 350–999-line file merely to reduce its line count. |
 | `lib.rs` | Declarations/re-exports only; no SQL, I/O, algorithms, transactions, or orchestration. |
 | Module layout | No `mod.rs`; named module roots only when a directory is actually needed. |
 | Binary layout | No `main.rs`; named `src/bin/*.rs` bootstrap files only. |
 | Catchalls | No `product.rs`, `common.rs`, `utils.rs`, `manager.rs`, `repository.rs`, factory layer, or generic repository abstraction. |
 
 Do not split a 40-line cohesive operation into request, validator, executor,
-outcome, and adapter files. Do split before one file owns two invariants or
-approaches the 500-line cap.
+outcome, and adapter files. Do split when one file owns unrelated invariants,
+even when it remains below the 1,000-line cap. Total production LOC and
+deletion of duplicate algorithms matter more than small files.
 
 ## 9. Test tree
 
@@ -421,12 +466,14 @@ crates/layerfs-storage-core/tests/
 ├── schema.rs             # exact 3/9 + 8/24 + wrong-shape rejection
 ├── merge.rs              # recursive-CTE merge base + first-conflict + history isolation
 ├── cas_pipeline.rs       # ObjectId/CDC/COW, batch adapters, pruning, dedup matrix
-└── wire.rs               # canonical contracts, framing, missing-only batches
+└── wire.rs               # frame/checksum/incomplete-frame rejection only
 
 crates/layerfs-branch-store/tests/
 ├── branch.rs             # anchors, two-ID Pull outcomes, commit, zero-copy reads
-├── merge.rs              # same/cross-base, unequal-root logical equality, CAS race
-└── workspace.rs           # transient COW and no workspace tables
+└── merge.rs              # same/cross-base, unequal-root logical equality, CAS race
+
+crates/layerfs-workspace/tests/
+└── lifecycle.rs          # direct commit/discard over the transient overlay; zero DB state
 
 crates/layerfs-stack-store/tests/
 ├── history.rs            # seed, linear CAS, stale-base merge, conflicts
@@ -457,7 +504,7 @@ architecture.
 | `layerfs-sync` | Delete; `wire.rs` replaces its only justified byte behavior. |
 | `layerfs-service` | Delete; named store binaries replace it. |
 | `layerfs-server` | Delete if present; no standalone server package exists. |
-| `layerfs-workspace` | Delete; transient COW lives in BranchStore. |
+| `layerfs-workspace` | Retain and rewrite as the sole zero-table transient COW/spool/lifecycle owner; remove every Store/database authority. |
 | `layerfs-materialization` | Keep only the minimal new SDK integration; no topology ownership. |
 | `layerfs-mount` | Keep only the minimal new SDK integration and named binary. |
 | `layerfs-sdk` | Rewrite composition to explicit direct/stacked constructors. |
@@ -469,9 +516,9 @@ source architecture to preserve.
 
 ```text
 cargo metadata --no-deps
-rg --files crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk} \
+rg --files crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk,workspace,mount} \
   | rg '(^|/)(mod|main|product|common|utils|manager|repository)\.rs$'
-find crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk} \
+find crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk,workspace,mount} \
   -name '*.rs' -print0 | xargs -0 wc -l
 cargo fmt --all -- --check
 cargo test -p layerfs-storage-core
@@ -479,11 +526,17 @@ cargo test -p layerfs-branch-store
 cargo test -p layerfs-stack-store
 cargo test -p layerfs-layer-store
 cargo test -p layerfs-sdk
+cargo test -p layerfs-workspace
+cargo test -p layerfs-mount
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-The forbidden-file search must return nothing for the four storage packages and
-SDK. No production file may exceed 500 lines. Every file above 350 lines must
-have an explicit split review. Workspace metadata must contain no old storage,
-sync, service, or workspace package.
+The forbidden-file search must return nothing for the four storage packages,
+SDK, Workspace, or mount. No handwritten production file may exceed 1,000
+lines. Files below that cap still fail SRP when they own unrelated
+responsibilities; cohesive 350–999-line files are not split for size alone.
+Workspace metadata must
+contain no old storage, sync, or service package. `layerfs-workspace` remains
+as the sole non-Store transient runtime and must have no SQLite dependency,
+database file, or production table.

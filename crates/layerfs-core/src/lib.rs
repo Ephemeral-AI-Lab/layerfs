@@ -10,7 +10,6 @@ mod error;
 pub mod format;
 pub mod identity;
 pub mod inode;
-pub mod legacy;
 pub mod limits;
 pub mod logical;
 pub mod metadata;

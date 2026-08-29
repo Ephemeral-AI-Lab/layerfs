@@ -5,15 +5,13 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
-[features]
-test-hooks = []
-
 [dependencies]
 layerfs-core = { path = "../layerfs-core" }
-layerfs-workspace = { path = "../layerfs-workspace" }
+layerfs-branch-store = { path = "../layerfs-branch-store" }
+layerfs-storage-core = { path = "../layerfs-storage-core" }
 
-[target.'cfg(target_os = "macos")'.dependencies]
-libc = "=0.2.189"
+[dev-dependencies]
+layerfs-layer-store = { path = "../layerfs-layer-store" }
 
 [lib]
 path = "src/lib.rs"

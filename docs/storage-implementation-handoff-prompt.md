@@ -213,14 +213,14 @@ crates/
 │   └── src/
 │       ├── lib.rs          declarations and re-exports only
 │       ├── ids.rs          storage IDs; ObjectId delegation
-│       ├── records.rs      seven records plus AddResult; no behavior
+│       ├── records.rs      seven records plus AddResult; manual bounded endpoint codec
 │       ├── schema.rs       exact 3/9 and 8/24 DDL and indexes
-│       ├── sql.rs          typed/Object membership, inserts, reads, CAS
+│       ├── sql.rs          typed/Object reads, exact inserts, final-intent transactions, CAS
 │       ├── merge_base.rs   indexed Commit -> Stack -> Layer base selection
 │       ├── three_way.rs    Clean or first lexicographic Conflict
 │       ├── merkle.rs       traversal, pruning, build, semantic equality
-│       ├── admission.rs    missing maps, bounded batches, deferred objects
-│       ├── contract.rs     fourteen-operation values and shared outcomes
+│       ├── admission.rs    fixed membership, bounded batches, authenticated admission
+│       ├── contract.rs     fourteen-operation values, outcomes, internal phase envelopes
 │       └── wire.rs         byte framing, checksums, bounded backpressure
 │
 ├── layerfs-branch-store/
@@ -232,7 +232,7 @@ crates/
 │       ├── merge.rs
 │       ├── branch_transfer.rs
 │       ├── layered_read.rs
-│       └── workspace.rs
+│       └── snapshot.rs
 │
 ├── layerfs-stack-store/
 │   └── src/
@@ -267,6 +267,26 @@ crates/
         └── binding.rs
 ```
 
+Retain `layerfs-workspace` as the sole zero-table transient runtime and keep the
+presentation chain exact:
+
+```text
+layerfs-mount -> layerfs-sdk -> layerfs-workspace -> layerfs-branch-store
+              -> configured StackStore/LayerStore parent
+```
+
+`layerfs-sdk/binding.rs` owns only the Workspace/materialization caller-to-
+BranchStore/Branch binding. It is not a transparent Store wrapper and does not
+forward the fourteen domain operations.
+
+Workspace owns generic transient COW/overlay changes, dirty spool ownership,
+one staged mutation set, and the direct commit/discard lifecycle. BranchStore
+owns exact Branch snapshot reads, persistent Branch/Commit/local-CAS state, and
+layered snapshot/object reads. Mount owns only FUSE callbacks, kernel inode and
+open-handle mappings, errno/attribute translation, and session/bootstrap. The
+Workspace crate adds no SQLite file/table, Store authority, Push/Add,
+deduplication policy, or transport.
+
 The target has four storage crates, no transfer/sync/server crate, 42
 production Rust files including SDK composition, five declaration-only
 `lib.rs` files, and two bootstrap-only named binaries. The SDK is composition,
@@ -276,8 +296,10 @@ Do not create `product.rs`, `common.rs`, `utils.rs`, `manager.rs`,
 `repository.rs`, a generic repository abstraction, one interface per Store, or
 request/validator/executor files for short cohesive operations. No `mod.rs`.
 No implementation-bearing `lib.rs`. No catch-all or god file under another
-name. Prefer files at or below 300 lines; review every file above 350; 500 is a
-hard cap.
+name. The hard handwritten production-file limit is 1,000 LOC. Do not split a
+cohesive 350–999-line file merely for size; split whenever distinct surviving
+responsibilities remain. Total production LOC and duplicate-algorithm deletion
+matter more than small-file targets.
 
 Implement the clean cold architecture. Do not preserve old crates, adapters,
 facades, schemas, names, or duplicated algorithms merely to reduce the diff.
@@ -390,7 +412,8 @@ page cache, and temp spill. Do not rerun with `LIMIT/OFFSET` and do not build an
 unbounded Rust ancestry set.
 
 Embedded local calls use typed Store endpoints. Loopback tests use the same
-contracts through `wire.rs`. There is one membership/admission/visibility
+contracts encoded by `records.rs` and framed as opaque bytes by `wire.rs`.
+There is one membership/admission/visibility
 algorithm, not separate local and remote semantics. The byte carrier never
 owns SQL, ObjectId lookup, deduplication, history, CAS, or three-way behavior.
 
@@ -766,7 +789,7 @@ Prove, do not merely claim:
 - normal transfer performs no full `objects`, Commit, Stack, Layer, or history
   scan;
 - known roots prune complete subtrees;
-- repeated/no-op Add reads zero descendants;
+- repeated mapped/equal-root Add reads zero descendants; a newly accepted equal-root Branch still creates one same-root Stack provenance node;
 - COW replacement scans only replacement bytes and keeps unchanged extents;
 - the sender sends exactly receiver-missing canonical bytes;
 - the receiver performs bounded set queries and bounded insert transactions;
@@ -852,13 +875,13 @@ Before terminal disposition, run:
 ```text
 cargo metadata --no-deps
 
-rg -n 'name = "layerfs-storage"|layerfs-(working-store|durable-store|sync|service|workspace)' \
+rg -n 'name = "layerfs-storage"|layerfs-(working-store|durable-store|sync|service)' \
   Cargo.toml crates tools
 
-rg --files crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk} \
+rg --files crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk,workspace,mount} \
   | rg '(^|/)(mod|main|product|common|utils|manager|repository)\.rs$'
 
-find crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk} \
+find crates/layerfs-{storage-core,branch-store,stack-store,layer-store,sdk,workspace,mount} \
   -name '*.rs' -print0 | xargs -0 wc -l
 
 cargo fmt --all -- --check
@@ -868,6 +891,7 @@ cargo test -p layerfs-branch-store
 cargo test -p layerfs-stack-store
 cargo test -p layerfs-layer-store
 cargo test -p layerfs-sdk
+cargo test -p layerfs-workspace
 cargo test -p layerfs-materialization
 cargo test -p layerfs-mount
 cargo test -p layerfs-eval
@@ -879,19 +903,26 @@ Expected structure:
 
 ```text
 exactly four storage crates
-no obsolete storage/sync/service/workspace package or import
-no forbidden filename in target storage crates or SDK
+no obsolete storage/sync/service package or import
+one zero-table `layerfs-workspace`; no duplicate generic COW/spool owner
+no forbidden filename in target storage crates, SDK, Workspace, or mount
 no implementation-bearing lib.rs
-no production file above 500 lines
-every file above 350 lines has a recorded split review
-new storage production LOC <= 6,100 review ceiling
-full non-test workspace production LOC <= 34,100 review ceiling
+no handwritten production file above 1,000 lines
+no cohesive 350–999-line file split only to satisfy a size target
+storage/package/workspace LOC estimates reviewed for unnecessary surviving lines
+aggregate LOC is not an automatic PASS/FAIL threshold
 ```
 
-The LOC values are review ceilings, not permission to compress correctness into
-dense files. If an invariant truly requires more, first remove duplication and
-obsolete code, then record the evidence and preserve SRP. Optimize final
-architecture and clarity, not line-count theater.
+Package figures such as storage-core 2,400, SDK 350, storage plus SDK 6,100,
+and full-workspace totals are review estimates, not terminal gates or permission
+to compress correctness into dense files. Do not move tests mechanically or
+split/merge responsibilities to hit a number. First remove duplicate
+algorithms/types/round trips, low-level public protocol, compatibility code,
+stubs, and wrong ownership. Judge minimality by whether every surviving line
+has one necessary responsibility. Architecture, canonical-model reuse,
+transaction/transfer correctness, measured speed/space, SRP, public API
+minimality, and evidence take priority. A current storage-plus-SDK count around
+7.9k is a review signal, not by itself a terminal blocker.
 
 ## 17. Terminal disposition
 

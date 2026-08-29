@@ -81,7 +81,7 @@ add_layer(H1, S2)   = three-way check + one LayerHistory head CAS
 | Store | Cardinality | Completeness |
 |---|---:|---|
 | `LayerStore` | exactly 1 | Complete central data and authoritative LayerHistory heads |
-| `StackStore` | 0..N | Owned StackHistories plus selected transferred dependencies |
+| `StackStore` | 0..N | StackHistories plus selected transferred dependencies; only histories matching the configured writer key are writable |
 | `BranchStore` | 1..N | Private Branch/Commit state; no accepted payload copy |
 
 ## 3. The three histories
@@ -219,28 +219,30 @@ The seed shares the root; it copies no payload.
 The StackStore that creates SH1 is its sole head writer. LayerStore and other
 StackStores may hold transferred copies, but those copies are read-only.
 
-No per-history StoreId, owner, or lease column is added. Enforcement uses one
-SDK-configured signing capability managed transparently outside the core
-tables:
+No per-history StoreId, owner, lease column, or public capability-wrapper type
+is added. The frozen operations continue to take `StackHistoryId`; enforcement
+uses the StackStore's configured signing key outside the core tables:
 
 ```text
 writer verification digest = embedded in StackHistoryId
-writer capability          = private signing key held by creator StackStore SDK
+writer capability          = private signing key held by creator StackStore
 
-create locally -> SDK returns OwnedStackHistory bound to matching signing key
-pull remotely   -> copies public StackHistoryId only; returns ReadOnlyStackHistory
-add_stack       -> requires OwnedStackHistory + matching signing capability
+create locally -> returns StackHistoryId; configured key digest matches the ID
+pull remotely   -> copies the same public StackHistoryId but never the private key
+add_stack       -> accepts StackHistoryId and verifies the configured key matches
 push_stack      -> signs history/head/suffix digest for LayerStore verification
 ```
 
-`create_stack_history_from_layer` returns the writable handle.
-`pull_stack_history` never returns it. Embedded local configuration creates and
-persists the capability without a user-managed credential. Cloning a writable
-StackStore database is unsupported because it would duplicate one writer.
-Authority transfer is not supported in the initial model. Losing the capability
-leaves the history readable but closed to new Stacks.
+`create_stack_history_from_layer` returns IDs, not a capability handle.
+`pull_stack_history` returns the same ID-shaped outcome and never transfers the
+key. Embedded local configuration creates and persists the key without a
+user-managed credential. Cloning a writable StackStore database is unsupported
+because it would duplicate one writer. Authority transfer is not supported in
+the initial model. Losing the key leaves the history readable but closed to new
+Stacks.
 
-Calling `add_stack` with an imported/read-only handle returns
+Calling `add_stack` for an imported history whose ID does not match the
+configured writer key returns
 `ReadOnlyHistory<StackHistoryId>` before three-way or mutation.
 
 ## 6. Branch creation and lifecycle
@@ -1110,7 +1112,7 @@ only -> idempotently admit -> verify closure -> expose ref/head last.
 | BranchStore -> LayerStore Push Branch | Same flow; no Stack/Layer creation or authoritative head move. |
 | StackStore -> LayerStore Push Stack | Same flow for Stack suffix plus every mapped frozen Branch/Commit/root provenance closure; then writer verification and read-only copied-head CAS. |
 | Reverse Pulls | Requester is receiver for cross-store flow; history/ref visible last. |
-| Add Stack/Add Layer | New merge objects use local flow; existing/equal roots are reused and no-op writes AddResult only. |
+| Add Stack/Add Layer | New merge objects use local flow and existing/equal roots are reused. Every newly accepted Branch creates one Stack metadata node even when the root is unchanged; equal-root Add Layer may write only AddResult. Repeating an already mapped source writes nothing. |
 
 Sender deletion is never part of Push. GC remains deferred.
 
@@ -1186,9 +1188,10 @@ CAS manifest objects. They preserve DB-native history/member queries without
 mixed-blob scans or a nullable god table. `objects` stores only filesystem
 chunks, trees, and roots.
 
-SQLite `PRAGMA user_version` carries schema version. Evaluate `WITHOUT ROWID`
-for the two-column BLOB-primary-key `objects` table using measured file bytes,
-lookup plans, and insert cost; do not assume it wins or apply it universally.
+SQLite `PRAGMA user_version` carries schema version. The ordinary-rowid
+`objects` layout is frozen by the 100,000-row FULL/WAL comparison recorded in
+`implementation-plan.md`; it was both smaller and faster than `WITHOUT ROWID`
+for the binding object shape, with indexed exact-ID lookup in both variants.
 
 ### BranchStore: 3 tables, 9 columns
 
@@ -1245,7 +1248,6 @@ Required reverse/history/transfer indexes:
 ```text
 commits(parent_id)
 commits(merge_parent_id)
-branches(base_id)
 layers(history_id, parent_id)
 stacks(history_id, parent_id)
 add_results(result_id)

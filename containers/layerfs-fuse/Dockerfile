@@ -23,9 +23,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
  && cargo test --locked --target "$target" -p layerfs-mount \
  && cargo clippy --locked --target "$target" -p layerfs-mount --all-targets -- -D warnings \
  && cargo build --locked --release --target "$target" -p layerfs-mount \
- && cargo build --locked --release --target "$target" -p layerfs-sdk --bin layerfsctl \
- && cp "target/$target/release/layerfs-mount" /layerfs-mount \
- && cp "target/$target/release/layerfsctl" /layerfsctl
+ && cp "target/$target/release/layerfs-mount" /layerfs-mount
 
 FROM rust:1.85.1-bookworm
 
@@ -41,7 +39,6 @@ ENV LAYERFS_SOURCE_COMMIT="$LAYERFS_SOURCE_COMMIT" \
     LAYERFS_FS_BENCH_SHA256="0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
 
 COPY --from=build /layerfs-mount /usr/local/bin/layerfs-mount
-COPY --from=build /layerfsctl /usr/local/bin/layerfsctl
 COPY containers/layerfs-fuse/fs-bench.sh /usr/local/bin/fs-bench.sh
 COPY containers/layerfs-fuse/verify_fs_bench.py /usr/local/bin/verify_fs_bench.py
 RUN echo "$LAYERFS_FS_BENCH_SHA256  /usr/local/bin/fs-bench.sh" | sha256sum -c - \

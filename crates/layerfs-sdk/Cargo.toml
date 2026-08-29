@@ -5,18 +5,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
-[features]
-test-hooks = ["layerfs-materialization/test-hooks", "layerfs-workspace/test-hooks"]
-
 [dependencies]
-layerfs-core = { path = "../layerfs-core" }
+layerfs-branch-store = { path = "../layerfs-branch-store" }
+layerfs-layer-store = { path = "../layerfs-layer-store" }
 layerfs-materialization = { path = "../layerfs-materialization" }
-layerfs-sync = { path = "../layerfs-sync" }
-layerfs-working-store = { path = "../layerfs-working-store" }
+layerfs-stack-store = { path = "../layerfs-stack-store" }
+layerfs-storage-core = { path = "../layerfs-storage-core" }
 layerfs-workspace = { path = "../layerfs-workspace" }
 
-[lib]
-path = "src/lib.rs"
-
 [dev-dependencies]
-layerfs-service = { path = "../layerfs-service" }
+layerfs-core = { path = "../layerfs-core" }
+layerfs-storage-core = { path = "../layerfs-storage-core", features = ["test-instrumentation"] }
+rusqlite.workspace = true

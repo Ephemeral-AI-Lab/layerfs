@@ -1,0 +1,15 @@
+[package]
+name = "layerfs-layer-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3.workspace = true
+ed25519-dalek.workspace = true
+layerfs-core = { path = "../layerfs-core" }
+layerfs-storage-core = { path = "../layerfs-storage-core" }
+
+[dev-dependencies]
+rusqlite.workspace = true

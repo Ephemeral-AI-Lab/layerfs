@@ -854,11 +854,17 @@ Clean with new objects:
 The last object batch, candidate row, AddResult, and head CAS share the final
 transaction.
 
-Semantic no-op for a new source:
+Equal-root Add Stack for a new Branch source:
 
-    insert source -> current AddResult
-    conditionally verify head remains current
-    one transaction
+    insert one same-root child Stack
+    insert source -> child Stack AddResult
+    exact-CAS StackHistory head to the child
+    one transaction and zero new payload bytes
+
+Every newly accepted Branch event advances StackHistory metadata even when its
+merged root equals the current root. This keeps later Push Stack provenance
+observable; only a repeated Add for an existing AddResult is a zero-write
+no-op.
 
 Existing AddResult:
 
@@ -1565,7 +1571,7 @@ Terminal pass requires raw evidence for every applicable gate below.
 | Clean Add | max(J, 1); candidate/AddResult/head share last transaction |
 | Serialized Add callers | Each caller reads/evaluates/CASes once under the operation gate; the next queued caller observes the completed head |
 | Injected Add CAS loss | Final candidate/AddResult/head rolls back and HeadMoved returns immediately with no internal retry |
-| No-op new Add | One conditional AddResult transaction |
+| Equal-root new Add | Add Stack: same-root Stack + AddResult + head CAS in one transaction; Add Layer: one conditional AddResult transaction |
 | Existing AddResult | One indexed read, zero writes |
 | Conflict | Zero row delta in every production table |
 | Visibility order | Child objects precede parents, root closure precedes typed facts, immutable facts precede AddResult/ref/head, and exact CAS is last |
