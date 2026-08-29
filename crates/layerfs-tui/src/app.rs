@@ -1,4 +1,23 @@
-use layerfs_cli::{Completion, Fact, HistoryGroup, TopologyEntry};
+use layerfs_cli::{Completion, Fact};
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct HistoryGroup {
+    pub(crate) name: String,
+    pub(crate) role: String,
+    pub(crate) location: String,
+    pub(crate) parent: Option<String>,
+    pub(crate) facts: Vec<Fact>,
+    pub(crate) has_more: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct TopologyEntry {
+    pub(crate) role: String,
+    pub(crate) name: String,
+    pub(crate) location: String,
+    pub(crate) parent: Option<String>,
+    pub(crate) active: bool,
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum Focus {
@@ -170,6 +189,7 @@ pub(crate) struct App {
     command: String,
     command_cursor: usize,
     command_running: bool,
+    focus_after_command: Option<Focus>,
     completions: Vec<Completion>,
     selected_completion: usize,
     message: Option<Message>,
@@ -338,7 +358,12 @@ impl App {
         };
         let mut relations = if let Some(child) = self.lineage_child {
             if child.category == HistoryCategory::Stacks {
-                stack_history_relations(group, child.container)
+                match group.facts.get(child.selected).copied() {
+                    Some(Fact::Stack(stack)) => {
+                        stack_relations(group, child.selected, stack.id.to_bytes().as_slice())
+                    }
+                    _ => stack_history_relations(group, child.container),
+                }
             } else {
                 match group.facts.get(child.container).copied() {
                     Some(Fact::Branch(branch)) => {
@@ -1235,23 +1260,30 @@ impl App {
         self.command.clear();
         self.command_cursor = 0;
         self.command_running = false;
-        self.focus = if self.topology.is_empty() {
-            Focus::Command
-        } else {
-            Focus::Stores
-        };
+        self.focus = self.focus_after_command.take().unwrap_or({
+            if self.topology.is_empty() {
+                Focus::Command
+            } else {
+                Focus::Stores
+            }
+        });
         self.completions.clear();
         self.message = Some(Message::Info(message.into()));
     }
 
     pub(crate) fn command_failed(&mut self, error: impl Into<String>) {
         self.command_running = false;
+        self.focus_after_command = None;
         self.focus = Focus::Command;
         self.message = Some(Message::Error(error.into()));
     }
 
     pub(crate) fn info(&mut self, message: impl Into<String>) {
         self.message = Some(Message::Info(message.into()));
+    }
+
+    pub(crate) fn focus_after_command(&mut self, focus: Focus) {
+        self.focus_after_command = Some(focus);
     }
 
     pub(crate) fn replace_topology(&mut self, topology: Vec<TopologyEntry>) {
@@ -1290,11 +1322,27 @@ impl App {
     }
 
     pub(crate) fn set_histories(&mut self, histories: Vec<HistoryGroup>) {
+        let selected_id = self.selected_history().and_then(|row| {
+            row.fact.and_then(|index| {
+                self.selected_store_history()
+                    .and_then(|group| group.facts.get(index).map(|fact| fact.id()))
+            })
+        });
         self.histories = histories;
         self.expanded_categories = self.history_categories();
-        self.selected_history = self
-            .selected_history
-            .min(self.history_rows().len().saturating_sub(1));
+        self.selected_history = selected_id
+            .and_then(|id| {
+                let group = self.selected_store_history()?;
+                self.history_rows().iter().position(|row| {
+                    row.fact
+                        .and_then(|index| group.facts.get(index))
+                        .is_some_and(|fact| fact.id() == id)
+                })
+            })
+            .unwrap_or_else(|| {
+                self.selected_history
+                    .min(self.history_rows().len().saturating_sub(1))
+            });
         self.selected_action = self
             .selected_action
             .min(self.actions().len().saturating_sub(1));

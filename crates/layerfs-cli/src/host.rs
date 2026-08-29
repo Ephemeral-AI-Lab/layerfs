@@ -598,7 +598,13 @@ impl Host {
 
     fn topology(&self) -> CliResult<ViewSnapshot> {
         let state = self.state.lock().map_err(|_| CliError::Integrity)?;
-        let context = state.client.context().map_err(sdk)?;
+        let context = match state.client.context() {
+            Ok(context) => context,
+            Err(layerfs_sdk::SdkError::MissingLayer) => {
+                return Ok(ViewSnapshot::Topology(Vec::new()))
+            }
+            Err(error) => return Err(sdk(error)),
+        };
         let mut entries = vec![TopologyEntry {
             role: "layer".to_owned(),
             location: context.layer.location.path().to_string_lossy().into_owned(),

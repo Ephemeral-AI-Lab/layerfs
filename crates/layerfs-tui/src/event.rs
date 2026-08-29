@@ -8,13 +8,13 @@ use crossterm::{
     execute,
 };
 use layerfs_cli::{
-    default_context_location, CliEvent, CliResult, CliSession, Command, CommandResult,
-    HistoryGroup, OperationHandle, TopologyEntry, ViewQuery, ViewSnapshot,
+    default_context_location, CliEvent, CliResult, CliSession, Command, CommandResult, DbCommand,
+    OperationHandle, StoreQuery, StoreScope, StoreSnapshot, ViewQuery, ViewSnapshot,
 };
 use ratatui::DefaultTerminal;
 
 use crate::{
-    app::{Action, App, Direction, Focus},
+    app::{Action, App, Direction, Focus, HistoryGroup, TopologyEntry},
     render,
 };
 
@@ -89,11 +89,7 @@ fn poll_operation(
 
 fn command_result(result: CommandResult) -> String {
     match result {
-        CommandResult::Database {
-            role,
-            name,
-            location,
-        } => format!("READY {role} {name} {location}"),
+        CommandResult::Database { role, location } => format!("READY {role} {location}"),
         _ => "OK".to_owned(),
     }
 }
@@ -219,7 +215,12 @@ fn store_key(key: KeyEvent, app: &mut App, session: &CliSession) -> Option<Opera
         KeyCode::Home | KeyCode::Char('g') => app.select_store_first(),
         KeyCode::End | KeyCode::Char('G') => app.select_store_last(),
         KeyCode::Char(' ') => app.toggle_store(),
-        KeyCode::Enter => app.focus_histories(),
+        KeyCode::Enter => {
+            if let Some(operation) = activate_store(app, session) {
+                return Some(operation);
+            }
+            app.focus_histories();
+        }
         KeyCode::PageUp => app.scroll_stores(false),
         KeyCode::PageDown => app.scroll_stores(true),
         _ => {}
@@ -581,6 +582,7 @@ fn execute_command(app: &mut App, session: &CliSession) -> Option<OperationHandl
     };
     match session.execute(command) {
         Ok(operation) => {
+            app.focus_after_command(Focus::Histories);
             app.command_started();
             Some(operation)
         }
@@ -600,18 +602,131 @@ fn refresh_completions(app: &mut App, session: &CliSession) {
     app.set_completions(completions);
 }
 
+fn activate_store(app: &mut App, session: &CliSession) -> Option<OperationHandle> {
+    let store = app.selected_store()?.clone();
+    if !matches!(store.role.as_str(), "stackstore" | "branchstore") {
+        return None;
+    }
+    let command = Command::Db {
+        command: DbCommand::Use {
+            location: store.location.into(),
+        },
+    };
+    match session.execute(command) {
+        Ok(operation) => {
+            app.command_started();
+            Some(operation)
+        }
+        Err(error) => {
+            app.command_failed(error.to_string());
+            None
+        }
+    }
+}
+
 fn topology(session: &CliSession) -> CliResult<Vec<TopologyEntry>> {
     match session.snapshot(ViewQuery::Topology)? {
-        ViewSnapshot::Topology(entries) => Ok(entries),
+        ViewSnapshot::Topology(entries) => Ok(entries
+            .into_iter()
+            .map(|entry| TopologyEntry {
+                name: std::path::Path::new(&entry.location)
+                    .file_stem()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or(&entry.role)
+                    .to_owned(),
+                role: match entry.role.as_str() {
+                    "layer" => "layerstore".to_owned(),
+                    "stack" => "stackstore".to_owned(),
+                    "branch" => "branchstore".to_owned(),
+                    _ => entry.role.clone(),
+                },
+                location: entry.location,
+                parent: entry.parent,
+                active: entry.active,
+            })
+            .collect()),
         _ => Err(layerfs_cli::CliError::Integrity),
     }
 }
 
 fn histories(session: &CliSession) -> CliResult<Vec<HistoryGroup>> {
-    match session.snapshot(ViewQuery::Histories)? {
-        ViewSnapshot::Histories(histories) => Ok(histories),
-        _ => Err(layerfs_cli::CliError::Integrity),
+    let stores = topology(session)?;
+    let mut groups = Vec::with_capacity(stores.len());
+    for store in stores {
+        let scope = match store.role.as_str() {
+            "layerstore" => StoreScope::Layer,
+            "stackstore" => StoreScope::Stack(store.location.clone().into()),
+            "branchstore" => StoreScope::Branch(store.location.clone().into()),
+            _ => continue,
+        };
+        let mut facts = Vec::new();
+        let mut has_more = false;
+        let kinds = match store.role.as_str() {
+            "branchstore" => vec![layerfs_cli::FactKind::Branch, layerfs_cli::FactKind::Commit],
+            _ => vec![
+                layerfs_cli::FactKind::LayerHistory,
+                layerfs_cli::FactKind::Layer,
+                layerfs_cli::FactKind::StackHistory,
+                layerfs_cli::FactKind::Stack,
+                layerfs_cli::FactKind::Branch,
+                layerfs_cli::FactKind::Commit,
+                layerfs_cli::FactKind::AddResult,
+            ],
+        };
+        for kind in kinds {
+            let snapshot = session.snapshot(ViewQuery::Store(StoreQuery::Page {
+                scope: scope.clone(),
+                kind,
+                after: None,
+                limit: 128,
+            }))?;
+            let ViewSnapshot::Store(StoreSnapshot::Page { facts: page, next }) = snapshot else {
+                return Err(layerfs_cli::CliError::Integrity);
+            };
+            has_more |= next.is_some();
+            facts.extend(
+                page.iter()
+                    .map(layerfs_cli::StoreFact::fact)
+                    .collect::<CliResult<Vec<_>>>()?,
+            );
+        }
+        groups.push(HistoryGroup {
+            name: store.name,
+            role: store.role,
+            location: store.location,
+            parent: store.parent,
+            facts,
+            has_more,
+        });
     }
+    let snapshots = groups.clone();
+    for group in &mut groups {
+        if group.role != "branchstore" {
+            continue;
+        }
+        let Some(parent) = group.parent.as_deref() else {
+            continue;
+        };
+        let Some(parent_group) = snapshots
+            .iter()
+            .find(|candidate| candidate.location == parent)
+        else {
+            continue;
+        };
+        let mut known = group
+            .facts
+            .iter()
+            .map(|fact| fact.id())
+            .collect::<std::collections::BTreeSet<_>>();
+        group.facts.extend(
+            parent_group
+                .facts
+                .iter()
+                .copied()
+                .filter(|fact| known.insert(fact.id())),
+        );
+    }
+    Ok(groups)
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -621,8 +736,7 @@ fn hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::{hex, move_or_focus};
-    use crate::app::{App, Direction, Focus};
-    use layerfs_cli::{StoreSyncStatus, TopologyEntry};
+    use crate::app::{App, Direction, Focus, TopologyEntry};
 
     #[test]
     fn encodes_operation_ids_without_truncation() {
@@ -639,11 +753,6 @@ mod tests {
                 location: "/tmp/layer.db".into(),
                 parent: None,
                 active: true,
-                sync: StoreSyncStatus {
-                    layer: None,
-                    stack: None,
-                    branch: None,
-                },
             },
             TopologyEntry {
                 role: "stackstore".into(),
@@ -651,11 +760,6 @@ mod tests {
                 location: "/tmp/stack.db".into(),
                 parent: Some("/tmp/layer.db".into()),
                 active: false,
-                sync: StoreSyncStatus {
-                    layer: None,
-                    stack: None,
-                    branch: None,
-                },
             },
         ]);
         move_or_focus(&mut app, Direction::Down);

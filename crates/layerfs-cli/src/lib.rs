@@ -24,6 +24,7 @@ pub use control::{CliSession, OperationHandle};
 pub use event::{
     CliError, CliEvent, CliResult, CommandResult, CommandSummary, OperationPhase, ProgressValue,
 };
+pub use layerfs_sdk::{Fact, FactKind};
 pub use plan::{CommandEffect, CommandPlan};
 pub use query::{
     CommitDiffEntry, DatabaseView, DedupView, MonitorView, PlacementView, StoreFact, StoreQuery,

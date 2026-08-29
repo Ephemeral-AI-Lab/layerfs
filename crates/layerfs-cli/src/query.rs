@@ -77,6 +77,143 @@ pub struct StoreFact {
     pub fields: Vec<(String, String)>,
 }
 
+impl StoreFact {
+    pub fn fact(&self) -> crate::CliResult<layerfs_sdk::Fact> {
+        use layerfs_sdk::{
+            AddResultRecord, BranchRecord, CommitRecord, Fact, FactKind, LayerHistoryRecord,
+            LayerRecord, StackHistoryRecord, StackRecord,
+        };
+
+        let field = |name| {
+            self.fields
+                .iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.as_str())
+                .ok_or(crate::CliError::Integrity)
+        };
+        let fact = match self.kind {
+            FactKind::Commit => Fact::Commit(CommitRecord {
+                id: parse_value(&self.id)?,
+                root_id: parse_value(field("root_id")?)?,
+                parent_id: parse_option_value(field("parent_id")?)?,
+                merge_parent_id: parse_option_value(field("merge_parent_id")?)?,
+            }),
+            FactKind::Branch => Fact::Branch(BranchRecord {
+                id: parse_value(&self.id)?,
+                head_commit_id: parse_value(field("head_commit_id")?)?,
+                base_id: parse_base_id(field("base_id")?)?,
+            }),
+            FactKind::LayerHistory => Fact::LayerHistory(LayerHistoryRecord {
+                id: parse_value(&self.id)?,
+                head_layer_id: parse_value(field("head_layer_id")?)?,
+            }),
+            FactKind::Layer => Fact::Layer(LayerRecord {
+                id: parse_value(&self.id)?,
+                history_id: parse_value(field("history_id")?)?,
+                parent_id: parse_option_value(field("parent_id")?)?,
+                root_id: parse_value(field("root_id")?)?,
+            }),
+            FactKind::StackHistory => Fact::StackHistory(StackHistoryRecord {
+                id: parse_value(&self.id)?,
+                base_layer_id: parse_value(field("base_layer_id")?)?,
+                head_stack_id: parse_value(field("head_stack_id")?)?,
+            }),
+            FactKind::Stack => Fact::Stack(StackRecord {
+                id: parse_value(&self.id)?,
+                history_id: parse_value(field("history_id")?)?,
+                parent_id: parse_option_value(field("parent_id")?)?,
+                root_id: parse_value(field("root_id")?)?,
+            }),
+            FactKind::AddResult => Fact::AddResult(AddResultRecord {
+                source_id: parse_source_id(&self.id)?,
+                result_id: parse_result_id(field("result_id")?)?,
+            }),
+        };
+        Ok(fact)
+    }
+}
+
+fn parse_value<T: std::str::FromStr>(value: &str) -> crate::CliResult<T> {
+    value.parse().map_err(|_| crate::CliError::Integrity)
+}
+
+fn parse_option_value<T: std::str::FromStr>(value: &str) -> crate::CliResult<Option<T>> {
+    if value == "None" {
+        return Ok(None);
+    }
+    let value = value
+        .strip_prefix("Some(")
+        .and_then(|value| value.strip_suffix(')'))
+        .ok_or(crate::CliError::Integrity)?;
+    parse_debug_id(value)
+}
+
+fn parse_debug_id<T: std::str::FromStr>(value: &str) -> crate::CliResult<Option<T>> {
+    let (_, value) = value.split_once('(').ok_or(crate::CliError::Integrity)?;
+    let value = value.strip_suffix(')').ok_or(crate::CliError::Integrity)?;
+    value
+        .parse()
+        .map(Some)
+        .map_err(|_| crate::CliError::Integrity)
+}
+
+fn parse_nested_id<T: std::str::FromStr>(value: &str, wrapper: &str) -> crate::CliResult<T> {
+    let value = value
+        .strip_prefix(wrapper)
+        .and_then(|value| value.strip_prefix('('))
+        .and_then(|value| value.strip_suffix(')'))
+        .ok_or(crate::CliError::Integrity)?;
+    value.parse().map_err(|_| crate::CliError::Integrity)
+}
+
+fn parse_base_id(value: &str) -> crate::CliResult<layerfs_sdk::BaseId> {
+    if let Some(value) = value.strip_prefix("Layer(") {
+        return Ok(layerfs_sdk::BaseId::Layer(parse_nested_id(
+            value.strip_suffix(')').ok_or(crate::CliError::Integrity)?,
+            "LayerId",
+        )?));
+    }
+    if let Some(value) = value.strip_prefix("Stack(") {
+        return Ok(layerfs_sdk::BaseId::Stack(parse_nested_id(
+            value.strip_suffix(')').ok_or(crate::CliError::Integrity)?,
+            "StackId",
+        )?));
+    }
+    Err(crate::CliError::Integrity)
+}
+
+fn parse_source_id(value: &str) -> crate::CliResult<layerfs_sdk::SourceId> {
+    if let Some(value) = value.strip_prefix("Branch(") {
+        return Ok(layerfs_sdk::SourceId::Branch(parse_nested_id(
+            value.strip_suffix(')').ok_or(crate::CliError::Integrity)?,
+            "BranchId",
+        )?));
+    }
+    if let Some(value) = value.strip_prefix("Stack(") {
+        return Ok(layerfs_sdk::SourceId::Stack(parse_nested_id(
+            value.strip_suffix(')').ok_or(crate::CliError::Integrity)?,
+            "StackId",
+        )?));
+    }
+    Err(crate::CliError::Integrity)
+}
+
+fn parse_result_id(value: &str) -> crate::CliResult<layerfs_sdk::ResultId> {
+    if let Some(value) = value.strip_prefix("Layer(") {
+        return Ok(layerfs_sdk::ResultId::Layer(parse_nested_id(
+            value.strip_suffix(')').ok_or(crate::CliError::Integrity)?,
+            "LayerId",
+        )?));
+    }
+    if let Some(value) = value.strip_prefix("Stack(") {
+        return Ok(layerfs_sdk::ResultId::Stack(parse_nested_id(
+            value.strip_suffix(')').ok_or(crate::CliError::Integrity)?,
+            "StackId",
+        )?));
+    }
+    Err(crate::CliError::Integrity)
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StoreSnapshot {
     Page {
@@ -951,4 +1088,30 @@ pub(crate) fn parse<T: std::str::FromStr>(value: &str, name: &str) -> crate::Cli
     value
         .parse()
         .map_err(|_| crate::CliError::Context(name.to_owned()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StoreFact;
+    use layerfs_sdk::{Fact, FactKind};
+
+    fn id(tag: &str, bytes: usize) -> String {
+        format!("{tag}{}", "0".repeat(bytes * 2))
+    }
+
+    #[test]
+    fn store_fact_decodes_branch_and_base() {
+        let fact = StoreFact {
+            kind: FactKind::Branch,
+            id: id("11", 16),
+            fields: vec![
+                ("head_commit_id".to_owned(), id("12", 32)),
+                (
+                    "base_id".to_owned(),
+                    format!("Layer(LayerId({}))", id("32", 32)),
+                ),
+            ],
+        };
+        assert!(matches!(fact.fact().unwrap(), Fact::Branch(_)));
+    }
 }

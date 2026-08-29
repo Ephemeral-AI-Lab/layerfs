@@ -23,12 +23,13 @@ pub use layerfs_monitor::{
 };
 pub use layerfs_stack_store::StackStore;
 pub use layerfs_storage::{
-    AddResult, AdmissionSetReceipt, BranchCommit, BranchId, BranchRecord, BranchSource, CommitId,
-    CommitRecord, CreatedStack, DatabaseReceipt, Fact, FactKind, InitializedLayer, LayerHistoryId,
-    LayerHistoryRecord, LayerId, LayerInitialization, LayerRecord, LayerSource,
-    LocalAdmissionReceipt, LocalObjectReceipt, MergeOutcome, ObjectTransferReceipt, PulledBranch,
-    RefOutcome, Result, StackHistoryId, StackHistoryRecord, StackId, StackRecord, StorageError,
-    StorageReceipt, TransferReceipt, TransferSetReceipt, TransportReceipt,
+    AddResult, AddResultRecord, AdmissionSetReceipt, BaseId, BranchCommit, BranchId, BranchRecord,
+    BranchSource, CommitId, CommitRecord, CreatedStack, DatabaseReceipt, Fact, FactKind,
+    InitializedLayer, LayerHistoryId, LayerHistoryRecord, LayerId, LayerInitialization,
+    LayerRecord, LayerSource, LocalAdmissionReceipt, LocalObjectReceipt, MergeOutcome,
+    ObjectTransferReceipt, PulledBranch, RefOutcome, Result, ResultId, SourceId, StackHistoryId,
+    StackHistoryRecord, StackId, StackRecord, StorageError, StorageReceipt, TransferReceipt,
+    TransferSetReceipt, TransportReceipt,
 };
 pub use layerfs_workspace::{
     ContainerId, CreateWorkspaceSession, EndWorkspaceMode, ExecutionEvent, ExecutionId,

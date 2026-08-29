@@ -1,11 +1,11 @@
 use crate::{
     app::{
-        Action, App, Focus, HistoryCategory, HistoryRow, LineageBase, LineageChild, RelationKind,
-        StoreRow,
+        Action, App, Focus, HistoryCategory, HistoryGroup, HistoryRow, LineageBase, LineageChild,
+        RelationKind, StoreRow, TopologyEntry,
     },
     theme::{self, Palette},
 };
-use layerfs_cli::{Fact, HistoryGroup, StoreSyncStatus, SyncStatus};
+use layerfs_cli::Fact;
 use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Modifier, Style},
@@ -176,7 +176,22 @@ fn stores(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
 fn histories(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
     let title = app
         .selected_store()
-        .map(|store| format!(" HISTORIES · {} {} ", role_label(&store.role), store.name))
+        .map(|store| {
+            let marker = if app
+                .selected_store_history()
+                .is_some_and(|group| group.has_more)
+            {
+                " …"
+            } else {
+                ""
+            };
+            format!(
+                " HISTORIES · {} {}{} ",
+                role_label(&store.role),
+                store.name,
+                marker
+            )
+        })
         .unwrap_or_else(|| " HISTORIES ".to_owned());
     let selected = app.selected_history();
     let rows = app.history_rows();
@@ -909,8 +924,8 @@ fn details(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
             Span::raw(route_label(app, store)),
         ]),
         Line::from(vec![
-            Span::styled("Sync   ", Style::default().fg(theme.muted)),
-            Span::raw(sync_details(store.sync)),
+            Span::styled("State  ", Style::default().fg(theme.muted)),
+            Span::raw(if store.active { "active" } else { "connected" }),
         ]),
         Line::from(""),
     ]);
@@ -1081,63 +1096,18 @@ fn role_label(role: &str) -> &str {
     }
 }
 
-fn sync_summary(entry: &layerfs_cli::TopologyEntry) -> String {
+fn sync_summary(entry: &TopologyEntry) -> String {
     if entry.role == "layerstore" {
         return "  AUTHORITY".to_owned();
     }
-    match entry.role.as_str() {
-        "stackstore" => format!(
-            "  L{} S{} B{}",
-            sync_mark(entry.sync.layer),
-            sync_mark(entry.sync.stack),
-            sync_mark(entry.sync.branch)
-        ),
-        "branchstore" => format!("  B{}", sync_mark(entry.sync.branch)),
-        _ => "  connected".to_owned(),
-    }
-}
-
-fn sync_details(sync: StoreSyncStatus) -> String {
-    let mut values = Vec::new();
-    if let Some(value) = sync.layer {
-        values.push(format!("layer {}", sync_word(value)));
-    }
-    if let Some(value) = sync.stack {
-        values.push(format!("stack {}", sync_word(value)));
-    }
-    if let Some(value) = sync.branch {
-        values.push(format!("branch {}", sync_word(value)));
-    }
-    if values.is_empty() {
-        "unknown".to_owned()
+    if entry.active {
+        "  ACTIVE".to_owned()
     } else {
-        values.join(" · ")
+        "  CONNECTED".to_owned()
     }
 }
 
-fn sync_mark(status: Option<SyncStatus>) -> &'static str {
-    match status {
-        Some(SyncStatus::Authority) => "A",
-        Some(SyncStatus::Synced) => "✓",
-        Some(SyncStatus::Ahead) => "↑",
-        Some(SyncStatus::Behind) => "↓",
-        Some(SyncStatus::Diverged) => "⇅",
-        Some(SyncStatus::Unknown) | None => "?",
-    }
-}
-
-fn sync_word(status: SyncStatus) -> &'static str {
-    match status {
-        SyncStatus::Authority => "authority",
-        SyncStatus::Synced => "synced",
-        SyncStatus::Ahead => "ahead",
-        SyncStatus::Behind => "behind",
-        SyncStatus::Diverged => "diverged",
-        SyncStatus::Unknown => "unknown",
-    }
-}
-
-fn route_label(app: &App, store: &layerfs_cli::TopologyEntry) -> String {
+fn route_label(app: &App, store: &TopologyEntry) -> String {
     if store.role == "layerstore" {
         return "authority".to_owned();
     }
@@ -1451,10 +1421,9 @@ fn footer(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
 
 #[cfg(test)]
 mod tests {
-    use layerfs_cli::{HistoryGroup, StoreSyncStatus, TopologyEntry};
     use ratatui::{backend::TestBackend, layout::Rect, Terminal};
 
-    use crate::app::App;
+    use crate::app::{App, HistoryGroup, TopologyEntry};
 
     #[test]
     fn renders_empty_and_bound_store_views() {
@@ -1558,11 +1527,6 @@ mod tests {
             location: location.to_owned(),
             parent: parent.map(str::to_owned),
             active: false,
-            sync: StoreSyncStatus {
-                layer: None,
-                stack: None,
-                branch: None,
-            },
         }
     }
 }

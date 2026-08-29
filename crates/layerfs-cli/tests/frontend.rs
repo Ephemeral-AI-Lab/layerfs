@@ -14,6 +14,11 @@ fn non_ratatui_client_consumes_plan_completion_events_paging_and_interruption() 
     let branch_path = root.join("branch.sqlite");
     let output = root.join("workspace");
 
+    let ViewSnapshot::Topology(topology) = session.snapshot(ViewQuery::Topology).unwrap() else {
+        panic!("empty topology")
+    };
+    assert!(topology.is_empty());
+
     run(
         &session,
         &format!("db create layer {}", layer_path.display()),

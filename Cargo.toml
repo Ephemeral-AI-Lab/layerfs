@@ -12,6 +12,7 @@ members = [
     "crates/layerfs-materialization",
     "crates/layerfs-monitor",
     "crates/layerfs-cli",
+    "crates/layerfs-tui",
     "tools/layerfs-eval",
 ]
 

@@ -128,6 +128,20 @@ impl OperationHandle {
             Err(_) => Ok(None),
         }
     }
+
+    pub fn try_next_event(&self) -> CliResult<Option<CliEvent>> {
+        match self
+            .events
+            .lock()
+            .map_err(|_| CliError::Context("event receiver".to_owned()))?
+            .try_recv()
+        {
+            Ok(event) => event.map(Some),
+            Err(
+                std::sync::mpsc::TryRecvError::Empty | std::sync::mpsc::TryRecvError::Disconnected,
+            ) => Ok(None),
+        }
+    }
 }
 
 #[doc(hidden)]
