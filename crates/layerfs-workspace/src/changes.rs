@@ -1,54 +1,549 @@
-use crate::model::{Data, FileData, Workspace};
-use layerfs_storage_core::internal::StagedChange;
-use layerfs_storage_core::{Result, StorageError};
+use crate::cow_tree::{portable_metadata, Attr, Data, FileData, Kind, NodeId, Workspace, ROOT};
+use layerfs_content::file::rope::{self, FileStateRoot};
+use layerfs_content::filesystem::{self, ContentChange, LogicalCounters};
+use layerfs_content::object::access::ObjectRead;
+use layerfs_content::object::{ContentDigestWriter, ObjectId};
+use layerfs_content::tree::inode::{InodeId, InodeKind, InodeRecordV1};
+use layerfs_content::CanonicalPath;
+use layerfs_storage::{BuiltRoot, CoreReader, ObjectBuffer, Result, StorageError};
+use std::collections::{BTreeMap, BTreeSet};
+use std::io::Read;
+
+#[derive(Clone, Copy)]
+struct BaseEntry {
+    inode: InodeId,
+    record: InodeRecordV1,
+    mode: u32,
+    mtime_seconds: i64,
+    mtime_nanoseconds: u32,
+}
+
+#[derive(Clone, Copy)]
+struct FinalEntry {
+    node: NodeId,
+    attr: Attr,
+}
 
 impl Workspace {
-    pub(crate) fn build_mutations(&self) -> Result<Vec<StagedChange>> {
-        let mut staged = self.mutations.clone();
-        for node_id in &self.dirty {
-            let Some(node) = self.nodes.get(node_id) else {
-                continue;
-            };
-            let Some(path) = node.paths.first() else {
-                continue;
-            };
-            let Data::File(FileData::Overlay {
-                base,
-                spool,
-                len,
-                dirty,
-                ..
-            }) = &node.data
-            else {
-                return Err(StorageError::Integrity("dirty file"));
-            };
-            let base_len = base.map_or(0, |(_, len)| len);
-            for (&start, &end) in dirty {
-                let end = end.min(*len);
-                if start < end {
-                    staged.push(StagedChange::SpliceFile {
-                        path: path.clone(),
-                        start,
-                        delete_len: end.min(base_len).saturating_sub(start.min(base_len)),
-                        spool: spool.clone(),
-                        spool_offset: start,
-                        replacement_len: end - start,
-                    });
-                }
+    pub(crate) fn final_matches_base(&mut self) -> Result<bool> {
+        let base = self.base_manifest()?;
+        let final_view = self.final_manifest(manifest_charge(&base))?;
+        if base.len() != final_view.len()
+            || base.keys().ne(final_view.keys())
+            || sorted_groups(groups_by_inode(&base)) != sorted_groups(groups_by_node(&final_view))
+        {
+            return Ok(false);
+        }
+        for (path, before) in &base {
+            let after = final_view
+                .get(path)
+                .ok_or(StorageError::Integrity("final manifest"))?;
+            if kind(before.record.kind) != after.attr.kind
+                || before.mode != after.attr.mode
+                || before.mtime_seconds != after.attr.mtime_seconds
+                || before.mtime_nanoseconds != after.attr.mtime_nanoseconds
+            {
+                return Ok(false);
             }
-            if *len < base_len {
-                staged.push(StagedChange::SpliceFile {
-                    path: path.clone(),
-                    start: *len,
-                    delete_len: base_len - *len,
-                    spool: spool.clone(),
-                    spool_offset: *len,
-                    replacement_len: 0,
-                });
+            let content_matches = match after.attr.kind {
+                Kind::Directory => true,
+                Kind::File => self.file_matches(after.node, before.record.content_root)?,
+                Kind::Symlink => {
+                    self.readlink(after.node)? == self.base_symlink(before.record.content_root)?
+                }
+            };
+            if !content_matches {
+                return Ok(false);
             }
         }
-        Ok(staged)
+        let resolved = filesystem::resolve(
+            &CoreReader(&self.branch),
+            self.base_root,
+            &CanonicalPath::root(),
+            &mut LogicalCounters::default(),
+        )?;
+        let before = portable_metadata(
+            &CoreReader(&self.branch),
+            resolved.record.metadata_root,
+            resolved.record.kind,
+        )?;
+        let after = self.attr(ROOT)?;
+        Ok(before.permission_mode == after.mode
+            && before.mtime_seconds == after.mtime_seconds
+            && before.mtime_nanoseconds == after.mtime_nanoseconds)
     }
+
+    pub(crate) fn build_candidate(&mut self) -> Result<BuiltRoot> {
+        let base = self.base_manifest()?;
+        let final_view = self.final_manifest(manifest_charge(&base))?;
+        let base_groups = groups_by_inode(&base);
+        let final_groups = groups_by_node(&final_view);
+        let mut recreate = BTreeSet::new();
+        let mut rewrite = BTreeSet::new();
+
+        for (node, paths) in &final_groups {
+            let entry = final_view
+                .get(&paths[0])
+                .ok_or(StorageError::Integrity("final manifest"))?;
+            let exact_base = paths
+                .first()
+                .and_then(|path| base.get(path))
+                .filter(|first| {
+                    paths.iter().all(|path| {
+                        base.get(path).is_some_and(|candidate| {
+                            candidate.inode == first.inode
+                                && kind(candidate.record.kind) == entry.attr.kind
+                        })
+                    })
+                })
+                .filter(|first| base_groups.get(&first.inode) == Some(paths));
+            let Some(base_entry) = exact_base else {
+                recreate.insert(*node);
+                continue;
+            };
+            match entry.attr.kind {
+                Kind::File if !self.file_matches(entry.node, base_entry.record.content_root)? => {
+                    rewrite.insert(*node);
+                }
+                Kind::Symlink
+                    if self.readlink(entry.node)?
+                        != self.base_symlink(base_entry.record.content_root)? =>
+                {
+                    recreate.insert(*node);
+                }
+                _ => {}
+            }
+        }
+
+        let seed = *filesystem::namespace(&CoreReader(&self.branch), self.base_root)?
+            .root_directory_inode
+            .as_bytes();
+        let mut objects = ObjectBuffer::new(&self.branch)?;
+        let mut root = self.base_root;
+        let mut cdc_bytes_scanned = 0_u64;
+        let mut removals = base
+            .iter()
+            .filter_map(|(path, before)| match final_view.get(path) {
+                None => Some(path.clone()),
+                Some(after)
+                    if kind(before.record.kind) != after.attr.kind
+                        || recreate.contains(&after.node) =>
+                {
+                    Some(path.clone())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        removals
+            .sort_by(|left, right| depth(right).cmp(&depth(left)).then_with(|| right.cmp(left)));
+        for path in removals {
+            root = apply_one(
+                &mut objects,
+                root,
+                ContentChange::Remove { path },
+                seed,
+                &mut cdc_bytes_scanned,
+            )?;
+        }
+
+        let mut directories = final_view
+            .iter()
+            .filter(|(path, entry)| {
+                entry.attr.kind == Kind::Directory
+                    && !base
+                        .get(*path)
+                        .is_some_and(|before| kind(before.record.kind) == Kind::Directory)
+            })
+            .map(|(path, entry)| (path.clone(), *entry))
+            .collect::<Vec<_>>();
+        directories.sort_by(|left, right| {
+            depth(&left.0)
+                .cmp(&depth(&right.0))
+                .then_with(|| left.0.cmp(&right.0))
+        });
+        for (path, entry) in directories {
+            root = apply_one(
+                &mut objects,
+                root,
+                ContentChange::Mkdir {
+                    path: path.clone(),
+                    mode: entry.attr.mode,
+                },
+                seed,
+                &mut cdc_bytes_scanned,
+            )?;
+            root = set_metadata(&mut objects, root, &path, entry.attr)?;
+        }
+
+        let groups = final_groups
+            .iter()
+            .map(|(node, paths)| (paths[0].clone(), (*node, paths)))
+            .collect::<BTreeMap<_, _>>();
+        for (representative, (node, paths)) in groups {
+            let entry = *final_view
+                .get(&representative)
+                .ok_or(StorageError::Integrity("final manifest"))?;
+            if recreate.contains(&node) {
+                root = self.create_group(
+                    &mut objects,
+                    root,
+                    &representative,
+                    paths,
+                    entry,
+                    seed,
+                    &mut cdc_bytes_scanned,
+                )?;
+            } else {
+                if rewrite.contains(&node) {
+                    let candidate = filesystem::write_file(
+                        &mut objects,
+                        root,
+                        &CanonicalPath::new(&representative)?,
+                        WorkspaceFileReader::new(self, node)?,
+                        entry.attr.mode,
+                        seed,
+                    )?;
+                    cdc_bytes_scanned = cdc_bytes_scanned
+                        .checked_add(candidate.counters().rope.cdc_bytes_scanned)
+                        .ok_or(StorageError::Integrity("CDC counter"))?;
+                    root = candidate.root();
+                }
+                let before = base
+                    .get(&representative)
+                    .ok_or(StorageError::Integrity("base hard-link group"))?;
+                if before.mode != entry.attr.mode
+                    || before.mtime_seconds != entry.attr.mtime_seconds
+                    || before.mtime_nanoseconds != entry.attr.mtime_nanoseconds
+                {
+                    root = set_metadata(&mut objects, root, &representative, entry.attr)?;
+                }
+            }
+        }
+
+        let base_root = filesystem::resolve(
+            &CoreReader(&self.branch),
+            self.base_root,
+            &CanonicalPath::root(),
+            &mut LogicalCounters::default(),
+        )?;
+        let base_root_metadata = portable_metadata(
+            &CoreReader(&self.branch),
+            base_root.record.metadata_root,
+            base_root.record.kind,
+        )?;
+        let final_root = self.attr(ROOT)?;
+        if base_root_metadata.permission_mode != final_root.mode
+            || base_root_metadata.mtime_seconds != final_root.mtime_seconds
+            || base_root_metadata.mtime_nanoseconds != final_root.mtime_nanoseconds
+        {
+            let path = CanonicalPath::root();
+            root = filesystem::set_mode(&mut objects, root, &path, final_root.mode)?.root();
+            root = filesystem::set_mtime(
+                &mut objects,
+                root,
+                &path,
+                final_root.mtime_seconds,
+                final_root.mtime_nanoseconds,
+            )?
+            .root();
+        }
+
+        objects.finish(root, cdc_bytes_scanned)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_group(
+        &self,
+        objects: &mut ObjectBuffer<'_>,
+        mut root: ObjectId,
+        representative: &str,
+        paths: &[String],
+        entry: FinalEntry,
+        seed: [u8; 32],
+        cdc_bytes_scanned: &mut u64,
+    ) -> Result<ObjectId> {
+        match entry.attr.kind {
+            Kind::File => {
+                let candidate = filesystem::write_file(
+                    objects,
+                    root,
+                    &CanonicalPath::new(representative)?,
+                    WorkspaceFileReader::new(self, entry.node)?,
+                    entry.attr.mode,
+                    seed,
+                )?;
+                *cdc_bytes_scanned = cdc_bytes_scanned
+                    .checked_add(candidate.counters().rope.cdc_bytes_scanned)
+                    .ok_or(StorageError::Integrity("CDC counter"))?;
+                root = candidate.root();
+            }
+            Kind::Symlink => {
+                root = apply_one(
+                    objects,
+                    root,
+                    ContentChange::Symlink {
+                        path: representative.to_owned(),
+                        target: self.readlink(entry.node)?,
+                    },
+                    seed,
+                    cdc_bytes_scanned,
+                )?;
+            }
+            Kind::Directory => return Err(StorageError::Integrity("directory hard link")),
+        }
+        for path in &paths[1..] {
+            root = apply_one(
+                objects,
+                root,
+                ContentChange::HardLink {
+                    source: representative.to_owned(),
+                    target: path.clone(),
+                },
+                seed,
+                cdc_bytes_scanned,
+            )?;
+        }
+        set_metadata(objects, root, representative, entry.attr)
+    }
+
+    fn base_manifest(&self) -> Result<BTreeMap<String, BaseEntry>> {
+        let reader = CoreReader(&self.branch);
+        let mut output = BTreeMap::new();
+        let mut charge = 0_u64;
+        let mut pending = vec![CanonicalPath::root()];
+        while let Some(directory) = pending.pop() {
+            let mut after = None;
+            loop {
+                let (page, _) = filesystem::list(
+                    &reader,
+                    self.base_root,
+                    &directory,
+                    after.as_ref(),
+                    128,
+                    256 * 1024,
+                )?;
+                for (name, _) in page.entries {
+                    let path = join(&directory, name.as_str())?;
+                    let resolved = filesystem::resolve(
+                        &reader,
+                        self.base_root,
+                        &path,
+                        &mut LogicalCounters::default(),
+                    )?;
+                    let metadata = portable_metadata(
+                        &reader,
+                        resolved.record.metadata_root,
+                        resolved.record.kind,
+                    )?;
+                    if resolved.record.kind == InodeKind::Directory {
+                        pending.push(path.clone());
+                    }
+                    let path = path.as_str().to_owned();
+                    charge = charge.saturating_add(path_charge(&path));
+                    output.insert(
+                        path,
+                        BaseEntry {
+                            inode: resolved.inode,
+                            record: resolved.record,
+                            mode: metadata.permission_mode,
+                            mtime_seconds: metadata.mtime_seconds,
+                            mtime_nanoseconds: metadata.mtime_nanoseconds,
+                        },
+                    );
+                    self.policy.check_final_delta(charge)?;
+                }
+                let Some(next) = page.continuation else { break };
+                after = Some(next);
+            }
+        }
+        Ok(output)
+    }
+
+    fn final_manifest(&mut self, base_charge: u64) -> Result<BTreeMap<String, FinalEntry>> {
+        let mut output = BTreeMap::new();
+        let mut charge = base_charge;
+        let mut pending = vec![(ROOT, String::new())];
+        while let Some((directory, prefix)) = pending.pop() {
+            for (name, node) in self.directory_entries(directory)? {
+                let name = std::str::from_utf8(&name)
+                    .map_err(|_| StorageError::Integrity("Workspace path"))?;
+                let path = if prefix.is_empty() {
+                    name.to_owned()
+                } else {
+                    format!("{prefix}/{name}")
+                };
+                let attr = self.attr(node)?;
+                charge = charge.saturating_add(path_charge(&path));
+                output.insert(path.clone(), FinalEntry { node, attr });
+                self.policy.check_final_delta(charge)?;
+                if attr.kind == Kind::Directory {
+                    pending.push((node, path));
+                }
+            }
+        }
+        Ok(output)
+    }
+
+    fn file_matches(&self, node: NodeId, base: ObjectId) -> Result<bool> {
+        match &self
+            .nodes
+            .get(&node)
+            .ok_or(StorageError::NotFound("node"))?
+            .data
+        {
+            Data::File(FileData::Base { root, .. }) if root.0 == base => return Ok(true),
+            Data::File(FileData::Overlay {
+                base: Some((root, _)),
+                dirty,
+                ..
+            }) if root.0 == base && dirty.is_empty() => return Ok(true),
+            Data::File(_) => {}
+            _ => return Err(StorageError::InvalidInput("file")),
+        }
+        let mut final_digest = ContentDigestWriter::new();
+        let mut input = WorkspaceFileReader::new(self, node)?;
+        std::io::copy(&mut input, &mut final_digest)?;
+        let mut base_digest = ContentDigestWriter::new();
+        rope::read_all(
+            &CoreReader(&self.branch),
+            FileStateRoot(base),
+            &mut base_digest,
+        )?;
+        Ok(final_digest.finish() == base_digest.finish())
+    }
+
+    fn base_symlink(&self, root: ObjectId) -> Result<Vec<u8>> {
+        Ok(CoreReader(&self.branch)
+            .with_authenticated_canonical(
+                root,
+                layerfs_content::tree::directory::codec::decode_symlink,
+            )?
+            .target)
+    }
+}
+
+fn manifest_charge<T>(manifest: &BTreeMap<String, T>) -> u64 {
+    manifest.keys().map(|path| path_charge(path)).sum()
+}
+
+fn path_charge(path: &str) -> u64 {
+    (path.len() as u64).saturating_mul(4).saturating_add(512)
+}
+
+struct WorkspaceFileReader<'a> {
+    workspace: &'a Workspace,
+    node: NodeId,
+    offset: u64,
+    len: u64,
+}
+
+impl<'a> WorkspaceFileReader<'a> {
+    fn new(workspace: &'a Workspace, node: NodeId) -> Result<Self> {
+        Ok(Self {
+            workspace,
+            node,
+            offset: 0,
+            len: workspace.attr(node)?.size,
+        })
+    }
+}
+
+impl Read for WorkspaceFileReader<'_> {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        if self.offset == self.len || output.is_empty() {
+            return Ok(0);
+        }
+        let bytes = self
+            .workspace
+            .read(
+                self.node,
+                self.offset,
+                output.len().min((self.len - self.offset) as usize),
+            )
+            .map_err(std::io::Error::other)?;
+        output[..bytes.len()].copy_from_slice(&bytes);
+        self.offset += bytes.len() as u64;
+        Ok(bytes.len())
+    }
+}
+
+fn apply_one(
+    objects: &mut ObjectBuffer<'_>,
+    root: ObjectId,
+    change: ContentChange,
+    seed: [u8; 32],
+    cdc_bytes_scanned: &mut u64,
+) -> Result<ObjectId> {
+    let applied = filesystem::apply_changes(objects, root, &[change], seed)?;
+    *cdc_bytes_scanned = cdc_bytes_scanned
+        .checked_add(applied.counters.cdc_bytes_scanned)
+        .ok_or(StorageError::Integrity("CDC counter"))?;
+    Ok(applied.root_id)
+}
+
+fn set_metadata(
+    objects: &mut ObjectBuffer<'_>,
+    root: ObjectId,
+    path: &str,
+    attr: Attr,
+) -> Result<ObjectId> {
+    let path = CanonicalPath::new(path)?;
+    let root = filesystem::set_mode(objects, root, &path, attr.mode)?.root();
+    Ok(filesystem::set_mtime(
+        objects,
+        root,
+        &path,
+        attr.mtime_seconds,
+        attr.mtime_nanoseconds,
+    )?
+    .root())
+}
+
+fn groups_by_inode(base: &BTreeMap<String, BaseEntry>) -> BTreeMap<InodeId, Vec<String>> {
+    let mut groups = BTreeMap::<_, Vec<_>>::new();
+    for (path, entry) in base {
+        if entry.record.kind != InodeKind::Directory {
+            groups.entry(entry.inode).or_default().push(path.clone());
+        }
+    }
+    groups
+}
+
+fn groups_by_node(final_view: &BTreeMap<String, FinalEntry>) -> BTreeMap<NodeId, Vec<String>> {
+    let mut groups = BTreeMap::<_, Vec<_>>::new();
+    for (path, entry) in final_view {
+        if entry.attr.kind != Kind::Directory {
+            groups.entry(entry.node).or_default().push(path.clone());
+        }
+    }
+    groups
+}
+
+fn sorted_groups<K: Ord>(groups: BTreeMap<K, Vec<String>>) -> Vec<Vec<String>> {
+    let mut groups = groups.into_values().collect::<Vec<_>>();
+    groups.sort();
+    groups
+}
+
+fn kind(kind: InodeKind) -> Kind {
+    match kind {
+        InodeKind::RegularFile => Kind::File,
+        InodeKind::Directory => Kind::Directory,
+        InodeKind::Symlink => Kind::Symlink,
+    }
+}
+
+fn join(parent: &CanonicalPath, name: &str) -> Result<CanonicalPath> {
+    let value = if parent.is_root() {
+        name.to_owned()
+    } else {
+        format!("{}/{name}", parent.as_str())
+    };
+    CanonicalPath::new(&value).map_err(Into::into)
+}
+
+fn depth(path: &str) -> usize {
+    path.bytes().filter(|byte| *byte == b'/').count()
 }
 
 impl Drop for Workspace {

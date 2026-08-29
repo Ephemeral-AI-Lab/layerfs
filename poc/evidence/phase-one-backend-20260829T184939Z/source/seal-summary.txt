@@ -1,0 +1,11 @@
+evidence_root=poc/evidence/phase-one-backend-20260829T184939Z
+image_source_files=     202
+image_source_tree=7a90664c376e4d2981063ab5f0b8ad27d722482a
+non_evidence_tree=80b6697c236f152784da297703d99ab2e70a20d1597d7e8394fd6954deb5d273
+image_id=sha256:5271a74d7b6c8cef369cf5cbc6a7cfdd6b4d23a52a15712fb3e436622b91fac6 label_tree=7a90664c376e4d2981063ab5f0b8ad27d722482a
+ca0949c595b383bd60ec2ebd2b0e16fa1911b4fddaa7e1b1f47608c76d23a268  target/release/layerfs
+339aedcda588663ddf3678a690f8acfd5945e6a7f8710e5699450fb4e886457b  /tmp/layerfs-final-linux-cli
+3711c5357c8f5fda288fdf16967ddc5eda7c3f7df4fd77a054acd9d9ce6cedb3  /usr/local/bin/layerfs-fuse
+0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef  /usr/local/bin/fs-bench.sh
+560203e9c022f798d3f6c6417585c94eeb4e5e174cc8e4effb6b2e0f5e873d67  /usr/local/bin/verify_fs_bench.py
+remaining_layerfs_containers=       0

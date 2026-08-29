@@ -1,0 +1,53 @@
+   Compiling layerfs-stack-store v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-stack-store)
+   Compiling layerfs-monitor v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-monitor)
+   Compiling layerfs-sdk v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-sdk)
+   Compiling layerfs-cli v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.20s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_cli-3ba82d89ad678e8b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/layerfs.rs (target/debug/deps/layerfs-e8a4ff311e8e6b2f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/frontend.rs (target/debug/deps/frontend-7579995f1cbf5455)
+
+running 1 test
+test non_ratatui_client_consumes_plan_completion_events_paging_and_interruption ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.89s
+
+     Running tests/parser.rs (target/debug/deps/parser-3c49d200a93bf944)
+
+running 2 tests
+test quoted_exec_argv_is_not_joined_or_reparsed ... ok
+test frozen_grammar_parses_every_command_group_without_aliases ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/persistent.rs (target/debug/deps/persistent-a5fc1934eb5c7e73)
+
+running 2 tests
+test cli_session_reuses_the_process_host ... ok
+test separate_processes_reconnect_to_one_ready_host_and_workspace_worker ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/render.rs (target/debug/deps/render-85deb15f5206b172)
+
+running 1 test
+test standalone_human_and_json_carry_the_same_semantic_result_and_help_is_local ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+   Doc-tests layerfs_cli
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

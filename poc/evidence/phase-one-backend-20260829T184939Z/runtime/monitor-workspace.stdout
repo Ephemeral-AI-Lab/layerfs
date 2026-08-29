@@ -1,0 +1,18 @@
+STARTED o:aec12fe80224f0e2027561fa3f51f7c3 Monitor { command: Workspace { workspace_id: None } }
+PROGRESS o:aec12fe80224f0e2027561fa3f51f7c3 Running 0 - 0
+SNAPSHOT Monitor
+w:019abb6ff117058864526d4081dff090 branch=1101a04edc28ed7709b831fb21c7092ffb state=Ended dirty=false
+w:02fb5584548b83c84eabf88cc78adce4 branch=1101a04edc2a1d734dab2e59af2f88afac state=Ended dirty=false
+w:0b5b46456e82834506e12d073336a119 branch=1101a04edc2a1d734dab2e59af2f88afac state=Ended dirty=false
+w:47b5ca982b06d3a1cee08be16bada1c3 branch=1101a04edc28ed7709b831fb21c7092ffb state=Ended dirty=false
+w:4c16db4ca2d0ccdaa71b54361414491a branch=1101a04edc28ed7709b831fb21c7092ffb state=Ended dirty=false
+w:76f7234bafd7a386b943dfec833aecfe branch=1101a04edc28ed7709b831fb21c7092ffb state=Active dirty=true
+w:7b3390126898b7f520286904ecb7eba6 branch=1101a04edc28ed7709b831fb21c7092ffb state=Ended dirty=false
+w:850c398381a948b2b08b810f3970d908 branch=1101a04edc2a1d734dab2e59af2f88afac state=Ended dirty=false
+w:86f7df61beb8393f0b134592f177609c branch=1101a04edc2a1d734dab2e59af2f88afac state=Committed dirty=true
+w:910fd6280c67b128edb04bd1da411388 branch=1101a04edc2a1d734dab2e59af2f88afac state=Ended dirty=false
+w:d12505909e4044dd9db687152ccf7409 branch=1101a04edc28ed7709b831fb21c7092ffb state=Committed dirty=true
+w:ff1dad1bee36d209e3e2df920395a0a4 branch=1101a04edc28ed7709b831fb21c7092ffb state=Ended dirty=false
+FINISHED OK
+RECEIPT operation=o:aec12fe80224f0e2027561fa3f51f7c3 service_ns=299792
+INVOCATION operation=o:aec12fe80224f0e2027561fa3f51f7c3 outcome=Succeeded total_ns=850917 parse_ns=120208 context_ns=350750 wait_ns=327625 render_ns=38626

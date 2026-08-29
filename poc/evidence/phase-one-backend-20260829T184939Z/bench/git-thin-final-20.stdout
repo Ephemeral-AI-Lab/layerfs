@@ -1,0 +1,18 @@
+config: REPS=20 WARMUP=1 RANDOMIZE_TARGETS=1 targets=/workspace /tmp
+
+[1m=== tiny file churn (1000 files) ===[0m
+
+[1m=== directory traversal ===[0m
+
+[1m=== large file I/O ===[0m
+
+[1m=== git ===[0m
+  [32mOK[0m    git init + commit 100 files    computerd  mean=182.0 med=177.8 p95=196.9 ms (n=20)
+  [32mOK[0m    git init + commit 100 files    base  mean=8.3 med=8.2 p95=8.9 ms (n=20)
+  SKIP  npm scenarios (npm not installed)
+  SKIP  go scenarios (go not installed)
+
+[1m=== summary ===[0m
+  scenario                       computerd mean computerd p95    base mean     base p95      ratio
+  git init + commit 100 files        182.0 ms     196.9 ms       8.3 ms       8.9 ms     22.03x
+wrote JSON summary to /tmp/git-thin-final-20.json

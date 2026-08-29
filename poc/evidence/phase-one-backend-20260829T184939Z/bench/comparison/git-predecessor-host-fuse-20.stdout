@@ -1,0 +1,18 @@
+config: REPS=20 WARMUP=1 RANDOMIZE_TARGETS=1 targets=/workspace /tmp
+
+[1m=== tiny file churn (1000 files) ===[0m
+
+[1m=== directory traversal ===[0m
+
+[1m=== large file I/O ===[0m
+
+[1m=== git ===[0m
+  [32mOK[0m    git init + commit 100 files    computerd  mean=147.7 med=147.9 p95=155.2 ms (n=20)
+  [32mOK[0m    git init + commit 100 files    base  mean=9.0 med=9.0 p95=9.9 ms (n=20)
+  SKIP  npm scenarios (npm not installed)
+  SKIP  go scenarios (go not installed)
+
+[1m=== summary ===[0m
+  scenario                       computerd mean computerd p95    base mean     base p95      ratio
+  git init + commit 100 files        147.7 ms     155.2 ms       9.0 ms       9.9 ms     16.40x
+wrote JSON summary to /tmp/git-predecessor-20.json

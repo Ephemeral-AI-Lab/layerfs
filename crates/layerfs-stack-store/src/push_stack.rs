@@ -1,7 +1,7 @@
-use crate::{history_pull::DeferredFactStore, StackStore};
-use layerfs_storage_core::{
-    visit_stack_push_facts, Fact, RefOutcome, Result, StackAttestation, StackId, StackPush,
-    StorageError, TransferPipeline,
+use crate::StackStore;
+use layerfs_storage::{
+    visit_stack_push_facts, DeferredFactStore, Fact, RefOutcome, Result, StackAttestation, StackId,
+    StackPush, StorageError, TransferPipeline,
 };
 
 impl StackStore {
@@ -20,7 +20,7 @@ impl StackStore {
                 != *blake3::hash(&self.writer.public_key()).as_bytes()
         {
             return Err(StorageError::ReadOnlyStackHistory(
-                layerfs_storage_core::ReadOnlyHistory {
+                layerfs_storage::ReadOnlyHistory {
                     history_id: history.id,
                 },
             ));
@@ -29,6 +29,7 @@ impl StackStore {
         let (expected, up_to_date) =
             pipeline.preflight_stack(history.id, history.base_layer_id, stack_id, stack.root_id)?;
         if up_to_date {
+            pipeline.finish_up_to_date()?;
             return Ok(RefOutcome::UpToDate(
                 expected.ok_or(StorageError::MissingBaseData)?,
             ));

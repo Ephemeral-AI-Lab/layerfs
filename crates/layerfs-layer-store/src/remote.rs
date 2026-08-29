@@ -2,7 +2,7 @@ use crate::{
     transfer::{PublicationPage, PublicationSpool},
     LayerStore,
 };
-use layerfs_storage_core::{
+use layerfs_storage::{
     read_object_frames, read_value, write_frame_bytes, write_value, BranchRecord, CommitId,
     EndpointRequest, EndpointResponse, Fact, FactKind, FrameKind, LayerId, ObjectSource,
     RefOutcome, Result, StackAttestation, StackHistoryId, StackHistoryRecord, StackId,
@@ -126,6 +126,8 @@ fn phase(
         EndpointRequest::StackHistoryHead(id) => {
             EndpointResponse::StackHistoryRecord(store.stack_history_record(id)?)
         }
+        EndpointRequest::StackRecord(id) => EndpointResponse::StackRecord(store.stack_record(id)?),
+        EndpointRequest::StoreIdentity => EndpointResponse::StoreIdentity(store.store_identity()?),
         EndpointRequest::AddStack {
             stack_history_id,
             branch_id,
@@ -135,7 +137,7 @@ fn phase(
         EndpointRequest::AddLayer {
             layer_history_id,
             source,
-        } => EndpointResponse::LayerAdd(store.add_layer(layer_history_id, source)?),
+        } => EndpointResponse::LayerAdd(store.add_layer_to_history(layer_history_id, source)?),
         EndpointRequest::ReadObjects(_)
         | EndpointRequest::HistoryMissing(_)
         | EndpointRequest::TransferBeginBranch { .. }
@@ -160,8 +162,8 @@ fn transfer_session(
     let mut publication: Option<PublicationSpool> = None;
     let mut publication_page: Option<PublicationPage> = None;
     let mut streamed = TransferExchange::membership(
-        layerfs_storage_core::MissingBitmap::empty(),
-        layerfs_storage_core::MissingBitmap::empty(),
+        layerfs_storage::MissingBitmap::empty(),
+        layerfs_storage::MissingBitmap::empty(),
     );
     let session = match request {
         EndpointRequest::TransferBeginBranch { branch, root } => {
@@ -183,7 +185,7 @@ fn transfer_session(
                 output,
                 EndpointResponse::Exchange(TransferExchange::membership(
                     store.db.missing_objects(&[root])?,
-                    layerfs_storage_core::MissingBitmap::empty(),
+                    layerfs_storage::MissingBitmap::empty(),
                 )),
             )?;
             if up_to_date {
@@ -219,7 +221,7 @@ fn transfer_session(
                 output,
                 EndpointResponse::Exchange(TransferExchange::membership(
                     store.db.missing_objects(&[root])?,
-                    layerfs_storage_core::MissingBitmap::empty(),
+                    layerfs_storage::MissingBitmap::empty(),
                 )),
             )?;
             if up_to_date {
@@ -299,8 +301,8 @@ fn transfer_session(
                 } else {
                     exchange.absorb(streamed)?;
                     streamed = TransferExchange::membership(
-                        layerfs_storage_core::MissingBitmap::empty(),
-                        layerfs_storage_core::MissingBitmap::empty(),
+                        layerfs_storage::MissingBitmap::empty(),
+                        layerfs_storage::MissingBitmap::empty(),
                     );
                     reply(output, EndpointResponse::Exchange(exchange))?;
                 }
@@ -412,9 +414,9 @@ struct HistoryWire<'a, R: Read, W: Write> {
 impl<R: Read, W: Write> HistoryWire<'_, R, W> {
     fn membership(
         &mut self,
-        kind: layerfs_storage_core::FactKind,
+        kind: layerfs_storage::FactKind,
         ids: &[Vec<u8>],
-    ) -> Result<layerfs_storage_core::MissingBitmap> {
+    ) -> Result<layerfs_storage::MissingBitmap> {
         reply(
             self.output,
             EndpointResponse::FactIds {

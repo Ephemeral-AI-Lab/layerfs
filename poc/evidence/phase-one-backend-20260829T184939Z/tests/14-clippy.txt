@@ -1,0 +1,11 @@
+    Checking layerfs-materialization v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-materialization)
+    Checking layerfs-storage v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-storage)
+    Checking layerfs-layer-store v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-layer-store)
+    Checking layerfs-stack-store v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-stack-store)
+    Checking layerfs-branch-store v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-branch-store)
+    Checking layerfs-workspace v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+    Checking layerfs-monitor v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-monitor)
+    Checking layerfs-sdk v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-sdk)
+    Checking layerfs-cli v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-cli)
+    Checking layerfs-eval v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/tools/layerfs-eval)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 28.06s

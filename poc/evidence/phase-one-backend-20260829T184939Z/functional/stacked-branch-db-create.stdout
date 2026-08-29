@@ -1,0 +1,5 @@
+STARTED o:b2fff05b4089c88df556fa1317b2483a Db { command: Create { role: Branch, location: "/var/lib/layerfs-pass/stacked-branch.db" } }
+PROGRESS o:b2fff05b4089c88df556fa1317b2483a Running 0 - 0
+FINISHED CONNECTED branch /var/lib/layerfs-pass/stacked-branch.db
+RECEIPT operation=o:b2fff05b4089c88df556fa1317b2483a service_ns=3853541
+INVOCATION operation=o:b2fff05b4089c88df556fa1317b2483a outcome=Succeeded total_ns=4421041 parse_ns=153709 context_ns=378292 wait_ns=3859417 render_ns=18210

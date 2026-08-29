@@ -1,0 +1,7 @@
+STARTED o:61f08a205a66653e6d6f9245a3e0550f Monitor { command: Dedup { route: Some("r:b3a73d4abb31a4c93b7fb256a695c3df"), analyze: true } }
+PROGRESS o:61f08a205a66653e6d6f9245a3e0550f Running 0 - 0
+SNAPSHOT Monitor
+route=r:b3a73d4abb31a4c93b7fb256a695c3df route_cas=7471 union_cas=6906 cross_store_placement=565 placement=1.0818129163046626
+FINISHED OK
+RECEIPT operation=o:61f08a205a66653e6d6f9245a3e0550f service_ns=141625
+INVOCATION operation=o:61f08a205a66653e6d6f9245a3e0550f outcome=Succeeded total_ns=680125 parse_ns=128750 context_ns=356792 wait_ns=163834 render_ns=16960

@@ -1,28 +1,16 @@
 use crate::StackStore;
-use layerfs_storage_core::{
-    LayerHistoryId, LayerId, Result, StackHistoryId, StackHistoryRecord, StackId, StackRecord,
+use layerfs_storage::{
+    CreatedStack, LayerId, Result, StackHistoryId, StackHistoryRecord, StackId, StackRecord,
     StorageError,
 };
 
 impl StackStore {
-    pub fn create_stack_history_from_layer(
-        &self,
-        layer_history_id: LayerHistoryId,
-        layer_id: LayerId,
-    ) -> Result<(StackHistoryRecord, StackRecord)> {
+    pub fn create_stack(&self, layer_id: LayerId) -> Result<CreatedStack> {
         let _operation = self.db.enter_operation()?;
         let layer = self
             .db
             .layer(layer_id)?
             .ok_or(StorageError::NotFound("Layer"))?;
-        if layer.history_id != layer_history_id {
-            return Err(StorageError::WrongLayerHistory(
-                layerfs_storage_core::WrongHistory {
-                    expected: layer_history_id,
-                    actual: layer.history_id,
-                },
-            ));
-        }
         if !self.db.has_object(layer.root_id)? {
             return Err(StorageError::MissingBaseData);
         }

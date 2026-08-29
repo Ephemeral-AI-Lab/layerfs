@@ -1,9 +1,10 @@
 use layerfs_branch_store::BranchStore;
+use layerfs_content::filesystem::ContentChange;
 use layerfs_layer_store::LayerStore;
 use layerfs_stack_store::StackStore;
-use layerfs_storage_core::{
-    dependency_order, AddLayerSource, BranchId, Change, CommitId, FactKind, ObjectSource,
-    RefOutcome, StorageId, StoreEndpoint,
+use layerfs_storage::{
+    dependency_order, BranchCommit, BranchId, BranchSource, CommitId, FactKind, LayerSource,
+    ObjectSource, RefOutcome, StorageId, StorageReceipt, StoreEndpoint,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, Barrier};
@@ -15,12 +16,16 @@ fn ten_direct_installs_share_one_payload_set_and_serialize_adds() {
     let run = run_dir("direct");
     let layer_path = run.join("layer.sqlite");
     let branch_path = run.join("branch.sqlite");
-    let layer = Arc::new(LayerStore::open(&layer_path).unwrap());
-    let (history, genesis) = layer.provision().unwrap();
+    let layer = Arc::new(LayerStore::create(&layer_path).unwrap());
+    let (_history, genesis) = layer
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let genesis_objects = objects(&layer_path);
-    let branch = BranchStore::open(&branch_path, layer.clone()).unwrap();
+    let branch = BranchStore::create(&branch_path, layer.clone()).unwrap();
     let package = package_changes();
-    let installs = create_installs(&branch, history.id, genesis.id, None, &package);
+    drop(layerfs_storage::take_storage_receipts());
+    let installs = create_installs(&branch, genesis.id, None, &package);
+    assert_install_receipts(layerfs_storage::take_storage_receipts());
     let expected = union(
         &genesis_objects,
         &reachable(&branch, branch.root(installs[0].0).unwrap()),
@@ -39,13 +44,10 @@ fn ten_direct_installs_share_one_payload_set_and_serialize_adds() {
             std::thread::spawn(move || {
                 barrier.wait();
                 layer
-                    .add_layer(
-                        history.id,
-                        AddLayerSource::BranchSource {
-                            branch_id,
-                            commit_id,
-                        },
-                    )
+                    .add_layer(LayerSource::BranchCommit(BranchCommit {
+                        branch_id,
+                        commit_id,
+                    }))
                     .unwrap()
                     .result_id
             })
@@ -76,25 +78,19 @@ fn ten_stacked_installs_share_one_payload_set_and_serialize_adds() {
     let layer_path = run.join("layer.sqlite");
     let stack_path = run.join("stack.sqlite");
     let branch_path = run.join("branch.sqlite");
-    let layer = Arc::new(LayerStore::open(&layer_path).unwrap());
-    let (layer_history, genesis) = layer.provision().unwrap();
+    let layer = Arc::new(LayerStore::create(&layer_path).unwrap());
+    let (_layer_history, genesis) = layer
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let genesis_objects = objects(&layer_path);
-    let stack = Arc::new(StackStore::open(&stack_path, layer.clone()).unwrap());
-    stack
-        .pull_layer_history(layer_history.id, genesis.id)
-        .unwrap();
-    let (stack_history, seed) = stack
-        .create_stack_history_from_layer(layer_history.id, genesis.id)
-        .unwrap();
-    let branch = BranchStore::open(&branch_path, stack.clone()).unwrap();
+    let stack = Arc::new(StackStore::create(&stack_path, layer.clone()).unwrap());
+    stack.pull_layer(genesis.id).unwrap();
+    let (stack_history, seed) = stack.create_stack(genesis.id).unwrap();
+    let branch = BranchStore::create(&branch_path, stack.clone()).unwrap();
     let package = package_changes();
-    let installs = create_installs(
-        &branch,
-        layer_history.id,
-        genesis.id,
-        Some((stack_history.id, seed.id)),
-        &package,
-    );
+    drop(layerfs_storage::take_storage_receipts());
+    let installs = create_installs(&branch, genesis.id, Some(seed.id), &package);
+    assert_install_receipts(layerfs_storage::take_storage_receipts());
     let expected = union(
         &genesis_objects,
         &reachable(&branch, branch.root(installs[0].0).unwrap()),
@@ -113,7 +109,10 @@ fn ten_stacked_installs_share_one_payload_set_and_serialize_adds() {
             std::thread::spawn(move || {
                 barrier.wait();
                 stack
-                    .add_stack(stack_history.id, branch_id, commit_id)
+                    .add_stack(BranchCommit {
+                        branch_id,
+                        commit_id,
+                    })
                     .unwrap()
                     .result_id
             })
@@ -144,9 +143,7 @@ fn ten_stacked_installs_share_one_payload_set_and_serialize_adds() {
         stack.push_stack(head).unwrap(),
         RefOutcome::UpToDate(_)
     ));
-    layer
-        .add_layer(layer_history.id, AddLayerSource::StackSource(head))
-        .unwrap();
+    layer.add_layer(LayerSource::Stack(head)).unwrap();
     assert_eq!(objects(&branch_path), private_objects);
     drop(branch);
     drop(stack);
@@ -173,31 +170,26 @@ fn late_equal_root_add_advances_stack_and_pushes_new_branch_provenance() {
     let layer_path = run.join("layer.sqlite");
     let stack_path = run.join("stack.sqlite");
     let branch_path = run.join("branch.sqlite");
-    let layer = Arc::new(LayerStore::open(&layer_path).unwrap());
-    let (layer_history, genesis) = layer.provision().unwrap();
-    let stack = Arc::new(StackStore::open(&stack_path, layer.clone()).unwrap());
-    stack
-        .pull_layer_history(layer_history.id, genesis.id)
+    let layer = Arc::new(LayerStore::create(&layer_path).unwrap());
+    let (_layer_history, genesis) = layer
+        .initialize(layerfs_storage::LayerInitialization::Empty)
         .unwrap();
-    let (stack_history, seed) = stack
-        .create_stack_history_from_layer(layer_history.id, genesis.id)
-        .unwrap();
-    let branch = BranchStore::open(&branch_path, stack.clone()).unwrap();
+    let stack = Arc::new(StackStore::create(&stack_path, layer.clone()).unwrap());
+    stack.pull_layer(genesis.id).unwrap();
+    let (stack_history, seed) = stack.create_stack(genesis.id).unwrap();
+    let branch = BranchStore::create(&branch_path, stack.clone()).unwrap();
     let small = small_install_changes();
-    let installs = create_installs(
-        &branch,
-        layer_history.id,
-        genesis.id,
-        Some((stack_history.id, seed.id)),
-        &small,
-    );
+    let installs = create_installs(&branch, genesis.id, Some(seed.id), &small);
     let (a, a_commit) = installs[0];
     let (b, b_commit) = installs[1];
     assert_eq!(a_commit, b_commit);
 
     branch.push_branch(a).unwrap();
     let s1 = stack
-        .add_stack(stack_history.id, a, a_commit)
+        .add_stack(BranchCommit {
+            branch_id: a,
+            commit_id: a_commit,
+        })
         .unwrap()
         .result_id;
     stack.push_stack(s1).unwrap();
@@ -205,7 +197,10 @@ fn late_equal_root_add_advances_stack_and_pushes_new_branch_provenance() {
 
     branch.push_branch(b).unwrap();
     let s2 = stack
-        .add_stack(stack_history.id, b, b_commit)
+        .add_stack(BranchCommit {
+            branch_id: b,
+            commit_id: b_commit,
+        })
         .unwrap()
         .result_id;
     assert_ne!(s1, s2);
@@ -220,7 +215,10 @@ fn late_equal_root_add_advances_stack_and_pushes_new_branch_provenance() {
     );
     assert_eq!(
         stack
-            .add_stack(stack_history.id, b, b_commit)
+            .add_stack(BranchCommit {
+                branch_id: b,
+                commit_id: b_commit,
+            })
             .unwrap()
             .result_id,
         s2
@@ -258,7 +256,7 @@ fn late_equal_root_add_advances_stack_and_pushes_new_branch_provenance() {
             b,
             &mut |kind, ids| {
                 assert_eq!(kind, FactKind::Commit);
-                layerfs_storage_core::MissingBitmap::from_missing(ids.len(), |_| true)
+                layerfs_storage::MissingBitmap::from_missing(ids.len(), |_| true)
             },
             &mut |commits| {
                 saw_commit |= commits.iter().any(|commit| commit.id == b_commit);
@@ -275,21 +273,15 @@ fn late_equal_root_add_advances_stack_and_pushes_new_branch_provenance() {
 
 fn create_installs(
     store: &BranchStore,
-    layer_history: layerfs_storage_core::LayerHistoryId,
-    layer: layerfs_storage_core::LayerId,
-    stack: Option<(
-        layerfs_storage_core::StackHistoryId,
-        layerfs_storage_core::StackId,
-    )>,
-    changes: &[Change],
+    layer: layerfs_storage::LayerId,
+    stack: Option<layerfs_storage::StackId>,
+    changes: &[ContentChange],
 ) -> Vec<(BranchId, CommitId)> {
     (0..INSTALLATIONS)
         .map(|_| {
             let branch = match stack {
-                Some((history, stack)) => store.create_branch_from_stack(history, stack).unwrap(),
-                None => store
-                    .create_branch_from_layer(layer_history, layer)
-                    .unwrap(),
+                Some(stack) => store.create_branch(BranchSource::Stack(stack)).unwrap(),
+                None => store.create_branch(BranchSource::Layer(layer)).unwrap(),
             };
             let commit = match store
                 .commit(branch.id, branch.head_commit_id, changes)
@@ -303,7 +295,34 @@ fn create_installs(
         .collect()
 }
 
-fn package_changes() -> Vec<Change> {
+fn assert_install_receipts(receipts: Vec<StorageReceipt>) {
+    let installs = receipts
+        .into_iter()
+        .filter_map(|receipt| match receipt {
+            StorageReceipt::Local(receipt) if receipt.objects.candidate_bytes > 0 => Some(receipt),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(installs.len(), INSTALLATIONS);
+    let candidate_bytes = installs
+        .iter()
+        .map(|receipt| receipt.objects.candidate_bytes)
+        .sum::<u64>();
+    let inserted_bytes = installs
+        .iter()
+        .map(|receipt| receipt.objects.inserted_bytes)
+        .sum::<u64>();
+    let reused_bytes = installs
+        .iter()
+        .map(|receipt| receipt.objects.reused_bytes)
+        .sum::<u64>();
+    assert_eq!(candidate_bytes, inserted_bytes + reused_bytes);
+    assert_eq!(candidate_bytes, installs[0].objects.candidate_bytes * 10);
+    assert_eq!(inserted_bytes, installs[0].objects.candidate_bytes);
+    assert_eq!(reused_bytes, installs[0].objects.candidate_bytes * 9);
+}
+
+fn package_changes() -> Vec<ContentChange> {
     let mut changes = [
         "installed",
         "installed/bin",
@@ -313,7 +332,7 @@ fn package_changes() -> Vec<Change> {
         "installed/etc",
     ]
     .into_iter()
-    .map(|path| Change::Mkdir {
+    .map(|path| ContentChange::Mkdir {
         path: path.into(),
         mode: 0o755,
     })
@@ -326,31 +345,31 @@ fn package_changes() -> Vec<Change> {
     ] {
         for index in 0..files {
             let path = format!("installed/{directory}/package-{index:02}");
-            changes.push(Change::Write {
+            changes.push(ContentChange::Write {
                 bytes: package_bytes(&path, bytes),
                 path,
                 mode: if directory == "bin" { 0o755 } else { 0o644 },
             });
         }
     }
-    changes.push(Change::HardLink {
+    changes.push(ContentChange::HardLink {
         source: "installed/bin/package-00".into(),
         target: "installed/bin/package-main".into(),
     });
-    changes.push(Change::Symlink {
+    changes.push(ContentChange::Symlink {
         path: "installed/current-library".into(),
         target: b"lib/package-00".to_vec(),
     });
     changes
 }
 
-fn small_install_changes() -> Vec<Change> {
+fn small_install_changes() -> Vec<ContentChange> {
     vec![
-        Change::Mkdir {
+        ContentChange::Mkdir {
             path: "installed".into(),
             mode: 0o755,
         },
-        Change::Write {
+        ContentChange::Write {
             path: "installed/package".into(),
             bytes: b"one deterministic installation payload".to_vec(),
             mode: 0o644,
@@ -483,7 +502,7 @@ fn objects(path: &std::path::Path) -> BTreeMap<Vec<u8>, u64> {
         .unwrap()
 }
 
-fn reachable(source: &dyn ObjectSource, root: layerfs_core::ObjectId) -> BTreeMap<Vec<u8>, u64> {
+fn reachable(source: &dyn ObjectSource, root: layerfs_content::ObjectId) -> BTreeMap<Vec<u8>, u64> {
     dependency_order(source, root)
         .unwrap()
         .into_iter()

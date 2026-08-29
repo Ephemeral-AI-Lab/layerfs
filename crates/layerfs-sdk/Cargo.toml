@@ -8,12 +8,12 @@ license.workspace = true
 [dependencies]
 layerfs-branch-store = { path = "../layerfs-branch-store" }
 layerfs-layer-store = { path = "../layerfs-layer-store" }
-layerfs-materialization = { path = "../layerfs-materialization" }
+layerfs-monitor = { path = "../layerfs-monitor" }
 layerfs-stack-store = { path = "../layerfs-stack-store" }
-layerfs-storage-core = { path = "../layerfs-storage-core" }
+layerfs-storage = { path = "../layerfs-storage" }
 layerfs-workspace = { path = "../layerfs-workspace" }
 
 [dev-dependencies]
-layerfs-core = { path = "../layerfs-core" }
-layerfs-storage-core = { path = "../layerfs-storage-core", features = ["test-instrumentation"] }
+layerfs-content = { path = "../layerfs-content" }
+layerfs-storage = { path = "../layerfs-storage", features = ["test-instrumentation"] }
 rusqlite.workspace = true

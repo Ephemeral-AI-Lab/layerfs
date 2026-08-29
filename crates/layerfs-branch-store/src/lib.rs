@@ -9,4 +9,5 @@ mod merge;
 mod snapshot;
 
 pub use branch_store::BranchStore;
-pub use layerfs_storage_core::{Change, MergeOutcome};
+pub use layerfs_content::filesystem::{ContentChange, RootDiff};
+pub use layerfs_storage::MergeOutcome;

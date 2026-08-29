@@ -1,14 +1,14 @@
 use crate::StackStore;
-use layerfs_core::ObjectId;
-use layerfs_storage_core::{
+use layerfs_content::ObjectId;
+use layerfs_storage::{
     closest_common_layer, closest_common_stack, BaseId, BaseSnapshot, BranchId, BranchRecord,
     CanonicalObject, CommitId, Fact, FactKind, LayerHistoryId, LayerHistoryRecord, LayerId,
     LayerRecord, ObjectSource, Result, StackHistoryId, StackHistoryRecord, StackId, StackRecord,
     StorageError, StoreEndpoint, TransferExchange, TransferIntent, TransferOutcome, TransferTarget,
 };
 
-type Membership<'a> =
-    dyn FnMut(FactKind, &[Vec<u8>]) -> Result<layerfs_storage_core::MissingBitmap> + 'a;
+pub(crate) type Membership<'a> =
+    dyn FnMut(FactKind, &[Vec<u8>]) -> Result<layerfs_storage::MissingBitmap> + 'a;
 
 impl ObjectSource for StackStore {
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
@@ -29,6 +29,22 @@ impl ObjectSource for StackStore {
 }
 
 impl StoreEndpoint for StackStore {
+    fn store_identity(&self) -> Result<[u8; 32]> {
+        Ok(self.db.identity())
+    }
+
+    fn inventory_page(
+        &self,
+        after: Option<ObjectId>,
+        limit: u16,
+    ) -> Result<layerfs_storage::InventoryPage> {
+        self.db.inventory_page(after, limit)
+    }
+
+    fn storage_snapshot(&self) -> Result<layerfs_storage::StoreStorageSnapshot> {
+        self.db.storage_snapshot()
+    }
+
     fn begin_transfer(&self) -> Result<Box<dyn TransferTarget + '_>> {
         Ok(Box::new(StackTransfer {
             store: self,
@@ -125,22 +141,9 @@ impl StoreEndpoint for StackStore {
         &self,
         branch_id: BranchId,
         membership: &mut Membership<'_>,
-        visitor: &mut dyn FnMut(&[layerfs_storage_core::CommitRecord]) -> Result<()>,
+        visitor: &mut dyn FnMut(&[layerfs_storage::CommitRecord]) -> Result<()>,
     ) -> Result<()> {
-        if let Some(branch) = self.db.branch(branch_id)? {
-            self.db
-                .visit_commit_ancestry(branch.head_commit_id, None, &mut |_, page| {
-                    missing_page(
-                        FactKind::Commit,
-                        page,
-                        |row| row.id.to_bytes(),
-                        membership,
-                        visitor,
-                    )
-                })
-        } else {
-            self.parent.visit_commits(branch_id, membership, visitor)
-        }
+        crate::commit_pull::visit_commits(self, branch_id, membership, visitor)
     }
 
     fn layer_history_record(&self, history_id: LayerHistoryId) -> Result<LayerHistoryRecord> {
@@ -153,10 +156,7 @@ impl StoreEndpoint for StackStore {
         &self,
         history_id: LayerHistoryId,
         through: LayerId,
-        membership: &mut dyn FnMut(
-            FactKind,
-            &[Vec<u8>],
-        ) -> Result<layerfs_storage_core::MissingBitmap>,
+        membership: &mut dyn FnMut(FactKind, &[Vec<u8>]) -> Result<layerfs_storage::MissingBitmap>,
         visitor: &mut dyn FnMut(&[LayerRecord]) -> Result<()>,
     ) -> Result<()> {
         self.db.visit_layers(history_id, through, &mut |page| {
@@ -176,14 +176,18 @@ impl StoreEndpoint for StackStore {
             .ok_or(StorageError::NotFound("StackHistory"))
     }
 
+    fn stack_record(&self, stack_id: StackId) -> Result<StackRecord> {
+        match self.db.stack(stack_id)? {
+            Some(stack) => Ok(stack),
+            None => self.parent.stack_record(stack_id),
+        }
+    }
+
     fn visit_stacks(
         &self,
         history_id: StackHistoryId,
         through: StackId,
-        membership: &mut dyn FnMut(
-            FactKind,
-            &[Vec<u8>],
-        ) -> Result<layerfs_storage_core::MissingBitmap>,
+        membership: &mut dyn FnMut(FactKind, &[Vec<u8>]) -> Result<layerfs_storage::MissingBitmap>,
         visitor: &mut dyn FnMut(&[StackRecord]) -> Result<()>,
     ) -> Result<()> {
         self.db.visit_stacks(history_id, through, &mut |page| {
@@ -202,12 +206,12 @@ impl StoreEndpoint for StackStore {
         stack_history_id: StackHistoryId,
         branch_id: BranchId,
         commit_id: CommitId,
-    ) -> Result<layerfs_storage_core::AddResult<StackId>> {
-        StackStore::add_stack(self, stack_history_id, branch_id, commit_id)
+    ) -> Result<layerfs_storage::AddResult<StackId>> {
+        self.add_stack_to_history(stack_history_id, branch_id, commit_id)
     }
 }
 
-fn missing_page<T: Copy, const N: usize>(
+pub(crate) fn missing_page<T: Copy, const N: usize>(
     kind: FactKind,
     page: &[T],
     id: impl Fn(T) -> [u8; N],
@@ -238,7 +242,7 @@ fn missing_page<T: Copy, const N: usize>(
 
 struct StackTransfer<'a> {
     store: &'a StackStore,
-    _permit: layerfs_storage_core::OperationPermit<'a>,
+    _permit: layerfs_storage::OperationPermit<'a>,
 }
 
 impl TransferTarget for StackTransfer<'_> {
@@ -246,7 +250,7 @@ impl TransferTarget for StackTransfer<'_> {
         &mut self,
         branch: BranchRecord,
         root: ObjectId,
-    ) -> Result<(Option<CommitId>, bool, layerfs_storage_core::MissingBitmap)> {
+    ) -> Result<(Option<CommitId>, bool, layerfs_storage::MissingBitmap)> {
         let (current, up_to_date) = self.store.db.preflight_branch_push(branch)?;
         Ok((current, up_to_date, self.store.db.missing_objects(&[root])?))
     }

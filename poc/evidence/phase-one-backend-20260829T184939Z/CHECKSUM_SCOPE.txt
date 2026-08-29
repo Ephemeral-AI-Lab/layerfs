@@ -1,0 +1,3 @@
+SHA256SUMS covers every regular evidence file except SHA256SUMS, SHA256SUMS.sha256, and SHA256SUMS.verify.
+SHA256SUMS.sha256 covers SHA256SUMS itself.
+SHA256SUMS.verify is the raw successful verification output.

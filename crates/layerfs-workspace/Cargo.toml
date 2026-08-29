@@ -5,13 +5,20 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+default = ["host-fuse"]
+host-fuse = ["layerfs-fuse/host"]
+
 [dependencies]
 layerfs-branch-store = { path = "../layerfs-branch-store" }
-layerfs-core = { path = "../layerfs-core" }
-layerfs-storage-core = { path = "../layerfs-storage-core" }
+layerfs-content = { path = "../layerfs-content" }
+layerfs-fuse = { path = "../layerfs-fuse", default-features = false }
+layerfs-materialization = { path = "../layerfs-materialization" }
+layerfs-storage = { path = "../layerfs-storage" }
 
 [lib]
 path = "src/lib.rs"
 
 [dev-dependencies]
 layerfs-layer-store = { path = "../layerfs-layer-store" }
+rusqlite.workspace = true

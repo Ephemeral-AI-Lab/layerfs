@@ -1,0 +1,8 @@
+STARTED o:3d8aab695df321a90974a564731a9bdd Workspace { command: Show { workspace_id: "w:86f7df61beb8393f0b134592f177609c" } }
+PROGRESS o:3d8aab695df321a90974a564731a9bdd Running 0 - 0
+SNAPSHOT Workspace
+w:86f7df61beb8393f0b134592f177609c branch=1101a04edc2a1d734dab2e59af2f88afac head=1255a307cc2d100d271b6b8b5f50cf1e68cead3439a1bb7f9ef47c593111f2cbaa state=Ended generation=4 placement=container:layerfs-phase1-pass-stacked:/workspace projection=Fuse
+execution=x:42750ae7a19a5ebc1e7282e4ccd9afef running=false receipt=Some(ExecutionReceipt { execution_id: ExecutionId([66, 117, 10, 231, 161, 154, 94, 188, 30, 114, 130, 228, 204, 217, 175, 239]), exit_code: Some(143), elapsed_ns: 122879500, stdout_bytes: 0, stderr_bytes: 0, stopped: true })
+FINISHED OK
+RECEIPT operation=o:3d8aab695df321a90974a564731a9bdd service_ns=11500
+INVOCATION operation=o:3d8aab695df321a90974a564731a9bdd outcome=Succeeded total_ns=637500 parse_ns=124250 context_ns=409041 wait_ns=61541 render_ns=29375

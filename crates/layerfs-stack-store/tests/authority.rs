@@ -1,6 +1,6 @@
 use layerfs_layer_store::LayerStore;
 use layerfs_stack_store::StackStore;
-use layerfs_storage_core::{
+use layerfs_storage::{
     read_value, write_value, BaseId, BranchId, BranchRecord, CommitId, CommitRecord, EndpointReply,
     EndpointRequest, Fact, FactKind, FrameKind, StackPush, StorageError, StorageId, TransferIntent,
 };
@@ -22,35 +22,30 @@ fn run_dir(name: &str) -> std::path::PathBuf {
 #[test]
 fn signer_survives_reopen_and_pulled_history_is_read_only() {
     let run = run_dir("authority");
-    let layer = Arc::new(LayerStore::open(run.join("layer.sqlite")).unwrap());
-    let (layer_history, genesis) = layer.provision().unwrap();
+    let layer = Arc::new(LayerStore::create(run.join("layer.sqlite")).unwrap());
+    let (_layer_history, genesis) = layer
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let creator_path = run.join("creator.sqlite");
-    let creator = StackStore::open(&creator_path, layer.clone()).unwrap();
-    creator
-        .pull_layer_history(layer_history.id, genesis.id)
-        .unwrap();
-    let (first_history, seed) = creator
-        .create_stack_history_from_layer(layer_history.id, genesis.id)
-        .unwrap();
+    let creator = StackStore::create(&creator_path, layer.clone()).unwrap();
+    creator.pull_layer(genesis.id).unwrap();
+    let (first_history, seed) = creator.create_stack(genesis.id).unwrap();
     creator.push_stack(seed.id).unwrap();
     drop(creator);
 
-    let reopened = StackStore::open(&creator_path, layer.clone()).unwrap();
-    let (second_history, _) = reopened
-        .create_stack_history_from_layer(layer_history.id, genesis.id)
-        .unwrap();
+    let reopened = StackStore::connect(&creator_path, layer.clone()).unwrap();
+    let (second_history, _) = reopened.create_stack(genesis.id).unwrap();
     assert_eq!(
         first_history.id.verification_key_digest(),
         second_history.id.verification_key_digest()
     );
     drop(reopened);
 
-    let pulled = StackStore::open(run.join("pulled.sqlite"), layer.clone()).unwrap();
-    pulled
-        .pull_stack_history(first_history.id, seed.id)
-        .unwrap();
+    let pulled = StackStore::create(run.join("pulled.sqlite"), layer.clone()).unwrap();
+    pulled.pull_stack(seed.id).unwrap();
     assert!(matches!(
-        pulled.add_stack(
+        layerfs_storage::StoreEndpoint::add_stack(
+            &pulled,
             first_history.id,
             BranchId::new(),
             CommitId::derive(genesis.root_id, None, None)
@@ -65,16 +60,14 @@ fn signer_survives_reopen_and_pulled_history_is_read_only() {
 #[test]
 fn stack_remote_rejects_unbound_transfer_phases_and_mismatched_final() {
     let run = run_dir("remote-session");
-    let layer = Arc::new(LayerStore::open(run.join("layer.sqlite")).unwrap());
-    let (layer_history, genesis) = layer.provision().unwrap();
+    let layer = Arc::new(LayerStore::create(run.join("layer.sqlite")).unwrap());
+    let (_layer_history, genesis) = layer
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let stack_path = run.join("stack.sqlite");
-    let store = StackStore::open(&stack_path, layer).unwrap();
-    store
-        .pull_layer_history(layer_history.id, genesis.id)
-        .unwrap();
-    let (history, seed) = store
-        .create_stack_history_from_layer(layer_history.id, genesis.id)
-        .unwrap();
+    let store = StackStore::create(&stack_path, layer).unwrap();
+    store.pull_layer(genesis.id).unwrap();
+    let (history, seed) = store.create_stack(genesis.id).unwrap();
     let commit = CommitRecord {
         id: CommitId::derive(seed.root_id, None, None),
         root_id: seed.root_id,

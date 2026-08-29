@@ -1,0 +1,5 @@
+/tmp/layerfs/87ce069308a90cac/control.sock
+/tmp/layerfs/87ce069308a90cac/host.lock
+/tmp/layerfs/87ce069308a90cac/host.pid
+/tmp/layerfs/87ce069308a90cac/monitor/operations.jsonl
+/tmp/layerfs/87ce069308a90cac/workspaces/output/x:42750ae7a19a5ebc1e7282e4ccd9afef.frames

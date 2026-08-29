@@ -1,5 +1,5 @@
 use crate::StackStore;
-use layerfs_storage_core::{
+use layerfs_storage::{
     read_object_frames, read_value, write_frame_bytes, write_value, BranchRecord, EndpointRequest,
     EndpointResponse, Fact, FactKind, FrameKind, ObjectSource, RefOutcome, Result, StorageError,
     StoreEndpoint, TransferExchange, TransferIntent,
@@ -122,11 +122,17 @@ fn phase(
         EndpointRequest::StackHistoryHead(id) => {
             EndpointResponse::StackHistoryRecord(store.stack_history_record(id)?)
         }
+        EndpointRequest::StackRecord(id) => EndpointResponse::StackRecord(store.stack_record(id)?),
+        EndpointRequest::StoreIdentity => EndpointResponse::StoreIdentity(store.store_identity()?),
         EndpointRequest::AddStack {
             stack_history_id,
             branch_id,
             commit_id,
-        } => EndpointResponse::StackAdd(store.add_stack(stack_history_id, branch_id, commit_id)?),
+        } => EndpointResponse::StackAdd(store.add_stack_to_history(
+            stack_history_id,
+            branch_id,
+            commit_id,
+        )?),
         EndpointRequest::PushStack(id) => EndpointResponse::StackRef(store.push_stack(id)?),
         EndpointRequest::AddLayer {
             layer_history_id,
@@ -173,15 +179,15 @@ fn transfer_session(
         output,
         EndpointResponse::Exchange(TransferExchange::membership(
             store.db.missing_objects(&[root])?,
-            layerfs_storage_core::MissingBitmap::empty(),
+            layerfs_storage::MissingBitmap::empty(),
         )),
     )?;
     if up_to_date {
         return Ok(());
     }
     let mut streamed = TransferExchange::membership(
-        layerfs_storage_core::MissingBitmap::empty(),
-        layerfs_storage_core::MissingBitmap::empty(),
+        layerfs_storage::MissingBitmap::empty(),
+        layerfs_storage::MissingBitmap::empty(),
     );
     loop {
         match read_value(input, FrameKind::Command)? {
@@ -213,8 +219,8 @@ fn transfer_session(
                 } else {
                     exchange.absorb(streamed)?;
                     streamed = TransferExchange::membership(
-                        layerfs_storage_core::MissingBitmap::empty(),
-                        layerfs_storage_core::MissingBitmap::empty(),
+                        layerfs_storage::MissingBitmap::empty(),
+                        layerfs_storage::MissingBitmap::empty(),
                     );
                     reply(output, EndpointResponse::Exchange(exchange))?;
                 }
@@ -253,9 +259,9 @@ struct HistoryWire<'a, R: Read, W: Write> {
 impl<R: Read, W: Write> HistoryWire<'_, R, W> {
     fn membership(
         &mut self,
-        kind: layerfs_storage_core::FactKind,
+        kind: layerfs_storage::FactKind,
         ids: &[Vec<u8>],
-    ) -> Result<layerfs_storage_core::MissingBitmap> {
+    ) -> Result<layerfs_storage::MissingBitmap> {
         reply(
             self.output,
             EndpointResponse::FactIds {
@@ -283,20 +289,20 @@ fn reply(output: &mut impl Write, response: EndpointResponse) -> Result<()> {
 }
 
 mod client {
-    use layerfs_core::ObjectId;
-    use layerfs_storage_core::{
-        read_frame, read_payload_bytes, read_value, write_frame_bytes, write_value, AddLayerSource,
-        AddResult, BaseId, BaseSnapshot, BranchId, BranchRecord, CanonicalObject, CommitId,
-        CommitRecord, EndpointReply, EndpointRequest, EndpointResponse, Fact, FactKind, FrameKind,
-        LayerHistoryId, LayerHistoryRecord, LayerId, LayerRecord, ObjectSource, RefOutcome, Result,
-        StackHistoryId, StackHistoryRecord, StackId, StackRecord, StorageError, StoreEndpoint,
-        TransferExchange, TransferIntent, TransferOutcome, TransferTarget,
+    use layerfs_content::ObjectId;
+    use layerfs_storage::{
+        read_frame, read_payload_bytes, read_value, write_frame_bytes, write_value, AddResult,
+        BaseId, BaseSnapshot, BranchId, BranchRecord, CanonicalObject, CommitId, CommitRecord,
+        EndpointReply, EndpointRequest, EndpointResponse, Fact, FactKind, FrameKind,
+        LayerHistoryId, LayerHistoryRecord, LayerId, LayerRecord, LayerSource, ObjectSource,
+        RefOutcome, Result, StackHistoryId, StackHistoryRecord, StackId, StackRecord, StorageError,
+        StoreEndpoint, TransferExchange, TransferIntent, TransferOutcome, TransferTarget,
     };
     use std::net::{SocketAddr, TcpStream};
     use std::sync::{Arc, Mutex, MutexGuard};
 
     type Membership<'a> =
-        dyn FnMut(FactKind, &[Vec<u8>]) -> Result<layerfs_storage_core::MissingBitmap> + 'a;
+        dyn FnMut(FactKind, &[Vec<u8>]) -> Result<layerfs_storage::MissingBitmap> + 'a;
 
     /// Opaque remote Store connection. Raw object/fact phases are not exposed.
     ///
@@ -352,7 +358,7 @@ mod client {
         pub fn add_layer(
             &self,
             layer_history_id: LayerHistoryId,
-            source: AddLayerSource,
+            source: LayerSource,
         ) -> Result<AddResult<LayerId>> {
             match self
                 .request(
@@ -519,6 +525,13 @@ mod client {
     }
 
     impl StoreEndpoint for RemoteEndpoint {
+        fn store_identity(&self) -> Result<[u8; 32]> {
+            match self.request(EndpointRequest::StoreIdentity, &[])?.0 {
+                EndpointResponse::StoreIdentity(value) => Ok(value),
+                _ => Err(StorageError::Integrity("wire Store identity reply")),
+            }
+        }
+
         fn begin_transfer(&self) -> Result<Box<dyn TransferTarget + '_>> {
             Ok(Box::new(RemoteTransfer {
                 stream: self
@@ -589,7 +602,7 @@ mod client {
             membership: &mut dyn FnMut(
                 FactKind,
                 &[Vec<u8>],
-            ) -> Result<layerfs_storage_core::MissingBitmap>,
+            ) -> Result<layerfs_storage::MissingBitmap>,
             visitor: &mut dyn FnMut(&[CommitRecord]) -> Result<()>,
         ) -> Result<()> {
             self.stream_history(
@@ -617,7 +630,7 @@ mod client {
             membership: &mut dyn FnMut(
                 FactKind,
                 &[Vec<u8>],
-            ) -> Result<layerfs_storage_core::MissingBitmap>,
+            ) -> Result<layerfs_storage::MissingBitmap>,
             visitor: &mut dyn FnMut(&[LayerRecord]) -> Result<()>,
         ) -> Result<()> {
             self.stream_history(
@@ -641,6 +654,13 @@ mod client {
             }
         }
 
+        fn stack_record(&self, stack_id: StackId) -> Result<StackRecord> {
+            match self.request(EndpointRequest::StackRecord(stack_id), &[])?.0 {
+                EndpointResponse::StackRecord(value) => Ok(value),
+                _ => Err(StorageError::Integrity("wire Stack reply")),
+            }
+        }
+
         fn visit_stacks(
             &self,
             history_id: StackHistoryId,
@@ -648,7 +668,7 @@ mod client {
             membership: &mut dyn FnMut(
                 FactKind,
                 &[Vec<u8>],
-            ) -> Result<layerfs_storage_core::MissingBitmap>,
+            ) -> Result<layerfs_storage::MissingBitmap>,
             visitor: &mut dyn FnMut(&[StackRecord]) -> Result<()>,
         ) -> Result<()> {
             self.stream_history(
@@ -674,7 +694,7 @@ mod client {
             &mut self,
             branch: BranchRecord,
             root: ObjectId,
-        ) -> Result<(Option<CommitId>, bool, layerfs_storage_core::MissingBitmap)> {
+        ) -> Result<(Option<CommitId>, bool, layerfs_storage::MissingBitmap)> {
             let status = RemoteEndpoint::request_on(
                 &mut self.stream,
                 EndpointRequest::TransferBeginBranch { branch, root },
@@ -693,7 +713,7 @@ mod client {
                 return Err(StorageError::Integrity("wire preflight membership"));
             };
             let (objects, facts) = exchange.missing();
-            if facts != layerfs_storage_core::MissingBitmap::empty() {
+            if facts != layerfs_storage::MissingBitmap::empty() {
                 return Err(StorageError::Integrity("wire preflight facts"));
             }
             self.finished = up_to_date;
@@ -706,7 +726,7 @@ mod client {
             base_layer_id: LayerId,
             incoming: StackId,
             root: ObjectId,
-        ) -> Result<(Option<StackId>, bool, layerfs_storage_core::MissingBitmap)> {
+        ) -> Result<(Option<StackId>, bool, layerfs_storage::MissingBitmap)> {
             let status = RemoteEndpoint::request_on(
                 &mut self.stream,
                 EndpointRequest::TransferBeginStack {
@@ -730,7 +750,7 @@ mod client {
                 return Err(StorageError::Integrity("wire preflight membership"));
             };
             let (objects, facts) = exchange.missing();
-            if facts != layerfs_storage_core::MissingBitmap::empty() {
+            if facts != layerfs_storage::MissingBitmap::empty() {
                 return Err(StorageError::Integrity("wire preflight facts"));
             }
             self.finished = up_to_date;
@@ -763,8 +783,8 @@ mod client {
                 RemoteEndpoint::send_on(&mut self.stream, request, objects)?;
                 self.started = true;
                 return Ok(TransferExchange::membership(
-                    layerfs_storage_core::MissingBitmap::empty(),
-                    layerfs_storage_core::MissingBitmap::empty(),
+                    layerfs_storage::MissingBitmap::empty(),
+                    layerfs_storage::MissingBitmap::empty(),
                 ));
             }
             let response = RemoteEndpoint::request_on(&mut self.stream, request, objects)?.0;

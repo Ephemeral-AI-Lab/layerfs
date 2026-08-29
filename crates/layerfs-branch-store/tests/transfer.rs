@@ -1,10 +1,11 @@
 use layerfs_branch_store::BranchStore;
+use layerfs_content::filesystem::ContentChange;
 use layerfs_layer_store::LayerStore;
-use layerfs_storage_core::{BranchId, Change, RefOutcome, StorageError};
+use layerfs_storage::{BranchSource, RefOutcome, StorageError};
 use std::sync::Arc;
 
 #[test]
-fn two_id_pull_preserves_local_ahead_and_rejects_divergence() {
+fn pull_preserves_global_identity_and_rejects_divergence() {
     let run = std::env::temp_dir().join(format!(
         "layerfs-pull-{}-{}",
         std::process::id(),
@@ -14,16 +15,18 @@ fn two_id_pull_preserves_local_ahead_and_rejects_divergence() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&run).unwrap();
-    let layer = Arc::new(LayerStore::open(run.join("layer.sqlite")).unwrap());
-    let (history, genesis) = layer.provision().unwrap();
-    let source = BranchStore::open(run.join("source.sqlite"), layer.clone()).unwrap();
+    let layer = Arc::new(LayerStore::create(run.join("layer.sqlite")).unwrap());
+    let (_history, genesis) = layer
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
+    let source = BranchStore::create(run.join("source.sqlite"), layer.clone()).unwrap();
     let remote = source
-        .create_branch_from_layer(history.id, genesis.id)
+        .create_branch(BranchSource::Layer(genesis.id))
         .unwrap();
     source.push_branch(remote.id).unwrap();
-    let local = BranchStore::open(run.join("local.sqlite"), layer.clone()).unwrap();
+    let local = BranchStore::create(run.join("local.sqlite"), layer.clone()).unwrap();
     assert_eq!(
-        local.pull_branch(remote.id, remote.id).unwrap(),
+        local.pull_branch(remote.id).unwrap().1,
         RefOutcome::Created(remote.head_commit_id)
     );
 
@@ -31,13 +34,13 @@ fn two_id_pull_preserves_local_ahead_and_rejects_divergence() {
         created(source.commit(remote.id, remote.head_commit_id, &[write("source", b"one")]));
     source.push_branch(remote.id).unwrap();
     assert_eq!(
-        local.pull_branch(remote.id, remote.id).unwrap(),
+        local.pull_branch(remote.id).unwrap().1,
         RefOutcome::FastForwarded(source_head)
     );
 
     let local_head = created(local.commit(remote.id, source_head, &[write("local", b"ahead")]));
     assert_eq!(
-        local.pull_branch(remote.id, remote.id).unwrap(),
+        local.pull_branch(remote.id).unwrap().1,
         RefOutcome::UpToDate(local_head)
     );
 
@@ -45,7 +48,7 @@ fn two_id_pull_preserves_local_ahead_and_rejects_divergence() {
         created(source.commit(remote.id, source_head, &[write("remote", b"diverged")]));
     source.push_branch(remote.id).unwrap();
     assert!(matches!(
-        local.pull_branch(remote.id, remote.id),
+        local.pull_branch(remote.id),
         Err(StorageError::CommitHeadMoved(_))
     ));
     assert_eq!(
@@ -53,19 +56,7 @@ fn two_id_pull_preserves_local_ahead_and_rejects_divergence() {
         local_head
     );
 
-    let fresh_id = BranchId::new();
-    assert_eq!(
-        local.pull_branch(remote.id, fresh_id).unwrap(),
-        RefOutcome::Created(next_source)
-    );
-    let occupied = local
-        .create_branch_from_layer(history.id, genesis.id)
-        .unwrap();
-    assert!(matches!(
-        local.pull_branch(remote.id, occupied.id),
-        Err(StorageError::CommitHeadMoved(_))
-    ));
-    assert_eq!(local.branch(occupied.id).unwrap().unwrap(), occupied);
+    assert_ne!(next_source, local_head);
     drop(local);
     drop(source);
     drop(layer);
@@ -73,16 +64,16 @@ fn two_id_pull_preserves_local_ahead_and_rejects_divergence() {
 }
 
 fn created(
-    result: layerfs_storage_core::Result<RefOutcome<layerfs_storage_core::CommitId>>,
-) -> layerfs_storage_core::CommitId {
+    result: layerfs_storage::Result<RefOutcome<layerfs_storage::CommitId>>,
+) -> layerfs_storage::CommitId {
     match result.unwrap() {
         RefOutcome::Created(id) => id,
         other => panic!("expected created Commit, got {other:?}"),
     }
 }
 
-fn write(path: &str, bytes: &[u8]) -> Change {
-    Change::Write {
+fn write(path: &str, bytes: &[u8]) -> ContentChange {
+    ContentChange::Write {
         path: path.into(),
         bytes: bytes.to_vec(),
         mode: 0o644,

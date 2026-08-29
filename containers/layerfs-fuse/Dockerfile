@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM rust:1.85.1-bookworm AS build
+FROM rust:1.85.1-bookworm AS build
 
 ARG TARGETARCH
 ARG LAYERFS_SOURCE_COMMIT
@@ -20,10 +20,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
       *) exit 1 ;; \
     esac \
  && rustup component add clippy \
- && cargo test --locked --target "$target" -p layerfs-mount \
- && cargo clippy --locked --target "$target" -p layerfs-mount --all-targets -- -D warnings \
- && cargo build --locked --release --target "$target" -p layerfs-mount \
- && cp "target/$target/release/layerfs-mount" /layerfs-mount
+ && cargo test --locked --target "$target" -p layerfs-fuse --no-default-features --features proxy \
+ && cargo clippy --locked --target "$target" -p layerfs-fuse --no-default-features --features proxy --all-targets -- -D warnings \
+ && cargo build --locked --release --target "$target" -p layerfs-fuse --no-default-features --features proxy \
+ && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
 
 FROM rust:1.85.1-bookworm
 
@@ -38,7 +38,7 @@ ENV LAYERFS_SOURCE_COMMIT="$LAYERFS_SOURCE_COMMIT" \
     LAYERFS_SOURCE_TREE="$LAYERFS_SOURCE_TREE" \
     LAYERFS_FS_BENCH_SHA256="0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
 
-COPY --from=build /layerfs-mount /usr/local/bin/layerfs-mount
+COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
 COPY containers/layerfs-fuse/fs-bench.sh /usr/local/bin/fs-bench.sh
 COPY containers/layerfs-fuse/verify_fs_bench.py /usr/local/bin/verify_fs_bench.py
 RUN echo "$LAYERFS_FS_BENCH_SHA256  /usr/local/bin/fs-bench.sh" | sha256sum -c - \
@@ -46,4 +46,4 @@ RUN echo "$LAYERFS_FS_BENCH_SHA256  /usr/local/bin/fs-bench.sh" | sha256sum -c -
  && chmod 0555 /usr/local/bin/fs-bench.sh /usr/local/bin/verify_fs_bench.py \
  && mkdir -p /workspace /var/lib/layerfs /var/tmp/layerfs-owned
 
-ENTRYPOINT ["/usr/local/bin/layerfs-mount"]
+ENTRYPOINT ["/usr/local/bin/layerfs-fuse"]

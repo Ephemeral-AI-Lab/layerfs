@@ -6,12 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-layerfs-core = { path = "../layerfs-core" }
-layerfs-branch-store = { path = "../layerfs-branch-store" }
-layerfs-storage-core = { path = "../layerfs-storage-core" }
-
-[dev-dependencies]
-layerfs-layer-store = { path = "../layerfs-layer-store" }
+layerfs-content = { path = "../layerfs-content" }
 
 [lib]
 path = "src/lib.rs"

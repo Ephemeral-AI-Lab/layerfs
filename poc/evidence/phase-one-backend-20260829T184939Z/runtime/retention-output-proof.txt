@@ -1,0 +1,4 @@
+retained_session_count=12
+active_session_count=0
+post_end_output_receipt=true
+OUTPUT_PAGE next=0 truncated=false exited=true receipt=Some(ExecutionReceipt { execution_id: ExecutionId([66, 117, 10, 231, 161, 154, 94, 188, 30, 114, 130, 228, 204, 217, 175, 239]), exit_code: Some(143), elapsed_ns: 122879500, stdout_bytes: 0, stderr_bytes: 0, stopped: true })

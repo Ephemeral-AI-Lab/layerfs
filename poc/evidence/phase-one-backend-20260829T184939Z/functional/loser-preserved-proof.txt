@@ -1,0 +1,1 @@
+loser_remains_writable_and_inspectable=true

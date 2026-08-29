@@ -1,0 +1,2 @@
+layerfs-async-diagnostic-workload
+layerfs-async-diagnostic-controller

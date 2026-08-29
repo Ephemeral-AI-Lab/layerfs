@@ -1,0 +1,7 @@
+STARTED o:4ed47b666f9925396ebd730b8e27ea7a Workspace { command: Diff { workspace_id: "w:910fd6280c67b128edb04bd1da411388" } }
+PROGRESS o:4ed47b666f9925396ebd730b8e27ea7a Running 0 - 0
+SNAPSHOT Workspace
+w:910fd6280c67b128edb04bd1da411388 dirty=false generation=177055
+FINISHED OK
+RECEIPT operation=o:4ed47b666f9925396ebd730b8e27ea7a service_ns=651875
+INVOCATION operation=o:4ed47b666f9925396ebd730b8e27ea7a outcome=Succeeded total_ns=1321167 parse_ns=156583 context_ns=954375 wait_ns=179084 render_ns=18373

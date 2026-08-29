@@ -1,5 +1,5 @@
 use ed25519_dalek::{Signer, SigningKey};
-use layerfs_storage_core::{Result, StorageError};
+use layerfs_storage::{Result, StorageError};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -7,13 +7,21 @@ use std::path::{Path, PathBuf};
 pub(crate) struct Writer(SigningKey);
 
 impl Writer {
-    pub(crate) fn open(database: &Path) -> Result<Self> {
+    pub(crate) fn create(database: &Path) -> Result<Self> {
         let path = appended(database, ".signer");
-        let bytes = if path.exists() {
-            std::fs::read(&path)?
-        } else {
-            create_key(&path)?
-        };
+        let bytes = create_key(&path)?;
+        Self::from_bytes(bytes)
+    }
+
+    pub(crate) fn connect(database: &Path) -> Result<Self> {
+        let path = appended(database, ".signer");
+        if !path.is_file() {
+            return Err(StorageError::StoreMissing);
+        }
+        Self::from_bytes(std::fs::read(path)?)
+    }
+
+    fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
         let key: [u8; 32] = bytes
             .try_into()
             .map_err(|_| StorageError::Integrity("Stack signer"))?;

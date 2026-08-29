@@ -1,7 +1,7 @@
 use crate::BranchStore;
-use layerfs_core::ObjectId;
-use layerfs_storage_core::internal::{CanonicalObject, ObjectSource};
-use layerfs_storage_core::{Result, StorageError};
+use layerfs_content::ObjectId;
+use layerfs_storage::internal::{CanonicalObject, ObjectSource};
+use layerfs_storage::{Result, StorageError};
 
 impl ObjectSource for BranchStore {
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
@@ -63,7 +63,7 @@ fn parent_on_missing<T>(local: Result<T>, parent: impl FnOnce() -> Result<T>) ->
 #[cfg(test)]
 mod tests {
     use super::parent_on_missing;
-    use layerfs_storage_core::StorageError;
+    use layerfs_storage::StorageError;
     use std::cell::Cell;
 
     #[test]

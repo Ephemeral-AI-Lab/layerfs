@@ -1,6 +1,6 @@
 use super::*;
 use ed25519_dalek::{Signer, SigningKey};
-use layerfs_storage_core::{AddResultRecord, CommitRecord, ResultId, SourceId, StackHistoryId};
+use layerfs_storage::{AddResultRecord, CommitRecord, ResultId, SourceId, StackHistoryId};
 
 #[test]
 fn stack_attestation_and_relationship_fail_before_publication() {
@@ -13,8 +13,10 @@ fn stack_attestation_and_relationship_fail_before_publication() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&root).unwrap();
-    let store = LayerStore::open(root.join("layer.sqlite")).unwrap();
-    let (_, base) = store.provision().unwrap();
+    let store = LayerStore::create(root.join("layer.sqlite")).unwrap();
+    let (_, base) = store
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let key = SigningKey::from_bytes(&[7; 32]);
     let history_id = StackHistoryId::new(&key.verifying_key().to_bytes());
     let seed = StackRecord {
@@ -183,8 +185,10 @@ fn large_publication_spools_in_bounded_pages_and_moves_head_last() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&root).unwrap();
-    let store = LayerStore::open(root.join("layer.sqlite")).unwrap();
-    let (_, base) = store.provision().unwrap();
+    let store = LayerStore::create(root.join("layer.sqlite")).unwrap();
+    let (_, base) = store
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let key = SigningKey::from_bytes(&[9; 32]);
     let history_id = StackHistoryId::new(&key.verifying_key().to_bytes());
     let seed = StackRecord {
@@ -252,7 +256,7 @@ fn large_publication_spools_in_bounded_pages_and_moves_head_last() {
         &foundation,
         &publication,
     );
-    for batch in layerfs_storage_core::fact_batches(&foundation).unwrap() {
+    for batch in layerfs_storage::fact_batches(&foundation).unwrap() {
         store.db.admit_facts(batch).unwrap();
     }
     for known in [
@@ -268,7 +272,7 @@ fn large_publication_spools_in_bounded_pages_and_moves_head_last() {
             .copied()
             .collect::<Vec<_>>(),
     ] {
-        for batch in layerfs_storage_core::fact_batches(&known).unwrap() {
+        for batch in layerfs_storage::fact_batches(&known).unwrap() {
             store.db.admit_facts(batch).unwrap();
         }
     }
@@ -278,7 +282,7 @@ fn large_publication_spools_in_bounded_pages_and_moves_head_last() {
         &publication[..branches.len()],
         &publication[branches.len()..],
     ] {
-        for page in typed.chunks(layerfs_storage_core::ID_BATCH_COUNT) {
+        for page in typed.chunks(layerfs_storage::ID_BATCH_COUNT) {
             let kind = page[0].kind();
             let ids = page.iter().copied().map(Fact::id).collect::<Vec<_>>();
             let missing = store.db.missing_facts(kind, &ids).unwrap();
@@ -292,7 +296,7 @@ fn large_publication_spools_in_bounded_pages_and_moves_head_last() {
             let mut pending =
                 PublicationPage::begin(&store, kind, &ids, missing, &mut publication_store)
                     .unwrap();
-            for batch in layerfs_storage_core::fact_batches(&selected).unwrap() {
+            for batch in layerfs_storage::fact_batches(&selected).unwrap() {
                 assert_eq!(
                     pending
                         .as_mut()
@@ -354,8 +358,10 @@ fn hundred_thousand_publication_relations_use_one_position_walk_and_fixed_pages(
             .as_nanos()
     ));
     std::fs::create_dir_all(&root).unwrap();
-    let store = LayerStore::open(root.join("layer.sqlite")).unwrap();
-    let (_, base) = store.provision().unwrap();
+    let store = LayerStore::create(root.join("layer.sqlite")).unwrap();
+    let (_, base) = store
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let history_id = StackHistoryId::new(&[41; 32]);
     let seed = StackRecord {
         id: StackId::derive(history_id, None, base.root_id),
@@ -448,7 +454,7 @@ fn publication_larger_than_one_wire_frame_spills_and_replays_in_bounded_batches(
         head_commit_id: commit,
         base_id: base,
     });
-    let count = layerfs_storage_core::MAX_FRAME_BYTES / sample.encoded_size() + 1;
+    let count = layerfs_storage::MAX_FRAME_BYTES / sample.encoded_size() + 1;
     let mut spool = PublicationSpool::new().unwrap();
     for start in (0..count).step_by(FACT_BATCH_COUNT) {
         let page = (start..(start + FACT_BATCH_COUNT).min(count))
@@ -465,7 +471,7 @@ fn publication_larger_than_one_wire_frame_spills_and_replays_in_bounded_batches(
             .collect::<Vec<_>>();
         spool.push(&page, true).unwrap();
     }
-    assert!(count * sample.encoded_size() > layerfs_storage_core::MAX_FRAME_BYTES);
+    assert!(count * sample.encoded_size() > layerfs_storage::MAX_FRAME_BYTES);
     assert!(spool.spilled());
     let mut replayed = 0;
     let mut pages = 0;
@@ -481,12 +487,12 @@ fn publication_larger_than_one_wire_frame_spills_and_replays_in_bounded_batches(
         })
         .unwrap();
     assert_eq!(replayed, count);
-    assert!(pages > layerfs_storage_core::MAX_FRAME_BYTES / FACT_BATCH_BYTES);
+    assert!(pages > layerfs_storage::MAX_FRAME_BYTES / FACT_BATCH_BYTES);
 }
 
 fn publication_spool(facts: &[Fact]) -> PublicationSpool {
     let mut spool = PublicationSpool::new().unwrap();
-    for page in layerfs_storage_core::fact_batches(facts).unwrap() {
+    for page in layerfs_storage::fact_batches(facts).unwrap() {
         spool.push(page, true).unwrap();
     }
     spool

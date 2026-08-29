@@ -1,0 +1,5 @@
+STARTED o:f6fa023f1dbaaa696054bc454a3063c8 Workspace { command: Create { branch_id: "1101a04edc28ed7709b831fb21c7092ffb", root: "/mnt/host-direct", container: None, projection: Some(Fuse) } }
+PROGRESS o:f6fa023f1dbaaa696054bc454a3063c8 Running 0 - 0
+FINISHED CREATED workspace w:47b5ca982b06d3a1cee08be16bada1c3
+RECEIPT operation=o:f6fa023f1dbaaa696054bc454a3063c8 service_ns=836333
+INVOCATION operation=o:f6fa023f1dbaaa696054bc454a3063c8 outcome=Succeeded total_ns=1422208 parse_ns=138917 context_ns=384833 wait_ns=857792 render_ns=27792

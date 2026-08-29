@@ -1,7 +1,7 @@
 use crate::LayerStore;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use layerfs_core::ObjectId;
-use layerfs_storage_core::{
+use layerfs_content::ObjectId;
+use layerfs_storage::{
     closest_common_layer, closest_common_stack, AddResultRecord, BaseId, BaseSnapshot, BranchId,
     BranchRecord, CanonicalObject, CommitId, Fact, FactKind, LayerHistoryId, LayerHistoryRecord,
     LayerId, LayerRecord, MissingBitmap, ObjectSource, Result, StackAttestation, StackHistoryId,
@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 type Membership<'a> =
-    dyn FnMut(FactKind, &[Vec<u8>]) -> Result<layerfs_storage_core::MissingBitmap> + 'a;
+    dyn FnMut(FactKind, &[Vec<u8>]) -> Result<layerfs_storage::MissingBitmap> + 'a;
 
 impl ObjectSource for LayerStore {
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
@@ -37,6 +37,22 @@ impl ObjectSource for LayerStore {
 }
 
 impl StoreEndpoint for LayerStore {
+    fn store_identity(&self) -> Result<[u8; 32]> {
+        Ok(self.db.identity())
+    }
+
+    fn inventory_page(
+        &self,
+        after: Option<ObjectId>,
+        limit: u16,
+    ) -> Result<layerfs_storage::InventoryPage> {
+        self.db.inventory_page(after, limit)
+    }
+
+    fn storage_snapshot(&self) -> Result<layerfs_storage::StoreStorageSnapshot> {
+        self.db.storage_snapshot()
+    }
+
     fn begin_transfer(&self) -> Result<Box<dyn TransferTarget + '_>> {
         Ok(Box::new(LayerTransfer {
             store: self,
@@ -135,7 +151,7 @@ impl StoreEndpoint for LayerStore {
         &self,
         branch_id: BranchId,
         membership: &mut Membership<'_>,
-        visitor: &mut dyn FnMut(&[layerfs_storage_core::CommitRecord]) -> Result<()>,
+        visitor: &mut dyn FnMut(&[layerfs_storage::CommitRecord]) -> Result<()>,
     ) -> Result<()> {
         let branch = self.branch_record(branch_id)?;
         self.db
@@ -160,10 +176,7 @@ impl StoreEndpoint for LayerStore {
         &self,
         history_id: LayerHistoryId,
         through: LayerId,
-        membership: &mut dyn FnMut(
-            FactKind,
-            &[Vec<u8>],
-        ) -> Result<layerfs_storage_core::MissingBitmap>,
+        membership: &mut dyn FnMut(FactKind, &[Vec<u8>]) -> Result<layerfs_storage::MissingBitmap>,
         visitor: &mut dyn FnMut(&[LayerRecord]) -> Result<()>,
     ) -> Result<()> {
         self.db.visit_layers(history_id, through, &mut |page| {
@@ -183,14 +196,17 @@ impl StoreEndpoint for LayerStore {
             .ok_or(StorageError::NotFound("StackHistory"))
     }
 
+    fn stack_record(&self, stack_id: StackId) -> Result<StackRecord> {
+        self.db
+            .stack(stack_id)?
+            .ok_or(StorageError::NotFound("Stack"))
+    }
+
     fn visit_stacks(
         &self,
         history_id: StackHistoryId,
         through: StackId,
-        membership: &mut dyn FnMut(
-            FactKind,
-            &[Vec<u8>],
-        ) -> Result<layerfs_storage_core::MissingBitmap>,
+        membership: &mut dyn FnMut(FactKind, &[Vec<u8>]) -> Result<layerfs_storage::MissingBitmap>,
         visitor: &mut dyn FnMut(&[StackRecord]) -> Result<()>,
     ) -> Result<()> {
         self.db.visit_stacks(history_id, through, &mut |page| {
@@ -207,9 +223,9 @@ impl StoreEndpoint for LayerStore {
     fn add_layer(
         &self,
         layer_history_id: LayerHistoryId,
-        source: layerfs_storage_core::AddLayerSource,
-    ) -> Result<layerfs_storage_core::AddResult<LayerId>> {
-        LayerStore::add_layer(self, layer_history_id, source)
+        source: layerfs_storage::LayerSource,
+    ) -> Result<layerfs_storage::AddResult<LayerId>> {
+        self.add_layer_to_history(layer_history_id, source)
     }
 }
 
@@ -441,7 +457,7 @@ impl PublicationSpool {
         &mut self,
         store: &LayerStore,
         push: &StackPush,
-        positions: &layerfs_storage_core::StackPositions,
+        positions: &layerfs_storage::StackPositions,
     ) -> Result<()> {
         self.prepare_read()?;
         let mut branches = self.reader()?;
@@ -553,7 +569,7 @@ fn read_publication_fact(input: &mut File) -> Result<Option<(Fact, bool)>> {
     }
     let mut bytes = vec![0; length];
     input.read_exact(&mut bytes)?;
-    let fact = layerfs_storage_core::decode_fact(&bytes)?;
+    let fact = layerfs_storage::decode_fact(&bytes)?;
     if !matches!(fact, Fact::Branch(_) | Fact::AddResult(_)) {
         return Err(StorageError::Integrity("Stack publication fact"));
     }
@@ -610,7 +626,7 @@ fn missing_page<T: Copy, const N: usize>(
 
 struct LayerTransfer<'a> {
     store: &'a LayerStore,
-    _permit: layerfs_storage_core::OperationPermit<'a>,
+    _permit: layerfs_storage::OperationPermit<'a>,
     attestation: StackAttestation,
     publication: Option<PublicationSpool>,
     publication_page: Option<PublicationPage>,
@@ -621,7 +637,7 @@ impl TransferTarget for LayerTransfer<'_> {
         &mut self,
         branch: BranchRecord,
         root: ObjectId,
-    ) -> Result<(Option<CommitId>, bool, layerfs_storage_core::MissingBitmap)> {
+    ) -> Result<(Option<CommitId>, bool, layerfs_storage::MissingBitmap)> {
         let (current, up_to_date) = self.store.db.preflight_branch_push(branch)?;
         Ok((current, up_to_date, self.store.db.missing_objects(&[root])?))
     }
@@ -632,7 +648,7 @@ impl TransferTarget for LayerTransfer<'_> {
         base_layer_id: LayerId,
         incoming: StackId,
         root: ObjectId,
-    ) -> Result<(Option<StackId>, bool, layerfs_storage_core::MissingBitmap)> {
+    ) -> Result<(Option<StackId>, bool, layerfs_storage::MissingBitmap)> {
         let (current, up_to_date) =
             self.store
                 .db
@@ -838,7 +854,7 @@ impl LayerStore {
     fn verify_stack_foundation(
         &self,
         push: &StackPush,
-        positions: &layerfs_storage_core::StackPositions,
+        positions: &layerfs_storage::StackPositions,
     ) -> Result<()> {
         let incoming = self
             .db
@@ -877,7 +893,7 @@ fn verify_empty_publication(push: &StackPush) -> Result<()> {
     }
 }
 
-fn base_layer_id(db: &layerfs_storage_core::StoreDb, base: BaseId) -> Result<LayerId> {
+fn base_layer_id(db: &layerfs_storage::StoreDb, base: BaseId) -> Result<LayerId> {
     match base {
         BaseId::Layer(id) => Ok(id),
         BaseId::Stack(id) => {

@@ -1,0 +1,21 @@
+terminal_receipt_evidence_and_runtime_audit=PASS
+receipt_status=PASS_PHASE_ONE
+receipt_checks_all=true
+terminal_commands_all_passed=true
+benchmark_summary_all_pass=true
+four_authoritative_verifiers_status=PASS_OPTIMIZED
+four_authoritative_verifiers_checks_all=true
+retained_image_id=sha256:5271a74d7b6c8cef369cf5cbc6a7cfdd6b4d23a52a15712fb3e436622b91fac6
+retained_image_source_tree=7a90664c376e4d2981063ab5f0b8ad27d722482a
+remaining_live_layerfs_containers=0
+link_known_source_hits=0
+ratatui_cargo_hits=0
+crossterm_cargo_hits=0
+layerfs_tui_absent=true
+timing_validation=PASS
+layer_stack_full_ddl_equal=True
+non_exempt_handwritten_files_over_1500=[]
+sql_schema_loc_exempt=true
+git_diff_check=PASS
+
+Validation used the retained image inspection because cleanup intentionally removed the live benchmark image after preserving its ID, labels, binary hashes, raw benchmark output, and container inspection.

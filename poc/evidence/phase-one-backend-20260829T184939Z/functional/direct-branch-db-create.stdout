@@ -1,0 +1,5 @@
+STARTED o:40a7c226f9947cc4e5beddeba38b6a1e Db { command: Create { role: Branch, location: "/var/lib/layerfs-pass/branch.db" } }
+PROGRESS o:40a7c226f9947cc4e5beddeba38b6a1e Running 0 - 0
+FINISHED CONNECTED branch /var/lib/layerfs-pass/branch.db
+RECEIPT operation=o:40a7c226f9947cc4e5beddeba38b6a1e service_ns=3838416
+INVOCATION operation=o:40a7c226f9947cc4e5beddeba38b6a1e outcome=Succeeded total_ns=4390750 parse_ns=141375 context_ns=369417 wait_ns=3842708 render_ns=24916

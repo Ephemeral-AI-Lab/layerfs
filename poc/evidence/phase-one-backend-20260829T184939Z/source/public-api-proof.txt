@@ -1,0 +1,112 @@
+[six typed Store constructors]
+99:    pub fn create_layer(&mut self, location: StoreLocation) -> Result<LayerConnection, SdkError> {
+103:    pub fn connect_layer(&mut self, location: StoreLocation) -> Result<LayerConnection, SdkError> {
+121:    pub fn create_stack(&mut self, location: StoreLocation) -> Result<StackConnectionId, SdkError> {
+125:    pub fn connect_stack(
+149:    pub fn create_branch(
+156:    pub fn connect_branch(
+[twelve semantic Store operation compile manifest]
+use layerfs_sdk::{
+    AddResult, AdmissionSetReceipt, BranchCommit, BranchId, BranchRecord, BranchSource,
+    BranchStore, CommitId, CreatedStack, DatabaseReceipt, InitializedLayer, LayerId,
+    LayerInitialization, LayerSource, LayerStore, LocalAdmissionReceipt, LocalObjectReceipt,
+    MergeOutcome, ObjectTransferReceipt, OperationReceipt, PulledBranch, RefOutcome, StackId,
+    StackStore, StorageReceipt, TransferReceipt, TransferSetReceipt, TransportReceipt,
+    WorkspaceSession, WorkspaceState,
+};
+
+#[test]
+fn semantic_store_manifest_is_exactly_twelve_operations() {
+    let _: fn(&LayerStore, LayerInitialization) -> layerfs_sdk::Result<InitializedLayer> =
+        LayerStore::initialize;
+    let _: fn(&StackStore, LayerId) -> layerfs_sdk::Result<RefOutcome<LayerId>> =
+        StackStore::pull_layer;
+    let _: fn(&LayerStore, LayerSource) -> layerfs_sdk::Result<AddResult<LayerId>> =
+        LayerStore::add_layer;
+
+    let _: fn(&StackStore, LayerId) -> layerfs_sdk::Result<CreatedStack> = StackStore::create_stack;
+    let _: fn(&StackStore, StackId) -> layerfs_sdk::Result<RefOutcome<StackId>> =
+        StackStore::pull_stack;
+    let _: fn(&StackStore, BranchCommit) -> layerfs_sdk::Result<AddResult<StackId>> =
+        StackStore::add_stack;
+    let _: fn(&StackStore, StackId) -> layerfs_sdk::Result<RefOutcome<StackId>> =
+        StackStore::push_stack;
+
+    let _: fn(&BranchStore, BranchSource) -> layerfs_sdk::Result<BranchRecord> =
+        BranchStore::create_branch;
+    let _: fn(&BranchStore, BranchId, BranchId) -> layerfs_sdk::Result<MergeOutcome> =
+        BranchStore::merge;
+    let _: fn(&BranchStore, BranchId) -> layerfs_sdk::Result<PulledBranch> =
+        BranchStore::pull_branch;
+    let _: fn(&BranchStore, BranchId) -> layerfs_sdk::Result<RefOutcome<CommitId>> =
+        BranchStore::push_branch;
+    let _: fn(&BranchStore, BranchId) -> layerfs_sdk::Result<CommitId> = BranchStore::pull_commits;
+}
+
+#[test]
+fn operation_storage_receipt_graph_is_public() {
+    fn visible<T>() {}
+    visible::<AdmissionSetReceipt>();
+    visible::<DatabaseReceipt>();
+    visible::<LocalObjectReceipt>();
+    visible::<LocalAdmissionReceipt>();
+    visible::<ObjectTransferReceipt>();
+    visible::<TransferSetReceipt>();
+    visible::<TransferReceipt>();
+    visible::<TransportReceipt>();
+    let _: fn(OperationReceipt) -> Vec<StorageReceipt> = |receipt| receipt.storage;
+    let _: fn(WorkspaceSession) -> WorkspaceState = |session| session.state;
+}
+[Workspace 3 lifecycle + 3 execution + 4 reads manifest]
+fn workspace_public_manifest_has_three_lifecycle_three_execution_and_four_reads() {
+    let _: fn(
+        &Workspaces,
+        CreateWorkspaceSession,
+    ) -> crate::WorkspaceResult<crate::WorkspaceSession> = Workspaces::create_workspace_session;
+    let _: fn(
+        &Workspaces,
+        crate::WorkspaceSessionId,
+    ) -> crate::WorkspaceResult<WorkspaceCommitResult> = Workspaces::commit_workspace_session;
+    let _: fn(
+        &Workspaces,
+        crate::WorkspaceSessionId,
+        EndWorkspaceMode,
+    ) -> crate::WorkspaceResult<crate::WorkspaceEndResult> = Workspaces::end_workspace_session;
+
+    let _: fn(
+        &Workspaces,
+        crate::WorkspaceSessionId,
+        NonEmpty<Vec<std::ffi::OsString>>,
+    ) -> crate::WorkspaceResult<crate::WorkspaceExecution> = Workspaces::exec;
+    let _: fn(
+        &Workspaces,
+        crate::WorkspaceSessionId,
+    ) -> crate::WorkspaceResult<crate::WorkspaceExecution> = Workspaces::shell;
+    let _: fn(&Workspaces, crate::ExecutionId) -> crate::WorkspaceResult<()> = Workspaces::stop;
+
+    let _: fn(&Workspaces) -> crate::WorkspaceResult<Vec<crate::WorkspaceSummary>> =
+        Workspaces::sessions;
+    let _: fn(
+        &Workspaces,
+        crate::WorkspaceSessionId,
+    ) -> crate::WorkspaceResult<crate::WorkspaceDetail> = Workspaces::session;
+    let _: fn(
+        &Workspaces,
+        crate::WorkspaceSessionId,
+    ) -> crate::WorkspaceResult<crate::WorkspaceDiff> = Workspaces::diff;
+    let _: fn(&Workspaces, crate::ExecutionId) -> crate::WorkspaceResult<crate::OutputReader> =
+        Workspaces::output;
+}
+[Monitor two public queries]
+55:    pub fn snapshot(&self, scope: MonitorScope) -> MonitorResult<MonitorSnapshot> {
+111:    pub fn analyze_dedup(&self, route: BranchStoreId) -> MonitorResult<DedupAnalysis> {
+[concrete CliSession seam]
+25:pub struct CliSession {
+36:    pub fn open(context_location: impl AsRef<Path>) -> CliResult<Self> {
+43:    pub fn parse_line(input: &str) -> CliResult<Command> {
+47:    pub fn plan(&self, command: &Command) -> CliResult<CommandPlan> {
+57:    pub fn execute(&self, command: Command) -> CliResult<OperationHandle> {
+94:    pub fn complete(&self, input: &str, cursor: usize) -> CliResult<Vec<Completion>> {
+101:    pub fn snapshot(&self, query: ViewQuery) -> CliResult<ViewSnapshot> {
+113:    pub fn interrupt(&self) -> CliResult<()> {
+120:    pub fn next_event(&self) -> CliResult<Option<CliEvent>> {

@@ -1,13 +1,13 @@
 use crate::BranchStore;
-use layerfs_core::{logical, CanonicalPath, ObjectId};
-use layerfs_storage_core::{CoreReader, Result, StorageError};
+use layerfs_content::{filesystem as logical, CanonicalPath, ObjectId};
+use layerfs_storage::{CoreReader, Result, StorageError};
 
 impl BranchStore {
     #[doc(hidden)]
     pub fn branch_snapshot(
         &self,
-        branch_id: layerfs_storage_core::BranchId,
-    ) -> Result<(layerfs_storage_core::BranchRecord, ObjectId)> {
+        branch_id: layerfs_storage::BranchId,
+    ) -> Result<(layerfs_storage::BranchRecord, ObjectId)> {
         let _operation = self.db.enter_operation()?;
         let branch = self
             .db
@@ -21,15 +21,11 @@ impl BranchStore {
         Ok((branch, root))
     }
 
-    pub fn root(&self, branch_id: layerfs_storage_core::BranchId) -> Result<ObjectId> {
+    pub fn root(&self, branch_id: layerfs_storage::BranchId) -> Result<ObjectId> {
         Ok(self.branch_snapshot(branch_id)?.1)
     }
 
-    pub fn read_path(
-        &self,
-        branch_id: layerfs_storage_core::BranchId,
-        path: &str,
-    ) -> Result<Vec<u8>> {
+    pub fn read_path(&self, branch_id: layerfs_storage::BranchId, path: &str) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
         logical::stream(
             &CoreReader(self),
@@ -39,13 +35,34 @@ impl BranchStore {
         )?;
         Ok(bytes)
     }
+
+    #[doc(hidden)]
+    pub fn commit_diff(
+        &self,
+        left: layerfs_storage::CommitId,
+        right: layerfs_storage::CommitId,
+    ) -> Result<Vec<layerfs_content::filesystem::RootDiff>> {
+        let root = |id| {
+            self.db
+                .commit(id)?
+                .map(|commit| commit.root_id)
+                .ok_or(StorageError::NotFound("Commit"))
+        };
+        let mut changes = Vec::new();
+        logical::diff_roots(&CoreReader(self), root(left)?, root(right)?, |change| {
+            changes.push(change);
+            Ok(())
+        })?;
+        Ok(changes)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use layerfs_content::filesystem::ContentChange;
     use layerfs_layer_store::LayerStore;
-    use layerfs_storage_core::{Change, RefOutcome};
+    use layerfs_storage::RefOutcome;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
 
@@ -60,11 +77,13 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&root).unwrap();
-        let layer = Arc::new(LayerStore::open(root.join("layer.sqlite")).unwrap());
-        let (history, genesis) = layer.provision().unwrap();
-        let store = BranchStore::open(root.join("branch.sqlite"), layer.clone()).unwrap();
+        let layer = Arc::new(LayerStore::create(root.join("layer.sqlite")).unwrap());
+        let (_history, genesis) = layer
+            .initialize(layerfs_storage::LayerInitialization::Empty)
+            .unwrap();
+        let store = BranchStore::create(root.join("branch.sqlite"), layer.clone()).unwrap();
         let branch = store
-            .create_branch_from_layer(history.id, genesis.id)
+            .create_branch(layerfs_storage::BranchSource::Layer(genesis.id))
             .unwrap();
         let start = Arc::new(Barrier::new(2));
         let done = Arc::new(AtomicBool::new(false));
@@ -80,7 +99,7 @@ mod tests {
                         .commit(
                             branch.id,
                             head,
-                            &[Change::Write {
+                            &[ContentChange::Write {
                                 path: "value".into(),
                                 bytes: vec![byte; 1024],
                                 mode: 0o600,

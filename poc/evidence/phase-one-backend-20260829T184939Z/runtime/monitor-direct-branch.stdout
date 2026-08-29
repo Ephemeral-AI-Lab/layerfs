@@ -1,0 +1,7 @@
+STARTED o:b63840014f49d75dd6a7d3f3e6ba2f8c Monitor { command: Branch { branch_id: "1101a04edc28ed7709b831fb21c7092ffb" } }
+PROGRESS o:b63840014f49d75dd6a7d3f3e6ba2f8c Running 0 - 0
+SNAPSHOT Monitor
+branch=Some(StoreFact { kind: Branch, id: "1101a04edc28ed7709b831fb21c7092ffb", fields: [("head_commit_id", "12e013a424dff794e77deca3905a85e2438ff07d66ea4b335faff27c1567422f72"), ("base_id", "Layer(LayerId(32434911663b158513d7c77942103b1408063d40ce88ef8f543b178aae0e67d5a9))")] })
+FINISHED OK
+RECEIPT operation=o:b63840014f49d75dd6a7d3f3e6ba2f8c service_ns=97125
+INVOCATION operation=o:b63840014f49d75dd6a7d3f3e6ba2f8c outcome=Succeeded total_ns=671958 parse_ns=159584 context_ns=369833 wait_ns=105209 render_ns=21793

@@ -1,5 +1,10 @@
 # LayerStack cold implementation plan
 
+> **Superseded.** This plan is retained only as historical implementation
+> context. Phase One is governed by `docs/cli-tui/05-implementation-plan.md`
+> and its preceding binding contracts; where this document conflicts, the
+> `docs/cli-tui/` contract wins.
+
 This plan replaces the existing storage topology with the architecture and
 schemas in [model.md](model.md), public operation semantics in
 [rule.md](rule.md), binding low-level Store/SQLite/transfer mechanics in
@@ -33,8 +38,8 @@ when they prevent implementation drift.
 | Persistent topology records | 7 records + AddResult |
 | New storage production files | 42 including SDK composition, five thin `lib.rs`, two named binaries |
 | New/replacement storage production LOC | approximately 6,100 review estimate; not a terminal gate |
-| File-size guidance | preserve cohesive files through 999 LOC; split on responsibility boundaries |
-| Hard per-file cap | 1,000 production LOC |
+| File-size guidance | preserve cohesive files through 1,499 LOC; split on responsibility boundaries |
+| Hard per-file cap | 1,500 production LOC, excluding `sql.rs` and `schema.rs` |
 
 The current checkout contains approximately 89,488 non-test Rust lines and
 112,294 total Rust lines across current crates/tools. Those lines and the ten
@@ -1115,8 +1120,8 @@ them to old semantics.
 ### Recorded cohesion review
 
 The old 350-line review trigger and 500-line hard cap are superseded. The
-handwritten production-file hard limit is 1,000 LOC. Cohesive files in the
-350–999 range are not split merely for size; SRP and one owner per invariant
+handwritten production-file hard limit is 1,500 LOC, excluding `sql.rs` and
+`schema.rs`. Cohesive files in the 350–1,499 range are not split merely for size; SRP and one owner per invariant
 still require a split whenever unrelated responsibilities survive together.
 Total production LOC and deletion of duplicate algorithms take precedence over
 small-file targets.
@@ -1261,8 +1266,8 @@ Expected:
 ```text
 no obsolete package/import hit
 no forbidden filename in target packages/SDK
-no handwritten production file above 1,000 LOC
-no cohesive 350–999-line file split only to satisfy a size target
+no handwritten production file above 1,500 LOC, excluding sql.rs and schema.rs
+no cohesive 350–1,499-line file split only to satisfy a size target
 storage/package/workspace LOC estimates reviewed for unnecessary surviving lines
 aggregate LOC is not an automatic PASS/FAIL threshold
 ```

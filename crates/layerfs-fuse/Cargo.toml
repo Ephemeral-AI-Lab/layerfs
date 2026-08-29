@@ -1,0 +1,15 @@
+[package]
+name = "layerfs-fuse"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = ["host"]
+host = ["dep:fuser"]
+proxy = ["dep:fuser"]
+
+[dependencies]
+fuser = { version = "=0.18.0", default-features = false, optional = true }
+layerfs-content = { path = "../layerfs-content" }

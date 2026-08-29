@@ -1,0 +1,18 @@
+[package]
+name = "layerfs-monitor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-branch-store = { path = "../layerfs-branch-store" }
+layerfs-content = { path = "../layerfs-content" }
+layerfs-layer-store = { path = "../layerfs-layer-store" }
+layerfs-stack-store = { path = "../layerfs-stack-store" }
+layerfs-storage = { path = "../layerfs-storage" }
+layerfs-workspace = { path = "../layerfs-workspace" }
+
+[dev-dependencies]
+layerfs-storage = { path = "../layerfs-storage", features = ["test-instrumentation"] }
+rusqlite.workspace = true

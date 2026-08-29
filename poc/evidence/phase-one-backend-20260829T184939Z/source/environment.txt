@@ -1,0 +1,8 @@
+utc=2026-08-29T18:50:02Z
+Darwin Yifans-MacBook-Pro-10.local 25.4.0 Darwin Kernel Version 25.4.0: Thu Mar 19 19:26:07 PDT 2026; root:xnu-12377.101.15~1/RELEASE_ARM64_T6031 arm64
+rustc 1.96.0 (ac68faa20 2026-05-25)
+cargo 1.96.0 (30a34c682 2026-05-25)
+docker_client=29.5.2 docker_server=29.5.2
+ProductName:		macOS
+ProductVersion:		26.4.1
+BuildVersion:		25E253

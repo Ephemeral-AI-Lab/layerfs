@@ -1,0 +1,32 @@
+   Compiling layerfs-branch-store v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-branch-store)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.15s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_branch_store-d002081b91918e78)
+
+running 2 tests
+test layered_read::tests::parent_is_used_only_for_missing_local_data ... ok
+test snapshot::tests::branch_snapshot_never_mixes_a_head_with_another_heads_root ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/merge.rs (target/debug/deps/merge-137565584f93c14c)
+
+running 3 tests
+test merge_rejects_different_layer_histories_without_moving_target ... ok
+test merge_falls_back_to_common_layer_without_moving_target_base ... ok
+test merge_falls_back_to_closest_common_stack ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/transfer.rs (target/debug/deps/transfer-21372433c5494deb)
+
+running 1 test
+test pull_preserves_global_identity_and_rejects_divergence ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+   Doc-tests layerfs_branch_store
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

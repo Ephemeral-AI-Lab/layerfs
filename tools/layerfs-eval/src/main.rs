@@ -1,5 +1,5 @@
-use layerfs_sdk::{BranchId, Direct, Stacked};
-use std::path::Path;
+use layerfs_sdk::{BranchId, BranchStore, LayerStore, StackStore};
+use std::sync::Arc;
 
 fn main() {
     if let Err(error) = run() {
@@ -9,15 +9,32 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
-    match args.as_slice() {
-        [mode, branch, layer, id, output] if mode == "materialize-direct" => Direct::open(branch, layer)?
-            .materialize(id.parse::<BranchId>()?, Path::new(output))?,
-        [mode, branch, stack, layer, id, output] if mode == "materialize-stacked" => {
-            Stacked::open(branch, stack, layer)?
-                .materialize(id.parse::<BranchId>()?, Path::new(output))?
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    let (branch, branch_id) = match arguments.as_slice() {
+        [mode, branch, layer, id] if mode == "check-direct" => {
+            let layer = Arc::new(LayerStore::connect(layer)?);
+            (
+                BranchStore::connect(branch, layer)?,
+                id.parse::<BranchId>()?,
+            )
         }
-        _ => return Err("usage: layerfs-eval materialize-direct <branch-db> <layer-db> <branch-id> <empty-output> | materialize-stacked <branch-db> <stack-db> <layer-db> <branch-id> <empty-output>".into()),
-    }
+        [mode, branch, stack, layer, id] if mode == "check-stacked" => {
+            let layer = Arc::new(LayerStore::connect(layer)?);
+            let stack = Arc::new(StackStore::connect(stack, layer)?);
+            (
+                BranchStore::connect(branch, stack)?,
+                id.parse::<BranchId>()?,
+            )
+        }
+        _ => {
+            return Err(
+                "usage: layerfs-eval check-direct <branch-db> <layer-db> <branch-id> | \
+                 check-stacked <branch-db> <stack-db> <layer-db> <branch-id>"
+                    .into(),
+            )
+        }
+    };
+    let (record, root) = branch.branch_snapshot(branch_id)?;
+    println!("{} {}", record.head_commit_id, root);
     Ok(())
 }

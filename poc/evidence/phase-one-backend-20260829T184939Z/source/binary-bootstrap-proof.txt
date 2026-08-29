@@ -1,0 +1,13 @@
+source_tree=7a90664c376e4d2981063ab5f0b8ad27d722482a
+
+[implementation-bearing entrypoint check]
+crates/layerfs-cli/src/bin/layerfs.rs=28 lines; argument dispatch only
+crates/layerfs-fuse/src/bin/layerfs-fuse.rs=74 lines; Linux proxy/bootstrap only
+crates/layerfs-layer-store/src/bin/layerfs-layer-store.rs=34 lines; TCP bootstrap only
+crates/layerfs-stack-store/src/bin/layerfs-stack-store.rs=44 lines; TCP bootstrap only
+tools/layerfs-eval/src/main.rs=40 lines; headless check tool only
+binary_entrypoint_total=220 lines
+god_entrypoints=[]
+implementation_bearing_lib_or_mod_files=[]
+handwritten_non_sql_schema_files_over_1500=[]
+sql_schema_loc_exempt=true

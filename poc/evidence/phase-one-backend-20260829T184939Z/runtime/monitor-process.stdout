@@ -1,0 +1,7 @@
+STARTED o:ec5ac7608d337196536dfff3aa06c328 Monitor { command: Process }
+PROGRESS o:ec5ac7608d337196536dfff3aa06c328 Running 0 - 0
+SNAPSHOT Monitor
+pid=19 rss=36810752 parallelism=4
+FINISHED OK
+RECEIPT operation=o:ec5ac7608d337196536dfff3aa06c328 service_ns=1622833
+INVOCATION operation=o:ec5ac7608d337196536dfff3aa06c328 outcome=Succeeded total_ns=2159708 parse_ns=121208 context_ns=369000 wait_ns=1634916 render_ns=21707

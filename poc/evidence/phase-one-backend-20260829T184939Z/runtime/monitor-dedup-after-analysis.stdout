@@ -1,0 +1,8 @@
+STARTED o:03c557b1f4c4383e05f34d525810771e Monitor { command: Dedup { route: None, analyze: false } }
+PROGRESS o:03c557b1f4c4383e05f34d525810771e Running 0 - 0
+SNAPSHOT Monitor
+route=r:af0be4ff63d0ef154714ba8a4eb028f9 route_cas=7333 union_cas=5877 cross_store_placement=1456 placement=1.2477454483580057
+route=r:b3a73d4abb31a4c93b7fb256a695c3df route_cas=7471 union_cas=6906 cross_store_placement=565 placement=1.0818129163046626
+FINISHED OK
+RECEIPT operation=o:03c557b1f4c4383e05f34d525810771e service_ns=5625
+INVOCATION operation=o:03c557b1f4c4383e05f34d525810771e outcome=Succeeded total_ns=562375 parse_ns=106542 context_ns=354125 wait_ns=76249 render_ns=14832

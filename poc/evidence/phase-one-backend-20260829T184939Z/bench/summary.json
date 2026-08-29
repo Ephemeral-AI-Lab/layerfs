@@ -1,0 +1,96 @@
+{
+  "all_pass": true,
+  "benchmark_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+  "populations": {
+    "direct-overlay": {
+      "aggregates": {
+        "G": 3.507261811846026,
+        "Rsum": 2.241065309011036,
+        "SB_ns": 1403657666,
+        "SL_ns": 3145688501,
+        "Spread": 1.0117919469738368
+      },
+      "checks_all": true,
+      "gates": {
+        "G": true,
+        "Rsum": true,
+        "SL": true,
+        "Spread": true,
+        "cloudflare_rows": true
+      },
+      "git_base_median_ns": 12383042,
+      "git_median_ns": 180147251,
+      "git_ratio": 14.547899538740158,
+      "samples": 3,
+      "status": "PASS_OPTIMIZED"
+    },
+    "direct-tmpfs": {
+      "aggregates": {
+        "G": 3.9765573731344497,
+        "Rsum": 2.359914164324101,
+        "SB_ns": 1384412236,
+        "SL_ns": 3267094045,
+        "Spread": 1.0096000058669876
+      },
+      "checks_all": true,
+      "gates": {
+        "G": true,
+        "Rsum": true,
+        "SL": true,
+        "Spread": true,
+        "cloudflare_rows": true
+      },
+      "git_base_median_ns": 8207667,
+      "git_median_ns": 179177625,
+      "git_ratio": 21.830518343397703,
+      "samples": 3,
+      "status": "PASS_OPTIMIZED"
+    },
+    "stacked-overlay": {
+      "aggregates": {
+        "G": 3.4161348989313116,
+        "Rsum": 2.2604938500242353,
+        "SB_ns": 1439877544,
+        "SL_ns": 3254834333,
+        "Spread": 1.0116380863431182
+      },
+      "checks_all": true,
+      "gates": {
+        "G": true,
+        "Rsum": true,
+        "SL": true,
+        "Spread": true,
+        "cloudflare_rows": true
+      },
+      "git_base_median_ns": 13086709,
+      "git_median_ns": 179867667,
+      "git_ratio": 13.744300954502771,
+      "samples": 3,
+      "status": "PASS_OPTIMIZED"
+    },
+    "stacked-tmpfs": {
+      "aggregates": {
+        "G": 3.8150644087638277,
+        "Rsum": 2.291916854274149,
+        "SB_ns": 1430957500,
+        "SL_ns": 3279635612,
+        "Spread": 1.0173160404748038
+      },
+      "checks_all": true,
+      "gates": {
+        "G": true,
+        "Rsum": true,
+        "SL": true,
+        "Spread": true,
+        "cloudflare_rows": true
+      },
+      "git_base_median_ns": 8515334,
+      "git_median_ns": 193798041,
+      "git_ratio": 22.75871281149982,
+      "samples": 3,
+      "status": "PASS_OPTIMIZED"
+    }
+  },
+  "schema": "layerfs-phase-one-benchmark-summary-v1",
+  "source_tree": "7a90664c376e4d2981063ab5f0b8ad27d722482a"
+}

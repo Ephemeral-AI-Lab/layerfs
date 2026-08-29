@@ -1,0 +1,4 @@
+layerfs-phase1-pass-controller 0.00% 34.72MiB / 2GiB 2
+layerfs-phase1-pass-direct 0.00% 832KiB / 512MiB 1
+layerfs-phase1-pass-stacked 0.00% 784KiB / 512MiB 2
+layerfs-phase1-pass-loser 0.00% 648KiB / 512MiB 1

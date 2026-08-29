@@ -1,0 +1,5 @@
+STARTED o:b3308038e4419620c13047aed118b3f7 Workspace { command: Stop { execution_id: "x:42750ae7a19a5ebc1e7282e4ccd9afef" } }
+PROGRESS o:b3308038e4419620c13047aed118b3f7 Running 0 - 0
+FINISHED OK
+RECEIPT operation=o:b3308038e4419620c13047aed118b3f7 service_ns=42677209
+INVOCATION operation=o:b3308038e4419620c13047aed118b3f7 outcome=Succeeded total_ns=43366166 parse_ns=128167 context_ns=401417 wait_ns=42805999 render_ns=18502

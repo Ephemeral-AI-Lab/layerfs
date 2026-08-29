@@ -1,0 +1,8 @@
+TARGET           FSTYPE OPTIONS
+/mnt/host-direct fuse   rw,nosuid,nodev,noatime,user_id=0,group_id=0,default_permissions
+TARGET            FSTYPE OPTIONS
+/mnt/host-stacked fuse   rw,nosuid,nodev,noatime,user_id=0,group_id=0,default_permissions
+sh: 1: cannot create /mnt/host-direct/after: Permission denied
+sh: 1: cannot create /mnt/host-stacked/after: Permission denied
+host_direct_write_exit=2
+host_stacked_write_exit=2

@@ -1,6 +1,6 @@
-use crate::model::{Data, FileData, Node, NodeId, Workspace};
-use layerfs_core::content::rope::read_range;
-use layerfs_storage_core::{CoreReader, Result, StorageError};
+use crate::cow_tree::{Data, FileData, Node, NodeId, Workspace};
+use layerfs_content::file::rope::read_range;
+use layerfs_storage::{CoreReader, Result, StorageError};
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::FileExt;
@@ -14,11 +14,12 @@ pub struct ReadPlan {
 }
 
 enum ReadSource {
-    Base(layerfs_core::content::rope::FileStateRoot),
+    Base(layerfs_content::file::rope::FileStateRoot),
     Overlay {
-        base: Option<(layerfs_core::content::rope::FileStateRoot, u64)>,
+        base: Option<(layerfs_content::file::rope::FileStateRoot, u64)>,
         spool: std::path::PathBuf,
         dirty: Vec<(u64, u64)>,
+        charged: Vec<(u64, u64)>,
     },
 }
 
@@ -35,7 +36,12 @@ impl ReadPlan {
                 self.offset,
                 (self.end - self.offset) as usize,
             ),
-            ReadSource::Overlay { base, spool, dirty } => {
+            ReadSource::Overlay {
+                base,
+                spool,
+                dirty,
+                charged,
+            } => {
                 let mut output = vec![0; (self.end - self.offset) as usize];
                 if let Some((root, base_len)) = base {
                     let base_end = self.end.min(base_len);
@@ -50,8 +56,11 @@ impl ReadPlan {
                         output[..bytes.len()].copy_from_slice(&bytes);
                     }
                 }
-                let file = File::open(spool)?;
                 for (start, end) in dirty {
+                    output[(start - self.offset) as usize..(end - self.offset) as usize].fill(0);
+                }
+                let file = File::open(spool)?;
+                for (start, end) in charged {
                     read_exact_at(
                         &file,
                         &mut output[(start - self.offset) as usize..(end - self.offset) as usize],
@@ -82,10 +91,19 @@ impl Workspace {
                 spool,
                 len,
                 dirty,
+                charged,
                 ..
             }) => {
                 let end = (*len).min(offset.saturating_add(size as u64));
                 let dirty = dirty
+                    .range(..end)
+                    .filter_map(|(&start, &range_end)| {
+                        let start = start.max(offset);
+                        let range_end = range_end.min(end);
+                        (start < range_end).then_some((start, range_end))
+                    })
+                    .collect();
+                let charged = charged
                     .range(..end)
                     .filter_map(|(&start, &range_end)| {
                         let start = start.max(offset);
@@ -101,6 +119,7 @@ impl Workspace {
                         base: *base,
                         spool: spool.clone(),
                         dirty,
+                        charged,
                     },
                 });
             }
@@ -118,12 +137,26 @@ impl Workspace {
     }
 
     pub fn write(&mut self, node: NodeId, offset: u64, bytes: &[u8]) -> Result<usize> {
+        self.write_inner(node, offset, bytes.len(), Some(bytes))
+    }
+
+    pub(crate) fn write_zero(&mut self, node: NodeId, offset: u64, len: usize) -> Result<usize> {
+        self.write_inner(node, offset, len, None)
+    }
+
+    fn write_inner(
+        &mut self,
+        node: NodeId,
+        offset: u64,
+        byte_len: usize,
+        bytes: Option<&[u8]>,
+    ) -> Result<usize> {
         self.ensure_active()?;
         let old_len = self.attr(node)?.size;
         let end = offset
-            .checked_add(bytes.len() as u64)
+            .checked_add(byte_len as u64)
             .ok_or(StorageError::InvalidInput("write length"))?;
-        if bytes.is_empty() {
+        if byte_len == 0 {
             return Ok(0);
         }
         self.ensure_overlay(node)?;
@@ -141,17 +174,27 @@ impl Workspace {
             insert_range(&mut next_dirty, old_len, offset);
         }
         insert_range(&mut next_dirty, offset, end);
-        insert_range(&mut next_charged, offset, end);
+        let materialize = bytes.is_some() || overlaps(&next_charged, offset, end);
+        if materialize {
+            insert_range(&mut next_charged, offset, end);
+        }
         let new_charge = range_bytes(&next_charged);
         self.policy.check(
             self.spool_bytes
                 .saturating_sub(old_charge)
                 .saturating_add(new_charge),
         )?;
-        OpenOptions::new()
-            .write(true)
-            .open(path)?
-            .write_all_at(bytes, offset)?;
+        match bytes {
+            Some(bytes) => OpenOptions::new()
+                .write(true)
+                .open(&path)?
+                .write_all_at(bytes, offset)?,
+            None if materialize => OpenOptions::new()
+                .write(true)
+                .open(&path)?
+                .write_all_at(&vec![0; byte_len], offset)?,
+            None => {}
+        }
         let Data::File(FileData::Overlay {
             len,
             dirty,
@@ -169,7 +212,8 @@ impl Workspace {
             .saturating_sub(old_charge)
             .saturating_add(new_charge);
         self.dirty.insert(node);
-        Ok(bytes.len())
+        self.note_mutation()?;
+        Ok(byte_len)
     }
 
     pub fn truncate(&mut self, node: NodeId, size: u64) -> Result<()> {
@@ -219,6 +263,7 @@ impl Workspace {
             .saturating_sub(old_charge)
             .saturating_add(new_charge);
         self.dirty.insert(node);
+        self.note_mutation()?;
         Ok(())
     }
 
@@ -271,6 +316,42 @@ impl Workspace {
         }))
     }
 
+    pub(crate) fn new_spool_node_reserved(
+        &mut self,
+        node: NodeId,
+        mode: u32,
+        path: String,
+    ) -> Result<()> {
+        let spool = self.spool.join(node.0.to_string());
+        File::create(&spool)?;
+        if self
+            .nodes
+            .insert(
+                node,
+                Node {
+                    canonical: None,
+                    paths: [path].into(),
+                    mode,
+                    links: 1,
+                    pins: 0,
+                    mtime_seconds: 0,
+                    mtime_nanoseconds: 0,
+                    data: Data::File(FileData::Overlay {
+                        base: None,
+                        spool,
+                        len: 0,
+                        dirty: BTreeMap::new(),
+                        charged: BTreeMap::new(),
+                    }),
+                },
+            )
+            .is_some()
+        {
+            return Err(StorageError::Integrity("reserved node"));
+        }
+        Ok(())
+    }
+
     fn ensure_overlay(&mut self, node: NodeId) -> Result<&Path> {
         if let Data::File(FileData::Base { root, len }) = self.nodes[&node].data {
             let path = self.spool.join(node.0.to_string());
@@ -307,7 +388,7 @@ impl Workspace {
 
 fn read_base(
     branch: &layerfs_branch_store::BranchStore,
-    root: layerfs_core::content::rope::FileStateRoot,
+    root: layerfs_content::file::rope::FileStateRoot,
     len: u64,
     offset: u64,
     size: usize,
@@ -353,6 +434,13 @@ fn insert_range(ranges: &mut BTreeMap<u64, u64>, mut start: u64, mut end: u64) {
         ranges.remove(&range_start);
     }
     ranges.insert(start, end);
+}
+
+fn overlaps(ranges: &BTreeMap<u64, u64>, start: u64, end: u64) -> bool {
+    ranges
+        .range(..end)
+        .next_back()
+        .is_some_and(|(_, range_end)| *range_end > start)
 }
 
 fn truncate_ranges(ranges: &mut BTreeMap<u64, u64>, size: u64) {

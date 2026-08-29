@@ -1,6 +1,6 @@
 use super::*;
-use layerfs_core::ObjectId;
-use layerfs_storage_core::{CommitId, CommitRecord};
+use layerfs_content::ObjectId;
+use layerfs_storage::{CommitId, CommitRecord};
 
 #[test]
 fn deferred_facts_stay_in_memory_then_spill_after_eight_mib() {

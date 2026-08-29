@@ -1,0 +1,7 @@
+STARTED o:010d1a99e5481b171e4c475ee8a8406b Workspace { command: Output { execution_id: "x:42750ae7a19a5ebc1e7282e4ccd9afef", follow: false } }
+PROGRESS o:010d1a99e5481b171e4c475ee8a8406b Running 0 - 0
+SNAPSHOT Output
+OUTPUT_PAGE next=0 truncated=false exited=true receipt=Some(ExecutionReceipt { execution_id: ExecutionId([66, 117, 10, 231, 161, 154, 94, 188, 30, 114, 130, 228, 204, 217, 175, 239]), exit_code: Some(143), elapsed_ns: 122879500, stdout_bytes: 0, stderr_bytes: 0, stopped: true })
+FINISHED OK
+RECEIPT operation=o:010d1a99e5481b171e4c475ee8a8406b service_ns=8875
+INVOCATION operation=o:010d1a99e5481b171e4c475ee8a8406b outcome=Succeeded total_ns=919708 parse_ns=132750 context_ns=450291 wait_ns=308791 render_ns=13541

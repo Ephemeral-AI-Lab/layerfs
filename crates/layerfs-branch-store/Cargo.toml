@@ -6,8 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-layerfs-core = { path = "../layerfs-core" }
-layerfs-storage-core = { path = "../layerfs-storage-core" }
+layerfs-content = { path = "../layerfs-content" }
+layerfs-storage = { path = "../layerfs-storage" }
 
 [dev-dependencies]
 layerfs-layer-store = { path = "../layerfs-layer-store" }

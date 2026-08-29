@@ -1,0 +1,23 @@
+source_tree=7a90664c376e4d2981063ab5f0b8ad27d722482a
+
+[final thin-proxy semantics]
+LinkKnown_request_hits=0
+SetMtime_is_synchronous=true; it is absent from Request::no_reply and receives an explicit response.
+pending_create_SetMtime_is_carried_in_the_same_create_frame=true
+Fence_semantic_filesystem_calls=0; ProxyHost maps Fence directly to Response::Unit.
+dependent operations flush only the pending create they depend on; pause/barrier drains bounded one-way work.
+
+[regression check]
+tests/08-fuse.txt:19:test capability_scopes_a_bounded_typed_proxy_session ... ok
+That fixture asserts transport barriers never invoke filesystem fsync.
+
+[real Docker Git health]
+benchmark=bench/git-thin-final-20.json
+samples=20
+median_ns=177832021
+p95_ns=196887458
+post_benchmark_commit=functional/git-n20-post-commit.stdout
+post_benchmark_commit_result=FINISHED UP_TO_DATE 1255a307cc2d100d271b6b8b5f50cf1e68cead3439a1bb7f9ef47c593111f2cbaa
+post_benchmark_diff=functional/git-n20-post-diff.stdout
+post_benchmark_diff_result=dirty=false generation=32544
+This proves the optimized request path no longer loses Git metadata or writes while keeping Fence free of semantic fsync.

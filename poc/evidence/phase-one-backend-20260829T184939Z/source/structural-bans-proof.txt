@@ -1,0 +1,73 @@
+[dependency bans]
+ratatui_cargo_hits=       0
+crossterm_cargo_hits=       0
+layerfs-core=       0
+layerfs-storage-core=       0
+layerfs-mount=       0
+layerfs-sync=       0
+layerfs-transfer=       0
+layerfs-server=       0
+layerfs-project=       0
+FullStorage=       0
+forbidden_catchall_files=       0
+content_include_hits=       0
+legacy_content_alias_hits=       0
+fuse_db_store_hits=       0
+workspace_production_sqlite_hits=       2
+cli_direct_store_dependency_hits=       0
+[Workspace sqlite-like strings are confined to cfg(test)]
+    use std::sync::Arc;
+
+    #[derive(Debug, Eq, PartialEq)]
+    struct Snapshot {
+        nodes: std::collections::HashMap<NodeId, Node>,
+        canonical_nodes: std::collections::HashMap<layerfs_content::tree::inode::InodeId, NodeId>,
+        dirty: BTreeSet<NodeId>,
+        next_node: u64,
+        spool_bytes: u64,
+    }
+
+    fn snapshot(workspace: &Workspace) -> Snapshot {
+        Snapshot {
+            nodes: workspace.nodes.clone(),
+            canonical_nodes: workspace.canonical_nodes.clone(),
+            dirty: workspace.dirty.clone(),
+            next_node: workspace.next_node,
+            spool_bytes: workspace.spool_bytes,
+        }
+    }
+
+    fn fixture(label: &str) -> (std::path::PathBuf, Workspace) {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-rename-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let layer = Arc::new(LayerStore::create(root.join("layer.sqlite")).unwrap());
+        let (_history, genesis) = layer
+            .initialize(layerfs_storage::LayerInitialization::Empty)
+            .unwrap();
+        let branch = BranchStore::create(root.join("branch.sqlite"), layer).unwrap();
+        let record = branch
+            .create_branch(layerfs_storage::BranchSource::Layer(genesis.id))
+            .unwrap();
+        let workspace = Workspace::open(branch, record.id, root.join("spool")).unwrap();
+        (root, workspace)
+    }
+
+    #[test]
+    fn rename_validates_every_noop_and_rejection_before_mutation() {
+        let (root, mut workspace) = fixture("same-path");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ROOT;
+    use layerfs_branch_store::BranchStore;

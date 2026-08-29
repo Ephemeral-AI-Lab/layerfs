@@ -1,15 +1,14 @@
 use crate::BranchStore;
-use layerfs_storage_core::{
-    commit_merge_base, three_way, CommitId, CommitRecord, MergeBaseOutcome, MergeOutcome, Result,
-    StorageError, ThreeWayOutcome,
+use layerfs_storage::{
+    commit_merge_base, merge_candidate, CandidateMergeOutcome, CommitId, CommitRecord,
+    MergeBaseOutcome, MergeOutcome, Result, StorageError,
 };
 
 impl BranchStore {
     pub fn merge(
         &self,
-        source_branch_id: layerfs_storage_core::BranchId,
-        target_branch_id: layerfs_storage_core::BranchId,
-        expected_target_head: CommitId,
+        source_branch_id: layerfs_storage::BranchId,
+        target_branch_id: layerfs_storage::BranchId,
     ) -> Result<MergeOutcome> {
         let _operation = self.db.enter_operation()?;
         let source = self
@@ -20,14 +19,6 @@ impl BranchStore {
             .db
             .branch(target_branch_id)?
             .ok_or(StorageError::NotFound("target Branch"))?;
-        if target.head_commit_id != expected_target_head {
-            return Err(StorageError::CommitHeadMoved(
-                layerfs_storage_core::HeadMoved {
-                    expected: Some(expected_target_head),
-                    actual: Some(target.head_commit_id),
-                },
-            ));
-        }
         let fallback_base = self.parent.common_base(source.base_id, target.base_id)?;
         if source.head_commit_id == target.head_commit_id
             || self
@@ -76,11 +67,11 @@ impl BranchStore {
             .commit(target.head_commit_id)?
             .ok_or(StorageError::MissingBaseData)?
             .root_id;
-        let merged = match three_way(self, base_root, target_root, source_root)? {
-            ThreeWayOutcome::Conflict(conflict) => {
+        let merged = match merge_candidate(self, base_root, target_root, source_root)? {
+            CandidateMergeOutcome::Conflict(conflict) => {
                 return Err(StorageError::Conflict(Box::new(conflict)))
             }
-            ThreeWayOutcome::Clean(merged) => merged,
+            CandidateMergeOutcome::Clean(merged) => merged,
         };
         let commit = CommitRecord {
             id: CommitId::derive(

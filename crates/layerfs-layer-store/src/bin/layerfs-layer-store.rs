@@ -18,7 +18,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if arguments.next().is_some() {
         return Err("usage: layerfs-layer-store <database-path> <listen-address>".into());
     }
-    let store = layerfs_layer_store::LayerStore::open(path)?;
+    let store = layerfs_layer_store::LayerStore::connect(path)?;
     let listener = TcpListener::bind(address.to_string_lossy().as_ref())?;
     for stream in listener.incoming() {
         let store = store.clone();

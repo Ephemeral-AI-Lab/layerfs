@@ -8,8 +8,8 @@ license.workspace = true
 [dependencies]
 blake3.workspace = true
 ed25519-dalek.workspace = true
-layerfs-core = { path = "../layerfs-core" }
-layerfs-storage-core = { path = "../layerfs-storage-core" }
+layerfs-content = { path = "../layerfs-content" }
+layerfs-storage = { path = "../layerfs-storage" }
 
 [dev-dependencies]
 rusqlite.workspace = true

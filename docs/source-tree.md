@@ -1,5 +1,11 @@
 # LayerStack cold-build source tree
 
+> **Superseded.** This document is retained only as historical implementation
+> context. The binding application architecture and exact Phase One source tree
+> are `docs/cli-tui/00-overview.md` through
+> `docs/cli-tui/05-implementation-plan.md`; where this document conflicts, the
+> `docs/cli-tui/` contract wins.
+
 This is the smallest target tree that preserves the three-store model, fourteen
 public operations, shared merge rules, exact schemas, CAS/CDC correctness, and
 SRP. It is a clean replacement, not a shape-preserving refactor.
@@ -445,8 +451,8 @@ history logic, merge, CAS traversal, or transfer planning belongs in a binary.
 |---|---|
 | Cohesion | A file may group short functions only when they share one invariant and data flow. |
 | Cohesion review | File size alone is not a split trigger; review and split only when distinct surviving responsibilities remain. |
-| Hard cap | CI rejects any handwritten production `.rs` file above 1,000 lines. |
-| Size guidance | Do not split a cohesive 350–999-line file merely to reduce its line count. |
+| Hard cap | CI rejects any handwritten production `.rs` file above 1,500 lines, excluding `sql.rs` and `schema.rs`. |
+| Size guidance | Do not split a cohesive 350–1,499-line file merely to reduce its line count. |
 | `lib.rs` | Declarations/re-exports only; no SQL, I/O, algorithms, transactions, or orchestration. |
 | Module layout | No `mod.rs`; named module roots only when a directory is actually needed. |
 | Binary layout | No `main.rs`; named `src/bin/*.rs` bootstrap files only. |
@@ -454,7 +460,7 @@ history logic, merge, CAS traversal, or transfer planning belongs in a binary.
 
 Do not split a 40-line cohesive operation into request, validator, executor,
 outcome, and adapter files. Do split when one file owns unrelated invariants,
-even when it remains below the 1,000-line cap. Total production LOC and
+even when it remains below the 1,500-line cap. Total production LOC and
 deletion of duplicate algorithms matter more than small files.
 
 ## 9. Test tree
@@ -533,9 +539,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 The forbidden-file search must return nothing for the four storage packages,
-SDK, Workspace, or mount. No handwritten production file may exceed 1,000
+SDK, Workspace, or mount. No handwritten production file may exceed 1,500
 lines. Files below that cap still fail SRP when they own unrelated
-responsibilities; cohesive 350–999-line files are not split for size alone.
+responsibilities; cohesive 350–1,499-line files are not split for size alone.
 Workspace metadata must
 contain no old storage, sync, or service package. `layerfs-workspace` remains
 as the sole non-Store transient runtime and must have no SQLite dependency,

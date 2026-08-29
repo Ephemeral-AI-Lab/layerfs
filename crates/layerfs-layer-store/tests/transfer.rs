@@ -1,6 +1,6 @@
-use layerfs_core::ObjectId;
+use layerfs_content::ObjectId;
 use layerfs_layer_store::LayerStore;
-use layerfs_storage_core::{
+use layerfs_storage::{
     read_value, write_frame_bytes, write_value, BaseId, BranchId, BranchRecord, CommitId,
     CommitRecord, EndpointReply, EndpointRequest, Fact, FactKind, FrameKind, StackHistoryId,
     StackId, StackPush, StorageId, TransferIntent,
@@ -17,8 +17,10 @@ fn incomplete_object_frame_admits_nothing() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&root).unwrap();
-    let store = LayerStore::open(root.join("layer.sqlite")).unwrap();
-    let (_, base) = store.provision().unwrap();
+    let store = LayerStore::create(root.join("layer.sqlite")).unwrap();
+    let (_, base) = store
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let commit = CommitRecord {
         id: CommitId::derive(base.root_id, None, None),
         root_id: base.root_id,
@@ -78,8 +80,10 @@ fn complete_wrong_identity_is_rejected_by_receiver_admission() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&root).unwrap();
-    let store = LayerStore::open(root.join("layer.sqlite")).unwrap();
-    let (_, base) = store.provision().unwrap();
+    let store = LayerStore::create(root.join("layer.sqlite")).unwrap();
+    let (_, base) = store
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let commit = CommitRecord {
         id: CommitId::derive(base.root_id, None, None),
         root_id: base.root_id,
@@ -92,7 +96,7 @@ fn complete_wrong_identity_is_rejected_by_receiver_admission() {
         base_id: BaseId::Layer(base.id),
     };
     let baseline = table_count(&root.join("layer.sqlite"), "objects");
-    let payload = layerfs_core::encode_bytes_object(b"authenticated once").unwrap();
+    let payload = layerfs_content::encode_bytes_object(b"authenticated once").unwrap();
     let mut input = Vec::new();
     write_value(
         &mut input,
@@ -139,8 +143,10 @@ fn remote_transfer_requires_pinned_begin_and_exact_final_intent() {
     ));
     std::fs::create_dir_all(&root).unwrap();
     let database = root.join("layer.sqlite");
-    let store = LayerStore::open(&database).unwrap();
-    let (_, base) = store.provision().unwrap();
+    let store = LayerStore::create(&database).unwrap();
+    let (_, base) = store
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let commit = CommitRecord {
         id: CommitId::derive(base.root_id, None, None),
         root_id: base.root_id,

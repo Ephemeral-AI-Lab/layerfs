@@ -1,0 +1,5 @@
+STARTED o:b42de8ef4c36e91242f028e38daa6969 Workspace { command: Create { branch_id: "1101a04edc28ed7709b831fb21c7092ffb", root: "/mnt/pass-mat-direct", container: None, projection: Some(Materialize) } }
+PROGRESS o:b42de8ef4c36e91242f028e38daa6969 Running 0 - 0
+FINISHED CREATED workspace w:ff1dad1bee36d209e3e2df920395a0a4
+RECEIPT operation=o:b42de8ef4c36e91242f028e38daa6969 service_ns=3443792
+INVOCATION operation=o:b42de8ef4c36e91242f028e38daa6969 outcome=Succeeded total_ns=4125209 parse_ns=140667 context_ns=466375 wait_ns=3476750 render_ns=28459

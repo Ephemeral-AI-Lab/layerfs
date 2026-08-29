@@ -1,7 +1,8 @@
 use layerfs_branch_store::BranchStore;
+use layerfs_content::filesystem::ContentChange;
 use layerfs_layer_store::LayerStore;
 use layerfs_stack_store::StackStore;
-use layerfs_storage_core::{AddLayerSource, Change, RefOutcome, StorageError};
+use layerfs_storage::{BranchCommit, BranchSource, LayerSource, RefOutcome, StorageError};
 use std::sync::Arc;
 
 #[test]
@@ -13,32 +14,28 @@ fn direct_and_stacked_conflicts_move_no_head_or_object_count() {
 fn direct_conflict() {
     let run = run_dir("direct");
     let layer_path = run.join("layer.sqlite");
-    let layer = Arc::new(LayerStore::open(&layer_path).unwrap());
-    let (history, genesis) = layer.provision().unwrap();
-    let branch = BranchStore::open(run.join("branch.sqlite"), layer.clone()).unwrap();
-    let left = committed(&branch, history.id, genesis.id, None, b"left");
-    let right = committed(&branch, history.id, genesis.id, None, b"right");
+    let layer = Arc::new(LayerStore::create(&layer_path).unwrap());
+    let (history, genesis) = layer
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
+    let branch = BranchStore::create(run.join("branch.sqlite"), layer.clone()).unwrap();
+    let left = committed(&branch, genesis.id, None, b"left");
+    let right = committed(&branch, genesis.id, None, b"right");
     branch.push_branch(left.0).unwrap();
     branch.push_branch(right.0).unwrap();
     layer
-        .add_layer(
-            history.id,
-            AddLayerSource::BranchSource {
-                branch_id: left.0,
-                commit_id: left.1,
-            },
-        )
+        .add_layer(LayerSource::BranchCommit(BranchCommit {
+            branch_id: left.0,
+            commit_id: left.1,
+        }))
         .unwrap();
     let before_head = layer.layer_history(history.id).unwrap().unwrap();
     let before_objects = object_count(&layer_path);
     assert!(matches!(
-        layer.add_layer(
-            history.id,
-            AddLayerSource::BranchSource {
-                branch_id: right.0,
-                commit_id: right.1,
-            }
-        ),
+        layer.add_layer(LayerSource::BranchCommit(BranchCommit {
+            branch_id: right.0,
+            commit_id: right.1,
+        })),
         Err(StorageError::Conflict(_))
     ));
     assert_eq!(
@@ -53,38 +50,32 @@ fn direct_conflict() {
 
 fn stacked_conflict() {
     let run = run_dir("stacked");
-    let layer = Arc::new(LayerStore::open(run.join("layer.sqlite")).unwrap());
-    let (layer_history, genesis) = layer.provision().unwrap();
+    let layer = Arc::new(LayerStore::create(run.join("layer.sqlite")).unwrap());
+    let (_layer_history, genesis) = layer
+        .initialize(layerfs_storage::LayerInitialization::Empty)
+        .unwrap();
     let stack_path = run.join("stack.sqlite");
-    let stack = Arc::new(StackStore::open(&stack_path, layer.clone()).unwrap());
-    stack
-        .pull_layer_history(layer_history.id, genesis.id)
-        .unwrap();
-    let (history, seed) = stack
-        .create_stack_history_from_layer(layer_history.id, genesis.id)
-        .unwrap();
-    let branch = BranchStore::open(run.join("branch.sqlite"), stack.clone()).unwrap();
-    let left = committed(
-        &branch,
-        layer_history.id,
-        genesis.id,
-        Some((history.id, seed.id)),
-        b"left",
-    );
-    let right = committed(
-        &branch,
-        layer_history.id,
-        genesis.id,
-        Some((history.id, seed.id)),
-        b"right",
-    );
+    let stack = Arc::new(StackStore::create(&stack_path, layer.clone()).unwrap());
+    stack.pull_layer(genesis.id).unwrap();
+    let (history, seed) = stack.create_stack(genesis.id).unwrap();
+    let branch = BranchStore::create(run.join("branch.sqlite"), stack.clone()).unwrap();
+    let left = committed(&branch, genesis.id, Some(seed.id), b"left");
+    let right = committed(&branch, genesis.id, Some(seed.id), b"right");
     branch.push_branch(left.0).unwrap();
     branch.push_branch(right.0).unwrap();
-    stack.add_stack(history.id, left.0, left.1).unwrap();
+    stack
+        .add_stack(BranchCommit {
+            branch_id: left.0,
+            commit_id: left.1,
+        })
+        .unwrap();
     let before_head = stack.stack_history(history.id).unwrap().unwrap();
     let before_objects = object_count(&stack_path);
     assert!(matches!(
-        stack.add_stack(history.id, right.0, right.1),
+        stack.add_stack(BranchCommit {
+            branch_id: right.0,
+            commit_id: right.1,
+        }),
         Err(StorageError::Conflict(_))
     ));
     assert_eq!(
@@ -100,28 +91,19 @@ fn stacked_conflict() {
 
 fn committed(
     store: &BranchStore,
-    layer_history: layerfs_storage_core::LayerHistoryId,
-    layer: layerfs_storage_core::LayerId,
-    stack: Option<(
-        layerfs_storage_core::StackHistoryId,
-        layerfs_storage_core::StackId,
-    )>,
+    layer: layerfs_storage::LayerId,
+    stack: Option<layerfs_storage::StackId>,
     bytes: &[u8],
-) -> (
-    layerfs_storage_core::BranchId,
-    layerfs_storage_core::CommitId,
-) {
+) -> (layerfs_storage::BranchId, layerfs_storage::CommitId) {
     let branch = match stack {
-        Some((history, stack)) => store.create_branch_from_stack(history, stack).unwrap(),
-        None => store
-            .create_branch_from_layer(layer_history, layer)
-            .unwrap(),
+        Some(stack) => store.create_branch(BranchSource::Stack(stack)).unwrap(),
+        None => store.create_branch(BranchSource::Layer(layer)).unwrap(),
     };
     let commit = match store
         .commit(
             branch.id,
             branch.head_commit_id,
-            &[Change::Write {
+            &[ContentChange::Write {
                 path: "same".into(),
                 bytes: bytes.to_vec(),
                 mode: 0o644,

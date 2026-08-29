@@ -1,11 +1,27 @@
 use crate::StackStore;
-use layerfs_storage_core::{
-    three_way, AddResult, BaseId, BranchId, CommitId, Result, ResultId, SourceId, StackHistoryId,
-    StackId, StackRecord, StorageError, ThreeWayOutcome,
+use layerfs_storage::{
+    merge_candidate, AddResult, BaseId, BranchCommit, BranchId, CandidateMergeOutcome, CommitId,
+    Result, ResultId, SourceId, StackHistoryId, StackId, StackRecord, StorageError,
 };
 
 impl StackStore {
-    pub fn add_stack(
+    pub fn add_stack(&self, source: BranchCommit) -> Result<AddResult<StackId>> {
+        let branch = self
+            .db
+            .branch(source.branch_id)?
+            .ok_or(StorageError::MissingBaseData)?;
+        let BaseId::Stack(base_stack_id) = branch.base_id else {
+            return Err(StorageError::WrongSourceRoute);
+        };
+        let history_id = self
+            .db
+            .stack(base_stack_id)?
+            .ok_or(StorageError::MissingBaseData)?
+            .history_id;
+        self.add_stack_to_history(history_id, source.branch_id, source.commit_id)
+    }
+
+    pub(crate) fn add_stack_to_history(
         &self,
         stack_history_id: StackHistoryId,
         branch_id: BranchId,
@@ -16,7 +32,7 @@ impl StackStore {
             != *blake3::hash(&self.writer.public_key()).as_bytes()
         {
             return Err(StorageError::ReadOnlyStackHistory(
-                layerfs_storage_core::ReadOnlyHistory {
+                layerfs_storage::ReadOnlyHistory {
                     history_id: stack_history_id,
                 },
             ));
@@ -29,12 +45,10 @@ impl StackStore {
             .branch(branch_id)?
             .ok_or(StorageError::MissingBaseData)?;
         if branch.head_commit_id != commit_id {
-            return Err(StorageError::CommitHeadMoved(
-                layerfs_storage_core::HeadMoved {
-                    expected: Some(commit_id),
-                    actual: Some(branch.head_commit_id),
-                },
-            ));
+            return Err(StorageError::CommitHeadMoved(layerfs_storage::HeadMoved {
+                expected: Some(commit_id),
+                actual: Some(branch.head_commit_id),
+            }));
         }
         let BaseId::Stack(base_stack_id) = branch.base_id else {
             return Err(StorageError::WrongSourceRoute);
@@ -45,7 +59,7 @@ impl StackStore {
             .ok_or(StorageError::MissingBaseData)?;
         if base.history_id != stack_history_id {
             return Err(StorageError::WrongStackHistory(
-                layerfs_storage_core::WrongHistory {
+                layerfs_storage::WrongHistory {
                     expected: stack_history_id,
                     actual: base.history_id,
                 },
@@ -63,12 +77,13 @@ impl StackStore {
             .db
             .stack(history.head_stack_id)?
             .ok_or(StorageError::MissingBaseData)?;
-        let merged = match three_way(&self.db, base.root_id, current.root_id, candidate.root_id)? {
-            ThreeWayOutcome::Conflict(conflict) => {
-                return Err(StorageError::Conflict(Box::new(conflict)))
-            }
-            ThreeWayOutcome::Clean(merged) => merged,
-        };
+        let merged =
+            match merge_candidate(&self.db, base.root_id, current.root_id, candidate.root_id)? {
+                CandidateMergeOutcome::Conflict(conflict) => {
+                    return Err(StorageError::Conflict(Box::new(conflict)))
+                }
+                CandidateMergeOutcome::Clean(merged) => merged,
+            };
         let stack = StackRecord {
             id: StackId::derive(stack_history_id, Some(current.id), merged.root_id),
             history_id: stack_history_id,
@@ -95,7 +110,7 @@ impl StackStore {
             .ok_or(StorageError::MissingBaseData)?;
         if stack.history_id != expected {
             return Err(StorageError::WrongStackHistory(
-                layerfs_storage_core::WrongHistory {
+                layerfs_storage::WrongHistory {
                     expected,
                     actual: stack.history_id,
                 },

@@ -24,7 +24,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Err(usage().into());
     }
     let parent = Arc::new(RemoteEndpoint::connect(parent.parse::<SocketAddr>()?)?);
-    let store = StackStore::open(path, parent)?;
+    let store = StackStore::connect(path, parent)?;
     let listener = TcpListener::bind(listen)?;
     for stream in listener.incoming() {
         let store = store.clone();

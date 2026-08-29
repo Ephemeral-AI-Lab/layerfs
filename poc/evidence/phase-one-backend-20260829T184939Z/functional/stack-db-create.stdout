@@ -1,0 +1,5 @@
+STARTED o:54b15a8c6516a80871e30eb81b796e58 Db { command: Create { role: Stack, location: "/var/lib/layerfs-pass/stack.db" } }
+PROGRESS o:54b15a8c6516a80871e30eb81b796e58 Running 0 - 0
+FINISHED CONNECTED stack /var/lib/layerfs-pass/stack.db
+RECEIPT operation=o:54b15a8c6516a80871e30eb81b796e58 service_ns=9596291
+INVOCATION operation=o:54b15a8c6516a80871e30eb81b796e58 outcome=Succeeded total_ns=10203917 parse_ns=125916 context_ns=394417 wait_ns=9644626 render_ns=27166

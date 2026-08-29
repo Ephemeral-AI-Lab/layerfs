@@ -1,0 +1,10 @@
+STARTED o:6a06ad253125ddbedf75222461824eb3 Monitor { command: Db }
+PROGRESS o:6a06ad253125ddbedf75222461824eb3 Running 0 - 0
+SNAPSHOT Monitor
+branch /var/lib/layerfs-pass/stacked-branch.db db=4096 wal=160712 shm=32768
+stack /var/lib/layerfs-pass/stack.db db=4096 wal=164832 shm=32768
+layer /var/lib/layerfs-pass/layer.db db=4096 wal=127752 shm=32768
+branch /var/lib/layerfs-pass/branch.db db=4096 wal=173072 shm=32768
+FINISHED OK
+RECEIPT operation=o:6a06ad253125ddbedf75222461824eb3 service_ns=24875
+INVOCATION operation=o:6a06ad253125ddbedf75222461824eb3 outcome=Succeeded total_ns=614875 parse_ns=156334 context_ns=375875 wait_ns=57209 render_ns=13457
