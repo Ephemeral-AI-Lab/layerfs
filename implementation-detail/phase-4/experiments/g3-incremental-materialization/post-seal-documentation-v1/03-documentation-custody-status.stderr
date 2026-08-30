@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "<string>", line 30, in <module>
-    assert h(p)==expected[name] and (p.stat().st_mode&0o7777)==0o644 and data.endswith(b'\n') and b'\r' not in data
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-AssertionError

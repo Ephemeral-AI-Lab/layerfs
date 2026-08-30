@@ -1,7 +1,0 @@
-{
-  "config": {"reps": 1, "warmup": 0, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
-  "results": [
-    {"scenario": "mkdir tree (10x10x10)", "target": "computerd", "meanNs": 662767876, "medianNs": 662767876, "p95Ns": 662767876, "minNs": 662767876, "maxNs": 662767876, "samples": 1},
-    {"scenario": "mkdir tree (10x10x10)", "target": "base", "meanNs": 413315375, "medianNs": 413315375, "p95Ns": 413315375, "minNs": 413315375, "maxNs": 413315375, "samples": 1}
-  ]
-}

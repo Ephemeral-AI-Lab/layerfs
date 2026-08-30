@@ -1,9 +1,0 @@
-{
-  "benchmark_exit": 0,
-  "matrix_exact": true,
-  "row_count": 24,
-  "schema": "layerfs-stage2-014-authoritative-capture-v1",
-  "status": "CAPTURED",
-  "timing_disposition": "UNVERIFIED_RAW",
-  "wall_ns": 24320696000
-}

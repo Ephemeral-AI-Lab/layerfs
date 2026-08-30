@@ -1,7 +1,0 @@
-{
-  "cpu_ns": 0,
-  "limit_ns": 25000000,
-  "schema": "layerfs-stage2-idle-cpu-v1",
-  "status": "PASS",
-  "wall_ns": 10011411380
-}

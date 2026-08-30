@@ -1,3 +1,0 @@
-d	755	4096	/volume
-f	644	61440	/volume/store.sqlite
-===== sqlite-sidecars =====

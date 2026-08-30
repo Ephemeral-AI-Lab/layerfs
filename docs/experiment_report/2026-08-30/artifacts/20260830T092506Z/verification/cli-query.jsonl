@@ -1,0 +1,2 @@
+{"schema_version":3,"event":"started","value":"Query { kind: AuthorityLayerstacks }"}
+{"schema_version":3,"event":"finished","result":{"kind":"query","items":[{"type":"layer_stack","id":"3101a0520abaeb7cd1888e422aa4e28d88","name":"api-server","head_layer_id":"32db4daf115b5c29104ef55def39d0a53df2c3f62d2c9d1fc489b5ceb1f4499087"}],"continuation":null}}

@@ -1,5 +1,0 @@
-source_commit=292be840c31052d85ab6e9441706298af3cd3d15
-source_tree=e3055bcd7a41921879fa149c11918891517e4522
-tool_image_id=sha256:bd51049cd15588faffd50331d3b2277ec56142a1561e250d63b4f2d58daf8a61
-cargo_registry=/Users/yifanxu/.cargo/registry mounted read-only
-docker run --rm --platform linux/arm64 --network none -v /Users/yifanxu/Ephemeral-AI-Lab:/Users/yifanxu/Ephemeral-AI-Lab -v /Users/yifanxu/.cargo/registry:/usr/local/cargo/registry:ro -v layerfs_stage2_final014_linux_target:/Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty/target -w /Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty sha256:bd51049cd15588faffd50331d3b2277ec56142a1561e250d63b4f2d58daf8a61 sh -c 'git rev-parse HEAD && /usr/bin/ruby --version && cargo test --offline --locked --workspace --all-targets -- --test-threads=1 && cargo clippy --offline --locked -p layerfs-fuse --all-targets -- -D warnings'

@@ -1,7 +1,0 @@
-STARTED o:15dedcada8e768b8e5c53e4a303d509e Monitor { command: Branch { branch_id: "1101a04edc2a1d734dab2e59af2f88afac" } }
-PROGRESS o:15dedcada8e768b8e5c53e4a303d509e Running 0 - 0
-SNAPSHOT Monitor
-branch=Some(StoreFact { kind: Branch, id: "1101a04edc2a1d734dab2e59af2f88afac", fields: [("head_commit_id", "12dd1455e3b634afe7e336fa577a2e001697fd16b104ad9310c1b764fe46c0426c"), ("base_id", "Stack(StackId(2289fe420f20c50508b547abb650a139cdee708c18e5a46025451cd27506c5e64c))")] })
-FINISHED OK
-RECEIPT operation=o:15dedcada8e768b8e5c53e4a303d509e service_ns=81541
-INVOCATION operation=o:15dedcada8e768b8e5c53e4a303d509e outcome=Succeeded total_ns=680125 parse_ns=153917 context_ns=382958 wait_ns=108125 render_ns=19416

@@ -1,1 +1,0 @@
-materialization_projection_and_runtime_cleanup=true

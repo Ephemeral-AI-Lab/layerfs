@@ -1,0 +1,100 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.53kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/rust:1.85.1-bookworm
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [build 1/6] FROM docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#4 resolve docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 27.74kB done
+#5 DONE 0.0s
+
+#6 [build 2/6] WORKDIR /src
+#6 CACHED
+
+#7 [build 3/6] COPY Cargo.toml Cargo.lock ./
+#7 CACHED
+
+#8 [build 4/6] COPY crates ./crates
+#8 DONE 0.0s
+
+#9 [build 5/6] COPY tools ./tools
+#9 DONE 0.0s
+
+#10 [build 6/6] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     test "${#LAYERFS_SOURCE_COMMIT}" -eq 40  && test "${#LAYERFS_SOURCE_TREE}" -eq 40  && case "$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE" in *[!0-9a-f]*) exit 1 ;; esac  && case "$TARGETARCH" in       arm64) rustup target add aarch64-unknown-linux-gnu; target=aarch64-unknown-linux-gnu ;;       amd64) rustup target add x86_64-unknown-linux-gnu; target=x86_64-unknown-linux-gnu ;;       *) exit 1 ;;     esac  && rustup component add clippy  && cargo test --locked --target "$target" -p layerfs-fuse --no-default-features --features proxy  && cargo clippy --locked --target "$target" -p layerfs-fuse --no-default-features --features proxy --all-targets -- -D warnings  && cargo build --locked --release --target "$target" -p layerfs-fuse --no-default-features --features proxy  && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
+#10 0.163 info: component 'rust-std' for target 'aarch64-unknown-linux-gnu' is up to date
+#10 0.265 info: downloading component 'clippy'
+#10 3.714 info: installing component 'clippy'
+#10 4.095    Compiling layerfs-fuse v0.1.0 (/src/crates/layerfs-fuse)
+#10 4.725     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.67s
+#10 4.728      Running unittests src/lib.rs (target/aarch64-unknown-linux-gnu/debug/deps/layerfs_fuse-8b8cd7a8d80e62a7)
+#10 4.729 
+#10 4.729 running 2 tests
+#10 4.729 test proxy_host::tests::capabilities_use_os_entropy ... ok
+#10 4.729 test protocol::tests::write_and_size_round_trip ... ok
+#10 4.729 
+#10 4.729 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#10 4.729 
+#10 4.729      Running unittests src/bin/layerfs-fuse.rs (target/aarch64-unknown-linux-gnu/debug/deps/layerfs_fuse-3be9c86d5f0b3908)
+#10 4.730 
+#10 4.730 running 0 tests
+#10 4.730 
+#10 4.730 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#10 4.730 
+#10 4.730      Running tests/proxy.rs (target/aarch64-unknown-linux-gnu/debug/deps/proxy-4ea9e3c5d7454db3)
+#10 4.731 
+#10 4.731 running 1 test
+#10 4.775 test capability_scopes_a_bounded_typed_proxy_session ... ok
+#10 4.775 
+#10 4.775 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+#10 4.775 
+#10 4.775    Doc-tests layerfs_fuse
+#10 4.817 
+#10 4.817 running 0 tests
+#10 4.818 
+#10 4.818 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+#10 4.818 
+#10 4.963     Checking layerfs-fuse v0.1.0 (/src/crates/layerfs-fuse)
+#10 5.230     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.36s
+#10 5.326    Compiling layerfs-fuse v0.1.0 (/src/crates/layerfs-fuse)
+#10 7.263     Finished `release` profile [optimized] target(s) in 2.02s
+#10 DONE 7.3s
+
+#4 [build 1/6] FROM docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#4 CACHED
+
+#11 [stage-1 2/5] COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
+#11 DONE 0.0s
+
+#12 [stage-1 3/5] COPY containers/layerfs-fuse/fs-bench.sh /usr/local/bin/fs-bench.sh
+#12 DONE 0.0s
+
+#13 [stage-1 4/5] COPY containers/layerfs-fuse/verify_fs_bench.py /usr/local/bin/verify_fs_bench.py
+#13 DONE 0.0s
+
+#14 [stage-1 5/5] RUN echo "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef  /usr/local/bin/fs-bench.sh" | sha256sum -c -  && python3 /usr/local/bin/verify_fs_bench.py --self-test  && chmod 0555 /usr/local/bin/fs-bench.sh /usr/local/bin/verify_fs_bench.py  && mkdir -p /workspace /var/lib/layerfs /var/tmp/layerfs-owned
+#14 0.094 /usr/local/bin/fs-bench.sh: OK
+#14 DONE 0.1s
+
+#15 exporting to image
+#15 exporting layers 0.1s done
+#15 exporting manifest sha256:98279dd336a441da2a35a9b20d0eaa9c9e1145c3e678da0458398d4c88ed9246 done
+#15 exporting config sha256:035d77c6a3f4bffdc91b4c09f503284e13cd483dcba61663718a3bb334bcae2a done
+#15 exporting attestation manifest sha256:6e4d1c120868145d4ab8b528db5bfa5cb1e81409803672dc51fa71246692c25a
+#15 exporting attestation manifest sha256:6e4d1c120868145d4ab8b528db5bfa5cb1e81409803672dc51fa71246692c25a done
+#15 exporting manifest list sha256:bf77c12659a9ad9cca496c9c4e85e4d764ffa3eb7ec637782bcbb19b658d8ffb done
+#15 naming to docker.io/library/layerfs-v2:benchmark-20260830T060931Z done
+#15 unpacking to docker.io/library/layerfs-v2:benchmark-20260830T060931Z 0.0s done
+#15 DONE 0.1s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/n6kmn7srdeu6zgucyfeaxcwro

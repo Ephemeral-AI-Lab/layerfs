@@ -1,6 +1,0 @@
-state_root=/tmp/layerfs/87ce069308a90cac/workspaces/workspaces
-remaining_workspace_state_directories=0
-/workspace is not a mountpoint
-/workspace is not a mountpoint
-/workspace is not a mountpoint
-active_mounts_helpers_and_state_empty=true

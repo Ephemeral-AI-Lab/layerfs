@@ -1,5 +1,0 @@
-STARTED o:1f617d403f0e68710693358cce24e90b Workspace { command: Exec { workspace_id: "w:86f7df61beb8393f0b134592f177609c", argv: ["/bin/sh", "-c", "printf container-stop > stopped-file; sleep 30 & wait"] } }
-PROGRESS o:1f617d403f0e68710693358cce24e90b Running 0 - 0
-FINISHED CREATED execution x:42750ae7a19a5ebc1e7282e4ccd9afef
-RECEIPT operation=o:1f617d403f0e68710693358cce24e90b service_ns=106461917
-INVOCATION operation=o:1f617d403f0e68710693358cce24e90b outcome=Succeeded total_ns=107154292 parse_ns=117834 context_ns=501584 wait_ns=106497332 render_ns=26624

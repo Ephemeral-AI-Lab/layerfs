@@ -1,3 +1,0 @@
-/mnt/host-direct is not a mountpoint
-/mnt/host-stacked is not a mountpoint
-host_fuse_mount_and_runtime_cleanup=true

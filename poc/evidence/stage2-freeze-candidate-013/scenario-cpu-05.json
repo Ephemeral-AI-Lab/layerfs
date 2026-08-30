@@ -1,7 +1,0 @@
-{
-  "config": {"reps": 1, "warmup": 0, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
-  "results": [
-    {"scenario": "find tree", "target": "computerd", "meanNs": 685231417, "medianNs": 685231417, "p95Ns": 685231417, "minNs": 685231417, "maxNs": 685231417, "samples": 1},
-    {"scenario": "find tree", "target": "base", "meanNs": 412581666, "medianNs": 412581666, "p95Ns": 412581666, "minNs": 412581666, "maxNs": 412581666, "samples": 1}
-  ]
-}

@@ -1,0 +1,20 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running tests/live_docker.rs (target/debug/deps/live_docker-0733fc6527c0d406)
+
+running 1 test
+DOCKER_MOUNT reference 410859708
+DOCKER_MOUNT replica 332204000
+
+thread 'one_prepared_container_runs_two_mounts_and_both_placement_benchmarks' (170367472) panicked at crates/layerfs-sdk/tests/live_docker.rs:166:9:
+reference benchmark verifier
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test one_prepared_container_runs_two_mounts_and_both_placement_benchmarks ... FAILED
+
+failures:
+
+failures:
+    one_prepared_container_runs_two_mounts_and_both_placement_benchmarks
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 33.02s
+
+error: test failed, to rerun pass `-p layerfs-sdk --test live_docker`

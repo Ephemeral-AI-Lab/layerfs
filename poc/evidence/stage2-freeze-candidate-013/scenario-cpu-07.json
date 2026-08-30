@@ -1,9 +1,0 @@
-{
-  "config": {"reps": 1, "warmup": 0, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
-  "results": [
-    {"scenario": "copy 64 MiB", "target": "computerd", "meanNs": 127023584, "medianNs": 127023584, "p95Ns": 127023584, "minNs": 127023584, "maxNs": 127023584, "samples": 1},
-    {"scenario": "copy 64 MiB", "target": "base", "meanNs": 41174125, "medianNs": 41174125, "p95Ns": 41174125, "minNs": 41174125, "maxNs": 41174125, "samples": 1},
-    {"scenario": "pure copy 64 MiB", "target": "computerd", "meanNs": 86453333, "medianNs": 86453333, "p95Ns": 86453333, "minNs": 86453333, "maxNs": 86453333, "samples": 1},
-    {"scenario": "pure copy 64 MiB", "target": "base", "meanNs": 21055667, "medianNs": 21055667, "p95Ns": 21055667, "minNs": 21055667, "maxNs": 21055667, "samples": 1}
-  ]
-}

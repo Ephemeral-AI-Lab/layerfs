@@ -1,8 +1,0 @@
-source_commit=6dff1664a8d7ea8b7b00c25150a356f7af0645a5
-source_tree=75874cfe43fd1d75519f74d46a07cf972754e932
-command=docker run --rm --platform linux/arm64 -v /Users/yifanxu/Ephemeral-AI-Lab/layerfs-empty:/src:ro -v layerfs_stage2_final013_linux_target:/src/target -v layerfs_stage2_final013_linux_cargo_registry:/usr/local/cargo/registry -w /src rust:1.85.1-bookworm sh -lc 'rustup component add clippy && cargo test --locked --workspace --all-targets -- --test-threads=1 && cargo clippy --locked --workspace --all-targets -- -D warnings'
-Unable to find image 'rust:1.85.1-bookworm' locally
-1.85.1-bookworm: Pulling from library/rust
-Digest: sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
-Status: Downloaded newer image for rust:1.85.1-bookworm
-sh: 1: rustup: not found

@@ -1,7 +1,0 @@
-status=PASS
-container_inspect_exit=1
-volume_inspect_exit=1
-container_absent=true
-volume_absent=true
-scoped_process_absent=true
-scoped_mount_namespace_absent=true

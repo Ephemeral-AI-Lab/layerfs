@@ -1,0 +1,430 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_branch_store-d156cdb98e6317a5)
+
+running 2 tests
+test read::tests::complete_reader_retains_no_parent_route ... ok
+test read::tests::mixed_reader_never_falls_back_for_a_receipted_root ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/contracts.rs (target/debug/deps/contracts-72e7a638e2193bf4)
+
+running 6 tests
+test layer_pull_tracks_exact_boundary_mode_and_complete_prefix ... ok
+test reconciliation_preserves_branch_layer_and_working_tree_as_distinct_choices ... ok
+test branch_pull_is_read_only_complete_history_and_push_sends_only_owned_suffix ... ok
+test branch_pull_imports_inherited_ancestry_and_origin_facts ... ok
+test incremental_pull_requests_only_suffix_and_interruption_hides_scope ... ok
+test branch_pull_crosses_more_than_512_commits_without_truncation ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.45s
+
+     Running tests/v2.rs (target/debug/deps/v2-c3d471b2334ef6eb)
+
+running 1 test
+test reference_commit_push_add_and_exact_forks_share_objects ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_cli-2d5965c9287ee9bc)
+
+running 1 test
+test output::tests::query_json_names_the_scope_boundary_and_mode ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/layerfs.rs (target/debug/deps/layerfs-a4ce288879fc282b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/v2.rs (target/debug/deps/v2-50912a8e6cd7e8a1)
+
+running 2 tests
+test exact_v2_grammar_parses_and_deleted_aliases_do_not ... ok
+test frontend_session_executes_one_pair_lifecycle_without_a_tui ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_content-07264e834522ffba)
+
+running 33 tests
+test file::cdc::tests::scanner_buffer_capacity_is_fixed ... ok
+test object::codec::tests::borrowed_bytes_encoding_matches_owned_canonical_identity ... ok
+test object::codec::tests::identity_authenticates_supplied_bytes_before_decoding ... ok
+test object::codec::tests::canonical_vectors_are_fixed ... ok
+test object::codec::tests::directory_names_use_the_canonical_name_bound ... ok
+test object::codec::tests::object_id_matches_hash_of_canonical_encoding ... ok
+test object::codec::tests::rejects_declared_fields_larger_than_remaining_payload ... ok
+test object::codec::tests::rejects_malformed_and_noncanonical_bytes ... ok
+test object::codec::tests::rejects_manually_unsorted_directory_wire_bytes ... ok
+test object::codec::tests::rejects_truncated_payloads_and_invalid_fields ... ok
+test object::codec::tests::round_trips_and_streams_each_object_kind ... ok
+test object::codec::tests::shallow_authentication_defers_payload_rules_to_the_exact_role_decoder ... ok
+test object::codec::tests::streaming_decode_handles_fragmented_and_short_reads ... ok
+test object::digest::tests::content_digest_writer_is_fragmentation_independent ... ok
+test object::digest::tests::object_domain_is_frozen_for_v2_and_differs_from_v1 ... ok
+test object::digest::tests::object_domain_is_not_unframed_hashing ... ok
+test object::digest::tests::object_hash_is_fragmentation_independent ... ok
+test object::id::tests::ids_are_fixed_and_text_round_trips ... ok
+test tree::path::tests::accepts_root_and_canonical_paths ... ok
+test tree::path::tests::orders_parents_and_components_by_bytes ... ok
+test tree::path::tests::enforces_path_bounds ... ok
+test tree::path::tests::rejects_invalid_paths ... ok
+test file::cdc::tests::callback_failure_is_propagated_exactly ... ok
+test file::cdc::tests::short_and_maximum_edges_are_bounded ... ok
+test file::cdc::tests::frozen_boundaries_are_deterministic ... ok
+test object::references::tests::every_internal_magic_is_safe_as_user_file_prefix_and_transfer_leaf ... ok
+test tree::directory::validate::tests::variable_width_directory_borrows_until_both_branches_are_filled ... ok
+test file::cdc::tests::fragmentation_does_not_change_boundaries ... ok
+test file::rope::edit::batch_tests::file_batch_streams_payload_while_deferring_only_structural_objects ... ok
+test tree::directory::validate::tests::directory_pages_resume_without_rescanning_or_skipping ... ok
+test filesystem::apply::tests::deferred_inode_batch_matches_sequential_roots_with_local_final_puts ... ok
+test file::rope::edit::batch_tests::file_batch_streams_large_replacement_below_structural_hard_bound ... ok
+test filesystem::apply::tests::deferred_directory_batch_matches_sequential_roots_with_local_final_puts ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.86s
+
+     Running tests/canonical_v2_fixture_oracle.rs (target/debug/deps/canonical_v2_fixture_oracle-de2a0797a9f04918)
+
+running 1 test
+test independent_actual_fixture_oracle_freezes_complete_v2_corpus ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.25s
+
+     Running tests/extent_codec.rs (target/debug/deps/extent_codec-8b82a0b700fc752d)
+
+running 3 tests
+test profile_digest_is_literal_and_malformed_framing_is_rejected ... ok
+test literal_empty_leaf_and_file_state_are_exact ... ok
+test selected_nonempty_boundary_ids_are_literal ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/extent_model.rs (target/debug/deps/extent_model-32cf70c920b6f87b)
+
+running 21 tests
+test fetched_identity_is_unconditional ... ok
+test missing_payload_batch_callback_is_rejected ... ok
+test extra_payload_batch_callback_is_rejected_without_panicking ... ok
+test paired_diff_skips_equal_roots_and_length_mismatch_mappings ... ok
+test full_empty_read_authenticates_and_binds_its_mapping_root ... ok
+test paired_diff_handles_unequal_height_and_partition_without_payload_reads ... ok
+test authenticated_child_summary_mismatch_and_underfull_nonroot_are_rejected ... ok
+test fetched_payload_above_frozen_ceiling_is_rejected ... ok
+test payload_batches_continue_across_mapping_leaf_boundaries ... ok
+test validation_binds_empty_state_and_visits_unread_children ... ok
+test deep_splice_rejoins_boundary_fragments_before_they_become_nonroots ... ok
+test extent_visitor_streams_the_mapping_without_fetching_payload_bytes ... ok
+test product_range_reader_uses_bounded_authenticated_payload_batches ... ok
+test replace_persists_no_new_unreachable_objects ... ok
+test mutation_batch_rejects_later_overlap_before_sealed_nodes_can_be_orphaned ... ok
+test frozen_three_mib_mapping_is_below_one_percent ... ok
+test streamed_build_and_ranges_match_vec_oracle ... ok
+test splices_match_vec_and_preserve_retained_root_without_suffix_payload_reads ... ok
+test large_replacement_persists_no_flushed_unreachable_prefix_nodes ... ok
+test mutation_batch_preserves_root_and_persists_only_final_extent_spines ... ok
+test two_thousand_randomized_splices_match_every_revision_and_retained_history ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 51.87s
+
+     Running tests/fastcdc_shifted_stream.rs (target/debug/deps/fastcdc_shifted_stream-a4e87b9e68487f20)
+
+running 1 test
+test shifted_stream_retains_a_frozen_canonical_suffix_that_fixed_blocks_lose ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+
+     Running tests/logical.rs (target/debug/deps/logical-c59316b47af0a11a)
+
+running 11 tests
+test three_root_reconciliation_never_publishes_an_undercounted_parallel_hard_link ... ok
+test rename_keeps_old_roots_readable_and_handles_same_and_cross_directory_moves ... ok
+test exact_reads_and_local_mutation_share_one_logical_owner ... ok
+test three_root_reconciliation_streams_independent_inode_changes_and_reports_overlap ... ok
+test three_root_reconciliation_combines_content_and_metadata_on_one_inode ... ok
+test path_diff_reuses_equal_persistent_objects_and_emits_incrementally ... ok
+test three_root_reconciliation_combines_disjoint_metadata_keys ... ok
+test three_root_reconciliation_combines_disjoint_names_in_one_directory ... ok
+test path_diff_preserves_order_types_metadata_symlinks_directories_and_hard_links ... ok
+test typed_conflicts_report_canonical_paths_and_exact_choice_roots ... ok
+test inode_reconciliation_prunes_equal_persistent_subtrees ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/namespace_codec.rs (target/debug/deps/namespace_codec-09c5f5622db83bd2)
+
+running 9 tests
+test inode_decoder_rejects_size_count_and_level_before_entry_allocation ... ok
+test portable_and_apple_metadata_are_exact_and_order_preserving ... ok
+test directory_inode_and_metadata_nodes_are_strict_and_ordered ... ok
+test metadata_empty_root_is_canonical_and_one_child_root_is_not ... ok
+test exact_namespace_values_round_trip_and_reject_trailing_bytes ... ok
+test metadata_child_ranges_must_not_overlap ... ok
+test persistent_metadata_tree_round_trips_multiple_levels ... ok
+test metadata_lookup_and_fixed_key_replacement_touch_only_one_cow_spine ... ok
+test metadata_builder_keeps_only_bounded_tail_summaries ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+
+     Running tests/namespace_model.rs (target/debug/deps/namespace_model-062537a02502c097)
+
+running 18 tests
+test inode_branch_summary_and_occupancy_are_authoritative ... ok
+test repeated_child_levels_are_rejected_before_loading_grandchildren ... ok
+test directory_state_and_branch_summaries_are_authoritative ... ok
+test inode_diff_merges_unequal_canonical_heights_without_collecting_entries ... ok
+test directory_diff_merges_unequal_canonical_heights_without_collecting_entries ... ok
+test directory_and_inode_child_ranges_must_not_overlap ... ok
+test underfull_middle_directory_borrows_right_before_merging_left ... ok
+test underfull_middle_inode_leaf_borrows_right_before_merging_left ... ok
+test variable_width_directory_borrows_until_both_leaves_are_filled ... ok
+test directory_diff_streams_valid_unmatched_prefixes_tails_and_renames ... ok
+test level_two_ranges_use_true_leftmost_leaf_minimum ... ok
+test paired_persistent_diffs_prune_unchanged_directory_and_inode_subtrees ... ok
+test deterministic_mixed_directory_edits_preserve_periodic_roots ... ok
+test remove_and_rename_persist_only_reachable_directory_and_inode_nodes ... ok
+test inode_remove_merges_collapses_and_preserves_retained_root ... ok
+test remove_merge_root_collapse_and_rename_match_oracle ... ok
+test inode_table_scales_and_record_update_rewrites_only_its_spine ... ok
+test ten_thousand_names_path_copy_and_retained_roots_match_ordered_oracle ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.28s
+
+     Running unittests src/main.rs (target/debug/deps/layerfs_eval-cec8bcf439adcaab)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_fuse-fc8bf29ea85aaf75)
+
+running 3 tests
+test protocol::tests::write_and_size_round_trip ... ok
+test proxy_host::tests::capabilities_use_os_entropy ... ok
+test proxy_client::tests::multi_stream_barrier_drains_every_stream_after_the_first_error ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/layerfs-fuse.rs (target/debug/deps/layerfs_fuse-30704ae8bc457ad0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/proxy.rs (target/debug/deps/proxy-9746529f4bca98f5)
+
+running 2 tests
+test deferred_mutation_errors_surface_at_the_next_synchronization_point ... ok
+test capability_scopes_a_bounded_typed_proxy_session ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_layerstack_store-af6b0071fa12ddd4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/layerfs-layerstack-store.rs (target/debug/deps/layerfs_layerstack_store-49768d4150330fad)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/initialize.rs (target/debug/deps/initialize-df1a0b0dbdef71c7)
+
+running 2 tests
+test typed_constructors_and_genesis_are_v2_only ... ok
+test names_are_unique_per_authority_and_multiple_layerstacks_are_isolated ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/refinement.rs (target/debug/deps/refinement-20b72d1e3552b6b5)
+
+running 5 tests
+test authority_point_and_name_queries_are_indexed ... ok
+test an_advance_verifies_only_the_new_owned_suffix ... ok
+test project_scoped_names_deduplicate_objects_and_reject_cross_stack_push ... ok
+test inherited_history_and_owned_suffix_use_distinct_stop_conditions ... ok
+test exact_pages_remain_bounded_and_pinned_after_the_authority_advances ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_materialization-dca987e6a99a70b3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/materialize.rs (target/debug/deps/materialize-24deb1242362f40a)
+
+running 1 test
+test port_materializes_files_metadata_hardlinks_and_symlinks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_monitor-a157e2d6dc9ce377)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/monitor.rs (target/debug/deps/monitor-9631d4d890e38d03)
+
+running 1 test
+test passive_snapshot_has_zero_sql_and_explicit_analysis_is_exact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_sdk-76909d9fccff9ed7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/leases.rs (target/debug/deps/leases-4dcbba259185a887)
+
+running 2 tests
+test writable_workspace_lease_is_shared_across_clients ... ok
+test reconciliation_workspace_holds_the_shared_lease_until_end ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/live_docker.rs (target/debug/deps/live_docker-6b24ad676e03c78c)
+
+running 1 test
+test one_prepared_container_runs_two_mounts_and_both_placement_benchmarks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/live_fuse.rs (target/debug/deps/live_fuse-3b52c31845ed5add)
+
+running 1 test
+test host_fuse_reads_and_commits_reference_and_replica ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/query_pagination.rs (target/debug/deps/query_pagination-44c4487dcbde82e8)
+
+running 1 test
+test named_query_pages_expose_every_record_and_validate_cursors ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+
+     Running tests/v2.rs (target/debug/deps/v2-60474f0ccdab94d0)
+
+running 7 tests
+test mismatched_parent_is_refused_without_reparenting ... ok
+test semantic_operation_receipts_survive_client_reopen ... ok
+test workspace_lease_and_head_cas_preserve_losing_final_state ... ok
+test one_verified_pair_runs_the_v2_lifecycle ... ok
+test typed_stale_conflict_blocks_commit_and_accepts_layer_choice ... ok
+test stale_add_requires_pull_resolution_commit_push_and_repeat ... ok
+test all_diff_forms_share_read_only_paged_path_diffs ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.95s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_storage-ed412d5f8ebcf70b)
+
+running 6 tests
+test transfer::tests::transfer_equation_rejects_missing_payload ... ok
+test transfer::tests::local_and_transfer_byte_equations_are_explicit ... ok
+test ids::tests::ids_are_typed_uuidv7_and_v2_domain_separated ... ok
+test schema::tests::exact_roles_census_and_parent_identity_are_enforced ... ok
+test admission::build::scratch_tests::deferred_objects_are_memory_first_and_spill_after_eight_mib ... ok
+test admission::build::scratch_tests::seen_ids_spill_in_fixed_pages_and_preserve_membership ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+     Running tests/v2.rs (target/debug/deps/v2-37be39d497ae2aa1)
+
+running 12 tests
+test core_reader_preserves_storage_failure_classes ... ok
+test entity_names_and_immutable_fact_wire_are_exact ... ok
+test fact_transfer_batches_membership_but_preserves_dependency_order ... ok
+test deterministic_layer_and_commit_ids_are_recomputed_before_admission ... ok
+test expensive_validation_precedes_every_publication_write ... ok
+test exact_fact_membership_and_name_conflicts_compare_full_facts ... ok
+test authority_cas_rejects_an_observed_head_outside_the_incoming_lane ... ok
+test remote_branches_are_read_only_and_local_branches_can_commit ... ok
+test scope_publication_is_visibility_last_and_remote_advance_is_atomic ... ok
+test multi_root_transfer_and_receipts_share_one_operation_state ... ok
+test schema_v3_has_exact_census_and_rejects_v2 ... ok
+test history_and_layer_prefix_pages_are_bounded_and_cursor_exact ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-c42bf83fd6c7cc72)
+
+running 6 tests
+test registry::tests::retention_evicts_oldest_by_age_count_and_bytes ... ok
+test reconcile::tests::only_intersecting_later_mutations_invalidate_a_resolution ... ok
+test output::tests::one_large_write_never_enters_the_live_tail_above_one_mib ... ok
+test cow_tree::tests::reserved_directory_consumes_the_exact_node_once ... ok
+test cow_tree::tests::failed_spool_io_does_not_advance_the_overlay ... ok
+test cow_tree::tests::rename_validates_every_noop_and_rejection_before_mutation ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+   Doc-tests layerfs_branch_store
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_cli
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_content
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_fuse
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_layerstack_store
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_materialization
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_monitor
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_sdk
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_storage
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_workspace
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

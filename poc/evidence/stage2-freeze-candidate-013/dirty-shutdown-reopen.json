@@ -1,9 +1,0 @@
-{
-  "bytes_hex": "64697274792d677261636566756c2d65786163742d6279746573",
-  "checks": {
-    "exact_bytes": true,
-    "spool_absent": true
-  },
-  "schema": "layerfs-stage2-dirty-shutdown-reopen-v1",
-  "status": "PASS"
-}

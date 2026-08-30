@@ -1,7 +1,0 @@
-{
-  "config": {"reps": 1, "warmup": 0, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
-  "results": [
-    {"scenario": "rm 1000 files", "target": "computerd", "meanNs": 602163542, "medianNs": 602163542, "p95Ns": 602163542, "minNs": 602163542, "maxNs": 602163542, "samples": 1},
-    {"scenario": "rm 1000 files", "target": "base", "meanNs": 25325333, "medianNs": 25325333, "p95Ns": 25325333, "minNs": 25325333, "maxNs": 25325333, "samples": 1}
-  ]
-}

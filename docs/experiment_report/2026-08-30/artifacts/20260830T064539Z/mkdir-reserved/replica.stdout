@@ -1,0 +1,51 @@
+config: REPS=3 WARMUP=1 RANDOMIZE_TARGETS=1 targets=/workspace /var/tmp
+
+[1m=== tiny file churn (1000 files) ===[0m
+  [32mOK[0m    create 1000 files              computerd  mean=166.4 med=167.1 p95=168.1 ms (n=3)
+  [32mOK[0m    create 1000 files              base  mean=18.4 med=18.2 p95=19.0 ms (n=3)
+  [32mOK[0m    stat 1000 files                computerd  mean=674.8 med=670.2 p95=684.1 ms (n=3)
+  [32mOK[0m    stat 1000 files                base  mean=495.0 med=500.5 p95=503.9 ms (n=3)
+  [32mOK[0m    rm 1000 files                  computerd  mean=307.0 med=294.2 p95=337.8 ms (n=3)
+  [32mOK[0m    rm 1000 files                  base  mean=26.0 med=26.1 p95=26.7 ms (n=3)
+
+[1m=== directory traversal ===[0m
+  [32mOK[0m    mkdir tree (10x10x10)          computerd  mean=664.4 med=664.6 p95=665.9 ms (n=3)
+  [32mOK[0m    mkdir tree (10x10x10)          base  mean=424.7 med=422.6 p95=432.3 ms (n=3)
+  [32mOK[0m    find tree                      computerd  mean=705.9 med=703.8 p95=710.8 ms (n=3)
+  [32mOK[0m    find tree                      base  mean=417.4 med=422.6 p95=423.3 ms (n=3)
+
+[1m=== large file I/O ===[0m
+  [32mOK[0m    write 64 MiB                   computerd  mean=24.1 med=25.3 p95=25.5 ms (n=3)
+  [32mOK[0m    write 64 MiB                   base  mean=15.9 med=15.8 p95=17.6 ms (n=3)
+  [32mOK[0m    copy 64 MiB                    computerd  mean=85.3 med=85.4 p95=85.7 ms (n=3)
+  [32mOK[0m    copy 64 MiB                    base  mean=35.9 med=35.5 p95=38.2 ms (n=3)
+  [32mOK[0m    read 64 MiB                    computerd  mean=36.5 med=36.5 p95=36.7 ms (n=3)
+  [32mOK[0m    read 64 MiB                    base  mean=29.0 med=28.8 p95=29.5 ms (n=3)
+  [32mOK[0m    pure read 64 MiB               computerd  mean=11.7 med=11.5 p95=12.4 ms (n=3)
+  [32mOK[0m    pure read 64 MiB               base  mean=10.6 med=10.7 p95=11.0 ms (n=3)
+  [32mOK[0m    pure copy 64 MiB               computerd  mean=60.2 med=60.0 p95=60.5 ms (n=3)
+  [32mOK[0m    pure copy 64 MiB               base  mean=16.9 med=16.8 p95=17.8 ms (n=3)
+  [32mOK[0m    overwrite 64 MiB               computerd  mean=24.1 med=24.3 p95=24.7 ms (n=3)
+  [32mOK[0m    overwrite 64 MiB               base  mean=10.8 med=11.3 p95=11.8 ms (n=3)
+
+[1m=== git ===[0m
+  [32mOK[0m    git init + commit 100 files    computerd  mean=247.1 med=244.8 p95=252.8 ms (n=3)
+  [32mOK[0m    git init + commit 100 files    base  mean=13.8 med=13.3 p95=15.5 ms (n=3)
+  SKIP  npm scenarios (npm not installed)
+  SKIP  go scenarios (go not installed)
+
+[1m=== summary ===[0m
+  scenario                       computerd mean computerd p95    base mean     base p95      ratio
+  copy 64 MiB                         85.3 ms      85.7 ms      35.9 ms      38.2 ms      2.37x
+  create 1000 files                  166.4 ms     168.1 ms      18.4 ms      19.0 ms      9.05x
+  find tree                          705.9 ms     710.8 ms     417.4 ms     423.3 ms      1.69x
+  git init + commit 100 files        247.1 ms     252.8 ms      13.8 ms      15.5 ms     17.95x
+  mkdir tree (10x10x10)              664.4 ms     665.9 ms     424.7 ms     432.3 ms      1.56x
+  overwrite 64 MiB                    24.1 ms      24.7 ms      10.8 ms      11.8 ms      2.23x
+  pure copy 64 MiB                    60.2 ms      60.5 ms      16.9 ms      17.8 ms      3.56x
+  pure read 64 MiB                    11.7 ms      12.4 ms      10.6 ms      11.0 ms      1.10x
+  read 64 MiB                         36.5 ms      36.7 ms      29.0 ms      29.5 ms      1.26x
+  rm 1000 files                      307.0 ms     337.8 ms      26.0 ms      26.7 ms     11.83x
+  stat 1000 files                    674.8 ms     684.1 ms     495.0 ms     503.9 ms      1.36x
+  write 64 MiB                        24.1 ms      25.5 ms      15.9 ms      17.6 ms      1.51x
+wrote JSON summary to /tmp/replica.json

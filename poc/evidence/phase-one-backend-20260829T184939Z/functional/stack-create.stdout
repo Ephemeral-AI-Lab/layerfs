@@ -1,5 +1,0 @@
-STARTED o:dcde13638451bfeb2971ae3588705c51 Stack { command: Create { layer_id: "32434911663b158513d7c77942103b1408063d40ce88ef8f543b178aae0e67d5a9" } }
-PROGRESS o:dcde13638451bfeb2971ae3588705c51 Running 0 - 0
-FINISHED CREATED stack 2289fe420f20c50508b547abb650a139cdee708c18e5a46025451cd27506c5e64c
-RECEIPT operation=o:dcde13638451bfeb2971ae3588705c51 service_ns=119333
-INVOCATION operation=o:dcde13638451bfeb2971ae3588705c51 outcome=Succeeded total_ns=715667 parse_ns=126833 context_ns=451334 wait_ns=108666 render_ns=17792

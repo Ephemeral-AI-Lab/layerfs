@@ -1,7 +1,0 @@
-{
-  "case": "metadata",
-  "error": "KeyError: 'command_started_ns'",
-  "schema": "layerfs-stage2-015-focused-current-crash-failure-v1",
-  "status": "PRESERVED_FAILURE",
-  "unix_ns": 1787733159153691000
-}

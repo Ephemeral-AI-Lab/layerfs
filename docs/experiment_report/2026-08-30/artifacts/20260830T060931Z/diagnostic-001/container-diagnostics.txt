@@ -1,0 +1,73 @@
+TARGET SOURCE FSTYPE OPTIONS
+/tmp   tmpfs  tmpfs  rw,nosuid,nodev,noexec,relatime,size=1048576k
+TARGET SOURCE  FSTYPE  OPTIONS
+/      overlay overlay rw,relatime,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/61901/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/61892/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/61867/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/61866/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/61865/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57052/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57051/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57050/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57049/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57048/fs,upperdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/61902/fs,workdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/61902/work
+total 32
+drwxrwxrwt 2 root root  160 Aug 30 06:14 .
+drwxr-xr-x 1 root root 4096 Aug 30 06:14 ..
+-rw-r--r-- 1 root root 4276 Aug 30 06:14 reference.json
+-rw-r--r-- 1 root root    0 Aug 30 06:13 reference.stderr
+-rw-r--r-- 1 root root 3882 Aug 30 06:14 reference.stdout
+-rw-r--r-- 1 root root 6776 Aug 30 06:14 reference.verification.json
+-rw-r--r-- 1 root root    0 Aug 30 06:14 reference.verifier.stderr
+-rw-r--r-- 1 root root 5724 Aug 30 06:14 reference.verifier.stdout
+FILE:/tmp/reference.stdout
+3882 /tmp/reference.stdout
+config: REPS=3 WARMUP=1 RANDOMIZE_TARGETS=1 targets=/workspace /var/tmp
+
+[1m=== tiny file churn (1000 files) ===[0m
+  [32mOK[0m    create 1000 files              computerd  mean=156.1 med=154.3 p95=159.9 ms (n=3)
+  [32mOK[0m    create 1000 files              base  mean=17.6 med=17.5 p95=17.8 ms (n=3)
+  [32mOK[0m    stat 1000 files                computerd  mean=644.8 med=646.6 p95=647.8 ms (n=3)
+  [32mOK[0m    stat 1000 files                base  mean=470.5 med=463.2 p95=489.5 ms (n=3)
+  [32mOK[0m    rm 1000 files                  computerd  mean=537.9 med=553.4 p95=560.9 ms (n=3)
+  [32mOK[0m    rm 1000 files                  base  mean=23.1 med=23.0 p95=23.3 ms (n=3)
+
+[1m=== directory traversal ===[0m
+  [32mOK[0m    mkdir tree (10x10x10)          computerd  mean=755.0 med=757.5 p95=758.6 ms (n=3)
+  [32mOK[0m    mkdir tree (10x10x10)          base  mean=391.4 med=388.2 p95=400.1 ms (n=3)
+  [32mOK[0m    find tree                      computerd  mean=858.6 med=857.7 p95=861.4 ms (n=3)
+  [32mOK[0m    find tree                      base  mean=396.8 med=396.5 p95=400.6 ms (n=3)
+
+[1m=== large file I/O ===[0m
+  [32mOK[0m    write 64 MiB                   computerd  mean=12.8 med=13.3 p95=14.1 ms (n=3)
+  [32mOK[0m    write 64 MiB                   base  mean=14.5 med=14.3 p95=14.8 ms (n=3)
+  [32mOK[0m    copy 64 MiB                    computerd  mean=143.6 med=144.4 p95=145.8 ms (n=3)
+  [32mOK[0m    copy 64 MiB                    base  mean=28.4 med=29.4 p95=30.6 ms (n=3)
+  [32mOK[0m    read 64 MiB                    computerd  mean=97.2 med=97.5 p95=101.3 ms (n=3)
+  [32mOK[0m    read 64 MiB                    base  mean=19.4 med=19.5 p95=19.7 ms (n=3)
+  [32mOK[0m    pure read 64 MiB               computerd  mean=87.0 med=86.6 p95=90.3 ms (n=3)
+  [32mOK[0m    pure read 64 MiB               base  mean=6.6 med=6.9 p95=7.1 ms (n=3)
+  [32mOK[0m    pure copy 64 MiB               computerd  mean=1483.6 med=136.4 p95=2147.5 ms (n=3)
+  [32mOK[0m    pure copy 64 MiB               base  mean=11.5 med=11.5 p95=12.4 ms (n=3)
+  [32mOK[0m    overwrite 64 MiB               computerd  mean=16.3 med=16.3 p95=16.6 ms (n=3)
+  [32mOK[0m    overwrite 64 MiB               base  mean=9.3 med=9.3 p95=9.3 ms (n=3)
+
+[1m=== git ===[0m
+  [32mOK[0m    git init + commit 100 files    computerd  mean=279.5 med=285.0 p95=291.1 ms (n=3)
+  [32mOK[0m    git init + commit 100 files    base  mean=13.2 med=13.1 p95=13.5 ms (n=3)
+  SKIP  npm scenarios (npm not installed)
+  SKIP  go scenarios (go not installed)
+
+[1m=== summary ===[0m
+  scenario                       computerd mean computerd p95    base mean     base p95      ratio
+  copy 64 MiB                        143.6 ms     145.8 ms      28.4 ms      30.6 ms      5.06x
+  create 1000 files                  156.1 ms     159.9 ms      17.6 ms      17.8 ms      8.88x
+  find tree                          858.6 ms     861.4 ms     396.8 ms     400.6 ms      2.16x
+  git init + commit 100 files        279.5 ms     291.1 ms      13.2 ms      13.5 ms     21.14x
+  mkdir tree (10x10x10)              755.0 ms     758.6 ms     391.4 ms     400.1 ms      1.93x
+  overwrite 64 MiB                    16.3 ms      16.6 ms       9.3 ms       9.3 ms      1.76x
+  pure copy 64 MiB                  1483.6 ms    2147.5 ms      11.5 ms      12.4 ms    129.24x
+  pure read 64 MiB                    87.0 ms      90.3 ms       6.6 ms       7.1 ms     13.23x
+  read 64 MiB                         97.2 ms     101.3 ms      19.4 ms      19.7 ms      5.00x
+  rm 1000 files                      537.9 ms     560.9 ms      23.1 ms      23.3 ms     23.31x
+  stat 1000 files                    644.8 ms     647.8 ms     470.5 ms     489.5 ms      1.37x
+  write 64 MiB                        12.8 ms      14.1 ms      14.5 ms      14.8 ms      0.89x
+wrote JSON summary to /tmp/reference.json
+FILE:/tmp/reference.stderr
+0 /tmp/reference.stderr
+FILE:/tmp/reference.verifier.stdout
+5724 /tmp/reference.verifier.stdout
+{"aggregates": {"G": 4.837880206904477, "Rsum": 2.6928862085577023, "SB_ns": 1392153169, "SL_ns": 3748910069, "Spread": 1.5458407353969525}, "checks": {"base": true, "matrix": true, "mount": true, "randomized": true, "reps": true, "row_count": true, "statistics:copy 64 MiB:base": true, "statistics:copy 64 MiB:computerd": true, "statistics:create 1000 files:base": true, "statistics:create 1000 files:computerd": true, "statistics:find tree:base": true, "statistics:find tree:computerd": true, "statistics:git init + commit 100 files:base": true, "statistics:git init + commit 100 files:computerd": true, "statistics:mkdir tree (10x10x10):base": true, "statistics:mkdir tree (10x10x10):computerd": true, "statistics:overwrite 64 MiB:base": true, "statistics:overwrite 64 MiB:computerd": true, "statistics:pure copy 64 MiB:base": true, "statistics:pure copy 64 MiB:computerd": false, "statistics:pure read 64 MiB:base": true, "statistics:pure read 64 MiB:computerd": true, "statistics:read 64 MiB:base": true, "statistics:read 64 MiB:computerd": true, "statistics:rm 1000 files:base": true, "statistics:rm 1000 files:computerd": true, "statistics:stat 1000 files:base": true, "statistics:stat 1000 files:computerd": true, "statistics:write 64 MiB:base": true, "statistics:write 64 MiB:computerd": true, "stdout_fail_markers": true, "stdout_network_scenarios": true, "unique_rows": true, "warmup": true}, "control": "overlay", "gates": {"G": true, "Rsum": true, "SL": true, "Spread": false, "cloudflare_rows": false}, "raw_sha256": "8bf0d89a8a773a9d873e0548d64d4f15c1bfa2b1ea9be9ba6e21d351b912cd69", "rows": [{"base_median_ns": 17486292, "budget_miss_ns": 0, "cloudflare_ratio": 47.99863781755993, "cloudflare_ratio_limit": 52.79850159931593, "cloudflare_ratio_pass": true, "layerfs_max_ns": 159930916, "layerfs_median_ns": 154260208, "median_ratio": 8.82177925428673, "optimized_budget_ns": 300000000, "scenario": "create 1000 files"}, {"base_median_ns": 463156459, "budget_miss_ns": 0, "cloudflare_ratio": 2.8361612918000367, "cloudflare_ratio_limit": 3.1197774209800406, "cloudflare_ratio_pass": true, "layerfs_max_ns": 647778792, "layerfs_median_ns": 646638917, "median_ratio": 1.3961565350856955, "optimized_budget_ns": 900000000, "scenario": "stat 1000 files"}, {"base_median_ns": 22957417, "budget_miss_ns": 153432361, "cloudflare_ratio": 46.018841912836585, "cloudflare_ratio_limit": 50.620726104120244, "cloudflare_ratio_pass": true, "layerfs_max_ns": 560864709, "layerfs_median_ns": 553432361, "median_ratio": 24.106908934920686, "optimized_budget_ns": 400000000, "scenario": "rm 1000 files"}, {"base_median_ns": 388161375, "budget_miss_ns": 0, "cloudflare_ratio": 2.938581383855921, "cloudflare_ratio_limit": 3.2324395222415134, "cloudflare_ratio_pass": true, "layerfs_max_ns": 758637083, "layerfs_median_ns": 757485834, "median_ratio": 1.9514714311798798, "optimized_budget_ns": 850000000, "scenario": "mkdir tree (10x10x10)"}, {"base_median_ns": 396513375, "budget_miss_ns": 0, "cloudflare_ratio": 3.0008105147893724, "cloudflare_ratio_limit": 3.30089156626831, "cloudflare_ratio_pass": true, "layerfs_max_ns": 861428876, "layerfs_median_ns": 857667208, "median_ratio": 2.163022137651725, "optimized_budget_ns": 950000000, "scenario": "find tree"}, {"base_median_ns": 14317334, "budget_miss_ns": 0, "cloudflare_ratio": 5.637418623922647, "cloudflare_ratio_limit": 6.201160486314913, "cloudflare_ratio_pass": true, "layerfs_max_ns": 14088042, "layerfs_median_ns": 13326458, "median_ratio": 0.9307918639042716, "optimized_budget_ns": 80000000, "scenario": "write 64 MiB"}, {"base_median_ns": 29408875, "budget_miss_ns": 0, "cloudflare_ratio": 11.257277771460702, "cloudflare_ratio_limit": 12.383005548606773, "cloudflare_ratio_pass": true, "layerfs_max_ns": 145765459, "layerfs_median_ns": 144427125, "median_ratio": 4.911004756217299, "optimized_budget_ns": 250000000, "scenario": "copy 64 MiB"}, {"base_median_ns": 19476750, "budget_miss_ns": 0, "cloudflare_ratio": 7.398305084745763, "cloudflare_ratio_limit": 8.13813559322034, "cloudflare_ratio_pass": true, "layerfs_max_ns": 101271958, "layerfs_median_ns": 97478792, "median_ratio": 5.0048797669015626, "optimized_budget_ns": 130000000, "scenario": "read 64 MiB"}, {"base_median_ns": 6868417, "budget_miss_ns": 31556833, "cloudflare_ratio": 11.034601973095558, "cloudflare_ratio_limit": 12.138062170405115, "cloudflare_ratio_pass": false, "layerfs_max_ns": 90301625, "layerfs_median_ns": 86556833, "median_ratio": 12.60215170395158, "optimized_budget_ns": 55000000, "scenario": "pure read 64 MiB"}, {"base_median_ns": 11457750, "budget_miss_ns": 0, "cloudflare_ratio": 16.867803364553968, "cloudflare_ratio_limit": 18.554583701009367, "cloudflare_ratio_pass": true, "layerfs_max_ns": 2147483647, "layerfs_median_ns": 136364750, "median_ratio": 11.901529532412559, "optimized_budget_ns": 180000000, "scenario": "pure copy 64 MiB"}, {"base_median_ns": 9260500, "budget_miss_ns": 0, "cloudflare_ratio": 13.967312342333491, "cloudflare_ratio_limit": 15.364043576566841, "cloudflare_ratio_pass": true, "layerfs_max_ns": 16557083, "layerfs_median_ns": 16255541, "median_ratio": 1.7553632093299498, "optimized_budget_ns": 100000000, "scenario": "overwrite 64 MiB"}, {"base_median_ns": 13088625, "budget_miss_ns": 0, "cloudflare_ratio": 34.088251380012224, "cloudflare_ratio_limit": 37.49707651801345, "cloudflare_ratio_pass": true, "layerfs_max_ns": 291109708, "layerfs_median_ns": 285016042, "median_ratio": 21.775858197480638, "optimized_budget_ns": 300000000, "scenario": "git init + commit 100 files"}], "schema": "layerfs-stage2-fs-bench-verification-v2", "status": "REVISE", "stdout_sha256": "ad49d5a2059f82f380d97bd317fa5d60b77702bf2504bd9d6975a50511166e1b"}
+FILE:/tmp/reference.verifier.stderr
+0 /tmp/reference.verifier.stderr

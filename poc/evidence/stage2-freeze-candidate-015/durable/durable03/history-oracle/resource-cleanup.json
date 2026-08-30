@@ -1,7 +1,0 @@
-{
-  "container": "lfs-d015-audit015-durable03-history-02-verify",
-  "container_remove_exit": 0,
-  "status": "PASS",
-  "volume": "lfs_d015_audit015_durable03_history_store",
-  "volume_remove_exit": 0
-}

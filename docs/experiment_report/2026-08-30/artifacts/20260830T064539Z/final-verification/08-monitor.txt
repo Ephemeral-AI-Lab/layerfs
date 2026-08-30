@@ -1,0 +1,22 @@
+   Compiling layerfs-workspace v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+   Compiling layerfs-monitor v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-monitor)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.92s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_monitor-3a143e1c280de53b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/monitor.rs (target/debug/deps/monitor-a94fd2d2b40fe58b)
+
+running 1 test
+test passive_snapshot_has_zero_sql_and_explicit_analysis_is_exact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+   Doc-tests layerfs_monitor
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

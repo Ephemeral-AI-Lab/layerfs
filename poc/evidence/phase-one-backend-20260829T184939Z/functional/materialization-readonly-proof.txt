@@ -1,8 +1,0 @@
-555 /mnt/pass-mat-direct
-444 /mnt/pass-mat-direct/portable
-555 /mnt/pass-mat-stacked
-444 /mnt/pass-mat-stacked/portable
-sh: 1: cannot create /mnt/pass-mat-direct/after-commit: Permission denied
-sh: 1: cannot create /mnt/pass-mat-stacked/after-commit: Permission denied
-direct_nonroot_write_exit=2
-stacked_nonroot_write_exit=2

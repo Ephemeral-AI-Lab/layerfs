@@ -1,0 +1,15 @@
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/00-fmt.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/01-content.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/02-storage.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/03-layerstack-store.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/04-branch-store.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/05-workspace.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/06-fuse.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/07-materialization.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/08-monitor.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/09-sdk.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/10-cli.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/11-workspace-all.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/12-clippy.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/finish-utc.txt: OK
+docs/experiment_report/2026-08-30/artifacts/20260830T064539Z/final-verification/start-utc.txt: OK

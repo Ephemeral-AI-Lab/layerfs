@@ -1,2 +1,0 @@
-{"event":"campaign-start","unix_ns":1787724343364182000}
-{"error":"HarnessError: command exited 1: ['docker', 'image', 'inspect', 'layerfs-fuse:frozen-292be84']: Error response from daemon: {\"message\":\"No such image: layerfs-fuse:frozen-292be84\"}","event":"campaign-failure","schema":"layerfs-stage2-014-durable-campaign-failure-v1","status":"PRESERVED_FAILURE","unix_ns":1787724343388002000}

@@ -1,4 +1,0 @@
-source_commit=292be840c31052d85ab6e9441706298af3cd3d15
-source_tree=e3055bcd7a41921879fa149c11918891517e4522
-source_archive_sha256=90d5959353036a0502f06dc34eb5bc9f2569b383d444aafd0e8761e7222bdee6
-docker build --no-cache --platform linux/arm64 --build-arg LAYERFS_SOURCE_COMMIT=292be840c31052d85ab6e9441706298af3cd3d15 --build-arg LAYERFS_SOURCE_TREE=e3055bcd7a41921879fa149c11918891517e4522 -t layerfs-fuse:frozen-292be84 -f containers/layerfs-fuse/Dockerfile - < poc/evidence/stage2-freeze-candidate-014/source-build-context.tar

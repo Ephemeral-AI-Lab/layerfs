@@ -1,7 +1,0 @@
-STARTED o:4feff200ce980f19dad6cd4a3ebe1d76 Workspace { command: Show { workspace_id: "w:76f7234bafd7a386b943dfec833aecfe" } }
-PROGRESS o:4feff200ce980f19dad6cd4a3ebe1d76 Running 0 - 0
-SNAPSHOT Workspace
-w:76f7234bafd7a386b943dfec833aecfe branch=1101a04edc28ed7709b831fb21c7092ffb head=1255a307cc2d100d271b6b8b5f50cf1e68cead3439a1bb7f9ef47c593111f2cbaa state=Active generation=2 placement=container:layerfs-phase1-pass-loser:/workspace projection=Fuse
-FINISHED OK
-RECEIPT operation=o:4feff200ce980f19dad6cd4a3ebe1d76 service_ns=10542
-INVOCATION operation=o:4feff200ce980f19dad6cd4a3ebe1d76 outcome=Succeeded total_ns=738625 parse_ns=127000 context_ns=483667 wait_ns=64251 render_ns=51002

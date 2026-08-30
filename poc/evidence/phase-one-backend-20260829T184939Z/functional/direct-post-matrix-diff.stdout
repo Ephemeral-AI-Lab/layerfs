@@ -1,7 +1,0 @@
-STARTED o:bf573117fcc8928c7c28027a10853c35 Workspace { command: Diff { workspace_id: "w:019abb6ff117058864526d4081dff090" } }
-PROGRESS o:bf573117fcc8928c7c28027a10853c35 Running 0 - 0
-SNAPSHOT Workspace
-w:019abb6ff117058864526d4081dff090 dirty=false generation=177053
-FINISHED OK
-RECEIPT operation=o:bf573117fcc8928c7c28027a10853c35 service_ns=681583
-INVOCATION operation=o:bf573117fcc8928c7c28027a10853c35 outcome=Succeeded total_ns=1304125 parse_ns=187500 context_ns=374208 wait_ns=663375 render_ns=66042

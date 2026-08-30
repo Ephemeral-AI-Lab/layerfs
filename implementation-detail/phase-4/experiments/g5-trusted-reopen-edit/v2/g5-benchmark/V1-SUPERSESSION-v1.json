@@ -1,1 +1,0 @@
-{"schema":"phase4-g5-trusted-child-v1-supersession-v1","status":"PASS","v1_source_manifest_sha256":"8ce8ff68a773560df836daead219ac35a5bf093fc6e5eb8ebf7e3211e55ea250","v1_files":5,"reason":"v1 lacked borrowed custody transport and release semantic sentinels","v2_reuses_product_trust_logic":true}

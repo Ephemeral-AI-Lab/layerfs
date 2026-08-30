@@ -1,0 +1,6 @@
+    Checking layerfs-workspace v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+    Checking layerfs-monitor v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-monitor)
+    Checking layerfs-sdk v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-sdk)
+    Checking layerfs-cli v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-cli)
+    Checking layerfs-eval v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/tools/layerfs-eval)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 18.07s

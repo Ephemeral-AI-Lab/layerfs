@@ -1,7 +1,0 @@
-{
-  "schema": "layerfs-stage2-015-cloudflare-same-container-superseded-v1",
-  "status": "SUPERSEDED_EVIDENCE_GAP",
-  "raw_observation": "ABSENT after same-container process restart",
-  "reason": "The run retained the same container and changed computerd process identity, but did not inspect the stopped container's physical /workspace path before docker start and omitted several raw envelope/final-cleanup assertions required by the independent audit.",
-  "rerun_scope": "same-container negative control only; no LayerFS or live matrix rerun"
-}

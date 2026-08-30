@@ -1,5 +1,0 @@
-STARTED o:36440c09716994c110a3947dfa5517ad Workspace { command: Create { branch_id: "1101a04edc2a1d734dab2e59af2f88afac", root: "/mnt/host-stacked", container: None, projection: Some(Fuse) } }
-PROGRESS o:36440c09716994c110a3947dfa5517ad Running 0 - 0
-FINISHED CREATED workspace w:0b5b46456e82834506e12d073336a119
-RECEIPT operation=o:36440c09716994c110a3947dfa5517ad service_ns=754084
-INVOCATION operation=o:36440c09716994c110a3947dfa5517ad outcome=Succeeded total_ns=1296625 parse_ns=156500 context_ns=344833 wait_ns=765500 render_ns=18000

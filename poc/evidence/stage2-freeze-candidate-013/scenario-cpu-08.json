@@ -1,9 +1,0 @@
-{
-  "config": {"reps": 1, "warmup": 0, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
-  "results": [
-    {"scenario": "read 64 MiB", "target": "computerd", "meanNs": 60970375, "medianNs": 60970375, "p95Ns": 60970375, "minNs": 60970375, "maxNs": 60970375, "samples": 1},
-    {"scenario": "read 64 MiB", "target": "base", "meanNs": 30636292, "medianNs": 30636292, "p95Ns": 30636292, "minNs": 30636292, "maxNs": 30636292, "samples": 1},
-    {"scenario": "pure read 64 MiB", "target": "computerd", "meanNs": 12008167, "medianNs": 12008167, "p95Ns": 12008167, "minNs": 12008167, "maxNs": 12008167, "samples": 1},
-    {"scenario": "pure read 64 MiB", "target": "base", "meanNs": 11056750, "medianNs": 11056750, "p95Ns": 11056750, "minNs": 11056750, "maxNs": 11056750, "samples": 1}
-  ]
-}

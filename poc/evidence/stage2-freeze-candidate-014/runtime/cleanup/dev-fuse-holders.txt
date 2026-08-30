@@ -1,4 +1,0 @@
-/proc/7/fd/4 -> /dev/fuse
-/proc/7/fd/7 -> /dev/fuse
-/proc/7/fd/8 -> /dev/fuse
-/proc/7/fd/9 -> /dev/fuse

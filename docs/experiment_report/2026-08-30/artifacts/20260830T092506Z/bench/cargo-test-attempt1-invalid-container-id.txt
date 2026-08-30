@@ -1,0 +1,27 @@
+   Compiling layerfs-content v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-storage)
+   Compiling layerfs-materialization v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-materialization)
+   Compiling layerfs-fuse v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+   Compiling layerfs-branch-store v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-branch-store)
+   Compiling layerfs-layerstack-store v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-layerstack-store)
+   Compiling layerfs-workspace v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+   Compiling layerfs-monitor v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-monitor)
+   Compiling layerfs-sdk v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-sdk)
+    Finished `release` profile [optimized] target(s) in 8.61s
+     Running tests/live_docker.rs (target/release/deps/live_docker-545549cb6a54c025)
+
+running 1 test
+
+thread 'one_prepared_container_runs_two_mounts_and_both_placement_benchmarks' (173101619) panicked at crates/layerfs-sdk/tests/live_docker.rs:84:14:
+called `Result::unwrap()` on an `Err` value: Workspace(InvalidPlacement)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test one_prepared_container_runs_two_mounts_and_both_placement_benchmarks ... FAILED
+
+failures:
+
+failures:
+    one_prepared_container_runs_two_mounts_and_both_placement_benchmarks
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+error: test failed, to rerun pass `-p layerfs-sdk --test live_docker`

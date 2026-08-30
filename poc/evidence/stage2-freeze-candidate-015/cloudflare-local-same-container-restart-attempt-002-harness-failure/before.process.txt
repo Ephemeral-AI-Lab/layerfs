@@ -1,4 +1,0 @@
-pid=1
-pidns=pid:[4026532558]
-start=6117
-ab2244312e069c6c97bece2437f61fb01db474eae5b0f1ce006162e212eae5b0  /proc/1/exe

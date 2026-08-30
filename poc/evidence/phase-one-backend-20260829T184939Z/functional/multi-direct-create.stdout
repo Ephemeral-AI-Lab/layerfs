@@ -1,5 +1,0 @@
-STARTED o:53e62a58038fd68eb489b81618200e4a Workspace { command: Create { branch_id: "1101a04edc28ed7709b831fb21c7092ffb", root: "/mnt/direct", container: Some("layerfs-phase1-pass-multi"), projection: Some(Fuse) } }
-PROGRESS o:53e62a58038fd68eb489b81618200e4a Running 0 - 0
-FINISHED CREATED workspace w:7b3390126898b7f520286904ecb7eba6
-RECEIPT operation=o:53e62a58038fd68eb489b81618200e4a service_ns=268019750
-INVOCATION operation=o:53e62a58038fd68eb489b81618200e4a outcome=Succeeded total_ns=268861625 parse_ns=145416 context_ns=623417 wait_ns=267983833 render_ns=98624

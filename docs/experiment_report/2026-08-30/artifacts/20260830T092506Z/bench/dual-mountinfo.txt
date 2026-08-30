@@ -1,0 +1,2 @@
+88 142 0:64 / /workspace/reference rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions
+89 142 0:65 / /workspace/replica rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions

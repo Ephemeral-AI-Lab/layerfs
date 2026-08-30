@@ -1,8 +1,0 @@
-{
-  "backend": "layerfs-fuse",
-  "fs_bench_sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
-  "integrity": "Verified",
-  "mount": "/workspace",
-  "source_commit": "1111111111111111111111111111111111111111",
-  "source_tree": "2222222222222222222222222222222222222222"
-}

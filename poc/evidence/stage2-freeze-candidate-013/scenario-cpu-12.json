@@ -1,7 +1,0 @@
-{
-  "config": {"reps": 1, "warmup": 0, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
-  "results": [
-    {"scenario": "git init + commit 100 files", "target": "computerd", "meanNs": 141755750, "medianNs": 141755750, "p95Ns": 141755750, "minNs": 141755750, "maxNs": 141755750, "samples": 1},
-    {"scenario": "git init + commit 100 files", "target": "base", "meanNs": 12726000, "medianNs": 12726000, "p95Ns": 12726000, "minNs": 12726000, "maxNs": 12726000, "samples": 1}
-  ]
-}

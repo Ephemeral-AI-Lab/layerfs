@@ -1,0 +1,14 @@
+   Compiling layerfs-fuse v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+   Compiling layerfs-workspace v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+   Compiling layerfs-monitor v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-monitor)
+   Compiling layerfs-sdk v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-sdk)
+    Finished `release` profile [optimized] target(s) in 3.88s
+     Running tests/live_docker.rs (target/release/deps/live_docker-545549cb6a54c025)
+
+running 1 test
+DOCKER_MOUNT reference 349454167
+DOCKER_MOUNT replica 340544791
+test one_prepared_container_runs_two_mounts_and_both_placement_benchmarks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 50.45s
+

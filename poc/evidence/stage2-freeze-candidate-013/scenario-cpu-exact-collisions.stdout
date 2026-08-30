@@ -1,6 +1,0 @@
-OK write 64 MiB computerd elapsed_ns=42115167 returncode=0
-OK write 64 MiB base elapsed_ns=22473458 returncode=0
-OK copy 64 MiB computerd elapsed_ns=130133833 returncode=0
-OK copy 64 MiB base elapsed_ns=41231167 returncode=0
-OK read 64 MiB computerd elapsed_ns=55005875 returncode=0
-OK read 64 MiB base elapsed_ns=26857125 returncode=0

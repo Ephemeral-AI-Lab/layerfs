@@ -1,5 +1,0 @@
-STARTED o:cc1793ab7ef2052c928f114cfde69943 Workspace { command: Commit { workspace_id: "w:47b5ca982b06d3a1cee08be16bada1c3" } }
-PROGRESS o:cc1793ab7ef2052c928f114cfde69943 Running 0 - 0
-FINISHED CREATED commit 12e013a424dff794e77deca3905a85e2438ff07d66ea4b335faff27c1567422f72 previous=12a5c76c4d13b57ff1853d775783d36a0cbeea2cc9b9766bc3b27ad39c137ba1b3
-RECEIPT operation=o:cc1793ab7ef2052c928f114cfde69943 service_ns=4456208
-INVOCATION operation=o:cc1793ab7ef2052c928f114cfde69943 outcome=Succeeded total_ns=5023459 parse_ns=116291 context_ns=376833 wait_ns=4496917 render_ns=22250

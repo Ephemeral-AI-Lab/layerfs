@@ -1,7 +1,0 @@
-{
-  "container": "layerfs-stage2-final015-dur-audit015-durable03-s09-03-verify",
-  "container_remove_exit": 0,
-  "status": "PASS",
-  "volume": "layerfs_stage2_final015_dur_audit015_durable03_s09_store",
-  "volume_remove_exit": 0
-}

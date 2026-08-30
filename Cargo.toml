@@ -12,6 +12,7 @@ members = [
     "crates/layerfs-monitor",
     "crates/layerfs-cli",
     "tools/layerfs-eval",
+    "benchmark/fs-benchmark-pro",
 ]
 
 [workspace.package]

@@ -1,4 +1,0 @@
-/mnt/direct is not a mountpoint
-/mnt/stacked is not a mountpoint
-state_root=/tmp/layerfs/87ce069308a90cac/workspaces/workspaces
-multi_mount_and_runtime_cleanup=true

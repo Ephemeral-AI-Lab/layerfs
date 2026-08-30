@@ -1,0 +1,67 @@
+[
+    {
+        "Id": "sha256:bf77c12659a9ad9cca496c9c4e85e4d764ffa3eb7ec637782bcbb19b658d8ffb",
+        "RepoTags": [
+            "layerfs-v2:benchmark-20260830T060931Z"
+        ],
+        "RepoDigests": [
+            "layerfs-v2@sha256:bf77c12659a9ad9cca496c9c4e85e4d764ffa3eb7ec637782bcbb19b658d8ffb"
+        ],
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-08-30T06:25:21.346544632Z",
+        "Config": {
+            "Env": [
+                "PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "RUSTUP_HOME=/usr/local/rustup",
+                "CARGO_HOME=/usr/local/cargo",
+                "RUST_VERSION=1.85.1",
+                "LAYERFS_SOURCE_COMMIT=b498b7253bb94ec4e24840a15b825fe00334c7dd",
+                "LAYERFS_SOURCE_TREE=d20648f4d878c53dcef1610a9c5856c2cc7f2bf0",
+                "LAYERFS_FS_BENCH_SHA256=0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
+            ],
+            "Entrypoint": [
+                "/usr/local/bin/layerfs-fuse"
+            ],
+            "Labels": {
+                "org.opencontainers.image.layerfs.fs-bench-sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+                "org.opencontainers.image.layerfs.source-commit": "b498b7253bb94ec4e24840a15b825fe00334c7dd",
+                "org.opencontainers.image.layerfs.source-tree": "d20648f4d878c53dcef1610a9c5856c2cc7f2bf0",
+                "org.opencontainers.image.revision": "b498b7253bb94ec4e24840a15b825fe00334c7dd",
+                "org.opencontainers.image.source": "https://github.com/Ephemeral-AI-Lab/layerfs"
+            }
+        },
+        "Architecture": "arm64",
+        "Os": "linux",
+        "Size": 598200816,
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:948048d45864d1f64cd70b0341fd6c927cd3fa13f1d56b0054064b3ba2b2b467",
+                "sha256:f8e34ba5db3916c38ce4918304394347cc2403a5c92006a1e550a72977e0ac2a",
+                "sha256:b8974bf4470658c9b2f2bcc4d91db2ab6abc4a3c63ac1944b38519dbebfb53a0",
+                "sha256:77122155c2dc59977416cf2f760eb52aed66fd82acb25b7b006e0ad7f989ff55",
+                "sha256:d7e47cd44dcd84a04c1dbba8965d45f33ca701efbde788880cdff56e7d58eacc",
+                "sha256:6497baa69a60ced87319225a6c61a8666a178a95ed408c79528855d2a9df585a",
+                "sha256:b5c6d360861bf252573bdd904d2d2badb63cb79b1fa235dcf3ba1e63df0c0b6a",
+                "sha256:8619cdf84ecb197f918b6ac27b091cec709a9fc5e1da8cee990134d921690873",
+                "sha256:b8aa35de60c3cfa500031aa1c09bf49a6b12ad32fccdbd184a412d92607c375f"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "2026-08-30T06:25:21.435587674Z"
+        },
+        "Descriptor": {
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "digest": "sha256:bf77c12659a9ad9cca496c9c4e85e4d764ffa3eb7ec637782bcbb19b658d8ffb",
+            "size": 856
+        },
+        "Identity": {
+            "Build": [
+                {
+                    "Ref": "n6kmn7srdeu6zgucyfeaxcwro",
+                    "CreatedAt": "2026-08-30T06:25:21.46726359Z"
+                }
+            ]
+        }
+    }
+]

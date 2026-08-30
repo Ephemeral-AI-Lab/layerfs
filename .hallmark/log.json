@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-08-29",
+    "macrostructure": "Index-First",
+    "theme": "user-white",
+    "enrichment": "none",
+    "brief": "LayerFS compact breadcrumb-first TUI navigator with white theme and original icon"
+  },
+  {
+    "date": "2026-08-29",
+    "macrostructure": "Map / Diagram",
+    "theme": "Riso",
+    "enrichment": "Tier-B hand-built LayerStack, Workspace/COW, deduplication, and rewind diagrams",
+    "brief": "Eight-slide LayerFS storage-efficiency reveal from LayerStack to whole-state rewind"
+  },
+  {
     "date": "2026-08-24",
     "macrostructure": "Workbench",
     "theme": "Cobalt",

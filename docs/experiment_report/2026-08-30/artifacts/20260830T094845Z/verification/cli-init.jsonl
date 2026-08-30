@@ -1,0 +1,2 @@
+{"schema_version":3,"event":"started","value":"Layerstack { command: Init(LayerStackInit { name: \"api-server\", directory: None, empty: true }) }"}
+{"schema_version":3,"event":"finished","result":{"kind":"text","value":"InitializeLayerStackResult { layer_stack_id: LayerStackId(3101a05216632e75c4a3720e12aaf21407), genesis_layer_id: LayerId(32e8a0062e8f8eab295f4270e5ff61d0b1c39c5caf245a1c1eea24259d35660506) }"}}

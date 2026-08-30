@@ -1,7 +1,0 @@
-{
-  "config": {"reps": 1, "warmup": 0, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
-  "results": [
-    {"scenario": "pure read 64 MiB", "target": "computerd", "meanNs": 13293042, "medianNs": 13293042, "p95Ns": 13293042, "minNs": 13293042, "maxNs": 13293042, "samples": 1},
-    {"scenario": "pure read 64 MiB", "target": "base", "meanNs": 11076875, "medianNs": 11076875, "p95Ns": 11076875, "minNs": 11076875, "maxNs": 11076875, "samples": 1}
-  ]
-}

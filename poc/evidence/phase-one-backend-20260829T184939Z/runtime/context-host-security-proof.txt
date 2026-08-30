@@ -1,5 +1,0 @@
-700 root:root directory /tmp/layerfs/87ce069308a90cac
-600 root:root socket /tmp/layerfs/87ce069308a90cac/control.sock
-600 root:root regular file /tmp/layerfs/87ce069308a90cac/host.lock
-644 root:root regular file /tmp/layerfs/87ce069308a90cac/host.pid
-600 root:root regular file /var/lib/layerfs-pass/context

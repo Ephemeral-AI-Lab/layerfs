@@ -1,7 +1,0 @@
-{
-  "config": {"reps": 1, "warmup": 0, "randomizeTargets": 0, "mount": "/workspace", "base": "/var/tmp"},
-  "results": [
-    {"scenario": "overwrite 64 MiB", "target": "computerd", "meanNs": 46327625, "medianNs": 46327625, "p95Ns": 46327625, "minNs": 46327625, "maxNs": 46327625, "samples": 1},
-    {"scenario": "overwrite 64 MiB", "target": "base", "meanNs": 13418917, "medianNs": 13418917, "p95Ns": 13418917, "minNs": 13418917, "maxNs": 13418917, "samples": 1}
-  ]
-}

@@ -1,0 +1,13 @@
+[package]
+name = "fs-benchmark-pro"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-sdk = { path = "../../crates/layerfs-sdk" }
+
+[[bin]]
+name = "fs-benchmark-pro"
+path = "src/main.rs"

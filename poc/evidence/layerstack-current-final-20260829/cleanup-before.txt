@@ -1,6 +1,0 @@
-containers_before
-layerfs-current-stacked-1787993531 Exited (0) 17 seconds ago
-layerfs-current-direct-1787993531 Exited (0) 5 minutes ago
-volumes_before
-layerfs-current-direct-1787993531
-layerfs-current-stacked-1787993531

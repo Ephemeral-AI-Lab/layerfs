@@ -1,4 +1,0 @@
-TARGET     FSTYPE OPTIONS
-/workspace fuse   ro,nosuid,nodev,noatime,user_id=0,group_id=0,default_permissions
-sh: 1: cannot create /workspace/after-commit: Permission denied
-stacked_nonroot_write_exit=2

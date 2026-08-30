@@ -1,7 +1,0 @@
-source_commit=74a40a7ac070d2b0b4106c1d02306dfab866af79
-source_tree=1ca2e7f6d6e5fa868febf479be91f93c0e7a4ea8
-source_tree_method=sha1(source-manifest.sha256); manifest is sorted SHA-256 of every Docker build input under Cargo.toml Cargo.lock crates tools containers/layerfs-fuse
-benchmark_sha256=0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef
-branch=main
-origin_main=74a40a7ac070d2b0b4106c1d02306dfab866af79
-canonical_main=74a40a7ac070d2b0b4106c1d02306dfab866af79

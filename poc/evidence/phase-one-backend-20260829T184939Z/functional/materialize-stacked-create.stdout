@@ -1,5 +1,0 @@
-STARTED o:24e14628a460b5bff111d5957b4c8d78 Workspace { command: Create { branch_id: "1101a04edc2a1d734dab2e59af2f88afac", root: "/mnt/pass-mat-stacked", container: None, projection: Some(Materialize) } }
-PROGRESS o:24e14628a460b5bff111d5957b4c8d78 Running 0 - 0
-FINISHED CREATED workspace w:850c398381a948b2b08b810f3970d908
-RECEIPT operation=o:24e14628a460b5bff111d5957b4c8d78 service_ns=1759000
-INVOCATION operation=o:24e14628a460b5bff111d5957b4c8d78 outcome=Succeeded total_ns=2419292 parse_ns=127542 context_ns=482708 wait_ns=1770584 render_ns=25709

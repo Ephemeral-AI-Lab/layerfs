@@ -1,0 +1,201 @@
+ M .hallmark/log.json
+ M Cargo.lock
+ M Cargo.toml
+ M IMPLEMENTATION_PLAN.md
+ M README.md
+ M ROADMAP.md
+ M SPEC.md
+ M architecture.md
+ M crates/layerfs-branch-store/Cargo.toml
+ D crates/layerfs-branch-store/src/branch_store.rs
+ D crates/layerfs-branch-store/src/branch_transfer.rs
+ M crates/layerfs-branch-store/src/commit.rs
+ D crates/layerfs-branch-store/src/create_branch.rs
+ D crates/layerfs-branch-store/src/layered_read.rs
+ M crates/layerfs-branch-store/src/lib.rs
+ D crates/layerfs-branch-store/src/merge.rs
+ D crates/layerfs-branch-store/src/snapshot.rs
+ D crates/layerfs-branch-store/tests/merge.rs
+ D crates/layerfs-branch-store/tests/transfer.rs
+ M crates/layerfs-cli/src/bin/layerfs.rs
+ M crates/layerfs-cli/src/command.rs
+ M crates/layerfs-cli/src/completion.rs
+ M crates/layerfs-cli/src/context.rs
+ M crates/layerfs-cli/src/control.rs
+ M crates/layerfs-cli/src/event.rs
+ M crates/layerfs-cli/src/execute.rs
+ M crates/layerfs-cli/src/host.rs
+ M crates/layerfs-cli/src/lib.rs
+ M crates/layerfs-cli/src/output.rs
+ M crates/layerfs-cli/src/plan.rs
+ M crates/layerfs-cli/src/query.rs
+ D crates/layerfs-cli/tests/frontend.rs
+ D crates/layerfs-cli/tests/parser.rs
+ D crates/layerfs-cli/tests/persistent.rs
+ D crates/layerfs-cli/tests/render.rs
+ M crates/layerfs-content/src/filesystem/change.rs
+ M crates/layerfs-content/src/filesystem/diff.rs
+ D crates/layerfs-content/src/filesystem/merge.rs
+ M crates/layerfs-content/src/filesystem/mod.rs
+ M crates/layerfs-content/src/tree/directory/diff.rs
+ D crates/layerfs-content/src/tree/directory/merge.rs
+ M crates/layerfs-content/src/tree/directory/mod.rs
+ M crates/layerfs-content/src/tree/inode/cursor.rs
+ D crates/layerfs-content/src/tree/inode/merge.rs
+ M crates/layerfs-content/src/tree/inode/mod.rs
+ M crates/layerfs-content/src/tree/inode/table.rs
+ D crates/layerfs-content/src/tree/metadata/merge.rs
+ M crates/layerfs-content/src/tree/metadata/mod.rs
+ M crates/layerfs-content/src/tree/metadata/tree.rs
+ M crates/layerfs-content/tests/logical.rs
+ M crates/layerfs-fuse/src/filesystem.rs
+ M crates/layerfs-fuse/src/port.rs
+ M crates/layerfs-fuse/src/protocol.rs
+ M crates/layerfs-fuse/src/proxy_client.rs
+ M crates/layerfs-fuse/src/proxy_host.rs
+ M crates/layerfs-fuse/tests/proxy.rs
+ D crates/layerfs-layer-store/Cargo.toml
+ D crates/layerfs-layer-store/src/add_layer.rs
+ D crates/layerfs-layer-store/src/bin/layerfs-layer-store.rs
+ D crates/layerfs-layer-store/src/layer_store.rs
+ D crates/layerfs-layer-store/src/lib.rs
+ D crates/layerfs-layer-store/src/provision.rs
+ D crates/layerfs-layer-store/src/remote.rs
+ D crates/layerfs-layer-store/src/transfer.rs
+ D crates/layerfs-layer-store/tests/initialize.rs
+ D crates/layerfs-layer-store/tests/support/transfer_unit.rs
+ D crates/layerfs-layer-store/tests/transfer.rs
+ M crates/layerfs-monitor/Cargo.toml
+ M crates/layerfs-monitor/src/collector.rs
+ M crates/layerfs-monitor/src/dedup.rs
+ M crates/layerfs-monitor/src/lib.rs
+ M crates/layerfs-monitor/src/operation.rs
+ D crates/layerfs-monitor/src/route.rs
+ M crates/layerfs-monitor/src/snapshot.rs
+ M crates/layerfs-monitor/tests/monitor.rs
+ M crates/layerfs-sdk/Cargo.toml
+ D crates/layerfs-sdk/src/branch.rs
+ M crates/layerfs-sdk/src/client.rs
+ M crates/layerfs-sdk/src/connection.rs
+ D crates/layerfs-sdk/src/layer.rs
+ M crates/layerfs-sdk/src/lib.rs
+ D crates/layerfs-sdk/src/location.rs
+ M crates/layerfs-sdk/src/result.rs
+ D crates/layerfs-sdk/src/stack.rs
+ M crates/layerfs-sdk/src/topology.rs
+ D crates/layerfs-sdk/tests/api.rs
+ D crates/layerfs-sdk/tests/conflict.rs
+ D crates/layerfs-sdk/tests/constructors.rs
+ D crates/layerfs-sdk/tests/dedup.rs
+ D crates/layerfs-sdk/tests/hash_counts.rs
+ D crates/layerfs-sdk/tests/topology.rs
+ D crates/layerfs-stack-store/Cargo.toml
+ D crates/layerfs-stack-store/src/add_stack.rs
+ D crates/layerfs-stack-store/src/bin/layerfs-stack-store.rs
+ D crates/layerfs-stack-store/src/branch_transfer.rs
+ D crates/layerfs-stack-store/src/commit_pull.rs
+ D crates/layerfs-stack-store/src/create_history.rs
+ D crates/layerfs-stack-store/src/history_pull.rs
+ D crates/layerfs-stack-store/src/lib.rs
+ D crates/layerfs-stack-store/src/push_stack.rs
+ D crates/layerfs-stack-store/src/remote.rs
+ D crates/layerfs-stack-store/src/stack_store.rs
+ D crates/layerfs-stack-store/src/writer.rs
+ D crates/layerfs-stack-store/tests/authority.rs
+ D crates/layerfs-stack-store/tests/support/history_pull_unit.rs
+ M crates/layerfs-storage/src/admission.rs
+ D crates/layerfs-storage/src/candidate.rs
+ D crates/layerfs-storage/src/contract.rs
+ M crates/layerfs-storage/src/error.rs
+ M crates/layerfs-storage/src/ids.rs
+ M crates/layerfs-storage/src/lib.rs
+ D crates/layerfs-storage/src/merge_base.rs
+ M crates/layerfs-storage/src/records.rs
+ M crates/layerfs-storage/src/schema.rs
+ M crates/layerfs-storage/src/sql.rs
+ M crates/layerfs-storage/src/transfer.rs
+ M crates/layerfs-storage/src/wire.rs
+ D crates/layerfs-storage/tests/admission.rs
+ D crates/layerfs-storage/tests/ancestry.rs
+ D crates/layerfs-storage/tests/merkle.rs
+ D crates/layerfs-storage/tests/owner.rs
+ D crates/layerfs-storage/tests/support/contract_unit.rs
+ D crates/layerfs-storage/tests/support/sql_unit.rs
+ D crates/layerfs-storage/tests/wire.rs
+ D crates/layerfs-tui/Cargo.toml
+ D crates/layerfs-tui/src/app.rs
+ D crates/layerfs-tui/src/bin/layerfs-tui.rs
+ D crates/layerfs-tui/src/event.rs
+ D crates/layerfs-tui/src/lib.rs
+ D crates/layerfs-tui/src/render.rs
+ D crates/layerfs-tui/src/theme.rs
+ M crates/layerfs-workspace/Cargo.toml
+ M crates/layerfs-workspace/src/changes.rs
+ M crates/layerfs-workspace/src/cow_tree.rs
+ M crates/layerfs-workspace/src/docker.rs
+ M crates/layerfs-workspace/src/execution.rs
+ M crates/layerfs-workspace/src/file_io.rs
+ M crates/layerfs-workspace/src/lib.rs
+ M crates/layerfs-workspace/src/lifecycle.rs
+ D crates/layerfs-workspace/src/placement.rs
+ M crates/layerfs-workspace/src/projection.rs
+ M crates/layerfs-workspace/src/registry.rs
+ M crates/layerfs-workspace/src/session.rs
+ M crates/layerfs-workspace/src/worker.rs
+ D crates/layerfs-workspace/tests/support/lifecycle.rs
+ M docs/architecture/README.md
+ M docs/cli-tui/00-overview.md
+ M docs/cli-tui/01-topology-and-source-tree.md
+ M docs/cli-tui/02-cli-sdk-contract.md
+ M docs/cli-tui/03-tui-design.md
+ M docs/cli-tui/04-monitoring-dedup-performance.md
+ M docs/cli-tui/05-implementation-plan.md
+ M docs/cli-tui/06-tui-implementation-plan.md
+ M docs/cli-tui/07-phase-one-handoff-prompt.md
+ M docs/db-transaction-transfer-model.md
+ M docs/implementation-plan.md
+ M docs/model.md
+ M docs/rule.md
+ M docs/source-tree.md
+ M docs/storage-implementation-handoff-prompt.md
+ D tools/install-layerfs-tui.sh
+ M tools/layerfs-eval/src/main.rs
+?? .agents/
+?? crates/layerfs-branch-store/src/fork.rs
+?? crates/layerfs-branch-store/src/provision.rs
+?? crates/layerfs-branch-store/src/pull.rs
+?? crates/layerfs-branch-store/src/push.rs
+?? crates/layerfs-branch-store/src/query.rs
+?? crates/layerfs-branch-store/src/read.rs
+?? crates/layerfs-branch-store/src/store.rs
+?? crates/layerfs-branch-store/tests/contracts.rs
+?? crates/layerfs-branch-store/tests/v2.rs
+?? crates/layerfs-cli/tests/v2.rs
+?? crates/layerfs-content/src/filesystem/reconcile.rs
+?? crates/layerfs-layerstack-store/
+?? crates/layerfs-sdk/src/query.rs
+?? crates/layerfs-sdk/src/request.rs
+?? crates/layerfs-sdk/tests/live_docker.rs
+?? crates/layerfs-sdk/tests/live_fuse.rs
+?? crates/layerfs-sdk/tests/v2.rs
+?? crates/layerfs-storage/tests/v2.rs
+?? crates/layerfs-workspace/src/reconcile.rs
+?? docs/cli-tui/tui-demo/
+?? docs/experiment_report/
+?? docs/v2/
+?? poc/evidence/layerfs-v2-20260830T000305Z/
+?? poc/evidence/layerstack-final-20260829/
+?? poc/evidence/layerstack-post-audit-20260829/
+?? poc/evidence/layerstack-terminal-20260829/
+?? poc/evidence/phase-one-backend-20260829T135113Z/
+?? poc/evidence/phase-one-backend-20260829T153312Z/
+?? poc/evidence/phase-one-backend-20260829T155820Z/
+?? poc/evidence/phase-one-backend-20260829T161648Z/
+?? poc/evidence/phase-one-backend-20260829T164105Z/
+?? poc/evidence/phase-one-backend-20260829T171746Z/
+?? poc/evidence/phase-one-backend-20260829T182547Z/
+?? poc/evidence/phase-one-backend-20260829T184132Z/
+?? skills-lock.json
+?? time-machine-vision.html
+?? tokens.css
+?? "\346\227\266\351\227\264\345\233\236\346\272\257\347\263\273\347\273\237.md"

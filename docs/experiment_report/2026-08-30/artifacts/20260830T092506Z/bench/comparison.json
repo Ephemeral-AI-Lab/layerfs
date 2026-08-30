@@ -1,0 +1,244 @@
+{
+  "schema": "layerfs-v2-pull-refinement-cloudflare-comparison-v1",
+  "cloudflare_provenance_sha256": "450f89b6d953dfd6c0b729d4cd4dbdffd1e4444823038c8ef89c2af8775a7287",
+  "reference": {
+    "rows": [
+      {
+        "scenario": "create 1000 files",
+        "cloudflare_median_ns": 858327625,
+        "layerfs_median_ns": 159856708,
+        "layerfs_min_ns": 158070083,
+        "layerfs_max_ns": 163913583,
+        "layerfs_speedup": 5.369356317534075,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "stat 1000 files",
+        "cloudflare_median_ns": 1463621126,
+        "layerfs_median_ns": 666252083,
+        "layerfs_min_ns": 663052084,
+        "layerfs_max_ns": 678358667,
+        "layerfs_speedup": 2.1967978237450403,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "rm 1000 files",
+        "cloudflare_median_ns": 1085162626,
+        "layerfs_median_ns": 280100251,
+        "layerfs_min_ns": 277246986,
+        "layerfs_max_ns": 281101458,
+        "layerfs_speedup": 3.874193693600082,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "mkdir tree (10x10x10)",
+        "cloudflare_median_ns": 1349970209,
+        "layerfs_median_ns": 683503167,
+        "layerfs_min_ns": 678848209,
+        "layerfs_max_ns": 684316417,
+        "layerfs_speedup": 1.9750752800827915,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "find tree",
+        "cloudflare_median_ns": 1401947167,
+        "layerfs_median_ns": 716433333,
+        "layerfs_min_ns": 638429500,
+        "layerfs_max_ns": 729416958,
+        "layerfs_speedup": 1.9568424617116469,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "write 64 MiB",
+        "cloudflare_median_ns": 83825833,
+        "layerfs_median_ns": 21583500,
+        "layerfs_min_ns": 20831583,
+        "layerfs_max_ns": 22528625,
+        "layerfs_speedup": 3.88379238770357,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "copy 64 MiB",
+        "cloudflare_median_ns": 309579833,
+        "layerfs_median_ns": 76513458,
+        "layerfs_min_ns": 76306709,
+        "layerfs_max_ns": 77592541,
+        "layerfs_speedup": 4.046083409274222,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "read 64 MiB",
+        "cloudflare_median_ns": 163469250,
+        "layerfs_median_ns": 26386291,
+        "layerfs_min_ns": 25314833,
+        "layerfs_max_ns": 27230708,
+        "layerfs_speedup": 6.195234108499751,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "pure read 64 MiB",
+        "cloudflare_median_ns": 74118958,
+        "layerfs_median_ns": 6114084,
+        "layerfs_min_ns": 5661833,
+        "layerfs_max_ns": 6315125,
+        "layerfs_speedup": 12.1226594204463,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "pure copy 64 MiB",
+        "cloudflare_median_ns": 231869042,
+        "layerfs_median_ns": 56428458,
+        "layerfs_min_ns": 56227125,
+        "layerfs_max_ns": 61356500,
+        "layerfs_speedup": 4.109079890150463,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "overwrite 64 MiB",
+        "cloudflare_median_ns": 144143250,
+        "layerfs_median_ns": 21529126,
+        "layerfs_min_ns": 21475750,
+        "layerfs_max_ns": 22692291,
+        "layerfs_speedup": 6.6952671464693925,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "git init + commit 100 files",
+        "cloudflare_median_ns": 451875292,
+        "layerfs_median_ns": 195471500,
+        "layerfs_min_ns": 188292542,
+        "layerfs_max_ns": 195810875,
+        "layerfs_speedup": 2.3117195703721514,
+        "layerfs_wins": true
+      }
+    ],
+    "wins": 12,
+    "layerfs_sum_ns": 2910171959,
+    "cloudflare_sum_ns": 7617910211,
+    "aggregate_speedup": 2.617683875154128,
+    "previous_current_sum_ns": 2777939000,
+    "vs_previous_current_percent": 4.760110247201252,
+    "screenshot_layerfs_sum_ns": 2920193197,
+    "vs_screenshot_percent": -0.34317037688790974
+  },
+  "replica": {
+    "rows": [
+      {
+        "scenario": "create 1000 files",
+        "cloudflare_median_ns": 858327625,
+        "layerfs_median_ns": 155074292,
+        "layerfs_min_ns": 153759125,
+        "layerfs_max_ns": 162750750,
+        "layerfs_speedup": 5.534944663813135,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "stat 1000 files",
+        "cloudflare_median_ns": 1463621126,
+        "layerfs_median_ns": 676447292,
+        "layerfs_min_ns": 674612792,
+        "layerfs_max_ns": 678945958,
+        "layerfs_speedup": 2.1636883513460794,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "rm 1000 files",
+        "cloudflare_median_ns": 1085162626,
+        "layerfs_median_ns": 278418375,
+        "layerfs_min_ns": 275947167,
+        "layerfs_max_ns": 281624208,
+        "layerfs_speedup": 3.8975970102548008,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "mkdir tree (10x10x10)",
+        "cloudflare_median_ns": 1349970209,
+        "layerfs_median_ns": 687522584,
+        "layerfs_min_ns": 680347209,
+        "layerfs_max_ns": 688170083,
+        "layerfs_speedup": 1.9635285304315182,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "find tree",
+        "cloudflare_median_ns": 1401947167,
+        "layerfs_median_ns": 712691667,
+        "layerfs_min_ns": 704238542,
+        "layerfs_max_ns": 713317042,
+        "layerfs_speedup": 1.9671159800441445,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "write 64 MiB",
+        "cloudflare_median_ns": 83825833,
+        "layerfs_median_ns": 20078792,
+        "layerfs_min_ns": 19630625,
+        "layerfs_max_ns": 20307291,
+        "layerfs_speedup": 4.1748444328722565,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "copy 64 MiB",
+        "cloudflare_median_ns": 309579833,
+        "layerfs_median_ns": 77068708,
+        "layerfs_min_ns": 76212000,
+        "layerfs_max_ns": 78329750,
+        "layerfs_speedup": 4.016932955460989,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "read 64 MiB",
+        "cloudflare_median_ns": 163469250,
+        "layerfs_median_ns": 25884376,
+        "layerfs_min_ns": 25134250,
+        "layerfs_max_ns": 26071625,
+        "layerfs_speedup": 6.3153637545676204,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "pure read 64 MiB",
+        "cloudflare_median_ns": 74118958,
+        "layerfs_median_ns": 6052417,
+        "layerfs_min_ns": 5938250,
+        "layerfs_max_ns": 6514417,
+        "layerfs_speedup": 12.246175040483827,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "pure copy 64 MiB",
+        "cloudflare_median_ns": 231869042,
+        "layerfs_median_ns": 56400625,
+        "layerfs_min_ns": 56030958,
+        "layerfs_max_ns": 57046042,
+        "layerfs_speedup": 4.111107669462883,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "overwrite 64 MiB",
+        "cloudflare_median_ns": 144143250,
+        "layerfs_median_ns": 21486083,
+        "layerfs_min_ns": 21453083,
+        "layerfs_max_ns": 23542500,
+        "layerfs_speedup": 6.708679753308223,
+        "layerfs_wins": true
+      },
+      {
+        "scenario": "git init + commit 100 files",
+        "cloudflare_median_ns": 451875292,
+        "layerfs_median_ns": 199265458,
+        "layerfs_min_ns": 195665250,
+        "layerfs_max_ns": 203787542,
+        "layerfs_speedup": 2.267705083135884,
+        "layerfs_wins": true
+      }
+    ],
+    "wins": 12,
+    "layerfs_sum_ns": 2916390669,
+    "cloudflare_sum_ns": 7617910211,
+    "aggregate_speedup": 2.612102106886833,
+    "previous_current_sum_ns": 2817835165,
+    "vs_previous_current_percent": 3.4975610079732964,
+    "screenshot_layerfs_sum_ns": 2920193197,
+    "vs_screenshot_percent": -0.13021494618597318
+  }
+}

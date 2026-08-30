@@ -1,5 +1,0 @@
-authoritative-var wall_ns=24813550000
-authoritative-tmp wall_ns=24320696000
-total wall_ns=49134246000
-durable02 wall_ns=212592658000
-durable02 classification=COLD_FRESH_STORE_RESTART_DURABLE

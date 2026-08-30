@@ -220,6 +220,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
+name = "fs-benchmark-pro"
+version = "0.1.0"
+dependencies = [
+ "layerfs-sdk",
+]
+
+[[package]]
 name = "fuser"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
