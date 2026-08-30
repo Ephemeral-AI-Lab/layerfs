@@ -1,4 +1,5 @@
 use crate::dump::render_to_string;
+use ratatui::layout::Rect;
 
 #[test]
 fn every_page_renders_at_all_frozen_sizes() {
@@ -101,4 +102,47 @@ fn compact_reconciliation_shows_every_unresolved_conflict() {
     assert!(screen.contains("Commit C-B-local-sync-04 vs current Layer L-A-19"));
     assert!(screen.contains("conflict-1  src/model.rs · Content"));
     assert!(screen.contains("conflict-2  src/schema.rs · Directory"));
+}
+
+#[test]
+fn explorer_files_and_changes_render_for_layer_and_commit_scopes() {
+    for (page, expected) in [
+        ("topology:files", "FILE TREE"),
+        ("topology:changes", "CHANGED PATHS"),
+        ("branch:files", "FILE TREE"),
+        ("branch:changes", "CHANGED PATHS"),
+    ] {
+        for (width, height) in [(80, 24), (120, 40), (200, 60)] {
+            let screen = render_to_string(page, width, height, true).unwrap();
+            assert!(
+                screen.contains(expected),
+                "{page} {width}x{height}: {expected}"
+            );
+        }
+    }
+    assert!(render_to_string("topology:file-content", 80, 24, true)
+        .unwrap()
+        .contains("CONTENT"));
+    assert!(render_to_string("branch:changes-content", 80, 24, true)
+        .unwrap()
+        .contains("BEFORE → AFTER"));
+    assert!(render_to_string("branch:changes", 200, 60, true)
+        .unwrap()
+        .contains("To    Commit"));
+}
+
+#[test]
+fn responsive_three_panes_never_overlap() {
+    let medium = super::three_panes(Rect::new(0, 0, 120, 40), 2);
+    assert!(medium[1].is_none());
+    let left = medium[0].unwrap();
+    let right = medium[2].unwrap();
+    assert!(left.x + left.width <= right.x);
+
+    let wide = super::three_panes(Rect::new(0, 0, 200, 40), 0);
+    for pair in wide.windows(2) {
+        let left = pair[0].unwrap();
+        let right = pair[1].unwrap();
+        assert!(left.x + left.width <= right.x);
+    }
 }

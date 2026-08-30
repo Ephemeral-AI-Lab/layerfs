@@ -29,13 +29,7 @@ impl Theme {
     }
 
     pub fn selected(self) -> Style {
-        if self.color {
-            self.style(Color::Black)
-                .bg(Color::Cyan)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().add_modifier(Modifier::BOLD | Modifier::REVERSED)
-        }
+        Style::default().add_modifier(Modifier::BOLD | Modifier::REVERSED)
     }
 
     pub fn focus(self) -> Style {

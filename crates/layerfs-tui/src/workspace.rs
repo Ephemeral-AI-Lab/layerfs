@@ -265,7 +265,12 @@ fn files(workspace: &WorkspaceView, selected: Option<&str>) -> [Section; 3] {
                 Line::from(clean(&file.path)),
                 Line::from(format!("Kind            {:?}", file.kind)),
                 Line::from(format!("Logical         {}", bytes(file.bytes))),
-                Line::from(format!("Allocated       {}", bytes(file.allocated_bytes))),
+                Line::from(format!(
+                    "Allocated       {}",
+                    file.allocated_bytes
+                        .map(bytes)
+                        .unwrap_or_else(|| "unavailable".into())
+                )),
                 Line::from(format!("Generation      {}", workspace.generation)),
                 Line::from(format!(
                     "Change          {}",

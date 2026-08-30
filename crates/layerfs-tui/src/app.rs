@@ -1,4 +1,4 @@
-use crate::workspace::WorkspaceTab;
+use crate::{explorer::ExplorerState, workspace::WorkspaceTab};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use layerfs_cli::{
     ActivitySnapshot, BranchId, BranchOrigin, BranchView, CliEvent, CliResult, CliSession, Command,
@@ -79,6 +79,7 @@ pub struct App {
     pub selected_project: Option<LayerStackId>,
     pub selected_layer: Option<LayerId>,
     pub selected_graph: Option<GraphTarget>,
+    pub explorer: ExplorerState,
     pub selected_workspace: Option<WorkspaceId>,
     pub workspace_tab: WorkspaceTab,
     pub selected_workspace_path: Option<String>,
@@ -131,6 +132,7 @@ impl App {
             ViewSnapshot::Activity(snapshot) => snapshot,
             _ => unreachable!(),
         };
+        let explorer = ExplorerState::new(selected_layer.clone());
         let mut app = Self {
             session,
             route: Route::Projects,
@@ -160,6 +162,7 @@ impl App {
             selected_project,
             selected_layer,
             selected_graph: None,
+            explorer,
             selected_workspace: None,
             workspace_tab: WorkspaceTab::Overview,
             selected_workspace_path: None,
@@ -214,6 +217,7 @@ impl App {
         app.selected_project = None;
         app.selected_layer = None;
         app.selected_graph = None;
+        app.explorer = ExplorerState::new(None);
         app.selected_workspace = None;
         app.selected_operation = None;
         app
@@ -225,6 +229,7 @@ impl App {
             "topology" | "project" => {
                 if let Some(id) = self.selected_project.clone() {
                     self.route = Route::Project(id);
+                    self.activate_selected_layer();
                 }
             }
             "branch" => {
@@ -234,6 +239,7 @@ impl App {
                         BranchId::from("B-main"),
                         CommitId::from("C-B-main-35"),
                     ));
+                    self.activate_selected_graph();
                 }
             }
             "workspaces" => self.route = Route::Workspaces(self.selected_project.clone()),
@@ -270,6 +276,12 @@ impl App {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
+        if self.error.is_some() {
+            if matches!(key.code, KeyCode::Esc | KeyCode::Enter) {
+                self.error = None;
+            }
+            return;
+        }
         self.error = None;
         match self.overlay {
             Overlay::Command => self.command_key(key),
@@ -493,6 +505,11 @@ impl App {
             }
             KeyCode::Char('3') => self.go(Route::Workspaces(self.selected_project.clone())),
             KeyCode::Char('4') => self.go(Route::Activity(ActivityTab::Operations)),
+            KeyCode::Char('q') if self.active_operation.is_some() => {
+                self.error = Some(
+                    "Operation is running; press x to interrupt or wait before quitting".into(),
+                )
+            }
             KeyCode::Char('q') => self.quit_cleanly(),
             KeyCode::Esc => self.back(),
             KeyCode::Tab => {
@@ -523,7 +540,7 @@ impl App {
             KeyCode::Char('?') => self.overlay = Overlay::Help,
             KeyCode::Char('o') => self.operation_drawer = !self.operation_drawer,
             KeyCode::Char('r') => self.refresh_all(),
-            KeyCode::Char('x') if !matches!(self.route, Route::Workspace(_)) => {
+            KeyCode::Char('x') if self.active_operation.is_some() => {
                 if let Some(handle) = self.active_operation.as_mut() {
                     if let Err(error) = handle.interrupt() {
                         self.error = Some(error.to_string());
@@ -536,6 +553,9 @@ impl App {
                 self.workspace_tab = WorkspaceTab::Changes;
                 self.sync_workspace_item();
             }
+            KeyCode::Char('d') if matches!(self.route, Route::Project(_) | Route::Branch(_, _)) => {
+                self.set_explorer_mode(crate::ExplorerMode::Changes)
+            }
             KeyCode::Char('d') => self.open_selected_diff(),
             KeyCode::Char('[') if matches!(self.route, Route::Workspace(_)) => {
                 self.workspace_tab = self.workspace_tab.next(-1);
@@ -544,6 +564,12 @@ impl App {
             KeyCode::Char(']') if matches!(self.route, Route::Workspace(_)) => {
                 self.workspace_tab = self.workspace_tab.next(1);
                 self.sync_workspace_item();
+            }
+            KeyCode::Char('[') if matches!(self.route, Route::Project(_) | Route::Branch(_, _)) => {
+                self.cycle_explorer_mode(-1)
+            }
+            KeyCode::Char(']') if matches!(self.route, Route::Project(_) | Route::Branch(_, _)) => {
+                self.cycle_explorer_mode(1)
             }
             KeyCode::Char('x') if matches!(self.route, Route::Workspace(_)) => {
                 self.prefill_workspace_bash()
@@ -557,12 +583,28 @@ impl App {
             KeyCode::Char('D') if matches!(self.route, Route::Workspace(_)) => {
                 self.plan_workspace_command("end", true)
             }
+            KeyCode::Char('h')
+                if matches!(self.route, Route::Project(_) | Route::Branch(_, _))
+                    && self.explorer.mode == crate::ExplorerMode::Files =>
+            {
+                self.toggle_explorer_directory(false)
+            }
+            KeyCode::Char('l')
+                if matches!(self.route, Route::Project(_) | Route::Branch(_, _))
+                    && self.explorer.mode == crate::ExplorerMode::Files =>
+            {
+                self.toggle_explorer_directory(true)
+            }
             KeyCode::Char('h') => self.set_expanded(false),
             KeyCode::Char('l') => self.set_expanded(true),
             KeyCode::Char(' ') => self.toggle_expanded(),
             KeyCode::Char('i') => {
-                self.focus = self.focus_count().saturating_sub(1);
-                self.compact_pane = self.focus;
+                self.explorer.inspector_visible = !self.explorer.inspector_visible;
+                self.compact_pane = if self.explorer.inspector_visible {
+                    2
+                } else {
+                    self.focus
+                };
             }
             _ => {}
         }
@@ -775,9 +817,19 @@ impl App {
                     self.go(Route::Project(id));
                 }
             }
-            Route::Project(project) => {
-                if let Some(GraphTarget::Branch(branch)) = self.selected_graph.clone() {
-                    self.go(Route::Branch(project.clone(), branch));
+            Route::Project(_) => {
+                if self.explorer.mode == crate::ExplorerMode::Topology {
+                    self.set_explorer_mode(crate::ExplorerMode::Files);
+                } else if self.explorer.mode == crate::ExplorerMode::Files {
+                    self.toggle_explorer_directory(
+                        !self
+                            .explorer
+                            .selected_path
+                            .as_ref()
+                            .is_some_and(|path| self.explorer.expanded_dirs.contains(path)),
+                    );
+                } else {
+                    self.set_explorer_mode(crate::ExplorerMode::Files);
                 }
             }
             Route::Workspaces(_) => {
@@ -792,7 +844,22 @@ impl App {
                     self.route = Route::Activity(ActivityTab::Operations);
                 }
             }
-            Route::Branch(_, _) | Route::Workspace(_) | Route::Diff(_) => {}
+            Route::Branch(_, _) => {
+                if self.explorer.mode == crate::ExplorerMode::Topology {
+                    self.set_explorer_mode(crate::ExplorerMode::Files);
+                } else if self.explorer.mode == crate::ExplorerMode::Files {
+                    self.toggle_explorer_directory(
+                        !self
+                            .explorer
+                            .selected_path
+                            .as_ref()
+                            .is_some_and(|path| self.explorer.expanded_dirs.contains(path)),
+                    );
+                } else {
+                    self.set_explorer_mode(crate::ExplorerMode::Files);
+                }
+            }
+            Route::Workspace(_) | Route::Diff(_) => {}
         }
     }
 
@@ -810,28 +877,38 @@ impl App {
                 );
             }
             Route::Project(_) => {
-                if self.focus == 0 {
+                if self.explorer.mode != crate::ExplorerMode::Topology {
+                    self.move_explorer_path(delta);
+                } else if self.focus == 0 {
                     if let Some(project) = &self.project {
                         self.selected_layer = move_id(
                             &project
                                 .layers
                                 .items
                                 .iter()
+                                .rev()
                                 .map(|layer| layer.id.clone())
                                 .collect::<Vec<_>>(),
                             self.selected_layer.as_ref(),
                             delta,
                         );
                         self.sync_graph_selection();
+                        self.activate_selected_layer();
                     }
                 } else {
                     let rows = self.graph_rows();
                     self.selected_graph = move_target(&rows, self.selected_graph.as_ref(), delta);
+                    self.activate_selected_graph();
                 }
             }
             Route::Branch(_, branch) => {
-                let rows = self.focused_branch_rows(branch);
-                self.selected_graph = move_target(&rows, self.selected_graph.as_ref(), delta);
+                if self.explorer.mode != crate::ExplorerMode::Topology {
+                    self.move_explorer_path(delta);
+                } else {
+                    let rows = self.focused_branch_rows(branch);
+                    self.selected_graph = move_target(&rows, self.selected_graph.as_ref(), delta);
+                    self.activate_selected_graph();
+                }
             }
             Route::Workspaces(_) => {
                 self.selected_workspace = move_id(
@@ -892,8 +969,14 @@ impl App {
 
     fn focus_count(&self) -> usize {
         match self.route {
-            Route::Projects | Route::Branch(_, _) | Route::Workspaces(_) | Route::Activity(_) => 2,
-            Route::Project(_) | Route::Workspace(_) | Route::Diff(_) => 3,
+            Route::Projects
+            | Route::Project(_)
+            | Route::Workspaces(_)
+            | Route::Workspace(_)
+            | Route::Activity(_)
+            | Route::Diff(_) => 2,
+            Route::Branch(_, _) if self.explorer.mode == crate::ExplorerMode::Topology => 1,
+            Route::Branch(_, _) => 2,
         }
     }
 
@@ -957,6 +1040,7 @@ impl App {
                         .and_then(|p| p.layers.items.last().map(|v| v.id.clone()));
                 }
                 self.sync_graph_selection();
+                self.sync_explorer_subject();
                 if let Some(project) = &self.project {
                     self.expanded
                         .retain(|id| project.branches.items.iter().any(|branch| &branch.id == id));
@@ -1096,16 +1180,22 @@ impl App {
     }
 
     fn prefill_fork(&mut self) {
-        let command = if matches!(self.route, Route::Project(_)) && self.focus == 0 {
-            self.selected_layer
-                .as_ref()
-                .map(|layer| format!("branch fork --name new-rollout --layer {layer}"))
-        } else if let Some(GraphTarget::Commit(branch, commit)) = self.selected_graph.clone() {
-            Some(format!(
+        let command = match self.explorer.subject.clone() {
+            Some(crate::ActiveSubject::Layer(layer)) => {
+                Some(format!("branch fork --name new-rollout --layer {layer}"))
+            }
+            Some(crate::ActiveSubject::Commit(branch, commit)) => Some(format!(
                 "branch fork --name new-rollout --branch {branch} --commit {commit}"
-            ))
-        } else {
-            None
+            )),
+            Some(crate::ActiveSubject::Branch(branch)) => self
+                .project
+                .as_ref()
+                .and_then(|project| project.branches.items.iter().find(|item| item.id == branch))
+                .and_then(|item| item.work_head.as_ref().or(item.authority_head.as_ref()))
+                .map(|commit| {
+                    format!("branch fork --name new-rollout --branch {branch} --commit {commit}")
+                }),
+            None => None,
         };
         if let Some(command) = command {
             self.command = command;
@@ -1116,8 +1206,8 @@ impl App {
     }
 
     fn prefill_workspace(&mut self) {
-        let command = match self.selected_graph.clone() {
-            Some(GraphTarget::Commit(branch_id, commit_id)) => self
+        let command = match self.explorer.subject.clone() {
+            Some(crate::ActiveSubject::Commit(branch_id, commit_id)) => self
                 .project
                 .as_ref()
                 .and_then(|project| {
@@ -1140,7 +1230,7 @@ impl App {
                         "workspace create --branch {branch_id} --commit {commit_id} --at /tmp/layerfs-workspace"
                     )
                 }),
-            Some(GraphTarget::Branch(branch_id)) => self
+            Some(crate::ActiveSubject::Branch(branch_id)) => self
                 .project
                 .as_ref()
                 .and_then(|project| {
@@ -1161,7 +1251,7 @@ impl App {
                     )),
                     BranchOrigin::Commit(_, _) => None,
                 }),
-            None => None,
+            Some(crate::ActiveSubject::Layer(_)) | None => None,
         };
         if let Some(command) = command {
             self.command = command;
@@ -1323,81 +1413,6 @@ impl App {
                 self.set_expanded(false);
             } else {
                 self.set_expanded(true);
-            }
-        }
-    }
-
-    fn apply_search(&mut self) {
-        let needle = self.search.to_ascii_lowercase();
-        if needle.is_empty() {
-            return;
-        }
-        match &self.route {
-            Route::Projects => {
-                self.selected_project = self
-                    .projects
-                    .iter()
-                    .find(|project| project.name.as_str().to_ascii_lowercase().contains(&needle))
-                    .map(|project| project.id.clone());
-            }
-            Route::Project(_) => {
-                self.selected_graph = self
-                    .graph_rows()
-                    .into_iter()
-                    .find(|row| {
-                        format!("{} {}", row.label, row.detail)
-                            .to_ascii_lowercase()
-                            .contains(&needle)
-                    })
-                    .map(|row| row.target);
-            }
-            Route::Branch(_, branch) => {
-                self.selected_graph = self
-                    .focused_branch_rows(branch)
-                    .into_iter()
-                    .find(|row| {
-                        format!("{} {}", row.label, row.detail)
-                            .to_ascii_lowercase()
-                            .contains(&needle)
-                    })
-                    .map(|row| row.target);
-            }
-            Route::Workspaces(_) => {
-                self.selected_workspace = self
-                    .workspaces
-                    .workspaces
-                    .items
-                    .iter()
-                    .find(|workspace| {
-                        format!("{} {}", workspace.id, workspace.branch_name)
-                            .to_ascii_lowercase()
-                            .contains(&needle)
-                    })
-                    .map(|workspace| workspace.id.clone());
-            }
-            Route::Workspace(_) => {
-                self.selected_workspace_path = self
-                    .workspace_items()
-                    .into_iter()
-                    .find(|item| item.to_ascii_lowercase().contains(&needle));
-            }
-            Route::Activity(_) => {
-                self.selected_operation = self
-                    .activity
-                    .operations
-                    .items
-                    .iter()
-                    .find(|operation| operation.title.to_ascii_lowercase().contains(&needle))
-                    .map(|operation| operation.id.clone());
-            }
-            Route::Diff(_) => {
-                self.selected_diff_path = self.diff.as_ref().and_then(|diff| {
-                    diff.entries
-                        .items
-                        .iter()
-                        .find(|entry| entry.path.to_ascii_lowercase().contains(&needle))
-                        .map(|entry| entry.path.clone())
-                });
             }
         }
     }

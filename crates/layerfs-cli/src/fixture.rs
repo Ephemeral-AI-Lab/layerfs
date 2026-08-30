@@ -1,9 +1,8 @@
 use crate::model::{
     ActivitySnapshot, BranchOrigin, BranchRelation, BranchView, CommitView, ConflictView,
-    DiffChange, DiffEntryView, DiffSnapshot, LayerCoverage, LayerView, OperationReceipt,
-    OperationState, OperationView, Page, PageRequest, ProjectRelation, ProjectSnapshot,
-    ProjectSummary, RemotePlacement, SemanticAction, StorageSnapshot, WorkspaceSnapshot,
-    WorkspaceState, WorkspaceView,
+    LayerCoverage, LayerView, OperationReceipt, OperationState, OperationView, Page, PageRequest,
+    ProjectRelation, ProjectSnapshot, ProjectSummary, RemotePlacement, SemanticAction,
+    StorageSnapshot, WorkspaceSnapshot, WorkspaceState, WorkspaceView,
 };
 use crate::workspace::{
     canonical_tree, seed_tree, CanonicalObject, Tree, TreeEntry, WorkspaceRecord,
@@ -526,60 +525,6 @@ impl MockState {
         ActivitySnapshot {
             operations: paginate(self.operations.clone(), page, "operations"),
             storage,
-        }
-    }
-
-    pub fn diff_snapshot(
-        &self,
-        title: &str,
-        from: &str,
-        to: &str,
-        page: &PageRequest,
-    ) -> DiffSnapshot {
-        let mut entries = vec![
-            DiffEntryView {
-                path: "src/storage.rs".into(),
-                change: DiffChange::Modify,
-                aspects: vec!["content".into(), "mode".into()],
-                before: Some("old single-point transfer".into()),
-                after: Some("through-history transfer".into()),
-            },
-            DiffEntryView {
-                path: "src/pull/history.rs".into(),
-                change: DiffChange::Add,
-                aspects: vec!["content".into()],
-                before: None,
-                after: Some("bounded ancestry traversal".into()),
-            },
-            DiffEntryView {
-                path: "src/legacy.rs".into(),
-                change: DiffChange::Remove,
-                aspects: vec!["content".into()],
-                before: Some("compatibility facade".into()),
-                after: None,
-            },
-            DiffEntryView {
-                path: "tests/hard-links.rs".into(),
-                change: DiffChange::Modify,
-                aspects: vec!["metadata".into(), "hard-links".into()],
-                before: Some("links 2".into()),
-                after: Some("links 3".into()),
-            },
-        ];
-        for index in 0..132 {
-            entries.push(DiffEntryView {
-                path: format!("fixtures/generated/file-{index:03}.txt"),
-                change: DiffChange::Modify,
-                aspects: vec!["content".into()],
-                before: Some(format!("old-{index}")),
-                after: Some(format!("new-{index}")),
-            });
-        }
-        DiffSnapshot {
-            title: title.into(),
-            from: from.into(),
-            to: to.into(),
-            entries: paginate(entries, page, "diff"),
         }
     }
 

@@ -340,8 +340,17 @@ pub struct WorkspaceFileView {
     pub path: String,
     pub kind: WorkspaceFileKind,
     pub bytes: u64,
-    pub allocated_bytes: u64,
+    pub allocated_bytes: Option<u64>,
     pub preview: FilePreview,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FilesSnapshot {
+    pub target: RouteTarget,
+    pub resolved: RouteTarget,
+    pub root: ObjectId,
+    pub generation: Option<u64>,
+    pub files: Page<WorkspaceFileView>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -504,8 +513,23 @@ pub struct DiffEntryView {
     pub after: Option<String>,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DeltaSummary {
+    pub added: u64,
+    pub modified: u64,
+    pub removed: u64,
+    pub before_bytes: u64,
+    pub after_bytes: u64,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiffSnapshot {
+    pub target: RouteTarget,
+    pub from_target: Option<RouteTarget>,
+    pub to_target: RouteTarget,
+    pub from_root: Option<ObjectId>,
+    pub to_root: ObjectId,
+    pub summary: DeltaSummary,
     pub title: String,
     pub from: String,
     pub to: String,
@@ -528,6 +552,14 @@ pub enum ViewQuery {
         page: PageRequest,
     },
     Activity(PageRequest),
+    Files {
+        target: RouteTarget,
+        page: PageRequest,
+    },
+    Changes {
+        target: RouteTarget,
+        page: PageRequest,
+    },
     Diff {
         request: crate::DiffRequest,
         page: PageRequest,
@@ -541,6 +573,8 @@ pub enum ViewSnapshot {
     Branch(ProjectSnapshot, BranchId),
     Workspaces(WorkspaceSnapshot),
     Activity(ActivitySnapshot),
+    Files(FilesSnapshot),
+    Changes(DiffSnapshot),
     Diff(DiffSnapshot),
 }
 

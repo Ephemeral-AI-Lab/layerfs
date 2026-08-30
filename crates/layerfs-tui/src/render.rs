@@ -1,5 +1,7 @@
 use crate::{
     app::{ActivityTab, App, GraphTarget, Overlay, Route},
+    explorer::{ActiveSubject, ExplorerMode},
+    format::{action_labels, bytes, display_id, truncate},
     theme::Theme,
 };
 use layerfs_cli::{
@@ -108,8 +110,16 @@ fn breadcrumb(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
     }
     let current = match &app.route {
         Route::Projects => "Projects".into(),
-        Route::Project(_) => format!("Projects  /  {}  /  Topology", project_name(app)),
-        Route::Branch(_, _) => branch_breadcrumb(app),
+        Route::Project(_) => format!(
+            "Projects  /  {}  /  {}",
+            project_name(app),
+            app.explorer.mode.label()
+        ),
+        Route::Branch(_, _) => format!(
+            "{}  /  {}",
+            branch_breadcrumb(app),
+            app.explorer.mode.label()
+        ),
         Route::Workspaces(_) => format!("{}  /  Workspaces", project_name(app)),
         Route::Workspace(id) => format!(
             "{}  /  Workspaces  /  {}  /  {}",
@@ -219,7 +229,18 @@ fn projects(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
     }
 }
 
+fn explorer_body(frame: &mut Frame, area: Rect, app: &App, theme: Theme) -> Rect {
+    let rows = Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).split(area);
+    crate::explorer::tabs(frame, rows[0], app, theme);
+    rows[1]
+}
+
 fn topology(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    let area = explorer_body(frame, area, app, theme);
+    if app.explorer.mode != ExplorerMode::Topology {
+        crate::explorer::draw(frame, area, app, theme);
+        return;
+    }
     let panes = three_panes(area, app.compact_pane);
     if let Some(left) = panes[0] {
         let layers = app
@@ -233,24 +254,35 @@ fn topology(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
         let lines = layers
             .into_iter()
             .map(|layer| {
-                let selected = app.selected_layer.as_ref() == Some(&layer.id);
+                let active =
+                    app.explorer.subject.as_ref() == Some(&ActiveSubject::Layer(layer.id.clone()));
+                let selected = active && app.focus == 0;
                 let source = layer
                     .source
                     .as_ref()
                     .map(|source| source_label(app, source))
                     .unwrap_or_else(|| "genesis".into());
                 Line::styled(
-                    format!(
-                        "{}L{:<3} {:<9} {:<10} ← {}",
-                        if selected { ">" } else { " " },
-                        layer.number,
-                        if layer.authority_head {
-                            "AUTH HEAD"
-                        } else {
-                            "AUTH"
-                        },
-                        layer_work_label(app, layer),
-                        source
+                    truncate(
+                        &format!(
+                            "{}L{:<3} {:<9} {:<10} ← {}",
+                            if selected {
+                                ">"
+                            } else if active {
+                                "•"
+                            } else {
+                                " "
+                            },
+                            layer.number,
+                            if layer.authority_head {
+                                "AUTH HEAD"
+                            } else {
+                                "AUTH"
+                            },
+                            layer_work_label(app, layer),
+                            source
+                        ),
+                        usize::from(left.width.saturating_sub(4)),
                     ),
                     row_style(selected, theme),
                 )
@@ -269,7 +301,7 @@ fn topology(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
     if let Some(center) = panes[1] {
         let rows = app.graph_rows();
         let selected_index = graph_selected_index(app, &rows);
-        let lines = graph_lines(app, rows, theme);
+        let lines = graph_lines(app, rows, center.width.saturating_sub(4), theme);
         list_panel(
             frame,
             center,
@@ -281,23 +313,21 @@ fn topology(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
         );
     }
     if let Some(right) = panes[2] {
-        panel(
-            frame,
-            right,
-            " INSPECTOR ",
-            app.focus == 2,
-            inspector(app),
-            theme,
-        );
+        panel(frame, right, " INSPECTOR ", false, inspector(app), theme);
     }
 }
 
 fn branch(frame: &mut Frame, area: Rect, app: &App, branch_id: &BranchId, theme: Theme) {
+    let area = explorer_body(frame, area, app, theme);
+    if app.explorer.mode != ExplorerMode::Topology {
+        crate::explorer::draw(frame, area, app, theme);
+        return;
+    }
     let panes = two_panes(area, app.compact_pane);
     if let Some(left) = panes.0 {
         let rows = app.focused_branch_rows(branch_id);
         let selected_index = graph_selected_index(app, &rows);
-        let lines = graph_lines(app, rows, theme);
+        let lines = graph_lines(app, rows, left.width.saturating_sub(4), theme);
         list_panel(
             frame,
             left,
@@ -309,30 +339,50 @@ fn branch(frame: &mut Frame, area: Rect, app: &App, branch_id: &BranchId, theme:
         );
     }
     if let Some(right) = panes.1 {
-        panel(
-            frame,
-            right,
-            " INSPECTOR ",
-            app.focus == 1,
-            inspector(app),
-            theme,
-        );
+        panel(frame, right, " INSPECTOR ", false, inspector(app), theme);
     }
 }
 
-fn graph_lines(app: &App, rows: Vec<crate::app::GraphRow>, theme: Theme) -> Vec<Line<'static>> {
+fn graph_lines(
+    app: &App,
+    rows: Vec<crate::app::GraphRow>,
+    width: u16,
+    theme: Theme,
+) -> Vec<Line<'static>> {
     rows.into_iter()
         .filter(|row| search_match(app, &format!("{} {}", row.label, row.detail)))
         .map(|row| {
-            let selected = app.selected_graph.as_ref() == Some(&row.target);
+            let active = match (&app.explorer.subject, &row.target) {
+                (Some(ActiveSubject::Branch(active)), GraphTarget::Branch(row)) => active == row,
+                (
+                    Some(ActiveSubject::Commit(active_branch, active_commit)),
+                    GraphTarget::Commit(row_branch, row_commit),
+                ) => active_branch == row_branch && active_commit == row_commit,
+                _ => false,
+            };
+            let selected = active
+                && match app.route {
+                    Route::Project(_) => app.focus == 1,
+                    Route::Branch(_, _) => app.focus == 0,
+                    _ => false,
+                };
             Line::styled(
-                format!(
-                    "{}{}├─ {} {}  {}",
-                    if selected { ">" } else { " " },
-                    "│ ".repeat(row.depth as usize),
-                    row.marker,
-                    row.label,
-                    row.detail
+                truncate(
+                    &format!(
+                        "{}{}├─ {} {}  {}",
+                        if selected {
+                            ">"
+                        } else if active {
+                            "•"
+                        } else {
+                            " "
+                        },
+                        "│ ".repeat(row.depth as usize),
+                        row.marker,
+                        row.label,
+                        row.detail
+                    ),
+                    usize::from(width),
                 ),
                 row_style(selected, theme),
             )
@@ -711,7 +761,11 @@ fn footer(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
                 " [Enter] open  [/] search  [r] refresh  [:] command  [?] help  [q] quit"
                     .into()
             }
-            Route::Project(_) | Route::Branch(_, _) => " [Tab] focus  [j/k] move  [i] inspector  [f] fork  [w] workspace  [d] diff  [Esc] back".into(),
+            Route::Project(_) | Route::Branch(_, _) => match app.explorer.mode {
+                ExplorerMode::Topology => " [Tab] pane  [j/k] move  [Enter] files  [[/]] mode  [f] fork  [w] workspace".into(),
+                ExplorerMode::Files => " [Tab] pane  [j/k] move/scroll  [h/l] fold  [[/]] mode  [d] changes  [i] inspector".into(),
+                ExplorerMode::Changes => " [Tab] pane  [j/k] move/scroll  [[/]] mode  [Enter] file  [i] inspector  [Esc] back".into(),
+            },
             Route::Workspaces(_) => " [j/k] move  [Enter] Workspace  [:] command  [o] operations  [Esc] back".into(),
             Route::Workspace(_) => " [Tab] pane  [[/]] tab  [x] Bash  [c] commit  [e] end  [D] discard  [Esc] back".into(),
             Route::Activity(_) => " [Enter] operations/storage  [j/k] move  [o] drawer  [:] command  [Esc] back".into(),
@@ -827,11 +881,13 @@ fn overlay(frame: &mut Frame, app: &App, theme: Theme) {
 }
 
 fn inspector(app: &App) -> Vec<Line<'static>> {
-    if matches!(app.route, Route::Project(_)) && app.focus == 0 {
+    if let Some(ActiveSubject::Layer(active)) = app.explorer.subject.as_ref() {
         if let Some(layer) = app.project.as_ref().and_then(|project| {
-            app.selected_layer
-                .as_ref()
-                .and_then(|id| project.layers.items.iter().find(|layer| &layer.id == id))
+            project
+                .layers
+                .items
+                .iter()
+                .find(|layer| &layer.id == active)
         }) {
             return vec![
                 Line::from(format!("Layer L{}", layer.number)),
@@ -850,8 +906,8 @@ fn inspector(app: &App) -> Vec<Line<'static>> {
             ];
         }
     }
-    match app.selected_graph.as_ref() {
-        Some(GraphTarget::Branch(id)) => app
+    match app.explorer.subject.as_ref() {
+        Some(ActiveSubject::Branch(id)) => app
             .project
             .as_ref()
             .and_then(|project| {
@@ -895,7 +951,7 @@ fn inspector(app: &App) -> Vec<Line<'static>> {
                 ]
             })
             .unwrap_or_else(empty_lines),
-        Some(GraphTarget::Commit(branch_id, commit_id)) => app
+        Some(ActiveSubject::Commit(branch_id, commit_id)) => app
             .project
             .as_ref()
             .and_then(|project| {
@@ -955,6 +1011,7 @@ fn inspector(app: &App) -> Vec<Line<'static>> {
                 ]
             })
             .unwrap_or_else(empty_lines),
+        Some(ActiveSubject::Layer(_)) => empty_lines(),
         None => app
             .project
             .as_ref()
@@ -1081,7 +1138,7 @@ fn operation_detail(operation: &OperationView) -> Vec<Line<'static>> {
     lines
 }
 
-fn panel(
+pub(crate) fn panel(
     frame: &mut Frame,
     area: Rect,
     title: &str,
@@ -1092,7 +1149,7 @@ fn panel(
     panel_at_scroll(frame, area, title, focused, 0, lines, theme);
 }
 
-fn list_panel(
+pub(crate) fn list_panel(
     frame: &mut Frame,
     area: Rect,
     title: &str,
@@ -1114,7 +1171,7 @@ fn list_panel(
     panel_at_scroll(frame, area, &title, focused, scroll as u16, lines, theme);
 }
 
-fn panel_at_scroll(
+pub(crate) fn panel_at_scroll(
     frame: &mut Frame,
     area: Rect,
     title: &str,
@@ -1123,6 +1180,11 @@ fn panel_at_scroll(
     lines: Vec<Line<'static>>,
     theme: Theme,
 ) {
+    let title = if focused {
+        format!("▶{title}")
+    } else {
+        title.to_owned()
+    };
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(if focused {
@@ -1131,7 +1193,7 @@ fn panel_at_scroll(
             theme.muted()
         })
         .title(Span::styled(
-            title.to_owned(),
+            title,
             if focused {
                 theme.focus()
             } else {
@@ -1163,7 +1225,7 @@ fn two_panes(area: Rect, compact: usize) -> (Option<Rect>, Option<Rect>) {
     }
 }
 
-fn three_panes(area: Rect, compact: usize) -> [Option<Rect>; 3] {
+pub(crate) fn three_panes(area: Rect, compact: usize) -> [Option<Rect>; 3] {
     if area.width < 100 {
         let mut result = [None, None, None];
         result[compact % 3] = Some(area);
@@ -1172,14 +1234,14 @@ fn three_panes(area: Rect, compact: usize) -> [Option<Rect>; 3] {
         let columns = Layout::horizontal([Constraint::Percentage(38), Constraint::Percentage(62)])
             .split(area);
         match compact % 3 {
-            2 => [Some(columns[0]), Some(columns[1]), Some(columns[1])],
+            2 => [Some(columns[0]), None, Some(columns[1])],
             _ => [Some(columns[0]), Some(columns[1]), None],
         }
     } else {
         let columns = Layout::horizontal([
-            Constraint::Percentage(24),
-            Constraint::Percentage(52),
-            Constraint::Percentage(24),
+            Constraint::Max(44),
+            Constraint::Min(56),
+            Constraint::Max(42),
         ])
         .split(area);
         [Some(columns[0]), Some(columns[1]), Some(columns[2])]
@@ -1319,8 +1381,7 @@ fn compact_project_summary(project: &ProjectSummary) -> String {
 fn route_name(app: &App) -> &'static str {
     match app.route {
         Route::Projects => "Projects",
-        Route::Project(_) => "Topology",
-        Route::Branch(_, _) => "Branch",
+        Route::Project(_) | Route::Branch(_, _) => app.explorer.mode.label(),
         Route::Workspaces(_) => "Workspaces",
         Route::Workspace(_) => "Workspace",
         Route::Activity(ActivityTab::Operations) => "Operations",
@@ -1332,6 +1393,9 @@ fn route_name(app: &App) -> &'static str {
 fn compact_pane_name(app: &App) -> &'static str {
     match app.route {
         Route::Projects => ["List 1/2", "Detail 2/2"][app.compact_pane % 2],
+        Route::Project(_) | Route::Branch(_, _) if app.explorer.mode != ExplorerMode::Topology => {
+            ["Paths 1/3", "Content 2/3", "Inspector 3/3"][app.compact_pane % 3]
+        }
         Route::Project(_) => ["Layers 1/3", "Graph 2/3", "Inspector 3/3"][app.compact_pane % 3],
         Route::Branch(_, _) => ["Tree 1/2", "Inspector 2/2"][app.compact_pane % 2],
         Route::Workspaces(_) => ["List 1/2", "Detail 2/2"][app.compact_pane % 2],
@@ -1419,55 +1483,6 @@ fn short_number(value: &str) -> String {
             .trim_start_matches('0')
             .to_owned()
     }
-}
-
-fn display_id(value: &impl ToString) -> String {
-    let value = value.to_string();
-    if value.get(1..2).is_none_or(|separator| separator != "~") || value.len() <= 24 {
-        return value;
-    }
-    format!("{}…{}", &value[..12], &value[value.len() - 6..])
-}
-
-fn action_labels(actions: &[SemanticAction]) -> String {
-    let values = actions
-        .iter()
-        .map(|action| match action {
-            SemanticAction::Pull => "pull",
-            SemanticAction::Fork => "fork",
-            SemanticAction::Push => "push",
-            SemanticAction::Add => "add / reconcile",
-            SemanticAction::Diff => "diff",
-            SemanticAction::Materialize => "materialize",
-            SemanticAction::Workspace => "workspace",
-        })
-        .collect::<Vec<_>>();
-    if values.is_empty() {
-        "inspect".into()
-    } else {
-        values.join(" · ")
-    }
-}
-
-fn bytes(value: u64) -> String {
-    if value >= 1_048_576 {
-        format!("{:.1} MiB", value as f64 / 1_048_576.0)
-    } else if value >= 1024 {
-        format!("{:.1} KiB", value as f64 / 1024.0)
-    } else {
-        format!("{value} B")
-    }
-}
-
-fn truncate(value: &str, width: usize) -> String {
-    if value.chars().count() <= width {
-        return value.into();
-    }
-    value
-        .chars()
-        .take(width.saturating_sub(1))
-        .chain(std::iter::once('…'))
-        .collect()
 }
 
 fn empty_lines() -> Vec<Line<'static>> {

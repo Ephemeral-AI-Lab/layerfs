@@ -21,6 +21,16 @@ Run it against an inspectable context profile:
 
     cargo run -p layerfs-tui -- --context /tmp/layerfs-demo/context
 
+Create a persistent five-Branch, 30-Commit npm demo (five accepted Layers plus
+genesis), then open it:
+
+    cargo run -p layerfs-tui --example seed_demo -- /tmp/layerfs-demo-full
+    cargo run -p layerfs-tui -- --context /tmp/layerfs-demo-full/context
+
+On a Project or Branch page, `[` and `]` switch the selected Layer, Branch, or
+Commit between Topology, Files, and Changes. `Tab` moves between the navigator
+and content; `j/k` moves a path or scrolls content; `h/l` folds directories.
+
 Use the TUI command line to create the two Stores, select the pair, and then
 initialize a LayerStack:
 

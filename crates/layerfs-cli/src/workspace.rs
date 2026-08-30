@@ -3,9 +3,10 @@ use crate::database::Databases;
 use crate::fixture::{commit_id, BranchRecord, CommitRecord, MockState};
 use crate::model::{
     BranchOrigin, BranchRelation, CliError, CliResult, CommandResult, DiffChange, DiffEntryView,
-    FilePreview, WorkspaceCommitReceipt, WorkspaceFileKind, WorkspaceFileView, WorkspaceRunView,
-    WorkspaceState, WorkspaceStorageView, WorkspaceTimingView, WorkspaceView,
+    WorkspaceCommitReceipt, WorkspaceFileView, WorkspaceRunView, WorkspaceState,
+    WorkspaceStorageView, WorkspaceTimingView, WorkspaceView,
 };
+use crate::snapshot::{diff_trees, file_view};
 use crate::{CommitId, ExecutionId, ObjectId, WorkspaceId};
 use std::collections::{BTreeMap, HashSet};
 use std::fs::{self, File};
@@ -20,7 +21,6 @@ use std::time::Instant;
 const MAX_FILES: usize = 1_024;
 const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_TREE_BYTES: u64 = 64 * 1024 * 1024;
-const PREVIEW_BYTES: usize = 4 * 1024;
 const OUTPUT_BYTES: usize = 512 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -157,7 +157,7 @@ impl WorkspaceRecord {
             .view
             .files
             .iter()
-            .map(|file| file.allocated_bytes)
+            .filter_map(|file| file.allocated_bytes)
             .sum();
         self.view.storage.cow_delta_bytes = self
             .view
@@ -766,47 +766,7 @@ fn file_views(root: &Path, tree: &Tree) -> CliResult<Vec<WorkspaceFileView>> {
         .map(|(path, entry)| {
             let absolute = checked_join(root, path)?;
             let metadata = fs::symlink_metadata(absolute).map_err(io_error)?;
-            let (kind, bytes, preview) = match entry {
-                TreeEntry::Directory => (WorkspaceFileKind::Directory, 0, FilePreview::None),
-                TreeEntry::File(bytes) => {
-                    (WorkspaceFileKind::File, bytes.len() as u64, preview(bytes))
-                }
-            };
-            Ok(WorkspaceFileView {
-                path: path.clone(),
-                kind,
-                bytes,
-                allocated_bytes: allocated_bytes(&metadata),
-                preview,
-            })
-        })
-        .collect()
-}
-
-fn diff_trees(before: &Tree, after: &Tree) -> Vec<DiffEntryView> {
-    let paths = before
-        .keys()
-        .chain(after.keys())
-        .cloned()
-        .collect::<std::collections::BTreeSet<_>>();
-    paths
-        .into_iter()
-        .filter_map(|path| {
-            let left = before.get(&path);
-            let right = after.get(&path);
-            let change = match (left, right) {
-                (None, Some(_)) => DiffChange::Add,
-                (Some(_), None) => DiffChange::Remove,
-                (Some(left), Some(right)) if left != right => DiffChange::Modify,
-                _ => return None,
-            };
-            Some(DiffEntryView {
-                path,
-                change,
-                aspects: vec!["final state".into()],
-                before: left.and_then(entry_text),
-                after: right.and_then(entry_text),
-            })
+            Ok(file_view(path, entry, Some(allocated_bytes(&metadata))))
         })
         .collect()
 }
@@ -838,29 +798,6 @@ fn candidate_objects(
         .filter(|object| wanted.contains(&object.id))
         .cloned()
         .collect()
-}
-
-fn preview(bytes: &[u8]) -> FilePreview {
-    if bytes.iter().take(PREVIEW_BYTES).any(|byte| *byte == 0) {
-        return FilePreview::Binary;
-    }
-    let shown = &bytes[..bytes.len().min(PREVIEW_BYTES)];
-    let text = String::from_utf8_lossy(shown).into_owned();
-    if bytes.len() > PREVIEW_BYTES {
-        FilePreview::Truncated(text)
-    } else {
-        FilePreview::Text(text)
-    }
-}
-
-fn entry_text(entry: &TreeEntry) -> Option<String> {
-    match entry {
-        TreeEntry::Directory => Some("directory".into()),
-        TreeEntry::File(bytes) if bytes.len() <= PREVIEW_BYTES && !bytes.contains(&0) => {
-            Some(String::from_utf8_lossy(bytes).into_owned())
-        }
-        TreeEntry::File(bytes) => Some(format!("{} bytes", bytes.len())),
-    }
 }
 
 fn checked_join(root: &Path, relative: &str) -> CliResult<PathBuf> {

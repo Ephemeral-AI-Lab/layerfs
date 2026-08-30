@@ -17,6 +17,13 @@ pub fn render_to_string(page: &str, width: u16, height: u16, no_color: bool) -> 
         App::demo()
     };
     app.set_demo_route(if route == "empty" { "projects" } else { route });
+    if matches!(app.route, Route::Project(_) | Route::Branch(_, _)) {
+        match state {
+            "files" | "file-content" => app.set_explorer_mode(crate::ExplorerMode::Files),
+            "changes" | "changes-content" => app.set_explorer_mode(crate::ExplorerMode::Changes),
+            _ => {}
+        }
+    }
     app.workspace_tab = match state {
         "files" => WorkspaceTab::Files,
         "changes" => WorkspaceTab::Changes,
@@ -26,7 +33,8 @@ pub fn render_to_string(page: &str, width: u16, height: u16, no_color: bool) -> 
     };
     app.sync_workspace_item();
     match state {
-        "detail" | "content" | "graph" | "receipt" | "dedup" => {
+        "detail" | "content" | "graph" | "receipt" | "dedup" | "file-content"
+        | "changes-content" => {
             app.focus = 1;
             app.compact_pane = 1;
         }

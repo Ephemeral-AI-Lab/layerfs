@@ -1,7 +1,7 @@
 use super::CliSession;
 use crate::{
     BranchId, BranchRelation, CliEvent, DiffRequest, FinishedStatus, PageRequest, RemotePlacement,
-    ViewQuery, ViewSnapshot,
+    RouteTarget, ViewQuery, ViewSnapshot,
 };
 
 fn finish(session: &CliSession, command: &str) -> CliEvent {
@@ -221,7 +221,7 @@ fn workspace_process_ids_and_retained_delta_rules_are_enforced() {
 }
 
 #[test]
-fn diff_cursor_is_consumable_and_fork_receipt_is_zero_copy() {
+fn real_diff_and_fork_receipt_is_zero_copy() {
     let session = CliSession::open("mock").unwrap();
     let request = DiffRequest::BranchCommits {
         branch: "B-search-a".into(),
@@ -237,20 +237,11 @@ fn diff_cursor_is_consumable_and_fork_receipt_is_zero_copy() {
     let ViewSnapshot::Diff(first) = first else {
         panic!("Diff")
     };
-    assert_eq!(first.entries.items.len(), 2);
-    let second = session
-        .snapshot(ViewQuery::Diff {
-            request,
-            page: PageRequest {
-                after: first.entries.next,
-                limit: 2,
-            },
-        })
-        .unwrap();
-    let ViewSnapshot::Diff(second) = second else {
-        panic!("Diff")
-    };
-    assert_eq!(second.entries.items.len(), 2);
+    assert_eq!(first.entries.items.len(), 1);
+    assert_eq!(first.from, "B-search-a/C-B-search-a-05");
+    assert_eq!(first.to, "B-search-a/C-B-search-a-08");
+    assert_eq!(first.summary.modified, 1);
+    assert_eq!(first.entries.next, None);
     assert!(matches!(
         finish(
             &session,
@@ -265,6 +256,182 @@ fn diff_cursor_is_consumable_and_fork_receipt_is_zero_copy() {
             ..
         }
     ));
+}
+
+#[test]
+fn files_and_changes_pin_real_layer_branch_and_commit_trees() {
+    let session = CliSession::open("mock").unwrap();
+
+    let first = session
+        .snapshot(ViewQuery::Files {
+            target: RouteTarget::Layer("L-A-02".into()),
+            page: PageRequest::first(2),
+        })
+        .unwrap();
+    let ViewSnapshot::Files(first) = first else {
+        panic!("Files")
+    };
+    assert_eq!(first.target, RouteTarget::Layer("L-A-02".into()));
+    assert_eq!(first.resolved, first.target);
+    assert_eq!(first.files.items.len(), 2);
+    assert_eq!(first.files.items[0].path, "package.json");
+    assert!(first
+        .files
+        .items
+        .iter()
+        .all(|file| file.allocated_bytes.is_none()));
+    let next = session
+        .snapshot(ViewQuery::Files {
+            target: first.target.clone(),
+            page: PageRequest {
+                after: first.files.next,
+                limit: 8,
+            },
+        })
+        .unwrap();
+    let ViewSnapshot::Files(next) = next else {
+        panic!("Files")
+    };
+    assert_eq!(next.files.items.len(), 3);
+
+    let layer = session
+        .snapshot(ViewQuery::Changes {
+            target: RouteTarget::Layer("L-A-02".into()),
+            page: PageRequest::first(128),
+        })
+        .unwrap();
+    let ViewSnapshot::Changes(layer) = layer else {
+        panic!("Changes")
+    };
+    assert_eq!(layer.from_target, Some(RouteTarget::Layer("L-A-01".into())));
+    assert_eq!(layer.to_target, RouteTarget::Layer("L-A-02".into()));
+    assert_eq!(layer.summary.modified, 1);
+    assert_eq!(layer.entries.items.len(), 1);
+
+    let branch = session
+        .snapshot(ViewQuery::Changes {
+            target: RouteTarget::Branch("B-search-a".into()),
+            page: PageRequest::first(128),
+        })
+        .unwrap();
+    let ViewSnapshot::Changes(branch) = branch else {
+        panic!("Changes")
+    };
+    assert_eq!(branch.target, RouteTarget::Branch("B-search-a".into()));
+    assert_eq!(
+        branch.from_target,
+        Some(RouteTarget::Commit("B-main".into(), "C-B-main-35".into()))
+    );
+    assert_eq!(
+        branch.to_target,
+        RouteTarget::Commit("B-search-a".into(), "C-B-search-a-08".into())
+    );
+    assert_eq!(branch.summary.modified, 1);
+
+    let branch_files = session
+        .snapshot(ViewQuery::Files {
+            target: RouteTarget::Branch("B-search-a".into()),
+            page: PageRequest::first(128),
+        })
+        .unwrap();
+    let ViewSnapshot::Files(branch_files) = branch_files else {
+        panic!("Files")
+    };
+    assert_eq!(branch_files.resolved, branch.to_target);
+    assert_eq!(branch_files.root, branch.to_root);
+
+    let commit = session
+        .snapshot(ViewQuery::Changes {
+            target: RouteTarget::Commit("B-search-a".into(), "C-B-search-a-08".into()),
+            page: PageRequest::first(128),
+        })
+        .unwrap();
+    let ViewSnapshot::Changes(commit) = commit else {
+        panic!("Changes")
+    };
+    assert_eq!(
+        commit.from_target,
+        Some(RouteTarget::Commit(
+            "B-search-a".into(),
+            "C-B-search-a-07".into()
+        ))
+    );
+    assert_eq!(commit.summary.modified, 1);
+    assert_ne!(commit.from_root, Some(commit.to_root));
+
+    let first_commit = session
+        .snapshot(ViewQuery::Changes {
+            target: RouteTarget::Commit("B-search-a".into(), "C-B-search-a-01".into()),
+            page: PageRequest::first(128),
+        })
+        .unwrap();
+    let ViewSnapshot::Changes(first_commit) = first_commit else {
+        panic!("Changes")
+    };
+    assert_eq!(
+        first_commit.from_target,
+        Some(RouteTarget::Commit("B-main".into(), "C-B-main-35".into()))
+    );
+}
+
+#[test]
+fn genesis_and_workspace_changes_share_the_final_tree_diff() {
+    let session = CliSession::open("mock").unwrap();
+    let genesis = session
+        .snapshot(ViewQuery::Changes {
+            target: RouteTarget::Layer("L-A-01".into()),
+            page: PageRequest::first(2),
+        })
+        .unwrap();
+    let ViewSnapshot::Changes(genesis) = genesis else {
+        panic!("Changes")
+    };
+    assert_eq!(genesis.from_target, None);
+    assert_eq!(genesis.from_root, None);
+    assert_eq!(genesis.summary.added, 5);
+    assert_eq!(genesis.entries.items.len(), 2);
+    assert!(genesis.entries.next.is_some());
+
+    let files = session
+        .snapshot(ViewQuery::Files {
+            target: RouteTarget::Workspace("W9".into()),
+            page: PageRequest::first(128),
+        })
+        .unwrap();
+    let ViewSnapshot::Files(files) = files else {
+        panic!("Files")
+    };
+    assert_eq!(files.generation, Some(1));
+    assert!(files
+        .files
+        .items
+        .iter()
+        .all(|file| file.allocated_bytes.is_some()));
+    assert!(files
+        .files
+        .items
+        .iter()
+        .any(|file| file.path == "src/workspace-change.js"));
+
+    let changes = session
+        .snapshot(ViewQuery::Changes {
+            target: RouteTarget::Workspace("W9".into()),
+            page: PageRequest::first(128),
+        })
+        .unwrap();
+    let ViewSnapshot::Changes(changes) = changes else {
+        panic!("Changes")
+    };
+    assert_eq!(
+        changes.from_target,
+        Some(RouteTarget::Commit(
+            "B-search-a".into(),
+            "C-B-search-a-08".into()
+        ))
+    );
+    assert_eq!(changes.to_target, RouteTarget::Workspace("W9".into()));
+    assert_eq!(changes.summary.added, 1);
+    assert_eq!(changes.entries.items, workspace(&session, "W9").changes);
 }
 
 #[test]

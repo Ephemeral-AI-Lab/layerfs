@@ -1,7 +1,7 @@
 use super::{App, GraphTarget, Overlay, Route};
-use crate::WorkspaceTab;
+use crate::{ActiveSubject, ExplorerMode, WorkspaceTab};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use layerfs_cli::{BranchId, CommitId};
+use layerfs_cli::{BranchId, CommitId, RouteTarget};
 
 #[test]
 fn navigates_by_stable_ids() {
@@ -11,6 +11,22 @@ fn navigates_by_stable_ids() {
     assert_eq!(app.selected_project, selected);
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(app.route, Route::Project(_)));
+}
+
+#[test]
+fn layer_navigation_matches_newest_first_rows() {
+    let mut app = App::demo();
+    app.selected_layer = Some("L-A-19".into());
+    app.set_demo_route("topology");
+    app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+    assert_eq!(
+        app.selected_layer.as_ref().map(|id| id.as_str()),
+        Some("L-A-18")
+    );
+    assert_eq!(
+        app.explorer.subject,
+        Some(ActiveSubject::Layer("L-A-18".into()))
+    );
 }
 
 #[test]
@@ -56,6 +72,7 @@ fn workspace_shortcut_requires_local_head() {
         BranchId::from("B-main"),
         CommitId::from("C-B-main-35"),
     ));
+    app.activate_selected_graph();
     app.prefill_workspace();
     assert_eq!(app.overlay, Overlay::None);
     assert!(app.error.is_some());
@@ -63,6 +80,7 @@ fn workspace_shortcut_requires_local_head() {
         BranchId::from("B-search-a2"),
         CommitId::from("C-B-search-a2-02"),
     ));
+    app.activate_selected_graph();
     app.prefill_workspace();
     assert_eq!(app.overlay, Overlay::Command);
     assert!(app.command.contains("--commit C-B-search-a2-02"));
@@ -116,21 +134,59 @@ fn command_cursor_edits_in_place() {
 }
 
 #[test]
-fn diff_consumes_continuation_without_losing_selection() {
+fn explicit_diff_reads_the_real_stored_delta() {
     let mut app = App::demo();
     app.set_demo_route("diff");
-    let first = app.diff.as_ref().unwrap();
-    assert_eq!(first.entries.items.len(), 128);
-    assert!(first.entries.next.is_some());
-    app.selected_diff_path = first.entries.items.last().map(|entry| entry.path.clone());
-    app.move_selection(1);
     let diff = app.diff.as_ref().unwrap();
-    assert_eq!(diff.entries.items.len(), 136);
+    assert_eq!(diff.entries.items.len(), 1);
     assert!(diff.entries.next.is_none());
+    assert_eq!(diff.from, "B-search-a/C-B-search-a-05");
+    assert_eq!(diff.to, "B-search-a/C-B-search-a-08");
+}
+
+#[test]
+fn explorer_pins_layer_branch_and_commit_baselines() {
+    let mut app = App::demo();
+    app.set_demo_route("topology");
+
+    app.selected_layer = Some("L-A-02".into());
+    app.activate_selected_layer();
+    app.set_explorer_mode(ExplorerMode::Changes);
+    let layer = app.explorer.changes.as_ref().unwrap();
+    assert_eq!(layer.from_target, Some(RouteTarget::Layer("L-A-01".into())));
+
+    app.explorer
+        .set_subject(ActiveSubject::Branch("B-search-a".into()));
+    app.set_explorer_mode(ExplorerMode::Changes);
+    let branch = app.explorer.changes.as_ref().unwrap();
     assert_eq!(
-        app.selected_diff_path.as_ref(),
-        diff.entries.items.get(128).map(|entry| &entry.path)
+        branch.from_target,
+        Some(RouteTarget::Commit("B-main".into(), "C-B-main-35".into()))
     );
+
+    app.explorer.set_subject(ActiveSubject::Commit(
+        "B-search-a".into(),
+        "C-B-search-a-08".into(),
+    ));
+    app.set_explorer_mode(ExplorerMode::Changes);
+    let commit = app.explorer.changes.as_ref().unwrap();
+    assert_eq!(
+        commit.from_target,
+        Some(RouteTarget::Commit(
+            "B-search-a".into(),
+            "C-B-search-a-07".into()
+        ))
+    );
+    app.set_explorer_mode(ExplorerMode::Files);
+    assert!(app
+        .explorer
+        .files
+        .as_ref()
+        .unwrap()
+        .files
+        .items
+        .iter()
+        .any(|file| file.path == "package.json"));
 }
 
 #[test]
@@ -175,6 +231,7 @@ fn workspace_detail_tabs_and_actions_are_explicit() {
     app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
     assert_eq!(app.overlay, Overlay::None);
     assert!(app.error.as_deref().unwrap().contains("Discard & End"));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('D'), KeyModifiers::NONE));
     assert_eq!(app.overlay, Overlay::Plan);
 }

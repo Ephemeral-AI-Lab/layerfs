@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex};
 
 mod events;
 mod reconcile;
+use crate::snapshot::{changes_snapshot, explicit_diff_snapshot, files_snapshot};
 use crate::workspace::{canonical_tree, create_workspace, seed_tree, workspace_action};
 use events::{empty_receipt, normalize_receipt, record_operation_event};
 use reconcile::create_reconciliation_workspace;
@@ -284,12 +285,15 @@ impl CliSession {
                 state.workspace_snapshot(project.as_ref(), &page),
             )),
             ViewQuery::Activity(page) => Ok(ViewSnapshot::Activity(state.activity_snapshot(&page))),
+            ViewQuery::Files { target, page } => {
+                files_snapshot(&state, target, &page).map(ViewSnapshot::Files)
+            }
+            ViewQuery::Changes { target, page } => {
+                changes_snapshot(&state, target, &page).map(ViewSnapshot::Changes)
+            }
             ViewQuery::Diff { request, page } => {
                 validate_diff(&state, &request)?;
-                let (title, from, to) = request.labels();
-                Ok(ViewSnapshot::Diff(
-                    state.diff_snapshot(&title, &from, &to, &page),
-                ))
+                explicit_diff_snapshot(&state, &request, &page).map(ViewSnapshot::Diff)
             }
         }
     }
