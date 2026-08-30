@@ -1,1532 +1,1443 @@
 use crate::{
-    app::{
-        Action, App, Focus, HistoryCategory, HistoryGroup, HistoryRow, LineageBase, LineageChild,
-        RelationKind, StoreRow, TopologyEntry,
-    },
-    theme::{self, Palette},
+    app::{ActivityTab, App, GraphTarget, Overlay, Route},
+    theme::Theme,
 };
-use layerfs_cli::Fact;
+use layerfs_cli::{
+    BranchId, BranchRelation, DiffChange, OperationView, ProjectRelation, ProjectSummary,
+    SemanticAction, WorkspaceState, WorkspaceView,
+};
 use ratatui::{
-    layout::{Alignment, Constraint, Layout, Rect},
-    style::{Modifier, Style},
+    layout::{Alignment, Constraint, Flex, Layout, Rect},
+    style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Padding, Paragraph},
+    widgets::{Block, Borders, Clear, Gauge, Padding, Paragraph, Wrap},
     Frame,
 };
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ScreenLayout {
-    pub(crate) stores: Rect,
-    pub(crate) histories: Rect,
-    pub(crate) lineage: Rect,
-    pub(crate) details: Rect,
-    pub(crate) command: Rect,
-    pub(crate) footer: Rect,
-}
+const MIN_WIDTH: u16 = 80;
+const MIN_HEIGHT: u16 = 24;
 
-pub(crate) fn layout(area: Rect) -> ScreenLayout {
-    let rows = Layout::vertical([
-        Constraint::Length(4),
-        Constraint::Min(7),
-        Constraint::Length(4),
-        Constraint::Length(2),
-    ])
-    .split(area);
-    let columns =
-        Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]).split(rows[1]);
-    let left = Layout::vertical([Constraint::Percentage(34), Constraint::Percentage(66)])
-        .split(columns[0]);
-    let middle = Layout::vertical([Constraint::Percentage(34), Constraint::Percentage(66)])
-        .split(columns[1]);
-    ScreenLayout {
-        stores: left[0],
-        histories: left[1],
-        details: middle[0],
-        lineage: middle[1],
-        command: rows[2],
-        footer: rows[3],
-    }
-}
-
-pub(crate) fn draw(frame: &mut Frame, app: &App) {
-    let theme = theme::palette();
-    frame.render_widget(
-        Block::default().style(Style::default().bg(theme.canvas).fg(theme.text)),
-        frame.area(),
-    );
-    if frame.area().width < 60 || frame.area().height < 16 {
-        too_small(frame, &theme);
+pub(crate) fn draw(frame: &mut Frame, app: &App, theme: Theme) {
+    let area = frame.area();
+    if area.width < MIN_WIDTH || area.height < MIN_HEIGHT {
+        frame.render_widget(
+            Paragraph::new(format!(
+                "LayerFS needs at least {MIN_WIDTH}x{MIN_HEIGHT}.\nCurrent terminal: {}x{}\n\nThe standalone mock CLI remains available:\n  layerfs query projects",
+                area.width, area.height
+            ))
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true }),
+            area,
+        );
         return;
     }
-    let areas = layout(frame.area());
-    header(frame, frame.area(), app, &theme);
-    stores(frame, areas.stores, app, &theme);
-    histories(frame, areas.histories, app, &theme);
-    lineage(frame, areas.lineage, app, &theme);
-    details(frame, areas.details, app, &theme);
-    command_input(frame, areas.command, app, &theme);
-    completion_popup(frame, areas.command, app, &theme);
-    footer(frame, areas.footer, app, &theme);
-    if app.help_visible() {
-        help_overlay(frame, &theme);
+
+    let operation_height = if app.operation_drawer { 6 } else { 1 };
+    let rows = Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Length(1),
+        Constraint::Min(8),
+        Constraint::Length(operation_height),
+        Constraint::Length(1),
+    ])
+    .split(area);
+    header(frame, rows[0], app, theme);
+    breadcrumb(frame, rows[1], app, theme);
+    match &app.route {
+        Route::Projects => projects(frame, rows[2], app, theme),
+        Route::Project(_) => topology(frame, rows[2], app, theme),
+        Route::Branch(_, branch_id) => branch(frame, rows[2], app, branch_id, theme),
+        Route::Workspaces(_) => workspaces(frame, rows[2], app, theme),
+        Route::Activity(tab) => activity(frame, rows[2], app, *tab, theme),
+        Route::Diff(_) => diff(frame, rows[2], app, theme),
     }
+    operation(frame, rows[3], app, theme);
+    footer(frame, rows[4], app, theme);
+    overlay(frame, app, theme);
 }
 
-fn too_small(frame: &mut Frame, theme: &Palette) {
-    let message = format!(
-        "LayerFS needs at least 60x16 cells for the TUI.\nCurrent terminal: {}x{}\n\nThe standalone CLI remains available:\n  layerfs status",
-        frame.area().width,
-        frame.area().height
-    );
+fn header(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    let selected = if matches!(app.route, Route::Projects) {
+        app.selected_project
+            .as_ref()
+            .and_then(|id| app.projects.iter().find(|project| &project.id == id))
+    } else {
+        app.project.as_ref().map(|snapshot| &snapshot.project)
+    };
+    let project = selected
+        .map(|project| format!("  selected {}", project.name))
+        .unwrap_or_default();
+    let authority =
+        if selected.is_some_and(|project| project.relation == ProjectRelation::AuthorityUnknown) {
+            "AUTH unavailable"
+        } else {
+            "AUTH connected"
+        };
+    let first = if area.width < 100 {
+        format!(" LayerFS · mock-v2 · LayerStackStore {authority} · BranchStore connected")
+    } else {
+        format!(" LayerFS  context mock-v2  {authority}  WORK connected{project}")
+    };
+    let second = if area.width < 100 {
+        selected
+            .map(compact_project_summary)
+            .unwrap_or_else(|| " No LayerStack selected".into())
+    } else {
+        " LayerStackStore  authority.sqlite   BranchStore  work.sqlite   observed 2s ago".into()
+    };
     frame.render_widget(
-        Paragraph::new(message)
-            .style(Style::default().fg(theme.text))
-            .block(Block::default().padding(Padding::uniform(1))),
-        frame.area(),
+        Paragraph::new(vec![Line::styled(first, theme.title()), Line::from(second)]),
+        area,
     );
 }
 
-fn header(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
-    let (name, location) = app
-        .selected_store()
-        .map(|store| (store.name.as_str(), store.location.as_str()))
-        .unwrap_or(("not connected", ""));
+fn breadcrumb(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    if area.width < 100 {
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(
+                    format!(" {} · {} ", route_name(app), compact_pane_name(app)),
+                    theme.focus(),
+                ),
+                Span::styled("Tab pane · Esc back", theme.muted()),
+            ])),
+            area,
+        );
+        return;
+    }
+    let current = match &app.route {
+        Route::Projects => "Projects".into(),
+        Route::Project(_) => format!("Projects  /  {}  /  Topology", project_name(app)),
+        Route::Branch(_, _) => branch_breadcrumb(app),
+        Route::Workspaces(_) => format!("{}  /  Workspaces", project_name(app)),
+        Route::Activity(ActivityTab::Operations) => "Activity  /  Operations".into(),
+        Route::Activity(ActivityTab::Storage) => "Activity  /  Storage".into(),
+        Route::Diff(_) => "Diff".into(),
+    };
     frame.render_widget(
         Paragraph::new(Line::from(vec![
+            Span::raw(" "),
+            Span::styled(current, theme.focus()),
             Span::styled(
-                " /\\ ",
-                Style::default()
-                    .fg(theme.layer)
-                    .add_modifier(Modifier::BOLD),
+                "    [1] Projects  [2] Topology  [3] Workspaces  [4] Activity",
+                theme.muted(),
             ),
-            Span::styled(
-                "LayerFS",
-                Style::default().fg(theme.text).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("  ·  navigator  ", Style::default().fg(theme.muted)),
-            Span::styled(
-                name,
-                Style::default().fg(theme.text).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                if location.is_empty() { "" } else { "  /  " },
-                Style::default().fg(theme.muted),
-            ),
-            Span::raw(location),
-        ]))
-        .block(
-            Block::default()
-                .borders(Borders::BOTTOM)
-                .border_style(Style::default().fg(theme.border))
-                .padding(Padding::horizontal(1)),
-        ),
-        Rect::new(area.x, area.y, area.width, 4),
+        ])),
+        area,
     );
 }
 
-fn stores(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
-    let rows = app.store_rows();
-    let selected = app.selected_store_index();
-    let mut lines = Vec::new();
-    if rows.is_empty() {
-        lines.push(Line::styled(
-            "No connected LayerStore",
-            Style::default().fg(theme.muted),
-        ));
-        lines.push(Line::from(""));
-        lines.push(Line::styled(
-            "Press / to connect or create one",
-            Style::default().fg(theme.muted),
-        ));
-    } else {
-        for (position, row) in rows.iter().enumerate() {
-            let entry = &app.topology()[row.topology_index];
-            let selected_row = selected == Some(row.topology_index);
-            let connector = store_connector(&rows, position);
-            let status = sync_summary(entry);
-            let line = Line::from(vec![
-                Span::styled(
-                    if selected_row { "▸ " } else { "  " },
-                    Style::default().fg(theme.focus),
+fn projects(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    let selected = app
+        .selected_project
+        .as_ref()
+        .and_then(|id| app.projects.iter().find(|project| &project.id == id));
+    let panes = two_panes(area, app.compact_pane);
+    if let Some(left) = panes.0 {
+        let projects = filtered_projects(app);
+        let selected_index = projects
+            .iter()
+            .position(|project| app.selected_project.as_ref() == Some(&project.id))
+            .map(|index| index + 1);
+        let mut lines = vec![Line::styled(
+            if left.width < 100 {
+                "NAME          AUTH  WORK          BRANCHES  WORKSPACES"
+            } else {
+                "NAME          AUTH  WORK PLACEMENT       BRANCHES       WORKSPACES"
+            },
+            theme.muted(),
+        )];
+        if projects.is_empty() {
+            lines = vec![
+                Line::from("No LayerStacks exist in this context."),
+                Line::from(""),
+                Line::from(": layerstack init --name <name> --empty"),
+                Line::from(": layerstack init --name <name> <directory>"),
+            ];
+        }
+        for project in projects {
+            let selected = app.selected_project.as_ref() == Some(&project.id);
+            let row = if left.width < 100 {
+                format!(
+                    "{}{:<13} L{:<3} {:<13} R{} L{} W{} W*{} W▶{} BUSY{} W!{}",
+                    if selected { ">" } else { " " },
+                    project.name,
+                    project.authority_number,
+                    project.relation,
+                    project.remote_branches,
+                    project.local_branches,
+                    project.workspaces,
+                    project.dirty_workspaces,
+                    project.running_workspaces,
+                    project.busy_workspaces,
+                    project.retained_workspaces
+                )
+            } else {
+                format!(
+                    "{}{:<13} L{:<4} {:<20} REM {:<2} LOC {:<2} W {} W* {} W▶ {} BUSY {} W! {}",
+                    if selected { ">" } else { " " },
+                    project.name,
+                    project.authority_number,
+                    project.relation,
+                    project.remote_branches,
+                    project.local_branches,
+                    project.workspaces,
+                    project.dirty_workspaces,
+                    project.running_workspaces,
+                    project.busy_workspaces,
+                    project.retained_workspaces
+                )
+            };
+            lines.push(Line::styled(row, row_style(selected, theme)));
+        }
+        list_panel(
+            frame,
+            left,
+            " PROJECTS ",
+            app.focus == 0,
+            selected_index,
+            lines,
+            theme,
+        );
+    }
+    if let Some(right) = panes.1 {
+        panel(
+            frame,
+            right,
+            " SELECTED PROJECT ",
+            app.focus == 1,
+            selected.map(project_detail).unwrap_or_else(empty_lines),
+            theme,
+        );
+    }
+}
+
+fn topology(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    let panes = three_panes(area, app.compact_pane);
+    if let Some(left) = panes[0] {
+        let layers = app
+            .project
+            .as_ref()
+            .map(|snapshot| snapshot.layers.items.iter().rev().collect::<Vec<_>>())
+            .unwrap_or_default();
+        let selected_index = layers
+            .iter()
+            .position(|layer| app.selected_layer.as_ref() == Some(&layer.id));
+        let lines = layers
+            .into_iter()
+            .map(|layer| {
+                let selected = app.selected_layer.as_ref() == Some(&layer.id);
+                let source = layer
+                    .source
+                    .as_ref()
+                    .map(|source| source_label(app, source))
+                    .unwrap_or_else(|| "genesis".into());
+                Line::styled(
+                    format!(
+                        "{}L{:<3} {:<9} {:<10} ← {}",
+                        if selected { ">" } else { " " },
+                        layer.number,
+                        if layer.authority_head {
+                            "AUTH HEAD"
+                        } else {
+                            "AUTH"
+                        },
+                        layer_work_label(app, layer),
+                        source
+                    ),
+                    row_style(selected, theme),
+                )
+            })
+            .collect();
+        list_panel(
+            frame,
+            left,
+            " AUTHORITY LAYERS ",
+            app.focus == 0,
+            selected_index,
+            lines,
+            theme,
+        );
+    }
+    if let Some(center) = panes[1] {
+        let rows = app.graph_rows();
+        let selected_index = graph_selected_index(app, &rows);
+        let lines = graph_lines(app, rows, theme);
+        list_panel(
+            frame,
+            center,
+            " AUTHORITY GRAPH + WORK OVERLAY ",
+            app.focus == 1,
+            selected_index,
+            lines,
+            theme,
+        );
+    }
+    if let Some(right) = panes[2] {
+        panel(
+            frame,
+            right,
+            " INSPECTOR ",
+            app.focus == 2,
+            inspector(app),
+            theme,
+        );
+    }
+}
+
+fn branch(frame: &mut Frame, area: Rect, app: &App, branch_id: &BranchId, theme: Theme) {
+    let panes = two_panes(area, app.compact_pane);
+    if let Some(left) = panes.0 {
+        let rows = app.focused_branch_rows(branch_id);
+        let selected_index = graph_selected_index(app, &rows);
+        let lines = graph_lines(app, rows, theme);
+        list_panel(
+            frame,
+            left,
+            " BRANCH HISTORY + MCTS ROLLOUT TREE ",
+            app.focus == 0,
+            selected_index,
+            lines,
+            theme,
+        );
+    }
+    if let Some(right) = panes.1 {
+        panel(
+            frame,
+            right,
+            " INSPECTOR ",
+            app.focus == 1,
+            inspector(app),
+            theme,
+        );
+    }
+}
+
+fn graph_lines(app: &App, rows: Vec<crate::app::GraphRow>, theme: Theme) -> Vec<Line<'static>> {
+    rows.into_iter()
+        .filter(|row| search_match(app, &format!("{} {}", row.label, row.detail)))
+        .map(|row| {
+            let selected = app.selected_graph.as_ref() == Some(&row.target);
+            Line::styled(
+                format!(
+                    "{}{}├─ {} {}  {}",
+                    if selected { ">" } else { " " },
+                    "│ ".repeat(row.depth as usize),
+                    row.marker,
+                    row.label,
+                    row.detail
                 ),
-                Span::styled(connector, Style::default().fg(theme.muted)),
-                Span::styled("● ", Style::default().fg(theme.secondary)),
-                Span::styled(
-                    format!("{} · {}", role_label(&entry.role), entry.name),
-                    row_style(selected_row, app.focus() == Focus::Stores, theme),
+                row_style(selected, theme),
+            )
+        })
+        .collect()
+}
+
+fn workspaces(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    let selected = selected_workspace(app);
+    let panes = two_panes(area, app.compact_pane);
+    if let Some(left) = panes.0 {
+        let workspaces = app
+            .workspaces
+            .workspaces
+            .items
+            .iter()
+            .filter(|workspace| search_match(app, &workspace.id.to_string()))
+            .collect::<Vec<_>>();
+        let selected_index = workspaces
+            .iter()
+            .position(|workspace| app.selected_workspace.as_ref() == Some(&workspace.id));
+        let lines = workspaces
+            .into_iter()
+            .map(|workspace| {
+                let anchor = workspace
+                    .anchor_commit
+                    .as_ref()
+                    .map(|commit| format!("C{}", short_number(commit.as_str())))
+                    .or_else(|| {
+                        workspace
+                            .anchor_layer
+                            .as_ref()
+                            .map(|layer| format!("L{}", short_number(layer.as_str())))
+                    })
+                    .unwrap_or_else(|| "—".into());
+                Line::styled(
+                    format!(
+                        "{}{}  {:<12} {:<11} {}@{}  Δ{}",
+                        if app.selected_workspace.as_ref() == Some(&workspace.id) {
+                            ">"
+                        } else {
+                            " "
+                        },
+                        workspace.id,
+                        workspace.project_name,
+                        workspace.state,
+                        workspace.branch_name,
+                        anchor,
+                        workspace.changed_paths
+                    ),
+                    row_style(
+                        app.selected_workspace.as_ref() == Some(&workspace.id),
+                        theme,
+                    ),
+                )
+            })
+            .collect();
+        list_panel(
+            frame,
+            left,
+            " WORKSPACES ",
+            app.focus == 0,
+            selected_index,
+            lines,
+            theme,
+        );
+    }
+    if let Some(right) = panes.1 {
+        panel(
+            frame,
+            right,
+            " WORKSPACE DETAIL + RETAINED OUTPUT ",
+            app.focus == 1,
+            selected.map(workspace_detail).unwrap_or_else(empty_lines),
+            theme,
+        );
+    }
+}
+
+fn activity(frame: &mut Frame, area: Rect, app: &App, tab: ActivityTab, theme: Theme) {
+    match tab {
+        ActivityTab::Operations => operations(frame, area, app, theme),
+        ActivityTab::Storage => storage(frame, area, app, theme),
+    }
+}
+
+fn operations(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    let selected = selected_operation(app);
+    let panes = two_panes(area, app.compact_pane);
+    if let Some(left) = panes.0 {
+        let operations = app.activity.operations.items.iter().collect::<Vec<_>>();
+        let selected_index = operations
+            .iter()
+            .position(|operation| app.selected_operation.as_ref() == Some(&operation.id));
+        let lines = operations
+            .into_iter()
+            .map(|operation| {
+                Line::styled(
+                    format!(
+                        "{}{}  {:<11} {:<12} {}/{}  {}",
+                        if app.selected_operation.as_ref() == Some(&operation.id) {
+                            ">"
+                        } else {
+                            " "
+                        },
+                        operation.id,
+                        operation.state,
+                        operation.phase,
+                        operation.completed,
+                        operation.total,
+                        operation.title
+                    ),
+                    row_style(
+                        app.selected_operation.as_ref() == Some(&operation.id),
+                        theme,
+                    ),
+                )
+            })
+            .collect();
+        list_panel(
+            frame,
+            left,
+            " OPERATIONS ",
+            app.focus == 0,
+            selected_index,
+            lines,
+            theme,
+        );
+    }
+    if let Some(right) = panes.1 {
+        panel(
+            frame,
+            right,
+            " RECEIPT + EVENTS ",
+            app.focus == 1,
+            selected.map(operation_detail).unwrap_or_else(empty_lines),
+            theme,
+        );
+    }
+}
+
+fn storage(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    let storage = &app.activity.storage;
+    let panes = two_panes(area, app.compact_pane);
+    if let Some(left) = panes.0 {
+        panel(
+            frame,
+            left,
+            " STORE INVENTORY ",
+            app.focus == 0,
+            vec![
+                Line::from(format!(
+                    " LayerStackStore    {}",
+                    storage.layerstack_store_id
+                )),
+                Line::from(format!(" BranchStore        {}", storage.branch_store_id)),
+                Line::from(""),
+                Line::from(format!(" Projects           {}", storage.projects)),
+                Line::from(format!(" Layers             {}", storage.layers)),
+                Line::from(format!(
+                    " Authority Branches {}",
+                    storage.authority_branches
+                )),
+                Line::from(format!(" Remote Branches    {}", storage.remote_branches)),
+                Line::from(format!(" Local Branches     {}", storage.local_branches)),
+                Line::from(format!(" Replica roots      {}", storage.replica_roots)),
+                Line::from(format!(" Reference scopes   {}", storage.reference_scopes)),
+            ],
+            theme,
+        );
+    }
+    if let Some(right) = panes.1 {
+        panel(
+            frame,
+            right,
+            " EXPLICIT DEDUP ANALYSIS ",
+            app.focus == 1,
+            vec![
+                Line::styled("Frontend snapshot · no ad-hoc Store reads", theme.success()),
+                Line::from(""),
+                Line::from(format!(" Shared objects    {}", storage.shared_objects)),
+                Line::from(format!(
+                    " Authority bytes   {}",
+                    bytes(storage.authority_bytes)
+                )),
+                Line::from(format!(
+                    " Branch bytes      {}",
+                    bytes(storage.branch_bytes)
+                )),
+                Line::from(format!(
+                    " Unique bytes      {}",
+                    bytes(storage.unique_bytes)
+                )),
+                Line::from(""),
+                Line::styled(
+                    if storage.analysis_available {
+                        "analysis available · : monitor analyze-dedup"
+                    } else {
+                        "analysis unavailable"
+                    },
+                    theme.info(),
                 ),
-                Span::styled(status, Style::default().fg(theme.muted)),
-            ]);
-            lines.push(line);
+            ],
+            theme,
+        );
+    }
+}
+
+fn diff(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    let panes = three_panes(area, app.compact_pane);
+    let selected = app.diff.as_ref().and_then(|snapshot| {
+        app.selected_diff_path.as_ref().and_then(|path| {
+            snapshot
+                .entries
+                .items
+                .iter()
+                .find(|entry| &entry.path == path)
+        })
+    });
+    if let Some(left) = panes[0] {
+        if let Some(snapshot) = &app.diff {
+            let visible = usize::from(left.height.saturating_sub(4)).max(1);
+            let selected_index = snapshot
+                .entries
+                .items
+                .iter()
+                .position(|entry| app.selected_diff_path.as_ref() == Some(&entry.path))
+                .unwrap_or(0);
+            let scroll = selected_index.saturating_add(1).saturating_sub(visible);
+            let end = (scroll + visible).min(snapshot.entries.items.len());
+            let mut lines = vec![
+                Line::styled(snapshot.title.clone(), theme.title()),
+                Line::from(format!("{}  →  {}", snapshot.from, snapshot.to)),
+            ];
+            lines.extend(snapshot.entries.items[scroll..end].iter().map(|entry| {
+                let marker = match entry.change {
+                    DiffChange::Add => "+",
+                    DiffChange::Remove => "-",
+                    DiffChange::Modify => "~",
+                };
+                let selected = app.selected_diff_path.as_ref() == Some(&entry.path);
+                let value = format!(
+                    "{}{marker} {}  {}",
+                    if selected { ">" } else { " " },
+                    entry.path,
+                    entry.aspects.join(", ")
+                );
+                Line::styled(
+                    truncate(&value, usize::from(left.width.saturating_sub(4))),
+                    row_style(selected, theme),
+                )
+            }));
+            let more = if snapshot.entries.next.is_some() {
+                " · more"
+            } else {
+                ""
+            };
+            panel(
+                frame,
+                left,
+                &format!(
+                    " CHANGED PATHS · paths {}–{end} of {}{more} ",
+                    scroll + 1,
+                    snapshot.entries.items.len()
+                ),
+                app.focus == 0,
+                lines,
+                theme,
+            );
+        } else {
+            panel(
+                frame,
+                left,
+                " CHANGED PATHS ",
+                app.focus == 0,
+                empty_lines(),
+                theme,
+            );
         }
     }
-    let block = panel_block(
-        format!(" STORES · {} ", rows.len()),
-        app.focus() == Focus::Stores,
-        theme,
+    if let Some(center) = panes[1] {
+        let lines = selected
+            .map(|entry| {
+                vec![
+                    Line::styled(" BEFORE", theme.error()),
+                    Line::from(entry.before.as_deref().unwrap_or("∅").to_owned()),
+                    Line::from(""),
+                    Line::styled(" AFTER", theme.success()),
+                    Line::from(entry.after.as_deref().unwrap_or("∅").to_owned()),
+                ]
+            })
+            .unwrap_or_else(empty_lines);
+        panel(frame, center, " CONTENT ", app.focus == 1, lines, theme);
+    }
+    if let Some(right) = panes[2] {
+        let lines = selected
+            .map(|entry| {
+                vec![
+                    Line::styled(entry.path.clone(), theme.title()),
+                    Line::from(format!("Change       {:?}", entry.change)),
+                    Line::from(format!("Aspects      {}", entry.aspects.join(", "))),
+                    Line::from(""),
+                    Line::from("Final-state diff only"),
+                    Line::from("No tool-operation history"),
+                ]
+            })
+            .unwrap_or_else(empty_lines);
+        panel(frame, right, " DETAILS ", app.focus == 2, lines, theme);
+    }
+}
+
+fn operation(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    if app.operation_drawer {
+        let mut lines = vec![Line::styled(
+            format!(" operation: {}", app.operation_title),
+            theme.title(),
+        )];
+        lines.extend(
+            app.event_log
+                .iter()
+                .rev()
+                .take(4)
+                .rev()
+                .map(|event| Line::from(format!("  {event}"))),
+        );
+        frame.render_widget(
+            Paragraph::new(lines).block(Block::default().borders(Borders::TOP)),
+            area,
+        );
+    } else if let Some((done, total, phase)) = &app.operation_progress {
+        let ratio = if *total == 0 {
+            0.0
+        } else {
+            *done as f64 / *total as f64
+        };
+        frame.render_widget(
+            Gauge::default()
+                .ratio(ratio.clamp(0.0, 1.0))
+                .label(format!(
+                    "{phase} {done}/{total}   [o] details  [x] interrupt"
+                ))
+                .gauge_style(theme.info()),
+            area,
+        );
+    } else {
+        frame.render_widget(
+            Paragraph::new(format!(
+                " operation: {}                                      [o] details",
+                app.operation_title
+            ))
+            .style(theme.muted()),
+            area,
+        );
+    }
+}
+
+fn footer(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    if area.width < 100 && app.overlay == Overlay::None {
+        frame.render_widget(
+            Paragraph::new(" Tab pane · j/k move · Enter open · : command · ? help · q quit")
+                .style(theme.muted()),
+            area,
+        );
+        return;
+    }
+    let line = match app.overlay {
+        Overlay::Command => {
+            let mut command = app.command.clone();
+            command.insert(app.command_cursor, '│');
+            format!(": {command}")
+        }
+        Overlay::Search => format!("/{}", app.search),
+        _ => match app.route {
+            Route::Projects => {
+                " [Enter] open  [/] search  [r] refresh  [:] command  [?] help  [q] quit"
+                    .into()
+            }
+            Route::Project(_) | Route::Branch(_, _) => " [Tab] focus  [j/k] move  [i] inspector  [f] fork  [w] workspace  [d] diff  [Esc] back".into(),
+            Route::Workspaces(_) => " [j/k] move  [Enter] branch  [:] command  [o] operations  [Esc] back".into(),
+            Route::Activity(_) => " [Enter] operations/storage  [j/k] move  [o] drawer  [:] command  [Esc] back".into(),
+            Route::Diff(_) => " [Tab] focus  [j/k] path  [Esc] back  [:] command  [?] help".into(),
+        },
+    };
+    frame.render_widget(Paragraph::new(line).style(theme.muted()), area);
+}
+
+fn overlay(frame: &mut Frame, app: &App, theme: Theme) {
+    if app.overlay == Overlay::Command && !app.completions.is_empty() {
+        let area = popup(frame.area(), 58, 8, 2);
+        let start = app
+            .completion_selected
+            .saturating_sub(5)
+            .min(app.completions.len().saturating_sub(6));
+        let lines = app
+            .completions
+            .iter()
+            .enumerate()
+            .skip(start)
+            .take(6)
+            .map(|(index, completion)| {
+                Line::from(vec![
+                    Span::styled(
+                        format!(" {:<24}", completion.value),
+                        if index == app.completion_selected {
+                            theme.selected()
+                        } else {
+                            theme.info()
+                        },
+                    ),
+                    Span::raw(completion.description.clone()),
+                ])
+            })
+            .collect();
+        frame.render_widget(Clear, area);
+        panel(
+            frame,
+            area,
+            " COMPLETIONS · Tab accepts ",
+            true,
+            lines,
+            theme,
+        );
+    }
+    if app.overlay == Overlay::Plan {
+        let area = popup(frame.area(), 66, 18, 0);
+        let lines = app
+            .plan
+            .as_ref()
+            .map(|(_, plan)| {
+                let mut lines = vec![
+                    Line::styled(plan.title.clone(), theme.title()),
+                    Line::from(plan.summary.clone()),
+                    Line::from(""),
+                ];
+                lines.extend(
+                    plan.fields
+                        .iter()
+                        .map(|field| Line::from(format!(" {:<18} {}", field.label, field.value))),
+                );
+                lines.push(Line::from(""));
+                lines.extend(
+                    plan.consequences
+                        .iter()
+                        .map(|value| Line::styled(format!(" • {value}"), theme.warning())),
+                );
+                lines.push(Line::from(""));
+                lines.push(Line::styled(" Enter confirms · Esc cancels", theme.focus()));
+                lines
+            })
+            .unwrap_or_else(empty_lines);
+        frame.render_widget(Clear, area);
+        panel(frame, area, " COMMAND PLAN ", true, lines, theme);
+    }
+    if app.overlay == Overlay::Help {
+        let area = popup(frame.area(), 72, 20, 0);
+        frame.render_widget(Clear, area);
+        panel(
+            frame,
+            area,
+            " HELP ",
+            true,
+            vec![
+                Line::styled("Navigation", theme.title()),
+                Line::from("  1 Projects · 2 Topology · 3 Workspaces · 4 Activity"),
+                Line::from("  Tab focus · j/k move · Enter open · Esc back"),
+                Line::from(""),
+                Line::styled("Actions", theme.title()),
+                Line::from("  f Fork · w Workspace · d Diff · r Refresh"),
+                Line::from("  i Inspector · : command · / search · o operations · x interrupt"),
+                Line::from(""),
+                Line::styled("Signals", theme.title()),
+                Line::from("  AUTH authority · WORK local view · REF reference · REP replica"),
+                Line::from("  PULL +N behind · PUSH +N ahead · W* dirty · W▶ running"),
+                Line::from(""),
+                Line::from("  ? or Esc closes help"),
+            ],
+            theme,
+        );
+    }
+    if let Some(error) = &app.error {
+        let area = popup(frame.area(), 72, 5, 0);
+        frame.render_widget(Clear, area);
+        frame.render_widget(
+            Paragraph::new(format!(" {error}"))
+                .style(theme.error())
+                .block(Block::default().borders(Borders::ALL).title(" ERROR ")),
+            area,
+        );
+    }
+}
+
+fn inspector(app: &App) -> Vec<Line<'static>> {
+    if matches!(app.route, Route::Project(_)) && app.focus == 0 {
+        if let Some(layer) = app.project.as_ref().and_then(|project| {
+            app.selected_layer
+                .as_ref()
+                .and_then(|id| project.layers.items.iter().find(|layer| &layer.id == id))
+        }) {
+            return vec![
+                Line::from(format!("Layer L{}", layer.number)),
+                Line::from(format!("Id            {}", layer.id)),
+                Line::from(format!("Root          {}", layer.root)),
+                Line::from(format!("Coverage      {}", layer.coverage)),
+                Line::from(format!("Authority     {}", layer.authority)),
+                Line::from(format!("Work          {}", layer.work)),
+                Line::from(format!("Direct Branches {}", layer.direct_branches)),
+                Line::from(""),
+                Line::from(if layer.work {
+                    "Actions: fork named Branch · diff"
+                } else {
+                    "Actions: pull through this Layer"
+                }),
+            ];
+        }
+    }
+    match app.selected_graph.as_ref() {
+        Some(GraphTarget::Branch(id)) => app
+            .project
+            .as_ref()
+            .and_then(|project| {
+                project
+                    .branches
+                    .items
+                    .iter()
+                    .find(|branch| &branch.id == id)
+            })
+            .map(|branch| {
+                let actions = action_labels(&branch.actions);
+                vec![
+                    Line::from(format!("Branch {}", branch.name)),
+                    Line::from(format!("Id            {}", branch.id)),
+                    Line::from(format!("Relation      {}", branch.relation)),
+                    Line::from(format!(
+                        "Authority     {}",
+                        optional_id(branch.authority_head.as_ref())
+                    )),
+                    Line::from(format!(
+                        "Work          {}",
+                        optional_id(branch.work_head.as_ref())
+                    )),
+                    Line::from(format!("Children      {}", branch.direct_children)),
+                    Line::from(format!("Descendants   {}", branch.descendant_count)),
+                    Line::from(format!("Workspaces    {}", branch.workspace_count)),
+                    Line::from(format!(
+                        "Replica roots {}",
+                        optional_id(branch.remote_complete_through.as_ref())
+                    )),
+                    Line::from(format!(
+                        "Visible closure {}",
+                        if branch.visible_roots_complete {
+                            "complete"
+                        } else {
+                            "parent-backed"
+                        }
+                    )),
+                    Line::from(""),
+                    Line::from(format!("Actions: {actions}")),
+                ]
+            })
+            .unwrap_or_else(empty_lines),
+        Some(GraphTarget::Commit(branch_id, commit_id)) => app
+            .project
+            .as_ref()
+            .and_then(|project| {
+                project
+                    .branches
+                    .items
+                    .iter()
+                    .find(|branch| &branch.id == branch_id)
+                    .and_then(|branch| {
+                        branch
+                            .commits
+                            .iter()
+                            .find(|commit| &commit.id == commit_id)
+                            .map(|commit| (branch, commit))
+                    })
+            })
+            .map(|(branch, commit)| {
+                let mut actions = action_labels(&commit.actions);
+                if !commit.actions.contains(&SemanticAction::Workspace) {
+                    let reason = if !commit.work {
+                        "pull before local use"
+                    } else if matches!(
+                        branch.relation,
+                        BranchRelation::AuthorityAhead { .. } | BranchRelation::Diverged
+                    ) {
+                        "Workspace unavailable: HeadMoved"
+                    } else if matches!(
+                        branch.relation,
+                        BranchRelation::LocalOnly
+                            | BranchRelation::LocalCurrent
+                            | BranchRelation::LocalPushAhead { .. }
+                    ) && branch.work_head.as_ref() != Some(&commit.id)
+                    {
+                        "historical Commit: Fork first"
+                    } else if !commit.workspaces.is_empty() {
+                        "Workspace lease unavailable"
+                    } else {
+                        "Workspace unavailable: Fork first"
+                    };
+                    actions.push_str(" · ");
+                    actions.push_str(reason);
+                }
+                vec![
+                    Line::from(format!("Commit C{}", commit.number)),
+                    Line::from(format!("Branch        {}", branch.name)),
+                    Line::from(format!("CommitId      {}", commit.id)),
+                    Line::from(format!("Base Layer    {}", commit.base_layer)),
+                    Line::from(format!("Root          {}", commit.root)),
+                    Line::from(format!("Child Branches {}", commit.child_branches)),
+                    Line::from(format!("Workspaces    {}", commit.workspaces.len())),
+                    Line::from(format!(
+                        "Accepted      {}",
+                        optional_id(commit.accepted_layer.as_ref())
+                    )),
+                    Line::from(""),
+                    Line::from(format!("Actions: {actions}")),
+                ]
+            })
+            .unwrap_or_else(empty_lines),
+        None => app
+            .project
+            .as_ref()
+            .map(|snapshot| project_detail(&snapshot.project))
+            .unwrap_or_else(empty_lines),
+    }
+}
+
+fn project_detail(project: &ProjectSummary) -> Vec<Line<'static>> {
+    vec![
+        Line::from(project.name.to_string()),
+        Line::from(project.id.to_string()),
+        Line::from(""),
+        Line::from(format!("Authority head      L{}", project.authority_number)),
+        Line::from(format!("Work placement      {}", project.relation)),
+        Line::from(format!(
+            "Work boundary       {}",
+            optional_id(project.work_boundary.as_ref())
+        )),
+        Line::from(format!(
+            "Complete roots      {}/{}",
+            project.complete_roots,
+            project.work_number.unwrap_or(0)
+        )),
+        Line::from(""),
+        Line::from(format!("Remote Branches     {}", project.remote_branches)),
+        Line::from(format!("Local Branches      {}", project.local_branches)),
+        Line::from(format!("Workspaces          {}", project.workspaces)),
+        Line::from(format!("Dirty Workspaces    {}", project.dirty_workspaces)),
+        Line::from(format!(
+            "Running / Busy      {} / {}",
+            project.running_workspaces, project.busy_workspaces
+        )),
+        Line::from(format!(
+            "Retained W!         {}",
+            project.retained_workspaces
+        )),
+        Line::from(format!("Observed            {}", project.observed)),
+    ]
+}
+
+fn workspace_detail(workspace: &WorkspaceView) -> Vec<Line<'static>> {
+    let anchor = match (&workspace.anchor_commit, &workspace.anchor_layer) {
+        (Some(commit), Some(layer)) => format!("Commit {commit} vs current Layer {layer}"),
+        (Some(commit), None) => format!("Commit {commit}"),
+        (None, Some(layer)) => format!("initial Layer {layer}"),
+        (None, None) => "invalid".into(),
+    };
+    let actions = match workspace.state {
+        WorkspaceState::Clean => "exec · shell · commit · end",
+        WorkspaceState::Dirty => "exec · shell · commit · end --discard",
+        WorkspaceState::Running | WorkspaceState::Busy => "output · stop · inspect",
+        WorkspaceState::HeadMoved => "conflicts · inspect delta · end --discard",
+        WorkspaceState::ReadOnly => "inspect · output · end",
+    };
+    let mut lines = vec![
+        Line::from(format!("Workspace     {}", workspace.id)),
+        Line::from(format!("Project       {}", workspace.project_name)),
+        Line::from(format!("Branch        {}", workspace.branch_name)),
+        Line::from(format!("Relation      {}", workspace.branch_relation)),
+        Line::from(format!("Anchor        {anchor}")),
+        Line::from(format!("State         {}", workspace.state)),
+        Line::from(format!("Projection    {}", workspace.projection)),
+        Line::from(format!("Placement     {}", workspace.placement)),
+        Line::from(format!("Mount         {}", workspace.mount)),
+        Line::from(format!("Changed paths {}", workspace.changed_paths)),
+        Line::from(format!("Output bytes  {}", workspace.output_bytes)),
+        Line::from(format!("Actions       {actions}")),
+    ];
+    if !workspace.conflicts.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from("Unresolved conflicts"));
+        lines.extend(workspace.conflicts.iter().map(|conflict| {
+            Line::from(format!(
+                "  {}  {} · {}",
+                conflict.id, conflict.path, conflict.kind
+            ))
+        }));
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from("Retained output"));
+    lines.extend(
+        workspace
+            .output
+            .iter()
+            .map(|line| Line::from(format!("  {line}"))),
     );
+    lines
+}
+
+fn operation_detail(operation: &OperationView) -> Vec<Line<'static>> {
+    let receipt = &operation.receipt;
+    let mut lines = vec![
+        Line::from(format!("Operation   {}", operation.id)),
+        Line::from(format!("State       {}", operation.state)),
+        Line::from(format!("Phase       {}", operation.phase)),
+        Line::from(format!(
+            "Progress    {}/{}",
+            operation.completed, operation.total
+        )),
+        Line::from(format!("Elapsed     {} ms", receipt.elapsed_ms)),
+        Line::from(""),
+        Line::from(format!(
+            "Facts       {} announced · {} missing · {} inserted",
+            receipt.facts_announced, receipt.facts_missing, receipt.facts_inserted
+        )),
+        Line::from(format!(
+            "Objects     {} announced · {} missing · {} sent",
+            receipt.objects_announced, receipt.objects_missing, receipt.objects_sent
+        )),
+        Line::from(format!(
+            "Admission   {} inserted · {} raced-existing",
+            receipt.objects_inserted, receipt.objects_raced
+        )),
+        Line::from(""),
+        Line::from("Events"),
+    ];
+    lines.extend(
+        operation
+            .events
+            .iter()
+            .map(|event| Line::from(format!("  {event}"))),
+    );
+    lines
+}
+
+fn panel(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    focused: bool,
+    lines: Vec<Line<'static>>,
+    theme: Theme,
+) {
+    panel_at_scroll(frame, area, title, focused, 0, lines, theme);
+}
+
+fn list_panel(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    focused: bool,
+    selected: Option<usize>,
+    lines: Vec<Line<'static>>,
+    theme: Theme,
+) {
+    let visible = usize::from(area.height.saturating_sub(2)).max(1);
+    let scroll = selected
+        .map(|selected| selected.saturating_add(1).saturating_sub(visible))
+        .unwrap_or(0);
+    let end = (scroll + visible).min(lines.len());
+    let title = if lines.len() > visible {
+        format!("{title} {}–{end}/{} ", scroll + 1, lines.len())
+    } else {
+        title.to_owned()
+    };
+    panel_at_scroll(frame, area, &title, focused, scroll as u16, lines, theme);
+}
+
+fn panel_at_scroll(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    focused: bool,
+    scroll: u16,
+    lines: Vec<Line<'static>>,
+    theme: Theme,
+) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(if focused {
+            theme.focus()
+        } else {
+            theme.muted()
+        })
+        .title(Span::styled(
+            title.to_owned(),
+            if focused {
+                theme.focus()
+            } else {
+                Style::default()
+            },
+        ))
+        .padding(Padding::horizontal(1));
+    frame.render_widget(Clear, area);
     frame.render_widget(
         Paragraph::new(lines)
-            .scroll((app.store_scroll(), 0))
+            .scroll((scroll, 0))
+            .wrap(Wrap { trim: false })
             .block(block),
         area,
     );
 }
 
-fn histories(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
-    let title = app
-        .selected_store()
-        .map(|store| {
-            let marker = if app
-                .selected_store_history()
-                .is_some_and(|group| group.has_more)
-            {
-                " …"
-            } else {
-                ""
-            };
-            format!(
-                " HISTORIES · {} {}{} ",
-                role_label(&store.role),
-                store.name,
-                marker
-            )
-        })
-        .unwrap_or_else(|| " HISTORIES ".to_owned());
-    let selected = app.selected_history();
-    let rows = app.history_rows();
-    let mut lines = Vec::new();
-    if app.selected_store().is_none() {
-        lines.push(Line::styled(
-            "Connect a LayerStore to begin",
-            Style::default().fg(theme.muted),
-        ));
-    } else {
-        for (position, row) in rows.iter().enumerate() {
-            let group_selected = selected == Some(*row);
-            match row.fact {
-                None => {
-                    let expanded = app.history_category_expanded(row.category);
-                    let count = app
-                        .selected_store_history()
-                        .map(|group| {
-                            group
-                                .facts
-                                .iter()
-                                .filter(|fact| history_container_matches(row.category, **fact))
-                                .count()
-                        })
-                        .unwrap_or(0);
-                    lines.push(Line::from(vec![
-                        Span::styled(
-                            if group_selected { "▸ " } else { "  " },
-                            Style::default().fg(theme.focus),
-                        ),
-                        Span::styled(
-                            if expanded { "▾ " } else { "▸ " },
-                            Style::default().fg(theme.muted),
-                        ),
-                        Span::styled(
-                            format!("{} ({count})", row.category.label()),
-                            row_style(group_selected, app.focus() == Focus::Histories, theme),
-                        ),
-                    ]));
-                }
-                Some(index) => {
-                    let Some(group) = app.selected_store_history() else {
-                        continue;
-                    };
-                    let Some(fact) = group.facts.get(index).copied() else {
-                        continue;
-                    };
-                    let line = Line::from(vec![
-                        Span::raw(fact_indent(*row, fact)),
-                        Span::styled(
-                            fact_symbol(fact),
-                            Style::default().fg(if group_selected {
-                                theme.focus
-                            } else {
-                                theme.secondary
-                            }),
-                        ),
-                        Span::styled(
-                            format!(
-                                " {}{}{}",
-                                fact_label(fact),
-                                if row.number > 0 {
-                                    format!(" ({})", row.number)
-                                } else {
-                                    String::new()
-                                },
-                                if row.head { " · head" } else { "" }
-                            ),
-                            row_style(group_selected, app.focus() == Focus::Histories, theme),
-                        ),
-                    ]);
-                    lines.push(line);
-                }
-            }
-            let _ = position;
-        }
-        if lines.is_empty() {
-            lines.push(Line::styled(
-                "No local histories",
-                Style::default().fg(theme.muted),
-            ));
-        }
-    }
-    frame.render_widget(
-        Paragraph::new(lines)
-            .scroll((app.history_scroll(), 0))
-            .block(panel_block(title, app.focus() == Focus::Histories, theme)),
-        area,
-    );
-}
-
-fn lineage(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
-    let block = panel_block(
-        " SELECTED LINEAGE ".to_owned(),
-        app.focus() == Focus::Lineage,
-        theme,
-    );
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-    let Some(group) = app.selected_store_history() else {
-        frame.render_widget(
-            Paragraph::new("Select a layer, stack, branch, or commit")
-                .style(Style::default().fg(theme.muted)),
-            inner,
-        );
-        return;
-    };
-    let mut lines = vec![lineage_lane_line(
-        group,
-        &app.lineage_visual_rows(),
-        app.selected_history().and_then(|row| row.fact),
-        app.lineage_base(),
-        app,
-        theme,
-    )];
-    let child_lanes = app.lineage_child_lanes();
-    if !child_lanes.is_empty() {
-        for (index, child) in child_lanes.iter().copied().enumerate() {
-            if index + 1 == child_lanes.len() {
-                lines.push(lineage_edge_line(group, child, app, theme));
-            } else {
-                lines.push(Line::styled("  │", Style::default().fg(theme.muted)));
-            }
-            lines.push(lineage_child_header(child, theme));
-            let rows = app.lineage_visual_rows_for_child(child);
-            lines.push(lineage_lane_line(
-                group,
-                &rows,
-                Some(child.selected),
-                app.lineage_base_for_child(child),
-                app,
-                theme,
-            ));
-            if index + 1 == child_lanes.len() {
-                lines.extend(lineage_relation_lines(group, app, theme));
-            }
+fn two_panes(area: Rect, compact: usize) -> (Option<Rect>, Option<Rect>) {
+    if area.width < 100 {
+        if compact % 2 == 0 {
+            (Some(area), None)
+        } else {
+            (None, Some(area))
         }
     } else {
-        lines.extend(lineage_relation_lines(group, app, theme));
+        let columns = Layout::horizontal([Constraint::Percentage(58), Constraint::Percentage(42)])
+            .split(area);
+        (Some(columns[0]), Some(columns[1]))
     }
-    frame.render_widget(
-        Paragraph::new(lines).scroll((0, app.lineage_scroll())),
-        inner,
-    );
 }
 
-fn lineage_lane_line(
-    group: &HistoryGroup,
-    rows: &[crate::app::LineageRow],
-    selected_index: Option<usize>,
-    base: Option<LineageBase>,
-    app: &App,
-    theme: &Palette,
-) -> Line<'static> {
-    let mut line = Line::default();
-    if let Some(base) = base.and_then(|base| {
-        group
-            .facts
-            .get(base.fact_index)
-            .copied()
-            .and_then(|fact| lineage_node_name(fact, base.number))
-    }) {
-        line.spans
-            .push(Span::styled(base, Style::default().fg(theme.secondary)));
-        line.spans.push(Span::styled(
-            " ──base──▶ ",
-            Style::default().fg(theme.focus),
-        ));
-    }
-    let mut position = 0;
-    for row in rows.iter().filter(|row| {
-        group
-            .facts
-            .get(row.fact_index)
-            .is_some_and(|fact| lineage_node_name(*fact, row.number).is_some())
-    }) {
-        let Some(fact) = group.facts.get(row.fact_index).copied() else {
-            continue;
-        };
-        let Some(node) = lineage_node_name(fact, row.number) else {
-            continue;
-        };
-        if position > 0 {
-            line.spans
-                .push(Span::styled("  →  ", Style::default().fg(theme.muted)));
+fn three_panes(area: Rect, compact: usize) -> [Option<Rect>; 3] {
+    if area.width < 100 {
+        let mut result = [None, None, None];
+        result[compact % 3] = Some(area);
+        result
+    } else if area.width < 140 {
+        let columns = Layout::horizontal([Constraint::Percentage(38), Constraint::Percentage(62)])
+            .split(area);
+        match compact % 3 {
+            2 => [Some(columns[0]), Some(columns[1]), Some(columns[1])],
+            _ => [Some(columns[0]), Some(columns[1]), None],
         }
-        line.spans.push(Span::styled(
-            node,
-            row_style(
-                selected_index == Some(row.fact_index),
-                app.focus() == Focus::Lineage,
-                theme,
-            ),
-        ));
-        position += 1;
-    }
-    if line.spans.is_empty() {
-        line.spans.push(Span::styled(
-            "(no linked records)",
-            Style::default().fg(theme.muted),
-        ));
-    }
-    line
-}
-
-fn lineage_edge_line(
-    group: &HistoryGroup,
-    child: LineageChild,
-    _app: &App,
-    theme: &Palette,
-) -> Line<'static> {
-    let source = group
-        .facts
-        .get(child.source)
-        .map(|fact| relation_fact_label(*fact))
-        .unwrap_or_else(|| "source".to_owned());
-    let target = group
-        .facts
-        .get(child.container)
-        .map(|fact| relation_fact_label(*fact))
-        .unwrap_or_else(|| "target".to_owned());
-    Line::from(vec![
-        Span::styled("  ╰─ ", Style::default().fg(theme.muted)),
-        Span::styled(source, Style::default().fg(theme.secondary)),
-        Span::styled(" ──▶ ", Style::default().fg(theme.focus)),
-        Span::styled(target, Style::default().fg(theme.text)),
-    ])
-}
-
-fn lineage_child_header(child: LineageChild, theme: &Palette) -> Line<'static> {
-    let title = match child.category {
-        HistoryCategory::Stacks => "STACK HISTORY",
-        HistoryCategory::Branches => "BRANCH HISTORY",
-        HistoryCategory::Layers => "LAYER HISTORY",
-    };
-    Line::styled(format!("  {title}"), Style::default().fg(theme.muted))
-}
-
-fn lineage_relation_lines(group: &HistoryGroup, app: &App, theme: &Palette) -> Vec<Line<'static>> {
-    let relations = app.lineage_relations();
-    if relations.is_empty() {
-        return vec![
-            Line::styled("  RELATIONSHIP SEARCH", Style::default().fg(theme.muted)),
-            Line::styled(
-                "  (no cross-type relationships)",
-                Style::default().fg(theme.muted),
-            ),
-        ];
-    }
-    let mut lines = vec![Line::styled(
-        "  RELATIONSHIP SEARCH",
-        Style::default().fg(theme.muted),
-    )];
-    lines.extend(relations.iter().enumerate().map(|(index, relation)| {
-        let source = group
-            .facts
-            .get(relation.source)
-            .map(|fact| relation_fact_label(*fact))
-            .unwrap_or_else(|| "source".to_owned());
-        let target = group
-            .facts
-            .get(relation.target)
-            .map(|fact| relation_fact_label(*fact))
-            .unwrap_or_else(|| "target".to_owned());
-        let (left, right, arrow) = match relation.kind {
-            RelationKind::CreatedBy => (source, target, "◀"),
-            RelationKind::Base => (target, source, "▶"),
-            RelationKind::Produces | RelationKind::Instantiates => (source, target, "▶"),
-        };
-        Line::from(vec![
-            Span::styled(
-                if app.lineage_relation_focus() && index == app.lineage_relation_offset() {
-                    "  ▸ "
-                } else {
-                    "    "
-                },
-                Style::default().fg(theme.focus),
-            ),
-            Span::styled("╰─ ", Style::default().fg(theme.muted)),
-            Span::styled(left, Style::default().fg(theme.secondary)),
-            Span::styled(
-                format!(" ──{}──{arrow} ", relation.kind.label()),
-                Style::default().fg(theme.focus),
-            ),
-            Span::styled(
-                right,
-                row_style(
-                    app.lineage_relation_focus() && index == app.lineage_relation_offset(),
-                    app.focus() == Focus::Lineage,
-                    theme,
-                ),
-            ),
+    } else {
+        let columns = Layout::horizontal([
+            Constraint::Percentage(24),
+            Constraint::Percentage(52),
+            Constraint::Percentage(24),
         ])
-    }));
-    lines
-}
-
-fn relation_fact_label(fact: Fact) -> String {
-    let kind = match fact {
-        Fact::Layer(_) => "layer",
-        Fact::Stack(_) => "stack",
-        Fact::LayerHistory(_) => "layer history",
-        Fact::StackHistory(_) => "stack history",
-        Fact::Branch(_) => "branch",
-        Fact::Commit(_) => "commit",
-        Fact::AddResult(_) => "result",
-    };
-    format!("{kind} {}", short_id(&fact.id()))
-}
-
-fn lineage_node_name(fact: Fact, number: usize) -> Option<String> {
-    let node = match fact {
-        Fact::Layer(_) => "layer",
-        Fact::Stack(_) => "stack",
-        Fact::Commit(_) => "commit",
-        _ => return None,
-    };
-    Some(format!("{node}({number})"))
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum LineageHit {
-    Node(usize),
-    Relation(usize),
-}
-
-pub(crate) fn lineage_hit_at(area: Rect, column: u16, row: u16, app: &App) -> Option<LineageHit> {
-    let inner = panel_block("".to_owned(), false, &theme::palette()).inner(area);
-    if column < inner.x || row < inner.y {
-        return None;
-    }
-    let group = app.selected_store_history()?;
-    let local_row = usize::from(row - inner.y);
-    let child_lanes = app.lineage_child_lanes();
-    let (rows, relation_start, node_kind, prefix_width) = if local_row == 0 {
-        (
-            app.lineage_visual_rows(),
-            0,
-            0,
-            app.lineage_base_prefix_width(),
-        )
-    } else if !child_lanes.is_empty() && local_row <= child_lanes.len() * 3 {
-        if local_row % 3 == 0 {
-            let child = child_lanes[local_row / 3 - 1];
-            (
-                app.lineage_visual_rows_for_child(child),
-                0,
-                1,
-                app.lineage_base_prefix_width_for_child(child),
-            )
-        } else {
-            return None;
-        }
-    } else if !child_lanes.is_empty() && local_row >= child_lanes.len() * 3 + 2 {
-        (Vec::new(), child_lanes.len() * 3 + 2, 2, 0)
-    } else if child_lanes.is_empty() && local_row >= 2 {
-        (Vec::new(), 2, 2, 0)
-    } else {
-        return None;
-    };
-    if node_kind == 2 {
-        let relation = local_row.saturating_sub(relation_start);
-        return (relation < app.lineage_relations().len())
-            .then_some(LineageHit::Relation(relation));
-    }
-    let x = usize::from(column - inner.x) + usize::from(app.lineage_scroll());
-    let mut offset: usize = prefix_width;
-    for lineage_row in rows {
-        let fact = group.facts.get(lineage_row.fact_index).copied()?;
-        let Some(node) = lineage_node_name(fact, lineage_row.number) else {
-            continue;
-        };
-        let width = Line::raw(node.as_str()).width();
-        if (offset..offset.saturating_add(width)).contains(&x) {
-            return Some(LineageHit::Node(lineage_row.fact_index));
-        }
-        offset = offset.saturating_add(width + 5);
-    }
-    None
-}
-
-#[allow(dead_code)]
-pub(crate) fn lineage_node_at(area: Rect, column: u16, row: u16, app: &App) -> Option<usize> {
-    match lineage_hit_at(area, column, row, app) {
-        Some(LineageHit::Node(index)) => Some(index),
-        _ => None,
+        .split(area);
+        [Some(columns[0]), Some(columns[1]), Some(columns[2])]
     }
 }
 
-#[allow(dead_code)]
-fn hover_details(
-    fact: Fact,
-    group: &HistoryGroup,
-    app: &App,
-    theme: &Palette,
-) -> Vec<Line<'static>> {
-    match fact {
-        Fact::Layer(layer) => layer_hover_details(Fact::Layer(layer), app, theme),
-        Fact::Stack(stack) => stack_hover_details(Fact::Stack(stack), app, theme),
-        Fact::Branch(branch) => branch_hover_details(Fact::Branch(branch), group, theme),
-        Fact::Commit(commit) => commit_hover_details(Fact::Commit(commit), theme),
-        _ => Vec::new(),
-    }
+fn popup(area: Rect, width: u16, height: u16, bottom_offset: u16) -> Rect {
+    let width = width.min(area.width.saturating_sub(4));
+    let height = height.min(area.height.saturating_sub(4));
+    let vertical = Layout::vertical([Constraint::Length(height)])
+        .flex(Flex::Center)
+        .split(area);
+    let horizontal = Layout::horizontal([Constraint::Length(width)])
+        .flex(Flex::Center)
+        .split(vertical[0]);
+    let mut result = horizontal[0];
+    result.y = result.y.saturating_sub(bottom_offset);
+    result
 }
 
-#[allow(dead_code)]
-fn layer_hover_details(fact: Fact, app: &App, theme: &Palette) -> Vec<Line<'static>> {
-    let Fact::Layer(layer) = fact else {
-        return Vec::new();
-    };
-    let mut lines = vec![Line::styled(
-        "LAYER RELATIONSHIPS",
-        Style::default().add_modifier(Modifier::BOLD),
-    )];
-    let parent = layer
-        .parent_id
-        .map(|id| format!("layer {}", short_id(id.to_bytes().as_slice())))
-        .unwrap_or_else(|| "(genesis)".to_owned());
-    lines.push(relation_line("created from", parent, theme));
-    let created_by = app
-        .history_groups()
+fn selected_workspace(app: &App) -> Option<&WorkspaceView> {
+    let id = app.selected_workspace.as_ref()?;
+    app.workspaces
+        .workspaces
+        .items
         .iter()
-        .flat_map(|group| group.facts.iter())
-        .filter_map(|fact| match fact {
-            Fact::AddResult(result)
-                if result.result_id.as_slice() == layer.id.to_bytes().as_slice() =>
-            {
-                let kind = match result.source_id.as_slice().first() {
-                    Some(0x11) => "branch",
-                    Some(0x22) => "stack",
-                    _ => "source",
-                };
-                Some(format!("{kind} {}", short_id(result.source_id.as_slice())))
-            }
-            _ => None,
-        })
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-    lines.push(relation_line(
-        "created by",
-        values_or_none(created_by),
-        theme,
-    ));
-    let mut children = Vec::new();
-    for group in app.history_groups() {
-        for fact in &group.facts {
-            match *fact {
-                Fact::StackHistory(history) if history.base_layer_id == layer.id => {
-                    children.push(format!(
-                        "stack {}",
-                        short_id(history.head_stack_id.to_bytes().as_slice())
-                    ));
-                }
-                Fact::Branch(branch)
-                    if branch.base_id.as_slice() == layer.id.to_bytes().as_slice() =>
-                {
-                    children.push(format!(
-                        "branch {}",
-                        short_id(branch.id.to_bytes().as_slice())
-                    ));
-                }
-                _ => {}
-            }
-        }
-    }
-    children.sort();
-    children.dedup();
-    lines.push(relation_line(
-        "instantiated",
-        values_or_none(children),
-        theme,
-    ));
-    lines
+        .find(|view| &view.id == id)
 }
 
-#[allow(dead_code)]
-fn stack_hover_details(fact: Fact, app: &App, theme: &Palette) -> Vec<Line<'static>> {
-    let Fact::Stack(stack) = fact else {
-        return Vec::new();
-    };
-    let mut lines = vec![Line::styled(
-        "STACK RELATIONSHIPS",
-        Style::default().add_modifier(Modifier::BOLD),
-    )];
-    let history = app.history_groups().iter().find_map(|group| {
-        group.facts.iter().find_map(|fact| match *fact {
-            Fact::StackHistory(history) if history.id == stack.history_id => Some(history),
-            _ => None,
-        })
-    });
-    let created_from = history
-        .map(|history| {
-            format!(
-                "layer {}",
-                short_id(history.base_layer_id.to_bytes().as_slice())
-            )
-        })
-        .unwrap_or_else(|| "(unknown layer)".to_owned());
-    lines.push(relation_line("created from", created_from, theme));
-    lines.push(relation_line(
-        "parent stack",
-        stack
-            .parent_id
-            .map(|id| format!("stack {}", short_id(id.to_bytes().as_slice())))
-            .unwrap_or_else(|| "(genesis)".to_owned()),
-        theme,
-    ));
-    let branches = app
-        .history_groups()
+fn selected_operation(app: &App) -> Option<&OperationView> {
+    let id = app.selected_operation.as_ref()?;
+    app.activity
+        .operations
+        .items
         .iter()
-        .flat_map(|group| group.facts.iter())
-        .filter_map(|fact| match *fact {
-            Fact::Branch(branch) if branch.base_id.as_slice() == stack.id.to_bytes().as_slice() => {
-                Some(format!(
-                    "branch {}",
-                    short_id(branch.id.to_bytes().as_slice())
-                ))
-            }
-            _ => None,
-        })
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-    lines.push(relation_line(
-        "instantiated",
-        values_or_none(branches),
-        theme,
-    ));
-    lines
+        .find(|view| &view.id == id)
 }
 
-#[allow(dead_code)]
-fn branch_hover_details(fact: Fact, group: &HistoryGroup, theme: &Palette) -> Vec<Line<'static>> {
-    let Fact::Branch(branch) = fact else {
-        return Vec::new();
-    };
-    let mut lines = vec![Line::styled(
-        "BRANCH RELATIONSHIPS",
-        Style::default().add_modifier(Modifier::BOLD),
-    )];
-    let commit_ids = commits_for_branch(group, Fact::Branch(branch));
-    let commit_count = commit_ids.len();
-    lines.push(relation_line(
-        "created from",
-        match branch.base_id.as_slice().first() {
-            Some(0x32) => format!("layer {}", short_id(branch.base_id.as_slice())),
-            Some(0x22) => format!("stack {}", short_id(branch.base_id.as_slice())),
-            _ => "(unknown base)".to_owned(),
-        },
-        theme,
-    ));
-    lines.push(Line::styled(
-        "COMMITS",
-        Style::default().add_modifier(Modifier::BOLD),
-    ));
-    if commit_ids.is_empty() {
-        lines.push(Line::styled("  (none)", Style::default().fg(theme.muted)));
-    } else {
-        for (position, id) in commit_ids.iter().enumerate() {
-            lines.push(Line::styled(
-                format!(
-                    "  commit({}) {}",
-                    commit_count.saturating_sub(position),
-                    short_id(id.as_slice())
-                ),
-                Style::default().fg(theme.text),
-            ));
-        }
-    }
-    let selected_ids = commits_for_branch(group, Fact::Branch(branch));
-    let subbranches = group
-        .facts
+fn filtered_projects(app: &App) -> Vec<&ProjectSummary> {
+    app.projects
         .iter()
-        .filter_map(|fact| match *fact {
-            Fact::Branch(candidate) if candidate.id != branch.id => {
-                let candidate_ids = commits_for_branch(group, Fact::Branch(candidate));
-                let shared = candidate_ids
-                    .iter()
-                    .find(|id| selected_ids.iter().any(|selected| selected == *id))?;
-                Some(format!(
-                    "branch {} via commit {}",
-                    short_id(candidate.id.to_bytes().as_slice()),
-                    short_id(shared)
-                ))
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    lines.push(relation_line(
-        "possible subbranches",
-        if subbranches.is_empty() {
-            "(none inferred)".to_owned()
-        } else {
-            format!("{} (inferred)", subbranches.join(", "))
-        },
-        theme,
-    ));
-    lines.push(Line::styled(
-        "  exact parent branch is not stored in BranchRecord",
-        Style::default().fg(theme.muted),
-    ));
-    lines
+        .filter(|project| search_match(app, project.name.as_str()))
+        .collect()
 }
 
-#[allow(dead_code)]
-fn commit_hover_details(fact: Fact, theme: &Palette) -> Vec<Line<'static>> {
-    let Fact::Commit(commit) = fact else {
-        return Vec::new();
-    };
-    vec![
-        Line::styled(
-            "COMMIT RELATIONSHIPS",
-            Style::default().add_modifier(Modifier::BOLD),
-        ),
-        relation_line(
-            "parent",
-            commit
-                .parent_id
-                .map(|id| format!("commit {}", short_id(id.to_bytes().as_slice())))
-                .unwrap_or_else(|| "(root)".to_owned()),
-            theme,
-        ),
-        relation_line(
-            "merge parent",
-            commit
-                .merge_parent_id
-                .map(|id| format!("commit {}", short_id(id.to_bytes().as_slice())))
-                .unwrap_or_else(|| "(none)".to_owned()),
-            theme,
-        ),
-    ]
+fn search_match(app: &App, value: &str) -> bool {
+    app.search.is_empty()
+        || value
+            .to_ascii_lowercase()
+            .contains(&app.search.to_ascii_lowercase())
 }
 
-#[allow(dead_code)]
-fn commits_for_branch(group: &HistoryGroup, fact: Fact) -> Vec<Vec<u8>> {
-    let Fact::Branch(branch) = fact else {
-        return Vec::new();
-    };
-    let commits = group
-        .facts
-        .iter()
-        .filter_map(|fact| match *fact {
-            Fact::Commit(commit) => Some((commit.id.to_bytes().to_vec(), commit.parent_id)),
-            _ => None,
-        })
-        .collect::<std::collections::BTreeMap<_, _>>();
-    let mut ids = Vec::new();
-    let mut current = Some(branch.head_commit_id.to_bytes().to_vec());
-    let mut seen = std::collections::BTreeSet::new();
-    while let Some(id) = current {
-        if !seen.insert(id.clone()) {
-            break;
-        }
-        let Some(parent) = commits.get(&id).copied() else {
-            break;
-        };
-        ids.push(id);
-        current = parent.map(|id| id.to_bytes().to_vec());
-    }
-    ids
+fn graph_selected_index(app: &App, rows: &[crate::app::GraphRow]) -> Option<usize> {
+    rows.iter()
+        .filter(|row| search_match(app, &format!("{} {}", row.label, row.detail)))
+        .position(|row| app.selected_graph.as_ref() == Some(&row.target))
 }
 
-#[allow(dead_code)]
-fn relation_line(label: &str, value: String, theme: &Palette) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(format!("{label:<22}"), Style::default().fg(theme.muted)),
-        Span::styled(value, Style::default().fg(theme.text)),
-    ])
-}
-
-#[allow(dead_code)]
-fn values_or_none(values: Vec<String>) -> String {
-    if values.is_empty() {
-        "(none)".to_owned()
-    } else {
-        values.join(", ")
-    }
-}
-
-fn short_id(bytes: &[u8]) -> String {
-    let id = hex(bytes);
-    if id.len() > 14 {
-        format!("{}…{}", &id[..6], &id[id.len() - 4..])
-    } else {
-        id
-    }
-}
-
-fn details(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
-    let Some(store) = app.selected_store() else {
-        frame.render_widget(
-            Paragraph::new("No store selected")
-                .style(Style::default().fg(theme.muted))
-                .block(panel_block(" DETAILS ".to_owned(), false, theme)),
-            area,
-        );
-        return;
-    };
-    let parent = store
-        .parent
-        .as_deref()
-        .and_then(|location| {
-            app.topology()
+fn source_label(app: &App, source: &(BranchId, layerfs_cli::CommitId)) -> String {
+    let name = app
+        .project
+        .as_ref()
+        .and_then(|project| {
+            project
+                .branches
+                .items
                 .iter()
-                .find(|entry| entry.location == location)
+                .find(|branch| branch.id == source.0)
         })
-        .map(|entry| format!("{} · {}", role_label(&entry.role), entry.name))
-        .unwrap_or_else(|| "-".to_owned());
-    let selected = app.active_lineage_fact();
-    let mut lines = vec![Line::styled(
-        format!("{} · {}", role_label(&store.role), store.name),
-        Style::default().add_modifier(Modifier::BOLD),
-    )];
-    lines.extend([
-        Line::styled(
-            if store.role == "layerstore" {
-                "AUTHORITY"
-            } else {
-                "CONNECTED"
-            },
-            Style::default().fg(theme.secondary),
+        .map(|branch| branch.name.to_string())
+        .unwrap_or_else(|| source.0.to_string());
+    format!("{name}/C{}", short_number(source.1.as_str()))
+}
+
+fn layer_work_label(app: &App, layer: &layerfs_cli::LayerView) -> String {
+    if !layer.work {
+        return "WORK— NEW".into();
+    }
+    if !layer.work_boundary {
+        return "WORK".into();
+    }
+    let mode = app
+        .project
+        .as_ref()
+        .and_then(|project| match &project.project.relation {
+            ProjectRelation::Current { mode } | ProjectRelation::PullBehind { mode, .. } => {
+                Some(*mode)
+            }
+            _ => None,
+        });
+    mode.map(|mode| format!("WORK {mode}"))
+        .unwrap_or_else(|| "WORK".into())
+}
+
+fn row_style(selected: bool, theme: Theme) -> Style {
+    if selected {
+        theme.selected()
+    } else {
+        Style::default()
+    }
+}
+
+fn project_name(app: &App) -> String {
+    app.project
+        .as_ref()
+        .map(|snapshot| snapshot.project.name.to_string())
+        .unwrap_or_else(|| "all projects".into())
+}
+
+fn compact_project_summary(project: &ProjectSummary) -> String {
+    let work = match &project.relation {
+        ProjectRelation::Current { mode } => {
+            format!("{mode}→L{} SYNC", project.work_number.unwrap_or_default())
+        }
+        ProjectRelation::PullBehind { mode, layers } => format!(
+            "{mode}→L{} PULL+{layers}",
+            project.work_number.unwrap_or_default()
         ),
-        Line::from(vec![
-            Span::styled("Parent ", Style::default().fg(theme.muted)),
-            Span::raw(parent.clone()),
-        ]),
-        Line::from(vec![
-            Span::styled("Route  ", Style::default().fg(theme.muted)),
-            Span::raw(route_label(app, store)),
-        ]),
-        Line::from(vec![
-            Span::styled("State  ", Style::default().fg(theme.muted)),
-            Span::raw(if store.active { "active" } else { "connected" }),
-        ]),
-        Line::from(""),
-    ]);
-    if let Some(fact) = selected {
-        lines.push(Line::styled(
-            fact_title(fact),
-            Style::default().add_modifier(Modifier::BOLD),
-        ));
-        lines.push(Line::styled(
-            format!("id     {}", hex(&fact.id())),
-            Style::default().fg(theme.muted),
-        ));
-    } else {
-        lines.push(Line::styled(
-            "Select a concrete history record",
-            Style::default().fg(theme.muted),
-        ));
-    }
-    lines.push(Line::from(""));
-    lines.push(Line::styled("OPERATIONS", Style::default().fg(theme.muted)));
-    let actions = app.actions();
-    if actions.is_empty() {
-        lines.push(Line::styled(
-            "  none for this selection",
-            Style::default().fg(theme.muted),
-        ));
-    } else {
-        for (index, action) in actions.iter().copied().enumerate() {
-            let selected_action = index == app.selected_action_index();
-            lines.push(Line::styled(
-                format!(
-                    "  [{}] {} {}",
-                    action.key(),
-                    action.label(),
-                    action_target(app, action)
-                ),
-                row_style(selected_action, app.focus() == Focus::Details, theme),
-            ));
-        }
-        lines.push(Line::styled(
-            "  ↑↓ choose · Enter prepare command",
-            Style::default().fg(theme.muted),
-        ));
-    }
-    frame.render_widget(
-        Paragraph::new(lines)
-            .scroll((app.details_scroll(), 0))
-            .block(panel_block(
-                " DETAILS ".to_owned(),
-                app.focus() == Focus::Details,
-                theme,
-            )),
-        area,
-    );
-}
-
-fn action_target(app: &App, action: Action) -> String {
-    let Some(store) = app.selected_store() else {
-        return String::new();
+        relation => relation.to_string(),
     };
-    let target = if store.role == "branchstore" {
-        store
-            .parent
-            .as_deref()
-            .and_then(|location| {
-                app.topology()
-                    .iter()
-                    .find(|entry| entry.location == location)
-            })
-            .map(|entry| entry.name.as_str())
-            .unwrap_or("parent")
-    } else {
-        app.topology()
-            .iter()
-            .find(|entry| entry.role == "layerstore")
-            .map(|entry| entry.name.as_str())
-            .unwrap_or("LayerStore")
-    };
-    let arrow = match action {
-        Action::PullLayer | Action::PullStack | Action::PullBranch | Action::PullCommits => "←",
-        Action::PushStack | Action::PushBranch => "→",
-    };
-    format!("{arrow} {target}")
-}
-
-fn action_offset(app: &App) -> usize {
-    if app.active_lineage_fact().is_some() {
-        10
-    } else {
-        9
-    }
-}
-
-pub(crate) fn action_row_at(area: Rect, row: u16, app: &App) -> Option<usize> {
-    let content = area.y.saturating_add(2);
-    let line = usize::from(row.saturating_sub(content)) + usize::from(app.details_scroll());
-    let index = line.checked_sub(action_offset(app))?;
-    (index < app.actions().len()).then_some(index)
-}
-
-pub(crate) fn store_row_at(area: Rect, row: u16, app: &App) -> Option<usize> {
-    let line =
-        usize::from(row.saturating_sub(area.y.saturating_add(2))) + usize::from(app.store_scroll());
-    let rows = app.store_rows();
-    rows.get(line).map(|_| line)
-}
-
-pub(crate) fn history_row_at(area: Rect, row: u16, app: &App) -> Option<usize> {
-    let line = usize::from(row.saturating_sub(area.y.saturating_add(2)))
-        + usize::from(app.history_scroll());
-    (line < app.history_rows().len()).then_some(line)
-}
-
-fn panel_block<'a>(title: String, focused: bool, theme: &Palette) -> Block<'a> {
-    Block::bordered()
-        .title(title)
-        .border_style(if focused {
-            Style::default().fg(theme.focus)
-        } else {
-            Style::default().fg(theme.border)
-        })
-        .padding(Padding::uniform(1))
-}
-
-fn row_style(selected: bool, focused: bool, theme: &Palette) -> Style {
-    if selected && focused {
-        Style::default()
-            .fg(theme.focus)
-            .add_modifier(Modifier::BOLD | Modifier::REVERSED)
-    } else if selected {
-        Style::default()
-            .fg(theme.focus)
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(theme.text)
-    }
-}
-
-fn store_connector(rows: &[StoreRow], position: usize) -> String {
-    let row = rows[position];
-    if row.depth == 0 {
-        return String::new();
-    }
-    let mut prefix = String::new();
-    for depth in 1..=row.depth {
-        let ancestor = (0..position)
-            .rev()
-            .find(|index| rows[*index].depth == depth - 1);
-        if depth == row.depth {
-            prefix.push_str(if row.last { "└─ " } else { "├─ " });
-        } else {
-            prefix.push_str(if ancestor.is_some_and(|index| !rows[index].last) {
-                "│  "
-            } else {
-                "   "
-            });
-        }
-    }
-    prefix
-}
-
-fn role_label(role: &str) -> &str {
-    match role {
-        "layerstore" => "LayerStore",
-        "stackstore" => "StackStore",
-        "branchstore" => "BranchStore",
-        _ => "Store",
-    }
-}
-
-fn sync_summary(entry: &TopologyEntry) -> String {
-    if entry.role == "layerstore" {
-        return "  AUTHORITY".to_owned();
-    }
-    if entry.active {
-        "  ACTIVE".to_owned()
-    } else {
-        "  CONNECTED".to_owned()
-    }
-}
-
-fn route_label(app: &App, store: &TopologyEntry) -> String {
-    if store.role == "layerstore" {
-        return "authority".to_owned();
-    }
-    let mut names = vec![store.name.clone()];
-    let mut parent = store.parent.as_deref();
-    while let Some(location) = parent {
-        let Some(entry) = app
-            .topology()
-            .iter()
-            .find(|entry| entry.location == location)
-        else {
-            break;
-        };
-        names.push(entry.name.clone());
-        parent = entry.parent.as_deref();
-    }
-    names.reverse();
-    names.join(" → ")
-}
-
-fn history_container_matches(category: HistoryCategory, fact: Fact) -> bool {
-    match category {
-        HistoryCategory::Layers => matches!(fact, Fact::LayerHistory(_)),
-        HistoryCategory::Stacks => matches!(fact, Fact::StackHistory(_)),
-        HistoryCategory::Branches => matches!(fact, Fact::Branch(_)),
-    }
-}
-
-fn fact_indent(row: HistoryRow, fact: Fact) -> String {
-    if matches!(
-        fact,
-        Fact::LayerHistory(_) | Fact::StackHistory(_) | Fact::Branch(_)
-    ) {
-        return "  ".to_owned();
-    }
     format!(
-        "  {} ",
-        if row.tail {
-            "└─"
-        } else if row.depth == 2 {
-            "├─"
-        } else {
-            "│ "
-        }
+        " {} · AUTH L{} · WORK {} · REM{} LOC{} · W{} W*{}",
+        project.name,
+        project.authority_number,
+        work,
+        project.remote_branches,
+        project.local_branches,
+        project.workspaces,
+        project.dirty_workspaces
     )
 }
 
-fn fact_symbol(fact: Fact) -> &'static str {
-    match fact {
-        Fact::LayerHistory(_) | Fact::Layer(_) | Fact::StackHistory(_) | Fact::Stack(_) => "◆",
-        Fact::Branch(_) | Fact::Commit(_) | Fact::AddResult(_) => "◇",
+fn route_name(app: &App) -> &'static str {
+    match app.route {
+        Route::Projects => "Projects",
+        Route::Project(_) => "Topology",
+        Route::Branch(_, _) => "Branch",
+        Route::Workspaces(_) => "Workspaces",
+        Route::Activity(ActivityTab::Operations) => "Operations",
+        Route::Activity(ActivityTab::Storage) => "Storage",
+        Route::Diff(_) => "Diff",
     }
 }
 
-fn fact_label(fact: Fact) -> String {
-    let id = hex(&fact.id());
-    let short = if id.len() > 14 {
-        format!("{}…{}", &id[..6], &id[id.len() - 4..])
-    } else {
-        id
+fn compact_pane_name(app: &App) -> &'static str {
+    match app.route {
+        Route::Projects => ["List 1/2", "Detail 2/2"][app.compact_pane % 2],
+        Route::Project(_) => ["Layers 1/3", "Graph 2/3", "Inspector 3/3"][app.compact_pane % 3],
+        Route::Branch(_, _) => ["Tree 1/2", "Inspector 2/2"][app.compact_pane % 2],
+        Route::Workspaces(_) => ["List 1/2", "Detail 2/2"][app.compact_pane % 2],
+        Route::Activity(ActivityTab::Operations) => {
+            ["Operations 1/2", "Receipt 2/2"][app.compact_pane % 2]
+        }
+        Route::Activity(ActivityTab::Storage) => {
+            ["Inventory 1/2", "Dedup 2/2"][app.compact_pane % 2]
+        }
+        Route::Diff(_) => ["Paths 1/3", "Content 2/3", "Details 3/3"][app.compact_pane % 3],
+    }
+}
+
+fn branch_breadcrumb(app: &App) -> String {
+    let Some(snapshot) = app.project.as_ref() else {
+        return "Branch".into();
     };
-    match fact {
-        Fact::LayerHistory(_) => format!("LayerHistory {short}"),
-        Fact::Layer(_) => format!("Layer {short}"),
-        Fact::StackHistory(_) => format!("StackHistory {short}"),
-        Fact::Stack(_) => format!("Stack {short}"),
-        Fact::Branch(_) => format!("Branch {short}"),
-        Fact::Commit(_) => format!("Commit {short}"),
-        Fact::AddResult(_) => format!("Result {short}"),
-    }
-}
-
-fn fact_title(fact: Fact) -> &'static str {
-    match fact {
-        Fact::LayerHistory(_) => "LAYER HISTORY",
-        Fact::Layer(_) => "LAYER",
-        Fact::StackHistory(_) => "STACK HISTORY",
-        Fact::Stack(_) => "STACK",
-        Fact::Branch(_) => "BRANCH",
-        Fact::Commit(_) => "COMMIT",
-        Fact::AddResult(_) => "RESULT",
-    }
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn command_input(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
-    let border = if app.command_focused() || app.command_running() {
-        theme.focus
-    } else {
-        theme.border
+    let Some(target) = app.selected_graph.as_ref() else {
+        return format!("{} > Branch", snapshot.project.name);
     };
-    let title = if app.command_running() {
-        " COMMAND · RUNNING "
-    } else {
-        " COMMAND "
+    let (branch_id, selected_commit) = match target {
+        GraphTarget::Branch(branch) => (branch, None),
+        GraphTarget::Commit(branch, commit) => (branch, Some(commit)),
     };
-    let block = Block::bordered()
-        .title(title)
-        .title_style(Style::default().fg(border).add_modifier(Modifier::BOLD))
-        .border_style(Style::default().fg(border))
-        .style(Style::default().bg(theme.surface))
-        .padding(Padding::horizontal(1));
-    let inner = block.inner(area);
-    let cursor_width = Line::raw(&app.command()[..app.command_cursor()]).width();
-    let offset = cursor_width.saturating_sub(inner.width.saturating_sub(1) as usize);
-    let command = if app.command().is_empty() {
-        Line::styled("/db …", Style::default().fg(theme.muted))
-    } else {
-        Line::styled(app.command(), Style::default().fg(theme.text))
-    };
-    let message = app.message().map_or_else(
-        || Line::raw(""),
-        |message| {
-            Line::styled(
-                message.text(),
-                Style::default().fg(if message.is_error() {
-                    theme.error
-                } else {
-                    theme.secondary
-                }),
-            )
-        },
-    );
-    frame.render_widget(block, area);
-    frame.render_widget(
-        Paragraph::new(command).scroll((0, offset.min(u16::MAX as usize) as u16)),
-        Rect::new(inner.x, inner.y, inner.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new(message),
-        Rect::new(inner.x, inner.y + 1, inner.width, 1),
-    );
-    if app.command_focused() {
-        frame.set_cursor_position((
-            inner.x
-                + cursor_width
-                    .saturating_sub(offset)
-                    .min(inner.width as usize) as u16,
-            inner.y,
-        ));
-    }
+    let mut parts = vec![snapshot.project.name.to_string()];
+    append_branch_path(snapshot, branch_id, selected_commit, &mut parts);
+    parts.join(" > ")
 }
 
-fn completion_popup(frame: &mut Frame, command_area: Rect, app: &App, theme: &Palette) {
-    if !app.command_focused() || app.completions().is_empty() {
-        return;
-    }
-    let shown = app.completions().len().min(5);
-    let width = frame.area().width.saturating_sub(8).min(72);
-    let area = Rect::new(
-        frame.area().x + frame.area().width.saturating_sub(width) / 2,
-        command_area.y.saturating_sub(shown as u16 + 2),
-        width,
-        shown as u16 + 2,
-    );
-    let lines = app
-        .completions()
+fn append_branch_path(
+    snapshot: &layerfs_cli::ProjectSnapshot,
+    branch_id: &BranchId,
+    selected_commit: Option<&layerfs_cli::CommitId>,
+    parts: &mut Vec<String>,
+) {
+    let Some(branch) = snapshot
+        .branches
+        .items
         .iter()
-        .take(shown)
-        .enumerate()
-        .map(|(index, completion)| {
-            let selected = index == app.selected_completion();
-            Line::from(vec![
-                Span::styled(
-                    if selected { "> " } else { "  " },
-                    Style::default().fg(theme.focus),
-                ),
-                Span::styled(
-                    &completion.value,
-                    Style::default()
-                        .fg(if selected { theme.focus } else { theme.text })
-                        .add_modifier(if selected {
-                            Modifier::BOLD
-                        } else {
-                            Modifier::empty()
-                        }),
-                ),
-                Span::styled(
-                    format!("  {}", completion.description),
-                    Style::default().fg(theme.muted),
-                ),
-            ])
+        .find(|branch| &branch.id == branch_id)
+    else {
+        return;
+    };
+    match &branch.origin {
+        layerfs_cli::BranchOrigin::Layer(layer_id) => {
+            if let Some(layer) = snapshot
+                .layers
+                .items
+                .iter()
+                .find(|layer| &layer.id == layer_id)
+            {
+                parts.push(format!("L{}", layer.number));
+            }
+        }
+        layerfs_cli::BranchOrigin::Commit(parent, commit) => {
+            append_branch_path(snapshot, parent, Some(commit), parts);
+        }
+    }
+    let at = selected_commit
+        .map(|commit| format!("@C{}", short_number(commit.as_str())))
+        .unwrap_or_default();
+    parts.push(format!("{}{at}", branch.name));
+}
+
+fn short_number(value: &str) -> &str {
+    value
+        .rsplit('-')
+        .next()
+        .unwrap_or(value)
+        .trim_start_matches('0')
+}
+
+fn optional_id<T: ToString>(value: Option<&T>) -> String {
+    value.map(ToString::to_string).unwrap_or_else(|| "—".into())
+}
+
+fn action_labels(actions: &[SemanticAction]) -> String {
+    let values = actions
+        .iter()
+        .map(|action| match action {
+            SemanticAction::Pull => "pull",
+            SemanticAction::Fork => "fork",
+            SemanticAction::Push => "push",
+            SemanticAction::Add => "add / reconcile",
+            SemanticAction::Diff => "diff",
+            SemanticAction::Materialize => "materialize",
+            SemanticAction::Workspace => "workspace",
         })
         .collect::<Vec<_>>();
-    frame.render_widget(Clear, area);
-    frame.render_widget(
-        Paragraph::new(lines).block(
-            Block::bordered()
-                .title(" COMPLETION ")
-                .border_style(Style::default().fg(theme.focus))
-                .style(Style::default().bg(theme.canvas)),
-        ),
-        area,
-    );
-}
-
-fn help_overlay(frame: &mut Frame, theme: &Palette) {
-    let width = frame.area().width.saturating_sub(4).min(72);
-    let height = frame.area().height.saturating_sub(4).min(16);
-    let area = Rect::new(
-        frame.area().x + frame.area().width.saturating_sub(width) / 2,
-        frame.area().y + frame.area().height.saturating_sub(height) / 2,
-        width,
-        height,
-    );
-    let lines = vec![
-        Line::styled("NAVIGATION", Style::default().add_modifier(Modifier::BOLD)),
-        Line::raw("j/k           move within the focused list"),
-        Line::raw("Space         fold or unfold the selected group"),
-        Line::raw("Arrow keys    move; at a list edge, cross to the adjacent panel"),
-        Line::raw("Enter         open a relationship or prepare an operation"),
-        Line::raw("Down          open relationship search in lineage"),
-        Line::raw("Tab           next panel   Shift-Tab previous"),
-        Line::raw("Esc           back or close this help"),
-        Line::raw("/             command input   ? toggle help"),
-        Line::raw("p / P         push / pull selected history"),
-        Line::raw("q             quit"),
-        Line::raw(""),
-        Line::styled("MOUSE", Style::default().add_modifier(Modifier::BOLD)),
-        Line::raw("Click a row or action; wheel scrolls its panel."),
-        Line::raw("Resize is handled by the terminal event loop."),
-    ];
-    frame.render_widget(Clear, area);
-    frame.render_widget(
-        Paragraph::new(lines)
-            .block(
-                Block::bordered()
-                    .title(" HELP ")
-                    .border_style(Style::default().fg(theme.focus))
-                    .style(Style::default().bg(theme.canvas))
-                    .padding(Padding::uniform(1)),
-            )
-            .style(Style::default().fg(theme.text)),
-        area,
-    );
-}
-
-fn footer(frame: &mut Frame, area: Rect, app: &App, theme: &Palette) {
-    let hints: &[(&str, &str)] = if app.command_focused() {
-        &[
-            (" Tab ", "complete"),
-            (" ↑↓ ", "select"),
-            (" Enter ", "run"),
-            (" Esc ", "back"),
-        ]
+    if values.is_empty() {
+        "inspect".into()
     } else {
-        match app.focus() {
-            Focus::Stores => &[
-                (" j/k ", "store"),
-                (" Space ", "fold"),
-                (" arrows ", "move / edge jump"),
-                (" Enter ", "histories"),
-                (" q ", "quit"),
-            ],
-            Focus::Histories => &[
-                (" j/k ", "history"),
-                (" Space ", "fold"),
-                (" arrows ", "move / edge jump"),
-                (" Enter ", "lineage"),
-                (" q ", "quit"),
-            ],
-            Focus::Details => &[
-                (" j/k ", "operation"),
-                (" arrows ", "move / edge jump"),
-                (" Enter ", "prepare"),
-                (" p/P ", "push/pull"),
-                (" Esc ", "back"),
-                (" q ", "quit"),
-            ],
-            Focus::Lineage => &[
-                (" j/k ", "next node / relation"),
-                (" PgUp/Dn ", "jump nodes"),
-                (" ←→ ", "next / relation"),
-                (" ↓ ", "relationships"),
-                (" Enter ", "open"),
-                (" Tab ", "focus"),
-                (" Esc ", "details"),
-                (" q ", "quit"),
-            ],
-            Focus::Command => &[(" / ", "commands"), (" q ", "quit")],
-        }
-    };
-    let mut spans = Vec::with_capacity(hints.len() * 3);
-    for (index, (key, label)) in hints.iter().enumerate() {
-        if index > 0 {
-            spans.push(Span::raw("   "));
-        }
-        spans.push(Span::styled(
-            *key,
-            Style::default()
-                .fg(theme.focus)
-                .add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::styled(*label, Style::default().fg(theme.secondary)));
+        values.join(" · ")
     }
-    frame.render_widget(
-        Paragraph::new(Line::from(spans))
-            .alignment(Alignment::Center)
-            .style(Style::default().bg(theme.canvas))
-            .block(
-                Block::default()
-                    .borders(Borders::TOP)
-                    .border_style(Style::default().fg(theme.border)),
-            ),
-        area,
-    );
+}
+
+fn bytes(value: u64) -> String {
+    if value >= 1_048_576 {
+        format!("{:.1} MiB", value as f64 / 1_048_576.0)
+    } else if value >= 1024 {
+        format!("{:.1} KiB", value as f64 / 1024.0)
+    } else {
+        format!("{value} B")
+    }
+}
+
+fn truncate(value: &str, width: usize) -> String {
+    if value.chars().count() <= width {
+        return value.into();
+    }
+    value
+        .chars()
+        .take(width.saturating_sub(1))
+        .chain(std::iter::once('…'))
+        .collect()
+}
+
+fn empty_lines() -> Vec<Line<'static>> {
+    vec![Line::from(" No data")]
 }
 
 #[cfg(test)]
-mod tests {
-    use ratatui::{backend::TestBackend, layout::Rect, Terminal};
-
-    use crate::app::{App, HistoryGroup, TopologyEntry};
-
-    #[test]
-    fn renders_empty_and_bound_store_views() {
-        let mut terminal = Terminal::new(TestBackend::new(160, 30)).unwrap();
-        let mut app = App::default();
-        terminal.draw(|frame| super::draw(frame, &app)).unwrap();
-        let empty = screen(&terminal);
-        assert!(empty.contains("No connected LayerStore"));
-        assert!(empty.contains("Select a layer, stack, branch, or commit"));
-        assert!(empty.contains("COMMAND"));
-
-        app.replace_topology(vec![
-            entry("layerstore", "main", "/tmp/layer.db", None),
-            entry(
-                "stackstore",
-                "release",
-                "/tmp/stack.db",
-                Some("/tmp/layer.db"),
-            ),
-            entry(
-                "branchstore",
-                "feature",
-                "/tmp/branch.db",
-                Some("/tmp/stack.db"),
-            ),
-        ]);
-        app.set_histories(vec![
-            HistoryGroup {
-                name: "main".into(),
-                role: "layerstore".into(),
-                location: "/tmp/layer.db".into(),
-                parent: None,
-                facts: Vec::new(),
-                has_more: false,
-            },
-            HistoryGroup {
-                name: "release".into(),
-                role: "stackstore".into(),
-                location: "/tmp/stack.db".into(),
-                parent: Some("/tmp/layer.db".into()),
-                facts: Vec::new(),
-                has_more: false,
-            },
-            HistoryGroup {
-                name: "feature".into(),
-                role: "branchstore".into(),
-                location: "/tmp/branch.db".into(),
-                parent: Some("/tmp/stack.db".into()),
-                facts: Vec::new(),
-                has_more: false,
-            },
-        ]);
-        terminal.draw(|frame| super::draw(frame, &app)).unwrap();
-        let bound = screen(&terminal);
-        assert!(bound.contains("STORES"));
-        assert!(bound.contains("LayerStore · main"));
-        assert!(bound.contains("StackStore · release"));
-        assert!(bound.contains("BranchStore · feature"));
-        assert!(bound.contains("LAYER HISTORIES"));
-        assert!(bound.contains("BRANCH HISTORIES"));
-    }
-
-    #[test]
-    fn stacks_store_and_history_panels_on_narrow_terminals() {
-        let narrow = super::layout(Rect::new(0, 0, 100, 40));
-        assert!(narrow.stores.y < narrow.histories.y);
-        assert_eq!(narrow.stores.x, narrow.histories.x);
-        assert_eq!(narrow.stores.width, narrow.histories.width);
-        assert!(narrow.histories.x + narrow.histories.width <= narrow.details.x);
-        assert!(narrow.details.y < narrow.lineage.y);
-        assert_eq!(narrow.details.x, narrow.lineage.x);
-        assert_eq!(narrow.details.width, narrow.lineage.width);
-        assert_eq!(narrow.stores.height, narrow.details.height);
-        assert_eq!(narrow.histories.height, narrow.lineage.height);
-
-        let wide = super::layout(Rect::new(0, 0, 160, 40));
-        assert!(wide.stores.y < wide.histories.y);
-        assert_eq!(wide.stores.x, wide.histories.x);
-        assert!(wide.histories.x + wide.histories.width <= wide.details.x);
-        assert!(wide.details.y < wide.lineage.y);
-        assert_eq!(wide.details.x, wide.lineage.x);
-        assert_eq!(wide.details.width, wide.lineage.width);
-        assert_eq!(wide.stores.height, wide.details.height);
-        assert_eq!(wide.histories.height, wide.lineage.height);
-    }
-
-    fn screen(terminal: &Terminal<TestBackend>) -> String {
-        terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect()
-    }
-
-    fn entry(role: &str, name: &str, location: &str, parent: Option<&str>) -> TopologyEntry {
-        TopologyEntry {
-            role: role.to_owned(),
-            name: name.to_owned(),
-            location: location.to_owned(),
-            parent: parent.map(str::to_owned),
-            active: false,
-        }
-    }
-}
+mod tests;

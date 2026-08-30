@@ -1,405 +1,563 @@
-use clap::{Args, Parser, Subcommand, ValueEnum};
-use std::ffi::OsString;
-use std::path::PathBuf;
+use crate::{CliError, CliResult, EntityName, RemotePlacement};
 
-#[derive(Parser)]
-#[command(name = "layerfs", disable_help_subcommand = true)]
-pub(crate) struct Invocation {
-    #[arg(long, global = true)]
-    pub json: bool,
-    #[command(subcommand)]
-    pub command: Command,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Command {
+    pub raw: String,
+    pub kind: CommandKind,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
-pub enum Command {
-    Db {
-        #[command(subcommand)]
-        command: DbCommand,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WorkspaceAnchor {
+    Commit { branch: String, commit: String },
+    InitialLayer { branch: String, layer: String },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DiffRequest {
+    Layers {
+        from: String,
+        to: String,
     },
-    Layer {
-        #[command(subcommand)]
-        command: LayerCommand,
+    BranchCommits {
+        branch: String,
+        from: String,
+        to: String,
     },
-    Stack {
-        #[command(subcommand)]
-        command: StackCommand,
+    BranchLayer {
+        branch: String,
+        layer: String,
     },
-    Branch {
-        #[command(subcommand)]
-        command: BranchCommand,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CommandKind {
+    ReadOnly {
+        family: String,
+        action: String,
     },
-    Workspace {
-        #[command(subcommand)]
-        command: WorkspaceCommand,
+    LayerStackInit {
+        name: EntityName,
+        source: String,
+    },
+    LayerStackPull {
+        through: String,
+        placement: RemotePlacement,
+    },
+    BranchPull {
+        branch: String,
+        through: String,
+        placement: RemotePlacement,
+    },
+    BranchForkLayer {
+        name: EntityName,
+        layer: String,
+    },
+    BranchForkCommit {
+        name: EntityName,
+        branch: String,
+        commit: String,
+    },
+    BranchPush {
+        branch: String,
+    },
+    LayerStackAdd {
+        branch: String,
+    },
+    Diff(DiffRequest),
+    WorkspaceCreate {
+        anchor: WorkspaceAnchor,
+        path: String,
+        container: Option<String>,
+        projection: String,
+    },
+    WorkspaceAction {
+        action: String,
+        target: String,
+        arguments: Vec<String>,
     },
     Monitor {
-        #[command(subcommand)]
-        command: MonitorCommand,
+        action: String,
     },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
-pub enum DbCommand {
-    Create { role: StoreRole, location: PathBuf },
-    Connect { role: StoreRole, location: PathBuf },
-    Use { location: PathBuf },
-    Disconnect { location: PathBuf },
-    List,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
-pub enum StoreRole {
-    Layer,
-    Stack,
-    Branch,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
-pub enum LayerCommand {
-    Init(LayerInit),
-    Pull {
-        layer_id: String,
-    },
-    Add {
-        #[arg(long = "from")]
-        source: String,
-    },
-    List,
-    Show {
-        id: String,
-    },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Args)]
-#[group(required = true, multiple = false)]
-pub struct LayerInit {
-    pub directory: Option<PathBuf>,
-    #[arg(long)]
-    pub empty: bool,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
-pub enum StackCommand {
-    Create {
-        #[arg(long = "from")]
-        layer_id: String,
-    },
-    Pull {
-        stack_id: String,
-    },
-    Add {
-        #[arg(long = "from")]
-        source: String,
-    },
-    Push {
-        stack_id: String,
-    },
-    List,
-    Show {
-        id: String,
-    },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
-pub enum BranchCommand {
-    Create {
-        #[arg(long = "from")]
-        source: String,
-    },
-    Merge {
-        source_branch_id: String,
-        #[arg(long = "into")]
-        target_branch_id: String,
-    },
-    Pull {
-        branch_id: String,
-    },
-    Push {
-        branch_id: String,
-    },
-    PullCommits {
-        branch_id: String,
-    },
-    List,
-    Show {
-        id: String,
-    },
-    Diff {
-        left: String,
-        right: String,
-    },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
-pub enum WorkspaceCommand {
-    Create {
-        branch_id: String,
-        #[arg(long = "at")]
-        root: PathBuf,
-        #[arg(long)]
-        container: Option<String>,
-        #[arg(long)]
-        projection: Option<Projection>,
-    },
-    Shell {
-        workspace_id: String,
-    },
-    Exec {
-        workspace_id: String,
-        #[arg(last = true, required = true, allow_hyphen_values = true)]
-        argv: Vec<OsString>,
-    },
-    Output {
-        execution_id: String,
-        #[arg(long)]
-        follow: bool,
-    },
-    Stop {
-        execution_id: String,
-    },
-    Commit {
-        workspace_id: String,
-    },
-    End {
-        workspace_id: String,
-        #[arg(long)]
-        discard: bool,
-    },
-    List,
-    Show {
-        workspace_id: String,
-    },
-    Diff {
-        workspace_id: String,
-    },
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
-pub enum Projection {
-    Fuse,
-    Materialize,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Subcommand)]
-pub enum MonitorCommand {
-    Db,
-    Dedup {
-        #[arg(long)]
-        route: Option<String>,
-        #[arg(long)]
-        analyze: bool,
-    },
-    Workspace {
-        workspace_id: Option<String>,
-    },
-    Branch {
-        branch_id: String,
-    },
-    Operation {
-        operation_id: Option<String>,
-    },
-    Process,
 }
 
 impl Command {
-    pub(crate) fn arguments(&self) -> Vec<OsString> {
-        let mut values = Vec::new();
-        match self {
-            Self::Db { command } => {
-                values.push("db".into());
-                match command {
-                    DbCommand::Create { role, location } => {
-                        values.extend(["create".into(), role_name(*role).into()]);
-                        values.push(location.as_os_str().to_owned());
-                    }
-                    DbCommand::Connect { role, location } => {
-                        values.extend(["connect".into(), role_name(*role).into()]);
-                        values.push(location.as_os_str().to_owned());
-                    }
-                    DbCommand::Use { location } => {
-                        values.push("use".into());
-                        values.push(location.as_os_str().to_owned());
-                    }
-                    DbCommand::Disconnect { location } => {
-                        values.push("disconnect".into());
-                        values.push(location.as_os_str().to_owned());
-                    }
-                    DbCommand::List => values.push("list".into()),
-                }
-            }
-            Self::Layer { command } => {
-                values.push("layer".into());
-                match command {
-                    LayerCommand::Init(request) => {
-                        values.push("init".into());
-                        if request.empty {
-                            values.push("--empty".into());
-                        } else if let Some(directory) = &request.directory {
-                            values.push(directory.as_os_str().to_owned());
-                        }
-                    }
-                    LayerCommand::Pull { layer_id } => {
-                        values.extend(["pull".into(), layer_id.into()]);
-                    }
-                    LayerCommand::Add { source } => {
-                        values.extend(["add".into(), "--from".into(), source.into()]);
-                    }
-                    LayerCommand::List => values.push("list".into()),
-                    LayerCommand::Show { id } => values.extend(["show".into(), id.into()]),
-                }
-            }
-            Self::Stack { command } => {
-                values.push("stack".into());
-                match command {
-                    StackCommand::Create { layer_id } => {
-                        values.extend(["create".into(), "--from".into(), layer_id.into()]);
-                    }
-                    StackCommand::Pull { stack_id } => {
-                        values.extend(["pull".into(), stack_id.into()]);
-                    }
-                    StackCommand::Add { source } => {
-                        values.extend(["add".into(), "--from".into(), source.into()]);
-                    }
-                    StackCommand::Push { stack_id } => {
-                        values.extend(["push".into(), stack_id.into()]);
-                    }
-                    StackCommand::List => values.push("list".into()),
-                    StackCommand::Show { id } => values.extend(["show".into(), id.into()]),
-                }
-            }
-            Self::Branch { command } => {
-                values.push("branch".into());
-                match command {
-                    BranchCommand::Create { source } => {
-                        values.extend(["create".into(), "--from".into(), source.into()]);
-                    }
-                    BranchCommand::Merge {
-                        source_branch_id,
-                        target_branch_id,
-                    } => values.extend([
-                        "merge".into(),
-                        source_branch_id.into(),
-                        "--into".into(),
-                        target_branch_id.into(),
-                    ]),
-                    BranchCommand::Pull { branch_id } => {
-                        values.extend(["pull".into(), branch_id.into()]);
-                    }
-                    BranchCommand::Push { branch_id } => {
-                        values.extend(["push".into(), branch_id.into()]);
-                    }
-                    BranchCommand::PullCommits { branch_id } => {
-                        values.extend(["pull-commits".into(), branch_id.into()]);
-                    }
-                    BranchCommand::List => values.push("list".into()),
-                    BranchCommand::Show { id } => values.extend(["show".into(), id.into()]),
-                    BranchCommand::Diff { left, right } => {
-                        values.extend(["diff".into(), left.into(), right.into()]);
-                    }
-                }
-            }
-            Self::Workspace { command } => {
-                values.push("workspace".into());
-                match command {
-                    WorkspaceCommand::Create {
-                        branch_id,
-                        root,
-                        container,
-                        projection,
-                    } => {
-                        values.extend(["create".into(), branch_id.into(), "--at".into()]);
-                        values.push(root.as_os_str().to_owned());
-                        if let Some(container) = container {
-                            values.extend(["--container".into(), container.into()]);
-                        }
-                        if let Some(projection) = projection {
-                            values.extend([
-                                "--projection".into(),
-                                match projection {
-                                    Projection::Fuse => "fuse",
-                                    Projection::Materialize => "materialize",
-                                }
-                                .into(),
-                            ]);
-                        }
-                    }
-                    WorkspaceCommand::Shell { workspace_id } => {
-                        values.extend(["shell".into(), workspace_id.into()]);
-                    }
-                    WorkspaceCommand::Exec { workspace_id, argv } => {
-                        values.extend(["exec".into(), workspace_id.into(), "--".into()]);
-                        values.extend(argv.iter().cloned());
-                    }
-                    WorkspaceCommand::Output {
-                        execution_id,
-                        follow,
-                    } => {
-                        values.extend(["output".into(), execution_id.into()]);
-                        if *follow {
-                            values.push("--follow".into());
-                        }
-                    }
-                    WorkspaceCommand::Stop { execution_id } => {
-                        values.extend(["stop".into(), execution_id.into()]);
-                    }
-                    WorkspaceCommand::Commit { workspace_id } => {
-                        values.extend(["commit".into(), workspace_id.into()]);
-                    }
-                    WorkspaceCommand::End {
-                        workspace_id,
-                        discard,
-                    } => {
-                        values.extend(["end".into(), workspace_id.into()]);
-                        if *discard {
-                            values.push("--discard".into());
-                        }
-                    }
-                    WorkspaceCommand::List => values.push("list".into()),
-                    WorkspaceCommand::Show { workspace_id } => {
-                        values.extend(["show".into(), workspace_id.into()]);
-                    }
-                    WorkspaceCommand::Diff { workspace_id } => {
-                        values.extend(["diff".into(), workspace_id.into()]);
-                    }
-                }
-            }
-            Self::Monitor { command } => {
-                values.push("monitor".into());
-                match command {
-                    MonitorCommand::Db => values.push("db".into()),
-                    MonitorCommand::Dedup { route, analyze } => {
-                        values.push("dedup".into());
-                        if let Some(route) = route {
-                            values.extend(["--route".into(), route.into()]);
-                        }
-                        if *analyze {
-                            values.push("--analyze".into());
-                        }
-                    }
-                    MonitorCommand::Workspace { workspace_id } => {
-                        values.push("workspace".into());
-                        values.extend(workspace_id.iter().map(OsString::from));
-                    }
-                    MonitorCommand::Branch { branch_id } => {
-                        values.extend(["branch".into(), branch_id.into()]);
-                    }
-                    MonitorCommand::Operation { operation_id } => {
-                        values.push("operation".into());
-                        values.extend(operation_id.iter().map(OsString::from));
-                    }
-                    MonitorCommand::Process => values.push("process".into()),
-                }
-            }
+    pub fn parse(input: &str) -> CliResult<Self> {
+        let tokens = tokenize(input)?;
+        if tokens.is_empty() {
+            return Err(CliError::Parse("command required".into()));
         }
-        values
+        let kind = parse_tokens(&tokens)?;
+        Ok(Self {
+            raw: input.trim().to_owned(),
+            kind,
+        })
     }
 }
 
-fn role_name(role: StoreRole) -> &'static str {
-    match role {
-        StoreRole::Layer => "layer",
-        StoreRole::Stack => "stack",
-        StoreRole::Branch => "branch",
+fn parse_tokens(tokens: &[String]) -> CliResult<CommandKind> {
+    match tokens.first().map(String::as_str) {
+        Some("db" | "context" | "query") => parse_read_only(tokens),
+        Some("layerstack") => parse_layerstack(tokens),
+        Some("branch") => parse_branch(tokens),
+        Some("workspace") => parse_workspace(tokens),
+        Some("monitor") => {
+            if tokens.len() != 2 {
+                return Err(CliError::Parse("monitor accepts one action".into()));
+            }
+            let action = tokens
+                .get(1)
+                .ok_or_else(|| CliError::Parse("monitor action".into()))?;
+            if !matches!(action.as_str(), "snapshot" | "analyze-dedup") {
+                return Err(CliError::Parse("monitor snapshot|analyze-dedup".into()));
+            }
+            Ok(CommandKind::Monitor {
+                action: action.clone(),
+            })
+        }
+        Some("stack" | "merge") => Err(CliError::Parse("deleted V2 command".into())),
+        Some(value) => Err(CliError::Parse(format!("unknown family {value}"))),
+        None => Err(CliError::Parse("command required".into())),
+    }
+}
+
+fn parse_read_only(tokens: &[String]) -> CliResult<CommandKind> {
+    let valid = match tokens.first().map(String::as_str) {
+        Some("db") => match (
+            tokens.get(1).map(String::as_str),
+            tokens.get(2).map(String::as_str),
+        ) {
+            (Some("create" | "connect"), Some("layerstack")) => tokens.len() == 4,
+            (Some("create" | "connect"), Some("branch")) => {
+                tokens.len() == 6 && optional_flag(tokens, "--parent").is_some()
+            }
+            _ => false,
+        },
+        Some("context") => tokens.get(1).is_some_and(|action| {
+            action == "show" && tokens.len() == 2
+                || action == "use"
+                    && tokens.len() == 6
+                    && optional_flag(tokens, "--layerstack").is_some()
+                    && optional_flag(tokens, "--branch").is_some()
+        }),
+        Some("query") => {
+            matches!(
+                tokens.get(1).map(String::as_str),
+                Some(
+                    "projects"
+                        | "project"
+                        | "layers"
+                        | "branches"
+                        | "commits"
+                        | "workspaces"
+                        | "executions"
+                        | "operations"
+                )
+            ) && matches!(tokens.len(), 2 | 3)
+        }
+        _ => false,
+    };
+    if !valid {
+        return Err(CliError::Parse("invalid read-only command".into()));
+    }
+    Ok(CommandKind::ReadOnly {
+        family: tokens[0].clone(),
+        action: tokens[1..].join(" "),
+    })
+}
+
+fn parse_layerstack(tokens: &[String]) -> CliResult<CommandKind> {
+    match tokens.get(1).map(String::as_str) {
+        Some("init") => {
+            exact_len(tokens, 5)?;
+            only_flags(tokens, &["--name", "--empty"])?;
+            let value = flag(tokens, "--name")?;
+            let name = EntityName::parse(value).map_err(|error| CliError::Parse(error.into()))?;
+            let empty = tokens.iter().any(|token| token == "--empty");
+            let directory = tokens
+                .iter()
+                .enumerate()
+                .skip(2)
+                .find(|(index, token)| {
+                    !token.starts_with('-')
+                        && tokens.get(index.saturating_sub(1)).map(String::as_str) != Some("--name")
+                })
+                .map(|(_, token)| token.clone());
+            let source = match (empty, directory) {
+                (true, None) => "empty".into(),
+                (false, Some(directory)) => directory,
+                _ => {
+                    return Err(CliError::Parse(
+                        "init requires exactly --empty or one directory".into(),
+                    ))
+                }
+            };
+            Ok(CommandKind::LayerStackInit { name, source })
+        }
+        Some("pull") => {
+            exact_len(tokens, 5)?;
+            only_flags(tokens, &["--through", "--reference", "--replica"])?;
+            Ok(CommandKind::LayerStackPull {
+                through: flag(tokens, "--through")?,
+                placement: placement(tokens)?,
+            })
+        }
+        Some("diff") => {
+            exact_len(tokens, 6)?;
+            only_flags(tokens, &["--from", "--to"])?;
+            Ok(CommandKind::Diff(DiffRequest::Layers {
+                from: flag(tokens, "--from")?,
+                to: flag(tokens, "--to")?,
+            }))
+        }
+        Some("add") => {
+            exact_len(tokens, 3)?;
+            Ok(CommandKind::LayerStackAdd {
+                branch: positional(tokens, 2, "Branch")?,
+            })
+        }
+        Some("push") => Err(CliError::Parse("Layer Push does not exist".into())),
+        _ => Err(CliError::Parse(
+            "layerstack init|pull|diff|add required".into(),
+        )),
+    }
+}
+
+fn parse_branch(tokens: &[String]) -> CliResult<CommandKind> {
+    match tokens.get(1).map(String::as_str) {
+        Some("pull") => {
+            exact_len(tokens, 6)?;
+            only_flags(tokens, &["--through", "--reference", "--replica"])?;
+            Ok(CommandKind::BranchPull {
+                branch: positional(tokens, 2, "Branch")?,
+                through: flag(tokens, "--through")?,
+                placement: placement(tokens)?,
+            })
+        }
+        Some("fork") => {
+            only_flags(tokens, &["--name", "--layer", "--branch", "--commit"])?;
+            if tokens
+                .iter()
+                .any(|token| matches!(token.as_str(), "--reference" | "--replica"))
+            {
+                return Err(CliError::Parse("Fork accepts no placement".into()));
+            }
+            let name = EntityName::parse(flag(tokens, "--name")?)
+                .map_err(|error| CliError::Parse(error.into()))?;
+            match (
+                optional_flag(tokens, "--layer"),
+                optional_flag(tokens, "--branch"),
+            ) {
+                (Some(layer), None) if optional_flag(tokens, "--commit").is_none() => {
+                    exact_len(tokens, 6)?;
+                    Ok(CommandKind::BranchForkLayer { name, layer })
+                }
+                (None, Some(branch)) => {
+                    exact_len(tokens, 8)?;
+                    Ok(CommandKind::BranchForkCommit {
+                        name,
+                        branch,
+                        commit: flag(tokens, "--commit")?,
+                    })
+                }
+                _ => Err(CliError::Parse(
+                    "Fork requires exactly --layer or --branch + --commit".into(),
+                )),
+            }
+        }
+        Some("push") => {
+            exact_len(tokens, 3)?;
+            Ok(CommandKind::BranchPush {
+                branch: positional(tokens, 2, "Branch")?,
+            })
+        }
+        Some("diff") => {
+            only_flags(tokens, &["--branch", "--layer", "--from", "--to"])?;
+            let branch = flag(tokens, "--branch")?;
+            match (
+                optional_flag(tokens, "--layer"),
+                optional_flag(tokens, "--from"),
+                optional_flag(tokens, "--to"),
+            ) {
+                (Some(layer), None, None) => {
+                    exact_len(tokens, 6)?;
+                    Ok(CommandKind::Diff(DiffRequest::BranchLayer {
+                        branch,
+                        layer,
+                    }))
+                }
+                (None, Some(from), Some(to)) => {
+                    exact_len(tokens, 8)?;
+                    Ok(CommandKind::Diff(DiffRequest::BranchCommits {
+                        branch,
+                        from,
+                        to,
+                    }))
+                }
+                _ => Err(CliError::Parse(
+                    "Branch Diff requires --layer or --from + --to".into(),
+                )),
+            }
+        }
+        Some("advance" | "merge") => Err(CliError::Parse("deleted V2 command".into())),
+        _ => Err(CliError::Parse(
+            "branch pull|fork|push|diff required".into(),
+        )),
+    }
+}
+
+fn parse_workspace(tokens: &[String]) -> CliResult<CommandKind> {
+    match tokens.get(1).map(String::as_str) {
+        Some("create") => {
+            only_flags(
+                tokens,
+                &[
+                    "--branch",
+                    "--commit",
+                    "--initial-layer",
+                    "--at",
+                    "--container",
+                    "--projection",
+                ],
+            )?;
+            if !matches!(tokens.len(), 8 | 10 | 12) {
+                return Err(CliError::Parse("unexpected create arguments".into()));
+            }
+            let branch = flag(tokens, "--branch")?;
+            let anchor = match (
+                optional_flag(tokens, "--commit"),
+                optional_flag(tokens, "--initial-layer"),
+            ) {
+                (Some(commit), None) => WorkspaceAnchor::Commit { branch, commit },
+                (None, Some(layer)) => WorkspaceAnchor::InitialLayer { branch, layer },
+                _ => {
+                    return Err(CliError::Parse(
+                        "Workspace requires exactly --commit or --initial-layer".into(),
+                    ))
+                }
+            };
+            Ok(CommandKind::WorkspaceCreate {
+                anchor,
+                path: flag(tokens, "--at")?,
+                container: optional_flag(tokens, "--container"),
+                projection: match optional_flag(tokens, "--projection").as_deref() {
+                    None | Some("fuse") => "fuse".into(),
+                    Some("materialize") => "materialize".into(),
+                    Some(_) => {
+                        return Err(CliError::Parse(
+                            "projection must be fuse or materialize".into(),
+                        ))
+                    }
+                },
+            })
+        }
+        Some(
+            action @ ("exec" | "shell" | "output" | "stop" | "conflicts" | "resolve" | "commit"
+            | "end"),
+        ) => {
+            validate_workspace_action(action, tokens)?;
+            Ok(CommandKind::WorkspaceAction {
+                action: action.into(),
+                target: positional(tokens, 2, "Workspace or execution")?,
+                arguments: tokens.iter().skip(3).cloned().collect(),
+            })
+        }
+        _ => Err(CliError::Parse("workspace action required".into())),
+    }
+}
+
+fn validate_workspace_action(action: &str, tokens: &[String]) -> CliResult<()> {
+    let arguments = tokens.get(3..).unwrap_or_default();
+    let valid = match action {
+        "exec" => arguments.first().is_some_and(|value| value == "--") && arguments.len() >= 2,
+        "shell" | "stop" | "commit" => arguments.is_empty(),
+        "output" => arguments.is_empty() || arguments == ["--follow"],
+        "conflicts" => {
+            arguments.is_empty()
+                || (arguments.len() == 2
+                    && arguments.first().is_some_and(|value| value == "--after"))
+        }
+        "resolve" => {
+            arguments.len() == 2
+                && matches!(
+                    arguments.get(1).map(String::as_str),
+                    Some("--branch" | "--layer" | "--working-tree")
+                )
+        }
+        "end" => arguments.is_empty() || arguments == ["--discard"],
+        _ => false,
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(CliError::Parse(format!(
+            "invalid workspace {action} arguments"
+        )))
+    }
+}
+
+fn placement(tokens: &[String]) -> CliResult<RemotePlacement> {
+    match (
+        tokens.iter().any(|token| token == "--reference"),
+        tokens.iter().any(|token| token == "--replica"),
+    ) {
+        (true, false) => Ok(RemotePlacement::Reference),
+        (false, true) => Ok(RemotePlacement::Replica),
+        _ => Err(CliError::Parse(
+            "exactly one of --reference or --replica required".into(),
+        )),
+    }
+}
+
+fn exact_len(tokens: &[String], expected: usize) -> CliResult<()> {
+    if tokens.len() == expected {
+        Ok(())
+    } else {
+        Err(CliError::Parse("unexpected arguments".into()))
+    }
+}
+
+fn only_flags(tokens: &[String], allowed: &[&str]) -> CliResult<()> {
+    if let Some(flag) = tokens
+        .iter()
+        .filter(|token| token.starts_with("--"))
+        .find(|token| !allowed.contains(&token.as_str()))
+    {
+        Err(CliError::Parse(format!("unexpected flag {flag}")))
+    } else {
+        Ok(())
+    }
+}
+
+fn flag(tokens: &[String], name: &str) -> CliResult<String> {
+    optional_flag(tokens, name).ok_or_else(|| CliError::Parse(format!("{name} required")))
+}
+
+fn optional_flag(tokens: &[String], name: &str) -> Option<String> {
+    tokens
+        .iter()
+        .position(|token| token == name)
+        .and_then(|index| tokens.get(index + 1))
+        .filter(|value| !value.starts_with('-'))
+        .cloned()
+}
+
+fn positional(tokens: &[String], index: usize, label: &str) -> CliResult<String> {
+    tokens
+        .get(index)
+        .filter(|value| !value.starts_with('-'))
+        .cloned()
+        .ok_or_else(|| CliError::Parse(format!("{label} required")))
+}
+
+fn tokenize(input: &str) -> CliResult<Vec<String>> {
+    let mut tokens = Vec::new();
+    let mut token = String::new();
+    let mut quote = None;
+    let mut escaped = false;
+    for character in input.trim().chars() {
+        if escaped {
+            token.push(character);
+            escaped = false;
+            continue;
+        }
+        if character == '\\' {
+            escaped = true;
+            continue;
+        }
+        if matches!(character, '\'' | '"') {
+            if quote == Some(character) {
+                quote = None;
+            } else if quote.is_none() {
+                quote = Some(character);
+            } else {
+                token.push(character);
+            }
+            continue;
+        }
+        if character.is_whitespace() && quote.is_none() {
+            if !token.is_empty() {
+                tokens.push(std::mem::take(&mut token));
+            }
+        } else {
+            token.push(character);
+        }
+    }
+    if quote.is_some() || escaped {
+        return Err(CliError::Parse("unterminated quote or escape".into()));
+    }
+    if !token.is_empty() {
+        tokens.push(token);
+    }
+    Ok(tokens)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Command, CommandKind, DiffRequest, WorkspaceAnchor};
+
+    #[test]
+    fn accepts_refined_grammar() {
+        let commands = [
+            "layerstack init --name api-server --empty",
+            "layerstack pull --through L-A-19 --replica",
+            "branch pull B-main --through C-B-main-42 --reference",
+            "branch fork --name search-a --branch B-main --commit C-B-main-35",
+            "branch fork --name scratch --layer L-A-18",
+            "branch push B-search-a",
+            "layerstack add B-search-a",
+            "workspace create --branch B-search-a --commit C-B-search-a-08 --at /tmp/w",
+            "workspace create --branch B-scratch --initial-layer L-A-18 --at /tmp/w",
+            "monitor analyze-dedup",
+            "workspace exec W9 -- cargo test",
+            "workspace output E-W14 --follow",
+            "workspace resolve W31 conflict-1 --working-tree",
+        ];
+        for command in commands {
+            Command::parse(command).unwrap_or_else(|error| panic!("{command}: {error}"));
+        }
+    }
+
+    #[test]
+    fn rejects_deleted_or_ambiguous_grammar() {
+        for command in [
+            "stack pull S1",
+            "branch merge B1 B2",
+            "branch fork --name x --branch B --commit C --replica",
+            "layerstack pull --through L1 --reference --replica",
+            "workspace create --branch B --at /tmp/w",
+            "workspace create --branch B --commit C --at /tmp/w --projection overlay",
+            "workspace exec W9 cargo test",
+            "workspace resolve W31 conflict-1 --branch --layer",
+            "layerstack init --name mixed --empty /tmp/source",
+            "db garbage",
+            "db create branch /tmp/branch",
+            "db create layerstack /tmp/layer --parent /tmp/other",
+            "context show extra",
+            "query projects extra extra",
+            "layerstack pull --through L1 --replica --bogus x",
+            "branch push B1 extra",
+            "branch fork --name x --layer L1 --bogus value",
+        ] {
+            assert!(Command::parse(command).is_err(), "{command}");
+        }
+    }
+
+    #[test]
+    fn parses_diff_and_anchor_shapes() {
+        let command = Command::parse("branch diff --branch B --from C1 --to C2").unwrap();
+        assert!(matches!(
+            command.kind,
+            CommandKind::Diff(DiffRequest::BranchCommits { .. })
+        ));
+        let command =
+            Command::parse("workspace create --branch B --commit C2 --at '/tmp/mock workspace'")
+                .unwrap();
+        assert!(matches!(
+            command.kind,
+            CommandKind::WorkspaceCreate {
+                anchor: WorkspaceAnchor::Commit { .. },
+                ..
+            }
+        ));
     }
 }

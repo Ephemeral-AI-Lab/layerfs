@@ -1,28 +1,35 @@
+use layerfs_cli::CliSession;
+
 fn main() {
-    let mut arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
-    let result = if arguments
-        .first()
-        .is_some_and(|argument| argument == "--host")
-    {
-        if arguments.len() != 2 {
-            Err(layerfs_cli::CliError::Invalid("host arguments".to_owned()))
-        } else {
-            layerfs_cli::serve(&arguments[1])
-        }
-        .map(|()| 0)
-    } else {
-        layerfs_cli::invoke(
-            layerfs_cli::default_context_location(),
-            std::mem::take(&mut arguments),
-            false,
-            &mut std::io::stdout(),
-        )
-    };
-    match result {
-        Ok(code) => std::process::exit(code),
-        Err(error) => {
-            eprintln!("{error}");
-            std::process::exit(2);
-        }
+    let input = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
+    if input.is_empty() {
+        eprintln!("mock layerfs: provide a refined V2 command");
+        std::process::exit(2);
+    }
+    let session = CliSession::open("mock").expect("mock session");
+    let command = CliSession::parse_line(&input).unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(2);
+    });
+    let plan = session.plan(&command).unwrap_or_else(|error| {
+        eprintln!("{error}");
+        std::process::exit(1);
+    });
+    println!("PLAN {}: {}", plan.title, plan.summary);
+    let mut handle = session.execute(command).expect("execute mock command");
+    let mut failed = false;
+    while let Some(event) = handle.next_event().expect("mock event") {
+        failed |= matches!(
+            event,
+            layerfs_cli::CliEvent::Finished {
+                status: layerfs_cli::FinishedStatus::Failed
+                    | layerfs_cli::FinishedStatus::Interrupted,
+                ..
+            }
+        );
+        println!("{event:?}");
+    }
+    if failed {
+        std::process::exit(1);
     }
 }
