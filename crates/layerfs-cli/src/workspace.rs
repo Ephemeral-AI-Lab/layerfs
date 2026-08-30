@@ -649,7 +649,7 @@ fn resolve_conflict(
 pub(crate) fn branch_head(branch: &BranchRecord) -> Option<CommitId> {
     branch
         .work_head
-        .map(|number| commit_id(branch.id.as_str(), number))
+        .and_then(|number| branch.commit_id(number))
         .or_else(|| branch.boundary_commit.clone())
 }
 

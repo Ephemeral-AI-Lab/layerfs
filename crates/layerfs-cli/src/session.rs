@@ -1,7 +1,7 @@
 use crate::command::{CommandKind, WorkspaceAnchor};
 use crate::database::Databases;
 use crate::fixture::{
-    commit_id, layer_for, trailing_number, BranchRecord, LayerRecord, MockState, ProjectRecord,
+    layer_for, trailing_number, BranchRecord, LayerRecord, MockState, ProjectRecord,
 };
 use crate::model::{
     field, BranchOrigin, BranchRelation, CliError, CliEvent, CliResult, CommandEffect, CommandPlan,
@@ -43,12 +43,20 @@ impl CliSession {
             Some("mock" | "mock-empty")
         );
         let empty = context_location.as_ref() != Path::new("mock");
-        let mut state = if empty {
-            MockState::empty()
-        } else {
-            MockState::demo()
-        };
         let databases = Arc::new(Databases::open(context_location.as_ref(), empty)?);
+        let mut state = if fixture {
+            if empty {
+                MockState::empty()
+            } else {
+                MockState::demo()
+            }
+        } else {
+            match databases.load_state() {
+                Ok(state) => state,
+                Err(CliError::NotFound(_)) => MockState::empty(),
+                Err(error) => return Err(error),
+            }
+        };
         if fixture {
             databases.decorate_storage(&mut state)?;
         }
@@ -446,7 +454,7 @@ fn plan(state: &MockState, command: &Command) -> CliResult<CommandPlan> {
             if !project.authority_available {
                 return Err(CliError::AuthorityUnavailable(project.name.to_string()));
             }
-            let number = commit_number(branch, through)?;
+            let number = commit_number(state, branch, through)?;
             fields.push(field("Branch", format!("{} ({})", branch.name, branch.id)));
             fields.push(field(
                 "Current boundary",
@@ -506,7 +514,7 @@ fn plan(state: &MockState, command: &Command) -> CliResult<CommandPlan> {
             let source = state
                 .find_branch(branch)
                 .ok_or_else(|| CliError::NotFound(branch.clone()))?;
-            let number = commit_number(source, commit)?;
+            let number = commit_number(state, source, commit)?;
             if !commit_is_local(source, number, commit) {
                 return Err(CliError::NotPulled(format!("{}/C{number}", source.name)));
             }
@@ -825,7 +833,7 @@ fn apply_state(
                 .ok_or_else(|| CliError::NotFound(branch.clone()))?;
             let number = {
                 let record = state.branch(&id).expect("resolved Branch");
-                commit_number(record, &through)?
+                commit_number(state, record, &through)?
             };
             let record = state.branch_mut(&id).expect("resolved Branch");
             if matches!(
@@ -901,7 +909,7 @@ fn apply_state(
                 .find_branch(&branch)
                 .cloned()
                 .ok_or_else(|| CliError::NotFound(branch.clone()))?;
-            let number = commit_number(&source, &commit)?;
+            let number = commit_number(state, &source, &commit)?;
             if !commit_is_local(&source, number, &commit) {
                 return Err(CliError::NotPulled(format!("{}/C{number}", source.name)));
             }
@@ -1050,7 +1058,10 @@ fn add_layer(state: &mut MockState, branch_value: &str) -> Result<CommandResult,
         .cloned()
         .ok_or_else(|| CliError::NotFound(branch_value.into()))?;
     let preflight = add_preflight(state, &branch)?;
-    let commit = commit_id(branch.id.as_str(), branch.work_head.unwrap_or_default());
+    let commit = branch
+        .work_head
+        .and_then(|number| branch.commit_id(number))
+        .ok_or_else(|| CliError::Integrity("Add source Commit".into()))?;
     match preflight {
         AddPreflight::Already(layer) => {
             return Ok(CommandResult::Add(format!("AlreadyAccepted {layer}")));
@@ -1106,7 +1117,10 @@ fn add_preflight(state: &MockState, branch: &BranchRecord) -> CliResult<AddPrefl
     }
     let head = (
         branch.id.clone(),
-        commit_id(branch.id.as_str(), branch.work_head.unwrap_or_default()),
+        branch
+            .work_head
+            .and_then(|number| branch.commit_id(number))
+            .ok_or_else(|| CliError::Integrity("Add Branch head".into()))?,
     );
     if let Some(layer) = state
         .layers
@@ -1155,7 +1169,7 @@ fn validate_workspace_anchor<'a>(
             ) {
                 return Err(CliError::ReadOnly("Fork the remote Commit first".into()));
             }
-            let number = commit_number(branch, commit)?;
+            let number = commit_number(state, branch, commit)?;
             let current = branch.work_head.or_else(|| {
                 branch
                     .boundary_commit
@@ -1192,7 +1206,7 @@ fn validate_workspace_anchor<'a>(
     }
 }
 
-fn commit_number(branch: &BranchRecord, value: &str) -> CliResult<u16> {
+fn commit_number(state: &MockState, branch: &BranchRecord, value: &str) -> CliResult<u16> {
     branch
         .commits
         .iter()
@@ -1203,7 +1217,15 @@ fn commit_number(branch: &BranchRecord, value: &str) -> CliResult<u16> {
                 .boundary_commit
                 .as_ref()
                 .filter(|commit| commit.as_str() == value)
-                .and_then(|commit| trailing_number(commit.as_str()))
+                .and_then(|commit| {
+                    state
+                        .branches
+                        .iter()
+                        .flat_map(|branch| &branch.commits)
+                        .find(|candidate| &candidate.id == commit)
+                        .map(|candidate| candidate.number)
+                        .or_else(|| trailing_number(commit.as_str()))
+                })
         })
         .ok_or_else(|| CliError::NotFound(format!("Commit {value} in {}", branch.name)))
 }
@@ -1260,7 +1282,7 @@ fn validate_diff(state: &MockState, request: &crate::DiffRequest) -> CliResult<(
                 .find_branch(branch)
                 .ok_or_else(|| CliError::NotFound(branch.clone()))?;
             for value in [from, to] {
-                let number = commit_number(branch, value)?;
+                let number = commit_number(state, branch, value)?;
                 if !commit_is_local(branch, number, value) {
                     return Err(CliError::NotPulled(value.clone()));
                 }

@@ -456,7 +456,12 @@ impl App {
                 }
             }
             if let Some(layer) = &commit.accepted_layer {
-                flags.push(format!("→ {layer}"));
+                let label = self
+                    .project
+                    .as_ref()
+                    .and_then(|project| project.layers.items.iter().find(|item| &item.id == layer))
+                    .map_or_else(|| layer.to_string(), |layer| format!("L{}", layer.number));
+                flags.push(format!("→ {label}"));
             }
             rows.push(GraphRow {
                 depth: depth + 1,

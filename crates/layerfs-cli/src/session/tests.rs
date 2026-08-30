@@ -516,6 +516,156 @@ fn real_db_context_use_show_and_parent_validation_are_atomic() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn persisted_store_pair_reopens_and_accepts_more_work() {
+    let root = std::env::temp_dir().join(format!(
+        "layerfs-persisted-context-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let context = root.join("context");
+    let layerstack = root.join("layerstack.sqlite");
+    let branch_store = root.join("branch.sqlite");
+    let first_workspace = root.join("W90");
+    let session = CliSession::open(&context).unwrap();
+    for command in [
+        format!("db create layerstack {}", layerstack.display()),
+        format!(
+            "db create branch {} --parent {}",
+            branch_store.display(),
+            layerstack.display()
+        ),
+        format!(
+            "context use --layerstack {} --branch {}",
+            layerstack.display(),
+            branch_store.display()
+        ),
+        "layerstack init --name persisted --empty".into(),
+        "layerstack pull --through L-S-MOCK-1-01 --replica".into(),
+        "branch fork --name main --layer L-S-MOCK-1-01".into(),
+        format!(
+            "workspace create --branch B-local-90 --initial-layer L-S-MOCK-1-01 --at {}",
+            first_workspace.display()
+        ),
+        "workspace exec W90 -- /bin/bash -lc 'printf persisted > value.txt'".into(),
+        "workspace commit W90".into(),
+        "workspace end W90".into(),
+        "branch push B-local-90".into(),
+        "layerstack add B-local-90".into(),
+    ] {
+        assert!(matches!(
+            finish(&session, &command),
+            CliEvent::Finished {
+                status: FinishedStatus::Succeeded,
+                ..
+            }
+        ));
+    }
+    drop(session);
+
+    let reopened = CliSession::open(&context).unwrap();
+    let projects = reopened
+        .snapshot(ViewQuery::Projects(PageRequest::first(16)))
+        .unwrap();
+    let ViewSnapshot::Projects(projects) = projects else {
+        panic!("Projects")
+    };
+    let project = projects
+        .items
+        .iter()
+        .find(|project| project.name.as_str() == "persisted")
+        .unwrap();
+    assert_eq!(project.authority_number, 2);
+    assert_eq!(project.work_number, Some(1));
+    assert!(project.id.as_str().starts_with("S~"));
+    let snapshot = reopened
+        .snapshot(ViewQuery::Project {
+            id: project.id.clone(),
+            page: PageRequest::first(64),
+        })
+        .unwrap();
+    let ViewSnapshot::Project(snapshot) = snapshot else {
+        panic!("Project")
+    };
+    let main = snapshot
+        .branches
+        .items
+        .iter()
+        .find(|branch| branch.name.as_str() == "main")
+        .unwrap();
+    assert_eq!(main.commits.len(), 1);
+    assert_eq!(main.work_number, Some(1));
+    assert_eq!(main.authority_number, Some(1));
+    assert!(main.id.as_str().starts_with("B~"));
+    let accepted = snapshot
+        .layers
+        .items
+        .iter()
+        .find(|layer| layer.number == 2)
+        .unwrap();
+    assert_eq!(accepted.root, main.commits[0].root);
+    assert_eq!(
+        accepted.source.as_ref().map(|source| &source.0),
+        Some(&main.id)
+    );
+    let workspaces = reopened
+        .snapshot(ViewQuery::Workspaces {
+            project: None,
+            page: PageRequest::first(16),
+        })
+        .unwrap();
+    let ViewSnapshot::Workspaces(workspaces) = workspaces else {
+        panic!("Workspaces")
+    };
+    assert!(workspaces.workspaces.items.is_empty());
+
+    let layer = accepted.id.clone();
+    assert!(matches!(
+        finish(
+            &reopened,
+            &format!("layerstack pull --through {layer} --replica")
+        ),
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            ..
+        }
+    ));
+    let next = match finish(
+        &reopened,
+        &format!("branch fork --name next --layer {layer}"),
+    ) {
+        CliEvent::Finished {
+            result: Ok(crate::CommandResult::Fork { branch_id, .. }),
+            ..
+        } => branch_id,
+        event => panic!("unexpected Fork result: {event:?}"),
+    };
+    assert_eq!(next.as_str(), "B-local-91");
+    drop(reopened);
+
+    let reopened_again = CliSession::open(&context).unwrap();
+    let snapshot = reopened_again
+        .snapshot(ViewQuery::Project {
+            id: project.id.clone(),
+            page: PageRequest::first(64),
+        })
+        .unwrap();
+    let ViewSnapshot::Project(snapshot) = snapshot else {
+        panic!("Project")
+    };
+    assert!(snapshot
+        .branches
+        .items
+        .iter()
+        .any(|branch| branch.name.as_str() == "next"));
+    assert_eq!(snapshot.project.work_number, Some(2));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 fn assert_context(
     session: &CliSession,
     command: &str,

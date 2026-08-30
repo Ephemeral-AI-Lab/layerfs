@@ -1,4 +1,4 @@
-use crate::fixture::{commit_id, layer_for, BranchRecord, MockState};
+use crate::fixture::{BranchRecord, MockState};
 use crate::workspace::CanonicalObject;
 use crate::{
     BranchOrigin, BranchRelation, CliError, CliResult, CommandKind, CommandResult, ContextProfile,
@@ -10,6 +10,8 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+
+mod load;
 
 const SCHEMA_VERSION: i64 = 3;
 const LAYERSTACK_APPLICATION_ID: i64 = 0x4c46_534c;
@@ -202,12 +204,12 @@ impl Databases {
                 parent.as_deref(),
                 None,
             )),
-            CommandKind::ContextUse { layerstack, branch } => Some(
-                self.execute_control(None, false, None, None, Some((layerstack, branch)))
-                    .inspect(|_| {
-                        *state = MockState::empty();
-                    }),
-            ),
+            CommandKind::ContextUse { layerstack, branch } => Some((|| {
+                let result =
+                    self.execute_control(None, false, None, None, Some((layerstack, branch)))?;
+                *state = self.load_state()?;
+                Ok(result)
+            })()),
             CommandKind::ContextShow => Some(self.execute_control(None, false, None, None, None)),
             _ => None,
         }
@@ -218,6 +220,10 @@ impl Databases {
         sync_layerstack(&profile.layerstack, state)?;
         sync_branch(&profile.branch, state)?;
         Ok(())
+    }
+
+    pub(crate) fn load_state(&self) -> CliResult<MockState> {
+        load::state(self)
     }
 
     pub(crate) fn publish_workspace_commit(
@@ -246,7 +252,8 @@ impl Databases {
             .number
             .checked_sub(1)
             .filter(|number| *number > 0)
-            .map(|number| commit_id_bytes(commit_id(branch.id.as_str(), number).as_str()))
+            .and_then(|number| branch.commit_id(number))
+            .map(|id| commit_id_bytes(id.as_str()))
             .or_else(|| {
                 branch
                     .boundary_commit
@@ -543,7 +550,12 @@ fn sync_layerstack(path: &Path, state: &MockState) -> CliResult<()> {
                 params![
                     stack_id(project.id.as_str()),
                     project.name.as_str(),
-                    layer_id(layer_for(project, project.authority_layers).as_str())
+                    layer_id(
+                        state
+                            .layer_id(&project.id, project.authority_layers)
+                            .ok_or_else(|| CliError::Integrity("authority head Layer".into()))?
+                            .as_str()
+                    )
                 ],
             )
             .map_err(database_error)?;
@@ -582,7 +594,12 @@ fn sync_branch(path: &Path, state: &MockState) -> CliResult<()> {
                      VALUES(?1,?2,?3)",
                     params![
                         stack_id(project.id.as_str()),
-                        layer_id(layer_for(project, boundary).as_str()),
+                        layer_id(
+                            state
+                                .layer_id(&project.id, boundary)
+                                .ok_or_else(|| CliError::Integrity("work boundary Layer".into()))?
+                                .as_str()
+                        ),
                         placement(mode)
                     ],
                 )
@@ -655,8 +672,12 @@ fn insert_authority_facts(transaction: &Transaction<'_>, state: &MockState) -> C
                 params![
                     layer_id(layer.id.as_str()),
                     stack_id(layer.project_id.as_str()),
-                    (layer.number > 1)
-                        .then(|| layer_id(layer_for(project, layer.number - 1).as_str())),
+                    layer
+                        .number
+                        .checked_sub(1)
+                        .filter(|number| *number > 0)
+                        .and_then(|number| state.layer_id(&project.id, number))
+                        .map(|id| layer_id(id.as_str())),
                     object_id(layer.root.as_str()),
                     source.map(|(branch, _)| branch_id(branch.as_str())),
                     source.map(|(_, commit)| commit_id_bytes(commit.as_str())),
@@ -696,8 +717,12 @@ fn insert_work_facts(transaction: &Transaction<'_>, state: &MockState) -> CliRes
                 params![
                     layer_id(layer.id.as_str()),
                     stack_id(layer.project_id.as_str()),
-                    (layer.number > 1)
-                        .then(|| layer_id(layer_for(project, layer.number - 1).as_str())),
+                    layer
+                        .number
+                        .checked_sub(1)
+                        .filter(|number| *number > 0)
+                        .and_then(|number| state.layer_id(&project.id, number))
+                        .map(|id| layer_id(id.as_str())),
                     object_id(layer.root.as_str()),
                     source.map(|(branch, _)| branch_id(branch.as_str())),
                     source.map(|(_, commit)| commit_id_bytes(commit.as_str())),
@@ -733,7 +758,12 @@ fn insert_work_facts(transaction: &Transaction<'_>, state: &MockState) -> CliRes
                          VALUES(?1,'remote',?2,?3)",
                         params![
                             branch_id(branch.id.as_str()),
-                            commit_id_bytes(commit_id(branch.id.as_str(), through).as_str()),
+                            commit_id_bytes(
+                                branch
+                                    .commit_id(through)
+                                    .ok_or_else(|| CliError::Integrity("remote Branch head".into()))?
+                                    .as_str()
+                            ),
                             placement(*mode)
                         ],
                     )
@@ -780,7 +810,7 @@ fn insert_commits(
             let parent = index
                 .checked_sub(1)
                 .and_then(|index| visible.get(index))
-                .map(|parent| commit_id(branch.id.as_str(), parent.number))
+                .map(|parent| parent.id.clone())
                 .or_else(|| branch.boundary_commit.clone());
             transaction
                 .execute(
@@ -851,7 +881,9 @@ fn insert_branch(
             Some(commit_id_bytes(commit.as_str())),
         ),
     };
-    let head = head.map(|number| commit_id_bytes(commit_id(branch.id.as_str(), number).as_str()));
+    let head = head
+        .and_then(|number| branch.commit_id(number))
+        .map(|id| commit_id_bytes(id.as_str()));
     if !nullable_head && head.is_none() {
         return Ok(());
     }
@@ -932,9 +964,55 @@ fn object_id(value: &str) -> Vec<u8> {
 }
 
 fn tagged_id(tag: u8, value: &str, length: usize) -> Vec<u8> {
+    if let Some(raw) = value
+        .strip_prefix(raw_prefix(tag))
+        .and_then(decode_hex)
+        .filter(|raw| raw.len() == length && raw.first() == Some(&tag))
+    {
+        return raw;
+    }
     let mut id = digest(value.as_bytes(), length);
     id[0] = tag;
     id
+}
+
+pub(super) fn external_id(tag: u8, bytes: &[u8]) -> CliResult<String> {
+    if bytes.first() != Some(&tag) {
+        return Err(CliError::Integrity("typed Store ID tag".into()));
+    }
+    Ok(format!(
+        "{}{}",
+        raw_prefix(tag),
+        bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    ))
+}
+
+fn raw_prefix(tag: u8) -> &'static str {
+    match tag {
+        0x31 => "S~",
+        0x11 => "B~",
+        0x32 => "L~",
+        0x12 => "C~",
+        _ => "X~",
+    }
+}
+
+fn decode_hex(value: &str) -> Option<Vec<u8>> {
+    if value.len() % 2 != 0 {
+        return None;
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let high = (pair[0] as char).to_digit(16)?;
+            let low = (pair[1] as char).to_digit(16)?;
+            Some(((high << 4) | low) as u8)
+        })
+        .collect()
 }
 
 fn digest(value: &[u8], length: usize) -> Vec<u8> {

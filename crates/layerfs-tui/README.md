@@ -29,6 +29,16 @@ initialize a LayerStack:
     context use --layerstack /tmp/layerfs-demo/layerstack.sqlite --branch /tmp/layerfs-demo/branch.sqlite
     layerstack init --name npm-demo --empty
 
+Reopening the same context reconstructs LayerStacks, Layers, Branches, Commit
+ancestry, roots, serving boundaries, and object-backed file trees directly from
+the two SQLite Stores:
+
+    cargo run -p layerfs-tui -- --context /tmp/layerfs-demo/context
+
+Workspace directories, Bash output, and operation activity remain ephemeral by
+design. A successfully committed Branch and every accepted Layer remain after
+restart; an ended Workspace does not.
+
 Render a deterministic headless screen:
 
     cargo run -p layerfs-tui -- --dump topology --width 200 --height 60 --no-color

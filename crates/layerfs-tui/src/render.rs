@@ -75,16 +75,16 @@ fn header(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
             "AUTH connected"
         };
     let first = if area.width < 100 {
-        format!(" LayerFS · mock-v2 · LayerStackStore {authority} · BranchStore connected")
+        format!(" LayerFS · SQLite V2 · LayerStackStore {authority} · BranchStore connected")
     } else {
-        format!(" LayerFS  context mock-v2  {authority}  WORK connected{project}")
+        format!(" LayerFS  context SQLite-V2  {authority}  WORK connected{project}")
     };
     let second = if area.width < 100 {
         selected
             .map(compact_project_summary)
             .unwrap_or_else(|| " No LayerStack selected".into())
     } else {
-        " LayerStackStore  authority.sqlite   BranchStore  work.sqlite   observed 2s ago".into()
+        " LayerStackStore  authority   BranchStore  local work   observed from Stores".into()
     };
     frame.render_widget(
         Paragraph::new(vec![Line::styled(first, theme.title()), Line::from(second)]),
@@ -835,7 +835,7 @@ fn inspector(app: &App) -> Vec<Line<'static>> {
         }) {
             return vec![
                 Line::from(format!("Layer L{}", layer.number)),
-                Line::from(format!("Id            {}", layer.id)),
+                Line::from(format!("Id            {}", display_id(&layer.id))),
                 Line::from(format!("Root          {}", layer.root)),
                 Line::from(format!("Coverage      {}", layer.coverage)),
                 Line::from(format!("Authority     {}", layer.authority)),
@@ -865,7 +865,7 @@ fn inspector(app: &App) -> Vec<Line<'static>> {
                 let actions = action_labels(&branch.actions);
                 vec![
                     Line::from(format!("Branch {}", branch.name)),
-                    Line::from(format!("Id            {}", branch.id)),
+                    Line::from(format!("Id            {}", display_id(&branch.id))),
                     Line::from(format!("Relation      {}", branch.relation)),
                     Line::from(format!(
                         "Authority     {}",
@@ -941,8 +941,8 @@ fn inspector(app: &App) -> Vec<Line<'static>> {
                 vec![
                     Line::from(format!("Commit C{}", commit.number)),
                     Line::from(format!("Branch        {}", branch.name)),
-                    Line::from(format!("CommitId      {}", commit.id)),
-                    Line::from(format!("Base Layer    {}", commit.base_layer)),
+                    Line::from(format!("CommitId      {}", display_id(&commit.id))),
+                    Line::from(format!("Base Layer    {}", display_id(&commit.base_layer))),
                     Line::from(format!("Root          {}", commit.root)),
                     Line::from(format!("Child Branches {}", commit.child_branches)),
                     Line::from(format!("Workspaces    {}", commit.workspaces.len())),
@@ -966,7 +966,7 @@ fn inspector(app: &App) -> Vec<Line<'static>> {
 fn project_detail(project: &ProjectSummary) -> Vec<Line<'static>> {
     vec![
         Line::from(project.name.to_string()),
-        Line::from(project.id.to_string()),
+        Line::from(display_id(&project.id)),
         Line::from(""),
         Line::from(format!("Authority head      L{}", project.authority_number)),
         Line::from(format!("Work placement      {}", project.relation)),
@@ -1239,19 +1239,23 @@ fn graph_selected_index(app: &App, rows: &[crate::app::GraphRow]) -> Option<usiz
 }
 
 fn source_label(app: &App, source: &(BranchId, layerfs_cli::CommitId)) -> String {
-    let name = app
-        .project
-        .as_ref()
-        .and_then(|project| {
-            project
-                .branches
-                .items
-                .iter()
-                .find(|branch| branch.id == source.0)
-        })
-        .map(|branch| branch.name.to_string())
-        .unwrap_or_else(|| source.0.to_string());
-    format!("{name}/C{}", short_number(source.1.as_str()))
+    let branch = app.project.as_ref().and_then(|project| {
+        project
+            .branches
+            .items
+            .iter()
+            .find(|branch| branch.id == source.0)
+    });
+    let Some(branch) = branch else {
+        return format!("{}/{}", display_id(&source.0), display_id(&source.1));
+    };
+    let commit = branch
+        .commits
+        .iter()
+        .find(|commit| commit.id == source.1)
+        .map(|commit| format!("C{}", commit.number))
+        .unwrap_or_else(|| display_id(&source.1));
+    format!("{}/{commit}", branch.name)
 }
 
 fn layer_work_label(app: &App, layer: &layerfs_cli::LayerView) -> String {
@@ -1389,22 +1393,40 @@ fn append_branch_path(
             append_branch_path(snapshot, parent, Some(commit), parts);
         }
     }
-    let at = selected_commit
-        .map(|commit| format!("@C{}", short_number(commit.as_str())))
-        .unwrap_or_default();
+    let at = selected_commit.map_or_else(String::new, |id| {
+        branch
+            .commits
+            .iter()
+            .find(|commit| &commit.id == id)
+            .map(|commit| format!("@C{}", commit.number))
+            .unwrap_or_else(|| format!("@{}", display_id(id)))
+    });
     parts.push(format!("{}{at}", branch.name));
 }
 
-fn short_number(value: &str) -> &str {
-    value
-        .rsplit('-')
-        .next()
-        .unwrap_or(value)
-        .trim_start_matches('0')
+fn optional_id<T: ToString>(value: Option<&T>) -> String {
+    value.map(display_id).unwrap_or_else(|| "—".into())
 }
 
-fn optional_id<T: ToString>(value: Option<&T>) -> String {
-    value.map(ToString::to_string).unwrap_or_else(|| "—".into())
+fn short_number(value: &str) -> String {
+    if value.get(1..2) == Some("~") {
+        display_id(&value)
+    } else {
+        value
+            .rsplit('-')
+            .next()
+            .unwrap_or(value)
+            .trim_start_matches('0')
+            .to_owned()
+    }
+}
+
+fn display_id(value: &impl ToString) -> String {
+    let value = value.to_string();
+    if value.get(1..2).is_none_or(|separator| separator != "~") || value.len() <= 24 {
+        return value;
+    }
+    format!("{}…{}", &value[..12], &value[value.len() - 6..])
 }
 
 fn action_labels(actions: &[SemanticAction]) -> String {

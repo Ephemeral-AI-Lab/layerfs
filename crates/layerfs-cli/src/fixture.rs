@@ -66,6 +66,16 @@ pub(crate) struct CommitRecord {
     pub objects: Vec<CanonicalObject>,
 }
 
+impl BranchRecord {
+    pub(crate) fn commit(&self, number: u16) -> Option<&CommitRecord> {
+        self.commits.iter().find(|commit| commit.number == number)
+    }
+
+    pub(crate) fn commit_id(&self, number: u16) -> Option<CommitId> {
+        self.commit(number).map(|commit| commit.id.clone())
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct MockState {
     pub projects: Vec<ProjectRecord>,
@@ -591,6 +601,21 @@ impl MockState {
         self.layers.iter().find(|layer| layer.id.as_str() == value)
     }
 
+    pub(crate) fn layer_id(&self, project: &LayerStackId, number: u16) -> Option<LayerId> {
+        self.layers
+            .iter()
+            .find(|layer| &layer.project_id == project && layer.number == number)
+            .map(|layer| layer.id.clone())
+    }
+
+    fn commit_number(&self, id: &CommitId) -> Option<u16> {
+        self.branches
+            .iter()
+            .flat_map(|branch| &branch.commits)
+            .find(|commit| &commit.id == id)
+            .map(|commit| commit.number)
+    }
+
     pub(crate) fn resolve_commit(
         &self,
         branch: &BranchRecord,
@@ -651,9 +676,13 @@ impl MockState {
         ProjectSummary {
             id: project.id.clone(),
             name: project.name.clone(),
-            authority_head: layer_for(project, project.authority_layers),
+            authority_head: self
+                .layer_id(&project.id, project.authority_layers)
+                .expect("project authority Layer"),
             authority_number: project.authority_layers,
-            work_boundary: project.work_layers.map(|number| layer_for(project, number)),
+            work_boundary: project
+                .work_layers
+                .and_then(|number| self.layer_id(&project.id, number)),
             work_number: project.work_layers,
             complete_roots: project.complete_roots,
             relation,
@@ -715,7 +744,11 @@ impl MockState {
         LayerView {
             id: layer.id.clone(),
             number: layer.number,
-            parent: (layer.number > 1).then(|| layer_for(project, layer.number - 1)),
+            parent: layer
+                .number
+                .checked_sub(1)
+                .filter(|number| *number > 0)
+                .and_then(|number| self.layer_id(&project.id, number)),
             root: layer.root.clone(),
             source: layer.source.clone(),
             authority: true,
@@ -748,7 +781,7 @@ impl MockState {
                 id: commit.id.clone(),
                 number: commit.number,
                 parent: if commit.number > 1 {
-                    Some(commit_id(branch.id.as_str(), commit.number - 1))
+                    branch.commit_id(commit.number - 1)
                 } else {
                     branch.boundary_commit.clone()
                 },
@@ -781,7 +814,7 @@ impl MockState {
         }
         let effective_head = branch
             .work_head
-            .map(|number| commit_id(branch.id.as_str(), number))
+            .and_then(|number| branch.commit_id(number))
             .or_else(|| {
                 boundary_present
                     .then(|| branch.boundary_commit.clone())
@@ -819,11 +852,13 @@ impl MockState {
             project_id: branch.project_id.clone(),
             name: branch.name.clone(),
             origin: branch.origin.clone(),
-            authority_head: branch.authority_head.map(|number| commit_id(branch.id.as_str(), number)),
+            authority_head: branch
+                .authority_head
+                .and_then(|number| branch.commit_id(number)),
             authority_number: branch.authority_head,
             work_head: branch
                 .work_head
-                .map(|number| commit_id(branch.id.as_str(), number))
+                .and_then(|number| branch.commit_id(number))
                 .or_else(|| boundary_present.then(|| branch.boundary_commit.clone()).flatten()),
             work_number: branch.work_head.or_else(|| {
                 boundary_present
@@ -831,13 +866,13 @@ impl MockState {
                         branch
                             .boundary_commit
                             .as_ref()
-                            .and_then(|id| trailing_number(id.as_str()))
+                            .and_then(|id| self.commit_number(id))
                     })
                     .flatten()
             }),
             remote_complete_through: branch
                 .remote_complete_through
-                .map(|number| commit_id(branch.id.as_str(), number)),
+                .and_then(|number| branch.commit_id(number)),
             visible_roots_complete: match &branch.relation {
                 BranchRelation::RemoteCurrent { .. }
                 | BranchRelation::RemotePullBehind { .. } => branch.work_head.is_some_and(|head| {
@@ -871,7 +906,11 @@ impl MockState {
         if parent.boundary_commit.as_ref() == Some(boundary) {
             return views;
         }
-        let boundary_number = trailing_number(boundary.as_str()).unwrap_or(0);
+        let boundary_number = parent
+            .commits
+            .iter()
+            .find(|commit| &commit.id == boundary)
+            .map_or(0, |commit| commit.number);
         views.extend(
             parent
                 .commits
@@ -881,7 +920,7 @@ impl MockState {
                     id: commit.id.clone(),
                     number: commit.number,
                     parent: if commit.number > 1 {
-                        Some(commit_id(parent.id.as_str(), commit.number - 1))
+                        parent.commit_id(commit.number - 1)
                     } else {
                         parent.boundary_commit.clone()
                     },
@@ -923,7 +962,8 @@ impl MockState {
         }
         let head = branch
             .work_head
-            .map(|number| (branch.id.clone(), commit_id(branch.id.as_str(), number)));
+            .and_then(|number| branch.commit_id(number))
+            .map(|commit| (branch.id.clone(), commit));
         let accepted = head.as_ref().is_some_and(|head| {
             self.layers
                 .iter()
@@ -1270,7 +1310,7 @@ fn workspace(
         anchor_root,
         expected_branch_head: branch
             .work_head
-            .map(|number| commit_id(branch.id.as_str(), number))
+            .and_then(|number| branch.commit_id(number))
             .or_else(|| branch.boundary_commit.clone()),
         published_commit: None,
         published_root: None,

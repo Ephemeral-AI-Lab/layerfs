@@ -1,4 +1,4 @@
-use crate::fixture::{commit_id, BranchRecord, MockState};
+use crate::fixture::{BranchRecord, MockState};
 use crate::workspace::{canonical_tree, seed_tree, TreeEntry, WorkspaceRecord};
 use crate::{
     CliError, CliResult, CommandResult, ConflictId, ConflictView, LayerId, WorkspaceId,
@@ -51,14 +51,12 @@ pub(super) fn create_reconciliation_workspace(
         branch_id: branch.id.clone(),
         branch_name: branch.name.clone(),
         branch_relation: branch.relation.clone(),
-        anchor_commit: branch
-            .work_head
-            .map(|number| commit_id(branch.id.as_str(), number)),
+        anchor_commit: branch.work_head.and_then(|number| branch.commit_id(number)),
         anchor_layer: Some(current_layer.clone()),
         anchor_root,
         expected_branch_head: branch
             .work_head
-            .map(|number| commit_id(branch.id.as_str(), number))
+            .and_then(|number| branch.commit_id(number))
             .or_else(|| branch.boundary_commit.clone()),
         published_commit: None,
         published_root: None,

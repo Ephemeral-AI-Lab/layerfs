@@ -129,6 +129,12 @@ End: cleanup time retained only in the Activity receipt
 After End, the Workspace row disappears immediately. Activity retains only its
 bounded general operation receipt and End duration.
 
+The selected Store pair is restartable. On a later TUI process, LayerStacks,
+Layers, Branches, Commit ancestry, roots, serving scopes, and canonical file
+trees are reconstructed from the unchanged SQLite schemas. Workspace mounts,
+Bash output, and operation activity are not Store facts and therefore do not
+return after End or process exit.
+
 ## Routes and responsive layout
 
 ```rust
