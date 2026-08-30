@@ -1,5 +1,5 @@
 use crate::{ResourcePolicy, WorkspaceState};
-use layerfs_branch_store::BranchStore;
+use layerfs_branch_store::{BranchStore, SnapshotReader};
 use layerfs_content::file::rope::{read_all_bounded, state, FileStateRoot, RopeCounters};
 use layerfs_content::filesystem::{self as logical, LogicalCounters};
 use layerfs_content::object::access::ObjectRead;
@@ -13,13 +13,25 @@ use layerfs_content::tree::inode::{
 };
 use layerfs_content::tree::metadata::{metadata_lookup, MetadataKey, PortableMetadataV1};
 use layerfs_content::{CanonicalName, CanonicalPath};
-use layerfs_storage::{BranchId, CommitId, CoreReader, Result, StorageError};
+use layerfs_storage::{
+    BranchId, CommitId, CoreReader, LayerId, LayerStackEndpoint, Result, StorageError,
+};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct NodeId(pub u64);
 pub const ROOT: NodeId = NodeId(1);
+
+pub(crate) struct WorkspaceSnapshot {
+    pub(crate) branch: BranchStore,
+    pub(crate) parent: std::sync::Arc<dyn LayerStackEndpoint>,
+    pub(crate) branch_id: BranchId,
+    pub(crate) expected_head: Option<CommitId>,
+    pub(crate) expected_base: LayerId,
+    pub(crate) root: layerfs_content::ObjectId,
+    pub(crate) reader: SnapshotReader,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Kind {
@@ -81,13 +93,17 @@ pub(crate) struct Node {
 
 pub struct Workspace {
     pub(crate) branch: BranchStore,
+    pub(crate) parent: std::sync::Arc<dyn LayerStackEndpoint>,
+    pub(crate) reader: SnapshotReader,
     pub(crate) branch_id: BranchId,
-    pub(crate) expected_head: CommitId,
+    pub(crate) expected_head: Option<CommitId>,
+    pub(crate) expected_base: LayerId,
     pub(crate) base_root: layerfs_content::ObjectId,
     pub(crate) base_inodes: InodeTableRoot,
     pub(crate) spool: PathBuf,
     pub(crate) spool_bytes: u64,
     pub(crate) mutation_generation: u64,
+    pub(crate) mutation_paths: BTreeMap<String, u64>,
     pub(crate) policy: ResourcePolicy,
     pub(crate) nodes: HashMap<NodeId, Node>,
     pub(crate) canonical_nodes: HashMap<InodeId, NodeId>,
@@ -95,25 +111,37 @@ pub struct Workspace {
     pub(crate) reserved: BTreeSet<NodeId>,
     pub(crate) next_node: u64,
     pub(crate) state: WorkspaceState,
+    pub(crate) resolution: Option<crate::reconcile::ResolutionState>,
 }
 
 impl Workspace {
-    pub fn open(branch: BranchStore, branch_id: BranchId, spool: impl AsRef<Path>) -> Result<Self> {
-        Self::open_with_policy(branch, branch_id, spool, ResourcePolicy::default())
+    pub fn open(
+        branch: BranchStore,
+        parent: std::sync::Arc<dyn LayerStackEndpoint>,
+        branch_id: BranchId,
+        spool: impl AsRef<Path>,
+    ) -> Result<Self> {
+        Self::open_with_policy(branch, parent, branch_id, spool, ResourcePolicy::default())
     }
 
     pub fn open_with_policy(
         branch: BranchStore,
+        parent: std::sync::Arc<dyn LayerStackEndpoint>,
         branch_id: BranchId,
         spool: impl AsRef<Path>,
         policy: ResourcePolicy,
     ) -> Result<Self> {
-        let (branch_record, base_root) = branch.branch_snapshot(branch_id)?;
+        let pinned = branch.pin_branch(parent.clone(), branch_id)?;
         Self::from_snapshot(
-            branch,
-            branch_id,
-            branch_record.head_commit_id,
-            base_root,
+            WorkspaceSnapshot {
+                branch,
+                parent,
+                branch_id,
+                expected_head: pinned.branch.head_commit_id,
+                expected_base: pinned.branch.base_layer_id,
+                root: pinned.root,
+                reader: pinned.reader,
+            },
             spool.as_ref(),
             policy,
         )
@@ -121,33 +149,44 @@ impl Workspace {
 
     pub(crate) fn clean_copy(&self, spool: impl AsRef<Path>) -> Result<Self> {
         Self::from_snapshot(
-            self.branch.clone(),
-            self.branch_id,
-            self.expected_head,
-            self.base_root,
+            WorkspaceSnapshot {
+                branch: self.branch.clone(),
+                parent: self.parent.clone(),
+                branch_id: self.branch_id,
+                expected_head: self.expected_head,
+                expected_base: self.expected_base,
+                root: self.base_root,
+                reader: self.reader.clone(),
+            },
             spool.as_ref(),
             self.policy,
         )
     }
 
-    fn from_snapshot(
-        branch: BranchStore,
-        branch_id: BranchId,
-        expected_head: CommitId,
-        base_root: layerfs_content::ObjectId,
+    pub(crate) fn from_snapshot(
+        snapshot: WorkspaceSnapshot,
         spool: &Path,
         policy: ResourcePolicy,
     ) -> Result<Self> {
-        let reader = CoreReader(&branch);
-        let namespace = logical::namespace(&reader, base_root)?;
+        let WorkspaceSnapshot {
+            branch,
+            parent,
+            branch_id,
+            expected_head,
+            expected_base,
+            root: base_root,
+            reader,
+        } = snapshot;
+        let core = CoreReader(&reader);
+        let namespace = logical::namespace(&core, base_root)?;
         let resolved = logical::resolve(
-            &reader,
+            &core,
             base_root,
             &CanonicalPath::root(),
             &mut LogicalCounters::default(),
         )?;
         let portable =
-            portable_metadata(&reader, resolved.record.metadata_root, resolved.record.kind)?;
+            portable_metadata(&core, resolved.record.metadata_root, resolved.record.kind)?;
         let spool = spool.to_owned();
         std::fs::create_dir_all(&spool)?;
         let root = Node {
@@ -165,13 +204,17 @@ impl Workspace {
         };
         Ok(Self {
             branch,
+            parent,
+            reader,
             branch_id,
             expected_head,
+            expected_base,
             base_root,
             base_inodes: InodeTableRoot(namespace.inode_table_root),
             spool,
             spool_bytes: 0,
             mutation_generation: 0,
+            mutation_paths: BTreeMap::new(),
             policy,
             nodes: HashMap::from([(ROOT, root)]),
             canonical_nodes: HashMap::from([(resolved.inode, ROOT)]),
@@ -179,6 +222,7 @@ impl Workspace {
             reserved: BTreeSet::new(),
             next_node: 2,
             state: WorkspaceState::Active,
+            resolution: None,
         })
     }
 
@@ -266,17 +310,20 @@ impl Workspace {
             return Err(StorageError::Integrity("reserved node"));
         }
         let path = self.child_path(parent, name)?;
-        self.new_spool_node_reserved(node, mode & 0o777, path)?;
+        self.new_spool_node_reserved(node, mode & 0o777, path.clone())?;
         self.insert_name(parent, name, node)?;
-        self.note_mutation()?;
+        self.note_mutation([path])?;
         self.attr(node)
     }
 
-    pub(crate) fn note_mutation(&mut self) -> Result<()> {
+    pub(crate) fn note_mutation(&mut self, paths: impl IntoIterator<Item = String>) -> Result<()> {
         self.mutation_generation = self
             .mutation_generation
             .checked_add(1)
             .ok_or(StorageError::Integrity("Workspace mutation generation"))?;
+        for path in paths {
+            self.mutation_paths.insert(path, self.mutation_generation);
+        }
         Ok(())
     }
 
@@ -289,7 +336,7 @@ impl Workspace {
             return Err(StorageError::NotFound("name"));
         };
         let inode = directory_lookup(
-            &CoreReader(&self.branch),
+            &CoreReader(&self.reader),
             base,
             &CanonicalName::from_bytes(name)?,
             &mut NamespaceCounters::default(),
@@ -304,14 +351,14 @@ impl Workspace {
             self.nodes.get_mut(&node).unwrap().paths.insert(path);
             return Ok(node);
         }
-        let reader = CoreReader(&self.branch);
+        let reader = CoreReader(&self.reader);
         let record_id = inode_table_lookup(
             &reader,
             self.base_inodes,
             inode,
             &mut InodeTableCounters::default(),
         )?
-        .ok_or(StorageError::MissingBaseData)?;
+        .ok_or(StorageError::Integrity("Workspace inode"))?;
         let record = reader.with_authenticated_canonical(record_id, decode_inode_record)?;
         let portable = portable_metadata(&reader, record.metadata_root, record.kind)?;
         let data = match record.kind {
@@ -361,7 +408,7 @@ impl Workspace {
             let mut after = None;
             loop {
                 let page = directory_page_after(
-                    &CoreReader(&self.branch),
+                    &CoreReader(&self.reader),
                     base,
                     after.as_ref(),
                     128,
@@ -400,7 +447,7 @@ impl Workspace {
         let mut after = None;
         loop {
             let page = directory_page_after(
-                &CoreReader(&self.branch),
+                &CoreReader(&self.reader),
                 base,
                 after.as_ref(),
                 128,
@@ -467,7 +514,7 @@ impl Workspace {
         self.nodes
             .iter()
             .find_map(|(id, node)| node.paths.contains(parent).then_some(*id))
-            .ok_or(StorageError::MissingBaseData)
+            .ok_or(StorageError::Integrity("Workspace parent"))
     }
 }
 
@@ -535,28 +582,34 @@ impl Workspace {
         let path = self.child_path(parent, name)?;
         let node = self.new_spool_node(mode & 0o777, path.clone())?;
         self.insert_name(parent, name, node)?;
-        self.note_mutation()?;
+        self.note_mutation([path])?;
         self.attr(node)
     }
 
     pub fn mkdir(&mut self, parent: NodeId, name: &[u8], mode: u32) -> Result<Attr> {
         self.ensure_active()?;
         let path = self.child_path(parent, name)?;
-        let node = self.allocate(Node {
-            canonical: None,
-            paths: BTreeSet::from([path.clone()]),
-            mode: mode & 0o1777,
-            links: 2,
-            pins: 0,
-            mtime_seconds: 0,
-            mtime_nanoseconds: 0,
-            data: Data::Directory(DirectoryData {
-                base: None,
-                changes: BTreeMap::new(),
-            }),
-        });
+        let node = self.allocate(new_directory(path.clone(), mode));
         self.insert_name(parent, name, node)?;
-        self.note_mutation()?;
+        self.note_mutation([path])?;
+        self.attr(node)
+    }
+
+    pub(crate) fn mkdir_reserved(
+        &mut self,
+        parent: NodeId,
+        name: &[u8],
+        mode: u32,
+        node: NodeId,
+    ) -> Result<Attr> {
+        self.ensure_active()?;
+        let path = self.child_path(parent, name)?;
+        if !self.reserved.remove(&node) {
+            return Err(StorageError::Integrity("reserved node"));
+        }
+        self.nodes.insert(node, new_directory(path.clone(), mode));
+        self.insert_name(parent, name, node)?;
+        self.note_mutation([path])?;
         self.attr(node)
     }
 
@@ -577,7 +630,7 @@ impl Workspace {
             data: Data::Symlink(target.clone()),
         });
         self.insert_name(parent, name, node)?;
-        self.note_mutation()?;
+        self.note_mutation([path])?;
         self.attr(node)
     }
 
@@ -597,21 +650,29 @@ impl Workspace {
         let value = self.nodes.get_mut(&node).unwrap();
         value.links += 1;
         value.paths.insert(target.clone());
-        self.note_mutation()?;
+        let paths = value.paths.iter().cloned().collect::<Vec<_>>();
+        self.note_mutation(paths)?;
         self.attr(node)
     }
 
     pub fn unlink(&mut self, parent: NodeId, name: &[u8], directory: bool) -> Result<()> {
         self.ensure_active()?;
         let node = self.lookup_node(parent, name)?;
-        let value = self.nodes.get(&node).unwrap();
-        if directory != matches!(value.data, Data::Directory(_)) {
+        let (is_directory, mut paths) = {
+            let value = self.nodes.get(&node).unwrap();
+            (
+                matches!(value.data, Data::Directory(_)),
+                value.paths.iter().cloned().collect::<Vec<_>>(),
+            )
+        };
+        if directory != is_directory {
             return Err(StorageError::InvalidInput("unlink kind"));
         }
         if directory && !self.directory_entries(node)?.is_empty() {
             return Err(StorageError::InvalidInput("directory not empty"));
         }
         let path = self.child_path(parent, name)?;
+        paths.push(path.clone());
         self.directory_mut(parent)?
             .changes
             .insert(name.to_vec(), None);
@@ -619,7 +680,7 @@ impl Workspace {
         value.links = value.links.saturating_sub(1);
         value.paths.remove(&path);
         self.reclaim(node);
-        self.note_mutation()?;
+        self.note_mutation(paths)?;
         Ok(())
     }
 
@@ -678,7 +739,7 @@ impl Workspace {
             .changes
             .insert(target.to_vec(), Some(node));
         self.replace_path_prefix(&source, &destination);
-        self.note_mutation()?;
+        self.note_mutation([source, destination])?;
         Ok(())
     }
 
@@ -714,11 +775,13 @@ impl Workspace {
 
     pub fn chmod(&mut self, node: NodeId, mode: u32) -> Result<()> {
         self.ensure_active()?;
-        self.nodes
+        let value = self
+            .nodes
             .get_mut(&node)
-            .ok_or(StorageError::NotFound("node"))?
-            .mode = mode & 0o1777;
-        self.note_mutation()?;
+            .ok_or(StorageError::NotFound("node"))?;
+        value.mode = mode & 0o1777;
+        let paths = value.paths.iter().cloned().collect::<Vec<_>>();
+        self.note_mutation(paths)?;
         Ok(())
     }
 
@@ -733,7 +796,8 @@ impl Workspace {
             .ok_or(StorageError::NotFound("node"))?;
         value.mtime_seconds = seconds;
         value.mtime_nanoseconds = nanos;
-        self.note_mutation()?;
+        let paths = value.paths.iter().cloned().collect::<Vec<_>>();
+        self.note_mutation(paths)?;
         Ok(())
     }
 
@@ -791,12 +855,28 @@ impl Workspace {
     }
 }
 
+fn new_directory(path: String, mode: u32) -> Node {
+    Node {
+        canonical: None,
+        paths: BTreeSet::from([path]),
+        mode: mode & 0o1777,
+        links: 2,
+        pins: 0,
+        mtime_seconds: 0,
+        mtime_nanoseconds: 0,
+        data: Data::Directory(DirectoryData {
+            base: None,
+            changes: BTreeMap::new(),
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ROOT;
     use layerfs_branch_store::BranchStore;
-    use layerfs_layer_store::LayerStore;
+    use layerfs_layerstack_store::LayerStackStore;
     use std::sync::Arc;
 
     #[derive(Debug, Eq, PartialEq)]
@@ -828,16 +908,46 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&root).unwrap();
-        let layer = Arc::new(LayerStore::create(root.join("layer.sqlite")).unwrap());
-        let (_history, genesis) = layer
-            .initialize(layerfs_storage::LayerInitialization::Empty)
+        let layer = Arc::new(LayerStackStore::create(root.join("layer.sqlite")).unwrap());
+        let genesis = layer
+            .initialize_layerstack(
+                layerfs_storage::EntityName::new("project").unwrap(),
+                layerfs_storage::LayerStackInitialization::Empty,
+            )
+            .unwrap()
+            .genesis_layer_id;
+        let branch = BranchStore::create(root.join("branch.sqlite"), layer.store_id()).unwrap();
+        branch
+            .pull_layer(
+                layer.clone(),
+                genesis,
+                layerfs_storage::RemotePlacement::Reference,
+            )
             .unwrap();
-        let branch = BranchStore::create(root.join("branch.sqlite"), layer).unwrap();
-        let record = branch
-            .create_branch(layerfs_storage::BranchSource::Layer(genesis.id))
+        let id = branch
+            .fork_branch(
+                layerfs_storage::EntityName::new("main").unwrap(),
+                layerfs_storage::LocalForkSource::Layer { layer_id: genesis },
+            )
             .unwrap();
-        let workspace = Workspace::open(branch, record.id, root.join("spool")).unwrap();
+        let workspace = Workspace::open(branch, layer, id, root.join("spool")).unwrap();
         (root, workspace)
+    }
+
+    #[test]
+    fn reserved_directory_consumes_the_exact_node_once() {
+        let (root, mut workspace) = fixture("reserved-directory");
+        let node = workspace.reserve_nodes(1).unwrap();
+        let directory = workspace
+            .mkdir_reserved(ROOT, b"directory", 0o700, node)
+            .unwrap();
+        assert_eq!(directory.node, node);
+        assert_eq!(workspace.lookup(ROOT, b"directory").unwrap().node, node);
+        assert!(workspace
+            .mkdir_reserved(ROOT, b"duplicate", 0o700, node)
+            .is_err());
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -917,6 +1027,31 @@ mod tests {
         let before = snapshot(&workspace);
         assert!(workspace.truncate(file.node, 2).is_err());
         assert_eq!(snapshot(&workspace), before);
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn resolution_fingerprint_ignores_unrelated_paths_and_tracks_affected_state() {
+        let (root, mut workspace) = fixture("resolution-fingerprint");
+        let affected = workspace.create_file(ROOT, b"affected", 0o600).unwrap();
+        workspace.write(affected.node, 0, b"before").unwrap();
+        let path = layerfs_content::CanonicalPath::new("affected").unwrap();
+        let before = workspace
+            .resolution_fingerprint(std::slice::from_ref(&path))
+            .unwrap();
+
+        let unrelated = workspace.create_file(ROOT, b"unrelated", 0o600).unwrap();
+        workspace.write(unrelated.node, 0, b"change").unwrap();
+        assert_eq!(
+            workspace
+                .resolution_fingerprint(std::slice::from_ref(&path))
+                .unwrap(),
+            before
+        );
+
+        workspace.write(affected.node, 0, b"after!").unwrap();
+        assert_ne!(workspace.resolution_fingerprint(&[path]).unwrap(), before);
         drop(workspace);
         std::fs::remove_dir_all(root).unwrap();
     }

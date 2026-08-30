@@ -3,7 +3,7 @@ use std::io::{self, Read, Write};
 use crate::error::{CoreError, CoreResult};
 
 pub const DIGEST_BYTES: usize = 32;
-const OBJECT_DOMAIN: &[u8] = b"layerfs/object\0";
+const OBJECT_DOMAIN: &[u8] = b"layerfs/object/v2\0";
 const CONTENT_DOMAIN: &[u8] = b"layerfs/content-bytes/v1\0";
 
 pub struct ContentDigestWriter {
@@ -123,6 +123,25 @@ mod tests {
             hash_object_bytes(b"same"),
             *blake3::hash(b"same").as_bytes()
         );
+    }
+
+    #[test]
+    fn object_domain_is_frozen_for_v2_and_differs_from_v1() {
+        let bytes = b"layerfs-v2-object-domain-probe";
+        let actual = hash_object_bytes(bytes);
+        assert_eq!(
+            actual,
+            [
+                0x24, 0x65, 0xa9, 0x5c, 0xc8, 0x21, 0xc5, 0x38, 0xfe, 0xdd, 0xb2, 0x78, 0x29, 0x45,
+                0x8e, 0x64, 0x0c, 0x9d, 0x71, 0x14, 0xcf, 0x4f, 0xfc, 0xe6, 0xee, 0x43, 0x00, 0x00,
+                0x30, 0x00, 0x66, 0x06,
+            ]
+        );
+
+        let mut legacy = blake3::Hasher::new();
+        legacy.update(b"layerfs/object\0");
+        legacy.update(bytes);
+        assert_ne!(actual, *legacy.finalize().as_bytes());
     }
 
     #[test]

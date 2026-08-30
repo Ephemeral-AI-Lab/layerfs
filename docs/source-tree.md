@@ -1,10 +1,7 @@
 # LayerStack cold-build source tree
 
-> **Superseded.** This document is retained only as historical implementation
-> context. The binding application architecture and exact Phase One source tree
-> are `docs/cli-tui/00-overview.md` through
-> `docs/cli-tui/05-implementation-plan.md`; where this document conflicts, the
-> `docs/cli-tui/` contract wins.
+> **Historical and superseded.** The Phase One tree below is not a V2
+> compatibility path. [`v2/spec.md`](v2/spec.md) is the sole authority.
 
 This is the smallest target tree that preserves the three-store model, fourteen
 public operations, shared merge rules, exact schemas, CAS/CDC correctness, and

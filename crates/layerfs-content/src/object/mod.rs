@@ -14,6 +14,6 @@ pub use codec::{
 };
 pub(crate) use digest::ObjectHashWriter;
 pub use digest::{hash_object_bytes, ContentDigestWriter, DIGEST_BYTES};
-pub use id::{chunk_id, ObjectId};
+pub use id::ObjectId;
 
 pub type ChunkId = ObjectId;

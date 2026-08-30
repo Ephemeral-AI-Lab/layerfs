@@ -7,7 +7,7 @@ use layerfs_content::tree::inode::{InodeId, InodeKind, InodeRecordV1};
 use layerfs_content::CanonicalPath;
 use layerfs_storage::{BuiltRoot, CoreReader, ObjectBuffer, Result, StorageError};
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Read;
+use std::io::{Read, Write};
 
 #[derive(Clone, Copy)]
 struct BaseEntry {
@@ -57,13 +57,13 @@ impl Workspace {
             }
         }
         let resolved = filesystem::resolve(
-            &CoreReader(&self.branch),
+            &CoreReader(&self.reader),
             self.base_root,
             &CanonicalPath::root(),
             &mut LogicalCounters::default(),
         )?;
         let before = portable_metadata(
-            &CoreReader(&self.branch),
+            &CoreReader(&self.reader),
             resolved.record.metadata_root,
             resolved.record.kind,
         )?;
@@ -115,10 +115,10 @@ impl Workspace {
             }
         }
 
-        let seed = *filesystem::namespace(&CoreReader(&self.branch), self.base_root)?
+        let seed = *filesystem::namespace(&CoreReader(&self.reader), self.base_root)?
             .root_directory_inode
             .as_bytes();
-        let mut objects = ObjectBuffer::new(&self.branch)?;
+        let mut objects = ObjectBuffer::new(&self.reader)?;
         let mut root = self.base_root;
         let mut cdc_bytes_scanned = 0_u64;
         let mut removals = base
@@ -221,13 +221,13 @@ impl Workspace {
         }
 
         let base_root = filesystem::resolve(
-            &CoreReader(&self.branch),
+            &CoreReader(&self.reader),
             self.base_root,
             &CanonicalPath::root(),
             &mut LogicalCounters::default(),
         )?;
         let base_root_metadata = portable_metadata(
-            &CoreReader(&self.branch),
+            &CoreReader(&self.reader),
             base_root.record.metadata_root,
             base_root.record.kind,
         )?;
@@ -249,6 +249,57 @@ impl Workspace {
         }
 
         objects.finish(root, cdc_bytes_scanned)
+    }
+
+    pub(crate) fn resolution_fingerprint(
+        &mut self,
+        affected_paths: &[CanonicalPath],
+    ) -> Result<[u8; 32]> {
+        let base = self.base_manifest()?;
+        let final_view = self.final_manifest(manifest_charge(&base))?;
+        let mut affected = affected_paths.iter().collect::<Vec<_>>();
+        affected.sort();
+        let mut digest = ContentDigestWriter::new();
+        digest.write_all(b"layerfs/workspace-resolution/v2\0")?;
+        for affected_path in affected {
+            digest.write_all(b"A")?;
+            frame(&mut digest, affected_path.as_bytes())?;
+            for (path, entry) in final_view
+                .iter()
+                .filter(|(path, _)| path_intersects(path, affected_path.as_str()))
+            {
+                digest.write_all(b"E")?;
+                frame(&mut digest, path.as_bytes())?;
+                digest.write_all(&[match entry.attr.kind {
+                    Kind::File => 1,
+                    Kind::Directory => 2,
+                    Kind::Symlink => 3,
+                }])?;
+                digest.write_all(&entry.attr.size.to_be_bytes())?;
+                digest.write_all(&entry.attr.mode.to_be_bytes())?;
+                digest.write_all(&entry.attr.links.to_be_bytes())?;
+                digest.write_all(&entry.attr.mtime_seconds.to_be_bytes())?;
+                digest.write_all(&entry.attr.mtime_nanoseconds.to_be_bytes())?;
+                let node = self
+                    .nodes
+                    .get(&entry.node)
+                    .ok_or(StorageError::Integrity("resolution node"))?;
+                digest.write_all(&(node.paths.len() as u64).to_be_bytes())?;
+                for alias in &node.paths {
+                    frame(&mut digest, alias.as_bytes())?;
+                }
+                match entry.attr.kind {
+                    Kind::File => {
+                        let mut reader = WorkspaceFileReader::new(self, entry.node)?;
+                        std::io::copy(&mut reader, &mut digest)?;
+                    }
+                    Kind::Symlink => frame(&mut digest, &self.readlink(entry.node)?)?,
+                    Kind::Directory => {}
+                }
+            }
+            digest.write_all(b"Z")?;
+        }
+        Ok(digest.finish())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -307,7 +358,7 @@ impl Workspace {
     }
 
     fn base_manifest(&self) -> Result<BTreeMap<String, BaseEntry>> {
-        let reader = CoreReader(&self.branch);
+        let reader = CoreReader(&self.reader);
         let mut output = BTreeMap::new();
         let mut charge = 0_u64;
         let mut pending = vec![CanonicalPath::root()];
@@ -405,7 +456,7 @@ impl Workspace {
         std::io::copy(&mut input, &mut final_digest)?;
         let mut base_digest = ContentDigestWriter::new();
         rope::read_all(
-            &CoreReader(&self.branch),
+            &CoreReader(&self.reader),
             FileStateRoot(base),
             &mut base_digest,
         )?;
@@ -413,13 +464,28 @@ impl Workspace {
     }
 
     fn base_symlink(&self, root: ObjectId) -> Result<Vec<u8>> {
-        Ok(CoreReader(&self.branch)
+        Ok(CoreReader(&self.reader)
             .with_authenticated_canonical(
                 root,
                 layerfs_content::tree::directory::codec::decode_symlink,
             )?
             .target)
     }
+}
+
+fn frame(output: &mut impl Write, value: &[u8]) -> Result<()> {
+    output.write_all(&(value.len() as u64).to_be_bytes())?;
+    output.write_all(value)?;
+    Ok(())
+}
+
+fn path_intersects(left: &str, right: &str) -> bool {
+    left == right || path_is_ancestor(left, right) || path_is_ancestor(right, left)
+}
+
+fn path_is_ancestor(parent: &str, child: &str) -> bool {
+    parent.is_empty()
+        || (child.starts_with(parent) && child.as_bytes().get(parent.len()) == Some(&b'/'))
 }
 
 fn manifest_charge<T>(manifest: &BTreeMap<String, T>) -> u64 {

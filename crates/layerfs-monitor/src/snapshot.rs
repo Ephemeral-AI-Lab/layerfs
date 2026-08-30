@@ -1,9 +1,8 @@
 use crate::dedup::DedupAnalysis;
 use crate::resource::ProcessSnapshot;
-use crate::{BranchStoreId, OperationId, OperationReceipt};
-use layerfs_storage::{BranchId, BranchRecord, StoreStorageSnapshot};
-use layerfs_workspace::{WorkspaceSessionId, WorkspaceSummary};
-use std::fmt;
+use crate::OperationReceipt;
+use layerfs_storage::StoreStorageSnapshot;
+use layerfs_workspace::WorkspaceSummary;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseSnapshot {
@@ -12,37 +11,23 @@ pub struct DatabaseSnapshot {
     pub storage: StoreStorageSnapshot,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MonitorScope {
-    Databases,
-    Dedup { route: Option<BranchStoreId> },
-    Workspace(Option<WorkspaceSessionId>),
-    Branch(BranchId),
-    Operation(Option<OperationId>),
-    Process,
-}
-
 #[derive(Clone, Debug)]
-pub enum MonitorSnapshot {
-    Databases(Vec<DatabaseSnapshot>),
-    Dedup(Vec<(BranchStoreId, DedupAnalysis)>),
-    Workspaces(Vec<WorkspaceSummary>),
-    Branch(Option<BranchRecord>),
-    Operations(Vec<OperationReceipt>),
-    Process {
-        process_id: u32,
-        resident_bytes: Option<u64>,
-        available_parallelism: usize,
-    },
+pub struct MonitorSnapshot {
+    pub databases: Vec<DatabaseSnapshot>,
+    pub workspaces: Vec<WorkspaceSummary>,
+    pub operations: Vec<OperationReceipt>,
+    pub dedup: Option<DedupAnalysis>,
+    pub process_id: u32,
+    pub resident_bytes: Option<u64>,
+    pub available_parallelism: usize,
 }
 
-impl From<ProcessSnapshot> for MonitorSnapshot {
-    fn from(value: ProcessSnapshot) -> Self {
-        Self::Process {
-            process_id: value.process_id,
-            resident_bytes: value.resident_bytes,
-            available_parallelism: value.available_parallelism,
-        }
+impl MonitorSnapshot {
+    pub(crate) fn with_process(mut self, process: ProcessSnapshot) -> Self {
+        self.process_id = process.process_id;
+        self.resident_bytes = process.resident_bytes;
+        self.available_parallelism = process.available_parallelism;
+        self
     }
 }
 
@@ -57,8 +42,8 @@ pub enum MonitorError {
 
 pub type MonitorResult<T> = Result<T, MonitorError>;
 
-impl fmt::Display for MonitorError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for MonitorError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "{self:?}")
     }
 }

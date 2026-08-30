@@ -1,10 +1,15 @@
-use crate::{Fact, FactKind, Result, StorageError};
-use rusqlite::types::Value;
+use crate::{InventoryEntry, InventoryPage, Result, StorageError, StoreId, StoreStorageSnapshot};
 use rusqlite::{Connection, OpenFlags};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+
+pub const SCHEMA_VERSION: i64 = 3;
+pub const LAYERSTACK_APPLICATION_ID: i64 = 0x4c46_534c;
+pub const BRANCH_APPLICATION_ID: i64 = 0x4c46_5342;
+pub const WAL_AUTOCHECKPOINT_PAGES: i64 = 1_000;
+pub const SQLITE_PAGE_CACHE_KIB: i64 = 8 * 1_024;
 
 #[cfg(feature = "test-instrumentation")]
 static SQL_TRACE: std::sync::OnceLock<Mutex<Vec<String>>> = std::sync::OnceLock::new();
@@ -38,36 +43,48 @@ pub fn sql_trace() -> Vec<String> {
         .clone()
 }
 
-pub const SCHEMA_VERSION: i64 = 1;
-pub const WAL_AUTOCHECKPOINT_PAGES: i64 = 1_000;
-pub const SQLITE_PAGE_CACHE_KIB: i64 = 8 * 1_024;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SchemaKind {
-    Branch,
-    Full,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StoreRole {
-    Layer,
-    Stack,
+    LayerStack,
     Branch,
 }
 
 impl StoreRole {
-    const fn schema(self) -> SchemaKind {
+    const fn application_id(self) -> i64 {
         match self {
-            Self::Layer | Self::Stack => SchemaKind::Full,
-            Self::Branch => SchemaKind::Branch,
+            Self::LayerStack => LAYERSTACK_APPLICATION_ID,
+            Self::Branch => BRANCH_APPLICATION_ID,
         }
     }
 
-    const fn bytes(self) -> &'static [u8] {
+    const fn schema(self) -> &'static str {
         match self {
-            Self::Layer => b"layer\n",
-            Self::Stack => b"stack\n",
-            Self::Branch => b"branch\n",
+            Self::LayerStack => LAYERSTACK_SCHEMA,
+            Self::Branch => BRANCH_SCHEMA,
+        }
+    }
+
+    const fn expected_tables(self) -> &'static [(&'static str, usize)] {
+        match self {
+            Self::LayerStack => &[
+                ("branches", 8),
+                ("commits", 4),
+                ("layer_stacks", 3),
+                ("layers", 6),
+                ("objects", 2),
+                ("store", 2),
+            ],
+            Self::Branch => &[
+                ("branch_scopes", 4),
+                ("branches", 8),
+                ("commits", 4),
+                ("complete_roots", 1),
+                ("layer_stack_scopes", 3),
+                ("layer_stacks", 2),
+                ("layers", 6),
+                ("objects", 2),
+                ("store", 3),
+            ],
         }
     }
 }
@@ -81,12 +98,19 @@ struct StoreInner {
     path: PathBuf,
     _owner: OwnerFile,
     role: StoreRole,
-    identity: [u8; 32],
+    store_id: StoreId,
+    parent_store_id: Option<StoreId>,
 }
 
 struct OwnerFile {
     path: PathBuf,
     _file: File,
+}
+
+impl Drop for OwnerFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 struct CreatedStoreFile {
@@ -98,13 +122,9 @@ impl Drop for CreatedStoreFile {
     fn drop(&mut self) {
         if self.remove {
             let _ = std::fs::remove_file(&self.path);
+            let _ = std::fs::remove_file(appended(&self.path, "-wal"));
+            let _ = std::fs::remove_file(appended(&self.path, "-shm"));
         }
-    }
-}
-
-impl Drop for OwnerFile {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
     }
 }
 
@@ -152,63 +172,51 @@ impl TicketGate {
 }
 
 impl StoreDb {
-    pub fn create(path: impl AsRef<Path>, role: StoreRole) -> Result<Self> {
-        Self::open(path.as_ref(), role, OpenMode::Create)
-    }
-
-    pub fn connect(path: impl AsRef<Path>, role: StoreRole) -> Result<Self> {
-        Self::open(path.as_ref(), role, OpenMode::Connect)
-    }
-
-    #[doc(hidden)]
-    pub fn fact_page(&self, kind: FactKind, after: Option<&[u8]>, limit: u16) -> Result<Vec<Fact>> {
-        if limit == 0 || limit > 512 {
-            return Err(StorageError::InvalidInput("fact query page"));
+    pub fn create(
+        path: impl AsRef<Path>,
+        role: StoreRole,
+        parent_store_id: Option<StoreId>,
+    ) -> Result<Self> {
+        if (role == StoreRole::Branch) != parent_store_id.is_some() {
+            return Err(StorageError::InvalidInput("Store parent"));
         }
-        let (table, key, columns) = crate::admission::fact_shape(kind, self.kind())?;
-        let sql = format!(
-            "SELECT {} FROM {table} WHERE {key}>?1 ORDER BY {key} LIMIT ?2",
-            columns.join(",")
-        );
-        let connection = self.connection()?;
-        let mut statement = connection.prepare(&sql)?;
-        let rows = statement
-            .query_map(rusqlite::params![after.unwrap_or(&[]), limit], |row| {
-                (0..columns.len())
-                    .map(|index| row.get::<_, Value>(index))
-                    .collect::<std::result::Result<Vec<_>, _>>()
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        rows.iter()
-            .map(|values| crate::admission::fact_from_values(kind, values))
-            .collect()
+        Self::open(path.as_ref(), role, parent_store_id, OpenMode::Create)
     }
 
-    fn open(path: &Path, role: StoreRole, mode: OpenMode) -> Result<Self> {
-        let kind = role.schema();
+    pub fn connect(
+        path: impl AsRef<Path>,
+        role: StoreRole,
+        expected_parent_store_id: Option<StoreId>,
+    ) -> Result<Self> {
+        if (role == StoreRole::Branch) != expected_parent_store_id.is_some() {
+            return Err(StorageError::InvalidInput("Store parent"));
+        }
+        Self::open(
+            path.as_ref(),
+            role,
+            expected_parent_store_id,
+            OpenMode::Connect,
+        )
+    }
+
+    fn open(
+        path: &Path,
+        role: StoreRole,
+        expected_parent_store_id: Option<StoreId>,
+        mode: OpenMode,
+    ) -> Result<Self> {
         let path = absolute(path)?;
-        if mode == OpenMode::Create {
-            if path.exists() {
-                return Err(StorageError::StoreAlreadyExists);
-            }
-        } else if !path.is_file() {
+        if mode == OpenMode::Create && path.exists() {
+            return Err(StorageError::StoreAlreadyExists);
+        }
+        if mode == OpenMode::Connect && !path.is_file() {
             return Err(StorageError::StoreMissing);
         }
         if mode == OpenMode::Create {
-            let parent = path
-                .parent()
-                .ok_or(StorageError::InvalidInput("Store location"))?;
-            std::fs::create_dir_all(parent)?;
-        }
-        let owner_path = appended(&path, ".owner");
-        let owner_file = acquire_owner(&owner_path, path.parent().expect("absolute Store path"))?;
-        let owner = OwnerFile {
-            path: owner_path,
-            _file: owner_file,
-        };
-        let role_path = appended(&path, ".role");
-        let identity_path = appended(&path, ".store-id");
-        let mut created = if mode == OpenMode::Create {
+            std::fs::create_dir_all(
+                path.parent()
+                    .ok_or(StorageError::InvalidInput("Store location"))?,
+            )?;
             OpenOptions::new()
                 .write(true)
                 .create_new(true)
@@ -220,73 +228,19 @@ impl StoreDb {
                         StorageError::Io(error)
                     }
                 })?;
-            Some(CreatedStoreFile {
-                path: path.clone(),
-                remove: true,
-            })
-        } else {
-            None
-        };
-        let mut created_role = if mode == OpenMode::Create {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&role_path)
-                .map_err(|error| {
-                    if error.kind() == std::io::ErrorKind::AlreadyExists {
-                        StorageError::StoreAlreadyExists
-                    } else {
-                        StorageError::Io(error)
-                    }
-                })?;
-            file.write_all(role.bytes())?;
-            file.sync_all()?;
-            Some(CreatedStoreFile {
-                path: role_path,
-                remove: true,
-            })
-        } else {
-            let actual = std::fs::read(&role_path).map_err(|error| {
-                if error.kind() == std::io::ErrorKind::NotFound {
-                    StorageError::WrongStoreSchema
-                } else {
-                    StorageError::Io(error)
-                }
-            })?;
-            if actual != role.bytes() {
-                return Err(StorageError::WrongStoreRole);
-            }
-            None
-        };
-        let (identity, mut created_identity) = if mode == OpenMode::Create {
-            let identity = new_store_identity(&path, role);
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&identity_path)?;
-            file.write_all(&identity)?;
-            file.sync_all()?;
-            (
-                identity,
-                Some(CreatedStoreFile {
-                    path: identity_path,
-                    remove: true,
-                }),
-            )
-        } else {
-            let bytes = std::fs::read(&identity_path).map_err(|error| {
-                if error.kind() == std::io::ErrorKind::NotFound {
-                    StorageError::WrongStoreSchema
-                } else {
-                    StorageError::Io(error)
-                }
-            })?;
-            (
-                bytes
-                    .try_into()
-                    .map_err(|_| StorageError::WrongStoreSchema)?,
-                None,
-            )
+        }
+        let mut created = (mode == OpenMode::Create).then(|| CreatedStoreFile {
+            path: path.clone(),
+            remove: true,
+        });
+        let owner_path = appended(&path, ".owner");
+        let owner = OwnerFile {
+            _file: acquire_owner(
+                &owner_path,
+                path.parent()
+                    .ok_or(StorageError::InvalidInput("Store location"))?,
+            )?,
+            path: owner_path,
         };
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX;
         let connection = Connection::open_with_flags(&path, flags)?;
@@ -295,38 +249,22 @@ impl StoreDb {
             rusqlite::trace::TraceEventCodes::SQLITE_TRACE_STMT,
             Some(trace_sql),
         );
-        let version: String =
-            connection.query_row("SELECT sqlite_version()", [], |row| row.get(0))?;
-        if sqlite_version(&version)? < (3, 35, 0) {
-            return Err(StorageError::Integrity("SQLite version"));
-        }
-        connection.pragma_update(None, "journal_mode", "WAL")?;
-        connection.pragma_update(None, "synchronous", "FULL")?;
-        connection.pragma_update(None, "temp_store", "FILE")?;
-        connection.pragma_update(None, "cache_size", -SQLITE_PAGE_CACHE_KIB)?;
-        connection.pragma_update(None, "wal_autocheckpoint", WAL_AUTOCHECKPOINT_PAGES)?;
-        connection.busy_timeout(std::time::Duration::from_secs(5))?;
-        if mode == OpenMode::Create {
-            install_schema(&connection, kind)?;
+        configure(&connection)?;
+        let (store_id, parent_store_id) = if mode == OpenMode::Create {
+            install_schema(&connection, role, expected_parent_store_id)?
         } else {
-            verify_schema(&connection, kind)?;
-        }
-        prepare_fixed_shapes(&connection, kind)?;
+            verify_schema(&connection, role, expected_parent_store_id)?
+        };
         let store = Self(Arc::new(StoreInner {
             connection: Mutex::new(connection),
             gate: TicketGate::default(),
             path,
             _owner: owner,
             role,
-            identity,
+            store_id,
+            parent_store_id,
         }));
         if let Some(created) = &mut created {
-            created.remove = false;
-        }
-        if let Some(created) = &mut created_role {
-            created.remove = false;
-        }
-        if let Some(created) = &mut created_identity {
             created.remove = false;
         }
         Ok(store)
@@ -336,61 +274,46 @@ impl StoreDb {
         &self.0.path
     }
 
-    pub fn kind(&self) -> SchemaKind {
-        self.0.role.schema()
-    }
-
     pub fn role(&self) -> StoreRole {
         self.0.role
     }
 
-    pub fn identity(&self) -> [u8; 32] {
-        self.0.identity
+    pub fn store_id(&self) -> StoreId {
+        self.0.store_id
     }
 
-    pub fn bind_parent(&self, parent: [u8; 32], create: bool) -> Result<()> {
-        let path = appended(self.path(), ".parent");
-        if create {
-            let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-            file.write_all(&parent)?;
-            file.sync_all()?;
-            return Ok(());
-        }
-        let actual = std::fs::read(path).map_err(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                StorageError::WrongStoreSchema
-            } else {
-                StorageError::Io(error)
-            }
-        })?;
-        if actual == parent {
-            Ok(())
-        } else {
-            Err(StorageError::WrongParent)
-        }
+    pub fn parent_store_id(&self) -> Option<StoreId> {
+        self.0.parent_store_id
+    }
+
+    pub fn enter_operation(&self) -> Result<OperationPermit<'_>> {
+        self.0.gate.enter()
     }
 
     pub fn inventory_page(
         &self,
         after: Option<layerfs_content::ObjectId>,
         limit: u16,
-    ) -> Result<crate::InventoryPage> {
-        if limit == 0 || limit > crate::ID_BATCH_COUNT as u16 {
+    ) -> Result<InventoryPage> {
+        if limit == 0 || limit > 512 {
             return Err(StorageError::InvalidInput("inventory page"));
         }
         let connection = self.connection()?;
         let mut statement = connection.prepare_cached(
             "SELECT object_id,length(bytes) FROM objects
-             WHERE (?1 IS NULL OR object_id>?1) ORDER BY object_id LIMIT ?2",
+             WHERE object_id>?1 ORDER BY object_id LIMIT ?2",
         )?;
-        let entries = statement
+        let mut entries = statement
             .query_map(
-                rusqlite::params![after.map(|id| id.to_bytes().to_vec()), limit],
+                rusqlite::params![
+                    after.map(|id| id.to_bytes().to_vec()).unwrap_or_default(),
+                    i64::from(limit) + 1
+                ],
                 |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, i64>(1)?)),
             )?
             .map(|row| {
                 let (id, encoded_length) = row?;
-                Ok(crate::InventoryEntry {
+                Ok(InventoryEntry {
                     object_id: layerfs_content::ObjectId::from_bytes(&id)?,
                     encoded_length: encoded_length
                         .try_into()
@@ -398,16 +321,18 @@ impl StoreDb {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let continuation = (entries.len() == usize::from(limit))
+        let has_more = entries.len() > usize::from(limit);
+        entries.truncate(usize::from(limit));
+        let continuation = has_more
             .then(|| entries.last().map(|entry| entry.object_id))
             .flatten();
-        Ok(crate::InventoryPage {
+        Ok(InventoryPage {
             entries,
             continuation,
         })
     }
 
-    pub fn storage_snapshot(&self) -> Result<crate::StoreStorageSnapshot> {
+    pub fn storage_snapshot(&self) -> Result<StoreStorageSnapshot> {
         fn len(path: &Path) -> Result<u64> {
             match std::fs::metadata(path) {
                 Ok(metadata) => Ok(metadata.len()),
@@ -415,15 +340,11 @@ impl StoreDb {
                 Err(error) => Err(StorageError::Io(error)),
             }
         }
-        Ok(crate::StoreStorageSnapshot {
+        Ok(StoreStorageSnapshot {
             database_bytes: len(self.path())?,
             wal_bytes: len(&appended(self.path(), "-wal"))?,
             shm_bytes: len(&appended(self.path(), "-shm"))?,
         })
-    }
-
-    pub fn enter_operation(&self) -> Result<OperationPermit<'_>> {
-        self.0.gate.enter()
     }
 
     pub(crate) fn connection(&self) -> Result<MutexGuard<'_, Connection>> {
@@ -434,15 +355,155 @@ impl StoreDb {
     }
 }
 
+fn configure(connection: &Connection) -> Result<()> {
+    let version: String = connection.query_row("SELECT sqlite_version()", [], |row| row.get(0))?;
+    if sqlite_version(&version)? < (3, 37, 0) {
+        return Err(StorageError::Integrity("SQLite STRICT support"));
+    }
+    connection.pragma_update(None, "foreign_keys", true)?;
+    connection.pragma_update(None, "journal_mode", "WAL")?;
+    connection.pragma_update(None, "synchronous", "FULL")?;
+    connection.pragma_update(None, "temp_store", "FILE")?;
+    connection.pragma_update(None, "cache_size", -SQLITE_PAGE_CACHE_KIB)?;
+    connection.pragma_update(None, "wal_autocheckpoint", WAL_AUTOCHECKPOINT_PAGES)?;
+    connection.busy_timeout(std::time::Duration::from_secs(5))?;
+    Ok(())
+}
+
+fn install_schema(
+    connection: &Connection,
+    role: StoreRole,
+    parent_store_id: Option<StoreId>,
+) -> Result<(StoreId, Option<StoreId>)> {
+    let transaction = connection.unchecked_transaction()?;
+    transaction.pragma_update(None, "application_id", role.application_id())?;
+    transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+    transaction.execute_batch(role.schema())?;
+    let store_id = StoreId::random()?;
+    match role {
+        StoreRole::LayerStack => {
+            transaction.execute(
+                "INSERT INTO store(singleton,store_id) VALUES(1,?1)",
+                [crate::StorageId::as_slice(&store_id)],
+            )?;
+        }
+        StoreRole::Branch => {
+            let parent = parent_store_id.ok_or(StorageError::InvalidInput("Store parent"))?;
+            transaction.execute(
+                "INSERT INTO store(singleton,store_id,parent_store_id) VALUES(1,?1,?2)",
+                rusqlite::params![
+                    crate::StorageId::as_slice(&store_id),
+                    crate::StorageId::as_slice(&parent)
+                ],
+            )?;
+        }
+    }
+    transaction.commit()?;
+    verify_schema(connection, role, parent_store_id)
+}
+
+fn verify_schema(
+    connection: &Connection,
+    role: StoreRole,
+    expected_parent_store_id: Option<StoreId>,
+) -> Result<(StoreId, Option<StoreId>)> {
+    let application_id: i64 =
+        connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
+    if application_id != role.application_id() {
+        return Err(StorageError::WrongStoreRole);
+    }
+    let user_version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if user_version != SCHEMA_VERSION {
+        return Err(StorageError::WrongStoreSchema);
+    }
+    if schema_objects(connection)? != expected_schema_objects(role)? {
+        return Err(StorageError::WrongStoreSchema);
+    }
+    let tables = connection
+        .prepare(
+            "SELECT name FROM sqlite_schema
+             WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        )?
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    let expected_names = role
+        .expected_tables()
+        .iter()
+        .map(|(name, _)| *name)
+        .collect::<Vec<_>>();
+    if tables.iter().map(String::as_str).collect::<Vec<_>>() != expected_names {
+        return Err(StorageError::WrongStoreSchema);
+    }
+    for (table, expected_columns) in role.expected_tables() {
+        let columns: i64 = connection.query_row(
+            "SELECT count(*) FROM pragma_table_info(?1)",
+            [table],
+            |row| row.get(0),
+        )?;
+        if columns != *expected_columns as i64 {
+            return Err(StorageError::WrongStoreSchema);
+        }
+    }
+    let foreign_key_errors: i64 = connection
+        .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |row| {
+            row.get(0)
+        })
+        .unwrap_or(1);
+    if foreign_key_errors != 0 {
+        return Err(StorageError::Integrity("foreign key check"));
+    }
+    let (store_id, parent_store_id) = if role == StoreRole::LayerStack {
+        let bytes: Vec<u8> =
+            connection.query_row("SELECT store_id FROM store WHERE singleton=1", [], |row| {
+                row.get(0)
+            })?;
+        (crate::StorageId::from_slice(&bytes)?, None)
+    } else {
+        let (store, parent): (Vec<u8>, Vec<u8>) = connection.query_row(
+            "SELECT store_id,parent_store_id FROM store WHERE singleton=1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        (
+            crate::StorageId::from_slice(&store)?,
+            Some(crate::StorageId::from_slice(&parent)?),
+        )
+    };
+    if expected_parent_store_id != parent_store_id {
+        return Err(StorageError::WrongParent);
+    }
+    Ok((store_id, parent_store_id))
+}
+
+type SchemaObject = (String, String, String, Option<String>);
+
+fn schema_objects(connection: &Connection) -> Result<Vec<SchemaObject>> {
+    Ok(connection
+        .prepare(
+            "SELECT type,name,tbl_name,sql FROM sqlite_schema
+             WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name",
+        )?
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?
+        .collect::<std::result::Result<_, _>>()?)
+}
+
+fn expected_schema_objects(role: StoreRole) -> Result<Vec<SchemaObject>> {
+    let expected = Connection::open_in_memory()?;
+    expected.execute_batch(role.schema())?;
+    schema_objects(&expected)
+}
+
 fn acquire_owner(path: &Path, parent: &Path) -> Result<File> {
+    #[cfg(unix)]
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
     for _ in 0..2 {
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(path)
-        {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        match options.open(path) {
             Ok(mut file) => {
                 writeln!(file, "{}", std::process::id())?;
                 file.sync_all()?;
@@ -450,9 +511,11 @@ fn acquire_owner(path: &Path, parent: &Path) -> Result<File> {
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 let metadata = std::fs::symlink_metadata(path)?;
-                if !metadata.file_type().is_file()
-                    || metadata.uid() != std::fs::metadata(parent)?.uid()
-                {
+                if !metadata.file_type().is_file() {
+                    return Err(StorageError::StoreBusy);
+                }
+                #[cfg(unix)]
+                if metadata.uid() != std::fs::metadata(parent)?.uid() {
                     return Err(StorageError::StoreBusy);
                 }
                 let pid = std::fs::read_to_string(path)
@@ -494,63 +557,6 @@ enum OpenMode {
     Connect,
 }
 
-fn new_store_identity(path: &Path, role: StoreRole) -> [u8; 32] {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static SERIAL: AtomicU64 = AtomicU64::new(0);
-    let mut input = Vec::new();
-    input.extend_from_slice(role.bytes());
-    input.extend_from_slice(path.as_os_str().as_encoded_bytes());
-    input.extend_from_slice(&std::process::id().to_be_bytes());
-    input.extend_from_slice(
-        &std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-            .to_be_bytes(),
-    );
-    input.extend_from_slice(&SERIAL.fetch_add(1, Ordering::Relaxed).to_be_bytes());
-    *blake3::hash(&input).as_bytes()
-}
-
-pub(crate) fn require_full(db: &StoreDb) -> Result<()> {
-    if db.kind() == SchemaKind::Full {
-        Ok(())
-    } else {
-        Err(StorageError::WrongSourceRoute)
-    }
-}
-
-fn prepare_fixed_shapes(connection: &Connection, kind: SchemaKind) -> Result<()> {
-    connection.prepare_cached(&membership_sql("objects", "object_id"))?;
-    connection.prepare_cached(&crate::admission::fixed_insert_sql(
-        "objects",
-        &["object_id", "bytes"],
-    ))?;
-    for fact in [
-        FactKind::Commit,
-        FactKind::Branch,
-        FactKind::LayerHistory,
-        FactKind::Layer,
-        FactKind::StackHistory,
-        FactKind::Stack,
-        FactKind::AddResult,
-    ] {
-        if let Ok((table, key, columns)) = crate::admission::fact_shape(fact, kind) {
-            connection.prepare_cached(&membership_sql(table, key))?;
-            connection.prepare_cached(&crate::admission::fixed_insert_sql(table, columns))?;
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn membership_sql(table: &str, key: &str) -> String {
-    let placeholders = (1..=crate::ID_BATCH_COUNT)
-        .map(|index| format!("?{index}"))
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("SELECT {key} FROM {table} WHERE {key} IN ({placeholders})")
-}
-
 fn sqlite_version(value: &str) -> Result<(u32, u32, u32)> {
     let mut parts = value.split('.');
     let parse = |part: Option<&str>| {
@@ -572,414 +578,326 @@ fn absolute(path: &Path) -> Result<PathBuf> {
     })
 }
 
-pub(crate) fn appended(path: &Path, suffix: &str) -> PathBuf {
-    let mut value = path.as_os_str().to_os_string();
+fn appended(path: &Path, suffix: &str) -> PathBuf {
+    let mut value = path.as_os_str().to_owned();
     value.push(suffix);
     value.into()
 }
 
-const OBJECTS: &str = "CREATE TABLE objects (
-    object_id BLOB PRIMARY KEY NOT NULL,
+const LAYERSTACK_SCHEMA: &str = r#"
+CREATE TABLE store (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    store_id BLOB NOT NULL UNIQUE CHECK (length(store_id) = 32)
+) STRICT;
+CREATE TABLE objects (
+    object_id BLOB PRIMARY KEY CHECK (length(object_id) = 32),
     bytes BLOB NOT NULL
-)";
-const COMMITS: &str = "CREATE TABLE commits (
-    commit_id BLOB PRIMARY KEY NOT NULL,
-    root_id BLOB NOT NULL,
-    parent_id BLOB,
-    merge_parent_id BLOB,
-    CHECK (merge_parent_id IS NULL OR parent_id IS NOT NULL),
-    CHECK (merge_parent_id IS NULL OR merge_parent_id != parent_id)
-)";
-const BRANCHES: &str = "CREATE TABLE branches (
-    branch_id BLOB PRIMARY KEY NOT NULL,
-    head_commit_id BLOB NOT NULL,
-    base_id BLOB NOT NULL
-)";
-const LAYER_HISTORIES: &str = "CREATE TABLE layer_histories (
-    history_id BLOB PRIMARY KEY NOT NULL,
-    head_layer_id BLOB NOT NULL
-)";
-const LAYERS: &str = "CREATE TABLE layers (
-    layer_id BLOB PRIMARY KEY NOT NULL,
-    history_id BLOB NOT NULL,
-    parent_id BLOB,
-    root_id BLOB NOT NULL
-)";
-const STACK_HISTORIES: &str = "CREATE TABLE stack_histories (
-    history_id BLOB PRIMARY KEY NOT NULL,
-    base_layer_id BLOB NOT NULL,
-    head_stack_id BLOB NOT NULL
-)";
-const STACKS: &str = "CREATE TABLE stacks (
-    stack_id BLOB PRIMARY KEY NOT NULL,
-    history_id BLOB NOT NULL,
-    parent_id BLOB,
-    root_id BLOB NOT NULL
-)";
-const ADD_RESULTS: &str = "CREATE TABLE add_results (
-    source_id BLOB PRIMARY KEY NOT NULL,
-    result_id BLOB NOT NULL
-)";
+) STRICT;
+CREATE TABLE commits (
+    commit_id BLOB PRIMARY KEY CHECK (length(commit_id) = 33),
+    root_id BLOB NOT NULL CHECK (length(root_id) = 32) REFERENCES objects(object_id),
+    parent_commit_id BLOB CHECK (parent_commit_id IS NULL OR length(parent_commit_id) = 33),
+    base_layer_id BLOB NOT NULL CHECK (length(base_layer_id) = 33) REFERENCES layers(layer_id),
+    FOREIGN KEY (parent_commit_id) REFERENCES commits(commit_id)
+) STRICT;
+CREATE TABLE branches (
+    branch_id BLOB PRIMARY KEY CHECK (length(branch_id) = 17),
+    layer_stack_id BLOB NOT NULL CHECK (length(layer_stack_id) = 17) REFERENCES layer_stacks(layer_stack_id) DEFERRABLE INITIALLY DEFERRED,
+    name TEXT NOT NULL
+        CHECK (length(name) BETWEEN 1 AND 63)
+        CHECK (name = lower(name))
+        CHECK (name NOT GLOB '*[^a-z0-9._-]*')
+        CHECK (substr(name, 1, 1) GLOB '[a-z0-9]')
+        CHECK (substr(name, -1, 1) GLOB '[a-z0-9]'),
+    base_layer_id BLOB NOT NULL CHECK (length(base_layer_id) = 33),
+    head_commit_id BLOB NOT NULL CHECK (length(head_commit_id) = 33) REFERENCES commits(commit_id),
+    forked_from_layer_id BLOB CHECK (forked_from_layer_id IS NULL OR length(forked_from_layer_id) = 33),
+    forked_from_branch_id BLOB CHECK (forked_from_branch_id IS NULL OR length(forked_from_branch_id) = 17),
+    forked_from_commit_id BLOB CHECK (forked_from_commit_id IS NULL OR length(forked_from_commit_id) = 33) REFERENCES commits(commit_id),
+    CHECK ((forked_from_layer_id IS NOT NULL AND forked_from_branch_id IS NULL AND forked_from_commit_id IS NULL)
+        OR (forked_from_layer_id IS NULL AND forked_from_branch_id IS NOT NULL AND forked_from_commit_id IS NOT NULL)),
+    FOREIGN KEY (layer_stack_id, base_layer_id) REFERENCES layers(layer_stack_id, layer_id),
+    FOREIGN KEY (layer_stack_id, forked_from_layer_id) REFERENCES layers(layer_stack_id, layer_id),
+    FOREIGN KEY (layer_stack_id, forked_from_branch_id) REFERENCES branches(layer_stack_id, branch_id)
+) STRICT;
+CREATE TABLE layer_stacks (
+    layer_stack_id BLOB PRIMARY KEY CHECK (length(layer_stack_id) = 17),
+    name TEXT NOT NULL
+        CHECK (length(name) BETWEEN 1 AND 63)
+        CHECK (name = lower(name))
+        CHECK (name NOT GLOB '*[^a-z0-9._-]*')
+        CHECK (substr(name, 1, 1) GLOB '[a-z0-9]')
+        CHECK (substr(name, -1, 1) GLOB '[a-z0-9]'),
+    head_layer_id BLOB NOT NULL CHECK (length(head_layer_id) = 33),
+    FOREIGN KEY (layer_stack_id, head_layer_id) REFERENCES layers(layer_stack_id, layer_id) DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+CREATE TABLE layers (
+    layer_id BLOB PRIMARY KEY CHECK (length(layer_id) = 33),
+    layer_stack_id BLOB NOT NULL CHECK (length(layer_stack_id) = 17) REFERENCES layer_stacks(layer_stack_id) DEFERRABLE INITIALLY DEFERRED,
+    parent_layer_id BLOB CHECK (parent_layer_id IS NULL OR length(parent_layer_id) = 33),
+    root_id BLOB NOT NULL CHECK (length(root_id) = 32) REFERENCES objects(object_id),
+    source_branch_id BLOB CHECK (source_branch_id IS NULL OR length(source_branch_id) = 17),
+    source_commit_id BLOB CHECK (source_commit_id IS NULL OR length(source_commit_id) = 33) REFERENCES commits(commit_id) DEFERRABLE INITIALLY DEFERRED,
+    CHECK ((parent_layer_id IS NULL AND source_branch_id IS NULL AND source_commit_id IS NULL)
+        OR (parent_layer_id IS NOT NULL AND source_branch_id IS NOT NULL AND source_commit_id IS NOT NULL)),
+    FOREIGN KEY (layer_stack_id, parent_layer_id) REFERENCES layers(layer_stack_id, layer_id),
+    FOREIGN KEY (layer_stack_id, source_branch_id) REFERENCES branches(layer_stack_id, branch_id)
+) STRICT;
+CREATE UNIQUE INDEX layer_stack_names ON layer_stacks(name);
+CREATE UNIQUE INDEX layer_identity ON layers(layer_stack_id, layer_id);
+CREATE UNIQUE INDEX layers_genesis ON layers(layer_stack_id) WHERE parent_layer_id IS NULL;
+CREATE UNIQUE INDEX layers_child ON layers(layer_stack_id, parent_layer_id) WHERE parent_layer_id IS NOT NULL;
+CREATE UNIQUE INDEX layers_source ON layers(source_branch_id, source_commit_id) WHERE source_branch_id IS NOT NULL;
+CREATE INDEX layers_parent ON layers(parent_layer_id);
+CREATE INDEX commits_parent ON commits(parent_commit_id);
+CREATE UNIQUE INDEX branch_identity ON branches(layer_stack_id, branch_id);
+CREATE UNIQUE INDEX branch_names ON branches(layer_stack_id, name);
+CREATE INDEX branches_head ON branches(head_commit_id);
+CREATE INDEX branches_fork ON branches(forked_from_branch_id, forked_from_commit_id);
+"#;
 
-const INDEXES: &[&str] = &[
-    "CREATE INDEX commits_parent ON commits(parent_id)",
-    "CREATE INDEX commits_merge_parent ON commits(merge_parent_id)",
-];
-
-const FULL_INDEXES: &[&str] = &[
-    "CREATE UNIQUE INDEX layers_genesis ON layers(history_id) WHERE parent_id IS NULL",
-    "CREATE UNIQUE INDEX layers_child ON layers(history_id, parent_id) WHERE parent_id IS NOT NULL",
-    "CREATE UNIQUE INDEX stacks_seed ON stacks(history_id) WHERE parent_id IS NULL",
-    "CREATE UNIQUE INDEX stacks_child ON stacks(history_id, parent_id) WHERE parent_id IS NOT NULL",
-    "CREATE INDEX add_results_result ON add_results(result_id)",
-];
-
-pub fn install_schema(connection: &Connection, kind: SchemaKind) -> Result<()> {
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    let table_count: i64 = connection.query_row(
-        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
-        [],
-        |row| row.get(0),
-    )?;
-    if version == 0 && table_count == 0 {
-        let transaction = connection.unchecked_transaction()?;
-        for ddl in [OBJECTS, COMMITS, BRANCHES] {
-            transaction.execute_batch(ddl)?;
-        }
-        for ddl in INDEXES {
-            transaction.execute_batch(ddl)?;
-        }
-        if kind == SchemaKind::Full {
-            for ddl in [
-                LAYER_HISTORIES,
-                LAYERS,
-                STACK_HISTORIES,
-                STACKS,
-                ADD_RESULTS,
-            ] {
-                transaction.execute_batch(ddl)?;
-            }
-            for ddl in FULL_INDEXES {
-                transaction.execute_batch(ddl)?;
-            }
-        }
-        transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
-        transaction.commit()?;
-    }
-    verify_schema(connection, kind)
-}
-
-pub fn verify_schema(connection: &Connection, kind: SchemaKind) -> Result<()> {
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-    if version != SCHEMA_VERSION {
-        return Err(StorageError::WrongStoreSchema);
-    }
-    let expected: &[(&str, &[&str])] = match kind {
-        SchemaKind::Branch => &[
-            ("branches", &["branch_id", "head_commit_id", "base_id"]),
-            (
-                "commits",
-                &["commit_id", "root_id", "parent_id", "merge_parent_id"],
-            ),
-            ("objects", &["object_id", "bytes"]),
-        ],
-        SchemaKind::Full => &[
-            ("add_results", &["source_id", "result_id"]),
-            ("branches", &["branch_id", "head_commit_id", "base_id"]),
-            (
-                "commits",
-                &["commit_id", "root_id", "parent_id", "merge_parent_id"],
-            ),
-            ("layer_histories", &["history_id", "head_layer_id"]),
-            (
-                "layers",
-                &["layer_id", "history_id", "parent_id", "root_id"],
-            ),
-            ("objects", &["object_id", "bytes"]),
-            (
-                "stack_histories",
-                &["history_id", "base_layer_id", "head_stack_id"],
-            ),
-            (
-                "stacks",
-                &["stack_id", "history_id", "parent_id", "root_id"],
-            ),
-        ],
-    };
-    let mut statement = connection.prepare(
-        "SELECT name FROM sqlite_master
-         WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-    )?;
-    let names = statement
-        .query_map([], |row| row.get::<_, String>(0))?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    let expected_names = expected
-        .iter()
-        .map(|(name, _)| (*name).to_owned())
-        .collect::<Vec<_>>();
-    if names != expected_names {
-        let other = match kind {
-            SchemaKind::Branch => [
-                "add_results",
-                "branches",
-                "commits",
-                "layer_histories",
-                "layers",
-                "objects",
-                "stack_histories",
-                "stacks",
-            ]
-            .as_slice(),
-            SchemaKind::Full => ["branches", "commits", "objects"].as_slice(),
-        };
-        if names
-            == other
-                .iter()
-                .map(|name| (*name).to_owned())
-                .collect::<Vec<_>>()
-        {
-            return Err(StorageError::WrongStoreRole);
-        }
-        return Err(StorageError::WrongStoreSchema);
-    }
-    let expected_ddl = match kind {
-        SchemaKind::Branch => vec![
-            ("branches", BRANCHES),
-            ("commits", COMMITS),
-            ("objects", OBJECTS),
-        ],
-        SchemaKind::Full => vec![
-            ("add_results", ADD_RESULTS),
-            ("branches", BRANCHES),
-            ("commits", COMMITS),
-            ("layer_histories", LAYER_HISTORIES),
-            ("layers", LAYERS),
-            ("objects", OBJECTS),
-            ("stack_histories", STACK_HISTORIES),
-            ("stacks", STACKS),
-        ],
-    };
-    let mut statement = connection.prepare(
-        "SELECT name,sql FROM sqlite_master
-         WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-    )?;
-    let actual_ddl = statement
-        .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    if actual_ddl
-        .iter()
-        .map(|(name, sql)| (name.as_str(), normalized(sql)))
-        .ne(expected_ddl
-            .iter()
-            .map(|(name, sql)| (*name, normalized(sql))))
-    {
-        return Err(StorageError::WrongStoreSchema);
-    }
-    for (table, columns) in expected {
-        let mut statement = connection.prepare(&format!("PRAGMA table_info({table})"))?;
-        let actual = statement
-            .query_map([], |row| row.get::<_, String>(1))?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        if actual
-            != columns
-                .iter()
-                .map(|column| (*column).to_owned())
-                .collect::<Vec<_>>()
-        {
-            return Err(StorageError::WrongStoreSchema);
-        }
-    }
-    let columns = expected
-        .iter()
-        .map(|(_, columns)| columns.len())
-        .sum::<usize>();
-    if (kind == SchemaKind::Branch && columns != 9) || (kind == SchemaKind::Full && columns != 24) {
-        return Err(StorageError::WrongStoreSchema);
-    }
-    let expected_indexes = INDEXES
-        .iter()
-        .chain(
-            (kind == SchemaKind::Full)
-                .then_some(FULL_INDEXES)
-                .into_iter()
-                .flatten(),
-        )
-        .map(|sql| normalized(sql))
-        .collect::<Vec<_>>();
-    let mut statement = connection.prepare(
-        "SELECT sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL ORDER BY name",
-    )?;
-    let actual_indexes = statement
-        .query_map([], |row| row.get::<_, String>(0))?
-        .map(|row| row.map(|sql| normalized(&sql)))
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    let mut expected_indexes = expected_indexes;
-    expected_indexes.sort();
-    let mut actual_indexes = actual_indexes;
-    actual_indexes.sort();
-    if actual_indexes != expected_indexes {
-        return Err(StorageError::WrongStoreSchema);
-    }
-    Ok(())
-}
-
-fn normalized(sql: &str) -> String {
-    sql.split_whitespace().collect::<Vec<_>>().join(" ")
-}
+const BRANCH_SCHEMA: &str = r#"
+CREATE TABLE store (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    store_id BLOB NOT NULL UNIQUE CHECK (length(store_id) = 32),
+    parent_store_id BLOB NOT NULL CHECK (length(parent_store_id) = 32)
+) STRICT;
+CREATE TABLE objects (
+    object_id BLOB PRIMARY KEY CHECK (length(object_id) = 32),
+    bytes BLOB NOT NULL
+) STRICT;
+CREATE TABLE commits (
+    commit_id BLOB PRIMARY KEY CHECK (length(commit_id) = 33),
+    root_id BLOB NOT NULL CHECK (length(root_id) = 32),
+    parent_commit_id BLOB CHECK (parent_commit_id IS NULL OR length(parent_commit_id) = 33),
+    base_layer_id BLOB NOT NULL CHECK (length(base_layer_id) = 33) REFERENCES layers(layer_id),
+    FOREIGN KEY (parent_commit_id) REFERENCES commits(commit_id)
+) STRICT;
+CREATE TABLE branches (
+    branch_id BLOB PRIMARY KEY CHECK (length(branch_id) = 17),
+    layer_stack_id BLOB NOT NULL CHECK (length(layer_stack_id) = 17) REFERENCES layer_stacks(layer_stack_id) DEFERRABLE INITIALLY DEFERRED,
+    name TEXT NOT NULL
+        CHECK (length(name) BETWEEN 1 AND 63)
+        CHECK (name = lower(name))
+        CHECK (name NOT GLOB '*[^a-z0-9._-]*')
+        CHECK (substr(name, 1, 1) GLOB '[a-z0-9]')
+        CHECK (substr(name, -1, 1) GLOB '[a-z0-9]'),
+    base_layer_id BLOB CHECK (base_layer_id IS NULL OR length(base_layer_id) = 33),
+    head_commit_id BLOB CHECK (head_commit_id IS NULL OR length(head_commit_id) = 33) REFERENCES commits(commit_id),
+    forked_from_layer_id BLOB CHECK (forked_from_layer_id IS NULL OR length(forked_from_layer_id) = 33),
+    forked_from_branch_id BLOB CHECK (forked_from_branch_id IS NULL OR length(forked_from_branch_id) = 17),
+    forked_from_commit_id BLOB CHECK (forked_from_commit_id IS NULL OR length(forked_from_commit_id) = 33) REFERENCES commits(commit_id),
+    CHECK ((forked_from_layer_id IS NOT NULL AND forked_from_branch_id IS NULL AND forked_from_commit_id IS NULL)
+        OR (forked_from_layer_id IS NULL AND forked_from_branch_id IS NOT NULL AND forked_from_commit_id IS NOT NULL)),
+    CHECK (base_layer_id IS NOT NULL OR head_commit_id IS NULL),
+    FOREIGN KEY (layer_stack_id, base_layer_id) REFERENCES layers(layer_stack_id, layer_id),
+    FOREIGN KEY (layer_stack_id, forked_from_layer_id) REFERENCES layers(layer_stack_id, layer_id),
+    FOREIGN KEY (layer_stack_id, forked_from_branch_id) REFERENCES branches(layer_stack_id, branch_id)
+) STRICT;
+CREATE TABLE branch_scopes (
+    branch_id BLOB PRIMARY KEY CHECK (length(branch_id) = 17) REFERENCES branches(branch_id),
+    scope_kind TEXT NOT NULL CHECK (scope_kind IN ('local', 'remote')),
+    through_commit_id BLOB CHECK (through_commit_id IS NULL OR length(through_commit_id) = 33),
+    serving_mode TEXT CHECK (serving_mode IS NULL OR serving_mode IN ('reference', 'replica')),
+    CHECK ((scope_kind = 'local' AND through_commit_id IS NULL AND serving_mode IS NULL)
+        OR (scope_kind = 'remote' AND through_commit_id IS NOT NULL AND serving_mode IS NOT NULL)),
+    FOREIGN KEY (branch_id, through_commit_id) REFERENCES branches(branch_id, head_commit_id)
+        DEFERRABLE INITIALLY DEFERRED
+) STRICT;
+CREATE TABLE layer_stacks (
+    layer_stack_id BLOB PRIMARY KEY CHECK (length(layer_stack_id) = 17),
+    name TEXT NOT NULL
+        CHECK (length(name) BETWEEN 1 AND 63)
+        CHECK (name = lower(name))
+        CHECK (name NOT GLOB '*[^a-z0-9._-]*')
+        CHECK (substr(name, 1, 1) GLOB '[a-z0-9]')
+        CHECK (substr(name, -1, 1) GLOB '[a-z0-9]')
+) STRICT;
+CREATE TABLE layer_stack_scopes (
+    layer_stack_id BLOB PRIMARY KEY CHECK (length(layer_stack_id) = 17) REFERENCES layer_stacks(layer_stack_id),
+    through_layer_id BLOB NOT NULL CHECK (length(through_layer_id) = 33),
+    serving_mode TEXT NOT NULL CHECK (serving_mode IN ('reference', 'replica')),
+    FOREIGN KEY (layer_stack_id, through_layer_id) REFERENCES layers(layer_stack_id, layer_id)
+) STRICT;
+CREATE TABLE layers (
+    layer_id BLOB PRIMARY KEY CHECK (length(layer_id) = 33),
+    layer_stack_id BLOB NOT NULL CHECK (length(layer_stack_id) = 17) REFERENCES layer_stacks(layer_stack_id) DEFERRABLE INITIALLY DEFERRED,
+    parent_layer_id BLOB CHECK (parent_layer_id IS NULL OR length(parent_layer_id) = 33),
+    root_id BLOB NOT NULL CHECK (length(root_id) = 32),
+    source_branch_id BLOB CHECK (source_branch_id IS NULL OR length(source_branch_id) = 17),
+    source_commit_id BLOB CHECK (source_commit_id IS NULL OR length(source_commit_id) = 33),
+    CHECK ((parent_layer_id IS NULL AND source_branch_id IS NULL AND source_commit_id IS NULL)
+        OR (parent_layer_id IS NOT NULL AND source_branch_id IS NOT NULL AND source_commit_id IS NOT NULL)),
+    FOREIGN KEY (layer_stack_id, parent_layer_id) REFERENCES layers(layer_stack_id, layer_id)
+) STRICT;
+CREATE TABLE complete_roots (
+    root_id BLOB PRIMARY KEY CHECK (length(root_id) = 32) REFERENCES objects(object_id)
+) STRICT;
+CREATE UNIQUE INDEX layer_stack_names ON layer_stacks(name);
+CREATE UNIQUE INDEX layer_identity ON layers(layer_stack_id, layer_id);
+CREATE UNIQUE INDEX layers_genesis ON layers(layer_stack_id) WHERE parent_layer_id IS NULL;
+CREATE UNIQUE INDEX layers_child ON layers(layer_stack_id, parent_layer_id) WHERE parent_layer_id IS NOT NULL;
+CREATE UNIQUE INDEX layers_source ON layers(source_branch_id, source_commit_id) WHERE source_branch_id IS NOT NULL;
+CREATE INDEX layers_parent ON layers(parent_layer_id);
+CREATE INDEX commits_parent ON commits(parent_commit_id);
+CREATE UNIQUE INDEX branch_identity ON branches(layer_stack_id, branch_id);
+CREATE UNIQUE INDEX branch_names ON branches(layer_stack_id, name);
+CREATE UNIQUE INDEX branch_pointer ON branches(branch_id, head_commit_id);
+CREATE INDEX branches_head ON branches(head_commit_id);
+CREATE INDEX branches_fork ON branches(forked_from_branch_id, forked_from_commit_id);
+"#;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn exact_manifests_and_wrong_shape_rejection() {
-        for kind in [SchemaKind::Branch, SchemaKind::Full] {
-            let connection = Connection::open_in_memory().unwrap();
-            install_schema(&connection, kind).unwrap();
-            verify_schema(&connection, kind).unwrap();
-            connection
-                .execute_batch("CREATE TABLE extra(value BLOB)")
-                .unwrap();
-            assert!(verify_schema(&connection, kind).is_err());
-        }
+    fn temp(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "layerfs-v2-schema-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
 
-        let connection = Connection::open_in_memory().unwrap();
-        connection.execute_batch(OBJECTS).unwrap();
+    #[test]
+    fn exact_roles_census_and_parent_identity_are_enforced() {
+        let authority_path = temp("authority");
+        let branch_path = temp("branch");
+        let authority = StoreDb::create(&authority_path, StoreRole::LayerStack, None).unwrap();
+        let parent = authority.store_id();
+        let branch = StoreDb::create(&branch_path, StoreRole::Branch, Some(parent)).unwrap();
+        assert_eq!(branch.parent_store_id(), Some(parent));
+        assert_eq!(census(&authority), (6, 25));
+        assert_eq!(census(&branch), (9, 33));
+        for db in [&authority, &branch] {
+            let connection = db.connection().unwrap();
+            assert_eq!(
+                connection
+                    .query_row("PRAGMA journal_mode", [], |row| row.get::<_, String>(0))
+                    .unwrap(),
+                "wal"
+            );
+            assert_eq!(pragma(&connection, "synchronous"), 2);
+            assert_eq!(pragma(&connection, "foreign_keys"), 1);
+            assert_eq!(pragma(&connection, "busy_timeout"), 5_000);
+            assert_eq!(pragma(&connection, "temp_store"), 1);
+            assert_eq!(pragma(&connection, "cache_size"), -SQLITE_PAGE_CACHE_KIB);
+            assert_eq!(
+                pragma(&connection, "wal_autocheckpoint"),
+                WAL_AUTOCHECKPOINT_PAGES
+            );
+        }
+        assert!(matches!(
+            StoreDb::connect(&authority_path, StoreRole::Branch, Some(parent)),
+            Err(StorageError::StoreBusy)
+        ));
+        drop(branch);
+        drop(authority);
+        assert!(matches!(
+            StoreDb::connect(
+                &branch_path,
+                StoreRole::Branch,
+                Some(StoreId::random().unwrap())
+            ),
+            Err(StorageError::WrongParent)
+        ));
+        std::fs::remove_file(authority_path).unwrap();
+        std::fs::remove_file(branch_path).unwrap();
+    }
+
+    #[test]
+    fn cold_open_rejects_same_census_with_changed_index_or_constraint() {
+        let index_path = temp("index");
+        let store = StoreDb::create(&index_path, StoreRole::LayerStack, None).unwrap();
+        drop(store);
+        let connection = Connection::open(&index_path).unwrap();
         connection
             .execute_batch(
-                "CREATE TABLE commits (
-                    commit_id BLOB PRIMARY KEY NOT NULL,
-                    root_id BLOB NOT NULL,
-                    parent_id BLOB,
-                    merge_parent_id BLOB
-                )",
+                "DROP INDEX branches_head;
+                 CREATE INDEX branches_head ON branches(branch_id);",
             )
             .unwrap();
-        connection.execute_batch(BRANCHES).unwrap();
-        for ddl in INDEXES {
-            connection.execute_batch(ddl).unwrap();
-        }
+        drop(connection);
+        assert!(matches!(
+            StoreDb::connect(&index_path, StoreRole::LayerStack, None),
+            Err(StorageError::WrongStoreSchema)
+        ));
+
+        let constraint_path = temp("constraint");
+        let connection = Connection::open(&constraint_path).unwrap();
+        configure(&connection).unwrap();
+        connection
+            .pragma_update(
+                None,
+                "application_id",
+                StoreRole::LayerStack.application_id(),
+            )
+            .unwrap();
         connection
             .pragma_update(None, "user_version", SCHEMA_VERSION)
             .unwrap();
-        assert!(verify_schema(&connection, SchemaKind::Branch).is_err());
+        connection
+            .execute_batch(&LAYERSTACK_SCHEMA.replace(
+                "CHECK (length(name) BETWEEN 1 AND 63)",
+                "CHECK (length(name) BETWEEN 0 AND 63)",
+            ))
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO store(singleton,store_id) VALUES(1,?1)",
+                [crate::StorageId::as_slice(&StoreId::random().unwrap())],
+            )
+            .unwrap();
+        drop(connection);
+        assert!(matches!(
+            StoreDb::connect(&constraint_path, StoreRole::LayerStack, None),
+            Err(StorageError::WrongStoreSchema)
+        ));
+        std::fs::remove_file(index_path).unwrap();
+        std::fs::remove_file(constraint_path).unwrap();
     }
 
     #[test]
-    fn create_and_connect_are_explicit_and_role_typed() {
-        let root = std::env::temp_dir().join(format!(
-            "layerfs-create-connect-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let path = root.join("store.sqlite");
-        assert!(matches!(
-            StoreDb::connect(&path, StoreRole::Layer),
-            Err(StorageError::StoreMissing)
-        ));
-        assert!(!path.exists());
-
-        let store = StoreDb::create(&path, StoreRole::Layer).unwrap();
-        assert_eq!(store.role(), StoreRole::Layer);
-        drop(store);
-        let before = std::fs::read(&path).unwrap();
-        assert!(matches!(
-            StoreDb::create(&path, StoreRole::Layer),
-            Err(StorageError::StoreAlreadyExists)
-        ));
-        assert_eq!(std::fs::read(&path).unwrap(), before);
-        assert!(matches!(
-            StoreDb::connect(&path, StoreRole::Stack),
-            Err(StorageError::WrongStoreRole)
-        ));
-        assert_eq!(std::fs::read(&path).unwrap(), before);
-
-        let connected = StoreDb::connect(&path, StoreRole::Layer).unwrap();
-        assert_eq!(connected.role(), StoreRole::Layer);
-        drop(connected);
-        std::fs::remove_dir_all(root).unwrap();
+    fn inventory_continuation_is_an_index_seek() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("CREATE TABLE objects(object_id BLOB PRIMARY KEY,bytes BLOB) STRICT")
+            .unwrap();
+        let details = connection
+            .prepare(
+                "EXPLAIN QUERY PLAN
+                 SELECT object_id,length(bytes) FROM objects
+                 WHERE object_id>?1 ORDER BY object_id LIMIT ?2",
+            )
+            .unwrap()
+            .query_map(rusqlite::params![vec![0_u8; 32], 513_i64], |row| {
+                row.get::<_, String>(3)
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert!(details.iter().any(|detail| detail.contains("SEARCH")));
+        assert!(details.iter().all(|detail| !detail.starts_with("SCAN ")));
     }
 
-    #[test]
-    fn second_database_owner_is_rejected() {
-        let root = std::env::temp_dir().join(format!(
-            "layerfs-owner-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        let path = root.join("store.sqlite");
-        let owner = crate::StoreDb::create(&path, StoreRole::Branch).unwrap();
-        assert!(matches!(
-            crate::StoreDb::connect(&path, StoreRole::Branch),
-            Err(StorageError::StoreBusy)
-        ));
-        drop(owner);
-        crate::StoreDb::connect(&path, StoreRole::Branch).unwrap();
-        std::fs::remove_dir_all(root).unwrap();
+    fn census(db: &StoreDb) -> (i64, i64) {
+        let connection = db.connection().unwrap();
+        connection
+            .query_row(
+                "SELECT count(*),sum((SELECT count(*) FROM pragma_table_info(s.name)))
+                 FROM sqlite_schema s WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap()
     }
 
-    #[test]
-    fn receiver_gate_is_fifo_single_active_and_does_not_block_database_reads() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-
-        let root = std::env::temp_dir().join(format!(
-            "layerfs-gate-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        let db = StoreDb::create(root.join("store.sqlite"), StoreRole::Branch).unwrap();
-        let first = db.enter_operation().unwrap();
-        let order = Arc::new(Mutex::new(Vec::new()));
-        let active = Arc::new(AtomicUsize::new(0));
-        let maximum = Arc::new(AtomicUsize::new(0));
-        let mut threads = Vec::new();
-        for index in 0..10 {
-            let queued = std::sync::mpsc::sync_channel(0);
-            let worker = db.clone();
-            let order = order.clone();
-            let active = active.clone();
-            let maximum = maximum.clone();
-            threads.push(std::thread::spawn(move || {
-                queued.0.send(()).unwrap();
-                let _permit = worker.enter_operation().unwrap();
-                let count = active.fetch_add(1, Ordering::SeqCst) + 1;
-                maximum.fetch_max(count, Ordering::SeqCst);
-                order.lock().unwrap().push(index);
-                active.fetch_sub(1, Ordering::SeqCst);
-            }));
-            queued.1.recv().unwrap();
-            while db.0.gate.state.lock().unwrap().next != index as u64 + 2 {
-                std::thread::yield_now();
-            }
-        }
-        assert_eq!(
-            db.connection()
-                .unwrap()
-                .query_row("SELECT 1", [], |row| row.get::<_, i64>(0))
-                .unwrap(),
-            1
-        );
-        drop(first);
-        for thread in threads {
-            thread.join().unwrap();
-        }
-        assert_eq!(*order.lock().unwrap(), (0..10).collect::<Vec<_>>());
-        assert_eq!(maximum.load(Ordering::SeqCst), 1);
-        assert_eq!(active.load(Ordering::SeqCst), 0);
-        drop(db);
-        std::fs::remove_dir_all(root).unwrap();
+    fn pragma(connection: &Connection, name: &str) -> i64 {
+        connection
+            .query_row(&format!("PRAGMA {name}"), [], |row| row.get(0))
+            .unwrap()
     }
 }

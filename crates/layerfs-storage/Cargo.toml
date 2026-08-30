@@ -10,6 +10,5 @@ test-instrumentation = []
 
 [dependencies]
 blake3.workspace = true
-ed25519-dalek.workspace = true
 layerfs-content = { path = "../layerfs-content" }
 rusqlite.workspace = true

@@ -1,5 +1,8 @@
 # LayerFS Architecture
 
+> **Historical and superseded.** The binding architecture is
+> [`docs/v2/spec.md`](docs/v2/spec.md).
+
 ## 1. Purpose
 
 LayerFS is an immutable, content-addressed logical filesystem that can be

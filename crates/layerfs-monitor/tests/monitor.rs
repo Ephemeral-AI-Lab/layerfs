@@ -1,57 +1,115 @@
 use layerfs_branch_store::BranchStore;
-use layerfs_layer_store::LayerStore;
+use layerfs_layerstack_store::LayerStackStore;
 use layerfs_monitor::{
-    Monitor, MonitorScope, MonitorSnapshot, MonitoredRoute, OperationId, OperationOutcome,
-    OperationReceipt, TimingFragment,
+    ExactOrUnavailable, Monitor, OperationFamily, OperationId, OperationOutcome, OperationReceipt,
+    SemanticOperation, TimingFragment,
 };
-use layerfs_storage::{reset_sql_trace, sql_trace, LayerInitialization};
+use layerfs_storage::{
+    reset_sql_trace, sql_trace, EntityName, LayerStackInitialization, LocalForkSource,
+};
 use layerfs_workspace::Workspaces;
 use std::sync::Arc;
 
 #[test]
-fn passive_dedup_snapshot_has_zero_sql_and_analysis_is_explicit() {
+fn passive_snapshot_has_zero_sql_and_explicit_analysis_is_exact() {
     let root = run_dir();
-    let layer = Arc::new(LayerStore::create(root.join("layer.sqlite")).unwrap());
-    let (_, genesis) = layer.initialize(LayerInitialization::Empty).unwrap();
-    let branch = BranchStore::create(root.join("branch.sqlite"), layer.clone()).unwrap();
-    let _record = branch
-        .create_branch(layerfs_storage::BranchSource::Layer(genesis.id))
+    let layerstack = Arc::new(LayerStackStore::create(root.join("layerstack.sqlite")).unwrap());
+    let genesis = layerstack
+        .initialize_layerstack(
+            EntityName::new("project").unwrap(),
+            LayerStackInitialization::Empty,
+        )
+        .unwrap()
+        .genesis_layer_id;
+    let branch = BranchStore::create(root.join("branch.sqlite"), layerstack.store_id()).unwrap();
+    branch
+        .pull_layer(
+            layerstack.clone(),
+            genesis,
+            layerfs_storage::RemotePlacement::Reference,
+        )
         .unwrap();
-    let workspaces = Arc::new(Workspaces::new(root.join("workspaces"), [branch.clone()]).unwrap());
-    let route = MonitoredRoute::new(branch, None, layer);
-    let route_id = route.id;
-    let monitor = Monitor::new(root.join("monitor"), [route], workspaces).unwrap();
+    branch
+        .fork_branch(
+            EntityName::new("main").unwrap(),
+            LocalForkSource::Layer { layer_id: genesis },
+        )
+        .unwrap();
+    let workspaces = Arc::new(
+        Workspaces::new(root.join("workspaces"), branch.clone(), layerstack.clone()).unwrap(),
+    );
+    let monitor = Monitor::new(
+        root.join("monitor"),
+        layerstack.clone(),
+        branch.clone(),
+        workspaces,
+    )
+    .unwrap();
 
     reset_sql_trace();
-    let MonitorSnapshot::Dedup(passive) = monitor
-        .snapshot(MonitorScope::Dedup {
-            route: Some(route_id),
-        })
-        .unwrap()
-    else {
-        panic!("dedup snapshot")
-    };
-    assert!(passive.is_empty());
+    let passive = monitor.snapshot().unwrap();
+    assert!(passive.dedup.is_none());
     assert!(sql_trace().is_empty());
-
-    let analysis = monitor.analyze_dedup(route_id).unwrap();
+    let analysis = monitor.analyze_dedup().unwrap();
     assert_eq!(analysis.placements.len(), 2);
+    assert_eq!(analysis.physical_cas_bytes, analysis.union_cas_bytes);
+    assert_eq!(analysis.cross_store_placement_bytes, 0);
+    assert!(matches!(
+        analysis.local_cas,
+        ExactOrUnavailable::Unavailable(_)
+    ));
+    assert!(matches!(
+        analysis.transfer,
+        ExactOrUnavailable::Unavailable(_)
+    ));
+    let unique_bytes = analysis.union_cas_bytes;
     assert!(!sql_trace().is_empty());
     reset_sql_trace();
-    let MonitorSnapshot::Dedup(cached) = monitor
-        .snapshot(MonitorScope::Dedup {
-            route: Some(route_id),
-        })
-        .unwrap()
-    else {
-        panic!("dedup snapshot")
-    };
-    assert_eq!(cached, vec![(route_id, analysis)]);
+    assert_eq!(monitor.snapshot().unwrap().dedup, Some(analysis));
     assert!(sql_trace().is_empty());
 
+    monitor.begin_operation();
+    branch
+        .pull_layer(
+            layerstack.clone(),
+            genesis,
+            layerfs_storage::RemotePlacement::Replica,
+        )
+        .unwrap();
+    let mut storage = monitor.finish_operation();
+    storage.extend((0..10).map(|index| {
+        layerfs_storage::StorageReceipt::Local(layerfs_storage::LocalAdmissionReceipt {
+            objects: layerfs_storage::LocalObjectReceipt {
+                candidate_ids: 1,
+                candidate_bytes: 1_261,
+                inserted_ids: u64::from(index == 0),
+                inserted_bytes: if index == 0 { 1_261 } else { 0 },
+                reused_ids: u64::from(index != 0),
+                reused_bytes: if index == 0 { 0 } else { 1_261 },
+            },
+        })
+    }));
+    let transfer_sets = storage.iter().filter_map(|receipt| match receipt {
+        layerfs_storage::StorageReceipt::Transfer(receipt) => Some(
+            std::iter::once(&receipt.objects)
+                .chain(receipt.facts.values())
+                .collect::<Vec<_>>(),
+        ),
+        layerfs_storage::StorageReceipt::Local(_) => None,
+    });
+    let (expected_announced, expected_sent) =
+        transfer_sets
+            .flatten()
+            .fold((0_u64, 0_u64), |(announced, sent), set| {
+                (
+                    announced + set.announced_bytes.exact().unwrap(),
+                    sent + set.sent_bytes,
+                )
+            });
+    let expected_storage_receipts = storage.len();
     let receipt = OperationReceipt {
         id: OperationId::new(),
-        name: "branch.push".to_owned(),
+        operation: SemanticOperation::new(OperationFamily::BranchPush),
         outcome: OperationOutcome::Succeeded,
         queued_ns: 10,
         service_ns: 100,
@@ -60,66 +118,59 @@ fn passive_dedup_snapshot_has_zero_sql_and_analysis_is_explicit() {
             started_ns: 1,
             elapsed_ns: 90,
         }],
-        storage: Vec::new(),
+        storage,
     };
     monitor.record(receipt.clone()).unwrap();
-    let MonitorSnapshot::Operations(receipts) = monitor
-        .snapshot(MonitorScope::Operation(Some(receipt.id)))
-        .unwrap()
-    else {
-        panic!("operation snapshot")
+    let receipt_json = receipt.to_json();
+    assert!(receipt_json.contains("\"family\":\"branch.push\""));
+    assert!(receipt_json.contains("\"fragments\":["));
+    assert_eq!(monitor.snapshot().unwrap().operations, vec![receipt]);
+    let analysis = monitor.analyze_dedup().unwrap();
+    assert_eq!(analysis.physical_cas_bytes, unique_bytes * 2);
+    assert_eq!(analysis.union_cas_bytes, unique_bytes);
+    assert_eq!(analysis.cross_store_placement_bytes, unique_bytes);
+    assert_eq!(analysis.placement_factor, 2.0);
+    let ExactOrUnavailable::Exact(local) = analysis.local_cas else {
+        panic!("local CAS analysis")
     };
-    assert_eq!(receipts, vec![receipt]);
+    assert_eq!(local.candidate_bytes, 12_610);
+    assert_eq!(local.inserted_bytes, 1_261);
+    assert_eq!(local.reused_bytes, 11_349);
+    assert_eq!(local.saved_fraction, 0.9);
+    assert_eq!(local.logical_to_physical, 10.0);
+    let ExactOrUnavailable::Exact(transfer) = analysis.transfer else {
+        panic!("transfer analysis")
+    };
+    assert_eq!(transfer.announced_bytes, expected_announced);
+    assert_eq!(transfer.sent_bytes, expected_sent);
+    assert_eq!(transfer.avoided_bytes, expected_announced - expected_sent);
 
     drop(monitor);
-    std::fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
-fn receipt_transaction_classes_match_the_sql_trace() {
-    let root = run_dir();
-    let db = layerfs_storage::StoreDb::create(
-        root.join("branch.sqlite"),
-        layerfs_storage::StoreRole::Branch,
+    let reopened = Monitor::new(
+        root.join("monitor"),
+        layerstack.clone(),
+        branch.clone(),
+        Arc::new(
+            Workspaces::new(root.join("reopened"), branch.clone(), layerstack.clone()).unwrap(),
+        ),
     )
     .unwrap();
-    let facts = (0..=layerfs_storage::FACT_BATCH_COUNT)
-        .map(|index| {
-            let root = layerfs_content::ObjectId::for_bytes(&(index as u64).to_be_bytes());
-            layerfs_storage::Fact::Commit(layerfs_storage::CommitRecord {
-                id: layerfs_storage::CommitId::derive(root, None, None),
-                root_id: root,
-                parent_id: None,
-                merge_parent_id: None,
-            })
-        })
-        .collect::<Vec<_>>();
-    reset_sql_trace();
-    let (exchange, _) = db
-        .finish_transfer(&[], &facts, layerfs_storage::TransferIntent::None)
-        .unwrap();
-    let database = exchange.database_receipt();
-    let trace = sql_trace();
-    let begins = trace
-        .iter()
-        .filter(|statement| statement.trim_start().starts_with("BEGIN"))
-        .count() as u64;
-    let commits = trace
-        .iter()
-        .filter(|statement| statement.trim_start().starts_with("COMMIT"))
-        .count() as u64;
-    assert_eq!(database.write_transactions, 2);
-    assert_eq!(database.fact_admission_transactions, 2);
-    assert_eq!(database.object_admission_transactions, 0);
-    assert_eq!(begins, database.write_transactions);
-    assert_eq!(commits, database.write_transactions);
-    drop(db);
+    let reopened_snapshot = reopened.snapshot().unwrap();
+    assert_eq!(reopened_snapshot.operations.len(), 1);
+    assert_eq!(
+        reopened_snapshot.operations[0].storage.len(),
+        expected_storage_receipts
+    );
+
+    drop(reopened);
+    drop(branch);
+    drop(layerstack);
     std::fs::remove_dir_all(root).unwrap();
 }
 
 fn run_dir() -> std::path::PathBuf {
     let path = std::env::temp_dir().join(format!(
-        "layerfs-monitor-{}-{}",
+        "layerfs-v2-monitor-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

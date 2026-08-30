@@ -1,5 +1,5 @@
 use super::codec::{decode_inode_table_node, InodeTableNodeV1};
-use super::merge::InodeTableDiff;
+use super::table::InodeTableDiff;
 use super::{InodeId, InodeTableCounters, Summary, ValidatedNode};
 use crate::file::rope::ObjectRead;
 use crate::{CoreError, CoreResult, ObjectId};

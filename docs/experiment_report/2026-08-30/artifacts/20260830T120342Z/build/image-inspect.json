@@ -1,0 +1,67 @@
+[
+    {
+        "Architecture": "arm64",
+        "Config": {
+            "Entrypoint": [
+                "/usr/local/bin/layerfs-fuse"
+            ],
+            "Env": [
+                "NO_PROXY=localhost,127.0.0.1,::1",
+                "no_proxy=localhost,127.0.0.1,::1",
+                "HTTP_PROXY=http://http.docker.internal:3128",
+                "http_proxy=http://http.docker.internal:3128",
+                "HTTPS_PROXY=http://http.docker.internal:3128",
+                "https_proxy=http://http.docker.internal:3128",
+                "PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "RUSTUP_HOME=/usr/local/rustup",
+                "CARGO_HOME=/usr/local/cargo",
+                "RUST_VERSION=1.85.1",
+                "LAYERFS_SOURCE_COMMIT=b498b7253bb94ec4e24840a15b825fe00334c7dd",
+                "LAYERFS_SOURCE_TREE=e15168bcd0ba19fbfc814e512ac764d38f4f6c230565cd6d945876e65d2ef4bb",
+                "LAYERFS_FS_BENCH_SHA256=0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef"
+            ],
+            "Labels": {
+                "desktop.docker.io/ports.scheme": "v2",
+                "org.opencontainers.image.layerfs.fs-bench-sha256": "0e2004339a9269b88c2de451d56575957477bde16b96a10cf1837519e37230ef",
+                "org.opencontainers.image.layerfs.source-commit": "b498b7253bb94ec4e24840a15b825fe00334c7dd",
+                "org.opencontainers.image.layerfs.source-tree": "e15168bcd0ba19fbfc814e512ac764d38f4f6c230565cd6d945876e65d2ef4bb",
+                "org.opencontainers.image.revision": "b498b7253bb94ec4e24840a15b825fe00334c7dd",
+                "org.opencontainers.image.source": "https://github.com/Ephemeral-AI-Lab/layerfs"
+            }
+        },
+        "Created": "2026-08-30T12:08:06.645715464Z",
+        "Descriptor": {
+            "digest": "sha256:4bb5a9a3de87f965f210a5829a2aaa975fadd910e37d9440db4f7f857265fc2a",
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "size": 2489
+        },
+        "Id": "sha256:4bb5a9a3de87f965f210a5829a2aaa975fadd910e37d9440db4f7f857265fc2a",
+        "Metadata": {
+            "LastTagTime": "2026-08-30T12:08:06.686083755Z"
+        },
+        "Os": "linux",
+        "Parent": "sha256:41b95da48daa821666f11ea2c76b8b7e645df824c740a906de2fec742753f18a",
+        "RepoDigests": [
+            "layerfs-v2@sha256:4bb5a9a3de87f965f210a5829a2aaa975fadd910e37d9440db4f7f857265fc2a"
+        ],
+        "RepoTags": [
+            "layerfs-v2:terminal-20260830T120342Z"
+        ],
+        "RootFS": {
+            "Layers": [
+                "sha256:948048d45864d1f64cd70b0341fd6c927cd3fa13f1d56b0054064b3ba2b2b467",
+                "sha256:f8e34ba5db3916c38ce4918304394347cc2403a5c92006a1e550a72977e0ac2a",
+                "sha256:b8974bf4470658c9b2f2bcc4d91db2ab6abc4a3c63ac1944b38519dbebfb53a0",
+                "sha256:77122155c2dc59977416cf2f760eb52aed66fd82acb25b7b006e0ad7f989ff55",
+                "sha256:d7e47cd44dcd84a04c1dbba8965d45f33ca701efbde788880cdff56e7d58eacc",
+                "sha256:15b52320f05887bb03b2cd0d243a0809481dd24986f7427134c413da42d0e802",
+                "sha256:8603a6882677503583e5120cf2638429548867fdda9563bf06358a25e6f7f257",
+                "sha256:d4b5f3ee570449e4ed254cb7b2213ea88fdc4b66a37ac256490753ced1ddcbb0",
+                "sha256:76e8d2add70c7607e99c91a053d59c4a234c8b0eb6954057c183b940e0689638",
+                "sha256:4edfd8554c5ad5f8358cefeb95501566eedfd6638e6fa99c18b769cb7668caed"
+            ],
+            "Type": "layers"
+        },
+        "Size": 598659978
+    }
+]

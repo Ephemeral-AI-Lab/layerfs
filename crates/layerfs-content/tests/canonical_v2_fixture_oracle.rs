@@ -79,6 +79,13 @@ fn bytes_object(value: &[u8]) -> Vec<u8> {
     output
 }
 
+fn chunk_object(value: &[u8]) -> Vec<u8> {
+    let mut chunk = Vec::with_capacity(8 + value.len());
+    chunk.extend_from_slice(b"LFS4CHK\0");
+    chunk.extend_from_slice(value);
+    bytes_object(&chunk)
+}
+
 fn mapping(tag: u8, body: &[u8]) -> Vec<u8> {
     let mut inner = Vec::with_capacity(11 + body.len());
     inner.extend_from_slice(b"LFS4MAP\0");
@@ -210,7 +217,7 @@ fn walk(
         for reference in &references[node.refs.clone()] {
             let start = reference.offset;
             let end = start + reference.length as usize;
-            let canonical = bytes_object(&source[start..end]);
+            let canonical = chunk_object(&source[start..end]);
             observe(closure, b"file-chunk", reference.id, &canonical);
             corpus_item(corpus, ordinal, b"file-chunk", reference.id, &canonical);
         }
@@ -236,7 +243,7 @@ fn oracle(size: usize, label: &'static str) -> Oracle {
     FastCdc::new()
         .scan(Cursor::new(&source), |chunk| {
             let length = u32::try_from(chunk.len()).unwrap();
-            let canonical = bytes_object(chunk);
+            let canonical = chunk_object(chunk);
             let id = ObjectId::for_bytes(&canonical);
             raw_sequence.update(&length.to_be_bytes());
             raw_sequence.update(ObjectId::for_bytes(chunk).as_bytes());
@@ -382,54 +389,54 @@ fn independent_actual_fixture_oracle_freezes_complete_v2_corpus() {
             1024 * 1024,
             "S1-1",
             "f79de600cf44b20c4443e06d2e2b9e8819e956ba5a7bcc9cab4ffd8a08059cf8",
-            "6a1d02f70694a50859c88c0080f0e2cc046c8b0d9e21f474c58dab66a895f1c1",
+            "77ff53eb762c4e3ca98208c241ab54dea8db267bc321b22a6ab25a9af6d414a0",
             53,
             1,
             0,
             0,
             2_025,
-            "c2b4a92188569d206717210b596dde9b8aeade1c9c81b87f02b8d0d6ebda1112",
-            "b0266bbda936c1532c04fc0155f1efef2fb63d69afb5647952e8f4a10060ab20",
-            "2274f609bfbd578a600da5e07b1deed6ff2c9a77927eaba854b0ebf7ab542142",
-            "18f33e3ca6030e966cf8ed41c0b43f4769de8b02247f453fae447627bee4b77c",
-            "60d191810b303b26d12453add0b9e1718b1f1b654473615d9323f0ee477a9b7d",
-            "7e806f7023c3e33914c59d2b0d0d84bca8859fdbd7663b55f5f5c99313252d42",
+            "e074a65048cbbdb9e7e30589a16f5b1459c630f0b27f8c080d816c21531dd985",
+            "55556ec86bca1f459795eb31474200eff52d603df0baa1cb930ac6728932a292",
+            "1e273a1957af2647663e1f983209ff231c00e486a76135d2ca0c6c3083fa73bb",
+            "82e78c92e4c71fd61d681c056a5b64d0d37e4f1f231ea14445dbb0f720644c9e",
+            "6d1fa7dd6ead3d51f088e1c4122983ee35712a96bb7bc37f08239cbe53dc2832",
+            "eb2061eacfd658373a5ac24f5a0481c4a09e7fca1a8868944ce0de294ec619b9",
             "f79de600cf44b20c4443e06d2e2b9e8819e956ba5a7bcc9cab4ffd8a08059cf8",
         ),
         (
             10 * 1024 * 1024,
             "S1-10",
             "e40db05d7407b92253e56099df402f03b399990014b2d1397e422ca305472449",
-            "982e992203cd527c1b7147e4e9509bcd2e5828706fc2313f18bcfe1b4de2f3ed",
+            "797a2b7bb2c7bdac86302b1931f5a241c947b283203ff993a5ae8c1eda4946fa",
             531,
             9,
             0,
             0,
             19_777,
-            "8eb047a5d7ac6cc86c26d30d014c46f722936147a0989683303057c96fbec67c",
-            "f119169a3aee39fdac17b72197dd5429155a34524ec7b02af421037e8deace08",
-            "8ad4351bb76bac1b0a80e279d8a5225a5ff752bce73c569f70daa7a15b79a0bf",
-            "003fac659363e97667cc75fa8fb81fef7065b856c547440e22722b76c1e72342",
-            "001cdef1e85c266038e98bc86e8470dc1b9d21e021bac1abd0d03e994e42c440",
-            "35282fcfecc493c025a3bc4a7567efc12562fc8a4d863c88e07617fb5e97d1c9",
+            "1de74c92d958a116f38ddbaf527d9d74a0aca1d0bd41f115a4188d2ae959a709",
+            "8c11b3ff6ea68013f95ca14deb67f6fb7098c163c80a3c06a41085dcaf2bbe78",
+            "887518e17ae5c9dcfb22c4a96fea70c0bcb54f7e17ad1a8f26f62595a2dd954f",
+            "a523df3dadd3a398116a133c21c40068ccd9757620f4cf69d7fcbb6d430eda47",
+            "2c82004f87c37c0b58723e30b066a2b40fd123803f3701b4b0c1973cef0b6542",
+            "813417c95ad0ba809e0e27e5854722296e431887cff894d69ab734cb922c271d",
             "08a1490b77d2afcc6fc9149e24bfe66696735791d7a7c370d2e1a31076ecaa1d",
         ),
         (
             100 * 1024 * 1024,
             "S1-100",
             "bb883eecf4ea85d80432953791dcc352243da94175e7503e2c476afe9bd0bab7",
-            "5bb376c3c54d8724973a7b160acab599f2f5cee4b4a56e855ff0cbe987425994",
+            "2e0c066ba84c1bf9be2661309bd602ce98d00ec66aa169fe9890367c9f8bbaa1",
             5_284,
             83,
             2,
             1,
             196_055,
-            "5bf63ef8adad7bb373be4e968759997b385590d076d75a1488e1958b64a3f8e2",
-            "c7107d5f0ecd8bd8a9efe11bde900aa50dbbff49dfc3122000835dc1323e1ecd",
-            "6f923dfa4f32981884af0437476f9c4e8b7f4bb1af84ecc6420a48daa455713c",
-            "93d1b461b5cbf88e8d122ad4e90a15a6e3029c408f0fe02ef51c561e5a94c6d1",
-            "2de8d2ce6b614373ba8fb8b29d3a3eccd535abfccc2654e7922514e5ca90fd89",
-            "29233d6018b031f6035c8e2c8175f1ab86fb721808f21a8858bc965567e9c0c1",
+            "4a224c5b09e8816a8fb7c45ad8a2792d65ff456f8ed643489a3ebd7ab8fbe232",
+            "057d320a87ead610a4bfd9fb89fd11260d73ac21c606a8dfe7134e2665cce8b8",
+            "345cfc1741056cb2e3156e4e85cb5779966acdd1deeadb1aa8a0ba486a623fe2",
+            "3e31be67d3d838f37f4f51e63963be780b3d22dee604a95804c0bbf7ef44c85b",
+            "90f709a28b35ac9d338e562da38ba7837dff9f5484ea9364b161fc5d2b01dd88",
+            "11421674d69d01c37d28184dcc6e6f5eb8a34116a52747fc1f795de46ada35b5",
             "0a4b6b60703a8b25d01b990ec346f5ab26661367c56de210b21769947692cd0f",
         ),
     ];

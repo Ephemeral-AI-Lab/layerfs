@@ -137,11 +137,11 @@ fn selected_nonempty_boundary_ids_are_literal() {
         [one, minimum, maximum, split, multilevel]
             .map(|bytes| ObjectId::for_bytes(&bytes).to_string()),
         [
-            "c0728dd70886704ac44ecd568cf415c9ebb4b4280df6f67522bea1c22e9e086d",
-            "0827230898d272ec3b37165dd37e2142e8476165da70fcf6a422258e0e47b1f9",
-            "0bcfc52babc07e7949c76d5a8afb06b5ed32f93d4963a04ee6cb818109c2288b",
-            "3619bfa6881d4dad25be255c5b608f22abc7dd4a4b6a0e1cda299c5d2e9ebc06",
-            "25d4d225f46f7e8f414fb2ce86f525bc16527cbea26ea96a93b6d8c30025c415",
+            "665b3253599af6839deee14dd40da917449e74fdfd78b3c984552e65bd36f8f4",
+            "15e6946d0d17d79c312abb0cd01e9f4b1434030726399c7c24f1ddff6d5ee1e1",
+            "00315c8aa56d3886ee63747c6378e2415ebe046398f534dae736e4f77df954d4",
+            "5dbfadd7f88cb557d05127382b0a7d7f70945f933b8d03c29a3bf8020ed8bbb0",
+            "83037ae75611e4cfc19720f6796d61576ba25db6d0cba820134948289354a8cf",
         ]
         .map(str::to_owned)
     );

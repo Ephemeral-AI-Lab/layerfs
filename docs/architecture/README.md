@@ -1,5 +1,8 @@
 # LayerFS architecture guide
 
+> **Historical explanatory package.** It is not V2 authority; see
+> [`../v2/spec.md`](../v2/spec.md).
+
 Status: **explanatory design package; not canonical-format, implementation, or
 benchmark authority**.
 

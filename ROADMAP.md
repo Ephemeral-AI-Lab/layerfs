@@ -1,5 +1,8 @@
 # LayerFS roadmap
 
+> **Historical product roadmap.** It is not architecture or implementation
+> authority; [`docs/v2/spec.md`](docs/v2/spec.md) is binding.
+
 This roadmap defines the sequence from the current local Linux/FUSE product to
 OCI distribution, OverlayFS compatibility, Firecracker execution, runtime
 integration, remote publication, and storage lifecycle management.

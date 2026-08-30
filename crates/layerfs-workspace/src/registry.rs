@@ -1,7 +1,6 @@
-use crate::{
-    WorkspaceError, WorkspaceResult, WorkspaceSession, WorkspaceSessionId, WorkspaceSummary,
-};
+use crate::{WorkspaceError, WorkspaceId, WorkspaceResult, WorkspaceSession, WorkspaceSummary};
 use layerfs_branch_store::BranchStore;
+use layerfs_storage::{BranchId, LayerStackEndpoint};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -41,8 +40,9 @@ struct Retention {
 
 pub struct Workspaces {
     pub(crate) runtime_root: PathBuf,
-    pub(crate) branches: Mutex<Vec<BranchStore>>,
-    pub(crate) sessions: Mutex<BTreeMap<WorkspaceSessionId, SessionRecord>>,
+    pub(crate) branch: BranchStore,
+    pub(crate) parent: Arc<dyn LayerStackEndpoint>,
+    pub(crate) sessions: Mutex<BTreeMap<WorkspaceId, SessionRecord>>,
     pub(crate) executions:
         Arc<Mutex<BTreeMap<crate::ExecutionId, Arc<crate::execution::Execution>>>>,
 }
@@ -50,7 +50,8 @@ pub struct Workspaces {
 impl Workspaces {
     pub fn new(
         runtime_root: impl AsRef<Path>,
-        branches: impl IntoIterator<Item = BranchStore>,
+        branch: BranchStore,
+        parent: Arc<dyn LayerStackEndpoint>,
     ) -> WorkspaceResult<Self> {
         let runtime_root = runtime_root.as_ref().to_owned();
         std::fs::create_dir_all(&runtime_root)?;
@@ -61,7 +62,8 @@ impl Workspaces {
         }
         Ok(Self {
             runtime_root,
-            branches: Mutex::new(branches.into_iter().collect()),
+            branch,
+            parent,
             sessions: Mutex::new(BTreeMap::new()),
             executions: Arc::new(Mutex::new(BTreeMap::new())),
         })
@@ -69,7 +71,7 @@ impl Workspaces {
 
     pub(crate) fn worker(
         &self,
-        id: WorkspaceSessionId,
+        id: WorkspaceId,
     ) -> WorkspaceResult<Arc<crate::worker::WorkspaceWorker>> {
         self.sessions
             .lock()
@@ -82,44 +84,40 @@ impl Workspaces {
             .ok_or(WorkspaceError::NotFound)
     }
 
-    #[doc(hidden)]
-    pub fn attach_branch_store(&self, store: BranchStore) -> WorkspaceResult<()> {
-        let mut branches = self
-            .branches
-            .lock()
-            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-        if branches.iter().all(|branch| branch.path() != store.path()) {
-            branches.push(store);
-        }
-        Ok(())
+    pub(crate) fn workspace_identity(
+        &self,
+        branch_id: BranchId,
+    ) -> WorkspaceResult<crate::worker::WorkspaceIdentity> {
+        let branch = self
+            .branch
+            .branch(branch_id)?
+            .ok_or(WorkspaceError::NotFound)?;
+        let stack =
+            self.branch
+                .layer_stack_fact(branch.layer_stack_id)?
+                .ok_or(WorkspaceError::Storage(
+                    layerfs_storage::StorageError::Integrity("Workspace LayerStack"),
+                ))?;
+        Ok(crate::worker::WorkspaceIdentity {
+            layer_stack_id: stack.id,
+            layer_stack_name: stack.name,
+            branch_name: branch.name,
+        })
     }
 
-    #[doc(hidden)]
-    pub fn detach_branch_store(&self, path: &Path) -> WorkspaceResult<()> {
-        let mut branches = self
-            .branches
-            .lock()
-            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-        let Some(position) = branches.iter().position(|branch| branch.path() == path) else {
-            return Err(WorkspaceError::NotFound);
-        };
-        let sessions = self
-            .sessions
-            .lock()
-            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-        for session in sessions.values() {
-            if let SessionRecord::Active(session) = session {
-                if branches[position]
-                    .branch(session.request.branch_id)?
-                    .is_some()
-                {
-                    return Err(WorkspaceError::WorkspaceBusy);
-                }
-            }
+    pub(crate) fn acquire_lease(&self, branch_id: BranchId) -> WorkspaceResult<BranchLease> {
+        if !self.branch.acquire_workspace_lease(branch_id)? {
+            return Err(WorkspaceError::WorkspaceBusy);
         }
-        drop(sessions);
-        branches.remove(position);
-        Ok(())
+        Ok(BranchLease {
+            branch: self.branch.clone(),
+            branch_id,
+            keep: false,
+        })
+    }
+
+    pub(crate) fn release_lease(&self, branch_id: BranchId) {
+        self.branch.release_workspace_lease(branch_id);
     }
 
     pub(crate) fn prune_retained(&self) -> WorkspaceResult<()> {
@@ -151,6 +149,82 @@ impl Workspaces {
         }
         prune_executions(&mut executions, now);
         Ok(())
+    }
+
+    pub fn session_page(
+        &self,
+        after: Option<WorkspaceId>,
+        limit: u16,
+    ) -> WorkspaceResult<(Vec<WorkspaceSummary>, Option<WorkspaceId>)> {
+        if limit == 0 || limit > 512 {
+            return Err(WorkspaceError::InvalidExecution);
+        }
+        self.prune_retained()?;
+        let records = {
+            use std::ops::Bound::{Excluded, Unbounded};
+            let sessions = self
+                .sessions
+                .lock()
+                .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+            sessions
+                .range((after.map_or(Unbounded, Excluded), Unbounded))
+                .take(usize::from(limit) + 1)
+                .map(|(_, record)| record.clone())
+                .collect::<Vec<_>>()
+        };
+        let has_more = records.len() > usize::from(limit);
+        let summaries = records
+            .into_iter()
+            .take(usize::from(limit))
+            .map(record_summary)
+            .collect::<WorkspaceResult<Vec<_>>>()?;
+        let continuation = has_more
+            .then(|| summaries.last().map(|summary| summary.id))
+            .flatten();
+        Ok((summaries, continuation))
+    }
+}
+
+fn record_summary(record: SessionRecord) -> WorkspaceResult<WorkspaceSummary> {
+    match record {
+        SessionRecord::Active(worker) => {
+            let dirty = crate::projection::is_dirty(&worker)?;
+            let workspace = worker
+                .workspace
+                .lock()
+                .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+            Ok(WorkspaceSummary {
+                id: worker.id,
+                branch_id: workspace.branch_id,
+                layer_stack_id: worker.identity.layer_stack_id,
+                layer_stack_name: worker.identity.layer_stack_name.clone(),
+                branch_name: worker.identity.branch_name.clone(),
+                pinned_head: workspace.expected_head,
+                state: workspace.state,
+                dirty,
+            })
+        }
+        SessionRecord::Retained(retained) => Ok(retained_summary(&retained)),
+    }
+}
+
+pub(crate) struct BranchLease {
+    branch: BranchStore,
+    branch_id: BranchId,
+    keep: bool,
+}
+
+impl BranchLease {
+    pub(crate) fn keep(mut self) {
+        self.keep = true;
+    }
+}
+
+impl Drop for BranchLease {
+    fn drop(&mut self) {
+        if !self.keep {
+            self.branch.release_workspace_lease(self.branch_id);
+        }
     }
 }
 
@@ -219,6 +293,9 @@ pub(crate) fn retained_summary(retained: &RetainedSession) -> WorkspaceSummary {
     WorkspaceSummary {
         id: retained.session.id,
         branch_id: retained.session.branch_id,
+        layer_stack_id: retained.session.layer_stack_id,
+        layer_stack_name: retained.session.layer_stack_name.clone(),
+        branch_name: retained.session.branch_name.clone(),
         pinned_head: retained.session.pinned_head,
         state: retained.session.state,
         dirty: false,

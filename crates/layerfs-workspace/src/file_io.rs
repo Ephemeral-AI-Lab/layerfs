@@ -7,7 +7,7 @@ use std::os::unix::fs::FileExt;
 use std::path::Path;
 
 pub struct ReadPlan {
-    branch: layerfs_branch_store::BranchStore,
+    reader: layerfs_branch_store::SnapshotReader,
     offset: u64,
     end: u64,
     source: ReadSource,
@@ -30,7 +30,7 @@ impl ReadPlan {
         }
         match self.source {
             ReadSource::Base(root) => read_base(
-                &self.branch,
+                &self.reader,
                 root,
                 self.end,
                 self.offset,
@@ -47,7 +47,7 @@ impl ReadPlan {
                     let base_end = self.end.min(base_len);
                     if self.offset < base_end {
                         let bytes = read_base(
-                            &self.branch,
+                            &self.reader,
                             root,
                             base_len,
                             self.offset,
@@ -112,7 +112,7 @@ impl Workspace {
                     })
                     .collect();
                 return Ok(ReadPlan {
-                    branch: self.branch.clone(),
+                    reader: self.reader.clone(),
                     offset,
                     end,
                     source: ReadSource::Overlay {
@@ -126,7 +126,7 @@ impl Workspace {
             _ => return Err(StorageError::InvalidInput("read")),
         };
         Ok(ReadPlan {
-            branch: self.branch.clone(),
+            reader: self.reader.clone(),
             offset,
             end: self
                 .attr(node)?
@@ -212,7 +212,8 @@ impl Workspace {
             .saturating_sub(old_charge)
             .saturating_add(new_charge);
         self.dirty.insert(node);
-        self.note_mutation()?;
+        let paths = self.nodes[&node].paths.iter().cloned().collect::<Vec<_>>();
+        self.note_mutation(paths)?;
         Ok(byte_len)
     }
 
@@ -263,7 +264,8 @@ impl Workspace {
             .saturating_sub(old_charge)
             .saturating_add(new_charge);
         self.dirty.insert(node);
-        self.note_mutation()?;
+        let paths = self.nodes[&node].paths.iter().cloned().collect::<Vec<_>>();
+        self.note_mutation(paths)?;
         Ok(())
     }
 
@@ -387,7 +389,7 @@ impl Workspace {
 }
 
 fn read_base(
-    branch: &layerfs_branch_store::BranchStore,
+    reader: &layerfs_branch_store::SnapshotReader,
     root: layerfs_content::file::rope::FileStateRoot,
     len: u64,
     offset: u64,
@@ -398,7 +400,7 @@ fn read_base(
         return Ok(Vec::new());
     }
     let mut bytes = Vec::with_capacity((end - offset) as usize);
-    read_range(&CoreReader(branch), root, offset..end, &mut bytes)?;
+    read_range(&CoreReader(reader), root, offset..end, &mut bytes)?;
     Ok(bytes)
 }
 

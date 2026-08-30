@@ -1,6 +1,9 @@
 use super::codec::{decode_inode_table_node, encode_inode_table_node, InodeTableNodeV1};
 use super::cursor::{inode_node_min, load, load_shallow};
-use super::{GeneratedInodeTable, InodeId, InodeTableCounters, InodeTableRoot, Summary};
+use super::{
+    GeneratedInodeTable, InodeId, InodeKind, InodeRecordV1, InodeTableCounters, InodeTableRoot,
+    Summary,
+};
 use crate::file::rope::{ObjectRead, ObjectStore};
 use crate::{CoreError, CoreResult, ObjectId};
 use std::collections::{BTreeMap, BTreeSet};
@@ -27,23 +30,116 @@ pub fn inode_table_lookup<S: ObjectRead>(
     key: InodeId,
     counters: &mut InodeTableCounters,
 ) -> CoreResult<Option<ObjectId>> {
-    let mut current = load_shallow(store, root.0, true, None, counters)?;
+    lookup_from(store, root.0, true, None, None, key, counters)
+}
+
+pub(crate) fn inode_table_lookup_pair<S: ObjectRead>(
+    store: &S,
+    left: InodeTableRoot,
+    right: InodeTableRoot,
+    key: InodeId,
+    counters: &mut InodeTableCounters,
+) -> CoreResult<(Option<ObjectId>, Option<ObjectId>)> {
+    if left == right {
+        let value = inode_table_lookup(store, left, key, counters)?;
+        return Ok((value, value));
+    }
+    let mut left = load_shallow(store, left.0, true, None, counters)?;
+    let mut right = load_shallow(store, right.0, true, None, counters)?;
+    loop {
+        match (&left.node, &right.node) {
+            (InodeTableNodeV1::Leaf(left), InodeTableNodeV1::Leaf(right)) => {
+                return Ok((leaf_lookup(left, key), leaf_lookup(right, key)));
+            }
+            (
+                InodeTableNodeV1::Branch {
+                    level: left_level,
+                    children: left_children,
+                    ..
+                },
+                InodeTableNodeV1::Branch {
+                    level: right_level,
+                    children: right_children,
+                    ..
+                },
+            ) => {
+                let left_index = left_children
+                    .partition_point(|entry| entry.0 < key)
+                    .min(left_children.len() - 1);
+                let right_index = right_children
+                    .partition_point(|entry| entry.0 < key)
+                    .min(right_children.len() - 1);
+                let (left_max, left_id) = left_children[left_index];
+                let (right_max, right_id) = right_children[right_index];
+                if left_id == right_id {
+                    if left_max != right_max || left_level != right_level {
+                        return Err(CoreError::InvalidRecord("inode child summary"));
+                    }
+                    let child_level = left_level
+                        .checked_sub(1)
+                        .ok_or(CoreError::InvalidRecord("inode child summary"))?;
+                    let value = lookup_from(
+                        store,
+                        left_id,
+                        false,
+                        Some(left_max),
+                        Some(child_level),
+                        key,
+                        counters,
+                    )?;
+                    return Ok((value, value));
+                }
+                let next_left = load_shallow(store, left_id, false, None, counters)?;
+                let next_right = load_shallow(store, right_id, false, None, counters)?;
+                if next_left.summary.max != left_max
+                    || next_left.summary.level.checked_add(1) != Some(*left_level)
+                    || next_right.summary.max != right_max
+                    || next_right.summary.level.checked_add(1) != Some(*right_level)
+                {
+                    return Err(CoreError::InvalidRecord("inode child summary"));
+                }
+                left = next_left;
+                right = next_right;
+            }
+            _ => {
+                return Ok((
+                    inode_table_lookup(store, InodeTableRoot(left.summary.id), key, counters)?,
+                    inode_table_lookup(store, InodeTableRoot(right.summary.id), key, counters)?,
+                ));
+            }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lookup_from<S: ObjectRead>(
+    store: &S,
+    id: ObjectId,
+    root: bool,
+    expected_max: Option<InodeId>,
+    expected_level: Option<u8>,
+    key: InodeId,
+    counters: &mut InodeTableCounters,
+) -> CoreResult<Option<ObjectId>> {
+    let mut current = load_shallow(store, id, root, None, counters)?;
+    if expected_max.is_some_and(|expected| current.summary.max != expected)
+        || expected_level.is_some_and(|expected| current.summary.level != expected)
+    {
+        return Err(CoreError::InvalidRecord("inode child summary"));
+    }
     loop {
         match current.node {
-            InodeTableNodeV1::Leaf(entries) => {
-                return Ok(entries
-                    .binary_search_by_key(&key, |entry| entry.0)
-                    .ok()
-                    .map(|index| entries[index].1))
-            }
-            InodeTableNodeV1::Branch { children, .. } => {
+            InodeTableNodeV1::Leaf(entries) => return Ok(leaf_lookup(&entries, key)),
+            InodeTableNodeV1::Branch {
+                level, children, ..
+            } => {
                 let index = children
                     .partition_point(|entry| entry.0 < key)
                     .min(children.len() - 1);
                 let expected_max = children[index].0;
                 let child = load_shallow(store, children[index].1, false, None, counters)?;
                 if child.summary.max != expected_max
-                    || child.summary.level.checked_add(1) != Some(current.summary.level)
+                    || child.summary.level.checked_add(1) != Some(level)
                 {
                     return Err(CoreError::InvalidRecord("inode child summary"));
                 }
@@ -51,6 +147,13 @@ pub fn inode_table_lookup<S: ObjectRead>(
             }
         }
     }
+}
+
+fn leaf_lookup(entries: &[(InodeId, ObjectId)], key: InodeId) -> Option<ObjectId> {
+    entries
+        .binary_search_by_key(&key, |entry| entry.0)
+        .ok()
+        .map(|index| entries[index].1)
 }
 
 pub fn inode_table_entries<S: ObjectRead>(
@@ -263,6 +366,485 @@ pub fn generated_inode_table_upsert<S: ObjectStore>(
     let summary = summary(store, root.0 .0, &mut counters)?;
     upsert_validated(store, summary, key, record, counters)
         .map(|(root, counters)| (GeneratedInodeTable(root), counters))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InodeTableDiff {
+    pub inode: InodeId,
+    pub before: Option<ObjectId>,
+    pub after: Option<ObjectId>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct InodeTableReconcileConflict {
+    pub inode: InodeId,
+    pub source: Option<ObjectId>,
+    pub destination: Option<ObjectId>,
+}
+
+pub fn reconcile_inode_tables<S: ObjectStore>(
+    store: &mut S,
+    base: InodeTableRoot,
+    source: InodeTableRoot,
+    destination: InodeTableRoot,
+) -> CoreResult<
+    std::result::Result<
+        (
+            InodeTableRoot,
+            InodeTableCounters,
+            crate::tree::directory::NamespaceCounters,
+        ),
+        InodeTableReconcileConflict,
+    >,
+> {
+    let mut counters = InodeTableCounters::default();
+    let mut namespace = crate::tree::directory::NamespaceCounters::default();
+    if source == base || source == destination {
+        return Ok(Ok((destination, counters, namespace)));
+    }
+    if destination == base {
+        return Ok(Ok((source, counters, namespace)));
+    }
+    let mut reconciled = destination;
+    if let Some(conflict) = reconcile_inode_node_diffs(
+        store,
+        base.0,
+        source.0,
+        true,
+        &mut reconciled,
+        &mut counters,
+        &mut namespace,
+    )? {
+        return Ok(Err(conflict));
+    }
+    Ok(Ok((reconciled, counters, namespace)))
+}
+
+fn reconcile_inode_node_diffs<S: ObjectStore>(
+    store: &mut S,
+    base: ObjectId,
+    source: ObjectId,
+    root: bool,
+    reconciled: &mut InodeTableRoot,
+    counters: &mut InodeTableCounters,
+    namespace: &mut crate::tree::directory::NamespaceCounters,
+) -> CoreResult<Option<InodeTableReconcileConflict>> {
+    use super::codec::InodeTableNodeV1;
+    use super::cursor::{load_shallow, StreamingInodeDiff};
+    if base == source {
+        return Ok(None);
+    }
+    let base_node = load_shallow(store, base, root, None, counters)?;
+    let source_node = load_shallow(store, source, root, None, counters)?;
+    match (base_node.node, source_node.node) {
+        (InodeTableNodeV1::Leaf(base), InodeTableNodeV1::Leaf(source)) => {
+            let mut conflict = None;
+            merge_inode_entries(
+                base.into_iter().map(Ok),
+                source.into_iter().map(Ok),
+                &mut |change| {
+                    if conflict.is_none() {
+                        conflict = apply_inode_table_change(
+                            store, reconciled, change, counters, namespace,
+                        )?;
+                    }
+                    Ok(())
+                },
+            )?;
+            Ok(conflict)
+        }
+        (
+            InodeTableNodeV1::Branch {
+                level: base_level,
+                children: base_children,
+                ..
+            },
+            InodeTableNodeV1::Branch {
+                level: source_level,
+                children: source_children,
+                ..
+            },
+        ) if base_level == source_level
+            && base_children.len() == source_children.len()
+            && base_children
+                .iter()
+                .zip(&source_children)
+                .all(|(base, source)| base.0 == source.0) =>
+        {
+            for ((_, base_child), (_, source_child)) in
+                base_children.into_iter().zip(source_children)
+            {
+                if let Some(conflict) = reconcile_inode_node_diffs(
+                    store,
+                    base_child,
+                    source_child,
+                    false,
+                    reconciled,
+                    counters,
+                    namespace,
+                )? {
+                    return Ok(Some(conflict));
+                }
+            }
+            Ok(None)
+        }
+        _ => {
+            let mut diffs = StreamingInodeDiff::new(base, source, root);
+            while let Some(change) = diffs.next(store, counters)? {
+                if let Some(conflict) =
+                    apply_inode_table_change(store, reconciled, change, counters, namespace)?
+                {
+                    return Ok(Some(conflict));
+                }
+            }
+            Ok(None)
+        }
+    }
+}
+
+fn apply_inode_table_change<S: ObjectStore>(
+    store: &mut S,
+    reconciled: &mut InodeTableRoot,
+    change: InodeTableDiff,
+    counters: &mut InodeTableCounters,
+    namespace: &mut crate::tree::directory::NamespaceCounters,
+) -> CoreResult<Option<InodeTableReconcileConflict>> {
+    let mut lookup = InodeTableCounters::default();
+    let destination = inode_table_lookup(store, *reconciled, change.inode, &mut lookup)?;
+    add_inode_counters(counters, lookup)?;
+    let selected = if destination == change.before {
+        change.after
+    } else if destination == change.after {
+        if concurrent_namespace_identity_change(store, change.before, change.after)? {
+            return Ok(Some(InodeTableReconcileConflict {
+                inode: change.inode,
+                source: change.after,
+                destination,
+            }));
+        }
+        destination
+    } else if let (Some(base), Some(source), Some(destination)) =
+        (change.before, change.after, destination)
+    {
+        match reconcile_inode_records(store, base, source, destination, namespace)? {
+            Some(record) => Some(record),
+            None => {
+                return Ok(Some(InodeTableReconcileConflict {
+                    inode: change.inode,
+                    source: change.after,
+                    destination: Some(destination),
+                }));
+            }
+        }
+    } else {
+        return Ok(Some(InodeTableReconcileConflict {
+            inode: change.inode,
+            source: change.after,
+            destination,
+        }));
+    };
+    let Some(selected) = selected else {
+        if destination.is_none() {
+            return Ok(None);
+        }
+        let (next, _, changed) = inode_table_remove(store, *reconciled, change.inode)?;
+        add_inode_counters(counters, changed)?;
+        *reconciled = next;
+        return Ok(None);
+    };
+    if Some(selected) == destination {
+        return Ok(None);
+    }
+    let (next, changed) = inode_table_upsert(store, *reconciled, change.inode, selected)?;
+    add_inode_counters(counters, changed)?;
+    *reconciled = next;
+    Ok(None)
+}
+
+fn concurrent_namespace_identity_change<S: ObjectStore>(
+    store: &S,
+    before: Option<ObjectId>,
+    after: Option<ObjectId>,
+) -> CoreResult<bool> {
+    use super::codec::decode_inode_record;
+    match (before, after) {
+        (None, Some(_)) => Ok(true),
+        (Some(before), Some(after)) => {
+            let before = store.with_authenticated_canonical(before, decode_inode_record)?;
+            let after = store.with_authenticated_canonical(after, decode_inode_record)?;
+            Ok(before.namespace_ref_count != after.namespace_ref_count)
+        }
+        _ => Ok(false),
+    }
+}
+
+fn reconcile_inode_records<S: ObjectStore>(
+    store: &mut S,
+    base: ObjectId,
+    source: ObjectId,
+    destination: ObjectId,
+    namespace: &mut crate::tree::directory::NamespaceCounters,
+) -> CoreResult<Option<ObjectId>> {
+    use super::codec::{decode_inode_record, encode_inode_record};
+    use crate::tree::directory::{reconcile_directory_roots, DirectoryStateRoot};
+    use crate::tree::metadata::reconcile_metadata_roots;
+    let base = store.with_authenticated_canonical(base, decode_inode_record)?;
+    let source = store.with_authenticated_canonical(source, decode_inode_record)?;
+    let destination = store.with_authenticated_canonical(destination, decode_inode_record)?;
+    let Some(kind) = reconcile_field(base.kind, source.kind, destination.kind) else {
+        return Ok(None);
+    };
+    let Some(namespace_ref_count) = reconcile_namespace_ref_count(
+        base.namespace_ref_count,
+        source.namespace_ref_count,
+        destination.namespace_ref_count,
+    ) else {
+        return Ok(None);
+    };
+    let content_root = match reconcile_field(
+        base.content_root,
+        source.content_root,
+        destination.content_root,
+    ) {
+        Some(root) => root,
+        None if [base.kind, source.kind, destination.kind]
+            .into_iter()
+            .all(|kind| kind == InodeKind::Directory) =>
+        {
+            let Some((root, counters)) = reconcile_directory_roots(
+                store,
+                DirectoryStateRoot(base.content_root),
+                DirectoryStateRoot(source.content_root),
+                DirectoryStateRoot(destination.content_root),
+            )?
+            else {
+                return Ok(None);
+            };
+            add_namespace_counters(namespace, counters)?;
+            root.0
+        }
+        None => return Ok(None),
+    };
+    let metadata_root = match reconcile_field(
+        base.metadata_root,
+        source.metadata_root,
+        destination.metadata_root,
+    ) {
+        Some(root) => root,
+        None => {
+            let Some(root) = reconcile_metadata_roots(
+                store,
+                base.metadata_root,
+                source.metadata_root,
+                destination.metadata_root,
+            )?
+            else {
+                return Ok(None);
+            };
+            root
+        }
+    };
+    if namespace_ref_count == 0 && kind != InodeKind::Directory
+        || namespace_ref_count != 1 && kind == InodeKind::Symlink
+        || namespace_ref_count == 0 && kind == InodeKind::RegularFile
+    {
+        return Ok(None);
+    }
+    store
+        .put(&encode_inode_record(InodeRecordV1 {
+            kind,
+            namespace_ref_count,
+            content_root,
+            metadata_root,
+        })?)
+        .map(Some)
+}
+
+fn add_namespace_counters(
+    target: &mut crate::tree::directory::NamespaceCounters,
+    source: crate::tree::directory::NamespaceCounters,
+) -> CoreResult<()> {
+    target.nodes_read = target
+        .nodes_read
+        .checked_add(source.nodes_read)
+        .ok_or(CoreError::LengthOverflow)?;
+    target.nodes_created = target
+        .nodes_created
+        .checked_add(source.nodes_created)
+        .ok_or(CoreError::LengthOverflow)?;
+    Ok(())
+}
+
+fn reconcile_field<T: Copy + Eq>(base: T, source: T, destination: T) -> Option<T> {
+    if source == base || source == destination {
+        Some(destination)
+    } else if destination == base {
+        Some(source)
+    } else {
+        None
+    }
+}
+
+fn reconcile_namespace_ref_count(base: u64, source: u64, destination: u64) -> Option<u64> {
+    if source == base {
+        Some(destination)
+    } else if destination == base {
+        Some(source)
+    } else {
+        None
+    }
+}
+
+fn add_inode_counters(
+    target: &mut InodeTableCounters,
+    source: InodeTableCounters,
+) -> CoreResult<()> {
+    target.nodes_read = target
+        .nodes_read
+        .checked_add(source.nodes_read)
+        .ok_or(CoreError::LengthOverflow)?;
+    target.nodes_created = target
+        .nodes_created
+        .checked_add(source.nodes_created)
+        .ok_or(CoreError::LengthOverflow)?;
+    Ok(())
+}
+
+pub fn diff_inode_table_entries<S: ObjectRead>(
+    store: &S,
+    old: InodeTableRoot,
+    new: InodeTableRoot,
+    mut visitor: impl FnMut(InodeTableDiff) -> CoreResult<()>,
+) -> CoreResult<InodeTableCounters> {
+    let mut counters = InodeTableCounters::default();
+    if old == new {
+        return Ok(counters);
+    }
+    diff_inode_nodes(store, old.0, new.0, true, &mut counters, &mut visitor)?;
+    Ok(counters)
+}
+
+fn diff_inode_nodes<S: ObjectRead>(
+    store: &S,
+    old: ObjectId,
+    new: ObjectId,
+    root: bool,
+    counters: &mut InodeTableCounters,
+    visitor: &mut impl FnMut(InodeTableDiff) -> CoreResult<()>,
+) -> CoreResult<()> {
+    use super::codec::InodeTableNodeV1;
+    use super::cursor::{load_shallow, InodeEntryCursor};
+    if old == new {
+        return Ok(());
+    }
+    let old_node = load_shallow(store, old, root, None, counters)?;
+    let new_node = load_shallow(store, new, root, None, counters)?;
+    match (&old_node.node, &new_node.node) {
+        (InodeTableNodeV1::Leaf(old), InodeTableNodeV1::Leaf(new)) => merge_inode_entries(
+            old.iter().copied().map(Ok),
+            new.iter().copied().map(Ok),
+            visitor,
+        ),
+        (
+            InodeTableNodeV1::Branch {
+                level: old_level,
+                children: old_children,
+                ..
+            },
+            InodeTableNodeV1::Branch {
+                level: new_level,
+                children: new_children,
+                ..
+            },
+        ) if old_level == new_level
+            && old_children.len() == new_children.len()
+            && old_children
+                .iter()
+                .zip(new_children)
+                .all(|(old, new)| old.0 == new.0) =>
+        {
+            for ((_, old_child), (_, new_child)) in old_children.iter().zip(new_children) {
+                diff_inode_nodes(store, *old_child, *new_child, false, counters, visitor)?;
+            }
+            Ok(())
+        }
+        _ => {
+            let mut old_counters = InodeTableCounters::default();
+            let mut new_counters = InodeTableCounters::default();
+            let result = merge_inode_entries(
+                InodeEntryCursor::new(store, old, root, &mut old_counters),
+                InodeEntryCursor::new(store, new, root, &mut new_counters),
+                visitor,
+            );
+            counters.nodes_read = counters
+                .nodes_read
+                .checked_add(old_counters.nodes_read)
+                .and_then(|value| value.checked_add(new_counters.nodes_read))
+                .ok_or(CoreError::LengthOverflow)?;
+            result
+        }
+    }
+}
+
+fn merge_inode_entries(
+    old: impl Iterator<Item = CoreResult<(InodeId, ObjectId)>>,
+    new: impl Iterator<Item = CoreResult<(InodeId, ObjectId)>>,
+    visitor: &mut impl FnMut(InodeTableDiff) -> CoreResult<()>,
+) -> CoreResult<()> {
+    let mut old = old;
+    let mut new = new;
+    let mut old_entry = old.next().transpose()?;
+    let mut new_entry = new.next().transpose()?;
+    loop {
+        match (old_entry, new_entry) {
+            (None, None) => return Ok(()),
+            (Some((old_key, before)), Some((new_key, after))) if old_key == new_key => {
+                if before != after {
+                    visitor(InodeTableDiff {
+                        inode: old_key,
+                        before: Some(before),
+                        after: Some(after),
+                    })?;
+                }
+                old_entry = old.next().transpose()?;
+                new_entry = new.next().transpose()?;
+            }
+            (Some((old_key, before)), Some((new_key, after))) if old_key < new_key => {
+                visitor(InodeTableDiff {
+                    inode: old_key,
+                    before: Some(before),
+                    after: None,
+                })?;
+                old_entry = old.next().transpose()?;
+                new_entry = Some((new_key, after));
+            }
+            (Some((old_key, before)), Some((new_key, after))) => {
+                visitor(InodeTableDiff {
+                    inode: new_key,
+                    before: None,
+                    after: Some(after),
+                })?;
+                old_entry = Some((old_key, before));
+                new_entry = new.next().transpose()?;
+            }
+            (Some((old_key, before)), None) => {
+                visitor(InodeTableDiff {
+                    inode: old_key,
+                    before: Some(before),
+                    after: None,
+                })?;
+                old_entry = old.next().transpose()?;
+            }
+            (None, Some((new_key, after))) => {
+                visitor(InodeTableDiff {
+                    inode: new_key,
+                    before: None,
+                    after: Some(after),
+                })?;
+                new_entry = new.next().transpose()?;
+            }
+        }
+    }
 }
 
 fn upsert_validated<S: ObjectStore>(

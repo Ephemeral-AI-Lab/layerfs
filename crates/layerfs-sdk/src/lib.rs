@@ -1,42 +1,35 @@
 #![forbid(unsafe_code)]
 
-mod branch;
 mod client;
 mod connection;
-mod layer;
-mod location;
+mod query;
+mod request;
 mod result;
-mod stack;
 mod topology;
 
-pub use client::{Client, FactId, Query, QueryCursor, QueryPage, QueryResult, QueryScope};
-pub use connection::{
-    BranchConnection, BranchConnectionId, BranchParent, ConnectionContext, LayerConnection,
-    LayerConnectionId, StackConnection, StackConnectionId,
-};
+pub use client::Client;
+pub use connection::{ConnectionContext, LayerStackEndpoint};
 pub use layerfs_branch_store::BranchStore;
-pub use layerfs_layer_store::LayerStore;
+pub use layerfs_layerstack_store::LayerStackStore;
 pub use layerfs_monitor::{
-    BranchStoreId, CliInvocationReceipt, DedupAnalysis, Monitor, MonitorError, MonitorScope,
-    MonitorSnapshot, MonitoredRoute, OperationId, OperationOutcome, OperationReceipt,
-    TimingFragment,
+    DedupAnalysis, ExactOrUnavailable, LocalCasAnalysis, MonitorError, MonitorSnapshot,
+    OperationFamily, OperationReceipt, PlacementAnalysis, SemanticOperation, TransferAnalysis,
 };
-pub use layerfs_stack_store::StackStore;
 pub use layerfs_storage::{
-    AddResult, AddResultRecord, AdmissionSetReceipt, BaseId, BranchCommit, BranchId, BranchRecord,
-    BranchSource, CommitId, CommitRecord, CreatedStack, DatabaseReceipt, Fact, FactKind,
-    InitializedLayer, LayerHistoryId, LayerHistoryRecord, LayerId, LayerInitialization,
-    LayerRecord, LayerSource, LocalAdmissionReceipt, LocalObjectReceipt, MergeOutcome,
-    ObjectTransferReceipt, PulledBranch, RefOutcome, Result, ResultId, SourceId, StackHistoryId,
-    StackHistoryRecord, StackId, StackRecord, StorageError, StorageReceipt, TransferReceipt,
-    TransferSetReceipt, TransportReceipt,
+    BranchFact, BranchId, BranchRecord, BranchScope, BranchScopeRecord, CommitId, CommitRecord,
+    DiffAspects, DiffEntry, DiffRequest, EntityName, Fact, FactKind, InitializeLayerStackResult,
+    LayerId, LayerRecord, LayerStackFact, LayerStackId, LayerStackInitialization, LayerStackRecord,
+    LayerStackScopeRecord, LocalForkSource, NodeSummary, PullBranchResult, PullLayerResult,
+    PushResult, RemotePlacement, ServingMode, StorageError, StoreId,
 };
 pub use layerfs_workspace::{
-    ContainerId, CreateWorkspaceSession, EndWorkspaceMode, ExecutionEvent, ExecutionId,
-    ExecutionReceipt, ExecutionSummary, NonEmpty, OutputChunk, OutputPage, OutputReader,
-    OutputStream, WorkspaceCommitResult, WorkspaceDetail, WorkspaceDiff, WorkspaceEndResult,
-    WorkspaceError, WorkspaceExecution, WorkspacePlacement, WorkspaceProjection, WorkspaceResult,
-    WorkspaceSession, WorkspaceSessionId, WorkspaceState, WorkspaceSummary, Workspaces,
+    ConflictCursor, ConflictId, ConflictKind, ConflictPage, ContainerId, CreateWorkspaceSession,
+    EndWorkspaceMode, ExecutionEvent, ExecutionId, ExecutionReceipt, ExecutionSummary, NonEmpty,
+    OutputChunk, OutputPage, OutputReader, OutputStream, ResolveChoice, ResolveResult,
+    WorkspaceCommitResult, WorkspaceConflict, WorkspaceDetail, WorkspaceEndResult, WorkspaceError,
+    WorkspaceExecution, WorkspaceId, WorkspacePlacement, WorkspaceProjection, WorkspaceState,
+    WorkspaceSummary,
 };
-pub use location::StoreLocation;
-pub use result::SdkError;
+pub use query::{Query, QueryItem, QueryKind, QueryPage, WorkspaceQueryItem};
+pub use request::{DiffPage, OperationHandle};
+pub use result::{AddLayerResult, Result, SdkError};

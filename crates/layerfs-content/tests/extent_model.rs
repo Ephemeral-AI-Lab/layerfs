@@ -1,4 +1,5 @@
 use layerfs_content::file::extent::{ChildDescriptorV3, ExtentNodeV3, ExtentSliceV3, FileStateV3};
+use layerfs_content::file::extent_codec::encode_chunk_object;
 use layerfs_content::file::extent_codec::{
     decode_file_state, decode_node_with_context, encode_file_state, encode_node, profile_id,
 };
@@ -167,7 +168,7 @@ fn paired_diff_skips_equal_roots_and_length_mismatch_mappings() {
 #[test]
 fn paired_diff_handles_unequal_height_and_partition_without_payload_reads() {
     let mut store = MemoryStore::default();
-    let payload = store.put(&encode_bytes_object(&[7]).unwrap()).unwrap();
+    let payload = store.put(&encode_chunk_object(&[7]).unwrap()).unwrap();
     let extents = (0..128)
         .map(|_| ExtentSliceV3::new(payload, 0, 1).unwrap())
         .collect::<Vec<_>>();
@@ -300,8 +301,8 @@ fn product_range_reader_uses_bounded_authenticated_payload_batches() {
 fn payload_batches_continue_across_mapping_leaf_boundaries() {
     let mut store = MemoryStore::default();
     let payloads = [
-        store.put(&encode_bytes_object(&[0x51]).unwrap()).unwrap(),
-        store.put(&encode_bytes_object(&[0xa7]).unwrap()).unwrap(),
+        store.put(&encode_chunk_object(&[0x51]).unwrap()).unwrap(),
+        store.put(&encode_chunk_object(&[0xa7]).unwrap()).unwrap(),
     ];
     let mut leaves = Vec::new();
     for leaf in 0..3_usize {
@@ -734,7 +735,7 @@ fn authenticated_child_summary_mismatch_and_underfull_nonroot_are_rejected() {
     let mut store = MemoryStore::default();
     let mut extents = Vec::new();
     for index in 0..128_u16 {
-        let payload = encode_bytes_object(&index.to_be_bytes()).unwrap();
+        let payload = encode_chunk_object(&index.to_be_bytes()).unwrap();
         let payload_id = store.put(&payload).unwrap();
         extents.push(ExtentSliceV3::new(payload_id, 0, 1).unwrap());
     }
@@ -820,7 +821,9 @@ fn authenticated_child_summary_mismatch_and_underfull_nonroot_are_rejected() {
 #[test]
 fn fetched_payload_above_frozen_ceiling_is_rejected() {
     let mut store = MemoryStore::default();
-    let payload = encode_bytes_object(&vec![7; 32_769]).unwrap();
+    let mut oversized = b"LFS4CHK\0".to_vec();
+    oversized.extend(vec![7; 32_769]);
+    let payload = encode_bytes_object(&oversized).unwrap();
     let payload_id = store.put(&payload).unwrap();
     let leaf = ExtentNodeV3::Leaf {
         subtree_logical_bytes: 1,
@@ -844,8 +847,8 @@ fn fetched_payload_above_frozen_ceiling_is_rejected() {
 #[test]
 fn deep_splice_rejoins_boundary_fragments_before_they_become_nonroots() {
     let mut store = MemoryStore::default();
-    let payload_a = store.put(&encode_bytes_object(&[0xaa]).unwrap()).unwrap();
-    let payload_b = store.put(&encode_bytes_object(&[0xbb]).unwrap()).unwrap();
+    let payload_a = store.put(&encode_chunk_object(&[0xaa]).unwrap()).unwrap();
+    let payload_b = store.put(&encode_chunk_object(&[0xbb]).unwrap()).unwrap();
     let mut leaves = Vec::new();
     for leaf_index in 0..128 {
         let extents = (0..64)
@@ -924,7 +927,7 @@ fn deep_splice_rejoins_boundary_fragments_before_they_become_nonroots() {
 #[test]
 fn validation_binds_empty_state_and_visits_unread_children() {
     let mut store = MemoryStore::default();
-    let payload = store.put(&encode_bytes_object(&[7]).unwrap()).unwrap();
+    let payload = store.put(&encode_chunk_object(&[7]).unwrap()).unwrap();
     let extent = ExtentSliceV3::new(payload, 0, 1).unwrap();
     let nonempty = ExtentNodeV3::Leaf {
         subtree_logical_bytes: 1,
@@ -948,7 +951,7 @@ fn validation_binds_empty_state_and_visits_unread_children() {
         subtree_logical_bytes: 64,
         extents: vec![extent; 64],
     };
-    let payload_right = store.put(&encode_bytes_object(&[8]).unwrap()).unwrap();
+    let payload_right = store.put(&encode_chunk_object(&[8]).unwrap()).unwrap();
     let right_leaf = ExtentNodeV3::Leaf {
         subtree_logical_bytes: 64,
         extents: vec![ExtentSliceV3::new(payload_right, 0, 1).unwrap(); 64],
@@ -1013,7 +1016,7 @@ fn full_empty_read_authenticates_and_binds_its_mapping_root() {
         Err(CoreError::InvalidMappingTag { tag: 0x0a })
     );
 
-    let payload = store.put(&encode_bytes_object(&[7]).unwrap()).unwrap();
+    let payload = store.put(&encode_chunk_object(&[7]).unwrap()).unwrap();
     let nonempty_mapping = store
         .put(
             &encode_node(&ExtentNodeV3::Leaf {

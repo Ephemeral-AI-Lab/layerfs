@@ -85,6 +85,15 @@ pub trait FilesystemPort: Send + Sync {
         Ok(())
     }
     fn mkdir(&self, parent: NodeId, name: &[u8], mode: u32) -> PortResult<Attr>;
+    fn mkdir_reserved(
+        &self,
+        _parent: NodeId,
+        _name: &[u8],
+        _mode: u32,
+        _node: NodeId,
+    ) -> PortResult<Attr> {
+        Err(PortError::Invalid)
+    }
     fn symlink(&self, parent: NodeId, name: &[u8], target: Vec<u8>) -> PortResult<Attr>;
     fn link(&self, node: NodeId, parent: NodeId, name: &[u8]) -> PortResult<Attr>;
     fn unlink(&self, parent: NodeId, name: &[u8], directory: bool) -> PortResult<()>;

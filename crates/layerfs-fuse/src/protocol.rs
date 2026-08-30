@@ -1,8 +1,8 @@
 use crate::{Attr, Kind, NodeId, PortError};
 use std::io::{Read, Write};
 
-const MAX_FRAME: usize = 2 * 1024 * 1024;
-const MAX_BYTES: usize = 1024 * 1024;
+const MAX_FRAME: usize = 17 * 1024 * 1024;
+const MAX_BYTES: usize = 16 * 1024 * 1024;
 const MAX_ENTRIES: usize = 16_384;
 const MAX_UNLINKS: usize = 512;
 
@@ -42,6 +42,7 @@ pub(crate) enum Request {
     WriteZero(NodeId, u64, u32),
     Fence,
     PinRead(NodeId),
+    MkdirReserved(NodeId, Vec<u8>, u32, NodeId),
 }
 
 impl Request {
@@ -55,7 +56,12 @@ impl Request {
                 | Self::UnlinkBatch(..)
                 | Self::WriteZero(..)
                 | Self::PinRead(..)
+                | Self::MkdirReserved(..)
         )
+    }
+
+    pub(crate) const fn acknowledges_deferred_error(&self) -> bool {
+        matches!(self, Self::Fence | Self::Fsync(_))
     }
 
     pub(crate) const fn name(&self) -> &'static str {
@@ -68,6 +74,7 @@ impl Request {
             Self::UnlinkBatch(..) => "UnlinkBatch",
             Self::WriteZero(..) => "WriteZero",
             Self::PinRead(..) => "PinRead",
+            Self::MkdirReserved(..) => "MkdirReserved",
             _ => "request",
         }
     }
@@ -245,6 +252,13 @@ pub(crate) fn write_request(output: &mut impl Write, request: &Request) -> std::
         }
         Request::Fence => bytes.push(24),
         Request::PinRead(node) => unary(&mut bytes, 25, *node),
+        Request::MkdirReserved(parent, name, mode, node) => {
+            bytes.push(26);
+            put_node(&mut bytes, *parent);
+            put_bytes(&mut bytes, name)?;
+            bytes.extend_from_slice(&mode.to_be_bytes());
+            put_node(&mut bytes, *node);
+        }
     }
     write_frame(output, &bytes)
 }
@@ -347,6 +361,12 @@ pub(crate) fn read_request(input: &mut impl Read) -> std::io::Result<Request> {
         23 => Request::WriteZero(input.node()?, input.u64()?, input.u32()?),
         24 => Request::Fence,
         25 => Request::PinRead(input.node()?),
+        26 => Request::MkdirReserved(
+            input.node()?,
+            input.bytes()?.to_vec(),
+            input.u32()?,
+            input.node()?,
+        ),
         _ => return Err(invalid("request tag")),
     };
     input.done()?;

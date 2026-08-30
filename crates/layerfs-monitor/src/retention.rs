@@ -66,6 +66,24 @@ impl Retention {
         state.receipts += 1;
         Ok(())
     }
+
+    pub(crate) fn load(&self) -> MonitorResult<Vec<OperationReceipt>> {
+        let mut receipts = Vec::new();
+        for path in [self.path.with_extension("jsonl.1"), self.path.clone()] {
+            let file = match std::fs::File::open(path) {
+                Ok(file) => file,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.into()),
+            };
+            for line in std::io::BufReader::new(file).lines() {
+                let line = line?;
+                if line.contains("\"record\":\"") {
+                    receipts.push(OperationReceipt::from_json(&line)?);
+                }
+            }
+        }
+        Ok(receipts)
+    }
 }
 
 fn remove_expired(path: &Path) -> MonitorResult<()> {

@@ -1,0 +1,17 @@
+[package]
+name = "layerfs-layerstack-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+test-instrumentation = ["layerfs-storage/test-instrumentation"]
+
+[dependencies]
+blake3.workspace = true
+layerfs-content = { path = "../layerfs-content" }
+layerfs-storage = { path = "../layerfs-storage" }
+
+[dev-dependencies]
+rusqlite.workspace = true

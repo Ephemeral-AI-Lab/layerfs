@@ -19,7 +19,6 @@ impl Filesystem for LayerFs {
         let _ = config.set_max_readahead(1024 * 1024);
         let wanted = InitFlags::FUSE_ASYNC_READ
             | InitFlags::FUSE_BIG_WRITES
-            | InitFlags::FUSE_WRITEBACK_CACHE
             | InitFlags::FUSE_PARALLEL_DIROPS
             | InitFlags::FUSE_MAX_PAGES;
         let _ = config.add_capabilities(config.capabilities() & wanted);
@@ -281,14 +280,7 @@ impl Filesystem for LayerFs {
             self.open_handle(node, flags.0 & O_TRUNC != 0, writable)
                 .map(|handle| (handle, writable))
         }) {
-            Ok((handle, writable)) => reply.opened(
-                FileHandle(handle),
-                if writable {
-                    FopenFlags::FOPEN_DIRECT_IO
-                } else {
-                    FopenFlags::FOPEN_KEEP_CACHE
-                },
-            ),
+            Ok((handle, _)) => reply.opened(FileHandle(handle), FopenFlags::FOPEN_KEEP_CACHE),
             Err(error) => reply.error(error),
         }
     }
@@ -487,7 +479,7 @@ impl Filesystem for LayerFs {
                 &attr,
                 Generation(0),
                 FileHandle(handle),
-                FopenFlags::FOPEN_DIRECT_IO,
+                FopenFlags::FOPEN_KEEP_CACHE,
             ),
             Err(error) => reply.error(error),
         }

@@ -1,64 +1,37 @@
 #![forbid(unsafe_code)]
 
 mod admission;
-mod candidate;
-mod contract;
 mod error;
 mod ids;
-mod merge_base;
-
 mod records;
 mod schema;
 mod sql;
 mod transfer;
 mod wire;
 
-pub use candidate::*;
-pub use contract::{
-    AdmissionSetReceipt, BranchCommit, BranchSource, DatabaseReceipt, HeadMoved, InventoryEntry,
-    InventoryPage, LayerInitialization, LayerSource, LocalAdmissionReceipt, LocalObjectReceipt,
-    MergeOutcome, ObjectTransferReceipt, ReadOnlyHistory, RefOutcome, StorageReceipt,
-    StoreStorageSnapshot, TransferReceipt, TransferSetReceipt, TransportReceipt, WrongHistory,
+pub use admission::{
+    apply_changes, apply_reconcile_choices, collect_dependency_set, dependency_order, empty_root,
+    reconcile_candidate, reconcile_candidate_with, BuildCounters, BuiltRoot,
+    CandidateReconciliation, CoreReader, DeferredObjectStore, ObjectBuffer, SpillableObjectSet,
 };
 pub use error::{Result, StorageError};
 pub use ids::*;
-pub use merge_base::*;
-
+pub use layerfs_content::filesystem::{DiffAspects, DiffEntry, NodeSummary};
+pub use layerfs_content::filesystem::{ReconcileChoice, ReconcileConflict, ReconcileConflictKind};
 pub use records::*;
 pub use schema::*;
-pub use sql::fact_batches;
-#[doc(hidden)]
-pub use transfer::{take_storage_receipts, DeferredFactStore, DEFERRED_MEMORY_BYTES};
-
-pub(crate) use contract::{
-    note_receiver_authentication, note_traversal_authentication, AdmissionStats,
+pub(crate) use transfer::{note_receiver_authentication, note_traversal_authentication};
+pub use transfer::{
+    receipt_totals, record_local_admission, take_storage_receipts, take_transfer_receipts,
+    transfer_facts, transfer_root, transfer_roots, AdmissionSetReceipt, CanonicalObject,
+    EndpointTarget, LayerStackEndpoint, LocalAdmissionReceipt, LocalObjectReceipt, MeasuredBytes,
+    MissingBitmap, ObjectSource, RootTransferRequest, StorageReceipt, TransferPipeline,
+    TransferReceipt, TransferSetReceipt, TransferTarget, FACT_BATCH_BYTES, FACT_BATCH_COUNT,
+    ID_BATCH_COUNT, OBJECT_BATCH_BYTES, OBJECT_BATCH_COUNT, TRANSFER_BUFFER_BYTES,
 };
-
-#[doc(hidden)]
-pub use contract::{
-    BaseSnapshot, EndpointReply, EndpointRequest, EndpointResponse, ObjectSource, StackAttestation,
-    StackPush, StoreEndpoint, TransferExchange, TransferIntent, TransferOutcome, TransferTarget,
+#[cfg(feature = "test-instrumentation")]
+pub use transfer::{reset_transfer_authentication_counts, transfer_authentication_counts};
+pub use wire::{
+    decode_diff_entry, decode_fact, decode_objects, encode_diff_entry, encode_fact, encode_objects,
+    read_frame, write_frame,
 };
-#[doc(hidden)]
-pub use transfer::TransferPipeline;
-#[doc(hidden)]
-pub use wire::*;
-
-#[doc(hidden)]
-pub mod internal {
-    #[cfg(feature = "test-instrumentation")]
-    pub use crate::contract::{
-        reset_transfer_authentication_counts, transfer_authentication_counts,
-    };
-    pub use crate::contract::{
-        BaseSnapshot, EndpointReply, EndpointRequest, EndpointResponse, ObjectSource,
-        StackAttestation, StackPush, StoreEndpoint, TransferExchange, TransferIntent,
-        TransferOutcome, TransferTarget,
-    };
-    pub use crate::transfer::TransferPipeline;
-    pub use crate::wire::*;
-}
-
-#[cfg(test)]
-#[path = "../tests/support/sql_unit.rs"]
-mod sql_tests;

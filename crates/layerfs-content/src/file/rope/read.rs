@@ -292,6 +292,7 @@ fn flush_read_batch<S: ObjectRead, W: Write>(
         .collect::<Vec<_>>();
     let mut index = 0_usize;
     store.get_authenticated_batch(&ids, |id, payload| {
+        let payload = crate::file::extent_codec::decode_chunk_payload(payload)?;
         let (extent, overlap_start, overlap_end) = selected
             .get(index)
             .copied()

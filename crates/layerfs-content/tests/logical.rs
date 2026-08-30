@@ -6,7 +6,7 @@ use layerfs_content::tree::directory::codec::{
 use layerfs_content::tree::directory::{directory_insert, empty_directory};
 use layerfs_content::tree::inode::codec::encode_inode_record;
 use layerfs_content::tree::inode::{
-    inode_table_from_root, inode_table_lookup, inode_table_upsert, merge_inode_tables, InodeId,
+    inode_table_from_root, inode_table_lookup, inode_table_upsert, reconcile_inode_tables, InodeId,
     InodeKind, InodeRecordV1, InodeTableCounters,
 };
 use layerfs_content::tree::metadata::{
@@ -15,6 +15,7 @@ use layerfs_content::tree::metadata::{
 };
 use layerfs_content::tree::NamespaceRootV1;
 use layerfs_content::{CanonicalName, CanonicalPath, CoreError, CoreResult, ObjectId};
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
@@ -66,7 +67,7 @@ fn metadata_at(store: &mut MemoryStore, kind: InodeKind, mtime_seconds: i64) -> 
 }
 
 #[test]
-fn three_root_merge_combines_content_and_metadata_on_one_inode() {
+fn three_root_reconciliation_combines_content_and_metadata_on_one_inode() {
     let (mut store, base) = fixture();
     let path = CanonicalPath::new("file").unwrap();
     let source =
@@ -82,7 +83,7 @@ fn three_root_merge_combines_content_and_metadata_on_one_inode() {
         Some(destination_metadata),
     )
     .unwrap();
-    let merged = logical::merge_roots(&mut store, base, source.root(), destination.root())
+    let merged = logical::reconcile_roots(&mut store, base, source.root(), destination.root())
         .unwrap()
         .unwrap();
     let mut bytes = Vec::new();
@@ -103,7 +104,7 @@ fn three_root_merge_combines_content_and_metadata_on_one_inode() {
 }
 
 #[test]
-fn three_root_merge_combines_disjoint_names_in_one_directory() {
+fn three_root_reconciliation_combines_disjoint_names_in_one_directory() {
     let (mut store, base) = fixture();
     let source_metadata = metadata(&mut store, InodeKind::RegularFile);
     let source = logical::replace_file(
@@ -123,7 +124,7 @@ fn three_root_merge_combines_disjoint_names_in_one_directory() {
         |_| Ok((InodeId::allocate([3; 32], 2), destination_metadata)),
     )
     .unwrap();
-    let merged = logical::merge_roots(&mut store, base, source.root(), destination.root())
+    let merged = logical::reconcile_roots(&mut store, base, source.root(), destination.root())
         .unwrap()
         .unwrap();
     let mut source_bytes = Vec::new();
@@ -148,7 +149,7 @@ fn three_root_merge_combines_disjoint_names_in_one_directory() {
 }
 
 #[test]
-fn three_root_merge_never_publishes_an_undercounted_parallel_hard_link() {
+fn three_root_reconciliation_never_publishes_an_undercounted_parallel_hard_link() {
     let (mut store, base) = fixture();
     let source = logical::hard_link(
         &mut store,
@@ -166,14 +167,14 @@ fn three_root_merge_never_publishes_an_undercounted_parallel_hard_link() {
     .unwrap();
 
     assert!(
-        logical::merge_roots(&mut store, base, source.root(), destination.root())
+        logical::reconcile_roots(&mut store, base, source.root(), destination.root())
             .unwrap()
             .is_err()
     );
 }
 
 #[test]
-fn three_root_merge_combines_disjoint_metadata_keys() {
+fn three_root_reconciliation_combines_disjoint_metadata_keys() {
     let (mut store, base) = fixture();
     let path = CanonicalPath::new("file").unwrap();
     let base_metadata = logical::resolve(
@@ -215,7 +216,7 @@ fn three_root_merge_combines_disjoint_metadata_keys() {
         Some(destination_metadata),
     )
     .unwrap();
-    let merged = logical::merge_roots(&mut store, base, source.root(), destination.root())
+    let merged = logical::reconcile_roots(&mut store, base, source.root(), destination.root())
         .unwrap()
         .unwrap();
     let merged_metadata = logical::resolve(
@@ -255,7 +256,7 @@ fn three_root_merge_combines_disjoint_metadata_keys() {
 }
 
 #[test]
-fn inode_merge_prunes_equal_persistent_subtrees() {
+fn inode_reconciliation_prunes_equal_persistent_subtrees() {
     let mut store = MemoryStore::default();
     let common = store
         .put(
@@ -311,7 +312,7 @@ fn inode_merge_prunes_equal_persistent_subtrees() {
     let destination = inode_table_upsert(&mut store, base, keys[510], destination_record)
         .unwrap()
         .0;
-    let (merged, counters, _) = merge_inode_tables(&mut store, base, source, destination)
+    let (merged, counters, _) = reconcile_inode_tables(&mut store, base, source, destination)
         .unwrap()
         .unwrap();
     assert!(counters.nodes_read < 12, "{counters:?}");
@@ -381,6 +382,257 @@ fn fixture() -> (MemoryStore, ObjectId) {
         )
         .unwrap();
     (store, root)
+}
+
+struct CountingRead<'a> {
+    store: &'a MemoryStore,
+    reads: RefCell<BTreeMap<ObjectId, u64>>,
+}
+
+impl layerfs_content::object::access::ObjectRead for CountingRead<'_> {
+    fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+        *self.reads.borrow_mut().entry(id).or_default() += 1;
+        ObjectStore::get(self.store, id)
+    }
+}
+
+#[test]
+fn path_diff_reuses_equal_persistent_objects_and_emits_incrementally() {
+    let (mut store, initial) = fixture();
+    let base = logical::apply_changes(
+        &mut store,
+        initial,
+        &[logical::ContentChange::Write {
+            path: "stable".into(),
+            bytes: b"unchanged".to_vec(),
+            mode: 0o644,
+        }],
+        [1; 32],
+    )
+    .unwrap()
+    .root_id;
+    let changed = logical::apply_changes(
+        &mut store,
+        base,
+        &[logical::ContentChange::Write {
+            path: "file".into(),
+            bytes: b"changed".to_vec(),
+            mode: 0o644,
+        }],
+        [1; 32],
+    )
+    .unwrap()
+    .root_id;
+
+    let namespace = logical::namespace(&store, base).unwrap();
+    let table = layerfs_content::tree::inode::InodeTableRoot(namespace.inode_table_root);
+    let root_record = inode_table_lookup(
+        &store,
+        table,
+        namespace.root_directory_inode,
+        &mut InodeTableCounters::default(),
+    )
+    .unwrap()
+    .unwrap();
+    let root_record = store.0.get(&root_record).unwrap();
+    let shared_directory = layerfs_content::tree::inode::codec::decode_inode_record(root_record)
+        .unwrap()
+        .content_root;
+    let stable = logical::resolve(
+        &store,
+        base,
+        &CanonicalPath::new("stable").unwrap(),
+        &mut logical::LogicalCounters::default(),
+    )
+    .unwrap();
+    let stable_record = inode_table_lookup(
+        &store,
+        table,
+        stable.inode,
+        &mut InodeTableCounters::default(),
+    )
+    .unwrap()
+    .unwrap();
+
+    let reader = CountingRead {
+        store: &store,
+        reads: RefCell::new(BTreeMap::new()),
+    };
+    let mut entries = Vec::new();
+    logical::diff_roots(&reader, base, changed, |entry| {
+        entries.push(entry);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(entries.len(), 1);
+    assert!(matches!(
+        &entries[0],
+        logical::DiffEntry::Modify { path, aspects, .. }
+            if path == &CanonicalPath::new("file").unwrap()
+                && aspects.content
+                && !aspects.directory_membership
+    ));
+    let reads = reader.reads.borrow();
+    assert_eq!(reads.get(&shared_directory), Some(&1));
+    assert_eq!(reads.get(&stable_record), Some(&1));
+
+    let equal = CountingRead {
+        store: &store,
+        reads: RefCell::new(BTreeMap::new()),
+    };
+    logical::diff_roots(&equal, base, base, |_| Ok(())).unwrap();
+    assert!(equal.reads.borrow().is_empty());
+}
+
+#[test]
+fn path_diff_preserves_order_types_metadata_symlinks_directories_and_hard_links() {
+    let (mut store, base) = fixture();
+    let seed = [1; 32];
+
+    let hard_link = logical::apply_changes(
+        &mut store,
+        base,
+        &[logical::ContentChange::HardLink {
+            source: "file".into(),
+            target: "alias".into(),
+        }],
+        seed,
+    )
+    .unwrap()
+    .root_id;
+    let mut entries = Vec::new();
+    logical::diff_roots(&store, base, hard_link, |entry| {
+        entries.push(entry);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(paths(&entries), ["", "alias", "file"]);
+    assert!(matches!(
+        &entries[0],
+        logical::DiffEntry::Modify { aspects, .. }
+            if aspects.directory_membership && aspects.content
+    ));
+    assert!(matches!(&entries[1], logical::DiffEntry::Add { .. }));
+    assert!(matches!(
+        &entries[2],
+        logical::DiffEntry::Modify { aspects, .. }
+            if aspects.hard_links && !aspects.node_type && !aspects.content && !aspects.metadata
+    ));
+
+    let metadata = logical::apply_changes(
+        &mut store,
+        base,
+        &[logical::ContentChange::SetMode {
+            path: "file".into(),
+            mode: 0o600,
+        }],
+        seed,
+    )
+    .unwrap()
+    .root_id;
+    let mut entries = Vec::new();
+    logical::diff_roots(&store, base, metadata, |entry| {
+        entries.push(entry);
+        Ok(())
+    })
+    .unwrap();
+    assert!(matches!(
+        entries.as_slice(),
+        [logical::DiffEntry::Modify { path, aspects, .. }]
+            if path == &CanonicalPath::new("file").unwrap()
+                && aspects.metadata
+                && !aspects.node_type
+                && !aspects.content
+                && !aspects.directory_membership
+                && !aspects.hard_links
+    ));
+
+    let type_change = logical::apply_changes(
+        &mut store,
+        base,
+        &[
+            logical::ContentChange::Remove {
+                path: "file".into(),
+            },
+            logical::ContentChange::Mkdir {
+                path: "file".into(),
+                mode: 0o755,
+            },
+            logical::ContentChange::Write {
+                path: "file/child".into(),
+                bytes: b"child".to_vec(),
+                mode: 0o644,
+            },
+        ],
+        seed,
+    )
+    .unwrap()
+    .root_id;
+    let mut entries = Vec::new();
+    logical::diff_roots(&store, base, type_change, |entry| {
+        entries.push(entry);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(paths(&entries), ["", "file", "file/child"]);
+    assert!(matches!(
+        &entries[1],
+        logical::DiffEntry::Modify { aspects, .. }
+            if aspects.node_type && aspects.content && aspects.metadata
+    ));
+    assert!(matches!(&entries[2], logical::DiffEntry::Add { .. }));
+
+    let symlink_base = logical::apply_changes(
+        &mut store,
+        base,
+        &[logical::ContentChange::Symlink {
+            path: "link".into(),
+            target: b"one".to_vec(),
+        }],
+        seed,
+    )
+    .unwrap()
+    .root_id;
+    let symlink_changed = logical::apply_changes(
+        &mut store,
+        symlink_base,
+        &[
+            logical::ContentChange::Remove {
+                path: "link".into(),
+            },
+            logical::ContentChange::Symlink {
+                path: "link".into(),
+                target: b"two".to_vec(),
+            },
+        ],
+        seed,
+    )
+    .unwrap()
+    .root_id;
+    let mut entries = Vec::new();
+    logical::diff_roots(&store, symlink_base, symlink_changed, |entry| {
+        entries.push(entry);
+        Ok(())
+    })
+    .unwrap();
+    assert!(matches!(
+        entries.as_slice(),
+        [logical::DiffEntry::Modify { path, aspects, .. }]
+            if path == &CanonicalPath::new("link").unwrap()
+                && aspects.content
+                && !aspects.node_type
+    ));
+}
+
+fn paths(entries: &[logical::DiffEntry]) -> Vec<&str> {
+    entries
+        .iter()
+        .map(|entry| match entry {
+            logical::DiffEntry::Add { path, .. }
+            | logical::DiffEntry::Remove { path, .. }
+            | logical::DiffEntry::Modify { path, .. } => path.as_str(),
+        })
+        .collect()
 }
 
 fn rename_fixture() -> (MemoryStore, ObjectId) {
@@ -569,7 +821,7 @@ fn rename_keeps_old_roots_readable_and_handles_same_and_cross_directory_moves() 
 }
 
 #[test]
-fn three_root_merge_streams_independent_inode_changes_and_reports_overlap() {
+fn three_root_reconciliation_streams_independent_inode_changes_and_reports_overlap() {
     let (mut store, base) = rename_fixture();
     let source = logical::replace_range(
         &mut store,
@@ -598,7 +850,7 @@ fn three_root_merge_streams_independent_inode_changes_and_reports_overlap() {
         metadata,
     )
     .unwrap();
-    let merged = logical::merge_roots(&mut store, base, source.root(), destination.root())
+    let merged = logical::reconcile_roots(&mut store, base, source.root(), destination.root())
         .unwrap()
         .unwrap();
     let mut bytes = Vec::new();
@@ -622,8 +874,161 @@ fn three_root_merge_streams_independent_inode_changes_and_reports_overlap() {
     )
     .unwrap();
     assert!(
-        logical::merge_roots(&mut store, base, source.root(), conflicting.root())
+        logical::reconcile_roots(&mut store, base, source.root(), conflicting.root())
             .unwrap()
             .is_err()
+    );
+}
+
+#[test]
+fn typed_conflicts_report_canonical_paths_and_exact_choice_roots() {
+    let (mut store, base) = fixture();
+    let root = |store: &mut MemoryStore, changes: &[logical::ContentChange], seed: [u8; 32]| {
+        logical::apply_changes(store, base, changes, seed)
+            .unwrap()
+            .root_id
+    };
+
+    let branch = root(
+        &mut store,
+        &[logical::ContentChange::Write {
+            path: "file".into(),
+            bytes: b"branch".to_vec(),
+            mode: 0o644,
+        }],
+        [3; 32],
+    );
+    let layer = root(
+        &mut store,
+        &[logical::ContentChange::Write {
+            path: "file".into(),
+            bytes: b"layer".to_vec(),
+            mode: 0o644,
+        }],
+        [4; 32],
+    );
+    let content = logical::reconcile(&mut store, base, branch, layer).unwrap();
+    assert_eq!(content.conflicts.len(), 1);
+    assert_eq!(
+        content.conflicts[0].kind,
+        logical::ReconcileConflictKind::Content
+    );
+    assert_eq!(
+        content.conflicts[0].affected_paths,
+        vec![CanonicalPath::new("file").unwrap()]
+    );
+    assert_eq!(
+        logical::reconcile_with(&mut store, base, branch, layer, |_| {
+            Some(logical::ReconcileChoice::Branch)
+        })
+        .unwrap()
+        .root_id,
+        branch
+    );
+    let layer_choice = logical::reconcile_with(&mut store, base, branch, layer, |_| {
+        Some(logical::ReconcileChoice::Layer)
+    })
+    .unwrap()
+    .root_id;
+    assert_eq!(layer_choice, layer);
+
+    let branch_type = root(
+        &mut store,
+        &[
+            logical::ContentChange::Remove {
+                path: "file".into(),
+            },
+            logical::ContentChange::Mkdir {
+                path: "file".into(),
+                mode: 0o755,
+            },
+        ],
+        [5; 32],
+    );
+    let layer_type = root(
+        &mut store,
+        &[
+            logical::ContentChange::Remove {
+                path: "file".into(),
+            },
+            logical::ContentChange::Symlink {
+                path: "file".into(),
+                target: b"target".to_vec(),
+            },
+        ],
+        [6; 32],
+    );
+    let type_conflict = logical::reconcile(&mut store, base, branch_type, layer_type).unwrap();
+    assert!(type_conflict.conflicts.iter().any(|conflict| {
+        conflict.kind == logical::ReconcileConflictKind::Type
+            && conflict.affected_paths == vec![CanonicalPath::new("file").unwrap()]
+    }));
+
+    let removed = root(
+        &mut store,
+        &[logical::ContentChange::Remove {
+            path: "file".into(),
+        }],
+        [7; 32],
+    );
+    let directory = logical::reconcile(&mut store, base, removed, layer).unwrap();
+    assert!(directory.conflicts.iter().any(|conflict| {
+        conflict.kind == logical::ReconcileConflictKind::Directory
+            && conflict.affected_paths == vec![CanonicalPath::new("file").unwrap()]
+    }));
+
+    let linked = root(
+        &mut store,
+        &[logical::ContentChange::HardLink {
+            source: "file".into(),
+            target: "branch-link".into(),
+        }],
+        [8; 32],
+    );
+    let layer_linked = root(
+        &mut store,
+        &[logical::ContentChange::HardLink {
+            source: "file".into(),
+            target: "layer-link".into(),
+        }],
+        [9; 32],
+    );
+    let hard_link = logical::reconcile(&mut store, base, linked, layer_linked).unwrap();
+    assert!(hard_link.conflicts.iter().any(|conflict| {
+        conflict.kind == logical::ReconcileConflictKind::HardLink
+            && conflict
+                .affected_paths
+                .contains(&CanonicalPath::new("file").unwrap())
+    }));
+
+    let nested_link = root(
+        &mut store,
+        &[
+            logical::ContentChange::Mkdir {
+                path: "dir".into(),
+                mode: 0o755,
+            },
+            logical::ContentChange::HardLink {
+                source: "file".into(),
+                target: "dir/branch-link".into(),
+            },
+        ],
+        [10; 32],
+    );
+    let root_link = root(
+        &mut store,
+        &[logical::ContentChange::HardLink {
+            source: "file".into(),
+            target: "layer-link".into(),
+        }],
+        [11; 32],
+    );
+    assert_eq!(
+        logical::reconcile_with(&mut store, base, nested_link, root_link, |_| {
+            Some(logical::ReconcileChoice::Branch)
+        })
+        .unwrap()
+        .root_id,
+        nested_link
     );
 }

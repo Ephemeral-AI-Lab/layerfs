@@ -34,10 +34,6 @@ impl ObjectId {
     }
 }
 
-pub fn chunk_id(bytes: &[u8]) -> super::ChunkId {
-    ObjectId::for_bytes(bytes)
-}
-
 impl fmt::Debug for ObjectId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter

@@ -1,14 +1,43 @@
-use crate::{WorkspacePlacement, WorkspaceProjection, WorkspaceState};
-use layerfs_storage::{BranchId, CommitId, HeadMoved, RefOutcome, StorageError};
+use crate::WorkspaceState;
+use layerfs_storage::{BranchId, CommitId, StorageError};
 use std::ffi::OsString;
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct WorkspaceSessionId([u8; 16]);
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContainerId(pub String);
 
-impl WorkspaceSessionId {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WorkspacePlacement {
+    Host {
+        root: PathBuf,
+    },
+    Container {
+        container_id: ContainerId,
+        root: PathBuf,
+    },
+}
+
+impl WorkspacePlacement {
+    pub(crate) fn root(&self) -> &PathBuf {
+        match self {
+            Self::Host { root } | Self::Container { root, .. } => root,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkspaceProjection {
+    Fuse,
+    Materialize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct WorkspaceId([u8; 16]);
+
+impl WorkspaceId {
     pub(crate) fn new() -> Self {
         static SERIAL: AtomicU64 = AtomicU64::new(0);
         let mut input = Vec::new();
@@ -26,7 +55,7 @@ impl WorkspaceSessionId {
     }
 }
 
-impl fmt::Display for WorkspaceSessionId {
+impl fmt::Display for WorkspaceId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("w:")?;
         for byte in self.0 {
@@ -36,7 +65,7 @@ impl fmt::Display for WorkspaceSessionId {
     }
 }
 
-impl std::str::FromStr for WorkspaceSessionId {
+impl std::str::FromStr for WorkspaceId {
     type Err = WorkspaceError;
 
     fn from_str(value: &str) -> WorkspaceResult<Self> {
@@ -59,9 +88,12 @@ pub enum EndWorkspaceMode {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkspaceSession {
-    pub id: WorkspaceSessionId,
+    pub id: WorkspaceId,
     pub branch_id: BranchId,
-    pub pinned_head: CommitId,
+    pub layer_stack_id: layerfs_storage::LayerStackId,
+    pub layer_stack_name: layerfs_storage::EntityName,
+    pub branch_name: layerfs_storage::EntityName,
+    pub pinned_head: Option<CommitId>,
     pub placement: WorkspacePlacement,
     pub projection: WorkspaceProjection,
     pub state: WorkspaceState,
@@ -69,9 +101,12 @@ pub struct WorkspaceSession {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkspaceSummary {
-    pub id: WorkspaceSessionId,
+    pub id: WorkspaceId,
     pub branch_id: BranchId,
-    pub pinned_head: CommitId,
+    pub layer_stack_id: layerfs_storage::LayerStackId,
+    pub layer_stack_name: layerfs_storage::EntityName,
+    pub branch_name: layerfs_storage::EntityName,
+    pub pinned_head: Option<CommitId>,
     pub state: WorkspaceState,
     pub dirty: bool,
 }
@@ -85,7 +120,7 @@ pub struct WorkspaceDetail {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkspaceDiff {
-    pub session_id: WorkspaceSessionId,
+    pub session_id: WorkspaceId,
     pub dirty: bool,
     pub mutation_generation: u64,
 }
@@ -162,7 +197,7 @@ pub enum ExecutionEvent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkspaceExecution {
     pub id: ExecutionId,
-    pub session_id: WorkspaceSessionId,
+    pub session_id: WorkspaceId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -175,35 +210,37 @@ pub struct ExecutionSummary {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WorkspaceCommitResult {
     Created {
-        previous_head: CommitId,
+        previous_head: Option<CommitId>,
         commit_id: CommitId,
     },
     UpToDate {
-        head: CommitId,
+        head: Option<CommitId>,
     },
+    Busy,
     HeadMoved {
-        expected: CommitId,
-        actual: CommitId,
+        expected: Option<CommitId>,
+        actual: Option<CommitId>,
     },
 }
 
 impl WorkspaceCommitResult {
-    pub(crate) fn from_outcome(previous_head: CommitId, outcome: RefOutcome<CommitId>) -> Self {
+    pub(crate) fn from_outcome(outcome: layerfs_branch_store::CommitOutcome) -> Self {
         match outcome {
-            RefOutcome::Created(commit_id) | RefOutcome::FastForwarded(commit_id) => {
-                Self::Created {
-                    previous_head,
-                    commit_id,
-                }
-            }
-            RefOutcome::UpToDate(head) => Self::UpToDate { head },
+            layerfs_branch_store::CommitOutcome::Created {
+                previous_head,
+                commit_id,
+            } => Self::Created {
+                previous_head,
+                commit_id,
+            },
+            layerfs_branch_store::CommitOutcome::UpToDate { head } => Self::UpToDate { head },
         }
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkspaceEndResult {
-    pub session_id: WorkspaceSessionId,
+    pub session_id: WorkspaceId,
     pub discarded: bool,
 }
 
@@ -224,11 +261,10 @@ pub type WorkspaceResult<T> = std::result::Result<T, WorkspaceError>;
 impl WorkspaceError {
     pub(crate) fn from_commit(error: StorageError) -> WorkspaceResult<WorkspaceCommitResult> {
         match error {
-            StorageError::CommitHeadMoved(HeadMoved {
-                expected: Some(expected),
-                actual: Some(actual),
-            }) => Ok(WorkspaceCommitResult::HeadMoved { expected, actual }),
-            StorageError::InvalidInput("workspace busy") => Err(Self::WorkspaceBusy),
+            StorageError::CommitHeadMoved { expected, actual } => {
+                Ok(WorkspaceCommitResult::HeadMoved { expected, actual })
+            }
+            StorageError::InvalidInput("workspace busy") => Ok(WorkspaceCommitResult::Busy),
             error => Err(Self::Storage(error)),
         }
     }

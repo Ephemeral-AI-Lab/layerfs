@@ -4,10 +4,31 @@ use super::extent::{
 use crate::{decode_bytes_object, encode_bytes_object, CoreError, CoreResult, ObjectId};
 
 const MAGIC: &[u8; 8] = b"LFS4MAP\0";
+pub const CHUNK_MAGIC: &[u8; 8] = b"LFS4CHK\0";
 const VERSION: u16 = 3;
 const LEAF: u8 = 0x08;
 const BRANCH: u8 = 0x09;
 const FILE_STATE: u8 = 0x0a;
+
+pub fn encode_chunk_object(bytes: &[u8]) -> CoreResult<Vec<u8>> {
+    if bytes.len() > crate::file::cdc::MAXIMUM_CHUNK_BYTES {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
+    let mut value = Vec::with_capacity(CHUNK_MAGIC.len() + bytes.len());
+    value.extend_from_slice(CHUNK_MAGIC);
+    value.extend_from_slice(bytes);
+    encode_bytes_object(&value)
+}
+
+pub fn decode_chunk_payload(value: &[u8]) -> CoreResult<&[u8]> {
+    let bytes = value
+        .strip_prefix(CHUNK_MAGIC)
+        .ok_or(CoreError::WrongLogicalRole)?;
+    if bytes.len() > crate::file::cdc::MAXIMUM_CHUNK_BYTES {
+        return Err(CoreError::ChunkLengthMismatch);
+    }
+    Ok(bytes)
+}
 
 pub fn profile_id() -> ObjectId {
     let mut bytes = Vec::with_capacity(96);

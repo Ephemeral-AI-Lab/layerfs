@@ -2,7 +2,7 @@ use crate::output::OutputLog;
 use crate::worker::WorkspaceWorker;
 use crate::{
     ExecutionId, ExecutionReceipt, ExecutionSummary, NonEmpty, OutputReader, OutputStream,
-    WorkspaceError, WorkspaceExecution, WorkspacePlacement, WorkspaceResult, WorkspaceSessionId,
+    WorkspaceError, WorkspaceExecution, WorkspaceId, WorkspacePlacement, WorkspaceResult,
     Workspaces,
 };
 use std::ffi::OsString;
@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, Weak};
 
 pub(crate) struct Execution {
     id: ExecutionId,
-    session_id: WorkspaceSessionId,
+    session_id: WorkspaceId,
     child: Mutex<Option<Child>>,
     termination: Termination,
     output: Arc<OutputLog>,
@@ -32,7 +32,7 @@ enum Termination {
         group: u32,
     },
     #[cfg(not(unix))]
-    Direct,
+    Foreground,
 }
 
 impl Execution {
@@ -49,7 +49,7 @@ impl Execution {
         })
     }
 
-    pub(crate) fn session_id(&self) -> WorkspaceSessionId {
+    pub(crate) fn session_id(&self) -> WorkspaceId {
         self.session_id
     }
 
@@ -64,13 +64,13 @@ impl Execution {
 impl Workspaces {
     pub fn exec(
         &self,
-        session_id: WorkspaceSessionId,
+        session_id: WorkspaceId,
         argv: NonEmpty<Vec<OsString>>,
     ) -> WorkspaceResult<WorkspaceExecution> {
         self.spawn(session_id, argv.as_slice(), false)
     }
 
-    pub fn shell(&self, session_id: WorkspaceSessionId) -> WorkspaceResult<WorkspaceExecution> {
+    pub fn shell(&self, session_id: WorkspaceId) -> WorkspaceResult<WorkspaceExecution> {
         let worker = self.worker(session_id)?;
         let argv = match &worker.request.placement {
             WorkspacePlacement::Host { .. } => {
@@ -114,7 +114,7 @@ impl Workspaces {
 
     fn spawn(
         &self,
-        session_id: WorkspaceSessionId,
+        session_id: WorkspaceId,
         argv: &[OsString],
         interactive: bool,
     ) -> WorkspaceResult<WorkspaceExecution> {
@@ -202,7 +202,7 @@ impl Workspaces {
                 }
                 #[cfg(not(unix))]
                 {
-                    Termination::Direct
+                    Termination::Foreground
                 }
             }
         };
@@ -245,7 +245,7 @@ impl Workspaces {
 
     pub(crate) fn execution_summaries(
         &self,
-        session_id: WorkspaceSessionId,
+        session_id: WorkspaceId,
     ) -> WorkspaceResult<Vec<ExecutionSummary>> {
         self.prune_retained()?;
         self.executions
@@ -265,7 +265,7 @@ impl Termination {
             Self::Host(group) => signal_host_group(*group),
             Self::Container { container, group } => signal_container_group(container, *group),
             #[cfg(not(unix))]
-            Self::Direct => {
+            Self::Foreground => {
                 if _child.try_wait()?.is_some() {
                     Ok(false)
                 } else {

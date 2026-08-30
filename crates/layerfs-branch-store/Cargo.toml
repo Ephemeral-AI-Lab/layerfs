@@ -10,5 +10,5 @@ layerfs-content = { path = "../layerfs-content" }
 layerfs-storage = { path = "../layerfs-storage" }
 
 [dev-dependencies]
-layerfs-layer-store = { path = "../layerfs-layer-store" }
-layerfs-stack-store = { path = "../layerfs-stack-store" }
+layerfs-layerstack-store = { path = "../layerfs-layerstack-store" }
+rusqlite.workspace = true

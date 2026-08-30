@@ -1,13 +1,14 @@
 #![forbid(unsafe_code)]
 
-mod branch_store;
-mod branch_transfer;
 mod commit;
-mod create_branch;
-mod layered_read;
-mod merge;
-mod snapshot;
+mod fork;
+mod provision;
+mod pull;
+mod push;
+mod query;
+mod read;
+mod store;
 
-pub use branch_store::BranchStore;
-pub use layerfs_content::filesystem::{ContentChange, RootDiff};
-pub use layerfs_storage::MergeOutcome;
+pub use commit::{CommitOutcome, PreparedReconciliation};
+pub use read::{PinnedSnapshot, SnapshotReader};
+pub use store::BranchStore;

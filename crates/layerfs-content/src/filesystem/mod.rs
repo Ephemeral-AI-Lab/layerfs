@@ -1,8 +1,8 @@
 mod apply;
 mod change;
 mod diff;
-mod merge;
 mod read;
+mod reconcile;
 mod resolve;
 mod root;
 
@@ -14,10 +14,13 @@ pub use apply::{
 };
 pub use change::{
     apply_changes, set_mode, set_mtime, write_file, AppliedRoot, ApplyCounters, ContentChange,
-    ContentConflict,
 };
-pub use diff::{diff_roots, RootDiff};
-pub use merge::{merge_inode_change, merge_roots, three_way, MergeConflict, ThreeWayOutcome};
+pub use diff::{diff_roots, DiffAspects, DiffEntry, NodeSummary};
 pub use read::{list, read_range, readlink, stat, stream, ListPage, Stat};
+pub use reconcile::{
+    reconcile, reconcile_inode_change, reconcile_roots, reconcile_with,
+    replace_conflict_from_snapshot, replace_paths_from_snapshot, ReconcileChoice,
+    ReconcileCollision, ReconcileConflict, ReconcileConflictKind, ReconcileResult,
+};
 pub use resolve::{namespace, resolve, resolve_parent, LogicalCounters, Resolved};
 pub use root::empty_root;

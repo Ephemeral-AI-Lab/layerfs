@@ -1,5 +1,8 @@
 # LayerStack database transaction and Store-to-Store transfer model
 
+> **Historical and superseded.** The binding two-database DDL, transaction,
+> and transfer contract is [`v2/spec.md`](v2/spec.md).
+
 This document is the binding implementation specification for database
 transactions, Store endpoints, missing-only transfer, bounded error handling,
 and their performance bounds.

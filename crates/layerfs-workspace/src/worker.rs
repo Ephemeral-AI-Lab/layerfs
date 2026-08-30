@@ -1,16 +1,22 @@
-use crate::{
-    CreateWorkspaceSession, Workspace, WorkspaceError, WorkspaceProjection, WorkspaceSessionId,
-};
+use crate::{CreateWorkspaceSession, Workspace, WorkspaceError, WorkspaceId, WorkspaceProjection};
 use std::sync::{Arc, Condvar, Mutex};
 
 pub(crate) struct WorkspaceWorker {
-    pub(crate) id: WorkspaceSessionId,
+    pub(crate) id: WorkspaceId,
     pub(crate) request: CreateWorkspaceSession,
     pub(crate) projection: WorkspaceProjection,
+    pub(crate) identity: WorkspaceIdentity,
     pub(crate) workspace: Arc<Mutex<Workspace>>,
     pub(crate) projection_handle: Mutex<Option<crate::projection::ProjectionHandle>>,
     admission: Mutex<Admission>,
     drained: Condvar,
+}
+
+#[derive(Clone)]
+pub(crate) struct WorkspaceIdentity {
+    pub(crate) layer_stack_id: layerfs_storage::LayerStackId,
+    pub(crate) layer_stack_name: layerfs_storage::EntityName,
+    pub(crate) branch_name: layerfs_storage::EntityName,
 }
 
 #[derive(Default)]
@@ -23,15 +29,17 @@ struct Admission {
 
 impl WorkspaceWorker {
     pub(crate) fn new(
-        id: WorkspaceSessionId,
+        id: WorkspaceId,
         request: CreateWorkspaceSession,
         projection: WorkspaceProjection,
+        identity: WorkspaceIdentity,
         workspace: Workspace,
     ) -> Self {
         Self {
             id,
             request,
             projection,
+            identity,
             workspace: Arc::new(Mutex::new(workspace)),
             projection_handle: Mutex::new(None),
             admission: Mutex::new(Admission {

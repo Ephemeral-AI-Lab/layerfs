@@ -1,10 +1,7 @@
 # LayerStack operation rules
 
-> **Superseded.** This document is retained only as historical implementation
-> context. The binding application operation contract is
-> `docs/cli-tui/00-overview.md` through
-> `docs/cli-tui/05-implementation-plan.md`; where this document conflicts, the
-> `docs/cli-tui/` contract wins.
+> **Historical and superseded.** This document is not a V2 compatibility
+> contract. [`v2/spec.md`](v2/spec.md) is the sole authority.
 
 This is the binding public-operation contract. `MUST`, `MUST NOT`, and `ONLY`
 are invariants.

@@ -23,11 +23,13 @@ impl ProxyHost {
         let stopped = Arc::new(AtomicBool::new(false));
         let failed = Arc::new(AtomicBool::new(false));
         let failure = Arc::new(Mutex::new(None));
+        let deferred = Arc::new(Mutex::new(None));
         let claimed = Arc::new(AtomicBool::new(false));
         let thread = {
             let stopped = stopped.clone();
             let failed = failed.clone();
             let failure = failure.clone();
+            let deferred = deferred.clone();
             std::thread::spawn(move || {
                 while !stopped.load(Ordering::Acquire) {
                     match listener.accept() {
@@ -71,7 +73,10 @@ impl ProxyHost {
                             let port = port.clone();
                             let failed = failed.clone();
                             let failure = failure.clone();
-                            std::thread::spawn(move || serve(stream, port, failed, failure));
+                            let deferred = deferred.clone();
+                            std::thread::spawn(move || {
+                                serve(stream, port, failed, failure, deferred)
+                            });
                         }
                         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -123,16 +128,25 @@ fn serve(
     port: SharedPort,
     failed: Arc<AtomicBool>,
     failure: Arc<Mutex<Option<(&'static str, PortError)>>>,
+    deferred: Arc<Mutex<Option<PortError>>>,
 ) {
     while let Ok(request) = read_request(&mut stream) {
         let no_reply = request.no_reply();
+        let acknowledges = request.acknowledges_deferred_error();
         let name = request.name();
-        let response = dispatch(port.as_ref(), request);
+        let response = if acknowledges {
+            acknowledge(&deferred).map_or_else(|| dispatch(port.as_ref(), request), Response::Error)
+        } else {
+            dispatch(port.as_ref(), request)
+        };
         if no_reply {
             if let Response::Error(error) = response {
                 failed.store(true, Ordering::Release);
                 if let Ok(mut failure) = failure.lock() {
                     failure.get_or_insert((name, error));
+                }
+                if let Ok(mut deferred) = deferred.lock() {
+                    deferred.get_or_insert(error);
                 }
             }
             continue;
@@ -141,6 +155,12 @@ fn serve(
             break;
         }
     }
+}
+
+fn acknowledge(deferred: &Mutex<Option<PortError>>) -> Option<PortError> {
+    deferred
+        .lock()
+        .map_or(Some(PortError::Io), |mut deferred| deferred.take())
 }
 
 fn dispatch(port: &dyn crate::FilesystemPort, request: Request) -> Response {
@@ -202,6 +222,9 @@ fn dispatch(port: &dyn crate::FilesystemPort, request: Request) -> Response {
         }
         Request::Fence => Response::Unit,
         Request::PinRead(node) => response_unit(port.pin(node, false, false)),
+        Request::MkdirReserved(parent, name, mode, node) => {
+            response_attr(port.mkdir_reserved(parent, &name, mode, node))
+        }
     }
 }
 

@@ -1,10 +1,10 @@
 use crate::{
     worker::WorkspaceWorker, CreateWorkspaceSession, EndWorkspaceMode, Workspace,
     WorkspaceCommitResult, WorkspaceDetail, WorkspaceDiff, WorkspaceEndResult, WorkspaceError,
-    WorkspaceProjection, WorkspaceResult, WorkspaceSession, WorkspaceSessionId, WorkspaceSummary,
+    WorkspaceId, WorkspaceProjection, WorkspaceResult, WorkspaceSession, WorkspaceSummary,
     Workspaces,
 };
-use layerfs_storage::{CommitId, RefOutcome, Result, StorageError};
+use layerfs_storage::{Result, StorageError};
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -18,17 +18,72 @@ pub enum WorkspaceState {
 
 impl Workspace {
     #[doc(hidden)]
-    pub fn commit(&mut self) -> Result<RefOutcome<CommitId>> {
+    pub fn commit(&mut self) -> Result<(layerfs_branch_store::CommitOutcome, bool)> {
         self.ensure_active()?;
+        if let Some(mut resolution) = self.resolution.take() {
+            resolution.invalidate_if_mutated(self)?;
+            if resolution.unresolved() != 0 {
+                self.resolution = Some(resolution);
+                return Err(StorageError::InvalidInput(
+                    "unresolved reconciliation conflict",
+                ));
+            }
+            let choices = resolution.choices()?;
+            let candidate = match self.build_candidate() {
+                Ok(candidate) => candidate,
+                Err(error) => {
+                    self.resolution = Some(resolution);
+                    return Err(error);
+                }
+            };
+            let outcome = self.branch.commit_reconciliation(
+                self.parent.clone(),
+                &resolution.prepared,
+                candidate,
+                &choices,
+            );
+            if outcome.is_err() {
+                self.resolution = Some(resolution);
+            }
+            let outcome = outcome?;
+            let reloaded = self.reload_committed(outcome);
+            return Ok((outcome, reloaded));
+        }
         let candidate = self.build_candidate()?;
         let outcome = self.branch.commit_candidate(
             self.branch_id,
             self.expected_head,
+            self.expected_base,
             self.base_root,
             candidate,
+            self.expected_base,
+            false,
         )?;
+        let reloaded = self.reload_committed(outcome);
+        Ok((outcome, reloaded))
+    }
+
+    fn reload_committed(&mut self, outcome: layerfs_branch_store::CommitOutcome) -> bool {
+        let committed = Self::open_with_policy(
+            self.branch.clone(),
+            self.parent.clone(),
+            self.branch_id,
+            self.spool.clone(),
+            self.policy,
+        );
+        if let Ok(mut committed) = committed {
+            let _ = self.clear_spool();
+            committed.state = WorkspaceState::Committed;
+            *self = committed;
+            return true;
+        }
+        self.expected_head = match outcome {
+            layerfs_branch_store::CommitOutcome::Created { commit_id, .. } => Some(commit_id),
+            layerfs_branch_store::CommitOutcome::UpToDate { head } => head,
+        };
+        self.resolution = None;
         self.state = WorkspaceState::Committed;
-        Ok(outcome)
+        false
     }
 
     #[doc(hidden)]
@@ -62,32 +117,20 @@ impl Workspaces {
         request: CreateWorkspaceSession,
     ) -> WorkspaceResult<WorkspaceSession> {
         self.prune_retained()?;
-        if !request.placement.root().is_absolute() {
+        if !request.placement.root().is_absolute() || request.placement.root().parent().is_none() {
             return Err(WorkspaceError::InvalidPlacement);
         }
-        let branches = self
-            .branches
-            .lock()
-            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-        let mut matches =
-            branches
-                .iter()
-                .filter_map(|store| match store.branch(request.branch_id) {
-                    Ok(Some(_)) => Some(Ok(store.clone())),
-                    Ok(None) => None,
-                    Err(error) => Some(Err(WorkspaceError::Storage(error))),
-                });
-        let branch = matches
-            .next()
-            .transpose()?
-            .ok_or(WorkspaceError::NotFound)?;
-        if matches.next().is_some() {
-            return Err(WorkspaceError::InvalidPlacement);
-        }
-        let id = WorkspaceSessionId::new();
+        let identity = self.workspace_identity(request.branch_id)?;
+        let lease = self.acquire_lease(request.branch_id)?;
+        let id = WorkspaceId::new();
         let state = self.runtime_root.join("workspaces").join(id.to_string());
         std::fs::create_dir_all(&state)?;
-        let workspace = Workspace::open(branch, request.branch_id, state.join("spool"))?;
+        let workspace = Workspace::open(
+            self.branch.clone(),
+            self.parent.clone(),
+            request.branch_id,
+            state.join("spool"),
+        )?;
         let projection = request.projection.unwrap_or({
             if matches!(
                 request.placement,
@@ -103,6 +146,7 @@ impl Workspaces {
             id,
             request.clone(),
             projection,
+            identity,
             workspace,
         ));
         let handle = match crate::projection::attach(&worker) {
@@ -121,46 +165,70 @@ impl Workspaces {
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?
             .insert(id, crate::registry::SessionRecord::Active(worker));
+        lease.keep();
         Ok(session)
     }
 
     pub fn commit_workspace_session(
         &self,
-        id: WorkspaceSessionId,
+        id: WorkspaceId,
     ) -> WorkspaceResult<WorkspaceCommitResult> {
         let worker = self.worker(id)?;
         if worker.has_executions()? {
-            return Err(WorkspaceError::WorkspaceBusy);
+            return Ok(WorkspaceCommitResult::Busy);
         }
         crate::projection::pause(&worker)?;
+        let _quiesced = match worker.quiesce() {
+            Ok(quiesced) => quiesced,
+            Err(WorkspaceError::WorkspaceBusy) => {
+                crate::projection::resume(&worker)?;
+                return Ok(WorkspaceCommitResult::Busy);
+            }
+            Err(error) => {
+                crate::projection::resume(&worker)?;
+                return Err(error);
+            }
+        };
         let result = (|| {
-            let _quiesced = worker.quiesce()?;
             crate::projection::capture(&worker)?;
             let mut workspace = worker
                 .workspace
                 .lock()
                 .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-            let previous_head = workspace.expected_head;
-            workspace
-                .commit()
-                .map(|outcome| WorkspaceCommitResult::from_outcome(previous_head, outcome))
-                .or_else(WorkspaceError::from_commit)
+            match workspace.commit() {
+                Ok((outcome, reloaded)) => {
+                    Ok((WorkspaceCommitResult::from_outcome(outcome), reloaded))
+                }
+                Err(error) => WorkspaceError::from_commit(error).map(|result| (result, false)),
+            }
         })();
         match &result {
-            Ok(WorkspaceCommitResult::Created { .. } | WorkspaceCommitResult::UpToDate { .. }) => {
-                let read_only = crate::projection::make_read_only(&worker);
-                let resumed = crate::projection::resume(&worker);
-                read_only?;
-                resumed?;
+            Ok((
+                WorkspaceCommitResult::Created { .. } | WorkspaceCommitResult::UpToDate { .. },
+                reloaded,
+            )) => {
+                let presentation = if *reloaded {
+                    crate::projection::refresh(&worker)
+                        .and_then(|()| crate::projection::make_read_only(&worker))
+                } else {
+                    crate::projection::end(&worker)
+                };
+                if presentation.is_err() {
+                    let _ = crate::projection::end(&worker);
+                }
             }
             _ => crate::projection::resume(&worker)?,
         }
-        result
+        match result {
+            Ok((result, _)) => Ok(result),
+            Err(WorkspaceError::WorkspaceBusy) => Ok(WorkspaceCommitResult::Busy),
+            Err(error) => Err(error),
+        }
     }
 
     pub fn end_workspace_session(
         &self,
-        id: WorkspaceSessionId,
+        id: WorkspaceId,
         mode: EndWorkspaceMode,
     ) -> WorkspaceResult<WorkspaceEndResult> {
         let worker = self.worker(id)?;
@@ -176,8 +244,16 @@ impl Workspaces {
                 .map_err(|_| WorkspaceError::WorkspaceBusy)?
                 .state
                 == WorkspaceState::Active;
-            if mode == EndWorkspaceMode::Clean && active && crate::projection::is_dirty(&worker)? {
-                return Err(WorkspaceError::WorkspaceDirty);
+            if mode == EndWorkspaceMode::Clean && active {
+                let has_resolution = worker
+                    .workspace
+                    .lock()
+                    .map_err(|_| WorkspaceError::WorkspaceBusy)?
+                    .resolution
+                    .is_some();
+                if has_resolution || crate::projection::is_dirty(&worker)? {
+                    return Err(WorkspaceError::WorkspaceDirty);
+                }
             }
             let mut workspace = worker
                 .workspace
@@ -211,6 +287,7 @@ impl Workspaces {
             return result;
         }
         let result = result?;
+        self.release_lease(worker.request.branch_id);
         let retained = {
             let workspace = worker
                 .workspace
@@ -245,7 +322,7 @@ impl Workspaces {
             .collect()
     }
 
-    pub fn session(&self, id: WorkspaceSessionId) -> WorkspaceResult<WorkspaceDetail> {
+    pub fn session(&self, id: WorkspaceId) -> WorkspaceResult<WorkspaceDetail> {
         self.prune_retained()?;
         let record = self
             .sessions
@@ -275,7 +352,7 @@ impl Workspaces {
         }
     }
 
-    pub fn diff(&self, id: WorkspaceSessionId) -> WorkspaceResult<WorkspaceDiff> {
+    pub fn diff(&self, id: WorkspaceId) -> WorkspaceResult<WorkspaceDiff> {
         self.prune_retained()?;
         let record = self
             .sessions
@@ -306,7 +383,7 @@ impl Workspaces {
     }
 }
 
-fn session(worker: &WorkspaceWorker) -> WorkspaceResult<WorkspaceSession> {
+pub(crate) fn session(worker: &WorkspaceWorker) -> WorkspaceResult<WorkspaceSession> {
     let workspace = worker
         .workspace
         .lock()
@@ -318,6 +395,9 @@ fn session_locked(worker: &WorkspaceWorker, workspace: &Workspace) -> WorkspaceS
     WorkspaceSession {
         id: worker.id,
         branch_id: workspace.branch_id,
+        layer_stack_id: worker.identity.layer_stack_id,
+        layer_stack_name: worker.identity.layer_stack_name.clone(),
+        branch_name: worker.identity.branch_name.clone(),
         pinned_head: workspace.expected_head,
         placement: worker.request.placement.clone(),
         projection: worker.projection,
@@ -334,6 +414,9 @@ fn summary(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<WorkspaceSummary> {
     Ok(WorkspaceSummary {
         id: worker.id,
         branch_id: workspace.branch_id,
+        layer_stack_id: worker.identity.layer_stack_id,
+        layer_stack_name: worker.identity.layer_stack_name.clone(),
+        branch_name: worker.identity.branch_name.clone(),
         pinned_head: workspace.expected_head,
         state: workspace.state,
         dirty,

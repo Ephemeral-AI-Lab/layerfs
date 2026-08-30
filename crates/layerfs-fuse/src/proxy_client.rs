@@ -7,6 +7,8 @@ use std::sync::{Mutex, RwLock};
 
 const CONNECTIONS: usize = 1;
 const MAX_PENDING_UNLINKS: usize = 16_384;
+const READ_AHEAD_BYTES: usize = 16 * 1024 * 1024;
+type DirectoryEntries = Vec<(NodeId, Kind, Vec<u8>)>;
 
 pub struct ProxyClient {
     streams: Vec<Mutex<TcpStream>>,
@@ -21,11 +23,23 @@ pub struct ProxyClient {
 #[derive(Default)]
 struct Cache {
     attrs: HashMap<NodeId, Attr>,
-    directories: HashMap<NodeId, BTreeMap<Vec<u8>, (NodeId, Kind)>>,
+    directories: HashMap<NodeId, CachedDirectory>,
     pending_creates: HashMap<NodeId, PendingCreate>,
     pending_closed: Vec<ClosedCreate>,
     pending_closed_bytes: usize,
     pending_unlinks: Vec<(NodeId, Vec<u8>)>,
+    read_ahead: Option<ReadAhead>,
+}
+
+struct CachedDirectory {
+    special: DirectoryEntries,
+    entries: BTreeMap<Vec<u8>, (NodeId, Kind)>,
+}
+
+struct ReadAhead {
+    node: NodeId,
+    offset: u64,
+    bytes: Vec<u8>,
 }
 
 struct PendingCreate {
@@ -165,14 +179,36 @@ impl ProxyClient {
     }
 
     fn barrier_locked(&self) -> PortResult<()> {
-        if self.pending.load(Ordering::Acquire) == 0 {
+        self.synchronize_locked(None)
+    }
+
+    fn synchronize_locked(&self, final_request: Option<(usize, Request)>) -> PortResult<()> {
+        let has_pending = self.pending.load(Ordering::Acquire) != 0;
+        if !has_pending && final_request.is_none() {
             return Ok(());
         }
-        for index in 0..self.streams.len() {
-            unit(self.raw_exchange_at(index, Request::Fence)?)?;
+        let final_stream = final_request.as_ref().map(|(index, _)| *index);
+        let mut first_error = None;
+        if has_pending {
+            for index in 0..self.streams.len() {
+                if Some(index) != final_stream {
+                    retain_first(
+                        &mut first_error,
+                        self.raw_exchange_at(index, Request::Fence).and_then(unit),
+                    );
+                }
+            }
         }
-        self.pending.store(0, Ordering::Release);
-        Ok(())
+        if let Some((index, request)) = final_request {
+            retain_first(
+                &mut first_error,
+                self.raw_exchange_at(index, request).and_then(unit),
+            );
+        }
+        if first_error.is_none() {
+            self.pending.store(0, Ordering::Release);
+        }
+        first_error.map_or(Ok(()), Err)
     }
 }
 
@@ -225,6 +261,9 @@ impl FilesystemPort for ProxyClient {
 
     fn readdir(&self, node: NodeId) -> PortResult<Vec<(NodeId, Kind, Vec<u8>)>> {
         self.barrier()?;
+        if let Some(entries) = self.cached_readdir(node)? {
+            return Ok(entries);
+        }
         match self.exchange(Request::Readdir(node))? {
             Response::Entries(entries) => {
                 self.remember_directory(node, &entries)?;
@@ -249,7 +288,7 @@ impl FilesystemPort for ProxyClient {
             .map_err(|_| PortError::Io)?
             .directories
             .get(&parent)
-            .is_some_and(|entries| !entries.contains_key(name));
+            .is_some_and(|directory| !directory.entries.contains_key(name));
         if reservable {
             let node = self.reserved_node()?;
             let attr = Attr {
@@ -291,13 +330,35 @@ impl FilesystemPort for ProxyClient {
 
     fn mkdir(&self, parent: NodeId, name: &[u8], mode: u32) -> PortResult<Attr> {
         self.flush_unlink_for(parent, name)?;
-        let attr = attr(self.exchange(Request::Mkdir(parent, name.to_vec(), mode))?)?;
-        self.remember(parent, name, attr)?;
-        self.cache
+        let reservable = self
+            .cache
             .lock()
             .map_err(|_| PortError::Io)?
             .directories
-            .insert(attr.node, BTreeMap::new());
+            .get(&parent)
+            .is_some_and(|directory| !directory.entries.contains_key(name));
+        if reservable {
+            let node = self.reserved_node()?;
+            let attr = Attr {
+                node,
+                size: 0,
+                kind: Kind::Directory,
+                mode: mode & 0o1777,
+                links: 2,
+                mtime_seconds: 0,
+                mtime_nanoseconds: 0,
+            };
+            self.send_at(
+                self.node_stream(node),
+                Request::MkdirReserved(parent, name.to_vec(), mode, node),
+            )?;
+            self.remember(parent, name, attr)?;
+            self.remember_new_directory(node, parent)?;
+            return Ok(attr);
+        }
+        let attr = attr(self.exchange(Request::Mkdir(parent, name.to_vec(), mode))?)?;
+        self.remember(parent, name, attr)?;
+        self.remember_new_directory(attr.node, parent)?;
         Ok(attr)
     }
 
@@ -323,7 +384,7 @@ impl FilesystemPort for ProxyClient {
             .map_err(|_| PortError::Io)?
             .directories
             .get(&parent)
-            .and_then(|entries| entries.get(name))
+            .and_then(|directory| directory.entries.get(name))
             .map(|(node, _)| *node);
         if let Some(node) = pending {
             self.flush_pending_create(node)?;
@@ -338,7 +399,12 @@ impl FilesystemPort for ProxyClient {
         let removed = cache
             .directories
             .get_mut(&parent)
-            .and_then(|entries| entries.remove(name));
+            .and_then(|directory| directory.entries.remove(name));
+        if directory {
+            if let Some((node, _)) = removed {
+                cache.directories.remove(&node);
+            }
+        }
         if !directory {
             if let Some(attr) = removed.and_then(|(node, _)| cache.attrs.get_mut(&node)) {
                 attr.links = attr.links.saturating_sub(1);
@@ -361,7 +427,7 @@ impl FilesystemPort for ProxyClient {
             .map_err(|_| PortError::Io)?
             .directories
             .get(&parent)
-            .and_then(|entries| entries.get(name))
+            .and_then(|directory| directory.entries.get(name))
             .map(|(node, _)| *node);
         self.flush_unlink_for(new_parent, new_name)?;
         if let Some(node) = moved {
@@ -369,7 +435,7 @@ impl FilesystemPort for ProxyClient {
             let target_exists = cache
                 .directories
                 .get(&new_parent)
-                .is_some_and(|entries| entries.contains_key(new_name));
+                .is_some_and(|directory| directory.entries.contains_key(new_name));
             if target_exists && no_replace {
                 return Err(PortError::Exists);
             }
@@ -383,11 +449,11 @@ impl FilesystemPort for ProxyClient {
                 let moved = cache
                     .directories
                     .get_mut(&parent)
-                    .and_then(|entries| entries.remove(name));
-                if let (Some(moved), Some(entries)) =
+                    .and_then(|directory| directory.entries.remove(name));
+                if let (Some(moved), Some(directory)) =
                     (moved, cache.directories.get_mut(&new_parent))
                 {
-                    entries.insert(new_name.to_vec(), moved);
+                    directory.entries.insert(new_name.to_vec(), moved);
                 }
                 return Ok(());
             }
@@ -405,11 +471,22 @@ impl FilesystemPort for ProxyClient {
         let moved = cache
             .directories
             .get_mut(&parent)
-            .and_then(|entries| entries.remove(name));
+            .and_then(|directory| directory.entries.remove(name));
         match moved {
             Some(moved) => {
-                if let Some(entries) = cache.directories.get_mut(&new_parent) {
-                    entries.insert(new_name.to_vec(), moved);
+                if moved.1 == Kind::Directory {
+                    if let Some(directory) = cache.directories.get_mut(&moved.0) {
+                        if let Some(parent) = directory
+                            .special
+                            .iter_mut()
+                            .find(|(_, _, name)| name.as_slice() == b"..")
+                        {
+                            parent.0 = new_parent;
+                        }
+                    }
+                }
+                if let Some(directory) = cache.directories.get_mut(&new_parent) {
+                    directory.entries.insert(new_name.to_vec(), moved);
                 }
             }
             None => {
@@ -424,6 +501,7 @@ impl FilesystemPort for ProxyClient {
         if !truncate && !writable {
             return self.send_at(self.node_stream(node), Request::PinRead(node));
         }
+        self.invalidate_read_ahead(node)?;
         unit(self.exchange(Request::Pin(node, truncate, writable))?)
     }
 
@@ -477,10 +555,24 @@ impl FilesystemPort for ProxyClient {
 
     fn read(&self, node: NodeId, offset: u64, size: usize) -> PortResult<Vec<u8>> {
         self.flush_pending_create(node)?;
-        bytes(self.exchange_at(self.node_stream(node), Request::Read(node, offset, size))?)
+        if let Some(bytes) = self.cached_read(node, offset, size)? {
+            return Ok(bytes);
+        }
+        let fetched = bytes(self.exchange_at(
+            self.node_stream(node),
+            Request::Read(node, offset, size.max(READ_AHEAD_BYTES)),
+        )?)?;
+        let output = fetched[..fetched.len().min(size)].to_vec();
+        self.cache.lock().map_err(|_| PortError::Io)?.read_ahead = Some(ReadAhead {
+            node,
+            offset,
+            bytes: fetched,
+        });
+        Ok(output)
     }
 
     fn write(&self, node: NodeId, offset: u64, value: &[u8]) -> PortResult<usize> {
+        self.invalidate_read_ahead(node)?;
         if is_zero(value) {
             let end = offset
                 .checked_add(value.len() as u64)
@@ -551,6 +643,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn truncate(&self, node: NodeId, size: u64) -> PortResult<()> {
+        self.invalidate_read_ahead(node)?;
         if size == 0 {
             let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
             if let Some(pending) = cache.pending_creates.get_mut(&node) {
@@ -636,17 +729,80 @@ impl FilesystemPort for ProxyClient {
         if let Some(node) = node {
             self.flush_pending_create(node)?;
         }
-        self.barrier()?;
-        match node {
-            Some(node) => {
-                unit(self.exchange_at(self.node_stream(node), Request::Fsync(Some(node)))?)
-            }
-            None => unit(self.exchange(Request::Fsync(None))?),
+        let _gate = self.gate.write().map_err(|_| PortError::Io)?;
+        if self.paused.load(Ordering::Acquire) {
+            return Err(PortError::Busy);
         }
+        self.flush_pending_locked()?;
+        let stream = node.map_or(0, |node| self.node_stream(node));
+        self.synchronize_locked(Some((stream, Request::Fsync(node))))
     }
 }
 
 impl ProxyClient {
+    fn remember_new_directory(&self, node: NodeId, parent: NodeId) -> PortResult<()> {
+        self.cache
+            .lock()
+            .map_err(|_| PortError::Io)?
+            .directories
+            .insert(
+                node,
+                CachedDirectory {
+                    special: vec![
+                        (node, Kind::Directory, b".".to_vec()),
+                        (parent, Kind::Directory, b"..".to_vec()),
+                    ],
+                    entries: BTreeMap::new(),
+                },
+            );
+        Ok(())
+    }
+
+    fn cached_readdir(&self, node: NodeId) -> PortResult<Option<DirectoryEntries>> {
+        let cache = self.cache.lock().map_err(|_| PortError::Io)?;
+        let Some(directory) = cache.directories.get(&node) else {
+            return Ok(None);
+        };
+        let mut output = directory.special.clone();
+        output.extend(
+            directory
+                .entries
+                .iter()
+                .map(|(name, (node, kind))| (*node, *kind, name.clone())),
+        );
+        Ok(Some(output))
+    }
+
+    fn cached_read(&self, node: NodeId, offset: u64, size: usize) -> PortResult<Option<Vec<u8>>> {
+        let cache = self.cache.lock().map_err(|_| PortError::Io)?;
+        let Some(read) = cache.read_ahead.as_ref().filter(|read| read.node == node) else {
+            return Ok(None);
+        };
+        let Some(relative) = offset
+            .checked_sub(read.offset)
+            .and_then(|value| usize::try_from(value).ok())
+        else {
+            return Ok(None);
+        };
+        if relative >= read.bytes.len() {
+            return Ok(None);
+        }
+        let end = relative.saturating_add(size).min(read.bytes.len());
+        Ok(Some(read.bytes[relative..end].to_vec()))
+    }
+
+    fn invalidate_read_ahead(&self, node: NodeId) -> PortResult<()> {
+        let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
+        if cache
+            .read_ahead
+            .as_ref()
+            .is_some_and(|read| read.node == node)
+        {
+            cache.read_ahead = None;
+        }
+        Ok(())
+    }
+
     fn flush_pending_create(&self, node: NodeId) -> PortResult<()> {
         if self
             .cache
@@ -816,7 +972,7 @@ impl ProxyClient {
         let Some(entries) = cache.directories.get(&parent) else {
             return Ok(None);
         };
-        let Some((node, _)) = entries.get(name) else {
+        let Some((node, _)) = entries.entries.get(name) else {
             return Ok(Some(Err(PortError::NotFound)));
         };
         Ok(cache.attrs.get(node).copied().map(Ok))
@@ -825,8 +981,10 @@ impl ProxyClient {
     fn remember(&self, parent: NodeId, name: &[u8], attr: Attr) -> PortResult<()> {
         let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
         cache.attrs.insert(attr.node, attr);
-        if let Some(entries) = cache.directories.get_mut(&parent) {
-            entries.insert(name.to_vec(), (attr.node, attr.kind));
+        if let Some(directory) = cache.directories.get_mut(&parent) {
+            directory
+                .entries
+                .insert(name.to_vec(), (attr.node, attr.kind));
         }
         Ok(())
     }
@@ -836,16 +994,21 @@ impl ProxyClient {
         node: NodeId,
         entries: &[(NodeId, Kind, Vec<u8>)],
     ) -> PortResult<()> {
+        let special = entries
+            .iter()
+            .filter(|(_, _, name)| matches!(name.as_slice(), b"." | b".."))
+            .cloned()
+            .collect();
         let entries = entries
             .iter()
-            .filter(|(_, _, name)| name.as_slice() != b"." && name.as_slice() != b"..")
+            .filter(|(_, _, name)| !matches!(name.as_slice(), b"." | b".."))
             .map(|(node, kind, name)| (name.clone(), (*node, *kind)))
             .collect();
         self.cache
             .lock()
             .map_err(|_| PortError::Io)?
             .directories
-            .insert(node, entries);
+            .insert(node, CachedDirectory { special, entries });
         Ok(())
     }
 }
@@ -871,6 +1034,12 @@ fn unit(response: Response) -> PortResult<()> {
     }
 }
 
+fn retain_first(first: &mut Option<PortError>, result: PortResult<()>) {
+    if let Err(error) = result {
+        first.get_or_insert(error);
+    }
+}
+
 fn is_zero(bytes: &[u8]) -> bool {
     if bytes.is_empty() {
         return false;
@@ -880,7 +1049,7 @@ fn is_zero(bytes: &[u8]) -> bool {
         && chunks.remainder().iter().all(|byte| *byte == 0)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "proxy"))]
 #[doc(hidden)]
 pub fn serve_control(
     path: std::ffi::OsString,
@@ -914,7 +1083,7 @@ pub fn serve_control(
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "proxy"))]
 #[doc(hidden)]
 pub fn control_call(
     path: &std::ffi::OsStr,
@@ -935,5 +1104,63 @@ pub fn control_call(
         Ok(())
     } else {
         Err("control command failed".into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::{read_request, write_response};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::Arc;
+
+    #[test]
+    fn multi_stream_barrier_drains_every_stream_after_the_first_error() {
+        let (client_a, mut server_a) = stream_pair();
+        let (client_b, mut server_b) = stream_pair();
+        let seen = Arc::new(AtomicUsize::new(0));
+        let first = {
+            let seen = seen.clone();
+            std::thread::spawn(move || {
+                assert!(matches!(
+                    read_request(&mut server_a).unwrap(),
+                    Request::Fence
+                ));
+                seen.fetch_add(1, Ordering::Relaxed);
+                write_response(&mut server_a, &Response::Error(PortError::NoSpace)).unwrap();
+            })
+        };
+        let second = {
+            let seen = seen.clone();
+            std::thread::spawn(move || {
+                assert!(matches!(
+                    read_request(&mut server_b).unwrap(),
+                    Request::Fence
+                ));
+                seen.fetch_add(1, Ordering::Relaxed);
+                write_response(&mut server_b, &Response::Unit).unwrap();
+            })
+        };
+        let client = ProxyClient {
+            streams: vec![Mutex::new(client_a), Mutex::new(client_b)],
+            next: AtomicUsize::new(0),
+            cache: Mutex::new(Cache::default()),
+            reservation: Mutex::new(Reservation::default()),
+            gate: RwLock::new(()),
+            paused: AtomicBool::new(false),
+            pending: AtomicU64::new(2),
+        };
+
+        assert_eq!(client.barrier_locked(), Err(PortError::NoSpace));
+        first.join().unwrap();
+        second.join().unwrap();
+        assert_eq!(seen.load(Ordering::Relaxed), 2);
+    }
+
+    fn stream_pair() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (server, _) = listener.accept().unwrap();
+        (client, server)
     }
 }

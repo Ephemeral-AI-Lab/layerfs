@@ -1,5 +1,8 @@
 # LayerStack local storage implementation handoff prompt
 
+> **Historical and superseded.** Do not execute this prompt for V2; use
+> [`v2/implementation-handoff-prompt.md`](v2/implementation-handoff-prompt.md).
+
 Copy the prompt below into the implementation owner's task. This is an
 execution mandate. The five binding documents named below remain authoritative
 for architecture, operations, database mechanics, source ownership, and phase

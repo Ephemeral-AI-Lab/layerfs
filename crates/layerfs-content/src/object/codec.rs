@@ -735,7 +735,7 @@ mod tests {
         assert_eq!(hex_bytes(&bytes), "4c46534f01000000090000000568656c6c6f");
         assert_eq!(
             object.id().unwrap().to_string(),
-            "a246e43d678984a154487ee08e96f5677f0100cf59041d6708103a517e383a49"
+            "bd479f17fe211a423718f70ce65a8abf2578f7e4055770db6d97ee0e44d7b641"
         );
 
         let empty = Object::directory(Vec::new()).unwrap();
@@ -743,7 +743,7 @@ mod tests {
         assert_eq!(hex_bytes(&empty_bytes), "4c46534f020000000400000000");
         assert_eq!(
             empty.id().unwrap().to_string(),
-            "c705a66295b38b1e1dabe72fec9c4793bde8e3bea68af1ea775a51d1cc56547a"
+            "6f059342b729b03333e585a4a524635b38e93899ff52f401f0a4bb8661e2c3c1"
         );
     }
 

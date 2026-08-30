@@ -20,5 +20,5 @@ layerfs-storage = { path = "../layerfs-storage" }
 path = "src/lib.rs"
 
 [dev-dependencies]
-layerfs-layer-store = { path = "../layerfs-layer-store" }
+layerfs-layerstack-store = { path = "../layerfs-layerstack-store" }
 rusqlite.workspace = true

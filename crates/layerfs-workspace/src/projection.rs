@@ -45,7 +45,7 @@ pub(crate) fn attach(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<Projectio
     match worker.projection {
         crate::WorkspaceProjection::Materialize => {
             let source = MaterializedView(Arc::downgrade(worker));
-            layerfs_materialization::materialize(&source, root).map_err(materialization_error)?;
+            materialize_atomic(&source, root)?;
             Ok(ProjectionHandle::Materialized(root.clone()))
         }
         crate::WorkspaceProjection::Fuse => {
@@ -62,7 +62,7 @@ pub(crate) fn attach(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<Projectio
     }
 }
 
-pub(crate) fn capture(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
+pub(crate) fn capture(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<()> {
     let root = {
         let handle = worker
             .projection_handle
@@ -85,15 +85,22 @@ pub(crate) fn capture(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
     let Some(root) = root else {
         return Ok(());
     };
+    let changed =
+        !layerfs_materialization::matches(&MaterializedView(Arc::downgrade(worker)), &root)
+            .map_err(materialization_error)?;
     let mut workspace = worker
         .workspace
         .lock()
         .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+    static CAPTURE_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let capture_spool = workspace
         .spool
         .parent()
         .ok_or(WorkspaceError::InvalidPlacement)?
-        .join("capture-spool");
+        .join(format!(
+            "capture-spool-{}",
+            CAPTURE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
     if capture_spool.exists() {
         std::fs::remove_dir_all(&capture_spool)?;
     }
@@ -104,6 +111,14 @@ pub(crate) fn capture(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
         let _ = std::fs::remove_dir_all(capture_spool);
         return Err(materialization_error(error));
     }
+    captured.mutation_generation = workspace
+        .mutation_generation
+        .checked_add(u64::from(changed))
+        .ok_or(WorkspaceError::Storage(
+            layerfs_storage::StorageError::Integrity("Workspace mutation generation"),
+        ))?;
+    captured.mutation_paths = workspace.mutation_paths.clone();
+    captured.resolution = workspace.resolution.take();
     let mut previous = std::mem::replace(&mut *workspace, captured);
     previous.discard()?;
     Ok(())
@@ -178,23 +193,104 @@ pub(crate) fn is_dirty(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<bool> {
 }
 
 pub(crate) fn end(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
-    let handle = worker
+    let mut handle = worker
         .projection_handle
         .lock()
-        .map_err(|_| WorkspaceError::WorkspaceBusy)?
-        .take();
-    match handle {
-        Some(ProjectionHandle::Materialized(root)) => {
-            if root.exists() {
-                writable_tree(&root)?;
-                std::fs::remove_dir_all(root)?;
-            }
-        }
-        #[cfg(all(target_os = "linux", feature = "host-fuse"))]
-        Some(ProjectionHandle::Fuse(mount)) => mount.unmount()?,
+        .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+    if let Some(ProjectionHandle::Materialized(root)) = handle.as_mut() {
+        cleanup_materialized(root)?;
+        *handle = None;
+        return Ok(());
+    }
+    #[cfg(all(target_os = "linux", feature = "host-fuse"))]
+    if let Some(ProjectionHandle::Fuse(mount)) = handle.as_mut() {
+        mount.unmount()?;
+        *handle = None;
+        return Ok(());
+    }
+    match handle.take() {
         Some(ProjectionHandle::Docker(projection)) => projection.end()?,
         None => {}
+        Some(ProjectionHandle::Materialized(_)) => unreachable!(),
+        #[cfg(all(target_os = "linux", feature = "host-fuse"))]
+        Some(ProjectionHandle::Fuse(_)) => unreachable!(),
     }
+    Ok(())
+}
+
+fn cleanup_materialized(root: &mut PathBuf) -> WorkspaceResult<()> {
+    if !root.exists() {
+        return Ok(());
+    }
+    static CLEANUP_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let quarantine = root.with_file_name(format!(
+        ".layerfs-cleanup-{}-{}",
+        std::process::id(),
+        CLEANUP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    if let Err(error) = std::fs::rename(&*root, &quarantine) {
+        let _ = read_only_tree(root);
+        return Err(error.into());
+    }
+    *root = quarantine;
+    if let Err(error) = writable_tree(root).and_then(|()| std::fs::remove_dir_all(&*root)) {
+        let _ = read_only_tree(root);
+        return Err(error.into());
+    }
+    Ok(())
+}
+
+fn materialize_atomic(
+    source: &dyn MaterializationSource,
+    destination: &Path,
+) -> WorkspaceResult<()> {
+    let parent = destination
+        .parent()
+        .ok_or(WorkspaceError::InvalidPlacement)?;
+    std::fs::create_dir_all(parent)?;
+    static STAGE_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let stage = parent.join(format!(
+        ".layerfs-stage-{}-{}",
+        std::process::id(),
+        STAGE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let materialized = layerfs_materialization::materialize(source, &stage);
+    if let Err(error) = materialized {
+        discard_stage(&stage);
+        return Err(materialization_error(error));
+    }
+    let published = (|| {
+        if destination.exists() {
+            if !destination.is_dir() || std::fs::read_dir(destination)?.next().is_some() {
+                return Err(WorkspaceError::InvalidPlacement);
+            }
+            std::fs::remove_dir(destination)?;
+        }
+        std::fs::rename(&stage, destination)?;
+        Ok(())
+    })();
+    if published.is_err() {
+        discard_stage(&stage);
+    }
+    published
+}
+
+fn discard_stage(stage: &Path) {
+    if stage.exists() {
+        let _ = writable_tree(stage);
+        if std::fs::remove_dir_all(stage).is_err() {
+            let _ = read_only_tree(stage);
+        }
+    }
+}
+
+pub(crate) fn refresh(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<()> {
+    end(worker)?;
+    let handle = attach(worker)?;
+    *worker
+        .projection_handle
+        .lock()
+        .map_err(|_| WorkspaceError::WorkspaceBusy)? = Some(handle);
     Ok(())
 }
 
@@ -352,6 +448,19 @@ impl FilesystemPort for FuseView {
     ) -> layerfs_fuse::PortResult<layerfs_fuse::Attr> {
         self.with(|workspace| workspace.mkdir(NodeId(parent.0), name, mode))
             .map(fuse_attr)
+    }
+
+    fn mkdir_reserved(
+        &self,
+        parent: layerfs_fuse::NodeId,
+        name: &[u8],
+        mode: u32,
+        node: layerfs_fuse::NodeId,
+    ) -> layerfs_fuse::PortResult<layerfs_fuse::Attr> {
+        self.with(|workspace| {
+            workspace.mkdir_reserved(NodeId(parent.0), name, mode, NodeId(node.0))
+        })
+        .map(fuse_attr)
     }
 
     fn symlink(
@@ -796,4 +905,136 @@ fn writable_tree(root: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct FailingSource;
+    struct EmptySource;
+
+    impl MaterializationSource for FailingSource {
+        fn root(&self) -> MaterializedAttr {
+            MaterializedAttr {
+                node: MaterializedNode(1),
+                kind: MaterializedKind::Directory,
+                mode: 0o755,
+                mtime_seconds: 0,
+                mtime_nanoseconds: 0,
+            }
+        }
+
+        fn entries(&self, node: MaterializedNode) -> MaterializedResult<Vec<Entry>> {
+            if node != MaterializedNode(1) {
+                return Err(MaterializationError::Port("directory"));
+            }
+            Ok(vec![Entry {
+                name: b"partial".to_vec(),
+                attr: MaterializedAttr {
+                    node: MaterializedNode(2),
+                    kind: MaterializedKind::File,
+                    mode: 0o644,
+                    mtime_seconds: 0,
+                    mtime_nanoseconds: 0,
+                },
+            }])
+        }
+
+        fn read(
+            &self,
+            node: MaterializedNode,
+            sink: &mut dyn std::io::Write,
+        ) -> MaterializedResult<()> {
+            assert_eq!(node, MaterializedNode(2));
+            sink.write_all(b"partial")?;
+            Err(MaterializationError::Port("injected read failure"))
+        }
+
+        fn readlink(&self, _: MaterializedNode) -> MaterializedResult<Vec<u8>> {
+            Err(MaterializationError::Port("symlink"))
+        }
+    }
+
+    impl MaterializationSource for EmptySource {
+        fn root(&self) -> MaterializedAttr {
+            FailingSource.root()
+        }
+
+        fn entries(&self, node: MaterializedNode) -> MaterializedResult<Vec<Entry>> {
+            (node == MaterializedNode(1))
+                .then(Vec::new)
+                .ok_or(MaterializationError::Port("directory"))
+        }
+
+        fn read(&self, _: MaterializedNode, _: &mut dyn std::io::Write) -> MaterializedResult<()> {
+            Err(MaterializationError::Port("file"))
+        }
+
+        fn readlink(&self, _: MaterializedNode) -> MaterializedResult<Vec<u8>> {
+            Err(MaterializationError::Port("symlink"))
+        }
+    }
+
+    #[test]
+    fn failed_materialization_never_publishes_or_leaves_a_stage() {
+        let parent = std::env::temp_dir().join(format!(
+            "layerfs-materialize-atomic-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&parent).unwrap();
+        let destination = parent.join("workspace");
+        assert!(materialize_atomic(&FailingSource, &destination).is_err());
+        assert!(!destination.exists());
+        assert!(std::fs::read_dir(&parent).unwrap().next().is_none());
+        std::fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn failed_cleanup_moves_the_projection_off_placement_and_retains_retry_path() {
+        let parent = std::env::temp_dir().join(format!(
+            "layerfs-materialize-cleanup-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&parent).unwrap();
+        let placement = parent.join("workspace");
+        std::fs::write(&placement, b"not a projection directory").unwrap();
+        let mut retry = placement.clone();
+        assert!(cleanup_materialized(&mut retry).is_err());
+        assert!(!placement.exists());
+        assert_ne!(retry, placement);
+        assert!(std::fs::symlink_metadata(&retry).is_ok());
+        std::fs::remove_file(retry).unwrap();
+        std::fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn failed_publish_removes_the_complete_stage() {
+        let parent = std::env::temp_dir().join(format!(
+            "layerfs-materialize-publish-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let destination = parent.join("workspace");
+        std::fs::create_dir_all(&destination).unwrap();
+        std::fs::write(destination.join("occupied"), b"keep").unwrap();
+        assert!(materialize_atomic(&EmptySource, &destination).is_err());
+        assert_eq!(
+            std::fs::read(destination.join("occupied")).unwrap(),
+            b"keep"
+        );
+        assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 1);
+        std::fs::remove_dir_all(parent).unwrap();
+    }
 }

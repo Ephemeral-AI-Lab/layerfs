@@ -53,14 +53,6 @@ pub enum ContentChange {
     },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ContentConflict {
-    pub path: String,
-    pub base: Option<ObjectId>,
-    pub current: Option<ObjectId>,
-    pub candidate: Option<ObjectId>,
-}
-
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ApplyCounters {
     pub cdc_bytes_scanned: u64,

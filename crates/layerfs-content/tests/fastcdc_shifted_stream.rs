@@ -1,5 +1,6 @@
 use layerfs_content::file::cdc::{FastCdc, TARGET_CHUNK_BYTES};
-use layerfs_content::{encode_bytes_object, ObjectId};
+use layerfs_content::file::extent_codec::encode_chunk_object;
+use layerfs_content::ObjectId;
 use std::io::Cursor;
 
 const SOURCE_BYTES: usize = 4 * 1024 * 1024;
@@ -61,7 +62,7 @@ fn shifted_stream_retains_a_frozen_canonical_suffix_that_fixed_blocks_lose() {
     assert_eq!(shared_bytes, 4_175_722);
     assert_eq!(
         shared_digest,
-        "61c91a10ca34fae310f4ab363fc5bfe35aa57a5fa2961d9fea3a11777509de2f"
+        "cdda60cfedea05c5dc71de290eaab82ea2ae1fb04c54f5695d6ffec865bd89cb"
     );
     assert_eq!(fixed_shared, 0);
 }
@@ -72,7 +73,7 @@ fn fastcdc(bytes: &[u8]) -> Vec<Chunk> {
         .scan(Cursor::new(bytes), |chunk| {
             chunks.push(Chunk {
                 bytes: chunk.len(),
-                id: ObjectId::for_bytes(&encode_bytes_object(chunk)?),
+                id: ObjectId::for_bytes(&encode_chunk_object(chunk)?),
             });
             Ok(())
         })
@@ -85,7 +86,7 @@ fn fixed(bytes: &[u8]) -> Vec<Chunk> {
         .chunks(TARGET_CHUNK_BYTES)
         .map(|chunk| Chunk {
             bytes: chunk.len(),
-            id: ObjectId::for_bytes(&encode_bytes_object(chunk).unwrap()),
+            id: ObjectId::for_bytes(&encode_chunk_object(chunk).unwrap()),
         })
         .collect()
 }

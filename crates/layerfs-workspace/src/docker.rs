@@ -1,4 +1,4 @@
-use crate::{ContainerId, WorkspaceError, WorkspaceResult, WorkspaceSessionId};
+use crate::{ContainerId, WorkspaceError, WorkspaceId, WorkspaceResult};
 use layerfs_fuse::{ProxyHost, SharedPort};
 use std::io::{BufRead, Read};
 use std::path::{Path, PathBuf};
@@ -16,7 +16,7 @@ pub(crate) struct DockerProjection {
 
 impl DockerProjection {
     pub(crate) fn attach(
-        id: WorkspaceSessionId,
+        id: WorkspaceId,
         container: ContainerId,
         root: PathBuf,
         port: SharedPort,

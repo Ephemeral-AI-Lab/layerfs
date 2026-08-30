@@ -29,7 +29,28 @@ pub(crate) fn cli(arguments: Vec<OsString>) -> CliResult<CliArgv> {
 }
 
 fn invocation(arguments: impl IntoIterator<Item = OsString>) -> Result<Invocation, clap::Error> {
-    Invocation::try_parse_from(std::iter::once(OsString::from("layerfs")).chain(arguments))
+    let invocation =
+        Invocation::try_parse_from(std::iter::once(OsString::from("layerfs")).chain(arguments))?;
+    if matches!(
+        invocation.command,
+        Command::Db {
+            command: crate::DbCommand::Create {
+                role: crate::StoreRole::Layerstack,
+                parent: Some(_),
+                ..
+            } | crate::DbCommand::Connect {
+                role: crate::StoreRole::Layerstack,
+                parent: Some(_),
+                ..
+            }
+        }
+    ) {
+        return Err(clap::Error::raw(
+            clap::error::ErrorKind::ArgumentConflict,
+            "--parent is only valid for a BranchStore",
+        ));
+    }
+    Ok(invocation)
 }
 
 pub(crate) fn line(input: &str) -> CliResult<Command> {

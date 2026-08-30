@@ -63,7 +63,81 @@ pub fn referenced_objects(canonical: &[u8]) -> CoreResult<Vec<ObjectId>> {
                 }
             }
         }
+        b"LFS4CHK\0" => Vec::new(),
         b"LFS4LNK\0" => Vec::new(),
         _ => Vec::new(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::file::extent_codec::{decode_chunk_payload, CHUNK_MAGIC};
+    use crate::file::rope::{build, read_all, ObjectStore};
+    use crate::{decode_bytes_object, CoreError, CoreResult};
+    use std::collections::{BTreeMap, BTreeSet};
+
+    #[derive(Default)]
+    struct MemoryStore(BTreeMap<ObjectId, Vec<u8>>);
+
+    impl ObjectStore for MemoryStore {
+        fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+            self.0.get(&id).cloned().ok_or(CoreError::MissingObject)
+        }
+
+        fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+            let id = ObjectId::for_bytes(canonical);
+            self.0.insert(id, canonical.to_vec());
+            Ok(id)
+        }
+    }
+
+    #[test]
+    fn every_internal_magic_is_safe_as_user_file_prefix_and_transfer_leaf() {
+        for magic in [
+            &b"LFS4FSR\0"[..],
+            &b"LFS4INT\0"[..],
+            &b"LFS4INO\0"[..],
+            &b"LFS4DIR\0"[..],
+            &b"LFS4NSP\0"[..],
+            &b"LFS4MET\0"[..],
+            &b"LFS4MAP\0"[..],
+            &b"LFS4LNK\0"[..],
+            &b"LFS4ACL\0"[..],
+            &b"LFS4CHK\0"[..],
+        ] {
+            let mut input = magic.to_vec();
+            input.extend_from_slice(b"arbitrary-user-bytes");
+            let mut store = MemoryStore::default();
+            let (root, _) = build(&mut store, input.as_slice()).unwrap();
+
+            let mut round_trip = Vec::new();
+            read_all(&store, root, &mut round_trip).unwrap();
+            assert_eq!(round_trip, input);
+
+            let mut pending = vec![root.0];
+            let mut seen = BTreeSet::new();
+            let mut chunks = 0;
+            while let Some(id) = pending.pop() {
+                if !seen.insert(id) {
+                    continue;
+                }
+                let canonical = store.0.get(&id).unwrap();
+                let references = referenced_objects(canonical).unwrap();
+                if decode_bytes_object(canonical)
+                    .unwrap()
+                    .starts_with(CHUNK_MAGIC)
+                {
+                    assert_eq!(
+                        decode_chunk_payload(decode_bytes_object(canonical).unwrap()).unwrap(),
+                        input
+                    );
+                    assert!(references.is_empty());
+                    chunks += 1;
+                }
+                pending.extend(references);
+            }
+            assert_eq!(chunks, 1, "magic={magic:?}");
+        }
+    }
 }

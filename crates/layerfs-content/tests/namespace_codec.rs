@@ -46,7 +46,7 @@ fn exact_namespace_values_round_trip_and_reject_trailing_bytes() {
     );
     assert_eq!(
         ObjectId::for_bytes(&encode_directory_state(directory).unwrap()).to_string(),
-        "0913ef4a2422a4cbf7548e2470944284909e9b23080ebf2f731901422e026436"
+        "58c8b2e2c012920bdf2f4c4fa7d8d7413427fea10cd67cbcaf76f994ea14ce59"
     );
 
     let record = InodeRecordV1 {
@@ -61,14 +61,14 @@ fn exact_namespace_values_round_trip_and_reject_trailing_bytes() {
     );
     assert_eq!(
         ObjectId::for_bytes(&encode_inode_record(record).unwrap()).to_string(),
-        "b1cb4b912444022dc7ff7510de67c325273562635c8084e809579f2c78c36cb1"
+        "db1a04b44a4f5123681ae054f3d8ed528b12d4526e52fd5d57db374df97e2d56"
     );
 
     let link = SymlinkStateV1::new(b"../dangling/target".to_vec()).unwrap();
     let mut encoded = encode_symlink(&link).unwrap();
     assert_eq!(
         ObjectId::for_bytes(&encoded).to_string(),
-        "98bb58549889140b6e10625cf7bc3c108137a36af0df6886ccdc90d8b2f092f6"
+        "b47bfc195cbdf2e0d573082e4962be0c87ca0d42c5684c76677bea81d2a5817a"
     );
     assert_eq!(decode_symlink(&encoded).unwrap(), link);
     encoded.push(0);
@@ -85,7 +85,7 @@ fn exact_namespace_values_round_trip_and_reject_trailing_bytes() {
     );
     assert_eq!(
         ObjectId::for_bytes(&encode_namespace_root(root).unwrap()).to_string(),
-        "394996076853720b4967f1399368738d3322ccce0fda2bd47eadc2f9ac6c8b11"
+        "a55104981ab7c699d1f07e157017520ea072b1c0c1f52d0d56c3553490114be5"
     );
 }
 

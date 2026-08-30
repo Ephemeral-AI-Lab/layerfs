@@ -1,5 +1,8 @@
 # LayerFS Restart Specification
 
+> **Historical and superseded.** The binding LayerFS V2 architecture, schema,
+> API, source tree, and verification contract is [`docs/v2/spec.md`](docs/v2/spec.md).
+
 Status: proposed implementation specification for a new Rust repository.
 
 The detailed Phase 4 gate is maintained in

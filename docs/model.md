@@ -1,5 +1,8 @@
 # LayerStack storage model
 
+> **Historical and superseded.** The former three-store model below is not a
+> V2 compatibility path. [`v2/spec.md`](v2/spec.md) is the sole authority.
+
 `LayerStack` is the whole architecture. It is not a row, ID, history, store,
 or operation target.
 

@@ -1,5 +1,8 @@
 # LayerFS Implementation Plan
 
+> **Historical and superseded.** The binding V2 implementation and terminal
+> gates are in [`docs/v2/spec.md`](docs/v2/spec.md).
+
 This plan implements the restart specification in
 [`SPEC.md`](SPEC.md) and uses the benchmark contract in
 [`implementation-detail/evaluation.md`](implementation-detail/evaluation.md).

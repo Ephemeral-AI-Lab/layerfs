@@ -1,594 +1,380 @@
-use crate::{
-    CliEvent, CliResult, CommandResult, MonitorView, StoreFact, StoreSnapshot, ViewSnapshot,
-};
-use layerfs_sdk::{OperationReceipt, OutputStream, WorkspaceCommitResult, WorkspacePlacement};
-use std::fmt::Write as _;
+use crate::{CliEvent, CliResult, CommandResult};
 use std::io::Write;
 
 pub(crate) fn render(event: &CliEvent, json: bool, output: &mut impl Write) -> CliResult<()> {
-    if json {
-        writeln!(output, "{}", json_event(event)).map_err(io)
-    } else {
-        human_event(event, output)
+    if !json {
+        if let CliEvent::Output(bytes) = event {
+            output.write_all(bytes)?;
+            output.flush()?;
+            return Ok(());
+        }
     }
+    let line = if json {
+        json_event(event)
+    } else {
+        human_event(event)
+    };
+    writeln!(output, "{line}")?;
+    Ok(())
 }
 
-fn human_event(event: &CliEvent, output: &mut impl Write) -> CliResult<()> {
+fn human_event(event: &CliEvent) -> String {
     match event {
-        CliEvent::Started {
-            operation_id,
-            command,
-        } => writeln!(output, "STARTED {operation_id} {}", command.0).map_err(io),
-        CliEvent::Progress {
-            operation_id,
-            phase,
-            progress,
-            elapsed_ns,
-        } => writeln!(
-            output,
-            "PROGRESS {operation_id} {phase:?} {} {} {elapsed_ns}",
-            progress.completed,
-            progress
-                .total
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| "-".to_owned())
-        )
-        .map_err(io),
-        CliEvent::Output {
-            execution_id,
-            sequence,
-            stream,
-            bytes,
-        } => writeln!(
-            output,
-            "OUTPUT {execution_id} {sequence} {stream:?} {}",
-            hex(bytes)
-        )
-        .map_err(io),
-        CliEvent::Snapshot { scope, snapshot } => human_snapshot(*scope, snapshot, output),
-        CliEvent::Finished {
-            operation_id,
-            result,
-            receipt,
-        } => {
-            match result {
-                Ok(result) => writeln!(output, "FINISHED {}", human_result(result)).map_err(io)?,
-                Err(error) => {
-                    writeln!(output, "FAILED {} detail={}", error_code(error), error).map_err(io)?
-                }
-            }
-            writeln!(
-                output,
-                "RECEIPT operation={operation_id} service_ns={}",
-                receipt.service_ns
-            )
-            .map_err(io)
+        CliEvent::Started(summary) => format!("STARTED {}", summary.name),
+        CliEvent::Progress { phase, value } => {
+            format!("PROGRESS {phase:?} {} {:?}", value.current, value.total)
         }
+        CliEvent::Output(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+        CliEvent::Diff(page) => format!("DIFF {:?}", page.entries),
+        CliEvent::Snapshot(snapshot) => human_result(&CommandResult::Query(snapshot.clone())),
+        CliEvent::Finished(Ok(result)) => format!("FINISHED {}", human_result(result)),
+        CliEvent::Finished(Err(error)) => format!("FAILED {error}"),
     }
 }
 
 fn human_result(result: &CommandResult) -> String {
     match result {
-        CommandResult::Database { role, location } => format!("CONNECTED {role} {location}"),
-        CommandResult::Id { kind, id } => format!("CREATED {kind} {id}"),
-        CommandResult::Reference { outcome, id } => format!("{outcome} {id}"),
-        CommandResult::InitializedLayer { layer_id, .. } => {
-            format!("CREATED layer {layer_id}")
-        }
-        CommandResult::CreatedStack { stack_id, .. } => format!("CREATED stack {stack_id}"),
-        CommandResult::Workspace(workspace) => format!("CREATED workspace {}", workspace.id),
-        CommandResult::WorkspaceCommit(result) => match result {
-            WorkspaceCommitResult::Created {
-                previous_head,
-                commit_id,
-            } => format!("CREATED commit {commit_id} previous={previous_head}"),
-            WorkspaceCommitResult::UpToDate { head } => format!("UP_TO_DATE {head}"),
-            WorkspaceCommitResult::HeadMoved { expected, actual } => {
-                format!("HEAD_MOVED expected={expected} actual={actual}")
-            }
-        },
-        CommandResult::WorkspaceEnd(result) => {
-            format!("ENDED {} discarded={}", result.session_id, result.discarded)
-        }
-        CommandResult::View { .. } | CommandResult::Unit => "OK".to_owned(),
+        CommandResult::Empty => String::new(),
+        CommandResult::Text(text) => text.clone(),
+        CommandResult::Query(page) => format!("{:?}", page.items),
+        CommandResult::Monitor(snapshot) => format!("{snapshot:?}"),
+        CommandResult::Dedup(analysis) => format!("{analysis:?}"),
     }
-}
-
-fn human_snapshot(
-    scope: crate::ViewScope,
-    snapshot: &ViewSnapshot,
-    output: &mut impl Write,
-) -> CliResult<()> {
-    writeln!(output, "SNAPSHOT {scope:?}").map_err(io)?;
-    match snapshot {
-        ViewSnapshot::Topology(entries) => entries.iter().try_for_each(|entry| {
-            writeln!(
-                output,
-                "{} {} parent={} active={}",
-                entry.role,
-                entry.location,
-                entry.parent.as_deref().unwrap_or("-"),
-                entry.active
-            )
-            .map_err(io)
-        }),
-        ViewSnapshot::Workspaces(values) => values.iter().try_for_each(|value| {
-            writeln!(
-                output,
-                "{} branch={} head={} state={:?} dirty={}",
-                value.id, value.branch_id, value.pinned_head, value.state, value.dirty
-            )
-            .map_err(io)
-        }),
-        ViewSnapshot::Workspace(value) => {
-            writeln!(
-                output,
-                "{} branch={} head={} state={:?} generation={} placement={} projection={:?}",
-                value.session.id,
-                value.session.branch_id,
-                value.session.pinned_head,
-                value.session.state,
-                value.mutation_generation,
-                placement(&value.session.placement),
-                value.session.projection
-            )
-            .map_err(io)?;
-            value.executions.iter().try_for_each(|execution| {
-                writeln!(
-                    output,
-                    "execution={} running={} receipt={:?}",
-                    execution.id, execution.running, execution.receipt
-                )
-                .map_err(io)
-            })
-        }
-        ViewSnapshot::WorkspaceDiff(value) => writeln!(
-            output,
-            "{} dirty={} generation={}",
-            value.session_id, value.dirty, value.mutation_generation
-        )
-        .map_err(io),
-        ViewSnapshot::Output(page) => {
-            for chunk in &page.chunks {
-                writeln!(
-                    output,
-                    "OUTPUT {} {:?} {}",
-                    chunk.sequence,
-                    chunk.stream,
-                    String::from_utf8_lossy(&chunk.bytes)
-                )
-                .map_err(io)?;
-            }
-            writeln!(
-                output,
-                "OUTPUT_PAGE next={} truncated={} exited={} receipt={:?}",
-                page.next_sequence, page.truncated, page.exited, page.receipt
-            )
-            .map_err(io)
-        }
-        ViewSnapshot::Monitor(value) => human_monitor(value, output),
-        ViewSnapshot::Store(value) => human_store(value, output),
-    }
-}
-
-fn human_store(value: &StoreSnapshot, output: &mut impl Write) -> CliResult<()> {
-    match value {
-        StoreSnapshot::Page { facts, next } => {
-            for fact in facts {
-                writeln!(output, "{}", human_store_fact(fact)).map_err(io)?;
-            }
-            writeln!(output, "PAGE next={}", next.is_some()).map_err(io)
-        }
-        StoreSnapshot::Fact(Some(fact)) => {
-            writeln!(output, "{}", human_store_fact(fact)).map_err(io)
-        }
-        StoreSnapshot::Fact(None) => writeln!(output, "NOT_FOUND").map_err(io),
-        StoreSnapshot::CommitDiff(changes) => changes.iter().try_for_each(|change| {
-            writeln!(
-                output,
-                "inode={} before={:?} after={:?}",
-                change.inode, change.before, change.after
-            )
-            .map_err(io)
-        }),
-    }
-}
-
-fn human_store_fact(fact: &StoreFact) -> String {
-    let mut value = format!("{:?} {}", fact.kind, fact.id).to_lowercase();
-    for (name, field) in &fact.fields {
-        write!(value, " {name}={field}").unwrap();
-    }
-    value
-}
-
-fn human_monitor(value: &MonitorView, output: &mut impl Write) -> CliResult<()> {
-    match value {
-        MonitorView::Databases(values) => values.iter().try_for_each(|value| {
-            writeln!(
-                output,
-                "{} {} db={} wal={} shm={}",
-                value.role, value.location, value.database_bytes, value.wal_bytes, value.shm_bytes
-            )
-            .map_err(io)
-        }),
-        MonitorView::Dedup(values) => values.iter().try_for_each(|value| {
-            writeln!(
-                output,
-                "route={} route_cas={} union_cas={} cross_store_placement={} placement={}",
-                value.route,
-                value.route_cas_bytes,
-                value.union_cas_bytes,
-                value.cross_store_placement_bytes,
-                value.placement_factor
-            )
-            .map_err(io)
-        }),
-        MonitorView::Workspaces(values) => values.iter().try_for_each(|value| {
-            writeln!(
-                output,
-                "{} branch={} state={:?} dirty={}",
-                value.id, value.branch_id, value.state, value.dirty
-            )
-            .map_err(io)
-        }),
-        MonitorView::Branch(value) => writeln!(output, "branch={value:?}").map_err(io),
-        MonitorView::Operations(values) => values
-            .iter()
-            .try_for_each(|value| writeln!(output, "{}", human_receipt(value)).map_err(io)),
-        MonitorView::Process {
-            process_id,
-            resident_bytes,
-            available_parallelism,
-        } => writeln!(
-            output,
-            "pid={process_id} rss={} parallelism={available_parallelism}",
-            resident_bytes
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| "unavailable".to_owned())
-        )
-        .map_err(io),
-    }
-}
-
-fn human_receipt(value: &OperationReceipt) -> String {
-    format!(
-        "{} outcome={:?} queued_ns={} service_ns={} fragments={}",
-        value.id,
-        value.outcome,
-        value.queued_ns,
-        value.service_ns,
-        value.fragments.len()
-    )
 }
 
 fn json_event(event: &CliEvent) -> String {
-    let mut text = format!("{{\"schema_version\":{}", crate::JSON_SCHEMA_VERSION);
-    match event {
-        CliEvent::Started {
-            operation_id,
-            command,
-        } => write!(
-            text,
-            ",\"event\":\"started\",\"operation_id\":{},\"command\":{}",
-            json_string(&operation_id.to_string()),
-            json_string(&command.0)
-        )
-        .unwrap(),
-        CliEvent::Progress {
-            operation_id,
-            phase,
-            progress,
-            elapsed_ns,
-        } => write!(
-            text,
-            ",\"event\":\"progress\",\"operation_id\":{},\"phase\":{},\"completed\":{},\"total\":{},\"elapsed_ns\":{}",
-            json_string(&operation_id.to_string()),
-            json_string(&format!("{phase:?}")),
-            progress.completed,
-            progress.total.map(|value| value.to_string()).unwrap_or_else(|| "null".to_owned()),
-            elapsed_ns
-        )
-        .unwrap(),
-        CliEvent::Output {
-            execution_id,
-            sequence,
-            stream,
-            bytes,
-        } => write!(
-            text,
-            ",\"event\":\"output\",\"execution_id\":{},\"sequence\":{},\"stream\":{},\"bytes_hex\":{}",
-            json_string(&execution_id.to_string()),
-            sequence,
-            json_string(&format!("{stream:?}").to_lowercase()),
-            json_string(&hex(bytes))
-        )
-        .unwrap(),
-        CliEvent::Snapshot { scope, snapshot } => write!(
-            text,
-            ",\"event\":\"snapshot\",\"scope\":{},\"snapshot\":{}",
-            json_string(&format!("{scope:?}").to_lowercase()),
-            json_snapshot(snapshot)
-        )
-        .unwrap(),
-        CliEvent::Finished {
-            operation_id,
-            result,
-            receipt,
-        } => {
-            write!(
-                text,
-                ",\"event\":\"finished\",\"operation_id\":{},\"result\":{},\"receipt\":{}",
-                json_string(&operation_id.to_string()),
-                match result {
-                    Ok(result) => json_result(result),
-                    Err(error) => format!(
-                        "{{\"ok\":false,\"code\":{},\"detail\":{}}}",
-                        json_string(error_code(error)),
-                        json_string(&error.to_string())
-                    ),
-                },
-                receipt.to_json()
-            )
-            .unwrap();
-        }
+    if let CliEvent::Finished(Ok(result)) = event {
+        return format!(
+            "{{\"schema_version\":3,\"event\":\"finished\",\"result\":{}}}",
+            json_result(result)
+        );
     }
-    text.push('}');
-    text
+    if let CliEvent::Diff(page) = event {
+        return format!(
+            "{{\"schema_version\":3,\"event\":\"diff\",\"page\":{}}}",
+            json_diff_page(page)
+        );
+    }
+    if let CliEvent::Snapshot(page) = event {
+        return format!(
+            "{{\"schema_version\":3,\"event\":\"snapshot\",\"result\":{}}}",
+            json_result(&CommandResult::Query(page.clone()))
+        );
+    }
+    let (kind, value) = match event {
+        CliEvent::Started(summary) => ("started", summary.name.clone()),
+        CliEvent::Progress { phase, value } => (
+            "progress",
+            format!("{phase:?}:{}:{:?}", value.current, value.total),
+        ),
+        CliEvent::Output(bytes) => ("output", String::from_utf8_lossy(bytes).into_owned()),
+        CliEvent::Diff(_) | CliEvent::Snapshot(_) => unreachable!("handled above"),
+        CliEvent::Finished(Ok(_)) => unreachable!("handled above"),
+        CliEvent::Finished(Err(error)) => ("failed", error.to_string()),
+    };
+    format!(
+        "{{\"schema_version\":3,\"event\":\"{kind}\",\"value\":\"{}\"}}",
+        escape(&value)
+    )
 }
 
 fn json_result(result: &CommandResult) -> String {
     match result {
-        CommandResult::Database { role, location } => format!(
-            "{{\"ok\":true,\"outcome\":\"CONNECTED\",\"role\":{},\"location\":{}}}",
-            json_string(role),
-            json_string(location)
-        ),
-        CommandResult::Id { kind, id } => format!(
-            "{{\"ok\":true,\"outcome\":\"CREATED\",\"kind\":{},\"id\":{}}}",
-            json_string(kind),
-            json_string(id)
-        ),
-        CommandResult::Reference { outcome, id } => format!(
-            "{{\"ok\":true,\"outcome\":{},\"id\":{}}}",
-            json_string(outcome),
-            json_string(id)
-        ),
-        CommandResult::InitializedLayer {
-            history_id,
-            layer_id,
-            root_id,
-        } => format!(
-            "{{\"ok\":true,\"outcome\":\"CREATED\",\"kind\":\"layer\",\"id\":{},\"history_id\":{},\"root_id\":{}}}",
-            json_string(layer_id),
-            json_string(history_id),
-            json_string(root_id)
-        ),
-        CommandResult::CreatedStack {
-            history_id,
-            stack_id,
-            root_id,
-        } => format!(
-            "{{\"ok\":true,\"outcome\":\"CREATED\",\"kind\":\"stack\",\"id\":{},\"history_id\":{},\"root_id\":{}}}",
-            json_string(stack_id),
-            json_string(history_id),
-            json_string(root_id)
-        ),
-        CommandResult::Workspace(workspace) => format!(
-            "{{\"ok\":true,\"outcome\":\"CREATED\",\"kind\":\"workspace\",\"id\":{}}}",
-            json_string(&workspace.id.to_string())
-        ),
-        CommandResult::WorkspaceCommit(result) => match result {
-            WorkspaceCommitResult::Created {
-                previous_head,
-                commit_id,
-            } => format!(
-                "{{\"ok\":true,\"outcome\":\"CREATED\",\"kind\":\"commit\",\"id\":{},\"previous_head\":{}}}",
-                json_string(&commit_id.to_string()),
-                json_string(&previous_head.to_string())
-            ),
-            WorkspaceCommitResult::UpToDate { head } => format!(
-                "{{\"ok\":true,\"outcome\":\"UP_TO_DATE\",\"head\":{}}}",
-                json_string(&head.to_string())
-            ),
-            WorkspaceCommitResult::HeadMoved { expected, actual } => format!(
-                "{{\"ok\":true,\"outcome\":\"HEAD_MOVED\",\"expected\":{},\"actual\":{}}}",
-                json_string(&expected.to_string()),
-                json_string(&actual.to_string())
-            ),
-        },
-        CommandResult::WorkspaceEnd(result) => format!(
-            "{{\"ok\":true,\"outcome\":\"ENDED\",\"id\":{},\"discarded\":{}}}",
-            json_string(&result.session_id.to_string()),
-            result.discarded
-        ),
-        CommandResult::View { .. } | CommandResult::Unit => {
-            "{\"ok\":true,\"outcome\":\"OK\"}".to_owned()
+        CommandResult::Empty => "{\"kind\":\"empty\"}".to_owned(),
+        CommandResult::Text(value) => {
+            format!("{{\"kind\":\"text\",\"value\":\"{}\"}}", escape(value))
         }
-    }
-}
-
-fn json_snapshot(snapshot: &ViewSnapshot) -> String {
-    match snapshot {
-        ViewSnapshot::Topology(values) => json_array(values.iter().map(|value| {
-            format!(
-                "{{\"role\":{},\"location\":{},\"parent\":{},\"active\":{}}}",
-                json_string(&value.role),
-                json_string(&value.location),
-                value
-                    .parent
-                    .as_ref()
-                    .map(|value| json_string(value))
-                    .unwrap_or_else(|| "null".to_owned()),
-                value.active
-            )
-        })),
-        ViewSnapshot::Workspaces(values) => json_array(values.iter().map(|value| {
-            format!(
-                "{{\"id\":{},\"branch_id\":{},\"pinned_head\":{},\"state\":{},\"dirty\":{}}}",
-                json_string(&value.id.to_string()),
-                json_string(&value.branch_id.to_string()),
-                json_string(&value.pinned_head.to_string()),
-                json_string(&format!("{:?}", value.state).to_lowercase()),
-                value.dirty
-            )
-        })),
-        ViewSnapshot::Workspace(value) => format!(
-            "{{\"id\":{},\"branch_id\":{},\"pinned_head\":{},\"state\":{},\"mutation_generation\":{},\"placement\":{},\"projection\":{},\"executions\":{}}}",
-            json_string(&value.session.id.to_string()),
-            json_string(&value.session.branch_id.to_string()),
-            json_string(&value.session.pinned_head.to_string()),
-            json_string(&format!("{:?}", value.session.state).to_lowercase()),
-            value.mutation_generation,
-            json_string(&placement(&value.session.placement)),
-            json_string(&format!("{:?}", value.session.projection).to_lowercase()),
-            json_array(value.executions.iter().map(|execution| format!(
-                "{{\"id\":{},\"running\":{}}}",
-                json_string(&execution.id.to_string()),
-                execution.running
-            )))
-        ),
-        ViewSnapshot::WorkspaceDiff(value) => format!(
-            "{{\"session_id\":{},\"dirty\":{},\"mutation_generation\":{}}}",
-            json_string(&value.session_id.to_string()),
-            value.dirty,
-            value.mutation_generation
-        ),
-        ViewSnapshot::Output(page) => format!(
-            "{{\"chunks\":{},\"next_sequence\":{},\"truncated\":{},\"exited\":{}}}",
-            json_array(page.chunks.iter().map(|chunk| format!(
-                "{{\"sequence\":{},\"stream\":{},\"bytes_hex\":{}}}",
-                chunk.sequence,
-                json_string(match chunk.stream { OutputStream::Stdout => "stdout", OutputStream::Stderr => "stderr" }),
-                json_string(&hex(&chunk.bytes))
-            ))),
-            page.next_sequence,
-            page.truncated,
-            page.exited
-        ),
-        ViewSnapshot::Monitor(value) => json_monitor(value),
-        ViewSnapshot::Store(value) => json_store(value),
-    }
-}
-
-fn json_store(value: &StoreSnapshot) -> String {
-    match value {
-        StoreSnapshot::Page { facts, next } => format!(
-            "{{\"facts\":{},\"next\":{}}}",
-            json_array(facts.iter().map(json_store_fact)),
-            next.as_ref()
-                .map(|cursor| json_string(&cursor.to_string()))
+        CommandResult::Query(page) => format!(
+            "{{\"kind\":\"query\",\"items\":[{}],\"continuation\":{}}}",
+            page.items
+                .iter()
+                .map(json_query_item)
+                .collect::<Vec<_>>()
+                .join(","),
+            page.continuation
+                .as_deref()
+                .map(|value| format!("\"{}\"", hex(value)))
                 .unwrap_or_else(|| "null".to_owned())
         ),
-        StoreSnapshot::Fact(value) => value
-            .as_ref()
-            .map(json_store_fact)
-            .unwrap_or_else(|| "null".to_owned()),
-        StoreSnapshot::CommitDiff(values) => json_array(values.iter().map(|value| {
-            format!(
-                "{{\"inode\":{},\"before\":{},\"after\":{}}}",
-                json_string(&value.inode),
-                value
-                    .before
-                    .as_ref()
-                    .map(|id| json_string(id))
-                    .unwrap_or_else(|| "null".to_owned()),
-                value
-                    .after
-                    .as_ref()
-                    .map(|id| json_string(id))
-                    .unwrap_or_else(|| "null".to_owned())
-            )
-        })),
+        CommandResult::Monitor(snapshot) => monitor_json(snapshot),
+        CommandResult::Dedup(analysis) => dedup_json(analysis),
     }
 }
 
-fn json_store_fact(fact: &StoreFact) -> String {
-    let fields = fact
-        .fields
-        .iter()
-        .map(|(name, value)| format!("{}:{}", json_string(name), json_string(value)))
-        .collect::<Vec<_>>()
-        .join(",");
+fn json_query_item(item: &layerfs_sdk::QueryItem) -> String {
+    use layerfs_sdk::{BranchScope, Fact, QueryItem};
+    match item {
+        QueryItem::LayerStack(value) => format!(
+            "{{\"type\":\"layer_stack\",\"id\":\"{}\",\"name\":\"{}\",\"head_layer_id\":\"{}\"}}",
+            value.id,
+            escape(value.name.as_str()),
+            value.head_layer_id,
+        ),
+        QueryItem::LayerStackScope(fact, scope) => format!(
+            "{{\"type\":\"layer_stack_scope\",\"id\":\"{}\",\"name\":\"{}\",\"through_layer_id\":\"{}\",\"serving_mode\":\"{}\"}}",
+            fact.id,
+            escape(fact.name.as_str()),
+            scope.through_layer_id,
+            placement(scope.serving_mode),
+        ),
+        QueryItem::Branch(value) => branch_json("branch", value, None),
+        QueryItem::BranchScope(value, scope) => branch_json(
+            "branch_scope",
+            value,
+            Some(match scope.scope {
+                BranchScope::Local => "\"scope\":\"local\"".to_owned(),
+                BranchScope::Remote {
+                    through_commit_id,
+                    serving_mode,
+                } => format!(
+                    "\"scope\":\"remote\",\"through_commit_id\":\"{through_commit_id}\",\"serving_mode\":\"{}\"",
+                    placement(serving_mode)
+                ),
+            }),
+        ),
+        QueryItem::Fact(Fact::LayerStack(value)) => format!(
+            "{{\"type\":\"layer_stack_fact\",\"id\":\"{}\",\"name\":\"{}\"}}",
+            value.id,
+            escape(value.name.as_str()),
+        ),
+        QueryItem::Fact(Fact::Layer(value)) => format!(
+            "{{\"type\":\"layer_fact\",\"id\":\"{}\",\"layer_stack_id\":\"{}\",\"parent_layer_id\":{},\"root_id\":\"{}\"}}",
+            value.id,
+            value.layer_stack_id,
+            optional_display(value.parent_layer_id),
+            value.root_id,
+        ),
+        QueryItem::Fact(Fact::Branch(value)) => format!(
+            "{{\"type\":\"branch_fact\",\"id\":\"{}\",\"layer_stack_id\":\"{}\",\"name\":\"{}\"}}",
+            value.id,
+            value.layer_stack_id,
+            escape(value.name.as_str()),
+        ),
+        QueryItem::Fact(Fact::Commit(value)) => format!(
+            "{{\"type\":\"commit_fact\",\"id\":\"{}\",\"root_id\":\"{}\",\"parent_commit_id\":{},\"base_layer_id\":\"{}\"}}",
+            value.id,
+            value.root_id,
+            optional_display(value.parent_commit_id),
+            value.base_layer_id,
+        ),
+        QueryItem::Workspace(value) => format!(
+            "{{\"type\":\"workspace\",\"id\":\"{}\",\"layer_stack_id\":\"{}\",\"layer_stack_name\":\"{}\",\"branch_id\":\"{}\",\"branch_name\":\"{}\",\"pinned_head\":{},\"state\":\"{}\",\"dirty\":{}}}",
+            value.summary.id,
+            value.layer_stack_id,
+            escape(value.layer_stack_name.as_str()),
+            value.summary.branch_id,
+            escape(value.branch_name.as_str()),
+            optional_display(value.summary.pinned_head),
+            format!("{:?}", value.summary.state).to_lowercase(),
+            value.summary.dirty,
+        ),
+        QueryItem::Monitor(value) => monitor_json(value),
+    }
+}
+
+fn branch_json(kind: &str, value: &layerfs_sdk::BranchRecord, scope: Option<String>) -> String {
+    let mut json = format!(
+        "{{\"type\":\"{kind}\",\"id\":\"{}\",\"layer_stack_id\":\"{}\",\"name\":\"{}\",\"base_layer_id\":\"{}\",\"head_commit_id\":{},\"forked_from_layer_id\":{},\"forked_from_branch_id\":{},\"forked_from_commit_id\":{}",
+        value.id,
+        value.layer_stack_id,
+        escape(value.name.as_str()),
+        value.base_layer_id,
+        optional_display(value.head_commit_id),
+        optional_display(value.forked_from_layer_id),
+        optional_display(value.forked_from_branch_id),
+        optional_display(value.forked_from_commit_id),
+    );
+    if let Some(scope) = scope {
+        json.push(',');
+        json.push_str(&scope);
+    }
+    json.push('}');
+    json
+}
+
+fn json_diff_page(page: &layerfs_sdk::DiffPage) -> String {
     format!(
-        "{{\"kind\":{},\"id\":{},\"fields\":{{{fields}}}}}",
-        json_string(&format!("{:?}", fact.kind).to_lowercase()),
-        json_string(&fact.id),
+        "{{\"entries\":[{}],\"continuation\":{}}}",
+        page.entries
+            .iter()
+            .map(json_diff_entry)
+            .collect::<Vec<_>>()
+            .join(","),
+        page.continuation
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_owned())
     )
 }
 
-fn json_monitor(value: &MonitorView) -> String {
-    match value {
-        MonitorView::Databases(values) => json_array(values.iter().map(|value| {
-            format!(
-                "{{\"role\":{},\"location\":{},\"database_bytes\":{},\"wal_bytes\":{},\"shm_bytes\":{}}}",
-                json_string(&value.role),
-                json_string(&value.location),
-                value.database_bytes,
-                value.wal_bytes,
-                value.shm_bytes
-            )
-        })),
-        MonitorView::Dedup(values) => json_array(values.iter().map(|value| {
-            format!(
-                "{{\"route\":{},\"route_cas_bytes\":{},\"union_cas_bytes\":{},\"cross_store_placement_bytes\":{},\"placement_factor\":{},\"placements\":{}}}",
-                json_string(&value.route),
-                value.route_cas_bytes,
-                value.union_cas_bytes,
-                value.cross_store_placement_bytes,
-                value.placement_factor,
-                json_array(value.placements.iter().map(|placement| format!(
-                    "{{\"role\":{},\"object_count\":{},\"encoded_bytes\":{}}}",
-                    json_string(&placement.role), placement.object_count, placement.encoded_bytes
-                )))
-            )
-        })),
-        MonitorView::Workspaces(values) => json_array(values.iter().map(|value| {
-            format!(
-                "{{\"id\":{},\"branch_id\":{},\"state\":{},\"dirty\":{}}}",
-                json_string(&value.id.to_string()),
-                json_string(&value.branch_id.to_string()),
-                json_string(&format!("{:?}", value.state).to_lowercase()),
-                value.dirty
-            )
-        })),
-        MonitorView::Branch(value) => value
-            .as_ref()
-            .map(json_store_fact)
-            .unwrap_or_else(|| "null".to_owned()),
-        MonitorView::Operations(values) => {
-            json_array(values.iter().map(OperationReceipt::to_json))
-        }
-        MonitorView::Process {
-            process_id,
-            resident_bytes,
-            available_parallelism,
+fn json_diff_entry(entry: &layerfs_sdk::DiffEntry) -> String {
+    match entry {
+        layerfs_sdk::DiffEntry::Add { path, after } => format!(
+            "{{\"type\":\"add\",\"path\":\"{}\",\"after\":{}}}",
+            escape(path.as_str()),
+            node_json(*after)
+        ),
+        layerfs_sdk::DiffEntry::Remove { path, before } => format!(
+            "{{\"type\":\"remove\",\"path\":\"{}\",\"before\":{}}}",
+            escape(path.as_str()),
+            node_json(*before)
+        ),
+        layerfs_sdk::DiffEntry::Modify {
+            path,
+            before,
+            after,
+            aspects,
         } => format!(
-            "{{\"process_id\":{},\"resident_bytes\":{},\"available_parallelism\":{}}}",
-            process_id,
-            resident_bytes
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| "null".to_owned()),
-            available_parallelism
+            "{{\"type\":\"modify\",\"path\":\"{}\",\"before\":{},\"after\":{},\"aspects\":{{\"node_type\":{},\"content\":{},\"metadata\":{},\"directory_membership\":{},\"hard_links\":{}}}}}",
+            escape(path.as_str()),
+            node_json(*before),
+            node_json(*after),
+            aspects.node_type,
+            aspects.content,
+            aspects.metadata,
+            aspects.directory_membership,
+            aspects.hard_links,
         ),
     }
 }
 
-fn placement(value: &WorkspacePlacement) -> String {
-    match value {
-        WorkspacePlacement::Host { root } => format!("host:{}", root.display()),
-        WorkspacePlacement::Container { container_id, root } => {
-            format!("container:{}:{}", container_id.0, root.display())
+fn node_json(node: layerfs_sdk::NodeSummary) -> String {
+    format!(
+        "{{\"kind\":\"{}\",\"content_root\":\"{}\",\"metadata_root\":\"{}\",\"namespace_ref_count\":{}}}",
+        format!("{:?}", node.kind).to_lowercase(),
+        node.content_root,
+        node.metadata_root,
+        node.namespace_ref_count,
+    )
+}
+
+fn monitor_json(snapshot: &layerfs_sdk::MonitorSnapshot) -> String {
+    format!(
+        "{{\"kind\":\"monitor\",\"process_id\":{},\"resident_bytes\":{},\"available_parallelism\":{},\"databases\":[{}],\"workspaces\":[{}],\"operations\":[{}],\"dedup\":{}}}",
+        snapshot.process_id,
+        snapshot
+            .resident_bytes
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_owned()),
+        snapshot.available_parallelism,
+        snapshot
+            .databases
+            .iter()
+            .map(|database| format!(
+                "{{\"role\":\"{}\",\"location\":\"{}\",\"database_bytes\":{},\"wal_bytes\":{},\"shm_bytes\":{}}}",
+                escape(&database.role),
+                escape(&database.location),
+                database.storage.database_bytes,
+                database.storage.wal_bytes,
+                database.storage.shm_bytes,
+            ))
+            .collect::<Vec<_>>()
+            .join(","),
+        snapshot
+            .workspaces
+            .iter()
+            .map(workspace_summary_json)
+            .collect::<Vec<_>>()
+            .join(","),
+        snapshot
+            .operations
+            .iter()
+            .map(layerfs_sdk::OperationReceipt::to_json)
+            .collect::<Vec<_>>()
+            .join(","),
+        snapshot
+            .dedup
+            .as_ref()
+            .map(dedup_json)
+            .unwrap_or_else(|| "null".to_owned()),
+    )
+}
+
+fn workspace_summary_json(value: &layerfs_sdk::WorkspaceSummary) -> String {
+    format!(
+        "{{\"id\":\"{}\",\"branch_id\":\"{}\",\"pinned_head\":{},\"state\":\"{}\",\"dirty\":{}}}",
+        value.id,
+        value.branch_id,
+        optional_display(value.pinned_head),
+        format!("{:?}", value.state).to_lowercase(),
+        value.dirty,
+    )
+}
+
+fn dedup_json(analysis: &layerfs_sdk::DedupAnalysis) -> String {
+    let local = match &analysis.local_cas {
+        layerfs_sdk::ExactOrUnavailable::Exact(value) => format!(
+            "{{\"candidate_bytes\":{},\"inserted_bytes\":{},\"reused_bytes\":{},\"saved_fraction\":{},\"logical_to_physical\":{}}}",
+            value.candidate_bytes,
+            value.inserted_bytes,
+            value.reused_bytes,
+            json_float(value.saved_fraction),
+            json_float(value.logical_to_physical),
+        ),
+        layerfs_sdk::ExactOrUnavailable::Unavailable(reason) => {
+            format!("{{\"unavailable\":\"{}\"}}", escape(reason))
         }
+    };
+    let transfer = match &analysis.transfer {
+        layerfs_sdk::ExactOrUnavailable::Exact(value) => format!(
+            "{{\"announced_bytes\":{},\"sent_bytes\":{},\"avoided_bytes\":{},\"avoided_fraction\":{}}}",
+            value.announced_bytes,
+            value.sent_bytes,
+            value.avoided_bytes,
+            json_float(value.avoided_fraction),
+        ),
+        layerfs_sdk::ExactOrUnavailable::Unavailable(reason) => {
+            format!("{{\"unavailable\":\"{}\"}}", escape(reason))
+        }
+    };
+    format!(
+        "{{\"kind\":\"dedup\",\"physical_cas_bytes\":{},\"union_cas_bytes\":{},\"cross_store_placement_bytes\":{},\"placement_factor\":{},\"placements\":[{}],\"local_cas\":{},\"transfer\":{}}}",
+        analysis.physical_cas_bytes,
+        analysis.union_cas_bytes,
+        analysis.cross_store_placement_bytes,
+        json_float(analysis.placement_factor),
+        analysis
+            .placements
+            .iter()
+            .map(|placement| format!(
+                "{{\"role\":\"{}\",\"object_count\":{},\"encoded_bytes\":{}}}",
+                escape(&placement.role),
+                placement.object_count,
+                placement.encoded_bytes,
+            ))
+            .collect::<Vec<_>>()
+            .join(","),
+        local,
+        transfer,
+    )
+}
+
+fn json_float(value: f64) -> String {
+    if value.is_finite() {
+        value.to_string()
+    } else {
+        "null".to_owned()
     }
 }
 
-fn json_array(values: impl IntoIterator<Item = String>) -> String {
-    format!("[{}]", values.into_iter().collect::<Vec<_>>().join(","))
+fn placement(value: layerfs_sdk::RemotePlacement) -> &'static str {
+    match value {
+        layerfs_sdk::RemotePlacement::Reference => "reference",
+        layerfs_sdk::RemotePlacement::Replica => "replica",
+    }
 }
 
-fn json_string(value: &str) -> String {
-    let mut output = String::from("\"");
+fn optional_display(value: Option<impl std::fmt::Display>) -> String {
+    value
+        .map(|value| format!("\"{value}\""))
+        .unwrap_or_else(|| "null".to_owned())
+}
+
+fn hex(value: &[u8]) -> String {
+    value.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn escape(value: &str) -> String {
+    let mut output = String::new();
     for character in value.chars() {
         match character {
             '"' => output.push_str("\\\""),
@@ -596,38 +382,69 @@ fn json_string(value: &str) -> String {
             '\n' => output.push_str("\\n"),
             '\r' => output.push_str("\\r"),
             '\t' => output.push_str("\\t"),
-            value if value.is_control() => write!(output, "\\u{:04x}", value as u32).unwrap(),
-            value => output.push(value),
+            character if character <= '\u{1f}' => {
+                output.push_str(&format!("\\u{:04x}", character as u32));
+            }
+            character => output.push(character),
         }
     }
-    output.push('"');
     output
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().fold(String::new(), |mut output, byte| {
-        write!(output, "{byte:02x}").unwrap();
-        output
-    })
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use layerfs_sdk::{
+        EntityName, LayerId, LayerStackFact, LayerStackId, LayerStackScopeRecord, QueryItem,
+        QueryPage, RemotePlacement,
+    };
 
-fn error_code(error: &crate::CliError) -> &'static str {
-    match error {
-        crate::CliError::Parse(_) => "PARSE_ERROR",
-        crate::CliError::Context(_) | crate::CliError::Io(_) => "CONTEXT_ERROR",
-        crate::CliError::Invalid(_) => "INVALID",
-        crate::CliError::NotFound => "NOT_FOUND",
-        crate::CliError::Conflict => "CONFLICT",
-        crate::CliError::HeadMoved => "HEAD_MOVED",
-        crate::CliError::WrongHistory => "WRONG_HISTORY",
-        crate::CliError::ReadOnly => "READ_ONLY",
-        crate::CliError::WorkspaceBusy => "WORKSPACE_BUSY",
-        crate::CliError::WorkspaceDirty => "WORKSPACE_DIRTY",
-        crate::CliError::Interrupted => "INTERRUPTED",
-        crate::CliError::Integrity => "INTEGRITY_ERROR",
+    #[test]
+    fn query_json_names_the_scope_boundary_and_mode() {
+        let stack = LayerStackId::new();
+        let mut layer_bytes = [0; 33];
+        layer_bytes[0] = 0x32;
+        let through = LayerId::from_bytes(layer_bytes).unwrap();
+        let event = CliEvent::Finished(Ok(CommandResult::Query(QueryPage {
+            items: vec![QueryItem::LayerStackScope(
+                LayerStackFact {
+                    id: stack,
+                    name: EntityName::new("api-server").unwrap(),
+                },
+                LayerStackScopeRecord {
+                    layer_stack_id: stack,
+                    through_layer_id: through,
+                    serving_mode: RemotePlacement::Replica,
+                },
+            )],
+            continuation: None,
+        })));
+        let json = json_event(&event);
+        assert!(json.contains("\"schema_version\":3"));
+        assert!(json.contains("\"name\":\"api-server\""));
+        assert!(json.contains(&format!("\"through_layer_id\":\"{through}\"")));
+        assert!(json.contains("\"serving_mode\":\"replica\""));
+        assert!(!json.contains("LayerStackScope("));
     }
-}
 
-fn io(error: std::io::Error) -> crate::CliError {
-    crate::CliError::Io(error.to_string())
+    #[test]
+    fn json_output_escapes_every_control_character() {
+        let json = json_event(&CliEvent::Output(b"tab\treturn\rzero\0line\n".to_vec()));
+        assert!(json.contains("tab\\treturn\\rzero\\u0000line\\n"));
+        assert!(!json.contains('\t'));
+        assert!(!json.contains('\r'));
+        assert!(!json.contains('\0'));
+    }
+
+    #[test]
+    fn human_output_preserves_bytes_without_line_framing() {
+        let mut output = Vec::new();
+        render(
+            &CliEvent::Output(b"first\nsecond\0".to_vec()),
+            false,
+            &mut output,
+        )
+        .unwrap();
+        assert_eq!(output, b"first\nsecond\0");
+    }
 }

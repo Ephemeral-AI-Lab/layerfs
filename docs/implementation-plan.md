@@ -1,9 +1,7 @@
 # LayerStack cold implementation plan
 
-> **Superseded.** This plan is retained only as historical implementation
-> context. Phase One is governed by `docs/cli-tui/05-implementation-plan.md`
-> and its preceding binding contracts; where this document conflicts, the
-> `docs/cli-tui/` contract wins.
+> **Historical and superseded.** The binding V2 implementation order and
+> terminal gates are in [`v2/spec.md`](v2/spec.md).
 
 This plan replaces the existing storage topology with the architecture and
 schemas in [model.md](model.md), public operation semantics in

@@ -8,6 +8,7 @@ struct Fixture {
     created: Mutex<Vec<Vec<u8>>>,
     links: Mutex<Vec<Vec<u8>>>,
     unlinks: Mutex<Vec<Vec<u8>>>,
+    readdirs: std::sync::atomic::AtomicUsize,
     fsyncs: std::sync::atomic::AtomicUsize,
     renamed: std::sync::atomic::AtomicBool,
     reject_mtimes: std::sync::atomic::AtomicBool,
@@ -47,6 +48,8 @@ impl FilesystemPort for Fixture {
         Err(PortError::Invalid)
     }
     fn readdir(&self, node: NodeId) -> PortResult<Vec<(NodeId, Kind, Vec<u8>)>> {
+        self.readdirs
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if node == NodeId(5) {
             Ok(vec![(NodeId(6), Kind::File, b"target".to_vec())])
         } else {
@@ -104,8 +107,27 @@ impl FilesystemPort for Fixture {
         }
         Ok(())
     }
-    fn mkdir(&self, _: NodeId, _: &[u8], _: u32) -> PortResult<Attr> {
-        Err(PortError::Invalid)
+    fn mkdir(&self, _: NodeId, _: &[u8], mode: u32) -> PortResult<Attr> {
+        Ok(Attr {
+            node: NodeId(900),
+            size: 0,
+            kind: Kind::Directory,
+            mode,
+            links: 2,
+            mtime_seconds: 0,
+            mtime_nanoseconds: 0,
+        })
+    }
+    fn mkdir_reserved(&self, _: NodeId, _: &[u8], mode: u32, node: NodeId) -> PortResult<Attr> {
+        Ok(Attr {
+            node,
+            size: 0,
+            kind: Kind::Directory,
+            mode,
+            links: 2,
+            mtime_seconds: 0,
+            mtime_nanoseconds: 0,
+        })
     }
     fn symlink(&self, _: NodeId, _: &[u8], _: Vec<u8>) -> PortResult<Attr> {
         Err(PortError::Invalid)
@@ -146,6 +168,12 @@ impl FilesystemPort for Fixture {
         {
             self.renamed
                 .store(true, std::sync::atomic::Ordering::Release);
+            Ok(())
+        } else if parent == NodeId(1)
+            && name == b"reserved-directory"
+            && new_parent == NodeId(5)
+            && new_name == b"moved-directory"
+        {
             Ok(())
         } else {
             Err(PortError::Invalid)
@@ -210,6 +238,7 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
         created: Mutex::new(Vec::new()),
         links: Mutex::new(Vec::new()),
         unlinks: Mutex::new(Vec::new()),
+        readdirs: std::sync::atomic::AtomicUsize::new(0),
         fsyncs: std::sync::atomic::AtomicUsize::new(0),
         renamed: std::sync::atomic::AtomicBool::new(false),
         reject_mtimes: std::sync::atomic::AtomicBool::new(false),
@@ -219,6 +248,12 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
     assert!(ProxyClient::connect(("127.0.0.1", host.port()), [0; 32]).is_err());
     let client = ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).unwrap();
     assert!(ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).is_err());
+    assert_eq!(client.readdir(NodeId(1)).unwrap().len(), 3);
+    assert_eq!(
+        fixture.readdirs.load(std::sync::atomic::Ordering::Relaxed),
+        1,
+        "a complete cached directory must not cross the proxy again",
+    );
     let directory = client.lookup(NodeId(1), b"existing-dir").unwrap();
     assert_eq!(directory.node, NodeId(3));
     assert_eq!(
@@ -319,22 +354,47 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
         .unwrap()
         .iter()
         .any(|name| name == b"rename-target"));
+    let directory = client
+        .mkdir(NodeId(1), b"reserved-directory", 0o700)
+        .unwrap();
+    assert_eq!(directory.node.0, renamed.node.0 + 1);
+    assert_eq!(client.readdir(directory.node).unwrap().len(), 2);
+    client
+        .rename(
+            NodeId(1),
+            b"reserved-directory",
+            destination.node,
+            b"moved-directory",
+            true,
+        )
+        .unwrap();
+    assert_eq!(
+        client
+            .readdir(directory.node)
+            .unwrap()
+            .into_iter()
+            .find(|(_, _, name)| name == b"..")
+            .unwrap()
+            .0,
+        destination.node,
+    );
 
     client.unlink(NodeId(1), b"file", false).unwrap();
     assert_eq!(
         *fixture.unlinks.lock().unwrap(),
         vec![b"known-link".to_vec()]
     );
-    client.barrier().unwrap();
-    assert_eq!(
-        *fixture.unlinks.lock().unwrap(),
-        vec![b"known-link".to_vec(), b"file".to_vec()]
-    );
     assert_eq!(
         fixture.fsyncs.load(std::sync::atomic::Ordering::Relaxed),
         0,
         "transport barriers must not invoke filesystem fsync",
     );
+    client.fsync(Some(NodeId(2))).unwrap();
+    assert_eq!(
+        *fixture.unlinks.lock().unwrap(),
+        vec![b"known-link".to_vec(), b"file".to_vec()]
+    );
+    assert_eq!(fixture.fsyncs.load(std::sync::atomic::Ordering::Relaxed), 1,);
 
     fixture
         .reject_mtimes
@@ -343,4 +403,51 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
     assert!(host.healthy());
     drop(client);
     assert!(ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).is_err());
+}
+
+#[test]
+fn deferred_mutation_errors_surface_at_the_next_synchronization_point() {
+    let fixture = Arc::new(Fixture {
+        bytes: Mutex::new(Vec::new()),
+        created: Mutex::new(Vec::new()),
+        links: Mutex::new(Vec::new()),
+        unlinks: Mutex::new(Vec::new()),
+        readdirs: std::sync::atomic::AtomicUsize::new(0),
+        fsyncs: std::sync::atomic::AtomicUsize::new(0),
+        renamed: std::sync::atomic::AtomicBool::new(false),
+        reject_mtimes: std::sync::atomic::AtomicBool::new(false),
+        reject_writes: std::sync::atomic::AtomicBool::new(true),
+    });
+    let host = ProxyHost::start(fixture.clone()).unwrap();
+    let client = ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).unwrap();
+
+    assert_eq!(client.write(NodeId(2), 0, b"fails later"), Ok(11));
+    assert_eq!(client.barrier(), Err(PortError::NoSpace));
+    assert_eq!(
+        client.barrier(),
+        Ok(()),
+        "the deferred error is acknowledged once"
+    );
+
+    assert_eq!(client.write(NodeId(2), 0, &[0; 4096]), Ok(4096));
+    assert_eq!(client.fsync(Some(NodeId(2))), Err(PortError::NoSpace));
+    assert_eq!(
+        fixture.fsyncs.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "a failed deferred mutation must be reported before filesystem fsync",
+    );
+    client.fsync(Some(NodeId(2))).unwrap();
+    assert_eq!(fixture.fsyncs.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+    let pending = client
+        .create_file_open(NodeId(1), b"batch-error", 0o600)
+        .unwrap();
+    assert_eq!(client.write(pending.node, 0, b"batch"), Ok(5));
+    client.unpin(pending.node, true).unwrap();
+    assert_eq!(client.pause(), Err(PortError::NoSpace));
+    client.resume();
+    assert_eq!(client.barrier(), Ok(()));
+
+    assert!(!host.healthy());
+    assert_eq!(host.failure(), Some(("Write", PortError::NoSpace)));
 }

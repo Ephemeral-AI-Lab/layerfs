@@ -1,17 +1,16 @@
 pub mod codec;
 mod diff;
 mod edit;
-mod merge;
 mod node;
 mod read;
 mod validate;
 
+pub(crate) use diff::reconcile_directory_roots;
 pub use diff::{diff_directory_entries, DirectoryEntryDiff};
 pub(crate) use edit::DeferredDirectory;
 #[cfg(test)]
 pub(crate) use edit::DEFERRED_DIRECTORY_MAX_BYTES;
 pub use edit::{directory_insert, directory_remove, directory_rename};
-pub use merge::merge_directory_roots;
 pub use node::{
     DirectoryPage, DirectoryStateRoot, DirectoryStateV1, NamespaceCounters, SymlinkStateV1,
 };

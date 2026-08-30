@@ -18,5 +18,5 @@ pub use object::{
     validate_bytes_identity, validate_identity, validate_object_from, DirectoryEntry, Object,
     ObjectKind, ObjectReference, ObjectSummary,
 };
-pub use object::{chunk_id, ChunkId, ObjectId};
+pub use object::{ChunkId, ObjectId};
 pub use tree::{CanonicalName, CanonicalPath};

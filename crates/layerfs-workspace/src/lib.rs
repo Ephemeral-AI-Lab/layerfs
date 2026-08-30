@@ -9,8 +9,8 @@ mod lifecycle;
 mod cow_tree;
 mod limits;
 mod output;
-mod placement;
 mod projection;
+mod reconcile;
 mod registry;
 mod session;
 mod worker;
@@ -19,15 +19,15 @@ pub(crate) use cow_tree::{Attr, Kind, NodeId, Workspace, ROOT};
 pub use lifecycle::WorkspaceState;
 pub(crate) use limits::ResourcePolicy;
 pub use output::{OutputPage, OutputReader};
-pub use placement::{ContainerId, WorkspacePlacement, WorkspaceProjection};
+pub use reconcile::{
+    ConflictCursor, ConflictId, ConflictKind, ConflictPage, ResolveChoice, ResolveResult,
+    WorkspaceConflict,
+};
 pub use registry::Workspaces;
 pub use session::{
-    CreateWorkspaceSession, EndWorkspaceMode, ExecutionEvent, ExecutionId, ExecutionReceipt,
-    ExecutionSummary, NonEmpty, OutputChunk, OutputStream, WorkspaceCommitResult, WorkspaceDetail,
-    WorkspaceDiff, WorkspaceEndResult, WorkspaceError, WorkspaceExecution, WorkspaceResult,
-    WorkspaceSession, WorkspaceSessionId, WorkspaceSummary,
+    ContainerId, CreateWorkspaceSession, EndWorkspaceMode, ExecutionEvent, ExecutionId,
+    ExecutionReceipt, ExecutionSummary, NonEmpty, OutputChunk, OutputStream, WorkspaceCommitResult,
+    WorkspaceDetail, WorkspaceDiff, WorkspaceEndResult, WorkspaceError, WorkspaceExecution,
+    WorkspaceId, WorkspacePlacement, WorkspaceProjection, WorkspaceResult, WorkspaceSession,
+    WorkspaceSummary,
 };
-
-#[cfg(test)]
-#[path = "../tests/support/lifecycle.rs"]
-mod lifecycle_tests;

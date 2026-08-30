@@ -7,8 +7,8 @@ use crate::file::cdc::FastCdc;
 use crate::file::extent::{
     ChildDescriptorV3, ExtentNodeV3, ExtentSliceV3, FileStateV3, MAX_ENTRIES,
 };
-use crate::file::extent_codec::{encode_file_state, encode_node, profile_id};
-use crate::object::{encode_bytes_object, ObjectId};
+use crate::file::extent_codec::{encode_chunk_object, encode_file_state, encode_node, profile_id};
+use crate::object::ObjectId;
 use std::io::Read;
 
 const STREAM_FLUSH_AT: usize = MAX_ENTRIES + 64;
@@ -54,7 +54,7 @@ fn scan_mapping<S: ObjectStore, R: Read>(
     let mut levels = vec![Pending::Extents(Vec::with_capacity(STREAM_FLUSH_AT + 1))];
     let mut counters = RopeCounters::default();
     let cdc = FastCdc::new().scan(source, |chunk| {
-        let canonical = encode_bytes_object(chunk)?;
+        let canonical = encode_chunk_object(chunk)?;
         let payload = store.put(&canonical)?;
         counters.payload_bytes_written = add(counters.payload_bytes_written, chunk.len() as u64)?;
         counters.chunks_created = add(counters.chunks_created, 1)?;
@@ -87,7 +87,7 @@ where
     let mut counters = RopeCounters::default();
     let mut flushed = 0_u64;
     let cdc = FastCdc::new().scan(source, |chunk| {
-        let canonical = encode_bytes_object(chunk)?;
+        let canonical = encode_chunk_object(chunk)?;
         let payload = put_payload(deferred.store, &canonical)?;
         counters.payload_bytes_written = add(counters.payload_bytes_written, chunk.len() as u64)?;
         counters.chunks_created = add(counters.chunks_created, 1)?;

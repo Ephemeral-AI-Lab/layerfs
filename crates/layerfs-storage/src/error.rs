@@ -1,24 +1,31 @@
-use crate::{
-    CommitId, HeadMoved, LayerHistoryId, LayerId, ReadOnlyHistory, StackHistoryId, StackId,
-    WrongHistory,
-};
-use layerfs_content::filesystem::ContentConflict;
+use crate::{BranchId, CommitId, EntityName, LayerId, LayerStackId};
+use layerfs_content::ObjectId;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
 #[derive(Debug)]
 pub enum StorageError {
-    CommitHeadMoved(HeadMoved<CommitId>),
-    StackHeadMoved(HeadMoved<StackId>),
-    LayerHeadMoved(HeadMoved<LayerId>),
-    WrongStackHistory(WrongHistory<StackHistoryId>),
-    WrongLayerHistory(WrongHistory<LayerHistoryId>),
-    ReadOnlyStackHistory(ReadOnlyHistory<StackHistoryId>),
-    WrongSourceRoute,
-    NoCommonBase,
-    AmbiguousMergeBase,
-    MissingBaseData,
-    Conflict(Box<ContentConflict>),
+    CommitHeadMoved {
+        expected: Option<CommitId>,
+        actual: Option<CommitId>,
+    },
+    LayerHeadMoved {
+        expected: LayerId,
+        actual: LayerId,
+    },
+    LayerStackNameConflict {
+        name: EntityName,
+        existing_id: LayerStackId,
+        incoming_id: LayerStackId,
+    },
+    BranchNameConflict {
+        layer_stack_id: LayerStackId,
+        name: EntityName,
+        existing_id: BranchId,
+        incoming_id: BranchId,
+    },
+    ReadOnlyBranch(BranchId),
+    MissingObject(ObjectId),
     Integrity(&'static str),
     StoreBusy,
     StoreAlreadyExists,
@@ -26,7 +33,7 @@ pub enum StorageError {
     WrongStoreRole,
     WrongStoreSchema,
     WrongParent,
-    ObservationUnavailable,
+    Unavailable,
     NotFound(&'static str),
     InvalidInput(&'static str),
     Database(String),
@@ -64,6 +71,10 @@ impl From<std::io::Error> for StorageError {
 
 impl From<layerfs_content::CoreError> for StorageError {
     fn from(value: layerfs_content::CoreError) -> Self {
-        Self::Core(value)
+        match value {
+            layerfs_content::CoreError::InvalidRecord(message) => Self::Integrity(message),
+            layerfs_content::CoreError::ValidationAuthorityUnavailable => Self::Unavailable,
+            error => Self::Core(error),
+        }
     }
 }

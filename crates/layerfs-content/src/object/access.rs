@@ -35,6 +35,7 @@ pub trait ObjectRead {
         F: FnMut(ObjectId, u32) -> CoreResult<()>,
     {
         self.get_authenticated_batch(ids, |id, payload| {
+            let payload = crate::file::extent_codec::decode_chunk_payload(payload)?;
             callback(
                 id,
                 u32::try_from(payload.len()).map_err(|_| CoreError::LengthOverflow)?,

@@ -1,92 +1,174 @@
-use crate::{Command, CommandSummary};
+use crate::{CliResult, Command};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommandEffect {
     Read,
-    Mutate,
-    Execute,
+    Write,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandPlan {
-    pub command: CommandSummary,
     pub effect: CommandEffect,
-    pub route: Vec<String>,
-    pub confirmation_required: bool,
+    pub summary: String,
 }
 
-pub(crate) fn effect(command: &Command) -> CommandEffect {
-    match command {
-        Command::Db {
-            command: crate::DbCommand::List,
+pub(crate) fn plan(
+    command: &Command,
+    client: Option<&layerfs_sdk::Client>,
+) -> CliResult<CommandPlan> {
+    let effect = match command {
+        Command::Context {
+            command: crate::ContextCommand::Show,
         }
-        | Command::Layer {
-            command: crate::LayerCommand::List | crate::LayerCommand::Show { .. },
+        | Command::Monitor { .. }
+        | Command::Query { .. }
+        | Command::Layerstack {
+            command: crate::LayerStackCommand::Diff { .. },
         }
-        | Command::Stack {
-            command: crate::StackCommand::List | crate::StackCommand::Show { .. },
+        | Command::Branch {
+            command: crate::BranchCommand::Diff(_),
+        } => CommandEffect::Read,
+        _ => CommandEffect::Write,
+    };
+    let mut summary = format!("{command:?}");
+    if let Some(client) = client {
+        if let Some(label) = command_label(client, command)? {
+            summary.push_str(" [");
+            summary.push_str(&label);
+            summary.push(']');
+        }
+    }
+    Ok(CommandPlan { effect, summary })
+}
+
+fn command_label(client: &layerfs_sdk::Client, command: &Command) -> CliResult<Option<String>> {
+    use crate::{BranchCommand, LayerStackCommand, WorkspaceCommand};
+    let branch = match command {
+        Command::Layerstack {
+            command: LayerStackCommand::Add { branch_id },
+        }
+        | Command::Branch {
+            command: BranchCommand::Push { branch_id },
         }
         | Command::Branch {
             command:
-                crate::BranchCommand::List
-                | crate::BranchCommand::Show { .. }
-                | crate::BranchCommand::Diff { .. },
+                BranchCommand::Diff(crate::BranchDiff {
+                    branch: branch_id, ..
+                }),
         }
         | Command::Workspace {
-            command:
-                crate::WorkspaceCommand::List
-                | crate::WorkspaceCommand::Show { .. }
-                | crate::WorkspaceCommand::Diff { .. }
-                | crate::WorkspaceCommand::Output { .. },
-        } => CommandEffect::Read,
+            command: WorkspaceCommand::Create { branch_id, .. },
+        } => Some((branch_id, false)),
+        Command::Branch {
+            command: BranchCommand::Pull(request),
+        } => Some((&request.branch_id, true)),
+        Command::Branch {
+            command: BranchCommand::Fork(request),
+        } => request.branch.as_ref().map(|branch| (branch, false)),
+        _ => None,
+    };
+    if let Some((branch, authority)) = branch {
+        let id = branch.parse().map_err(|error: layerfs_sdk::StorageError| {
+            crate::CliError::Parse(error.to_string())
+        })?;
+        return branch_label(client, id, authority);
+    }
+    let workspace = match command {
         Command::Workspace {
-            command: crate::WorkspaceCommand::Exec { .. } | crate::WorkspaceCommand::Shell { .. },
-        } => CommandEffect::Execute,
-        Command::Monitor { .. } => CommandEffect::Read,
-        _ => CommandEffect::Mutate,
+            command:
+                WorkspaceCommand::Exec { workspace_id, .. }
+                | WorkspaceCommand::Shell { workspace_id }
+                | WorkspaceCommand::Conflicts { workspace_id, .. }
+                | WorkspaceCommand::Commit { workspace_id }
+                | WorkspaceCommand::End { workspace_id, .. },
+        } => Some(workspace_id),
+        Command::Workspace {
+            command: WorkspaceCommand::Resolve(request),
+        } => Some(&request.workspace_id),
+        _ => None,
+    };
+    let Some(workspace) = workspace else {
+        return Ok(None);
+    };
+    let workspace_id = workspace.parse().map_err(crate::CliError::Workspace)?;
+    let mut query = layerfs_sdk::Query::new(layerfs_sdk::QueryKind::Workspaces);
+    loop {
+        let page = client.query(query.clone())?;
+        for item in page.items {
+            if let layerfs_sdk::QueryItem::Workspace(value) = item {
+                if value.summary.id == workspace_id {
+                    return Ok(Some(format!(
+                        "{}/{} ({})",
+                        value.layer_stack_name, value.branch_name, value.summary.branch_id
+                    )));
+                }
+            }
+        }
+        let Some(continuation) = page.continuation else {
+            return Ok(None);
+        };
+        query = query.after(continuation);
     }
 }
 
-pub(crate) fn put_plan(
-    output: &mut crate::control::WireWriter,
-    plan: &CommandPlan,
-) -> crate::CliResult<()> {
-    output.string(&plan.command.0)?;
-    output.byte(match plan.effect {
-        CommandEffect::Read => 0,
-        CommandEffect::Mutate => 1,
-        CommandEffect::Execute => 2,
+fn branch_label(
+    client: &layerfs_sdk::Client,
+    branch_id: layerfs_sdk::BranchId,
+    authority: bool,
+) -> CliResult<Option<String>> {
+    let mut query = layerfs_sdk::Query::new(if authority {
+        layerfs_sdk::QueryKind::AuthorityBranches
+    } else {
+        layerfs_sdk::QueryKind::Branches
     });
-    output.u32(
-        plan.route
-            .len()
-            .try_into()
-            .map_err(|_| crate::CliError::Context("plan route length".to_owned()))?,
-    );
-    plan.route
-        .iter()
-        .try_for_each(|value| output.string(value))?;
-    output.bool(plan.confirmation_required);
-    Ok(())
+    loop {
+        let page = client.query(query.clone())?;
+        for item in page.items {
+            let branch = match item {
+                layerfs_sdk::QueryItem::Branch(branch)
+                | layerfs_sdk::QueryItem::BranchScope(branch, _)
+                    if branch.id == branch_id =>
+                {
+                    branch
+                }
+                _ => continue,
+            };
+            let stack = stack_name(client, branch.layer_stack_id, authority)?;
+            return Ok(Some(format!("{stack}/{} ({branch_id})", branch.name)));
+        }
+        let Some(continuation) = page.continuation else {
+            return Ok(None);
+        };
+        query = query.after(continuation);
+    }
 }
 
-pub(crate) fn get_plan(
-    input: &mut crate::control::WireReader<'_>,
-) -> crate::CliResult<CommandPlan> {
-    let command = crate::CommandSummary(input.string()?);
-    let effect = match input.byte()? {
-        0 => CommandEffect::Read,
-        1 => CommandEffect::Mutate,
-        2 => CommandEffect::Execute,
-        _ => return Err(crate::CliError::Context("plan effect".to_owned())),
-    };
-    let route = (0..input.count()?)
-        .map(|_| input.string())
-        .collect::<crate::CliResult<Vec<_>>>()?;
-    Ok(CommandPlan {
-        command,
-        effect,
-        route,
-        confirmation_required: input.bool()?,
-    })
+fn stack_name(
+    client: &layerfs_sdk::Client,
+    stack_id: layerfs_sdk::LayerStackId,
+    authority: bool,
+) -> CliResult<String> {
+    let mut query = layerfs_sdk::Query::new(if authority {
+        layerfs_sdk::QueryKind::AuthorityLayerStacks
+    } else {
+        layerfs_sdk::QueryKind::LayerStacks
+    });
+    loop {
+        let page = client.query(query.clone())?;
+        for item in page.items {
+            match item {
+                layerfs_sdk::QueryItem::LayerStack(value) if value.id == stack_id => {
+                    return Ok(value.name.to_string())
+                }
+                layerfs_sdk::QueryItem::LayerStackScope(value, _) if value.id == stack_id => {
+                    return Ok(value.name.to_string())
+                }
+                _ => {}
+            }
+        }
+        let Some(continuation) = page.continuation else {
+            return Ok("?".to_owned());
+        };
+        query = query.after(continuation);
+    }
 }
