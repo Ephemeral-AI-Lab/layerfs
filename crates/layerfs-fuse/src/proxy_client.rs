@@ -70,6 +70,7 @@ impl ProxyClient {
             let mut stream = TcpStream::connect(address)?;
             stream.set_nodelay(true)?;
             stream.write_all(&capability)?;
+            stream.write_all(b"d")?;
             let mut accepted = [0];
             stream.read_exact(&mut accepted)?;
             if accepted != [1] {
@@ -89,19 +90,6 @@ impl ProxyClient {
             paused: AtomicBool::new(false),
             pending: AtomicU64::new(0),
         };
-        client
-            .refill_reservation()
-            .map_err(|_| std::io::Error::other("LayerFS node reservation"))?;
-        let entries = match client
-            .exchange(Request::Readdir(crate::ROOT))
-            .map_err(|_| std::io::Error::other("LayerFS root snapshot"))?
-        {
-            Response::Entries(entries) => entries,
-            _ => return Err(std::io::Error::other("LayerFS root snapshot")),
-        };
-        client
-            .remember_directory(crate::ROOT, &entries)
-            .map_err(|_| std::io::Error::other("LayerFS root snapshot"))?;
         Ok(client)
     }
 
@@ -223,14 +211,7 @@ impl FilesystemPort for ProxyClient {
                 self.remember(parent, name, attr)?;
                 Ok(attr)
             }
-            Err(PortError::NotFound) => {
-                if !self.cached_directory(parent)? {
-                    if let Response::Entries(entries) = self.exchange(Request::Readdir(parent))? {
-                        self.remember_directory(parent, &entries)?;
-                    }
-                }
-                Err(PortError::NotFound)
-            }
+            Err(PortError::NotFound) => Err(PortError::NotFound),
             Err(error) => Err(error),
         }
     }
@@ -934,37 +915,19 @@ impl ProxyClient {
         Ok(())
     }
 
-    fn refill_reservation(&self) -> PortResult<()> {
-        let start = match self.exchange(Request::ReserveNodes(65_536))? {
-            Response::Node(node) => node.0,
-            _ => return Err(PortError::Io),
-        };
-        let mut reservation = self.reservation.lock().map_err(|_| PortError::Io)?;
-        reservation.next = start;
-        reservation.end = start + 65_536;
-        Ok(())
-    }
-
     fn reserved_node(&self) -> PortResult<NodeId> {
-        {
-            let mut reservation = self.reservation.lock().map_err(|_| PortError::Io)?;
-            if reservation.next < reservation.end {
-                let node = NodeId(reservation.next);
-                reservation.next += 1;
-                return Ok(node);
-            }
+        let mut reservation = self.reservation.lock().map_err(|_| PortError::Io)?;
+        if reservation.next == reservation.end {
+            let start = match self.exchange(Request::ReserveNodes(65_536))? {
+                Response::Node(node) => node.0,
+                _ => return Err(PortError::Io),
+            };
+            reservation.next = start;
+            reservation.end = start.checked_add(65_536).ok_or(PortError::Invalid)?;
         }
-        self.refill_reservation()?;
-        self.reserved_node()
-    }
-
-    fn cached_directory(&self, node: NodeId) -> PortResult<bool> {
-        Ok(self
-            .cache
-            .lock()
-            .map_err(|_| PortError::Io)?
-            .directories
-            .contains_key(&node))
+        let node = NodeId(reservation.next);
+        reservation.next += 1;
+        Ok(node)
     }
 
     fn cached_lookup(&self, parent: NodeId, name: &[u8]) -> PortResult<Option<PortResult<Attr>>> {
@@ -1049,61 +1012,88 @@ fn is_zero(bytes: &[u8]) -> bool {
         && chunks.remainder().iter().all(|byte| *byte == 0)
 }
 
-#[cfg(all(target_os = "linux", feature = "proxy"))]
 #[doc(hidden)]
-pub fn serve_control(
-    path: std::ffi::OsString,
+pub fn serve_remote_control(
+    endpoint: impl ToSocketAddrs,
+    capability: [u8; 32],
     client: std::sync::Arc<ProxyClient>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> std::io::Result<RemoteControl> {
     use std::io::{Read, Write};
-    use std::os::unix::fs::PermissionsExt;
-    let listener = std::os::unix::net::UnixListener::bind(&path)?;
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-    std::thread::spawn(move || {
-        for stream in listener.incoming() {
-            let Ok(mut stream) = stream else { break };
-            let mut command = [0];
-            let result = stream.read_exact(&mut command).and_then(|()| {
-                let result = match command[0] {
-                    b'b' => client.barrier(),
-                    b'p' => client.pause(),
-                    b'r' => {
-                        client.resume();
-                        Ok(())
-                    }
-                    _ => Err(PortError::Invalid),
-                };
-                stream.write_all(&[u8::from(result.is_ok())])
-            });
-            if result.is_err() {
-                break;
-            }
-        }
-    });
-    Ok(())
-}
-
-#[cfg(all(target_os = "linux", feature = "proxy"))]
-#[doc(hidden)]
-pub fn control_call(
-    path: &std::ffi::OsStr,
-    command: &std::ffi::OsStr,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use std::io::{Read, Write};
-    let command = match command.to_str() {
-        Some("barrier") => b'b',
-        Some("pause") => b'p',
-        Some("resume") => b'r',
-        _ => return Err("invalid control command".into()),
-    };
-    let mut stream = std::os::unix::net::UnixStream::connect(path)?;
-    stream.write_all(&[command])?;
+    let address = endpoint
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| std::io::Error::other("LayerFS control endpoint"))?;
+    let mut stream = TcpStream::connect(address)?;
+    stream.set_nodelay(true)?;
+    stream.write_all(&capability)?;
+    stream.write_all(b"c")?;
     let mut accepted = [0];
     stream.read_exact(&mut accepted)?;
-    if accepted == [1] {
-        Ok(())
-    } else {
-        Err("control command failed".into())
+    if accepted != [1] {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "LayerFS control capability",
+        ));
+    }
+    let (shutdown_send, shutdown) = std::sync::mpsc::sync_channel(1);
+    let (finished, finished_receive) = std::sync::mpsc::sync_channel(1);
+    let thread = std::thread::spawn(move || {
+        let mut stream = stream;
+        loop {
+            let mut command = [0];
+            stream.read_exact(&mut command)?;
+            if command == [b's'] {
+                let accepted =
+                    shutdown_send.send(()).is_ok() && finished_receive.recv().unwrap_or(false);
+                stream.write_all(&[u8::from(accepted)])?;
+                return Ok(());
+            }
+            let accepted = u8::from(apply_control(&client, command[0]).is_ok());
+            stream.write_all(&[accepted])?;
+        }
+    });
+    Ok(RemoteControl {
+        shutdown,
+        finished,
+        thread: Some(thread),
+    })
+}
+
+#[doc(hidden)]
+pub struct RemoteControl {
+    shutdown: std::sync::mpsc::Receiver<()>,
+    finished: std::sync::mpsc::SyncSender<bool>,
+    thread: Option<std::thread::JoinHandle<std::io::Result<()>>>,
+}
+
+impl RemoteControl {
+    pub fn wait_for_shutdown(&self) -> std::io::Result<()> {
+        self.shutdown
+            .recv()
+            .map_err(|_| std::io::Error::other("LayerFS control disconnected"))
+    }
+
+    pub fn finish_shutdown(mut self, accepted: bool) -> std::io::Result<()> {
+        self.finished
+            .send(accepted)
+            .map_err(|_| std::io::Error::other("LayerFS control disconnected"))?;
+        self.thread
+            .take()
+            .expect("remote control thread")
+            .join()
+            .map_err(|_| std::io::Error::other("LayerFS control thread"))?
+    }
+}
+
+fn apply_control(client: &ProxyClient, command: u8) -> PortResult<()> {
+    match command {
+        b'b' => client.barrier(),
+        b'p' => client.pause(),
+        b'r' => {
+            client.resume();
+            Ok(())
+        }
+        _ => Err(PortError::Invalid),
     }
 }
 

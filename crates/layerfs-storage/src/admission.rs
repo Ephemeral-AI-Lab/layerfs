@@ -81,6 +81,7 @@ mod build {
     use layerfs_content::{CoreError, CoreResult, ObjectId};
     use rusqlite::OptionalExtension;
     use std::collections::{BTreeMap, BTreeSet, VecDeque};
+    use std::time::Instant;
 
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     pub struct BuildCounters {
@@ -363,7 +364,9 @@ mod build {
                 continue;
             }
             let missing = walk.transfer.announce_objects(&[root_id])?;
+            let started = Instant::now();
             let bytes = source.read_object(root_id)?;
+            crate::note_push_phase(crate::PushPhase::SourceReadAuth, elapsed_ns(started));
             walk.active.insert(root_id);
             walk.visit(
                 CanonicalObject { id: root_id, bytes },
@@ -371,6 +374,116 @@ mod build {
             )?;
         }
         Ok(())
+    }
+
+    pub fn transfer_root_transition(
+        source: &(impl ObjectSource + ?Sized),
+        target: &dyn crate::TransferTarget,
+        old: ObjectId,
+        new: ObjectId,
+    ) -> Result<crate::TransferReceipt> {
+        let mut frontier = DeferredObjectStore::new()?;
+        let mut seen = SeenIds::empty()?;
+        let mut active = BTreeSet::new();
+        let mut pruned = 0_u64;
+        collect_transition_frontier(
+            source,
+            Some(old),
+            new,
+            &mut seen,
+            &mut active,
+            &mut frontier,
+            &mut pruned,
+        )?;
+        let mut pipeline = crate::TransferPipeline::new(target)?;
+        for _ in 0..pruned {
+            pipeline.prune_complete_root();
+        }
+        frontier.visit_batches(&mut |objects, _| {
+            let mut ids = objects.iter().map(|object| object.id).collect::<Vec<_>>();
+            ids.sort();
+            let missing = pipeline.announce_objects(&ids)?;
+            let missing = ids
+                .iter()
+                .enumerate()
+                .filter_map(|(index, id)| missing.is_missing(index).ok()?.then_some(*id))
+                .collect::<BTreeSet<_>>();
+            for object in objects {
+                if missing.contains(&object.id) {
+                    pipeline.stage_object(object.clone())?;
+                }
+            }
+            Ok(())
+        })?;
+        pipeline.finish()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn collect_transition_frontier(
+        source: &(impl ObjectSource + ?Sized),
+        old: Option<ObjectId>,
+        new: ObjectId,
+        seen: &mut SeenIds,
+        active: &mut BTreeSet<ObjectId>,
+        frontier: &mut DeferredObjectStore,
+        pruned: &mut u64,
+    ) -> Result<()> {
+        if old == Some(new) {
+            *pruned = pruned.saturating_add(1);
+            return Ok(());
+        }
+        if seen.insert_page(&[new])?.is_empty() {
+            return Ok(());
+        }
+        if !active.insert(new) {
+            return Err(StorageError::Integrity("object cycle"));
+        }
+        let started = Instant::now();
+        let canonical = source.read_object(new)?;
+        crate::note_push_phase(crate::PushPhase::SourceReadAuth, elapsed_ns(started));
+        crate::note_traversal_authentication();
+        layerfs_content::authenticate_identity(&canonical, new)?;
+        let mut new_children = referenced_objects(&canonical)?;
+        let mut unique = BTreeSet::new();
+        new_children.retain(|child| unique.insert(*child));
+        let mut old_children = if new_children.is_empty() {
+            Vec::new()
+        } else {
+            match old {
+                Some(old) => {
+                    let started = Instant::now();
+                    let canonical = source.read_object(old)?;
+                    crate::note_push_phase(crate::PushPhase::SourceReadAuth, elapsed_ns(started));
+                    referenced_objects(&canonical)?
+                }
+                None => Vec::new(),
+            }
+        };
+        unique.clear();
+        old_children.retain(|child| unique.insert(*child));
+        let old_set = old_children.iter().copied().collect::<BTreeSet<_>>();
+        let new_set = new_children.iter().copied().collect::<BTreeSet<_>>();
+        *pruned = pruned.saturating_add(
+            new_children
+                .iter()
+                .filter(|child| old_set.contains(child))
+                .count() as u64,
+        );
+        new_children.retain(|child| !old_set.contains(child));
+        old_children.retain(|child| !new_set.contains(child));
+        for (index, child) in new_children.into_iter().enumerate() {
+            collect_transition_frontier(
+                source,
+                old_children.get(index).copied(),
+                child,
+                seen,
+                active,
+                frontier,
+                pruned,
+            )?;
+        }
+        active.remove(&new);
+        frontier.put(new, &canonical)
     }
 
     struct ObjectTransfer<'source, 'borrow, 'destination, S: ObjectSource + ?Sized> {
@@ -390,6 +503,7 @@ mod build {
                 .checked_add(object_bytes)
                 .ok_or(StorageError::Integrity("transfer buffer ceiling"))?;
             self.transfer.observe_external_buffer(self.active_bytes)?;
+            let started = Instant::now();
             crate::note_traversal_authentication();
             layerfs_content::authenticate_identity(&object.bytes, object.id)?;
             let mut children = BTreeSet::new();
@@ -399,6 +513,7 @@ mod build {
                 }
                 children.insert(child);
             }
+            crate::note_push_phase(crate::PushPhase::SourceReadAuth, elapsed_ns(started));
             let children = children.into_iter().collect::<Vec<_>>();
             for page in children.chunks(crate::ID_BATCH_COUNT) {
                 let ids = self.seen.insert_page(page)?;
@@ -413,9 +528,11 @@ mod build {
                     .collect::<Result<BTreeMap<_, _>>>()?;
                 let mut traverse = Vec::with_capacity(ids.len());
                 for id in &ids {
-                    if send.get(id).copied().unwrap_or(false)
-                        || !self.source.prune_existing_subtree(*id)?
-                    {
+                    let started = Instant::now();
+                    let traverse_id = send.get(id).copied().unwrap_or(false)
+                        || !self.source.prune_existing_subtree(*id)?;
+                    crate::note_push_phase(crate::PushPhase::Frontier, elapsed_ns(started));
+                    if traverse_id {
                         traverse.push(*id);
                     }
                 }
@@ -423,9 +540,12 @@ mod build {
                     let child_send = *send
                         .get(&child_id)
                         .ok_or(StorageError::Integrity("transfer child"))?;
+                    let started = Instant::now();
+                    let bytes = self.source.read_object(child_id)?;
+                    crate::note_push_phase(crate::PushPhase::SourceReadAuth, elapsed_ns(started));
                     let child = CanonicalObject {
                         id: child_id,
-                        bytes: self.source.read_object(child_id)?,
+                        bytes,
                     };
                     self.active.insert(child_id);
                     self.visit(child, child_send)?;
@@ -486,6 +606,10 @@ mod build {
         }
     }
 
+    fn elapsed_ns(started: Instant) -> u64 {
+        started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+    }
+
     impl DeferredObjectStore {
         pub(crate) fn new() -> Result<Self> {
             Ok(Self {
@@ -509,6 +633,33 @@ mod build {
 
         pub fn encoded_bytes(&self) -> u64 {
             self.encoded_bytes
+        }
+
+        pub fn ids_in_order(&self, limit: usize) -> Result<Option<Vec<ObjectId>>> {
+            if self.count > limit as u64 {
+                return Ok(None);
+            }
+            let mut ids = Vec::with_capacity(self.count as usize);
+            match &self.storage {
+                DeferredObjects::Memory { order, .. } => ids.extend(order.iter().copied()),
+                DeferredObjects::Spill {
+                    connection,
+                    pending,
+                    ..
+                } => {
+                    let mut statement =
+                        connection.prepare("SELECT object_id FROM objects ORDER BY sequence")?;
+                    let rows = statement.query_map([], |row| row.get::<_, Vec<u8>>(0))?;
+                    for id in rows {
+                        ids.push(ObjectId::from_bytes(&id?)?);
+                    }
+                    ids.extend(pending.iter().map(|(id, _)| *id));
+                }
+            }
+            if ids.len() != self.count as usize {
+                return Err(StorageError::Integrity("deferred object ID count"));
+            }
+            Ok(Some(ids))
         }
 
         fn reachable_from(self, root: ObjectId) -> Result<Self> {

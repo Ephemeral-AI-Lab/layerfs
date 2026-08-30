@@ -39,14 +39,12 @@ but this package does not include the C3 implementation or compare against it.
 
 ## Comparable boundary
 
-The headline table compares:
+The headline table compares each candidate's complete public Workspace
+lifecycle in an already-prepared container:
 
 ```text
-Computer upstream: to_durable_ns
-LayerFS Reference: authority_checkpoint_ns
-                   = shell_ns
-                   + workspace_commit_api_ns
-                   + push_api_ns
+Computer upstream: complete_turn_ns
+LayerFS Reference: complete_turn_ns
 ```
 
 LayerFS also reports:
@@ -58,8 +56,9 @@ complete_turn_ns
   + workspace_end_ns
 ```
 
-Workspace Commit is printed as a diagnostic subset of the LayerFS authority
-checkpoint. LayerStack Add is not part of the comparable boundary; if the
+For EDIT16, each arm creates one Workspace/FUSE mount, performs all 16 durable
+checkpoints, and ends the Workspace once. Workspace Commit and authority
+checkpoint are diagnostic subsets. LayerStack Add is not part of the comparable boundary; if the
 LayerFS arm records it, the report keeps it diagnostic and excluded.
 
 ## Source pins
@@ -114,6 +113,7 @@ git -C "$upstream" archive --format=tar "$computer_commit" >"$context/computer-s
 cp benchmark/fs-benchmark-pro/Dockerfile.computer \
    benchmark/fs-benchmark-pro/computer.mjs \
    benchmark/fs-benchmark-pro/computer.test.mjs \
+   benchmark/fs-benchmark-pro/workload.rs \
    "$context/"
 docker build -f "$context/Dockerfile.computer" \
   -t layerfs-fs-benchmark-pro-computer:de87919a "$context"
@@ -175,7 +175,7 @@ terminates the campaign; it is not silently rerun.
 All output is under the requested results root:
 
 ```text
-benchmark-results/fs-benchmark-pro/<RUN_ID>/
+benchmark-results/fs-bench-plus/runs/<RUN_ID>/
   fixture.bin
   manifest.json
   terminal.json
@@ -199,7 +199,7 @@ benchmark-results/fs-benchmark-pro/<RUN_ID>/
 ```
 
 [`compare.py`](compare.py) accepts only the exact two-arm
-`fs-benchmark-pro-sample-v1` schema. It validates the complete 19-operation
+`fs-benchmark-pro-sample-v2` schema. It validates the complete 19-operation
 matrix, every phase and aggregate equation, nonnegative timings, fixture and
 final digests, final size, successful process reopen, exact Computer pin, and
 the randomized adjacent-pair manifest. It hashes all raw evidence and refuses
@@ -207,7 +207,7 @@ to overwrite an existing report.
 
 The report renders:
 
-- Computer `to durable` versus LayerFS authority-checkpoint latency;
+- complete public Workspace lifecycle latency for both candidates;
 - LayerFS Workspace Commit latency as a diagnostic;
 - durability and final digest proof;
 - physical SQLite/allocation metrics separately from semantic payload;

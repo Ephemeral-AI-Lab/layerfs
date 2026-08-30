@@ -2,6 +2,7 @@
 
 mod changes;
 mod docker;
+mod docker_engine;
 mod execution;
 mod file_io;
 mod lifecycle;

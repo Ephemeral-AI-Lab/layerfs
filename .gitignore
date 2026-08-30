@@ -4,3 +4,9 @@ target/
 .DS_Store
 __pycache__/
 *.py[cod]
+
+# Benchmark runs are immutable local evidence and may contain large databases.
+benchmark-results/*
+!benchmark-results/fs-bench-plus/
+benchmark-results/fs-bench-plus/*
+!benchmark-results/fs-bench-plus/optimization-history.md

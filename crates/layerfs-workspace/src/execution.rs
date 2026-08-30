@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex, Weak};
 pub(crate) struct Execution {
     id: ExecutionId,
     session_id: WorkspaceId,
-    child: Mutex<Option<Child>>,
+    process: Mutex<Option<ExecutionProcess>>,
     termination: Termination,
     output: Arc<OutputLog>,
     receipt: Mutex<Option<ExecutionReceipt>>,
@@ -24,15 +24,29 @@ pub(crate) struct Execution {
     stderr_bytes: AtomicU64,
 }
 
+enum ExecutionProcess {
+    Child(Child),
+    #[cfg(unix)]
+    Docker(crate::docker_engine::DockerExec),
+}
+
 enum Termination {
     #[cfg(unix)]
     Host(u32),
     Container {
         container: String,
-        group: u32,
+        pid_file: String,
     },
+    #[cfg(unix)]
+    Direct,
     #[cfg(not(unix))]
     Foreground,
+}
+
+struct ExecutionTimingStart {
+    total: std::time::Instant,
+    spawn_finished: std::time::Instant,
+    spawn_ns: u64,
 }
 
 impl Execution {
@@ -91,12 +105,14 @@ impl Workspaces {
         {
             return Ok(());
         }
-        let mut child = execution
-            .child
+        let mut process = execution
+            .process
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-        let delivered = match child.as_mut() {
-            Some(child) => execution.termination.stop(child)?,
+        let delivered = match process.as_mut() {
+            Some(ExecutionProcess::Child(child)) => execution.termination.stop(child)?,
+            #[cfg(unix)]
+            Some(ExecutionProcess::Docker(process)) => process.stop()?,
             None => false,
         };
         if delivered {
@@ -144,74 +160,116 @@ impl Workspaces {
                 return Err(error);
             }
         };
-        let container_control = match &worker.request.placement {
-            WorkspacePlacement::Container { container_id, .. } => Some((
-                container_id.0.clone(),
-                format!("/tmp/layerfs-execution-{id}.pid"),
-                format!("/tmp/layerfs-execution-{id}.ready"),
-            )),
-            WorkspacePlacement::Host { .. } => None,
-        };
-        let mut command = command(
-            &worker.request.placement,
-            argv,
-            interactive,
-            container_control
-                .as_ref()
-                .map(|(_, pid, ready)| (pid.as_str(), ready.as_str())),
-        );
+        let total_started = std::time::Instant::now();
         #[cfg(unix)]
-        if container_control.is_none() {
-            use std::os::unix::process::CommandExt;
-            command.process_group(0);
-        }
-        if interactive {
-            command
-                .stdin(Stdio::inherit())
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit());
+        let direct = !interactive
+            && crate::docker_engine::DockerExec::available()
+            && matches!(
+                worker.request.placement,
+                WorkspacePlacement::Container { .. }
+            );
+        #[cfg(not(unix))]
+        let direct = false;
+        let spawned = if direct {
+            #[cfg(unix)]
+            {
+                let WorkspacePlacement::Container { container_id, root } =
+                    &worker.request.placement
+                else {
+                    unreachable!()
+                };
+                let pid_file = format!("/tmp/layerfs-execution-{id}.pid");
+                crate::docker_engine::DockerExec::start_wrapped(
+                    &container_id.0,
+                    root,
+                    argv,
+                    &pid_file,
+                )
+                .map(|process| {
+                    (
+                        ExecutionProcess::Docker(process),
+                        Termination::Direct,
+                        None,
+                        None,
+                        true,
+                    )
+                })
+            }
+            #[cfg(not(unix))]
+            unreachable!()
         } else {
-            command
-                .stdin(Stdio::null())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-        }
-        let mut child = match command.spawn() {
-            Ok(child) => child,
+            let container_control = match &worker.request.placement {
+                WorkspacePlacement::Container { container_id, .. } => Some((
+                    container_id.0.clone(),
+                    format!("/tmp/layerfs-execution-{id}.pid"),
+                )),
+                WorkspacePlacement::Host { .. } => None,
+            };
+            let mut command = command(
+                &worker.request.placement,
+                argv,
+                interactive,
+                container_control
+                    .as_ref()
+                    .map(|(_, pid_file)| pid_file.as_str()),
+            );
+            #[cfg(unix)]
+            if container_control.is_none() {
+                use std::os::unix::process::CommandExt;
+                command.process_group(0);
+            }
+            if interactive {
+                command
+                    .stdin(Stdio::inherit())
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit());
+            } else {
+                command
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped());
+            }
+            command.spawn().map(|mut child| {
+                let termination = match container_control {
+                    Some((container, pid_file)) => Termination::Container {
+                        container,
+                        pid_file,
+                    },
+                    None => {
+                        #[cfg(unix)]
+                        {
+                            Termination::Host(child.id())
+                        }
+                        #[cfg(not(unix))]
+                        {
+                            Termination::Foreground
+                        }
+                    }
+                };
+                let stdout = child.stdout.take();
+                let stderr = child.stderr.take();
+                (
+                    ExecutionProcess::Child(child),
+                    termination,
+                    stdout,
+                    stderr,
+                    false,
+                )
+            })
+        };
+        let (process, termination, stdout, stderr, direct_engine) = match spawned {
+            Ok(spawned) => spawned,
             Err(error) => {
                 worker.note_execution(false)?;
                 return Err(WorkspaceError::Io(error));
             }
         };
-        let termination = match container_control {
-            Some((container, pid, ready)) => match container_process_group(&container, &pid) {
-                Ok(group) => {
-                    let _ = release_container_execution(&container, &ready);
-                    Termination::Container { container, group }
-                }
-                Err(error) => {
-                    let _ = child.wait();
-                    worker.note_execution(false)?;
-                    return Err(error);
-                }
-            },
-            None => {
-                #[cfg(unix)]
-                {
-                    Termination::Host(child.id())
-                }
-                #[cfg(not(unix))]
-                {
-                    Termination::Foreground
-                }
-            }
-        };
-        let stdout = child.stdout.take();
-        let stderr = child.stderr.take();
+        let spawn_ns = elapsed_ns(total_started);
+        let spawn_finished = std::time::Instant::now();
         let execution = Arc::new(Execution {
             id,
             session_id,
-            child: Mutex::new(Some(child)),
+            process: Mutex::new(Some(process)),
             termination,
             output,
             receipt: Mutex::new(None),
@@ -228,6 +286,12 @@ impl Workspaces {
             execution,
             Arc::downgrade(&worker),
             Arc::downgrade(&self.executions),
+            ExecutionTimingStart {
+                total: total_started,
+                spawn_finished,
+                spawn_ns,
+            },
+            direct_engine,
             stdout.map(|stdout| drain(stdout, OutputStream::Stdout)),
             stderr.map(|stderr| drain(stderr, OutputStream::Stderr)),
         );
@@ -259,19 +323,23 @@ impl Workspaces {
 }
 
 impl Termination {
-    fn stop(&self, _child: &mut Child) -> WorkspaceResult<bool> {
+    fn stop(&self, child: &mut Child) -> WorkspaceResult<bool> {
+        if child.try_wait()?.is_some() {
+            return Ok(false);
+        }
         match self {
             #[cfg(unix)]
             Self::Host(group) => signal_host_group(*group),
-            Self::Container { container, group } => signal_container_group(container, *group),
+            Self::Container {
+                container,
+                pid_file,
+            } => signal_container_group(container, pid_file),
+            #[cfg(unix)]
+            Self::Direct => Err(WorkspaceError::InvalidExecution),
             #[cfg(not(unix))]
             Self::Foreground => {
-                if _child.try_wait()?.is_some() {
-                    Ok(false)
-                } else {
-                    _child.kill()?;
-                    Ok(true)
-                }
+                child.kill()?;
+                Ok(true)
             }
         }
     }
@@ -300,14 +368,17 @@ fn signal_host_group(group: u32) -> WorkspaceResult<bool> {
     }
 }
 
-fn signal_container_group(container: &str, group: u32) -> WorkspaceResult<bool> {
+fn signal_container_group(container: &str, pid_file: &str) -> WorkspaceResult<bool> {
     let status = Command::new("docker")
         .args(["exec", container, "/bin/sh", "-c"])
         .arg(
-            "if kill -TERM -\"$1\" 2>/dev/null; then exit 0; fi; \
-             if kill -0 -\"$1\" 2>/dev/null; then exit 1; fi; exit 2",
+            "attempts=0; while [ ! -s \"$1\" ]; do attempts=$((attempts + 1)); \
+             [ \"$attempts\" -lt 100 ] || exit 2; sleep 0.01; done; \
+             group=$(cat \"$1\") || exit 1; \
+             if kill -TERM -\"$group\" 2>/dev/null; then exit 0; fi; \
+             if kill -0 -\"$group\" 2>/dev/null; then exit 1; fi; exit 2",
         )
-        .args(["layerfs-stop", &group.to_string()])
+        .args(["layerfs-stop", pid_file])
         .status()?;
     match status.code() {
         Some(0) => Ok(true),
@@ -322,7 +393,7 @@ fn command(
     placement: &WorkspacePlacement,
     argv: &[OsString],
     interactive: bool,
-    container_control: Option<(&str, &str)>,
+    container_control: Option<&str>,
 ) -> Command {
     match placement {
         WorkspacePlacement::Host { root } => {
@@ -342,58 +413,17 @@ fn command(
                 .arg(&container_id.0)
                 .args(["/bin/sh", "-c"])
                 .arg(
-                    "umask 077; pid_file=$1; ready_file=$2; shift 2; \
+                    "pid_file=$1; shift; \
                      pgid=$(cut -d ' ' -f 5 \"/proc/$$/stat\") || exit 125; \
                      [ \"$pgid\" = \"$$\" ] || exit 125; \
-                     printf '%s\\n' \"$$\" > \"$pid_file\" || exit 125; attempts=0; \
-                     while [ ! -e \"$ready_file\" ]; do attempts=$((attempts + 1)); \
-                     if [ \"$attempts\" -ge 500 ]; then rm -f \"$pid_file\" \"$ready_file\"; \
-                     exit 125; fi; sleep 0.01; done; rm -f \"$pid_file\" \"$ready_file\"; \
-                     exec \"$@\"",
+                     (umask 077 && printf '%s\\n' \"$$\" > \"$pid_file\") || exit 125; \
+                     trap 'rm -f \"$pid_file\"' EXIT; \"$@\"",
                 )
                 .arg("layerfs-exec")
-                .arg(container_control.expect("container control paths").0)
-                .arg(container_control.expect("container control paths").1)
+                .arg(container_control.expect("container pid path"))
                 .args(argv);
             command
         }
-    }
-}
-
-fn container_process_group(container: &str, path: &str) -> WorkspaceResult<u32> {
-    let output = Command::new("docker")
-        .args(["exec", container, "/bin/sh", "-c"])
-        .arg(
-            "attempts=0; while [ ! -s \"$1\" ]; do attempts=$((attempts + 1)); \
-             [ \"$attempts\" -lt 500 ] || exit 1; sleep 0.01; done; \
-             cat \"$1\"",
-        )
-        .args(["layerfs-pid", path])
-        .output()?;
-    if !output.status.success() {
-        return Err(WorkspaceError::Io(std::io::Error::other(
-            "container execution pid handshake",
-        )));
-    }
-    let group = std::str::from_utf8(&output.stdout)
-        .ok()
-        .and_then(|value| value.trim().parse::<u32>().ok())
-        .filter(|group| *group > 0)
-        .ok_or(WorkspaceError::InvalidExecution)?;
-    Ok(group)
-}
-
-fn release_container_execution(container: &str, path: &str) -> WorkspaceResult<()> {
-    let status = Command::new("docker")
-        .args(["exec", container, "/bin/sh", "-c", ": > \"$1\""])
-        .args(["layerfs-ready", path])
-        .status()?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(WorkspaceError::Io(std::io::Error::other(
-            "container execution ready handshake",
-        )))
     }
 }
 
@@ -428,13 +458,14 @@ fn supervise<F, G>(
     execution: Arc<Execution>,
     worker: Weak<WorkspaceWorker>,
     executions: Weak<Mutex<std::collections::BTreeMap<ExecutionId, Arc<Execution>>>>,
+    timing: ExecutionTimingStart,
+    direct_engine: bool,
     stdout: Option<F>,
     stderr: Option<G>,
 ) where
     F: FnOnce(Arc<Execution>) + Send + 'static,
     G: FnOnce(Arc<Execution>) + Send + 'static,
 {
-    let started = std::time::Instant::now();
     let stdout = stdout.map(|drain| {
         let execution = execution.clone();
         std::thread::spawn(move || drain(execution))
@@ -444,40 +475,105 @@ fn supervise<F, G>(
         std::thread::spawn(move || drain(execution))
     });
     std::thread::spawn(move || {
-        let status = loop {
-            let status = execution
-                .child
-                .lock()
-                .map_err(|_| ())
-                .and_then(|mut child| child.as_mut().ok_or(())?.try_wait().map_err(|_| ()));
-            match status {
-                Ok(Some(status)) => break Some(status),
-                Err(()) => break None,
-                Ok(None) => {}
+        let supervisor_queue_ns = elapsed_ns(timing.spawn_finished);
+        let runtime_started = std::time::Instant::now();
+        let exit_code = if direct_engine {
+            #[cfg(unix)]
+            {
+                let stream = execution
+                    .process
+                    .lock()
+                    .map_err(|_| ())
+                    .and_then(|mut process| match process.as_mut() {
+                        Some(ExecutionProcess::Docker(process)) => {
+                            process.take_stream().map_err(|_| ())
+                        }
+                        _ => Err(()),
+                    });
+                stream.ok().and_then(|mut stream| {
+                    crate::docker_engine::drain_multiplexed(&mut stream, |stream, bytes| {
+                        let stream = match stream {
+                            1 => OutputStream::Stdout,
+                            2 => OutputStream::Stderr,
+                            _ => return Err(std::io::Error::other("Docker Exec output stream")),
+                        };
+                        match stream {
+                            OutputStream::Stdout => &execution.stdout_bytes,
+                            OutputStream::Stderr => &execution.stderr_bytes,
+                        }
+                        .fetch_add(bytes.len() as u64, Ordering::Relaxed);
+                        execution
+                            .output
+                            .append(stream, bytes)
+                            .map_err(|error| match error {
+                                WorkspaceError::Io(error) => error,
+                                _ => std::io::Error::other("Docker Exec output"),
+                            })
+                    })
+                    .ok()?;
+                    execution
+                        .process
+                        .lock()
+                        .ok()
+                        .and_then(|process| match process.as_ref() {
+                            Some(ExecutionProcess::Docker(process)) => process.exit_code().ok(),
+                            _ => None,
+                        })
+                        .flatten()
+                })
             }
-            std::thread::sleep(std::time::Duration::from_millis(20));
+            #[cfg(not(unix))]
+            None
+        } else {
+            let status = loop {
+                let status = execution
+                    .process
+                    .lock()
+                    .map_err(|_| ())
+                    .and_then(|mut process| match process.as_mut() {
+                        Some(ExecutionProcess::Child(child)) => child.try_wait().map_err(|_| ()),
+                        _ => Err(()),
+                    });
+                match status {
+                    Ok(Some(status)) => break Some(status),
+                    Err(()) => break None,
+                    Ok(None) => {}
+                }
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            };
+            status.and_then(|status| status.code())
         };
+        let runtime_ns = elapsed_ns(runtime_started);
+        let drain_started = std::time::Instant::now();
         if let Some(thread) = stdout {
             let _ = thread.join();
         }
         if let Some(thread) = stderr {
             let _ = thread.join();
         }
-        if let Ok(mut child) = execution.child.lock() {
-            child.take();
+        if let Ok(mut process) = execution.process.lock() {
+            process.take();
         }
+        let drain_ns = elapsed_ns(drain_started);
         let receipt = ExecutionReceipt {
             execution_id: execution.id,
-            exit_code: status.and_then(|status| status.code()),
-            elapsed_ns: started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
+            exit_code,
+            elapsed_ns: 0,
+            total_wall_ns: 0,
+            spawn_ns: timing.spawn_ns,
+            supervisor_queue_ns,
+            runtime_ns,
+            drain_ns,
+            terminal_publication_ns: 0,
+            unattributed_ns: 0,
+            direct_engine,
             stdout_bytes: execution.stdout_bytes.load(Ordering::Relaxed),
             stderr_bytes: execution.stderr_bytes.load(Ordering::Relaxed),
             stopped: execution.stopped.load(Ordering::Acquire),
         };
-        if let Ok(mut stored) = execution.receipt.lock() {
-            *stored = Some(receipt.clone());
-        }
-        execution.output.finish(receipt);
+        let _receipt = execution
+            .output
+            .finish_timed(receipt, &execution.receipt, timing.total);
         if let Ok(mut completed_at) = execution.completed_at.lock() {
             *completed_at = Some(std::time::SystemTime::now());
         }
@@ -488,6 +584,10 @@ fn supervise<F, G>(
             crate::registry::prune_execution_registry(&executions);
         }
     });
+}
+
+fn elapsed_ns(started: std::time::Instant) -> u64 {
+    started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
 }
 
 fn new_execution_id() -> ExecutionId {
@@ -504,4 +604,39 @@ fn new_execution_id() -> ExecutionId {
     bytes.extend_from_slice(&SERIAL.fetch_add(1, Ordering::Relaxed).to_be_bytes());
     let digest = layerfs_content::ObjectId::for_bytes(&bytes).to_bytes();
     ExecutionId(digest[..16].try_into().expect("fixed execution id"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn container_execution_starts_without_a_ready_handshake() {
+        let command = command(
+            &WorkspacePlacement::Container {
+                container_id: crate::ContainerId("target".to_owned()),
+                root: "/workspace".into(),
+            },
+            &[OsString::from("/bin/true")],
+            false,
+            Some("/tmp/execution.pid"),
+        );
+        let arguments = command
+            .get_args()
+            .map(|argument| argument.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert!(arguments
+            .iter()
+            .any(|argument| argument.contains("pid_file")));
+        assert!(arguments
+            .iter()
+            .all(|argument| !argument.contains("ready_file")));
+        assert_eq!(
+            arguments
+                .iter()
+                .filter(|argument| argument.as_str() == "/tmp/execution.pid")
+                .count(),
+            1
+        );
+    }
 }

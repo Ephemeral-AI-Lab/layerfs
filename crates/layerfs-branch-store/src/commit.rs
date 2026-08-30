@@ -1,3 +1,4 @@
+use crate::store::PushPlan;
 use crate::BranchStore;
 use layerfs_content::filesystem::ContentChange;
 use layerfs_storage::{
@@ -93,13 +94,13 @@ impl BranchStore {
         working: BuiltRoot,
         choices: &[ReconcileChoice],
     ) -> Result<CommitOutcome> {
-        crate::provision::admit_built(&self.db, &working)?;
+        crate::provision::admit_built(&self.db, None, &working)?;
         let working_local = self.local_closure_complete(working.root_id)?;
         let branch_local = self.db.complete_root(prepared.branch_root)?;
         let layer_local =
             self.layer_requires_local(prepared.current_layer_id, prepared.layer_root)?;
         let reader = self.roots_reader_with_policy(
-            parent,
+            parent.clone(),
             &[
                 (working.root_id, working_local),
                 (prepared.branch_root, branch_local),
@@ -114,9 +115,10 @@ impl BranchStore {
             &prepared.conflicts,
             choices,
         )?;
-        crate::provision::admit_built(&self.db, &built)?;
+        crate::provision::admit_built(&self.db, None, &built)?;
         let complete = self.local_closure_complete(built.root_id)?;
         self.commit_candidate_impl(
+            parent,
             prepared.branch_id,
             Some(prepared.expected_head),
             prepared.old_base_layer_id,
@@ -145,7 +147,7 @@ impl BranchStore {
         changes: &[ContentChange],
     ) -> Result<CommitOutcome> {
         self.require_local_branch(branch_id)?;
-        let pinned = self.pin_branch(parent, branch_id)?;
+        let pinned = self.pin_branch(parent.clone(), branch_id)?;
         if pinned.branch.head_commit_id != expected_head {
             return Err(StorageError::CommitHeadMoved {
                 expected: expected_head,
@@ -160,6 +162,7 @@ impl BranchStore {
         .as_bytes();
         let built = apply_changes(&pinned.reader, pinned.root, changes, seed)?;
         self.commit_candidate(
+            parent,
             branch_id,
             expected_head,
             pinned.branch.base_layer_id,
@@ -173,6 +176,7 @@ impl BranchStore {
     #[allow(clippy::too_many_arguments)]
     pub fn commit_candidate(
         &self,
+        parent: Arc<dyn LayerStackEndpoint>,
         branch_id: layerfs_storage::BranchId,
         expected_head: Option<CommitId>,
         expected_base: LayerId,
@@ -182,6 +186,7 @@ impl BranchStore {
         force_complete: bool,
     ) -> Result<CommitOutcome> {
         self.commit_candidate_impl(
+            parent,
             branch_id,
             expected_head,
             expected_base,
@@ -197,6 +202,7 @@ impl BranchStore {
     #[allow(clippy::too_many_arguments)]
     fn commit_candidate_impl(
         &self,
+        parent: Arc<dyn LayerStackEndpoint>,
         branch_id: layerfs_storage::BranchId,
         expected_head: Option<CommitId>,
         expected_base: LayerId,
@@ -250,19 +256,45 @@ impl BranchStore {
         {
             return Err(StorageError::Integrity("Branch LayerStack ownership"));
         }
-        if !objects_admitted {
-            crate::provision::admit_built(&self.db, &built)?;
-        }
         let complete =
             force_complete || (inherit_base_completeness && self.db.complete_root(base_root)?);
+        if !objects_admitted {
+            if parent.store_id()? != self.parent_store_id() {
+                return Err(StorageError::WrongParent);
+            }
+            crate::provision::admit_built(
+                &self.db,
+                (!complete).then_some(parent.as_ref()),
+                &built,
+            )?;
+        }
         if complete {
-            self.verify_local_closure(built.root_id)?;
+            let started = std::time::Instant::now();
+            let verified = self.verify_local_closure(built.root_id);
+            layerfs_storage::note_workspace_commit_phase(
+                layerfs_storage::WorkspaceCommitPhase::CompletenessVerify,
+                started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
+            );
+            verified?;
         }
         let commit = CommitRecord {
             id: CommitId::derive(built.root_id, expected_head, new_base),
             root_id: built.root_id,
             parent_commit_id: expected_head,
             base_layer_id: new_base,
+        };
+        let push_plan = if inherit_base_completeness {
+            built
+                .objects
+                .ids_in_order(crate::store::PUSH_PLAN_ID_CAP)?
+                .map(|ids| PushPlan {
+                    commit_id: commit.id,
+                    base_root,
+                    new_root: built.root_id,
+                    ids,
+                })
+        } else {
+            None
         };
         self.db.commit_branch(
             branch_id,
@@ -272,6 +304,9 @@ impl BranchStore {
             new_base,
             complete,
         )?;
+        if let Some(plan) = push_plan {
+            self.retain_push_plan(branch_id, plan);
+        }
         Ok(CommitOutcome::Created {
             previous_head: expected_head,
             commit_id: commit.id,

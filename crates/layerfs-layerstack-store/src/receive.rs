@@ -1,9 +1,9 @@
 use crate::LayerStackStore;
 use layerfs_content::ObjectId;
 use layerfs_storage::{
-    AdmissionSetReceipt, AuthorityAddResult, BranchFact, BranchId, BranchRecord, CanonicalObject,
-    CommitHistoryPage, CommitId, CommitRecord, Fact, LayerId, LayerPrefixPage, LayerRecord,
-    LayerStackEndpoint, LayerStackFact, LayerStackId, LayerStackRecord, MissingBitmap,
+    record_durability, AdmissionSetReceipt, AuthorityAddResult, BranchFact, BranchId, BranchRecord,
+    CanonicalObject, CommitHistoryPage, CommitId, CommitRecord, Fact, LayerId, LayerPrefixPage,
+    LayerRecord, LayerStackEndpoint, LayerStackFact, LayerStackId, LayerStackRecord, MissingBitmap,
     ObjectSource, PushResult, Result, StorageError, StoreDb, StoreId,
 };
 
@@ -124,11 +124,20 @@ impl LayerStackEndpoint for LayerStackStore {
         branch: &BranchRecord,
         observed_head: Option<CommitId>,
     ) -> Result<PushResult> {
-        self.validate_push(branch, observed_head)?;
-        if branch.head_commit_id == branch.forked_from_commit_id {
-            return Ok(PushResult::NoChanges);
-        }
-        self.db.authority_publish_branch(branch, observed_head)
+        let started = std::time::Instant::now();
+        let validated = self.validate_push(branch, observed_head);
+        layerfs_storage::note_push_phase(
+            layerfs_storage::PushPhase::AuthorityTransitionVerify,
+            started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
+        );
+        validated?;
+        let result = if branch.head_commit_id == branch.forked_from_commit_id {
+            PushResult::NoChanges
+        } else {
+            self.db.authority_publish_branch(branch, observed_head)?
+        };
+        record_durability(self.db.stable_barrier()?)?;
+        Ok(result)
     }
 
     fn add_layer(&self, branch_id: BranchId) -> Result<AuthorityAddResult> {
@@ -241,8 +250,28 @@ impl LayerStackStore {
             through_commit_id,
             stop_exclusive,
         );
-        self.db.verify_complete_roots(&mut roots)?;
-        roots.finish()
+        let suffix = roots.by_ref().collect::<Vec<_>>();
+        roots.finish()?;
+        let mut prior = if let Some(stop) = stop_exclusive {
+            self.db
+                .commit(stop)?
+                .ok_or(StorageError::Integrity("pushed transition base Commit"))?
+                .root_id
+        } else {
+            self.db
+                .layer(
+                    branch
+                        .forked_from_layer_id
+                        .ok_or(StorageError::Integrity("pushed transition base Layer"))?,
+                )?
+                .ok_or(StorageError::Integrity("pushed transition base Layer"))?
+                .root_id
+        };
+        for root in suffix.into_iter().rev() {
+            self.db.verify_complete_transition(prior, root)?;
+            prior = root;
+        }
+        Ok(())
     }
 
     pub(crate) fn verify_complete(&self, root: ObjectId) -> Result<()> {

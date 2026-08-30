@@ -6,7 +6,15 @@ use crate::{
 };
 use layerfs_storage::{Result, StorageError};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CommitTransition {
+    Rebased,
+    RebasedRefresh,
+    Reloaded,
+    Detached,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkspaceState {
@@ -14,11 +22,13 @@ pub enum WorkspaceState {
     Committed,
     Discarded,
     Ended,
+    BrokenCleanup,
 }
 
 impl Workspace {
-    #[doc(hidden)]
-    pub fn commit(&mut self) -> Result<(layerfs_branch_store::CommitOutcome, bool)> {
+    pub(crate) fn commit(
+        &mut self,
+    ) -> Result<(layerfs_branch_store::CommitOutcome, CommitTransition)> {
         self.ensure_active()?;
         if let Some(mut resolution) = self.resolution.take() {
             resolution.invalidate_if_mutated(self)?;
@@ -46,11 +56,12 @@ impl Workspace {
                 self.resolution = Some(resolution);
             }
             let outcome = outcome?;
-            let reloaded = self.reload_committed(outcome);
-            return Ok((outcome, reloaded));
+            let transition = self.transition_committed(outcome, true);
+            return Ok((outcome, transition));
         }
         let candidate = self.build_candidate()?;
         let outcome = self.branch.commit_candidate(
+            self.parent.clone(),
             self.branch_id,
             self.expected_head,
             self.expected_base,
@@ -59,11 +70,28 @@ impl Workspace {
             self.expected_base,
             false,
         )?;
-        let reloaded = self.reload_committed(outcome);
-        Ok((outcome, reloaded))
+        let transition = self.transition_committed(outcome, false);
+        Ok((outcome, transition))
     }
 
-    fn reload_committed(&mut self, outcome: layerfs_branch_store::CommitOutcome) -> bool {
+    fn transition_committed(
+        &mut self,
+        outcome: layerfs_branch_store::CommitOutcome,
+        refresh: bool,
+    ) -> CommitTransition {
+        let started = Instant::now();
+        let rebased = self.rebase_committed(outcome).is_ok();
+        layerfs_storage::note_workspace_commit_phase(
+            layerfs_storage::WorkspaceCommitPhase::InPlaceRebase,
+            elapsed_ns(started),
+        );
+        if rebased {
+            return if refresh {
+                CommitTransition::RebasedRefresh
+            } else {
+                CommitTransition::Rebased
+            };
+        }
         let committed = Self::open_with_policy(
             self.branch.clone(),
             self.parent.clone(),
@@ -75,7 +103,7 @@ impl Workspace {
             let _ = self.clear_spool();
             committed.state = WorkspaceState::Committed;
             *self = committed;
-            return true;
+            return CommitTransition::Reloaded;
         }
         self.expected_head = match outcome {
             layerfs_branch_store::CommitOutcome::Created { commit_id, .. } => Some(commit_id),
@@ -83,7 +111,129 @@ impl Workspace {
         };
         self.resolution = None;
         self.state = WorkspaceState::Committed;
-        false
+        CommitTransition::Detached
+    }
+
+    fn rebase_committed(&mut self, outcome: layerfs_branch_store::CommitOutcome) -> Result<()> {
+        let expected_head = match outcome {
+            layerfs_branch_store::CommitOutcome::Created { commit_id, .. } => Some(commit_id),
+            layerfs_branch_store::CommitOutcome::UpToDate { head } => head,
+        };
+        let pinned = self
+            .branch
+            .pin_branch(self.parent.clone(), self.branch_id)?;
+        if pinned.branch.head_commit_id != expected_head {
+            return Err(StorageError::Integrity("committed Workspace head"));
+        }
+        static REBASE_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let rebase_spool = self
+            .spool
+            .parent()
+            .ok_or(StorageError::InvalidInput("Workspace spool"))?
+            .join(format!(
+                "rebase-spool-{}",
+                REBASE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            ));
+        let mut committed = Self::from_snapshot(
+            crate::cow_tree::WorkspaceSnapshot {
+                branch: self.branch.clone(),
+                parent: self.parent.clone(),
+                branch_id: self.branch_id,
+                expected_head,
+                expected_base: pinned.branch.base_layer_id,
+                root: pinned.root,
+                reader: pinned.reader,
+            },
+            &rebase_spool,
+            self.policy,
+        )?;
+        let current = self
+            .nodes
+            .iter()
+            .map(|(id, node)| (*id, node.clone()))
+            .collect::<Vec<_>>();
+        let mut nodes = std::collections::HashMap::new();
+        let mut canonical_nodes = std::collections::HashMap::new();
+        let mut obsolete_spools = Vec::new();
+        let mut retained_spool_bytes = 0_u64;
+        for (id, old) in current {
+            if old.paths.is_empty() {
+                if old.pins != 0 {
+                    let mut retained = old;
+                    retained.canonical = None;
+                    if let crate::cow_tree::Data::File(crate::cow_tree::FileData::Overlay {
+                        charged,
+                        ..
+                    }) = &retained.data
+                    {
+                        retained_spool_bytes = retained_spool_bytes
+                            .saturating_add(charged.iter().map(|(start, end)| end - start).sum());
+                    }
+                    nodes.insert(id, retained);
+                }
+                continue;
+            }
+            let fresh_id = if id == crate::ROOT {
+                crate::ROOT
+            } else {
+                lookup_path(&mut committed, old.paths.first().expect("nonempty paths"))?
+            };
+            for path in old.paths.iter().skip(1) {
+                if lookup_path(&mut committed, path)? != fresh_id {
+                    return Err(StorageError::Integrity("committed hard-link identity"));
+                }
+            }
+            let old_attr = self.attr(id)?;
+            let fresh_attr = committed.attr(fresh_id)?;
+            if old_attr.kind != fresh_attr.kind
+                || old_attr.size != fresh_attr.size
+                || old_attr.mode != fresh_attr.mode
+                || old_attr.links != fresh_attr.links
+                || old_attr.mtime_seconds != fresh_attr.mtime_seconds
+                || old_attr.mtime_nanoseconds != fresh_attr.mtime_nanoseconds
+            {
+                return Err(StorageError::Integrity("committed Workspace presentation"));
+            }
+            let mut rebased = committed
+                .nodes
+                .get(&fresh_id)
+                .ok_or(StorageError::Integrity("committed Workspace node"))?
+                .clone();
+            rebased.paths = old.paths;
+            rebased.pins = old.pins;
+            if let Some(inode) = rebased.canonical {
+                if canonical_nodes.insert(inode, id).is_some() {
+                    return Err(StorageError::Integrity("committed Workspace inode"));
+                }
+            }
+            if let crate::cow_tree::Data::File(crate::cow_tree::FileData::Overlay {
+                spool, ..
+            }) = old.data
+            {
+                obsolete_spools.push(spool);
+            }
+            nodes.insert(id, rebased);
+        }
+        for spool in obsolete_spools {
+            if spool.exists() {
+                std::fs::remove_file(spool)?;
+            }
+        }
+        self.reader = committed.reader.clone();
+        self.expected_head = expected_head;
+        self.expected_base = committed.expected_base;
+        self.base_root = committed.base_root;
+        self.base_inodes = committed.base_inodes;
+        self.nodes = nodes;
+        self.canonical_nodes = canonical_nodes;
+        self.spool_bytes = retained_spool_bytes;
+        self.mutation_generation = 0;
+        self.mutation_paths.clear();
+        self.dirty.clear();
+        self.resolution = None;
+        self.state = WorkspaceState::Active;
+        let _ = std::fs::remove_dir_all(rebase_spool);
+        Ok(())
     }
 
     #[doc(hidden)]
@@ -174,11 +324,27 @@ impl Workspaces {
         id: WorkspaceId,
     ) -> WorkspaceResult<WorkspaceCommitResult> {
         let worker = self.worker(id)?;
+        let _timing = layerfs_storage::begin_workspace_commit(match worker.projection {
+            WorkspaceProjection::Fuse => layerfs_storage::CaptureMode::Live,
+            WorkspaceProjection::Materialize => layerfs_storage::CaptureMode::Materialized,
+        })?;
         if worker.has_executions()? {
             return Ok(WorkspaceCommitResult::Busy);
         }
-        crate::projection::pause(&worker)?;
-        let _quiesced = match worker.quiesce() {
+        let started = Instant::now();
+        let paused = crate::projection::pause(&worker);
+        layerfs_storage::note_workspace_commit_phase(
+            layerfs_storage::WorkspaceCommitPhase::PauseFence,
+            elapsed_ns(started),
+        );
+        paused?;
+        let started = Instant::now();
+        let quiesced = worker.quiesce();
+        layerfs_storage::note_workspace_commit_phase(
+            layerfs_storage::WorkspaceCommitPhase::Quiesce,
+            elapsed_ns(started),
+        );
+        let _quiesced = match quiesced {
             Ok(quiesced) => quiesced,
             Err(WorkspaceError::WorkspaceBusy) => {
                 crate::projection::resume(&worker)?;
@@ -190,34 +356,65 @@ impl Workspaces {
             }
         };
         let result = (|| {
-            crate::projection::capture(&worker)?;
+            let started = Instant::now();
+            let captured = crate::projection::capture(&worker);
+            layerfs_storage::note_workspace_commit_phase(
+                layerfs_storage::WorkspaceCommitPhase::Capture,
+                elapsed_ns(started),
+            );
+            captured?;
             let mut workspace = worker
                 .workspace
                 .lock()
                 .map_err(|_| WorkspaceError::WorkspaceBusy)?;
             match workspace.commit() {
-                Ok((outcome, reloaded)) => {
-                    Ok((WorkspaceCommitResult::from_outcome(outcome), reloaded))
+                Ok((outcome, transition)) => {
+                    Ok((WorkspaceCommitResult::from_outcome(outcome), transition))
                 }
-                Err(error) => WorkspaceError::from_commit(error).map(|result| (result, false)),
+                Err(error) => WorkspaceError::from_commit(error)
+                    .map(|result| (result, CommitTransition::Detached)),
             }
         })();
-        match &result {
+        let presentation = match &result {
             Ok((
                 WorkspaceCommitResult::Created { .. } | WorkspaceCommitResult::UpToDate { .. },
-                reloaded,
-            )) => {
-                let presentation = if *reloaded {
-                    crate::projection::refresh(&worker)
-                        .and_then(|()| crate::projection::make_read_only(&worker))
-                } else {
-                    crate::projection::end(&worker)
-                };
-                if presentation.is_err() {
-                    let _ = crate::projection::end(&worker);
+                transition,
+            )) => match transition {
+                CommitTransition::Rebased => {
+                    let started = Instant::now();
+                    let resumed = crate::projection::resume(&worker);
+                    layerfs_storage::note_workspace_commit_phase(
+                        layerfs_storage::WorkspaceCommitPhase::Resume,
+                        elapsed_ns(started),
+                    );
+                    resumed
                 }
+                CommitTransition::RebasedRefresh => {
+                    let started = Instant::now();
+                    let refreshed = crate::projection::refresh(&worker);
+                    layerfs_storage::note_workspace_commit_phase(
+                        layerfs_storage::WorkspaceCommitPhase::Resume,
+                        elapsed_ns(started),
+                    );
+                    refreshed
+                }
+                CommitTransition::Reloaded => crate::projection::refresh(&worker)
+                    .and_then(|()| crate::projection::make_read_only(&worker)),
+                CommitTransition::Detached => crate::projection::end(&worker),
+            },
+            _ => {
+                let started = Instant::now();
+                let resumed = crate::projection::resume(&worker);
+                layerfs_storage::note_workspace_commit_phase(
+                    layerfs_storage::WorkspaceCommitPhase::Resume,
+                    elapsed_ns(started),
+                );
+                resumed
             }
-            _ => crate::projection::resume(&worker)?,
+        };
+        if let Err(error) = presentation {
+            let _ = crate::projection::end(&worker);
+            return Err(error);
         }
         match result {
             Ok((result, _)) => Ok(result),
@@ -235,9 +432,28 @@ impl Workspaces {
         if worker.has_executions()? {
             return Err(WorkspaceError::WorkspaceBusy);
         }
-        crate::projection::pause(&worker)?;
-        let result = (|| {
-            let _quiesced = worker.quiesce()?;
+        let state = worker
+            .workspace
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .state;
+        if state == WorkspaceState::BrokenCleanup {
+            return Err(WorkspaceError::InvalidPlacement);
+        }
+        let committed = state == WorkspaceState::Committed;
+        if !committed {
+            crate::projection::pause(&worker)?;
+        }
+        let _quiesced = match worker.quiesce() {
+            Ok(quiesced) => quiesced,
+            Err(error) => {
+                if !committed {
+                    crate::projection::resume(&worker)?;
+                }
+                return Err(error);
+            }
+        };
+        let validated = (|| {
             let active = worker
                 .workspace
                 .lock()
@@ -255,7 +471,7 @@ impl Workspaces {
                     return Err(WorkspaceError::WorkspaceDirty);
                 }
             }
-            let mut workspace = worker
+            let workspace = worker
                 .workspace
                 .lock()
                 .map_err(|_| WorkspaceError::WorkspaceBusy)?;
@@ -265,6 +481,28 @@ impl Workspaces {
                 .ok_or(WorkspaceError::InvalidPlacement)?
                 .to_owned();
             let discarded = mode == EndWorkspaceMode::Discard;
+            Ok((state, discarded))
+        })();
+        let (state, discarded) = match validated {
+            Ok(validated) => validated,
+            Err(error) => {
+                if !committed {
+                    crate::projection::resume(&worker)?;
+                }
+                return Err(error);
+            }
+        };
+        if let Err(error) = crate::projection::end(&worker) {
+            if let Ok(mut workspace) = worker.workspace.lock() {
+                workspace.state = WorkspaceState::BrokenCleanup;
+            }
+            return Err(error);
+        }
+        let finalized = (|| {
+            let mut workspace = worker
+                .workspace
+                .lock()
+                .map_err(|_| WorkspaceError::WorkspaceBusy)?;
             match mode {
                 EndWorkspaceMode::Discard => {
                     workspace.discard()?;
@@ -273,20 +511,17 @@ impl Workspaces {
                 EndWorkspaceMode::Clean => workspace.end_clean()?,
             }
             drop(workspace);
-            crate::projection::end(&worker)?;
             if state.exists() {
                 std::fs::remove_dir_all(state)?;
             }
-            Ok(WorkspaceEndResult {
-                session_id: id,
-                discarded,
-            })
+            Ok(())
         })();
-        if result.is_err() {
-            crate::projection::resume(&worker)?;
-            return result;
+        if let Err(error) = finalized {
+            if let Ok(mut workspace) = worker.workspace.lock() {
+                workspace.state = WorkspaceState::BrokenCleanup;
+            }
+            return Err(error);
         }
-        let result = result?;
         self.release_lease(worker.request.branch_id);
         let retained = {
             let workspace = worker
@@ -304,7 +539,10 @@ impl Workspaces {
             .map_err(|_| WorkspaceError::WorkspaceBusy)?
             .insert(id, crate::registry::SessionRecord::Retained(retained));
         self.prune_retained()?;
-        Ok(result)
+        Ok(WorkspaceEndResult {
+            session_id: id,
+            discarded,
+        })
     }
 
     pub fn sessions(&self) -> WorkspaceResult<Vec<WorkspaceSummary>> {
@@ -381,6 +619,22 @@ impl Workspaces {
             }),
         }
     }
+}
+
+fn lookup_path(workspace: &mut Workspace, path: &str) -> Result<crate::NodeId> {
+    let mut node = crate::ROOT;
+    for component in path
+        .as_bytes()
+        .split(|byte| *byte == b'/')
+        .filter(|component| !component.is_empty())
+    {
+        node = workspace.lookup_node(node, component)?;
+    }
+    Ok(node)
+}
+
+fn elapsed_ns(started: Instant) -> u64 {
+    started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
 }
 
 pub(crate) fn session(worker: &WorkspaceWorker) -> WorkspaceResult<WorkspaceSession> {

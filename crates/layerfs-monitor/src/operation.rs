@@ -178,12 +178,21 @@ impl OperationReceipt {
             && self.storage.iter().all(|receipt| match receipt {
                 layerfs_storage::StorageReceipt::Local(receipt) => receipt.validate().is_ok(),
                 layerfs_storage::StorageReceipt::Transfer(receipt) => receipt.validate().is_ok(),
+                layerfs_storage::StorageReceipt::Durability(receipt) => receipt.validate().is_ok(),
+                layerfs_storage::StorageReceipt::WorkspaceCommit(receipt) => {
+                    receipt.validate().is_ok()
+                }
+                layerfs_storage::StorageReceipt::Push(receipt) => receipt.validate().is_ok(),
+                layerfs_storage::StorageReceipt::Database(receipt) => receipt.validate().is_ok(),
+                layerfs_storage::StorageReceipt::WorkspaceLifecycle(receipt) => {
+                    receipt.validate().is_ok()
+                }
             })
     }
 
     pub fn to_json(&self) -> String {
         format!(
-            "{{\"schema\":\"layerfs-operation-receipt-v3\",\"record\":\"{}\",\"operation_id\":\"{}\",\"operation\":{},\"outcome\":\"{}\",\"queued_ns\":{},\"service_ns\":{},\"fragments\":[{}],\"storage\":[{}]}}",
+            "{{\"schema\":\"layerfs-operation-receipt-v4\",\"record\":\"{}\",\"operation_id\":\"{}\",\"operation\":{},\"outcome\":\"{}\",\"queued_ns\":{},\"service_ns\":{},\"fragments\":[{}],\"storage\":[{}]}}",
             hex_bytes(self.record().as_bytes()),
             self.id,
             operation_json(&self.operation),
@@ -215,7 +224,7 @@ impl OperationReceipt {
 
     fn record(&self) -> String {
         let mut fields = vec![
-            "v3".to_owned(),
+            "v4".to_owned(),
             self.id.to_string(),
             family_code(self.operation.family).to_owned(),
             optional_id(self.operation.layer_stack_id),
@@ -251,7 +260,7 @@ impl OperationReceipt {
             match receipt {
                 layerfs_storage::StorageReceipt::Local(receipt) => {
                     let value = receipt.objects;
-                    fields.push("l".to_owned());
+                    fields.push("c".to_owned());
                     fields.extend(
                         [
                             value.candidate_ids,
@@ -263,6 +272,12 @@ impl OperationReceipt {
                         ]
                         .map(|value| value.to_string()),
                     );
+                    fields.extend([
+                        receipt.cdc_bytes_scanned.to_string(),
+                        receipt.encode_hash_invocations.to_string(),
+                        receipt.source_reused_ids.to_string(),
+                        receipt.source_reused_bytes.to_string(),
+                    ]);
                 }
                 layerfs_storage::StorageReceipt::Transfer(receipt) => {
                     fields.push("t".to_owned());
@@ -282,6 +297,123 @@ impl OperationReceipt {
                         push_set(&mut fields, *set);
                     }
                 }
+                layerfs_storage::StorageReceipt::Durability(receipt) => {
+                    fields.push("d".to_owned());
+                    fields.push(match receipt.role {
+                        layerfs_storage::StoreRole::LayerStack => "s".to_owned(),
+                        layerfs_storage::StoreRole::Branch => "b".to_owned(),
+                    });
+                    fields.push(receipt.store_id.to_string());
+                    fields.extend(
+                        [
+                            receipt.stable_ns,
+                            receipt.checkpoint_ns,
+                            receipt.database_fsync_ns,
+                            receipt.directory_fsync_ns,
+                            receipt.unattributed_ns,
+                        ]
+                        .map(|value| value.to_string()),
+                    );
+                }
+                layerfs_storage::StorageReceipt::WorkspaceCommit(receipt) => {
+                    fields.push("w".to_owned());
+                    fields.push(
+                        match receipt.capture_mode {
+                            Some(layerfs_storage::CaptureMode::Live) => "l",
+                            Some(layerfs_storage::CaptureMode::Materialized) => "m",
+                            None => "-",
+                        }
+                        .to_owned(),
+                    );
+                    fields.extend(
+                        [
+                            receipt.total_ns,
+                            receipt.pause_fence_ns,
+                            receipt.quiesce_ns,
+                            receipt.capture_ns,
+                            receipt.captured_files,
+                            receipt.captured_bytes,
+                            receipt.candidate_plan_ns,
+                            receipt.dirty_compare_ns,
+                            receipt.content_ns,
+                            receipt.namespace_ns,
+                            receipt.candidate_finish_ns,
+                            receipt.local_admission_ns,
+                            receipt.completeness_verify_ns,
+                            receipt.publication_ns,
+                            receipt.in_place_rebase_ns,
+                            receipt.resume_ns,
+                            receipt.unattributed_ns,
+                        ]
+                        .map(|value| value.to_string()),
+                    );
+                }
+                layerfs_storage::StorageReceipt::Push(receipt) => {
+                    fields.push("p".to_owned());
+                    fields.extend(
+                        [
+                            receipt.total_ns,
+                            receipt.history_ns,
+                            receipt.frontier_ns,
+                            receipt.membership_ns,
+                            receipt.source_read_auth_ns,
+                            receipt.object_admission_ns,
+                            receipt.fact_admission_ns,
+                            receipt.authority_transition_verify_ns,
+                            receipt.publication_ns,
+                            receipt.durability_ns,
+                            receipt.unattributed_ns,
+                            receipt.endpoint_calls,
+                        ]
+                        .map(|value| value.to_string()),
+                    );
+                }
+                layerfs_storage::StorageReceipt::Database(receipt) => {
+                    fields.push("q".to_owned());
+                    fields.push(store_role_code(receipt.role).to_owned());
+                    fields.push(receipt.store_id.to_string());
+                    fields.push(database_operation_code(receipt.operation).to_owned());
+                    fields.extend(
+                        [
+                            receipt.total_ns,
+                            receipt.connection_wait_ns,
+                            receipt.writer_acquire_ns,
+                            receipt.statement_ns,
+                            receipt.publication_ns,
+                            receipt.commit_sync_ns,
+                            receipt.unattributed_ns,
+                            receipt.statement_count,
+                            receipt.rows,
+                            receipt.bytes,
+                        ]
+                        .map(|value| value.to_string()),
+                    );
+                }
+                layerfs_storage::StorageReceipt::WorkspaceLifecycle(receipt) => {
+                    fields.push("y".to_owned());
+                    fields.push(
+                        match receipt.kind {
+                            layerfs_storage::WorkspaceLifecycleKind::Attach => "a",
+                            layerfs_storage::WorkspaceLifecycleKind::End => "e",
+                        }
+                        .to_owned(),
+                    );
+                    fields.extend(
+                        [
+                            receipt.total_ns,
+                            receipt.proxy_ns,
+                            receipt.docker_setup_ns,
+                            receipt.helper_copy_ns,
+                            receipt.mount_ready_ns,
+                            receipt.unmount_ns,
+                            receipt.wait_ns,
+                            receipt.cleanup_ns,
+                            receipt.unattributed_ns,
+                            receipt.docker_calls,
+                        ]
+                        .map(|value| value.to_string()),
+                    );
+                }
             }
         }
         fields.join(" ")
@@ -289,7 +421,10 @@ impl OperationReceipt {
 
     fn from_record(record: &str) -> crate::MonitorResult<Self> {
         let mut fields = record.split_whitespace();
-        expect(&mut fields, "v3")?;
+        match next(&mut fields)? {
+            "v3" | "v4" => {}
+            _ => return Err(crate::MonitorError::Integrity("operation record version")),
+        }
         let id = next(&mut fields)?.parse()?;
         let operation = SemanticOperation {
             family: take_family(&mut fields)?,
@@ -324,16 +459,29 @@ impl OperationReceipt {
         let mut storage = Vec::new();
         for _ in 0..count(&mut fields)? {
             storage.push(match next(&mut fields)? {
-                "l" => {
+                kind @ ("l" | "b" | "c") => {
+                    let objects = layerfs_storage::LocalObjectReceipt {
+                        candidate_ids: number(&mut fields)?,
+                        candidate_bytes: number(&mut fields)?,
+                        inserted_ids: number(&mut fields)?,
+                        inserted_bytes: number(&mut fields)?,
+                        reused_ids: number(&mut fields)?,
+                        reused_bytes: number(&mut fields)?,
+                    };
                     layerfs_storage::StorageReceipt::Local(layerfs_storage::LocalAdmissionReceipt {
-                        objects: layerfs_storage::LocalObjectReceipt {
-                            candidate_ids: number(&mut fields)?,
-                            candidate_bytes: number(&mut fields)?,
-                            inserted_ids: number(&mut fields)?,
-                            inserted_bytes: number(&mut fields)?,
-                            reused_ids: number(&mut fields)?,
-                            reused_bytes: number(&mut fields)?,
+                        objects,
+                        cdc_bytes_scanned: if matches!(kind, "b" | "c") {
+                            number(&mut fields)?
+                        } else {
+                            0
                         },
+                        encode_hash_invocations: if matches!(kind, "b" | "c") {
+                            number(&mut fields)?
+                        } else {
+                            0
+                        },
+                        source_reused_ids: if kind == "c" { number(&mut fields)? } else { 0 },
+                        source_reused_bytes: if kind == "c" { number(&mut fields)? } else { 0 },
                     })
                 }
                 "t" => {
@@ -355,6 +503,109 @@ impl OperationReceipt {
                         known_roots_pruned,
                     })
                 }
+                "d" => {
+                    let role = match next(&mut fields)? {
+                        "s" => layerfs_storage::StoreRole::LayerStack,
+                        "b" => layerfs_storage::StoreRole::Branch,
+                        _ => return Err(crate::MonitorError::Integrity("durability Store role")),
+                    };
+                    layerfs_storage::StorageReceipt::Durability(
+                        layerfs_storage::DurabilityReceipt {
+                            store_id: next(&mut fields)?
+                                .parse()
+                                .map_err(|_| crate::MonitorError::Integrity("durability Store"))?,
+                            role,
+                            stable_ns: number(&mut fields)?,
+                            checkpoint_ns: number(&mut fields)?,
+                            database_fsync_ns: number(&mut fields)?,
+                            directory_fsync_ns: number(&mut fields)?,
+                            unattributed_ns: number(&mut fields)?,
+                        },
+                    )
+                }
+                "w" => layerfs_storage::StorageReceipt::WorkspaceCommit(
+                    layerfs_storage::WorkspaceCommitReceipt {
+                        capture_mode: match next(&mut fields)? {
+                            "l" => Some(layerfs_storage::CaptureMode::Live),
+                            "m" => Some(layerfs_storage::CaptureMode::Materialized),
+                            "-" => None,
+                            _ => return Err(crate::MonitorError::Integrity("capture mode")),
+                        },
+                        total_ns: number(&mut fields)?,
+                        pause_fence_ns: number(&mut fields)?,
+                        quiesce_ns: number(&mut fields)?,
+                        capture_ns: number(&mut fields)?,
+                        captured_files: number(&mut fields)?,
+                        captured_bytes: number(&mut fields)?,
+                        candidate_plan_ns: number(&mut fields)?,
+                        dirty_compare_ns: number(&mut fields)?,
+                        content_ns: number(&mut fields)?,
+                        namespace_ns: number(&mut fields)?,
+                        candidate_finish_ns: number(&mut fields)?,
+                        local_admission_ns: number(&mut fields)?,
+                        completeness_verify_ns: number(&mut fields)?,
+                        publication_ns: number(&mut fields)?,
+                        in_place_rebase_ns: number(&mut fields)?,
+                        resume_ns: number(&mut fields)?,
+                        unattributed_ns: number(&mut fields)?,
+                    },
+                ),
+                "p" => layerfs_storage::StorageReceipt::Push(layerfs_storage::PushPhaseReceipt {
+                    total_ns: number(&mut fields)?,
+                    history_ns: number(&mut fields)?,
+                    frontier_ns: number(&mut fields)?,
+                    membership_ns: number(&mut fields)?,
+                    source_read_auth_ns: number(&mut fields)?,
+                    object_admission_ns: number(&mut fields)?,
+                    fact_admission_ns: number(&mut fields)?,
+                    authority_transition_verify_ns: number(&mut fields)?,
+                    publication_ns: number(&mut fields)?,
+                    durability_ns: number(&mut fields)?,
+                    unattributed_ns: number(&mut fields)?,
+                    endpoint_calls: number(&mut fields)?,
+                }),
+                "q" => {
+                    layerfs_storage::StorageReceipt::Database(layerfs_storage::DatabaseReceipt {
+                        role: take_store_role(&mut fields)?,
+                        store_id: next(&mut fields)?
+                            .parse()
+                            .map_err(|_| crate::MonitorError::Integrity("database Store"))?,
+                        operation: take_database_operation(&mut fields)?,
+                        total_ns: number(&mut fields)?,
+                        connection_wait_ns: number(&mut fields)?,
+                        writer_acquire_ns: number(&mut fields)?,
+                        statement_ns: number(&mut fields)?,
+                        publication_ns: number(&mut fields)?,
+                        commit_sync_ns: number(&mut fields)?,
+                        unattributed_ns: number(&mut fields)?,
+                        statement_count: number(&mut fields)?,
+                        rows: number(&mut fields)?,
+                        bytes: number(&mut fields)?,
+                    })
+                }
+                "y" => layerfs_storage::StorageReceipt::WorkspaceLifecycle(
+                    layerfs_storage::WorkspaceLifecycleReceipt {
+                        kind: match next(&mut fields)? {
+                            "a" => layerfs_storage::WorkspaceLifecycleKind::Attach,
+                            "e" => layerfs_storage::WorkspaceLifecycleKind::End,
+                            _ => {
+                                return Err(crate::MonitorError::Integrity(
+                                    "Workspace lifecycle kind",
+                                ))
+                            }
+                        },
+                        total_ns: number(&mut fields)?,
+                        proxy_ns: number(&mut fields)?,
+                        docker_setup_ns: number(&mut fields)?,
+                        helper_copy_ns: number(&mut fields)?,
+                        mount_ready_ns: number(&mut fields)?,
+                        unmount_ns: number(&mut fields)?,
+                        wait_ns: number(&mut fields)?,
+                        cleanup_ns: number(&mut fields)?,
+                        unattributed_ns: number(&mut fields)?,
+                        docker_calls: number(&mut fields)?,
+                    },
+                ),
                 _ => return Err(crate::MonitorError::Integrity("storage receipt kind")),
             });
         }
@@ -548,13 +799,17 @@ fn storage_json(receipt: &layerfs_storage::StorageReceipt) -> String {
         layerfs_storage::StorageReceipt::Local(receipt) => {
             let value = receipt.objects;
             format!(
-                "{{\"local\":{{\"candidate_ids\":{},\"candidate_bytes\":{},\"inserted_ids\":{},\"inserted_bytes\":{},\"reused_ids\":{},\"reused_bytes\":{}}}}}",
+                "{{\"local\":{{\"candidate_ids\":{},\"candidate_bytes\":{},\"inserted_ids\":{},\"inserted_bytes\":{},\"reused_ids\":{},\"reused_bytes\":{},\"source_reused_ids\":{},\"source_reused_bytes\":{},\"cdc_bytes_scanned\":{},\"encode_hash_invocations\":{}}}}}",
                 value.candidate_ids,
                 value.candidate_bytes,
                 value.inserted_ids,
                 value.inserted_bytes,
                 value.reused_ids,
                 value.reused_bytes,
+                receipt.source_reused_ids,
+                receipt.source_reused_bytes,
+                receipt.cdc_bytes_scanned,
+                receipt.encode_hash_invocations,
             )
         }
         layerfs_storage::StorageReceipt::Transfer(receipt) => format!(
@@ -571,6 +826,148 @@ fn storage_json(receipt: &layerfs_storage::StorageReceipt) -> String {
             receipt.peak_buffer_bytes,
             receipt.known_roots_pruned,
         ),
+        layerfs_storage::StorageReceipt::Durability(receipt) => format!(
+            "{{\"durability\":{{\"store_id\":\"{}\",\"role\":\"{}\",\"stable_ns\":{},\"checkpoint_ns\":{},\"database_fsync_ns\":{},\"directory_fsync_ns\":{},\"unattributed_ns\":{}}}}}",
+            receipt.store_id,
+            match receipt.role {
+                layerfs_storage::StoreRole::LayerStack => "layerstack",
+                layerfs_storage::StoreRole::Branch => "branch",
+            },
+            receipt.stable_ns,
+            receipt.checkpoint_ns,
+            receipt.database_fsync_ns,
+            receipt.directory_fsync_ns,
+            receipt.unattributed_ns,
+        ),
+        layerfs_storage::StorageReceipt::WorkspaceCommit(receipt) => format!(
+            "{{\"workspace_commit\":{{\"total_ns\":{},\"pause_fence_ns\":{},\"quiesce_ns\":{},\"capture_ns\":{},\"capture_mode\":{},\"captured_files\":{},\"captured_bytes\":{},\"candidate_plan_ns\":{},\"dirty_compare_ns\":{},\"content_ns\":{},\"namespace_ns\":{},\"candidate_finish_ns\":{},\"local_admission_ns\":{},\"completeness_verify_ns\":{},\"publication_ns\":{},\"in_place_rebase_ns\":{},\"resume_ns\":{},\"unattributed_ns\":{}}}}}",
+            receipt.total_ns,
+            receipt.pause_fence_ns,
+            receipt.quiesce_ns,
+            receipt.capture_ns,
+            receipt.capture_mode.map_or("null".to_owned(), |mode| format!(
+                "\"{}\"",
+                match mode {
+                    layerfs_storage::CaptureMode::Live => "live",
+                    layerfs_storage::CaptureMode::Materialized => "materialized",
+                }
+            )),
+            receipt.captured_files,
+            receipt.captured_bytes,
+            receipt.candidate_plan_ns,
+            receipt.dirty_compare_ns,
+            receipt.content_ns,
+            receipt.namespace_ns,
+            receipt.candidate_finish_ns,
+            receipt.local_admission_ns,
+            receipt.completeness_verify_ns,
+            receipt.publication_ns,
+            receipt.in_place_rebase_ns,
+            receipt.resume_ns,
+            receipt.unattributed_ns,
+        ),
+        layerfs_storage::StorageReceipt::Push(receipt) => format!(
+            "{{\"push_phases\":{{\"total_ns\":{},\"history_ns\":{},\"frontier_ns\":{},\"membership_ns\":{},\"source_read_auth_ns\":{},\"object_admission_ns\":{},\"fact_admission_ns\":{},\"authority_transition_verify_ns\":{},\"publication_ns\":{},\"durability_ns\":{},\"unattributed_ns\":{},\"endpoint_calls\":{}}}}}",
+            receipt.total_ns,
+            receipt.history_ns,
+            receipt.frontier_ns,
+            receipt.membership_ns,
+            receipt.source_read_auth_ns,
+            receipt.object_admission_ns,
+            receipt.fact_admission_ns,
+            receipt.authority_transition_verify_ns,
+            receipt.publication_ns,
+            receipt.durability_ns,
+            receipt.unattributed_ns,
+            receipt.endpoint_calls,
+        ),
+        layerfs_storage::StorageReceipt::Database(receipt) => format!(
+            "{{\"database\":{{\"store_id\":\"{}\",\"role\":\"{}\",\"operation\":\"{}\",\"total_ns\":{},\"connection_wait_ns\":{},\"writer_acquire_ns\":{},\"statement_ns\":{},\"publication_ns\":{},\"commit_sync_ns\":{},\"unattributed_ns\":{},\"statement_count\":{},\"rows\":{},\"bytes\":{}}}}}",
+            receipt.store_id,
+            store_role_name(receipt.role),
+            database_operation_name(receipt.operation),
+            receipt.total_ns,
+            receipt.connection_wait_ns,
+            receipt.writer_acquire_ns,
+            receipt.statement_ns,
+            receipt.publication_ns,
+            receipt.commit_sync_ns,
+            receipt.unattributed_ns,
+            receipt.statement_count,
+            receipt.rows,
+            receipt.bytes,
+        ),
+        layerfs_storage::StorageReceipt::WorkspaceLifecycle(receipt) => format!(
+            "{{\"workspace_lifecycle\":{{\"kind\":\"{}\",\"total_ns\":{},\"proxy_ns\":{},\"docker_setup_ns\":{},\"helper_copy_ns\":{},\"mount_ready_ns\":{},\"unmount_ns\":{},\"wait_ns\":{},\"cleanup_ns\":{},\"unattributed_ns\":{},\"docker_calls\":{}}}}}",
+            match receipt.kind {
+                layerfs_storage::WorkspaceLifecycleKind::Attach => "attach",
+                layerfs_storage::WorkspaceLifecycleKind::End => "end",
+            },
+            receipt.total_ns,
+            receipt.proxy_ns,
+            receipt.docker_setup_ns,
+            receipt.helper_copy_ns,
+            receipt.mount_ready_ns,
+            receipt.unmount_ns,
+            receipt.wait_ns,
+            receipt.cleanup_ns,
+            receipt.unattributed_ns,
+            receipt.docker_calls,
+        ),
+    }
+}
+
+fn store_role_code(role: layerfs_storage::StoreRole) -> &'static str {
+    match role {
+        layerfs_storage::StoreRole::LayerStack => "s",
+        layerfs_storage::StoreRole::Branch => "b",
+    }
+}
+
+fn store_role_name(role: layerfs_storage::StoreRole) -> &'static str {
+    match role {
+        layerfs_storage::StoreRole::LayerStack => "layerstack",
+        layerfs_storage::StoreRole::Branch => "branch",
+    }
+}
+
+fn take_store_role<'a>(
+    fields: &mut impl Iterator<Item = &'a str>,
+) -> crate::MonitorResult<layerfs_storage::StoreRole> {
+    match next(fields)? {
+        "s" => Ok(layerfs_storage::StoreRole::LayerStack),
+        "b" => Ok(layerfs_storage::StoreRole::Branch),
+        _ => Err(crate::MonitorError::Integrity("database Store role")),
+    }
+}
+
+fn database_operation_code(operation: layerfs_storage::DatabaseOperation) -> &'static str {
+    match operation {
+        layerfs_storage::DatabaseOperation::ObjectAdmission => "o",
+        layerfs_storage::DatabaseOperation::FactAdmission => "f",
+        layerfs_storage::DatabaseOperation::CommitCas => "c",
+        layerfs_storage::DatabaseOperation::AuthorityPublish => "p",
+    }
+}
+
+fn database_operation_name(operation: layerfs_storage::DatabaseOperation) -> &'static str {
+    match operation {
+        layerfs_storage::DatabaseOperation::ObjectAdmission => "object_admission",
+        layerfs_storage::DatabaseOperation::FactAdmission => "fact_admission",
+        layerfs_storage::DatabaseOperation::CommitCas => "commit_cas",
+        layerfs_storage::DatabaseOperation::AuthorityPublish => "authority_publish",
+    }
+}
+
+fn take_database_operation<'a>(
+    fields: &mut impl Iterator<Item = &'a str>,
+) -> crate::MonitorResult<layerfs_storage::DatabaseOperation> {
+    match next(fields)? {
+        "o" => Ok(layerfs_storage::DatabaseOperation::ObjectAdmission),
+        "f" => Ok(layerfs_storage::DatabaseOperation::FactAdmission),
+        "c" => Ok(layerfs_storage::DatabaseOperation::CommitCas),
+        "p" => Ok(layerfs_storage::DatabaseOperation::AuthorityPublish),
+        _ => Err(crate::MonitorError::Integrity("database operation")),
     }
 }
 
@@ -662,17 +1059,6 @@ fn take_fact_kind<'a>(
         2 => Ok(layerfs_storage::FactKind::LayerStack),
         3 => Ok(layerfs_storage::FactKind::Layer),
         _ => Err(crate::MonitorError::Integrity("fact kind")),
-    }
-}
-
-fn expect<'a>(
-    fields: &mut impl Iterator<Item = &'a str>,
-    expected: &str,
-) -> crate::MonitorResult<()> {
-    if next(fields)? == expected {
-        Ok(())
-    } else {
-        Err(crate::MonitorError::Integrity("operation record version"))
     }
 }
 

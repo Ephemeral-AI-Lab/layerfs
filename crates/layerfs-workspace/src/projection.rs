@@ -83,6 +83,7 @@ pub(crate) fn capture(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<()> {
         }
     };
     let Some(root) = root else {
+        layerfs_storage::note_workspace_capture(0, 0);
         return Ok(());
     };
     let changed =
@@ -105,12 +106,16 @@ pub(crate) fn capture(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<()> {
         std::fs::remove_dir_all(&capture_spool)?;
     }
     let mut captured = workspace.clean_copy(&capture_spool)?;
-    if let Err(error) =
-        layerfs_materialization::capture(&root, &mut WorkspaceCapture(&mut captured))
-    {
+    let mut sink = WorkspaceCapture {
+        workspace: &mut captured,
+        files: 0,
+        bytes: 0,
+    };
+    if let Err(error) = layerfs_materialization::capture(&root, &mut sink) {
         let _ = std::fs::remove_dir_all(capture_spool);
         return Err(materialization_error(error));
     }
+    layerfs_storage::note_workspace_capture(sink.files, sink.bytes);
     captured.mutation_generation = workspace
         .mutation_generation
         .checked_add(u64::from(changed))
@@ -183,13 +188,12 @@ pub(crate) fn is_dirty(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<bool> {
             .map(|matches| !matches)
             .map_err(materialization_error);
     }
-    worker
+    Ok(worker
         .workspace
         .lock()
         .map_err(|_| WorkspaceError::WorkspaceBusy)?
-        .final_matches_base()
-        .map(|matches| !matches)
-        .map_err(WorkspaceError::Storage)
+        .mutation_generation
+        != 0)
 }
 
 pub(crate) fn end(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
@@ -208,12 +212,9 @@ pub(crate) fn end(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
         *handle = None;
         return Ok(());
     }
-    match handle.take() {
-        Some(ProjectionHandle::Docker(projection)) => projection.end()?,
-        None => {}
-        Some(ProjectionHandle::Materialized(_)) => unreachable!(),
-        #[cfg(all(target_os = "linux", feature = "host-fuse"))]
-        Some(ProjectionHandle::Fuse(_)) => unreachable!(),
+    if let Some(ProjectionHandle::Docker(projection)) = handle.as_mut() {
+        projection.end()?;
+        *handle = None;
     }
     Ok(())
 }
@@ -672,14 +673,18 @@ impl MaterializationSource for MaterializedView {
     }
 }
 
-struct WorkspaceCapture<'a>(&'a mut Workspace);
+struct WorkspaceCapture<'a> {
+    workspace: &'a mut Workspace,
+    files: u64,
+    bytes: u64,
+}
 
 impl CaptureSink for WorkspaceCapture<'_> {
     fn reset(&mut self, mode: u32, seconds: i64, nanos: u32) -> MaterializedResult<()> {
-        clear_directory(self.0, ROOT)?;
-        self.0
+        clear_directory(self.workspace, ROOT)?;
+        self.workspace
             .chmod(ROOT, mode)
-            .and_then(|_| self.0.set_mtime(ROOT, seconds, nanos))
+            .and_then(|_| self.workspace.set_mtime(ROOT, seconds, nanos))
             .map_err(|_| MaterializationError::Port("Workspace"))
     }
 
@@ -690,12 +695,12 @@ impl CaptureSink for WorkspaceCapture<'_> {
         seconds: i64,
         nanos: u32,
     ) -> MaterializedResult<()> {
-        let (parent, name) = parent(self.0, path)?;
+        let (parent, name) = parent(self.workspace, path)?;
         let attr = self
-            .0
+            .workspace
             .mkdir(parent, &name, mode)
             .map_err(|_| MaterializationError::Port("Workspace"))?;
-        self.0
+        self.workspace
             .set_mtime(attr.node, seconds, nanos)
             .map_err(|_| MaterializationError::Port("Workspace"))
     }
@@ -708,9 +713,9 @@ impl CaptureSink for WorkspaceCapture<'_> {
         seconds: i64,
         nanos: u32,
     ) -> MaterializedResult<()> {
-        let (parent, name) = parent(self.0, path)?;
+        let (parent, name) = parent(self.workspace, path)?;
         let attr = self
-            .0
+            .workspace
             .create_file(parent, &name, mode)
             .map_err(|_| MaterializationError::Port("Workspace"))?;
         let mut offset = 0;
@@ -720,12 +725,14 @@ impl CaptureSink for WorkspaceCapture<'_> {
             if read == 0 {
                 break;
             }
-            self.0
+            self.workspace
                 .write(attr.node, offset, &bytes[..read])
                 .map_err(|_| MaterializationError::Port("Workspace"))?;
             offset += read as u64;
         }
-        self.0
+        self.files = self.files.saturating_add(1);
+        self.bytes = self.bytes.saturating_add(offset);
+        self.workspace
             .set_mtime(attr.node, seconds, nanos)
             .map_err(|_| MaterializationError::Port("Workspace"))
     }
@@ -737,12 +744,12 @@ impl CaptureSink for WorkspaceCapture<'_> {
         seconds: i64,
         nanos: u32,
     ) -> MaterializedResult<()> {
-        let (parent, name) = parent(self.0, path)?;
+        let (parent, name) = parent(self.workspace, path)?;
         let attr = self
-            .0
+            .workspace
             .symlink(parent, &name, target)
             .map_err(|_| MaterializationError::Port("Workspace"))?;
-        self.0
+        self.workspace
             .set_mtime(attr.node, seconds, nanos)
             .map_err(|_| MaterializationError::Port("Workspace"))
     }
@@ -752,9 +759,9 @@ impl CaptureSink for WorkspaceCapture<'_> {
         source: &layerfs_content::CanonicalPath,
         target: &layerfs_content::CanonicalPath,
     ) -> MaterializedResult<()> {
-        let source = node(self.0, source)?;
-        let (parent, name) = parent(self.0, target)?;
-        self.0
+        let source = node(self.workspace, source)?;
+        let (parent, name) = parent(self.workspace, target)?;
+        self.workspace
             .link(source, parent, &name)
             .map(drop)
             .map_err(|_| MaterializationError::Port("Workspace"))

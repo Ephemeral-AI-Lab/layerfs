@@ -2,12 +2,12 @@ use layerfs_content::filesystem::ContentChange;
 use layerfs_content::object::access::ObjectRead;
 use layerfs_content::{CanonicalName, DirectoryEntry, Object, ObjectKind, ObjectReference};
 use layerfs_storage::{
-    apply_changes, decode_fact, empty_root, encode_fact, transfer_facts, transfer_roots,
-    AdmissionSetReceipt, BranchFact, BranchId, BranchRecord, BranchScope, BranchScopeRecord,
-    BuiltRoot, CanonicalObject, CommitId, CommitRecord, CoreReader, EntityName, Fact, FactKind,
-    LayerId, LayerRecord, LayerStackFact, LayerStackId, LayerStackRecord, LayerStackScopeRecord,
-    MissingBitmap, ObjectSource, PushResult, RemotePlacement, RootTransferRequest, StorageError,
-    StoreDb, StoreId, StoreRole, TransferTarget,
+    apply_changes, decode_fact, empty_root, encode_fact, transfer_facts, transfer_root_transition,
+    transfer_roots, AdmissionSetReceipt, BranchFact, BranchId, BranchRecord, BranchScope,
+    BranchScopeRecord, BuiltRoot, CanonicalObject, CommitId, CommitRecord, CoreReader, EntityName,
+    Fact, FactKind, LayerId, LayerRecord, LayerStackFact, LayerStackId, LayerStackRecord,
+    LayerStackScopeRecord, MissingBitmap, ObjectSource, PushResult, RemotePlacement,
+    RootTransferRequest, StorageError, StoreDb, StoreId, StoreRole, TransferTarget,
 };
 
 #[test]
@@ -706,6 +706,76 @@ fn multi_root_transfer_and_receipts_share_one_operation_state() {
     assert!(receiver.complete_root(built.root_id).unwrap());
     drop(receiver);
     drop(authority);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn complete_transition_prunes_trusted_subtrees_but_rejects_a_missing_frontier() {
+    let root = run_dir("complete-transition");
+    let store =
+        StoreDb::create(root.join("authority.sqlite"), StoreRole::LayerStack, None).unwrap();
+    let base = empty_root([42; 32]).unwrap();
+    admit_built(&store, &base);
+    let changed = apply_changes(
+        &DbSource(&store),
+        base.root_id,
+        &[ContentChange::Write {
+            path: "file".to_owned(),
+            bytes: b"frontier".to_vec(),
+            mode: 0o644,
+        }],
+        [43; 32],
+    )
+    .unwrap();
+    let mut objects = Vec::new();
+    changed
+        .objects
+        .visit_batches(&mut |batch, _| {
+            objects.extend_from_slice(batch);
+            Ok(())
+        })
+        .unwrap();
+    let missing = objects
+        .iter()
+        .position(|object| object.id != changed.root_id && !store.has_object(object.id).unwrap())
+        .unwrap();
+    store
+        .admit_objects(
+            &objects
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| *index != missing)
+                .map(|(_, object)| object.clone())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    let error = store
+        .verify_complete_transition(base.root_id, changed.root_id)
+        .unwrap_err();
+    assert!(matches!(error, StorageError::MissingObject(_)), "{error:?}");
+    store
+        .admit_objects(std::slice::from_ref(&objects[missing]))
+        .unwrap();
+    store
+        .verify_complete_transition(base.root_id, changed.root_id)
+        .unwrap();
+    let receiver = StoreDb::create(
+        root.join("receiver.sqlite"),
+        StoreRole::Branch,
+        Some(store.store_id()),
+    )
+    .unwrap();
+    admit_built(&receiver, &base);
+    let receipt =
+        transfer_root_transition(&DbSource(&store), &receiver, base.root_id, changed.root_id)
+            .unwrap();
+    assert!(receipt.known_roots_pruned > 0);
+    assert_eq!(receipt.membership_pages, 1);
+    receiver
+        .verify_complete_transition(base.root_id, changed.root_id)
+        .unwrap();
+    drop(receiver);
+    drop(store);
     std::fs::remove_dir_all(root).unwrap();
 }
 

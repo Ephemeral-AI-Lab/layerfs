@@ -103,11 +103,34 @@ impl OutputLog {
         Ok(())
     }
 
-    pub(crate) fn finish(&self, receipt: ExecutionReceipt) {
-        if let Ok(mut state) = self.state.lock() {
-            state.receipt = Some(receipt);
-            self.changed.notify_all();
-        }
+    pub(crate) fn finish_timed(
+        &self,
+        mut receipt: ExecutionReceipt,
+        execution_receipt: &Mutex<Option<ExecutionReceipt>>,
+        total_started: std::time::Instant,
+    ) -> Option<ExecutionReceipt> {
+        let terminal_started = std::time::Instant::now();
+        let mut state = self.state.lock().ok()?;
+        let mut stored = execution_receipt.lock().ok()?;
+        self.changed.notify_all();
+        state.receipt = Some(receipt.clone());
+        *stored = Some(receipt.clone());
+        receipt.terminal_publication_ns = terminal_started
+            .elapsed()
+            .as_nanos()
+            .min(u128::from(u64::MAX)) as u64;
+        receipt.total_wall_ns = total_started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+        receipt.elapsed_ns = receipt.total_wall_ns;
+        let attributed = receipt
+            .spawn_ns
+            .saturating_add(receipt.supervisor_queue_ns)
+            .saturating_add(receipt.runtime_ns)
+            .saturating_add(receipt.drain_ns)
+            .saturating_add(receipt.terminal_publication_ns);
+        receipt.unattributed_ns = receipt.total_wall_ns.saturating_sub(attributed);
+        state.receipt = Some(receipt.clone());
+        *stored = Some(receipt.clone());
+        Some(receipt)
     }
 
     pub(crate) fn retained_bytes(&self) -> u64 {

@@ -181,9 +181,30 @@ pub struct ExecutionReceipt {
     pub execution_id: ExecutionId,
     pub exit_code: Option<i32>,
     pub elapsed_ns: u64,
+    pub total_wall_ns: u64,
+    pub spawn_ns: u64,
+    pub supervisor_queue_ns: u64,
+    pub runtime_ns: u64,
+    pub drain_ns: u64,
+    pub terminal_publication_ns: u64,
+    pub unattributed_ns: u64,
+    pub direct_engine: bool,
     pub stdout_bytes: u64,
     pub stderr_bytes: u64,
     pub stopped: bool,
+}
+
+impl ExecutionReceipt {
+    pub fn timing_balanced(&self) -> bool {
+        let phases = self
+            .spawn_ns
+            .checked_add(self.supervisor_queue_ns)
+            .and_then(|value| value.checked_add(self.runtime_ns))
+            .and_then(|value| value.checked_add(self.drain_ns))
+            .and_then(|value| value.checked_add(self.terminal_publication_ns))
+            .and_then(|value| value.checked_add(self.unattributed_ns));
+        self.elapsed_ns == self.total_wall_ns && phases == Some(self.total_wall_ns)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

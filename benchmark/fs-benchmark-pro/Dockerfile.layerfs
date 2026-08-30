@@ -7,18 +7,24 @@ ARG LAYERFS_SOURCE_COMMIT
 ARG LAYERFS_SOURCE_TREE
 ARG LAYERFS_SOURCE_DIRTY
 ARG LAYERFS_SOURCE_SEAL
+ARG WORKLOAD_SOURCE_SHA256
+ARG WORKLOAD_BINARY_SHA256
 
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY tools ./tools
 COPY benchmark/fs-benchmark-pro ./benchmark/fs-benchmark-pro
+COPY benchmark/fs-benchmark-pro/workload.rs /workload/workload.rs
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     test "${#LAYERFS_SOURCE_COMMIT}" -eq 40 \
  && test "${#LAYERFS_SOURCE_TREE}" -eq 40 \
  && test "${#LAYERFS_SOURCE_SEAL}" -eq 64 \
+ && test "${#WORKLOAD_SOURCE_SHA256}" -eq 64 \
+ && test "${#WORKLOAD_BINARY_SHA256}" -eq 64 \
+ && echo "$WORKLOAD_SOURCE_SHA256  /workload/workload.rs" | sha256sum -c - \
  && case "$LAYERFS_SOURCE_DIRTY" in true|false) ;; *) exit 1 ;; esac \
  && case "$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE$LAYERFS_SOURCE_SEAL" in *[!0-9a-f]*) exit 1 ;; esac \
  && case "$TARGETARCH" in \
@@ -27,6 +33,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
       *) exit 1 ;; \
     esac \
  && rustup target add "$target" \
+ && rustc --edition=2021 -C opt-level=3 -C strip=symbols \
+      --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload \
+ && echo "$WORKLOAD_BINARY_SHA256  /fs-benchmark-workload" | sha256sum -c - \
  && cargo test --locked --target "$target" -p fs-benchmark-pro \
  && cargo build --locked --release --target "$target" -p fs-benchmark-pro \
  && cargo build --locked --release --target "$target" -p layerfs-fuse --no-default-features --features proxy \
@@ -41,24 +50,27 @@ ARG LAYERFS_SOURCE_COMMIT
 ARG LAYERFS_SOURCE_TREE
 ARG LAYERFS_SOURCE_DIRTY
 ARG LAYERFS_SOURCE_SEAL
+ARG WORKLOAD_SOURCE_SHA256
+ARG WORKLOAD_BINARY_SHA256
 
 RUN mkdir -p /results /workspace /var/tmp/layerfs-owned /src/benchmark/fs-benchmark-pro
 
 COPY --from=build /fs-benchmark-pro /usr/local/bin/fs-benchmark-pro
+COPY --from=build /fs-benchmark-workload /usr/local/bin/fs-benchmark-workload
 COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
-COPY benchmark/fs-benchmark-pro/workload.py /src/benchmark/fs-benchmark-pro/workload.py
-
-RUN chmod 0555 /usr/local/bin/fs-benchmark-pro /usr/local/bin/layerfs-fuse \
-                  /src/benchmark/fs-benchmark-pro/workload.py \
- && python3 /src/benchmark/fs-benchmark-pro/workload.py self-check \
+RUN chmod 0555 /usr/local/bin/fs-benchmark-pro /usr/local/bin/fs-benchmark-workload \
+                  /usr/local/bin/layerfs-fuse \
+ && /usr/local/bin/fs-benchmark-workload self-check \
  && /usr/local/bin/fs-benchmark-pro self-check
 
 LABEL org.opencontainers.image.source="https://github.com/Ephemeral-AI-Lab/layerfs" \
       org.opencontainers.image.revision="$LAYERFS_SOURCE_COMMIT" \
       org.opencontainers.image.source-tree="$LAYERFS_SOURCE_TREE" \
       dev.layerfs.source-dirty="$LAYERFS_SOURCE_DIRTY" \
-      dev.layerfs.source-seal="$LAYERFS_SOURCE_SEAL"
+      dev.layerfs.source-seal="$LAYERFS_SOURCE_SEAL" \
+      dev.layerfs.workload-source-sha256="$WORKLOAD_SOURCE_SHA256" \
+      dev.layerfs.workload-binary-sha256="$WORKLOAD_BINARY_SHA256"
 
 ENV LAYERFS_SOURCE_COMMIT="$LAYERFS_SOURCE_COMMIT" \
     LAYERFS_SOURCE_TREE="$LAYERFS_SOURCE_TREE" \

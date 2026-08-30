@@ -6,6 +6,7 @@ use crate::{
 use layerfs_content::ObjectId;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::time::Instant;
 
 pub const ID_BATCH_COUNT: usize = 512;
 pub const OBJECT_BATCH_COUNT: usize = 128;
@@ -344,11 +345,263 @@ impl LocalObjectReceipt {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct LocalAdmissionReceipt {
     pub objects: LocalObjectReceipt,
+    pub cdc_bytes_scanned: u64,
+    pub encode_hash_invocations: u64,
+    pub source_reused_ids: u64,
+    pub source_reused_bytes: u64,
 }
 
 impl LocalAdmissionReceipt {
     pub fn validate(&self) -> Result<()> {
-        self.objects.validate()
+        self.objects.validate()?;
+        if self.source_reused_ids > self.objects.reused_ids
+            || self.source_reused_bytes > self.objects.reused_bytes
+        {
+            return Err(StorageError::Integrity("source reuse equation"));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DurabilityReceipt {
+    pub store_id: StoreId,
+    pub role: crate::StoreRole,
+    pub stable_ns: u64,
+    pub checkpoint_ns: u64,
+    pub database_fsync_ns: u64,
+    pub directory_fsync_ns: u64,
+    pub unattributed_ns: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CaptureMode {
+    Live,
+    Materialized,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct WorkspaceCommitReceipt {
+    pub total_ns: u64,
+    pub pause_fence_ns: u64,
+    pub quiesce_ns: u64,
+    pub capture_ns: u64,
+    pub capture_mode: Option<CaptureMode>,
+    pub captured_files: u64,
+    pub captured_bytes: u64,
+    pub candidate_plan_ns: u64,
+    pub dirty_compare_ns: u64,
+    pub content_ns: u64,
+    pub namespace_ns: u64,
+    pub candidate_finish_ns: u64,
+    pub local_admission_ns: u64,
+    pub completeness_verify_ns: u64,
+    pub publication_ns: u64,
+    pub in_place_rebase_ns: u64,
+    pub resume_ns: u64,
+    pub unattributed_ns: u64,
+}
+
+impl WorkspaceCommitReceipt {
+    fn attributed_ns(self) -> u64 {
+        [
+            self.pause_fence_ns,
+            self.quiesce_ns,
+            self.capture_ns,
+            self.candidate_plan_ns,
+            self.dirty_compare_ns,
+            self.content_ns,
+            self.namespace_ns,
+            self.candidate_finish_ns,
+            self.local_admission_ns,
+            self.completeness_verify_ns,
+            self.publication_ns,
+            self.in_place_rebase_ns,
+            self.resume_ns,
+        ]
+        .into_iter()
+        .fold(0_u64, u64::saturating_add)
+    }
+
+    pub fn validate(self) -> Result<()> {
+        if self.capture_mode.is_none()
+            || self.total_ns != self.attributed_ns().saturating_add(self.unattributed_ns)
+            || (self.capture_mode == Some(CaptureMode::Live)
+                && (self.captured_files != 0 || self.captured_bytes != 0))
+        {
+            return Err(StorageError::Integrity("Workspace Commit timing equation"));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkspaceCommitPhase {
+    PauseFence,
+    Quiesce,
+    Capture,
+    CandidatePlan,
+    DirtyCompare,
+    Content,
+    Namespace,
+    CandidateFinish,
+    LocalAdmission,
+    CompletenessVerify,
+    Publication,
+    InPlaceRebase,
+    Resume,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PushPhaseReceipt {
+    pub total_ns: u64,
+    pub history_ns: u64,
+    pub frontier_ns: u64,
+    pub membership_ns: u64,
+    pub source_read_auth_ns: u64,
+    pub object_admission_ns: u64,
+    pub fact_admission_ns: u64,
+    pub authority_transition_verify_ns: u64,
+    pub publication_ns: u64,
+    pub durability_ns: u64,
+    pub unattributed_ns: u64,
+    pub endpoint_calls: u64,
+}
+
+impl PushPhaseReceipt {
+    fn attributed_ns(self) -> u64 {
+        [
+            self.history_ns,
+            self.frontier_ns,
+            self.membership_ns,
+            self.source_read_auth_ns,
+            self.object_admission_ns,
+            self.fact_admission_ns,
+            self.authority_transition_verify_ns,
+            self.publication_ns,
+            self.durability_ns,
+        ]
+        .into_iter()
+        .fold(0_u64, u64::saturating_add)
+    }
+
+    pub fn validate(self) -> Result<()> {
+        if self.total_ns != self.attributed_ns().saturating_add(self.unattributed_ns) {
+            return Err(StorageError::Integrity("Push timing equation"));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PushPhase {
+    History,
+    Frontier,
+    Membership,
+    SourceReadAuth,
+    ObjectAdmission,
+    FactAdmission,
+    AuthorityTransitionVerify,
+    Publication,
+    Durability,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DatabaseOperation {
+    ObjectAdmission,
+    FactAdmission,
+    CommitCas,
+    AuthorityPublish,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DatabaseReceipt {
+    pub store_id: StoreId,
+    pub role: crate::StoreRole,
+    pub operation: DatabaseOperation,
+    pub total_ns: u64,
+    pub connection_wait_ns: u64,
+    pub writer_acquire_ns: u64,
+    pub statement_ns: u64,
+    pub publication_ns: u64,
+    pub commit_sync_ns: u64,
+    pub unattributed_ns: u64,
+    pub statement_count: u64,
+    pub rows: u64,
+    pub bytes: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkspaceLifecycleKind {
+    Attach,
+    End,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct WorkspaceLifecycleReceipt {
+    pub kind: WorkspaceLifecycleKind,
+    pub total_ns: u64,
+    pub proxy_ns: u64,
+    pub docker_setup_ns: u64,
+    pub helper_copy_ns: u64,
+    pub mount_ready_ns: u64,
+    pub unmount_ns: u64,
+    pub wait_ns: u64,
+    pub cleanup_ns: u64,
+    pub unattributed_ns: u64,
+    pub docker_calls: u64,
+}
+
+impl WorkspaceLifecycleReceipt {
+    pub fn validate(self) -> Result<()> {
+        if self.total_ns
+            != self
+                .proxy_ns
+                .saturating_add(self.docker_setup_ns)
+                .saturating_add(self.helper_copy_ns)
+                .saturating_add(self.mount_ready_ns)
+                .saturating_add(self.unmount_ns)
+                .saturating_add(self.wait_ns)
+                .saturating_add(self.cleanup_ns)
+                .saturating_add(self.unattributed_ns)
+        {
+            return Err(StorageError::Integrity(
+                "Workspace lifecycle timing equation",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl DatabaseReceipt {
+    pub fn validate(self) -> Result<()> {
+        if self.total_ns
+            != self
+                .connection_wait_ns
+                .saturating_add(self.writer_acquire_ns)
+                .saturating_add(self.statement_ns)
+                .saturating_add(self.publication_ns)
+                .saturating_add(self.commit_sync_ns)
+                .saturating_add(self.unattributed_ns)
+        {
+            return Err(StorageError::Integrity("database timing equation"));
+        }
+        Ok(())
+    }
+}
+
+impl DurabilityReceipt {
+    pub fn validate(self) -> Result<()> {
+        if self.stable_ns
+            != self
+                .checkpoint_ns
+                .saturating_add(self.database_fsync_ns)
+                .saturating_add(self.directory_fsync_ns)
+                .saturating_add(self.unattributed_ns)
+        {
+            return Err(StorageError::Integrity("durability timing equation"));
+        }
+        Ok(())
     }
 }
 
@@ -356,6 +609,11 @@ impl LocalAdmissionReceipt {
 pub enum StorageReceipt {
     Local(LocalAdmissionReceipt),
     Transfer(TransferReceipt),
+    Durability(DurabilityReceipt),
+    WorkspaceCommit(WorkspaceCommitReceipt),
+    Push(PushPhaseReceipt),
+    Database(DatabaseReceipt),
+    WorkspaceLifecycle(WorkspaceLifecycleReceipt),
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -453,7 +711,11 @@ impl<'a> TransferPipeline<'a> {
         if ids.len() > ID_BATCH_COUNT || ids.windows(2).any(|pair| pair[0] >= pair[1]) {
             return Err(StorageError::InvalidInput("object membership page"));
         }
-        let (missing, lengths) = self.target.object_membership(ids)?;
+        note_push_endpoint_call();
+        let started = Instant::now();
+        let membership = self.target.object_membership(ids);
+        note_push_phase(PushPhase::Membership, elapsed_ns(started));
+        let (missing, lengths) = membership?;
         missing.validate_tail(ids.len())?;
         if lengths.len() != ids.len()
             || lengths.iter().enumerate().any(|(index, length)| {
@@ -520,6 +782,7 @@ impl<'a> TransferPipeline<'a> {
         if self.receipt.peak_buffer_bytes >= TRANSFER_BUFFER_BYTES as u64 {
             return Err(StorageError::Integrity("transfer buffer ceiling"));
         }
+        note_push_endpoint_call();
         let admission = self.target.admit_objects(&self.objects)?;
         merge_set(&mut self.receipt.objects, count, bytes, admission);
         self.receipt.payload_batches += 1;
@@ -540,7 +803,11 @@ impl<'a> TransferPipeline<'a> {
                 {
                     return Err(StorageError::InvalidInput("duplicate fact"));
                 }
-                let missing = self.target.missing_facts(&announced)?;
+                note_push_endpoint_call();
+                let started = Instant::now();
+                let missing = self.target.missing_facts(&announced);
+                note_push_phase(PushPhase::Membership, elapsed_ns(started));
+                let missing = missing?;
                 missing.validate_tail(announced.len())?;
                 self.receipt.membership_pages += 1;
                 let set = self
@@ -569,6 +836,7 @@ impl<'a> TransferPipeline<'a> {
                     .collect::<Vec<_>>();
                 for batch in fact_batches(&selected)? {
                     let bytes = batch.iter().map(|fact| fact.encoded_size()).sum::<usize>();
+                    note_push_endpoint_call();
                     let admission = self.target.admit_facts(batch)?;
                     merge_set(
                         self.receipt
@@ -682,15 +950,162 @@ fn merge_set(
 
 thread_local! {
     static RECEIPTS: RefCell<Vec<StorageReceipt>> = const { RefCell::new(Vec::new()) };
+    static WORKSPACE_COMMIT: RefCell<Option<WorkspaceCommitReceipt>> = const { RefCell::new(None) };
+    static PUSH_PHASES: RefCell<Option<PushPhaseReceipt>> = const { RefCell::new(None) };
 }
 
 fn record(receipt: StorageReceipt) {
     RECEIPTS.with(|receipts| receipts.borrow_mut().push(receipt));
 }
 
+pub struct WorkspaceCommitTimer(Instant);
+
+impl Drop for WorkspaceCommitTimer {
+    fn drop(&mut self) {
+        WORKSPACE_COMMIT.with(|current| {
+            let Some(mut receipt) = current.borrow_mut().take() else {
+                return;
+            };
+            receipt.total_ns = elapsed_ns(self.0);
+            receipt.unattributed_ns = receipt.total_ns.saturating_sub(receipt.attributed_ns());
+            if receipt.validate().is_ok() {
+                record(StorageReceipt::WorkspaceCommit(receipt));
+            }
+        });
+    }
+}
+
+pub fn begin_workspace_commit(mode: CaptureMode) -> Result<WorkspaceCommitTimer> {
+    WORKSPACE_COMMIT.with(|current| {
+        let mut current = current.borrow_mut();
+        if current.is_some() {
+            return Err(StorageError::Integrity("nested Workspace Commit timing"));
+        }
+        *current = Some(WorkspaceCommitReceipt {
+            capture_mode: Some(mode),
+            ..WorkspaceCommitReceipt::default()
+        });
+        Ok(WorkspaceCommitTimer(Instant::now()))
+    })
+}
+
+pub fn note_workspace_commit_phase(phase: WorkspaceCommitPhase, elapsed_ns: u64) {
+    WORKSPACE_COMMIT.with(|current| {
+        let mut current = current.borrow_mut();
+        let Some(receipt) = current.as_mut() else {
+            return;
+        };
+        let target = match phase {
+            WorkspaceCommitPhase::PauseFence => &mut receipt.pause_fence_ns,
+            WorkspaceCommitPhase::Quiesce => &mut receipt.quiesce_ns,
+            WorkspaceCommitPhase::Capture => &mut receipt.capture_ns,
+            WorkspaceCommitPhase::CandidatePlan => &mut receipt.candidate_plan_ns,
+            WorkspaceCommitPhase::DirtyCompare => &mut receipt.dirty_compare_ns,
+            WorkspaceCommitPhase::Content => &mut receipt.content_ns,
+            WorkspaceCommitPhase::Namespace => &mut receipt.namespace_ns,
+            WorkspaceCommitPhase::CandidateFinish => &mut receipt.candidate_finish_ns,
+            WorkspaceCommitPhase::LocalAdmission => &mut receipt.local_admission_ns,
+            WorkspaceCommitPhase::CompletenessVerify => &mut receipt.completeness_verify_ns,
+            WorkspaceCommitPhase::Publication => &mut receipt.publication_ns,
+            WorkspaceCommitPhase::InPlaceRebase => &mut receipt.in_place_rebase_ns,
+            WorkspaceCommitPhase::Resume => &mut receipt.resume_ns,
+        };
+        *target = target.saturating_add(elapsed_ns);
+    });
+}
+
+pub fn note_workspace_capture(captured_files: u64, captured_bytes: u64) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.captured_files = receipt.captured_files.saturating_add(captured_files);
+            receipt.captured_bytes = receipt.captured_bytes.saturating_add(captured_bytes);
+        }
+    });
+}
+
+pub struct PushTimer(Instant);
+
+impl Drop for PushTimer {
+    fn drop(&mut self) {
+        PUSH_PHASES.with(|current| {
+            let Some(mut receipt) = current.borrow_mut().take() else {
+                return;
+            };
+            receipt.total_ns = elapsed_ns(self.0);
+            receipt.unattributed_ns = receipt.total_ns.saturating_sub(receipt.attributed_ns());
+            if receipt.validate().is_ok() {
+                record(StorageReceipt::Push(receipt));
+            }
+        });
+    }
+}
+
+pub fn begin_push() -> Result<PushTimer> {
+    PUSH_PHASES.with(|current| {
+        let mut current = current.borrow_mut();
+        if current.is_some() {
+            return Err(StorageError::Integrity("nested Push timing"));
+        }
+        *current = Some(PushPhaseReceipt::default());
+        Ok(PushTimer(Instant::now()))
+    })
+}
+
+pub fn note_push_phase(phase: PushPhase, elapsed_ns: u64) {
+    PUSH_PHASES.with(|current| {
+        let mut current = current.borrow_mut();
+        let Some(receipt) = current.as_mut() else {
+            return;
+        };
+        let target = match phase {
+            PushPhase::History => &mut receipt.history_ns,
+            PushPhase::Frontier => &mut receipt.frontier_ns,
+            PushPhase::Membership => &mut receipt.membership_ns,
+            PushPhase::SourceReadAuth => &mut receipt.source_read_auth_ns,
+            PushPhase::ObjectAdmission => &mut receipt.object_admission_ns,
+            PushPhase::FactAdmission => &mut receipt.fact_admission_ns,
+            PushPhase::AuthorityTransitionVerify => &mut receipt.authority_transition_verify_ns,
+            PushPhase::Publication => &mut receipt.publication_ns,
+            PushPhase::Durability => &mut receipt.durability_ns,
+        };
+        *target = target.saturating_add(elapsed_ns);
+    });
+}
+
+pub fn note_push_endpoint_call() {
+    PUSH_PHASES.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.endpoint_calls = receipt.endpoint_calls.saturating_add(1);
+        }
+    });
+}
+
+pub fn record_database(receipt: DatabaseReceipt) -> Result<()> {
+    receipt.validate()?;
+    record(StorageReceipt::Database(receipt));
+    Ok(())
+}
+
+pub fn record_workspace_lifecycle(receipt: WorkspaceLifecycleReceipt) -> Result<()> {
+    receipt.validate()?;
+    record(StorageReceipt::WorkspaceLifecycle(receipt));
+    Ok(())
+}
+
+fn elapsed_ns(started: Instant) -> u64 {
+    started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+}
+
 pub fn record_local_admission(receipt: LocalAdmissionReceipt) -> Result<()> {
     receipt.validate()?;
     record(StorageReceipt::Local(receipt));
+    Ok(())
+}
+
+pub fn record_durability(receipt: DurabilityReceipt) -> Result<()> {
+    receipt.validate()?;
+    note_push_phase(PushPhase::Durability, receipt.stable_ns);
+    record(StorageReceipt::Durability(receipt));
     Ok(())
 }
 
@@ -703,7 +1118,12 @@ pub fn take_transfer_receipts() -> Vec<TransferReceipt> {
         .into_iter()
         .filter_map(|receipt| match receipt {
             StorageReceipt::Transfer(receipt) => Some(receipt),
-            StorageReceipt::Local(_) => None,
+            StorageReceipt::Local(_)
+            | StorageReceipt::Durability(_)
+            | StorageReceipt::WorkspaceCommit(_)
+            | StorageReceipt::Push(_)
+            | StorageReceipt::Database(_)
+            | StorageReceipt::WorkspaceLifecycle(_) => None,
         })
         .collect()
 }
@@ -756,6 +1176,15 @@ mod tests {
             reused_bytes: 8,
         };
         local.validate().unwrap();
+
+        LocalAdmissionReceipt {
+            objects: local,
+            source_reused_ids: 1,
+            source_reused_bytes: 8,
+            ..LocalAdmissionReceipt::default()
+        }
+        .validate()
+        .unwrap();
 
         let transfer = TransferSetReceipt {
             announced_ids: 2,

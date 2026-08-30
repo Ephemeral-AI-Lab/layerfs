@@ -34,8 +34,7 @@ explicit refinement in this handoff:
 > The public operation set is frozen to operations that already exist in the
 > current SDK. Do not add or use a new public operation, command, endpoint,
 > operation family, benchmark-only API, or active selector. In particular, do
-> not add the provisional `Client::durability_barrier()` operation mentioned in
-> the draft benchmark specification. If matched durability needs stronger
+> not add `Client::durability_barrier()`. If matched durability needs stronger
 > behavior, implement it internally within the existing Commit/Push lifecycle
 > and expose passive timing/outcome evidence through existing receipts and
 > Monitor data.
@@ -55,7 +54,7 @@ all callers of every changed public type or function
 current focused tests
 benchmark/fs-bench
 benchmark/fs-benchmark-pro
-benchmark-results/fs-bench-pro
+benchmark-results/fs-bench-plus
 current Monitor, receipt, tracing, and evidence paths
 ~~~
 
@@ -75,7 +74,8 @@ Complete all of the following:
 3. Run LayerFS Reference against pinned upstream Computer through the exact
    public product paths in `docs/fs-bench-plus/spec.md`.
 4. Add the timers, passive counters, structured traces, and evidence needed to
-   attribute execution, Commit, Push, durability, storage, and materialization.
+   attribute execution, Commit, Push, durability, storage, and FUSE
+   materialization.
 5. Route production work through the existing optimized algorithms in
    `crates/layerfs-content` and `crates/layerfs-storage` instead of rebuilding
    equivalent logic in Workspace, SDK, FUSE, Store, or benchmark code.
@@ -84,13 +84,13 @@ Complete all of the following:
 7. Maintain one append-only optimization history at:
 
    ~~~text
-   /Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/optimization-history.md
+   /Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-plus/optimization-history.md
    ~~~
 
 8. Retain raw evidence for every run under:
 
    ~~~text
-   /Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/runs/<run-id>/
+   /Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-plus/runs/<run-id>/
    ~~~
 
 9. Finish with full repository verification, a valid 30-pair formal campaign,
@@ -142,18 +142,27 @@ read-only filesystem metadata for DB/WAL/SHM allocation
 the Computer-comparable boundary. It must not enter headline latency or
 storage.
 
-Cold materialization may use the existing
-`Client::create_workspace_session` operation with Host placement and
-`WorkspaceProjection::Materialize`. Do not invent a protected-seed operation.
-Warm incremental materialization remains unsupported until the existing public
-surface can express it without a new operation; report that honestly.
+Every materialization row means FUSE materialization: make the selected
+immutable root available in the admitted container through
+`WorkspacePlacement::Container` and `WorkspaceProjection::Fuse`, then measure
+mount readiness and exact first access. Host placement and
+`WorkspaceProjection::Materialize` are out of scope.
+
+Implement and report the FUSE rows frozen by the specification, including cold
+mount, proven-warm fresh mount, same-mount no-change, next checkpoint after a
+ten-byte edit, append, truncate, rename, temp-prepend, full rewrite, first read,
+repeat read, and fresh-process remount/recovery. At the current SDK lifecycle,
+a successful Commit makes the prior Workspace non-executable, so next-root rows
+must include the required new Workspace/helper/mount instead of pretending the
+old mount can continue.
 
 Do not add or use:
 
 ~~~text
 Client::durability_barrier or any other new public operation
 new CLI commands or operation families
-direct docker exec for a LayerFS workload
+WorkspacePlacement::Host or WorkspaceProjection::Materialize in this benchmark
+docker exec for the registered filesystem workload
 BranchStore::commit_changes from the benchmark
 ContentChange::Splice as a user-facing benchmark operation
 ObjectBuffer or StoreDb from the benchmark
@@ -167,7 +176,92 @@ fixture-specific paths, digests, offsets, markers, roots, or ObjectIds
 The public operation vocabulary is frozen; internal implementation,
 instrumentation, receipts, and algorithms may be optimized.
 
-## 4. Fairness and anti-cheating rules
+## 4. Frozen Docker environment
+
+Use the dedicated fs-bench-plus images. Do not substitute the simpler
+`containers/layerfs-fuse/Dockerfile` product/base-fs-bench image for the
+public-SDK controller image.
+
+LayerFS image:
+
+~~~text
+Dockerfile: benchmark/fs-benchmark-pro/Dockerfile.layerfs
+tag: layerfs-fs-benchmark-pro:local
+build base: rust:1.85.1-bookworm
+runtime base: rust:1.85.1-bookworm
+required binaries:
+  /usr/local/bin/fs-benchmark-pro
+  /usr/local/bin/layerfs-fuse
+  /usr/local/bin/docker
+~~~
+
+Build it from the exact measured checkout. OCI labels must match the current
+commit, tree, dirty state, and source-seal SHA-256. Rebuild after every source,
+benchmark, manifest, lockfile, or container-definition change. The runner must
+reject a stale or mismatched image.
+
+Computer image:
+
+~~~text
+Dockerfile: benchmark/fs-benchmark-pro/Dockerfile.computer
+tag: layerfs-fs-benchmark-pro-computer:de87919a
+build base: node:22.22.0-bookworm
+runtime base: node:22.22.0-bookworm-slim
+upstream commit: de87919a4fd37242e960e13b7b3ba802d1eef0a0
+upstream tree: 4fb409d7e1356e1098439293d77d2fdc2dbf2190
+~~~
+
+Build Computer from the exact sealed upstream `git archive` and admitted
+adapter files only. Do not patch the product source. Both image architectures
+must match.
+
+Every arm uses a fresh container with exactly:
+
+~~~text
+--privileged
+--device /dev/fuse:rwm
+--cap-add SYS_ADMIN
+--security-opt apparmor=unconfined
+--security-opt seccomp=unconfined
+--network none
+--cpus 1
+--memory 1g
+--memory-swap 1g
+--pids-limit 512
+--tmpfs /tmp:rw,nosuid,nodev,size=256m
+~~~
+
+The LayerFS controller may mount `/var/run/docker.sock` only because the
+production Container-placement path uses Docker to copy, start, pause, resume,
+and remove the FUSE helper in the target container. The measured Workspace must
+target that fresh admitted container at a registered `/workspace/...` mount
+path.
+
+An outer `docker exec` may start the sealed `fs-benchmark-pro` controller in
+the admitted container. It may not execute a registered read or mutation. The
+controller must launch every registered filesystem command through:
+
+~~~text
+Client::exec_workspace_session
+Client::workspace_output
+OutputReader::read through a terminal receipt
+~~~
+
+Docker calls made internally by the production `DockerProjection` to attach or
+control the FUSE helper are legitimate timed product work. The current
+`timed_docker` workload shortcut in `benchmark/fs-benchmark-pro/src/main.rs` is
+a known invalid wiring path and must be removed before the first valid result.
+
+The current runner also writes to `benchmark-results/fs-benchmark-pro`. Change
+its result root to the user-frozen `benchmark-results/fs-bench-plus`, where the
+single append-only history and all per-run raw directories live.
+
+Each LayerFS trial uses a fresh measurement container. Recovery uses a second
+fresh container over retained Store files. Each Computer trial also uses a
+fresh container. No container, mount, Workspace, Store, or application cache
+crosses trial boundaries.
+
+## 5. Fairness and anti-cheating rules
 
 Use exactly two candidates:
 
@@ -192,9 +286,9 @@ Never:
 - precompute final files, chunks, extents, ObjectIds, changed-object lists, or
   expected roots;
 - disable or delay durability;
-- use sparse holes, reflinks, hard links, compression-friendly zero data, or a
-  prebuilt destination unless the scenario explicitly requires that mechanism
-  for both candidates;
+- use sparse holes, reflinks, hard links, compression-friendly zero data, a
+  hidden surviving mount, or a pre-read target unless the scenario explicitly
+  requires that mechanism for both candidates;
 - bypass FUSE or the public SDK;
 - warm only one candidate;
 - retain candidate state across trials;
@@ -210,7 +304,7 @@ Natural state created by earlier registered operations in the same scenario is
 product behavior. Explicit warm and cold scenarios remain separate and are
 never pooled.
 
-## 5. Reuse the existing optimized algorithms
+## 6. Reuse the existing optimized algorithms
 
 Before optimizing a slow phase, trace the complete call path and all callers.
 Prefer fixing the shared production primitive once.
@@ -228,9 +322,9 @@ exact normalized dirty ranges
   -> bounded canonical admission
 ~~~
 
-For a small base-backed edit, do not hash, CDC-scan, copy, materialize, or
-rebuild the complete file. Do not copy authority-owned Reference objects into
-BranchStore. Candidate admission must distinguish:
+For a small base-backed edit, do not hash, CDC-scan, copy, eagerly reconstruct,
+or rebuild the complete file. Do not copy authority-owned Reference objects
+into BranchStore. Candidate admission must distinguish:
 
 ~~~text
 inserted locally
@@ -249,7 +343,7 @@ canonical objects into BranchStore.
 
 You may optimize inefficient algorithms anywhere in the in-scope production
 path, including content, storage, BranchStore, LayerStackStore, Workspace,
-FUSE, SDK internals, Monitor, materialization, and the benchmark harness.
+FUSE, SDK internals, Monitor, FUSE projection, and the benchmark harness.
 Preserve V2 identities, canonical encodings, CDC behavior, transaction
 boundaries, failure atomicity, and the public operation set.
 
@@ -257,7 +351,7 @@ No SQLite write transaction may contain network I/O, complete history or
 closure enumeration, CDC, hashing, or unbounded work. Preserve bounded memory,
 bounded batches, exact missing-only transfer, and immutable publication.
 
-## 6. Timers, traces, counters, and logging
+## 7. Timers, traces, counters, and logging
 
 Add enough instrumentation to explain every material phase. Instrumentation
 must be passive, bounded, structured, low-overhead, and independent of fixture
@@ -327,22 +421,42 @@ push_object_admission_ns
 push_fact_admission_ns
 push_authority_verify_ns
 push_publish_ns
+push_durability_ns
 push_unattributed_ns
 ~~~
 
-Add materialization timers when that route runs:
+`push_durability_ns` contains the two-Store checkpoint/fsync fragments listed
+above. `Client::push_branch` must not return before that durability phase
+completes. The benchmark must not add a separate public durability call or
+double-count the same fragment outside `sdk_branch_push_ns`.
+
+Attribute FUSE materialization and first access:
 
 ~~~text
-materialize_qualification_ns
-materialize_reconstruct_ns
-materialize_metadata_ns
-materialize_data_sync_ns
-materialize_directory_sync_ns
-materialize_publish_ns
-materialize_verify_ns
-materialize_cleanup_ns
-materialize_unattributed_ns
+container_start_ns
+client_connect_ns
+root_pin_ns
+workspace_registry_ns
+proxy_start_ns
+helper_copy_ns
+helper_start_ns
+mount_ready_ns
+projection_attach_ns
+first_lookup_ns
+first_stat_ns
+first_read_ns
+complete_read_ns
+projection_pause_ns
+projection_unmount_ns
+projection_cleanup_ns
+fuse_materialization_unattributed_ns
 ~~~
+
+Record the exact image digest, container ID, mount path, immutable root, helper
+binary SHA-256/PID, proxy identity, in-container mountinfo, eager reconstructed
+bytes, attach-time payload reads, attach-time complete-file hash/CDC bytes,
+first/repeated-read bytes, page faults, process/cgroup I/O, and lifecycle
+residue. FUSE attach must not eagerly reconstruct or copy the root.
 
 Expand counters when existing counters cannot explain a phase. Include exact
 work quantities such as compared bytes, CDC bytes, dirty bytes, payload reads,
@@ -371,12 +485,12 @@ the hot path. Buffer structured events and attach them to the existing
 operation/Monitor evidence. Every phase equation must balance; keep an explicit
 `*_unattributed_ns` until it is understood rather than forcing totals to match.
 
-## 7. Append-only optimization history
+## 8. Append-only optimization history
 
 The only cumulative run report is:
 
 ~~~text
-benchmark-results/fs-bench-pro/optimization-history.md
+benchmark-results/fs-bench-plus/optimization-history.md
 ~~~
 
 Create it if absent. Only the primary handoff agent may append to it. Subagents
@@ -399,6 +513,8 @@ Use this exact per-round structure:
 - Benchmark/profile and exact commands:
 - Candidate order seed and pair count:
 - Host, kernel, Docker, CPU/memory/I/O envelope:
+- Candidate image tags, digests, architectures, and verified OCI labels:
+- Measurement/recovery container IDs, FUSE mount paths, mountinfo, and helper SHA-256:
 - Raw evidence directory and SHA-256 inventory:
 - Previous comparable round:
 - Current best comparable round:
@@ -442,7 +558,7 @@ runs, and should not be changed without new contrary evidence.
 Raw evidence belongs in the round's `runs/<run-id>/` directory, not inline in
 the ledger. Link it from the ledger and record its source seal and hashes.
 
-## 8. Self-improving iteration loop
+## 9. Self-improving iteration loop
 
 Begin with a current-source baseline before making optimization changes. Then
 repeat this loop:
@@ -486,7 +602,7 @@ exhausted when its work equations are optimal for the registered operation,
 its contribution is at or below measurement noise or unavoidable public-path
 cost, and independent review finds no safe evidence-backed improvement.
 
-## 9. Benchmark progression
+## 10. Benchmark progression
 
 Use this progression:
 
@@ -516,7 +632,7 @@ Every formal attempt is retained and disclosed. A source, configuration,
 fixture, helper, evidence-schema, or benchmark change starts a new campaign and
 source seal.
 
-## 10. Required optimization order
+## 11. Required optimization order
 
 Let evidence choose the exact patch, but normally inspect bottlenecks in this
 order:
@@ -533,12 +649,13 @@ order:
 8. SQLite transaction duration, checkpointing, fsync grouping, and connection
    reuse inside existing operation semantics;
 9. one-pass bounded construction for new files and opaque replacements;
-10. reads, dense writes, materialization, memory, and physical I/O.
+10. reads, dense writes, FUSE materialization/first access, memory, and physical
+    I/O.
 
 Do not assume this list identifies the current bottleneck. Confirm every choice
 with current-round evidence.
 
-## 11. Verification after each change
+## 12. Verification after each change
 
 After each semantic change:
 
@@ -555,7 +672,7 @@ Add focused regression tests for every root cause. Tests must prove behavior,
 not the benchmark fixture. Include varied paths, offsets, data, file sizes, and
 operation orders so fixture-specific shortcuts cannot pass.
 
-## 12. Terminal gates
+## 13. Terminal gates
 
 Do not stop at compilation, unit tests, a faster microbenchmark, a favorable
 smoke run, a passing pilot, or plausible prose.
@@ -564,6 +681,9 @@ Terminal requires all of the following together:
 
 1. Every required fs-bench-plus scenario is implemented through the frozen
    existing public SDK operation set and real FUSE.
+   Cold, warm, incremental, first-read, repeat-read, and process-cold
+   materialization all use Container placement plus `WorkspaceProjection::Fuse`;
+   none use Host directory export.
 2. All independent oracles, namespace checks, retained-root checks,
    fresh-process recovery, transaction rules, bounded-memory rules, and
    missing-only equations pass.
@@ -578,6 +698,9 @@ Terminal requires all of the following together:
    phase has an evidence-backed explanation.
 7. The final 30-pair campaign is valid, immutable, fully reported, and linked
    from the append-only ledger.
+   Its image digests/labels, architectures, Dockerfiles, resource envelope,
+   container lifecycle, `/dev/fuse`, in-container mountinfo, and fresh recovery
+   container match the frozen environment section.
 8. Full repository verification passes:
 
    ~~~text
@@ -601,7 +724,7 @@ Terminal requires all of the following together:
 optimization, not theoretical proof of a global optimum. Stable components
 that already meet their gates should be recorded and left alone.
 
-## 13. External blockers
+## 14. External blockers
 
 Stop only for a genuine external blocker after exhausting safe in-repository
 alternatives and all independent work. A difficult implementation, regression,

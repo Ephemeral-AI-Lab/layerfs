@@ -16,11 +16,12 @@ pub use layerfs_monitor::{
     OperationFamily, OperationReceipt, PlacementAnalysis, SemanticOperation, TransferAnalysis,
 };
 pub use layerfs_storage::{
-    BranchFact, BranchId, BranchRecord, BranchScope, BranchScopeRecord, CommitId, CommitRecord,
-    DiffAspects, DiffEntry, DiffRequest, EntityName, Fact, FactKind, InitializeLayerStackResult,
-    LayerId, LayerRecord, LayerStackFact, LayerStackId, LayerStackInitialization, LayerStackRecord,
-    LayerStackScopeRecord, LocalForkSource, NodeSummary, PullBranchResult, PullLayerResult,
-    PushResult, RemotePlacement, ServingMode, StorageError, StoreId,
+    BranchFact, BranchId, BranchRecord, BranchScope, BranchScopeRecord, CaptureMode, CommitId,
+    CommitRecord, DiffAspects, DiffEntry, DiffRequest, EntityName, Fact, FactKind,
+    InitializeLayerStackResult, LayerId, LayerRecord, LayerStackFact, LayerStackId,
+    LayerStackInitialization, LayerStackRecord, LayerStackScopeRecord, LocalForkSource,
+    NodeSummary, PullBranchResult, PullLayerResult, PushResult, RemotePlacement, ServingMode,
+    StorageError, StorageReceipt, StoreId, StoreRole,
 };
 pub use layerfs_workspace::{
     ConflictCursor, ConflictId, ConflictKind, ConflictPage, ContainerId, CreateWorkspaceSession,

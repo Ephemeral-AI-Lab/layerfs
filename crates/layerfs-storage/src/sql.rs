@@ -8,8 +8,11 @@ use crate::{
     ID_BATCH_COUNT, OBJECT_BATCH_BYTES, OBJECT_BATCH_COUNT,
 };
 use layerfs_content::ObjectId;
-use rusqlite::{params, params_from_iter, types::Value, OptionalExtension, Transaction};
+use rusqlite::{
+    params, params_from_iter, types::Value, OptionalExtension, Transaction, TransactionBehavior,
+};
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Instant;
 
 impl StoreDb {
     pub fn read_object_row(&self, id: ObjectId) -> Result<Vec<u8>> {
@@ -62,26 +65,8 @@ impl StoreDb {
         if ids.is_empty() {
             return Ok(BTreeMap::new());
         }
-        let sql = fixed_membership_sql("objects", "object_id", "object_id,bytes");
-        let mut values = ids
-            .iter()
-            .map(|id| Value::Blob(id.as_bytes().to_vec()))
-            .collect::<Vec<_>>();
-        values.resize(ID_BATCH_COUNT, Value::Null);
         let connection = self.connection()?;
-        let mut statement = connection.prepare_cached(&sql)?;
-        let rows = statement
-            .query_map(params_from_iter(values), |row| {
-                Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?))
-            })?
-            .map(|row| {
-                let (id, bytes) = row?;
-                let id = ObjectId::from_bytes(&id)?;
-                layerfs_content::authenticate_identity(&bytes, id)?;
-                Ok((id, bytes))
-            })
-            .collect();
-        rows
+        existing_object_rows_on(&connection, ids)
     }
 
     pub fn missing_objects(&self, ids: &[ObjectId]) -> Result<MissingBitmap> {
@@ -133,31 +118,67 @@ impl StoreDb {
             layerfs_content::authenticate_identity(&object.bytes, object.id)?;
             crate::note_receiver_authentication();
         }
+        let bytes = objects.iter().map(|object| object.bytes.len() as u64).sum();
+        let total_started = Instant::now();
+        let started = Instant::now();
         let mut connection = self.connection()?;
-        let transaction = connection.transaction()?;
-        let mut receipt = AdmissionSetReceipt::default();
+        let connection_wait_ns = elapsed_ns(started);
+        let started = Instant::now();
+        let known = existing_object_rows_on(
+            &connection,
+            &objects.iter().map(|object| object.id).collect::<Vec<_>>(),
+        )?;
         for object in objects {
+            if let Some(bytes) = known.get(&object.id) {
+                if bytes != &object.bytes {
+                    return Err(StorageError::Integrity("object collision"));
+                }
+            }
+        }
+        let mut statement_ns = elapsed_ns(started);
+        let mut statement_count = 1_u64;
+        let started = Instant::now();
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let writer_acquire_ns = elapsed_ns(started);
+        let mut receipt = AdmissionSetReceipt::default();
+        let started = Instant::now();
+        for object in objects {
+            if known.contains_key(&object.id) {
+                receipt.raced_existing_ids += 1;
+                receipt.raced_existing_bytes += object.bytes.len() as u64;
+                continue;
+            }
             let inserted = transaction.execute(
                 "INSERT INTO objects(object_id,bytes) VALUES(?1,?2) ON CONFLICT DO NOTHING",
                 params![object.id.as_bytes().as_slice(), &object.bytes],
             )?;
+            statement_count += 1;
             if inserted == 1 {
                 receipt.inserted_ids += 1;
                 receipt.inserted_bytes += object.bytes.len() as u64;
             } else {
-                let known: Vec<u8> = transaction.query_row(
-                    "SELECT bytes FROM objects WHERE object_id=?1",
-                    [object.id.as_bytes().as_slice()],
-                    |row| row.get(0),
-                )?;
-                if known != object.bytes {
-                    return Err(StorageError::Integrity("object collision"));
-                }
-                receipt.raced_existing_ids += 1;
-                receipt.raced_existing_bytes += object.bytes.len() as u64;
+                return Err(StorageError::Integrity("object admission race"));
             }
         }
+        statement_ns = statement_ns.saturating_add(elapsed_ns(started));
+        let started = Instant::now();
         transaction.commit()?;
+        let commit_sync_ns = elapsed_ns(started);
+        let total_ns = elapsed_ns(total_started);
+        crate::record_database(database_receipt(
+            self,
+            crate::DatabaseOperation::ObjectAdmission,
+            total_ns,
+            connection_wait_ns,
+            writer_acquire_ns,
+            statement_ns,
+            0,
+            commit_sync_ns,
+            statement_count,
+            objects.len() as u64,
+            bytes,
+        ))?;
+        crate::note_push_phase(crate::PushPhase::ObjectAdmission, total_ns);
         Ok(receipt)
     }
 
@@ -205,9 +226,16 @@ impl StoreDb {
             .iter()
             .map(|fact| fact.encoded_size() as u64)
             .collect::<Vec<_>>();
+        let bytes = encoded_sizes.iter().sum();
+        let total_started = Instant::now();
+        let started = Instant::now();
         let mut connection = self.connection()?;
-        let transaction = connection.transaction()?;
+        let connection_wait_ns = elapsed_ns(started);
+        let started = Instant::now();
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let writer_acquire_ns = elapsed_ns(started);
         let mut receipt = AdmissionSetReceipt::default();
+        let started = Instant::now();
         for (fact, bytes) in facts.iter().zip(encoded_sizes) {
             let inserted = insert_fact(&transaction, self.role(), fact)?;
             if inserted {
@@ -218,7 +246,25 @@ impl StoreDb {
                 receipt.raced_existing_bytes += bytes;
             }
         }
+        let statement_ns = elapsed_ns(started);
+        let started = Instant::now();
         transaction.commit()?;
+        let commit_sync_ns = elapsed_ns(started);
+        let total_ns = elapsed_ns(total_started);
+        crate::record_database(database_receipt(
+            self,
+            crate::DatabaseOperation::FactAdmission,
+            total_ns,
+            connection_wait_ns,
+            writer_acquire_ns,
+            statement_ns,
+            0,
+            commit_sync_ns,
+            facts.len() as u64,
+            facts.len() as u64,
+            bytes,
+        ))?;
+        crate::note_push_phase(crate::PushPhase::FactAdmission, total_ns);
         Ok(receipt)
     }
 
@@ -884,6 +930,13 @@ impl StoreDb {
         Ok(())
     }
 
+    pub fn verify_complete_transition(&self, old: ObjectId, new: ObjectId) -> Result<()> {
+        let objects = LocalObjects(self);
+        let mut seen = crate::SpillableObjectSet::empty()?;
+        let mut active = BTreeSet::new();
+        verify_transition(&objects, Some(old), new, &mut seen, &mut active)
+    }
+
     pub fn complete_root(&self, root: ObjectId) -> Result<bool> {
         if self.role() != StoreRole::Branch {
             return Err(StorageError::WrongStoreRole);
@@ -1097,21 +1150,36 @@ impl StoreDb {
         }
         validate_commit_identity(&commit)?;
         if complete {
-            self.verify_complete_roots([commit.root_id])?;
+            let started = Instant::now();
+            let verified = self.verify_complete_roots([commit.root_id]);
+            crate::note_workspace_commit_phase(
+                crate::WorkspaceCommitPhase::CompletenessVerify,
+                elapsed_ns(started),
+            );
+            verified?;
         }
-        let mut connection = self.connection()?;
-        let transaction = connection.transaction()?;
-        let scope = branch_scope_row(&transaction, branch_id)?
+        let scope = self
+            .branch_scope(branch_id)?
             .ok_or(StorageError::NotFound("Branch scope"))?;
         if !matches!(scope.scope, BranchScope::Local) {
             return Err(StorageError::ReadOnlyBranch(branch_id));
         }
-        insert_commit(&transaction, commit)?;
+        let total_started = Instant::now();
+        let started = Instant::now();
+        let mut connection = self.connection()?;
+        let connection_wait_ns = elapsed_ns(started);
+        let started = Instant::now();
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let writer_acquire_ns = elapsed_ns(started);
+        let publication_started = Instant::now();
+        let mut statement_count = 1_u64;
+        let mut rows = u64::from(insert_commit(&transaction, commit)?);
         if complete {
-            transaction.execute(
+            rows += transaction.execute(
                 "INSERT INTO complete_roots(root_id) VALUES(?1) ON CONFLICT DO NOTHING",
                 [commit.root_id.as_bytes().as_slice()],
-            )?;
+            )? as u64;
+            statement_count += 1;
         }
         let changed = transaction.execute(
             "UPDATE branches SET head_commit_id=?1,base_layer_id=?2
@@ -1124,6 +1192,8 @@ impl StoreDb {
                 expected_base.as_slice()
             ],
         )?;
+        statement_count += 1;
+        rows += changed as u64;
         if changed != 1 {
             let actual = branch_head(&transaction, branch_id)?;
             return Err(StorageError::CommitHeadMoved {
@@ -1131,7 +1201,25 @@ impl StoreDb {
                 actual,
             });
         }
+        let publication_ns = elapsed_ns(publication_started);
+        let started = Instant::now();
         transaction.commit()?;
+        let commit_sync_ns = elapsed_ns(started);
+        let total_ns = elapsed_ns(total_started);
+        crate::record_database(database_receipt(
+            self,
+            crate::DatabaseOperation::CommitCas,
+            total_ns,
+            connection_wait_ns,
+            writer_acquire_ns,
+            0,
+            publication_ns,
+            commit_sync_ns,
+            statement_count,
+            rows,
+            Fact::Commit(commit).encoded_size() as u64,
+        ))?;
+        crate::note_workspace_commit_phase(crate::WorkspaceCommitPhase::Publication, total_ns);
         Ok(())
     }
 
@@ -1164,8 +1252,16 @@ impl StoreDb {
             .map(|observed| self.commit_in_lane(incoming, observed, branch.forked_from_commit_id))
             .transpose()?
             .unwrap_or(true);
+        let total_started = Instant::now();
+        let started = Instant::now();
         let mut connection = self.connection()?;
-        let transaction = connection.transaction()?;
+        let connection_wait_ns = elapsed_ns(started);
+        let started = Instant::now();
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let writer_acquire_ns = elapsed_ns(started);
+        let publication_started = Instant::now();
+        let mut statement_count = 2_u64;
+        let mut rows = 0_u64;
         let current = branch_head(&transaction, branch.id)?;
         if let Some(existing) = branch_row(&transaction, branch.id)? {
             if !same_origin(&existing, branch) {
@@ -1173,6 +1269,7 @@ impl StoreDb {
             }
         } else {
             reject_branch_name_conflict(&transaction, &branch.fact())?;
+            statement_count += 1;
         }
         let outcome = match current {
             None => {
@@ -1180,6 +1277,8 @@ impl StoreDb {
                     return Err(StorageError::Integrity("Push observed head"));
                 }
                 insert_branch(&transaction, branch)?;
+                statement_count += 1;
+                rows += 1;
                 crate::PushResult::Created {
                     commit_id: incoming,
                 }
@@ -1204,6 +1303,8 @@ impl StoreDb {
                             current.as_slice()
                         ],
                     )?;
+                    statement_count += 1;
+                    rows += changed as u64;
                     if changed != 1 {
                         return Err(StorageError::CommitHeadMoved {
                             expected: Some(current),
@@ -1221,7 +1322,25 @@ impl StoreDb {
                 local_head: incoming,
             },
         };
+        let publication_ns = elapsed_ns(publication_started);
+        let started = Instant::now();
         transaction.commit()?;
+        let commit_sync_ns = elapsed_ns(started);
+        let total_ns = elapsed_ns(total_started);
+        crate::record_database(database_receipt(
+            self,
+            crate::DatabaseOperation::AuthorityPublish,
+            total_ns,
+            connection_wait_ns,
+            writer_acquire_ns,
+            0,
+            publication_ns,
+            commit_sync_ns,
+            statement_count,
+            rows,
+            0,
+        ))?;
+        crate::note_push_phase(crate::PushPhase::Publication, total_ns);
         Ok(outcome)
     }
 
@@ -1512,6 +1631,71 @@ fn validate_object_batch(objects: &[CanonicalObject]) -> Result<()> {
         return Err(StorageError::InvalidInput("object batch"));
     }
     Ok(())
+}
+
+fn existing_object_rows_on(
+    connection: &rusqlite::Connection,
+    ids: &[ObjectId],
+) -> Result<BTreeMap<ObjectId, Vec<u8>>> {
+    let sql = fixed_membership_sql("objects", "object_id", "object_id,bytes");
+    let mut values = ids
+        .iter()
+        .map(|id| Value::Blob(id.as_bytes().to_vec()))
+        .collect::<Vec<_>>();
+    values.resize(ID_BATCH_COUNT, Value::Null);
+    let mut statement = connection.prepare_cached(&sql)?;
+    let rows = statement
+        .query_map(params_from_iter(values), |row| {
+            Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?))
+        })?
+        .map(|row| {
+            let (id, bytes) = row?;
+            let id = ObjectId::from_bytes(&id)?;
+            layerfs_content::authenticate_identity(&bytes, id)?;
+            Ok((id, bytes))
+        })
+        .collect();
+    rows
+}
+
+#[allow(clippy::too_many_arguments)]
+fn database_receipt(
+    db: &StoreDb,
+    operation: crate::DatabaseOperation,
+    total_ns: u64,
+    connection_wait_ns: u64,
+    writer_acquire_ns: u64,
+    statement_ns: u64,
+    publication_ns: u64,
+    commit_sync_ns: u64,
+    statement_count: u64,
+    rows: u64,
+    bytes: u64,
+) -> crate::DatabaseReceipt {
+    let attributed = connection_wait_ns
+        .saturating_add(writer_acquire_ns)
+        .saturating_add(statement_ns)
+        .saturating_add(publication_ns)
+        .saturating_add(commit_sync_ns);
+    crate::DatabaseReceipt {
+        store_id: db.store_id(),
+        role: db.role(),
+        operation,
+        total_ns,
+        connection_wait_ns,
+        writer_acquire_ns,
+        statement_ns,
+        publication_ns,
+        commit_sync_ns,
+        unattributed_ns: total_ns.saturating_sub(attributed),
+        statement_count,
+        rows,
+        bytes,
+    }
+}
+
+fn elapsed_ns(started: Instant) -> u64 {
+    started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
 }
 
 fn validate_fact_batch(role: StoreRole, facts: &[Fact]) -> Result<()> {
@@ -2176,13 +2360,6 @@ fn layer_is_ancestor_on(
     }
 }
 
-fn branch_scope_row(
-    transaction: &Transaction<'_>,
-    id: BranchId,
-) -> Result<Option<BranchScopeRecord>> {
-    branch_scope_on(transaction, id)
-}
-
 fn reject_layer_stack_name_conflict(
     connection: &rusqlite::Connection,
     fact: &LayerStackFact,
@@ -2268,6 +2445,56 @@ impl ObjectSource for LocalObjects<'_> {
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
         self.0.read_object_row(id)
     }
+}
+
+fn verify_transition(
+    source: &dyn ObjectSource,
+    old: Option<ObjectId>,
+    new: ObjectId,
+    seen: &mut crate::SpillableObjectSet,
+    active: &mut BTreeSet<ObjectId>,
+) -> Result<()> {
+    if old == Some(new) {
+        return Ok(());
+    }
+    if seen.insert_page(&[new])?.is_empty() {
+        return Ok(());
+    }
+    if !active.insert(new) {
+        return Err(StorageError::Integrity("object cycle"));
+    }
+    let canonical = source.read_object(new)?;
+    let mut new_children = layerfs_content::object::references::referenced_objects(&canonical)?;
+    let mut unique = BTreeSet::new();
+    new_children.retain(|child| unique.insert(*child));
+    if new_children.is_empty() {
+        active.remove(&new);
+        return Ok(());
+    }
+    let mut old_children = match old {
+        Some(old) => {
+            let canonical = source.read_object(old)?;
+            layerfs_content::object::references::referenced_objects(&canonical)?
+        }
+        None => Vec::new(),
+    };
+    unique.clear();
+    old_children.retain(|child| unique.insert(*child));
+    let old_set = old_children.iter().copied().collect::<BTreeSet<_>>();
+    let new_set = new_children.iter().copied().collect::<BTreeSet<_>>();
+    new_children.retain(|child| !old_set.contains(child));
+    old_children.retain(|child| !new_set.contains(child));
+    for (index, child) in new_children.into_iter().enumerate() {
+        verify_transition(
+            source,
+            old_children.get(index).copied(),
+            child,
+            seen,
+            active,
+        )?;
+    }
+    active.remove(&new);
+    Ok(())
 }
 
 fn same_origin(left: &BranchRecord, right: &BranchRecord) -> bool {

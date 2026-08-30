@@ -1,5 +1,6 @@
 use layerfs_fuse::{
-    Attr, FilesystemPort, Kind, NodeId, PortError, PortResult, ProxyClient, ProxyHost,
+    serve_remote_control, Attr, FilesystemPort, Kind, NodeId, PortError, PortResult, ProxyClient,
+    ProxyHost,
 };
 use std::sync::{Arc, Mutex};
 
@@ -8,7 +9,9 @@ struct Fixture {
     created: Mutex<Vec<Vec<u8>>>,
     links: Mutex<Vec<Vec<u8>>>,
     unlinks: Mutex<Vec<Vec<u8>>>,
+    root_entries: usize,
     readdirs: std::sync::atomic::AtomicUsize,
+    reservations: std::sync::atomic::AtomicUsize,
     fsyncs: std::sync::atomic::AtomicUsize,
     renamed: std::sync::atomic::AtomicBool,
     reject_mtimes: std::sync::atomic::AtomicBool,
@@ -52,6 +55,16 @@ impl FilesystemPort for Fixture {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if node == NodeId(5) {
             Ok(vec![(NodeId(6), Kind::File, b"target".to_vec())])
+        } else if self.root_entries != 3 {
+            Ok((0..self.root_entries)
+                .map(|index| {
+                    (
+                        NodeId(index as u64 + 2),
+                        Kind::File,
+                        format!("file-{index}").into_bytes(),
+                    )
+                })
+                .collect())
         } else {
             Ok(vec![
                 (NodeId(2), Kind::File, b"file".to_vec()),
@@ -64,6 +77,8 @@ impl FilesystemPort for Fixture {
         Err(PortError::Invalid)
     }
     fn reserve_nodes(&self, _: u32) -> PortResult<NodeId> {
+        self.reservations
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(NodeId(100))
     }
     fn create_file_open_reserved(
@@ -238,7 +253,9 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
         created: Mutex::new(Vec::new()),
         links: Mutex::new(Vec::new()),
         unlinks: Mutex::new(Vec::new()),
+        root_entries: 3,
         readdirs: std::sync::atomic::AtomicUsize::new(0),
+        reservations: std::sync::atomic::AtomicUsize::new(0),
         fsyncs: std::sync::atomic::AtomicUsize::new(0),
         renamed: std::sync::atomic::AtomicBool::new(false),
         reject_mtimes: std::sync::atomic::AtomicBool::new(false),
@@ -246,7 +263,25 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
     });
     let host = ProxyHost::start(fixture.clone()).unwrap();
     assert!(ProxyClient::connect(("127.0.0.1", host.port()), [0; 32]).is_err());
-    let client = ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).unwrap();
+    let client =
+        Arc::new(ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).unwrap());
+    assert_eq!(
+        fixture
+            .reservations
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "connect must not reserve node IDs",
+    );
+    let control = serve_remote_control(
+        ("127.0.0.1", host.port()),
+        host.capability(),
+        client.clone(),
+    )
+    .unwrap();
+    host.control("pause").unwrap();
+    assert!(matches!(client.attr(NodeId(2)), Err(PortError::Busy)));
+    host.control("resume").unwrap();
+    assert!(client.attr(NodeId(2)).is_ok());
     assert!(ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).is_err());
     assert_eq!(client.readdir(NodeId(1)).unwrap().len(), 3);
     assert_eq!(
@@ -311,6 +346,13 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
         .create_file_open(NodeId(1), b"missing", 0o600)
         .unwrap();
     assert_eq!(created.node, NodeId(100));
+    assert_eq!(
+        fixture
+            .reservations
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1,
+        "the first reservable create lazily reserves one batch",
+    );
     client.write(created.node, 0, b"discarded").unwrap();
     client.truncate(created.node, 0).unwrap();
     client.chmod(created.node, 0o640).unwrap();
@@ -401,8 +443,46 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
         .store(true, std::sync::atomic::Ordering::Release);
     assert_eq!(client.set_mtime(NodeId(2), 9, 12), Err(PortError::NoSpace));
     assert!(host.healthy());
+    std::thread::scope(|scope| {
+        let shutdown = scope.spawn(|| host.control("shutdown"));
+        control.wait_for_shutdown().unwrap();
+        control.finish_shutdown(true).unwrap();
+        shutdown.join().unwrap().unwrap();
+    });
     drop(client);
     assert!(ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).is_err());
+}
+
+#[test]
+fn connect_does_not_enumerate_or_reserve_a_hundred_thousand_entry_root() {
+    let fixture = Arc::new(Fixture {
+        bytes: Mutex::new(Vec::new()),
+        created: Mutex::new(Vec::new()),
+        links: Mutex::new(Vec::new()),
+        unlinks: Mutex::new(Vec::new()),
+        root_entries: 100_000,
+        readdirs: std::sync::atomic::AtomicUsize::new(0),
+        reservations: std::sync::atomic::AtomicUsize::new(0),
+        fsyncs: std::sync::atomic::AtomicUsize::new(0),
+        renamed: std::sync::atomic::AtomicBool::new(false),
+        reject_mtimes: std::sync::atomic::AtomicBool::new(false),
+        reject_writes: std::sync::atomic::AtomicBool::new(false),
+    });
+    let host = ProxyHost::start(fixture.clone()).unwrap();
+    let _client = ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).unwrap();
+
+    assert_eq!(
+        fixture.readdirs.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "Workspace attach must not enumerate the root",
+    );
+    assert_eq!(
+        fixture
+            .reservations
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "Workspace attach must not reserve nodes",
+    );
 }
 
 #[test]
@@ -412,7 +492,9 @@ fn deferred_mutation_errors_surface_at_the_next_synchronization_point() {
         created: Mutex::new(Vec::new()),
         links: Mutex::new(Vec::new()),
         unlinks: Mutex::new(Vec::new()),
+        root_entries: 3,
         readdirs: std::sync::atomic::AtomicUsize::new(0),
+        reservations: std::sync::atomic::AtomicUsize::new(0),
         fsyncs: std::sync::atomic::AtomicUsize::new(0),
         renamed: std::sync::atomic::AtomicBool::new(false),
         reject_mtimes: std::sync::atomic::AtomicBool::new(false),
@@ -439,6 +521,7 @@ fn deferred_mutation_errors_surface_at_the_next_synchronization_point() {
     client.fsync(Some(NodeId(2))).unwrap();
     assert_eq!(fixture.fsyncs.load(std::sync::atomic::Ordering::Relaxed), 1);
 
+    client.readdir(NodeId(1)).unwrap();
     let pending = client
         .create_file_open(NodeId(1), b"batch-error", 0o600)
         .unwrap();

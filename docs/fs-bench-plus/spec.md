@@ -1,16 +1,17 @@
 # fs-bench-plus specification
 
 Status: draft binding benchmark contract
-Protocol version: 0.1
+Protocol version: 0.3
 Drafted: 2026-08-31
-LayerFS source at drafting: a047e5dc48483f5b8189e19470ebdda37d4b8840
+LayerFS source at revision: 0970008668f54bae841797dafd57acab191fba7f
 
 ## 1. Purpose and authority
 
 fs-bench-plus measures the public, single-agent filesystem experience of
 LayerFS V2 against pinned upstream Cloudflare Computer. It covers real
 filesystem execution, immutable checkpoint creation, authority publication,
-storage amplification, transfer, materialization, and fresh-process recovery.
+storage amplification, transfer, FUSE materialization, and fresh-process
+recovery.
 
 The protocol is designed to answer all of these questions without mixing
 evidence layers:
@@ -21,13 +22,19 @@ evidence layers:
 3. How many canonical or blob bytes are newly retained because of an edit?
 4. Does Reference placement avoid copying authority-owned base content?
 5. Does transfer send and verify only the required canonical frontier?
-6. What does cold, warm, and incremental projection or materialization cost?
+6. What does cold, warm, and incremental FUSE materialization cost?
 7. Does every acknowledged state survive process, Workspace, FUSE, and
    connection replacement?
 
 The binding LayerFS product architecture remains docs/v2/spec.md. This
 document may prescribe benchmark instrumentation and public-SDK orchestration,
 but it may not create a benchmark-only product architecture.
+
+In this protocol, **materialization** means making an immutable root available
+through a real container FUSE Workspace projection, from public Workspace
+creation through mount readiness and exact first access. It does not mean the
+separate Host-placement `WorkspaceProjection::Materialize` directory-export
+path. That path is out of scope for fs-bench-plus.
 
 The protocol name is fs-bench-plus. Until explicitly renamed, its
 implementation and result paths remain:
@@ -36,7 +43,7 @@ implementation and result paths remain:
 benchmark/fs-bench                 # frozen base FUSE/fs-bench suite
 benchmark/fs-benchmark-pro         # fs-bench-plus SDK/E2E implementation
 benchmark-results/fs-bench         # base-suite evidence
-benchmark-results/fs-benchmark-pro # fs-bench-plus evidence
+benchmark-results/fs-bench-plus    # fs-bench-plus raw evidence and history
 ~~~
 
 The Cloudflare CAS/CDC/COW article supplies workload inspiration and evidence
@@ -86,6 +93,7 @@ statistics:
 - multi-agent or concurrent-writer workloads;
 - branch fan-out or conflict races;
 - synthetic in-memory storage engines;
+- Host-placement `WorkspaceProjection::Materialize` directory export;
 - direct internal content or Store APIs substituted for the public SDK path;
 - an engine-only splice substituted for a real editor/FUSE prepend;
 - a TUI;
@@ -104,7 +112,7 @@ The report MUST keep these layers separate:
 | Transfer | What was announced, avoided, sent, admitted, and verified? |
 | Semantic storage | Which canonical or blob bytes are unique, shared, inserted, reused, reachable, or retained? |
 | Physical storage | What DB, WAL, SHM, scratch, projection, and allocated bytes exist? |
-| Materialization | What does cold, warm, no-op, incremental, and fallback projection cost? |
+| FUSE materialization | What do cold mount, warm mount, next-root projection, and first access cost? |
 | Recovery | Can a fresh process reproduce every acknowledged oracle? |
 
 An engine-only result MUST NOT be called user-facing performance. Workspace
@@ -180,6 +188,78 @@ Both candidates in a pair MUST use the same:
 Host, kernel, Docker, storage, CPU, memory, and candidate cgroup information
 MUST be captured before the first trial.
 
+### 4.5 Frozen container images and runtime
+
+fs-bench-plus runs both candidates in Docker with real `/dev/fuse`. The
+LayerFS measurement image MUST be built from:
+
+~~~text
+Dockerfile: benchmark/fs-benchmark-pro/Dockerfile.layerfs
+recommended tag: layerfs-fs-benchmark-pro:local
+build base: rust:1.85.1-bookworm
+runtime base: rust:1.85.1-bookworm
+~~~
+
+It contains the release `fs-benchmark-pro` controller, the release production
+`layerfs-fuse` proxy helper, Docker CLI for the production Container placement
+path, and the sealed neutral workload helper. Its OCI labels MUST match the
+admitted LayerFS commit, tree, dirty state, and source-seal SHA-256.
+`containers/layerfs-fuse/Dockerfile` is the product/base-fs-bench image and
+MUST NOT replace this public-SDK controller image in fs-bench-plus.
+
+The Computer measurement image MUST be built from:
+
+~~~text
+Dockerfile: benchmark/fs-benchmark-pro/Dockerfile.computer
+recommended tag: layerfs-fs-benchmark-pro-computer:de87919a
+build base: node:22.22.0-bookworm
+runtime base: node:22.22.0-bookworm-slim
+upstream commit: de87919a4fd37242e960e13b7b3ba802d1eef0a0
+upstream tree: 4fb409d7e1356e1098439293d77d2fdc2dbf2190
+~~~
+
+The Computer build context contains the exact sealed upstream source archive
+and admitted adapter files only. Both image architectures MUST match.
+
+Every candidate arm uses a fresh container with this common envelope:
+
+~~~text
+--privileged
+--device /dev/fuse:rwm
+--cap-add SYS_ADMIN
+--security-opt apparmor=unconfined
+--security-opt seccomp=unconfined
+--network none
+--cpus 1
+--memory 1g
+--memory-swap 1g
+--pids-limit 512
+--tmpfs /tmp:rw,nosuid,nodev,size=256m
+~~~
+
+The LayerFS controller mounts the Docker socket only because the production
+`WorkspacePlacement::Container` implementation uses Docker to copy, start,
+control, and remove the FUSE helper in the target container. The measured
+request points at that fresh container and uses:
+
+~~~rust
+WorkspacePlacement::Container { container_id, root: mount_root }
+WorkspaceProjection::Fuse
+~~~
+
+One outer `docker exec` MAY launch the sealed benchmark controller inside the
+already admitted measurement container. It MUST NOT execute the registered
+filesystem workload. Every registered read or mutation MUST be launched by
+`Client::exec_workspace_session`, consumed through
+`Client::workspace_output` and `OutputReader`, and performed through the real
+FUSE mount. Docker calls made internally by the production Container
+projection to attach/control the FUSE helper are product work and remain timed.
+
+Each LayerFS trial uses a fresh measurement container. Fresh-process recovery
+uses a second fresh container over the retained Store files. Each Computer
+trial also uses a fresh container. No candidate container, mount, Workspace,
+application cache, or Store crosses trial boundaries.
+
 ## 5. Public product paths
 
 ### 5.1 LayerFS public SDK requirement
@@ -229,18 +309,23 @@ let receipt = loop {
     }
 };
 
-let commit = client.commit_workspace_session(workspace_id)?;
-let push = client.push_branch(branch_id)?;
+for checkpoint in checkpoints {
+    let execution = client.exec_workspace_session(workspace_id, checkpoint.argv)?;
+    // Read OutputReader through the terminal receipt, then:
+    let commit = client.commit_workspace_session(workspace_id)?;
+    let push = client.push_branch(branch_id)?;
+}
 client.end_workspace_session(workspace_id, EndWorkspaceMode::Clean)?;
 ~~~
 
-At this source pin, a successful Commit changes the Workspace state to
-Committed and public execution then rejects it. EDIT16-K1 therefore uses 16
-public Workspaces, EDIT16-K4 uses four, and EDIT16-K16 uses one. Create,
-projection attach, clean end, and any remount are required work inside the
-corresponding complete checkpoint. A later reusable-Workspace result is
-admissible only after a production public continuation operation exists and a
-new protocol version freezes that operation; the harness may not simulate it.
+Protocol 0.3 requires a successful Commit to rebase the existing active
+Workspace in place. The rebase preserves visible NodeIds, open-handle identity,
+the branch lease, and the same FUSE mount; advances the pinned head, base root,
+reader, and exact COW base; clears committed dirty/spool state; and resumes the
+same projection. A reload under a retained mount or a simple state change is
+invalid. EDIT16-K1, EDIT16-K4, and EDIT16-K16 each create one public Workspace,
+run every checkpoint on that Workspace, and end it once. Create/attach and
+End/unmount remain inside the complete scenario total.
 
 The execution receipt MUST prove:
 
@@ -263,19 +348,12 @@ BranchStore::root_complete(...)      // registered-root proof, after timer
 Client::add_layer(...)   // diagnostic and excluded from the primary boundary
 ~~~
 
-A formal authority-to-stable result additionally requires a public SDK
-two-Store durability operation, provisionally named:
-
-~~~rust
-Client::durability_barrier() -> DurabilityBarrierReceipt
-~~~
-
-The receipt MUST identify both bound Store IDs and record each WAL checkpoint,
-database fsync, and parent-directory fsync outcome. This operation does not
-exist at the drafting source pin. Until it exists, smoke runs may report public
-API completion, but no formal matched-stability or superiority claim is
-admissible. Private SQL, opening the databases behind the SDK, and
-benchmark-only checkpoint hooks are not substitutes.
+A formal authority-to-stable result requires the existing Commit/Push lifecycle
+to complete the matched two-Store durability work before acknowledgement. Do
+not add a new public operation. Existing receipts and Monitor evidence MUST
+identify both bound Store IDs and record each WAL checkpoint, database fsync,
+and parent-directory fsync outcome. Private SQL, opening the databases behind
+the SDK, and benchmark-only checkpoint hooks are not substitutes.
 
 Fresh-process verification MUST reconnect the exact Stores through public
 constructors, create a public SDK Workspace, execute the verifier through
@@ -285,7 +363,7 @@ Workspace through the SDK.
 The benchmark MUST NOT use any of these as a headline shortcut:
 
 ~~~text
-docker exec directly
+docker exec for the registered filesystem workload
 BranchStore::commit_changes directly
 ContentChange::Splice directly
 ObjectBuffer directly
@@ -364,7 +442,7 @@ The benchmark MUST NOT use:
 - disabled or delayed durability;
 - background persistence left incomplete when the timer stops;
 - an expected final root injected into candidate state;
-- a hidden prebuilt materialized destination;
+- a hidden pre-mounted FUSE projection or pre-read target;
 - durable candidate state carried from another trial.
 
 Ordinary product CAS, CDC, canonical objects, persistent extents, SQLite page
@@ -413,7 +491,7 @@ Preparation MUST NOT cache candidate workload state:
 - canonical objects or Computer blobs;
 - manifests, extents, roots, or changed-object lists;
 - Workspace spools;
-- materialized seeds or candidate destinations;
+- pre-mounted FUSE projections or candidate mount state;
 - path, inode, membership, or completeness lookups;
 - prior operation receipts used to skip product work;
 - expected final state.
@@ -442,7 +520,7 @@ state MUST be created by a registered candidate-local setup operation whose:
 
 - elapsed time;
 - bytes read and written;
-- root and destination identity;
+- immutable root and mount identity;
 - process and connection state;
 - allocation;
 - inclusion or exclusion from the timed phase
@@ -454,7 +532,7 @@ cold samples MUST never be pooled.
 
 ### 7.4 Cache-state axes
 
-Every materialization and executor-start row MUST record these independent
+Every FUSE-materialization and executor-start row MUST record these independent
 axes:
 
 | Axis | Values |
@@ -462,8 +540,8 @@ axes:
 | Product durable state | empty, seeded, history-retained |
 | Candidate process | fresh-process, same-process |
 | SQLite connection | fresh-connection, reused-connection |
-| Workspace/projection | new-workspace, existing-workspace, protected-seed |
-| Destination | absent, empty, exact-prior-root, externally-mutated |
+| Workspace/projection | new-workspace, existing-active-workspace, new-FUSE-mount, existing-FUSE-mount |
+| Mount/root | mount-absent, same-root-mounted, next-root-remount, process-cold-remount |
 | OS page cache | host-evicted, proven-warm, uncontrolled |
 | Fixture source | host-evicted, proven-warm, uncontrolled |
 
@@ -677,11 +755,15 @@ push_object_admission_ns
 push_fact_admission_ns
 push_authority_verify_ns
 push_publish_ns
+push_durability_ns
 
 branch_store_checkpoint_ns
 layerstack_store_checkpoint_ns
-database_fsync_ns
-directory_fsync_ns
+branch_store_database_fsync_ns
+branch_store_directory_fsync_ns
+layerstack_store_database_fsync_ns
+layerstack_store_directory_fsync_ns
+durability_unattributed_ns
 ~~~
 
 Required equations:
@@ -709,7 +791,17 @@ sdk_branch_push_ns
   + push_fact_admission_ns
   + push_authority_verify_ns
   + push_publish_ns
+  + push_durability_ns
   + push_unattributed_ns
+
+push_durability_ns
+  = branch_store_checkpoint_ns
+  + layerstack_store_checkpoint_ns
+  + branch_store_database_fsync_ns
+  + branch_store_directory_fsync_ns
+  + layerstack_store_database_fsync_ns
+  + layerstack_store_directory_fsync_ns
+  + durability_unattributed_ns
 
 authority_api_ns
   = sdk_exec_dispatch_ns
@@ -719,10 +811,6 @@ authority_api_ns
 
 authority_to_stable_ns
   = authority_api_ns
-  + branch_store_checkpoint_ns
-  + layerstack_store_checkpoint_ns
-  + database_fsync_ns
-  + directory_fsync_ns
 
 complete_checkpoint_ns
   = sdk_workspace_create_ns
@@ -732,6 +820,10 @@ complete_checkpoint_ns
 complete_scenario_ns
   = sum(complete_checkpoint_ns for registered checkpoints)
 ~~~
+
+`authority_to_stable_ns` equals `authority_api_ns` because the existing Push
+operation does not return before `push_durability_ns` completes. The same
+durability fragments MUST NOT be added again outside the Push timer.
 
 The report MUST show authority_to_stable as a diagnostic for each checkpoint.
 The primary public-path boundary is complete_checkpoint for a single
@@ -771,10 +863,11 @@ fsync both databases
 fsync their parent directory when supported
 ~~~
 
-The LayerFS barrier MUST be invoked through the public SDK operation required
-by section 5.1 and must return its public receipt. Its absence makes a formal
-matched-stability campaign unavailable; it does not authorize private SQLite
-access.
+The LayerFS barrier MUST complete inside the existing Commit/Push public
+lifecycle and be exposed through existing operation receipts and Monitor data.
+No new public operation or benchmark-only hook is permitted. Missing evidence
+makes a formal matched-stability campaign unavailable; it does not authorize
+private SQLite access.
 
 Computer API plus barrier MUST NOT be compared with LayerFS API alone.
 
@@ -786,13 +879,12 @@ without the process, FUSE daemon, Workspace, or container that performed it.
 All LayerFS rows in this section use Client::exec_workspace_session and
 OutputReader to terminal receipt.
 
-The primary boundary is each candidate's complete public workflow. Computer
-keeps its public Workspace, runtime, computerd, and FUSE mount while that API
-permits continued execution. At this source pin, LayerFS must create and end a
-new public Workspace for every Commit because a committed Workspace is no
-longer executable. All lifecycle work is included in each candidate's complete
-scenario total. The report exposes this difference rather than hiding it or
-emulating a continuation unavailable to SDK users.
+The primary boundary is each candidate's complete public workflow in an
+already-prepared container. Each registered scenario creates one public
+Workspace/FUSE projection, executes all scenario checkpoints, and closes that
+Workspace once. Image build, container/process startup, readiness, and
+prerequisite installation are setup evidence outside the headline. Public
+Workspace ready/attach and close/unmount are inside the complete scenario.
 
 | ID | Setup | Filesystem operation | Checkpoints | Purpose |
 |---|---|---|---:|---|
@@ -825,9 +917,10 @@ For checkpoint size K, both candidates execute exactly one sealed-helper
 command containing K edits, and the helper fsyncs after every edit. Computer
 then performs exactly one public post-command authority synchronization and
 stable barrier. LayerFS performs exactly one Workspace Commit, one Branch Push,
-one public two-Store stable barrier, and one clean Workspace end. Thus K1 has
-16 public execution/checkpoint groups in both arms, K4 has four, and K16 has
-one.
+and one public two-Store stable barrier per checkpoint group. K1 has 16 public
+execution/checkpoint groups in both arms, K4 has four, and K16 has one. Every
+row creates one Workspace before its first group and performs one clean End
+after its final group.
 
 ### 11.2 File-size scaling
 
@@ -1220,139 +1313,129 @@ non-overlapping file-range union; repeated references cannot be double-counted.
 The application editor phase remains linear because it copied the file. Commit
 and storage need not add another file-sized copy.
 
-## 15. Materialization and projection section
+## 15. FUSE materialization and projection
 
-### 15.1 Common cold and warm executor rows
+All rows in this section use a real container FUSE projection. The benchmark
+MUST NOT use Host placement or `WorkspaceProjection::Materialize` for these
+rows.
 
-These compare equivalent public product paths:
+### 15.1 Exact public request
 
-| ID | Starting state | Measured boundary |
-|---|---|---|
-| EXEC-COLD | Fresh process, connection, executor, Workspace, and mount; seeded durable authority | Public setup through first exact readable projection |
-| EXEC-WARM-NOCHANGE | Same registered executor and mount, no authority change | Public synchronization/no-op and exact read |
-| EXEC-NEXT-CHECKPOINT | Natural product state after one durable edit | Public route through the next exact readable projection |
-| EXEC-PROCESS-COLD | Durable state retained; every candidate process and connection replaced | Reconnect through exact readable projection |
-
-Every cache-state axis from section 7 MUST appear in these rows.
-
-For EXEC-NEXT-CHECKPOINT, Computer may reuse its executable Workspace if its
-public API permits it. The current LayerFS SDK must create a new Workspace and
-projection because Commit makes the prior Workspace non-executable. That
-candidate-required reacquisition is timed. The row measures the next operation
-users can actually perform; it does not assert identical internal lifecycle.
-
-### 15.2 LayerFS explicit materialization rows
-
-These use the public Host placement required by the current implementation:
+LayerFS FUSE materialization uses:
 
 ~~~rust
 client.create_workspace_session(CreateWorkspaceSession {
     branch_id,
-    placement: WorkspacePlacement::Host { root: destination },
-    projection: Some(WorkspaceProjection::Materialize),
+    placement: WorkspacePlacement::Container {
+        container_id,
+        root: mount_root,
+    },
+    projection: Some(WorkspaceProjection::Fuse),
 })?
 ~~~
 
-Container placement with Materialize is invalid and MUST NOT be used. These
-rows are LayerFS-only unless Computer gains a genuinely equivalent public
-native-directory projection.
+The request pins the immutable Branch root, starts the production proxy,
+copies/starts the production FUSE helper in the admitted target container,
+waits for mount readiness, and exposes the namespace at `mount_root`. It MUST
+not eagerly reconstruct, copy, hash, or CDC-scan the complete root.
 
-| ID | Starting state | Transition | Current public result | Future qualified route |
-|---|---|---|---|---|
-| MAT-COLD-FULL-32M | Destination absent | Empty to 32 MiB root | cold-full | cold-full |
-| MAT-WARM-NOOP-32M | Exact protected R | R to R | unsupported | qualified-noop |
-| MAT-WARM-EDIT-10B | Exact protected R0 | R0 to edited R1 | unsupported | qualified-incremental or public fallback |
-| MAT-WARM-APPEND-4K | Exact protected R0 | Append 4 KiB | unsupported | qualified-incremental or public fallback |
-| MAT-WARM-TRUNCATE-4K | Exact protected R0 | Remove 4 KiB | unsupported | qualified-incremental or public fallback |
-| MAT-WARM-RENAME | Exact protected tree | Rename | unsupported | qualified-incremental or public fallback |
-| MAT-WARM-METADATA | Exact protected tree | Mode and mtime | unsupported | qualified-incremental or public fallback |
-| MAT-TEMP-PREPEND | Exact protected R0 | Editor temp-copy-rename | unsupported | qualified-incremental or public fallback |
-| MAT-SEED-INVALIDATED | Externally mutated seed | Requested target | typed invalid placement | public fallback or typed rejection |
-| MAT-PROCESS-COLD-EDIT | Exact seed, fresh process | Edited target | unsupported | qualified-incremental or public fallback |
-| MAT-FULL-REWRITE | Exact R0 | Unrelated R1 | unsupported | full-fallback |
+### 15.2 Cold, warm, and incremental rows
 
-The current public request has no prior-root, protected-seed, destination
-receipt, or qualification input, and the full materializer rejects a nonempty
-destination. Therefore MAT-COLD-FULL-32M may report the current full route, but
-every exact-prior-root warm row MUST report unsupported at this source pin.
-It MUST NOT call the current behavior full-fallback from that destination.
+These rows compare equivalent public product experiences where Computer
+provides the corresponding boundary:
 
-A warm row becomes admissible only after a production public request can bind
-the exact seed root, Store identity, destination identity, and invalidation
-state. A benchmark-private receipt or hidden protected seed cannot manufacture
-the capability.
+| ID | Starting state | Measured boundary |
+|---|---|---|
+| FUSE-COLD-MOUNT-32M | Fresh container, process, connection, Workspace, helper, and mount; seeded durable authority | Container start through first exact stat and registered first read |
+| FUSE-WARM-MOUNT-32M | Fresh Workspace/helper/mount; same durable root; explicitly proven warm Store and OS cache state | Public Workspace creation through first exact stat/read |
+| FUSE-WARM-NOCHANGE | Same active Workspace and mount; no Commit or authority change | Repeated exact stat/read with no remount |
+| FUSE-NEXT-CHECKPOINT-10B | Natural product state after one durable ten-byte edit | Public route through the next root's mount readiness and exact changed-byte read |
+| FUSE-INCREMENTAL-APPEND-4K | Durable root after 4 KiB append | New root projection through exact appended-byte read |
+| FUSE-INCREMENTAL-TRUNCATE-4K | Durable root after 4 KiB shrink | New root projection through exact size/tail verification |
+| FUSE-INCREMENTAL-RENAME | Durable namespace-only rename | New root projection through old-path absence and new-path exact read |
+| FUSE-INCREMENTAL-TEMP-PREPEND | Durable editor temp-copy-rename result | New root projection through exact prefix and digest read |
+| FUSE-FULL-REWRITE | Durable unrelated 32 MiB replacement | New root projection through exact first and complete read |
+| FUSE-FIRST-READ-32M | Newly ready mount with registered cache axes | First complete FUSE read |
+| FUSE-REPEAT-READ-32M | Same active mount immediately after the registered first read | Second complete FUSE read |
+| FUSE-PROCESS-COLD | Durable state retained; all candidate processes, connections, helpers, and mounts replaced | Fresh container/reconnect through exact readable projection |
 
-### 15.3 Qualified no-op
+Every cache-state axis from section 7 MUST appear in these rows. Cold, proven
+warm, and uncontrolled cache samples are never pooled.
 
-A qualified no-op requires production authority binding for:
+Protocol 0.3 measures FUSE-NEXT-CHECKPOINT and incremental-root rows on the
+same active Workspace/FUSE mount after the in-place Commit rebase. Fresh-mount
+rows still create and attach a new public Workspace. Any fallback reload or
+remount is reported separately and invalidates a same-mount row.
+
+### 15.3 Required FUSE phase evidence
+
+Record non-overlapping or explicitly overlapping timers for:
 
 ~~~text
-Store identity
+container_start_ns
+client_connect_ns
+root_pin_ns
+workspace_registry_ns
+proxy_start_ns
+helper_copy_ns
+helper_start_ns
+mount_ready_ns
+projection_attach_ns
+first_lookup_ns
+first_stat_ns
+first_read_ns
+complete_read_ns
+projection_pause_ns
+projection_unmount_ns
+projection_cleanup_ns
+fuse_materialization_unattributed_ns
+~~~
+
+Record at least:
+
+~~~text
 selected immutable root
-destination identity
-destination mutation generation
-content and namespace authority
+mount path
+mountinfo filesystem type and options
+helper PID and exact binary SHA-256
+proxy endpoint identity
+mount attempts and failures
+bytes eagerly reconstructed during attach
+canonical bytes copied during attach
+payload bytes read before first registered access
+payload bytes read by first and repeated access
+complete-file hashes or CDC bytes during attach
+kernel page-fault and process I/O deltas
+residual helper, mount, proxy, and temporary paths
 ~~~
 
-Path, inode, size, mode, and timestamp hints alone are insufficient.
+Counters MUST be passive consequences of required product work. They must not
+read the tree merely to prove that the tree was not read.
 
-Qualified no-op requires:
+### 15.4 FUSE validity requirements
 
-~~~text
-payload reconstructed bytes = 0
-native payload written bytes = 0
-temporary stage bytes = 0
-publication renames = 0
-~~~
+A FUSE materialization row is valid only when:
 
-Otherwise the route is fallback or rejection.
+1. Linux `/proc/self/mountinfo` inside the target container proves a real FUSE
+   mount at the registered path;
+2. the exact selected immutable root is recorded before attachment;
+3. first lookup, stat, read, namespace, size, and digest oracles pass;
+4. mount readiness occurs before the registered workload begins;
+5. attach performs zero eager complete-root reconstruction or payload copy;
+6. Reference attachment copies zero authority-owned base objects into
+   BranchStore;
+7. a ten-byte next-root projection performs no complete-file hash or CDC scan;
+8. every helper/proxy/mount created by the row is removed or intentionally
+   retained by the registered warm scenario; and
+9. fresh-process recovery uses a second fresh admitted container over the
+   retained Store files.
 
-### 15.4 Qualified incremental materialization
-
-An incremental materializer MUST:
-
-1. bind exact old and new roots;
-2. derive changes from authenticated persistent-tree differences;
-3. never mutate the authoritative seed in place;
-4. clone, reflink, or construct a private stage;
-5. apply only proven content and namespace changes;
-6. apply exact metadata;
-7. sync according to the claimed destination durability boundary;
-8. verify the output;
-9. publish with no-follow atomic rename;
-10. clean unpublished state.
-
-It MUST record:
-
-~~~text
-qualification time
-clone/reflink attempts and outcome
-logical and observable physical clone bytes
-reconstructed bytes
-changed ranges and bytes
-payload source reads
-native patch bytes
-fallback bytes
-metadata time
-data and directory sync
-publish and verification time
-stage, seed, and destination allocations
-residual temporary paths
-~~~
-
-### 15.5 Invalidated seed
-
-Seed invalidation tests MUST include:
-
-- one-byte content mutation;
-- mode change;
-- rename;
-- hard-link topology change;
-- symlink substitution.
-
-An invalidated seed MUST not enter a qualified no-op or incremental path unless
-the new state is authenticated by an admitted production authority. Valid
-outcomes are fallback, typed rejection, or publication conflict.
+An outer `docker exec` may start the sealed benchmark controller. The
+controller MUST invoke every registered filesystem command through
+`Client::exec_workspace_session`. Calling the workload through a benchmark
+`docker exec`, including the current `timed_docker` shortcut, invalidates the
+row. Docker calls made by the production Container projection to manage the
+FUSE helper remain legitimate product work and are timed.
 
 ## 16. Resource measurements
 
@@ -1372,8 +1455,8 @@ Workspace spool peak
 SQLite cache configuration
 ~~~
 
-All candidate-owned control, FUSE, proxy, computerd, helper, and
-materialization processes are in scope.
+All candidate-owned control, FUSE, proxy, computerd, helper, and benchmark
+controller processes are in scope.
 
 If Docker Desktop does not expose reliable physical I/O, the report MUST retain
 logical counters and mark physical I/O unavailable. SQLite payload or wall time
@@ -1405,7 +1488,7 @@ otherwise complete empirical evidence.
 | Smoke | 1 | Functional and evidence-path validation only |
 | Pilot | 10 | Method and variance qualification; no final claim |
 | Core formal | 30 | Headline E2E latency and storage |
-| Extended formal | 10 | Scale, checkpoint-frequency, and materialization sections |
+| Extended formal | 10 | Scale, checkpoint-frequency, and FUSE-materialization sections |
 
 Each pair:
 
@@ -1504,6 +1587,18 @@ latency.rename_only
 latency.prepend_temp_rename
 latency.rewrite_32m
 latency.read_sync_32m
+latency.fuse_cold_mount_32m
+latency.fuse_warm_mount_32m
+latency.fuse_warm_nochange
+latency.fuse_next_checkpoint_10b
+latency.fuse_incremental_append_4k
+latency.fuse_incremental_truncate_4k
+latency.fuse_incremental_rename
+latency.fuse_incremental_temp_prepend
+latency.fuse_full_rewrite
+latency.fuse_first_read_32m
+latency.fuse_repeat_read_32m
+latency.fuse_process_cold
 latency.registered_core_total
 storage.edit16.incremental_semantic_payload_ratio
 storage.edit16.durable_allocation_ratio
@@ -1564,7 +1659,8 @@ Any violation invalidates the campaign:
 15. No durable write transaction contains network, CDC, hashing, history, or
     closure enumeration.
 16. Both arms use the admitted public SDK/API and real FUSE path.
-17. No unpublished materialization stage remains.
+17. No unexpected FUSE helper, proxy, mount, or temporary lifecycle residue
+    remains.
 
 ## 20. Mechanism gates
 
@@ -1677,55 +1773,76 @@ BranchStore inserted canonical bytes <= 1 MiB
 
 The editor phase is linear and MUST NOT be claimed file-size-independent.
 
-## 21. Materialization gates
+## 21. FUSE materialization gates
 
-These gates determine LayerFS optimization status when the named public route
-is supported. At the drafting source pin, exact-prior-root warm routes are
-reported as unsupported and cannot contribute a materialization-performance
-claim.
+These gates apply to the Container-placement `WorkspaceProjection::Fuse` rows
+in section 15. Host directory export is not an admissible substitute.
 
-MAT-COLD-FULL requires:
+Every FUSE materialization row requires:
 
 ~~~text
-destination absent before operation
-no protected seed
-exact output tree
-reconstructed payload = logical payload
-no residue
+admitted image labels and architecture match
+registered fresh or warm container state
+exact immutable root pinned before attach
+real FUSE mount proven by in-container mountinfo
+mount ready before registered workload
+exact namespace, size, metadata, and content oracle
+registered cache axes
+zero workload execution through direct docker exec
+no unexpected helper, proxy, mount, or temporary residue
 ~~~
 
-Qualified MAT-WARM-NOOP requires:
+FUSE-COLD-MOUNT-32M additionally requires:
 
 ~~~text
-exact authority binding
-payload reconstructed = 0
-native payload written = 0
-publication renames = 0
+container/process/connection/Workspace/helper/mount all fresh
+bytes eagerly reconstructed during attach = 0
+canonical payload copied during attach = 0
+complete-file hash bytes during attach = 0
+CDC bytes during attach = 0
+first stat and registered first read exact
 ~~~
 
-Qualified MAT-WARM-EDIT-10B requires:
+FUSE-WARM-MOUNT-32M requires a fresh Workspace/helper/mount and the same durable
+root. Store, SQLite, fixture-source, and OS page-cache warmth must each be
+independently proven or labeled uncontrolled. A hidden surviving mount is an
+invalid warm row.
+
+FUSE-WARM-NOCHANGE requires:
 
 ~~~text
-exact old/new root proof
-no complete reconstruction
-changed ranges cover every actual difference
-no unproven unchanged range is patched
-native patch bytes bounded near changed bytes
-exact final tree
+same active Workspace and mount
+same immutable root
+helper restarts = 0
+projection remounts = 0
+canonical or Store writes = 0
+repeated exact stat/read
 ~~~
 
-MAT-SEED-INVALIDATED requires:
+FUSE-NEXT-CHECKPOINT-10B requires:
 
 ~~~text
-qualified fast-path count = 0
-one fallback, rejection, or conflict
-exact old or exact target state
+exact old and new root IDs
+new public Workspace/FUSE projection when required by the SDK lifecycle
+full-file hash bytes during attach = 0
+CDC bytes during attach = 0
+authority base canonical bytes copied into BranchStore = 0
+changed bytes and complete digest exact
 ~~~
 
-If a future public product supports a qualified seed but rejects it, typed
-rejection or a public full fallback is valid. Without a public seed-binding
-input, the exact-prior-root warm rows are unsupported; the harness may not
-construct a fallback by mutating or deleting the registered seed itself.
+Append, truncate, rename, temp-prepend, and full-rewrite projection rows must
+expose their exact acknowledged root and satisfy their operation-specific
+oracles. Projection attachment itself must remain independent of complete
+payload size; the later registered complete read is accounted separately.
+
+FUSE-PROCESS-COLD requires a second fresh admitted container with fresh
+processes, connection, Workspace, helper, and mount over retained durable Store
+files. It must reproduce the acknowledged root without the measurement
+container or its kernel/FUSE state.
+
+FUSE-FIRST-READ-32M and FUSE-REPEAT-READ-32M must report distinct cache states,
+page faults, process/cgroup I/O, complete bytes, and digest. The second result
+must not be called a cold read.
 
 ## 22. Performance and storage gates
 
@@ -1758,6 +1875,9 @@ The stronger terminal optimization gates are:
 | SAME-BYTE-NOOP, APPEND-10B, both TRUNCATE rows, RENAME-ONLY | <= 0.50 | <= 0.67 | >= 2.00x |
 | PREPEND-TEMP-RENAME | <= 0.67 | <= 0.80 | >= 1.50x |
 | COLD-CREATE-32M, REWRITE-32M, READ-SYNC-32M | <= 0.80 | < 1.00 | >= 1.25x |
+| FUSE-COLD-MOUNT-32M, FUSE-PROCESS-COLD | <= 0.80 | < 1.00 | >= 1.25x |
+| FUSE-NEXT-CHECKPOINT-10B and incremental append/truncate/rename rows | <= 0.50 | <= 0.67 | >= 2.00x |
+| FUSE-FIRST-READ-32M, FUSE-REPEAT-READ-32M | <= 0.80 | < 1.00 | >= 1.25x |
 | Registered core total | <= 0.67 | <= 0.80 | >= 1.50x |
 
 These are acceptance gates, not constants to tune the implementation around.
@@ -1849,10 +1969,10 @@ physical allocation fails, the result is mixed, not a storage victory.
 | Edits/checkpoint | Checkpoints | Computer total | LayerFS total | Speedup | Commit bytes | Fact bytes |
 |---:|---:|---:|---:|---:|---:|---:|
 
-### 23.9 Cache and materialization
+### 23.9 Cache and FUSE materialization
 
-| Workload | Route | Process | Connection | Workspace | Destination | OS cache | Qualification | Clone | Reconstruct | Patch | Total | Exact |
-|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|
+| Workload | Image | Container | Process | Connection | Workspace | Mount/root | OS cache | Attach | First stat | First read | Eager bytes | Total | Exact |
+|---|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|
 
 ### 23.10 History and recovery
 
@@ -1894,7 +2014,11 @@ fixture and helper hashes
 frozen randomized schedule
 environment and cgroup data
 source archives, pins, seals, diffs, and image labels
-FUSE mountinfo proof
+candidate image tags, immutable digests, architectures, and OCI label checks
+measurement and recovery container IDs and inspect records
+Docker resource flags and effective cgroup limits
+FUSE helper binary SHA-256, PID, proxy identity, mount path, and lifecycle log
+in-container FUSE mountinfo proof
 public SDK/API request and receipt records
 execution output and terminal receipts
 phase timings
@@ -1978,8 +2102,8 @@ The campaign is invalid if:
 - the source seal changed during execution.
 
 A present, correctly measured LayerFS value outside a resource, mechanism,
-materialization, performance, or storage threshold is not on this invalidity
-list. It produces `evidence_verdict=VALID` and
+FUSE-materialization, performance, or storage threshold is not on this
+invalidity list. It produces `evidence_verdict=VALID` and
 `layerfs_optimization_verdict=FAIL`.
 
 ## 26. Required interpretation
@@ -1991,7 +2115,8 @@ LayerFS is faster on the registered public-SDK authority-durable workload.
 LayerFS adds fewer canonical bytes per checkpoint.
 LayerFS small public edits remain independent of complete file size.
 LayerFS Reference avoids copying the authority base.
-LayerFS materialization reused an authenticated seed under the named state.
+LayerFS exposed the authenticated root through real FUSE without eager payload
+reconstruction under the named cache and container state.
 ~~~
 
 It may not conclude:
@@ -2002,10 +2127,10 @@ LayerFS reproduced C3's 3.18x result.
 Internal semantic splice equals editor prepend.
 A fresh process proves an evicted OS page cache.
 Low canonical payload proves low physical device writes.
-A hidden materialized seed is a fair warm cache.
+A hidden surviving mount or pre-read target is a fair warm cache.
 ~~~
 
 The benchmark is successful only when correctness, public SDK latency,
-mechanism counters, transfer, storage, materialization, and fresh-process
+mechanism counters, transfer, storage, FUSE materialization, and fresh-process
 durability pass together. High final CAS reuse after file-sized candidate work
 is evidence of avoidable amplification, not an optimized edit.

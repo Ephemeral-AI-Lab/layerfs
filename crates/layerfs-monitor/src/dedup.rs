@@ -118,7 +118,12 @@ fn local_cas(
         .flat_map(|operation| &operation.storage)
         .filter_map(|receipt| match receipt {
             layerfs_storage::StorageReceipt::Local(receipt) => Some(receipt),
-            layerfs_storage::StorageReceipt::Transfer(_) => None,
+            layerfs_storage::StorageReceipt::Transfer(_)
+            | layerfs_storage::StorageReceipt::Durability(_)
+            | layerfs_storage::StorageReceipt::WorkspaceCommit(_)
+            | layerfs_storage::StorageReceipt::Push(_)
+            | layerfs_storage::StorageReceipt::Database(_)
+            | layerfs_storage::StorageReceipt::WorkspaceLifecycle(_) => None,
         })
     {
         receipt.validate()?;
@@ -164,7 +169,12 @@ fn transfer(
         .flat_map(|operation| &operation.storage)
         .filter_map(|receipt| match receipt {
             layerfs_storage::StorageReceipt::Transfer(receipt) => Some(receipt),
-            layerfs_storage::StorageReceipt::Local(_) => None,
+            layerfs_storage::StorageReceipt::Local(_)
+            | layerfs_storage::StorageReceipt::Durability(_)
+            | layerfs_storage::StorageReceipt::WorkspaceCommit(_)
+            | layerfs_storage::StorageReceipt::Push(_)
+            | layerfs_storage::StorageReceipt::Database(_)
+            | layerfs_storage::StorageReceipt::WorkspaceLifecycle(_) => None,
         })
         .flat_map(|receipt| std::iter::once(&receipt.objects).chain(receipt.facts.values()))
     {

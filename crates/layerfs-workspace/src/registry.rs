@@ -188,7 +188,13 @@ impl Workspaces {
 fn record_summary(record: SessionRecord) -> WorkspaceResult<WorkspaceSummary> {
     match record {
         SessionRecord::Active(worker) => {
-            let dirty = crate::projection::is_dirty(&worker)?;
+            let broken_cleanup = worker
+                .workspace
+                .lock()
+                .map_err(|_| WorkspaceError::WorkspaceBusy)?
+                .state
+                == crate::WorkspaceState::BrokenCleanup;
+            let dirty = broken_cleanup || crate::projection::is_dirty(&worker)?;
             let workspace = worker
                 .workspace
                 .lock()

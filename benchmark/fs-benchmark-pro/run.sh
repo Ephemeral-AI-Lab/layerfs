@@ -3,9 +3,9 @@ set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 repo=$(cd "$here/../.." && pwd -P)
-results_root="$repo/benchmark-results/fs-benchmark-pro"
+results_root="$repo/benchmark-results/fs-bench-plus/runs"
 compare="$here/compare.py"
-workload="$here/workload.py"
+workload_source="$here/workload.rs"
 computer_commit=de87919a4fd37242e960e13b7b3ba802d1eef0a0
 computer_tree=4fb409d7e1356e1098439293d77d2fdc2dbf2190
 fixture_bytes=33554432
@@ -20,6 +20,8 @@ sha256_file() {
     shasum -a 256 "$1" | awk '{print $1}'
   fi
 }
+
+workload_source_sha256=$(sha256_file "$workload_source")
 
 safe_id() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]
@@ -102,12 +104,17 @@ cleanup_layer_container() {
 
 self_check() {
   bash -n "$0"
-  python3 "$workload" self-check
   python3 "$compare" --self-check
   command -v node >/dev/null || die "Node.js is required for the neutral fixture"
+  command -v rustc >/dev/null || die "rustc is required for the native workload self-check"
   self_check_dir=$(mktemp -d "${TMPDIR:-/tmp}/fs-benchmark-pro-check.XXXXXX")
   trap cleanup_self_check EXIT
+  rustc --edition=2021 -C opt-level=3 -C strip=symbols \
+    --remap-path-prefix="$here"=. "$workload_source" -o "$self_check_dir/fs-benchmark-workload"
+  "$self_check_dir/fs-benchmark-workload" self-check
   generate_fixture "$self_check_dir/fixture.bin"
+  "$self_check_dir/fs-benchmark-workload" digest "$self_check_dir/fixture.bin" |
+    grep -Fx "$fixture_bytes	$fixture_sha256" >/dev/null || die "native workload fixture digest mismatch"
   cleanup_self_check
   trap - EXIT
   printf 'PASS fs-benchmark-pro shell, workload, fixture, and paired verifier checks\n'
@@ -123,17 +130,20 @@ if [[ "${1:-}" == "--source-seal" ]]; then
 fi
 
 [[ $# -ge 3 && $# -le 4 ]] ||
-  die "usage: $0 smoke|formal COMPUTER_IMAGE LAYERFS_IMAGE [RUN_ID]\n       $0 --self-check"
+  die "usage: $0 focused|smoke|formal COMPUTER_IMAGE LAYERFS_IMAGE [RUN_ID]\n       $0 --self-check"
 profile=$1
 computer_image=$2
 layerfs_image=$3
 run_id=${4:-$(date -u +%Y%m%dT%H%M%SZ)-$(git -C "$repo" rev-parse --short=12 HEAD)}
 
 case "$profile" in
+  focused) pair_count=1 ;;
   smoke) pair_count=1 ;;
   formal) pair_count=30 ;;
-  *) die "profile must be smoke or formal" ;;
+  *) die "profile must be focused, smoke, or formal" ;;
 esac
+[[ "$profile" == focused ]] ||
+  die "native+Bash baseline is scoped to focused EDIT16 until Computer scenario isolation is complete"
 safe_id "$run_id" || die "RUN_ID must be 1-128 safe filename characters"
 [[ "$computer_image" =~ ^[A-Za-z0-9][A-Za-z0-9_./:@-]*$ ]] || die "unsafe Computer image reference"
 [[ "$layerfs_image" =~ ^[A-Za-z0-9][A-Za-z0-9_./:@-]*$ ]] || die "unsafe LayerFS image reference"
@@ -141,7 +151,6 @@ safe_id "$run_id" || die "RUN_ID must be 1-128 safe filename characters"
 command -v docker >/dev/null || die "docker is required"
 command -v node >/dev/null || die "Node.js is required"
 python3 "$compare" --self-check >/dev/null
-python3 "$workload" self-check >/dev/null
 docker image inspect "$computer_image" >/dev/null || die "Computer image not found: $computer_image"
 docker image inspect "$layerfs_image" >/dev/null || die "LayerFS image not found: $layerfs_image"
 
@@ -151,7 +160,7 @@ computer_labels=$(docker image inspect --format '{{index .Config.Labels "org.ope
 computer_build_mode=$(docker image inspect --format '{{index .Config.Labels "dev.layerfs.computer-build-mode"}}' "$computer_image")
 case "$computer_build_mode" in
   sealed-source-build) ;;
-  diagnostic-prebuilt-dist) [[ "$profile" == smoke ]] || die "diagnostic Computer image is smoke-only" ;;
+  diagnostic-prebuilt-dist) [[ "$profile" != formal ]] || die "diagnostic Computer image is not formal evidence" ;;
   *) die "Computer image has unsupported build provenance: $computer_build_mode" ;;
 esac
 layerfs_commit=$(git -C "$repo" rev-parse HEAD)
@@ -159,13 +168,14 @@ layerfs_tree=$(git -C "$repo" rev-parse HEAD^{tree})
 layerfs_dirty=false
 [[ -z "$(git -C "$repo" status --porcelain)" ]] || layerfs_dirty=true
 source_seal_sha256=$(source_seal)
-layerfs_labels=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "org.opencontainers.image.source-tree"}} {{index .Config.Labels "dev.layerfs.source-dirty"}} {{index .Config.Labels "dev.layerfs.source-seal"}}' "$layerfs_image")
-[[ "$layerfs_labels" == "$layerfs_commit $layerfs_tree $layerfs_dirty $source_seal_sha256" ]] ||
+layerfs_labels=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "org.opencontainers.image.source-tree"}} {{index .Config.Labels "dev.layerfs.source-dirty"}} {{index .Config.Labels "dev.layerfs.source-seal"}} {{index .Config.Labels "dev.layerfs.workload-source-sha256"}} {{index .Config.Labels "dev.layerfs.workload-binary-sha256"}}' "$layerfs_image")
+read -r admitted_commit admitted_tree admitted_dirty admitted_seal admitted_workload_source admitted_workload_binary <<<"$layerfs_labels"
+[[ "$admitted_commit $admitted_tree $admitted_dirty $admitted_seal $admitted_workload_source" == "$layerfs_commit $layerfs_tree $layerfs_dirty $source_seal_sha256 $workload_source_sha256" ]] ||
   die "LayerFS image labels do not match current commit/tree/dirty state/source seal: $layerfs_labels"
+[[ "$admitted_workload_binary" =~ ^[0-9a-f]{64}$ ]] || die "LayerFS image lacks admitted native helper binary SHA-256"
 computer_arch=$(docker image inspect --format '{{.Architecture}}' "$computer_image")
 layerfs_arch=$(docker image inspect --format '{{.Architecture}}' "$layerfs_image")
 [[ "$computer_arch" == "$layerfs_arch" ]] || die "image architecture mismatch: Computer=$computer_arch LayerFS=$layerfs_arch"
-
 run_dir="$results_root/$run_id"
 mkdir -p "$results_root"
 mkdir "$run_dir" || die "refusing to overwrite existing result: $run_dir"
@@ -190,7 +200,7 @@ schedule_seed=$(printf '%s\n' "$run_id" | sha256_file /dev/stdin)
 started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 python3 - "$run_dir/manifest.json" "$run_id" "$profile" "$pair_count" "$schedule_seed" \
-  "$computer_image" "$computer_build_mode" "$layerfs_image" "$layerfs_commit" "$layerfs_tree" "$layerfs_dirty" "$source_seal_sha256" "$started_utc" "$computer_arch" <<'PY'
+  "$computer_image" "$computer_build_mode" "$layerfs_image" "$layerfs_commit" "$layerfs_tree" "$layerfs_dirty" "$source_seal_sha256" "$started_utc" "$computer_arch" "$workload_source_sha256" "$admitted_workload_binary" <<'PY'
 import json
 import random
 import sys
@@ -198,18 +208,20 @@ import sys
 (
     output, run_id, profile, pair_count, seed, computer_image, computer_build_mode, layerfs_image,
     layerfs_commit, layerfs_tree, layerfs_dirty, source_seal, started_utc, architecture,
+    helper_source_sha256, helper_binary_sha256,
 ) = sys.argv[1:]
 rng = random.Random(int(seed, 16))
-candidates = ["computer-upstream", "layerfs-reference"]
+candidates = ["layerfs-reference"] if profile == "focused" else ["computer-upstream", "layerfs-reference"]
 schedule = []
 for index in range(1, int(pair_count) + 1):
     order = candidates.copy()
     rng.shuffle(order)
     schedule.append({"pair_id": f"{index:03d}", "order": order})
 manifest = {
-    "schema": "fs-benchmark-pro-run-v1",
+    "schema": "fs-benchmark-pro-run-v2",
     "run_id": run_id,
     "profile": profile,
+    "claim_scope": "EDIT16 native+Bash baseline",
     "candidates": candidates,
     "pair_count": int(pair_count),
     "schedule_seed": seed,
@@ -238,6 +250,19 @@ manifest = {
         "path": "fixture.bin",
         "generated_outside_candidate_timers": True,
     },
+    "helper": {
+        "path": "fs-benchmark-workload",
+        "source_path": "benchmark/fs-benchmark-pro/workload.rs",
+        "source_sha256": helper_source_sha256,
+        "sha256": helper_binary_sha256,
+        "binary_identity_evidence": "environment/native-helper.sha256",
+        "byte_identical_in_scheduled_candidates": True,
+        "paired_identity_verified": profile != "focused",
+    },
+    "registered_edit_argv": {
+        "layerfs-reference": ["/bin/bash", "-lc", "\"$@\"", "fs-bench-shell", "/usr/local/bin/fs-benchmark-workload", "edit", "<payload>", "<index>", "33554432"],
+        "computer-upstream": ["/bin/bash", "-lc", "\"$@\"", "fs-bench-shell", "/benchmark/fs-benchmark-workload", "edit", "<payload>", "<index>", "33554432"],
+    },
     "envelope": {
         "same_docker_daemon": True,
         "adjacent_pairs": True,
@@ -248,6 +273,7 @@ manifest = {
         "pids_limit": 512,
         "tmpfs": "/tmp:rw,nosuid,nodev,size=256m",
         "architecture": architecture,
+        "os_page_cache": "uncontrolled",
         "layerfs_control_process_inside_envelope": True,
     },
     "started_utc": started_utc,
@@ -273,14 +299,15 @@ run_layerfs() {
   local arm_dir=$1
   local pair_id=$2
   active_layer_container="layerfs-fs-pro-${run_id:0:48}-$pair_id-$$"
-  ln "$fixture" "$arm_dir/fixture.bin"
   docker run -d --rm --name "$active_layer_container" --privileged --device /dev/fuse:rwm \
     --cap-add SYS_ADMIN --security-opt apparmor=unconfined --security-opt seccomp=unconfined \
     --network none --cpus 1 --memory 1g --memory-swap 1g --pids-limit 512 \
     --tmpfs /tmp:rw,nosuid,nodev,size=256m \
     --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+    --mount "type=bind,src=$fixture,dst=/fixture/payload.bin,readonly" \
     --mount "type=bind,src=$arm_dir,dst=/results" \
-    -e LAYERFS_BENCH_SELF_TARGET=1 \
+    -e LAYERFS_BENCH_SELF_TARGET=1 -e LAYERFS_BENCH_REQUIRE_DIRECT_ENGINE=1 \
+    -e LAYERFS_BENCH_FIXTURE=/fixture/payload.bin \
     --entrypoint sleep "$layerfs_image" infinity >"$arm_dir/docker-run.stdout.txt" 2>"$arm_dir/docker-run.stderr.txt"
   docker inspect --type container "$active_layer_container" >"$arm_dir/measure-container-inspect.json"
   docker exec "$active_layer_container" /usr/local/bin/fs-benchmark-pro \
@@ -302,7 +329,7 @@ run_layerfs() {
     --tmpfs /tmp:rw,nosuid,nodev,size=256m \
     --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
     --mount "type=bind,src=$arm_dir,dst=/results" \
-    -e LAYERFS_BENCH_SELF_TARGET=1 \
+    -e LAYERFS_BENCH_SELF_TARGET=1 -e LAYERFS_BENCH_REQUIRE_DIRECT_ENGINE=1 \
     --entrypoint sleep "$layerfs_image" infinity >"$arm_dir/docker-reopen.stdout.txt" 2>"$arm_dir/docker-reopen.stderr.txt"
   docker inspect --type container "$active_layer_container" >"$arm_dir/verify-container-inspect.json"
   docker exec "$active_layer_container" /usr/local/bin/fs-benchmark-pro verify \
@@ -310,6 +337,57 @@ run_layerfs() {
     >"$arm_dir/verify.stdout.txt" 2>"$arm_dir/verify.stderr.txt"
   docker stop "$active_layer_container" >"$arm_dir/docker-stop.stdout.txt" 2>"$arm_dir/docker-stop.stderr.txt"
   active_layer_container=
+
+  for diagnostic in true bash helper edit; do
+    for sample_number in {1..5}; do
+      sample=$(printf '%03d' "$sample_number")
+      active_layer_container="layerfs-fs-pro-${run_id:0:32}-$pair_id-$diagnostic-$sample-$$"
+      docker run -d --rm --name "$active_layer_container" --privileged --device /dev/fuse:rwm \
+        --cap-add SYS_ADMIN --security-opt apparmor=unconfined --security-opt seccomp=unconfined \
+        --network none --cpus 1 --memory 1g --memory-swap 1g --pids-limit 512 \
+        --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+        --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+        --mount "type=bind,src=$fixture,dst=/fixture/payload.bin,readonly" \
+        --mount "type=bind,src=$arm_dir,dst=/results" \
+        -e LAYERFS_BENCH_SELF_TARGET=1 -e LAYERFS_BENCH_REQUIRE_DIRECT_ENGINE=1 \
+        -e LAYERFS_BENCH_FIXTURE=/fixture/payload.bin \
+        --entrypoint sleep "$layerfs_image" infinity >"$arm_dir/docker-diagnostic-$diagnostic-$sample.stdout.txt" 2>"$arm_dir/docker-diagnostic-$diagnostic-$sample.stderr.txt"
+      docker inspect --type container "$active_layer_container" >"$arm_dir/diagnostic-$diagnostic-$sample-container-inspect.json"
+      docker exec "$active_layer_container" /usr/local/bin/fs-benchmark-pro diagnose \
+        "$active_layer_container" /results "$diagnostic" "$sample" \
+        >"$arm_dir/diagnostic-$diagnostic-$sample.stdout.txt" 2>"$arm_dir/diagnostic-$diagnostic-$sample.stderr.txt"
+      docker stop "$active_layer_container" >"$arm_dir/diagnostic-$diagnostic-$sample-stop.stdout.txt" 2>"$arm_dir/diagnostic-$diagnostic-$sample-stop.stderr.txt"
+      active_layer_container=
+    done
+  done
+  python3 - "$arm_dir" <<'PY'
+import json
+import statistics
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+summary = {
+    "schema": "fs-benchmark-pro-execution-diagnostics-summary-v1",
+    "headline": False,
+    "diagnostic_prewarm": False,
+    "os_page_cache": "uncontrolled",
+    "operations": {},
+}
+for name in ("true", "bash", "helper", "edit"):
+    rows = [json.loads(path.read_text()) for path in sorted(root.glob(f"execution-diagnostic-{name}-*.json"))]
+    values = sorted(row["sdk_exec_to_terminal_ns"] for row in rows)
+    if len(values) != 5:
+        raise SystemExit(f"{name}: expected five isolated diagnostics")
+    summary["operations"][name] = {
+        "exact_argv": rows[0]["exact_argv"],
+        "raw_public_ns": values,
+        "median_ns": statistics.median(values),
+        "q1_ns": statistics.median(values[:2]),
+        "q3_ns": statistics.median(values[3:]),
+    }
+(root / "execution-diagnostics-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+PY
 }
 
 trap cleanup_layer_container EXIT
@@ -340,6 +418,28 @@ PY
 done
 trap - EXIT INT TERM
 
+layerfs_helper_sha256=$(docker run --rm --network none --entrypoint sha256sum "$layerfs_image" /usr/local/bin/fs-benchmark-workload | awk '{print $1}')
+printf 'layerfs-reference\t%s\n' "$layerfs_helper_sha256" >"$run_dir/environment/native-helper.sha256"
+if [[ "$profile" != focused ]]; then
+  computer_workload_labels=$(docker image inspect --format '{{index .Config.Labels "dev.layerfs.workload-source-sha256"}} {{index .Config.Labels "dev.layerfs.workload-binary-sha256"}}' "$computer_image")
+  [[ "$computer_workload_labels" == "$workload_source_sha256 $admitted_workload_binary" ]] ||
+    die "Computer native helper labels do not match LayerFS: $computer_workload_labels"
+  computer_helper_sha256=$(docker run --rm --network none --entrypoint sha256sum "$computer_image" /benchmark/fs-benchmark-workload | awk '{print $1}')
+  printf 'computer-upstream\t%s\n' "$computer_helper_sha256" >>"$run_dir/environment/native-helper.sha256"
+  [[ "$computer_helper_sha256" == "$layerfs_helper_sha256" ]] ||
+    die "candidate native helper SHA-256 mismatch: Computer=$computer_helper_sha256 LayerFS=$layerfs_helper_sha256"
+fi
+[[ "$layerfs_helper_sha256" == "$admitted_workload_binary" ]] ||
+  die "LayerFS native helper bytes do not match admitted label"
+docker run --rm --network none --entrypoint /bin/bash "$layerfs_image" -c \
+  'printf "version\t"; /bin/bash --version | head -1; sha256sum /bin/bash /usr/local/bin/fs-benchmark-workload' \
+  >"$run_dir/environment/layerfs-bash-helper-provenance.txt"
+if [[ "$profile" != focused ]]; then
+  docker run --rm --network none --entrypoint /bin/bash "$computer_image" -c \
+    'printf "version\t"; /bin/bash --version | head -1; sha256sum /bin/bash /benchmark/fs-benchmark-workload' \
+    >"$run_dir/environment/computer-bash-helper-provenance.txt"
+fi
+
 python3 - "$run_dir/terminal.json" <<'PY'
 import json
 import sys
@@ -355,4 +455,13 @@ with open(path, "x", encoding="utf-8") as target:
     target.write("\n")
 PY
 
-python3 "$compare" "$run_id"
+if [[ "$profile" != focused ]]; then
+  python3 "$compare" "$run_id"
+fi
+
+(
+  cd "$run_dir"
+  find . -type f ! -name raw-inventory.sha256 -print0 |
+    sort -z |
+    xargs -0 shasum -a 256 >raw-inventory.sha256
+)

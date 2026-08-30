@@ -7,7 +7,7 @@ use layerfs_storage::{
 };
 
 #[test]
-fn authority_verifies_all_owned_suffix_pages_with_one_seen_domain() {
+fn authority_walks_all_owned_suffix_pages_and_prunes_equal_roots() {
     let path = std::env::temp_dir().join(format!(
         "layerfs-v2-authority-union-{}-{}",
         std::process::id(),
@@ -58,12 +58,14 @@ fn authority_verifies_all_owned_suffix_pages_with_one_seen_domain() {
         LayerStackEndpoint::publish_branch(&store, &branch, None).unwrap(),
         PushResult::Created { .. }
     ));
+    assert!(closure_len > 0);
     assert_eq!(
         layerfs_storage::sql_trace()
             .iter()
             .filter(|sql| sql.contains("SELECT bytes FROM objects WHERE object_id="))
             .count(),
-        closure_len
+        0,
+        "equal positional roots must not re-read their complete payload closure",
     );
 
     drop(store);

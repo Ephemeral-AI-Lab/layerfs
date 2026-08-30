@@ -2,12 +2,12 @@ use layerfs_branch_store::{BranchStore, CommitOutcome};
 use layerfs_content::filesystem::ContentChange;
 use layerfs_layerstack_store::LayerStackStore;
 use layerfs_storage::{
-    receipt_totals, take_transfer_receipts, AdmissionSetReceipt, AuthorityAddResult, BranchFact,
-    BranchId, BranchRecord, CanonicalObject, CommitHistoryPage, CommitId, CommitRecord, EntityName,
-    Fact, FactKind, LayerId, LayerPrefixPage, LayerRecord, LayerStackEndpoint, LayerStackFact,
-    LayerStackId, LayerStackInitialization, LayerStackRecord, LocalForkSource, MissingBitmap,
-    ObjectSource, PullBranchResult, PullLayerResult, PushResult, ReconcileChoice, RemotePlacement,
-    StorageError, StoreId,
+    receipt_totals, take_storage_receipts, take_transfer_receipts, AdmissionSetReceipt,
+    AuthorityAddResult, BranchFact, BranchId, BranchRecord, CanonicalObject, CommitHistoryPage,
+    CommitId, CommitRecord, EntityName, Fact, FactKind, LayerId, LayerPrefixPage, LayerRecord,
+    LayerStackEndpoint, LayerStackFact, LayerStackId, LayerStackInitialization, LayerStackRecord,
+    LocalForkSource, MissingBitmap, ObjectSource, PullBranchResult, PullLayerResult, PushResult,
+    ReconcileChoice, RemotePlacement, StorageError, StorageReceipt, StoreId,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -157,6 +157,403 @@ fn layer_pull_tracks_exact_boundary_mode_and_complete_prefix() {
         .expect("Replica Layer Diff must be offline");
     assert!(!differences.is_empty());
     assert_eq!(unavailable.calls.load(Ordering::Relaxed), 0);
+
+    drop(branches);
+    drop(authority);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn first_reference_push_prunes_the_trusted_fork_layer() {
+    let root = temp("first-push-transition");
+    let source = root.join("source");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::write(source.join("base.bin"), vec![7_u8; 4 * 1024 * 1024]).unwrap();
+    let authority = Arc::new(LayerStackStore::create(root.join("authority.sqlite")).unwrap());
+    let genesis = authority
+        .initialize_layerstack(
+            EntityName::new("project").unwrap(),
+            LayerStackInitialization::Directory(source),
+        )
+        .unwrap()
+        .genesis_layer_id;
+    let branches = BranchStore::create(root.join("branch.sqlite"), authority.store_id()).unwrap();
+    branches
+        .pull_layer(authority.clone(), genesis, RemotePlacement::Reference)
+        .unwrap();
+    let branch = branches
+        .fork_branch(
+            EntityName::new("main").unwrap(),
+            LocalForkSource::Layer { layer_id: genesis },
+        )
+        .unwrap();
+    commit_once(
+        &branches,
+        authority.clone(),
+        branch,
+        None,
+        &[write("edit.txt", b"ten bytes!")],
+    );
+
+    take_transfer_receipts();
+    branches.push_branch(authority.clone(), branch).unwrap();
+    let receipts = take_transfer_receipts();
+    assert!(
+        receipts
+            .iter()
+            .any(|receipt| receipt.known_roots_pruned > 0),
+        "first publication must prune the trusted fork Layer"
+    );
+    let objects = receipts
+        .iter()
+        .find(|receipt| receipt.objects.announced_ids != 0)
+        .expect("candidate object transfer");
+    assert!(objects.objects.announced_ids <= 128);
+    assert_eq!(objects.membership_pages, 1);
+
+    drop(branches);
+    drop(authority);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn paged_push_plan_covers_the_512_boundary_and_large_sparse_prepend() {
+    let below = reference_prepend_push_plan(9 * 1024 * 1024);
+    assert!((480..=512).contains(&below));
+    let above = reference_prepend_push_plan(10 * 1024 * 1024);
+    assert!((513..=580).contains(&above));
+    let large = reference_prepend_push_plan(32 * 1024 * 1024);
+    assert!((1_500..=2_000).contains(&large));
+}
+
+fn reference_prepend_push_plan(file_bytes: usize) -> u64 {
+    let root = temp(&format!("paged-push-plan-{file_bytes}"));
+    let source = root.join("source");
+    std::fs::create_dir_all(&source).unwrap();
+    let mut state = 0x9e37_79b9_u32;
+    let mut base = Vec::with_capacity(file_bytes);
+    for _ in 0..file_bytes {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        base.push(state as u8);
+    }
+    std::fs::write(source.join("payload.bin"), &base).unwrap();
+    let authority = Arc::new(LayerStackStore::create(root.join("authority.sqlite")).unwrap());
+    let genesis = authority
+        .initialize_layerstack(
+            EntityName::new("project").unwrap(),
+            LayerStackInitialization::Directory(source),
+        )
+        .unwrap()
+        .genesis_layer_id;
+    let branches = BranchStore::create(root.join("branch.sqlite"), authority.store_id()).unwrap();
+    branches
+        .pull_layer(authority.clone(), genesis, RemotePlacement::Reference)
+        .unwrap();
+    let branch = branches
+        .fork_branch(
+            EntityName::new("main").unwrap(),
+            LocalForkSource::Layer { layer_id: genesis },
+        )
+        .unwrap();
+    let endpoint = Arc::new(CountingEndpoint::new(authority.clone()));
+    let mut expected = b"0123456789".to_vec();
+    expected.extend_from_slice(&base);
+    take_storage_receipts();
+    let CommitOutcome::Created { commit_id, .. } = branches
+        .commit_changes(
+            endpoint.clone(),
+            branch,
+            None,
+            &[write("payload.bin", &expected)],
+        )
+        .unwrap()
+    else {
+        panic!("Commit")
+    };
+    let admission = take_storage_receipts()
+        .into_iter()
+        .find_map(|receipt| match receipt {
+            StorageReceipt::Local(receipt) => Some(receipt),
+            _ => None,
+        })
+        .expect("local admission receipt");
+    admission.validate().unwrap();
+    assert!(admission.source_reused_ids > 0);
+    assert!(admission.source_reused_bytes > admission.objects.inserted_bytes);
+    assert!(admission.objects.inserted_ids < admission.objects.candidate_ids);
+    assert!(endpoint.membership_calls.load(Ordering::Relaxed) <= 16);
+    assert!(endpoint.membership_max.load(Ordering::Relaxed) <= 128);
+    assert!(!branches
+        .root_complete(branches.commit(commit_id).unwrap().unwrap().root_id)
+        .unwrap());
+    assert_eq!(
+        read_file(&branches, authority.clone(), branch, "payload.bin"),
+        expected
+    );
+
+    endpoint.membership_calls.store(0, Ordering::Relaxed);
+    endpoint.membership_max.store(0, Ordering::Relaxed);
+    endpoint.object_calls.store(0, Ordering::Relaxed);
+    endpoint.admit_object_calls.store(0, Ordering::Relaxed);
+    endpoint.admit_object_max.store(0, Ordering::Relaxed);
+    endpoint.admit_object_max_bytes.store(0, Ordering::Relaxed);
+    take_storage_receipts();
+    assert!(matches!(
+        branches.push_branch(endpoint.clone(), branch).unwrap(),
+        PushResult::Created { commit_id: pushed } if pushed == commit_id
+    ));
+    let receipts = take_transfer_receipts();
+    let transfer = receipts
+        .iter()
+        .find(|receipt| receipt.objects.announced_ids != 0)
+        .expect("candidate object transfer");
+    assert_eq!(
+        transfer.objects.announced_ids,
+        admission.objects.candidate_ids
+    );
+    assert_eq!(
+        transfer.objects.announced_bytes.exact(),
+        Some(admission.objects.candidate_bytes)
+    );
+    assert_eq!(transfer.objects.missing_ids, admission.objects.inserted_ids);
+    assert_eq!(transfer.objects.sent_ids, admission.objects.inserted_ids);
+    assert_eq!(
+        transfer.objects.sent_bytes,
+        admission.objects.inserted_bytes
+    );
+    assert_eq!(
+        transfer.membership_pages,
+        admission
+            .objects
+            .candidate_ids
+            .div_ceil(layerfs_storage::ID_BATCH_COUNT as u64)
+    );
+    assert_eq!(
+        endpoint.membership_calls.load(Ordering::Relaxed) as u64,
+        transfer.membership_pages
+    );
+    assert!(endpoint.membership_max.load(Ordering::Relaxed) <= 512);
+    assert!(endpoint.admit_object_max.load(Ordering::Relaxed) <= 128);
+    assert!(
+        endpoint.admit_object_max_bytes.load(Ordering::Relaxed)
+            <= layerfs_storage::OBJECT_BATCH_BYTES
+    );
+    assert_eq!(endpoint.object_calls.load(Ordering::Relaxed), 0);
+    assert_eq!(transfer.known_roots_pruned, 1);
+    assert_eq!(
+        authority.branch(branch).unwrap().unwrap().head_commit_id,
+        Some(commit_id)
+    );
+    layerfs_storage::dependency_order(
+        authority.as_ref(),
+        authority.commit(commit_id).unwrap().unwrap().root_id,
+    )
+    .expect("authority must independently verify the complete transition");
+
+    let candidate_ids = admission.objects.candidate_ids;
+    drop(branches);
+    drop(authority);
+    std::fs::remove_dir_all(root).unwrap();
+    candidate_ids
+}
+
+#[test]
+fn push_plan_cache_miss_after_reopen_uses_the_safe_fallback() {
+    let root = temp("push-plan-reopen");
+    let source = root.join("source");
+    std::fs::create_dir_all(&source).unwrap();
+    std::fs::write(source.join("base.bin"), vec![3_u8; 4 * 1024 * 1024]).unwrap();
+    let authority = Arc::new(LayerStackStore::create(root.join("authority.sqlite")).unwrap());
+    let genesis = authority
+        .initialize_layerstack(
+            EntityName::new("project").unwrap(),
+            LayerStackInitialization::Directory(source),
+        )
+        .unwrap()
+        .genesis_layer_id;
+    let branch_path = root.join("branch.sqlite");
+    let branches = BranchStore::create(&branch_path, authority.store_id()).unwrap();
+    branches
+        .pull_layer(authority.clone(), genesis, RemotePlacement::Reference)
+        .unwrap();
+    let branch = branches
+        .fork_branch(
+            EntityName::new("main").unwrap(),
+            LocalForkSource::Layer { layer_id: genesis },
+        )
+        .unwrap();
+    let commit = commit_once(
+        &branches,
+        authority.clone(),
+        branch,
+        None,
+        &[write("edit.txt", b"ten bytes!")],
+    );
+    drop(branches);
+
+    let reopened = BranchStore::connect(&branch_path, authority.store_id()).unwrap();
+    assert!(matches!(
+        reopened.push_branch(authority.clone(), branch).unwrap(),
+        PushResult::Created { commit_id } if commit_id == commit
+    ));
+    assert_eq!(
+        authority.branch(branch).unwrap().unwrap().head_commit_id,
+        Some(commit)
+    );
+
+    drop(reopened);
+    drop(authority);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn push_plan_boundary_mismatch_and_publication_interruption_are_safe() {
+    let root = temp("push-plan-fallbacks");
+    std::fs::create_dir_all(&root).unwrap();
+    let authority = Arc::new(LayerStackStore::create(root.join("authority.sqlite")).unwrap());
+    let genesis = authority
+        .initialize_layerstack(
+            EntityName::new("project").unwrap(),
+            LayerStackInitialization::Empty,
+        )
+        .unwrap()
+        .genesis_layer_id;
+    let branches = BranchStore::create(root.join("branch.sqlite"), authority.store_id()).unwrap();
+    branches
+        .pull_layer(authority.clone(), genesis, RemotePlacement::Reference)
+        .unwrap();
+
+    let branch = branches
+        .fork_branch(
+            EntityName::new("gap").unwrap(),
+            LocalForkSource::Layer { layer_id: genesis },
+        )
+        .unwrap();
+    let first = commit_once(
+        &branches,
+        authority.clone(),
+        branch,
+        None,
+        &[write("first", b"first")],
+    );
+    branches.push_branch(authority.clone(), branch).unwrap();
+    let second = commit_once(
+        &branches,
+        authority.clone(),
+        branch,
+        Some(first),
+        &[write("second", b"second")],
+    );
+    let third = commit_once(
+        &branches,
+        authority.clone(),
+        branch,
+        Some(second),
+        &[write("third", b"third")],
+    );
+    take_storage_receipts();
+    branches.push_branch(authority.clone(), branch).unwrap();
+    assert_eq!(
+        take_transfer_receipts()
+            .iter()
+            .filter(|receipt| receipt.objects.announced_ids != 0)
+            .count(),
+        2,
+        "a plan based on the unacknowledged second Commit must fall back to both transitions"
+    );
+    assert_eq!(
+        authority.branch(branch).unwrap().unwrap().head_commit_id,
+        Some(third)
+    );
+
+    let interrupted = branches
+        .fork_branch(
+            EntityName::new("interrupted").unwrap(),
+            LocalForkSource::Layer { layer_id: genesis },
+        )
+        .unwrap();
+    let commit = commit_once(
+        &branches,
+        authority.clone(),
+        interrupted,
+        None,
+        &[write("payload", b"payload")],
+    );
+    let endpoint = Arc::new(CountingEndpoint::new(authority.clone()));
+    endpoint.fail_publish.store(1, Ordering::Relaxed);
+    assert!(matches!(
+        branches.push_branch(endpoint.clone(), interrupted),
+        Err(StorageError::Unavailable)
+    ));
+    assert!(authority.branch(interrupted).unwrap().is_none());
+    endpoint.fail_publish.store(0, Ordering::Relaxed);
+    assert!(matches!(
+        branches.push_branch(endpoint, interrupted).unwrap(),
+        PushResult::Created { commit_id } if commit_id == commit
+    ));
+    assert_eq!(
+        authority
+            .branch(interrupted)
+            .unwrap()
+            .unwrap()
+            .head_commit_id,
+        Some(commit)
+    );
+
+    drop(branches);
+    drop(authority);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn push_plan_rejects_an_omitted_local_object_before_visibility() {
+    let root = temp("push-plan-omitted-object");
+    std::fs::create_dir_all(&root).unwrap();
+    let authority = Arc::new(LayerStackStore::create(root.join("authority.sqlite")).unwrap());
+    let genesis = authority
+        .initialize_layerstack(
+            EntityName::new("project").unwrap(),
+            LayerStackInitialization::Empty,
+        )
+        .unwrap()
+        .genesis_layer_id;
+    let branch_path = root.join("branch.sqlite");
+    let branches = BranchStore::create(&branch_path, authority.store_id()).unwrap();
+    branches
+        .pull_layer(authority.clone(), genesis, RemotePlacement::Reference)
+        .unwrap();
+    let branch = branches
+        .fork_branch(
+            EntityName::new("main").unwrap(),
+            LocalForkSource::Layer { layer_id: genesis },
+        )
+        .unwrap();
+    commit_once(
+        &branches,
+        authority.clone(),
+        branch,
+        None,
+        &[write("payload", &vec![7; 256 * 1024])],
+    );
+    let omitted = branches
+        .inventory_page(None, 512)
+        .unwrap()
+        .entries
+        .first()
+        .expect("candidate object")
+        .object_id;
+    rusqlite::Connection::open(branch_path)
+        .unwrap()
+        .execute(
+            "DELETE FROM objects WHERE object_id=?1",
+            [omitted.as_bytes().as_slice()],
+        )
+        .unwrap();
+
+    assert!(branches.push_branch(authority.clone(), branch).is_err());
+    assert!(authority.branch(branch).unwrap().is_none());
 
     drop(branches);
     drop(authority);
@@ -880,6 +1277,84 @@ fn push_never_uses_authority_to_mask_a_missing_receipted_local_object() {
 }
 
 #[test]
+fn push_repairs_an_incomplete_authority_closure_even_when_its_root_exists() {
+    let root = temp("push-repair-incomplete-root");
+    std::fs::create_dir_all(&root).unwrap();
+    let authority = Arc::new(LayerStackStore::create(root.join("authority.sqlite")).unwrap());
+    let genesis = authority
+        .initialize_layerstack(
+            EntityName::new("project").unwrap(),
+            LayerStackInitialization::Empty,
+        )
+        .unwrap()
+        .genesis_layer_id;
+    let branches = BranchStore::create(root.join("branch.sqlite"), authority.store_id()).unwrap();
+    branches
+        .pull_layer(authority.clone(), genesis, RemotePlacement::Reference)
+        .unwrap();
+    let branch = branches
+        .fork_branch(
+            EntityName::new("main").unwrap(),
+            LocalForkSource::Layer { layer_id: genesis },
+        )
+        .unwrap();
+    let commit = commit_once(
+        &branches,
+        authority.clone(),
+        branch,
+        None,
+        &[write("payload", &vec![7; 256 * 1024])],
+    );
+    let root_id = branches.commit(commit).unwrap().unwrap().root_id;
+    let reader = branches
+        .snapshot_reader(authority.clone(), root_id)
+        .unwrap();
+    let ids = layerfs_storage::dependency_order(&reader, root_id).unwrap();
+    let child = ids
+        .iter()
+        .copied()
+        .find(|id| {
+            *id != root_id
+                && authority
+                    .missing_objects(&[*id])
+                    .unwrap()
+                    .is_missing(0)
+                    .unwrap()
+        })
+        .expect("snapshot closure must contain an authority-missing child object");
+    let root_object = CanonicalObject::new(reader.read_object(root_id).unwrap()).unwrap();
+    LayerStackEndpoint::admit_objects(authority.as_ref(), &[root_object]).unwrap();
+    assert!(!authority
+        .missing_objects(&[root_id])
+        .unwrap()
+        .is_missing(0)
+        .unwrap());
+    assert!(
+        authority
+            .missing_objects(&[child])
+            .unwrap()
+            .is_missing(0)
+            .unwrap(),
+        "test precondition requires a root-present incomplete closure"
+    );
+
+    assert!(matches!(
+        branches.push_branch(authority.clone(), branch).unwrap(),
+        PushResult::Created { .. }
+    ));
+    assert_eq!(
+        authority.branch(branch).unwrap().unwrap().head_commit_id,
+        Some(commit)
+    );
+    layerfs_storage::dependency_order(authority.as_ref(), root_id)
+        .expect("Push must repair and publish the complete closure");
+
+    drop(branches);
+    drop(authority);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn reconciliation_preserves_branch_layer_and_working_tree_as_distinct_choices() {
     let root = temp("three-resolution-choices");
     std::fs::create_dir_all(&root).unwrap();
@@ -1250,11 +1725,17 @@ struct CountingEndpoint {
     inner: Arc<LayerStackStore>,
     calls: AtomicUsize,
     object_calls: AtomicUsize,
+    membership_calls: AtomicUsize,
+    membership_max: AtomicUsize,
+    admit_object_calls: AtomicUsize,
+    admit_object_max: AtomicUsize,
+    admit_object_max_bytes: AtomicUsize,
     commit_ancestry_records: AtomicUsize,
     commit_history_calls: AtomicUsize,
     layer_ancestry_records: AtomicUsize,
     fail_objects: AtomicUsize,
     fail_all: AtomicUsize,
+    fail_publish: AtomicUsize,
     layer_override: Mutex<Option<LayerRecord>>,
     branch_override: Mutex<Option<BranchRecord>>,
     commit_override: Mutex<Option<CommitRecord>>,
@@ -1266,11 +1747,17 @@ impl CountingEndpoint {
             inner,
             calls: AtomicUsize::new(0),
             object_calls: AtomicUsize::new(0),
+            membership_calls: AtomicUsize::new(0),
+            membership_max: AtomicUsize::new(0),
+            admit_object_calls: AtomicUsize::new(0),
+            admit_object_max: AtomicUsize::new(0),
+            admit_object_max_bytes: AtomicUsize::new(0),
             commit_ancestry_records: AtomicUsize::new(0),
             commit_history_calls: AtomicUsize::new(0),
             layer_ancestry_records: AtomicUsize::new(0),
             fail_objects: AtomicUsize::new(0),
             fail_all: AtomicUsize::new(0),
+            fail_publish: AtomicUsize::new(0),
             layer_override: Mutex::new(None),
             branch_override: Mutex::new(None),
             commit_override: Mutex::new(None),
@@ -1432,6 +1919,16 @@ impl LayerStackEndpoint for CountingEndpoint {
         self.inner.missing_objects(ids)
     }
 
+    fn object_membership(
+        &self,
+        ids: &[layerfs_content::ObjectId],
+    ) -> layerfs_storage::Result<(MissingBitmap, Vec<Option<u64>>)> {
+        self.enter()?;
+        self.membership_calls.fetch_add(1, Ordering::Relaxed);
+        self.membership_max.fetch_max(ids.len(), Ordering::Relaxed);
+        self.inner.object_membership(ids)
+    }
+
     fn missing_facts(&self, facts: &[Fact]) -> layerfs_storage::Result<MissingBitmap> {
         self.enter()?;
         self.inner.missing_facts(facts)
@@ -1442,6 +1939,13 @@ impl LayerStackEndpoint for CountingEndpoint {
         objects: &[CanonicalObject],
     ) -> layerfs_storage::Result<AdmissionSetReceipt> {
         self.enter()?;
+        self.admit_object_calls.fetch_add(1, Ordering::Relaxed);
+        self.admit_object_max
+            .fetch_max(objects.len(), Ordering::Relaxed);
+        self.admit_object_max_bytes.fetch_max(
+            objects.iter().map(|object| object.bytes.len()).sum(),
+            Ordering::Relaxed,
+        );
         self.inner.admit_objects(objects)
     }
 
@@ -1456,6 +1960,9 @@ impl LayerStackEndpoint for CountingEndpoint {
         observed: Option<CommitId>,
     ) -> layerfs_storage::Result<PushResult> {
         self.enter()?;
+        if self.fail_publish.load(Ordering::Relaxed) != 0 {
+            return Err(StorageError::Unavailable);
+        }
         self.inner.publish_branch(branch, observed)
     }
 

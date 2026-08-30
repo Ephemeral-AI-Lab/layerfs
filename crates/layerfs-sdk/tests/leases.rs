@@ -2,7 +2,7 @@ use layerfs_sdk::{
     AddLayerResult, BranchStore, Client, ConnectionContext, CreateWorkspaceSession,
     EndWorkspaceMode, EntityName, LayerStackEndpoint, LayerStackInitialization, LayerStackStore,
     LocalForkSource, Query, QueryItem, QueryKind, RemotePlacement, SdkError, WorkspaceError,
-    WorkspacePlacement, WorkspaceProjection,
+    WorkspacePlacement, WorkspaceProjection, WorkspaceState,
 };
 use std::sync::Arc;
 
@@ -111,6 +111,34 @@ fn writable_workspace_lease_is_shared_across_clients() {
         })
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(queried, std::collections::BTreeSet::from([first, third]));
+
+    let broken = client_a
+        .create_workspace_session(request("workspace-broken"))
+        .unwrap();
+    let broken_path = root.join("workspace-broken");
+    std::fs::remove_dir_all(&broken_path).unwrap();
+    std::fs::write(&broken_path, b"not a projection directory").unwrap();
+    assert!(client_a
+        .end_workspace_session(broken, EndWorkspaceMode::Discard)
+        .is_err());
+    assert!(matches!(
+        client_a.end_workspace_session(broken, EndWorkspaceMode::Discard),
+        Err(SdkError::Workspace(WorkspaceError::InvalidPlacement))
+    ));
+    assert!(matches!(
+        client_b.create_workspace_session(request("blocked-by-broken-cleanup")),
+        Err(SdkError::Workspace(WorkspaceError::WorkspaceBusy))
+    ));
+    let broken_state = client_a
+        .query(Query::new(QueryKind::Workspaces).limit(512))
+        .unwrap()
+        .items
+        .into_iter()
+        .find_map(|item| match item {
+            QueryItem::Workspace(value) if value.summary.id == broken => Some(value.summary.state),
+            _ => None,
+        });
+    assert_eq!(broken_state, Some(WorkspaceState::BrokenCleanup));
 
     drop(client_b);
     drop(client_a);

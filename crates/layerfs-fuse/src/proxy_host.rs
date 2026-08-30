@@ -3,7 +3,7 @@ use crate::{PortError, PortResult, SharedPort};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 pub struct ProxyHost {
     address: SocketAddr,
@@ -11,35 +11,40 @@ pub struct ProxyHost {
     stopped: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
     failure: Arc<Mutex<Option<(&'static str, PortError)>>>,
+    control: Arc<RemoteControl>,
     thread: Option<std::thread::JoinHandle<()>>,
+}
+
+#[derive(Default)]
+struct RemoteControl {
+    stream: Mutex<Option<TcpStream>>,
+    ready: Condvar,
 }
 
 impl ProxyHost {
     pub fn start(port: SharedPort) -> std::io::Result<Self> {
         let listener = TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, 0))?;
         let address = listener.local_addr()?;
-        listener.set_nonblocking(true)?;
         let capability = capability()?;
         let stopped = Arc::new(AtomicBool::new(false));
         let failed = Arc::new(AtomicBool::new(false));
         let failure = Arc::new(Mutex::new(None));
         let deferred = Arc::new(Mutex::new(None));
-        let claimed = Arc::new(AtomicBool::new(false));
+        let data_claimed = Arc::new(AtomicBool::new(false));
+        let control_claimed = Arc::new(AtomicBool::new(false));
+        let control = Arc::new(RemoteControl::default());
         let thread = {
             let stopped = stopped.clone();
             let failed = failed.clone();
             let failure = failure.clone();
             let deferred = deferred.clone();
+            let control = control.clone();
             std::thread::spawn(move || {
                 while !stopped.load(Ordering::Acquire) {
                     match listener.accept() {
                         Ok((mut stream, _)) => {
                             if stopped.load(Ordering::Acquire) {
                                 break;
-                            }
-                            if claimed.load(Ordering::Acquire) {
-                                let _ = stream.write_all(&[0]);
-                                continue;
                             }
                             let timeout = Some(std::time::Duration::from_secs(1));
                             if stream.set_nonblocking(false).is_err()
@@ -49,17 +54,27 @@ impl ProxyHost {
                             {
                                 continue;
                             }
-                            let mut presented = [0; 32];
+                            let mut presented = [0; 33];
                             if stream.read_exact(&mut presented).is_err()
-                                || !same_capability(presented, capability)
-                                || claimed
-                                    .compare_exchange(
-                                        false,
-                                        true,
-                                        Ordering::AcqRel,
-                                        Ordering::Acquire,
-                                    )
-                                    .is_err()
+                                || !same_capability(
+                                    presented[..32].try_into().expect("capability frame"),
+                                    capability,
+                                )
+                            {
+                                let _ = stream.write_all(&[0]);
+                                continue;
+                            }
+                            let claimed = match presented[32] {
+                                b'd' => &data_claimed,
+                                b'c' => &control_claimed,
+                                _ => {
+                                    let _ = stream.write_all(&[0]);
+                                    continue;
+                                }
+                            };
+                            if claimed
+                                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                                .is_err()
                             {
                                 let _ = stream.write_all(&[0]);
                                 continue;
@@ -70,6 +85,13 @@ impl ProxyHost {
                             {
                                 continue;
                             }
+                            if presented[32] == b'c' {
+                                if let Ok(mut slot) = control.stream.lock() {
+                                    *slot = Some(stream);
+                                    control.ready.notify_all();
+                                }
+                                continue;
+                            }
                             let port = port.clone();
                             let failed = failed.clone();
                             let failure = failure.clone();
@@ -77,9 +99,6 @@ impl ProxyHost {
                             std::thread::spawn(move || {
                                 serve(stream, port, failed, failure, deferred)
                             });
-                        }
-                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                            std::thread::sleep(std::time::Duration::from_millis(10));
                         }
                         Err(_) => break,
                     }
@@ -92,6 +111,7 @@ impl ProxyHost {
             stopped,
             failed,
             failure,
+            control,
             thread: Some(thread),
         })
     }
@@ -110,6 +130,44 @@ impl ProxyHost {
 
     pub fn failure(&self) -> Option<(&'static str, PortError)> {
         self.failure.lock().ok().and_then(|failure| *failure)
+    }
+
+    pub fn control(&self, command: &str) -> PortResult<()> {
+        let command = match command {
+            "barrier" => b'b',
+            "pause" => b'p',
+            "resume" => b'r',
+            "shutdown" => b's',
+            _ => return Err(PortError::Invalid),
+        };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let mut slot = self.control.stream.lock().map_err(|_| PortError::Io)?;
+        while slot.is_none() {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(PortError::Io);
+            }
+            let (next, timeout) = self
+                .control
+                .ready
+                .wait_timeout(slot, remaining)
+                .map_err(|_| PortError::Io)?;
+            slot = next;
+            if timeout.timed_out() && slot.is_none() {
+                return Err(PortError::Io);
+            }
+        }
+        let stream = slot.as_mut().expect("control stream");
+        stream.write_all(&[command]).map_err(|_| PortError::Io)?;
+        let mut accepted = [0];
+        stream
+            .read_exact(&mut accepted)
+            .map_err(|_| PortError::Io)?;
+        if accepted == [1] {
+            Ok(())
+        } else {
+            Err(PortError::Io)
+        }
     }
 }
 

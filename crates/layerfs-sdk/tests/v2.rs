@@ -2,8 +2,8 @@ use layerfs_branch_store::CommitOutcome;
 use layerfs_sdk::{
     AddLayerResult, BranchStore, Client, ConnectionContext, CreateWorkspaceSession, DiffRequest,
     EndWorkspaceMode, EntityName, LayerStackEndpoint, LayerStackInitialization, LayerStackStore,
-    LocalForkSource, PullLayerResult, Query, QueryKind, RemotePlacement, SdkError,
-    WorkspaceCommitResult, WorkspacePlacement, WorkspaceProjection,
+    LocalForkSource, PullLayerResult, Query, QueryItem, QueryKind, RemotePlacement, SdkError,
+    WorkspaceCommitResult, WorkspacePlacement, WorkspaceProjection, WorkspaceState,
 };
 use std::sync::Arc;
 
@@ -44,7 +44,9 @@ fn one_verified_pair_runs_the_v2_lifecycle() {
     let root = root("lifecycle");
     std::fs::create_dir_all(&root).unwrap();
     let layerstack = Arc::new(LayerStackStore::create(root.join("layerstack.sqlite")).unwrap());
-    let branches = BranchStore::create(root.join("branch.sqlite"), layerstack.store_id()).unwrap();
+    let branch_path = root.join("branch.sqlite");
+    let branches = BranchStore::create(&branch_path, layerstack.store_id()).unwrap();
+    let branch_store_id = branches.store_id();
     let client = Client::connect(ConnectionContext {
         layerstack: LayerStackEndpoint::local(layerstack.clone()),
         branches,
@@ -82,10 +84,101 @@ fn one_verified_pair_runs_the_v2_lifecycle() {
             projection: Some(WorkspaceProjection::Materialize),
         })
         .unwrap();
+    let materialized_dirty = || {
+        let page = client.query(Query::new(QueryKind::Workspaces)).unwrap();
+        let [QueryItem::Workspace(item)] = page.items.as_slice() else {
+            panic!("one Workspace query item")
+        };
+        item.summary.dirty
+    };
+    assert!(!materialized_dirty());
     std::fs::write(mount.join("answer"), b"42").unwrap();
+    assert!(materialized_dirty());
     let commit = client.commit_workspace_session(workspace).unwrap();
     assert!(matches!(commit, WorkspaceCommitResult::Created { .. }));
+    let page = client.query(Query::new(QueryKind::Workspaces)).unwrap();
+    let [QueryItem::Workspace(item)] = page.items.as_slice() else {
+        panic!("one Workspace query item")
+    };
+    assert_eq!(item.summary.state, WorkspaceState::Active);
+    assert!(!item.summary.dirty);
+    assert!(matches!(
+        client.create_workspace_session(CreateWorkspaceSession {
+            branch_id: branch,
+            placement: WorkspacePlacement::Host {
+                root: root.join("blocked-by-retained-lease"),
+            },
+            projection: Some(WorkspaceProjection::Materialize),
+        }),
+        Err(SdkError::Workspace(
+            layerfs_sdk::WorkspaceError::WorkspaceBusy
+        ))
+    ));
+    std::fs::write(mount.join("answer"), b"43").unwrap();
+    assert!(materialized_dirty());
+    layerfs_storage::reset_sql_trace();
+    assert!(matches!(
+        client.commit_workspace_session(workspace).unwrap(),
+        WorkspaceCommitResult::Created { .. }
+    ));
+    let trace = layerfs_storage::sql_trace();
+    let mut writer = false;
+    for sql in &trace {
+        if sql.starts_with("BEGIN IMMEDIATE") {
+            writer = true;
+        } else if sql.starts_with("COMMIT") {
+            writer = false;
+        } else if writer {
+            assert!(!sql.contains("SELECT bytes FROM objects"));
+            assert!(!sql.contains("WITH RECURSIVE"));
+        }
+    }
+    assert!(!writer);
+    let receipt = client.monitor_snapshot().unwrap().operations.pop().unwrap();
+    let commit_phases = receipt
+        .storage
+        .iter()
+        .find_map(|receipt| match receipt {
+            layerfs_storage::StorageReceipt::WorkspaceCommit(receipt) => Some(*receipt),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        commit_phases.capture_mode,
+        Some(layerfs_storage::CaptureMode::Materialized)
+    );
+    assert_eq!(commit_phases.captured_files, 1);
+    assert_eq!(commit_phases.captured_bytes, 2);
+    assert!(commit_phases.validate().is_ok());
+    assert!(receipt.storage.iter().any(|receipt| matches!(
+        receipt,
+        layerfs_storage::StorageReceipt::Database(database)
+            if database.operation == layerfs_storage::DatabaseOperation::CommitCas
+                && database.statement_count <= 3
+                && database.rows <= 3
+                && database.validate().is_ok()
+    )));
+    assert_eq!(std::fs::read(mount.join("answer")).unwrap(), b"43");
+    assert!(!materialized_dirty());
     client.push_branch(branch).unwrap();
+    let push = client.monitor_snapshot().unwrap().operations.pop().unwrap();
+    let durability = push
+        .storage
+        .iter()
+        .filter_map(|receipt| match receipt {
+            layerfs_storage::StorageReceipt::Durability(receipt) => Some(*receipt),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(durability.len(), 2);
+    assert!(durability.iter().all(|receipt| receipt.validate().is_ok()));
+    assert!(durability.iter().any(|receipt| {
+        receipt.role == layerfs_storage::StoreRole::LayerStack
+            && receipt.store_id == layerstack.store_id()
+    }));
+    assert!(durability.iter().any(|receipt| {
+        receipt.role == layerfs_storage::StoreRole::Branch && receipt.store_id == branch_store_id
+    }));
     let added = client.add_layer(branch).unwrap();
     let AddLayerResult::Added { layer_id } = added else {
         panic!("Add")
@@ -117,6 +210,27 @@ fn one_verified_pair_runs_the_v2_lifecycle() {
         .end_workspace_session(workspace, EndWorkspaceMode::Clean)
         .unwrap();
     drop(client);
+    let reopened = Client::connect(ConnectionContext {
+        layerstack: LayerStackEndpoint::local(layerstack.clone()),
+        branches: BranchStore::connect(&branch_path, layerstack.store_id()).unwrap(),
+    })
+    .unwrap();
+    let retained_push = reopened
+        .monitor_snapshot()
+        .unwrap()
+        .operations
+        .into_iter()
+        .find(|receipt| receipt.operation.family == layerfs_sdk::OperationFamily::BranchPush)
+        .unwrap();
+    assert_eq!(
+        retained_push
+            .storage
+            .iter()
+            .filter(|receipt| { matches!(receipt, layerfs_storage::StorageReceipt::Durability(_)) })
+            .count(),
+        2
+    );
+    drop(reopened);
     drop(layerstack);
     std::fs::remove_dir_all(root).unwrap();
 }

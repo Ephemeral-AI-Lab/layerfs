@@ -1,11 +1,13 @@
 use layerfs_sdk::{
     AddLayerResult, BranchId, BranchStore, Client, ConnectionContext, ContainerId,
-    CreateWorkspaceSession, EndWorkspaceMode, EntityName, LayerStackEndpoint,
-    LayerStackInitialization, LayerStackStore, LocalForkSource, MonitorSnapshot, OperationReceipt,
-    PushResult, RemotePlacement, StoreId, WorkspaceCommitResult, WorkspacePlacement,
+    CreateWorkspaceSession, EndWorkspaceMode, EntityName, ExecutionReceipt, LayerStackEndpoint,
+    LayerStackInitialization, LayerStackStore, LocalForkSource, MonitorSnapshot, NonEmpty,
+    OperationFamily, OperationReceipt, OutputStream, PushResult, RemotePlacement, StorageReceipt,
+    StoreId, StoreRole, WorkspaceCommitResult, WorkspaceId, WorkspacePlacement,
     WorkspaceProjection,
 };
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -29,10 +31,30 @@ struct Phases {
     id: String,
     workspace_create_ns: u64,
     shell_ns: u64,
+    sdk_exec_to_terminal_ns: u64,
+    sdk_exec_dispatch_ns: u64,
+    sdk_output_handle_ns: u64,
+    sdk_output_follow_ns: u64,
+    sdk_exec_unattributed_ns: u64,
+    execution_exit_code: Option<i32>,
+    execution_stopped: bool,
+    execution_stdout_bytes: u64,
+    execution_stderr_bytes: u64,
+    execution_elapsed_ns: u64,
+    execution_total_wall_ns: u64,
+    execution_spawn_ns: u64,
+    execution_supervisor_queue_ns: u64,
+    execution_runtime_ns: u64,
+    execution_drain_ns: u64,
+    execution_terminal_ns: u64,
+    execution_unattributed_ns: u64,
+    execution_direct_engine: bool,
     workspace_commit_api_ns: u64,
     push_api_ns: u64,
     workspace_end_ns: u64,
     workspace_create_receipt: Option<String>,
+    workspace_exec_receipt: Option<String>,
+    workspace_output_receipt: Option<String>,
     workspace_commit_receipt: Option<String>,
     push_receipt: Option<String>,
     workspace_end_receipt: Option<String>,
@@ -51,6 +73,10 @@ impl Phases {
         self.workspace_create_ns
             .saturating_add(self.authority_checkpoint_ns())
             .saturating_add(self.workspace_end_ns)
+    }
+
+    fn comparable_ns(&self) -> u64 {
+        self.complete_turn_ns()
     }
 }
 
@@ -87,19 +113,19 @@ fn run() -> AnyResult<()> {
             parse_positive(file_mib, "FILE_MIB")?,
             usize::try_from(parse_positive(edits, "EDIT_COUNT")?)?,
         ),
+        [mode, container, results, diagnostic, sample] if mode == "diagnose" => {
+            diagnose_execution(container, Path::new(results), DEFAULT_FILE_MIB, diagnostic, sample)
+        }
         [mode, state, result] if mode == "verify" => verify(Path::new(state), Path::new(result)),
         _ => Err(
-            "usage: fs-benchmark-pro self-check | measure CONTAINER RESULT_DIR [FILE_MIB EDIT_COUNT] | verify STATE_TSV RESULT_PATH"
+            "usage: fs-benchmark-pro self-check | measure CONTAINER RESULT_DIR [FILE_MIB EDIT_COUNT] | verify STATE_TSV RESULT_PATH | diagnose CONTAINER RESULT_DIR true|bash|helper|edit SAMPLE"
                 .into(),
         ),
     }
 }
 
 fn self_check() -> AnyResult<()> {
-    let status = Command::new("python3")
-        .arg(workload_script())
-        .arg("self-check")
-        .status()?;
+    let status = Command::new(workload_binary()).arg("self-check").status()?;
     if !status.success() {
         return Err("workload self-check failed".into());
     }
@@ -118,6 +144,9 @@ fn measure(container: &str, results: &Path, file_mib: u64, edit_count: usize) ->
     if edit_count == 0 {
         return Err("EDIT_COUNT must be positive".into());
     }
+    if file_mib != DEFAULT_FILE_MIB || edit_count != DEFAULT_EDITS {
+        return Err("registered fs-benchmark-pro profile is fixed at 32 MiB and 16 edits".into());
+    }
     let file_bytes = file_mib
         .checked_mul(1024 * 1024)
         .ok_or("FILE_MIB overflow")?;
@@ -126,7 +155,9 @@ fn measure(container: &str, results: &Path, file_mib: u64, edit_count: usize) ->
     }
     fs::create_dir_all(results)?;
     let results = fs::canonicalize(results)?;
-    let fixture = results.join("fixture.bin");
+    let fixture = std::env::var_os("LAYERFS_BENCH_FIXTURE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| results.join("fixture.bin"));
     let (fixture_bytes, fixture_digest) = host_digest(&fixture)?;
     if fixture_bytes != file_bytes {
         return Err(format!(
@@ -141,110 +172,150 @@ fn measure(container: &str, results: &Path, file_mib: u64, edit_count: usize) ->
         )
         .into());
     }
-    let (after_edits_digest, final_oracle_digest) =
-        host_oracles(&results, &fixture, file_bytes, edit_count)?;
-    if file_mib == DEFAULT_FILE_MIB && edit_count == DEFAULT_EDITS {
-        if after_edits_digest != ARTICLE_EDIT_SHA256 {
-            return Err(format!(
-                "article edit oracle is {after_edits_digest}, expected {ARTICLE_EDIT_SHA256}"
-            )
-            .into());
-        }
-        if final_oracle_digest != ARTICLE_FINAL_SHA256 {
-            return Err(format!(
-                "article final oracle is {final_oracle_digest}, expected {ARTICLE_FINAL_SHA256}"
-            )
-            .into());
-        }
-    }
+    let after_edits_digest = ARTICLE_EDIT_SHA256.to_owned();
+    let final_oracle_digest = ARTICLE_FINAL_SHA256.to_owned();
 
     let evidence_path = results.join("layerfs-reference.jsonl");
     let state_path = results.join("layerfs-reference-state.tsv");
-    let store_root = results.join("layerfs-reference-store");
-    if evidence_path.exists() || state_path.exists() || store_root.exists() {
+    let cold_store_root = results.join("layerfs-cold-create-store");
+    let store_root = results.join("layerfs-reference-edit-store");
+    let fuse_helper = results.join("layerfs-fuse");
+    let mountinfo_path = results.join("edit-mountinfo.txt");
+    if evidence_path.exists()
+        || state_path.exists()
+        || cold_store_root.exists()
+        || store_root.exists()
+        || fuse_helper.exists()
+        || mountinfo_path.exists()
+    {
         return Err("LayerFS result files already exist; use a fresh RESULT_DIR".into());
     }
-    fs::create_dir(&store_root)?;
-    let fuse_helper = store_root.join("layerfs-fuse");
     copy_from_container(container, "/usr/local/bin/layerfs-fuse", &fuse_helper)?;
     make_executable(&fuse_helper)?;
     std::env::set_var("LAYERFS_FUSE_HELPER", &fuse_helper);
+
+    let self_target = std::env::var("LAYERFS_BENCH_SELF_TARGET").as_deref() == Ok("1");
+    let (remote_workload, remote_fixture) = if self_target {
+        (
+            workload_binary().to_string_lossy().into_owned(),
+            fixture.to_string_lossy().into_owned(),
+        )
+    } else {
+        let workload = format!("/tmp/fs-benchmark-pro-{}-workload", std::process::id());
+        let fixture_path = format!("/tmp/fs-benchmark-pro-{}-fixture.bin", std::process::id());
+        copy_to_container(container, &workload_binary(), &workload)?;
+        copy_to_container(container, &fixture, &fixture_path)?;
+        docker_checked(container, &["chmod", "0555", &workload])?;
+        docker_checked(container, &["chmod", "0444", &fixture_path])?;
+        (workload, fixture_path)
+    };
+    let mount_root = format!("/workspace/fs-benchmark-pro-{}", std::process::id());
+    let payload = format!("{mount_root}/payload.bin");
+    let mut operations = Vec::with_capacity(edit_count + 3);
+
+    fs::create_dir(&store_root)?;
     let authority_path = store_root.join("authority.sqlite");
     let branch_path = store_root.join("branch.sqlite");
     let authority = Arc::new(LayerStackStore::create(&authority_path)?);
     let authority_store_id = authority.store_id();
     let branches = BranchStore::create(&branch_path, authority_store_id)?;
+    let branch_store_id = branches.store_id();
     let branch_parent_store_id = branches.parent_store_id();
+    let client = Client::connect(ConnectionContext {
+        layerstack: LayerStackEndpoint::local(authority.clone()),
+        branches: branches.clone(),
+    })?;
+    let genesis = client
+        .initialize_layerstack(
+            EntityName::new("fs-benchmark-pro-edit")?,
+            LayerStackInitialization::Directory(
+                fixture
+                    .parent()
+                    .ok_or("fixture has no seed directory")?
+                    .to_owned(),
+            ),
+        )?
+        .genesis_layer_id;
+    client.pull_layer(genesis, RemotePlacement::Reference)?;
+    if inventory_totals(&branches)? != (0, 0) {
+        return Err("Reference Pull copied authority base objects into BranchStore".into());
+    }
+    let branch_id = client.fork_branch(
+        EntityName::new("fs-benchmark-pro-edit-main")?,
+        LocalForkSource::Layer { layer_id: genesis },
+    )?;
+    if inventory_totals(&branches)? != (0, 0) {
+        return Err("Reference Fork copied canonical objects".into());
+    }
+    drop(client);
+    drop(branches);
+    drop(authority);
+
+    let authority = Arc::new(LayerStackStore::connect(&authority_path)?);
+    if authority.store_id() != authority_store_id {
+        return Err("seeded LayerStackStore identity changed on reopen".into());
+    }
+    let branches = BranchStore::connect(&branch_path, authority_store_id)?;
+    if branches.store_id() != branch_store_id {
+        return Err("seeded BranchStore identity changed on reopen".into());
+    }
     let client = Client::connect(ConnectionContext {
         layerstack: LayerStackEndpoint::local(authority.clone()),
         branches,
     })?;
-    let genesis = client
-        .initialize_layerstack(
-            EntityName::new("fs-benchmark-pro")?,
-            LayerStackInitialization::Empty,
-        )?
-        .genesis_layer_id;
-    client.pull_layer(genesis, RemotePlacement::Reference)?;
-    let branch_id = client.fork_branch(
-        EntityName::new("fs-benchmark-pro-main")?,
-        LocalForkSource::Layer { layer_id: genesis },
-    )?;
     let initial = store_totals(&client.monitor_snapshot()?, &store_root)?;
-
-    let self_target = std::env::var("LAYERFS_BENCH_SELF_TARGET").as_deref() == Ok("1");
-    let (remote_script, remote_fixture) = if self_target {
-        (
-            workload_script().to_string_lossy().into_owned(),
-            fixture.to_string_lossy().into_owned(),
-        )
-    } else {
-        let script = format!("/tmp/fs-benchmark-pro-{}-workload.py", std::process::id());
-        let fixture_path = format!("/tmp/fs-benchmark-pro-{}-fixture.bin", std::process::id());
-        copy_to_container(container, &workload_script(), &script)?;
-        copy_to_container(container, &fixture, &fixture_path)?;
-        docker_checked(container, &["chmod", "0555", &script])?;
-        docker_checked(container, &["chmod", "0444", &fixture_path])?;
-        (script, fixture_path)
-    };
-    let mount_root = format!("/workspace/fs-benchmark-pro-{}", std::process::id());
-    let payload = format!("{mount_root}/payload.bin");
     let runner = WorkspaceRun {
         client: &client,
         branch_id,
         container,
         mount_root: &mount_root,
         store_root: &store_root,
+        authority_store_id,
+        branch_store_id,
     };
 
-    let mut operations = Vec::with_capacity(edit_count + 3);
-    operations.push(runner.mutation(
-        "create".to_owned(),
-        &[
-            "python3",
-            &remote_script,
-            "create",
-            &remote_fixture,
-            &payload,
-        ],
-    )?);
-
+    let edits_before = store_totals(&client.monitor_snapshot()?, &store_root)?;
+    let (edit_workspace, edit_create_ns, edit_create_receipt) = runner.create()?;
+    retain_mountinfo(&branch_path, edit_workspace, &mount_root, &mountinfo_path)?;
+    let first_edit = operations.len();
     for index in 0..edit_count {
         let id = format!("edit-{:02}", index + 1);
         let index = index.to_string();
         let bytes = file_bytes.to_string();
-        operations.push(runner.mutation(
+        operations.push(runner.mutation_open(
+            edit_workspace,
             id,
-            &["python3", &remote_script, "edit", &payload, &index, &bytes],
+            &[
+                "/bin/bash",
+                "-lc",
+                "\"$@\"",
+                "fs-bench-shell",
+                &remote_workload,
+                "edit",
+                &payload,
+                &index,
+                &bytes,
+            ],
         )?);
     }
+    let (_, edit_end_ns, edit_end_receipt) = observed(&client, || {
+        client.end_workspace_session(edit_workspace, EndWorkspaceMode::Clean)
+    })?;
+    let last_edit = operations.len() - 1;
+    operations[first_edit].workspace_create_ns = edit_create_ns;
+    operations[first_edit].workspace_create_receipt = Some(edit_create_receipt.to_json());
+    operations[first_edit].storage_before = Some(edits_before);
+    operations[last_edit].workspace_end_ns = edit_end_ns;
+    operations[last_edit].workspace_end_receipt = Some(edit_end_receipt.to_json());
+    operations[last_edit].storage_after =
+        Some(store_totals(&client.monitor_snapshot()?, &store_root)?);
 
     operations.push(runner.mutation(
         "prepend".to_owned(),
-        &["python3", &remote_script, "prepend", &payload],
+        &[&remote_workload, "prepend", &payload],
     )?);
 
-    let (read, output) = runner.read(&["python3", &remote_script, "read", &payload])?;
+    let (read, output) = runner.read(&[&remote_workload, "read", &payload])?;
     let (expected_bytes, expected_digest) = parse_digest(&output)?;
     if expected_bytes != file_bytes + PREPEND_BYTES {
         return Err(format!(
@@ -265,6 +336,46 @@ fn measure(container: &str, results: &Path, file_mib: u64, edit_count: usize) ->
     let (add, add_ns, add_receipt) = observed(&client, || client.add_layer(branch_id))?;
     require_add(&add)?;
     let final_storage = store_totals(&client.monitor_snapshot()?, &store_root)?;
+
+    fs::create_dir(&cold_store_root)?;
+    let create = {
+        let authority = Arc::new(LayerStackStore::create(
+            cold_store_root.join("authority.sqlite"),
+        )?);
+        let authority_store_id = authority.store_id();
+        let branches =
+            BranchStore::create(cold_store_root.join("branch.sqlite"), authority_store_id)?;
+        let branch_store_id = branches.store_id();
+        let client = Client::connect(ConnectionContext {
+            layerstack: LayerStackEndpoint::local(authority.clone()),
+            branches,
+        })?;
+        let genesis = client
+            .initialize_layerstack(
+                EntityName::new("fs-benchmark-pro-cold")?,
+                LayerStackInitialization::Empty,
+            )?
+            .genesis_layer_id;
+        client.pull_layer(genesis, RemotePlacement::Reference)?;
+        let branch_id = client.fork_branch(
+            EntityName::new("fs-benchmark-pro-cold-main")?,
+            LocalForkSource::Layer { layer_id: genesis },
+        )?;
+        WorkspaceRun {
+            client: &client,
+            branch_id,
+            container,
+            mount_root: &mount_root,
+            store_root: &cold_store_root,
+            authority_store_id,
+            branch_store_id,
+        }
+        .mutation(
+            "create".to_owned(),
+            &[&remote_workload, "create", &remote_fixture, &payload],
+        )?
+    };
+    operations.insert(0, create);
     let (commit, dirty) = source_provenance();
     write_evidence(&EvidenceWrite {
         path: &evidence_path,
@@ -285,6 +396,7 @@ fn measure(container: &str, results: &Path, file_mib: u64, edit_count: usize) ->
             branch_path: &branch_path,
             fuse_helper: &fuse_helper,
             authority_store_id,
+            branch_store_id,
             branch_parent_store_id,
             branch_id,
             file_bytes,
@@ -303,8 +415,152 @@ fn measure(container: &str, results: &Path, file_mib: u64, edit_count: usize) ->
             source_dirty: dirty,
         },
     )?;
+
     println!("{}", state_path.display());
     Ok(())
+}
+
+fn retain_mountinfo(
+    branch_path: &Path,
+    workspace: WorkspaceId,
+    mount_root: &str,
+    destination: &Path,
+) -> AnyResult<()> {
+    let source = workspace_mountinfo_path(branch_path, &workspace.to_string());
+    let mountinfo = fs::read_to_string(&source)?;
+    let fields = mountinfo.split_whitespace().collect::<Vec<_>>();
+    if fields.get(4) != Some(&mount_root)
+        || !fields
+            .windows(3)
+            .any(|fields| fields[0] == "-" && fields[1].starts_with("fuse"))
+    {
+        return Err("captured Workspace mountinfo does not identify the live FUSE mount".into());
+    }
+    fs::write(destination, mountinfo)?;
+    Ok(())
+}
+
+fn workspace_mountinfo_path(branch_path: &Path, workspace: &str) -> PathBuf {
+    branch_path
+        .with_extension("sqlite.runtime")
+        .join("workspaces")
+        .join("workspaces")
+        .join(workspace)
+        .join("mountinfo.txt")
+}
+
+fn diagnose_execution(
+    container: &str,
+    results: &Path,
+    file_mib: u64,
+    diagnostic: &str,
+    sample: &str,
+) -> AnyResult<()> {
+    validate_container(container)?;
+    if !matches!(diagnostic, "true" | "bash" | "helper" | "edit") {
+        return Err("invalid execution diagnostic".into());
+    }
+    let sample_number = sample.parse::<u8>()?;
+    if !(1..=9).contains(&sample_number) || sample != format!("{sample_number:03}") {
+        return Err("invalid execution diagnostic sample".into());
+    }
+    let results = fs::canonicalize(results)?;
+    let diagnostics_path = results.join(format!("execution-diagnostic-{diagnostic}-{sample}.json"));
+    let store_root = results.join(format!(
+        "layerfs-execution-diagnostic-{diagnostic}-{sample}-store"
+    ));
+    if diagnostics_path.exists() || store_root.exists() {
+        return Err("execution diagnostics already exist".into());
+    }
+    let fixture = std::env::var_os("LAYERFS_BENCH_FIXTURE")
+        .map(PathBuf::from)
+        .ok_or("execution diagnostics require LAYERFS_BENCH_FIXTURE")?;
+    let file_bytes = file_mib
+        .checked_mul(1024 * 1024)
+        .ok_or("FILE_MIB overflow")?;
+    if fs::metadata(&fixture)?.len() != file_bytes {
+        return Err("execution diagnostic fixture size mismatch".into());
+    }
+    fs::create_dir(&store_root)?;
+    let authority = Arc::new(LayerStackStore::create(
+        store_root.join("authority.sqlite"),
+    )?);
+    let branches = BranchStore::create(store_root.join("branch.sqlite"), authority.store_id())?;
+    let branch_store_id = branches.store_id();
+    let client = Client::connect(ConnectionContext {
+        layerstack: LayerStackEndpoint::local(authority.clone()),
+        branches,
+    })?;
+    let genesis = client
+        .initialize_layerstack(
+            EntityName::new("fs-benchmark-pro-diagnostic")?,
+            LayerStackInitialization::Directory(
+                fixture
+                    .parent()
+                    .ok_or("diagnostic fixture parent")?
+                    .to_owned(),
+            ),
+        )?
+        .genesis_layer_id;
+    client.pull_layer(genesis, RemotePlacement::Reference)?;
+    let branch_id = client.fork_branch(
+        EntityName::new("fs-benchmark-pro-diagnostic-main")?,
+        LocalForkSource::Layer { layer_id: genesis },
+    )?;
+    let mount_root = format!(
+        "/workspace/fs-benchmark-pro-diagnostic-{}",
+        std::process::id()
+    );
+    let payload = format!("{mount_root}/payload.bin");
+    let workload = workload_binary().to_string_lossy().into_owned();
+    let runner = WorkspaceRun {
+        client: &client,
+        branch_id,
+        container,
+        mount_root: &mount_root,
+        store_root: &store_root,
+        authority_store_id: authority.store_id(),
+        branch_store_id,
+    };
+    let (workspace, workspace_create_ns, _) = runner.create()?;
+    let file_bytes = file_bytes.to_string();
+    let argv = match diagnostic {
+        "true" => vec!["/bin/true"],
+        "bash" => vec!["/bin/bash", "-lc", ":"],
+        "helper" => vec![
+            "/bin/bash",
+            "-lc",
+            "\"$@\"",
+            "fs-bench-shell",
+            &workload,
+            "noop",
+        ],
+        "edit" => vec![
+            "/bin/bash",
+            "-lc",
+            "\"$@\"",
+            "fs-bench-shell",
+            &workload,
+            "edit",
+            &payload,
+            "0",
+            &file_bytes,
+        ],
+        _ => unreachable!(),
+    };
+    let execution = execute_workspace_command(&client, workspace, &argv)?;
+    let (_, workspace_end_ns, _) = observed(&client, || {
+        client.end_workspace_session(workspace, EndWorkspaceMode::Discard)
+    })?;
+    write_execution_diagnostic(
+        &diagnostics_path,
+        diagnostic,
+        sample,
+        &argv,
+        workspace_create_ns,
+        workspace_end_ns,
+        &execution,
+    )
 }
 
 struct WorkspaceRun<'a> {
@@ -313,6 +569,8 @@ struct WorkspaceRun<'a> {
     container: &'a str,
     mount_root: &'a str,
     store_root: &'a Path,
+    authority_store_id: StoreId,
+    branch_store_id: StoreId,
 }
 
 impl WorkspaceRun<'_> {
@@ -333,41 +591,74 @@ impl WorkspaceRun<'_> {
     fn mutation(&self, id: String, command: &[&str]) -> AnyResult<Phases> {
         let before = store_totals(&self.client.monitor_snapshot()?, self.store_root)?;
         let (workspace, workspace_create_ns, create_receipt) = self.create()?;
-        let (shell_ns, _) = timed_docker(self.container, command)?;
-        let (commit, workspace_commit_api_ns, commit_receipt) = observed(self.client, || {
-            self.client.commit_workspace_session(workspace)
-        })?;
-        require_commit_created(&commit)?;
-        let (push, push_api_ns, push_receipt) =
-            observed(self.client, || self.client.push_branch(self.branch_id))?;
-        require_push(&push)?;
+        let mut phases = self.mutation_open(workspace, id, command)?;
         let (_, workspace_end_ns, end_receipt) = observed(self.client, || {
             self.client
                 .end_workspace_session(workspace, EndWorkspaceMode::Clean)
         })?;
+        phases.workspace_create_ns = workspace_create_ns;
+        phases.workspace_end_ns = workspace_end_ns;
+        phases.workspace_create_receipt = Some(create_receipt.to_json());
+        phases.workspace_end_receipt = Some(end_receipt.to_json());
+        phases.storage_before = Some(before);
+        phases.storage_after = Some(store_totals(
+            &self.client.monitor_snapshot()?,
+            self.store_root,
+        )?);
+        Ok(phases)
+    }
+
+    fn mutation_open(
+        &self,
+        workspace: WorkspaceId,
+        id: String,
+        command: &[&str],
+    ) -> AnyResult<Phases> {
+        let execution = execute_workspace_command(self.client, workspace, command)?;
+        let (commit, workspace_commit_api_ns, commit_receipt) = observed(self.client, || {
+            self.client.commit_workspace_session(workspace)
+        })?;
+        require_commit_created(&commit)?;
+        require_normal_commit_rebased(&commit_receipt)?;
+        let (push, push_api_ns, push_receipt) =
+            observed(self.client, || self.client.push_branch(self.branch_id))?;
+        require_push(&push)?;
+        require_push_durability(&push_receipt, self.authority_store_id, self.branch_store_id)?;
         Ok(Phases {
             id,
-            workspace_create_ns,
-            shell_ns,
+            shell_ns: execution.sdk_exec_to_terminal_ns,
+            sdk_exec_to_terminal_ns: execution.sdk_exec_to_terminal_ns,
+            sdk_exec_dispatch_ns: execution.sdk_exec_dispatch_ns,
+            sdk_output_handle_ns: execution.sdk_output_handle_ns,
+            sdk_output_follow_ns: execution.sdk_output_follow_ns,
+            sdk_exec_unattributed_ns: execution.sdk_exec_unattributed_ns,
+            execution_exit_code: execution.receipt.exit_code,
+            execution_stopped: execution.receipt.stopped,
+            execution_stdout_bytes: execution.receipt.stdout_bytes,
+            execution_stderr_bytes: execution.receipt.stderr_bytes,
+            execution_elapsed_ns: execution.receipt.elapsed_ns,
+            execution_total_wall_ns: execution.receipt.total_wall_ns,
+            execution_spawn_ns: execution.receipt.spawn_ns,
+            execution_supervisor_queue_ns: execution.receipt.supervisor_queue_ns,
+            execution_runtime_ns: execution.receipt.runtime_ns,
+            execution_drain_ns: execution.receipt.drain_ns,
+            execution_terminal_ns: execution.receipt.terminal_publication_ns,
+            execution_unattributed_ns: execution.receipt.unattributed_ns,
+            execution_direct_engine: execution.receipt.direct_engine,
             workspace_commit_api_ns,
             push_api_ns,
-            workspace_end_ns,
-            workspace_create_receipt: Some(create_receipt.to_json()),
+            workspace_exec_receipt: Some(execution.exec_receipt.to_json()),
+            workspace_output_receipt: Some(execution.output_receipt.to_json()),
             workspace_commit_receipt: Some(commit_receipt.to_json()),
             push_receipt: Some(push_receipt.to_json()),
-            workspace_end_receipt: Some(end_receipt.to_json()),
-            storage_before: Some(before),
-            storage_after: Some(store_totals(
-                &self.client.monitor_snapshot()?,
-                self.store_root,
-            )?),
+            ..Phases::default()
         })
     }
 
     fn read(&self, command: &[&str]) -> AnyResult<(Phases, Vec<u8>)> {
         let before = store_totals(&self.client.monitor_snapshot()?, self.store_root)?;
         let (workspace, workspace_create_ns, create_receipt) = self.create()?;
-        let (shell_ns, output) = timed_docker(self.container, command)?;
+        let execution = execute_workspace_command(self.client, workspace, command)?;
         let (_, workspace_end_ns, end_receipt) = observed(self.client, || {
             self.client
                 .end_workspace_session(workspace, EndWorkspaceMode::Clean)
@@ -376,9 +667,29 @@ impl WorkspaceRun<'_> {
             Phases {
                 id: "read".to_owned(),
                 workspace_create_ns,
-                shell_ns,
+                shell_ns: execution.sdk_exec_to_terminal_ns,
+                sdk_exec_to_terminal_ns: execution.sdk_exec_to_terminal_ns,
+                sdk_exec_dispatch_ns: execution.sdk_exec_dispatch_ns,
+                sdk_output_handle_ns: execution.sdk_output_handle_ns,
+                sdk_output_follow_ns: execution.sdk_output_follow_ns,
+                sdk_exec_unattributed_ns: execution.sdk_exec_unattributed_ns,
+                execution_exit_code: execution.receipt.exit_code,
+                execution_stopped: execution.receipt.stopped,
+                execution_stdout_bytes: execution.receipt.stdout_bytes,
+                execution_stderr_bytes: execution.receipt.stderr_bytes,
+                execution_elapsed_ns: execution.receipt.elapsed_ns,
+                execution_total_wall_ns: execution.receipt.total_wall_ns,
+                execution_spawn_ns: execution.receipt.spawn_ns,
+                execution_supervisor_queue_ns: execution.receipt.supervisor_queue_ns,
+                execution_runtime_ns: execution.receipt.runtime_ns,
+                execution_drain_ns: execution.receipt.drain_ns,
+                execution_terminal_ns: execution.receipt.terminal_publication_ns,
+                execution_unattributed_ns: execution.receipt.unattributed_ns,
+                execution_direct_engine: execution.receipt.direct_engine,
                 workspace_end_ns,
                 workspace_create_receipt: Some(create_receipt.to_json()),
+                workspace_exec_receipt: Some(execution.exec_receipt.to_json()),
+                workspace_output_receipt: Some(execution.output_receipt.to_json()),
                 workspace_end_receipt: Some(end_receipt.to_json()),
                 storage_before: Some(before),
                 storage_after: Some(store_totals(
@@ -387,14 +698,162 @@ impl WorkspaceRun<'_> {
                 )?),
                 ..Phases::default()
             },
-            output,
+            execution.stdout,
         ))
     }
 }
 
+struct WorkspaceCommand {
+    sdk_exec_to_terminal_ns: u64,
+    sdk_exec_dispatch_ns: u64,
+    sdk_output_handle_ns: u64,
+    sdk_output_follow_ns: u64,
+    sdk_exec_unattributed_ns: u64,
+    stdout: Vec<u8>,
+    receipt: ExecutionReceipt,
+    exec_receipt: OperationReceipt,
+    output_receipt: OperationReceipt,
+}
+
+fn write_execution_diagnostic(
+    path: &Path,
+    name: &str,
+    sample: &str,
+    argv: &[&str],
+    workspace_create_ns: u64,
+    workspace_end_ns: u64,
+    command: &WorkspaceCommand,
+) -> AnyResult<()> {
+    let argv = argv
+        .iter()
+        .map(|value| json_string(value))
+        .collect::<Vec<_>>()
+        .join(",");
+    fs::write(
+        path,
+        format!(
+            "{{\"schema\":\"fs-benchmark-pro-execution-diagnostic-v3\",\"headline\":false,\"fresh_container\":true,\"fresh_store_pair\":true,\"diagnostic_prewarm\":false,\"os_page_cache\":\"uncontrolled\",\"name\":{},\"sample\":{},\"exact_argv\":[{}],\"workspace_create_ns\":{},\"workspace_end_ns\":{},\"sdk_exec_to_terminal_ns\":{},\"sdk_exec_dispatch_ns\":{},\"sdk_output_handle_ns\":{},\"sdk_output_follow_ns\":{},\"sdk_exec_unattributed_ns\":{},\"execution\":{{\"elapsed_ns\":{},\"total_wall_ns\":{},\"spawn_ns\":{},\"supervisor_queue_ns\":{},\"runtime_ns\":{},\"drain_ns\":{},\"terminal_publication_ns\":{},\"unattributed_ns\":{},\"timing_balanced\":{},\"direct_engine\":{},\"stdout_bytes\":{},\"stderr_bytes\":{}}},\"bash_path\":\"/bin/bash\"}}\n",
+            json_string(name),
+            json_string(sample),
+            argv,
+            workspace_create_ns,
+            workspace_end_ns,
+            command.sdk_exec_to_terminal_ns,
+            command.sdk_exec_dispatch_ns,
+            command.sdk_output_handle_ns,
+            command.sdk_output_follow_ns,
+            command.sdk_exec_unattributed_ns,
+            command.receipt.elapsed_ns,
+            command.receipt.total_wall_ns,
+            command.receipt.spawn_ns,
+            command.receipt.supervisor_queue_ns,
+            command.receipt.runtime_ns,
+            command.receipt.drain_ns,
+            command.receipt.terminal_publication_ns,
+            command.receipt.unattributed_ns,
+            command.receipt.timing_balanced(),
+            command.receipt.direct_engine,
+            command.receipt.stdout_bytes,
+            command.receipt.stderr_bytes,
+        ),
+    )?;
+    Ok(())
+}
+
+fn execute_workspace_command(
+    client: &Client,
+    workspace: WorkspaceId,
+    command: &[&str],
+) -> AnyResult<WorkspaceCommand> {
+    let argv = NonEmpty::new(command.iter().map(OsString::from).collect())?;
+    let outer_started = Instant::now();
+    let started = Instant::now();
+    let execution = client.exec_workspace_session(workspace, argv)?;
+    let sdk_exec_dispatch_ns = elapsed_ns(started);
+    let started = Instant::now();
+    let output = client.workspace_output(execution.id)?;
+    let sdk_output_handle_ns = elapsed_ns(started);
+    let output_started = Instant::now();
+    let mut after = 0;
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let receipt = loop {
+        let page = output.read(after, true)?;
+        if page.truncated {
+            return Err("required Workspace output was truncated".into());
+        }
+        after = page.next_sequence;
+        for chunk in page.chunks {
+            match chunk.stream {
+                OutputStream::Stdout => stdout.extend_from_slice(&chunk.bytes),
+                OutputStream::Stderr => stderr.extend_from_slice(&chunk.bytes),
+            }
+        }
+        if page.exited {
+            break page
+                .receipt
+                .ok_or("terminal Workspace receipt is missing")?;
+        }
+    };
+    let sdk_output_follow_ns = elapsed_ns(output_started);
+    let sdk_exec_to_terminal_ns = elapsed_ns(outer_started);
+    let attributed = sdk_exec_dispatch_ns
+        .saturating_add(sdk_output_handle_ns)
+        .saturating_add(sdk_output_follow_ns);
+    let sdk_exec_unattributed_ns = sdk_exec_to_terminal_ns.saturating_sub(attributed);
+    if attributed > sdk_exec_to_terminal_ns
+        || sdk_exec_to_terminal_ns != attributed.saturating_add(sdk_exec_unattributed_ns)
+    {
+        return Err("SDK Exec-to-terminal timing is unbalanced".into());
+    }
+    if !receipt.timing_balanced() {
+        return Err("Workspace execution receipt timing is unbalanced".into());
+    }
+    if std::env::var("LAYERFS_BENCH_REQUIRE_DIRECT_ENGINE").as_deref() == Ok("1")
+        && !receipt.direct_engine
+    {
+        return Err("Workspace execution did not use the required direct Engine transport".into());
+    }
+    if receipt.exit_code != Some(0) || receipt.stopped {
+        return Err(format!(
+            "Workspace execution failed: exit={:?} stopped={} stderr={}",
+            receipt.exit_code,
+            receipt.stopped,
+            String::from_utf8_lossy(&stderr)
+        )
+        .into());
+    }
+    let snapshot = client.monitor_snapshot()?;
+    let operation = |family| {
+        snapshot
+            .operations
+            .iter()
+            .rev()
+            .find(|receipt| {
+                receipt.operation.family == family
+                    && receipt.operation.execution_id == Some(execution.id)
+            })
+            .cloned()
+            .ok_or("Workspace execution operation receipt is missing")
+    };
+    let exec_receipt = operation(OperationFamily::WorkspaceExec)?;
+    let output_receipt = operation(OperationFamily::WorkspaceOutput)?;
+    Ok(WorkspaceCommand {
+        sdk_exec_to_terminal_ns,
+        sdk_exec_dispatch_ns,
+        sdk_output_handle_ns,
+        sdk_output_follow_ns,
+        sdk_exec_unattributed_ns,
+        stdout,
+        receipt,
+        exec_receipt,
+        output_receipt,
+    })
+}
+
 fn verify(state_path: &Path, result_path: &Path) -> AnyResult<()> {
     let state = read_state(state_path)?;
-    require_state(&state, "schema", "fs-benchmark-pro-state-v1")?;
+    require_state(&state, "schema", "fs-benchmark-pro-state-v4")?;
     let container = value(&state, "container")?;
     validate_container(container)?;
     let authority_path = PathBuf::from(value(&state, "authority_db")?);
@@ -405,6 +864,7 @@ fn verify(state_path: &Path, result_path: &Path) -> AnyResult<()> {
     }
     std::env::set_var("LAYERFS_FUSE_HELPER", &fuse_helper);
     let expected_store_id = value(&state, "authority_store_id")?.parse::<StoreId>()?;
+    let expected_branch_store_id = value(&state, "branch_store_id")?.parse::<StoreId>()?;
     let expected_parent = value(&state, "branch_parent_store_id")?.parse::<StoreId>()?;
     let branch_id = value(&state, "branch_id")?.parse::<BranchId>()?;
     let expected_bytes = parse_positive(value(&state, "expected_bytes")?, "expected_bytes")?;
@@ -414,6 +874,9 @@ fn verify(state_path: &Path, result_path: &Path) -> AnyResult<()> {
         return Err("reopened LayerStackStore identity changed".into());
     }
     let branches = BranchStore::connect(&branch_path, expected_store_id)?;
+    if branches.store_id() != expected_branch_store_id {
+        return Err("reopened BranchStore identity changed".into());
+    }
     if branches.parent_store_id() != expected_parent || expected_parent != expected_store_id {
         return Err("reopened BranchStore parent binding changed".into());
     }
@@ -421,13 +884,13 @@ fn verify(state_path: &Path, result_path: &Path) -> AnyResult<()> {
         layerstack: LayerStackEndpoint::local(authority),
         branches,
     })?;
-    let remote_script = if std::env::var("LAYERFS_BENCH_SELF_TARGET").as_deref() == Ok("1") {
-        workload_script().to_string_lossy().into_owned()
+    let remote_workload = if std::env::var("LAYERFS_BENCH_SELF_TARGET").as_deref() == Ok("1") {
+        workload_binary().to_string_lossy().into_owned()
     } else {
-        let script = format!("/tmp/fs-benchmark-pro-{}-verify.py", std::process::id());
-        copy_to_container(container, &workload_script(), &script)?;
-        docker_checked(container, &["chmod", "0555", &script])?;
-        script
+        let workload = format!("/tmp/fs-benchmark-pro-{}-verify", std::process::id());
+        copy_to_container(container, &workload_binary(), &workload)?;
+        docker_checked(container, &["chmod", "0555", &workload])?;
+        workload
     };
     let mount_root = format!("/workspace/fs-benchmark-pro-verify-{}", std::process::id());
     let payload = format!("{mount_root}/payload.bin");
@@ -440,19 +903,19 @@ fn verify(state_path: &Path, result_path: &Path) -> AnyResult<()> {
         },
         projection: Some(WorkspaceProjection::Fuse),
     })?;
-    let output = docker_checked(
-        container,
+    let execution = execute_workspace_command(
+        &client,
+        workspace,
         &[
-            "python3",
-            &remote_script,
+            &remote_workload,
             "verify",
             &payload,
             &expected_bytes.to_string(),
             expected_digest,
         ],
     )?;
-    let (actual_bytes, actual_digest) = parse_digest(&output.stdout)?;
-    client.end_workspace_session(workspace, EndWorkspaceMode::Discard)?;
+    let (actual_bytes, actual_digest) = parse_digest(&execution.stdout)?;
+    client.end_workspace_session(workspace, EndWorkspaceMode::Clean)?;
     let reopen_verify_ns = elapsed_ns(verify_started);
     let final_snapshot = store_totals(
         &client.monitor_snapshot()?,
@@ -481,6 +944,7 @@ struct StateWrite<'a> {
     branch_path: &'a Path,
     fuse_helper: &'a Path,
     authority_store_id: StoreId,
+    branch_store_id: StoreId,
     branch_parent_store_id: StoreId,
     branch_id: BranchId,
     file_bytes: u64,
@@ -501,12 +965,13 @@ struct StateWrite<'a> {
 
 fn write_state(path: &Path, state: &StateWrite<'_>) -> AnyResult<()> {
     let mut lines = vec![
-        "schema\tfs-benchmark-pro-state-v1".to_owned(),
+        "schema\tfs-benchmark-pro-state-v4".to_owned(),
         format!("container\t{}", state.container),
         format!("authority_db\t{}", state.authority_path.display()),
         format!("branch_db\t{}", state.branch_path.display()),
         format!("fuse_helper\t{}", state.fuse_helper.display()),
         format!("authority_store_id\t{}", state.authority_store_id),
+        format!("branch_store_id\t{}", state.branch_store_id),
         format!("branch_parent_store_id\t{}", state.branch_parent_store_id),
         format!("branch_id\t{}", state.branch_id),
         format!("file_bytes\t{}", state.file_bytes),
@@ -529,10 +994,30 @@ fn write_state(path: &Path, state: &StateWrite<'_>) -> AnyResult<()> {
     append_storage(&mut lines, "final", state.final_storage);
     for operation in state.operations {
         lines.push(format!(
-            "operation\t{}\t{}\t{}\t{}\t{}\t{}",
+            "operation\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             operation.id,
             operation.workspace_create_ns,
             operation.shell_ns,
+            operation.sdk_exec_to_terminal_ns,
+            operation.sdk_exec_dispatch_ns,
+            operation.sdk_output_handle_ns,
+            operation.sdk_output_follow_ns,
+            operation.sdk_exec_unattributed_ns,
+            operation
+                .execution_exit_code
+                .map_or_else(|| "-".to_owned(), |code| code.to_string()),
+            operation.execution_stopped,
+            operation.execution_stdout_bytes,
+            operation.execution_stderr_bytes,
+            operation.execution_elapsed_ns,
+            operation.execution_total_wall_ns,
+            operation.execution_spawn_ns,
+            operation.execution_supervisor_queue_ns,
+            operation.execution_runtime_ns,
+            operation.execution_drain_ns,
+            operation.execution_terminal_ns,
+            operation.execution_unattributed_ns,
+            operation.execution_direct_engine,
             operation.workspace_commit_api_ns,
             operation.push_api_ns,
             operation.workspace_end_ns,
@@ -560,16 +1045,34 @@ fn read_state(path: &Path) -> AnyResult<State> {
     for (line_number, line) in fs::read_to_string(path)?.lines().enumerate() {
         let fields = line.split('\t').collect::<Vec<_>>();
         if fields.first() == Some(&"operation") {
-            if fields.len() != 7 {
+            if fields.len() != 25 {
                 return Err(format!("invalid operation at state line {}", line_number + 1).into());
             }
             operations.push(Phases {
                 id: fields[1].to_owned(),
                 workspace_create_ns: fields[2].parse()?,
                 shell_ns: fields[3].parse()?,
-                workspace_commit_api_ns: fields[4].parse()?,
-                push_api_ns: fields[5].parse()?,
-                workspace_end_ns: fields[6].parse()?,
+                sdk_exec_to_terminal_ns: fields[4].parse()?,
+                sdk_exec_dispatch_ns: fields[5].parse()?,
+                sdk_output_handle_ns: fields[6].parse()?,
+                sdk_output_follow_ns: fields[7].parse()?,
+                sdk_exec_unattributed_ns: fields[8].parse()?,
+                execution_exit_code: (fields[9] != "-").then(|| fields[9].parse()).transpose()?,
+                execution_stopped: fields[10].parse()?,
+                execution_stdout_bytes: fields[11].parse()?,
+                execution_stderr_bytes: fields[12].parse()?,
+                execution_elapsed_ns: fields[13].parse()?,
+                execution_total_wall_ns: fields[14].parse()?,
+                execution_spawn_ns: fields[15].parse()?,
+                execution_supervisor_queue_ns: fields[16].parse()?,
+                execution_runtime_ns: fields[17].parse()?,
+                execution_drain_ns: fields[18].parse()?,
+                execution_terminal_ns: fields[19].parse()?,
+                execution_unattributed_ns: fields[20].parse()?,
+                execution_direct_engine: fields[21].parse()?,
+                workspace_commit_api_ns: fields[22].parse()?,
+                push_api_ns: fields[23].parse()?,
+                workspace_end_ns: fields[24].parse()?,
                 ..Phases::default()
             });
         } else if let [key, item] = fields.as_slice() {
@@ -611,10 +1114,10 @@ fn summary_json(
         return Err(format!("state has {} edits, expected {expected_edits}", edits.len()).into());
     }
     let edits_sum = edits.iter().fold(0_u64, |sum, operation| {
-        sum.saturating_add(operation.authority_checkpoint_ns())
+        sum.saturating_add(operation.comparable_ns())
     });
     let comparable_total = state.operations.iter().fold(0_u64, |sum, operation| {
-        sum.saturating_add(operation.authority_checkpoint_ns())
+        sum.saturating_add(operation.comparable_ns())
     });
     let complete_turn_total = state.operations.iter().fold(0_u64, |sum, operation| {
         sum.saturating_add(operation.complete_turn_ns())
@@ -629,15 +1132,15 @@ fn summary_json(
     let authority_checkpoint = state_storage(state, "authority_checkpoint")?;
     let add_ns = parse_positive_or_zero(value(state, "add_ns")?, "add_ns")?;
     Ok(format!(
-        "{{\"schema\":\"fs-benchmark-pro-sample-v1\",\"candidate\":\"layerfs-reference\",\"workload\":{{\"initial_bytes\":{},\"initial_sha256\":{},\"edit_count\":{},\"edit_size_bytes\":10,\"prepend_bytes\":10}},\"operations\":[{}],\"aggregates\":{{\"create_ns\":{},\"sixteen_edits_sum_ns\":{},\"prepend_ns\":{},\"read_ns\":{},\"workspace_create_ns\":{},\"workspace_end_ns\":{},\"add_ns\":{},\"comparable_total_ns\":{},\"complete_turn_total_ns\":{}}},\"verification\":{{\"initial_bytes\":{},\"initial_sha256\":{},\"after_edits_sha256\":{},\"final_bytes\":{},\"final_sha256\":{},\"final_digest\":{},\"reopen_passed\":true,\"reopen_verify_ns\":{}}},\"storage\":{{\"initial\":{},\"authority_checkpoint\":{},\"final\":{},\"unavailable\":{{\"logical_bytes\":\"not exposed by the public Store snapshot\",\"semantic_payload_bytes\":\"available by fact/object kind in exact JSONL operation receipts; no single lossless aggregate\",\"wire_bytes\":\"local endpoint has no network transport\"}}}},\"provenance\":{{\"source_commit\":{},\"source_dirty\":{},\"authority_store_id\":{},\"branch_parent_store_id\":{},\"branch_id\":{},\"measured_unix_ns\":{}}},\"status\":\"pass\"}}",
+        "{{\"schema\":\"fs-benchmark-pro-sample-v2\",\"candidate\":\"layerfs-reference\",\"workload\":{{\"initial_bytes\":{},\"initial_sha256\":{},\"edit_count\":{},\"edit_size_bytes\":10,\"prepend_bytes\":10}},\"operations\":[{}],\"aggregates\":{{\"create_ns\":{},\"sixteen_edits_sum_ns\":{},\"prepend_ns\":{},\"read_ns\":{},\"workspace_create_ns\":{},\"workspace_end_ns\":{},\"add_ns\":{},\"comparable_total_ns\":{},\"complete_turn_total_ns\":{}}},\"verification\":{{\"initial_bytes\":{},\"initial_sha256\":{},\"after_edits_sha256\":{},\"final_bytes\":{},\"final_sha256\":{},\"final_digest\":{},\"reopen_passed\":true,\"reopen_verify_ns\":{}}},\"storage\":{{\"initial\":{},\"authority_checkpoint\":{},\"final\":{},\"unavailable\":{{\"logical_bytes\":\"not exposed by the public Store snapshot\",\"semantic_payload_bytes\":\"available by fact/object kind in exact JSONL operation receipts; no single lossless aggregate\",\"wire_bytes\":\"local endpoint has no network transport\"}}}},\"provenance\":{{\"source_commit\":{},\"source_dirty\":{},\"authority_store_id\":{},\"branch_store_id\":{},\"branch_parent_store_id\":{},\"branch_id\":{},\"measured_unix_ns\":{}}},\"status\":\"pass\"}}",
         value(state, "file_bytes")?,
         json_string(value(state, "fixture_digest")?),
         value(state, "edit_count")?,
         operations,
-        create.authority_checkpoint_ns(),
+        create.comparable_ns(),
         edits_sum,
-        prepend.authority_checkpoint_ns(),
-        read.shell_ns,
+        prepend.comparable_ns(),
+        read.comparable_ns(),
         create.workspace_create_ns,
         read.workspace_end_ns,
         add_ns,
@@ -656,6 +1159,7 @@ fn summary_json(
         json_string(value(state, "source_commit")?),
         value(state, "source_dirty")?,
         json_string(value(state, "authority_store_id")?),
+        json_string(value(state, "branch_store_id")?),
         json_string(value(state, "branch_parent_store_id")?),
         json_string(value(state, "branch_id")?),
         now_ns(),
@@ -664,15 +1168,33 @@ fn summary_json(
 
 fn operation_summary_json(operation: &Phases) -> String {
     format!(
-        "{{\"id\":{},\"workspace_create_ns\":{},\"shell_ns\":{},\"workspace_commit_api_ns\":{},\"push_api_ns\":{},\"workspace_end_ns\":{},\"authority_checkpoint_ns\":{},\"comparable_ns\":{},\"complete_turn_ns\":{}}}",
+        "{{\"id\":{},\"workspace_create_ns\":{},\"shell_ns\":{},\"sdk_exec_to_terminal_ns\":{},\"sdk_exec_dispatch_ns\":{},\"sdk_output_handle_ns\":{},\"sdk_output_follow_ns\":{},\"sdk_exec_unattributed_ns\":{},\"execution\":{{\"exit_code\":{},\"stopped\":{},\"stdout_bytes\":{},\"stderr_bytes\":{},\"elapsed_ns\":{},\"total_wall_ns\":{},\"spawn_ns\":{},\"supervisor_queue_ns\":{},\"runtime_ns\":{},\"drain_ns\":{},\"terminal_publication_ns\":{},\"unattributed_ns\":{},\"direct_engine\":{}}},\"workspace_commit_api_ns\":{},\"push_api_ns\":{},\"workspace_end_ns\":{},\"authority_checkpoint_ns\":{},\"comparable_ns\":{},\"complete_turn_ns\":{}}}",
         json_string(&operation.id),
         operation.workspace_create_ns,
         operation.shell_ns,
+        operation.sdk_exec_to_terminal_ns,
+        operation.sdk_exec_dispatch_ns,
+        operation.sdk_output_handle_ns,
+        operation.sdk_output_follow_ns,
+        operation.sdk_exec_unattributed_ns,
+        operation.execution_exit_code.map_or_else(|| "null".to_owned(), |code| code.to_string()),
+        operation.execution_stopped,
+        operation.execution_stdout_bytes,
+        operation.execution_stderr_bytes,
+        operation.execution_elapsed_ns,
+        operation.execution_total_wall_ns,
+        operation.execution_spawn_ns,
+        operation.execution_supervisor_queue_ns,
+        operation.execution_runtime_ns,
+        operation.execution_drain_ns,
+        operation.execution_terminal_ns,
+        operation.execution_unattributed_ns,
+        operation.execution_direct_engine,
         operation.workspace_commit_api_ns,
         operation.push_api_ns,
         operation.workspace_end_ns,
         operation.authority_checkpoint_ns(),
-        operation.authority_checkpoint_ns(),
+        operation.comparable_ns(),
         operation.complete_turn_ns(),
     )
 }
@@ -702,7 +1224,7 @@ fn write_evidence(evidence: &EvidenceWrite<'_>) -> AnyResult<()> {
         source_dirty,
     } = evidence;
     let mut rows = vec![format!(
-        "{{\"schema\":\"fs-benchmark-pro-evidence-v1\",\"candidate\":\"layerfs-reference\",\"record\":\"provenance\",\"file_bytes\":{file_bytes},\"edit_count\":{edit_count},\"fixture_sha256\":{},\"source_commit\":{},\"source_dirty\":{},\"unix_ns\":{}}}",
+        "{{\"schema\":\"fs-benchmark-pro-evidence-v3\",\"candidate\":\"layerfs-reference\",\"record\":\"provenance\",\"file_bytes\":{file_bytes},\"edit_count\":{edit_count},\"fixture_sha256\":{},\"source_commit\":{},\"source_dirty\":{},\"unix_ns\":{}}}",
         json_string(fixture_digest),
         json_string(source_commit),
         *source_dirty,
@@ -710,10 +1232,28 @@ fn write_evidence(evidence: &EvidenceWrite<'_>) -> AnyResult<()> {
     )];
     for operation in *operations {
         rows.push(format!(
-            "{{\"schema\":\"fs-benchmark-pro-evidence-v1\",\"candidate\":\"layerfs-reference\",\"record\":\"operation\",\"id\":{},\"workspace_create_ns\":{},\"shell_ns\":{},\"workspace_commit_api_ns\":{},\"push_api_ns\":{},\"workspace_end_ns\":{},\"authority_checkpoint_ns\":{},\"complete_turn_ns\":{},\"storage_before\":{},\"storage_after\":{},\"receipts\":{{\"workspace_create\":{},\"workspace_commit\":{},\"push\":{},\"workspace_end\":{}}}}}",
+            "{{\"schema\":\"fs-benchmark-pro-evidence-v3\",\"candidate\":\"layerfs-reference\",\"record\":\"operation\",\"id\":{},\"workspace_create_ns\":{},\"shell_ns\":{},\"sdk_exec_to_terminal_ns\":{},\"sdk_exec_dispatch_ns\":{},\"sdk_output_handle_ns\":{},\"sdk_output_follow_ns\":{},\"sdk_exec_unattributed_ns\":{},\"execution\":{{\"exit_code\":{},\"stopped\":{},\"stdout_bytes\":{},\"stderr_bytes\":{},\"elapsed_ns\":{},\"total_wall_ns\":{},\"spawn_ns\":{},\"supervisor_queue_ns\":{},\"runtime_ns\":{},\"drain_ns\":{},\"terminal_publication_ns\":{},\"unattributed_ns\":{},\"direct_engine\":{}}},\"workspace_commit_api_ns\":{},\"push_api_ns\":{},\"workspace_end_ns\":{},\"authority_checkpoint_ns\":{},\"complete_turn_ns\":{},\"storage_before\":{},\"storage_after\":{},\"receipts\":{{\"workspace_create\":{},\"workspace_exec\":{},\"workspace_output\":{},\"workspace_commit\":{},\"push\":{},\"workspace_end\":{}}}}}",
             json_string(&operation.id),
             operation.workspace_create_ns,
             operation.shell_ns,
+            operation.sdk_exec_to_terminal_ns,
+            operation.sdk_exec_dispatch_ns,
+            operation.sdk_output_handle_ns,
+            operation.sdk_output_follow_ns,
+            operation.sdk_exec_unattributed_ns,
+            operation.execution_exit_code.map_or_else(|| "null".to_owned(), |code| code.to_string()),
+            operation.execution_stopped,
+            operation.execution_stdout_bytes,
+            operation.execution_stderr_bytes,
+            operation.execution_elapsed_ns,
+            operation.execution_total_wall_ns,
+            operation.execution_spawn_ns,
+            operation.execution_supervisor_queue_ns,
+            operation.execution_runtime_ns,
+            operation.execution_drain_ns,
+            operation.execution_terminal_ns,
+            operation.execution_unattributed_ns,
+            operation.execution_direct_engine,
             operation.workspace_commit_api_ns,
             operation.push_api_ns,
             operation.workspace_end_ns,
@@ -722,13 +1262,15 @@ fn write_evidence(evidence: &EvidenceWrite<'_>) -> AnyResult<()> {
             optional_storage_json(operation.storage_before),
             optional_storage_json(operation.storage_after),
             optional_receipt_json(operation.workspace_create_receipt.as_deref(), "not applicable to this operation"),
+            optional_receipt_json(operation.workspace_exec_receipt.as_deref(), "not applicable to this operation"),
+            optional_receipt_json(operation.workspace_output_receipt.as_deref(), "not applicable to this operation"),
             optional_receipt_json(operation.workspace_commit_receipt.as_deref(), "read-only operation has no Workspace Commit"),
             optional_receipt_json(operation.push_receipt.as_deref(), "read-only operation has no Push"),
             optional_receipt_json(operation.workspace_end_receipt.as_deref(), "Workspace remains active"),
         ));
     }
     rows.push(format!(
-        "{{\"schema\":\"fs-benchmark-pro-evidence-v1\",\"candidate\":\"layerfs-reference\",\"record\":\"add\",\"elapsed_ns\":{add_ns},\"excluded_from_comparable_total\":true,\"operation_receipt\":{}}}",
+        "{{\"schema\":\"fs-benchmark-pro-evidence-v3\",\"candidate\":\"layerfs-reference\",\"record\":\"add\",\"elapsed_ns\":{add_ns},\"excluded_from_comparable_total\":true,\"operation_receipt\":{}}}",
         add_receipt.to_json()
     ));
     fs::write(path, format!("{}\n", rows.join("\n")))?;
@@ -761,11 +1303,68 @@ fn require_commit_created(result: &WorkspaceCommitResult) -> AnyResult<()> {
     }
 }
 
+fn require_normal_commit_rebased(receipt: &OperationReceipt) -> AnyResult<()> {
+    let commits = receipt
+        .storage
+        .iter()
+        .filter_map(|receipt| match receipt {
+            StorageReceipt::WorkspaceCommit(receipt) => Some(receipt),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if commits.len() != 1
+        || commits[0].capture_mode != Some(layerfs_sdk::CaptureMode::Live)
+        || commits[0].in_place_rebase_ns == 0
+        || commits[0].resume_ns == 0
+        || receipt
+            .storage
+            .iter()
+            .any(|receipt| matches!(receipt, StorageReceipt::WorkspaceLifecycle(_)))
+    {
+        return Err("ordinary Workspace Commit did not prove in-place Rebased transition".into());
+    }
+    Ok(())
+}
+
 fn require_push(result: &PushResult) -> AnyResult<()> {
     match result {
         PushResult::Created { .. } | PushResult::Advanced { .. } => Ok(()),
         other => Err(format!("Push did not advance authority: {other:?}").into()),
     }
+}
+
+fn require_push_durability(
+    receipt: &OperationReceipt,
+    authority_store_id: StoreId,
+    branch_store_id: StoreId,
+) -> AnyResult<()> {
+    let durability = receipt
+        .storage
+        .iter()
+        .filter_map(|receipt| match receipt {
+            StorageReceipt::Durability(receipt) => Some(*receipt),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if durability.len() != 2 {
+        return Err(format!(
+            "Push emitted {} durability receipts, expected two",
+            durability.len()
+        )
+        .into());
+    }
+    for receipt in &durability {
+        receipt.validate()?;
+    }
+    if !durability.iter().any(|receipt| {
+        receipt.role == StoreRole::LayerStack && receipt.store_id == authority_store_id
+    }) || !durability
+        .iter()
+        .any(|receipt| receipt.role == StoreRole::Branch && receipt.store_id == branch_store_id)
+    {
+        return Err("Push durability receipts do not match the bound Stores".into());
+    }
+    Ok(())
 }
 
 fn require_add(result: &AddLayerResult) -> AnyResult<()> {
@@ -791,6 +1390,23 @@ fn store_totals(snapshot: &MonitorSnapshot, store_root: &Path) -> AnyResult<Stor
         durable_allocated_bytes: allocated_database_bytes(store_root)?,
         ..storage
     })
+}
+
+fn inventory_totals(store: &BranchStore) -> AnyResult<(u64, u64)> {
+    let mut after = None;
+    let mut ids = 0_u64;
+    let mut bytes = 0_u64;
+    loop {
+        let page = store.inventory_page(after, 512)?;
+        ids = ids.saturating_add(page.entries.len() as u64);
+        bytes = page.entries.iter().fold(bytes, |total, entry| {
+            total.saturating_add(entry.encoded_length)
+        });
+        let Some(next) = page.continuation else {
+            return Ok((ids, bytes));
+        };
+        after = Some(next);
+    }
 }
 
 #[cfg(unix)]
@@ -876,19 +1492,23 @@ fn require_state(state: &State, key: &str, expected: &str) -> AnyResult<()> {
     }
 }
 
-fn workload_script() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("workload.py")
+fn workload_binary() -> PathBuf {
+    std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::current_exe()
+                .expect("current executable")
+                .parent()
+                .expect("executable directory")
+                .join("fs-benchmark-workload")
+        })
 }
 
 fn host_digest(path: &Path) -> AnyResult<(u64, String)> {
     if !path.is_file() {
         return Err(format!("neutral fixture is missing: {}", path.display()).into());
     }
-    let output = Command::new("python3")
-        .arg(workload_script())
-        .arg("digest")
-        .arg(path)
-        .output()?;
+    let output = Command::new("sha256sum").arg(path).output()?;
     if !output.status.success() {
         return Err(format!(
             "fixture digest failed: {}",
@@ -896,49 +1516,11 @@ fn host_digest(path: &Path) -> AnyResult<(u64, String)> {
         )
         .into());
     }
-    parse_digest(&output.stdout)
-}
-
-fn host_oracles(
-    results: &Path,
-    fixture: &Path,
-    file_bytes: u64,
-    edit_count: usize,
-) -> AnyResult<(String, String)> {
-    let oracle = results.join(".fs-benchmark-pro-oracle.bin");
-    let status = Command::new("python3")
-        .arg(workload_script())
-        .args(["create"])
-        .arg(fixture)
-        .arg(&oracle)
-        .status()?;
-    if !status.success() {
-        return Err("neutral oracle copy failed".into());
-    }
-    for index in 0..edit_count {
-        let status = Command::new("python3")
-            .arg(workload_script())
-            .arg("edit")
-            .arg(&oracle)
-            .arg(index.to_string())
-            .arg(file_bytes.to_string())
-            .status()?;
-        if !status.success() {
-            return Err(format!("neutral oracle edit {} failed", index + 1).into());
-        }
-    }
-    let (_, after_edits) = host_digest(&oracle)?;
-    let status = Command::new("python3")
-        .arg(workload_script())
-        .arg("prepend")
-        .arg(&oracle)
-        .status()?;
-    if !status.success() {
-        return Err("neutral oracle prepend failed".into());
-    }
-    let (_, final_digest) = host_digest(&oracle)?;
-    fs::remove_file(oracle)?;
-    Ok((after_edits, final_digest))
+    let digest = std::str::from_utf8(&output.stdout)?
+        .split_whitespace()
+        .next()
+        .ok_or("sha256sum output")?;
+    Ok((fs::metadata(path)?.len(), digest.to_owned()))
 }
 
 fn parse_digest(bytes: &[u8]) -> AnyResult<(u64, String)> {
@@ -989,12 +1571,6 @@ fn docker_checked(container: &str, arguments: &[&str]) -> AnyResult<Output> {
         .args(arguments)
         .output()?;
     checked_output(output, "docker exec")
-}
-
-fn timed_docker(container: &str, arguments: &[&str]) -> AnyResult<(u64, Vec<u8>)> {
-    let started = Instant::now();
-    let output = docker_checked(container, arguments)?;
-    Ok((elapsed_ns(started), output.stdout))
 }
 
 fn checked_output(output: Output, action: &str) -> AnyResult<Output> {
@@ -1120,5 +1696,55 @@ mod tests {
         };
         assert_eq!(phases.authority_checkpoint_ns(), 15);
         assert_eq!(phases.complete_turn_ns(), 28);
+        assert_eq!(phases.comparable_ns(), 28);
+    }
+
+    #[test]
+    fn diagnostics_cannot_run_before_headline_and_recovery() {
+        let source = include_str!("main.rs");
+        let measure = source
+            .split_once("fn measure(")
+            .unwrap()
+            .1
+            .split_once("fn diagnose_execution(")
+            .unwrap()
+            .0;
+        assert!(!measure.contains("write_execution_diagnostic("));
+        assert!(
+            measure.find("let first_edit").unwrap()
+                < measure.find("operations.insert(0, create)").unwrap()
+        );
+        assert!(
+            measure.find("retain_mountinfo(").unwrap() < measure.find("let first_edit").unwrap()
+        );
+
+        let runner = include_str!("../run.sh");
+        let recovery = runner
+            .find("/usr/local/bin/fs-benchmark-pro verify")
+            .unwrap();
+        let diagnostics = runner
+            .find("for diagnostic in true bash helper edit")
+            .unwrap();
+        assert!(diagnostics > recovery);
+    }
+
+    #[test]
+    fn registered_edits_keep_bash_and_native_odrdwr_semantics() {
+        let source = include_str!("main.rs");
+        assert!(source
+            .contains("\"/bin/bash\",\n                \"-lc\",\n                \"\\\"$@\\\"\""));
+        let workload = include_str!("../workload.rs");
+        assert!(workload.contains("OpenOptions::new().read(true).write(true).open(path)?"));
+        let computer = include_str!("../computer.mjs");
+        assert!(computer.contains("/bin/bash -lc ${shellQuote("));
+        assert!(computer.contains("fs-bench-shell ${shellQuote(WORKLOAD)} edit"));
+    }
+
+    #[test]
+    fn mountinfo_custody_uses_the_workspace_runtime_layout() {
+        assert_eq!(
+            workspace_mountinfo_path(Path::new("/evidence/branch.sqlite"), "w:123"),
+            Path::new("/evidence/branch.sqlite.runtime/workspaces/workspaces/w:123/mountinfo.txt")
+        );
     }
 }

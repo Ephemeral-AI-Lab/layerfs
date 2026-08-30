@@ -7,6 +7,10 @@ pub(crate) fn admit_built(db: &StoreDb, built: &BuiltRoot) -> Result<()> {
             candidate_bytes: built.objects.encoded_bytes(),
             ..LocalObjectReceipt::default()
         },
+        cdc_bytes_scanned: built.counters.cdc_bytes_scanned,
+        encode_hash_invocations: built.counters.encode_hash_invocations,
+        source_reused_ids: 0,
+        source_reused_bytes: 0,
     };
     built.objects.visit_batches(&mut |objects, _last| {
         let admitted = db.admit_objects(objects)?;

@@ -21,7 +21,6 @@ pub use adapter::LayerFs;
 pub use host_mount::{mount_host, HostMount};
 pub use port::{Attr, FilesystemPort, Kind, NodeId, PortError, PortResult, SharedPort, ROOT};
 pub use proxy_client::ProxyClient;
-#[cfg(all(target_os = "linux", feature = "proxy"))]
 #[doc(hidden)]
-pub use proxy_client::{control_call, serve_control};
+pub use proxy_client::{serve_remote_control, RemoteControl};
 pub use proxy_host::ProxyHost;

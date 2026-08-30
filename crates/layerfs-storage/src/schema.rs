@@ -12,35 +12,25 @@ pub const WAL_AUTOCHECKPOINT_PAGES: i64 = 1_000;
 pub const SQLITE_PAGE_CACHE_KIB: i64 = 8 * 1_024;
 
 #[cfg(feature = "test-instrumentation")]
-static SQL_TRACE: std::sync::OnceLock<Mutex<Vec<String>>> = std::sync::OnceLock::new();
+thread_local! {
+    static SQL_TRACE: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
 
 #[cfg(feature = "test-instrumentation")]
 fn trace_sql(event: rusqlite::trace::TraceEvent<'_>) {
     if let rusqlite::trace::TraceEvent::Stmt(_, sql) = event {
-        SQL_TRACE
-            .get_or_init(|| Mutex::new(Vec::new()))
-            .lock()
-            .expect("SQL trace")
-            .push(sql.to_owned());
+        SQL_TRACE.with(|trace| trace.borrow_mut().push(sql.to_owned()));
     }
 }
 
 #[cfg(feature = "test-instrumentation")]
 pub fn reset_sql_trace() {
-    SQL_TRACE
-        .get_or_init(|| Mutex::new(Vec::new()))
-        .lock()
-        .expect("SQL trace")
-        .clear();
+    SQL_TRACE.with(|trace| trace.borrow_mut().clear());
 }
 
 #[cfg(feature = "test-instrumentation")]
 pub fn sql_trace() -> Vec<String> {
-    SQL_TRACE
-        .get_or_init(|| Mutex::new(Vec::new()))
-        .lock()
-        .expect("SQL trace")
-        .clone()
+    SQL_TRACE.with(|trace| trace.borrow().clone())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -345,6 +335,57 @@ impl StoreDb {
             wal_bytes: len(&appended(self.path(), "-wal"))?,
             shm_bytes: len(&appended(self.path(), "-shm"))?,
         })
+    }
+
+    pub fn stable_barrier(&self) -> Result<crate::DurabilityReceipt> {
+        fn elapsed_ns(started: std::time::Instant) -> u64 {
+            started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+        }
+
+        let stable_started = std::time::Instant::now();
+        let checkpoint_started = std::time::Instant::now();
+        let checkpoint =
+            self.connection()?
+                .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                })?;
+        let checkpoint_ns = elapsed_ns(checkpoint_started);
+        if checkpoint != (0, 0, 0) {
+            return Err(StorageError::Integrity("incomplete WAL checkpoint"));
+        }
+
+        let database_started = std::time::Instant::now();
+        File::open(self.path())?.sync_all()?;
+        let database_fsync_ns = elapsed_ns(database_started);
+
+        let directory_started = std::time::Instant::now();
+        File::open(
+            self.path()
+                .parent()
+                .ok_or(StorageError::InvalidInput("Store location"))?,
+        )?
+        .sync_all()?;
+        let directory_fsync_ns = elapsed_ns(directory_started);
+
+        let stable_ns = elapsed_ns(stable_started);
+        let attributed = checkpoint_ns
+            .saturating_add(database_fsync_ns)
+            .saturating_add(directory_fsync_ns);
+        let receipt = crate::DurabilityReceipt {
+            store_id: self.store_id(),
+            role: self.role(),
+            stable_ns,
+            checkpoint_ns,
+            database_fsync_ns,
+            directory_fsync_ns,
+            unattributed_ns: stable_ns.saturating_sub(attributed),
+        };
+        receipt.validate()?;
+        Ok(receipt)
     }
 
     pub(crate) fn connection(&self) -> Result<MutexGuard<'_, Connection>> {
@@ -789,6 +830,12 @@ mod tests {
                 pragma(&connection, "wal_autocheckpoint"),
                 WAL_AUTOCHECKPOINT_PAGES
             );
+        }
+        for db in [&authority, &branch] {
+            let receipt = db.stable_barrier().unwrap();
+            receipt.validate().unwrap();
+            assert_eq!(receipt.store_id, db.store_id());
+            assert_eq!(receipt.role, db.role());
         }
         assert!(matches!(
             StoreDb::connect(&authority_path, StoreRole::Branch, Some(parent)),

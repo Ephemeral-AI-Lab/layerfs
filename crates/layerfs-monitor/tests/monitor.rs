@@ -87,15 +87,57 @@ fn passive_snapshot_has_zero_sql_and_explicit_analysis_is_exact() {
                 reused_ids: u64::from(index != 0),
                 reused_bytes: if index == 0 { 0 } else { 1_261 },
             },
+            cdc_bytes_scanned: 0,
+            encode_hash_invocations: 0,
+            source_reused_ids: 0,
+            source_reused_bytes: 0,
         })
     }));
+    storage.extend([
+        layerfs_storage::StorageReceipt::WorkspaceCommit(layerfs_storage::WorkspaceCommitReceipt {
+            total_ns: 13,
+            pause_fence_ns: 1,
+            capture_ns: 2,
+            capture_mode: Some(layerfs_storage::CaptureMode::Live),
+            unattributed_ns: 10,
+            ..layerfs_storage::WorkspaceCommitReceipt::default()
+        }),
+        layerfs_storage::StorageReceipt::Push(layerfs_storage::PushPhaseReceipt {
+            total_ns: 4,
+            history_ns: 1,
+            durability_ns: 1,
+            unattributed_ns: 2,
+            endpoint_calls: 3,
+            ..layerfs_storage::PushPhaseReceipt::default()
+        }),
+        layerfs_storage::StorageReceipt::Database(layerfs_storage::DatabaseReceipt {
+            store_id: branch.store_id(),
+            role: layerfs_storage::StoreRole::Branch,
+            operation: layerfs_storage::DatabaseOperation::CommitCas,
+            total_ns: 5,
+            connection_wait_ns: 1,
+            writer_acquire_ns: 1,
+            statement_ns: 1,
+            publication_ns: 0,
+            commit_sync_ns: 1,
+            unattributed_ns: 1,
+            statement_count: 2,
+            rows: 2,
+            bytes: 64,
+        }),
+    ]);
     let transfer_sets = storage.iter().filter_map(|receipt| match receipt {
         layerfs_storage::StorageReceipt::Transfer(receipt) => Some(
             std::iter::once(&receipt.objects)
                 .chain(receipt.facts.values())
                 .collect::<Vec<_>>(),
         ),
-        layerfs_storage::StorageReceipt::Local(_) => None,
+        layerfs_storage::StorageReceipt::Local(_)
+        | layerfs_storage::StorageReceipt::Durability(_)
+        | layerfs_storage::StorageReceipt::WorkspaceCommit(_)
+        | layerfs_storage::StorageReceipt::Push(_)
+        | layerfs_storage::StorageReceipt::Database(_)
+        | layerfs_storage::StorageReceipt::WorkspaceLifecycle(_) => None,
     });
     let (expected_announced, expected_sent) =
         transfer_sets
@@ -124,6 +166,8 @@ fn passive_snapshot_has_zero_sql_and_explicit_analysis_is_exact() {
     let receipt_json = receipt.to_json();
     assert!(receipt_json.contains("\"family\":\"branch.push\""));
     assert!(receipt_json.contains("\"fragments\":["));
+    assert!(receipt_json.contains("\"capture_mode\":\"live\""));
+    assert!(receipt_json.contains("\"operation\":\"commit_cas\""));
     assert_eq!(monitor.snapshot().unwrap().operations, vec![receipt]);
     let analysis = monitor.analyze_dedup().unwrap();
     assert_eq!(analysis.physical_cas_bytes, unique_bytes * 2);

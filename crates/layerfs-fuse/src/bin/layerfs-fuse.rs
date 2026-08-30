@@ -19,36 +19,84 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut arguments = std::env::args_os().skip(1);
     let endpoint = arguments.next().ok_or("missing endpoint")?;
-    if endpoint == "--control" {
-        let socket = arguments.next().ok_or("missing control socket")?;
-        let command = arguments.next().ok_or("missing control command")?;
-        if arguments.next().is_some() {
-            return Err("unexpected control argument".into());
-        }
-        return layerfs_fuse::control_call(&socket, &command);
-    }
-    let capability = capability(
-        arguments
-            .next()
-            .ok_or("missing capability")?
-            .to_str()
-            .ok_or("capability text")?,
-    )?;
-    let mountpoint = arguments.next().ok_or("missing mountpoint")?;
-    let control = arguments.next().ok_or("missing control socket")?;
+    let capability_text = arguments
+        .next()
+        .ok_or("missing capability")?
+        .to_str()
+        .ok_or("capability text")?
+        .to_owned();
+    let capability = capability(&capability_text)?;
+    let mountpoint = std::path::PathBuf::from(arguments.next().ok_or("missing mountpoint")?);
     if arguments.next().is_some() {
         return Err("unexpected argument".into());
     }
-    let client = Arc::new(layerfs_fuse::ProxyClient::connect(
-        endpoint.to_str().ok_or("endpoint text")?,
-        capability,
-    )?);
-    layerfs_fuse::serve_control(control, client.clone())?;
-    let mount = layerfs_fuse::mount_host(client, mountpoint, 0, 0)?;
+    let endpoint = endpoint.to_str().ok_or("endpoint text")?;
+    let client = Arc::new(layerfs_fuse::ProxyClient::connect(endpoint, capability)?);
+    let control = layerfs_fuse::serve_remote_control(endpoint, capability, client.clone())?;
+    let mut mount = layerfs_fuse::mount_host(client, &mountpoint, 0, 0)?;
     println!("READY");
+    let mountpoint_text = mountpoint.to_string_lossy();
+    let mountinfo_text = std::fs::read_to_string("/proc/self/mountinfo")?;
+    let mountinfo = mountinfo_text
+        .lines()
+        .find(|line| line.split_whitespace().nth(4) == Some(mountpoint_text.as_ref()))
+        .ok_or("mounted FUSE path missing from mountinfo")?;
+    println!("MOUNTINFO\t{mountinfo}");
     std::io::stdout().flush()?;
-    mount.join()?;
+    if let Err(error) = control.wait_for_shutdown() {
+        let _ = mount.unmount();
+        return Err(error.into());
+    }
+    let shutdown = mount
+        .unmount()
+        .and_then(|()| cleanup_owned(&mountpoint, &capability_text));
+    let acknowledged = control.finish_shutdown(shutdown.is_ok());
+    shutdown?;
+    acknowledged.map_err(Into::into)
+}
+
+#[cfg(all(target_os = "linux", feature = "proxy"))]
+fn cleanup_owned(mountpoint: &std::path::Path, capability: &str) -> std::io::Result<()> {
+    let helper = std::env::current_exe()?;
+    if std::env::var_os("LAYERFS_OWNED_HELPER").as_deref() != Some(helper.as_os_str())
+        || std::env::var_os("LAYERFS_OWNED_ROOT").as_deref() != Some(mountpoint.as_os_str())
+        || std::env::var("LAYERFS_OWNED_CAPABILITY").as_deref() != Ok(capability)
+    {
+        return Err(std::io::Error::other("LayerFS cleanup ownership"));
+    }
+    let mut identity = helper.as_os_str().to_os_string();
+    identity.push(".identity");
+    let identity = std::path::PathBuf::from(identity);
+    let text = std::fs::read_to_string(&identity)?;
+    let mut fields = text.split_whitespace();
+    let pid = std::process::id().to_string();
+    let start = process_start()?;
+    if fields.next() != Some(pid.as_str()) || fields.next() != Some(start.as_str()) {
+        return Err(std::io::Error::other("LayerFS cleanup identity"));
+    }
+    let created_root = match fields.next() {
+        Some("0") => false,
+        Some("1") => true,
+        _ => return Err(std::io::Error::other("LayerFS cleanup root identity")),
+    };
+    if fields.next().is_some() {
+        return Err(std::io::Error::other("LayerFS cleanup identity"));
+    }
+    std::fs::remove_file(&helper)?;
+    std::fs::remove_file(identity)?;
+    if created_root {
+        std::fs::remove_dir(mountpoint)?;
+    }
     Ok(())
+}
+
+#[cfg(all(target_os = "linux", feature = "proxy"))]
+fn process_start() -> std::io::Result<String> {
+    let stat = std::fs::read_to_string("/proc/self/stat")?;
+    stat.rsplit_once(") ")
+        .and_then(|(_, fields)| fields.split_whitespace().nth(19))
+        .map(str::to_owned)
+        .ok_or_else(|| std::io::Error::other("LayerFS process identity"))
 }
 
 #[cfg(all(target_os = "linux", feature = "proxy"))]

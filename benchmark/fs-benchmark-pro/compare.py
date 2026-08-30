@@ -12,8 +12,8 @@ import tempfile
 from pathlib import Path
 
 
-SCHEMA = "fs-benchmark-pro-sample-v1"
-RUN_SCHEMA = "fs-benchmark-pro-run-v1"
+SCHEMA = "fs-benchmark-pro-sample-v2"
+RUN_SCHEMA = "fs-benchmark-pro-run-v2"
 CANDIDATES = ("computer-upstream", "layerfs-reference")
 COMPUTER_COMMIT = "de87919a4fd37242e960e13b7b3ba802d1eef0a0"
 COMPUTER_TREE = "4fb409d7e1356e1098439293d77d2fdc2dbf2190"
@@ -77,12 +77,21 @@ def validate_operation(candidate: str, operation: dict, expected_id: str) -> Non
     require(operation["id"] == expected_id, f"{candidate}: operation order/identity")
     require(type(operation["comparable_ns"]) is int and operation["comparable_ns"] > 0, f"{candidate}/{expected_id}: positive comparable_ns")
     if candidate == "computer-upstream":
-        exact_keys(operation, {"api_ns", "persistence_ns", "to_durable_ns"}, f"{candidate}/{expected_id}")
-        require(operation["comparable_ns"] == operation["to_durable_ns"], f"{candidate}/{expected_id}: comparable equation")
+        exact_keys(
+            operation,
+            {"api_ns", "persistence_ns", "to_durable_ns", "workspace_create_ns", "workspace_end_ns", "complete_turn_ns"},
+            f"{candidate}/{expected_id}",
+        )
         require(
             operation["to_durable_ns"] == operation["api_ns"] + operation["persistence_ns"],
             f"{candidate}/{expected_id}: to_durable phase equation",
         )
+        require(
+            operation["complete_turn_ns"]
+            == operation["workspace_create_ns"] + operation["to_durable_ns"] + operation["workspace_end_ns"],
+            f"{candidate}/{expected_id}: complete-turn equation",
+        )
+        require(operation["comparable_ns"] == operation["complete_turn_ns"], f"{candidate}/{expected_id}: comparable equation")
     else:
         phases = {
             "workspace_create_ns",
@@ -99,12 +108,12 @@ def validate_operation(candidate: str, operation: dict, expected_id: str) -> Non
             == operation["shell_ns"] + operation["workspace_commit_api_ns"] + operation["push_api_ns"],
             f"{candidate}/{expected_id}: authority checkpoint equation",
         )
-        require(operation["comparable_ns"] == operation["authority_checkpoint_ns"], f"{candidate}/{expected_id}: comparable equation")
         require(
             operation["complete_turn_ns"]
             == operation["workspace_create_ns"] + operation["authority_checkpoint_ns"] + operation["workspace_end_ns"],
             f"{candidate}/{expected_id}: complete-turn equation",
         )
+        require(operation["comparable_ns"] == operation["complete_turn_ns"], f"{candidate}/{expected_id}: comparable equation")
 
 
 def validate_sample(sample: dict, candidate: str) -> dict:
@@ -230,7 +239,7 @@ def render_markdown(receipt: dict) -> str:
         "",
         "## Comparable durable latency",
         "",
-        "| Workload | Computer to durable | LayerFS authority checkpoint | LayerFS speedup | LayerFS Workspace Commit |",
+        "| Workload | Computer complete public lifecycle | LayerFS complete public lifecycle | LayerFS speedup | LayerFS Workspace Commit |",
         "|---|---:|---:|---:|---:|",
     ]
     for row in receipt["latency"]:
@@ -241,7 +250,7 @@ def render_markdown(receipt: dict) -> str:
         )
     lines += [
         "",
-        "Computer `to durable` is compared only with LayerFS `authority checkpoint` (`shell + Workspace Commit + Push`). Workspace Commit is a diagnostic subset, not a separate candidate. LayerFS Add is excluded from the comparable boundary and, when recorded, remains diagnostic only.",
+        "The headline boundary is each candidate's complete public Workspace lifecycle in an already-prepared container. LayerFS includes Workspace create/mount readiness, exec/output, Commit, Push/durability, and End. Workspace Commit and authority checkpoint are diagnostic subsets only. LayerFS Add is excluded and remains diagnostic.",
         "",
         "## Durability",
         "",
@@ -421,7 +430,7 @@ def compare_run(run_dir: Path, write: bool = True) -> dict:
 
     last = pair_samples[-1]
     receipt = {
-        "schema": "fs-benchmark-pro-comparison-v1",
+        "schema": "fs-benchmark-pro-comparison-v2",
         "status": "VALID",
         "run_id": run_id,
         "profile": manifest.get("profile"),
@@ -454,12 +463,18 @@ def synthetic_sample(candidate: str, base: int) -> dict:
         if candidate == "computer-upstream":
             api = base + index
             persistence = base // 2 + index
-            comparable = api + persistence
+            to_durable = api + persistence
+            workspace_create = index
+            workspace_end = index + 1
+            comparable = workspace_create + to_durable + workspace_end
             operation = {
                 "id": operation_id,
                 "api_ns": api,
                 "persistence_ns": persistence,
-                "to_durable_ns": comparable,
+                "to_durable_ns": to_durable,
+                "workspace_create_ns": workspace_create,
+                "workspace_end_ns": workspace_end,
+                "complete_turn_ns": comparable,
                 "comparable_ns": comparable,
             }
         else:
@@ -478,7 +493,7 @@ def synthetic_sample(candidate: str, base: int) -> dict:
                 "workspace_end_ns": workspace_end,
                 "authority_checkpoint_ns": authority,
                 "complete_turn_ns": workspace_create + authority + workspace_end,
-                "comparable_ns": authority,
+                "comparable_ns": workspace_create + authority + workspace_end,
             }
         operations.append(operation)
     by_id = {operation["id"]: operation for operation in operations}
@@ -577,7 +592,7 @@ def main(argv: list[str]) -> int:
         print(f"usage: {Path(sys.argv[0]).name} RUN_ID\n       {Path(sys.argv[0]).name} --self-check", file=sys.stderr)
         return 2
     repo = Path(__file__).resolve().parents[2]
-    run_dir = repo / "benchmark-results" / "fs-benchmark-pro" / argv[0]
+    run_dir = repo / "benchmark-results" / "fs-bench-pro" / "runs" / argv[0]
     try:
         receipt = compare_run(run_dir)
     except InvalidRun as error:
