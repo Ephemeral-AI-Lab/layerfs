@@ -29,8 +29,47 @@ pub enum DiffRequest {
     },
 }
 
+impl DiffRequest {
+    pub(crate) fn labels(&self) -> (String, String, String) {
+        match self {
+            Self::Layers { from, to } => ("Layer to Layer".into(), from.clone(), to.clone()),
+            Self::BranchCommits { branch, from, to } => (
+                format!("Branch {branch} Commit Diff"),
+                from.clone(),
+                to.clone(),
+            ),
+            Self::BranchLayer { branch, layer } => (
+                format!("Branch {branch} versus Layer"),
+                layer.clone(),
+                branch.clone(),
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StoreRole {
+    LayerStack,
+    Branch,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandKind {
+    DbCreate {
+        role: StoreRole,
+        location: String,
+        parent: Option<String>,
+    },
+    DbConnect {
+        role: StoreRole,
+        location: String,
+        parent: Option<String>,
+    },
+    ContextUse {
+        layerstack: String,
+        branch: String,
+    },
+    ContextShow,
     ReadOnly {
         family: String,
         action: String,
@@ -96,7 +135,9 @@ impl Command {
 
 fn parse_tokens(tokens: &[String]) -> CliResult<CommandKind> {
     match tokens.first().map(String::as_str) {
-        Some("db" | "context" | "query") => parse_read_only(tokens),
+        Some("db") => parse_db(tokens),
+        Some("context") => parse_context(tokens),
+        Some("query") => parse_read_only(tokens),
         Some("layerstack") => parse_layerstack(tokens),
         Some("branch") => parse_branch(tokens),
         Some("workspace") => parse_workspace(tokens),
@@ -120,25 +161,53 @@ fn parse_tokens(tokens: &[String]) -> CliResult<CommandKind> {
     }
 }
 
+fn parse_db(tokens: &[String]) -> CliResult<CommandKind> {
+    let role = match tokens.get(2).map(String::as_str) {
+        Some("layerstack") => StoreRole::LayerStack,
+        Some("branch") => StoreRole::Branch,
+        _ => return Err(CliError::Parse("db role must be layerstack|branch".into())),
+    };
+    let location = positional(tokens, 3, "Store location")?;
+    let parent = optional_flag(tokens, "--parent");
+    let valid = match role {
+        StoreRole::LayerStack => tokens.len() == 4 && parent.is_none(),
+        StoreRole::Branch => tokens.len() == 6 && parent.is_some(),
+    };
+    if !valid {
+        return Err(CliError::Parse(
+            "BranchStore requires exactly one --parent LayerStackStore".into(),
+        ));
+    }
+    match tokens.get(1).map(String::as_str) {
+        Some("create") => Ok(CommandKind::DbCreate {
+            role,
+            location,
+            parent,
+        }),
+        Some("connect") => Ok(CommandKind::DbConnect {
+            role,
+            location,
+            parent,
+        }),
+        _ => Err(CliError::Parse("db create|connect required".into())),
+    }
+}
+
+fn parse_context(tokens: &[String]) -> CliResult<CommandKind> {
+    match tokens.get(1).map(String::as_str) {
+        Some("show") if tokens.len() == 2 => Ok(CommandKind::ContextShow),
+        Some("use") if tokens.len() == 6 => Ok(CommandKind::ContextUse {
+            layerstack: flag(tokens, "--layerstack")?,
+            branch: flag(tokens, "--branch")?,
+        }),
+        _ => Err(CliError::Parse(
+            "context show|use --layerstack <location> --branch <path>".into(),
+        )),
+    }
+}
+
 fn parse_read_only(tokens: &[String]) -> CliResult<CommandKind> {
     let valid = match tokens.first().map(String::as_str) {
-        Some("db") => match (
-            tokens.get(1).map(String::as_str),
-            tokens.get(2).map(String::as_str),
-        ) {
-            (Some("create" | "connect"), Some("layerstack")) => tokens.len() == 4,
-            (Some("create" | "connect"), Some("branch")) => {
-                tokens.len() == 6 && optional_flag(tokens, "--parent").is_some()
-            }
-            _ => false,
-        },
-        Some("context") => tokens.get(1).is_some_and(|action| {
-            action == "show" && tokens.len() == 2
-                || action == "use"
-                    && tokens.len() == 6
-                    && optional_flag(tokens, "--layerstack").is_some()
-                    && optional_flag(tokens, "--branch").is_some()
-        }),
         Some("query") => {
             matches!(
                 tokens.get(1).map(String::as_str),
@@ -351,8 +420,7 @@ fn parse_workspace(tokens: &[String]) -> CliResult<CommandKind> {
             })
         }
         Some(
-            action @ ("exec" | "shell" | "output" | "stop" | "conflicts" | "resolve" | "commit"
-            | "end"),
+            action @ ("exec" | "output" | "stop" | "conflicts" | "resolve" | "commit" | "end"),
         ) => {
             validate_workspace_action(action, tokens)?;
             Ok(CommandKind::WorkspaceAction {
@@ -368,8 +436,14 @@ fn parse_workspace(tokens: &[String]) -> CliResult<CommandKind> {
 fn validate_workspace_action(action: &str, tokens: &[String]) -> CliResult<()> {
     let arguments = tokens.get(3..).unwrap_or_default();
     let valid = match action {
-        "exec" => arguments.first().is_some_and(|value| value == "--") && arguments.len() >= 2,
-        "shell" | "stop" | "commit" => arguments.is_empty(),
+        "exec" => {
+            matches!(
+                arguments,
+                [separator, executable, login, _]
+                    if separator == "--" && executable == "/bin/bash" && login == "-lc"
+            )
+        }
+        "stop" | "commit" => arguments.is_empty(),
         "output" => arguments.is_empty() || arguments == ["--follow"],
         "conflicts" => {
             arguments.is_empty()
@@ -508,7 +582,7 @@ mod tests {
             "workspace create --branch B-search-a --commit C-B-search-a-08 --at /tmp/w",
             "workspace create --branch B-scratch --initial-layer L-A-18 --at /tmp/w",
             "monitor analyze-dedup",
-            "workspace exec W9 -- cargo test",
+            "workspace exec W9 -- /bin/bash -lc 'printf ok'",
             "workspace output E-W14 --follow",
             "workspace resolve W31 conflict-1 --working-tree",
         ];

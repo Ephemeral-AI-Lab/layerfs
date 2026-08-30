@@ -2,6 +2,7 @@ use crate::{
     app::{App, Overlay, Route},
     render,
     theme::Theme,
+    WorkspaceTab,
 };
 use ratatui::{backend::TestBackend, Terminal};
 use std::io;
@@ -16,6 +17,14 @@ pub fn render_to_string(page: &str, width: u16, height: u16, no_color: bool) -> 
         App::demo()
     };
     app.set_demo_route(if route == "empty" { "projects" } else { route });
+    app.workspace_tab = match state {
+        "files" => WorkspaceTab::Files,
+        "changes" => WorkspaceTab::Changes,
+        "runs" => WorkspaceTab::Runs,
+        "workspace-storage" => WorkspaceTab::Storage,
+        _ => app.workspace_tab,
+    };
+    app.sync_workspace_item();
     match state {
         "detail" | "content" | "graph" | "receipt" | "dedup" => {
             app.focus = 1;

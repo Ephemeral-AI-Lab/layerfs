@@ -1,4 +1,5 @@
 use crate::fixture::{commit_id, BranchRecord, MockState};
+use crate::workspace::{canonical_tree, seed_tree, TreeEntry, WorkspaceRecord};
 use crate::{
     CliError, CliResult, CommandResult, ConflictId, ConflictView, LayerId, WorkspaceId,
     WorkspaceState, WorkspaceView,
@@ -36,7 +37,14 @@ pub(super) fn create_reconciliation_workspace(
             kind: "Directory".into(),
         },
     ];
-    state.workspaces.push(WorkspaceView {
+    let anchor = state
+        .layers
+        .iter()
+        .find(|layer| layer.id == current_layer)
+        .map(|layer| layer.tree.clone())
+        .unwrap_or_else(|| seed_tree(current_layer.as_str()));
+    let (anchor_root, _) = canonical_tree(&anchor);
+    let view = WorkspaceView {
         id: id.clone(),
         project_id: project.id.clone(),
         project_name: project.name.clone(),
@@ -47,7 +55,15 @@ pub(super) fn create_reconciliation_workspace(
             .work_head
             .map(|number| commit_id(branch.id.as_str(), number)),
         anchor_layer: Some(current_layer.clone()),
+        anchor_root,
+        expected_branch_head: branch
+            .work_head
+            .map(|number| commit_id(branch.id.as_str(), number))
+            .or_else(|| branch.boundary_commit.clone()),
+        published_commit: None,
+        published_root: None,
         state: WorkspaceState::Dirty,
+        generation: 1,
         projection: "FUSE".into(),
         placement: "host".into(),
         mount: format!("/workspaces/reconcile-{id}"),
@@ -58,7 +74,26 @@ pub(super) fn create_reconciliation_workspace(
             "reconcile Branch base {old_base} against current {current_layer}"
         )],
         conflicts,
-    });
+        files: Vec::new(),
+        changes: Vec::new(),
+        runs: Vec::new(),
+        storage: Default::default(),
+        timing: Default::default(),
+        commit_receipt: None,
+    };
+    let mut current = anchor.clone();
+    current.insert(
+        "src/model.rs".into(),
+        TreeEntry::File(b"reconciliation candidate\n".to_vec()),
+    );
+    current.insert(
+        "src/schema.rs".into(),
+        TreeEntry::File(b"reconciliation schema candidate\n".to_vec()),
+    );
+    let mut workspace = WorkspaceRecord::fixture_dirty(view, anchor, current)?;
+    workspace.state = WorkspaceState::Dirty;
+    workspace.changed_paths = 2;
+    state.workspaces.push(workspace);
     Ok(CommandResult::NeedsResolution {
         workspace_id: id,
         old_base,

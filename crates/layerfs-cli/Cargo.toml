@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[dependencies]
+rusqlite.workspace = true
+
 [[bin]]
 name = "layerfs"
 path = "src/bin/layerfs.rs"

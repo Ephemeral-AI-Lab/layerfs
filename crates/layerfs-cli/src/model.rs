@@ -18,6 +18,7 @@ pub enum CliError {
     WorkspaceDirty(String),
     NotPulled(String),
     AuthorityUnavailable(String),
+    Database(String),
     Interrupted,
 }
 
@@ -36,6 +37,7 @@ impl Display for CliError {
             Self::AuthorityUnavailable(value) => {
                 write!(formatter, "authority unavailable: {value}")
             }
+            Self::Database(value) => write!(formatter, "database: {value}"),
             Self::Interrupted => formatter.write_str("interrupted"),
         }
     }
@@ -297,7 +299,12 @@ pub struct WorkspaceView {
     pub branch_relation: BranchRelation,
     pub anchor_commit: Option<CommitId>,
     pub anchor_layer: Option<LayerId>,
+    pub anchor_root: ObjectId,
+    pub expected_branch_head: Option<CommitId>,
+    pub published_commit: Option<CommitId>,
+    pub published_root: Option<ObjectId>,
     pub state: WorkspaceState,
+    pub generation: u64,
     pub projection: String,
     pub placement: String,
     pub mount: String,
@@ -306,6 +313,91 @@ pub struct WorkspaceView {
     pub execution: Option<ExecutionId>,
     pub output: Vec<String>,
     pub conflicts: Vec<ConflictView>,
+    pub files: Vec<WorkspaceFileView>,
+    pub changes: Vec<DiffEntryView>,
+    pub runs: Vec<WorkspaceRunView>,
+    pub storage: WorkspaceStorageView,
+    pub timing: WorkspaceTimingView,
+    pub commit_receipt: Option<WorkspaceCommitReceipt>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkspaceFileKind {
+    Directory,
+    File,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FilePreview {
+    None,
+    Text(String),
+    Binary,
+    Truncated(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkspaceFileView {
+    pub path: String,
+    pub kind: WorkspaceFileKind,
+    pub bytes: u64,
+    pub allocated_bytes: u64,
+    pub preview: FilePreview,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkspaceRunView {
+    pub execution_id: ExecutionId,
+    pub script: String,
+    pub exit_code: i32,
+    pub stdout: String,
+    pub stderr: String,
+    pub output_bytes: u64,
+    pub elapsed_micros: u64,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct WorkspaceStorageView {
+    pub logical_bytes: u64,
+    pub materialized_allocated_bytes: u64,
+    pub cow_delta_bytes: u64,
+    pub base_reused_bytes: u64,
+    pub candidate_objects: u64,
+    pub candidate_bytes: u64,
+    pub inserted_objects: u64,
+    pub inserted_bytes: u64,
+    pub reused_objects: u64,
+    pub reused_bytes: u64,
+    pub sqlite_growth_bytes: u64,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct WorkspaceTimingView {
+    pub create_micros: u64,
+    pub bash_last_micros: u64,
+    pub bash_total_micros: u64,
+    pub capture_micros: u64,
+    pub admission_micros: u64,
+    pub publish_micros: u64,
+    pub commit_total_micros: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkspaceCommitReceipt {
+    pub commit_id: CommitId,
+    pub root: ObjectId,
+    pub generation: u64,
+    pub changed_paths: u16,
+    pub candidate_objects: u64,
+    pub candidate_bytes: u64,
+    pub inserted_objects: u64,
+    pub inserted_bytes: u64,
+    pub reused_objects: u64,
+    pub reused_bytes: u64,
+    pub sqlite_growth_bytes: u64,
+    pub capture_micros: u64,
+    pub admission_micros: u64,
+    pub publish_micros: u64,
+    pub total_micros: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -350,6 +442,7 @@ pub struct OperationReceipt {
     pub objects_inserted: u64,
     pub objects_raced: u64,
     pub elapsed_ms: u64,
+    pub elapsed_micros: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -381,6 +474,12 @@ pub struct StorageSnapshot {
     pub replica_roots: u16,
     pub reference_scopes: u16,
     pub analysis_available: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContextProfile {
+    pub layerstack: std::path::PathBuf,
+    pub branch: std::path::PathBuf,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -458,6 +557,13 @@ pub struct PlanField {
     pub value: String,
 }
 
+pub(crate) fn field(label: &str, value: String) -> PlanField {
+    PlanField {
+        label: label.into(),
+        value,
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandPlan {
     pub title: String,
@@ -498,7 +604,8 @@ pub enum CommandResult {
     Diff(String),
     Monitor(String),
     Query(String),
-    Context(String),
+    Initialized(String),
+    Context(ContextProfile),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -20,9 +20,19 @@ fn main() -> io::Result<()> {
         ));
     }
     let mut terminal = ratatui::init();
-    let result = layerfs_tui::run(&mut terminal);
+    let result = match string_flag(&args, "--context") {
+        Some(context) => layerfs_tui::run_with_context(&mut terminal, context),
+        None => layerfs_tui::run(&mut terminal),
+    };
     ratatui::restore();
     result
+}
+
+fn string_flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
+    args.iter()
+        .position(|value| value == name)
+        .and_then(|index| args.get(index + 1))
+        .map(String::as_str)
 }
 
 fn flag(args: &[String], name: &str) -> Option<u16> {

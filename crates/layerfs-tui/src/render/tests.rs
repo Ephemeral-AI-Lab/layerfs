@@ -7,6 +7,7 @@ fn every_page_renders_at_all_frozen_sizes() {
         "topology",
         "branch",
         "workspaces",
+        "workspace",
         "activity",
         "diff",
     ] {
@@ -15,6 +16,32 @@ fn every_page_renders_at_all_frozen_sizes() {
             assert!(screen.contains("LayerFS"), "{page} {width}x{height}");
             assert_eq!(screen.lines().count(), height as usize);
         }
+    }
+}
+
+#[test]
+fn workspace_page_exposes_files_changes_runs_storage_and_timings() {
+    for (state, expected) in [
+        ("files", "BOUNDED PREVIEW"),
+        ("changes", "BEFORE / AFTER"),
+        ("runs", "RETAINED OUTPUT"),
+        ("workspace-storage", "COW DELTA (MODEL)"),
+    ] {
+        let page = format!("workspace:{state}");
+        let screen = render_to_string(&page, 120, 40, true).unwrap();
+        assert!(screen.contains(expected), "{page}: missing {expected}");
+    }
+    let overview = render_to_string("workspace", 120, 40, true).unwrap();
+    assert!(overview.contains("Only final filesystem state becomes the Commit."));
+    assert!(overview.contains("Bash, order, output, and timing stay ephemeral."));
+}
+
+#[test]
+fn workspace_page_remains_legible_at_frozen_sizes_and_without_color() {
+    for (width, height) in [(80, 24), (120, 40), (200, 60)] {
+        let screen = render_to_string("workspace:workspace-storage", width, height, true).unwrap();
+        assert!(screen.contains("COW DELTA (MODEL)"), "{width}x{height}");
+        assert!(screen.contains("Logical final view"), "{width}x{height}");
     }
 }
 

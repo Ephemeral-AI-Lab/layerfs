@@ -1,15 +1,14 @@
 use crate::command::{CommandKind, WorkspaceAnchor};
+use crate::database::Databases;
 use crate::fixture::{
-    commit_id, layer_for, BranchRecord, CommitRecord, LayerRecord, MockState, ProjectRecord,
+    commit_id, layer_for, trailing_number, BranchRecord, LayerRecord, MockState, ProjectRecord,
 };
 use crate::model::{
-    BranchOrigin, BranchRelation, CliError, CliEvent, CliResult, CommandEffect, CommandPlan,
+    field, BranchOrigin, BranchRelation, CliError, CliEvent, CliResult, CommandEffect, CommandPlan,
     CommandResult, Completion, FinishedStatus, OperationReceipt, OperationState, OperationView,
-    PlanField, RemotePlacement, ViewQuery, ViewSnapshot, WorkspaceState, WorkspaceView,
+    RemotePlacement, ViewQuery, ViewSnapshot,
 };
-use crate::{
-    BranchId, Command, EntityName, ExecutionId, LayerId, LayerStackId, OperationId, WorkspaceId,
-};
+use crate::{BranchId, Command, EntityName, LayerId, LayerStackId, OperationId};
 use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,18 +16,21 @@ use std::sync::{Arc, Mutex};
 
 mod events;
 mod reconcile;
-use events::{normalize_receipt, record_operation_event};
+use crate::workspace::{canonical_tree, create_workspace, seed_tree, workspace_action};
+use events::{empty_receipt, normalize_receipt, record_operation_event};
 use reconcile::create_reconciliation_workspace;
 
 #[derive(Clone)]
 pub struct CliSession {
     state: Arc<Mutex<MockState>>,
+    databases: Arc<Databases>,
     next_operation: Arc<AtomicU64>,
 }
 
 pub struct OperationHandle {
     id: OperationId,
     state: Arc<Mutex<MockState>>,
+    databases: Arc<Databases>,
     pending: Option<Command>,
     events: VecDeque<Option<CliEvent>>,
     terminal: bool,
@@ -36,13 +38,23 @@ pub struct OperationHandle {
 
 impl CliSession {
     pub fn open(context_location: impl AsRef<Path>) -> CliResult<Self> {
-        let state = if context_location.as_ref() == Path::new("mock-empty") {
+        let fixture = matches!(
+            context_location.as_ref().to_str(),
+            Some("mock" | "mock-empty")
+        );
+        let empty = context_location.as_ref() != Path::new("mock");
+        let mut state = if empty {
             MockState::empty()
         } else {
             MockState::demo()
         };
+        let databases = Arc::new(Databases::open(context_location.as_ref(), empty)?);
+        if fixture {
+            databases.decorate_storage(&mut state)?;
+        }
         Ok(Self {
             state: Arc::new(Mutex::new(state)),
+            databases,
             next_operation: Arc::new(AtomicU64::new(100)),
         })
     }
@@ -62,6 +74,8 @@ impl CliSession {
         let state = self.lock()?;
         let mut values = vec![
             ("layerstack", "LayerStack operations"),
+            ("db", "Create or validate one real SQLite Store"),
+            ("context", "Select or show one Store pair"),
             ("branch", "Branch operations"),
             ("workspace", "Workspace operations"),
             ("monitor", "Monitor operations"),
@@ -74,6 +88,9 @@ impl CliSession {
             ("--reference", "Local-first parent-backed serving"),
             ("--replica", "Offline-complete serving"),
             ("--name", "Immutable entity name"),
+            ("--layerstack", "LayerStackStore location"),
+            ("--branch", "BranchStore location"),
+            ("--parent", "Immutable parent LayerStackStore"),
         ]
         .into_iter()
         .map(|(value, description)| (value.to_owned(), description.to_owned()))
@@ -149,7 +166,7 @@ impl CliSession {
                 ..
             } | CommandKind::BranchPush { .. }
         );
-        let fact_write = plan.effect == CommandEffect::Mutate;
+        let fact_write = store_write(&command.kind);
         let receipt = OperationReceipt {
             facts_announced: if fact_write { total } else { 0 },
             facts_missing: if fact_write {
@@ -168,6 +185,7 @@ impl CliSession {
             objects_inserted: if transfer { 1_198 } else { 0 },
             objects_raced: if transfer { 6 } else { 0 },
             elapsed_ms: 84,
+            elapsed_micros: 84_000,
         };
         let work_phase = if transfer {
             "transferring missing objects"
@@ -230,6 +248,7 @@ impl CliSession {
         Ok(OperationHandle {
             id,
             state: self.state.clone(),
+            databases: self.databases.clone(),
             pending: Some(command),
             events,
             terminal: false,
@@ -259,7 +278,7 @@ impl CliSession {
             ViewQuery::Activity(page) => Ok(ViewSnapshot::Activity(state.activity_snapshot(&page))),
             ViewQuery::Diff { request, page } => {
                 validate_diff(&state, &request)?;
-                let (title, from, to) = diff_labels(&request);
+                let (title, from, to) = request.labels();
                 Ok(ViewSnapshot::Diff(
                     state.diff_snapshot(&title, &from, &to, &page),
                 ))
@@ -314,7 +333,15 @@ impl OperationHandle {
                         .state
                         .lock()
                         .map_err(|_| CliError::Integrity("mock state lock".into()))?;
-                    *result = apply(&mut state, command);
+                    let mut candidate = state.clone();
+                    *result = apply(&mut candidate, command, &self.databases);
+                    if let Some(micros) = candidate.last_operation_elapsed_micros.take() {
+                        receipt.elapsed_micros = micros;
+                        receipt.elapsed_ms = micros.saturating_add(999) / 1_000;
+                    }
+                    if result.is_ok() {
+                        *state = candidate;
+                    }
                     if result.is_err() {
                         *status = FinishedStatus::Failed;
                     }
@@ -625,7 +652,7 @@ fn plan(state: &MockState, command: &Command) -> CliResult<CommandPlan> {
         ),
         CommandKind::Diff(request) => {
             validate_diff(state, request)?;
-            let (name, from, to) = diff_labels(request);
+            let (name, from, to) = request.labels();
             fields.extend([field("From", from), field("To", to)]);
             ("Open Diff", CommandEffect::Read, name)
         }
@@ -643,6 +670,26 @@ fn plan(state: &MockState, command: &Command) -> CliResult<CommandPlan> {
                 format!("create project {name}"),
             )
         }
+        CommandKind::DbCreate { role, location, .. } => (
+            "Create Store",
+            CommandEffect::Mutate,
+            format!("create {role:?} at {location}"),
+        ),
+        CommandKind::DbConnect { role, location, .. } => (
+            "Connect Store",
+            CommandEffect::Read,
+            format!("connect {role:?} at {location}"),
+        ),
+        CommandKind::ContextUse { layerstack, branch } => (
+            "Use Store pair",
+            CommandEffect::Mutate,
+            format!("LayerStackStore {layerstack}; BranchStore {branch}"),
+        ),
+        CommandKind::ContextShow => (
+            "Show Store pair",
+            CommandEffect::Read,
+            "show active context".into(),
+        ),
         CommandKind::ReadOnly { family, action } => (
             "Read-only command",
             CommandEffect::Read,
@@ -659,7 +706,76 @@ fn plan(state: &MockState, command: &Command) -> CliResult<CommandPlan> {
     })
 }
 
-fn apply(state: &mut MockState, command: Command) -> Result<CommandResult, CliError> {
+fn apply(
+    state: &mut MockState,
+    command: Command,
+    databases: &Databases,
+) -> Result<CommandResult, CliError> {
+    if let Some(result) = databases.apply_control(state, &command.kind) {
+        return result;
+    }
+    let write_store = store_write(&command.kind);
+    let commit_target = match &command.kind {
+        CommandKind::WorkspaceAction { action, target, .. } if action == "commit" => {
+            Some(target.clone())
+        }
+        _ => None,
+    };
+    let before = commit_target
+        .as_ref()
+        .map(|_| databases.branch_storage_bytes())
+        .transpose()?;
+    let result = apply_state(state, command, databases)?;
+    if let Some(target) = commit_target.as_deref() {
+        if state
+            .workspaces
+            .iter()
+            .find(|workspace| workspace.id.as_str() == target)
+            .is_some_and(|workspace| workspace.published_commit.is_some())
+        {
+            databases.publish_workspace_commit(state, target)?;
+        }
+    } else if write_store {
+        databases.sync(state)?;
+    }
+    if let (Some(target), Some(before)) = (commit_target, before) {
+        let growth = databases.branch_storage_bytes()?.saturating_sub(before);
+        if let Some(workspace) = state
+            .workspaces
+            .iter_mut()
+            .find(|workspace| workspace.id.as_str() == target)
+        {
+            workspace.storage.sqlite_growth_bytes = growth;
+            if let Some(receipt) = &mut workspace.commit_receipt {
+                receipt.sqlite_growth_bytes = growth;
+            }
+        }
+    }
+    if write_store {
+        databases.decorate_storage(state)?;
+    }
+    Ok(result)
+}
+
+fn store_write(command: &CommandKind) -> bool {
+    match command {
+        CommandKind::WorkspaceAction { action, .. } => action == "commit",
+        CommandKind::LayerStackPull { .. }
+        | CommandKind::BranchPull { .. }
+        | CommandKind::BranchForkLayer { .. }
+        | CommandKind::BranchForkCommit { .. }
+        | CommandKind::BranchPush { .. }
+        | CommandKind::LayerStackAdd { .. }
+        | CommandKind::LayerStackInit { .. } => true,
+        _ => false,
+    }
+}
+
+fn apply_state(
+    state: &mut MockState,
+    command: Command,
+    databases: &Databases,
+) -> Result<CommandResult, CliError> {
     match command.kind {
         CommandKind::LayerStackPull { through, placement } => {
             let layer = state
@@ -838,9 +954,9 @@ fn apply(state: &mut MockState, command: Command) -> Result<CommandResult, CliEr
             action,
             target,
             arguments,
-        } => workspace_action(state, &action, &target, &arguments),
+        } => workspace_action(state, databases, &action, &target, &arguments),
         CommandKind::Diff(request) => {
-            let (title, _, _) = diff_labels(&request);
+            let (title, _, _) = request.labels();
             Ok(CommandResult::Diff(title))
         }
         CommandKind::Monitor { action } => Ok(CommandResult::Monitor(action)),
@@ -859,17 +975,27 @@ fn apply(state: &mut MockState, command: Command) -> Result<CommandResult, CliEr
                 authority_available: true,
                 observed: "now".into(),
             });
+            let layer_id = LayerId::new(format!("L-{id}-01"));
+            let tree = seed_tree(layer_id.as_str());
+            let (root, objects) = canonical_tree(&tree);
             state.layers.push(LayerRecord {
-                id: LayerId::new(format!("L-{id}-01")),
+                id: layer_id,
                 project_id: id.clone(),
                 number: 1,
                 source: None,
+                root,
+                tree,
+                objects,
             });
-            Ok(CommandResult::Context(format!("Created {name} ({id})")))
+            Ok(CommandResult::Initialized(format!("Created {name} ({id})")))
         }
         CommandKind::ReadOnly { family, action } => {
             Ok(CommandResult::Query(format!("{family} {action}")))
         }
+        CommandKind::DbCreate { .. }
+        | CommandKind::DbConnect { .. }
+        | CommandKind::ContextUse { .. }
+        | CommandKind::ContextShow => unreachable!("control command handled before mock state"),
     }
 }
 
@@ -934,6 +1060,12 @@ fn add_layer(state: &mut MockState, branch_value: &str) -> Result<CommandResult,
         }
         AddPreflight::Ready => {}
     }
+    let accepted = branch
+        .commits
+        .iter()
+        .find(|item| item.id == commit)
+        .cloned()
+        .ok_or_else(|| CliError::Integrity("Add source Commit".into()))?;
     let project = state
         .projects
         .iter_mut()
@@ -947,6 +1079,9 @@ fn add_layer(state: &mut MockState, branch_value: &str) -> Result<CommandResult,
         project_id: project.id.clone(),
         number,
         source: Some((branch.id.clone(), commit.clone())),
+        root: accepted.root,
+        tree: accepted.tree,
+        objects: accepted.objects,
     });
     if let Some(record) = state.branch_mut(&branch.id) {
         if let Some(item) = record.commits.iter_mut().find(|item| item.id == commit) {
@@ -992,251 +1127,15 @@ fn add_preflight(state: &MockState, branch: &BranchRecord) -> CliResult<AddPrefl
         .find(|layer| layer.project_id == project.id && layer.number == project.authority_layers)
         .map(|layer| layer.id.clone())
         .expect("authority head Layer");
+    if project.work_layers != Some(project.authority_layers) {
+        return Err(CliError::NotPulled(format!(
+            "Pull current Layer {current} before Add"
+        )));
+    }
     if base != current {
         return Ok(AddPreflight::NeedsResolution { old: base, current });
     }
     Ok(AddPreflight::Ready)
-}
-
-fn create_workspace(
-    state: &mut MockState,
-    anchor: WorkspaceAnchor,
-    path: String,
-    container: Option<String>,
-    projection: String,
-) -> Result<CommandResult, CliError> {
-    let (branch, anchor_commit, anchor_layer) = match anchor {
-        WorkspaceAnchor::Commit { branch, commit } => {
-            let record = state
-                .find_branch(&branch)
-                .cloned()
-                .ok_or_else(|| CliError::NotFound(branch.clone()))?;
-            let number = commit_number(&record, &commit)?;
-            let current = record
-                .work_head
-                .map(|head| commit_id(record.id.as_str(), head))
-                .or(record.boundary_commit.clone());
-            let selected = record
-                .commits
-                .iter()
-                .find(|item| item.number == number)
-                .map(|item| item.id.clone())
-                .or_else(|| record.boundary_commit.clone())
-                .ok_or_else(|| CliError::NotFound(commit.clone()))?;
-            if current.as_ref() != Some(&selected) {
-                return Err(CliError::HeadMoved(
-                    "selected Commit is not target head".into(),
-                ));
-            }
-            (record, Some(selected), None)
-        }
-        WorkspaceAnchor::InitialLayer { branch, layer } => {
-            let record = state
-                .find_branch(&branch)
-                .cloned()
-                .ok_or_else(|| CliError::NotFound(branch.clone()))?;
-            if record.work_head.is_some() || record.boundary_commit.is_some() {
-                return Err(CliError::HeadMoved(
-                    "Branch already has a Commit head".into(),
-                ));
-            }
-            let source = state
-                .find_layer(&layer)
-                .ok_or_else(|| CliError::NotFound(layer.clone()))?;
-            if source.project_id != record.project_id {
-                return Err(CliError::Integrity("Workspace LayerStack mismatch".into()));
-            }
-            if record.origin != BranchOrigin::Layer(source.id.clone()) {
-                return Err(CliError::Integrity(
-                    "initial Workspace must use the Branch origin Layer".into(),
-                ));
-            }
-            (record, None, Some(source.id.clone()))
-        }
-    };
-    if !matches!(
-        branch.relation,
-        BranchRelation::LocalOnly
-            | BranchRelation::LocalCurrent
-            | BranchRelation::LocalPushAhead { .. }
-    ) {
-        return Err(CliError::ReadOnly(branch.name.to_string()));
-    }
-    if state
-        .workspaces
-        .iter()
-        .any(|workspace| workspace.branch_id == branch.id)
-    {
-        return Err(CliError::WorkspaceBusy(branch.name.to_string()));
-    }
-    let project = state
-        .projects
-        .iter()
-        .find(|project| project.id == branch.project_id)
-        .expect("fixture project");
-    let id = WorkspaceId::new(format!("W{}", state.next_workspace));
-    state.next_workspace += 1;
-    state.workspaces.push(WorkspaceView {
-        id: id.clone(),
-        project_id: project.id.clone(),
-        project_name: project.name.clone(),
-        branch_id: branch.id.clone(),
-        branch_name: branch.name.clone(),
-        branch_relation: branch.relation.clone(),
-        anchor_commit,
-        anchor_layer,
-        state: WorkspaceState::Clean,
-        projection,
-        placement: container.map_or_else(|| "host".into(), |id| format!("container {id}")),
-        mount: path,
-        changed_paths: 0,
-        output_bytes: 0,
-        execution: None,
-        output: vec!["Workspace ready".into()],
-        conflicts: Vec::new(),
-    });
-    Ok(CommandResult::Workspace(format!("Created {id}")))
-}
-
-fn workspace_action(
-    state: &mut MockState,
-    action: &str,
-    target: &str,
-    arguments: &[String],
-) -> Result<CommandResult, CliError> {
-    let index = state
-        .workspaces
-        .iter()
-        .position(|workspace| {
-            if matches!(action, "output" | "stop") {
-                workspace
-                    .execution
-                    .as_ref()
-                    .is_some_and(|execution| execution.as_str() == target)
-            } else {
-                workspace.id.as_str() == target
-            }
-        })
-        .ok_or_else(|| CliError::NotFound(target.into()))?;
-    match action {
-        "commit" => {
-            let workspace = state.workspaces[index].clone();
-            if matches!(
-                workspace.state,
-                WorkspaceState::Running | WorkspaceState::Busy
-            ) {
-                return Err(CliError::WorkspaceBusy(target.into()));
-            }
-            if workspace.state == WorkspaceState::HeadMoved {
-                return Err(CliError::HeadMoved(target.into()));
-            }
-            if workspace.state == WorkspaceState::ReadOnly {
-                return Err(CliError::ReadOnly(target.into()));
-            }
-            if !workspace.conflicts.is_empty() {
-                return Err(CliError::Integrity(
-                    "resolve every reconciliation conflict before Commit".into(),
-                ));
-            }
-            if workspace.changed_paths == 0 {
-                state.workspaces[index].state = WorkspaceState::ReadOnly;
-                return Ok(CommandResult::Workspace("NoChanges".into()));
-            }
-            let branch = state
-                .branch_mut(&workspace.branch_id)
-                .ok_or_else(|| CliError::Integrity("Workspace Branch".into()))?;
-            let number = branch.work_head.unwrap_or(0) + 1;
-            let id = commit_id(branch.id.as_str(), number);
-            branch.commits.push(CommitRecord {
-                id: id.clone(),
-                number,
-                authority: false,
-                work: true,
-                inherited: false,
-                owned: true,
-                accepted_layer: None,
-            });
-            branch.work_head = Some(number);
-            branch.relation = match branch.authority_head {
-                None => BranchRelation::LocalOnly,
-                Some(head) if head == number => BranchRelation::LocalCurrent,
-                Some(head) => BranchRelation::LocalPushAhead {
-                    commits: number.saturating_sub(head),
-                },
-            };
-            if let Some(base) = workspace.anchor_layer.clone() {
-                branch.effective_base = Some(base);
-            }
-            let relation = branch.relation.clone();
-            state.workspaces[index].state = WorkspaceState::ReadOnly;
-            state.workspaces[index].anchor_commit = Some(id.clone());
-            state.workspaces[index].changed_paths = 0;
-            state.workspaces[index].branch_relation = relation;
-            Ok(CommandResult::Workspace(format!("Created {id}")))
-        }
-        "end" => {
-            if matches!(
-                state.workspaces[index].state,
-                WorkspaceState::Dirty | WorkspaceState::HeadMoved
-            ) && !arguments.iter().any(|argument| argument == "--discard")
-            {
-                return Err(CliError::WorkspaceDirty(target.into()));
-            }
-            state.workspaces.remove(index);
-            Ok(CommandResult::Workspace(format!("Ended {target}")))
-        }
-        "exec" | "shell" => {
-            match state.workspaces[index].state {
-                WorkspaceState::Running | WorkspaceState::Busy => {
-                    return Err(CliError::WorkspaceBusy(target.into()));
-                }
-                WorkspaceState::HeadMoved => return Err(CliError::HeadMoved(target.into())),
-                WorkspaceState::ReadOnly => return Err(CliError::ReadOnly(target.into())),
-                WorkspaceState::Clean | WorkspaceState::Dirty => {}
-            }
-            state.workspaces[index].state = WorkspaceState::Running;
-            state.workspaces[index].execution = Some(ExecutionId::new(format!("E-{target}-mock")));
-            state.workspaces[index]
-                .output
-                .push(format!("mock {action} started"));
-            Ok(CommandResult::Workspace(format!("Started {action}")))
-        }
-        "stop" => {
-            state.workspaces[index].state = WorkspaceState::Dirty;
-            state.workspaces[index].execution = None;
-            Ok(CommandResult::Workspace(format!("Stopped {target}")))
-        }
-        "resolve" => {
-            let conflict_id = arguments
-                .first()
-                .ok_or_else(|| CliError::Parse("conflict ID required".into()))?;
-            let conflict_index = state.workspaces[index]
-                .conflicts
-                .iter()
-                .position(|conflict| conflict.id.as_str() == conflict_id)
-                .ok_or_else(|| CliError::NotFound(format!("Conflict {conflict_id}")))?;
-            let conflict = state.workspaces[index].conflicts.remove(conflict_index);
-            let choice = arguments
-                .get(1)
-                .ok_or_else(|| CliError::Parse("resolution choice required".into()))?
-                .trim_start_matches("--");
-            if matches!(choice, "branch" | "layer") {
-                state.workspaces[index].changed_paths =
-                    state.workspaces[index].changed_paths.saturating_sub(1);
-            }
-            state.workspaces[index]
-                .output
-                .push(format!("resolved {} with {choice}", conflict.path));
-            Ok(CommandResult::Workspace(format!(
-                "Resolved {} with {choice}",
-                conflict.id
-            )))
-        }
-        "output" | "conflicts" => Ok(CommandResult::Workspace(format!("{action} {target}"))),
-        _ => Err(CliError::Parse(format!(
-            "unsupported Workspace action {action}"
-        ))),
-    }
 }
 
 fn validate_workspace_anchor<'a>(
@@ -1394,35 +1293,6 @@ fn validate_diff(state: &MockState, request: &crate::DiffRequest) -> CliResult<(
     Ok(())
 }
 
-fn trailing_number(value: &str) -> Option<u16> {
-    value.rsplit('-').next()?.parse().ok()
-}
-
-fn field(label: &str, value: String) -> PlanField {
-    PlanField {
-        label: label.into(),
-        value,
-    }
-}
-
-fn diff_labels(request: &crate::DiffRequest) -> (String, String, String) {
-    match request {
-        crate::DiffRequest::Layers { from, to } => {
-            ("Layer to Layer".into(), from.clone(), to.clone())
-        }
-        crate::DiffRequest::BranchCommits { branch, from, to } => (
-            format!("Branch {branch} Commit Diff"),
-            from.clone(),
-            to.clone(),
-        ),
-        crate::DiffRequest::BranchLayer { branch, layer } => (
-            format!("Branch {branch} versus Layer"),
-            layer.clone(),
-            branch.clone(),
-        ),
-    }
-}
-
 fn affected_scope(command: &Command) -> String {
     match command.kind {
         CommandKind::LayerStackPull { .. } | CommandKind::LayerStackAdd { .. } => "project",
@@ -1433,23 +1303,14 @@ fn affected_scope(command: &Command) -> String {
         CommandKind::WorkspaceCreate { .. } | CommandKind::WorkspaceAction { .. } => "workspace",
         CommandKind::Diff(_) => "diff",
         CommandKind::Monitor { .. } => "activity",
-        CommandKind::LayerStackInit { .. } | CommandKind::ReadOnly { .. } => "projects",
+        CommandKind::LayerStackInit { .. }
+        | CommandKind::ReadOnly { .. }
+        | CommandKind::DbCreate { .. }
+        | CommandKind::DbConnect { .. }
+        | CommandKind::ContextUse { .. }
+        | CommandKind::ContextShow => "projects",
     }
     .into()
-}
-
-fn empty_receipt() -> OperationReceipt {
-    OperationReceipt {
-        facts_announced: 0,
-        facts_missing: 0,
-        facts_inserted: 0,
-        objects_announced: 0,
-        objects_missing: 0,
-        objects_sent: 0,
-        objects_inserted: 0,
-        objects_raced: 0,
-        elapsed_ms: 0,
-    }
 }
 
 #[cfg(test)]

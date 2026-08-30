@@ -6,7 +6,10 @@ fn main() {
         eprintln!("mock layerfs: provide a refined V2 command");
         std::process::exit(2);
     }
-    let session = CliSession::open("mock").expect("mock session");
+    let context = std::env::var_os("LAYERFS_CONTEXT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| "mock".into());
+    let session = CliSession::open(context).expect("mock session");
     let command = CliSession::parse_line(&input).unwrap_or_else(|error| {
         eprintln!("{error}");
         std::process::exit(2);

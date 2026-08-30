@@ -1,11 +1,13 @@
+use crate::workspace::WorkspaceTab;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use layerfs_cli::{
-    ActivitySnapshot, BranchId, BranchOrigin, BranchView, CliEvent, CliSession, Command,
+    ActivitySnapshot, BranchId, BranchOrigin, BranchView, CliEvent, CliResult, CliSession, Command,
     CommandPlan, CommitId, DiffRequest, DiffSnapshot, FinishedStatus, LayerId, LayerStackId,
     OperationHandle, OperationId, PageRequest, ProjectSnapshot, ProjectSummary, ViewQuery,
     ViewSnapshot, WorkspaceId, WorkspaceSnapshot, WorkspaceState,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::Path;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ActivityTab {
@@ -19,6 +21,7 @@ pub enum Route {
     Project(LayerStackId),
     Branch(LayerStackId, BranchId),
     Workspaces(Option<LayerStackId>),
+    Workspace(WorkspaceId),
     Activity(ActivityTab),
     Diff(DiffRequest),
 }
@@ -77,6 +80,8 @@ pub struct App {
     pub selected_layer: Option<LayerId>,
     pub selected_graph: Option<GraphTarget>,
     pub selected_workspace: Option<WorkspaceId>,
+    pub workspace_tab: WorkspaceTab,
+    pub selected_workspace_path: Option<String>,
     pub selected_operation: Option<OperationId>,
     pub selected_diff_path: Option<String>,
     expanded: HashSet<BranchId>,
@@ -84,11 +89,12 @@ pub struct App {
 
 impl App {
     pub fn demo() -> Self {
-        let session = CliSession::open("mock").expect("mock session");
-        let projects = match session
-            .snapshot(ViewQuery::Projects(page()))
-            .expect("projects")
-        {
+        Self::open("mock").expect("mock session")
+    }
+
+    pub fn open(context_location: impl AsRef<Path>) -> CliResult<Self> {
+        let session = CliSession::open(context_location)?;
+        let projects = match session.snapshot(ViewQuery::Projects(page()))? {
             ViewSnapshot::Projects(page) => page.items,
             _ => unreachable!(),
         };
@@ -114,20 +120,14 @@ impl App {
                 .or_else(|| snapshot.layers.items.last())
                 .map(|layer| layer.id.clone())
         });
-        let workspaces = match session
-            .snapshot(ViewQuery::Workspaces {
-                project: None,
-                page: page(),
-            })
-            .expect("workspaces")
-        {
+        let workspaces = match session.snapshot(ViewQuery::Workspaces {
+            project: None,
+            page: page(),
+        })? {
             ViewSnapshot::Workspaces(snapshot) => snapshot,
             _ => unreachable!(),
         };
-        let activity = match session
-            .snapshot(ViewQuery::Activity(page()))
-            .expect("activity")
-        {
+        let activity = match session.snapshot(ViewQuery::Activity(page()))? {
             ViewSnapshot::Activity(snapshot) => snapshot,
             _ => unreachable!(),
         };
@@ -161,6 +161,8 @@ impl App {
             selected_layer,
             selected_graph: None,
             selected_workspace: None,
+            workspace_tab: WorkspaceTab::Overview,
+            selected_workspace_path: None,
             selected_operation: None,
             selected_diff_path: None,
             expanded: HashSet::new(),
@@ -182,7 +184,7 @@ impl App {
             .map(|w| w.id.clone());
         app.selected_operation = app.activity.operations.items.first().map(|o| o.id.clone());
         app.sync_graph_selection();
-        app
+        Ok(app)
     }
 
     pub fn empty_demo() -> Self {
@@ -235,9 +237,20 @@ impl App {
                 }
             }
             "workspaces" => self.route = Route::Workspaces(self.selected_project.clone()),
+            "workspace" => {
+                if let Some(id) = self.selected_workspace.clone() {
+                    self.route = Route::Workspace(id);
+                }
+            }
             "activity" | "operations" => self.route = Route::Activity(ActivityTab::Operations),
             "storage" => self.route = Route::Activity(ActivityTab::Storage),
             "reconciliation" => {
+                let pull = CliSession::parse_line("layerstack pull --through L-A-19 --reference")
+                    .expect("mock Pull");
+                self.start_operation(pull);
+                for _ in 0..16 {
+                    self.tick();
+                }
                 let command =
                     CliSession::parse_line("layerstack add B-local-sync").expect("mock Add");
                 self.start_operation(command);
@@ -505,7 +518,7 @@ impl App {
             KeyCode::Char('?') => self.overlay = Overlay::Help,
             KeyCode::Char('o') => self.operation_drawer = !self.operation_drawer,
             KeyCode::Char('r') => self.refresh_all(),
-            KeyCode::Char('x') => {
+            KeyCode::Char('x') if !matches!(self.route, Route::Workspace(_)) => {
                 if let Some(handle) = self.active_operation.as_mut() {
                     if let Err(error) = handle.interrupt() {
                         self.error = Some(error.to_string());
@@ -514,7 +527,31 @@ impl App {
             }
             KeyCode::Char('f') => self.prefill_fork(),
             KeyCode::Char('w') => self.prefill_workspace(),
+            KeyCode::Char('d') if matches!(self.route, Route::Workspace(_)) => {
+                self.workspace_tab = WorkspaceTab::Changes;
+                self.sync_workspace_item();
+            }
             KeyCode::Char('d') => self.open_selected_diff(),
+            KeyCode::Char('[') if matches!(self.route, Route::Workspace(_)) => {
+                self.workspace_tab = self.workspace_tab.next(-1);
+                self.sync_workspace_item();
+            }
+            KeyCode::Char(']') if matches!(self.route, Route::Workspace(_)) => {
+                self.workspace_tab = self.workspace_tab.next(1);
+                self.sync_workspace_item();
+            }
+            KeyCode::Char('x') if matches!(self.route, Route::Workspace(_)) => {
+                self.prefill_workspace_bash()
+            }
+            KeyCode::Char('c') if matches!(self.route, Route::Workspace(_)) => {
+                self.plan_workspace_command("commit", false)
+            }
+            KeyCode::Char('e') if matches!(self.route, Route::Workspace(_)) => {
+                self.plan_workspace_command("end", false)
+            }
+            KeyCode::Char('D') if matches!(self.route, Route::Workspace(_)) => {
+                self.plan_workspace_command("end", true)
+            }
             KeyCode::Char('h') => self.set_expanded(false),
             KeyCode::Char('l') => self.set_expanded(true),
             KeyCode::Char(' ') => self.toggle_expanded(),
@@ -740,28 +777,7 @@ impl App {
             }
             Route::Workspaces(_) => {
                 if let Some(workspace) = self.selected_workspace.as_ref() {
-                    if let Some(view) = self
-                        .workspaces
-                        .workspaces
-                        .items
-                        .iter()
-                        .find(|view| &view.id == workspace)
-                    {
-                        self.selected_project = Some(view.project_id.clone());
-                        self.selected_layer = view.anchor_layer.clone();
-                        self.selected_graph = Some(
-                            view.anchor_commit
-                                .as_ref()
-                                .map(|commit| {
-                                    GraphTarget::Commit(view.branch_id.clone(), commit.clone())
-                                })
-                                .unwrap_or_else(|| GraphTarget::Branch(view.branch_id.clone())),
-                        );
-                        self.go(Route::Branch(
-                            view.project_id.clone(),
-                            view.branch_id.clone(),
-                        ));
-                    }
+                    self.go(Route::Workspace(workspace.clone()));
                 }
             }
             Route::Activity(tab) => {
@@ -771,7 +787,7 @@ impl App {
                     self.route = Route::Activity(ActivityTab::Operations);
                 }
             }
-            Route::Branch(_, _) | Route::Diff(_) => {}
+            Route::Branch(_, _) | Route::Workspace(_) | Route::Diff(_) => {}
         }
     }
 
@@ -825,6 +841,11 @@ impl App {
                     delta,
                 );
             }
+            Route::Workspace(_) => {
+                let values = self.workspace_items();
+                self.selected_workspace_path =
+                    move_id(&values, self.selected_workspace_path.as_ref(), delta);
+            }
             Route::Activity(_) => {
                 self.selected_operation = move_id(
                     &self
@@ -867,7 +888,7 @@ impl App {
     fn focus_count(&self) -> usize {
         match self.route {
             Route::Projects | Route::Branch(_, _) | Route::Workspaces(_) | Route::Activity(_) => 2,
-            Route::Project(_) | Route::Diff(_) => 3,
+            Route::Project(_) | Route::Workspace(_) | Route::Diff(_) => 3,
         }
     }
 
@@ -876,6 +897,7 @@ impl App {
             Route::Projects => self.refresh_projects(),
             Route::Project(id) | Route::Branch(id, _) => self.refresh_project(id),
             Route::Workspaces(project) => self.refresh_workspaces(project),
+            Route::Workspace(_) => self.refresh_workspaces(None),
             Route::Activity(_) => self.refresh_activity(),
             Route::Diff(request) => self.refresh_diff(request),
         }
@@ -958,6 +980,14 @@ impl App {
                         .items
                         .first()
                         .map(|w| w.id.clone());
+                }
+                let items = self.workspace_items();
+                if self
+                    .selected_workspace_path
+                    .as_ref()
+                    .is_none_or(|selected| !items.contains(selected))
+                {
+                    self.selected_workspace_path = items.first().cloned();
                 }
             }
             Ok(_) => {}
@@ -1176,6 +1206,11 @@ impl App {
                 self.focus = 1;
                 self.compact_pane = 1;
             }
+            layerfs_cli::CommandKind::WorkspaceAction { action, .. } if action == "end" => {
+                self.route = Route::Workspaces(self.selected_project.clone());
+                self.focus = 0;
+                self.compact_pane = 0;
+            }
             layerfs_cli::CommandKind::ReadOnly { family, action }
                 if family == "query" && action.starts_with("projects") =>
             {
@@ -1193,6 +1228,48 @@ impl App {
             .complete(&self.command, self.command_cursor)
             .unwrap_or_default();
         self.completion_selected = 0;
+    }
+
+    fn prefill_workspace_bash(&mut self) {
+        let Some(workspace) = self.selected_workspace.as_ref() else {
+            return;
+        };
+        self.command = format!("workspace exec {workspace} -- /bin/bash -lc \"\"");
+        self.command_cursor = self.command.len().saturating_sub(1);
+        self.overlay = Overlay::Command;
+        self.update_completions();
+    }
+
+    fn plan_workspace_command(&mut self, action: &str, discard: bool) {
+        let Some(workspace) = self.selected_workspace.as_ref() else {
+            return;
+        };
+        if action == "end"
+            && !discard
+            && self.selected_workspace_view().is_some_and(|view| {
+                matches!(
+                    view.state,
+                    WorkspaceState::Dirty | WorkspaceState::HeadMoved
+                )
+            })
+        {
+            self.error =
+                Some("Workspace has an uncommitted final delta; use D to Discard & End".into());
+            return;
+        }
+        let line = format!(
+            "workspace {action} {workspace}{}",
+            if discard { " --discard" } else { "" }
+        );
+        match CliSession::parse_line(&line)
+            .and_then(|command| self.session.plan(&command).map(|plan| (command, plan)))
+        {
+            Ok(value) => {
+                self.plan = Some(value);
+                self.overlay = Overlay::Plan;
+            }
+            Err(error) => self.error = Some(error.to_string()),
+        }
     }
 
     pub fn paste_command(&mut self, value: &str) {
@@ -1292,6 +1369,12 @@ impl App {
                             .contains(&needle)
                     })
                     .map(|workspace| workspace.id.clone());
+            }
+            Route::Workspace(_) => {
+                self.selected_workspace_path = self
+                    .workspace_items()
+                    .into_iter()
+                    .find(|item| item.to_ascii_lowercase().contains(&needle));
             }
             Route::Activity(_) => {
                 self.selected_operation = self

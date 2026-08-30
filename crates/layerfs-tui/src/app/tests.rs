@@ -1,4 +1,5 @@
 use super::{App, GraphTarget, Overlay, Route};
+use crate::WorkspaceTab;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use layerfs_cli::{BranchId, CommitId};
 
@@ -133,23 +134,49 @@ fn diff_consumes_continuation_without_losing_selection() {
 }
 
 #[test]
-fn initial_layer_workspace_returns_to_exact_branch_anchor() {
+fn initial_layer_workspace_opens_with_exact_branch_anchor() {
     let mut app = App::demo();
     app.route = Route::Workspaces(Some("SA-91".into()));
     app.selected_workspace = Some("W50".into());
     app.open_selected();
-    assert!(matches!(
-        app.route,
-        Route::Branch(_, ref branch) if branch.as_str() == "B-empty"
-    ));
+    assert!(matches!(app.route, Route::Workspace(ref id) if id.as_str() == "W50"));
+    let workspace = app.selected_workspace_view().unwrap();
+    assert_eq!(workspace.branch_id.as_str(), "B-empty");
     assert_eq!(
-        app.selected_graph,
-        Some(GraphTarget::Branch(BranchId::from("B-empty")))
-    );
-    assert_eq!(
-        app.selected_layer.as_ref().map(|id| id.as_str()),
+        workspace.anchor_layer.as_ref().map(|id| id.as_str()),
         Some("L-A-18")
     );
+}
+
+#[test]
+fn workspace_detail_tabs_and_actions_are_explicit() {
+    let mut app = App::demo();
+    app.route = Route::Workspaces(Some("SA-91".into()));
+    let id = app.selected_workspace.clone().unwrap();
+    app.open_selected();
+    assert_eq!(app.route, Route::Workspace(id.clone()));
+
+    app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
+    assert_eq!(app.workspace_tab, WorkspaceTab::Files);
+    assert!(app.selected_workspace_path.is_some());
+
+    app.handle_key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert_eq!(app.overlay, Overlay::Command);
+    assert_eq!(
+        app.command,
+        format!("workspace exec {id} -- /bin/bash -lc \"\"")
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+    assert_eq!(app.overlay, Overlay::Plan);
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
+    assert_eq!(app.overlay, Overlay::None);
+    assert!(app.error.as_deref().unwrap().contains("Discard & End"));
+    app.handle_key(KeyEvent::new(KeyCode::Char('D'), KeyModifiers::NONE));
+    assert_eq!(app.overlay, Overlay::Plan);
 }
 
 #[test]
@@ -185,6 +212,12 @@ fn quit_interrupts_and_records_terminal_event() {
 #[test]
 fn stale_add_routes_to_reconciliation_workspace() {
     let mut app = App::demo();
+    let pull = layerfs_cli::CliSession::parse_line("layerstack pull --through L-A-19 --reference")
+        .unwrap();
+    app.start_operation(pull);
+    for _ in 0..16 {
+        app.tick();
+    }
     let command = layerfs_cli::CliSession::parse_line("layerstack add B-local-sync").unwrap();
     app.start_operation(command);
     for _ in 0..16 {

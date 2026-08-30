@@ -1,6 +1,20 @@
-use super::empty_receipt;
 use crate::fixture::MockState;
 use crate::{CliError, CliEvent, CommandResult, FinishedStatus, OperationReceipt, OperationState};
+
+pub(super) fn empty_receipt() -> OperationReceipt {
+    OperationReceipt {
+        facts_announced: 0,
+        facts_missing: 0,
+        facts_inserted: 0,
+        objects_announced: 0,
+        objects_missing: 0,
+        objects_sent: 0,
+        objects_inserted: 0,
+        objects_raced: 0,
+        elapsed_ms: 0,
+        elapsed_micros: 0,
+    }
+}
 
 pub(super) fn normalize_receipt(
     result: &Result<CommandResult, CliError>,
@@ -14,15 +28,22 @@ pub(super) fn normalize_receipt(
             | CommandResult::Add(value)
             | CommandResult::Workspace(value),
         ) => value.contains("Already") || value.contains("UpToDate") || value == "NoChanges",
-        Ok(CommandResult::Diff(_) | CommandResult::Monitor(_) | CommandResult::Query(_)) => true,
-        Ok(CommandResult::Context(value)) => !value.starts_with("Created"),
+        Ok(
+            CommandResult::Diff(_)
+            | CommandResult::Monitor(_)
+            | CommandResult::Query(_)
+            | CommandResult::Context(_),
+        ) => true,
+        Ok(CommandResult::Initialized(_)) => false,
         Ok(CommandResult::NeedsResolution { .. }) => true,
         Ok(CommandResult::Fork { .. }) => false,
     };
     if no_change {
         let elapsed_ms = receipt.elapsed_ms;
+        let elapsed_micros = receipt.elapsed_micros;
         *receipt = empty_receipt();
         receipt.elapsed_ms = elapsed_ms;
+        receipt.elapsed_micros = elapsed_micros;
     }
 }
 

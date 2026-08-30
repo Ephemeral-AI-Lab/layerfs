@@ -507,6 +507,9 @@ dependencies = [
 [[package]]
 name = "layerfs-cli"
 version = "0.1.0"
+dependencies = [
+ "rusqlite",
+]
 
 [[package]]
 name = "layerfs-content"

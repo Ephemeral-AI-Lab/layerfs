@@ -7,11 +7,19 @@ use crossterm::{
     execute,
 };
 use ratatui::{backend::Backend, Terminal};
-use std::{io, time::Duration};
+use std::{io, path::Path, time::Duration};
 
 pub fn run<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
+    run_with_context(terminal, "mock")
+}
+
+pub fn run_with_context<B: Backend>(
+    terminal: &mut Terminal<B>,
+    context_location: impl AsRef<Path>,
+) -> io::Result<()> {
     let _paste = PasteGuard::enable()?;
-    run_loop(terminal)
+    let app = App::open(context_location).map_err(|error| io::Error::other(error.to_string()))?;
+    run_loop(terminal, app)
 }
 
 struct PasteGuard;
@@ -29,8 +37,7 @@ impl Drop for PasteGuard {
     }
 }
 
-fn run_loop<B: Backend>(terminal: &mut Terminal<B>) -> io::Result<()> {
-    let mut app = App::demo();
+fn run_loop<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     loop {
         app.tick();
         terminal.draw(|frame| render::draw(frame, &app, Theme::detect()))?;

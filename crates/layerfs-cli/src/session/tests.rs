@@ -179,9 +179,9 @@ fn workspace_process_ids_and_retained_delta_rules_are_enforced() {
         }
     ));
     for command in [
-        "workspace exec W14 -- cargo test",
-        "workspace exec W31 -- cargo test",
-        "workspace exec W44 -- cargo test",
+        "workspace exec W14 -- /bin/bash -lc 'printf ok'",
+        "workspace exec W31 -- /bin/bash -lc 'printf ok'",
+        "workspace exec W44 -- /bin/bash -lc 'printf ok'",
     ] {
         assert!(matches!(
             finish(&session, command),
@@ -199,7 +199,7 @@ fn workspace_process_ids_and_retained_delta_rules_are_enforced() {
         }
     ));
     assert!(matches!(
-        finish(&session, "workspace exec W9 -- cargo test"),
+        finish(&session, "workspace exec W9 -- /bin/bash -lc 'printf ok'",),
         CliEvent::Finished {
             status: FinishedStatus::Failed,
             result: Err(crate::CliError::ReadOnly(_)),
@@ -317,6 +317,18 @@ fn forked_branch_pull_preserves_exact_boundary_and_visible_ancestry() {
 #[test]
 fn add_is_idempotent_and_rejects_stale_base() {
     let session = CliSession::open("mock").unwrap();
+    let add = CliSession::parse_line("layerstack add B-local-sync").unwrap();
+    assert!(matches!(
+        session.execute(add),
+        Err(crate::CliError::NotPulled(_))
+    ));
+    assert!(matches!(
+        finish(&session, "layerstack pull --through L-A-19 --reference"),
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            ..
+        }
+    ));
     assert!(matches!(
         finish(&session, "layerstack add B-local-sync"),
         CliEvent::Finished {
@@ -418,4 +430,345 @@ fn unavailable_authority_blocks_pull() {
             Err(crate::CliError::AuthorityUnavailable(_))
         ));
     }
+}
+
+#[test]
+fn real_db_context_use_show_and_parent_validation_are_atomic() {
+    let root = std::env::temp_dir().join(format!(
+        "layerfs-mock-context-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let context = root.join("context");
+    let layerstack = root.join("layerstack.sqlite");
+    let other = root.join("other.sqlite");
+    let branch = root.join("branch.sqlite");
+    let session = CliSession::open(&context).unwrap();
+
+    for command in [
+        format!("db create layerstack {}", layerstack.display()),
+        format!("db create layerstack {}", other.display()),
+        format!(
+            "db create branch {} --parent {}",
+            branch.display(),
+            layerstack.display()
+        ),
+        format!("db connect layerstack {}", layerstack.display()),
+        format!(
+            "db connect branch {} --parent {}",
+            branch.display(),
+            layerstack.display()
+        ),
+    ] {
+        assert!(matches!(
+            finish(&session, &command),
+            CliEvent::Finished {
+                status: FinishedStatus::Succeeded,
+                ..
+            }
+        ));
+    }
+
+    let select = format!(
+        "context use --layerstack {} --branch {}",
+        layerstack.display(),
+        branch.display()
+    );
+    assert_context(&session, &select, &layerstack, &branch);
+    assert_context(&session, "context show", &layerstack, &branch);
+
+    let mismatch = format!(
+        "context use --layerstack {} --branch {}",
+        other.display(),
+        branch.display()
+    );
+    assert!(matches!(
+        finish(&session, &mismatch),
+        CliEvent::Finished {
+            status: FinishedStatus::Failed,
+            result: Err(crate::CliError::Integrity(_)),
+            ..
+        }
+    ));
+    assert_context(&session, "context show", &layerstack, &branch);
+
+    assert!(matches!(
+        finish(&session, "layerstack init --name real-schema --empty"),
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            ..
+        }
+    ));
+    let connection = rusqlite::Connection::open(&layerstack).unwrap();
+    let projects: i64 = connection
+        .query_row("SELECT count(*) FROM layer_stacks", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(projects, 1);
+    drop(connection);
+    std::fs::rename(&layerstack, root.join("layerstack.offline")).unwrap();
+    std::fs::rename(&branch, root.join("branch.offline")).unwrap();
+    let offline = CliSession::open(&context).unwrap();
+    assert_context(&offline, "context show", &layerstack, &branch);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+fn assert_context(
+    session: &CliSession,
+    command: &str,
+    layerstack: &std::path::Path,
+    branch: &std::path::Path,
+) {
+    match finish(session, command) {
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            result: Ok(crate::CommandResult::Context(profile)),
+            ..
+        } => {
+            assert_eq!(profile.layerstack, layerstack);
+            assert_eq!(profile.branch, branch);
+        }
+        event => panic!("unexpected context result: {event:?}"),
+    }
+}
+
+fn temporary_workspace(label: &str) -> String {
+    let path = std::env::temp_dir().join(format!(
+        "layerfs-cli-test-{label}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    path.display().to_string()
+}
+
+fn fork_from_layer(session: &CliSession, name: &str, layer: &str) -> BranchId {
+    match finish(
+        session,
+        &format!("branch fork --name {name} --layer {layer}"),
+    ) {
+        CliEvent::Finished {
+            result: Ok(crate::CommandResult::Fork { branch_id, .. }),
+            ..
+        } => branch_id,
+        event => panic!("unexpected Fork result: {event:?}"),
+    }
+}
+
+fn workspace(session: &CliSession, id: &str) -> crate::WorkspaceView {
+    let snapshot = session
+        .snapshot(ViewQuery::Workspaces {
+            project: None,
+            page: PageRequest::first(128),
+        })
+        .unwrap();
+    let ViewSnapshot::Workspaces(snapshot) = snapshot else {
+        panic!("Workspaces")
+    };
+    snapshot
+        .workspaces
+        .items
+        .into_iter()
+        .find(|workspace| workspace.id.as_str() == id)
+        .unwrap()
+}
+
+fn committed_root(script: &str, label: &str) -> crate::ObjectId {
+    let session = CliSession::open("mock").unwrap();
+    let branch = fork_from_layer(&session, label, "L-A-18");
+    let mount = temporary_workspace(label);
+    assert!(matches!(
+        finish(
+            &session,
+            &format!("workspace create --branch {branch} --initial-layer L-A-18 --at {mount}"),
+        ),
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            ..
+        }
+    ));
+    assert!(matches!(
+        finish(
+            &session,
+            &format!("workspace exec W90 -- /bin/bash -lc '{script}'"),
+        ),
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            ..
+        }
+    ));
+    assert!(matches!(
+        finish(&session, "workspace commit W90"),
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            ..
+        }
+    ));
+    let view = workspace(&session, "W90");
+    assert!(view.files.iter().all(|file| file.path != "temporary.txt"));
+    assert_eq!(view.changes.len(), 1);
+    let root = view.published_root.unwrap();
+    assert!(matches!(
+        finish(&session, "workspace end W90"),
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            ..
+        }
+    ));
+    assert!(!std::path::Path::new(&mount).exists());
+    root
+}
+
+#[test]
+fn final_root_ignores_bash_operation_history_and_create_delete_undo() {
+    let first = committed_root(
+        "printf final > result.txt; printf temporary > temporary.txt; rm temporary.txt",
+        "history-a",
+    );
+    let second = committed_root(
+        "touch temporary.txt; rm temporary.txt; printf final > result.txt",
+        "history-b",
+    );
+    assert_eq!(first, second);
+}
+
+#[test]
+fn real_bash_failure_keeps_effects_and_bounds_output() {
+    let session = CliSession::open("mock").unwrap();
+    let branch = fork_from_layer(&session, "bash-failure", "L-A-18");
+    let mount = temporary_workspace("bash-failure");
+    assert!(matches!(
+        finish(
+            &session,
+            &format!("workspace create --branch {branch} --initial-layer L-A-18 --at {mount}"),
+        ),
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            ..
+        }
+    ));
+    let event = finish(
+        &session,
+        "workspace exec W90 -- /bin/bash -lc 'printf kept > failure.txt; yes x | head -c 700000; exit 7'",
+    );
+    assert!(matches!(
+        event,
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            result: Ok(crate::CommandResult::Workspace(ref value)),
+            ..
+        } if value.contains("exited 7")
+    ));
+    let view = workspace(&session, "W90");
+    assert_eq!(view.runs.last().unwrap().exit_code, 7);
+    assert!(view.runs.last().unwrap().output_bytes <= 1024 * 1024);
+    assert!(view.files.iter().any(|file| file.path == "failure.txt"));
+    assert!(view.timing.bash_last_micros > 0);
+    assert!(matches!(
+        finish(&session, "workspace end W90 --discard"),
+        CliEvent::Finished {
+            status: FinishedStatus::Succeeded,
+            ..
+        }
+    ));
+    assert!(!std::path::Path::new(&mount).exists());
+}
+
+#[test]
+fn commit_dedup_equations_and_add_reuse_the_exact_root() {
+    let session = CliSession::open("mock").unwrap();
+    let first = fork_from_layer(&session, "dedup-a", "L-SW-11");
+    let first_mount = temporary_workspace("dedup-a");
+    finish(
+        &session,
+        &format!("workspace create --branch {first} --initial-layer L-SW-11 --at {first_mount}"),
+    );
+    finish(
+        &session,
+        "workspace exec W90 -- /bin/bash -lc 'printf shared > shared.txt'",
+    );
+    finish(&session, "workspace commit W90");
+    let first_root = workspace(&session, "W90").published_root.unwrap();
+    finish(&session, "workspace end W90");
+
+    let second = fork_from_layer(&session, "dedup-b", "L-SW-11");
+    let second_mount = temporary_workspace("dedup-b");
+    finish(
+        &session,
+        &format!("workspace create --branch {second} --initial-layer L-SW-11 --at {second_mount}"),
+    );
+    finish(
+        &session,
+        "workspace exec W91 -- /bin/bash -lc 'printf shared > shared.txt'",
+    );
+    finish(&session, "workspace commit W91");
+    let second_view = workspace(&session, "W91");
+    let receipt = second_view.commit_receipt.as_ref().unwrap();
+    assert_eq!(second_view.published_root.as_ref(), Some(&first_root));
+    assert_eq!(
+        receipt.candidate_objects,
+        receipt.inserted_objects + receipt.reused_objects
+    );
+    assert_eq!(
+        receipt.candidate_bytes,
+        receipt.inserted_bytes + receipt.reused_bytes
+    );
+    assert!(receipt.reused_objects > 0);
+
+    finish(&session, &format!("branch push {second}"));
+    finish(&session, &format!("layerstack add {second}"));
+    let snapshot = session
+        .snapshot(ViewQuery::Project {
+            id: "SW-20".into(),
+            page: PageRequest::first(64),
+        })
+        .unwrap();
+    let ViewSnapshot::Project(snapshot) = snapshot else {
+        panic!("Project")
+    };
+    let added = snapshot.layers.items.last().unwrap();
+    assert_eq!(added.root, first_root);
+    assert_eq!(added.source.as_ref().map(|source| &source.0), Some(&second));
+    finish(&session, "workspace end W91");
+    assert!(!std::path::Path::new(&second_mount).exists());
+}
+
+#[test]
+fn workspace_rejects_relative_mounts_and_symlink_capture() {
+    let session = CliSession::open("mock").unwrap();
+    let branch = fork_from_layer(&session, "bounded", "L-A-18");
+    assert!(matches!(
+        finish(
+            &session,
+            &format!("workspace create --branch {branch} --initial-layer L-A-18 --at relative"),
+        ),
+        CliEvent::Finished {
+            status: FinishedStatus::Failed,
+            result: Err(crate::CliError::Parse(_)),
+            ..
+        }
+    ));
+    let mount = temporary_workspace("bounded");
+    finish(
+        &session,
+        &format!("workspace create --branch {branch} --initial-layer L-A-18 --at {mount}"),
+    );
+    assert!(matches!(
+        finish(
+            &session,
+            "workspace exec W90 -- /bin/bash -lc 'ln -s /tmp escaped-link'",
+        ),
+        CliEvent::Finished {
+            status: FinishedStatus::Failed,
+            result: Err(crate::CliError::Integrity(_)),
+            ..
+        }
+    ));
+    finish(&session, "workspace end W90 --discard");
+    assert!(!std::path::Path::new(&mount).exists());
 }

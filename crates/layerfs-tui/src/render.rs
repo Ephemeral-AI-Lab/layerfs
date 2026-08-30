@@ -48,6 +48,7 @@ pub(crate) fn draw(frame: &mut Frame, app: &App, theme: Theme) {
         Route::Project(_) => topology(frame, rows[2], app, theme),
         Route::Branch(_, branch_id) => branch(frame, rows[2], app, branch_id, theme),
         Route::Workspaces(_) => workspaces(frame, rows[2], app, theme),
+        Route::Workspace(_) => crate::workspace::draw(frame, rows[2], app, theme),
         Route::Activity(tab) => activity(frame, rows[2], app, *tab, theme),
         Route::Diff(_) => diff(frame, rows[2], app, theme),
     }
@@ -110,6 +111,12 @@ fn breadcrumb(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
         Route::Project(_) => format!("Projects  /  {}  /  Topology", project_name(app)),
         Route::Branch(_, _) => branch_breadcrumb(app),
         Route::Workspaces(_) => format!("{}  /  Workspaces", project_name(app)),
+        Route::Workspace(id) => format!(
+            "{}  /  Workspaces  /  {}  /  {}",
+            project_name(app),
+            id,
+            app.workspace_tab.label()
+        ),
         Route::Activity(ActivityTab::Operations) => "Activity  /  Operations".into(),
         Route::Activity(ActivityTab::Storage) => "Activity  /  Storage".into(),
         Route::Diff(_) => "Diff".into(),
@@ -684,11 +691,12 @@ fn operation(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
 
 fn footer(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
     if area.width < 100 && app.overlay == Overlay::None {
-        frame.render_widget(
-            Paragraph::new(" Tab pane · j/k move · Enter open · : command · ? help · q quit")
-                .style(theme.muted()),
-            area,
-        );
+        let line = if matches!(app.route, Route::Workspace(_)) {
+            " Tab pane · [/] tab · x Bash · c commit · e end · D discard · Esc back"
+        } else {
+            " Tab pane · j/k move · Enter open · : command · ? help · q quit"
+        };
+        frame.render_widget(Paragraph::new(line).style(theme.muted()), area);
         return;
     }
     let line = match app.overlay {
@@ -704,7 +712,8 @@ fn footer(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
                     .into()
             }
             Route::Project(_) | Route::Branch(_, _) => " [Tab] focus  [j/k] move  [i] inspector  [f] fork  [w] workspace  [d] diff  [Esc] back".into(),
-            Route::Workspaces(_) => " [j/k] move  [Enter] branch  [:] command  [o] operations  [Esc] back".into(),
+            Route::Workspaces(_) => " [j/k] move  [Enter] Workspace  [:] command  [o] operations  [Esc] back".into(),
+            Route::Workspace(_) => " [Tab] pane  [[/]] tab  [x] Bash  [c] commit  [e] end  [D] discard  [Esc] back".into(),
             Route::Activity(_) => " [Enter] operations/storage  [j/k] move  [o] drawer  [:] command  [Esc] back".into(),
             Route::Diff(_) => " [Tab] focus  [j/k] path  [Esc] back  [:] command  [?] help".into(),
         },
@@ -1010,7 +1019,7 @@ fn workspace_detail(workspace: &WorkspaceView) -> Vec<Line<'static>> {
         Line::from(format!("State         {}", workspace.state)),
         Line::from(format!("Projection    {}", workspace.projection)),
         Line::from(format!("Placement     {}", workspace.placement)),
-        Line::from(format!("Mount         {}", workspace.mount)),
+        Line::from(format!("Mount         {}", truncate(&workspace.mount, 60))),
         Line::from(format!("Changed paths {}", workspace.changed_paths)),
         Line::from(format!("Output bytes  {}", workspace.output_bytes)),
         Line::from(format!("Actions       {actions}")),
@@ -1309,6 +1318,7 @@ fn route_name(app: &App) -> &'static str {
         Route::Project(_) => "Topology",
         Route::Branch(_, _) => "Branch",
         Route::Workspaces(_) => "Workspaces",
+        Route::Workspace(_) => "Workspace",
         Route::Activity(ActivityTab::Operations) => "Operations",
         Route::Activity(ActivityTab::Storage) => "Storage",
         Route::Diff(_) => "Diff",
@@ -1321,6 +1331,9 @@ fn compact_pane_name(app: &App) -> &'static str {
         Route::Project(_) => ["Layers 1/3", "Graph 2/3", "Inspector 3/3"][app.compact_pane % 3],
         Route::Branch(_, _) => ["Tree 1/2", "Inspector 2/2"][app.compact_pane % 2],
         Route::Workspaces(_) => ["List 1/2", "Detail 2/2"][app.compact_pane % 2],
+        Route::Workspace(_) => {
+            ["Navigator 1/3", "Content 2/3", "Inspector 3/3"][app.compact_pane % 3]
+        }
         Route::Activity(ActivityTab::Operations) => {
             ["Operations 1/2", "Receipt 2/2"][app.compact_pane % 2]
         }

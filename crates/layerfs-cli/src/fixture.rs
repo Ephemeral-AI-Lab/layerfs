@@ -5,9 +5,12 @@ use crate::model::{
     ProjectSummary, RemotePlacement, SemanticAction, StorageSnapshot, WorkspaceSnapshot,
     WorkspaceState, WorkspaceView,
 };
+use crate::workspace::{
+    canonical_tree, seed_tree, CanonicalObject, Tree, TreeEntry, WorkspaceRecord,
+};
 use crate::{
-    BranchId, CommitId, ConflictId, EntityName, ExecutionId, LayerId, LayerStackId, ObjectId,
-    OperationId, WorkspaceId,
+    BranchId, CliError, CliResult, CommitId, ConflictId, EntityName, ExecutionId, LayerId,
+    LayerStackId, ObjectId, OperationId, WorkspaceId,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -29,6 +32,9 @@ pub(crate) struct LayerRecord {
     pub project_id: LayerStackId,
     pub number: u16,
     pub source: Option<(BranchId, CommitId)>,
+    pub root: ObjectId,
+    pub tree: Tree,
+    pub objects: Vec<CanonicalObject>,
 }
 
 #[derive(Clone)]
@@ -55,6 +61,9 @@ pub(crate) struct CommitRecord {
     pub inherited: bool,
     pub owned: bool,
     pub accepted_layer: Option<LayerId>,
+    pub root: ObjectId,
+    pub tree: Tree,
+    pub objects: Vec<CanonicalObject>,
 }
 
 #[derive(Clone)]
@@ -62,11 +71,12 @@ pub(crate) struct MockState {
     pub projects: Vec<ProjectRecord>,
     pub layers: Vec<LayerRecord>,
     pub branches: Vec<BranchRecord>,
-    pub workspaces: Vec<WorkspaceView>,
+    pub workspaces: Vec<WorkspaceRecord>,
     pub operations: Vec<OperationView>,
     pub storage: StorageSnapshot,
     pub next_branch: u16,
     pub next_workspace: u16,
+    pub last_operation_elapsed_micros: Option<u64>,
 }
 
 impl MockState {
@@ -144,6 +154,7 @@ impl MockState {
             },
             next_branch: 90,
             next_workspace: 90,
+            last_operation_elapsed_micros: None,
         };
 
         state.add_branch(branch(
@@ -455,7 +466,7 @@ impl MockState {
                 self.workspaces
                     .iter()
                     .filter(|workspace| project.is_none_or(|id| &workspace.project_id == id))
-                    .cloned()
+                    .map(|workspace| workspace.view.clone())
                     .map(|mut workspace| {
                         if let Some(branch) = self.branch(&workspace.branch_id) {
                             workspace.branch_relation = branch.relation.clone();
@@ -580,6 +591,31 @@ impl MockState {
         self.layers.iter().find(|layer| layer.id.as_str() == value)
     }
 
+    pub(crate) fn resolve_commit(
+        &self,
+        branch: &BranchRecord,
+        value: &str,
+    ) -> CliResult<CommitRecord> {
+        if let Some(commit) = branch
+            .commits
+            .iter()
+            .find(|commit| commit.id.as_str() == value || format!("C{}", commit.number) == value)
+        {
+            return Ok(commit.clone());
+        }
+        let boundary = branch
+            .boundary_commit
+            .as_ref()
+            .filter(|commit| commit.as_str() == value)
+            .ok_or_else(|| CliError::NotFound(format!("Commit {value} in {}", branch.name)))?;
+        self.branches
+            .iter()
+            .flat_map(|record| &record.commits)
+            .find(|commit| &commit.id == boundary)
+            .cloned()
+            .ok_or_else(|| CliError::NotFound(boundary.to_string()))
+    }
+
     pub fn relation_name_exists(&self, project: &LayerStackId, name: &EntityName) -> bool {
         self.branches
             .iter()
@@ -680,7 +716,7 @@ impl MockState {
             id: layer.id.clone(),
             number: layer.number,
             parent: (layer.number > 1).then(|| layer_for(project, layer.number - 1)),
-            root: ObjectId::new(format!("R-{}-{:02}", project.id, layer.number)),
+            root: layer.root.clone(),
             source: layer.source.clone(),
             authority: true,
             work,
@@ -716,7 +752,7 @@ impl MockState {
                 } else {
                     branch.boundary_commit.clone()
                 },
-                root: ObjectId::new(format!("R-{}-C{:02}", branch.id, commit.number)),
+                root: commit.root.clone(),
                 base_layer: self.branch_base_layer(branch),
                 authority: commit.authority,
                 work: commit.work,
@@ -849,7 +885,7 @@ impl MockState {
                     } else {
                         parent.boundary_commit.clone()
                     },
-                    root: ObjectId::new(format!("R-{}-C{:02}", parent.id, commit.number)),
+                    root: commit.root.clone(),
                     base_layer: self.branch_base_layer(parent),
                     authority: commit.authority,
                     work,
@@ -1008,20 +1044,27 @@ fn branch(
         effective_base,
         relation,
         commits: (1..=commit_count)
-            .map(|number| CommitRecord {
-                id: commit_id(id, number),
-                number,
-                authority: authority_head.is_some_and(|head| number <= head),
-                work: work_head.is_some_and(|head| number <= head),
-                inherited: false,
-                owned: true,
-                accepted_layer: None,
+            .map(|number| {
+                let tree = seed_tree(&format!("{id}-C{number}"));
+                let (root, objects) = canonical_tree(&tree);
+                CommitRecord {
+                    id: commit_id(id, number),
+                    number,
+                    authority: authority_head.is_some_and(|head| number <= head),
+                    work: work_head.is_some_and(|head| number <= head),
+                    inherited: false,
+                    owned: true,
+                    accepted_layer: None,
+                    root,
+                    tree,
+                    objects,
+                }
             })
             .collect(),
     }
 }
 
-fn trailing_number(value: &str) -> Option<u16> {
+pub(crate) fn trailing_number(value: &str) -> Option<u16> {
     value.rsplit('-').next()?.parse().ok()
 }
 
@@ -1048,11 +1091,26 @@ fn api_layers(branches: &[BranchRecord]) -> Vec<LayerRecord> {
                 record.id == *branch && record.commits.iter().any(|item| item.id == *commit)
             }));
         }
+        let id = layer_id("A", number);
+        let tree = source
+            .as_ref()
+            .and_then(|(branch, commit)| {
+                branches
+                    .iter()
+                    .find(|record| &record.id == branch)
+                    .and_then(|record| record.commits.iter().find(|item| &item.id == commit))
+                    .map(|commit| commit.tree.clone())
+            })
+            .unwrap_or_else(|| seed_tree(id.as_str()));
+        let (root, objects) = canonical_tree(&tree);
         layers.push(LayerRecord {
-            id: layer_id("A", number),
+            id,
             project_id: project.clone(),
             number,
             source,
+            root,
+            tree,
+            objects,
         });
     }
     layers
@@ -1067,20 +1125,28 @@ fn simple_layers(
     let project = project.clone();
     let prefix = prefix.to_string();
     let source_branch = source_branch.to_string();
-    (1..=count).map(move |number| LayerRecord {
-        id: layer_id(&prefix, number),
-        project_id: project.clone(),
-        number,
-        source: (number > 1).then(|| {
-            (
-                BranchId::new(source_branch.clone()),
-                commit_id(&source_branch, number - 1),
-            )
-        }),
+    (1..=count).map(move |number| {
+        let id = layer_id(&prefix, number);
+        let tree = seed_tree(id.as_str());
+        let (root, objects) = canonical_tree(&tree);
+        LayerRecord {
+            id,
+            project_id: project.clone(),
+            number,
+            source: (number > 1).then(|| {
+                (
+                    BranchId::new(source_branch.clone()),
+                    commit_id(&source_branch, number - 1),
+                )
+            }),
+            root,
+            tree,
+            objects,
+        }
     })
 }
 
-fn workspaces(state: &MockState) -> Vec<WorkspaceView> {
+fn workspaces(state: &MockState) -> Vec<WorkspaceRecord> {
     vec![
         workspace(
             state,
@@ -1162,7 +1228,7 @@ fn workspace(
     projection: &str,
     placement: &str,
     mount: &str,
-) -> WorkspaceView {
+) -> WorkspaceRecord {
     let branch = state
         .branch(&BranchId::from(branch_id))
         .expect("fixture branch");
@@ -1171,7 +1237,28 @@ fn workspace(
         .iter()
         .find(|project| project.id == branch.project_id)
         .expect("fixture project");
-    WorkspaceView {
+    let anchor = anchor_commit
+        .as_ref()
+        .and_then(|id| {
+            state
+                .branches
+                .iter()
+                .flat_map(|branch| &branch.commits)
+                .find(|commit| &commit.id == id)
+                .map(|commit| commit.tree.clone())
+        })
+        .or_else(|| {
+            anchor_layer.as_ref().and_then(|id| {
+                state
+                    .layers
+                    .iter()
+                    .find(|layer| &layer.id == id)
+                    .map(|layer| layer.tree.clone())
+            })
+        })
+        .unwrap_or_else(|| seed_tree(id));
+    let (anchor_root, _) = canonical_tree(&anchor);
+    let view = WorkspaceView {
         id: WorkspaceId::from(id),
         project_id: project.id.clone(),
         project_name: project.name.clone(),
@@ -1180,15 +1267,19 @@ fn workspace(
         branch_relation: branch.relation.clone(),
         anchor_commit,
         anchor_layer,
+        anchor_root,
+        expected_branch_head: branch
+            .work_head
+            .map(|number| commit_id(branch.id.as_str(), number))
+            .or_else(|| branch.boundary_commit.clone()),
+        published_commit: None,
+        published_root: None,
         state: status,
+        generation: 0,
         projection: projection.into(),
         placement: placement.into(),
         mount: mount.into(),
-        changed_paths: if status == WorkspaceState::Dirty {
-            18
-        } else {
-            0
-        },
+        changed_paths: 0,
         output_bytes: 412 * 1024,
         execution: matches!(status, WorkspaceState::Running | WorkspaceState::Busy)
             .then(|| ExecutionId::new(format!("E-{id}"))),
@@ -1206,7 +1297,35 @@ fn workspace(
         } else {
             Vec::new()
         },
+        files: Vec::new(),
+        changes: Vec::new(),
+        runs: Vec::new(),
+        storage: Default::default(),
+        timing: Default::default(),
+        commit_receipt: None,
+    };
+    let changed = matches!(
+        status,
+        WorkspaceState::Dirty
+            | WorkspaceState::Running
+            | WorkspaceState::Busy
+            | WorkspaceState::HeadMoved
+    );
+    let mut current = anchor.clone();
+    if changed {
+        current.insert(
+            "src/workspace-change.js".into(),
+            TreeEntry::File(format!("export const workspace = {id:?};\n").into_bytes()),
+        );
     }
+    let mut record = if changed {
+        WorkspaceRecord::fixture_dirty(view, anchor, current)
+    } else {
+        WorkspaceRecord::fixture(view, anchor)
+    }
+    .expect("fixture Workspace");
+    record.view.state = status;
+    record
 }
 
 fn operations() -> Vec<OperationView> {
@@ -1292,6 +1411,7 @@ fn operation(
             objects_inserted: 12_391,
             objects_raced: 11,
             elapsed_ms: 1_056,
+            elapsed_micros: 1_056_000,
         },
         events: vec![
             "Started".into(),
@@ -1319,85 +1439,4 @@ fn paginate<T>(items: Vec<T>, request: &PageRequest, prefix: &str) -> Page<T> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::MockState;
-    use crate::{
-        BranchId, BranchOrigin, BranchRelation, LayerStackId, PageRequest, ProjectRelation,
-    };
-
-    #[test]
-    fn fixture_is_relationally_consistent() {
-        let state = MockState::demo();
-        let project = state
-            .project_snapshot(&LayerStackId::from("SA-91"), &PageRequest::first(64))
-            .unwrap();
-        assert!(matches!(
-            project.project.relation,
-            ProjectRelation::PullBehind { layers: 1, .. }
-        ));
-        let main = project
-            .branches
-            .items
-            .iter()
-            .find(|branch| branch.id == BranchId::from("B-main"))
-            .unwrap();
-        assert!(matches!(
-            main.relation,
-            BranchRelation::RemotePullBehind { commits: 5, .. }
-        ));
-        assert_eq!(main.authority_number, Some(42));
-        assert_eq!(main.work_number, Some(37));
-        for branch in &project.branches.items {
-            match &branch.origin {
-                BranchOrigin::Layer(layer) => {
-                    assert!(project.layers.items.iter().any(|item| &item.id == layer));
-                }
-                BranchOrigin::Commit(parent, commit) => {
-                    let parent = state.branch(parent).expect("origin Branch");
-                    assert!(parent.commits.iter().any(|item| &item.id == commit));
-                }
-            }
-        }
-        for layer in project.layers.items.iter().skip(1) {
-            let (branch, commit) = layer.source.as_ref().expect("non-genesis source");
-            let source = state.branch(branch).expect("source Branch");
-            let source_commit = source
-                .commits
-                .iter()
-                .find(|item| &item.id == commit)
-                .expect("source Commit");
-            assert_eq!(source_commit.accepted_layer.as_ref(), Some(&layer.id));
-        }
-        for project in state.project_summaries(&PageRequest::first(64)).items {
-            let snapshot = state
-                .project_snapshot(&project.id, &PageRequest::first(64))
-                .unwrap();
-            for layer in snapshot.layers.items.iter().skip(1) {
-                let (branch, _) = layer.source.as_ref().expect("non-genesis source");
-                let source = state.branch(branch).expect("source Branch");
-                let base = state.branch_base_layer(source);
-                let base = snapshot
-                    .layers
-                    .items
-                    .iter()
-                    .find(|candidate| candidate.id == base)
-                    .expect("source base Layer");
-                assert!(
-                    base.number < layer.number,
-                    "{} -> {}",
-                    base.number,
-                    layer.number
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn fixture_has_depth_four_rollout() {
-        let state = MockState::demo();
-        let deep = state.branch(&BranchId::from("B-search-a1x-i")).unwrap();
-        assert_eq!(deep.name.as_str(), "search-a1x-i");
-        let root = state.branch(&BranchId::from("B-main")).unwrap();
-        assert!(state.descendants(&root.id, &mut Default::default()) >= 4);
-    }
-}
+mod tests;
