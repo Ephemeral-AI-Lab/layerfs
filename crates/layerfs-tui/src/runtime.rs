@@ -50,7 +50,9 @@ fn run_loop<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<
         match event::read()? {
             Event::Key(key) if key.kind == KeyEventKind::Press => {
                 if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                    app.quit_cleanly();
+                    if !app.interrupt_active() {
+                        app.quit_cleanly();
+                    }
                     continue;
                 }
                 app.handle_key(key);

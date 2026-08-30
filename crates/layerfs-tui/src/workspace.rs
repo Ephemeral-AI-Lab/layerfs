@@ -45,12 +45,18 @@ impl WorkspaceTab {
 }
 
 pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
-    let rows = Layout::vertical([Constraint::Length(1), Constraint::Min(4)]).split(area);
+    let rows = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(4),
+    ])
+    .split(area);
     tabs(frame, rows[0], app, theme);
+    navigation(frame, rows[1], app, theme);
     let Some(workspace) = selected(app) else {
         pane(
             frame,
-            rows[1],
+            rows[2],
             " WORKSPACE ",
             true,
             vec![Line::from(
@@ -60,7 +66,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
         );
         return;
     };
-    let panes = body_panes(rows[1], app.compact_pane);
+    let panes = body_panes(rows[2], app.compact_pane);
     let sections = match app.workspace_tab {
         WorkspaceTab::Overview => overview(workspace),
         WorkspaceTab::Files => files(workspace, app.selected_workspace_path.as_deref()),
@@ -129,7 +135,7 @@ impl App {
 }
 
 fn tabs(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
-    let spans = WorkspaceTab::ALL
+    let mut spans = WorkspaceTab::ALL
         .into_iter()
         .flat_map(|tab| {
             let active = tab == app.workspace_tab;
@@ -146,7 +152,23 @@ fn tabs(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
             ]
         })
         .collect::<Vec<_>>();
+    spans.push(Span::styled("[ previous tab · ] next tab", theme.muted()));
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
+fn navigation(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    let name = ["NAVIGATOR", "CONTENT", "INSPECTOR"][app.focus.min(2)];
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                format!(" FOCUS {}/3 · {name}  ", app.focus + 1),
+                theme.focus(),
+            ),
+            Span::raw("[Tab] next pane  "),
+            Span::styled("[Esc/Backspace] Workspaces  [?] help", theme.muted()),
+        ])),
+        area,
+    );
 }
 
 type Section = (&'static str, Vec<Line<'static>>);
@@ -245,7 +267,7 @@ fn files(workspace: &WorkspaceView, selected: Option<&str>) -> [Section; 3] {
             let depth = file.path.matches('/').count();
             let active = selected.is_some_and(|value| value.path == file.path);
             let marker = match file.kind {
-                WorkspaceFileKind::Directory => "▸",
+                WorkspaceFileKind::Directory => "d",
                 WorkspaceFileKind::File => change_marker(workspace, &file.path),
             };
             Line::from(format!(

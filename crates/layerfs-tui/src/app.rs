@@ -1,5 +1,5 @@
 use crate::{explorer::ExplorerState, workspace::WorkspaceTab};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use layerfs_cli::{
     ActivitySnapshot, BranchId, BranchOrigin, BranchView, CliEvent, CliResult, CliSession, Command,
     CommandPlan, CommitId, DiffRequest, DiffSnapshot, FinishedStatus, LayerId, LayerStackId,
@@ -8,6 +8,8 @@ use layerfs_cli::{
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
+
+mod keys;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ActivityTab {
@@ -323,6 +325,16 @@ impl App {
         }
     }
 
+    pub(crate) fn interrupt_active(&mut self) -> bool {
+        let Some(handle) = self.active_operation.as_mut() else {
+            return false;
+        };
+        if let Err(error) = handle.interrupt() {
+            self.error = Some(error.to_string());
+        }
+        true
+    }
+
     pub fn graph_rows(&self) -> Vec<GraphRow> {
         let Some(snapshot) = self.project.as_ref() else {
             return Vec::new();
@@ -492,121 +504,6 @@ impl App {
             for child in children {
                 self.flatten_branch(child, branches, depth + 2, false, rows);
             }
-        }
-    }
-
-    fn normal_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Char('1') => self.go(Route::Projects),
-            KeyCode::Char('2') => {
-                if let Some(id) = self.selected_project.clone() {
-                    self.go(Route::Project(id));
-                }
-            }
-            KeyCode::Char('3') => self.go(Route::Workspaces(self.selected_project.clone())),
-            KeyCode::Char('4') => self.go(Route::Activity(ActivityTab::Operations)),
-            KeyCode::Char('q') if self.active_operation.is_some() => {
-                self.error = Some(
-                    "Operation is running; press x to interrupt or wait before quitting".into(),
-                )
-            }
-            KeyCode::Char('q') => self.quit_cleanly(),
-            KeyCode::Esc => self.back(),
-            KeyCode::Tab => {
-                if key.modifiers.contains(KeyModifiers::SHIFT) {
-                    self.focus = (self.focus + self.focus_count() - 1) % self.focus_count();
-                } else {
-                    self.focus = (self.focus + 1) % self.focus_count();
-                }
-                self.compact_pane = self.focus;
-            }
-            KeyCode::BackTab => {
-                self.focus = (self.focus + self.focus_count() - 1) % self.focus_count();
-                self.compact_pane = self.focus;
-            }
-            KeyCode::Down | KeyCode::Char('j') => self.move_selection(1),
-            KeyCode::Up | KeyCode::Char('k') => self.move_selection(-1),
-            KeyCode::Enter => self.open_selected(),
-            KeyCode::Char(':') => {
-                self.overlay = Overlay::Command;
-                self.command.clear();
-                self.command_cursor = 0;
-                self.update_completions();
-            }
-            KeyCode::Char('/') => {
-                self.overlay = Overlay::Search;
-                self.search.clear();
-            }
-            KeyCode::Char('?') => self.overlay = Overlay::Help,
-            KeyCode::Char('o') => self.operation_drawer = !self.operation_drawer,
-            KeyCode::Char('r') => self.refresh_all(),
-            KeyCode::Char('x') if self.active_operation.is_some() => {
-                if let Some(handle) = self.active_operation.as_mut() {
-                    if let Err(error) = handle.interrupt() {
-                        self.error = Some(error.to_string());
-                    }
-                }
-            }
-            KeyCode::Char('f') => self.prefill_fork(),
-            KeyCode::Char('w') => self.prefill_workspace(),
-            KeyCode::Char('d') if matches!(self.route, Route::Workspace(_)) => {
-                self.workspace_tab = WorkspaceTab::Changes;
-                self.sync_workspace_item();
-            }
-            KeyCode::Char('d') if matches!(self.route, Route::Project(_) | Route::Branch(_, _)) => {
-                self.set_explorer_mode(crate::ExplorerMode::Changes)
-            }
-            KeyCode::Char('d') => self.open_selected_diff(),
-            KeyCode::Char('[') if matches!(self.route, Route::Workspace(_)) => {
-                self.workspace_tab = self.workspace_tab.next(-1);
-                self.sync_workspace_item();
-            }
-            KeyCode::Char(']') if matches!(self.route, Route::Workspace(_)) => {
-                self.workspace_tab = self.workspace_tab.next(1);
-                self.sync_workspace_item();
-            }
-            KeyCode::Char('[') if matches!(self.route, Route::Project(_) | Route::Branch(_, _)) => {
-                self.cycle_explorer_mode(-1)
-            }
-            KeyCode::Char(']') if matches!(self.route, Route::Project(_) | Route::Branch(_, _)) => {
-                self.cycle_explorer_mode(1)
-            }
-            KeyCode::Char('x') if matches!(self.route, Route::Workspace(_)) => {
-                self.prefill_workspace_bash()
-            }
-            KeyCode::Char('c') if matches!(self.route, Route::Workspace(_)) => {
-                self.plan_workspace_command("commit", false)
-            }
-            KeyCode::Char('e') if matches!(self.route, Route::Workspace(_)) => {
-                self.plan_workspace_command("end", false)
-            }
-            KeyCode::Char('D') if matches!(self.route, Route::Workspace(_)) => {
-                self.plan_workspace_command("end", true)
-            }
-            KeyCode::Char('h')
-                if matches!(self.route, Route::Project(_) | Route::Branch(_, _))
-                    && self.explorer.mode == crate::ExplorerMode::Files =>
-            {
-                self.toggle_explorer_directory(false)
-            }
-            KeyCode::Char('l')
-                if matches!(self.route, Route::Project(_) | Route::Branch(_, _))
-                    && self.explorer.mode == crate::ExplorerMode::Files =>
-            {
-                self.toggle_explorer_directory(true)
-            }
-            KeyCode::Char('h') => self.set_expanded(false),
-            KeyCode::Char('l') => self.set_expanded(true),
-            KeyCode::Char(' ') => self.toggle_expanded(),
-            KeyCode::Char('i') => {
-                self.explorer.inspector_visible = !self.explorer.inspector_visible;
-                self.compact_pane = if self.explorer.inspector_visible {
-                    2
-                } else {
-                    self.focus
-                };
-            }
-            _ => {}
         }
     }
 
@@ -817,47 +714,23 @@ impl App {
                     self.go(Route::Project(id));
                 }
             }
-            Route::Project(_) => {
-                if self.explorer.mode == crate::ExplorerMode::Topology {
-                    self.set_explorer_mode(crate::ExplorerMode::Files);
-                } else if self.explorer.mode == crate::ExplorerMode::Files {
-                    self.toggle_explorer_directory(
-                        !self
-                            .explorer
-                            .selected_path
-                            .as_ref()
-                            .is_some_and(|path| self.explorer.expanded_dirs.contains(path)),
-                    );
-                } else {
-                    self.set_explorer_mode(crate::ExplorerMode::Files);
-                }
-            }
+            Route::Project(_) => self.open_explorer_selection(),
             Route::Workspaces(_) => {
                 if let Some(workspace) = self.selected_workspace.as_ref() {
                     self.go(Route::Workspace(workspace.clone()));
                 }
             }
-            Route::Activity(tab) => {
-                if *tab == ActivityTab::Operations {
-                    self.route = Route::Activity(ActivityTab::Storage);
-                } else {
-                    self.route = Route::Activity(ActivityTab::Operations);
-                }
-            }
-            Route::Branch(_, _) => {
-                if self.explorer.mode == crate::ExplorerMode::Topology {
-                    self.set_explorer_mode(crate::ExplorerMode::Files);
-                } else if self.explorer.mode == crate::ExplorerMode::Files {
-                    self.toggle_explorer_directory(
-                        !self
-                            .explorer
-                            .selected_path
-                            .as_ref()
-                            .is_some_and(|path| self.explorer.expanded_dirs.contains(path)),
-                    );
-                } else {
-                    self.set_explorer_mode(crate::ExplorerMode::Files);
-                }
+            Route::Activity(_) => {}
+            Route::Branch(_, _) => self.open_explorer_selection(),
+            Route::Workspace(_)
+                if self.focus == 0
+                    && matches!(
+                        self.workspace_tab,
+                        WorkspaceTab::Files | WorkspaceTab::Changes | WorkspaceTab::Runs
+                    ) =>
+            {
+                self.focus = 1;
+                self.compact_pane = 1;
             }
             Route::Workspace(_) | Route::Diff(_) => {}
         }
@@ -866,6 +739,9 @@ impl App {
     fn move_selection(&mut self, delta: isize) {
         match &self.route {
             Route::Projects => {
+                if self.focus != 0 {
+                    return;
+                }
                 self.selected_project = move_id(
                     &self
                         .projects
@@ -895,7 +771,7 @@ impl App {
                         self.sync_graph_selection();
                         self.activate_selected_layer();
                     }
-                } else {
+                } else if self.focus == 1 {
                     let rows = self.graph_rows();
                     self.selected_graph = move_target(&rows, self.selected_graph.as_ref(), delta);
                     self.activate_selected_graph();
@@ -904,13 +780,16 @@ impl App {
             Route::Branch(_, branch) => {
                 if self.explorer.mode != crate::ExplorerMode::Topology {
                     self.move_explorer_path(delta);
-                } else {
+                } else if self.focus == 0 {
                     let rows = self.focused_branch_rows(branch);
                     self.selected_graph = move_target(&rows, self.selected_graph.as_ref(), delta);
                     self.activate_selected_graph();
                 }
             }
             Route::Workspaces(_) => {
+                if self.focus != 0 {
+                    return;
+                }
                 self.selected_workspace = move_id(
                     &self
                         .workspaces
@@ -924,11 +803,14 @@ impl App {
                 );
             }
             Route::Workspace(_) => {
+                if self.focus != 0 {
+                    return;
+                }
                 let values = self.workspace_items();
                 self.selected_workspace_path =
                     move_id(&values, self.selected_workspace_path.as_ref(), delta);
             }
-            Route::Activity(_) => {
+            Route::Activity(ActivityTab::Operations) if self.focus == 0 => {
                 self.selected_operation = move_id(
                     &self
                         .activity
@@ -941,7 +823,11 @@ impl App {
                     delta,
                 );
             }
+            Route::Activity(_) => {}
             Route::Diff(_) => {
+                if self.focus != 0 {
+                    return;
+                }
                 let load_more = delta > 0
                     && self.diff.as_ref().is_some_and(|diff| {
                         diff.entries.next.is_some()
@@ -969,14 +855,10 @@ impl App {
 
     fn focus_count(&self) -> usize {
         match self.route {
-            Route::Projects
-            | Route::Project(_)
-            | Route::Workspaces(_)
-            | Route::Workspace(_)
-            | Route::Activity(_)
-            | Route::Diff(_) => 2,
-            Route::Branch(_, _) if self.explorer.mode == crate::ExplorerMode::Topology => 1,
-            Route::Branch(_, _) => 2,
+            Route::Projects | Route::Workspaces(_) | Route::Activity(_) => 2,
+            Route::Project(_) | Route::Workspace(_) | Route::Diff(_) => 3,
+            Route::Branch(_, _) if self.explorer.mode == crate::ExplorerMode::Topology => 2,
+            Route::Branch(_, _) => 3,
         }
     }
 
@@ -1000,6 +882,11 @@ impl App {
         self.refresh_activity();
         if let Route::Diff(request) = self.route.clone() {
             self.refresh_diff(request);
+        }
+        if matches!(self.route, Route::Project(_) | Route::Branch(_, _))
+            && self.explorer.mode != crate::ExplorerMode::Topology
+        {
+            self.refresh_explorer();
         }
     }
 
@@ -1261,21 +1148,6 @@ impl App {
         } else {
             self.error =
                 Some("Workspace requires a local Branch head or a new local Branch base".into());
-        }
-    }
-
-    fn open_selected_diff(&mut self) {
-        if let Some(GraphTarget::Commit(branch, commit)) = self.selected_graph.clone() {
-            let from = self
-                .selected_branch()
-                .and_then(|branch| branch.commits.first())
-                .map(|commit| commit.id.to_string())
-                .unwrap_or_else(|| commit.to_string());
-            self.open_diff(DiffRequest::BranchCommits {
-                branch: branch.to_string(),
-                from,
-                to: commit.to_string(),
-            });
         }
     }
 

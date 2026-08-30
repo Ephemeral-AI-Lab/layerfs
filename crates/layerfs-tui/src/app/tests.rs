@@ -14,6 +14,122 @@ fn navigates_by_stable_ids() {
 }
 
 #[test]
+fn explorer_back_and_topology_shortcut_follow_visible_hierarchy() {
+    let mut app = App::demo();
+    let project = app.selected_project.clone().unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.route, Route::Project(project.clone()));
+    assert_eq!(app.explorer.mode, ExplorerMode::Topology);
+
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.explorer.mode, ExplorerMode::Files);
+    app.handle_key(KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE));
+    assert_eq!(app.route, Route::Project(project.clone()));
+    assert_eq!(app.explorer.mode, ExplorerMode::Topology);
+
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(app.route, Route::Project(project.clone()));
+    assert_eq!(app.explorer.mode, ExplorerMode::Topology);
+    app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+    assert_eq!(app.route, Route::Projects);
+}
+
+#[test]
+fn tab_reaches_every_visible_pane_and_syncs_topology_subject() {
+    let mut app = App::demo();
+    app.set_demo_route("topology");
+    let graph = app.selected_graph.clone().unwrap();
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(app.focus, 1);
+    assert_eq!(
+        app.explorer.subject,
+        Some(match graph {
+            GraphTarget::Branch(id) => ActiveSubject::Branch(id),
+            GraphTarget::Commit(branch, commit) => ActiveSubject::Commit(branch, commit),
+        })
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(app.focus, 2);
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(app.focus, 0);
+    assert_eq!(
+        app.explorer.subject,
+        app.selected_layer.clone().map(ActiveSubject::Layer)
+    );
+
+    app.set_demo_route("workspace");
+    app.focus = 0;
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(app.focus, 2);
+
+    app.set_demo_route("diff");
+    app.focus = 0;
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert_eq!(app.focus, 2);
+}
+
+#[test]
+fn enter_on_file_focuses_content_and_path_search_targets_visible_mode() {
+    let mut app = App::demo();
+    app.set_demo_route("topology");
+    app.set_explorer_mode(ExplorerMode::Files);
+    assert_eq!(app.focus, 0);
+    assert_eq!(app.explorer.selected_path.as_deref(), Some("package.json"));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.focus, 1);
+
+    app.focus = 0;
+    app.search = "index.test".into();
+    app.apply_search();
+    assert_eq!(
+        app.explorer.selected_path.as_deref(),
+        Some("test/index.test.js")
+    );
+}
+
+#[test]
+fn tree_arrows_refresh_and_context_keys_touch_only_visible_state() {
+    let mut app = App::demo();
+    let subject = app.explorer.subject.clone();
+    let expanded = app.expanded.clone();
+    for key in ['f', 'w', 'h', 'l', ' ', 'i'] {
+        app.handle_key(KeyEvent::new(KeyCode::Char(key), KeyModifiers::NONE));
+    }
+    assert_eq!(app.overlay, Overlay::None);
+    assert_eq!(app.explorer.subject, subject);
+    assert_eq!(app.expanded, expanded);
+
+    app.set_demo_route("topology");
+    app.set_explorer_mode(ExplorerMode::Files);
+    app.explorer.selected_path = Some("src".into());
+    assert!(app.explorer.expanded_dirs.contains("src"));
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    assert!(!app.explorer.expanded_dirs.contains("src"));
+    app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+    assert!(!app.explorer.expanded_dirs.contains("src"));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert!(app.explorer.expanded_dirs.contains("src"));
+}
+
+#[test]
+fn modified_action_keys_are_ignored() {
+    let mut app = App::demo();
+    app.set_demo_route("workspace");
+    for (key, modifiers) in [
+        ('e', KeyModifiers::CONTROL),
+        ('c', KeyModifiers::ALT),
+        ('x', KeyModifiers::CONTROL),
+    ] {
+        app.handle_key(KeyEvent::new(KeyCode::Char(key), modifiers));
+    }
+    assert_eq!(app.overlay, Overlay::None);
+    assert!(app.plan.is_none());
+}
+
+#[test]
 fn layer_navigation_matches_newest_first_rows() {
     let mut app = App::demo();
     app.selected_layer = Some("L-A-19".into());
@@ -97,6 +213,26 @@ fn active_operation_cannot_be_replaced() {
     app.start_operation(second);
     assert_eq!(app.active_operation.as_ref().unwrap().id(), &id);
     assert!(app.error.as_deref().unwrap().contains("already running"));
+}
+
+#[test]
+fn interrupt_active_does_not_exit_the_tui() {
+    let mut app = App::demo();
+    let command =
+        layerfs_cli::CliSession::parse_line("layerstack pull --through L-A-19 --replica").unwrap();
+    app.start_operation(command);
+    assert!(app.interrupt_active());
+    for _ in 0..8 {
+        app.tick();
+    }
+    assert!(!app.should_quit);
+    assert!(app.active_operation.is_none());
+    assert!(app
+        .activity
+        .operations
+        .items
+        .iter()
+        .any(|operation| { operation.state == layerfs_cli::OperationState::Interrupted }));
 }
 
 #[test]

@@ -8,6 +8,19 @@ pub(crate) fn display_id(value: &impl ToString) -> String {
     format!("{}…{}", &value[..12], &value[value.len() - 6..])
 }
 
+pub(crate) fn short_number(value: &str) -> String {
+    if value.get(1..2) == Some("~") {
+        display_id(&value)
+    } else {
+        value
+            .rsplit('-')
+            .next()
+            .unwrap_or(value)
+            .trim_start_matches('0')
+            .to_owned()
+    }
+}
+
 pub(crate) fn action_labels(actions: &[SemanticAction]) -> String {
     let values = actions
         .iter()

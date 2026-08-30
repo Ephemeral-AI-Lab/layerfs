@@ -1,7 +1,7 @@
 use crate::{
     app::{ActivityTab, App, GraphTarget, Overlay, Route},
-    explorer::{ActiveSubject, ExplorerMode},
-    format::{action_labels, bytes, display_id, truncate},
+    explorer::{no_data as empty_lines, ActiveSubject, ExplorerMode},
+    format::{action_labels, bytes, display_id, short_number, truncate},
     theme::Theme,
 };
 use layerfs_cli::{
@@ -102,7 +102,7 @@ fn breadcrumb(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
                     format!(" {} · {} ", route_name(app), compact_pane_name(app)),
                     theme.focus(),
                 ),
-                Span::styled("Tab pane · Esc back", theme.muted()),
+                Span::styled("Tab pane · ? help", theme.muted()),
             ])),
             area,
         );
@@ -230,9 +230,15 @@ fn projects(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
 }
 
 fn explorer_body(frame: &mut Frame, area: Rect, app: &App, theme: Theme) -> Rect {
-    let rows = Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).split(area);
+    let rows = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(1),
+    ])
+    .split(area);
     crate::explorer::tabs(frame, rows[0], app, theme);
-    rows[1]
+    crate::explorer::navigation(frame, rows[1], app, theme);
+    rows[2]
 }
 
 fn topology(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
@@ -313,7 +319,14 @@ fn topology(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
         );
     }
     if let Some(right) = panes[2] {
-        panel(frame, right, " INSPECTOR ", false, inspector(app), theme);
+        panel(
+            frame,
+            right,
+            " INSPECTOR ",
+            app.focus == 2,
+            inspector(app),
+            theme,
+        );
     }
 }
 
@@ -339,7 +352,14 @@ fn branch(frame: &mut Frame, area: Rect, app: &App, branch_id: &BranchId, theme:
         );
     }
     if let Some(right) = panes.1 {
-        panel(frame, right, " INSPECTOR ", false, inspector(app), theme);
+        panel(
+            frame,
+            right,
+            " INSPECTOR ",
+            app.focus == 1,
+            inspector(app),
+            theme,
+        );
     }
 }
 
@@ -740,36 +760,30 @@ fn operation(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
 }
 
 fn footer(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
-    if area.width < 100 && app.overlay == Overlay::None {
-        let line = if matches!(app.route, Route::Workspace(_)) {
-            " Tab pane · [/] tab · x Bash · c commit · e end · D discard · Esc back"
-        } else {
-            " Tab pane · j/k move · Enter open · : command · ? help · q quit"
-        };
-        frame.render_widget(Paragraph::new(line).style(theme.muted()), area);
-        return;
-    }
     let line = match app.overlay {
         Overlay::Command => {
             let mut command = app.command.clone();
             command.insert(app.command_cursor, '│');
-            format!(": {command}")
+            format!(": {command}   [Enter] run  [Tab] complete  [Esc] cancel")
         }
-        Overlay::Search => format!("/{}", app.search),
+        Overlay::Search => format!("/{}   [Enter] apply  [Esc] cancel", app.search),
+        _ if app.active_operation.is_some() => {
+            " [x] interrupt operation  [o] details  [q] blocked while running".into()
+        }
         _ => match app.route {
             Route::Projects => {
                 " [Enter] open  [/] search  [r] refresh  [:] command  [?] help  [q] quit"
                     .into()
             }
             Route::Project(_) | Route::Branch(_, _) => match app.explorer.mode {
-                ExplorerMode::Topology => " [Tab] pane  [j/k] move  [Enter] files  [[/]] mode  [f] fork  [w] workspace".into(),
-                ExplorerMode::Files => " [Tab] pane  [j/k] move/scroll  [h/l] fold  [[/]] mode  [d] changes  [i] inspector".into(),
-                ExplorerMode::Changes => " [Tab] pane  [j/k] move/scroll  [[/]] mode  [Enter] file  [i] inspector  [Esc] back".into(),
+                ExplorerMode::Topology => " [Esc] Projects  [Tab] next pane  [j/k] move  [Enter] Files  [f] Fork  [?] Help".into(),
+                ExplorerMode::Files => " [Esc] Topology  [Tab] next pane  [j/k] move/scroll  [Enter] open  [h/l] fold  [?] Help".into(),
+                ExplorerMode::Changes => " [Esc] Topology  [Tab] next pane  [j/k] move/scroll  [Enter] Files  [?] Help".into(),
             },
-            Route::Workspaces(_) => " [j/k] move  [Enter] Workspace  [:] command  [o] operations  [Esc] back".into(),
-            Route::Workspace(_) => " [Tab] pane  [[/]] tab  [x] Bash  [c] commit  [e] end  [D] discard  [Esc] back".into(),
-            Route::Activity(_) => " [Enter] operations/storage  [j/k] move  [o] drawer  [:] command  [Esc] back".into(),
-            Route::Diff(_) => " [Tab] focus  [j/k] path  [Esc] back  [:] command  [?] help".into(),
+            Route::Workspaces(_) => " [Esc] back  [j/k] move  [Enter] Workspace  [:] command  [?] Help".into(),
+            Route::Workspace(_) => " [Esc] Workspaces  [Tab] next pane  [ previous tab · ] next tab  [x] Bash  [c] Commit".into(),
+            Route::Activity(_) => " [Esc] back  [ previous view · ] next view  [Tab] pane  [j/k] move  [?] Help".into(),
+            Route::Diff(_) => " [Esc] back  [Tab] next pane  [j/k] move  [:] command  [?] Help".into(),
         },
     };
     frame.render_widget(Paragraph::new(line).style(theme.muted()), area);
@@ -851,13 +865,23 @@ fn overlay(frame: &mut Frame, app: &App, theme: Theme) {
             " HELP ",
             true,
             vec![
-                Line::styled("Navigation", theme.title()),
+                Line::styled(
+                    format!(
+                        "Current view · {} · {}",
+                        route_name(app),
+                        compact_pane_name(app)
+                    ),
+                    theme.title(),
+                ),
                 Line::from("  1 Projects · 2 Topology · 3 Workspaces · 4 Activity"),
-                Line::from("  Tab focus · j/k move · Enter open · Esc back"),
+                Line::from("  Tab / Shift+Tab: next / previous pane"),
+                Line::from("  j/k or arrows: move, scroll, fold · Enter: open"),
+                Line::from("  Esc or Backspace: Files → Topology → Projects"),
+                Line::from("  [ previous mode · ] next mode"),
                 Line::from(""),
                 Line::styled("Actions", theme.title()),
-                Line::from("  f Fork · w Workspace · d Diff · r Refresh"),
-                Line::from("  i Inspector · : command · / search · o operations · x interrupt"),
+                Line::from("  f Fork · w Workspace · d Changes · r Refresh"),
+                Line::from("  : command · / search · o operations · ? close Help"),
                 Line::from(""),
                 Line::styled("Signals", theme.title()),
                 Line::from("  AUTH authority · WORK local view · REF reference · REP replica"),
@@ -869,10 +893,10 @@ fn overlay(frame: &mut Frame, app: &App, theme: Theme) {
         );
     }
     if let Some(error) = &app.error {
-        let area = popup(frame.area(), 72, 5, 0);
+        let area = popup(frame.area(), 72, 6, 0);
         frame.render_widget(Clear, area);
         frame.render_widget(
-            Paragraph::new(format!(" {error}"))
+            Paragraph::new(format!(" {error}\n\n Enter or Esc dismisses"))
                 .style(theme.error())
                 .block(Block::default().borders(Borders::ALL).title(" ERROR ")),
             area,
@@ -1470,23 +1494,6 @@ fn append_branch_path(
 
 fn optional_id<T: ToString>(value: Option<&T>) -> String {
     value.map(display_id).unwrap_or_else(|| "—".into())
-}
-
-fn short_number(value: &str) -> String {
-    if value.get(1..2) == Some("~") {
-        display_id(&value)
-    } else {
-        value
-            .rsplit('-')
-            .next()
-            .unwrap_or(value)
-            .trim_start_matches('0')
-            .to_owned()
-    }
-}
-
-fn empty_lines() -> Vec<Line<'static>> {
-    vec![Line::from(" No data")]
 }
 
 #[cfg(test)]

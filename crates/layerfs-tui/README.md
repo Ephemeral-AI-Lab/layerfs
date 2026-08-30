@@ -28,8 +28,10 @@ genesis), then open it:
     cargo run -p layerfs-tui -- --context /tmp/layerfs-demo-full/context
 
 On a Project or Branch page, `[` and `]` switch the selected Layer, Branch, or
-Commit between Topology, Files, and Changes. `Tab` moves between the navigator
-and content; `j/k` moves a path or scrolls content; `h/l` folds directories.
+Commit between Topology, Files, and Changes. `Tab`/`Shift+Tab` visit every
+rendered pane; `j/k` moves a path or scrolls content; `h/l` and the left/right
+arrows fold directories. `Esc` or `Backspace` returns Files/Changes to Topology,
+then returns Topology to Projects. `2` always jumps directly to Topology.
 
 Use the TUI command line to create the two Stores, select the pair, and then
 initialize a LayerStack:

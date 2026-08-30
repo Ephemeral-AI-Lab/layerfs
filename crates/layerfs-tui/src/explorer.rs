@@ -67,7 +67,6 @@ pub struct ExplorerState {
     pub selected_path: Option<String>,
     pub expanded_dirs: HashSet<String>,
     pub content_scroll: u16,
-    pub inspector_visible: bool,
 }
 
 impl ExplorerState {
@@ -80,7 +79,6 @@ impl ExplorerState {
             selected_path: None,
             expanded_dirs: HashSet::new(),
             content_scroll: 0,
-            inspector_visible: false,
         }
     }
 
@@ -152,6 +150,8 @@ impl App {
     pub(crate) fn set_explorer_mode(&mut self, mode: ExplorerMode) {
         self.explorer.mode = mode;
         self.explorer.content_scroll = 0;
+        self.focus = 0;
+        self.compact_pane = 0;
         self.refresh_explorer();
     }
 
@@ -177,17 +177,26 @@ impl App {
         };
         match result {
             Ok(ViewSnapshot::Files(snapshot)) => {
+                let first_load = self.explorer.files.is_none();
                 self.explorer.selected_path = retained_path(
                     self.explorer.selected_path.as_ref(),
                     snapshot.files.items.iter().map(|file| &file.path),
                 );
-                self.explorer.expanded_dirs = snapshot
-                    .files
-                    .items
-                    .iter()
-                    .filter(|file| file.kind == WorkspaceFileKind::Directory)
-                    .map(|file| file.path.clone())
-                    .collect();
+                if first_load {
+                    self.explorer.expanded_dirs = snapshot
+                        .files
+                        .items
+                        .iter()
+                        .filter(|file| file.kind == WorkspaceFileKind::Directory)
+                        .map(|file| file.path.clone())
+                        .collect();
+                } else {
+                    self.explorer.expanded_dirs.retain(|path| {
+                        snapshot.files.items.iter().any(|file| {
+                            &file.path == path && file.kind == WorkspaceFileKind::Directory
+                        })
+                    });
+                }
                 self.explorer.files = Some(snapshot);
                 self.explorer.changes = None;
             }
@@ -248,6 +257,9 @@ impl App {
             };
             return;
         }
+        if self.focus != 0 {
+            return;
+        }
         let paths = self.explorer_paths();
         self.explorer.selected_path =
             move_item(&paths, self.explorer.selected_path.as_ref(), delta);
@@ -273,6 +285,37 @@ impl App {
             self.explorer.expanded_dirs.remove(&path);
         }
     }
+
+    pub(crate) fn open_explorer_selection(&mut self) {
+        match self.explorer.mode {
+            ExplorerMode::Topology => self.set_explorer_mode(ExplorerMode::Files),
+            ExplorerMode::Changes => {
+                self.set_explorer_mode(ExplorerMode::Files);
+                self.focus = 1;
+                self.compact_pane = 1;
+            }
+            ExplorerMode::Files if self.focus == 0 => {
+                let directory = self.explorer.files.as_ref().is_some_and(|snapshot| {
+                    snapshot.files.items.iter().any(|file| {
+                        self.explorer.selected_path.as_ref() == Some(&file.path)
+                            && file.kind == WorkspaceFileKind::Directory
+                    })
+                });
+                if directory {
+                    let expanded = self
+                        .explorer
+                        .selected_path
+                        .as_ref()
+                        .is_some_and(|path| self.explorer.expanded_dirs.contains(path));
+                    self.toggle_explorer_directory(!expanded);
+                } else {
+                    self.focus = 1;
+                    self.compact_pane = 1;
+                }
+            }
+            ExplorerMode::Files => {}
+        }
+    }
 }
 
 pub(crate) fn tabs(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
@@ -291,8 +334,49 @@ pub(crate) fn tabs(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
             },
         ));
     }
-    spans.push(Span::styled("  [ / ] switch", theme.muted()));
+    spans.push(Span::styled("  [ prev mode · ] next mode", theme.muted()));
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
+pub(crate) fn navigation(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
+    let (name, total) = match app.explorer.mode {
+        ExplorerMode::Topology => match app.route {
+            crate::Route::Branch(_, _) => (["GRAPH", "INSPECTOR"][app.focus.min(1)], 2),
+            _ => (["LAYERS", "GRAPH", "INSPECTOR"][app.focus.min(2)], 3),
+        },
+        ExplorerMode::Files => (["FILE TREE", "CONTENT", "INSPECTOR"][app.focus.min(2)], 3),
+        ExplorerMode::Changes => (
+            ["CHANGED PATHS", "BEFORE / AFTER", "INSPECTOR"][app.focus.min(2)],
+            3,
+        ),
+    };
+    let back = if app.explorer.mode == ExplorerMode::Topology {
+        "Projects"
+    } else {
+        "Topology"
+    };
+    if area.width < 100 {
+        frame.render_widget(
+            Paragraph::new(format!(
+                " FOCUS {}/{} · {name}  [Tab] pane  [Esc] {back}  [?] Help",
+                app.focus + 1,
+                total
+            )),
+            area,
+        );
+        return;
+    }
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                format!(" FOCUS {}/{} · {name}  ", app.focus + 1, total),
+                theme.focus(),
+            ),
+            Span::raw("[Tab] next pane  [Shift+Tab] previous  "),
+            Span::styled(format!("[Esc/Backspace] {back}  [?] help"), theme.muted()),
+        ])),
+        area,
+    );
 }
 
 pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
@@ -349,7 +433,7 @@ fn draw_files(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
             frame,
             right,
             " FILE INSPECTOR ",
-            false,
+            app.focus == 2,
             file_inspector(snapshot, selected),
             theme,
         );
@@ -406,7 +490,7 @@ fn draw_changes(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
             frame,
             right,
             " DELTA INSPECTOR ",
-            false,
+            app.focus == 2,
             change_inspector(snapshot, selected),
             theme,
         );
@@ -414,7 +498,8 @@ fn draw_changes(frame: &mut Frame, area: Rect, app: &App, theme: Theme) {
 }
 
 fn file_line(app: &App, file: &WorkspaceFileView, theme: Theme) -> Line<'static> {
-    let selected = app.explorer.selected_path.as_ref() == Some(&file.path) && app.focus == 0;
+    let active = app.explorer.selected_path.as_ref() == Some(&file.path);
+    let selected = active && app.focus == 0;
     let depth = file.path.matches('/').count();
     let name = file.path.rsplit('/').next().unwrap_or(&file.path);
     let marker = match file.kind {
@@ -425,7 +510,13 @@ fn file_line(app: &App, file: &WorkspaceFileView, theme: Theme) -> Line<'static>
     Line::styled(
         format!(
             "{}{}{} {}  {}",
-            if selected { "> " } else { "  " },
+            if selected {
+                "> "
+            } else if active {
+                "• "
+            } else {
+                "  "
+            },
             "  ".repeat(depth),
             marker,
             name,
@@ -440,7 +531,8 @@ fn file_line(app: &App, file: &WorkspaceFileView, theme: Theme) -> Line<'static>
 }
 
 fn change_line(app: &App, entry: &DiffEntryView, width: u16, theme: Theme) -> Line<'static> {
-    let selected = app.explorer.selected_path.as_ref() == Some(&entry.path) && app.focus == 0;
+    let active = app.explorer.selected_path.as_ref() == Some(&entry.path);
+    let selected = active && app.focus == 0;
     let marker = match entry.change {
         DiffChange::Add => "+",
         DiffChange::Remove => "−",
@@ -450,7 +542,13 @@ fn change_line(app: &App, entry: &DiffEntryView, width: u16, theme: Theme) -> Li
         truncate(
             &format!(
                 "{}{} {}  {}",
-                if selected { ">" } else { " " },
+                if selected {
+                    ">"
+                } else if active {
+                    "•"
+                } else {
+                    " "
+                },
                 marker,
                 entry.path,
                 entry.aspects.join(", ")
@@ -640,7 +738,7 @@ fn text_lines(value: &str) -> Vec<Line<'static>> {
         .collect()
 }
 
-fn no_data() -> Vec<Line<'static>> {
+pub(crate) fn no_data() -> Vec<Line<'static>> {
     vec![Line::from("No data")]
 }
 

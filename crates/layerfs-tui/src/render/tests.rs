@@ -146,3 +146,18 @@ fn responsive_three_panes_never_overlap() {
         assert!(left.x + left.width <= right.x);
     }
 }
+
+#[test]
+fn explorer_navigation_is_visible_without_the_footer() {
+    for page in ["topology", "topology:files", "topology:changes"] {
+        let screen = render_to_string(page, 120, 40, true).unwrap();
+        assert!(screen.contains("FOCUS"), "{page}");
+        assert!(screen.contains("Tab"), "{page}");
+        assert!(screen.contains("Esc"), "{page}");
+        assert!(!screen.contains("[ / ] switch"), "{page}");
+    }
+    let content = render_to_string("topology:file-content", 120, 40, true).unwrap();
+    assert!(content.contains("• · package.json"));
+    let error = render_to_string("projects:error", 120, 40, true).unwrap();
+    assert!(error.contains("Enter or Esc dismisses"));
+}
