@@ -38,7 +38,7 @@ Traditional copies of an agent workspace duplicate unchanged bytes and directory
 
 ## Core model
 
-A single local SQLite **Store** contains durable history and canonical objects. A **Workspace** is an ephemeral projection of one branch that can be executed, committed, discarded, and ended explicitly.
+A single local SQLite **Store** contains durable history and canonical objects. A **LayerStack** is an ordered history of immutable **Layers**, with the newest Layer at the top and the genesis Layer at the bottom. Each Layer can fork multiple **Branches**; each Branch can create multiple ephemeral **Workspaces**. A Workspace can be committed back to its Branch, and the Branch head can then be added as a new Layer on the LayerStack.
 
 | Concept | Lifetime | Role |
 | --- | --- | --- |
@@ -49,15 +49,51 @@ A single local SQLite **Store** contains durable history and canonical objects. 
 | **Workspace** | Ephemeral | A private copy-on-write working environment projected onto a host directory or through container FUSE. |
 | **Client** | Process-bound | Binds one Store, one monitor, and one workspace manager. |
 
-The normal lifecycle is:
+The mental model is:
 
 ```text
-LayerStack → Branch → Workspace → Execute → Commit or discard → End
-                         │
-                         └──────────────→ Add branch head as a new Layer
+                                      LayerStack
+                              newest Layer at the top
+                                      oldest at bottom
+
+                              ┌────────────────────────┐
+                              │ L2                     │
+                              │ from Branch D @ D2     │
+                              ├────────────────────────┤
+                              │ L1                     │
+                              │ from Branch B @ B2     │
+                              ├────────────────────────┤
+                              │ L0  genesis            │
+                              └────────────────────────┘
+
+L2 ──┬── fork ──▶ Branch E ──┬── create ──▶ Workspace E1
+     │                       └── create ──▶ Workspace E2
+     │
+     └── fork ──▶ Branch F ──┬── create ──▶ Workspace F1
+                             └── create ──▶ Workspace F2
+
+L1 ──┬── fork ──▶ Branch C ──┬── create ──▶ Workspace C1
+     │                       └── create ──▶ Workspace C2
+     │
+     └── fork ──▶ Branch D ──┬── create ──▶ Workspace D1
+                             └── create ──▶ Workspace D2
+                                                   │
+                                                   └── commit ──▶ Commit D2
+                                                                    │
+                                                                    └── Add ──▶ L2
+
+L0 ──┬── fork ──▶ Branch A ──┬── create ──▶ Workspace A1
+     │                       └── create ──▶ Workspace A2
+     │
+     └── fork ──▶ Branch B ──┬── create ──▶ Workspace B1
+                             └── create ──▶ Workspace B2
+                                                   │
+                                                   └── commit ──▶ Commit B2
+                                                                    │
+                                                                    └── Add ──▶ L1
 ```
 
-Each `workspace exec` starts a fresh process. `commit` publishes the current state to the branch; `end` removes the ephemeral projection and never commits implicitly.
+A LayerStack is the durable sequence; Branches are lines of work rooted at a Layer; Workspaces are disposable executions created from a Branch. `commit` publishes a Workspace’s changes to its Branch, while `Add` promotes the Branch head into a new immutable Layer. Each `workspace exec` starts a fresh process, and `end` removes the ephemeral projection without committing implicitly.
 
 ## Quickstart
 
