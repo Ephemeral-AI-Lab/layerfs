@@ -1,8 +1,6 @@
 # LayerFS
 
-**Ephemeral Workspaces. Durable Shared History.**
-
-Fast, branchable filesystem storage for parallel AI agents.
+**Branchable, content-addressed workspaces for local AI-agent workloads.**
 
 [![CI](https://github.com/Ephemeral-AI-Lab/layerfs/actions/workflows/ci.yml/badge.svg)](https://github.com/Ephemeral-AI-Lab/layerfs/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -11,117 +9,63 @@ Fast, branchable filesystem storage for parallel AI agents.
 <p align="center">
   <img
     src="docs/assets/diagrams/layerstack-parallel-workspaces.png"
-    alt="A top-down LayerStack with newer Layers above older Layers, multiple Branches per Layer, multiple Workspaces per Branch, and Branch head Commits added as new Layers"
+    alt="LayerStack history with branches and parallel workspaces"
     width="820"
   >
 </p>
-LayerFS gives each agent a private, disposable filesystem **Workspace** over shared immutable history. Useful results become durable, deduplicated **Commits** in one local SQLite **Store**, ready to branch, inspect, reuse, or promote into the next immutable **Layer**.
 
-Fork stored state without duplicating its canonical content. Run ordinary Linux tools through a real FUSE filesystem. Commit only the changed content and filesystem structure.
+LayerFS is a **local filesystem storage engine** for creating disposable workspaces over shared, immutable history. Agents work in ordinary Linux filesystems, keep their changes isolated, and publish useful results as deduplicated commits that can be branched, inspected, compared, or promoted into a new layer.
 
-LayerFS is a local workspace and storage engine. It is **not** an agent framework, a cloud orchestration service, or a hardened security sandbox.
+LayerFS is deliberately narrow in scope. It provides storage, workspace, execution, and history primitives; it is **not** an agent framework, cloud orchestration service, or hardened security sandbox.
 
 > [!WARNING]
-> LayerFS 0.1.0 is a release candidate and Developer Preview. It is intended for local evaluation, agent-runtime integration, and performance research. It is not production storage or a crash-durable database. Keep an independent copy of important data.
+> LayerFS 0.1.0 is a developer preview and release candidate. It is intended for local evaluation, agent-runtime integration, and performance research—not production storage. It does not provide crash- or power-loss-durability guarantees. Keep an independent copy of important data.
 
-## Architecture
+## Why LayerFS?
 
-LayerFS separates durable shared history from ephemeral execution:
+Traditional copies of an agent workspace duplicate unchanged bytes and directory structure. LayerFS instead stores immutable content once and creates new state by reusing everything that did not change.
 
-| Component         | Lifetime      | Responsibility                                               |
-| ----------------- | ------------- | ------------------------------------------------------------ |
-| `LayerStackStore` | Durable       | One local SQLite database containing LayerStacks, immutable Layers, named Branches, immutable Commits, and one deduplicated canonical-object namespace. |
-| `Client`          | Process-bound | Binds exactly one Store, one Monitor, and one Workspace manager. A different Store uses a different Client. |
-| `Workspace`       | Ephemeral     | Copy-on-write state projected through a host directory or container FUSE, with fresh-process execution and explicit Commit and End. It has no database. |
+| Mechanism | What it does |
+| --- | --- |
+| **Content-addressed storage** | Names immutable objects by their canonical bytes, verifies reads, and reuses exact duplicates. |
+| **Content-defined chunking** | Keeps chunk boundaries stable around localized edits, reducing the amount of new file content required. |
+| **Copy-on-write trees** | Rebuilds only changed files and directory paths while reusing unchanged subtrees. |
+| **Branches and layers** | Makes alternate filesystem states cheap to create, inspect, compare, and promote. |
 
-The public lifecycle is:
+## Core model
 
-```text
-Layer Ln → Fork Branch → Create Workspace → Commit to Branch → Add Branch head → Layer L(n+1)
-```
+A single local SQLite **Store** contains durable history and canonical objects. A **Workspace** is an ephemeral projection of one branch that can be executed, committed, discarded, and ended explicitly.
 
-One LayerStack is a linear history. Initialization creates the genesis Layer `L0`; every later Layer is created by adding a Branch head Commit based on the current LayerStack head. Adding a Branch reuses the Commit’s existing root and copies zero canonical objects.
+| Concept | Lifetime | Role |
+| --- | --- | --- |
+| **LayerStack** | Durable | A linear sequence of immutable filesystem checkpoints. |
+| **Layer** | Durable | A checkpoint created by adding a branch-head commit to a LayerStack. |
+| **Branch** | Durable | A named line of work rooted at a layer or commit. |
+| **Commit** | Durable | An immutable snapshot of a workspace’s filesystem state. |
+| **Workspace** | Ephemeral | A private copy-on-write working environment projected onto a host directory or through container FUSE. |
+| **Client** | Process-bound | Binds one Store, one monitor, and one workspace manager. |
 
-Each Layer can seed many Branches, and each Branch can create many Workspaces over its lifetime. LayerFS 0.1.0 permits one active writable Workspace lease per Branch, so parallel agents normally use separate Branches. Competing Branches must reconcile onto the winning LayerStack head before `Add`.
-
-## Storage Model: Core Storage Mechanisms
-
-CAS, CDC, and COW make LayerFS history storage-efficient by reusing unchanged objects, file regions, and filesystem structure.
-
-### 01 · Identity
-
-#### Content-addressed storage
-
-Names immutable objects from their canonical bytes, verifies reads, and reuses exact duplicates across files, LayerStacks, and agents.
-
-### 02 · Byte locality
-
-#### Content-defined chunking
-
-Keeps chunk boundaries stable around localized edits, so changing a small region does not require storing an entirely new large file.
-
-### 03 · Structural locality
-
-#### Copy-on-write
-
-Publishes a change in a new Layer by rebuilding only the changed file and directory path while preserving every unchanged subtree from its parent.
-
-## LayerStacks, Branches, and Workspaces
-
-A **LayerStack** records complete filesystem checkpoints. Agents can check out independent Workspaces from different points in that history:
+The normal lifecycle is:
 
 ```text
-LayerStack:  L0 ── L1 ── L2 ── L3 ── L4
-                         │          │
-                    Agent A      Agent B
-                   checkout L1  checkout L3
+LayerStack → Branch → Workspace → Execute → Commit or discard → End
+                         │
+                         └──────────────→ Add branch head as a new Layer
 ```
 
-Agent A and Agent B receive private filesystem environments while the selected history remains shared. This supports independent experimentation, checkpointing, branching, rollback, comparison, and later promotion of useful results.[1]
-
-The current 0.1.0 lifecycle is:
-
-1. Create or open a local Store.
-2. Initialize a LayerStack from an empty root or directory.
-3. Fork a named Branch from a Layer or Commit.
-4. Create a host-materialized or container-FUSE Workspace.
-5. Execute fresh processes and follow bounded output.
-6. Commit or discard the Workspace, then end it cleanly.
-7. Add the Branch head as an immutable Layer.
-8. Query, diff, inspect, or reconcile durable history as needed.
-
-## Repository Layout
-
-```text
-crates/
-├── layerfs-content           canonical objects, CDC, extents, and tree algorithms
-├── layerfs-layerstack-store  SQLite schema, identities, history, and object admission
-├── layerfs-workspace         ephemeral COW sessions, capture, execution, and containers
-├── layerfs-materialization   portable directory materialization and capture
-├── layerfs-fuse              Linux FUSE plus host/proxy adapters
-├── layerfs-daemon            authenticated container mount and execution protocol
-├── layerfs-monitor           operation receipts, timings, database snapshots, and dedup analysis
-├── layerfs-sdk               public Rust Client and value types
-└── layerfs-cli               layerfs command-line interface
-
-containers/layerfs-fuse       managed Linux FUSE runtime image
-benchmark/fs-bench            focused filesystem benchmark scripts
-benchmark/fs-bench-pro        end-to-end public SDK benchmark
-benchmark-results/             retained benchmark evidence
-tools/layerfs-eval             Store and Branch integrity evaluator
-docs/versioned/0.1.0          current versioned product manual
-release-notes/0.1.0           release contract, evidence, artifacts, and limitations
-```
+Each `workspace exec` starts a fresh process. `commit` publishes the current state to the branch; `end` removes the ephemeral projection and never commits implicitly.
 
 ## Quickstart
 
-LayerFS 0.1.0 is built from source and requires macOS or Linux with Rust 1.85.1 or newer. Docker is needed only for managed-container FUSE Workspaces.
+The current release is built from source. You need **macOS or Linux** and **Rust 1.85 or newer**. Docker, `/dev/fuse`, and `CAP_SYS_ADMIN` are needed only for managed container-FUSE workspaces. Packages are not published to crates.io in 0.1.0.
+
+From the repository root:
 
 ```bash
 git clone https://github.com/Ephemeral-AI-Lab/layerfs.git
 cd layerfs
-cargo build --release -p layerfs-cli
 
+cargo build --release -p layerfs-cli
 export LAYERFS_BIN="$PWD/target/release/layerfs"
 export LAYERFS_CONTEXT="$PWD/.layerfs/context"
 mkdir -p "$PWD/.layerfs"
@@ -132,18 +76,36 @@ mkdir -p "$PWD/.layerfs"
 "$LAYERFS_BIN" query layerstacks
 ```
 
-This creates one local Store and one LayerStack with a genesis Layer. Continue with the [complete quickstart](docs/versioned/0.1.0/quickstart.md) for Branch creation, the Workspace → Exec → Commit → End lifecycle, directory imports, managed containers, and real FUSE. See the [CLI reference](docs/versioned/0.1.0/cli.md) for every command and argument.
+This creates a local Store and an empty LayerStack with a genesis layer. To continue through branch creation, workspace execution, commit, and cleanup, follow the [complete quickstart](docs/versioned/0.1.0/quickstart.md).
 
-## Rust SDK
+If you initialize from an existing directory, keep the Store file **outside** the directory being imported or projected:
 
-The CLI and benchmarks use the public Rust SDK. It is currently consumed from this repository:
+```bash
+mkdir -p "$PWD/import-root"
+printf 'hello\n' > "$PWD/import-root/hello.txt"
+"$LAYERFS_BIN" layerstack init --name imported "$PWD/import-root"
+```
+
+## What is included
+
+The 0.1.0 public surface includes the following capabilities:
+
+- local LayerStack initialization from an empty root or an existing directory;
+- named Branch creation from a layer or commit;
+- host-materialized and container-FUSE Workspaces;
+- fresh-process execution with bounded output streaming;
+- explicit workspace commit, discard, and cleanup;
+- immutable layer creation from a branch head;
+- history queries, supported diffs, and stale-workspace reconciliation;
+- monitoring, operation receipts, database snapshots, and deduplication analysis; and
+- resource-bounded managed runtime containers.
+
+Use the [CLI reference](docs/versioned/0.1.0/cli.md) for the complete command surface. For programmatic integration, use the public Rust SDK:
 
 ```toml
 [dependencies]
 layerfs-sdk = { path = "/absolute/path/to/layerfs/crates/layerfs-sdk" }
 ```
-
-Connect one Client to one local Store:
 
 ```rust
 use layerfs_sdk::{Client, LayerStackStore};
@@ -153,99 +115,73 @@ let store = Arc::new(LayerStackStore::create(".layerfs/store.sqlite")?);
 let client = Client::connect(store)?;
 ```
 
-The [Rust SDK reference](docs/versioned/0.1.0/sdk.md) contains a complete compilable lifecycle example plus initialization, Branch, Workspace, execution, container, query, monitoring, pagination, and cleanup APIs.
+See the [Rust SDK reference](docs/versioned/0.1.0/sdk.md) for a complete lifecycle example and API details.
 
-## Public Operations
+## Repository layout
 
-LayerFS currently supports:
+```text
+crates/
+├── layerfs-content           content-addressed objects, chunking, extents, trees
+├── layerfs-layerstack-store  SQLite schema, history, identities, object admission
+├── layerfs-workspace         ephemeral workspaces, capture, execution, containers
+├── layerfs-materialization   directory materialization and capture
+├── layerfs-fuse              Linux FUSE and host/proxy adapters
+├── layerfs-daemon            authenticated container mount/execution protocol
+├── layerfs-monitor           receipts, timings, snapshots, dedup analysis
+├── layerfs-sdk               public Rust client and value types
+└── layerfs-cli               `layerfs` command-line interface
 
-- initializing a LayerStack from an empty root or directory;
-- forking a named Branch from a Layer or Commit;
-- creating host-materialized and container-FUSE Workspaces;
-- executing fresh processes and following bounded output;
-- committing, discarding, or cleanly ending a Workspace;
-- adding a Branch head as an immutable Layer;
-- diffing supported Layer and Branch-history pairs;
-- reconciling stale Workspace conflicts;
-- querying durable entities and active operations;
-- inspecting deduplication evidence; and
-- managing resource-bounded runtime containers.
+tools/layerfs-eval             Store and Branch integrity evaluator
+benchmark/                     filesystem and end-to-end benchmarks
+containers/layerfs-fuse        managed Linux FUSE runtime image
+docs/versioned/0.1.0          current versioned product manual
+release-notes/0.1.0            release contract, evidence, and limitations
+```
 
-See the [CLI reference](docs/versioned/0.1.0/cli.md) and [SDK reference](docs/versioned/0.1.0/sdk.md) for the complete public surface.
+## Current limitations
 
-## Measured End-to-End Performance
+LayerFS is suitable for evaluation and integration work, but the preview boundary matters:
 
-The LayerFS 0.1.0 release-candidate benchmark compares complete public SDK lifecycles against Cloudflare Computer. The matched seven-pair campaign uses real FUSE Workspaces, fresh workload processes, isolated Stores, identical acknowledgement boundaries, and no timed container provisioning.
-
-| Complete public SDK lifecycle | LayerFS median | Cloudflare Computer median | LayerFS speedup |
-| ----------------------------- | -------------: | -------------------------: | --------------: |
-| Cold create 32 MiB            | **161.231 ms** |               1,660.321 ms |      **10.07×** |
-| Sixteen deterministic edits   | **169.133 ms** |               2,631.062 ms |      **15.80×** |
-| Prepend 10 bytes              | **232.394 ms** |               2,484.210 ms |      **10.48×** |
-| Read 32 MiB                   | **119.154 ms** |                 780.946 ms |       **6.53×** |
-| Registered total              | **690.196 ms** |               7,579.414 ms |      **10.76×** |
-
-Measured incremental-storage results:
-
-| Workload                   |        LayerFS storage reduction |
-| -------------------------- | -------------------------------: |
-| Prepend 10 bytes to 32 MiB | **99.92% less semantic content** |
-| Sixteen-edit campaign      | **97.19% less semantic content** |
-
-These measurements apply to a specific release-candidate source seal, environment, workload, and public operation boundary. They are not universal latency guarantees. Read the [complete benchmark report](release-notes/0.1.0/benchmark-results.md) for distributions, phase timing, storage accounting, source identity, environment custody, raw evidence, and limitations.
-
-## Project Status and Limitations
-
-LayerFS is ready for local evaluation, agent-runtime integration, and performance research, but it is not production-ready.
-
-Important current limitations include:
-
-- local one-Store operation with no cross-host synchronization;
-- live-process transaction visibility with no power-loss durability guarantee;
-- no published crates.io SDK package or default runtime image;
-- Docker, `/dev/fuse`, and `CAP_SYS_ADMIN` are required for managed FUSE;
+- operation is local to one Store; there is no cross-host synchronization;
+- live-process transaction visibility does not imply crash or power-loss durability;
+- the SDK is consumed from this repository; there is no published crates.io package or default runtime image;
+- managed FUSE requires Docker, `/dev/fuse`, and `CAP_SYS_ADMIN`;
 - the managed container is not a complete hostile-code security boundary;
 - the detached CLI context owner does not forward an interactive PTY; and
-- CLI JSON operation payloads remain preview-level.
+- CLI JSON output is a preview text envelope, not a stable machine API.
 
-Read the [complete limitations](release-notes/0.1.0/limitations.md) before using LayerFS with important data.
+Read the full [limitations](docs/versioned/0.1.0/limitations.md) before using LayerFS with important data.
 
-## Learn More
+## Documentation
 
-- [Quickstart](docs/versioned/0.1.0/quickstart.md) — run the current public CLI and SDK.
-- [LayerFS from first principles](https://learn.layerfs.ai/) — learn CAS, CDC, copy-on-write, and the LayerStack model.
-- [Simplified Chinese documentation](https://learn.layerfs.ai/zh/) — Chinese version of the learning site.
-- [0.1.0 specification](docs/versioned/0.1.0/specification.md) — normative release-candidate behavior.
-- [CLI reference](docs/versioned/0.1.0/cli.md) — complete command grammar.
-- [Rust SDK reference](docs/versioned/0.1.0/sdk.md) — complete public Rust API.
-- [Container runtime](docs/versioned/0.1.0/container-runtime.md) — managed Docker and real-FUSE setup.
-- [Benchmark results](release-notes/0.1.0/benchmark-results.md) — latency, storage, methodology, and raw evidence.
-- [Release-candidate record](release-notes/0.1.0/README.md) — frozen release scope, verification, artifacts, and limitations.
-- [Documentation index](docs/index.md) — all maintained documentation.
+Start with the [documentation index](docs/index.md), or choose a focused guide:
 
-The versioned repository documentation defines the current product contract. The first-principles learning site is educational and may describe future work.[1]
+| Need | Documentation |
+| --- | --- |
+| Learn the concepts | [Core concepts](docs/general/concepts.md) |
+| Run the public CLI and SDK | [Quickstart](docs/versioned/0.1.0/quickstart.md) |
+| Find a CLI command | [CLI reference](docs/versioned/0.1.0/cli.md) |
+| Integrate with Rust | [Rust SDK reference](docs/versioned/0.1.0/sdk.md) |
+| Configure container FUSE | [Container runtime](docs/versioned/0.1.0/container-runtime.md) |
+| Understand the storage format | [Storage format](docs/versioned/0.1.0/storage-format.md) |
+| Review measured performance | [Benchmark results](release-notes/0.1.0/benchmark-results.md) |
+| Contribute changes | [Development guide](docs/general/development.md) |
 
-## Related Projects
+The [first-principles learning site](https://learn.layerfs.ai/) is educational material and may describe future work; the versioned repository manual defines the current product contract.
 
-LayerFS supplies storage mechanics. Neighboring projects focus on execution isolation and version-control workflows:
+## Related projects
 
-| Project                                                      | Purpose                                                      |
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| [AgentsGit](https://github.com/Ephemeral-AI-Lab/agentsgit)   | Version control for agent work in motion: checkpoint, branch, compare, recover, and promote. |
-| [Ephemeral Sandbox](https://github.com/Ephemeral-AI-Lab/ephemeral-sandbox) | Isolated execution environments for parallel agents.         |
+LayerFS provides storage mechanics for a broader agent-workflow stack:
+
+| Project | Focus |
+| --- | --- |
+| [AgentsGit](https://github.com/Ephemeral-AI-Lab/agentsgit) | Version control for agent work in motion: checkpoint, branch, compare, recover, and promote. |
+| [Ephemeral Sandbox](https://github.com/Ephemeral-AI-Lab/ephemeral-sandbox) | Isolated execution environments for parallel agents. |
 
 ## Contributing
 
-LayerFS is under active development. Bug reports, reproducible performance evidence, documentation corrections, and focused pull requests are welcome.
-
-See the [development guide](docs/general/development.md) for the local verification workflow.
+Bug reports, reproducible performance evidence, documentation corrections, and focused pull requests are welcome. Before opening a change, review the [development guide](docs/general/development.md) and run the repository’s relevant verification commands.
 
 ## License
 
 LayerFS is licensed under the [MIT License](LICENSE).
-
-## References
-
-[1]: https://learn.layerfs.ai/chapters/01-cas-and-cdc/index.html "Foundations: CAS + CDC + COW"
-
-[4]: https://github.com/Ephemeral-AI-Lab/layerfs "LayerFS source repository"
