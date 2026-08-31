@@ -12,16 +12,19 @@ From the repository root:
 
 ```bash
 cargo build --workspace
-cargo test --workspace --all-features
+tools/test-fast.sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 git diff --check
 ```
 
-The bounded native suite is also available as:
+`tools/test-fast.sh` is the complete native test gate. It builds all workspace
+test targets, runs them in bounded parallel workers, and fails if the warm
+suite exceeds 120 seconds. Use a focused `cargo test` command when iterating
+on one package or test target.
 
 ```bash
-tools/test-fast.sh
+cargo test -p layerfs-content --test extent_model
 ```
 
 ## Production crates

@@ -13,6 +13,7 @@ trap 'rm -rf -- "$temporary"' EXIT
 started=$SECONDS
 
 cargo test --manifest-path "$repo/Cargo.toml" --workspace --all-features \
+  --locked \
   --no-run --message-format=json >"$temporary/artifacts.jsonl"
 
 python3 - "$temporary/artifacts.jsonl" "$temporary/executables" "$jobs" <<'PY'
