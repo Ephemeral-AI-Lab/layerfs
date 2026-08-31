@@ -1,34 +1,24 @@
-use layerfs_branch_store::{BranchStore, CommitOutcome};
 use layerfs_content::filesystem::ContentChange;
-use layerfs_layerstack_store::LayerStackStore;
-use layerfs_storage::{
-    AuthorityAddResult, EntityName, LayerStackInitialization, LocalForkSource, RemotePlacement,
+use layerfs_layerstack_store::{
+    apply_changes, AddLayerResult, CommitOutcome, EntityName, LayerStackInitialization,
+    LayerStackStore, LocalForkSource,
 };
 use layerfs_workspace::{
     EndWorkspaceMode, ResolveChoice, WorkspaceCommitResult, WorkspacePlacement, Workspaces,
 };
-use std::sync::Arc;
 
 #[test]
-fn materialized_reference_resolution_ignores_unrelated_edits_and_refreshes_to_committed_root() {
+fn materialized_resolution_ignores_unrelated_edits_and_remains_writable_after_commit() {
     let root = temp();
     std::fs::create_dir_all(&root).unwrap();
-    let authority = Arc::new(LayerStackStore::create(root.join("authority.sqlite")).unwrap());
-    let initialized = authority
+    let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+    let initialized = store
         .initialize_layerstack(
             EntityName::new("project").unwrap(),
             LayerStackInitialization::Empty,
         )
         .unwrap();
-    let producer = BranchStore::create(root.join("producer.sqlite"), authority.store_id()).unwrap();
-    producer
-        .pull_layer(
-            authority.clone(),
-            initialized.genesis_layer_id,
-            RemotePlacement::Reference,
-        )
-        .unwrap();
-    let accepted = producer
+    let accepted = store
         .fork_branch(
             EntityName::new("accepted").unwrap(),
             LocalForkSource::Layer {
@@ -36,22 +26,7 @@ fn materialized_reference_resolution_ignores_unrelated_edits_and_refreshes_to_co
             },
         )
         .unwrap();
-    commit(&producer, authority.clone(), accepted, b"layer");
-    producer.push_branch(authority.clone(), accepted).unwrap();
-    let AuthorityAddResult::Added { layer_id: current } = authority.add_layer(accepted).unwrap()
-    else {
-        panic!("accepted Add")
-    };
-
-    let branches = BranchStore::create(root.join("branch.sqlite"), authority.store_id()).unwrap();
-    branches
-        .pull_layer(
-            authority.clone(),
-            initialized.genesis_layer_id,
-            RemotePlacement::Reference,
-        )
-        .unwrap();
-    let stale = branches
+    let stale = store
         .fork_branch(
             EntityName::new("stale").unwrap(),
             LocalForkSource::Layer {
@@ -59,16 +34,13 @@ fn materialized_reference_resolution_ignores_unrelated_edits_and_refreshes_to_co
             },
         )
         .unwrap();
-    commit(&branches, authority.clone(), stale, b"branch");
-    branches.push_branch(authority.clone(), stale).unwrap();
-    branches
-        .pull_layer(authority.clone(), current, RemotePlacement::Reference)
-        .unwrap();
-    let current_root = authority.layer(current).unwrap().unwrap().root_id;
-    assert!(!branches.root_complete(current_root).unwrap());
+    commit(&store, accepted, b"layer");
+    let AddLayerResult::Added { layer_id: current } = store.add_layer(accepted).unwrap() else {
+        panic!("accepted Add")
+    };
+    commit(&store, stale, b"branch");
 
-    let branch_api = branches.clone();
-    let workspaces = Workspaces::new(root.join("runtime"), branches, authority.clone()).unwrap();
+    let workspaces = Workspaces::new(root.join("runtime"), store.clone()).unwrap();
     let (workspace_id, conflicts) = workspaces
         .create_reconciliation_workspace(stale, current)
         .unwrap();
@@ -91,46 +63,45 @@ fn materialized_reference_resolution_ignores_unrelated_edits_and_refreshes_to_co
     ));
     assert_eq!(std::fs::read(mount.join("z")).unwrap(), b"layer");
     assert_eq!(std::fs::read(mount.join("a")).unwrap(), b"unrelated");
-    assert!(std::fs::write(mount.join("late"), b"rejected").is_err());
-    assert!(!branch_api
-        .root_complete(branch_api.branch_root(stale).unwrap())
-        .unwrap());
+    std::fs::write(mount.join("late"), b"still-active").unwrap();
     workspaces
-        .end_workspace_session(workspace_id, EndWorkspaceMode::Clean)
+        .end_workspace_session(workspace_id, EndWorkspaceMode::Discard)
         .unwrap();
 
     drop(workspaces);
-    drop(producer);
-    drop(authority);
+    drop(store);
     std::fs::remove_dir_all(root).unwrap();
 }
 
-fn commit(
-    branches: &BranchStore,
-    authority: Arc<LayerStackStore>,
-    branch: layerfs_storage::BranchId,
-    value: &[u8],
-) {
+fn commit(store: &LayerStackStore, branch_id: layerfs_layerstack_store::BranchId, value: &[u8]) {
+    let pinned = store.pin_branch(branch_id).unwrap();
+    let built = apply_changes(
+        &pinned.reader,
+        pinned.root,
+        &[ContentChange::Write {
+            path: "z".to_owned(),
+            bytes: value.to_vec(),
+            mode: 0o644,
+        }],
+        [9; 32],
+    )
+    .unwrap();
     assert!(matches!(
-        branches
-            .commit_changes(
-                authority,
-                branch,
-                None,
-                &[ContentChange::Write {
-                    path: "z".to_owned(),
-                    bytes: value.to_vec(),
-                    mode: 0o644,
-                }],
+        store
+            .commit_candidate(
+                &pinned.branch,
+                pinned.root,
+                pinned.branch.base_layer_id,
+                built,
             )
             .unwrap(),
-        CommitOutcome::Created { .. }
+        CommitOutcome::Committed { .. }
     ));
 }
 
 fn temp() -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
-        "layerfs-v2-workspace-reconciliation-{}-{}",
+        "layerfs-v4-workspace-reconciliation-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

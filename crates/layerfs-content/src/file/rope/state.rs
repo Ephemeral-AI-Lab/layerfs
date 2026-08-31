@@ -10,6 +10,9 @@ pub use crate::object::access::{ObjectRead, ObjectStore};
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct RopeCounters {
     pub payload_bytes_read: u64,
+    pub payload_ids_read: u64,
+    pub payload_batches_read: u64,
+    pub max_payload_batch: u64,
     pub payload_bytes_written: u64,
     pub cdc_bytes_scanned: u64,
     pub chunks_created: u64,

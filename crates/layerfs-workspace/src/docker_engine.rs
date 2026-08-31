@@ -5,9 +5,11 @@ mod unix {
     use std::os::unix::fs::FileTypeExt;
     use std::os::unix::net::UnixStream;
     use std::path::Path;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     const SOCKET: &str = "/var/run/docker.sock";
     const API: &str = "/v1.41";
+    static OPERATIONS: AtomicU64 = AtomicU64::new(0);
 
     pub(crate) struct DockerExec {
         container: String,
@@ -175,6 +177,7 @@ mod unix {
         body: &str,
         upgrade: bool,
     ) -> io::Result<(u16, UnixStream)> {
+        OPERATIONS.fetch_add(1, Ordering::Relaxed);
         let mut stream = UnixStream::connect(SOCKET)?;
         write!(
             stream,
@@ -287,7 +290,11 @@ mod unix {
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
     }
+
+    pub(crate) fn operation_count() -> u64 {
+        OPERATIONS.load(Ordering::Relaxed)
+    }
 }
 
 #[cfg(unix)]
-pub(crate) use unix::{drain_multiplexed, DockerExec};
+pub(crate) use unix::{drain_multiplexed, operation_count, DockerExec};

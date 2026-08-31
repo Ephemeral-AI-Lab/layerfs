@@ -13,3 +13,4 @@ pub use read::{
     visit_extents,
 };
 pub use state::{FileStateRoot, ObjectRead, ObjectStore, ReadPlan, RopeCounters};
+pub(crate) use validate::merge_counters as merge_rope_counters;

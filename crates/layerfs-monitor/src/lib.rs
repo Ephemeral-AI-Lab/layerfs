@@ -3,17 +3,13 @@
 mod collector;
 mod dedup;
 mod operation;
-mod resource;
-mod retention;
 mod snapshot;
-mod timing;
 
 pub use collector::Monitor;
-pub use dedup::{
-    DedupAnalysis, ExactOrUnavailable, LocalCasAnalysis, PlacementAnalysis, TransferAnalysis,
-};
+pub use dedup::{CandidateTotals, DedupAnalysis};
 pub use operation::{
-    CliInvocationReceipt, OperationFamily, OperationId, OperationOutcome, OperationReceipt,
+    CandidateStats, OperationFamily, OperationId, OperationOutcome, OperationReceipt,
     SemanticOperation, TimingFragment,
 };
+pub(crate) use snapshot::database_snapshot;
 pub use snapshot::{DatabaseSnapshot, MonitorError, MonitorResult, MonitorSnapshot};

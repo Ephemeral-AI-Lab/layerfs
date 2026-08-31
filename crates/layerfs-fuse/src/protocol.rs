@@ -78,6 +78,33 @@ impl Request {
             _ => "request",
         }
     }
+
+    pub(crate) fn write_logical_bytes(&self) -> u64 {
+        match self {
+            Self::Write(_, _, bytes) => bytes.len() as u64,
+            Self::WriteZero(_, _, len) => u64::from(*len),
+            Self::CreateFilesClosedReserved(entries) => entries
+                .iter()
+                .flat_map(|entry| &entry.4)
+                .fold(0_u64, |total, (_, bytes)| {
+                    total.saturating_add(bytes.len() as u64)
+                }),
+            _ => 0,
+        }
+    }
+
+    pub(crate) fn write_payload_bytes(&self) -> u64 {
+        match self {
+            Self::Write(_, _, bytes) => bytes.len() as u64,
+            Self::CreateFilesClosedReserved(entries) => entries
+                .iter()
+                .flat_map(|entry| &entry.4)
+                .fold(0_u64, |total, (_, bytes)| {
+                    total.saturating_add(bytes.len() as u64)
+                }),
+            _ => 0,
+        }
+    }
 }
 
 pub(crate) enum Response {
@@ -90,7 +117,95 @@ pub(crate) enum Response {
     Node(NodeId),
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct RequestWriteMeasurement {
+    pub(crate) frame_bytes: u64,
+    pub(crate) logical_bytes: u64,
+    pub(crate) payload_copy_bytes: u64,
+    pub(crate) encode_ns: u64,
+    pub(crate) socket_ns: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct RequestReadMeasurement {
+    pub(crate) frame_bytes: u64,
+    pub(crate) logical_bytes: u64,
+    pub(crate) payload_copy_bytes: u64,
+    pub(crate) socket_ns: u64,
+    pub(crate) decode_ns: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ResponseWriteMeasurement {
+    pub(crate) frame_bytes: u64,
+    pub(crate) logical_bytes: u64,
+    pub(crate) payload_copy_bytes: u64,
+    pub(crate) encode_ns: u64,
+    pub(crate) socket_ns: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ResponseReadMeasurement {
+    pub(crate) frame_bytes: u64,
+    pub(crate) logical_bytes: u64,
+    pub(crate) payload_copy_bytes: u64,
+    pub(crate) socket_ns: u64,
+    pub(crate) decode_ns: u64,
+}
+
+#[cfg(test)]
 pub(crate) fn write_request(output: &mut impl Write, request: &Request) -> std::io::Result<()> {
+    write_request_measured(output, request).map(|_| ())
+}
+
+pub(crate) fn write_request_measured(
+    output: &mut impl Write,
+    request: &Request,
+) -> std::io::Result<RequestWriteMeasurement> {
+    if let Request::Write(node, offset, value) = request {
+        if value.len() > MAX_BYTES {
+            return Err(invalid("byte length"));
+        }
+        let started = std::time::Instant::now();
+        let body_len = 21_usize
+            .checked_add(value.len())
+            .filter(|length| *length <= MAX_FRAME)
+            .ok_or_else(|| invalid("frame length"))?;
+        let mut header = [0_u8; 25];
+        header[..4].copy_from_slice(&u32::try_from(body_len).map_err(invalid)?.to_be_bytes());
+        header[4] = 13;
+        header[5..13].copy_from_slice(&node.0.to_be_bytes());
+        header[13..21].copy_from_slice(&offset.to_be_bytes());
+        header[21..25].copy_from_slice(&u32::try_from(value.len()).map_err(invalid)?.to_be_bytes());
+        let encode_ns = elapsed_ns(started);
+        let started = std::time::Instant::now();
+        output.write_all(&header)?;
+        output.write_all(value)?;
+        output.flush()?;
+        return Ok(RequestWriteMeasurement {
+            frame_bytes: (header.len() as u64).saturating_add(value.len() as u64),
+            logical_bytes: value.len() as u64,
+            payload_copy_bytes: 0,
+            encode_ns,
+            socket_ns: elapsed_ns(started),
+        });
+    }
+    let started = std::time::Instant::now();
+    let bytes = encode_request(request)?;
+    let encode_ns = elapsed_ns(started);
+    let started = std::time::Instant::now();
+    write_frame(output, &bytes)?;
+    let socket_ns = elapsed_ns(started);
+    Ok(RequestWriteMeasurement {
+        frame_bytes: (bytes.len() as u64).saturating_add(4),
+        logical_bytes: request.write_logical_bytes(),
+        payload_copy_bytes: request.write_payload_bytes(),
+        encode_ns,
+        socket_ns,
+    })
+}
+
+fn encode_request(request: &Request) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     match request {
         Request::Lookup(node, name) => {
@@ -260,12 +375,79 @@ pub(crate) fn write_request(output: &mut impl Write, request: &Request) -> std::
             put_node(&mut bytes, *node);
         }
     }
-    write_frame(output, &bytes)
+    Ok(bytes)
 }
 
+#[cfg(test)]
 pub(crate) fn read_request(input: &mut impl Read) -> std::io::Result<Request> {
-    let bytes = read_frame(input)?;
-    let mut input = Input::new(&bytes);
+    read_request_measured(input).map(|(request, _)| request)
+}
+
+pub(crate) fn read_request_measured(
+    input: &mut impl Read,
+) -> std::io::Result<(Request, RequestReadMeasurement)> {
+    let started = std::time::Instant::now();
+    let mut length = [0; 4];
+    input.read_exact(&mut length)?;
+    let length = u32::from_be_bytes(length) as usize;
+    if length == 0 || length > MAX_FRAME {
+        return Err(invalid("frame length"));
+    }
+    let mut tag = [0];
+    input.read_exact(&mut tag)?;
+    let mut socket_ns = elapsed_ns(started);
+    if tag == [13] {
+        if length < 21 {
+            return Err(invalid("frame length"));
+        }
+        let started = std::time::Instant::now();
+        let mut header = [0; 20];
+        input.read_exact(&mut header)?;
+        socket_ns = socket_ns.saturating_add(elapsed_ns(started));
+        let started = std::time::Instant::now();
+        let node = NodeId(u64::from_be_bytes(header[..8].try_into().expect("node")));
+        let offset = u64::from_be_bytes(header[8..16].try_into().expect("offset"));
+        let payload_len =
+            u32::from_be_bytes(header[16..20].try_into().expect("payload length")) as usize;
+        if payload_len > MAX_BYTES || length != 21 + payload_len {
+            return Err(invalid("byte length"));
+        }
+        let mut payload = vec![0; payload_len];
+        let decode_ns = elapsed_ns(started);
+        let started = std::time::Instant::now();
+        input.read_exact(&mut payload)?;
+        socket_ns = socket_ns.saturating_add(elapsed_ns(started));
+        return Ok((
+            Request::Write(node, offset, payload),
+            RequestReadMeasurement {
+                frame_bytes: (length as u64).saturating_add(4),
+                logical_bytes: payload_len as u64,
+                payload_copy_bytes: 0,
+                socket_ns,
+                decode_ns,
+            },
+        ));
+    }
+    let mut bytes = vec![0; length];
+    bytes[0] = tag[0];
+    let started = std::time::Instant::now();
+    input.read_exact(&mut bytes[1..])?;
+    socket_ns = socket_ns.saturating_add(elapsed_ns(started));
+    let started = std::time::Instant::now();
+    let request = decode_request(&bytes)?;
+    let decode_ns = elapsed_ns(started);
+    let measurement = RequestReadMeasurement {
+        frame_bytes: (bytes.len() as u64).saturating_add(4),
+        logical_bytes: request.write_logical_bytes(),
+        payload_copy_bytes: request.write_payload_bytes(),
+        socket_ns,
+        decode_ns,
+    };
+    Ok((request, measurement))
+}
+
+fn decode_request(bytes: &[u8]) -> std::io::Result<Request> {
+    let mut input = Input::new(bytes);
     let request = match input.u8()? {
         0 => Request::Lookup(input.node()?, input.bytes()?.to_vec()),
         1 => Request::Attr(input.node()?),
@@ -373,7 +555,43 @@ pub(crate) fn read_request(input: &mut impl Read) -> std::io::Result<Request> {
     Ok(request)
 }
 
+#[cfg(test)]
 pub(crate) fn write_response(output: &mut impl Write, response: &Response) -> std::io::Result<()> {
+    write_response_measured(output, response).map(|_| ())
+}
+
+pub(crate) fn write_response_measured(
+    output: &mut impl Write,
+    response: &Response,
+) -> std::io::Result<ResponseWriteMeasurement> {
+    if let Response::Bytes(value) = response {
+        if value.len() > MAX_BYTES {
+            return Err(invalid("byte length"));
+        }
+        let started = std::time::Instant::now();
+        let body_len = value
+            .len()
+            .checked_add(5)
+            .filter(|length| *length <= MAX_FRAME)
+            .ok_or_else(|| invalid("frame length"))?;
+        let mut header = [0_u8; 9];
+        header[..4].copy_from_slice(&u32::try_from(body_len).map_err(invalid)?.to_be_bytes());
+        header[4] = 1;
+        header[5..].copy_from_slice(&u32::try_from(value.len()).map_err(invalid)?.to_be_bytes());
+        let encode_ns = elapsed_ns(started);
+        let started = std::time::Instant::now();
+        output.write_all(&header)?;
+        output.write_all(value)?;
+        output.flush()?;
+        return Ok(ResponseWriteMeasurement {
+            frame_bytes: (header.len() as u64).saturating_add(value.len() as u64),
+            logical_bytes: value.len() as u64,
+            payload_copy_bytes: 0,
+            encode_ns,
+            socket_ns: elapsed_ns(started),
+        });
+    }
+    let started = std::time::Instant::now();
     let mut bytes = Vec::new();
     match response {
         Response::Attr(attr) => {
@@ -410,11 +628,73 @@ pub(crate) fn write_response(output: &mut impl Write, response: &Response) -> st
             put_node(&mut bytes, *node);
         }
     }
-    write_frame(output, &bytes)
+    let encode_ns = elapsed_ns(started);
+    let frame_bytes = (bytes.len() as u64).saturating_add(4);
+    let started = std::time::Instant::now();
+    write_frame(output, &bytes)?;
+    Ok(ResponseWriteMeasurement {
+        frame_bytes,
+        logical_bytes: 0,
+        payload_copy_bytes: 0,
+        encode_ns,
+        socket_ns: elapsed_ns(started),
+    })
 }
 
+#[cfg(test)]
 pub(crate) fn read_response(input: &mut impl Read) -> std::io::Result<Response> {
-    let bytes = read_frame(input)?;
+    read_response_measured(input).map(|(response, _)| response)
+}
+
+pub(crate) fn read_response_measured(
+    input: &mut impl Read,
+) -> std::io::Result<(Response, ResponseReadMeasurement)> {
+    let started = std::time::Instant::now();
+    let mut length = [0; 4];
+    input.read_exact(&mut length)?;
+    let length = u32::from_be_bytes(length) as usize;
+    if length == 0 || length > MAX_FRAME {
+        return Err(invalid("frame length"));
+    }
+    let mut tag = [0];
+    input.read_exact(&mut tag)?;
+    let mut socket_ns = elapsed_ns(started);
+    let frame_bytes = (length as u64).saturating_add(4);
+    if tag == [1] {
+        if length < 5 {
+            return Err(invalid("frame length"));
+        }
+        let started = std::time::Instant::now();
+        let mut payload_len = [0; 4];
+        input.read_exact(&mut payload_len)?;
+        socket_ns = socket_ns.saturating_add(elapsed_ns(started));
+        let started = std::time::Instant::now();
+        let payload_len = u32::from_be_bytes(payload_len) as usize;
+        if payload_len > MAX_BYTES || length != payload_len + 5 {
+            return Err(invalid("byte length"));
+        }
+        let mut payload = vec![0; payload_len];
+        let decode_ns = elapsed_ns(started);
+        let started = std::time::Instant::now();
+        input.read_exact(&mut payload)?;
+        socket_ns = socket_ns.saturating_add(elapsed_ns(started));
+        return Ok((
+            Response::Bytes(payload),
+            ResponseReadMeasurement {
+                frame_bytes,
+                logical_bytes: payload_len as u64,
+                payload_copy_bytes: 0,
+                socket_ns,
+                decode_ns,
+            },
+        ));
+    }
+    let mut bytes = vec![0; length];
+    bytes[0] = tag[0];
+    let started = std::time::Instant::now();
+    input.read_exact(&mut bytes[1..])?;
+    socket_ns = socket_ns.saturating_add(elapsed_ns(started));
+    let started = std::time::Instant::now();
     let mut input = Input::new(&bytes);
     let response = match input.u8()? {
         0 => Response::Attr(input.attr()?),
@@ -437,7 +717,17 @@ pub(crate) fn read_response(input: &mut impl Read) -> std::io::Result<Response> 
         _ => return Err(invalid("response tag")),
     };
     input.done()?;
-    Ok(response)
+    let decode_ns = elapsed_ns(started);
+    Ok((
+        response,
+        ResponseReadMeasurement {
+            frame_bytes,
+            logical_bytes: 0,
+            payload_copy_bytes: 0,
+            socket_ns,
+            decode_ns,
+        },
+    ))
 }
 
 fn write_frame(output: &mut impl Write, bytes: &[u8]) -> std::io::Result<()> {
@@ -447,18 +737,6 @@ fn write_frame(output: &mut impl Write, bytes: &[u8]) -> std::io::Result<()> {
     output.write_all(&(bytes.len() as u32).to_be_bytes())?;
     output.write_all(bytes)?;
     output.flush()
-}
-
-fn read_frame(input: &mut impl Read) -> std::io::Result<Vec<u8>> {
-    let mut length = [0; 4];
-    input.read_exact(&mut length)?;
-    let length = u32::from_be_bytes(length) as usize;
-    if length > MAX_FRAME {
-        return Err(invalid("frame length"));
-    }
-    let mut bytes = vec![0; length];
-    input.read_exact(&mut bytes)?;
-    Ok(bytes)
 }
 
 fn unary(output: &mut Vec<u8>, tag: u8, node: NodeId) {
@@ -499,6 +777,10 @@ fn put_attr(output: &mut Vec<u8>, attr: Attr) {
     output.extend_from_slice(&attr.links.to_be_bytes());
     output.extend_from_slice(&attr.mtime_seconds.to_be_bytes());
     output.extend_from_slice(&attr.mtime_nanoseconds.to_be_bytes());
+}
+
+fn elapsed_ns(started: std::time::Instant) -> u64 {
+    u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
 
 fn error_code(error: PortError) -> u8 {
@@ -626,9 +908,21 @@ mod tests {
     #[test]
     fn write_and_size_round_trip() {
         let mut bytes = Vec::new();
-        write_request(&mut bytes, &Request::Write(NodeId(2), 7, b"bytes".to_vec())).unwrap();
-        let Request::Write(node, offset, value) = read_request(&mut bytes.as_slice()).unwrap()
-        else {
+        let measured =
+            write_request_measured(&mut bytes, &Request::Write(NodeId(2), 7, b"bytes".to_vec()))
+                .unwrap();
+        assert_eq!(measured.frame_bytes, 30);
+        assert_eq!(measured.logical_bytes, 5);
+        assert_eq!(measured.payload_copy_bytes, 0);
+        assert_eq!(&bytes[..4], &26_u32.to_be_bytes());
+        assert_eq!(bytes[4], 13);
+        assert_eq!(&bytes[25..], b"bytes");
+        assert!(read_request_measured(&mut &bytes[..bytes.len() - 1]).is_err());
+        let (request, decoded) = read_request_measured(&mut bytes.as_slice()).unwrap();
+        assert_eq!(decoded.frame_bytes, 30);
+        assert_eq!(decoded.logical_bytes, 5);
+        assert_eq!(decoded.payload_copy_bytes, 0);
+        let Request::Write(node, offset, value) = request else {
             panic!("write")
         };
         assert_eq!((node, offset, value), (NodeId(2), 7, b"bytes".to_vec()));
@@ -639,6 +933,26 @@ mod tests {
             panic!("size")
         };
         assert_eq!(size, 5);
+
+        bytes.clear();
+        let measured =
+            write_response_measured(&mut bytes, &Response::Bytes(b"bytes".to_vec())).unwrap();
+        assert_eq!(measured.frame_bytes, 14);
+        assert_eq!(measured.logical_bytes, 5);
+        assert_eq!(measured.payload_copy_bytes, 0);
+        assert_eq!(&bytes[..4], &10_u32.to_be_bytes());
+        assert_eq!(bytes[4], 1);
+        assert_eq!(&bytes[5..9], &5_u32.to_be_bytes());
+        assert_eq!(&bytes[9..], b"bytes");
+        assert!(read_response_measured(&mut &bytes[..bytes.len() - 1]).is_err());
+        let (response, decoded) = read_response_measured(&mut bytes.as_slice()).unwrap();
+        assert_eq!(decoded.frame_bytes, 14);
+        assert_eq!(decoded.logical_bytes, 5);
+        assert_eq!(decoded.payload_copy_bytes, 0);
+        let Response::Bytes(value) = response else {
+            panic!("bytes")
+        };
+        assert_eq!(value, b"bytes");
 
         bytes.clear();
         let entries = vec![(NodeId(1), b"one".to_vec()), (NodeId(2), b"two".to_vec())];

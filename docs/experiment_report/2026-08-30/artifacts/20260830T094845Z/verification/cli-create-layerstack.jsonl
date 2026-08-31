@@ -1,2 +1,0 @@
-{"schema_version":3,"event":"started","value":"Db { command: Create { role: Layerstack, path: \"/var/tmp/layerfs-cli-json-final2.eQWwPU/layerstack.sqlite\", parent: None } }"}
-{"schema_version":3,"event":"finished","result":{"kind":"text","value":"4073ea37ee6a961a86fede60c243819b19a1bed42df36b3859d1ada14be4d9af"}}

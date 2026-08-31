@@ -1,13 +1,13 @@
 use crate::cow_tree::{Data, FileData, Node, NodeId, Workspace};
 use layerfs_content::file::rope::read_range;
-use layerfs_storage::{CoreReader, Result, StorageError};
+use layerfs_layerstack_store::{CoreReader, Result, SnapshotReader, StoreError};
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
-use std::os::unix::fs::FileExt;
+use std::os::unix::fs::{FileExt, MetadataExt};
 use std::path::Path;
 
 pub struct ReadPlan {
-    reader: layerfs_branch_store::SnapshotReader,
+    reader: SnapshotReader,
     offset: u64,
     end: u64,
     source: ReadSource,
@@ -25,10 +25,14 @@ enum ReadSource {
 
 impl ReadPlan {
     pub fn read(self) -> Result<Vec<u8>> {
+        let started = std::time::Instant::now();
+        let requested = self.end.saturating_sub(self.offset);
+        let reader = self.reader.clone();
         if self.offset >= self.end {
+            reader.note_workspace_read(0, 0, elapsed_ns(started))?;
             return Ok(Vec::new());
         }
-        match self.source {
+        let output = match self.source {
             ReadSource::Base(root) => read_base(
                 &self.reader,
                 root,
@@ -69,7 +73,9 @@ impl ReadPlan {
                 }
                 Ok(output)
             }
-        }
+        }?;
+        reader.note_workspace_read(requested, output.len() as u64, elapsed_ns(started))?;
+        Ok(output)
     }
 }
 
@@ -82,7 +88,7 @@ impl Workspace {
         let source = match &self
             .nodes
             .get(&node)
-            .ok_or(StorageError::NotFound("node"))?
+            .ok_or(StoreError::NotFound("node"))?
             .data
         {
             Data::File(FileData::Base { root, .. }) => ReadSource::Base(*root),
@@ -123,7 +129,7 @@ impl Workspace {
                     },
                 });
             }
-            _ => return Err(StorageError::InvalidInput("read")),
+            _ => return Err(StoreError::InvalidInput("read")),
         };
         Ok(ReadPlan {
             reader: self.reader.clone(),
@@ -141,6 +147,7 @@ impl Workspace {
     }
 
     pub(crate) fn write_zero(&mut self, node: NodeId, offset: u64, len: usize) -> Result<usize> {
+        self.invalidate_capture();
         self.write_inner(node, offset, len, None)
     }
 
@@ -155,7 +162,7 @@ impl Workspace {
         let old_len = self.attr(node)?.size;
         let end = offset
             .checked_add(byte_len as u64)
-            .ok_or(StorageError::InvalidInput("write length"))?;
+            .ok_or(StoreError::InvalidInput("write length"))?;
         if byte_len == 0 {
             return Ok(0);
         }
@@ -184,17 +191,25 @@ impl Workspace {
                 .saturating_sub(old_charge)
                 .saturating_add(new_charge),
         )?;
-        match bytes {
-            Some(bytes) => OpenOptions::new()
-                .write(true)
-                .open(&path)?
-                .write_all_at(bytes, offset)?,
-            None if materialize => OpenOptions::new()
-                .write(true)
-                .open(&path)?
-                .write_all_at(&vec![0; byte_len], offset)?,
-            None => {}
+        let started = std::time::Instant::now();
+        let write = match bytes {
+            Some(bytes) => self.spool_file(node, &path)?.write_all_at(bytes, offset),
+            None if materialize => self
+                .spool_file(node, &path)?
+                .write_all_at(&vec![0; byte_len], offset),
+            None => Ok(()),
+        };
+        if bytes.is_some() || materialize {
+            self.spool_write_metrics.write_bytes = self
+                .spool_write_metrics
+                .write_bytes
+                .saturating_add(byte_len as u64);
+            self.spool_write_metrics.write_ns = self
+                .spool_write_metrics
+                .write_ns
+                .saturating_add(elapsed_ns(started));
         }
+        write?;
         let Data::File(FileData::Overlay {
             len,
             dirty,
@@ -214,10 +229,14 @@ impl Workspace {
         self.dirty.insert(node);
         let paths = self.nodes[&node].paths.iter().cloned().collect::<Vec<_>>();
         self.note_mutation(paths)?;
+        if let Some(bytes) = bytes {
+            self.capture_write(node, offset, old_len, bytes);
+        }
         Ok(byte_len)
     }
 
     pub fn truncate(&mut self, node: NodeId, size: u64) -> Result<()> {
+        self.invalidate_capture();
         self.ensure_active()?;
         let old_len = self.attr(node)?.size;
         if size == old_len {
@@ -246,7 +265,7 @@ impl Workspace {
                 .saturating_sub(old_charge)
                 .saturating_add(new_charge),
         )?;
-        OpenOptions::new().write(true).open(path)?.set_len(size)?;
+        self.spool_file(node, &path)?.set_len(size)?;
         let Data::File(FileData::Overlay {
             len,
             dirty,
@@ -269,22 +288,49 @@ impl Workspace {
         Ok(())
     }
 
-    pub fn fsync(&self, node: Option<NodeId>) -> Result<()> {
-        if let Some(node) = node {
-            if let Data::File(FileData::Overlay { spool, .. }) = &self.nodes[&node].data {
-                OpenOptions::new().write(true).open(spool)?.sync_all()?;
+    pub fn fsync(&mut self, node: Option<NodeId>) -> Result<()> {
+        let spools = if let Some(node) = node {
+            match &self
+                .nodes
+                .get(&node)
+                .ok_or(StoreError::NotFound("node"))?
+                .data
+            {
+                Data::File(FileData::Overlay { spool, .. }) => vec![(node, spool.clone())],
+                _ => Vec::new(),
             }
-            return Ok(());
+        } else {
+            self.nodes
+                .iter()
+                .filter_map(|(node, value)| match &value.data {
+                    Data::File(FileData::Overlay { spool, .. }) => Some((*node, spool.clone())),
+                    _ => None,
+                })
+                .collect()
+        };
+        let started = std::time::Instant::now();
+        for (node, spool) in spools {
+            self.spool_file(node, &spool)?;
         }
-        for value in self.nodes.values() {
-            if let Data::File(FileData::Overlay { spool, .. }) = &value.data {
-                OpenOptions::new().write(true).open(spool)?.sync_all()?;
-            }
-        }
+        // Workspace bytes are ephemeral. This is an ordering/error/capture fence,
+        // not a host-filesystem crash-durability barrier.
+        self.finish_capture(node);
+        self.spool_write_metrics.fence_count =
+            self.spool_write_metrics.fence_count.saturating_add(1);
+        self.spool_write_metrics.fence_ns = self
+            .spool_write_metrics
+            .fence_ns
+            .saturating_add(elapsed_ns(started));
         Ok(())
     }
 
+    pub(crate) fn take_spool_write_metrics(&mut self) -> crate::cow_tree::SpoolWriteMetrics {
+        std::mem::take(&mut self.spool_write_metrics)
+    }
+
     pub(crate) fn clear_spool(&mut self) -> Result<()> {
+        self.invalidate_capture();
+        self.open_spools.clear();
         for value in self.nodes.values() {
             if let Data::File(FileData::Overlay { spool, .. }) = &value.data {
                 if spool.exists() {
@@ -299,8 +345,10 @@ impl Workspace {
     pub(crate) fn new_spool_node(&mut self, mode: u32, path: String) -> Result<NodeId> {
         let node = NodeId(self.next_node);
         let spool = self.spool.join(node.0.to_string());
-        File::create(&spool)?;
-        Ok(self.allocate(Node {
+        let started = std::time::Instant::now();
+        let file = create_spool(&spool)?;
+        self.note_spool_open(elapsed_ns(started));
+        let node = self.allocate(Node {
             canonical: None,
             paths: [path].into(),
             mode,
@@ -315,7 +363,11 @@ impl Workspace {
                 dirty: BTreeMap::new(),
                 charged: BTreeMap::new(),
             }),
-        }))
+        });
+        if self.open_spools.insert(node, file).is_some() {
+            return Err(StoreError::Integrity("spool descriptor"));
+        }
+        Ok(node)
     }
 
     pub(crate) fn new_spool_node_reserved(
@@ -325,7 +377,9 @@ impl Workspace {
         path: String,
     ) -> Result<()> {
         let spool = self.spool.join(node.0.to_string());
-        File::create(&spool)?;
+        let started = std::time::Instant::now();
+        let file = create_spool(&spool)?;
+        self.note_spool_open(elapsed_ns(started));
         if self
             .nodes
             .insert(
@@ -349,7 +403,10 @@ impl Workspace {
             )
             .is_some()
         {
-            return Err(StorageError::Integrity("reserved node"));
+            return Err(StoreError::Integrity("reserved node"));
+        }
+        if self.open_spools.insert(node, file).is_some() {
+            return Err(StoreError::Integrity("spool descriptor"));
         }
         Ok(())
     }
@@ -357,8 +414,10 @@ impl Workspace {
     fn ensure_overlay(&mut self, node: NodeId) -> Result<&Path> {
         if let Data::File(FileData::Base { root, len }) = self.nodes[&node].data {
             let path = self.spool.join(node.0.to_string());
-            let file = File::create(&path)?;
+            let started = std::time::Instant::now();
+            let file = create_spool(&path)?;
             file.set_len(len)?;
+            self.note_spool_open(elapsed_ns(started));
             self.nodes.get_mut(&node).unwrap().data = Data::File(FileData::Overlay {
                 base: Some((root, len)),
                 spool: path,
@@ -366,10 +425,13 @@ impl Workspace {
                 dirty: BTreeMap::new(),
                 charged: BTreeMap::new(),
             });
+            if self.open_spools.insert(node, file).is_some() {
+                return Err(StoreError::Integrity("spool descriptor"));
+            }
         }
         match &self.nodes[&node].data {
             Data::File(FileData::Overlay { spool, .. }) => Ok(spool),
-            _ => Err(StorageError::InvalidInput("file")),
+            _ => Err(StoreError::InvalidInput("file")),
         }
     }
 
@@ -378,7 +440,7 @@ impl Workspace {
             match &self
                 .nodes
                 .get(&node)
-                .ok_or(StorageError::NotFound("node"))?
+                .ok_or(StoreError::NotFound("node"))?
                 .data
             {
                 Data::File(FileData::Overlay { charged, .. }) => range_bytes(charged),
@@ -386,10 +448,43 @@ impl Workspace {
             },
         )
     }
+
+    pub(crate) fn spool_file(&self, node: NodeId, path: &Path) -> Result<&File> {
+        let file = self
+            .open_spools
+            .get(&node)
+            .ok_or(StoreError::Integrity("spool descriptor"))?;
+        let open = file.metadata()?;
+        let linked = std::fs::metadata(path)?;
+        if open.dev() != linked.dev() || open.ino() != linked.ino() {
+            return Err(StoreError::Integrity("spool descriptor identity"));
+        }
+        Ok(file)
+    }
+
+    fn note_spool_open(&mut self, elapsed_ns: u64) {
+        self.spool_write_metrics.write_open_count =
+            self.spool_write_metrics.write_open_count.saturating_add(1);
+        self.spool_write_metrics.write_ns =
+            self.spool_write_metrics.write_ns.saturating_add(elapsed_ns);
+    }
+}
+
+fn elapsed_ns(started: std::time::Instant) -> u64 {
+    u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX)
+}
+
+fn create_spool(path: &Path) -> std::io::Result<File> {
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)
 }
 
 fn read_base(
-    reader: &layerfs_branch_store::SnapshotReader,
+    reader: &SnapshotReader,
     root: layerfs_content::file::rope::FileStateRoot,
     len: u64,
     offset: u64,
@@ -400,7 +495,8 @@ fn read_base(
         return Ok(Vec::new());
     }
     let mut bytes = Vec::with_capacity((end - offset) as usize);
-    read_range(&CoreReader(reader), root, offset..end, &mut bytes)?;
+    let counters = read_range(&CoreReader(reader), root, offset..end, &mut bytes)?;
+    reader.note_rope_read(counters)?;
     Ok(bytes)
 }
 
@@ -408,7 +504,7 @@ fn read_exact_at(file: &File, mut output: &mut [u8], mut offset: u64) -> Result<
     while !output.is_empty() {
         let read = file.read_at(output, offset)?;
         if read == 0 {
-            return Err(StorageError::Integrity("spool eof"));
+            return Err(StoreError::Integrity("spool eof"));
         }
         offset += read as u64;
         output = &mut output[read..];

@@ -1,36 +1,34 @@
 #![forbid(unsafe_code)]
 
 mod client;
-mod connection;
 mod query;
 mod request;
 mod result;
-mod topology;
 
 pub use client::Client;
-pub use connection::{ConnectionContext, LayerStackEndpoint};
-pub use layerfs_branch_store::BranchStore;
-pub use layerfs_layerstack_store::LayerStackStore;
-pub use layerfs_monitor::{
-    DedupAnalysis, ExactOrUnavailable, LocalCasAnalysis, MonitorError, MonitorSnapshot,
-    OperationFamily, OperationReceipt, PlacementAnalysis, SemanticOperation, TransferAnalysis,
-};
-pub use layerfs_storage::{
-    BranchFact, BranchId, BranchRecord, BranchScope, BranchScopeRecord, CaptureMode, CommitId,
-    CommitRecord, DiffAspects, DiffEntry, DiffRequest, EntityName, Fact, FactKind,
-    InitializeLayerStackResult, LayerId, LayerRecord, LayerStackFact, LayerStackId,
-    LayerStackInitialization, LayerStackRecord, LayerStackScopeRecord, LocalForkSource,
-    NodeSummary, PullBranchResult, PullLayerResult, PushResult, RemotePlacement, ServingMode,
-    StorageError, StorageReceipt, StoreId, StoreRole,
-};
-pub use layerfs_workspace::{
-    ConflictCursor, ConflictId, ConflictKind, ConflictPage, ContainerId, CreateWorkspaceSession,
-    EndWorkspaceMode, ExecutionEvent, ExecutionId, ExecutionReceipt, ExecutionSummary, NonEmpty,
-    OutputChunk, OutputPage, OutputReader, OutputStream, ResolveChoice, ResolveResult,
-    WorkspaceCommitResult, WorkspaceConflict, WorkspaceDetail, WorkspaceEndResult, WorkspaceError,
-    WorkspaceExecution, WorkspaceId, WorkspacePlacement, WorkspaceProjection, WorkspaceState,
-    WorkspaceSummary,
-};
 pub use query::{Query, QueryItem, QueryKind, QueryPage, WorkspaceQueryItem};
 pub use request::{DiffPage, OperationHandle};
-pub use result::{AddLayerResult, Result, SdkError};
+pub use result::{Result, SdkError};
+
+pub use layerfs_layerstack_store::{
+    AddLayerResult, BranchId, BranchRecord, BuildCounters, CandidateReceipt, CanonicalStorage,
+    CommitId, CommitRecord, DiffAspects, DiffEntry, DiffRequest, EntityName,
+    InitializeLayerStackResult, LayerId, LayerRecord, LayerStackId, LayerStackInitialization,
+    LayerStackRecord, LayerStackStore, LocalForkSource, NodeSummary, ObjectSource, ReconcileChoice,
+    ReconcileConflict, ReconcileConflictKind, StorageReceipt, StoreCounts, StoreError,
+};
+pub use layerfs_monitor::{
+    CandidateStats, CandidateTotals, DatabaseSnapshot, DedupAnalysis, MonitorError,
+    MonitorSnapshot, OperationFamily, OperationId, OperationOutcome, OperationReceipt,
+    SemanticOperation, TimingFragment,
+};
+pub use layerfs_workspace::{
+    ConflictCursor, ConflictId, ConflictKind, ConflictPage, ContainerBinding, ContainerCreate,
+    ContainerError, ContainerId, ContainerLimits, ContainerManager, ContainerResult,
+    ContainerStatus, CreateWorkspaceSession, CreatedContainer, DaemonTiming, EndWorkspaceMode,
+    ExecutionEvent, ExecutionId, ExecutionReceipt, ExecutionSummary, ExecutionTransport, NonEmpty,
+    OutputChunk, OutputPage, OutputReader, OutputStream, ResolveChoice, ResolveResult,
+    RunningContainer, WorkspaceCommitResult, WorkspaceConflict, WorkspaceDetail,
+    WorkspaceEndResult, WorkspaceError, WorkspaceExecution, WorkspaceId, WorkspacePlacement,
+    WorkspaceProjection, WorkspaceState, WorkspaceSummary,
+};

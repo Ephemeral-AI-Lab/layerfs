@@ -1,5 +1,5 @@
 use crate::WorkspaceState;
-use layerfs_storage::{BranchId, CommitId, StorageError};
+use layerfs_layerstack_store::{BranchId, CommitId, EntityName, LayerStackId, StoreError};
 use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
@@ -53,6 +53,11 @@ impl WorkspaceId {
         let digest = layerfs_content::ObjectId::for_bytes(&input).to_bytes();
         Self(digest[..16].try_into().expect("fixed digest"))
     }
+
+    #[cfg(unix)]
+    pub(crate) fn bytes(self) -> [u8; 16] {
+        self.0
+    }
 }
 
 impl fmt::Display for WorkspaceId {
@@ -90,9 +95,9 @@ pub enum EndWorkspaceMode {
 pub struct WorkspaceSession {
     pub id: WorkspaceId,
     pub branch_id: BranchId,
-    pub layer_stack_id: layerfs_storage::LayerStackId,
-    pub layer_stack_name: layerfs_storage::EntityName,
-    pub branch_name: layerfs_storage::EntityName,
+    pub layer_stack_id: LayerStackId,
+    pub layer_stack_name: EntityName,
+    pub branch_name: EntityName,
     pub pinned_head: Option<CommitId>,
     pub placement: WorkspacePlacement,
     pub projection: WorkspaceProjection,
@@ -103,9 +108,9 @@ pub struct WorkspaceSession {
 pub struct WorkspaceSummary {
     pub id: WorkspaceId,
     pub branch_id: BranchId,
-    pub layer_stack_id: layerfs_storage::LayerStackId,
-    pub layer_stack_name: layerfs_storage::EntityName,
-    pub branch_name: layerfs_storage::EntityName,
+    pub layer_stack_id: LayerStackId,
+    pub layer_stack_name: EntityName,
+    pub branch_name: EntityName,
     pub pinned_head: Option<CommitId>,
     pub state: WorkspaceState,
     pub dirty: bool,
@@ -145,6 +150,13 @@ impl NonEmpty<Vec<OsString>> {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ExecutionId(pub(crate) [u8; 16]);
 
+impl ExecutionId {
+    #[cfg(unix)]
+    pub(crate) fn bytes(self) -> [u8; 16] {
+        self.0
+    }
+}
+
 impl fmt::Display for ExecutionId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("x:")?;
@@ -177,9 +189,41 @@ pub struct OutputChunk {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DaemonTiming {
+    pub accept_bind_ns: u64,
+    pub decode_ns: u64,
+    pub spawn_ns: u64,
+    pub runtime_ns: u64,
+    pub drain_ns: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ExecutionTransport {
+    #[default]
+    Host,
+    Daemon,
+    DockerEngineFallback,
+    DockerCliFallback,
+    DockerCliInteractive,
+}
+
+impl ExecutionTransport {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Host => "host",
+            Self::Daemon => "daemon",
+            Self::DockerEngineFallback => "docker-engine",
+            Self::DockerCliFallback => "docker-cli",
+            Self::DockerCliInteractive => "docker-cli-interactive",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExecutionReceipt {
     pub execution_id: ExecutionId,
     pub exit_code: Option<i32>,
+    pub signal: Option<i32>,
     pub elapsed_ns: u64,
     pub total_wall_ns: u64,
     pub spawn_ns: u64,
@@ -188,7 +232,9 @@ pub struct ExecutionReceipt {
     pub drain_ns: u64,
     pub terminal_publication_ns: u64,
     pub unattributed_ns: u64,
-    pub direct_engine: bool,
+    pub transport: ExecutionTransport,
+    pub daemon_timing: Option<DaemonTiming>,
+    pub docker_engine_calls: u64,
     pub stdout_bytes: u64,
     pub stderr_bytes: u64,
     pub stopped: bool,
@@ -245,16 +291,18 @@ pub enum WorkspaceCommitResult {
 }
 
 impl WorkspaceCommitResult {
-    pub(crate) fn from_outcome(outcome: layerfs_branch_store::CommitOutcome) -> Self {
+    pub(crate) fn from_outcome(
+        outcome: layerfs_layerstack_store::CommitOutcome,
+        previous_head: Option<CommitId>,
+    ) -> Self {
         match outcome {
-            layerfs_branch_store::CommitOutcome::Created {
-                previous_head,
-                commit_id,
-            } => Self::Created {
+            layerfs_layerstack_store::CommitOutcome::Committed { commit_id, .. } => Self::Created {
                 previous_head,
                 commit_id,
             },
-            layerfs_branch_store::CommitOutcome::UpToDate { head } => Self::UpToDate { head },
+            layerfs_layerstack_store::CommitOutcome::UpToDate { .. } => Self::UpToDate {
+                head: previous_head,
+            },
         }
     }
 }
@@ -273,26 +321,28 @@ pub enum WorkspaceError {
     ReadOnly,
     InvalidPlacement,
     InvalidExecution,
-    Storage(StorageError),
+    InfrastructureLost,
+    OutputFailed,
+    Storage(StoreError),
     Io(std::io::Error),
 }
 
 pub type WorkspaceResult<T> = std::result::Result<T, WorkspaceError>;
 
 impl WorkspaceError {
-    pub(crate) fn from_commit(error: StorageError) -> WorkspaceResult<WorkspaceCommitResult> {
+    pub(crate) fn from_commit(error: StoreError) -> WorkspaceResult<WorkspaceCommitResult> {
         match error {
-            StorageError::CommitHeadMoved { expected, actual } => {
+            StoreError::CommitHeadMoved { expected, actual } => {
                 Ok(WorkspaceCommitResult::HeadMoved { expected, actual })
             }
-            StorageError::InvalidInput("workspace busy") => Ok(WorkspaceCommitResult::Busy),
+            StoreError::InvalidInput("workspace busy") => Ok(WorkspaceCommitResult::Busy),
             error => Err(Self::Storage(error)),
         }
     }
 }
 
-impl From<StorageError> for WorkspaceError {
-    fn from(value: StorageError) -> Self {
+impl From<StoreError> for WorkspaceError {
+    fn from(value: StoreError) -> Self {
         Self::Storage(value)
     }
 }

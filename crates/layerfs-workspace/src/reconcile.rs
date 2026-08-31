@@ -3,9 +3,11 @@ use crate::{
     Workspace, WorkspaceError, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
     WorkspaceResult, Workspaces,
 };
-use layerfs_branch_store::PreparedReconciliation;
 use layerfs_content::CanonicalPath;
-use layerfs_storage::{LayerId, ReconcileChoice, ReconcileConflictKind};
+use layerfs_layerstack_store::{
+    BranchId, LayerId, LayerStackStore, PreparedReconciliation, ReconcileChoice,
+    ReconcileConflictKind, Result as StoreResult, StoreError,
+};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
@@ -144,10 +146,7 @@ impl ResolutionState {
         }
     }
 
-    pub(crate) fn invalidate_if_mutated(
-        &mut self,
-        workspace: &mut Workspace,
-    ) -> layerfs_storage::Result<()> {
+    pub(crate) fn invalidate_if_mutated(&mut self, workspace: &mut Workspace) -> StoreResult<()> {
         for conflict in &mut self.conflicts {
             conflict.invalidate_if_mutated(workspace)?;
         }
@@ -161,14 +160,14 @@ impl ResolutionState {
             .count()
     }
 
-    pub(crate) fn choices(&self) -> layerfs_storage::Result<Vec<ReconcileChoice>> {
+    pub(crate) fn choices(&self) -> StoreResult<Vec<ReconcileChoice>> {
         self.conflicts
             .iter()
             .map(|conflict| match conflict.choice {
                 Some(ResolveChoice::Branch) => Ok(ReconcileChoice::Branch),
                 Some(ResolveChoice::Layer) => Ok(ReconcileChoice::Layer),
                 Some(ResolveChoice::WorkingTree) => Ok(ReconcileChoice::WorkingTree),
-                None => Err(layerfs_storage::StorageError::InvalidInput(
+                None => Err(StoreError::InvalidInput(
                     "unresolved reconciliation conflict",
                 )),
             })
@@ -177,7 +176,7 @@ impl ResolutionState {
 }
 
 impl ResolutionConflict {
-    fn invalidate_if_mutated(&mut self, workspace: &mut Workspace) -> layerfs_storage::Result<()> {
+    fn invalidate_if_mutated(&mut self, workspace: &mut Workspace) -> StoreResult<()> {
         let Some(resolved) = self.resolved_generation else {
             return Ok(());
         };
@@ -210,17 +209,15 @@ impl ResolutionConflict {
 
 impl Workspace {
     fn open_resolution(
-        branch: layerfs_branch_store::BranchStore,
-        parent: Arc<dyn layerfs_storage::LayerStackEndpoint>,
+        store: LayerStackStore,
         id: WorkspaceId,
         prepared: PreparedReconciliation,
         spool: &std::path::Path,
-    ) -> layerfs_storage::Result<Self> {
-        let reader = branch.snapshot_reader(parent.clone(), prepared.root_id)?;
+    ) -> StoreResult<Self> {
+        let reader = store.reconciliation_reader(&prepared);
         let mut workspace = Self::from_snapshot(
             WorkspaceSnapshot {
-                branch,
-                parent,
+                store,
                 branch_id: prepared.branch_id,
                 expected_head: Some(prepared.expected_head),
                 expected_base: prepared.old_base_layer_id,
@@ -238,16 +235,16 @@ impl Workspace {
 impl Workspaces {
     pub fn create_reconciliation_workspace(
         &self,
-        branch_id: layerfs_storage::BranchId,
+        branch_id: BranchId,
         current_layer_id: LayerId,
     ) -> WorkspaceResult<(WorkspaceId, u64)> {
         if let Some(existing) = self.existing_reconciliation(branch_id, current_layer_id)? {
             return Ok(existing);
         }
         let lease = self.acquire_lease(branch_id)?;
-        let prepared =
-            self.branch
-                .prepare_reconciliation(self.parent.clone(), branch_id, current_layer_id)?;
+        let prepared = self
+            .store
+            .prepare_reconciliation(branch_id, current_layer_id)?;
         let conflict_count = prepared.conflicts.len() as u64;
         let id = WorkspaceId::new();
         let state = self.runtime_root.join("workspaces").join(id.to_string());
@@ -258,13 +255,8 @@ impl Workspaces {
             placement: WorkspacePlacement::Host { root },
             projection: Some(WorkspaceProjection::Materialize),
         };
-        let workspace = Workspace::open_resolution(
-            self.branch.clone(),
-            self.parent.clone(),
-            id,
-            prepared,
-            &state.join("spool"),
-        )?;
+        let workspace =
+            Workspace::open_resolution(self.store.clone(), id, prepared, &state.join("spool"))?;
         let identity = self.workspace_identity(branch_id)?;
         let worker = Arc::new(WorkspaceWorker::new(
             id,
@@ -272,8 +264,9 @@ impl Workspaces {
             WorkspaceProjection::Materialize,
             identity,
             workspace,
+            lease,
         ));
-        let handle = crate::projection::attach(&worker)?;
+        let handle = crate::projection::attach(&worker, None)?;
         *worker
             .projection_handle
             .lock()
@@ -282,13 +275,12 @@ impl Workspaces {
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?
             .insert(id, crate::registry::SessionRecord::Active(worker));
-        lease.keep();
         Ok((id, conflict_count))
     }
 
     fn existing_reconciliation(
         &self,
-        branch_id: layerfs_storage::BranchId,
+        branch_id: BranchId,
         current_layer_id: LayerId,
     ) -> WorkspaceResult<Option<(WorkspaceId, u64)>> {
         let sessions = self

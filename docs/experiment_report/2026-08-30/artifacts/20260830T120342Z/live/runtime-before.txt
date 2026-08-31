@@ -1,5 +1,0 @@
-Linux e06cef091d9b 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 GNU/Linux
-100000 100000
-3221225472
-tmpfs on /tmp type tmpfs (rw,nosuid,nodev,noexec,relatime,size=1048576k)
-/workspace is not a mountpoint

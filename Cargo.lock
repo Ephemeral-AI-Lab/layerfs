@@ -224,6 +224,7 @@ name = "fs-benchmark-pro"
 version = "0.1.0"
 dependencies = [
  "layerfs-sdk",
+ "rusqlite",
 ]
 
 [[package]]
@@ -306,19 +307,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-branch-store"
-version = "0.1.0"
-dependencies = [
- "layerfs-content",
- "layerfs-layerstack-store",
- "layerfs-storage",
- "rusqlite",
-]
-
-[[package]]
 name = "layerfs-cli"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "clap",
  "layerfs-sdk",
  "nix 0.29.0",
@@ -330,6 +322,14 @@ name = "layerfs-content"
 version = "0.1.0"
 dependencies = [
  "blake3",
+]
+
+[[package]]
+name = "layerfs-daemon"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "nix 0.29.0",
 ]
 
 [[package]]
@@ -353,7 +353,6 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "layerfs-content",
- "layerfs-storage",
  "rusqlite",
 ]
 
@@ -368,46 +367,29 @@ dependencies = [
 name = "layerfs-monitor"
 version = "0.1.0"
 dependencies = [
- "layerfs-branch-store",
- "layerfs-content",
  "layerfs-layerstack-store",
- "layerfs-storage",
  "layerfs-workspace",
- "rusqlite",
 ]
 
 [[package]]
 name = "layerfs-sdk"
 version = "0.1.0"
 dependencies = [
- "layerfs-branch-store",
  "layerfs-content",
  "layerfs-layerstack-store",
  "layerfs-monitor",
- "layerfs-storage",
  "layerfs-workspace",
- "rusqlite",
-]
-
-[[package]]
-name = "layerfs-storage"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "layerfs-content",
- "rusqlite",
 ]
 
 [[package]]
 name = "layerfs-workspace"
 version = "0.1.0"
 dependencies = [
- "layerfs-branch-store",
  "layerfs-content",
+ "layerfs-daemon",
  "layerfs-fuse",
  "layerfs-layerstack-store",
  "layerfs-materialization",
- "layerfs-storage",
  "rusqlite",
 ]
 

@@ -42,6 +42,14 @@ struct OutputState {
     next_sequence: u64,
     truncated_through: Option<u64>,
     receipt: Option<ExecutionReceipt>,
+    failure: Option<OutputFailure>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum OutputFailure {
+    InfrastructureLost,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    OutputFailed,
 }
 
 impl OutputLog {
@@ -58,6 +66,7 @@ impl OutputLog {
                 next_sequence: 0,
                 truncated_through: None,
                 receipt: None,
+                failure: None,
             }),
             changed: Condvar::new(),
         }))
@@ -144,6 +153,20 @@ impl OutputLog {
             .unwrap_or(0)
     }
 
+    pub(crate) fn fail(&self, failure: OutputFailure) {
+        if let Ok(mut state) = self.state.lock() {
+            state.failure = Some(failure);
+            self.changed.notify_all();
+        }
+    }
+
+    pub(crate) fn is_terminal(&self) -> bool {
+        self.state
+            .lock()
+            .map(|state| state.receipt.is_some() || state.failure.is_some())
+            .unwrap_or(true)
+    }
+
     fn read(&self, after: u64, follow: bool) -> WorkspaceResult<OutputPage> {
         let mut state = self
             .state
@@ -151,6 +174,7 @@ impl OutputLog {
             .map_err(|_| WorkspaceError::WorkspaceBusy)?;
         if follow
             && state.receipt.is_none()
+            && state.failure.is_none()
             && state
                 .chunks
                 .back()
@@ -161,6 +185,12 @@ impl OutputLog {
                 .wait_timeout(state, std::time::Duration::from_secs(1))
                 .map_err(|_| WorkspaceError::WorkspaceBusy)?;
             state = next;
+        }
+        if let Some(failure) = state.failure {
+            return Err(match failure {
+                OutputFailure::InfrastructureLost => WorkspaceError::InfrastructureLost,
+                OutputFailure::OutputFailed => WorkspaceError::OutputFailed,
+            });
         }
         let chunks = state
             .chunks

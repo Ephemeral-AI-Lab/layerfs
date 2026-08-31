@@ -5,9 +5,13 @@ use layerfs_content::object::access::ObjectRead;
 use layerfs_content::object::{ContentDigestWriter, ObjectId};
 use layerfs_content::tree::inode::{InodeId, InodeKind, InodeRecordV1};
 use layerfs_content::CanonicalPath;
-use layerfs_storage::{BuiltRoot, CoreReader, ObjectBuffer, Result, StorageError};
+use layerfs_layerstack_store::{
+    BuiltRoot, CoreReader, ObjectBuffer, Result, StoreError as StorageError, WorkspaceCommitPhase,
+};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs::File;
 use std::io::{Read, Write};
+use std::os::unix::fs::FileExt;
 use std::time::Instant;
 
 #[derive(Clone, Copy)]
@@ -27,6 +31,10 @@ struct FinalEntry {
 
 impl Workspace {
     pub(crate) fn build_candidate(&mut self) -> Result<BuiltRoot> {
+        let captured = self.take_capture();
+        if let Some(captured) = &captured {
+            layerfs_layerstack_store::note_workspace_capture(1, captured.len);
+        }
         let started = Instant::now();
         let base = self.base_manifest()?;
         let final_view = self.final_manifest(manifest_charge(&base))?;
@@ -35,10 +43,7 @@ impl Workspace {
         let mut recreate = BTreeSet::new();
         let mut rewrite = BTreeSet::new();
         let mut renames = BTreeMap::new();
-        note_commit_phase(
-            layerfs_storage::WorkspaceCommitPhase::CandidatePlan,
-            started,
-        );
+        note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
 
         let started = Instant::now();
         for (node, paths) in &final_groups {
@@ -115,13 +120,25 @@ impl Workspace {
                 _ => {}
             }
         }
-        note_commit_phase(layerfs_storage::WorkspaceCommitPhase::DirtyCompare, started);
+        note_commit_phase(WorkspaceCommitPhase::DirtyCompare, started);
 
         let started = Instant::now();
         let seed = *filesystem::namespace(&CoreReader(&self.reader), self.base_root)?
             .root_directory_inode
             .as_bytes();
-        let mut objects = ObjectBuffer::new(&self.reader)?;
+        let (mut objects, captured) = match captured {
+            Some(crate::capture::CapturedFile {
+                node,
+                len,
+                root,
+                counters,
+                objects,
+            }) => (
+                ObjectBuffer::resume_prevalidated(&self.reader, objects),
+                Some((node, len, root, counters)),
+            ),
+            None => (ObjectBuffer::new(&self.reader)?, None),
+        };
         let mut root = self.base_root;
         let mut cdc_bytes_scanned = 0_u64;
         let renamed_sources = renames
@@ -203,7 +220,7 @@ impl Workspace {
             )?;
             root = set_metadata(&mut objects, root, &path, entry.attr)?;
         }
-        note_commit_phase(layerfs_storage::WorkspaceCommitPhase::Namespace, started);
+        note_commit_phase(WorkspaceCommitPhase::Namespace, started);
 
         let groups = final_groups
             .iter()
@@ -221,10 +238,11 @@ impl Workspace {
                     &representative,
                     paths,
                     entry,
+                    captured,
                     seed,
                     &mut cdc_bytes_scanned,
                 )?;
-                note_commit_phase(layerfs_storage::WorkspaceCommitPhase::Content, started);
+                note_commit_phase(WorkspaceCommitPhase::Content, started);
             } else {
                 if rewrite.contains(&node) {
                     let before = base
@@ -266,7 +284,7 @@ impl Workspace {
                             root = candidate.root();
                         }
                     }
-                    note_commit_phase(layerfs_storage::WorkspaceCommitPhase::Content, started);
+                    note_commit_phase(WorkspaceCommitPhase::Content, started);
                 }
                 let before_path = renames
                     .get(&node)
@@ -280,7 +298,7 @@ impl Workspace {
                 {
                     let started = Instant::now();
                     root = set_metadata(&mut objects, root, &representative, entry.attr)?;
-                    note_commit_phase(layerfs_storage::WorkspaceCommitPhase::Namespace, started);
+                    note_commit_phase(WorkspaceCommitPhase::Namespace, started);
                 }
             }
         }
@@ -313,14 +331,11 @@ impl Workspace {
             )?
             .root();
         }
-        note_commit_phase(layerfs_storage::WorkspaceCommitPhase::Namespace, started);
+        note_commit_phase(WorkspaceCommitPhase::Namespace, started);
 
         let started = Instant::now();
         let built = objects.finish(root, cdc_bytes_scanned);
-        note_commit_phase(
-            layerfs_storage::WorkspaceCommitPhase::CandidateFinish,
-            started,
-        );
+        note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
         built
     }
 
@@ -383,23 +398,56 @@ impl Workspace {
         representative: &str,
         paths: &[String],
         entry: FinalEntry,
+        captured: Option<(NodeId, u64, FileStateRoot, RopeCounters)>,
         seed: [u8; 32],
         cdc_bytes_scanned: &mut u64,
     ) -> Result<ObjectId> {
         match entry.attr.kind {
             Kind::File => {
-                let candidate = filesystem::write_file(
-                    objects,
-                    root,
-                    &CanonicalPath::new(representative)?,
-                    WorkspaceFileReader::new(self, entry.node)?,
-                    entry.attr.mode,
-                    seed,
-                )?;
-                *cdc_bytes_scanned = cdc_bytes_scanned
-                    .checked_add(candidate.counters().rope.cdc_bytes_scanned)
-                    .ok_or(StorageError::Integrity("CDC counter"))?;
-                root = candidate.root();
+                let path = CanonicalPath::new(representative)?;
+                if let Some((_, _, content, counters)) = captured
+                    .filter(|(node, len, _, _)| *node == entry.node && *len == entry.attr.size)
+                {
+                    root = filesystem::write_file(
+                        objects,
+                        root,
+                        &path,
+                        std::io::empty(),
+                        entry.attr.mode,
+                        seed,
+                    )?
+                    .root();
+                    let resolved =
+                        filesystem::resolve(objects, root, &path, &mut LogicalCounters::default())?;
+                    root = filesystem::apply_inode_mutations(
+                        objects,
+                        root,
+                        [InodeMutation::Upsert {
+                            inode: resolved.inode,
+                            record: InodeRecordV1 {
+                                content_root: content.0,
+                                ..resolved.record
+                            },
+                        }],
+                    )?
+                    .root();
+                    *cdc_bytes_scanned = cdc_bytes_scanned
+                        .checked_add(counters.cdc_bytes_scanned)
+                        .ok_or(StorageError::Integrity("CDC counter"))?;
+                } else {
+                    let candidate = filesystem::write_file(
+                        objects,
+                        root,
+                        &path,
+                        WorkspaceFileReader::new(self, entry.node)?,
+                        entry.attr.mode,
+                        seed,
+                    )?;
+                    *cdc_bytes_scanned = cdc_bytes_scanned
+                        .checked_add(candidate.counters().rope.cdc_bytes_scanned)
+                        .ok_or(StorageError::Integrity("CDC counter"))?;
+                    root = candidate.root();
+                }
             }
             Kind::Symlink => {
                 root = apply_one(
@@ -683,8 +731,8 @@ impl Workspace {
     }
 }
 
-fn note_commit_phase(phase: layerfs_storage::WorkspaceCommitPhase, started: Instant) {
-    layerfs_storage::note_workspace_commit_phase(
+fn note_commit_phase(phase: WorkspaceCommitPhase, started: Instant) {
+    layerfs_layerstack_store::note_workspace_commit_phase(
         phase,
         started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
     );
@@ -714,10 +762,18 @@ fn path_charge(path: &str) -> u64 {
 }
 
 struct WorkspaceFileReader<'a> {
-    workspace: &'a Workspace,
-    node: NodeId,
+    source: WorkspaceFileSource<'a>,
     offset: u64,
     len: u64,
+}
+
+#[derive(Clone, Copy)]
+enum WorkspaceFileSource<'a> {
+    Direct(&'a File),
+    Mixed {
+        workspace: &'a Workspace,
+        node: NodeId,
+    },
 }
 
 struct WorkspaceRangeReader<'a> {
@@ -765,11 +821,32 @@ impl Read for WorkspaceRangeReader<'_> {
 
 impl<'a> WorkspaceFileReader<'a> {
     fn new(workspace: &'a Workspace, node: NodeId) -> Result<Self> {
+        let len = workspace.attr(node)?.size;
+        let source = match &workspace
+            .nodes
+            .get(&node)
+            .ok_or(StorageError::NotFound("node"))?
+            .data
+        {
+            Data::File(FileData::Overlay {
+                base: None,
+                spool,
+                charged,
+                ..
+            }) if fully_charged(charged, len) => {
+                let file = workspace.spool_file(node, spool)?;
+                if file.metadata()?.len() != len {
+                    return Err(StorageError::Integrity("spool length"));
+                }
+                WorkspaceFileSource::Direct(file)
+            }
+            Data::File(_) => WorkspaceFileSource::Mixed { workspace, node },
+            _ => return Err(StorageError::InvalidInput("file")),
+        };
         Ok(Self {
-            workspace,
-            node,
+            source,
             offset: 0,
-            len: workspace.attr(node)?.size,
+            len,
         })
     }
 }
@@ -779,18 +856,34 @@ impl Read for WorkspaceFileReader<'_> {
         if self.offset == self.len || output.is_empty() {
             return Ok(0);
         }
-        let bytes = self
-            .workspace
-            .read(
-                self.node,
-                self.offset,
-                output.len().min((self.len - self.offset) as usize),
-            )
-            .map_err(std::io::Error::other)?;
-        output[..bytes.len()].copy_from_slice(&bytes);
-        self.offset += bytes.len() as u64;
-        Ok(bytes.len())
+        let count = output.len().min((self.len - self.offset) as usize);
+        match self.source {
+            WorkspaceFileSource::Direct(file) => {
+                let mut read = 0;
+                while read < count {
+                    let next = file.read_at(&mut output[read..count], self.offset + read as u64)?;
+                    if next == 0 {
+                        return Err(std::io::ErrorKind::UnexpectedEof.into());
+                    }
+                    read += next;
+                }
+                self.offset += read as u64;
+                Ok(read)
+            }
+            WorkspaceFileSource::Mixed { workspace, node } => {
+                let bytes = workspace
+                    .read(node, self.offset, count)
+                    .map_err(std::io::Error::other)?;
+                output[..bytes.len()].copy_from_slice(&bytes);
+                self.offset += bytes.len() as u64;
+                Ok(bytes.len())
+            }
+        }
     }
+}
+
+fn fully_charged(charged: &BTreeMap<u64, u64>, len: u64) -> bool {
+    (len == 0 && charged.is_empty()) || (charged.len() == 1 && charged.get(&0) == Some(&len))
 }
 
 fn apply_one(
@@ -875,10 +968,166 @@ impl Drop for Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use layerfs_branch_store::BranchStore;
-    use layerfs_layerstack_store::LayerStackStore;
-    use layerfs_storage::{EntityName, LayerStackInitialization, LocalForkSource, RemotePlacement};
-    use std::sync::Arc;
+    use layerfs_layerstack_store::{
+        CommitOutcome, EntityName, LayerStackInitialization, LayerStackStore, LocalForkSource,
+    };
+
+    fn empty_workspace(label: &str) -> (std::path::PathBuf, Workspace) {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-direct-spool-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let layer = store
+            .initialize_layerstack(
+                EntityName::new("project").unwrap(),
+                LayerStackInitialization::Empty,
+            )
+            .unwrap()
+            .genesis_layer_id;
+        let branch = store
+            .fork_branch(
+                EntityName::new(label).unwrap(),
+                LocalForkSource::Layer { layer_id: layer },
+            )
+            .unwrap();
+        let workspace = Workspace::open(store, branch, root.join("spool")).unwrap();
+        (root, workspace)
+    }
+
+    #[test]
+    fn clean_workspace_commit_is_immediately_up_to_date() {
+        let (root, mut workspace) = empty_workspace("clean-commit");
+        let base_root = workspace.base_root;
+        let (outcome, transition) = workspace.commit().unwrap();
+        assert!(matches!(
+            outcome,
+            CommitOutcome::UpToDate { root_id } if root_id == base_root
+        ));
+        assert_eq!(transition, crate::lifecycle::CommitTransition::Rebased);
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn fully_charged_new_file_reads_directly_from_retained_spool() {
+        let (root, mut workspace) = empty_workspace("direct-reader");
+        let data = (0..128 * 1024)
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>();
+        let file = workspace.create_file(ROOT, b"full", 0o600).unwrap();
+        workspace.write(file.node, 0, &data).unwrap();
+        let mut reader = WorkspaceFileReader::new(&workspace, file.node).unwrap();
+        assert!(matches!(reader.source, WorkspaceFileSource::Direct(_)));
+        let mut actual = Vec::new();
+        reader.read_to_end(&mut actual).unwrap();
+        assert_eq!(actual, data);
+
+        let sparse = workspace.create_file(ROOT, b"sparse", 0o600).unwrap();
+        workspace.write(sparse.node, 4096, b"x").unwrap();
+        assert!(matches!(
+            WorkspaceFileReader::new(&workspace, sparse.node)
+                .unwrap()
+                .source,
+            WorkspaceFileSource::Mixed { .. }
+        ));
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn sequential_new_file_capture_is_canonical_and_commit_ready() {
+        let (root, mut workspace) = empty_workspace("streaming-capture");
+        let data = (0..2 * 1024 * 1024)
+            .map(|index| ((index * 29 + index / 11) % 251) as u8)
+            .collect::<Vec<_>>();
+        let file = workspace.create_file(ROOT, b"payload", 0o600).unwrap();
+        for (index, chunk) in data.chunks(64 * 1024).enumerate() {
+            workspace
+                .write(file.node, (index * 64 * 1024) as u64, chunk)
+                .unwrap();
+        }
+        workspace.fsync(Some(file.node)).unwrap();
+        let captured_root = match &workspace.capture {
+            crate::capture::CaptureState::Ready(captured) => captured.root,
+            _ => panic!("sequential capture did not finish"),
+        };
+
+        let store = workspace.store.clone();
+        let branch = store.branch(workspace.branch_id).unwrap().unwrap();
+        let built = workspace.build_candidate().unwrap();
+        let outcome = store
+            .commit_candidate(&branch, workspace.base_root, workspace.expected_base, built)
+            .unwrap();
+        let CommitOutcome::Committed { root_id, .. } = outcome else {
+            panic!("capture Commit was not created")
+        };
+        let reader = store.snapshot_reader(root_id);
+        let resolved = filesystem::resolve(
+            &CoreReader(&reader),
+            root_id,
+            &CanonicalPath::new("payload").unwrap(),
+            &mut LogicalCounters::default(),
+        )
+        .unwrap();
+        assert_eq!(resolved.record.content_root, captured_root.0);
+        let mut actual = Vec::new();
+        filesystem::stream(
+            &CoreReader(&reader),
+            root_id,
+            &CanonicalPath::new("payload").unwrap(),
+            &mut actual,
+        )
+        .unwrap();
+        assert_eq!(actual, data);
+
+        drop(workspace);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn backward_write_invalidates_capture_and_uses_exact_fallback() {
+        let (root, mut workspace) = empty_workspace("capture-fallback");
+        let mut expected = vec![17; 128 * 1024];
+        let file = workspace.create_file(ROOT, b"payload", 0o600).unwrap();
+        workspace.write(file.node, 0, &expected).unwrap();
+        workspace.write(file.node, 4096, b"backward10").unwrap();
+        expected[4096..4106].copy_from_slice(b"backward10");
+        assert!(matches!(
+            workspace.capture,
+            crate::capture::CaptureState::Invalid
+        ));
+
+        let store = workspace.store.clone();
+        let branch = store.branch(workspace.branch_id).unwrap().unwrap();
+        let built = workspace.build_candidate().unwrap();
+        let outcome = store
+            .commit_candidate(&branch, workspace.base_root, workspace.expected_base, built)
+            .unwrap();
+        let CommitOutcome::Committed { root_id, .. } = outcome else {
+            panic!("fallback Commit was not created")
+        };
+        let reader = store.snapshot_reader(root_id);
+        let mut actual = Vec::new();
+        filesystem::stream(
+            &CoreReader(&reader),
+            root_id,
+            &CanonicalPath::new("payload").unwrap(),
+            &mut actual,
+        )
+        .unwrap();
+        assert_eq!(actual, expected);
+
+        drop(workspace);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn existing_file_mutations_are_exact_and_bounded() {
@@ -897,33 +1146,21 @@ mod tests {
             let source = root.join("source");
             std::fs::create_dir_all(&source).unwrap();
             std::fs::write(source.join("payload"), &base).unwrap();
-            let authority =
-                Arc::new(LayerStackStore::create(root.join("authority.sqlite")).unwrap());
-            let layer = authority
+            let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+            let layer = store
                 .initialize_layerstack(
                     EntityName::new("project").unwrap(),
                     LayerStackInitialization::Directory(source),
                 )
                 .unwrap()
                 .genesis_layer_id;
-            let branches =
-                BranchStore::create(root.join("branch.sqlite"), authority.store_id()).unwrap();
-            branches
-                .pull_layer(authority.clone(), layer, RemotePlacement::Reference)
-                .unwrap();
-            let branch = branches
+            let branch = store
                 .fork_branch(
                     EntityName::new(case).unwrap(),
                     LocalForkSource::Layer { layer_id: layer },
                 )
                 .unwrap();
-            let mut workspace = Workspace::open(
-                branches.clone(),
-                authority.clone(),
-                branch,
-                root.join("spool"),
-            )
-            .unwrap();
+            let mut workspace = Workspace::open(store.clone(), branch, root.join("spool")).unwrap();
             let file = workspace.lookup(ROOT, b"payload").unwrap().node;
             let original_inode = workspace.nodes[&file].canonical.unwrap();
             let mut expected = base.clone();
@@ -974,28 +1211,15 @@ mod tests {
                 assert!(built.objects.is_empty());
             }
             let candidate_root = built.root_id;
-            let outcome = branches
-                .commit_candidate(
-                    authority.clone(),
-                    branch,
-                    workspace.expected_head,
-                    workspace.expected_base,
-                    workspace.base_root,
-                    built,
-                    workspace.expected_base,
-                    false,
-                )
+            let record = store.branch(branch).unwrap().unwrap();
+            let outcome = store
+                .commit_candidate(&record, workspace.base_root, workspace.expected_base, built)
                 .unwrap();
             assert_eq!(
-                matches!(
-                    outcome,
-                    layerfs_branch_store::CommitOutcome::UpToDate { .. }
-                ),
+                matches!(outcome, CommitOutcome::UpToDate { .. }),
                 case == "noop"
             );
-            let reader = branches
-                .snapshot_reader(authority.clone(), candidate_root)
-                .unwrap();
+            let reader = store.snapshot_reader(candidate_root);
             let mut actual = Vec::new();
             let resolved = filesystem::resolve(
                 &CoreReader(&reader),
@@ -1024,8 +1248,7 @@ mod tests {
             assert_eq!(actual, expected, "{case}");
 
             drop(workspace);
-            drop(branches);
-            drop(authority);
+            drop(store);
             std::fs::remove_dir_all(root).unwrap();
         }
     }

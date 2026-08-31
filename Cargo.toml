@@ -2,9 +2,8 @@
 resolver = "2"
 members = [
     "crates/layerfs-content",
-    "crates/layerfs-storage",
+    "crates/layerfs-daemon",
     "crates/layerfs-layerstack-store",
-    "crates/layerfs-branch-store",
     "crates/layerfs-sdk",
     "crates/layerfs-workspace",
     "crates/layerfs-fuse",
@@ -12,7 +11,7 @@ members = [
     "crates/layerfs-monitor",
     "crates/layerfs-cli",
     "tools/layerfs-eval",
-    "benchmark/fs-benchmark-pro",
+    "benchmark/fs-bench-pro",
 ]
 
 [workspace.package]

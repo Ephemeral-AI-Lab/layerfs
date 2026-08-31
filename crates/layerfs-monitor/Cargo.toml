@@ -6,12 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-layerfs-branch-store = { path = "../layerfs-branch-store" }
-layerfs-content = { path = "../layerfs-content" }
 layerfs-layerstack-store = { path = "../layerfs-layerstack-store" }
-layerfs-storage = { path = "../layerfs-storage" }
 layerfs-workspace = { path = "../layerfs-workspace" }
 
 [dev-dependencies]
-layerfs-storage = { path = "../layerfs-storage", features = ["test-instrumentation"] }
-rusqlite.workspace = true
+layerfs-layerstack-store = { path = "../layerfs-layerstack-store", features = ["test-instrumentation"] }

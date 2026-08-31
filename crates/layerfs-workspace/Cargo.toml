@@ -10,15 +10,14 @@ default = ["host-fuse"]
 host-fuse = ["layerfs-fuse/host"]
 
 [dependencies]
-layerfs-branch-store = { path = "../layerfs-branch-store" }
 layerfs-content = { path = "../layerfs-content" }
+layerfs-daemon = { path = "../layerfs-daemon" }
 layerfs-fuse = { path = "../layerfs-fuse", default-features = false }
+layerfs-layerstack-store = { path = "../layerfs-layerstack-store" }
 layerfs-materialization = { path = "../layerfs-materialization" }
-layerfs-storage = { path = "../layerfs-storage" }
 
 [lib]
 path = "src/lib.rs"
 
 [dev-dependencies]
-layerfs-layerstack-store = { path = "../layerfs-layerstack-store" }
 rusqlite.workspace = true

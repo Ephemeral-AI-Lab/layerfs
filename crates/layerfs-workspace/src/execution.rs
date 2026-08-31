@@ -1,9 +1,9 @@
-use crate::output::OutputLog;
+use crate::output::{OutputFailure, OutputLog};
 use crate::worker::WorkspaceWorker;
 use crate::{
-    ExecutionId, ExecutionReceipt, ExecutionSummary, NonEmpty, OutputReader, OutputStream,
-    WorkspaceError, WorkspaceExecution, WorkspaceId, WorkspacePlacement, WorkspaceResult,
-    Workspaces,
+    DaemonTiming, ExecutionId, ExecutionReceipt, ExecutionSummary, ExecutionTransport, NonEmpty,
+    OutputReader, OutputStream, WorkspaceError, WorkspaceExecution, WorkspaceId,
+    WorkspacePlacement, WorkspaceResult, Workspaces,
 };
 use std::ffi::OsString;
 use std::io::Read;
@@ -28,6 +28,8 @@ enum ExecutionProcess {
     Child(Child),
     #[cfg(unix)]
     Docker(crate::docker_engine::DockerExec),
+    #[cfg(unix)]
+    Daemon(crate::daemon::DaemonExec),
 }
 
 enum Termination {
@@ -47,6 +49,7 @@ struct ExecutionTimingStart {
     total: std::time::Instant,
     spawn_finished: std::time::Instant,
     spawn_ns: u64,
+    docker_engine_calls_before: u64,
 }
 
 impl Execution {
@@ -58,7 +61,7 @@ impl Execution {
             .clone();
         Ok(ExecutionSummary {
             id: self.id,
-            running: receipt.is_none(),
+            running: !self.output.is_terminal(),
             receipt,
         })
     }
@@ -113,6 +116,11 @@ impl Workspaces {
             Some(ExecutionProcess::Child(child)) => execution.termination.stop(child)?,
             #[cfg(unix)]
             Some(ExecutionProcess::Docker(process)) => process.stop()?,
+            #[cfg(unix)]
+            Some(ExecutionProcess::Daemon(process)) => {
+                process.stop()?;
+                true
+            }
             None => false,
         };
         if delivered {
@@ -161,8 +169,19 @@ impl Workspaces {
             }
         };
         let total_started = std::time::Instant::now();
+        let docker_engine_calls_before = docker_engine_calls();
+        #[cfg(unix)]
+        let daemon = !interactive
+            && self.execution_route == crate::daemon::ExecutionRoute::Daemon
+            && matches!(
+                worker.request.placement,
+                WorkspacePlacement::Container { .. }
+            );
+        #[cfg(not(unix))]
+        let daemon = false;
         #[cfg(unix)]
         let direct = !interactive
+            && !daemon
             && crate::docker_engine::DockerExec::available()
             && matches!(
                 worker.request.placement,
@@ -170,7 +189,34 @@ impl Workspaces {
             );
         #[cfg(not(unix))]
         let direct = false;
-        let spawned = if direct {
+        let spawned = if daemon {
+            #[cfg(unix)]
+            {
+                let WorkspacePlacement::Container { root, .. } = &worker.request.placement else {
+                    unreachable!()
+                };
+                self.daemon
+                    .as_ref()
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::NotConnected,
+                            "daemon owner is unavailable",
+                        )
+                    })
+                    .and_then(|daemon| daemon.start(session_id, id, root, argv))
+                    .map(|process| {
+                        (
+                            ExecutionProcess::Daemon(process),
+                            Termination::Direct,
+                            None,
+                            None,
+                            ExecutionTransport::Daemon,
+                        )
+                    })
+            }
+            #[cfg(not(unix))]
+            unreachable!()
+        } else if direct {
             #[cfg(unix)]
             {
                 let WorkspacePlacement::Container { container_id, root } =
@@ -191,7 +237,7 @@ impl Workspaces {
                         Termination::Direct,
                         None,
                         None,
-                        true,
+                        ExecutionTransport::DockerEngineFallback,
                     )
                 })
             }
@@ -248,16 +294,23 @@ impl Workspaces {
                 };
                 let stdout = child.stdout.take();
                 let stderr = child.stderr.take();
+                let transport = match &worker.request.placement {
+                    WorkspacePlacement::Host { .. } => ExecutionTransport::Host,
+                    WorkspacePlacement::Container { .. } if interactive => {
+                        ExecutionTransport::DockerCliInteractive
+                    }
+                    WorkspacePlacement::Container { .. } => ExecutionTransport::DockerCliFallback,
+                };
                 (
                     ExecutionProcess::Child(child),
                     termination,
                     stdout,
                     stderr,
-                    false,
+                    transport,
                 )
             })
         };
-        let (process, termination, stdout, stderr, direct_engine) = match spawned {
+        let (process, termination, stdout, stderr, transport) = match spawned {
             Ok(spawned) => spawned,
             Err(error) => {
                 worker.note_execution(false)?;
@@ -290,8 +343,9 @@ impl Workspaces {
                 total: total_started,
                 spawn_finished,
                 spawn_ns,
+                docker_engine_calls_before,
             },
-            direct_engine,
+            transport,
             stdout.map(|stdout| drain(stdout, OutputStream::Stdout)),
             stderr.map(|stderr| drain(stderr, OutputStream::Stderr)),
         );
@@ -459,7 +513,7 @@ fn supervise<F, G>(
     worker: Weak<WorkspaceWorker>,
     executions: Weak<Mutex<std::collections::BTreeMap<ExecutionId, Arc<Execution>>>>,
     timing: ExecutionTimingStart,
-    direct_engine: bool,
+    transport: ExecutionTransport,
     stdout: Option<F>,
     stderr: Option<G>,
 ) where
@@ -477,71 +531,16 @@ fn supervise<F, G>(
     std::thread::spawn(move || {
         let supervisor_queue_ns = elapsed_ns(timing.spawn_finished);
         let runtime_started = std::time::Instant::now();
-        let exit_code = if direct_engine {
+        let terminal = match transport {
             #[cfg(unix)]
-            {
-                let stream = execution
-                    .process
-                    .lock()
-                    .map_err(|_| ())
-                    .and_then(|mut process| match process.as_mut() {
-                        Some(ExecutionProcess::Docker(process)) => {
-                            process.take_stream().map_err(|_| ())
-                        }
-                        _ => Err(()),
-                    });
-                stream.ok().and_then(|mut stream| {
-                    crate::docker_engine::drain_multiplexed(&mut stream, |stream, bytes| {
-                        let stream = match stream {
-                            1 => OutputStream::Stdout,
-                            2 => OutputStream::Stderr,
-                            _ => return Err(std::io::Error::other("Docker Exec output stream")),
-                        };
-                        match stream {
-                            OutputStream::Stdout => &execution.stdout_bytes,
-                            OutputStream::Stderr => &execution.stderr_bytes,
-                        }
-                        .fetch_add(bytes.len() as u64, Ordering::Relaxed);
-                        execution
-                            .output
-                            .append(stream, bytes)
-                            .map_err(|error| match error {
-                                WorkspaceError::Io(error) => error,
-                                _ => std::io::Error::other("Docker Exec output"),
-                            })
-                    })
-                    .ok()?;
-                    execution
-                        .process
-                        .lock()
-                        .ok()
-                        .and_then(|process| match process.as_ref() {
-                            Some(ExecutionProcess::Docker(process)) => process.exit_code().ok(),
-                            _ => None,
-                        })
-                        .flatten()
-                })
-            }
+            ExecutionTransport::Daemon => supervise_daemon(&execution),
             #[cfg(not(unix))]
-            None
-        } else {
-            let status = loop {
-                let status = execution
-                    .process
-                    .lock()
-                    .map_err(|_| ())
-                    .and_then(|mut process| match process.as_mut() {
-                        Some(ExecutionProcess::Child(child)) => child.try_wait().map_err(|_| ()),
-                        _ => Err(()),
-                    });
-                match status {
-                    Ok(Some(status)) => break Some(status),
-                    Err(()) => break None,
-                    Ok(None) => {}
-                }
-                std::thread::sleep(std::time::Duration::from_millis(2));
-            };
-            status.and_then(|status| status.code())
+            ExecutionTransport::Daemon => Err(OutputFailure::InfrastructureLost),
+            #[cfg(unix)]
+            ExecutionTransport::DockerEngineFallback => supervise_docker(&execution),
+            #[cfg(not(unix))]
+            ExecutionTransport::DockerEngineFallback => Err(OutputFailure::InfrastructureLost),
+            _ => supervise_child(&execution),
         };
         let runtime_ns = elapsed_ns(runtime_started);
         let drain_started = std::time::Instant::now();
@@ -555,30 +554,40 @@ fn supervise<F, G>(
             process.take();
         }
         let drain_ns = elapsed_ns(drain_started);
-        let receipt = ExecutionReceipt {
-            execution_id: execution.id,
-            exit_code,
-            elapsed_ns: 0,
-            total_wall_ns: 0,
-            spawn_ns: timing.spawn_ns,
-            supervisor_queue_ns,
-            runtime_ns,
-            drain_ns,
-            terminal_publication_ns: 0,
-            unattributed_ns: 0,
-            direct_engine,
-            stdout_bytes: execution.stdout_bytes.load(Ordering::Relaxed),
-            stderr_bytes: execution.stderr_bytes.load(Ordering::Relaxed),
-            stopped: execution.stopped.load(Ordering::Acquire),
-        };
-        let _receipt = execution
-            .output
-            .finish_timed(receipt, &execution.receipt, timing.total);
-        if let Ok(mut completed_at) = execution.completed_at.lock() {
-            *completed_at = Some(std::time::SystemTime::now());
-        }
         if let Some(worker) = worker.upgrade() {
             let _ = worker.note_execution(false);
+        }
+        match terminal {
+            Ok(terminal) => {
+                let receipt = ExecutionReceipt {
+                    execution_id: execution.id,
+                    exit_code: terminal.exit_code,
+                    signal: terminal.signal,
+                    elapsed_ns: 0,
+                    total_wall_ns: 0,
+                    spawn_ns: timing.spawn_ns,
+                    supervisor_queue_ns,
+                    runtime_ns,
+                    drain_ns,
+                    terminal_publication_ns: 0,
+                    unattributed_ns: 0,
+                    transport,
+                    daemon_timing: terminal.daemon_timing,
+                    docker_engine_calls: docker_engine_calls()
+                        .saturating_sub(timing.docker_engine_calls_before),
+                    stdout_bytes: execution.stdout_bytes.load(Ordering::Relaxed),
+                    stderr_bytes: execution.stderr_bytes.load(Ordering::Relaxed),
+                    stopped: terminal.stopped,
+                };
+                let _receipt =
+                    execution
+                        .output
+                        .finish_timed(receipt, &execution.receipt, timing.total);
+            }
+            Err(failure) => execution.output.fail(failure),
+        }
+        if let Ok(mut completed_at) = execution.completed_at.lock() {
+            *completed_at = Some(std::time::SystemTime::now());
         }
         if let Some(executions) = executions.upgrade() {
             crate::registry::prune_execution_registry(&executions);
@@ -586,8 +595,214 @@ fn supervise<F, G>(
     });
 }
 
+struct Terminal {
+    exit_code: Option<i32>,
+    signal: Option<i32>,
+    stopped: bool,
+    daemon_timing: Option<DaemonTiming>,
+}
+
+#[cfg(unix)]
+fn supervise_daemon(execution: &Execution) -> Result<Terminal, OutputFailure> {
+    let mut stream = execution
+        .process
+        .lock()
+        .map_err(|_| OutputFailure::InfrastructureLost)?
+        .as_ref()
+        .and_then(|process| match process {
+            ExecutionProcess::Daemon(process) => process.reader().ok(),
+            _ => None,
+        })
+        .ok_or(OutputFailure::InfrastructureLost)?;
+    if std::env::var("LAYERFS_EXEC_INJECT_DISCONNECT").as_deref() == Ok("1") {
+        if let Ok(process) = execution.process.lock() {
+            if let Some(ExecutionProcess::Daemon(process)) = process.as_ref() {
+                let _ = process.disconnect();
+            }
+        }
+    }
+    loop {
+        match crate::daemon::DaemonExec::read(&mut stream) {
+            Ok(crate::daemon::DaemonEvent::Stdout(bytes)) => {
+                execution
+                    .stdout_bytes
+                    .fetch_add(bytes.len() as u64, Ordering::Relaxed);
+                if execution
+                    .output
+                    .append(OutputStream::Stdout, &bytes)
+                    .is_err()
+                {
+                    disconnect_daemon(execution);
+                    return Err(OutputFailure::OutputFailed);
+                }
+            }
+            Ok(crate::daemon::DaemonEvent::Stderr(bytes)) => {
+                execution
+                    .stderr_bytes
+                    .fetch_add(bytes.len() as u64, Ordering::Relaxed);
+                if execution
+                    .output
+                    .append(OutputStream::Stderr, &bytes)
+                    .is_err()
+                {
+                    disconnect_daemon(execution);
+                    return Err(OutputFailure::OutputFailed);
+                }
+            }
+            Ok(crate::daemon::DaemonEvent::Exit(exit)) => {
+                if exit.stdout_bytes != execution.stdout_bytes.load(Ordering::Relaxed)
+                    || exit.stderr_bytes != execution.stderr_bytes.load(Ordering::Relaxed)
+                {
+                    return Err(OutputFailure::OutputFailed);
+                }
+                return Ok(Terminal {
+                    exit_code: exit.code,
+                    signal: exit.signal,
+                    stopped: exit.stopped,
+                    daemon_timing: Some(DaemonTiming {
+                        accept_bind_ns: exit.timing.accept_bind_ns,
+                        decode_ns: exit.timing.decode_ns,
+                        spawn_ns: exit.timing.spawn_ns,
+                        runtime_ns: exit.timing.runtime_ns,
+                        drain_ns: exit.timing.drain_ns,
+                    }),
+                });
+            }
+            Ok(crate::daemon::DaemonEvent::Error(
+                layerfs_daemon::protocol::RemoteError::OutputFailed,
+            )) => return Err(OutputFailure::OutputFailed),
+            Ok(crate::daemon::DaemonEvent::Error(_)) | Err(_) => {
+                return Err(OutputFailure::InfrastructureLost)
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+fn disconnect_daemon(execution: &Execution) {
+    if let Ok(process) = execution.process.lock() {
+        if let Some(ExecutionProcess::Daemon(process)) = process.as_ref() {
+            let _ = process.disconnect();
+        }
+    }
+}
+
+#[cfg(unix)]
+fn supervise_docker(execution: &Execution) -> Result<Terminal, OutputFailure> {
+    let mut stream = execution
+        .process
+        .lock()
+        .map_err(|_| OutputFailure::InfrastructureLost)?
+        .as_mut()
+        .and_then(|process| match process {
+            ExecutionProcess::Docker(process) => process.take_stream().ok(),
+            _ => None,
+        })
+        .ok_or(OutputFailure::InfrastructureLost)?;
+    let injected = std::env::var("LAYERFS_EXEC_INJECT_DISCONNECT").as_deref() == Ok("1");
+    if injected {
+        let _ = stream.shutdown(std::net::Shutdown::Both);
+    }
+    if crate::docker_engine::drain_multiplexed(&mut stream, |stream, bytes| {
+        let stream = match stream {
+            1 => OutputStream::Stdout,
+            2 => OutputStream::Stderr,
+            _ => return Err(std::io::Error::other("Docker Exec output stream")),
+        };
+        match stream {
+            OutputStream::Stdout => &execution.stdout_bytes,
+            OutputStream::Stderr => &execution.stderr_bytes,
+        }
+        .fetch_add(bytes.len() as u64, Ordering::Relaxed);
+        execution
+            .output
+            .append(stream, bytes)
+            .map_err(|error| match error {
+                WorkspaceError::Io(error) => error,
+                _ => std::io::Error::other("Docker Exec output"),
+            })
+    })
+    .is_err()
+    {
+        if let Ok(mut process) = execution.process.lock() {
+            if let Some(ExecutionProcess::Docker(process)) = process.as_mut() {
+                let _ = process.stop();
+            }
+        }
+        return Err(OutputFailure::InfrastructureLost);
+    }
+    if injected {
+        if let Ok(mut process) = execution.process.lock() {
+            if let Some(ExecutionProcess::Docker(process)) = process.as_mut() {
+                let _ = process.stop();
+            }
+        }
+        return Err(OutputFailure::InfrastructureLost);
+    }
+    let exit_code = execution
+        .process
+        .lock()
+        .map_err(|_| OutputFailure::InfrastructureLost)?
+        .as_ref()
+        .and_then(|process| match process {
+            ExecutionProcess::Docker(process) => process.exit_code().ok(),
+            _ => None,
+        })
+        .ok_or(OutputFailure::InfrastructureLost)?;
+    Ok(Terminal {
+        exit_code,
+        signal: None,
+        stopped: execution.stopped.load(Ordering::Acquire),
+        daemon_timing: None,
+    })
+}
+
+fn supervise_child(execution: &Execution) -> Result<Terminal, OutputFailure> {
+    let status = loop {
+        let status = execution
+            .process
+            .lock()
+            .map_err(|_| OutputFailure::InfrastructureLost)?
+            .as_mut()
+            .and_then(|process| match process {
+                ExecutionProcess::Child(child) => child.try_wait().ok(),
+                #[allow(unreachable_patterns)]
+                _ => None,
+            });
+        match status {
+            Some(Some(status)) => break status,
+            None => return Err(OutputFailure::InfrastructureLost),
+            Some(None) => std::thread::sleep(std::time::Duration::from_millis(2)),
+        }
+    };
+    #[cfg(unix)]
+    let signal = {
+        use std::os::unix::process::ExitStatusExt;
+        status.signal()
+    };
+    #[cfg(not(unix))]
+    let signal = None;
+    Ok(Terminal {
+        exit_code: status.code(),
+        signal,
+        stopped: execution.stopped.load(Ordering::Acquire),
+        daemon_timing: None,
+    })
+}
+
 fn elapsed_ns(started: std::time::Instant) -> u64 {
     started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+}
+
+fn docker_engine_calls() -> u64 {
+    #[cfg(unix)]
+    {
+        crate::docker_engine::operation_count()
+    }
+    #[cfg(not(unix))]
+    {
+        0
+    }
 }
 
 fn new_execution_id() -> ExecutionId {

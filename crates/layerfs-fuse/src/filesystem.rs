@@ -15,13 +15,29 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 impl Filesystem for LayerFs {
     fn init(&mut self, _request: &Request, config: &mut KernelConfig) -> std::io::Result<()> {
-        let _ = config.set_max_write(1024 * 1024);
-        let _ = config.set_max_readahead(1024 * 1024);
+        let max_write = config
+            .set_max_write(1024 * 1024)
+            .map(|_| 1024 * 1024)
+            .unwrap_or_else(|limit| {
+                let _ = config.set_max_write(limit);
+                limit
+            });
+        self.port.note_fuse_max_write(max_write);
+        let max_readahead = config
+            .set_max_readahead(1024 * 1024)
+            .map(|_| 1024 * 1024)
+            .unwrap_or_else(|limit| {
+                let _ = config.set_max_readahead(limit);
+                limit
+            });
         let wanted = InitFlags::FUSE_ASYNC_READ
             | InitFlags::FUSE_BIG_WRITES
             | InitFlags::FUSE_PARALLEL_DIROPS
             | InitFlags::FUSE_MAX_PAGES;
-        let _ = config.add_capabilities(config.capabilities() & wanted);
+        let capabilities = config.capabilities() & wanted;
+        let _ = config.add_capabilities(capabilities);
+        self.port
+            .note_fuse_read_config(max_readahead, u64::from(capabilities.bits()));
         let _ = config.set_max_background(64);
         let _ = config.set_congestion_threshold(48);
         config

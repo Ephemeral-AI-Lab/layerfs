@@ -1,21 +1,21 @@
-use layerfs_storage::{Result, StoreDb, StoreId, StoreRole};
+use crate::{Result, StoreError};
 use std::path::Path;
 
 #[derive(Clone)]
 pub struct LayerStackStore {
-    pub(crate) db: StoreDb,
+    pub(crate) db: crate::schema::StoreDb,
 }
 
 impl LayerStackStore {
     pub fn create(path: impl AsRef<Path>) -> Result<Self> {
         Ok(Self {
-            db: StoreDb::create(path, StoreRole::LayerStack, None)?,
+            db: crate::schema::StoreDb::create(path)?,
         })
     }
 
     pub fn connect(path: impl AsRef<Path>) -> Result<Self> {
         Ok(Self {
-            db: StoreDb::connect(path, StoreRole::LayerStack, None)?,
+            db: crate::schema::StoreDb::connect(path)?,
         })
     }
 
@@ -23,7 +23,16 @@ impl LayerStackStore {
         self.db.path()
     }
 
-    pub fn store_id(&self) -> StoreId {
-        self.db.store_id()
+    #[doc(hidden)]
+    pub fn data_version(&self) -> Result<u64> {
+        self.db.data_version()
+    }
+
+    #[doc(hidden)]
+    pub fn ensure_writable(&self) -> Result<()> {
+        self.db.writer().map(drop).map_err(|error| match error {
+            StoreError::StoreBusy => StoreError::StoreBusy,
+            error => error,
+        })
     }
 }

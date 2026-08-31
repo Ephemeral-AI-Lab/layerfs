@@ -125,8 +125,11 @@ pub(super) fn coalesce(extents: &mut Vec<ExtentSliceV3>) -> CoreResult<()> {
     Ok(())
 }
 
-pub(super) fn merge_counters(target: &mut RopeCounters, source: RopeCounters) -> CoreResult<()> {
+pub(crate) fn merge_counters(target: &mut RopeCounters, source: RopeCounters) -> CoreResult<()> {
     target.payload_bytes_read = add(target.payload_bytes_read, source.payload_bytes_read)?;
+    target.payload_ids_read = add(target.payload_ids_read, source.payload_ids_read)?;
+    target.payload_batches_read = add(target.payload_batches_read, source.payload_batches_read)?;
+    target.max_payload_batch = target.max_payload_batch.max(source.max_payload_batch);
     target.payload_bytes_written = add(target.payload_bytes_written, source.payload_bytes_written)?;
     target.cdc_bytes_scanned = add(target.cdc_bytes_scanned, source.cdc_bytes_scanned)?;
     target.chunks_created = add(target.chunks_created, source.chunks_created)?;

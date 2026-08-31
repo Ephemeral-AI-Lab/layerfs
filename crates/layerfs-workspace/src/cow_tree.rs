@@ -1,5 +1,4 @@
 use crate::{ResourcePolicy, WorkspaceState};
-use layerfs_branch_store::{BranchStore, SnapshotReader};
 use layerfs_content::file::rope::{read_all_bounded, state, FileStateRoot, RopeCounters};
 use layerfs_content::filesystem::{self as logical, LogicalCounters};
 use layerfs_content::object::access::ObjectRead;
@@ -13,8 +12,9 @@ use layerfs_content::tree::inode::{
 };
 use layerfs_content::tree::metadata::{metadata_lookup, MetadataKey, PortableMetadataV1};
 use layerfs_content::{CanonicalName, CanonicalPath};
-use layerfs_storage::{
-    BranchId, CommitId, CoreReader, LayerId, LayerStackEndpoint, Result, StorageError,
+use layerfs_layerstack_store::{
+    BranchId, CommitId, CoreReader, LayerId, LayerStackStore, Result, SnapshotReader,
+    StoreError as StorageError,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
@@ -24,8 +24,7 @@ pub struct NodeId(pub u64);
 pub const ROOT: NodeId = NodeId(1);
 
 pub(crate) struct WorkspaceSnapshot {
-    pub(crate) branch: BranchStore,
-    pub(crate) parent: std::sync::Arc<dyn LayerStackEndpoint>,
+    pub(crate) store: LayerStackStore,
     pub(crate) branch_id: BranchId,
     pub(crate) expected_head: Option<CommitId>,
     pub(crate) expected_base: LayerId,
@@ -92,8 +91,7 @@ pub(crate) struct Node {
 }
 
 pub struct Workspace {
-    pub(crate) branch: BranchStore,
-    pub(crate) parent: std::sync::Arc<dyn LayerStackEndpoint>,
+    pub(crate) store: LayerStackStore,
     pub(crate) reader: SnapshotReader,
     pub(crate) branch_id: BranchId,
     pub(crate) expected_head: Option<CommitId>,
@@ -102,6 +100,9 @@ pub struct Workspace {
     pub(crate) base_inodes: InodeTableRoot,
     pub(crate) spool: PathBuf,
     pub(crate) spool_bytes: u64,
+    pub(crate) spool_write_metrics: SpoolWriteMetrics,
+    pub(crate) capture: crate::capture::CaptureState,
+    pub(crate) open_spools: HashMap<NodeId, std::fs::File>,
     pub(crate) mutation_generation: u64,
     pub(crate) mutation_paths: BTreeMap<String, u64>,
     pub(crate) policy: ResourcePolicy,
@@ -114,28 +115,36 @@ pub struct Workspace {
     pub(crate) resolution: Option<crate::reconcile::ResolutionState>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct SpoolWriteMetrics {
+    pub(crate) write_bytes: u64,
+    pub(crate) write_open_count: u64,
+    pub(crate) write_ns: u64,
+    pub(crate) fence_count: u64,
+    pub(crate) fence_ns: u64,
+}
+
 impl Workspace {
+    #[cfg(test)]
     pub fn open(
-        branch: BranchStore,
-        parent: std::sync::Arc<dyn LayerStackEndpoint>,
+        store: LayerStackStore,
         branch_id: BranchId,
         spool: impl AsRef<Path>,
     ) -> Result<Self> {
-        Self::open_with_policy(branch, parent, branch_id, spool, ResourcePolicy::default())
+        Self::open_with_policy(store, branch_id, spool, ResourcePolicy::default())
     }
 
+    #[cfg(test)]
     pub fn open_with_policy(
-        branch: BranchStore,
-        parent: std::sync::Arc<dyn LayerStackEndpoint>,
+        store: LayerStackStore,
         branch_id: BranchId,
         spool: impl AsRef<Path>,
         policy: ResourcePolicy,
     ) -> Result<Self> {
-        let pinned = branch.pin_branch(parent.clone(), branch_id)?;
+        let pinned = store.pin_branch(branch_id)?;
         Self::from_snapshot(
             WorkspaceSnapshot {
-                branch,
-                parent,
+                store,
                 branch_id,
                 expected_head: pinned.branch.head_commit_id,
                 expected_base: pinned.branch.base_layer_id,
@@ -150,8 +159,7 @@ impl Workspace {
     pub(crate) fn clean_copy(&self, spool: impl AsRef<Path>) -> Result<Self> {
         Self::from_snapshot(
             WorkspaceSnapshot {
-                branch: self.branch.clone(),
-                parent: self.parent.clone(),
+                store: self.store.clone(),
                 branch_id: self.branch_id,
                 expected_head: self.expected_head,
                 expected_base: self.expected_base,
@@ -169,8 +177,7 @@ impl Workspace {
         policy: ResourcePolicy,
     ) -> Result<Self> {
         let WorkspaceSnapshot {
-            branch,
-            parent,
+            store,
             branch_id,
             expected_head,
             expected_base,
@@ -203,8 +210,7 @@ impl Workspace {
             }),
         };
         Ok(Self {
-            branch,
-            parent,
+            store,
             reader,
             branch_id,
             expected_head,
@@ -213,6 +219,9 @@ impl Workspace {
             base_inodes: InodeTableRoot(namespace.inode_table_root),
             spool,
             spool_bytes: 0,
+            spool_write_metrics: SpoolWriteMetrics::default(),
+            capture: crate::capture::CaptureState::default(),
+            open_spools: HashMap::new(),
             mutation_generation: 0,
             mutation_paths: BTreeMap::new(),
             policy,
@@ -761,6 +770,7 @@ impl Workspace {
     }
 
     pub fn unpin(&mut self, node: NodeId) -> Result<()> {
+        self.finish_capture(Some(node));
         let value = self
             .nodes
             .get_mut(&node)
@@ -841,6 +851,7 @@ impl Workspace {
         {
             self.dirty.remove(&node);
             if let Some(value) = self.nodes.remove(&node) {
+                self.open_spools.remove(&node);
                 if let Some(inode) = value.canonical {
                     self.canonical_nodes.remove(&inode);
                 }
@@ -875,9 +886,9 @@ fn new_directory(path: String, mode: u32) -> Node {
 mod tests {
     use super::*;
     use crate::ROOT;
-    use layerfs_branch_store::BranchStore;
-    use layerfs_layerstack_store::LayerStackStore;
-    use std::sync::Arc;
+    use layerfs_layerstack_store::{
+        EntityName, LayerStackInitialization, LayerStackStore, LocalForkSource,
+    };
 
     #[derive(Debug, Eq, PartialEq)]
     struct Snapshot {
@@ -908,29 +919,21 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&root).unwrap();
-        let layer = Arc::new(LayerStackStore::create(root.join("layer.sqlite")).unwrap());
-        let genesis = layer
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let genesis = store
             .initialize_layerstack(
-                layerfs_storage::EntityName::new("project").unwrap(),
-                layerfs_storage::LayerStackInitialization::Empty,
+                EntityName::new("project").unwrap(),
+                LayerStackInitialization::Empty,
             )
             .unwrap()
             .genesis_layer_id;
-        let branch = BranchStore::create(root.join("branch.sqlite"), layer.store_id()).unwrap();
-        branch
-            .pull_layer(
-                layer.clone(),
-                genesis,
-                layerfs_storage::RemotePlacement::Reference,
-            )
-            .unwrap();
-        let id = branch
+        let id = store
             .fork_branch(
-                layerfs_storage::EntityName::new("main").unwrap(),
-                layerfs_storage::LocalForkSource::Layer { layer_id: genesis },
+                EntityName::new("main").unwrap(),
+                LocalForkSource::Layer { layer_id: genesis },
             )
             .unwrap();
-        let workspace = Workspace::open(branch, layer, id, root.join("spool")).unwrap();
+        let workspace = Workspace::open(store, id, root.join("spool")).unwrap();
         (root, workspace)
     }
 
@@ -998,6 +1001,27 @@ mod tests {
         assert_rejected(&mut workspace, |workspace| {
             workspace.rename(ROOT, b"source", child.node, b"target", false)
         });
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn spool_write_metrics_are_aggregate_and_reset() {
+        let (root, mut workspace) = fixture("spool-write-metrics");
+        let file = workspace.create_file(ROOT, b"file", 0o600).unwrap();
+        workspace.write(file.node, 0, b"data").unwrap();
+        workspace.fsync(Some(file.node)).unwrap();
+        assert_eq!(workspace.open_spools.len(), 1);
+        let metrics = workspace.take_spool_write_metrics();
+        assert_eq!(metrics.write_bytes, 4);
+        assert_eq!(metrics.write_open_count, 1);
+        assert_eq!(metrics.fence_count, 1);
+        assert_eq!(
+            workspace.take_spool_write_metrics(),
+            SpoolWriteMetrics::default()
+        );
+        workspace.unlink(ROOT, b"file", false).unwrap();
+        assert!(workspace.open_spools.is_empty());
         drop(workspace);
         std::fs::remove_dir_all(root).unwrap();
     }

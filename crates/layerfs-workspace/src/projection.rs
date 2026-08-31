@@ -16,7 +16,10 @@ pub(crate) enum ProjectionHandle {
     Fuse(layerfs_fuse::HostMount),
 }
 
-pub(crate) fn attach(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<ProjectionHandle> {
+pub(crate) fn attach(
+    worker: &Arc<WorkspaceWorker>,
+    daemon: Option<&crate::daemon::DaemonOwner>,
+) -> WorkspaceResult<ProjectionHandle> {
     if let WorkspacePlacement::Container { container_id, root } = &worker.request.placement {
         if worker.projection != crate::WorkspaceProjection::Fuse {
             return Err(WorkspaceError::InvalidPlacement);
@@ -36,6 +39,7 @@ pub(crate) fn attach(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<Projectio
             root.clone(),
             port,
             &runtime,
+            daemon,
         )
         .map(|projection| ProjectionHandle::Docker(Box::new(projection)));
     }
@@ -83,7 +87,7 @@ pub(crate) fn capture(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<()> {
         }
     };
     let Some(root) = root else {
-        layerfs_storage::note_workspace_capture(0, 0);
+        layerfs_layerstack_store::note_workspace_capture(0, 0);
         return Ok(());
     };
     let changed =
@@ -115,12 +119,12 @@ pub(crate) fn capture(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<()> {
         let _ = std::fs::remove_dir_all(capture_spool);
         return Err(materialization_error(error));
     }
-    layerfs_storage::note_workspace_capture(sink.files, sink.bytes);
+    layerfs_layerstack_store::note_workspace_capture(sink.files, sink.bytes);
     captured.mutation_generation = workspace
         .mutation_generation
         .checked_add(u64::from(changed))
         .ok_or(WorkspaceError::Storage(
-            layerfs_storage::StorageError::Integrity("Workspace mutation generation"),
+            layerfs_layerstack_store::StoreError::Integrity("Workspace mutation generation"),
         ))?;
     captured.mutation_paths = workspace.mutation_paths.clone();
     captured.resolution = workspace.resolution.take();
@@ -140,6 +144,112 @@ pub(crate) fn pause(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
     Ok(())
 }
 
+pub(crate) fn record_write_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
+    let started = std::time::Instant::now();
+    let transport = {
+        let handle = worker
+            .projection_handle
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        match handle.as_ref() {
+            Some(ProjectionHandle::Docker(projection)) => Some(projection.take_write_metrics()?),
+            _ => None,
+        }
+    };
+    let Some(transport) = transport else {
+        return Ok(());
+    };
+    let spool = worker
+        .workspace
+        .lock()
+        .map_err(|_| WorkspaceError::WorkspaceBusy)?
+        .take_spool_write_metrics();
+    layerfs_layerstack_store::record_fuse_write(layerfs_layerstack_store::FuseWriteReceipt {
+        max_write_bytes: transport.max_write_bytes,
+        kernel_write_requests: transport.kernel_write_requests,
+        kernel_write_bytes: transport.kernel_write_bytes,
+        kernel_write_le_4k: transport.kernel_write_le_4k,
+        kernel_write_le_64k: transport.kernel_write_le_64k,
+        kernel_write_le_256k: transport.kernel_write_le_256k,
+        kernel_write_le_1m: transport.kernel_write_le_1m,
+        kernel_write_gt_1m: transport.kernel_write_gt_1m,
+        client_request_copy_bytes: transport.client_request_copy_bytes,
+        frame_payload_copy_bytes: transport.frame_payload_copy_bytes,
+        client_frame_bytes: transport.client_frame_bytes,
+        encode_ns: transport.encode_ns,
+        socket_write_ns: transport.socket_write_ns,
+        host_frame_bytes: transport.host_frame_bytes,
+        socket_read_ns: transport.socket_read_ns,
+        decode_ns: transport.decode_ns,
+        host_decode_copy_bytes: transport.host_decode_copy_bytes,
+        host_dispatch_ns: transport.host_dispatch_ns,
+        spool_write_bytes: spool.write_bytes,
+        spool_write_open_count: spool.write_open_count,
+        spool_write_ns: spool.write_ns,
+        workspace_fence_count: spool.fence_count,
+        workspace_fence_ns: spool.fence_ns,
+        collection_ns: u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX),
+    })?;
+    Ok(())
+}
+
+pub(crate) fn record_read_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
+    let started = std::time::Instant::now();
+    let transport = {
+        let handle = worker
+            .projection_handle
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        match handle.as_ref() {
+            Some(ProjectionHandle::Docker(projection)) => Some(projection.take_read_metrics()?),
+            _ => None,
+        }
+    };
+    let Some(transport) = transport else {
+        return Ok(());
+    };
+    if transport.kernel_read_requests == 0 {
+        return Ok(());
+    }
+    let mut receipt = worker
+        .workspace
+        .lock()
+        .map_err(|_| WorkspaceError::WorkspaceBusy)?
+        .reader
+        .take_read_metrics()?;
+    receipt.max_readahead_bytes = transport.max_readahead_bytes;
+    receipt.init_capabilities = transport.init_capabilities;
+    receipt.kernel_read_requests = transport.kernel_read_requests;
+    receipt.kernel_read_bytes = transport.kernel_read_bytes;
+    receipt.kernel_read_le_4k = transport.kernel_read_le_4k;
+    receipt.kernel_read_le_64k = transport.kernel_read_le_64k;
+    receipt.kernel_read_le_256k = transport.kernel_read_le_256k;
+    receipt.kernel_read_le_1m = transport.kernel_read_le_1m;
+    receipt.kernel_read_gt_1m = transport.kernel_read_gt_1m;
+    receipt.read_ahead_hits = transport.read_ahead_hits;
+    receipt.read_ahead_misses = transport.read_ahead_misses;
+    receipt.read_ahead_fetches = transport.read_ahead_fetches;
+    receipt.read_ahead_requested_bytes = transport.read_ahead_requested_bytes;
+    receipt.read_ahead_fetched_bytes = transport.read_ahead_fetched_bytes;
+    receipt.read_ahead_served_bytes = transport.read_ahead_served_bytes;
+    receipt.read_ahead_unused_bytes = transport.read_ahead_unused_bytes;
+    receipt.read_ahead_cache_copy_bytes = transport.read_ahead_cache_copy_bytes;
+    receipt.host_response_frames = transport.host_response_frames;
+    receipt.host_response_bytes = transport.host_response_bytes;
+    receipt.host_response_copy_bytes = transport.host_response_copy_bytes;
+    receipt.host_encode_ns = transport.host_encode_ns;
+    receipt.host_socket_write_ns = transport.host_socket_write_ns;
+    receipt.client_response_frames = transport.client_response_frames;
+    receipt.client_response_bytes = transport.client_response_bytes;
+    receipt.client_socket_read_ns = transport.client_socket_read_ns;
+    receipt.client_decode_ns = transport.client_decode_ns;
+    receipt.client_decode_copy_bytes = transport.client_decode_copy_bytes;
+    receipt.host_dispatch_ns = transport.host_dispatch_ns;
+    receipt.collection_ns = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    layerfs_layerstack_store::record_workspace_read(receipt)?;
+    Ok(())
+}
+
 pub(crate) fn resume(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
     let handle = worker
         .projection_handle
@@ -147,27 +257,6 @@ pub(crate) fn resume(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
         .map_err(|_| WorkspaceError::WorkspaceBusy)?;
     if let Some(ProjectionHandle::Docker(projection)) = handle.as_ref() {
         projection.resume()?;
-    }
-    Ok(())
-}
-
-pub(crate) fn make_read_only(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
-    let root = {
-        let handle = worker
-            .projection_handle
-            .lock()
-            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-        match handle.as_ref() {
-            Some(ProjectionHandle::Materialized(root)) => Some(root.clone()),
-            Some(ProjectionHandle::Docker(projection)) => {
-                projection.make_read_only()?;
-                None
-            }
-            _ => None,
-        }
-    };
-    if let Some(root) = root {
-        read_only_tree(&root)?;
     }
     Ok(())
 }
@@ -285,9 +374,12 @@ fn discard_stage(stage: &Path) {
     }
 }
 
-pub(crate) fn refresh(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<()> {
+pub(crate) fn refresh(
+    worker: &Arc<WorkspaceWorker>,
+    daemon: Option<&crate::daemon::DaemonOwner>,
+) -> WorkspaceResult<()> {
     end(worker)?;
-    let handle = attach(worker)?;
+    let handle = attach(worker, daemon)?;
     *worker
         .projection_handle
         .lock()
@@ -304,7 +396,7 @@ impl FuseView {
 
     fn with<T>(
         &self,
-        operation: impl FnOnce(&mut Workspace) -> layerfs_storage::Result<T>,
+        operation: impl FnOnce(&mut Workspace) -> layerfs_layerstack_store::Result<T>,
     ) -> Result<T, PortError> {
         let worker = self.worker()?;
         let _callback = worker.enter_callback().map_err(workspace_port_error)?;
@@ -613,7 +705,7 @@ struct MaterializedView(Weak<WorkspaceWorker>);
 impl MaterializedView {
     fn with<T>(
         &self,
-        operation: impl FnOnce(&mut Workspace) -> layerfs_storage::Result<T>,
+        operation: impl FnOnce(&mut Workspace) -> layerfs_layerstack_store::Result<T>,
     ) -> MaterializedResult<T> {
         let worker = self
             .0
@@ -858,14 +950,20 @@ fn workspace_port_error(error: WorkspaceError) -> PortError {
     }
 }
 
-fn storage_port_error(error: layerfs_storage::StorageError) -> PortError {
+fn storage_port_error(error: layerfs_layerstack_store::StoreError) -> PortError {
     match error {
-        layerfs_storage::StorageError::NotFound(_) => PortError::NotFound,
-        layerfs_storage::StorageError::InvalidInput("directory not empty") => PortError::NotEmpty,
-        layerfs_storage::StorageError::InvalidInput("name exists") => PortError::Exists,
-        layerfs_storage::StorageError::InvalidInput("workspace spool limit") => PortError::NoSpace,
-        layerfs_storage::StorageError::InvalidInput("workspace inactive") => PortError::ReadOnly,
-        layerfs_storage::StorageError::InvalidInput(_) => PortError::Invalid,
+        layerfs_layerstack_store::StoreError::NotFound(_) => PortError::NotFound,
+        layerfs_layerstack_store::StoreError::InvalidInput("directory not empty") => {
+            PortError::NotEmpty
+        }
+        layerfs_layerstack_store::StoreError::InvalidInput("name exists") => PortError::Exists,
+        layerfs_layerstack_store::StoreError::InvalidInput("workspace spool limit") => {
+            PortError::NoSpace
+        }
+        layerfs_layerstack_store::StoreError::InvalidInput("workspace inactive") => {
+            PortError::ReadOnly
+        }
+        layerfs_layerstack_store::StoreError::InvalidInput(_) => PortError::Invalid,
         _ => PortError::Io,
     }
 }

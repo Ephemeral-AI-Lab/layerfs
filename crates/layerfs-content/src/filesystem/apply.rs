@@ -47,6 +47,23 @@ impl CandidateRoot {
     pub const fn counters(&self) -> LogicalCounters {
         self.counters
     }
+
+    pub(super) fn after(mut self, previous: Self) -> CoreResult<Self> {
+        self.parent_root = previous.parent_root;
+        merge_namespace(&mut self.counters, previous.counters.namespace)?;
+        merge_inode(&mut self.counters, previous.counters.inode_table)?;
+        crate::file::rope::merge_rope_counters(&mut self.counters.rope, previous.counters.rope)?;
+        self.counters.structural_deferred_peak_bytes = self
+            .counters
+            .structural_deferred_peak_bytes
+            .max(previous.counters.structural_deferred_peak_bytes);
+        self.counters.structural_deferred_prunes = self
+            .counters
+            .structural_deferred_prunes
+            .checked_add(previous.counters.structural_deferred_prunes)
+            .ok_or(CoreError::LengthOverflow)?;
+        Ok(self)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

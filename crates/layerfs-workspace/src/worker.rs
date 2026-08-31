@@ -8,15 +8,16 @@ pub(crate) struct WorkspaceWorker {
     pub(crate) identity: WorkspaceIdentity,
     pub(crate) workspace: Arc<Mutex<Workspace>>,
     pub(crate) projection_handle: Mutex<Option<crate::projection::ProjectionHandle>>,
+    pub(crate) lease: Mutex<Option<layerfs_layerstack_store::WorkspaceLease>>,
     admission: Mutex<Admission>,
     drained: Condvar,
 }
 
 #[derive(Clone)]
 pub(crate) struct WorkspaceIdentity {
-    pub(crate) layer_stack_id: layerfs_storage::LayerStackId,
-    pub(crate) layer_stack_name: layerfs_storage::EntityName,
-    pub(crate) branch_name: layerfs_storage::EntityName,
+    pub(crate) layer_stack_id: layerfs_layerstack_store::LayerStackId,
+    pub(crate) layer_stack_name: layerfs_layerstack_store::EntityName,
+    pub(crate) branch_name: layerfs_layerstack_store::EntityName,
 }
 
 #[derive(Default)]
@@ -34,6 +35,7 @@ impl WorkspaceWorker {
         projection: WorkspaceProjection,
         identity: WorkspaceIdentity,
         workspace: Workspace,
+        lease: layerfs_layerstack_store::WorkspaceLease,
     ) -> Self {
         Self {
             id,
@@ -42,6 +44,7 @@ impl WorkspaceWorker {
             identity,
             workspace: Arc::new(Mutex::new(workspace)),
             projection_handle: Mutex::new(None),
+            lease: Mutex::new(Some(lease)),
             admission: Mutex::new(Admission {
                 accepting: true,
                 ..Admission::default()
@@ -74,6 +77,7 @@ impl WorkspaceWorker {
                 .writers
                 .checked_sub(1)
                 .ok_or(WorkspaceError::WorkspaceBusy)?;
+            self.drained.notify_all();
         }
         Ok(())
     }
@@ -134,6 +138,29 @@ impl WorkspaceWorker {
             return Err(WorkspaceError::WorkspaceBusy);
         }
         Ok(Quiesced { worker: self })
+    }
+
+    pub(crate) fn wait_for_writers(&self) -> Result<(), WorkspaceError> {
+        let mut admission = self
+            .admission
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        while admission.writers != 0 {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(WorkspaceError::WorkspaceBusy);
+            }
+            let (next, timeout) = self
+                .drained
+                .wait_timeout(admission, remaining)
+                .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+            admission = next;
+            if timeout.timed_out() && admission.writers != 0 {
+                return Err(WorkspaceError::WorkspaceBusy);
+            }
+        }
+        Ok(())
     }
 }
 

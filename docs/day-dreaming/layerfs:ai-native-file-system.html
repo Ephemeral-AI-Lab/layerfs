@@ -1,0 +1,1290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="LayerFS technical vision for logical, zero-bootstrap, browser-native workspaces shared by humans and AI Agents.">
+<meta name="theme-color" content="#111831">
+<title>LayerFS: An AI-Native File System for Universal Logical Workspaces</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f3f6fb;
+  --paper: #fff;
+  --ink: #142033;
+  --muted: #5e6b7d;
+  --line: #dce4ef;
+  --panel: #f7f9fc;
+  --panel-strong: #edf2f8;
+  --accent: #3157d5;
+  --accent-2: #7c3aed;
+  --accent-soft: #eef2ff;
+  --code: #101827;
+  --shadow: 0 24px 70px rgba(20, 32, 51, .10);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 14% 2%, rgba(49, 87, 213, .12), transparent 30rem),
+    radial-gradient(circle at 92% 12%, rgba(124, 58, 237, .09), transparent 28rem),
+    var(--bg);
+  font: 16px/1.72 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.skip-link { position: fixed; left: 16px; top: -80px; z-index: 20; padding: 10px 14px; border-radius: 8px; color: #fff; background: var(--accent); }
+.skip-link:focus { top: 16px; }
+.layout { display: grid; grid-template-columns: minmax(230px, 290px) minmax(0, 940px); gap: 42px; max-width: 1360px; margin: 0 auto; padding: 42px 30px 90px; }
+.sidebar { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; padding: 22px; border: 1px solid rgba(220, 228, 239, .9); border-radius: 18px; background: rgba(255, 255, 255, .88); backdrop-filter: blur(14px); box-shadow: 0 14px 42px rgba(20, 32, 51, .08); }
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-weight: 800; letter-spacing: -.02em; }
+.mark { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); font-size: .8rem; box-shadow: 0 7px 18px rgba(49, 87, 213, .24); }
+.sidebar p { margin: 0 0 17px; color: var(--muted); font-size: .88rem; }
+.sidebar-label { margin: 20px 0 8px; color: #8a96a8; font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.toc { margin: 0; padding: 0; list-style: none; }
+.toc li { margin: 2px 0; }
+.toc a { display: block; padding: 5px 8px; border-radius: 7px; color: #40506a; font-size: .84rem; line-height: 1.35; }
+.toc a:hover { color: var(--accent); background: var(--accent-soft); text-decoration: none; }
+.source-link { display: inline-flex; margin-top: 18px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); font-size: .82rem; }
+main { min-width: 0; padding: clamp(30px, 6vw, 72px); border: 1px solid rgba(220, 228, 239, .9); border-radius: 24px; background: var(--paper); box-shadow: var(--shadow); }
+h1, h2, h3 { line-height: 1.18; letter-spacing: -.035em; scroll-margin-top: 22px; }
+h1 { max-width: 820px; margin: 0 0 24px; font-size: clamp(2.55rem, 5.8vw, 5rem); font-weight: 850; text-wrap: balance; }
+h1::before { display: block; width: max-content; margin-bottom: 20px; padding: 7px 11px; border: 1px solid #ccd7ff; border-radius: 999px; color: var(--accent); background: var(--accent-soft); content: "TECHNICAL VISION / DAY-DREAMING"; font-size: .72rem; font-weight: 800; letter-spacing: .12em; }
+h2 { margin: 62px 0 20px; padding-top: 22px; border-top: 1px solid var(--line); font-size: clamp(1.75rem, 3vw, 2.35rem); }
+h3 { margin: 36px 0 13px; font-size: 1.34rem; }
+p { margin: 0 0 18px; }
+main > blockquote:first-of-type { margin: 0 0 40px; border: 1px solid #dce3ff; border-left: 4px solid var(--accent); border-radius: 0 14px 14px 0; background: linear-gradient(135deg, #f7f9ff, #fbf9ff); color: #40506a; }
+blockquote { margin: 24px 0; padding: 16px 20px; border-left: 4px solid var(--accent); background: var(--accent-soft); color: #293a59; }
+blockquote p:last-child { margin-bottom: 0; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: #101a2d; }
+ul, ol { margin: 0 0 24px; padding-left: 28px; }
+li { margin: 5px 0; }
+code { padding: .15em .38em; border-radius: 6px; color: #273a60; background: var(--panel-strong); font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+pre { overflow-x: auto; margin: 22px 0 27px; padding: 19px 21px; border-radius: 13px; color: #e8eef8; background: var(--code); font: .87rem/1.58 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
+pre code { padding: 0; color: inherit; background: transparent; font: inherit; }
+pre.mermaid { overflow: auto; padding: 26px 16px; border: 1px solid var(--line); color: var(--ink); background: linear-gradient(180deg, #fbfcff, #f5f7fb); text-align: center; box-shadow: none; }
+.table-wrap { overflow-x: auto; margin: 22px 0 30px; border: 1px solid var(--line); border-radius: 13px; box-shadow: 0 4px 18px rgba(20, 32, 51, .05); }
+table { width: 100%; min-width: 620px; border-collapse: collapse; background: #fff; }
+th, td { padding: 12px 15px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: #283750; background: var(--panel); font-weight: 760; }
+tr:last-child td { border-bottom: 0; }
+footer { margin-top: 70px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+@media (max-width: 920px) {
+  .layout { display: block; padding: 18px 14px 52px; }
+  .sidebar { position: static; max-height: none; margin-bottom: 18px; }
+  .toc { columns: 2; column-gap: 20px; }
+  main { padding: 34px 22px 52px; border-radius: 18px; }
+}
+@media (max-width: 560px) {
+  .toc { columns: 1; }
+  h1 { font-size: 2.35rem; }
+  main { padding-inline: 18px; }
+}
+@media print {
+  @page { margin: 17mm 15mm; }
+  body { background: #fff; font-size: 10.5pt; }
+  .layout { display: block; max-width: none; padding: 0; }
+  .sidebar, .skip-link { display: none; }
+  main { padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+  h1 { font-size: 30pt; }
+  h2, h3 { break-after: avoid-page; }
+  pre, blockquote, .table-wrap, .mermaid { break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to document</a>
+<div class="layout">
+  <aside class="sidebar" aria-label="Table of contents">
+    <div class="brand"><span class="mark">LF</span><span>LayerFS</span></div>
+    <p>AI-native filesystem and universal logical workspace technical vision.</p>
+    <div class="sidebar-label">Contents</div>
+    <ol class="toc"><li><a href="#executive-thesis">Executive thesis</a></li>
+<li><a href="#abstract">Abstract</a></li>
+<li><a href="#1-the-change-in-the-source-of-truth">1. The change in the source of truth</a></li>
+<li><a href="#2-three-generations-of-development-workspaces">2. Three generations of development workspaces</a></li>
+<li><a href="#3-why-the-physical-workspace-model-fails-under-agent-parallelism">3. Why the physical-workspace model fails under Agent parallelism</a></li>
+<li><a href="#4-the-logical-workspace-model">4. The logical workspace model</a></li>
+<li><a href="#5-design-principles-for-an-ai-native-filesystem">5. Design principles for an AI-native filesystem</a></li>
+<li><a href="#6-multi-agent-workspaces">6. Multi-Agent workspaces</a></li>
+<li><a href="#7-zero-bootstrap-workspace-activation">7. Zero-bootstrap workspace activation</a></li>
+<li><a href="#8-one-root-multiple-projections">8. One root, multiple projections</a></li>
+<li><a href="#9-the-browser-as-a-first-class-workspace-runtime">9. The browser as a first-class workspace runtime</a></li>
+<li><a href="#10-sqlite-webassembly-opfs">10. SQLite + WebAssembly + OPFS</a></li>
+<li><a href="#11-direct-usability-and-the-execution-continuum">11. Direct usability and the execution continuum</a></li>
+<li><a href="#12-commit-rollout-and-rollback">12. Commit, rollout, and rollback</a></li>
+<li><a href="#13-storage-and-transfer-model">13. Storage and transfer model</a></li>
+<li><a href="#14-canonical-state-derived-artifacts-and-evidence">14. Canonical state, derived artifacts, and evidence</a></li>
+<li><a href="#15-integrity-trust-and-isolation">15. Integrity, trust, and isolation</a></li>
+<li><a href="#16-relationship-to-version-control">16. Relationship to version control</a></li>
+<li><a href="#17-required-system-properties">17. Required system properties</a></li>
+<li><a href="#18-evaluation-framework">18. Evaluation framework</a></li>
+<li><a href="#19-progressive-realization">19. Progressive realization</a></li>
+<li><a href="#20-non-goals-and-boundaries">20. Non-goals and boundaries</a></li>
+<li><a href="#21-future-workspace-lifecycle">21. Future workspace lifecycle</a></li>
+<li><a href="#22-conclusion">22. Conclusion</a></li></ol>
+    <a class="source-link" href="layerfs:ai-native-file-system.md">View Markdown source</a>
+  </aside>
+  <main id="content">
+<h1 id="layerfs-an-ai-native-file-system-for-universal-logical-workspaces">LayerFS: An AI-Native File System for Universal Logical Workspaces</h1>
+<blockquote>
+<p><strong>Status:</strong> Non-binding future vision / day-dreaming document<br><strong>Current authority:</strong> <a href="../v2-replacement/spec.md"><code>../v2-replacement/spec.md</code></a><br><strong>Scope:</strong> The future shape of code workspaces for humans, Agents, browsers,
+native tools, and remote execution. This document is intentionally not a
+market analysis, pricing proposal, or replacement for the binding V2
+specification.</p>
+</blockquote>
+<h2 id="executive-thesis">Executive thesis</h2>
+<p>The fundamental unit of software work should no longer be a physical directory
+that must be constructed on a particular machine. It should be an immutable,
+authenticated, branchable logical workspace root that can be opened directly,
+forked without copying, and projected into browser, native, or remote execution
+environments without changing its identity.</p>
+<p>The central inversion is:</p>
+<pre><code class="language-text">Traditional model
+physical directory = workspace
+
+LayerFS model
+logical root = workspace
+physical directory = one optional projection
+</code></pre>
+<p>This inversion enables three connected shifts:</p>
+<ol>
+<li><strong>Physical to logical:</strong> files and directories become canonical logical
+objects rooted in authenticated state.</li>
+<li><strong>Local to universal:</strong> the codebase is no longer bound to a local or remote
+machine filesystem; it can be opened directly in a browser through SQLite,
+WebAssembly, and a virtual filesystem.</li>
+<li><strong>Single-worker to multi-Agent:</strong> humans and Agents receive isolated
+copy-on-write overlays over a shared immutable root rather than independent
+copies of the same physical workspace.</li>
+</ol>
+<p>The resulting vision is concise:</p>
+<blockquote>
+<p><strong>A workspace is a root, not a directory.</strong></p>
+</blockquote>
+<blockquote>
+<p><strong>Fork roots, not physical files.</strong></p>
+</blockquote>
+<blockquote>
+<p><strong>The browser is a workspace runtime, not merely a repository viewer.</strong></p>
+</blockquote>
+<blockquote>
+<p><strong>Open the codebase and begin working without waiting for the codebase to be
+reconstructed first.</strong></p>
+</blockquote>
+<h2 id="abstract">Abstract</h2>
+<p>Software development still treats a workspace as a physical directory. Before
+useful work can begin, source code is cloned, files are checked out,
+dependencies are downloaded, packages are installed, indexes are generated,
+and an execution environment is prepared. Local development performs this work
+on a developer machine. Conventional cloud development moves it to a remote
+machine but generally preserves the same physical-workspace model.</p>
+<p>This model was designed for a small number of long-lived human workspaces. It
+becomes increasingly inefficient when autonomous Agents create many
+short-lived, concurrent, and speculative branches of work. A single request may
+produce multiple implementation attempts, debugging hypotheses, security
+analyses, test experiments, reviews, and reconciliation branches. Reconstructing
+a complete physical checkout and dependency environment for every attempt
+multiplies storage, transfer, preparation, indexing, and cleanup even though
+most workspace content remains identical.</p>
+<p>LayerFS proposes a different foundation. The authoritative workspace is an
+immutable, content-addressed object graph identified by a canonical root.
+Physical files are projections of that logical state rather than the state
+itself. A writable workspace is a private copy-on-write overlay over an
+immutable root. Creating a branch initially requires only a new branch identity,
+a reference to the root, and an empty overlay; unchanged canonical objects are
+not copied.</p>
+<p>The same logical workspace can be projected through FUSE for existing native
+tools, materialized when required, exposed to remote execution, or opened
+directly in a browser. In the browser form, an immutable SQLite artifact
+provides indexed access to canonical workspace objects, WebAssembly implements
+verification and logical filesystem behavior, and an OPFS-backed overlay
+retains local mutations. Portable tools may execute in the browser while
+native or resource-intensive work is dispatched remotely against the same root.</p>
+<p>This architecture enables a zero-bootstrap workspace model. Zero bootstrap does
+not mean zero network transfer or zero computation. It means that complete
+clone, checkout, dependency installation, indexing, and filesystem
+materialization are removed from the critical path of useful interaction.
+Activation cost follows the initial working set rather than total workspace
+size.</p>
+<p>LayerFS therefore proposes more than an AI-native filesystem. It proposes a
+universal logical workspace shared by humans, Agents, browsers, native tools,
+CI workers, and remote execution systems.</p>
+<h2 id="1-the-change-in-the-source-of-truth">1. The change in the source of truth</h2>
+<p>The revolutionary change is not that physical files become bytes. Physical
+files are already bytes. The change is that a physical namespace stops being
+authoritative.</p>
+<p>In the conventional model:</p>
+<pre><code class="language-text">workspace identity = path to one mutable directory
+</code></pre>
+<p>The directory simultaneously acts as:</p>
+<ul>
+<li>the representation of state;</li>
+<li>the mutation surface;</li>
+<li>the interface used by tools;</li>
+<li>the unit copied for isolation;</li>
+<li>the unit mounted into execution;</li>
+<li>the unit archived or deleted.</li>
+</ul>
+<p>Logical and physical concerns are coupled.</p>
+<p>In the LayerFS model:</p>
+<pre><code class="language-text">workspace identity = authenticated root of canonical logical objects
+</code></pre>
+<p>The root is independent of:</p>
+<ul>
+<li>machine;</li>
+<li>mount point;</li>
+<li>native inode;</li>
+<li>process;</li>
+<li>container;</li>
+<li>browser origin;</li>
+<li>SQLite row identifier;</li>
+<li>SQLite page layout;</li>
+<li>storage endpoint;</li>
+<li>projection technology.</li>
+</ul>
+<p>The physical namespace becomes a replaceable view:</p>
+<pre><code class="language-text">logical root
+    ↓
+projection
+    ↓
+physical or virtual filesystem interface
+</code></pre>
+<p>This separation permits the workspace to move across execution environments
+without changing what the workspace is.</p>
+<h2 id="2-three-generations-of-development-workspaces">2. Three generations of development workspaces</h2>
+<p>The transition from local development to browser-native logical workspaces is
+not merely a change in user interface. It is a change in where authoritative
+state lives.</p>
+<pre class="mermaid">flowchart LR
+    subgraph G1[&quot;Generation 1: Local development&quot;]
+        GIT1[Repository] --&gt;|clone| LOCAL[Local physical directory]
+        LOCAL --&gt; TOOLS1[Local editor and tools]
+    end
+
+    subgraph G2[&quot;Generation 2: Cloud development&quot;]
+        BROWSER2[Browser UI] --&gt; VM[Remote VM or container]
+        GIT2[Repository] --&gt;|clone| REMOTE[Remote physical directory]
+        VM --&gt; REMOTE
+        REMOTE --&gt; TOOLS2[Remote editor and tools]
+    end
+
+    subgraph G3[&quot;Generation 3: Logical workspace development&quot;]
+        ROOT[Authenticated logical root]
+        ROOT --&gt; WEB[Browser WASM + OPFS]
+        ROOT --&gt; NATIVE[Native FUSE or materialization]
+        ROOT --&gt; EXEC[Remote execution]
+        ROOT --&gt; AGENTS[Additional Agent overlays]
+    end
+</pre>
+<p>Local development makes a local directory authoritative. Cloud development
+usually makes a remote directory authoritative. The browser is often a terminal
+or editor attached to a hidden remote machine that still performs clone,
+checkout, installation, indexing, and materialization.</p>
+<p>LayerFS changes the authority boundary. The browser may directly host and
+mutate the logical workspace. Native and remote machines become execution
+projections rather than owners of workspace identity.</p>
+<p>The distinction can be summarized as:</p>
+<blockquote>
+<p><strong>Cloud development moved the machine. LayerFS removes the machine from
+workspace identity.</strong></p>
+</blockquote>
+<h2 id="3-why-the-physical-workspace-model-fails-under-agent-parallelism">3. Why the physical-workspace model fails under Agent parallelism</h2>
+<p>The traditional preparation path is eager:</p>
+<pre><code class="language-text">clone repository
+    ↓
+checkout files
+    ↓
+download dependencies
+    ↓
+install packages
+    ↓
+generate indexes
+    ↓
+configure environment
+    ↓
+begin useful work
+</code></pre>
+<p>This produces several structural problems.</p>
+<h3 id="3-1-workspace-creation-scales-with-total-workspace-size">3.1 Workspace creation scales with total workspace size</h3>
+<p>Preparation time is commonly proportional to repository history, file count,
+dependency volume, generated metadata, and physical checkout size. A task that
+needs five files may still prepare millions of files.</p>
+<h3 id="3-2-logical-branches-become-physical-copies">3.2 Logical branches become physical copies</h3>
+<p>A version-control branch may be logically cheap, but a usable execution branch
+often becomes another checkout, worktree, CI directory, container layer, cloud
+workspace, dependency directory, and build tree.</p>
+<h3 id="3-3-dependencies-are-repeatedly-reconstructed">3.3 Dependencies are repeatedly reconstructed</h3>
+<p>Lockfiles identify desired versions, but do not always provide an immediately
+usable environment. Every workspace may still contact registries, download
+archives, extract packages, generate metadata, and rebuild native components.</p>
+<h3 id="3-4-reproducibility-is-incomplete">3.4 Reproducibility is incomplete</h3>
+<p>A source commit does not necessarily identify the complete filesystem observed
+by an Agent. Two executions may differ in dependencies, toolchains, generated
+files, local caches, platform behavior, or environment configuration.</p>
+<h3 id="3-5-multi-agent-execution-multiplies-every-inefficiency">3.5 Multi-Agent execution multiplies every inefficiency</h3>
+<p>One difficult task may produce:</p>
+<ul>
+<li>a minimal patch attempt;</li>
+<li>an architectural refactor;</li>
+<li>several debugging hypotheses;</li>
+<li>a dependency upgrade;</li>
+<li>an independent correctness review;</li>
+<li>a security-hardening branch;</li>
+<li>a test-minimization branch;</li>
+<li>one or more reconciliation attempts.</li>
+</ul>
+<p>If every attempt requires a complete physical environment, infrastructure work
+grows with the number of attempts even when most content is shared.</p>
+<p>The desired model is instead:</p>
+<pre><code class="language-text">one immutable logical root
+    +
+many lightweight writable overlays
+</code></pre>
+<h2 id="4-the-logical-workspace-model">4. The logical workspace model</h2>
+<p>A logical workspace is an authenticated graph of immutable objects. At a
+conceptual level:</p>
+<pre><code class="language-text">Workspace root
+    ↓
+Directory objects
+    ↓
+File objects
+    ↓
+Content objects or chunks
+</code></pre>
+<p>Each object has:</p>
+<ul>
+<li>one canonical representation;</li>
+<li>one content-derived identity;</li>
+<li>immutable bytes;</li>
+<li>an explicit kind;</li>
+<li>bounded decoding rules;</li>
+<li>authenticated child references.</li>
+</ul>
+<p>The defining invariant is:</p>
+<pre><code class="language-text">same logical filesystem
+    ⇒
+same canonical objects
+    ⇒
+same root identity
+</code></pre>
+<p>This must hold across machines, databases, browsers, mounts, processes, and
+executions.</p>
+<h3 id="4-1-structural-sharing">4.1 Structural sharing</h3>
+<p>A mutation creates new objects only for changed content and the affected
+ancestor path. Unchanged objects retain their identities and remain shared.</p>
+<pre class="mermaid">flowchart LR
+    R0[Root R0] --&gt; D0[Directory A0]
+    D0 --&gt; S0[src directory 0]
+    D0 --&gt; README[README object]
+    D0 --&gt; TESTS[tests subtree]
+    S0 --&gt; M0[main file 0]
+    S0 --&gt; LIB[lib subtree]
+    M0 --&gt; X[Chunk X]
+
+    R1[Root R1] --&gt; D1[Directory A1 - new]
+    D1 --&gt; S1[src directory 1 - new]
+    D1 --&gt; README
+    D1 --&gt; TESTS
+    S1 --&gt; M1[main file 1 - new]
+    S1 --&gt; LIB
+    M1 --&gt; Y[Chunk Y - new]
+</pre>
+<p>Changing <code>main</code> creates new content, a new file object, a new <code>src</code> directory,
+and a new ancestor spine to <code>R1</code>. <code>README</code>, <code>tests</code>, and <code>lib</code> remain shared.</p>
+<h3 id="4-2-logical-identity-is-not-sqlite-identity">4.2 Logical identity is not SQLite identity</h3>
+<p>SQLite may carry canonical objects, but it must not define them:</p>
+<pre><code class="language-text">logical ObjectId
+    ≠
+SQLite row ID
+    ≠
+SQLite transaction ID
+    ≠
+SQLite page location
+</code></pre>
+<p>The same object should remain valid in SQLite, OPFS, memory, an object store, a
+packfile, or another durable carrier.</p>
+<p>SQLite answers:</p>
+<blockquote>
+<p>Where are these bytes, and how can they be retrieved and published durably?</p>
+</blockquote>
+<p>The logical layer answers:</p>
+<blockquote>
+<p>What do these bytes mean, and do they authenticate as the object requested?</p>
+</blockquote>
+<h2 id="5-design-principles-for-an-ai-native-filesystem">5. Design principles for an AI-native filesystem</h2>
+<p>An AI-native workspace should satisfy the following principles.</p>
+<h3 id="5-1-immutable-publication">5.1 Immutable publication</h3>
+<p>Published roots are never modified in place. A mutation produces a new root.
+Immutability enables deterministic identity, safe caching, historical access,
+rollback, concurrent reading, and authenticated reuse.</p>
+<h3 id="5-2-copy-on-write-mutation">5.2 Copy-on-write mutation</h3>
+<p>A writable workspace is a private overlay over an immutable root. It records
+only the Agent&#39;s unique changes.</p>
+<h3 id="5-3-metadata-only-initial-fork">5.3 Metadata-only initial fork</h3>
+<p>Forking creates a branch identity, selects a base root, and allocates an empty
+overlay. It copies no canonical content solely because the branch exists.</p>
+<h3 id="5-4-lazy-acquisition">5.4 Lazy acquisition</h3>
+<p>A workspace becomes logically available before all reachable content is local.
+Objects are acquired according to access and declared availability policy.</p>
+<h3 id="5-5-transactional-publication">5.5 Transactional publication</h3>
+<p>A new root does not become visible until its required objects and immutable
+facts are durable or explicitly resolvable under its placement policy.</p>
+<h3 id="5-6-explicit-placement">5.6 Explicit placement</h3>
+<p>Local replicas, reference-backed roots, remote stores, browser artifacts, and
+caches may change acquisition latency and offline availability. They must not
+change workspace identity or filesystem results.</p>
+<h3 id="5-7-snapshot-pinned-reads">5.7 Snapshot-pinned reads</h3>
+<p>A reader opened for a root continues to observe that root even when branch
+heads advance concurrently.</p>
+<h3 id="5-8-compare-and-swap-writes">5.8 Compare-and-swap writes</h3>
+<p>A commit declares the exact parent and expected branch head. An unexpected head
+advance produces a conflict instead of silent overwrite.</p>
+<h3 id="5-9-branch-per-attempt-isolation">5.9 Branch-per-attempt isolation</h3>
+<p>Agents normally write to independent overlays rather than a shared mutable
+namespace.</p>
+<h3 id="5-10-capability-based-execution">5.10 Capability-based execution</h3>
+<p>Workspace access does not imply unrestricted access to the host, network,
+secrets, clock, process table, package registries, or external systems.
+Execution capabilities are explicit.</p>
+<h2 id="6-multi-agent-workspaces">6. Multi-Agent workspaces</h2>
+<p>The filesystem should assume that parallel speculation is normal rather than
+exceptional.</p>
+<pre class="mermaid">flowchart TB
+    R0[Accepted Root R0]
+    R0 --&gt; A[Agent A overlay]
+    R0 --&gt; B[Agent B overlay]
+    R0 --&gt; C[Agent C overlay]
+
+    A --&gt; RA[Result Root RA]
+    B --&gt; RB[Result Root RB]
+    C --&gt; RC[Result Root RC]
+
+    RA --&gt; VA{Validation}
+    RB --&gt; VB{Validation}
+    RC --&gt; VC{Validation}
+
+    VA --&gt;|pass| PROMOTE[Promote selected root]
+    VB --&gt;|fail| DISCARD[Discard attempt]
+    VC --&gt;|partial| EVIDENCE[Retain evidence or reconcile]
+
+    PROMOTE --&gt; R1[Accepted Root R1]
+</pre>
+<p>Every Agent sees the same immutable base but owns a private writable overlay.
+The fork initially copies zero canonical content. Successful attempts produce
+new roots. Failed attempts can be discarded without mutating or recopying the
+base.</p>
+<h3 id="6-1-root-based-coordination">6.1 Root-based coordination</h3>
+<p>Agent coordination should use immutable states:</p>
+<pre><code class="language-text">compare Root A with Root B
+validate Root C
+reconcile Root A and Root D against Base R0
+promote Root B
+discard Root E
+</code></pre>
+<p>This is safer than coordinating through mutable paths such as
+<code>/tmp/agent-workspace-42</code>.</p>
+<h3 id="6-2-agent-results-are-more-than-patches">6.2 Agent results are more than patches</h3>
+<p>A useful Agent result may contain:</p>
+<pre><code class="language-text">parent root
+result root
+changed paths
+commands executed
+toolchain identity
+tests and evidence
+declared capabilities
+unresolved limitations
+</code></pre>
+<p>The workspace root identifies filesystem state. Evidence is content-addressed
+and linked to the root, but does not automatically become part of the root&#39;s
+canonical filesystem identity.</p>
+<h3 id="6-3-typed-reconciliation">6.3 Typed reconciliation</h3>
+<p>Competing roots should be reconciled as logical filesystem states rather than
+by allowing Agents to edit the same physical directory concurrently.</p>
+<p>Reconciliation may report typed conflicts such as:</p>
+<ul>
+<li>content conflict;</li>
+<li>file-versus-directory conflict;</li>
+<li>delete-versus-modify conflict;</li>
+<li>directory conflict;</li>
+<li>hard-link conflict;</li>
+<li>metadata conflict.</li>
+</ul>
+<p>A resolution produces another immutable root.</p>
+<h2 id="7-zero-bootstrap-workspace-activation">7. Zero-bootstrap workspace activation</h2>
+<p>&quot;Zero bootstrap&quot; is an architectural property, not a literal claim of zero
+elapsed time.</p>
+<p>It means that these operations are not mandatory prerequisites for useful
+interaction:</p>
+<ul>
+<li>complete repository clone;</li>
+<li>complete checkout;</li>
+<li>archive extraction;</li>
+<li>installation of every dependency;</li>
+<li>generation of every index;</li>
+<li>construction of a complete physical directory.</li>
+</ul>
+<pre class="mermaid">flowchart LR
+    subgraph TRADITIONAL[&quot;Traditional activation&quot;]
+        T1[Clone] --&gt; T2[Checkout]
+        T2 --&gt; T3[Install]
+        T3 --&gt; T4[Index]
+        T4 --&gt; T5[Materialize]
+        T5 --&gt; T6[Useful work]
+    end
+
+    subgraph LOGICAL[&quot;LayerFS activation&quot;]
+        L1[Open root] --&gt; L2[Useful work]
+        L2 -. on demand .-&gt; L3[Fetch accessed objects]
+        L2 -. on demand .-&gt; L4[Acquire dependency objects]
+        L2 -. optional .-&gt; L5[Materialize]
+        L2 -. optional .-&gt; L6[Load derived indexes]
+    end
+</pre>
+<p>The desired property is:</p>
+<blockquote>
+<p><strong>Time to first useful operation depends primarily on the initial working set,
+not total workspace size.</strong></p>
+</blockquote>
+<p>A zero-bootstrap system should measure separately:</p>
+<ul>
+<li>root-resolution time;</li>
+<li>time to authenticated namespace;</li>
+<li>time to first tree display;</li>
+<li>time to first file read;</li>
+<li>bytes acquired before first interaction;</li>
+<li>time to first writable fork;</li>
+<li>time to first command;</li>
+<li>remaining background or on-demand acquisition.</li>
+</ul>
+<p>The precise claim is:</p>
+<blockquote>
+<p>LayerFS removes complete workspace construction from the critical path of
+useful development.</p>
+</blockquote>
+<h2 id="8-one-root-multiple-projections">8. One root, multiple projections</h2>
+<p>FUSE, SQLite, WASM, OPFS, and remote execution are not competing definitions of
+the workspace. They are carriers or projections of one logical root.</p>
+<pre class="mermaid">flowchart TB
+    ROOT[Authenticated Workspace Root]
+    READER[Pinned SnapshotReader]
+    ROOT --&gt; READER
+
+    READER --&gt; FUSE[Native FUSE projection]
+    READER --&gt; MAT[Explicit materialization]
+    READER --&gt; WEB[Browser VFS]
+    READER --&gt; REMOTE[Remote execution projection]
+
+    FUSE --&gt; POSIX[Existing POSIX tools]
+    MAT --&gt; NATIVE[Native directory consumers]
+    WEB --&gt; WASM[Editor, Agent, and WASM tools]
+    REMOTE --&gt; HEAVY[Container, build, test, or GPU work]
+</pre>
+<p>All projections must preserve:</p>
+<ul>
+<li>ObjectIds;</li>
+<li>root identity;</li>
+<li>namespace contents;</li>
+<li>file contents;</li>
+<li>root-to-root diff semantics;</li>
+<li>commit rules;</li>
+<li>authentication requirements.</li>
+</ul>
+<p>The core architectural statement is:</p>
+<blockquote>
+<p><strong>FUSE is not the architecture. SQLite is not the architecture. WASM is not
+the architecture. The canonical logical workspace is the architecture.</strong></p>
+</blockquote>
+<h2 id="9-the-browser-as-a-first-class-workspace-runtime">9. The browser as a first-class workspace runtime</h2>
+<p>The browser transition is a co-equal innovation, not a secondary interface.</p>
+<p>Conventional browser IDEs often retain this architecture:</p>
+<pre><code class="language-text">browser UI
+    ↓ network
+remote VM
+    ↓
+remote physical checkout
+    ↓
+remote tools
+</code></pre>
+<p>The browser is a screen for a machine-bound workspace.</p>
+<p>LayerFS instead permits:</p>
+<pre><code class="language-text">authenticated root
+    ↓
+browser logical runtime
+    ↓
+direct inspection, fork, mutation, and portable execution
+</code></pre>
+<p>The browser can become a universal workspace shell capable of:</p>
+<ul>
+<li>resolving and authenticating a root;</li>
+<li>rendering its logical namespace;</li>
+<li>reading objects lazily;</li>
+<li>comparing roots;</li>
+<li>retaining a private branch;</li>
+<li>coordinating humans and Agents;</li>
+<li>executing portable tools;</li>
+<li>dispatching native work;</li>
+<li>publishing a resulting root.</li>
+</ul>
+<p>The codebase becomes directly addressable:</p>
+<pre><code class="language-text">https://workspace.example/open?root=&lt;root-id&gt;&amp;artifact=&lt;artifact-url&gt;
+</code></pre>
+<p>The user experience becomes:</p>
+<pre><code class="language-text">open workspace URL
+    ↓
+authenticate root
+    ↓
+display logical namespace
+    ↓
+fork local overlay
+    ↓
+edit or execute
+    ↓
+commit new root
+    ↓
+publish missing objects
+</code></pre>
+<h2 id="10-sqlite-webassembly-opfs">10. SQLite + WebAssembly + OPFS</h2>
+<p>SQLite, WebAssembly, and OPFS form a practical browser projection of the
+logical workspace.</p>
+<p>They are not the logical format itself.</p>
+<h3 id="10-1-sqlite-as-an-indexed-workspace-carrier">10.1 SQLite as an indexed workspace carrier</h3>
+<p>An immutable SQLite artifact may carry:</p>
+<ul>
+<li>canonical objects;</li>
+<li>root and ancestry metadata;</li>
+<li>path indexes;</li>
+<li>completeness receipts;</li>
+<li>dependency objects;</li>
+<li>integrity metadata;</li>
+<li>execution manifests;</li>
+<li>references to associated evidence.</li>
+</ul>
+<p>Unlike a conventional archive, SQLite permits indexed queries without first
+extracting the complete artifact.</p>
+<p>The artifact should be produced from a selected complete root closure, cleanly
+checkpointed, closed, authenticated, and published as immutable data.</p>
+<p>It should not be treated as a mutable file that multiple Git branches are
+expected to merge at the binary level.</p>
+<h3 id="10-2-webassembly-as-the-logical-runtime">10.2 WebAssembly as the logical runtime</h3>
+<p>WebAssembly may implement:</p>
+<ul>
+<li>canonical decoding;</li>
+<li>ObjectId verification;</li>
+<li>tree traversal;</li>
+<li>path lookup;</li>
+<li>range reads;</li>
+<li>root comparison;</li>
+<li>copy-on-write mutation;</li>
+<li>diff;</li>
+<li>reconciliation;</li>
+<li>selected language tooling;</li>
+<li>portable validation.</li>
+</ul>
+<p>WASM should be used as a portable, capability-controlled execution plane. It
+should not be used to pretend that every native operating-system workload is
+naturally browser-portable.</p>
+<h3 id="10-3-opfs-as-the-writable-browser-overlay">10.3 OPFS as the writable browser overlay</h3>
+<p>The distributed base remains immutable. Browser-local mutations are separated:</p>
+<pre><code class="language-text">read-only base SQLite artifact
+    +
+writable OPFS overlay
+    =
+active browser workspace
+</code></pre>
+<p>The overlay records only local changes. Committing it produces a new logical
+root and a set of newly required canonical objects.</p>
+<h3 id="10-4-universal-loader">10.4 Universal loader</h3>
+<p>A SQLite artifact cannot bootstrap itself. The browser must first obtain a
+loader containing or acquiring:</p>
+<ul>
+<li>SQLite WASM;</li>
+<li>LayerFS logical WASM;</li>
+<li>Worker bootstrap;</li>
+<li>browser VFS;</li>
+<li>user and Agent interface.</li>
+</ul>
+<p>The practical one-artifact form is:</p>
+<pre><code class="language-text">one reusable LayerFS web loader
+    +
+one immutable workspace artifact URL
+</code></pre>
+<p>The loader can be cached and reused across many workspaces. Each artifact
+remains independently addressable and verifiable.</p>
+<h3 id="10-5-browser-architecture">10.5 Browser architecture</h3>
+<pre class="mermaid">flowchart TB
+    subgraph REMOTE[&quot;Static distribution or remote source&quot;]
+        DB[Immutable workspace.sqlite]
+        PARENT[Optional missing-object endpoint]
+    end
+
+    LOADER[Universal LayerFS Web Loader]
+
+    subgraph WORKER[&quot;Browser Worker&quot;]
+        SQLITE[SQLite WASM]
+        BASE[Base object reader]
+        LFS[LayerFS WASM: verify, tree, diff, COW]
+        VFS[Browser VFS]
+        OVERLAY[OPFS writable overlay]
+        COMMIT[Commit new root]
+
+        SQLITE --&gt; BASE
+        BASE --&gt; LFS
+        LFS --&gt; VFS
+        LFS --&gt; OVERLAY
+        OVERLAY --&gt; COMMIT
+    end
+
+    subgraph UI[&quot;Browser UI&quot;]
+        TREE[File tree]
+        EDITOR[Editor]
+        AGENT[Agent]
+        SEARCH[Search and diff]
+        TOOLS[WASM or WASI tools]
+    end
+
+    DB --&gt; SQLITE
+    PARENT -. exact missing objects .-&gt; BASE
+    LOADER --&gt; SQLITE
+    LOADER --&gt; LFS
+    VFS --&gt; TREE
+    VFS --&gt; EDITOR
+    VFS --&gt; AGENT
+    VFS --&gt; SEARCH
+    VFS --&gt; TOOLS
+    COMMIT --&gt; RESULT[New root and missing objects]
+</pre>
+<h2 id="11-direct-usability-and-the-execution-continuum">11. Direct usability and the execution continuum</h2>
+<p>Direct browser access should be defined in progressive capability levels.</p>
+<h3 id="level-1-inspect">Level 1: inspect</h3>
+<ul>
+<li>browse the namespace;</li>
+<li>read files;</li>
+<li>query metadata;</li>
+<li>authenticate objects;</li>
+<li>search paths and content;</li>
+<li>compare roots.</li>
+</ul>
+<h3 id="level-2-modify">Level 2: modify</h3>
+<ul>
+<li>fork a local branch;</li>
+<li>create and edit files;</li>
+<li>delete paths;</li>
+<li>persist a writable overlay;</li>
+<li>construct a new root;</li>
+<li>export a delta or artifact.</li>
+</ul>
+<h3 id="level-3-execute-portable-tools">Level 3: execute portable tools</h3>
+<ul>
+<li>parsers;</li>
+<li>formatters;</li>
+<li>linters;</li>
+<li>language servers;</li>
+<li>static analyzers;</li>
+<li>supported interpreters;</li>
+<li>tests compiled for WASM or WASI.</li>
+</ul>
+<h3 id="level-4-dispatch-native-work">Level 4: dispatch native work</h3>
+<p>Tasks requiring native operating-system behavior remain native or remote:</p>
+<ul>
+<li>arbitrary native binaries;</li>
+<li>container builds;</li>
+<li>kernel tests;</li>
+<li>large compilers;</li>
+<li>high-memory workloads;</li>
+<li>GPUs;</li>
+<li>performance benchmarks;</li>
+<li>system integration tests.</li>
+</ul>
+<p>The browser and remote worker operate on the same workspace root. Execution
+placement changes; workspace identity does not.</p>
+<p>Browser-native therefore does not mean browser-only. It means the browser is a
+first-class host and control surface rather than a passive viewer.</p>
+<h2 id="12-commit-rollout-and-rollback">12. Commit, rollout, and rollback</h2>
+<p>A commit converts mutable overlay state into a new immutable root.</p>
+<p>The publication sequence is conceptually:</p>
+<pre><code class="language-text">overlay
+    ↓
+canonicalize changed logical state
+    ↓
+derive and verify object identities
+    ↓
+admit missing immutable objects
+    ↓
+verify required closure
+    ↓
+publish immutable facts
+    ↓
+compare-and-swap branch head
+</code></pre>
+<p>A root must not become visible while required content is partially published.
+Failure may leave reusable unreferenced objects, but it must leave the previous
+published head intact.</p>
+<h3 id="12-1-rollout">12.1 Rollout</h3>
+<p>Rollout promotes a validated immutable root by changing a small accepted
+reference.</p>
+<h3 id="12-2-rollback">12.2 Rollback</h3>
+<p>Rollback selects a prior immutable root. It does not reverse every file mutation
+or reconstruct an earlier directory.</p>
+<pre class="mermaid">flowchart LR
+    R0[Root R0] --&gt; R1[Root R1]
+    R1 --&gt; R2[Root R2]
+    R2 --&gt; R3[Root R3]
+
+    ACCEPT1[Accepted pointer] --&gt; R1
+    VALIDATE{Validate R3} --&gt;|pass| ACCEPT3[Move accepted pointer]
+    ACCEPT3 --&gt; R3
+    ROLLBACK[Rollback selection] --&gt; R1
+</pre>
+<p>The roots remain immutable throughout:</p>
+<pre><code class="language-text">initial accepted root: R1
+rollout accepted root: R3
+rollback accepted root: R1
+</code></pre>
+<p>This guarantee covers LayerFS-managed filesystem state. It does not
+automatically reverse external database writes, network messages, deployments,
+package publication, or other side effects. Those require explicit
+transactional or compensating systems above the filesystem.</p>
+<h2 id="13-storage-and-transfer-model">13. Storage and transfer model</h2>
+<p>The storage goal is not to claim mathematical minimality. It is to eliminate
+growth caused solely by workspace multiplicity.</p>
+<p>Let <code>Objects(R)</code> be the canonical object closure required by root <code>R</code>.</p>
+<p>The physical-copy model tends toward:</p>
+<pre><code class="language-text">total storage ≈ Σ materialized_size(Ri)
+</code></pre>
+<p>The logical model tends toward:</p>
+<pre><code class="language-text">total canonical storage ≈ size(Union(Objects(R1...Rn)))
+</code></pre>
+<p>Actual physical storage also includes:</p>
+<ul>
+<li>metadata and indexes;</li>
+<li>database pages;</li>
+<li>write-ahead logs;</li>
+<li>configured replication;</li>
+<li>writable overlays;</li>
+<li>caches;</li>
+<li>temporary transfer state;</li>
+<li>retained unreachable objects;</li>
+<li>garbage-collection metadata.</li>
+</ul>
+<p>The system should expose these costs rather than hide them behind a single
+deduplication ratio.</p>
+<p>Useful measurements include:</p>
+<pre><code class="language-text">physical CAS bytes
+logical union bytes
+cross-placement bytes
+unique bytes introduced per branch
+reused bytes
+transfer bytes avoided
+unreachable retained bytes
+metadata amplification
+</code></pre>
+<p>Transfer should be missing-only and bounded. A receiver should announce what it
+requires, avoid retransmitting objects it already authenticates, and publish a
+new visible boundary only after the required state is safe.</p>
+<h2 id="14-canonical-state-derived-artifacts-and-evidence">14. Canonical state, derived artifacts, and evidence</h2>
+<p>Not every useful artifact should alter workspace identity.</p>
+<p>The system should distinguish:</p>
+<pre><code class="language-text">Canonical workspace inputs
+  source files
+  dependency inputs
+  executable configuration
+  filesystem metadata
+  declared workspace policy
+
+Derived reproducible artifacts
+  search indexes
+  symbol graphs
+  embeddings
+  build outputs
+  test results
+  coverage
+  static-analysis results
+
+Ephemeral execution state
+  temporary files
+  live process state
+  transient logs
+  editor cursors
+  speculative context
+</code></pre>
+<p>Derived artifacts may be addressed by:</p>
+<pre><code class="language-text">workspace root
+    +
+tool identity
+    +
+toolchain identity
+    +
+configuration
+    +
+command
+</code></pre>
+<p>This permits safe reuse without making incidental caches part of the canonical
+root.</p>
+<p>Secrets must remain outside all reproducible artifacts. The workspace may
+declare capability requirements, but credentials are supplied by an external
+authority at execution time.</p>
+<h2 id="15-integrity-trust-and-isolation">15. Integrity, trust, and isolation</h2>
+<p>An AI-native filesystem must expect untrusted or partially trusted content.</p>
+<h3 id="15-1-authenticate-every-object">15.1 Authenticate every object</h3>
+<p>Retrieval is not trust:</p>
+<pre><code class="language-text">received bytes
+    ↓
+bounded canonical validation
+    ↓
+content hash
+    ↓
+expected ObjectId comparison
+</code></pre>
+<h3 id="15-2-bound-every-decoder-and-traversal">15.2 Bound every decoder and traversal</h3>
+<p>Canonical formats and APIs should bound:</p>
+<ul>
+<li>object size;</li>
+<li>name length;</li>
+<li>child count;</li>
+<li>recursion depth;</li>
+<li>path depth;</li>
+<li>allocation;</li>
+<li>history page size;</li>
+<li>object-transfer batches;</li>
+<li>in-memory closure tracking.</li>
+</ul>
+<h3 id="15-3-make-completeness-explicit">15.3 Make completeness explicit</h3>
+<p>Possession of a root object does not prove possession of its complete reachable
+closure. Offline availability must be verified and recorded, not inferred.</p>
+<h3 id="15-4-avoid-ambient-authority">15.4 Avoid ambient authority</h3>
+<p>Opening a workspace must not automatically grant:</p>
+<ul>
+<li>the host filesystem;</li>
+<li>unrestricted network access;</li>
+<li>environment secrets;</li>
+<li>arbitrary process execution;</li>
+<li>package publication authority;</li>
+<li>cloud credentials.</li>
+</ul>
+<p>The browser sandbox and WASM capability model are useful boundaries, but they
+must be reinforced by explicit host imports and policy.</p>
+<h2 id="16-relationship-to-version-control">16. Relationship to version control</h2>
+<p>LayerFS does not need to replace version control.</p>
+<p>Version control manages source history, exchange, review, and collaboration.
+The logical workspace manages directly usable filesystem state.</p>
+<p>A possible relationship is:</p>
+<pre><code class="language-text">version-control commit
+    ↓
+resolve or import
+    ↓
+LayerFS workspace root
+    ↓
+human and Agent forks
+    ↓
+new LayerFS roots
+    ↓
+validate and select
+    ↓
+export source transition
+    ↓
+version-control commit or review
+</code></pre>
+<p>A source commit answers:</p>
+<blockquote>
+<p>What source tree was recorded?</p>
+</blockquote>
+<p>A workspace root answers:</p>
+<blockquote>
+<p>What exact logical filesystem was made available for work and execution?</p>
+</blockquote>
+<p>The two can coexist and reference each other.</p>
+<h2 id="17-required-system-properties">17. Required system properties</h2>
+<p>A future AI-native filesystem should make these guarantees explicit.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Required guarantee</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Deterministic identity</td>
+<td>Equivalent logical filesystems produce the same root</td>
+</tr>
+<tr>
+<td>Cheap fork</td>
+<td>Fork copies no canonical content</td>
+</tr>
+<tr>
+<td>Snapshot consistency</td>
+<td>One reader observes one pinned root</td>
+</tr>
+<tr>
+<td>Atomic publication</td>
+<td>Partial roots never become visible</td>
+</tr>
+<tr>
+<td>Authenticated retrieval</td>
+<td>Returned bytes are verified against ObjectId</td>
+</tr>
+<tr>
+<td>Placement independence</td>
+<td>Storage location does not alter filesystem results</td>
+</tr>
+<tr>
+<td>Explicit completeness</td>
+<td>Offline availability is verified, not assumed</td>
+</tr>
+<tr>
+<td>Bounded processing</td>
+<td>Traversal and transfer use bounded memory</td>
+</tr>
+<tr>
+<td>Projection equivalence</td>
+<td>Native and browser views expose the same logical contents</td>
+</tr>
+<tr>
+<td>Writer isolation</td>
+<td>Concurrent Agents use independent branches or explicit leases</td>
+</tr>
+<tr>
+<td>Recoverable interruption</td>
+<td>Crashes cannot corrupt an already published root</td>
+</tr>
+<tr>
+<td>Explicit authority</td>
+<td>Execution receives declared capabilities, not ambient access</td>
+</tr>
+<tr>
+<td>Evidence separation</td>
+<td>Derived results can be linked without destabilizing root identity</td>
+</tr>
+</tbody></table></div>
+<h2 id="18-evaluation-framework">18. Evaluation framework</h2>
+<p>The architecture should be judged by total system behavior, not only local
+filesystem microbenchmarks.</p>
+<h3 id="18-1-workspace-activation">18.1 Workspace activation</h3>
+<p>Measure:</p>
+<ul>
+<li>root-open latency;</li>
+<li>first-tree latency;</li>
+<li>first-file latency;</li>
+<li>first writable fork latency;</li>
+<li>first command latency;</li>
+<li>bytes transferred before first use.</li>
+</ul>
+<h3 id="18-2-fork-scalability">18.2 Fork scalability</h3>
+<p>Evaluate increasing numbers of concurrent branches:</p>
+<pre><code class="language-text">1
+10
+100
+1,000
+</code></pre>
+<p>Report:</p>
+<ul>
+<li>branch creation latency;</li>
+<li>physical bytes added by an empty branch;</li>
+<li>memory per active branch;</li>
+<li>commit throughput;</li>
+<li>conflict and reconciliation behavior.</li>
+</ul>
+<h3 id="18-3-storage-efficiency">18.3 Storage efficiency</h3>
+<p>Measure:</p>
+<ul>
+<li>physical bytes;</li>
+<li>union logical bytes;</li>
+<li>unique bytes per Agent result;</li>
+<li>cross-placement duplication;</li>
+<li>database and WAL overhead;</li>
+<li>cache overhead;</li>
+<li>retained unreachable bytes.</li>
+</ul>
+<p>Use realistic source trees, dependency trees, many-small-file workloads,
+high-entropy binaries, sparse files, and large mutable files.</p>
+<h3 id="18-4-browser-behavior">18.4 Browser behavior</h3>
+<p>Measure:</p>
+<ul>
+<li>time to interactive namespace;</li>
+<li>bytes downloaded before first file;</li>
+<li>SQLite query latency;</li>
+<li>ObjectId verification cost;</li>
+<li>OPFS overlay performance;</li>
+<li>reload recovery;</li>
+<li>local commit latency;</li>
+<li>multi-tab behavior;</li>
+<li>quota-exhaustion behavior.</li>
+</ul>
+<h3 id="18-5-projection-equivalence">18.5 Projection equivalence</h3>
+<p>Verify that native, materialized, browser, and remote projections of the same
+root produce:</p>
+<ul>
+<li>identical logical namespace;</li>
+<li>identical file contents;</li>
+<li>compatible metadata semantics;</li>
+<li>identical root-to-root diffs;</li>
+<li>identical resulting roots after equivalent logical operations.</li>
+</ul>
+<h3 id="18-6-reliability">18.6 Reliability</h3>
+<p>Test:</p>
+<ul>
+<li>termination during write;</li>
+<li>interruption during transfer;</li>
+<li>disk exhaustion;</li>
+<li>browser termination;</li>
+<li>corrupted object bytes;</li>
+<li>missing promised objects;</li>
+<li>stale parent state;</li>
+<li>simultaneous commit;</li>
+<li>projection cleanup failure;</li>
+<li>OPFS quota exhaustion.</li>
+</ul>
+<h2 id="19-progressive-realization">19. Progressive realization</h2>
+<p>This vision should be realized in stages while preserving the binding current
+architecture.</p>
+<h3 id="stage-1-native-logical-workspace-foundation">Stage 1: native logical workspace foundation</h3>
+<ul>
+<li>deterministic canonical roots;</li>
+<li>content-addressed immutable objects;</li>
+<li>copy-on-write workspaces;</li>
+<li>root-based diff and reconciliation;</li>
+<li>FUSE and materialization projections;</li>
+<li>transactional commit and integrity verification.</li>
+</ul>
+<h3 id="stage-2-immutable-browser-artifact">Stage 2: immutable browser artifact</h3>
+<ul>
+<li>export one selected complete root to a clean SQLite artifact;</li>
+<li>open it with SQLite WASM;</li>
+<li>validate canonical objects in the browser;</li>
+<li>display the tree;</li>
+<li>read files;</li>
+<li>search and compare roots.</li>
+</ul>
+<p>This stage should remain read-only. It proves that the logical workspace can
+leave the native filesystem without first porting every native subsystem.</p>
+<h3 id="stage-3-browser-local-copy-on-write">Stage 3: browser-local copy-on-write</h3>
+<ul>
+<li>OPFS writable overlay;</li>
+<li>file creation and mutation;</li>
+<li>deletion and namespace changes;</li>
+<li>new root creation;</li>
+<li>reload recovery;</li>
+<li>delta or artifact export.</li>
+</ul>
+<h3 id="stage-4-portable-execution">Stage 4: portable execution</h3>
+<ul>
+<li>selected formatters and parsers;</li>
+<li>language services;</li>
+<li>linters and static analysis;</li>
+<li>WASM- or WASI-compatible tests;</li>
+<li>explicit capability imports.</li>
+</ul>
+<h3 id="stage-5-root-based-native-and-remote-execution">Stage 5: root-based native and remote execution</h3>
+<ul>
+<li>dispatch heavy work by root identity;</li>
+<li>missing-only object acquisition;</li>
+<li>native execution evidence tied to the exact root;</li>
+<li>browser review of results;</li>
+<li>publication and reconciliation of returned roots.</li>
+</ul>
+<p>The browser path should begin at the narrow logical seam rather than attempting
+to compile the entire native storage, FUSE, process, Docker, and workspace
+lifecycle implementation into WASM unchanged.</p>
+<h2 id="20-non-goals-and-boundaries">20. Non-goals and boundaries</h2>
+<p>This vision does not require LayerFS to become:</p>
+<ul>
+<li>a replacement for general-purpose native filesystems;</li>
+<li>a replacement for all version-control collaboration;</li>
+<li>a binary SQLite file that multiple Git branches merge directly;</li>
+<li>a browser emulator for every native operating-system workload;</li>
+<li>a shared mutable directory for many Agents;</li>
+<li>a database-shaped public filesystem API;</li>
+<li>an opaque virtual-machine image;</li>
+<li>a mandatory full download;</li>
+<li>a store for secrets;</li>
+<li>a system that places every cache and Agent trace inside canonical identity;</li>
+<li>a claim of literally zero network, computation, or storage overhead.</li>
+</ul>
+<p>The browser is a first-class projection, not the only projection. SQLite is a
+strong initial carrier, not the definition of identity. WASM is a portable
+execution plane, not universal native compatibility. FUSE is a native
+compatibility interface, not the logical architecture.</p>
+<h2 id="21-future-workspace-lifecycle">21. Future workspace lifecycle</h2>
+<p>The complete future lifecycle is:</p>
+<pre><code class="language-text">1. Resolve an authenticated workspace root
+2. Open it without complete materialization
+3. Fork an isolated copy-on-write overlay
+4. Project it into browser, native, or remote execution
+5. Execute with explicit capabilities
+6. Commit changes into a new immutable root
+7. Attach validation evidence
+8. Compare or reconcile competing Agent roots
+9. Promote an accepted root
+10. Roll back by selecting a prior root when required
+11. Transfer only missing canonical objects
+12. Collect unreachable state under an explicit retention policy
+</code></pre>
+<p>Humans and Agents do not need to agree on a path, mount point, container
+instance, or machine. They agree on the root.</p>
+<h2 id="22-conclusion">22. Conclusion</h2>
+<p>AI-native software development requires a filesystem designed for concurrency,
+speculation, isolation, reproducibility, and rapid workspace activation.</p>
+<p>The physical-checkout model makes every additional human, Agent, CI worker, or
+execution environment expensive because it repeatedly reconstructs mostly
+identical state. LayerFS replaces that model with immutable, content-addressed
+workspace roots and isolated copy-on-write overlays.</p>
+<p>This enables:</p>
+<ul>
+<li>storage-efficient snapshots;</li>
+<li>shared immutable content;</li>
+<li>near-instant logical forks;</li>
+<li>isolated multi-Agent work;</li>
+<li>deterministic workspace identity;</li>
+<li>lazy acquisition;</li>
+<li>transactional publication;</li>
+<li>explicit rollout and rollback;</li>
+<li>native filesystem compatibility;</li>
+<li>direct browser access;</li>
+<li>portable WASM execution;</li>
+<li>remote native execution against the same root;</li>
+<li>verifiable Agent results.</li>
+</ul>
+<p>SQLite provides a practical indexed carrier for portable workspace artifacts.
+WebAssembly provides a portable and capability-controlled logical runtime. OPFS
+provides browser-local writable state. The browser provides a universal
+interaction surface. FUSE and materialization preserve native compatibility.
+Remote execution provides native and large-scale computation. All are connected
+by one canonical logical root.</p>
+<p>The final vision is not merely a faster filesystem:</p>
+<blockquote>
+<p><strong>LayerFS turns the codebase from a machine-local folder into a universal,
+directly usable logical workspace.</strong></p>
+</blockquote>
+<blockquote>
+<p><strong>The codebase becomes a URL-addressed, authenticated state that humans and
+Agents can open, fork, execute, validate, and publish from anywhere.</strong></p>
+</blockquote>
+
+    <footer>
+      Generated from <a href="layerfs:ai-native-file-system.md">layerfs:ai-native-file-system.md</a>.
+      The Markdown document is the source of truth; the binding V2 specification remains authoritative for current behavior.
+    </footer>
+  </main>
+</div>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    securityLevel: 'strict',
+    themeVariables: {
+      primaryColor: '#eef2ff',
+      primaryTextColor: '#142033',
+      primaryBorderColor: '#3157d5',
+      lineColor: '#6b7890',
+      secondaryColor: '#f5f3ff',
+      tertiaryColor: '#f7f9fc',
+      fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>

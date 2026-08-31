@@ -1,6 +1,5 @@
 use crate::{WorkspaceError, WorkspaceId, WorkspaceResult, WorkspaceSession, WorkspaceSummary};
-use layerfs_branch_store::BranchStore;
-use layerfs_storage::{BranchId, LayerStackEndpoint};
+use layerfs_layerstack_store::{BranchId, LayerStackStore, StoreError};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -40,18 +39,38 @@ struct Retention {
 
 pub struct Workspaces {
     pub(crate) runtime_root: PathBuf,
-    pub(crate) branch: BranchStore,
-    pub(crate) parent: Arc<dyn LayerStackEndpoint>,
+    pub(crate) store: LayerStackStore,
     pub(crate) sessions: Mutex<BTreeMap<WorkspaceId, SessionRecord>>,
     pub(crate) executions:
         Arc<Mutex<BTreeMap<crate::ExecutionId, Arc<crate::execution::Execution>>>>,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub(crate) execution_route: crate::daemon::ExecutionRoute,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub(crate) mount_route: crate::daemon::MountRoute,
+    pub(crate) daemon: Option<crate::daemon::DaemonOwner>,
 }
 
 impl Workspaces {
-    pub fn new(
+    pub fn new(runtime_root: impl AsRef<Path>, store: LayerStackStore) -> WorkspaceResult<Self> {
+        Self::with_daemon(runtime_root, store, crate::daemon::configure()?)
+    }
+
+    pub fn new_with_container(
         runtime_root: impl AsRef<Path>,
-        branch: BranchStore,
-        parent: Arc<dyn LayerStackEndpoint>,
+        store: LayerStackStore,
+        binding: crate::ContainerBinding,
+    ) -> WorkspaceResult<Self> {
+        Self::with_daemon(
+            runtime_root,
+            store,
+            crate::daemon::configure_binding(binding)?,
+        )
+    }
+
+    fn with_daemon(
+        runtime_root: impl AsRef<Path>,
+        store: LayerStackStore,
+        daemon: crate::daemon::DaemonConfiguration,
     ) -> WorkspaceResult<Self> {
         let runtime_root = runtime_root.as_ref().to_owned();
         std::fs::create_dir_all(&runtime_root)?;
@@ -62,10 +81,12 @@ impl Workspaces {
         }
         Ok(Self {
             runtime_root,
-            branch,
-            parent,
+            store,
             sessions: Mutex::new(BTreeMap::new()),
             executions: Arc::new(Mutex::new(BTreeMap::new())),
+            execution_route: daemon.route,
+            mount_route: daemon.mount_route,
+            daemon: daemon.owner,
         })
     }
 
@@ -84,20 +105,41 @@ impl Workspaces {
             .ok_or(WorkspaceError::NotFound)
     }
 
+    pub fn active_workspace_count(&self) -> WorkspaceResult<usize> {
+        Ok(self
+            .sessions
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .values()
+            .filter(|record| matches!(record, SessionRecord::Active(_)))
+            .count())
+    }
+
+    pub fn active_execution_count(&self) -> WorkspaceResult<usize> {
+        let executions = self
+            .executions
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        Ok(executions
+            .values()
+            .filter(|execution| execution.retention().is_none())
+            .count())
+    }
+
     pub(crate) fn workspace_identity(
         &self,
         branch_id: BranchId,
     ) -> WorkspaceResult<crate::worker::WorkspaceIdentity> {
         let branch = self
-            .branch
+            .store
             .branch(branch_id)?
             .ok_or(WorkspaceError::NotFound)?;
         let stack =
-            self.branch
-                .layer_stack_fact(branch.layer_stack_id)?
-                .ok_or(WorkspaceError::Storage(
-                    layerfs_storage::StorageError::Integrity("Workspace LayerStack"),
-                ))?;
+            self.store
+                .layer_stack(branch.layer_stack_id)?
+                .ok_or(WorkspaceError::Storage(StoreError::Integrity(
+                    "Workspace LayerStack",
+                )))?;
         Ok(crate::worker::WorkspaceIdentity {
             layer_stack_id: stack.id,
             layer_stack_name: stack.name,
@@ -105,19 +147,13 @@ impl Workspaces {
         })
     }
 
-    pub(crate) fn acquire_lease(&self, branch_id: BranchId) -> WorkspaceResult<BranchLease> {
-        if !self.branch.acquire_workspace_lease(branch_id)? {
-            return Err(WorkspaceError::WorkspaceBusy);
-        }
-        Ok(BranchLease {
-            branch: self.branch.clone(),
-            branch_id,
-            keep: false,
-        })
-    }
-
-    pub(crate) fn release_lease(&self, branch_id: BranchId) {
-        self.branch.release_workspace_lease(branch_id);
+    pub(crate) fn acquire_lease(
+        &self,
+        branch_id: BranchId,
+    ) -> WorkspaceResult<layerfs_layerstack_store::WorkspaceLease> {
+        self.store
+            .acquire_workspace_lease(branch_id)?
+            .ok_or(WorkspaceError::WorkspaceBusy)
     }
 
     pub(crate) fn prune_retained(&self) -> WorkspaceResult<()> {
@@ -211,26 +247,6 @@ fn record_summary(record: SessionRecord) -> WorkspaceResult<WorkspaceSummary> {
             })
         }
         SessionRecord::Retained(retained) => Ok(retained_summary(&retained)),
-    }
-}
-
-pub(crate) struct BranchLease {
-    branch: BranchStore,
-    branch_id: BranchId,
-    keep: bool,
-}
-
-impl BranchLease {
-    pub(crate) fn keep(mut self) {
-        self.keep = true;
-    }
-}
-
-impl Drop for BranchLease {
-    fn drop(&mut self) {
-        if !self.keep {
-            self.branch.release_workspace_lease(self.branch_id);
-        }
     }
 }
 

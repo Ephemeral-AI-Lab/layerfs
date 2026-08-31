@@ -1,2 +1,0 @@
-EXEMPT_SQL_SCHEMA  2143 crates/layerfs-storage/src/sql.rs
-PASS non-SQL/schema production files <= 1500 physical lines

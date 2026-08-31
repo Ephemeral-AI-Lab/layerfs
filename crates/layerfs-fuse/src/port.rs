@@ -38,6 +38,8 @@ pub enum PortError {
 pub type PortResult<T> = Result<T, PortError>;
 
 pub trait FilesystemPort: Send + Sync {
+    fn note_fuse_max_write(&self, _bytes: u32) {}
+    fn note_fuse_read_config(&self, _max_readahead: u32, _capabilities: u64) {}
     fn lookup(&self, parent: NodeId, name: &[u8]) -> PortResult<Attr>;
     fn attr(&self, node: NodeId) -> PortResult<Attr>;
     fn readlink(&self, node: NodeId) -> PortResult<Vec<u8>>;

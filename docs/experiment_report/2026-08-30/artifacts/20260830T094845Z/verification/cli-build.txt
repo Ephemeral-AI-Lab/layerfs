@@ -1,4 +1,0 @@
-   Compiling layerfs-monitor v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-monitor)
-   Compiling layerfs-sdk v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-sdk)
-   Compiling layerfs-cli v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-cli)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.39s

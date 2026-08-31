@@ -7,6 +7,6 @@ __pycache__/
 
 # Benchmark runs are immutable local evidence and may contain large databases.
 benchmark-results/*
-!benchmark-results/fs-bench-plus/
-benchmark-results/fs-bench-plus/*
-!benchmark-results/fs-bench-plus/optimization-history.md
+!benchmark-results/fs-bench-pro/
+benchmark-results/fs-bench-pro/*
+!benchmark-results/fs-bench-pro/optimization-history.md

@@ -8,6 +8,10 @@ use crate::object::ObjectId;
 use std::io::Write;
 use std::ops::Range;
 
+const READ_BATCH_OBJECTS: usize = 127;
+const _: () =
+    assert!(READ_BATCH_OBJECTS * (crate::file::cdc::MAXIMUM_CHUNK_BYTES + 21) <= 4 * 1024 * 1024);
+
 pub fn state<S: ObjectRead>(
     store: &S,
     root: FileStateRoot,
@@ -101,7 +105,7 @@ fn read_range_with_plan_into<S: ObjectRead, W: Write>(
         level: plan.state.tree_level,
     };
     let mut ancestors = vec![summary.id];
-    let mut selected = Vec::with_capacity(64);
+    let mut selected = Vec::with_capacity(READ_BATCH_OBJECTS);
     read_decoded_node(
         store,
         0,
@@ -135,7 +139,7 @@ pub fn read_all_bounded<S: ObjectRead, W: Write>(
     if state.logical_len > maximum {
         return Err(CoreError::ObjectLimitExceeded);
     }
-    let mut selected = Vec::with_capacity(64);
+    let mut selected = Vec::with_capacity(READ_BATCH_OBJECTS);
     read_node(
         store,
         Summary {
@@ -231,7 +235,7 @@ fn read_decoded_node<S: ObjectRead, W: Write>(
                         range.start.max(logical) - logical,
                         range.end.min(end) - logical,
                     ));
-                    if selected.len() == 64 {
+                    if selected.len() == READ_BATCH_OBJECTS {
                         flush_read_batch(store, sink, counters, selected)?;
                     }
                 }
@@ -286,6 +290,9 @@ fn flush_read_batch<S: ObjectRead, W: Write>(
     if selected.is_empty() {
         return Ok(());
     }
+    counters.payload_ids_read = add(counters.payload_ids_read, selected.len() as u64)?;
+    counters.payload_batches_read = add(counters.payload_batches_read, 1)?;
+    counters.max_payload_batch = counters.max_payload_batch.max(selected.len() as u64);
     let ids = selected
         .iter()
         .map(|(extent, _, _)| extent.payload_object_id)

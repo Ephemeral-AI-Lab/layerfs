@@ -1,46 +1,42 @@
-use crate::dedup::DedupAnalysis;
-use crate::resource::ProcessSnapshot;
-use crate::OperationReceipt;
-use layerfs_storage::StoreStorageSnapshot;
-use layerfs_workspace::WorkspaceSummary;
+use crate::{DedupAnalysis, OperationReceipt};
+use layerfs_layerstack_store::{LayerStackStore, StoreError};
+use layerfs_workspace::{WorkspaceError, WorkspaceSummary};
+use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseSnapshot {
-    pub role: String,
-    pub location: String,
-    pub storage: StoreStorageSnapshot,
+    pub location: PathBuf,
+    pub database_bytes: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MonitorSnapshot {
-    pub databases: Vec<DatabaseSnapshot>,
+    pub database: DatabaseSnapshot,
     pub workspaces: Vec<WorkspaceSummary>,
     pub operations: Vec<OperationReceipt>,
-    pub dedup: Option<DedupAnalysis>,
-    pub process_id: u32,
-    pub resident_bytes: Option<u64>,
-    pub available_parallelism: usize,
-}
-
-impl MonitorSnapshot {
-    pub(crate) fn with_process(mut self, process: ProcessSnapshot) -> Self {
-        self.process_id = process.process_id;
-        self.resident_bytes = process.resident_bytes;
-        self.available_parallelism = process.available_parallelism;
-        self
-    }
+    pub last_analysis: Option<DedupAnalysis>,
 }
 
 #[derive(Debug)]
 pub enum MonitorError {
-    Storage(layerfs_storage::StorageError),
-    Workspace(layerfs_workspace::WorkspaceError),
-    Io(std::io::Error),
-    NotFound,
+    Store(StoreError),
+    Workspace(WorkspaceError),
     Integrity(&'static str),
 }
 
-pub type MonitorResult<T> = Result<T, MonitorError>;
+pub type MonitorResult<T> = std::result::Result<T, MonitorError>;
+
+impl From<StoreError> for MonitorError {
+    fn from(value: StoreError) -> Self {
+        Self::Store(value)
+    }
+}
+
+impl From<WorkspaceError> for MonitorError {
+    fn from(value: WorkspaceError) -> Self {
+        Self::Workspace(value)
+    }
+}
 
 impl std::fmt::Display for MonitorError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -50,20 +46,10 @@ impl std::fmt::Display for MonitorError {
 
 impl std::error::Error for MonitorError {}
 
-impl From<layerfs_storage::StorageError> for MonitorError {
-    fn from(value: layerfs_storage::StorageError) -> Self {
-        Self::Storage(value)
-    }
-}
-
-impl From<layerfs_workspace::WorkspaceError> for MonitorError {
-    fn from(value: layerfs_workspace::WorkspaceError) -> Self {
-        Self::Workspace(value)
-    }
-}
-
-impl From<std::io::Error> for MonitorError {
-    fn from(value: std::io::Error) -> Self {
-        Self::Io(value)
-    }
+pub(crate) fn database_snapshot(store: &LayerStackStore) -> MonitorResult<DatabaseSnapshot> {
+    let storage = store.storage_snapshot()?;
+    Ok(DatabaseSnapshot {
+        location: store.path().to_owned(),
+        database_bytes: storage.database_bytes,
+    })
 }

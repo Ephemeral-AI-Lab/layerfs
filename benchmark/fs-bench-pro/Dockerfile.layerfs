@@ -1,0 +1,79 @@
+# syntax=docker/dockerfile:1.7
+
+FROM rust:1.85.1-bookworm AS build
+
+ARG TARGETARCH
+ARG LAYERFS_SOURCE_COMMIT
+ARG LAYERFS_SOURCE_TREE
+ARG LAYERFS_SOURCE_DIRTY
+ARG LAYERFS_SOURCE_SEAL
+ARG WORKLOAD_SOURCE_SHA256
+
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY tools ./tools
+COPY benchmark/fs-bench-pro ./benchmark/fs-bench-pro
+COPY benchmark/fs-bench-pro/workload.rs /workload/workload.rs
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    test "${#LAYERFS_SOURCE_COMMIT}" -eq 40 \
+ && test "${#LAYERFS_SOURCE_TREE}" -eq 40 \
+ && test "${#LAYERFS_SOURCE_SEAL}" -eq 64 \
+ && test "${#WORKLOAD_SOURCE_SHA256}" -eq 64 \
+ && echo "$WORKLOAD_SOURCE_SHA256  /workload/workload.rs" | sha256sum -c - \
+ && case "$LAYERFS_SOURCE_DIRTY" in true|false) ;; *) exit 1 ;; esac \
+ && case "$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE$LAYERFS_SOURCE_SEAL" in *[!0-9a-f]*) exit 1 ;; esac \
+ && case "$TARGETARCH" in \
+      arm64) target=aarch64-unknown-linux-gnu ;; \
+      amd64) target=x86_64-unknown-linux-gnu ;; \
+      *) exit 1 ;; \
+    esac \
+ && rustup target add "$target" \
+ && rustc --edition=2021 -C opt-level=3 -C strip=symbols \
+      --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload \
+ && cargo test --locked --target "$target" -p layerfs-daemon \
+ && cargo build --locked --release --target "$target" -p layerfs-daemon \
+ && cargo build --locked --release --target "$target" -p layerfs-fuse --no-default-features --features proxy \
+ && cp "target/$target/release/layerfs-daemon" /layerfs-daemon \
+ && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
+
+FROM rust:1.85.1-bookworm
+
+ARG LAYERFS_SOURCE_COMMIT
+ARG LAYERFS_SOURCE_TREE
+ARG LAYERFS_SOURCE_DIRTY
+ARG LAYERFS_SOURCE_SEAL
+ARG WORKLOAD_SOURCE_SHA256
+
+RUN mkdir -p /run/layerfs /workspace /var/tmp/layerfs-owned \
+ && chmod 0700 /run/layerfs
+
+COPY --from=build /fs-benchmark-workload /usr/local/bin/fs-benchmark-workload
+COPY --from=build /layerfs-daemon /usr/local/bin/layerfs-daemon
+COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
+COPY benchmark/fs-bench-pro/daemon-entrypoint.sh /usr/local/bin/layerfs-daemon-entrypoint
+RUN chmod 0555 /usr/local/bin/fs-benchmark-workload /usr/local/bin/layerfs-daemon \
+                  /usr/local/bin/layerfs-fuse /usr/local/bin/layerfs-daemon-entrypoint \
+ && /usr/local/bin/fs-benchmark-workload self-check \
+ && test -x /usr/local/bin/layerfs-daemon
+
+LABEL org.opencontainers.image.source="https://github.com/Ephemeral-AI-Lab/layerfs" \
+      org.opencontainers.image.revision="$LAYERFS_SOURCE_COMMIT" \
+      org.opencontainers.image.source-tree="$LAYERFS_SOURCE_TREE" \
+      dev.layerfs.source-dirty="$LAYERFS_SOURCE_DIRTY" \
+      dev.layerfs.source-seal="$LAYERFS_SOURCE_SEAL" \
+      dev.layerfs.workload-source-sha256="$WORKLOAD_SOURCE_SHA256"
+
+ENV LAYERFS_SOURCE_COMMIT="$LAYERFS_SOURCE_COMMIT" \
+    LAYERFS_SOURCE_TREE="$LAYERFS_SOURCE_TREE" \
+    LAYERFS_SOURCE_DIRTY="$LAYERFS_SOURCE_DIRTY" \
+    LAYERFS_SOURCE_SEAL="$LAYERFS_SOURCE_SEAL" \
+    LAYERFS_FUSE_HELPER="/usr/local/bin/layerfs-fuse" \
+    LAYERFS_FUSE_HOST="host.docker.internal" \
+    LAYERFS_DAEMON_TCP_LISTEN="0.0.0.0:41273"
+
+EXPOSE 41273/tcp
+
+ENTRYPOINT ["/usr/local/bin/layerfs-daemon-entrypoint"]

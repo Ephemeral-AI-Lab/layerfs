@@ -1,15 +1,11 @@
-use layerfs_storage::LayerStackId;
+use layerfs_layerstack_store::LayerStackId;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QueryKind {
     LayerStacks,
-    AuthorityLayerStacks,
     Layers,
-    AuthorityLayers,
     Branches,
-    AuthorityBranches,
     Commits,
-    AuthorityCommits,
     Workspaces,
     Monitor,
 }
@@ -64,19 +60,12 @@ impl Query {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum QueryItem {
-    LayerStack(layerfs_storage::LayerStackRecord),
-    LayerStackScope(
-        layerfs_storage::LayerStackFact,
-        layerfs_storage::LayerStackScopeRecord,
-    ),
-    Branch(layerfs_storage::BranchRecord),
-    BranchScope(
-        layerfs_storage::BranchRecord,
-        layerfs_storage::BranchScopeRecord,
-    ),
-    Fact(layerfs_storage::Fact),
+    LayerStack(layerfs_layerstack_store::LayerStackRecord),
+    Layer(layerfs_layerstack_store::LayerRecord),
+    Branch(layerfs_layerstack_store::BranchRecord),
+    Commit(layerfs_layerstack_store::CommitRecord),
     Workspace(WorkspaceQueryItem),
     Monitor(layerfs_monitor::MonitorSnapshot),
 }
@@ -84,12 +73,9 @@ pub enum QueryItem {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkspaceQueryItem {
     pub summary: layerfs_workspace::WorkspaceSummary,
-    pub layer_stack_id: LayerStackId,
-    pub layer_stack_name: layerfs_storage::EntityName,
-    pub branch_name: layerfs_storage::EntityName,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct QueryPage {
     pub items: Vec<QueryItem>,
     pub continuation: Option<Vec<u8>>,

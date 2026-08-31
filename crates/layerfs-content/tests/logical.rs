@@ -755,6 +755,30 @@ fn exact_reads_and_local_mutation_share_one_logical_owner() {
 }
 
 #[test]
+fn new_file_write_preserves_replacement_cdc_and_structural_counters() {
+    for mib in [4, 32] {
+        let mut store = MemoryStore::default();
+        let root = logical::empty_root(&mut store, [mib as u8; 32]).unwrap();
+        let bytes = vec![mib as u8; mib * 1024 * 1024];
+        let candidate = logical::write_file(
+            &mut store,
+            root,
+            &CanonicalPath::new("new.bin").unwrap(),
+            Cursor::new(&bytes),
+            0o644,
+            [mib as u8; 32],
+        )
+        .unwrap();
+        assert_eq!(
+            candidate.counters().rope.cdc_bytes_scanned,
+            bytes.len() as u64
+        );
+        assert!(candidate.counters().namespace.nodes_created > 0);
+        assert!(candidate.counters().inode_table.nodes_created > 0);
+    }
+}
+
+#[test]
 fn rename_keeps_old_roots_readable_and_handles_same_and_cross_directory_moves() {
     let (mut store, root) = rename_fixture();
     let metadata = logical::resolve(

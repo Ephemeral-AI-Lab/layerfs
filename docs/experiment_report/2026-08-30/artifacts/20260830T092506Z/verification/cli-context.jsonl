@@ -1,2 +1,0 @@
-{"schema_version":3,"event":"started","value":"Context { command: Use { layerstack: \"/var/tmp/layerfs-cli-json.m1qnUH/layerstack.sqlite\", branch: \"/var/tmp/layerfs-cli-json.m1qnUH/branch.sqlite\" } }"}
-{"schema_version":3,"event":"finished","result":{"kind":"text","value":"context updated"}}

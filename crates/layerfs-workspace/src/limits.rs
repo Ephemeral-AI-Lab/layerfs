@@ -1,4 +1,4 @@
-use layerfs_storage::{Result, StorageError};
+use layerfs_layerstack_store::{Result, StoreError};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ResourcePolicy {
@@ -20,7 +20,7 @@ impl ResourcePolicy {
         if spool_bytes <= self.max_spool_bytes {
             Ok(())
         } else {
-            Err(StorageError::InvalidInput("workspace spool limit"))
+            Err(StoreError::InvalidInput("workspace spool limit"))
         }
     }
 
@@ -28,7 +28,7 @@ impl ResourcePolicy {
         if memory_bytes <= self.max_final_delta_memory_bytes {
             Ok(())
         } else {
-            Err(StorageError::InvalidInput("workspace final-delta limit"))
+            Err(StoreError::InvalidInput("workspace final-delta limit"))
         }
     }
 }

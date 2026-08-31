@@ -1,7 +1,10 @@
 use super::extent::{
     ChildDescriptorV3, ExtentNodeV3, ExtentSliceV3, FileStateV3, MAX_NODE_OBJECT_BYTES,
 };
-use crate::{decode_bytes_object, encode_bytes_object, CoreError, CoreResult, ObjectId};
+use crate::object::{HEADER_LEN, MAGIC as OBJECT_MAGIC};
+use crate::{
+    decode_bytes_object, encode_bytes_object, CoreError, CoreResult, ObjectId, ObjectKind,
+};
 
 const MAGIC: &[u8; 8] = b"LFS4MAP\0";
 pub const CHUNK_MAGIC: &[u8; 8] = b"LFS4CHK\0";
@@ -14,10 +17,32 @@ pub fn encode_chunk_object(bytes: &[u8]) -> CoreResult<Vec<u8>> {
     if bytes.len() > crate::file::cdc::MAXIMUM_CHUNK_BYTES {
         return Err(CoreError::ObjectLimitExceeded);
     }
-    let mut value = Vec::with_capacity(CHUNK_MAGIC.len() + bytes.len());
-    value.extend_from_slice(CHUNK_MAGIC);
-    value.extend_from_slice(bytes);
-    encode_bytes_object(&value)
+    let value_len = CHUNK_MAGIC
+        .len()
+        .checked_add(bytes.len())
+        .ok_or(CoreError::LengthOverflow)?;
+    let payload_len = 4_usize
+        .checked_add(value_len)
+        .ok_or(CoreError::LengthOverflow)?;
+    let total_len = HEADER_LEN
+        .checked_add(payload_len)
+        .ok_or(CoreError::LengthOverflow)?;
+    let mut canonical = Vec::with_capacity(total_len);
+    canonical.extend_from_slice(&OBJECT_MAGIC);
+    canonical.push(ObjectKind::Bytes as u8);
+    canonical.extend_from_slice(
+        &u32::try_from(payload_len)
+            .map_err(|_| CoreError::LengthOverflow)?
+            .to_be_bytes(),
+    );
+    canonical.extend_from_slice(
+        &u32::try_from(value_len)
+            .map_err(|_| CoreError::LengthOverflow)?
+            .to_be_bytes(),
+    );
+    canonical.extend_from_slice(CHUNK_MAGIC);
+    canonical.extend_from_slice(bytes);
+    Ok(canonical)
 }
 
 pub fn decode_chunk_payload(value: &[u8]) -> CoreResult<&[u8]> {
@@ -214,4 +239,26 @@ fn check_prefix(value: &[u8]) -> CoreResult<()> {
         return Err(CoreError::UnsupportedMappingVersion { version });
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn single_allocation_chunk_encoding_is_byte_identical() {
+        let maximum = vec![7; crate::file::cdc::MAXIMUM_CHUNK_BYTES];
+        for bytes in [&b""[..], &b"payload"[..], maximum.as_slice()] {
+            let mut value = CHUNK_MAGIC.to_vec();
+            value.extend_from_slice(bytes);
+            let expected = encode_bytes_object(&value).unwrap();
+            let actual = encode_chunk_object(bytes).unwrap();
+            assert_eq!(actual, expected);
+            assert_eq!(ObjectId::for_bytes(&actual), ObjectId::for_bytes(&expected));
+            assert_eq!(
+                decode_chunk_payload(decode_bytes_object(&actual).unwrap()).unwrap(),
+                bytes
+            );
+        }
+    }
 }

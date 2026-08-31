@@ -57,12 +57,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(all(target_os = "linux", feature = "proxy"))]
 fn cleanup_owned(mountpoint: &std::path::Path, capability: &str) -> std::io::Result<()> {
+    const FIXED_HELPER: &str = "/usr/local/bin/layerfs-fuse";
     let helper = std::env::current_exe()?;
     if std::env::var_os("LAYERFS_OWNED_HELPER").as_deref() != Some(helper.as_os_str())
         || std::env::var_os("LAYERFS_OWNED_ROOT").as_deref() != Some(mountpoint.as_os_str())
         || std::env::var("LAYERFS_OWNED_CAPABILITY").as_deref() != Ok(capability)
     {
         return Err(std::io::Error::other("LayerFS cleanup ownership"));
+    }
+    if std::env::var("LAYERFS_FIXED_HELPER").as_deref() == Ok("1") {
+        return if helper == std::path::Path::new(FIXED_HELPER) {
+            Ok(())
+        } else {
+            Err(std::io::Error::other("LayerFS fixed helper identity"))
+        };
     }
     let mut identity = helper.as_os_str().to_os_string();
     identity.push(".identity");

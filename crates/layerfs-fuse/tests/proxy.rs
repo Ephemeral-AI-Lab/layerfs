@@ -13,6 +13,7 @@ struct Fixture {
     readdirs: std::sync::atomic::AtomicUsize,
     reservations: std::sync::atomic::AtomicUsize,
     fsyncs: std::sync::atomic::AtomicUsize,
+    writes: std::sync::atomic::AtomicUsize,
     renamed: std::sync::atomic::AtomicBool,
     reject_mtimes: std::sync::atomic::AtomicBool,
     reject_writes: std::sync::atomic::AtomicBool,
@@ -190,6 +191,18 @@ impl FilesystemPort for Fixture {
             && new_name == b"moved-directory"
         {
             Ok(())
+        } else if parent == NodeId(1)
+            && name == b"rename-source"
+            && new_parent == NodeId(1)
+            && new_name == b"rename-target"
+        {
+            let mut created = self.created.lock().unwrap();
+            let name = created
+                .iter_mut()
+                .find(|created| created.as_slice() == b"rename-source")
+                .ok_or(PortError::NotFound)?;
+            *name = new_name.to_vec();
+            Ok(())
         } else {
             Err(PortError::Invalid)
         }
@@ -212,6 +225,8 @@ impl FilesystemPort for Fixture {
         {
             return Err(PortError::NoSpace);
         }
+        self.writes
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut bytes = self.bytes.lock().unwrap();
         let start = usize::try_from(offset).map_err(|_| PortError::Invalid)?;
         let len = bytes.len().max(start + value.len());
@@ -257,6 +272,7 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
         readdirs: std::sync::atomic::AtomicUsize::new(0),
         reservations: std::sync::atomic::AtomicUsize::new(0),
         fsyncs: std::sync::atomic::AtomicUsize::new(0),
+        writes: std::sync::atomic::AtomicUsize::new(0),
         renamed: std::sync::atomic::AtomicBool::new(false),
         reject_mtimes: std::sync::atomic::AtomicBool::new(false),
         reject_writes: std::sync::atomic::AtomicBool::new(false),
@@ -265,6 +281,8 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
     assert!(ProxyClient::connect(("127.0.0.1", host.port()), [0; 32]).is_err());
     let client =
         Arc::new(ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).unwrap());
+    client.note_fuse_max_write(1024 * 1024);
+    client.note_fuse_read_config(1024 * 1024, 7);
     assert_eq!(
         fixture
             .reservations
@@ -323,6 +341,20 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
     );
     client.write(NodeId(2), 0, b"proxy bytes").unwrap();
     assert_eq!(client.read(NodeId(2), 0, 64).unwrap(), b"proxy bytes");
+    let writes = fixture.writes.load(std::sync::atomic::Ordering::Relaxed);
+    let block = vec![7; 64 * 1024];
+    for index in 0..32 {
+        client
+            .write(NodeId(2), index * block.len() as u64, &block)
+            .unwrap();
+    }
+    client.barrier().unwrap();
+    assert_eq!(*fixture.bytes.lock().unwrap(), vec![7; 2 * 1024 * 1024]);
+    assert_eq!(
+        fixture.writes.load(std::sync::atomic::Ordering::Relaxed),
+        writes + 2,
+        "one global 1 MiB buffer must coalesce sequential writes"
+    );
     assert_eq!(client.lookup(NodeId(1), b"file").unwrap().node, NodeId(2));
     let linked = client.link(NodeId(2), NodeId(1), b"known-link").unwrap();
     assert_eq!(linked.links, 2);
@@ -370,9 +402,8 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
     let pending = client
         .create_file_open(NodeId(1), b"pending", 0o600)
         .unwrap();
-    assert_eq!(client.pause(), Err(PortError::Busy));
-    client.unpin(pending.node, true).unwrap();
     client.pause().unwrap();
+    client.unpin(pending.node, true).unwrap();
     client.resume();
 
     let renamed = client
@@ -443,6 +474,28 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
         .store(true, std::sync::atomic::Ordering::Release);
     assert_eq!(client.set_mtime(NodeId(2), 9, 12), Err(PortError::NoSpace));
     assert!(host.healthy());
+    client.pause().unwrap();
+    let metrics = host.take_write_metrics().unwrap();
+    assert_eq!(metrics.max_write_bytes, 1024 * 1024);
+    assert!(metrics.kernel_write_requests >= 6);
+    assert!(metrics.kernel_write_bytes >= 4096);
+    assert_eq!(metrics.client_frame_bytes, metrics.host_frame_bytes);
+    assert_eq!(
+        metrics.frame_payload_copy_bytes,
+        metrics.host_decode_copy_bytes
+    );
+    assert!(metrics.client_request_copy_bytes >= metrics.frame_payload_copy_bytes);
+    let read = host.take_read_metrics().unwrap();
+    assert_eq!(read.max_readahead_bytes, 1024 * 1024);
+    assert_eq!(read.init_capabilities, 7);
+    assert_eq!(read.kernel_read_requests, 1);
+    assert_eq!(read.read_ahead_misses, 1);
+    assert_eq!(read.read_ahead_fetches, 1);
+    assert_eq!(read.read_ahead_fetched_bytes, b"proxy bytes".len() as u64);
+    assert_eq!(read.host_response_frames, read.client_response_frames);
+    assert_eq!(read.host_response_bytes, read.client_response_bytes);
+    assert_eq!(read.host_response_copy_bytes, read.client_decode_copy_bytes);
+    client.resume();
     std::thread::scope(|scope| {
         let shutdown = scope.spawn(|| host.control("shutdown"));
         control.wait_for_shutdown().unwrap();
@@ -464,6 +517,7 @@ fn connect_does_not_enumerate_or_reserve_a_hundred_thousand_entry_root() {
         readdirs: std::sync::atomic::AtomicUsize::new(0),
         reservations: std::sync::atomic::AtomicUsize::new(0),
         fsyncs: std::sync::atomic::AtomicUsize::new(0),
+        writes: std::sync::atomic::AtomicUsize::new(0),
         renamed: std::sync::atomic::AtomicBool::new(false),
         reject_mtimes: std::sync::atomic::AtomicBool::new(false),
         reject_writes: std::sync::atomic::AtomicBool::new(false),
@@ -486,6 +540,40 @@ fn connect_does_not_enumerate_or_reserve_a_hundred_thousand_entry_root() {
 }
 
 #[test]
+fn read_ahead_never_returns_short_before_source_eof() {
+    const WINDOW: usize = 16 * 1024 * 1024;
+    let expected = (0..WINDOW + 128 * 1024)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    let fixture = Arc::new(Fixture {
+        bytes: Mutex::new(expected.clone()),
+        created: Mutex::new(Vec::new()),
+        links: Mutex::new(Vec::new()),
+        unlinks: Mutex::new(Vec::new()),
+        root_entries: 3,
+        readdirs: std::sync::atomic::AtomicUsize::new(0),
+        reservations: std::sync::atomic::AtomicUsize::new(0),
+        fsyncs: std::sync::atomic::AtomicUsize::new(0),
+        writes: std::sync::atomic::AtomicUsize::new(0),
+        renamed: std::sync::atomic::AtomicBool::new(false),
+        reject_mtimes: std::sync::atomic::AtomicBool::new(false),
+        reject_writes: std::sync::atomic::AtomicBool::new(false),
+    });
+    let host = ProxyHost::start(fixture).unwrap();
+    let client = ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).unwrap();
+
+    assert_eq!(
+        client.read(NodeId(2), 0, 64 * 1024).unwrap(),
+        expected[..64 * 1024]
+    );
+    let offset = WINDOW - 64 * 1024;
+    assert_eq!(
+        client.read(NodeId(2), offset as u64, 128 * 1024).unwrap(),
+        expected[offset..offset + 128 * 1024]
+    );
+}
+
+#[test]
 fn deferred_mutation_errors_surface_at_the_next_synchronization_point() {
     let fixture = Arc::new(Fixture {
         bytes: Mutex::new(Vec::new()),
@@ -496,6 +584,7 @@ fn deferred_mutation_errors_surface_at_the_next_synchronization_point() {
         readdirs: std::sync::atomic::AtomicUsize::new(0),
         reservations: std::sync::atomic::AtomicUsize::new(0),
         fsyncs: std::sync::atomic::AtomicUsize::new(0),
+        writes: std::sync::atomic::AtomicUsize::new(0),
         renamed: std::sync::atomic::AtomicBool::new(false),
         reject_mtimes: std::sync::atomic::AtomicBool::new(false),
         reject_writes: std::sync::atomic::AtomicBool::new(true),

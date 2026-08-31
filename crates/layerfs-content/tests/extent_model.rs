@@ -78,7 +78,13 @@ impl ObjectRead for BatchRead<'_> {
     where
         F: FnMut(ObjectId, &[u8]) -> CoreResult<()>,
     {
-        assert!(!ids.is_empty() && ids.len() <= 64);
+        assert!(!ids.is_empty() && ids.len() <= 127);
+        assert!(
+            ids.iter()
+                .map(|id| self.store.0.get(id).unwrap().len())
+                .sum::<usize>()
+                <= 4 * 1024 * 1024
+        );
         self.batches.set(self.batches.get() + 1);
         for id in ids {
             let bytes = self.store.0.get(id).ok_or(CoreError::MissingObject)?;
@@ -361,14 +367,17 @@ fn payload_batches_continue_across_mapping_leaf_boundaries() {
         state_reads: Cell::new(0),
     };
     let mut actual = Vec::new();
-    read_range(&reader, root, 0..195, &mut actual).unwrap();
+    let counters = read_range(&reader, root, 0..195, &mut actual).unwrap();
     assert_eq!(
         actual,
         (0..195)
             .map(|index| if index % 2 == 0 { 0x51 } else { 0xa7 })
             .collect::<Vec<_>>()
     );
-    assert_eq!(reader.batches.get(), 4);
+    assert_eq!(reader.batches.get(), 2);
+    assert_eq!(counters.payload_ids_read, 195);
+    assert_eq!(counters.payload_batches_read, 2);
+    assert_eq!(counters.max_payload_batch, 127);
 }
 
 #[test]

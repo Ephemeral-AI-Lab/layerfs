@@ -1,4 +1,5 @@
-use crate::protocol::{read_request, write_response, Request, Response};
+use crate::protocol::{read_request_measured, write_response_measured, Request, Response};
+use crate::write_metrics::{AtomicFuseReadMetrics, AtomicFuseWriteMetrics};
 use crate::{PortError, PortResult, SharedPort};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -11,6 +12,8 @@ pub struct ProxyHost {
     stopped: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
     failure: Arc<Mutex<Option<(&'static str, PortError)>>>,
+    metrics: Arc<AtomicFuseWriteMetrics>,
+    read_metrics: Arc<AtomicFuseReadMetrics>,
     control: Arc<RemoteControl>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -29,6 +32,8 @@ impl ProxyHost {
         let stopped = Arc::new(AtomicBool::new(false));
         let failed = Arc::new(AtomicBool::new(false));
         let failure = Arc::new(Mutex::new(None));
+        let metrics = Arc::new(AtomicFuseWriteMetrics::default());
+        let read_metrics = Arc::new(AtomicFuseReadMetrics::default());
         let deferred = Arc::new(Mutex::new(None));
         let data_claimed = Arc::new(AtomicBool::new(false));
         let control_claimed = Arc::new(AtomicBool::new(false));
@@ -37,6 +42,8 @@ impl ProxyHost {
             let stopped = stopped.clone();
             let failed = failed.clone();
             let failure = failure.clone();
+            let metrics = metrics.clone();
+            let read_metrics = read_metrics.clone();
             let deferred = deferred.clone();
             let control = control.clone();
             std::thread::spawn(move || {
@@ -96,8 +103,18 @@ impl ProxyHost {
                             let failed = failed.clone();
                             let failure = failure.clone();
                             let deferred = deferred.clone();
+                            let metrics = metrics.clone();
+                            let read_metrics = read_metrics.clone();
                             std::thread::spawn(move || {
-                                serve(stream, port, failed, failure, deferred)
+                                serve(
+                                    stream,
+                                    port,
+                                    failed,
+                                    failure,
+                                    deferred,
+                                    metrics,
+                                    read_metrics,
+                                )
                             });
                         }
                         Err(_) => break,
@@ -111,6 +128,8 @@ impl ProxyHost {
             stopped,
             failed,
             failure,
+            metrics,
+            read_metrics,
             control,
             thread: Some(thread),
         })
@@ -140,6 +159,53 @@ impl ProxyHost {
             "shutdown" => b's',
             _ => return Err(PortError::Invalid),
         };
+        let mut slot = self.control_stream()?;
+        let stream = slot.as_mut().expect("control stream");
+        stream.write_all(&[command]).map_err(|_| PortError::Io)?;
+        let mut accepted = [0];
+        stream
+            .read_exact(&mut accepted)
+            .map_err(|_| PortError::Io)?;
+        if accepted == [1] {
+            Ok(())
+        } else {
+            Err(PortError::Io)
+        }
+    }
+
+    pub fn take_write_metrics(&self) -> PortResult<crate::FuseWriteMetrics> {
+        let mut slot = self.control_stream()?;
+        let stream = slot.as_mut().expect("control stream");
+        stream.write_all(b"m").map_err(|_| PortError::Io)?;
+        let mut accepted = [0];
+        stream
+            .read_exact(&mut accepted)
+            .map_err(|_| PortError::Io)?;
+        if accepted != [1] {
+            return Err(PortError::Io);
+        }
+        let mut metrics = crate::FuseWriteMetrics::read_from(stream).map_err(|_| PortError::Io)?;
+        metrics.merge(self.metrics.take());
+        Ok(metrics)
+    }
+
+    pub fn take_read_metrics(&self) -> PortResult<crate::FuseReadMetrics> {
+        let mut slot = self.control_stream()?;
+        let stream = slot.as_mut().expect("control stream");
+        stream.write_all(b"n").map_err(|_| PortError::Io)?;
+        let mut accepted = [0];
+        stream
+            .read_exact(&mut accepted)
+            .map_err(|_| PortError::Io)?;
+        if accepted != [1] {
+            return Err(PortError::Io);
+        }
+        let mut metrics = crate::FuseReadMetrics::read_from(stream).map_err(|_| PortError::Io)?;
+        metrics.merge(self.read_metrics.take());
+        Ok(metrics)
+    }
+
+    fn control_stream(&self) -> PortResult<std::sync::MutexGuard<'_, Option<TcpStream>>> {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let mut slot = self.control.stream.lock().map_err(|_| PortError::Io)?;
         while slot.is_none() {
@@ -157,17 +223,7 @@ impl ProxyHost {
                 return Err(PortError::Io);
             }
         }
-        let stream = slot.as_mut().expect("control stream");
-        stream.write_all(&[command]).map_err(|_| PortError::Io)?;
-        let mut accepted = [0];
-        stream
-            .read_exact(&mut accepted)
-            .map_err(|_| PortError::Io)?;
-        if accepted == [1] {
-            Ok(())
-        } else {
-            Err(PortError::Io)
-        }
+        Ok(slot)
     }
 }
 
@@ -187,16 +243,34 @@ fn serve(
     failed: Arc<AtomicBool>,
     failure: Arc<Mutex<Option<(&'static str, PortError)>>>,
     deferred: Arc<Mutex<Option<PortError>>>,
+    metrics: Arc<AtomicFuseWriteMetrics>,
+    read_metrics: Arc<AtomicFuseReadMetrics>,
 ) {
-    while let Ok(request) = read_request(&mut stream) {
+    while let Ok((request, measured)) = read_request_measured(&mut stream) {
+        if measured.logical_bytes != 0 {
+            metrics.note_host_frame(
+                measured.frame_bytes,
+                measured.payload_copy_bytes,
+                measured.socket_ns,
+                measured.decode_ns,
+            );
+        }
         let no_reply = request.no_reply();
+        let is_read = matches!(&request, Request::Read(..));
         let acknowledges = request.acknowledges_deferred_error();
         let name = request.name();
+        let started = std::time::Instant::now();
         let response = if acknowledges {
             acknowledge(&deferred).map_or_else(|| dispatch(port.as_ref(), request), Response::Error)
         } else {
             dispatch(port.as_ref(), request)
         };
+        if measured.logical_bytes != 0 {
+            metrics.note_host_dispatch(elapsed_ns(started));
+        }
+        if is_read {
+            read_metrics.note_host_dispatch(elapsed_ns(started));
+        }
         if no_reply {
             if let Response::Error(error) = response {
                 failed.store(true, Ordering::Release);
@@ -209,10 +283,25 @@ fn serve(
             }
             continue;
         }
-        if write_response(&mut stream, &response).is_err() {
-            break;
+        match write_response_measured(&mut stream, &response) {
+            Ok(measured) => {
+                if is_read {
+                    read_metrics.note_host_response(
+                        measured.frame_bytes,
+                        measured.logical_bytes,
+                        measured.payload_copy_bytes,
+                        measured.encode_ns,
+                        measured.socket_ns,
+                    );
+                }
+            }
+            Err(_) => break,
         }
     }
+}
+
+fn elapsed_ns(started: std::time::Instant) -> u64 {
+    u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
 
 fn acknowledge(deferred: &Mutex<Option<PortError>>) -> Option<PortError> {

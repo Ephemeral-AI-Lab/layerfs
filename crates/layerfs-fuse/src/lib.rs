@@ -14,6 +14,7 @@ mod port;
 mod protocol;
 mod proxy_client;
 mod proxy_host;
+mod write_metrics;
 
 #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
 pub use adapter::LayerFs;
@@ -24,3 +25,4 @@ pub use proxy_client::ProxyClient;
 #[doc(hidden)]
 pub use proxy_client::{serve_remote_control, RemoteControl};
 pub use proxy_host::ProxyHost;
+pub use write_metrics::{FuseReadMetrics, FuseWriteMetrics};

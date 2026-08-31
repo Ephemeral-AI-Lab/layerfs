@@ -97,7 +97,7 @@ pub fn write_file<S: ObjectStore, R: Read>(
     let candidate = filesystem::replace_file(store, root, path, bytes, |store| {
         Ok((inode, metadata(store, InodeKind::RegularFile, mode)?))
     })?;
-    set_mode(store, candidate.root(), path, mode)
+    set_mode(store, candidate.root(), path, mode)?.after(candidate)
 }
 
 fn apply_change<S: ObjectStore>(
@@ -118,7 +118,7 @@ fn apply_change<S: ObjectStore>(
                 filesystem::replace_file(store, root, &path, Cursor::new(bytes), |store| {
                     Ok((inode, metadata(store, InodeKind::RegularFile, *mode)?))
                 })?;
-            set_mode(store, candidate.root(), &path, *mode)?
+            set_mode(store, candidate.root(), &path, *mode)?.after(candidate)?
         }
         ContentChange::Splice {
             path: value,
