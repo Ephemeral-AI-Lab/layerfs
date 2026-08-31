@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/branding/layerfs-icon.png" alt="LayerFS icon" width="128">
+</p>
+
 # LayerFS
 
 **Branchable, content-addressed workspaces for local AI-agent workloads.**
