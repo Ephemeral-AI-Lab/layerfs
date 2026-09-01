@@ -3,9 +3,9 @@
 > **Status:** Current documentation index. LayerFS 0.1.0 is the active release
 > candidate.
 
-LayerFS is a local, content-addressed, copy-on-write filesystem for branchable
-agent workspaces. Start with the released manual, then use the general guides
-for repository-wide conventions.
+LayerFS is a content-addressed, SQLite-backed, copy-on-write filesystem for
+branchable agent Workspaces. Start with the released manual, then use the
+general guides for repository-wide conventions.
 
 ## 0.1.0 release-candidate manual
 
