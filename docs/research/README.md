@@ -1,21 +1,17 @@
 # LayerFS research documents
 
-> **Status:** Research
->
-> These documents are informative and are not part of a released product
+> **Status:** Research and history; informative and not a released product
 > contract.
 
-Research documents contain comparative studies, conceptual work, and product
-exploration. Released behavior is documented under `docs/versioned/`; proposed
-release work is documented under `docs/next/`.
+Released behavior is under [`../versioned/`](../versioned/), and current work
+is under [`../roadmap/`](../roadmap/). Everything here is supporting context.
 
-Current research collections:
+## Collections
 
-- Competitor and adjacent-product studies currently stored under
-  [`../agent-fs/`](../agent-fs/).
-- The AI-native filesystem vision paper and assets currently stored under
-  [`../day-dreaming/`](../day-dreaming/).
+- [AgentFS adjacent-product study](agent-fs/README.md)
+- [AI-native filesystem vision](vision/README.md)
+- [Historical V2 replacement work](history/v2-replacement/README.md)
+- [Historical V3 engineering work](history/v3/README.md)
 
-Those source collections will move under this directory only after release
-links and large binary assets have been audited. Their current locations do not
-make them normative.
+Historical paths are retained for design context and source-seal interpretation;
+they do not define the current product or roadmap.

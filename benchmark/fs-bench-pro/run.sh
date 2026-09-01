@@ -35,7 +35,8 @@ for directory in [
 paths += [
     root / "Cargo.toml",
     root / "Cargo.lock",
-    root / "docs/v2-replacement/spec.md",
+    root / "docs/roadmap/0.1/benchmarking.md",
+    root / "docs/research/history/v2-replacement/spec.md",
     root / "benchmark/fs-bench-pro/Cargo.toml",
     root / "benchmark/fs-bench-pro/Dockerfile.layerfs",
     root / "benchmark/fs-bench-pro/daemon-entrypoint.sh",

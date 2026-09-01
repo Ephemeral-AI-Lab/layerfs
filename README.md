@@ -64,7 +64,7 @@ This is the conceptual checkout view; the public lifecycle is
 
 <p align="left">
   <img
-    src="docs/assets/diagrams/layerstack-parallel-workspaces.png"
+    src="docs/assets/diagrams/layerstack-checkout.png"
     alt="Top-down LayerStack with Branches, Commits, and parallel agent Workspaces"
     width="560"
   >
@@ -179,7 +179,7 @@ Read the full [limitations](docs/versioned/0.1.0/limitations.md) before using La
 
 ## 📚 Documentation
 
-Start with the [documentation index](docs/index.md), or jump directly to a focused guide:
+Start with the [documentation index](docs/README.md), or jump directly to a focused guide:
 
 | Goal | Guide |
 | --- | --- |
@@ -190,7 +190,7 @@ Start with the [documentation index](docs/index.md), or jump directly to a focus
 | Configure container FUSE | [Container runtime](docs/versioned/0.1.0/container-runtime.md) |
 | Understand storage | [Storage format](docs/versioned/0.1.0/storage-format.md) |
 | Review performance evidence | [Benchmark results](release-notes/0.1.0/benchmark-results.md) |
-| Contribute changes | [Development guide](docs/general/development.md) |
+| Contribute changes | [0.1.x development guide](docs/roadmap/0.1/development.md) |
 
 The [first-principles learning site](https://learn.layerfs.ai/) is educational material and may describe future work. The versioned repository manual defines the current product contract.
 
@@ -199,18 +199,18 @@ The [first-principles learning site](https://learn.layerfs.ai/) is educational m
 | Stage | Focus | Status |
 | --- | --- | --- |
 | **0.1.0 Developer Preview** | One SQLite Store, immutable LayerStack history, Branches, Workspaces, public SDK/CLI, host materialization, container FUSE, monitoring, and benchmark evidence. | **Released** as source under `v0.1.0`. |
-| **0.1.1** | Make the current path boringly reliable: FUSE conformance, large and mixed-edit capture, prepend handling, bounded resources, and lifecycle cleanup. | **Proposed**; preserve the 0.1.0 schema, identities, SDK, CLI, and runtime bounds. |
+| **0.1.1** | Measure and harden existing-directory initialization through localized Commit, with focused FUSE and Docker proof. | **Planning**; see the [versioned checklist](docs/roadmap/0.1/0.1.1/README.md). |
 | **Next minor** | Establish a portable projection foundation, including capability-detected reflink/clonefile paths and a future OverlayFS projection. | **Planned**; requires a new compatibility contract. |
 | **Later** | Add platform/runtime expansion and verified Store export, import, and synchronization. | **Research**; no cross-host synchronization is part of 0.1.0. |
 
-See the [roadmap checklist](docs/roadmap.md) and
-[roadmap planning notes](docs/roadmap-planning.md) for acceptance gates,
+See the [roadmap checklist](docs/roadmap/README.md) and
+[roadmap architecture notes](docs/roadmap/architecture.md) for acceptance gates,
 ownership boundaries, and sequencing. Use the [Rust SDK reference](docs/versioned/0.1.0/sdk.md)
 to integrate the current public SDK.
 
 ## 🤝 Contributing
 
-Bug reports, reproducible performance evidence, documentation corrections, and focused pull requests are welcome. Before opening a change, review the [development guide](docs/general/development.md) and run the repository’s relevant verification commands.
+Bug reports, reproducible performance evidence, documentation corrections, and focused pull requests are welcome. Before opening a change, review the [0.1.x development guide](docs/roadmap/0.1/development.md) and run the repository’s relevant verification commands.
 
 ## 💬 Community
 

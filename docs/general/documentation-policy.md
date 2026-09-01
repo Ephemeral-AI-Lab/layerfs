@@ -4,15 +4,16 @@
 
 ## Documentation classes
 
-- `docs/index.md` is the documentation entry point.
+- `docs/README.md` is the documentation entry point.
 - `docs/versioned/<release>/` is the immutable user and operator manual for a
   release.
-- `docs/next/<release>/` contains non-binding proposals for a named future
-  release.
+- `docs/roadmap/` contains the current roadmap, release checklists, proposals,
+  development guidance, benchmark contracts, and dated planning checkpoints.
+  A patch checklist lives at
+  `docs/roadmap/<minor>/<release>/README.md`; sibling `*-YYYY-MM-DD.md` files
+  are append-only checkpoints.
 - `docs/general/` contains maintained project practices and concepts.
-- `docs/development/` contains maintainer tooling and benchmark contracts.
-- `docs/research/` contains informative comparative and conceptual work.
-- `docs/archive/` contains implementation history and handoff material.
+- `docs/research/` contains informative studies and historical design material.
 - `release-notes/<release>/` contains release evidence and announcements.
 - benchmark and research directories contain supporting evidence or design
   exploration, not released product contracts.
@@ -24,6 +25,8 @@ Every maintained document begins with an explicit status banner. Use one of:
 ```text
 Status: Released for LayerFS <release>.
 Status: Release candidate for LayerFS <release>.
+Status: Current planning checklist; no release candidate exists.
+Status: Dated planning checkpoint; not release evidence or a product contract.
 Status: Current general guide.
 Status: Proposal; target LayerFS <release>; not a released contract.
 Status: Research; informative and not a product contract.

@@ -1,9 +1,38 @@
 # fs-bench-pro
 
-This is the current LayerFS V2 replacement benchmark. Its normative contract is
-[`docs/v2-replacement/spec.md`](../../docs/v2-replacement/spec.md), sections 17–19.
+This benchmark follows the current
+[0.1.x benchmark contract](../../docs/roadmap/0.1/benchmarking.md). Its
+historical architecture is retained in
+[`docs/research/history/v2-replacement/spec.md`](../../docs/research/history/v2-replacement/spec.md),
+sections 17–19.
 
-The LayerFS arm uses exactly one local `LayerStackStore` and public SDK calls.
+## Campaign inventory
+
+- The existing registered payload campaign is implemented: 32 MiB cold create,
+  small edit, EDIT16, prepend, and read.
+- The 0.1.1 namespace-admission campaign is specified but not implemented yet:
+  `namespace-100`, `namespace-1000`, `namespace-10000`, and
+  `namespace-100000`.
+- The canonical scenario and status table is the
+  [0.1.x benchmark matrix](../../docs/roadmap/0.1/benchmarking.md).
+
+The benchmark contract also carries the canonical **Problem statement**,
+**Goal**, **Files to read**, and **Acceptance criteria** for the v0.1.1
+namespace work; this README records harness usage and implementation status.
+
+Each planned namespace fixture has 2,500 unique deterministic bytes per regular
+file and 100 regular files per directory. All timed namespace rows use real
+FUSE. Materialization is reserved for one untimed equality proof at 10,000
+files / 25 MB.
+
+Namespace-admission rows remain outside the existing registered total and the
+paired LayerFS-versus-Computer campaign. The planned namespace runner is
+LayerFS-only and separate from both `run.sh` and `run-paired.sh`, allowing one
+failing tier to be iterated without running the full or comparative campaigns.
+It will support one-case and `all` modes; `run-namespace.sh` does not exist yet.
+
+The implemented payload LayerFS arm uses exactly one local `LayerStackStore`
+and public SDK calls.
 The benchmark process, SDK, Store, Workspace spool, and FUSE `ProxyHost` run
 natively on macOS. Every measured mutation executes through a real FUSE
 Workspace in one already prepared daemon container, starts a fresh process,
@@ -44,6 +73,9 @@ Run a sealed campaign against an already running prepared container:
 benchmark/fs-bench-pro/run.sh RUN_ID CONTAINER_ID HOST_FIXTURE CONTAINER_FIXTURE [ITERATIONS]
 ```
 
+This command runs only the implemented payload campaign. It does not run the
+planned namespace matrix.
+
 The container must run the current sealed image with TCP port `41273` published
 only on `127.0.0.1`; its fixture must match `HOST_FIXTURE` byte-for-byte. The
 script reads the protected daemon capability during untimed preparation,
@@ -81,8 +113,8 @@ docker build \
   -t layerfs-fs-benchmark-pro-computer:fair-host-v3 .
 ```
 
-Then run randomized adjacent pairs against one already prepared LayerFS daemon
-container:
+After the LayerFS candidate is stable, run randomized adjacent pairs against
+one already prepared LayerFS daemon container:
 
 ```sh
 benchmark/fs-bench-pro/run-paired.sh \
@@ -100,3 +132,7 @@ container, non-FUSE Computer executors, non-pinned Computer product files,
 non-matching SQLite acknowledgement, missing storage census, and incomplete
 pairs. It saves raw pair evidence and `report.md` under
 `benchmark-results/fs-bench-pro/paired/RUN_ID`.
+
+This Cloudflare Computer comparison covers only the existing matched payload
+rows. Namespace rows are LayerFS-only and never contribute to paired results or
+`registered_total_ns`.
