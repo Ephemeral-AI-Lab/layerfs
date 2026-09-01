@@ -36,8 +36,12 @@ impl Filesystem for LayerFs {
             | InitFlags::FUSE_MAX_PAGES;
         let capabilities = config.capabilities() & wanted;
         let _ = config.add_capabilities(capabilities);
+        #[cfg(target_os = "linux")]
+        let capability_bits = capabilities.bits();
+        #[cfg(not(target_os = "linux"))]
+        let capability_bits = u64::from(capabilities.bits());
         self.port
-            .note_fuse_read_config(max_readahead, u64::from(capabilities.bits()));
+            .note_fuse_read_config(max_readahead, capability_bits);
         let _ = config.set_max_background(64);
         let _ = config.set_congestion_threshold(48);
         config
