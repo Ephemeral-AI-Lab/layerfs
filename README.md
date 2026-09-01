@@ -20,14 +20,15 @@
 
 ### Ephemeral Workspaces. Durable Shared History.
 
-LayerFS is a **content-addressed filesystem storage engine backed by SQLite**.
-It stores canonical chunks, extents, and filesystem structure in the Store, then
-projects a selected Branch frontier into an ephemeral Workspace. Agents fork a
-Branch from a Layer or Commit, run ordinary tools in isolation, and explicitly
-publish changed state as an immutable Commit. A Branch head Commit can be
-promoted with `Add` into the next Layer. LayerFS provides storage, Workspace,
-execution, and history primitives—not an agent framework, cloud orchestration
-service, or hardened security sandbox.
+LayerFS is a **SQLite-backed, content-addressed time machine for agent
+Workspaces**. Give every filesystem-affecting tool call its own ephemeral
+Workspace; when retained, that call becomes one immutable Commit—the base unit
+of the filesystem timeline. CAS, CDC, and COW store one shared base plus unique
+deltas instead of cloning full environments. From any Layer or eligible Commit,
+agents can fork zero-copy Branches, run parallel rollouts, discard failures,
+roll back by forking an earlier state, and promote a winning Branch with `Add`.
+The filesystem remains load-bearing for recursive multi-agent exploration
+without multiplying storage.
 
 > [!WARNING]
 > LayerFS 0.1.0 is a Developer Preview and release candidate. It is intended
@@ -35,9 +36,7 @@ service, or hardened security sandbox.
 > production storage. It does not provide crash- or power-loss-durability
 > guarantees. Keep an independent copy of important data.
 
----
-
-## 🧱  LayerStack storage model
+## 🧱 LayerStack storage model
 
 ### ⚙️ Core storage mechanisms
 
@@ -54,6 +53,26 @@ for the design rationale and step-by-step storage model.
 | --- | --- | --- |
 | **Content-addressed storage** — Names immutable objects from their canonical bytes, verifies reads, and reuses exact duplicates across files, LayerStacks, and agents. | **Content-defined chunking** — Keeps chunk boundaries stable around localized edits, so changing a small region does not require storing an entirely new large file. | **Copy-on-write** — Rebuilds only the changed file and directory path when publishing a new Commit, preserving unchanged subtrees; a Branch head can then be added as the next Layer. |
 
+### 🗃️ Check out an ephemeral filesystem from any layer
+
+A LayerStack records complete filesystem checkpoints. Agent A can start from L1
+while Agent B independently starts from L3. Each gets a private place to work
+while the selected history remains shared.
+
+This is the conceptual checkout view; the public lifecycle is
+`Layer` or `Commit` → `Branch` → `Workspace`.
+
+<p align="left">
+  <img
+    src="docs/assets/diagrams/layerstack-parallel-workspaces.png"
+    alt="Top-down LayerStack with Branches, Commits, and parallel agent Workspaces"
+    width="560"
+  >
+</p>
+
+*One LayerStack, many zero-copy Branches, and ephemeral COW Workspaces sharing
+immutable history.*
+
 ### 📦 Measured deduplication
 
 The primary storage signal is semantic content growth: the canonical bytes
@@ -69,28 +88,6 @@ content represented by the Store.
 These measurements come from the final public-SDK, real-FUSE campaign. See the
 [full benchmark report](release-notes/0.1.0/benchmark-results.md) for physical
 allocation, equations, source identity, and raw evidence.
-
----
-
-## 🗃️ Check out an ephemeral filesystem from any layer
-
-A LayerStack records complete filesystem checkpoints. Agent A can start from L1
-while Agent B independently starts from L3. Each gets a private place to work
-while the selected history remains shared.
-
-This is the conceptual checkout view; the public lifecycle is
-`Layer` or `Commit` → `Branch` → `Workspace`.
-
-<p align="center">
-  <img
-    src="docs/assets/diagrams/layerstack-checkout.png"
-    alt="A LayerStack with Agent A checking out an ephemeral filesystem from L1 and Agent B checking out an ephemeral filesystem from L3"
-    width="820"
-  >
-</p>
-
-*One LayerStack, two checkout points, and two ephemeral filesystems in which
-agents can work independently.*
 
 ---
 

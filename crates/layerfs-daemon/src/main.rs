@@ -1297,16 +1297,30 @@ mod linux {
     }
 }
 
-#[cfg(target_os = "linux")]
 fn main() {
-    if let Err(error) = linux::run() {
-        eprintln!("layerfs-daemon: {error}");
+    if version_requested() {
+        return;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Err(error) = linux::run() {
+            eprintln!("layerfs-daemon: {error}");
+            std::process::exit(1);
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        eprintln!("layerfs-daemon: Linux is required");
         std::process::exit(1);
     }
 }
 
-#[cfg(not(target_os = "linux"))]
-fn main() {
-    eprintln!("layerfs-daemon: Linux is required");
-    std::process::exit(1);
+fn version_requested() -> bool {
+    let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    if arguments.len() == 1 && arguments[0] == "--version" {
+        println!("layerfs-daemon {}", env!("CARGO_PKG_VERSION"));
+        true
+    } else {
+        false
+    }
 }

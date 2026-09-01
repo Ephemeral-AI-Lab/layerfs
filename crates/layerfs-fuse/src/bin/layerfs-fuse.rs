@@ -1,15 +1,29 @@
-#[cfg(all(target_os = "linux", feature = "proxy"))]
 fn main() {
-    if let Err(error) = run() {
-        eprintln!("{error}");
+    if version_requested() {
+        return;
+    }
+    #[cfg(all(target_os = "linux", feature = "proxy"))]
+    {
+        if let Err(error) = run() {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    }
+    #[cfg(not(all(target_os = "linux", feature = "proxy")))]
+    {
+        eprintln!("layerfs-fuse requires Linux and the proxy feature");
         std::process::exit(1);
     }
 }
 
-#[cfg(not(all(target_os = "linux", feature = "proxy")))]
-fn main() {
-    eprintln!("layerfs-fuse requires Linux and the proxy feature");
-    std::process::exit(1);
+fn version_requested() -> bool {
+    let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    if arguments.len() == 1 && arguments[0] == "--version" {
+        println!("layerfs-fuse {}", env!("CARGO_PKG_VERSION"));
+        true
+    } else {
+        false
+    }
 }
 
 #[cfg(all(target_os = "linux", feature = "proxy"))]

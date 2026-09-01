@@ -3,6 +3,7 @@ use crate::{BranchId, Result, StoreError};
 use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 use std::collections::BTreeSet;
 use std::fs::OpenOptions;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
@@ -253,6 +254,15 @@ impl StoreDb {
 }
 
 fn preflight_connect(path: &Path) -> Result<()> {
+    let mut header = [0; 20];
+    let mut file = std::fs::File::open(path)?;
+    if file.metadata()?.len() < header.len() as u64 {
+        return Err(StoreError::WrongStoreSchema);
+    }
+    file.read_exact(&mut header)?;
+    if header[18] == 2 || header[19] == 2 {
+        return Err(StoreError::WrongStoreSchema);
+    }
     let connection = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,

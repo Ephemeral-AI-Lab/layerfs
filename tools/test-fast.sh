@@ -10,11 +10,11 @@ jobs=${LAYERFS_TEST_JOBS:-4}
 
 temporary=$(mktemp -d "${TMPDIR:-/tmp}/layerfs-test-fast.XXXXXX")
 trap 'rm -rf -- "$temporary"' EXIT
-started=$SECONDS
 
 cargo test --manifest-path "$repo/Cargo.toml" --workspace --all-features \
   --locked \
   --no-run --message-format=json >"$temporary/artifacts.jsonl"
+started=$SECONDS
 
 python3 - "$temporary/artifacts.jsonl" "$temporary/executables" "$jobs" <<'PY'
 import concurrent.futures
