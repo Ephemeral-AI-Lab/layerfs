@@ -1,6 +1,6 @@
 # LayerFS 0.1.0 Rust SDK
 
-> **Status:** Release-candidate Rust SDK reference for LayerFS 0.1.0.
+> **Status:** Released Rust SDK reference for LayerFS 0.1.0 Developer Preview.
 
 The SDK package is available from this repository:
 

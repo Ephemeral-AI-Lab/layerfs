@@ -1,6 +1,6 @@
 # LayerFS 0.1.0 quickstart
 
-> **Status:** Release-candidate user guide for LayerFS 0.1.0.
+> **Status:** Released user guide for LayerFS 0.1.0 Developer Preview.
 
 This guide creates one Store, one LayerStack, one Branch, and one
 host-materialized Workspace. This path needs Rust but not Docker.

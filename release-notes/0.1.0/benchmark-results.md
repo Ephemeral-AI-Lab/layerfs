@@ -1,6 +1,6 @@
 # LayerFS 0.1.0 benchmark
 
-> **Status:** Release-candidate benchmark evidence for LayerFS 0.1.0.
+> **Status:** Final benchmark evidence for LayerFS 0.1.0 Developer Preview.
 
 This note records the reportable `fs-bench-pro` comparison between LayerFS
 0.1.0 and Cloudflare Computer. It contains only the final seven-pair matched

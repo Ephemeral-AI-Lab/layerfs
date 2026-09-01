@@ -31,7 +31,7 @@ The filesystem remains load-bearing for recursive multi-agent exploration
 without multiplying storage.
 
 > [!WARNING]
-> LayerFS 0.1.0 is a Developer Preview and release candidate. It is intended
+> LayerFS 0.1.0 is a Developer Preview. It is intended
 > for local evaluation, agent-runtime integration, and performance research—not
 > production storage. It does not provide crash- or power-loss-durability
 > guarantees. Keep an independent copy of important data.
@@ -198,7 +198,7 @@ The [first-principles learning site](https://learn.layerfs.ai/) is educational m
 
 | Stage | Focus | Status |
 | --- | --- | --- |
-| **0.1.0 Developer Preview** | One SQLite Store, immutable LayerStack history, Branches, Workspaces, public SDK/CLI, host materialization, container FUSE, monitoring, and benchmark evidence. | **Release candidate**; final source, artifact, and verification freeze remains. |
+| **0.1.0 Developer Preview** | One SQLite Store, immutable LayerStack history, Branches, Workspaces, public SDK/CLI, host materialization, container FUSE, monitoring, and benchmark evidence. | **Released** as source under `v0.1.0`. |
 | **0.1.1** | Make the current path boringly reliable: FUSE conformance, large and mixed-edit capture, prepend handling, bounded resources, and lifecycle cleanup. | **Proposed**; preserve the 0.1.0 schema, identities, SDK, CLI, and runtime bounds. |
 | **Next minor** | Establish a portable projection foundation, including capability-detected reflink/clonefile paths and a future OverlayFS projection. | **Planned**; requires a new compatibility contract. |
 | **Later** | Add platform/runtime expansion and verified Store export, import, and synchronization. | **Research**; no cross-host synchronization is part of 0.1.0. |

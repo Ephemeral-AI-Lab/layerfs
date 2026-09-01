@@ -1,6 +1,6 @@
 # LayerFS 0.1.0 container runtime
 
-> **Status:** Release-candidate container-runtime contract for LayerFS 0.1.0.
+> **Status:** Released container-runtime contract for LayerFS 0.1.0 Developer Preview.
 
 LayerFS can project a Workspace through real FUSE inside one prepared Linux
 container while the SDK and Store remain on the host.

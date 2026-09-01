@@ -1,6 +1,6 @@
 # LayerFS 0.1.0 release contract
 
-> **Status:** Release candidate. Normative for the proposed `v0.1.0` tag.
+> **Status:** Released Developer Preview contract, normative under `v0.1.0`.
 
 This document defines what the LayerFS 0.1.0 Developer Preview represents. The
 keywords **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative within
@@ -13,12 +13,12 @@ built.
 
 | Identity | Release value |
 | --- | --- |
-| Git tag | **TO BE FILLED AT RELEASE** |
-| Git commit | **TO BE FILLED AT RELEASE** |
-| Source archive SHA-256 | **TO BE FILLED AT RELEASE** |
-| `Cargo.lock` SHA-256 | **TO BE FILLED AT RELEASE** |
-| Checksum manifest SHA-256 | **TO BE FILLED AT RELEASE** |
-| Verification finish time in UTC | **TO BE FILLED AT RELEASE** |
+| Git tag | `v0.1.0` |
+| Git commit | The commit resolved by `v0.1.0^{commit}` |
+| Source archive SHA-256 | Recorded in the release asset `SHA256SUMS` |
+| `Cargo.lock` SHA-256 | Recorded in the release asset `SHA256SUMS` |
+| Checksum manifest identity | GitHub Release asset digest for `SHA256SUMS` |
+| Verification | Required successful GitHub Actions check on the tagged commit |
 
 The Git tag MUST resolve to the recorded commit. Release archives, executables,
 helpers, and container images MUST match [artifacts.md](artifacts.md). A local

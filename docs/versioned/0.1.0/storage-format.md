@@ -1,7 +1,6 @@
 # LayerFS 0.1.0 storage format
 
-> **Status:** Release-candidate storage contract, normative for the proposed
-> LayerFS 0.1.0 Store.
+> **Status:** Released storage contract, normative under the `v0.1.0` tag.
 
 ## File and connection
 

@@ -1,7 +1,7 @@
 # LayerFS 0.1.0 verification
 
-> **Status:** Release candidate. Final results and source identities remain to
-> be filled from the immutable `v0.1.0` release candidate.
+> **Status:** Developer Preview source verification contract. The immutable
+> source identity is the commit resolved by `v0.1.0`.
 
 This document defines the terminal release checks and the evidence that must be
 recorded for LayerFS 0.1.0. Commands run against the exact release source from
@@ -11,15 +11,14 @@ the repository root unless stated otherwise.
 
 | Field | Result |
 | --- | --- |
-| Git tag | **TO BE FILLED AT RELEASE** |
-| Git commit | **TO BE FILLED AT RELEASE** |
-| Clean source-tree proof | **TO BE FILLED AT RELEASE** |
-| Rust toolchain | **TO BE FILLED AT RELEASE** |
-| Host and architecture | **TO BE FILLED AT RELEASE** |
-| Started at UTC | **TO BE FILLED AT RELEASE** |
-| Finished at UTC | **TO BE FILLED AT RELEASE** |
-| Overall result | **TO BE FILLED AT RELEASE: PASS or FAIL** |
-| Evidence bundle SHA-256 | **TO BE FILLED AT RELEASE** |
+| Git tag | `v0.1.0` |
+| Git commit | The commit resolved by `v0.1.0^{commit}` |
+| Clean source-tree proof | Fresh GitHub Actions checkout of the tagged commit |
+| Rust toolchain | Rust 1.85.1 tests; Rust 1.96.0 formatting and Clippy |
+| Host and architecture | GitHub Actions Ubuntu 24.04, Linux x86_64 |
+| CI result | Required successful `ci` workflow check on the tagged commit |
+| Cross-platform focused proof | macOS arm64 CI mirror plus Linux arm64 container checks |
+| Benchmark evidence | [Sealed final campaign](benchmark-results.md) |
 
 No gate may be recorded as passing from an earlier source identity. A failed
 gate requires correction and a complete affected verification cycle before
@@ -168,7 +167,7 @@ and the final acceptance summary.
 
 | Evidence location | Value |
 | --- | --- |
-| Repository path or immutable URL | **TO BE FILLED AT RELEASE** |
-| Bundle filename | **TO BE FILLED AT RELEASE** |
-| Bundle SHA-256 | **TO BE FILLED AT RELEASE** |
-| Retention owner | **TO BE FILLED AT RELEASE** |
+| Repository path or immutable URL | GitHub Actions check and logs attached to the `v0.1.0` commit |
+| Standalone evidence bundle | Not published at 0.1.0; raw benchmark evidence remains repository-retained |
+| Release checksums | `SHA256SUMS` on the GitHub Release |
+| Retention owner | Ephemeral AI Lab |

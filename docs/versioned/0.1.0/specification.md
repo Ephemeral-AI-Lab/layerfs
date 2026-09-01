@@ -1,7 +1,6 @@
 # LayerFS 0.1.0 product specification
 
-> **Status:** Release-candidate specification, normative for the proposed
-> LayerFS 0.1.0 tag.
+> **Status:** Released specification, normative under the `v0.1.0` tag.
 
 ## Architecture
 

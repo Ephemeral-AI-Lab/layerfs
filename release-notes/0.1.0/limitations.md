@@ -1,6 +1,6 @@
 # LayerFS 0.1.0 limitations
 
-> **Status:** Release-candidate limitations for LayerFS 0.1.0.
+> **Status:** Released limitations for LayerFS 0.1.0 Developer Preview.
 
 LayerFS 0.1.0 is a Developer Preview intended for development, integration
 testing, benchmark reproduction, and design evaluation. Read these constraints

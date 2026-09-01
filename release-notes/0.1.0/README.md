@@ -1,7 +1,7 @@
 # LayerFS 0.1.0 Developer Preview
 
-> **Status:** Release candidate. This record becomes immutable when `v0.1.0`
-> is tagged and every release-identity placeholder is filled.
+> **Status:** Developer Preview release record, frozen by the annotated
+> `v0.1.0` tag.
 
 LayerFS 0.1.0 is a Developer Preview of a local, content-addressed,
 copy-on-write filesystem for branchable agent workspaces. It provides one
@@ -9,7 +9,7 @@ SQLite-backed `LayerStackStore`, immutable snapshots, named writable Branches,
 ephemeral Workspaces, fresh-process command execution, explicit Commit, and
 materialized or real-FUSE projections.
 
-This directory is the release-candidate record. The versioned documentation
+This directory is the release record. The versioned documentation
 describes the product contract intended for this release; files outside the
 versioned documentation may continue to evolve.
 
@@ -19,9 +19,9 @@ versioned documentation may continue to evolve.
 | --- | --- |
 | Version | `0.1.0` |
 | Channel | Developer Preview |
-| Git tag | **TO BE FILLED AT RELEASE** |
-| Git commit | **TO BE FILLED AT RELEASE** |
-| Release date | **TO BE FILLED AT RELEASE** |
+| Git tag | `v0.1.0` |
+| Git commit | The commit resolved by `v0.1.0^{commit}` |
+| Release date | 2026-09-01 |
 | Source and artifact checksums | [Artifact manifest](artifacts.md) |
 | Verification result | [Verification record](verification.md) |
 

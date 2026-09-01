@@ -1,6 +1,6 @@
 # LayerFS 0.1.0 CLI reference
 
-> **Status:** Release-candidate CLI reference for LayerFS 0.1.0.
+> **Status:** Released CLI reference for LayerFS 0.1.0 Developer Preview.
 
 The `layerfs` binary is a thin adapter over the public Rust SDK. It stores no
 application SQL and has no alternate storage path.

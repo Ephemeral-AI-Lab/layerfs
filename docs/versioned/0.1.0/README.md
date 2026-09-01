@@ -1,7 +1,7 @@
 # LayerFS 0.1.0 manual
 
-> **Status:** Release-candidate manual for LayerFS 0.1.0. It becomes the
-> released manual when `v0.1.0` is tagged.
+> **Status:** Released manual for LayerFS 0.1.0 Developer Preview, frozen by
+> the `v0.1.0` tag.
 
 LayerFS 0.1.0 provides local, branchable agent workspaces backed by one
 content-addressed SQLite Store. It supports host materialization, real FUSE
