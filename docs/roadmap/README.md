@@ -18,6 +18,24 @@ Active maintainer guidance is co-located with its release checklist. See the
 - A release is complete only after its source identity, verification, artifacts,
   and documentation are frozen together.
 
+## 0.1.x phase: benchmark completion and optimization
+
+The [0.1.x roadmap](0.1/README.md) completes the benchmark surface and performs
+evidence-driven optimization against the existing host-Store, Docker,
+authenticated-daemon, real-FUSE, fresh-process, explicit-Commit, and
+explicit-End architecture.
+
+- [x] Keep the public SDK and real-FUSE lifecycle as the product boundary.
+- [x] Keep container and fixture preparation outside timed regions.
+- [x] Keep LayerFS-only iteration separate from final paired Cloudflare runs.
+- [ ] Complete the namespace matrix in v0.1.1.
+- [ ] Complete admitted prepend and mixed-edit work in v0.1.2.
+- [ ] Stop the patch line when the completed matrix has no evidence-backed
+  defect within the existing architecture.
+
+New projections, platforms, remote topology, or incompatible contracts do not
+belong in this phase.
+
 ## Current baseline: LayerFS 0.1.0
 
 ### Implemented product surface
@@ -89,7 +107,23 @@ projection types are deferred from 0.1.1. Patch-compatible follow-up work is
 tracked in the [0.1.2 proposals](0.1/0.1.2/README.md); only incompatible work
 moves to 0.2.0.
 
-## Next minor release: portable projection foundation
+## Proposed compatibility-preserving 0.1.2 work
+
+The [0.1.2 proposal set](0.1/0.1.2/README.md) continues benchmark-driven
+optimization after the namespace lifecycle is understood.
+
+- [ ] Admit prepend/range-copy work only from public-path transfer evidence.
+- [ ] Admit fragmented-write, sparse-growth, or mixed-edit work only from a
+  focused failing row.
+- [ ] Preserve the existing FUSE/Docker environment and 0.1.x contracts.
+- [ ] Retain exact bytes, canonical roots, fresh reopen proof, and existing
+  registered scenario meanings.
+- [ ] Rerun LayerFS-only payload and namespace matrices after every accepted
+  optimization.
+- [ ] Run the paired Cloudflare payload campaign once at candidate stability.
+- [ ] Move only incompatible mechanisms to 0.2.0.
+
+## 0.2.0: portable projection foundation
 
 Work that changes the public contract or frozen 0.1.0 compatibility surface
 belongs in a minor release.

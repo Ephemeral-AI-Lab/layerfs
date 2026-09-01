@@ -200,7 +200,8 @@ The [first-principles learning site](https://learn.layerfs.ai/) is educational m
 | --- | --- | --- |
 | **0.1.0 Developer Preview** | One SQLite Store, immutable LayerStack history, Branches, Workspaces, public SDK/CLI, host materialization, container FUSE, monitoring, and benchmark evidence. | **Released** as source under `v0.1.0`. |
 | **0.1.1** | Measure and harden existing-directory initialization through localized Commit, with focused FUSE and Docker proof. | **Planning**; see the [versioned checklist](docs/roadmap/0.1/0.1.1/README.md). |
-| **Next minor** | Establish a portable projection foundation, including capability-detected reflink/clonefile paths and a future OverlayFS projection. | **Planned**; requires a new compatibility contract. |
+| **0.1.2** | Complete admitted prepend, range-copy, fragmented-write, sparse-growth, and mixed-edit optimization against the same FUSE/Docker path. | **Proposed**; see the [proposal set](docs/roadmap/0.1/0.1.2/README.md). |
+| **0.2.0** | Establish a portable projection foundation, including capability-detected reflink/clonefile paths and a future OverlayFS projection. | **Planned**; requires a new compatibility contract. |
 | **Later** | Add platform/runtime expansion and verified Store export, import, and synchronization. | **Research**; no cross-host synchronization is part of 0.1.0. |
 
 See the [roadmap checklist](docs/roadmap/README.md) and

@@ -92,6 +92,25 @@ AgentsGit must not share one mutable database.
 
 ## Release sequence
 
+### 0.1.x: finish and optimize the existing architecture
+
+The 0.1.x line is the benchmark-completion and evidence-driven optimization
+phase for the existing host-native Store, Docker runtime, authenticated daemon,
+real Linux FUSE projection, fresh-process execution, explicit Commit, and
+explicit End path.
+
+Keep the environment and measurement contract stable: public SDK operations,
+prepared containers outside the timer, no Store bind mount, matched
+acknowledgement, source/container custody, exact oracles, and fresh evidence
+resources. Optimize production code only after passive evidence identifies a
+shared root cause. Do not add benchmark-only APIs, persistent workers, hidden
+caches, skipped integrity checks, weaker durability, or shifted timing
+boundaries.
+
+LayerFS-only focused rows drive iteration. The paired Cloudflare payload
+campaign is a stable-candidate comparison and regression check, not part of the
+inner optimization loop.
+
 ### 0.1.0: immutable baseline — complete
 
 The released `v0.1.0` source, manual, verification, artifacts, checksums, and
@@ -134,6 +153,23 @@ Patch-compatible large/mixed-edit and `copy_file_range` follow-up is tracked in
 the [0.1.2 proposals](0.1/0.1.2/README.md). Any item that requires an
 incompatible wire, public API, schema, canonical, or identity change moves to
 0.2.0 with the broader projection and platform work.
+
+### 0.1.2: payload and mixed-edit optimization
+
+After v0.1.1 completes namespace admission, v0.1.2 may accept measured prepend,
+range-copy, fragmented-write, sparse-growth, and mixed-edit work. Each item must
+use the same public SDK, real-FUSE, Docker, fresh-process, timing, integrity, and
+acknowledgement boundaries established by v0.1.0.
+
+Keep the existing registered payload and namespace rows stable. Add a new row
+only when it answers a concrete product question, iterate LayerFS-only on the
+smallest failing case, and rerun paired Cloudflare payload evidence only after
+candidate stability. Preserve exact bytes, canonical roots, fresh reopen
+results, Store compatibility, and resource bounds.
+
+Do not reserve another 0.1.x version speculatively. Stop the patch line when the
+completed benchmark matrix has no evidence-backed defect within the existing
+architecture. Move only incompatible mechanisms to v0.2.0.
 
 ### 0.2.0: portable projection foundation
 
