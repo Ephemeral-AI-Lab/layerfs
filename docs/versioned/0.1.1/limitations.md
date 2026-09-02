@@ -1,6 +1,6 @@
-# LayerFS 0.1.1 release-candidate limitations
+# LayerFS 0.1.1 limitations
 
-> **Status:** Candidate limitations; `v0.1.1` is not published.
+> **Status:** Released limitations for the `v0.1.1` Developer Preview.
 
 The [0.1.0 limitations](../0.1.0/limitations.md) remain in force: LayerFS is a
 Developer Preview, does not claim crash- or power-loss durability at every
@@ -8,7 +8,7 @@ acknowledgement, requires independent backups for important data, supports one
 live local authority per Store, and provides no cross-host synchronization,
 automatic repair, or hostile-code security boundary.
 
-Additional candidate qualifications:
+Additional 0.1.1 qualifications:
 
 - namespace benchmark results describe exact synthetic fixtures and the
   retained host; they are not universal throughput guarantees;

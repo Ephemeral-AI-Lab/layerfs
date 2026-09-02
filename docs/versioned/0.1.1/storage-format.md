@@ -1,8 +1,8 @@
-# LayerFS 0.1.1 release-candidate storage format
+# LayerFS 0.1.1 storage format
 
-> **Status:** Candidate compatibility record; `v0.1.1` is not published.
+> **Status:** Released compatibility record for `v0.1.1`.
 
-The 0.1.1 candidate preserves the five-table SQLite schema, canonical object
+The 0.1.1 release preserves the five-table SQLite schema, canonical object
 encodings, identity domains, content-defined chunking profile, immutable
 Layer and Commit records, Branch publication ordering, and authenticated read
 requirements defined by the
@@ -11,5 +11,5 @@ requirements defined by the
 Initialization may avoid persisting obsolete intermediate objects and may
 admit final objects in bounded batches. Those changes do not alter reachable
 canonical bytes, identifiers, or public Store compatibility. A released 0.1.0
-Store must open on the candidate, and failed publication must not expose an
+Store must open on the release, and failed publication must not expose an
 incomplete reachable closure.

@@ -1,7 +1,6 @@
-# LayerFS 0.1.1 release-candidate limitations
+# LayerFS 0.1.1 limitations
 
-> **Status:** Candidate record. The latest published limitations remain those
-> for [0.1.0](../0.1.0/limitations.md).
+> **Status:** Released limitations for the `v0.1.1` Developer Preview.
 
 LayerFS remains a Developer Preview for local evaluation, integration,
 benchmark reproduction, and design research—not production storage.
@@ -18,8 +17,8 @@ benchmark reproduction, and design research—not production storage.
   compatible release identity.
 - Benchmark results are fixture- and host-specific evidence, not universal
   latency or throughput guarantees.
-- Terminal namespace and payload gates pass. Publication still requires the
-  clean immutable release commit, CI result, artifacts, checksums, and tag.
+- Terminal namespace and payload gates pass for the retained source-sealed
+  campaigns; they are workload-specific evidence, not universal guarantees.
 
-See the candidate [versioned limitations](../../docs/versioned/0.1.1/limitations.md)
+See the [versioned limitations](../../docs/versioned/0.1.1/limitations.md)
 and [verification record](verification.md).

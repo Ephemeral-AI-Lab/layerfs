@@ -1,11 +1,10 @@
 # LayerFS 0.1.1 terminal benchmark evidence
 
-> **Status:** Terminal candidate evidence. Every binding benchmark and evidence
-> gate passes; the values remain candidate results until `v0.1.1` is published.
+> **Status:** Final terminal evidence for the `v0.1.1` Developer Preview.
 
-`fs-bench-pro` is LayerFS-only for 0.1.1 candidate work. Historical comparison
+`fs-bench-pro` is LayerFS-only for 0.1.1. Historical comparison
 artifacts remain immutable, but no external product is part of the active
-runner or this release-candidate decision.
+runner or this release decision.
 
 ## Namespace-v2 terminal campaign
 
@@ -50,7 +49,7 @@ Report SHA-256:
 `13f2d29362bdf409121af95b80ad1b2911a24fc1ed05760a75a3bf3160248bab`.
 Every frozen hard gate passes:
 
-| Metric | Candidate median | Frozen gate |
+| Metric | 0.1.1 median | Frozen gate |
 | --- | ---: | ---: |
 | Workspace Create | 14.550 ms | ≤20 ms |
 | Small-edit Commit | 4.503 ms | ≤6 ms |
@@ -63,16 +62,16 @@ Every frozen hard gate passes:
 | Host peak RSS | 97.1 MB | ≤128 MiB |
 
 Against retained 0.1.0 medians of 636.378417 ms total and 113.571208 ms read,
-the terminal candidate is approximately 2.7% slower in total and 24.5% slower
+the 0.1.1 result is approximately 2.7% slower in total and 24.5% slower
 on read. The read difference is the accepted cost of bounding authenticated
 read-ahead to 8 MiB instead of retaining a larger speculative payload window:
 it limits owned memory and unused fetches at the cost of additional bounded
 read service work. The 141.418-ms result remains below the frozen 150-ms hard
 gate, and the 653.401-ms total remains below 700 ms.
 
-## Publication evidence still required
+## Publication identity
 
-The terminal benchmark campaigns are complete. Publication still requires the
-clean release commit, CI identity, source archives, `Cargo.lock` and artifact
-checksums, annotated tag, and GitHub Release. Those pending identities must not
-be inferred from the benchmark source seals.
+The benchmark source seals bind their captured development worktrees. The
+annotated `v0.1.1` tag, required CI check, source archives, and release asset
+checksums bind the published source identity; they do not rewrite the retained
+benchmark evidence.

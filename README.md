@@ -113,7 +113,7 @@ Each `workspace exec` starts a fresh process. `commit` publishes the Workspace s
 
 ## 🛠️ Quickstart
 
-The current release is built from source. You need **macOS or Linux** and **Rust 1.85 or newer**. Docker, `/dev/fuse`, and `CAP_SYS_ADMIN` are needed only for managed container-FUSE workspaces. Packages are not published to crates.io in 0.1.0.
+The current release is built from source. You need **macOS or Linux** and **Rust 1.85 or newer**. Docker, `/dev/fuse`, and `CAP_SYS_ADMIN` are needed only for managed container-FUSE workspaces. Packages are not published to crates.io in 0.1.1.
 
 From the repository root:
 
@@ -159,10 +159,10 @@ crates/
 tools/layerfs-eval             Store and Branch integrity evaluator
 benchmark/                     filesystem and end-to-end benchmarks
 containers/layerfs-fuse        managed Linux FUSE runtime image
-docs/versioned/0.1.0          current versioned product manual
-release-notes/0.1.0            release contract, evidence, and limitations
-docs/versioned/0.1.1          release-candidate manual (not published)
-release-notes/0.1.1            release-candidate record (not published)
+docs/versioned/0.1.0          previous versioned product manual
+release-notes/0.1.0            previous release record
+docs/versioned/0.1.1          current versioned product manual
+release-notes/0.1.1            release contract, evidence, and limitations
 ```
 
 ## ⚠️ Current limitations
@@ -186,13 +186,13 @@ Start with the [documentation index](docs/README.md), or jump directly to a focu
 | Goal | Guide |
 | --- | --- |
 | Learn the concepts | [Core concepts](docs/general/concepts.md) |
-| Run the CLI and SDK | [Quickstart](docs/versioned/0.1.0/quickstart.md) |
-| Find a CLI command | [CLI reference](docs/versioned/0.1.0/cli.md) |
-| Integrate with Rust | [Rust SDK reference](docs/versioned/0.1.0/sdk.md) |
-| Configure container FUSE | [Container runtime](docs/versioned/0.1.0/container-runtime.md) |
-| Understand storage | [Storage format](docs/versioned/0.1.0/storage-format.md) |
-| Review performance evidence | [Benchmark results](release-notes/0.1.0/benchmark-results.md) |
-| Review the 0.1.1 candidate | [Release-candidate record](release-notes/0.1.1/README.md) |
+| Run the CLI and SDK | [Quickstart](docs/versioned/0.1.1/quickstart.md) |
+| Find a CLI command | [CLI reference](docs/versioned/0.1.1/cli.md) |
+| Integrate with Rust | [Rust SDK reference](docs/versioned/0.1.1/sdk.md) |
+| Configure container FUSE | [Container runtime](docs/versioned/0.1.1/container-runtime.md) |
+| Understand storage | [Storage format](docs/versioned/0.1.1/storage-format.md) |
+| Review performance evidence | [Benchmark results](release-notes/0.1.1/benchmark-results.md) |
+| Review the 0.1.1 release | [Release record](release-notes/0.1.1/README.md) |
 | Contribute changes | [0.1.x development guide](docs/roadmap/0.1/development.md) |
 
 The [first-principles learning site](https://learn.layerfs.ai/) is educational material and may describe future work. The versioned repository manual defines the current product contract.
@@ -202,7 +202,7 @@ The [first-principles learning site](https://learn.layerfs.ai/) is educational m
 | Stage | Focus | Status |
 | --- | --- | --- |
 | **0.1.0 Developer Preview** | One SQLite Store, immutable LayerStack history, Branches, Workspaces, public SDK/CLI, host materialization, container FUSE, monitoring, and benchmark evidence. | **Released** as source under `v0.1.0`. |
-| **0.1.1** | Measure and harden existing-directory initialization through localized Commit, with focused FUSE and Docker proof. | **Release-candidate preparation**; terminal benchmark gates pass and publication identity remains pending in the [candidate record](release-notes/0.1.1/README.md). |
+| **0.1.1** | Measure and harden existing-directory initialization through localized Commit, with focused FUSE and Docker proof. | **Released** as source under `v0.1.1`; see the [release record](release-notes/0.1.1/README.md). |
 | **0.1.2** | Complete admitted prepend, range-copy, fragmented-write, sparse-growth, and mixed-edit optimization against the same FUSE/Docker path. | **Proposed**; see the [proposal set](docs/roadmap/0.1/0.1.2/README.md). |
 | **0.1.3** | Complete diverse, tiered filesystem-workload families against one genesis Layer and one Branch, then optimize measured bottlenecks. | **Draft**; see the [release README](docs/roadmap/0.1/0.1.3/README.md). |
 | **0.1.4** | Benchmark multi-Layer and multi-Branch Commit history, Fork, Add, Diff, conflict, and query scaling, then optimize measured bottlenecks. | **Draft**; see the [release README](docs/roadmap/0.1/0.1.4/README.md). |

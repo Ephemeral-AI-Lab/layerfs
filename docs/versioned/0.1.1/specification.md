@@ -1,7 +1,7 @@
-# LayerFS 0.1.1 release-candidate specification
+# LayerFS 0.1.1 specification
 
-> **Status:** Candidate delta over the released
-> [0.1.0 specification](../0.1.0/specification.md). Not yet normative.
+> **Status:** Released normative delta over the
+> [0.1.0 specification](../0.1.0/specification.md).
 
 LayerFS 0.1.1 retains the 0.1.0 product model: one local SQLite Store per
 Client; immutable Layers and Commits; named Branches; ephemeral Workspaces;
@@ -9,7 +9,7 @@ explicit Commit and End; authenticated canonical objects; CDC; structural
 copy-on-write; materialized or real-FUSE projections; and bounded queries,
 reads, output, and admission.
 
-The candidate changes implementation rather than public semantics:
+The release changes implementation rather than public semantics:
 
 - existing-directory initialization constructs final canonical state through
   bounded parallel preparation and visibility-last admission;
@@ -22,6 +22,5 @@ The candidate changes implementation rather than public semantics:
 
 The five-table Store schema, canonical encodings and identities, CDC profile,
 SDK and CLI behavior, daemon/proxy protocol, acknowledgement boundary, and
-Workspace lifecycle remain compatibility requirements. The exact candidate
-must pass the [release verification record](../../../release-notes/0.1.1/verification.md)
-before this document can be frozen.
+Workspace lifecycle remain compatibility requirements. The terminal proof is
+recorded in the [release verification record](../../../release-notes/0.1.1/verification.md).

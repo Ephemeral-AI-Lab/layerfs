@@ -1,18 +1,17 @@
-# LayerFS 0.1.1 release-candidate contract
+# LayerFS 0.1.1 release contract
 
-> **Status:** Proposed Developer Preview contract. It becomes normative only
-> after terminal verification and publication of `v0.1.1`.
+> **Status:** Released Developer Preview contract, normative under `v0.1.1`.
 
 ## Identity
 
-| Identity | Candidate value |
+| Identity | Release value |
 | --- | --- |
-| Git tag | Pending annotated `v0.1.1` |
-| Git commit | Pending clean immutable candidate |
-| Source archives | Pending |
-| `Cargo.lock` SHA-256 | Pending |
-| Checksum manifest | Pending `SHA256SUMS` |
-| CI verification | Pending against the tagged commit |
+| Git tag | Annotated `v0.1.1` |
+| Git commit | The commit resolved by `v0.1.1^{commit}` |
+| Source archives | `layerfs-0.1.1.tar.gz` and `layerfs-0.1.1.zip` |
+| `Cargo.lock` SHA-256 | Recorded in release asset `SHA256SUMS` |
+| Checksum manifest | Release asset `SHA256SUMS` |
+| CI verification | Required successful `ci` workflow check on the tagged commit |
 
 ## Preserved public contract
 
@@ -20,7 +19,7 @@ LayerFS 0.1.1 must retain the 0.1.0 durable/ephemeral boundary, canonical
 identity, five-table Store schema, visibility-last publication, explicit
 Commit and End behavior, stale-Workspace reconciliation, bounded public
 operations, daemon compatibility, and materialized/FUSE logical equivalence.
-The normative candidate details are in the
+The normative release details are in the
 [versioned manual](../../docs/versioned/0.1.1/README.md).
 
 The release may optimize initialization, object admission, localized Commit,
@@ -41,5 +40,5 @@ The release is accepted only when:
 5. source artifacts and `SHA256SUMS` are generated and verified; and
 6. the annotated tag resolves to the verified commit.
 
-No development benchmark or earlier source seal substitutes for terminal
-release verification.
+No development benchmark or earlier source seal substitutes for the terminal
+release verification recorded for 0.1.1.

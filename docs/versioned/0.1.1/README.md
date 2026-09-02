@@ -1,7 +1,7 @@
-# LayerFS 0.1.1 release-candidate manual
+# LayerFS 0.1.1 manual
 
-> **Status:** Release-candidate preparation. This manual is not frozen by a
-> tag and does not describe a published release.
+> **Status:** Released Developer Preview manual, frozen by the annotated
+> `v0.1.1` tag.
 
 LayerFS 0.1.1 preserves the 0.1.0 public SDK, CLI, canonical-object, Store,
 daemon, and Workspace contracts while optimizing existing-directory
@@ -17,7 +17,6 @@ initialization, localized Commit, Workspace Create, and bounded reads.
 6. [Storage format](storage-format.md)
 7. [Limitations](limitations.md)
 
-The candidate evidence and remaining gates are in the
-[0.1.1 release record](../../../release-notes/0.1.1/README.md). Until the
-release is tagged, use the [0.1.0 manual](../0.1.0/README.md) as the latest
-published contract.
+The terminal evidence and release identity are in the
+[0.1.1 release record](../../../release-notes/0.1.1/README.md). The
+[0.1.0 manual](../0.1.0/README.md) remains available as the previous contract.

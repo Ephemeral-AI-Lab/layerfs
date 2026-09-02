@@ -1,22 +1,21 @@
-# LayerFS 0.1.1 release-candidate verification
+# LayerFS 0.1.1 verification
 
-> **Status:** In progress. Results below are development evidence, not terminal
-> verification of a tagged release.
+> **Status:** Developer Preview source verification record for `v0.1.1`.
 
 ## Release identity
 
 | Field | Result |
 | --- | --- |
-| Git tag | Pending |
-| Git commit/tree | Pending clean candidate |
-| Workspace version | `0.1.1` complete |
-| Clean source proof | Pending |
-| CI on exact commit | Pending |
-| Source archive verification | Pending |
+| Git tag | Annotated `v0.1.1` |
+| Git commit/tree | The commit and tree resolved by `v0.1.1` |
+| Workspace version | `0.1.1` |
+| Clean source proof | Clean tagged checkout and deterministic archives |
+| CI on exact commit | Required successful `ci` workflow check |
+| Source archive verification | Release asset `SHA256SUMS` |
 
 ## Mandatory terminal commands
 
-Run from the clean candidate source and retain complete output:
+The following commands were required from the release source:
 
 ```bash
 cargo fmt --all -- --check
@@ -32,7 +31,7 @@ git diff --check
 
 Terminal verification must also include:
 
-- released 0.1.0 Store opening on the candidate;
+- released 0.1.0 Store opening on the 0.1.1 release;
 - canonical fixture and reachable-root compatibility;
 - exact direct-path eligibility and canonical fallback coverage;
 - real Linux FUSE/materialization equality;
@@ -55,15 +54,15 @@ gate at source seal
 See [benchmark-results.md](benchmark-results.md) for retained paths, exact
 checksums, medians, and the bounded read-ahead tradeoff.
 
-## Pending acceptance record
+## Acceptance record
 
 | Gate | Status |
 | --- | --- |
-| Clean immutable source | Pending |
-| Version and lockfile | Pending |
+| Clean immutable source | Pass; bound by annotated tag and release archives |
+| Version and lockfile | Pass; every local package resolves to `0.1.1` |
 | Native workspace checks | Pass in namespace composite proof |
 | Linux FUSE/Docker checks | Pass in namespace composite proof |
 | Namespace performance/evidence | Pass on terminal namespace seal |
 | Registered payload regression | All frozen gates pass on terminal payload seal |
-| Documentation audit | Candidate links and whitespace pass; release-commit audit pending |
-| Artifacts/checksums | Pending |
+| Documentation audit | Pass; release links and whitespace verified |
+| Artifacts/checksums | Published with the GitHub Release and verified by `SHA256SUMS` |

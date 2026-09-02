@@ -1,10 +1,12 @@
-# LayerFS 0.1.1 release-candidate quickstart
+# LayerFS 0.1.1 quickstart
 
-> **Status:** Candidate instructions; `v0.1.1` is not published.
+> **Status:** Released instructions for `v0.1.1`.
 
-Build the candidate from its eventual clean release commit:
+Build from the immutable release tag:
 
 ```bash
+git clone --branch v0.1.1 --depth 1 https://github.com/Ephemeral-AI-Lab/layerfs.git
+cd layerfs
 cargo build --release -p layerfs-cli
 export LAYERFS_BIN="$PWD/target/release/layerfs"
 export LAYERFS_CONTEXT="$PWD/.layerfs/context"
@@ -19,5 +21,4 @@ mkdir -p "$PWD/.layerfs"
 For the complete Branch, Workspace, Commit, End, directory-import, and
 managed-container walkthrough, follow the compatible
 [0.1.0 quickstart](../0.1.0/quickstart.md). Keep the Store outside any imported
-or projected directory. Before publication, this abbreviated candidate guide
-must be rechecked against the exact clean `v0.1.1` source.
+or projected directory.

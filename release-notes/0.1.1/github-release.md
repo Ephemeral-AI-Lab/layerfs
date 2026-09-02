@@ -1,13 +1,10 @@
-# LayerFS 0.1.1 Developer Preview — draft
-
-> **Publication status:** Blocked. Do not publish until every item in
-> [verification.md](verification.md) passes against the tagged source.
+# LayerFS 0.1.1 Developer Preview
 
 LayerFS 0.1.1 preserves the 0.1.0 public and storage contracts while improving
 large existing-directory initialization, localized small-edit Commit,
 Workspace Create, and bounded reads.
 
-Candidate highlights:
+Highlights:
 
 - bounded initialization with eight existing producers, four fixed slabs, and
   the calling thread as the sole SQLite admission owner;
@@ -21,10 +18,23 @@ Candidate highlights:
 Correctness, resource, cleanup, FUSE/materialization equality, managed Docker,
 native quality, namespace performance, and registered payload gates pass in
 the terminal retained evidence. The workspace version is `0.1.1`.
-Publication remains blocked because the final clean commit and CI identity
-have not been recorded, and release artifacts, checksums, and the annotated
-tag do not exist.
 
-When those gates pass, replace this warning with the exact tag, commit,
-benchmark source seal, artifact links, and checksums. Until then, LayerFS 0.1.0
-remains the latest published Developer Preview.
+## Start here
+
+LayerFS 0.1.1 is distributed as source. Build the CLI with Rust 1.85 or newer:
+
+```bash
+git clone --branch v0.1.1 --depth 1 https://github.com/Ephemeral-AI-Lab/layerfs.git
+cd layerfs
+cargo build --release -p layerfs-cli
+./target/release/layerfs --version
+```
+
+Continue with the
+[0.1.1 quickstart](https://github.com/Ephemeral-AI-Lab/layerfs/blob/v0.1.1/docs/versioned/0.1.1/quickstart.md)
+and review the
+[release limitations](https://github.com/Ephemeral-AI-Lab/layerfs/blob/v0.1.1/docs/versioned/0.1.1/limitations.md).
+
+Prebuilt executables, crates.io packages, and runtime images are not published
+for 0.1.1. The release contains deterministic source archives, `Cargo.lock`,
+the MIT license, and `SHA256SUMS`.
