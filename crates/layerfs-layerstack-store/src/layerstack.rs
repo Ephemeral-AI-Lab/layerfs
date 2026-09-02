@@ -2732,7 +2732,10 @@ mod tests {
             failed_pages as u64 * crate::schema::SQLITE_PAGE_SIZE_BYTES as u64
         );
         assert!(failed_pages >= baseline_pages);
-        assert!(failed_freelist > baseline_freelist);
+        assert!(
+            failed_pages == baseline_pages || failed_freelist > baseline_freelist,
+            "cleanup must truncate to baseline or expose reclaimed pages on the freelist"
+        );
         drop(store);
 
         let reopened = LayerStackStore::connect(&store_path).unwrap();
