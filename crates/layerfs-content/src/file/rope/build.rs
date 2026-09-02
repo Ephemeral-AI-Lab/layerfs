@@ -30,7 +30,7 @@ pub fn build<S: ObjectStore, R: Read>(
         mapping_root: root.id,
     };
     let canonical = encode_file_state(state)?;
-    let id = store.put(&canonical)?;
+    let id = store.put_owned(canonical)?;
     Ok((FileStateRoot(id), counters))
 }
 
@@ -45,14 +45,14 @@ pub fn build_bytes<S: ObjectStore>(
     }
 
     let canonical = encode_chunk_object(bytes)?;
-    let payload = store.put(&canonical)?;
+    let payload = store.put_owned(canonical)?;
     let logical_len = u64::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?;
     let logical_length = u32::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?;
     let node = ExtentNodeV3::Leaf {
         subtree_logical_bytes: logical_len,
         extents: vec![ExtentSliceV3::new(payload, 0, logical_length)?],
     };
-    let mapping_root = store.put(&encode_node(&node)?)?;
+    let mapping_root = store.put_owned(encode_node(&node)?)?;
     let state = FileStateV3 {
         logical_len,
         extent_count: 1,
@@ -60,7 +60,7 @@ pub fn build_bytes<S: ObjectStore>(
         profile_id: profile_id(),
         mapping_root,
     };
-    let root = store.put(&encode_file_state(state)?)?;
+    let root = store.put_owned(encode_file_state(state)?)?;
     Ok((
         FileStateRoot(root),
         RopeCounters {
@@ -94,7 +94,7 @@ fn scan_mapping<S: ObjectStore, R: Read>(
     let mut counters = RopeCounters::default();
     let cdc = FastCdc::new().scan(source, |chunk| {
         let canonical = encode_chunk_object(chunk)?;
-        let payload = store.put(&canonical)?;
+        let payload = store.put_owned(canonical)?;
         counters.payload_bytes_written = add(counters.payload_bytes_written, chunk.len() as u64)?;
         counters.chunks_created = add(counters.chunks_created, 1)?;
         match &mut levels[0] {
@@ -253,7 +253,7 @@ fn emit_prefix<S: ObjectStore>(
         }
     };
     let canonical = encode_node(&node)?;
-    let id = store.put(&canonical)?;
+    let id = store.put_owned(canonical)?;
     counters.nodes_created = add(counters.nodes_created, 1)?;
     Ok(Summary {
         id,

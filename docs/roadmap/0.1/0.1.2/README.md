@@ -49,8 +49,8 @@ moves only that item to 0.2.0.
 
 - [ ] Start from retained v0.1.0/v0.1.1 benchmark evidence and admit only a
   measured defect or opportunity.
-- [ ] Iterate with the smallest failing LayerFS-only row; run the paired
-  Cloudflare payload campaign only after candidate stability.
+- [ ] Iterate with the smallest failing LayerFS-only row; rerun the registered
+  LayerFS payload campaign after candidate stability.
 - [ ] Keep real FUSE, Docker custody, fresh processes, timing boundaries,
   acknowledgement, integrity checks, and registered scenario meanings fixed.
 - [ ] Preserve exact final bytes, canonical roots, fresh reopen results, and

@@ -29,7 +29,8 @@ pub use records::{
 };
 pub use store::LayerStackStore;
 pub use telemetry::{
-    begin_workspace_commit, note_workspace_capture, note_workspace_commit_phase, record_fuse_write,
+    begin_workspace_commit, note_workspace_capture, note_workspace_commit_phase,
+    note_workspace_commit_reads, note_workspace_create_snapshot, record_fuse_write,
     record_workspace_lifecycle, record_workspace_read, take_storage_receipts, CandidateReceipt,
     CaptureMode, FuseWriteReceipt, LayerStackInitializationReceipt, StorageReceipt,
     WorkspaceCommitPhase, WorkspaceCommitReceipt, WorkspaceCommitTimer, WorkspaceLifecycleKind,

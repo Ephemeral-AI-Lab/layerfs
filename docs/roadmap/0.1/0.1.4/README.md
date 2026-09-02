@@ -86,7 +86,7 @@ when the parent benchmark issue is admitted.
   parents, Add outcome, Diff results, conflict choices, and fresh reopen.
 - Retain every valid sample and every failed tier; do not shorten the registered
   population after observing a slow result.
-- Use LayerFS-only iteration. Cloudflare Computer is not a comparator for
+- Use LayerFS-only iteration; external products are not comparators for
   LayerStack-specific Fork, Add, history, Diff, Query, or conflict semantics.
 
 ## Proposed GitHub issue structure

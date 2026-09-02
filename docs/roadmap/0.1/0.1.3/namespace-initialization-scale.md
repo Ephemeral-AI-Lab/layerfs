@@ -92,7 +92,7 @@ result_schema = fs-bench-pro-namespace-dedup-v1
 
 The existing `all` selector retains its frozen four-tier meaning. The new IDs
 are individually selectable; any future group selector is additive and must
-not change `all`, registered totals, or paired results.
+not change `all` or registered totals.
 
 ## Shared lifecycle and timing boundary
 
@@ -502,7 +502,7 @@ Proof fixtures contain all three seed subtrees and execute once per proof ID.
 Report logical ingest, unique payload insertion, unique canonical insertion,
 and physical Store growth side by side. Dedup rows do not satisfy the inherited
 unique-content throughput or adjacent-scaling gate and remain outside
-`registered_total_ns` and paired results.
+`registered_total_ns`.
 
 Use the parent planning model for budgeting, not as a pre-baseline latency
 admission gate. The family includes the four inherited rows, nine timed dedup
@@ -563,7 +563,7 @@ matrix or implementation; it does not hide slow rows.
   Store growth, swap/OOM, exact reconnect, and cleanup evidence with no hidden
   resource trade.
 - [ ] Keep all dedup-friendly rows separate from inherited unique-content
-  performance and paired totals.
+  performance totals.
 - [ ] Run three fresh samples per timed row and one complete execution per proof
   case, retaining every valid success or failure.
 - [ ] Meet the 55-second target and never exceed the 90-second hard family wall

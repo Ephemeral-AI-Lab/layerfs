@@ -41,6 +41,8 @@ as measured with no code change.
 Read the contracts and harness first:
 
 - [Namespace-v2 benchmark and optimization specification](namespace-optimization-spec.md)
+- [Namespace architecture shift and complexity analysis](architecture_shift.md)
+- [Publication-blocked v0.1.1 announcement draft](release-blog-draft.md)
 - [Namespace-v2 execution handoff prompt](namespace-v2-handoff-prompt.md)
 - [Baseline](baseline-2026-09-02.md)
 - [0.1.x benchmark contract](../benchmarking.md)
@@ -76,12 +78,14 @@ Current admission issue:
 
 ### Current namespace-v2 continuation
 
-The implemented namespace-v2 fixture and retained candidate are correct but
-not a performance PASS. The warm/uncontrolled-cache 100,000-file median is
-4.502 seconds for 500 MB, or 111.1 MB/s. The retained path prepares canonical
-segments in about 2.44 seconds, then spends about 1.54 seconds in SQLite step
-and commit work. It also writes and rereads about 647 MB of temporary object
-segments.
+The implemented namespace-v2 fixture and retained direct-admission candidate
+are correct but not a terminal performance/resource PASS. The earlier
+4.502-second / 111.1-MB/s result is the pre-direct, temporary-object-segment
+baseline, not the current implementation. The retained direct path has zero
+object-segment reads/writes. Its source-sealed one-sample 100,000-file
+init-only diagnostic is 3.040 seconds / 164.5 MB/s; a separate product screen
+on an earlier seal is 2.891 seconds / 172.9 MB/s. Neither is a current-seal
+terminal matrix.
 
 Issue #11 owns one replacement for that sequential boundary: eight existing
 import producers, exact bounded initialization-local metadata interning,
@@ -92,10 +96,95 @@ in-operation common-result reuse, not a warm or persistent product cache.
 
 The new path may neither add a worker nor change canonical bytes, the Store
 schema, eager initialization, or visibility-last publication. Correctness is
-proved outside the timed initialization measurement. The binding throughput
-floors are 300/400/400/200 MB/s for 100/1,000/10,000/100,000 files. No result
-becomes PASS until every tier meets its floor, the 100,000-file median is at
-most 2.5 seconds and 40,000 files/s, and the CPU and memory gates pass.
+proved outside the timed initialization measurement. The prospective binding
+throughput floors are 300/400/400/153 MB/s for
+100/1,000/10,000/100,000 files. No result becomes PASS until every tier meets
+its floor, the 100,000-file median is at most 3.235294118 seconds and 30,600
+files/s, and the CPU and memory gates pass. These 100,000-file limits encode
+the authorized 10-percent release tolerance. Its 200-MB/s / 2.5-second preferred
+and 250-MB/s / 2.0-second stretch outcomes are reported but nonbinding.
+
+The active result identity is `commit-head-exact-reopen-v2`:
+`reopen_verify_ns` covers fresh Store reconnect, reopened real-FUSE Workspace
+Create, and exact bounded content/metadata verification. Reopened Workspace End
+is cleanup outside T7. The 100,000-file result is independent of the retained
+1.30x and 1.70x adjacent ceilings through 10,000 files; a faster 10,000-file
+row is never delayed to create another ratio.
+
+Current evidence reports native T0/T1 lifetime high-water RSS, CPU, physical
+I/O, explicit ownership, SQLite page-cache overflow, and per-connection cache
+target/use. Endpoint RSS is not accepted as a phase peak, and a cumulative
+high-water that does not establish a new T1 maximum is marked unavailable.
+SQLite global MEMORY_USED/MALLOC_COUNT values are explicitly unavailable when
+the system build has MEMSTATUS disabled. The current 32-MiB connection-cache
+target remains the performance winner and is below the 64-MiB allowance; the
+allowance is headroom, not a target and never authorizes an eager 64-MiB cache.
+Terminal evidence also requires the runner-owned live composite proof; external
+self-authored proof manifests are rejected.
+
+The retained bounded read fix replaces one cross-worker 16-MiB proxy entry
+with at most four per-node two-MiB entries and skips fully served responses.
+At 10,000 files it reduced exact-verifier fetches from 6.43 GB to the exact
+300 MB served, with zero unused bytes; the 100,000-file proof likewise fetched
+and served exactly 500 MB. The observed normal content-changing overwrite kept
+the normalized mtime, so current namespace results are not extrapolated to
+automatic POSIX write-mtime behavior.
+
+The retained 2026-09-03 init-only screen is
+`issue11-v3-retained-init-all-r001-20260903`. Its 100/1,000/10,000/100,000
+initialization rows are 251.905/295.101/457.022/3,040.053 ms and
+496.2/677.7/656.4/164.5 MB/s. The first three tiers and both adjacent ratios
+pass; 100,000 was retained as a miss under the then-current
+2.5-second/200-MB/s gate and is not relabeled. The final release gates are
+14.07 initialization CPU-seconds, <=10 MiB modeled named buffers, <=64
+MiB configured SQLite cache (retained at 32 MiB), <=128 MiB initialization
+incremental HWM, and <=256 MiB complete-lifecycle incremental HWM, with zero
+new workers, swap, or OOM. The 12-MiB and 8-MiB cache trials remain rejected
+for I/O/performance tradeoffs; no further cache-size experiment is a release
+requirement.
+
+The earlier passing same-source-seal selected product evidence is
+`issue9-v3-final-create-100-r001-20260903` for 100 files and
+`issue11-v3-terminal-all4-composite-r003-20260903` for
+1,000/10,000/100,000 files plus the runner-owned composite proof. Both use
+full source seal
+`f6a2c969ca9245b0394c91643d6c24a2f56180975fad537c10fb5360358d4170`.
+Their selected initialization medians are 220.820/269.757/414.729/2,766.280
+ms and 566.1/741.4/723.4/180.7 MB/s; Create is
+14.742/12.394/18.750/12.556 ms and localized Commit is
+2.730/2.532/3.448/3.857 ms. Every selected tier-specific binding median
+passes, while 200 MB/s remains preferred and nonbinding at 100,000 files.
+
+The raw reports remain immutable. The all-tier `r003` report retains its own
+15.223-ms 100-file Create miss and therefore its negative performance/evidence
+markers; the supplemental same-seal 100-file report supplies the passing
+14.742-ms median but does not duplicate the composite proof. This selected
+cross-report view is development evidence, not a release claim. The direct
+numbers also apply only to a proven-empty Store whose nonempty source root
+contains top-level directories and no hard links; other accepted shapes use
+the canonical fallback. The architecture audit records an apparent unproved
+boundary above 1,000 direct top-level task blocks that must be contained or
+resolved before release admission.
+
+The newer LayerFS-only terminal attempt
+`issue11-v3-layerfs-only-terminal-r001-20260903` is retained unchanged under
+full source seal
+`7b211f30c7a0a8a2c74e0dbd39f4bfebf34c7bf44aa6bbe45c455f23672bcb89`.
+Its correctness, resource, cleanup, sample-shape, and runner-owned composite
+gates pass. Under the authorized 10-percent tolerance, its subsequent-sample
+`namespace-100000` initialization median of 3.019 seconds / 165.6 MB/s /
+33,121 files/s passes the 3.235294118-second / 153-MB/s / 30,600-files/s
+binding gates. Its `namespace-100` Create median remains a binding miss at
+17.144 milliseconds against 15 milliseconds, so the campaign still does not
+establish a terminal release PASS.
+
+The registered LayerFS payload campaign
+`v011-layerfs-registered-regression-r006-20260903` passes every frozen payload
+gate at source seal
+`1f3c09c59f931615eca557bf1b17a2fead0200c0eebf1311638ad12f98bb7c97`,
+including a 674.790-millisecond registered total against the 700-millisecond
+ceiling. Because neither retained seal is the final release source, freeze the
+candidate before rerunning either family.
 
 ## Benchmark contract
 
@@ -121,9 +210,8 @@ All timed rows use real Linux FUSE. Materialization is used only for the
 untimed equality proof at 10,000 files / 25 MB.
 
 Add one LayerFS-only namespace runner with one-case and full-matrix modes. It
-must not call or contribute to the registered payload totals or the paired
-Cloudflare Computer campaign. Run the existing paired payload campaign once,
-after the LayerFS candidate is stable.
+must not call or contribute to the registered payload totals. `fs-bench-pro`
+contains only LayerFS campaigns.
 
 ## Admission checklist
 
@@ -213,11 +301,13 @@ An incompatible change belongs in 0.2.0.
 - [x] `git diff --check` passes.
 - [x] Real-FUSE, Docker, equality, and cleanup proofs pass on capable Linux.
 - [ ] The full LayerFS-only namespace matrix has candidate-source evidence.
+- [ ] Direct-path performance claims state the empty-Store, all-directory-root,
+  no-hard-link eligibility boundary; fallback behavior is not relabeled.
+- [ ] More than 1,000 top-level task blocks select the existing fallback before
+  direct admission or pass focused correctness and failure-cleanup proof.
 - [ ] Admit the four namespace scenario definitions into the append-only
   registry without changing the frozen v0.1.0 rows.
 - [ ] Existing registered payload rows have no unexplained regression.
-- [ ] The existing paired LayerFS/Cloudflare payload campaign passes once after
-  candidate stability; it is not part of the optimization loop.
 - [ ] Limitations and evidence agree with the implementation.
 - [ ] Select one clean immutable source commit.
 - [ ] Bump the workspace version and lockfile to `0.1.1`.

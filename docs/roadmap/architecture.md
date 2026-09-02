@@ -107,9 +107,8 @@ shared root cause. Do not add benchmark-only APIs, persistent workers, hidden
 caches, skipped integrity checks, weaker durability, or shifted timing
 boundaries.
 
-LayerFS-only focused rows drive iteration. The paired Cloudflare payload
-campaign is a stable-candidate comparison and regression check, not part of the
-inner optimization loop.
+LayerFS-only focused rows drive iteration and stable-candidate regression
+checks.
 
 The 0.1.x benchmark registry is append-only. Once a scenario is admitted, its
 fixture, public operation sequence, timing boundary, correctness oracle, and
@@ -170,7 +169,7 @@ acknowledgement boundaries established by v0.1.0.
 
 Keep the existing registered payload and namespace rows stable. Add a new row
 only when it answers a concrete product question, iterate LayerFS-only on the
-smallest failing case, and rerun paired Cloudflare payload evidence only after
+smallest failing case, and rerun registered LayerFS payload evidence only after
 candidate stability. Preserve exact bytes, canonical roots, fresh reopen
 results, Store compatibility, and resource bounds. Storage evidence counts the
 complete durable Store, not only the SQLite file, and must not trade footprint
@@ -394,12 +393,6 @@ Learn from [AgentFS](https://github.com/tursodatabase/agentfs) where its model
 is useful: one understandable SQLite artifact, direct SDK access, simple CLI
 onboarding, and explicit portability. Do not copy unrelated key-value or tool
 history surfaces without a concrete LayerFS requirement.
-
-Learn from
-[Cloudflare Computer](https://github.com/cloudflare/computer) where its model
-is useful: authoritative state separated from pluggable execution backends and
-an explicit synchronization boundary for container execution. Do not import
-Workers/Durable Object assumptions or reintroduce a local BranchStore.
 
 ## Continuous performance program
 

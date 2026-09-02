@@ -2,7 +2,7 @@ use layerfs_sdk::{
     BranchId, CandidateStats, Client, CommitId, ContainerId, CreateWorkspaceSession,
     EndWorkspaceMode, EntityName, ExecutionTransport, LayerStackInitialization, LayerStackStore,
     LocalForkSource, NonEmpty, OperationFamily, OutputPage, Query, QueryItem, QueryKind,
-    WorkspaceCommitResult, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
+    StorageReceipt, WorkspaceCommitResult, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
 };
 use std::ffi::OsString;
 use std::io::Write;
@@ -13,6 +13,408 @@ use std::time::Instant;
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
+#[derive(Clone, Copy)]
+struct ProcessResourceSnapshot {
+    user_cpu_ns: u64,
+    system_cpu_ns: u64,
+    resident_bytes: u64,
+    peak_resident_bytes: u64,
+    physical_footprint_bytes: u64,
+    disk_read_bytes: u64,
+    disk_write_bytes: u64,
+    context_switches: u64,
+    swaps: u64,
+    threads: u64,
+}
+
+#[derive(Clone, Copy)]
+struct SqliteResourceSnapshot {
+    memory_used_bytes: u64,
+    memory_peak_bytes: u64,
+    page_cache_overflow_bytes: u64,
+    page_cache_overflow_peak_bytes: u64,
+    allocation_count: u64,
+    allocation_peak_count: u64,
+    connection_cache_used_bytes: u64,
+    connection_cache_target_bytes: u64,
+}
+
+#[derive(Clone, Copy)]
+struct ContainerCgroupSnapshot {
+    memory_current: u64,
+    memory_peak: u64,
+    swap_current: u64,
+    pids_current: u64,
+    oom: u64,
+    oom_kill: u64,
+}
+
+fn container_cgroup_snapshot(container: &ContainerId) -> AnyResult<ContainerCgroupSnapshot> {
+    let output = Command::new("docker")
+        .args([
+            "exec",
+            container.0.as_str(),
+            "sh",
+            "-c",
+            r#"printf "memory_current=%s\n" "$(cat /sys/fs/cgroup/memory.current)"
+printf "memory_peak=%s\n" "$(cat /sys/fs/cgroup/memory.peak)"
+printf "swap_current=%s\n" "$(cat /sys/fs/cgroup/memory.swap.current)"
+printf "pids_current=%s\n" "$(cat /sys/fs/cgroup/pids.current)"
+grep '^oom ' /sys/fs/cgroup/memory.events | tr ' ' '='
+grep '^oom_kill ' /sys/fs/cgroup/memory.events | tr ' ' '='"#,
+        ])
+        .output()?;
+    if !output.status.success() || !output.stderr.is_empty() {
+        return Err("container cgroup snapshot failed".into());
+    }
+    let text = std::str::from_utf8(&output.stdout)?;
+    let value = |name: &str| -> AnyResult<u64> {
+        text.lines()
+            .find_map(|line| line.strip_prefix(name))
+            .ok_or_else(|| format!("missing cgroup field: {name}").into())
+            .and_then(|value| value.parse().map_err(Into::into))
+    };
+    Ok(ContainerCgroupSnapshot {
+        memory_current: value("memory_current=")?,
+        memory_peak: value("memory_peak=")?,
+        swap_current: value("swap_current=")?,
+        pids_current: value("pids_current=")?,
+        oom: value("oom=")?,
+        oom_kill: value("oom_kill=")?,
+    })
+}
+
+fn sqlite_status(operation: i32, reset_peak: bool) -> AnyResult<(u64, u64)> {
+    let mut current = 0_i64;
+    let mut peak = 0_i64;
+    // SAFETY: SQLite initializes both i64 outputs and the operation is process-global telemetry.
+    let status = unsafe {
+        rusqlite::ffi::sqlite3_status64(
+            operation,
+            std::ptr::from_mut(&mut current),
+            std::ptr::from_mut(&mut peak),
+            i32::from(reset_peak),
+        )
+    };
+    if status != rusqlite::ffi::SQLITE_OK {
+        return Err(format!("SQLite status failed: {operation} ({status})").into());
+    }
+    Ok((u64::try_from(current)?, u64::try_from(peak)?))
+}
+
+fn sqlite_resource_snapshot(
+    store: &LayerStackStore,
+    reset_peaks: bool,
+) -> AnyResult<SqliteResourceSnapshot> {
+    let (memory_used_bytes, memory_peak_bytes) =
+        sqlite_status(rusqlite::ffi::SQLITE_STATUS_MEMORY_USED, reset_peaks)?;
+    let (page_cache_overflow_bytes, page_cache_overflow_peak_bytes) =
+        sqlite_status(rusqlite::ffi::SQLITE_STATUS_PAGECACHE_OVERFLOW, reset_peaks)?;
+    let (allocation_count, allocation_peak_count) =
+        sqlite_status(rusqlite::ffi::SQLITE_STATUS_MALLOC_COUNT, reset_peaks)?;
+    let (connection_cache_used_bytes, connection_cache_target_bytes) =
+        store.inspect_connection(|connection| -> AnyResult<(u64, u64)> {
+            let mut current = 0_i32;
+            let mut unused_peak = 0_i32;
+            // SAFETY: the Store keeps the locked connection alive for this read-only status call.
+            let status = unsafe {
+                rusqlite::ffi::sqlite3_db_status(
+                    connection.handle(),
+                    rusqlite::ffi::SQLITE_DBSTATUS_CACHE_USED,
+                    std::ptr::from_mut(&mut current),
+                    std::ptr::from_mut(&mut unused_peak),
+                    0,
+                )
+            };
+            if status != rusqlite::ffi::SQLITE_OK {
+                return Err(format!("SQLite connection cache status failed: {status}").into());
+            }
+            let cache_size: i64 =
+                connection.pragma_query_value(None, "cache_size", |row| row.get(0))?;
+            let page_size: i64 =
+                connection.pragma_query_value(None, "page_size", |row| row.get(0))?;
+            let target = if cache_size < 0 {
+                cache_size
+                    .checked_neg()
+                    .and_then(|value| value.checked_mul(1024))
+            } else {
+                cache_size.checked_mul(page_size)
+            }
+            .ok_or("SQLite cache target overflow")?;
+            Ok((u64::try_from(current)?, u64::try_from(target)?))
+        })??;
+    Ok(SqliteResourceSnapshot {
+        memory_used_bytes,
+        memory_peak_bytes,
+        page_cache_overflow_bytes,
+        page_cache_overflow_peak_bytes,
+        allocation_count,
+        allocation_peak_count,
+        connection_cache_used_bytes,
+        connection_cache_target_bytes,
+    })
+}
+
+fn phase_peak_status(
+    before: ProcessResourceSnapshot,
+    after: ProcessResourceSnapshot,
+) -> &'static str {
+    if after.peak_resident_bytes > before.peak_resident_bytes {
+        "exact-new-lifetime-high-water"
+    } else {
+        "unavailable-cumulative-high-water"
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[repr(C)]
+#[derive(Default)]
+struct NativeTimeval {
+    seconds: i64,
+    microseconds: i64,
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[repr(C)]
+#[derive(Default)]
+struct NativeRusage {
+    user_time: NativeTimeval,
+    system_time: NativeTimeval,
+    max_rss: i64,
+    shared_memory: i64,
+    unshared_data: i64,
+    unshared_stack: i64,
+    minor_faults: i64,
+    major_faults: i64,
+    swaps: i64,
+    block_inputs: i64,
+    block_outputs: i64,
+    messages_sent: i64,
+    messages_received: i64,
+    signals: i64,
+    voluntary_context_switches: i64,
+    involuntary_context_switches: i64,
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+unsafe extern "C" {
+    fn getrusage(who: i32, usage: *mut NativeRusage) -> i32;
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn native_peak_rss_and_swaps() -> AnyResult<(u64, u64)> {
+    let mut usage = NativeRusage::default();
+    // SAFETY: RUSAGE_SELF writes exactly one native rusage C-layout structure.
+    if unsafe { getrusage(0, std::ptr::from_mut(&mut usage)) } != 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let peak = u64::try_from(usage.max_rss)?;
+    #[cfg(target_os = "linux")]
+    let peak = peak.checked_mul(1024).ok_or("Linux peak RSS overflow")?;
+    Ok((peak, u64::try_from(usage.swaps)?))
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Default)]
+struct DarwinRusageInfoV2 {
+    uuid: [u8; 16],
+    user_time: u64,
+    system_time: u64,
+    package_idle_wakeups: u64,
+    interrupt_wakeups: u64,
+    pageins: u64,
+    wired_size: u64,
+    resident_size: u64,
+    physical_footprint: u64,
+    process_start_time: u64,
+    process_exit_time: u64,
+    child_user_time: u64,
+    child_system_time: u64,
+    child_package_idle_wakeups: u64,
+    child_interrupt_wakeups: u64,
+    child_pageins: u64,
+    child_elapsed_time: u64,
+    disk_read_bytes: u64,
+    disk_write_bytes: u64,
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Default)]
+struct DarwinTaskInfo {
+    virtual_size: u64,
+    resident_size: u64,
+    total_user: u64,
+    total_system: u64,
+    threads_user: u64,
+    threads_system: u64,
+    policy: i32,
+    faults: i32,
+    pageins: i32,
+    cow_faults: i32,
+    messages_sent: i32,
+    messages_received: i32,
+    mach_syscalls: i32,
+    unix_syscalls: i32,
+    context_switches: i32,
+    thread_count: i32,
+    running_threads: i32,
+    priority: i32,
+}
+
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Default)]
+struct MachTimebaseInfo {
+    numerator: u32,
+    denominator: u32,
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "proc")]
+unsafe extern "C" {
+    fn proc_pid_rusage(pid: i32, flavor: i32, buffer: *mut std::ffi::c_void) -> i32;
+    fn proc_pidinfo(
+        pid: i32,
+        flavor: i32,
+        argument: u64,
+        buffer: *mut std::ffi::c_void,
+        size: i32,
+    ) -> i32;
+    fn mach_timebase_info(info: *mut MachTimebaseInfo) -> i32;
+}
+
+#[cfg(target_os = "macos")]
+fn process_resource_snapshot() -> AnyResult<ProcessResourceSnapshot> {
+    const RUSAGE_INFO_V2: i32 = 2;
+    const PROC_PIDTASKINFO: i32 = 4;
+    let pid = i32::try_from(std::process::id())?;
+    let mut usage = DarwinRusageInfoV2::default();
+    let mut task = DarwinTaskInfo::default();
+    let mut timebase = MachTimebaseInfo::default();
+    // SAFETY: both calls target this process and receive correctly sized C-layout buffers.
+    let usage_status =
+        unsafe { proc_pid_rusage(pid, RUSAGE_INFO_V2, std::ptr::from_mut(&mut usage).cast()) };
+    // SAFETY: PROC_PIDTASKINFO writes exactly one proc_taskinfo-compatible buffer.
+    let task_bytes = unsafe {
+        proc_pidinfo(
+            pid,
+            PROC_PIDTASKINFO,
+            0,
+            std::ptr::from_mut(&mut task).cast(),
+            i32::try_from(std::mem::size_of::<DarwinTaskInfo>())?,
+        )
+    };
+    // SAFETY: mach_timebase_info initializes the two-field C-layout structure.
+    let timebase_status = unsafe { mach_timebase_info(std::ptr::from_mut(&mut timebase)) };
+    if usage_status != 0
+        || usize::try_from(task_bytes)? != std::mem::size_of::<DarwinTaskInfo>()
+        || timebase_status != 0
+        || timebase.denominator == 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let to_nanoseconds = |value: u64| -> AnyResult<u64> {
+        u64::try_from(
+            u128::from(value)
+                .checked_mul(u128::from(timebase.numerator))
+                .ok_or("Mach CPU time overflow")?
+                / u128::from(timebase.denominator),
+        )
+        .map_err(Into::into)
+    };
+    let (peak_resident_bytes, swaps) = native_peak_rss_and_swaps()?;
+    Ok(ProcessResourceSnapshot {
+        user_cpu_ns: to_nanoseconds(usage.user_time)?,
+        system_cpu_ns: to_nanoseconds(usage.system_time)?,
+        resident_bytes: usage.resident_size,
+        peak_resident_bytes,
+        physical_footprint_bytes: usage.physical_footprint,
+        disk_read_bytes: usage.disk_read_bytes,
+        disk_write_bytes: usage.disk_write_bytes,
+        context_switches: u64::try_from(task.context_switches)?,
+        swaps,
+        threads: u64::try_from(task.thread_count)?,
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn process_resource_snapshot() -> AnyResult<ProcessResourceSnapshot> {
+    static CLOCK_TICKS: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    let clock_ticks = *CLOCK_TICKS.get_or_init(|| {
+        Command::new("getconf")
+            .arg("CLK_TCK")
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .and_then(|output| output.trim().parse().ok())
+            .unwrap_or(0)
+    });
+    if clock_ticks == 0 {
+        return Err("Linux clock tick rate unavailable".into());
+    }
+    let status = std::fs::read_to_string("/proc/self/status")?;
+    let status_value = |name: &str| -> AnyResult<u64> {
+        status
+            .lines()
+            .find_map(|line| line.strip_prefix(name))
+            .and_then(|value| value.split_whitespace().next())
+            .ok_or_else(|| format!("Linux process status field unavailable: {name}").into())
+            .and_then(|value| value.parse().map_err(Into::into))
+    };
+    let io = std::fs::read_to_string("/proc/self/io")?;
+    let io_value = |name: &str| -> AnyResult<u64> {
+        io.lines()
+            .find_map(|line| line.strip_prefix(name))
+            .map(str::trim)
+            .ok_or_else(|| format!("Linux process I/O field unavailable: {name}").into())
+            .and_then(|value| value.parse().map_err(Into::into))
+    };
+    let stat = std::fs::read_to_string("/proc/self/stat")?;
+    let fields = stat
+        .get(stat.rfind(')').ok_or("Linux process stat shape")? + 2..)
+        .ok_or("Linux process stat fields")?
+        .split_whitespace()
+        .collect::<Vec<_>>();
+    let ticks_to_ns = |index: usize| -> AnyResult<u64> {
+        let ticks = fields
+            .get(index)
+            .ok_or("Linux process CPU field")?
+            .parse::<u64>()?;
+        u64::try_from(u128::from(ticks) * 1_000_000_000 / u128::from(clock_ticks))
+            .map_err(Into::into)
+    };
+    let resident_bytes = status_value("VmRSS:")?
+        .checked_mul(1024)
+        .ok_or("Linux resident bytes overflow")?;
+    let (peak_resident_bytes, swaps) = native_peak_rss_and_swaps()?;
+    Ok(ProcessResourceSnapshot {
+        user_cpu_ns: ticks_to_ns(11)?,
+        system_cpu_ns: ticks_to_ns(12)?,
+        resident_bytes,
+        peak_resident_bytes,
+        physical_footprint_bytes: resident_bytes,
+        disk_read_bytes: io_value("read_bytes:")?,
+        disk_write_bytes: io_value("write_bytes:")?,
+        context_switches: status_value("voluntary_ctxt_switches:")?
+            .checked_add(status_value("nonvoluntary_ctxt_switches:")?)
+            .ok_or("Linux context switches overflow")?,
+        swaps,
+        threads: status_value("Threads:")?,
+    })
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn process_resource_snapshot() -> AnyResult<ProcessResourceSnapshot> {
+    Err("process resource snapshots are unsupported on this host".into())
+}
+
+fn resource_delta(after: u64, before: u64, name: &'static str) -> AnyResult<u64> {
+    after.checked_sub(before).ok_or_else(|| name.into())
+}
+
 const MIB_32: u64 = 32 * 1024 * 1024;
 const WORKSPACE_CREATE_HARD_NS: u64 = 20_000_000;
 const SMALL_COMMIT_HARD_NS: u64 = 6_000_000;
@@ -20,14 +422,12 @@ const SMALL_COMPLETE_HARD_NS: u64 = 30_000_000;
 const COLD_COMPLETE_HARD_NS: u64 = 150_000_000;
 const EDIT16_HARD_NS: u64 = 200_000_000;
 const PREPEND_HARD_NS: u64 = 250_000_000;
+const NAMESPACE_100000_BINDING_INIT_NS: u64 = 3_235_294_118;
+const NAMESPACE_100000_BINDING_BYTES_PER_SECOND: u64 = 153_000_000;
+const NAMESPACE_100000_BINDING_FILES_PER_SECOND: u64 = 30_600;
 const READ_HARD_NS: u64 = 150_000_000;
 const REGISTERED_TOTAL_HARD_NS: u64 = 700_000_000;
 const INNER_WRITE_MIN_BYTES_PER_SECOND: f64 = 300.0 * 1024.0 * 1024.0;
-const PAIRED_COLD_COMPLETE_HARD_NS: u64 = 200_000_000;
-const PAIRED_EDIT16_HARD_NS: u64 = 250_000_000;
-const PAIRED_PREPEND_HARD_NS: u64 = 350_000_000;
-const PAIRED_READ_HARD_NS: u64 = 200_000_000;
-const PAIRED_TOTAL_HARD_NS: u64 = 900_000_000;
 #[allow(dead_code)]
 mod workload_source {
     include!("../workload.rs");
@@ -51,6 +451,32 @@ struct NamespaceManifest {
     mtime_seconds: i64,
     mtime_nanoseconds: u32,
     digest: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct NamespaceVerification {
+    manifest: NamespaceManifest,
+    maximum_verifier_buffer_bytes: u64,
+    verifier_worker_count: u64,
+    verifier_plan_bytes: u64,
+    verifier_path_state_peak_bytes: u64,
+    verifier_digest_state_peak_bytes: u64,
+}
+
+#[derive(Clone, Copy)]
+struct NamespaceReadMetrics {
+    maximum_product_read_ahead_bytes: u64,
+    read_ahead_hits: u64,
+    read_ahead_misses: u64,
+    read_ahead_fetches: u64,
+    read_ahead_requested_bytes: u64,
+    read_ahead_fetched_bytes: u64,
+    read_ahead_served_bytes: u64,
+    read_ahead_unused_bytes: u64,
+    local_calls: u64,
+    local_ids: u64,
+    local_rows: u64,
+    local_bytes: u64,
 }
 
 struct GeneratedNamespaceFixture {
@@ -82,12 +508,23 @@ struct NamespaceSample {
     workspace_end_ns: u64,
     reconnect_ns: u64,
     reopen_workspace_create_ns: u64,
+    reopen_content_verify_ns: u64,
+    reopen_verify_ns: u64,
     reopen_workspace_end_ns: u64,
+    complete_product_ns: u64,
     product_lifecycle_ns: u64,
 }
 
 impl NamespaceSample {
     fn validate(&self) -> AnyResult<()> {
+        let reopen = [
+            self.reconnect_ns,
+            self.reopen_workspace_create_ns,
+            self.reopen_content_verify_ns,
+        ]
+        .into_iter()
+        .try_fold(0_u64, u64::checked_add)
+        .ok_or("namespace reopen phase overflow")?;
         let phases = [
             self.layerstack_init_ns,
             self.branch_fork_ns,
@@ -95,16 +532,17 @@ impl NamespaceSample {
             self.edit_ns,
             self.commit_ns,
             self.workspace_end_ns,
-            self.reconnect_ns,
-            self.reopen_workspace_create_ns,
-            self.reopen_workspace_end_ns,
+            self.reopen_verify_ns,
         ]
         .into_iter()
         .try_fold(0_u64, u64::checked_add)
         .ok_or("namespace phase overflow")?;
-        if phases != self.product_lifecycle_ns
+        if reopen != self.reopen_verify_ns
+            || phases != self.complete_product_ns
+            || phases != self.product_lifecycle_ns
             || self.reconnect_ns == 0
             || self.reopen_workspace_create_ns == 0
+            || self.reopen_verify_ns == 0
             || self.reopen_workspace_end_ns == 0
         {
             return Err("namespace phase equation".into());
@@ -510,6 +948,18 @@ fn rate(units: u64, elapsed_ns: u64) -> u64 {
 }
 
 fn namespace_self_check() -> AnyResult<()> {
+    if NAMESPACE_100000_BINDING_INIT_NS != 3_235_294_118
+        || NAMESPACE_100000_BINDING_BYTES_PER_SECOND != 153_000_000
+        || NAMESPACE_100000_BINDING_FILES_PER_SECOND != 30_600
+        || !(3_019_172_334 <= NAMESPACE_100000_BINDING_INIT_NS
+            && 165_608_300 >= NAMESPACE_100000_BINDING_BYTES_PER_SECOND
+            && 33_121 >= NAMESPACE_100000_BINDING_FILES_PER_SECOND)
+        || 3_235_294_119 <= NAMESPACE_100000_BINDING_INIT_NS
+        || 152_999_999 >= NAMESPACE_100000_BINDING_BYTES_PER_SECOND
+        || 30_599 >= NAMESPACE_100000_BINDING_FILES_PER_SECOND
+    {
+        return Err("namespace-100000 binding threshold self-check".into());
+    }
     let expected = [
         ("namespace-100", [1, 78, 15, 5, 1], 125_000_000),
         ("namespace-1000", [10, 789, 150, 50, 1], 200_000_000),
@@ -522,16 +972,15 @@ fn namespace_self_check() -> AnyResult<()> {
     ];
     for (id, counts, logical_bytes) in expected {
         let first = workload_source::namespace_plan(id)?;
-        let second = workload_source::namespace_plan(id)?;
-        if first != second
-            || [
-                first.empty_files,
-                first.tiny_files,
-                first.small_files,
-                first.medium_files,
-                first.anchor_files,
-            ] != counts
+        if [
+            first.empty_files,
+            first.tiny_files,
+            first.small_files,
+            first.medium_files,
+            first.anchor_files,
+        ] != counts
             || first.scenario.logical_bytes != logical_bytes
+            || (id == "namespace-100" && first != workload_source::namespace_plan(id)?)
         {
             return Err("namespace-v2 planner self-check".into());
         }
@@ -545,7 +994,10 @@ fn namespace_self_check() -> AnyResult<()> {
         workspace_end_ns: 6,
         reconnect_ns: 7,
         reopen_workspace_create_ns: 8,
-        reopen_workspace_end_ns: 9,
+        reopen_content_verify_ns: 9,
+        reopen_workspace_end_ns: 10,
+        reopen_verify_ns: 24,
+        complete_product_ns: 45,
         product_lifecycle_ns: 45,
     }
     .validate()?;
@@ -584,6 +1036,84 @@ fn operation_candidate(
     Ok(candidate)
 }
 
+fn operation_workspace_read(
+    snapshot: &layerfs_sdk::MonitorSnapshot,
+) -> AnyResult<NamespaceReadMetrics> {
+    let mut reads = snapshot.operations.iter().flat_map(|operation| {
+        operation
+            .storage
+            .iter()
+            .filter_map(|receipt| match receipt {
+                StorageReceipt::WorkspaceRead(receipt) => Some(*receipt),
+                _ => None,
+            })
+    });
+    let read = reads.next().ok_or("namespace Workspace read receipt")?;
+    if reads.next().is_some()
+        || read.read_ahead_fetches == 0
+        || read.read_ahead_fetches != read.read_ahead_misses
+        || read.max_readahead_bytes == 0
+    {
+        return Err("namespace product read-ahead equation".into());
+    }
+    Ok(NamespaceReadMetrics {
+        maximum_product_read_ahead_bytes: read.max_readahead_bytes,
+        read_ahead_hits: read.read_ahead_hits,
+        read_ahead_misses: read.read_ahead_misses,
+        read_ahead_fetches: read.read_ahead_fetches,
+        read_ahead_requested_bytes: read.read_ahead_requested_bytes,
+        read_ahead_fetched_bytes: read.read_ahead_fetched_bytes,
+        read_ahead_served_bytes: read.read_ahead_served_bytes,
+        read_ahead_unused_bytes: read.read_ahead_unused_bytes,
+        local_calls: read.local_calls,
+        local_ids: read.local_ids,
+        local_rows: read.local_rows,
+        local_bytes: read.local_bytes,
+    })
+}
+
+fn operation_workspace_create(
+    snapshot: &layerfs_sdk::MonitorSnapshot,
+) -> AnyResult<layerfs_sdk::WorkspaceLifecycleReceipt> {
+    let mut creates = snapshot.operations.iter().flat_map(|operation| {
+        operation
+            .storage
+            .iter()
+            .filter_map(|receipt| match receipt {
+                StorageReceipt::WorkspaceLifecycle(receipt)
+                    if receipt.kind == layerfs_sdk::WorkspaceLifecycleKind::Attach =>
+                {
+                    Some(*receipt)
+                }
+                _ => None,
+            })
+    });
+    let create = creates.next().ok_or("namespace Workspace Create receipt")?;
+    if creates.next().is_some() {
+        return Err("namespace Workspace Create receipt cardinality".into());
+    }
+    Ok(create)
+}
+
+fn operation_workspace_commit(
+    snapshot: &layerfs_sdk::MonitorSnapshot,
+) -> AnyResult<layerfs_sdk::WorkspaceCommitReceipt> {
+    let mut commits = snapshot.operations.iter().flat_map(|operation| {
+        operation
+            .storage
+            .iter()
+            .filter_map(|receipt| match receipt {
+                StorageReceipt::WorkspaceCommit(receipt) => Some(*receipt),
+                _ => None,
+            })
+    });
+    let commit = commits.next().ok_or("namespace Workspace Commit receipt")?;
+    if commits.next().is_some() {
+        return Err("namespace Workspace Commit receipt cardinality".into());
+    }
+    Ok(commit)
+}
+
 fn sum_metric(left: u64, right: u64, name: &'static str) -> AnyResult<u64> {
     left.checked_add(right).ok_or_else(|| name.into())
 }
@@ -592,6 +1122,110 @@ fn valid_digest(value: &str) -> bool {
     value.len() == 64
         && value.bytes().all(|byte| byte.is_ascii_hexdigit())
         && value.bytes().all(|byte| !byte.is_ascii_uppercase())
+}
+
+fn parse_namespace_verification(output: &OutputPage) -> AnyResult<NamespaceVerification> {
+    let bytes = output
+        .chunks
+        .iter()
+        .flat_map(|chunk| chunk.bytes.iter().copied())
+        .collect::<Vec<_>>();
+    parse_namespace_verification_text(std::str::from_utf8(&bytes)?)
+}
+
+fn parse_namespace_verification_text(output: &str) -> AnyResult<NamespaceVerification> {
+    let mut fields = std::collections::BTreeMap::new();
+    for line in output.lines() {
+        let (name, value) = line
+            .split_once('=')
+            .ok_or("malformed namespace verification field")?;
+        if fields.insert(name, value).is_some() {
+            return Err("duplicate namespace verification field".into());
+        }
+    }
+    if fields.len() != 15 {
+        return Err("namespace verification field count".into());
+    }
+    let digest = fields
+        .remove("namespace_digest")
+        .ok_or("namespace verification digest")?;
+    if !valid_digest(digest) {
+        return Err("namespace verification digest shape".into());
+    }
+    let manifest = NamespaceManifest {
+        regular_files: fields
+            .remove("regular_files")
+            .ok_or("namespace verification files")?
+            .parse()?,
+        data_directories: fields
+            .remove("data_directories")
+            .ok_or("namespace verification directories")?
+            .parse()?,
+        logical_bytes: fields
+            .remove("logical_bytes")
+            .ok_or("namespace verification bytes")?
+            .parse()?,
+        empty_files: fields
+            .remove("empty_files")
+            .ok_or("namespace verification empty files")?
+            .parse()?,
+        tiny_files: fields
+            .remove("tiny_files")
+            .ok_or("namespace verification tiny files")?
+            .parse()?,
+        small_files: fields
+            .remove("small_files")
+            .ok_or("namespace verification small files")?
+            .parse()?,
+        medium_files: fields
+            .remove("medium_files")
+            .ok_or("namespace verification medium files")?
+            .parse()?,
+        anchor_files: fields
+            .remove("anchor_files")
+            .ok_or("namespace verification anchor files")?
+            .parse()?,
+        anchor_bytes: fields
+            .remove("anchor_bytes")
+            .ok_or("namespace verification anchor bytes")?
+            .parse()?,
+        file_mode: workload_source::NAMESPACE_FILE_MODE,
+        directory_mode: workload_source::NAMESPACE_DIRECTORY_MODE,
+        mtime_seconds: workload_source::NAMESPACE_MTIME_SECONDS,
+        mtime_nanoseconds: workload_source::NAMESPACE_MTIME_NANOSECONDS,
+        digest: digest.to_owned(),
+    };
+    let verification = NamespaceVerification {
+        manifest,
+        maximum_verifier_buffer_bytes: fields
+            .remove("maximum_verifier_buffer_bytes")
+            .ok_or("namespace maximum verifier buffer")?
+            .parse()?,
+        verifier_worker_count: fields
+            .remove("verifier_worker_count")
+            .ok_or("namespace verifier worker count")?
+            .parse()?,
+        verifier_plan_bytes: fields
+            .remove("verifier_plan_bytes")
+            .ok_or("namespace verifier plan bytes")?
+            .parse()?,
+        verifier_path_state_peak_bytes: fields
+            .remove("verifier_path_state_peak_bytes")
+            .ok_or("namespace verifier path bytes")?
+            .parse()?,
+        verifier_digest_state_peak_bytes: fields
+            .remove("verifier_digest_state_peak_bytes")
+            .ok_or("namespace verifier digest bytes")?
+            .parse()?,
+    };
+    if !fields.is_empty()
+        || verification.maximum_verifier_buffer_bytes
+            > u64::try_from(workload_source::NAMESPACE_SCRATCH_BYTES)?
+        || verification.verifier_worker_count == 0
+    {
+        return Err("namespace verifier resource bound".into());
+    }
+    Ok(verification)
 }
 
 fn namespace_manifest(scenario: NamespaceScenario, digest: &str) -> AnyResult<NamespaceManifest> {
@@ -638,10 +1272,10 @@ fn namespace_case(
         || fixture_digest == edited_digest
         || !matches!(
             fixture_cache_profile,
-            "generated-first-use-uncontrolled"
-                | "generated-post-first-use-uncontrolled"
-                | "reused-first-use-uncontrolled"
-                | "reused-post-first-use-uncontrolled"
+            "generated-first-sample-uncontrolled"
+                | "generated-subsequent-sample-uncontrolled"
+                | "reused-first-sample-uncontrolled"
+                | "reused-subsequent-sample-uncontrolled"
         )
         || edit_path.starts_with('/')
         || edit_path.contains("..")
@@ -662,11 +1296,16 @@ fn namespace_case(
     if !stale.is_empty() {
         return Err("stale LayerStack initialization receipt".into());
     }
+    let sqlite_resources_before = sqlite_resource_snapshot(&store, true)?;
+    let initialization_resources_before = process_resource_snapshot()?;
     let t0 = Instant::now();
     let initialized = client.initialize_layerstack(
         EntityName::new(format!("{}-{iteration}", scenario.id))?,
         LayerStackInitialization::Directory(fixture.to_owned()),
     )?;
+    let t1 = Instant::now();
+    let initialization_resources_after = process_resource_snapshot()?;
+    let sqlite_resources_after = sqlite_resource_snapshot(&store, false)?;
     let receipts = store.take_layerstack_initialization_receipts();
     let [scan] = receipts.as_slice() else {
         return Err("LayerStack initialization receipt cardinality".into());
@@ -677,8 +1316,6 @@ fn namespace_case(
     {
         return Err(format!("LayerStack initialization scan receipt mismatch: {scan:?}").into());
     }
-    let t1 = Instant::now();
-
     let branch = client.fork_branch(
         EntityName::new("main")?,
         LocalForkSource::Layer {
@@ -770,6 +1407,11 @@ fn namespace_case(
     let initialize_candidate =
         operation_candidate(&snapshot, OperationFamily::LayerStackInitialize)?;
     let commit_candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
+    let workspace_commit = operation_workspace_commit(&snapshot)?;
+    let workspace_create = operation_workspace_create(&snapshot)?;
+    let workspace_create_non_attach_ns = nanos(t2, t3)
+        .checked_sub(workspace_create.total_ns)
+        .ok_or("namespace Workspace Create timing equation")?;
     let reconnect_started = Instant::now();
     drop(client);
     drop(store);
@@ -786,14 +1428,73 @@ fn namespace_case(
         })
         .map_err(|error| format!("namespace reopened Workspace create failed: {error}"))?;
     let t8 = Instant::now();
-    reopened
-        .end_workspace_session(reopened_workspace.id, EndWorkspaceMode::Clean)
-        .map_err(|error| format!("namespace reopened Workspace End failed: {error}"))?;
+    let verified = (|| -> AnyResult<_> {
+        let output = execute_workload(
+            &reopened,
+            reopened_workspace.id,
+            vec![
+                workload.clone(),
+                OsString::from("namespace-verify"),
+                OsString::from("."),
+                OsString::from(scenario.id),
+            ],
+        )
+        .map_err(|error| format!("namespace reopen verification execution failed: {error}"))?;
+        let verified = parse_namespace_verification(&output)?;
+        if verified.manifest != namespace_manifest(scenario, edited_digest)? {
+            return Err("namespace reopened verification mismatch".into());
+        }
+        Ok(verified)
+    })();
     let t9 = Instant::now();
+    let product_resources_after = process_resource_snapshot();
+    let normal_overwrite_started = Instant::now();
+    let normal_overwrite = if verified.is_ok() {
+        execute_workload(
+            &reopened,
+            reopened_workspace.id,
+            vec![
+                workload,
+                OsString::from("namespace-edit-normal"),
+                OsString::from(edit_path),
+            ],
+        )
+        .and_then(|output| parse_normal_overwrite_mtime(&output))
+    } else {
+        Err("normal-overwrite diagnostic skipped after verification failure".into())
+    };
+    let normal_overwrite_diagnostic_ns = elapsed_ns(normal_overwrite_started);
+    let reopen_end_started = Instant::now();
+    let ended = reopened
+        .end_workspace_session(
+            reopened_workspace.id,
+            if verified.is_ok() {
+                EndWorkspaceMode::Discard
+            } else {
+                EndWorkspaceMode::Clean
+            },
+        )
+        .map_err(|error| format!("namespace reopened Workspace End failed: {error}"));
+    let t10 = Instant::now();
+    ended?;
+    let container_resources_after = container_cgroup_snapshot(&container_id)?;
+    let product_resources_after = product_resources_after?;
+    let verified = verified?;
+    let (normal_overwrite_mtime_seconds, normal_overwrite_mtime_nanoseconds) = normal_overwrite?;
+    let normal_overwrite_changed_mtime = u8::from(
+        (
+            normal_overwrite_mtime_seconds,
+            normal_overwrite_mtime_nanoseconds,
+        ) != (
+            workload_source::NAMESPACE_MTIME_SECONDS,
+            i64::from(workload_source::NAMESPACE_MTIME_NANOSECONDS),
+        ),
+    );
     if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
         return Err("namespace reopened Workspace leaked runtime state".into());
     }
     let reopen_snapshot = reopened.monitor_snapshot()?;
+    let read = operation_workspace_read(&reopen_snapshot)?;
     let store_storage = reopened_store.storage_snapshot()?;
     let canonical_storage = reopened_store.canonical_storage()?;
     let store_database_bytes = store_storage.database_bytes;
@@ -811,24 +1512,36 @@ fn namespace_case(
         workspace_end_ns: nanos(t5, t6),
         reconnect_ns: nanos(reconnect_started, t7),
         reopen_workspace_create_ns: nanos(t7, t8),
-        reopen_workspace_end_ns: nanos(t8, t9),
+        reopen_content_verify_ns: nanos(t8, t9),
+        reopen_verify_ns: 0,
+        reopen_workspace_end_ns: nanos(reopen_end_started, t10),
+        complete_product_ns: 0,
         product_lifecycle_ns: 0,
     };
+    let reopen_verify_ns = [
+        sample.reconnect_ns,
+        sample.reopen_workspace_create_ns,
+        sample.reopen_content_verify_ns,
+    ]
+    .into_iter()
+    .try_fold(0_u64, u64::checked_add)
+    .ok_or("namespace reopen phase overflow")?;
+    let complete_product_ns = [
+        sample.layerstack_init_ns,
+        sample.branch_fork_ns,
+        sample.workspace_create_ns,
+        sample.edit_ns,
+        sample.commit_ns,
+        sample.workspace_end_ns,
+        reopen_verify_ns,
+    ]
+    .into_iter()
+    .try_fold(0_u64, u64::checked_add)
+    .ok_or("namespace product lifecycle overflow")?;
     let sample = NamespaceSample {
-        product_lifecycle_ns: [
-            sample.layerstack_init_ns,
-            sample.branch_fork_ns,
-            sample.workspace_create_ns,
-            sample.edit_ns,
-            sample.commit_ns,
-            sample.workspace_end_ns,
-            sample.reconnect_ns,
-            sample.reopen_workspace_create_ns,
-            sample.reopen_workspace_end_ns,
-        ]
-        .into_iter()
-        .try_fold(0_u64, u64::checked_add)
-        .ok_or("namespace product lifecycle overflow")?,
+        reopen_verify_ns,
+        complete_product_ns,
+        product_lifecycle_ns: complete_product_ns,
         ..sample
     };
     sample.validate()?;
@@ -881,8 +1594,48 @@ fn namespace_case(
 
     let init_bytes_per_second = rate(fixture_manifest.logical_bytes, sample.layerstack_init_ns);
     let init_files_per_second = rate(fixture_manifest.regular_files, sample.layerstack_init_ns);
+    let initialization_peak_status = phase_peak_status(
+        initialization_resources_before,
+        initialization_resources_after,
+    );
+    let product_peak_status =
+        phase_peak_status(initialization_resources_before, product_resources_after);
+    let SqliteResourceSnapshot {
+        memory_used_bytes: sqlite_t0_memory_used_bytes,
+        memory_peak_bytes: sqlite_t0_memory_peak_bytes,
+        page_cache_overflow_bytes: sqlite_t0_page_cache_overflow_bytes,
+        page_cache_overflow_peak_bytes: sqlite_t0_page_cache_overflow_peak_bytes,
+        allocation_count: sqlite_t0_allocation_count,
+        allocation_peak_count: sqlite_t0_allocation_peak_count,
+        connection_cache_used_bytes: sqlite_t0_connection_cache_used_bytes,
+        connection_cache_target_bytes: sqlite_t0_connection_cache_target_bytes,
+    } = sqlite_resources_before;
+    let SqliteResourceSnapshot {
+        memory_used_bytes: sqlite_t1_memory_used_bytes,
+        memory_peak_bytes: sqlite_t1_memory_peak_bytes,
+        page_cache_overflow_bytes: sqlite_t1_page_cache_overflow_bytes,
+        page_cache_overflow_peak_bytes: sqlite_t1_page_cache_overflow_peak_bytes,
+        allocation_count: sqlite_t1_allocation_count,
+        allocation_peak_count: sqlite_t1_allocation_peak_count,
+        connection_cache_used_bytes: sqlite_t1_connection_cache_used_bytes,
+        connection_cache_target_bytes: sqlite_t1_connection_cache_target_bytes,
+    } = sqlite_resources_after;
+    eprintln!(
+        "layerfs-normal-overwrite-v1 nonce={} elapsed_ns={normal_overwrite_diagnostic_ns} mtime_seconds={normal_overwrite_mtime_seconds} mtime_nanoseconds={normal_overwrite_mtime_nanoseconds} changed={normal_overwrite_changed_mtime}",
+        std::env::var("LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE")?,
+    );
+    eprintln!(
+        "layerfs-container-cgroup-after-v1 nonce={} memory_current={} memory_peak={} swap_current={} pids_current={} oom={} oom_kill={}",
+        std::env::var("LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE")?,
+        container_resources_after.memory_current,
+        container_resources_after.memory_peak,
+        container_resources_after.swap_current,
+        container_resources_after.pids_current,
+        container_resources_after.oom,
+        container_resources_after.oom_kill,
+    );
     println!(
-        "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"product-lifecycle\",\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"edit_ns\":{},\"commit_ns\":{},\"workspace_end_ns\":{},\"reconnect_ns\":{},\"reopen_workspace_create_ns\":{},\"reopen_workspace_end_ns\":{},\"product_lifecycle_ns\":{},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"edit_path\":\"{}\",\"edit_size\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{candidate_objects},\"candidate_bytes\":{candidate_bytes},\"inserted_objects\":{inserted_objects},\"inserted_bytes\":{inserted_bytes},\"reused_objects\":{reused_objects},\"reused_bytes\":{reused_bytes},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialize_candidate_objects\":{},\"initialize_candidate_bytes\":{},\"initialize_inserted_objects\":{},\"initialize_inserted_bytes\":{},\"initialize_reused_objects\":{},\"initialize_reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"commit_candidate_objects\":{},\"commit_candidate_bytes\":{},\"commit_inserted_objects\":{},\"commit_inserted_bytes\":{},\"commit_reused_objects\":{},\"commit_reused_bytes\":{},\"commit_admission_transactions\":{},\"commit_max_transaction_objects\":{},\"commit_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{}}}",
+        "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"product-lifecycle\",\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"edit_ns\":{},\"commit_ns\":{},\"workspace_end_ns\":{},\"reconnect_ns\":{},\"reopen_workspace_create_ns\":{},\"reopen_content_verify_ns\":{},\"reopen_workspace_end_ns\":{},\"reopen_verify_ns\":{},\"complete_product_ns\":{},\"product_lifecycle_ns\":{},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"edit_path\":\"{}\",\"edit_size\":{},\"fixture_digest\":\"{}\",\"verified_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{candidate_objects},\"candidate_bytes\":{candidate_bytes},\"inserted_objects\":{inserted_objects},\"inserted_bytes\":{inserted_bytes},\"reused_objects\":{reused_objects},\"reused_bytes\":{reused_bytes},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialize_candidate_objects\":{},\"initialize_candidate_bytes\":{},\"initialize_inserted_objects\":{},\"initialize_inserted_bytes\":{},\"initialize_reused_objects\":{},\"initialize_reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"commit_candidate_objects\":{},\"commit_candidate_bytes\":{},\"commit_inserted_objects\":{},\"commit_inserted_bytes\":{},\"commit_reused_objects\":{},\"commit_reused_bytes\":{},\"commit_admission_transactions\":{},\"commit_max_transaction_objects\":{},\"commit_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{},\"maximum_verifier_buffer_bytes\":{},\"verifier_worker_count\":{},\"verifier_plan_bytes\":{},\"verifier_path_state_peak_bytes\":{},\"verifier_digest_state_peak_bytes\":{},\"maximum_product_read_ahead_bytes\":{},\"read_ahead_hits\":{},\"read_ahead_misses\":{},\"read_ahead_fetches\":{},\"read_ahead_requested_bytes\":{},\"read_ahead_fetched_bytes\":{},\"read_ahead_served_bytes\":{},\"read_ahead_unused_bytes\":{},\"workspace_read_local_calls\":{},\"workspace_read_local_ids\":{},\"workspace_read_local_rows\":{},\"workspace_read_local_bytes\":{},\"workspace_create_attach_ns\":{},\"workspace_create_non_attach_ns\":{},\"snapshot_database_calls\":{},\"snapshot_database_rows\":{},\"snapshot_database_bytes\":{},\"snapshot_cache_rows_at_create\":{},\"snapshot_cache_bytes_at_create\":{},\"snapshot_store_wide_scans\":{},\"small_file_prefetch_eligible\":{},\"small_file_prefetch_bytes\":{},\"anchor_prefetch_count\":{},\"commit_snapshot_database_calls\":{},\"commit_snapshot_database_rows\":{},\"commit_snapshot_database_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_anchor_payload_reads\":{},\"process_t0_rss_bytes\":{},\"process_t1_rss_bytes\":{},\"process_t1_rss_growth_bytes\":{},\"process_t0_peak_rss_bytes\":{},\"process_t1_peak_rss_bytes\":{},\"process_initialization_incremental_peak_rss_bytes\":{},\"process_initialization_peak_status\":\"{initialization_peak_status}\",\"process_t0_swaps\":{},\"process_t1_swaps\":{},\"process_t0_physical_footprint_bytes\":{},\"process_t1_physical_footprint_bytes\":{},\"initialization_user_cpu_ns\":{},\"initialization_system_cpu_ns\":{},\"initialization_disk_read_bytes\":{},\"initialization_disk_write_bytes\":{},\"initialization_context_switches\":{},\"process_threads_before\":{},\"process_threads_after\":{},\"sqlite_t0_memory_used_bytes\":{sqlite_t0_memory_used_bytes},\"sqlite_t0_memory_peak_bytes\":{sqlite_t0_memory_peak_bytes},\"sqlite_t0_page_cache_overflow_bytes\":{sqlite_t0_page_cache_overflow_bytes},\"sqlite_t0_page_cache_overflow_peak_bytes\":{sqlite_t0_page_cache_overflow_peak_bytes},\"sqlite_t0_allocation_count\":{sqlite_t0_allocation_count},\"sqlite_t0_allocation_peak_count\":{sqlite_t0_allocation_peak_count},\"sqlite_t0_connection_cache_used_bytes\":{sqlite_t0_connection_cache_used_bytes},\"sqlite_connection_cache_target_bytes\":{sqlite_t0_connection_cache_target_bytes},\"sqlite_t1_memory_used_bytes\":{sqlite_t1_memory_used_bytes},\"sqlite_t1_memory_peak_bytes\":{sqlite_t1_memory_peak_bytes},\"sqlite_t1_page_cache_overflow_bytes\":{sqlite_t1_page_cache_overflow_bytes},\"sqlite_t1_page_cache_overflow_peak_bytes\":{sqlite_t1_page_cache_overflow_peak_bytes},\"sqlite_t1_allocation_count\":{sqlite_t1_allocation_count},\"sqlite_t1_allocation_peak_count\":{sqlite_t1_allocation_peak_count},\"sqlite_t1_connection_cache_used_bytes\":{sqlite_t1_connection_cache_used_bytes},\"sqlite_t1_connection_cache_target_bytes\":{sqlite_t1_connection_cache_target_bytes},\"process_t7_rss_bytes\":{},\"process_t7_peak_rss_bytes\":{},\"process_product_incremental_peak_rss_bytes\":{},\"process_product_peak_status\":\"{product_peak_status}\",\"process_t7_swaps\":{},\"process_t7_physical_footprint_bytes\":{},\"product_user_cpu_ns\":{},\"product_system_cpu_ns\":{},\"product_disk_read_bytes\":{},\"product_disk_write_bytes\":{},\"product_context_switches\":{},\"process_threads_at_t7\":{}}}",
         workload_source::NAMESPACE_SCHEMA,
         scenario.id,
         workload_source::NAMESPACE_FIXTURE_PROFILE,
@@ -898,7 +1651,10 @@ fn namespace_case(
         sample.workspace_end_ns,
         sample.reconnect_ns,
         sample.reopen_workspace_create_ns,
+        sample.reopen_content_verify_ns,
         sample.reopen_workspace_end_ns,
+        sample.reopen_verify_ns,
+        sample.complete_product_ns,
         sample.product_lifecycle_ns,
         fixture_manifest.regular_files,
         fixture_manifest.data_directories,
@@ -916,6 +1672,7 @@ fn namespace_case(
         edit_path,
         edit_size,
         fixture_manifest.digest,
+        verified.manifest.digest,
         scan.scanned_files,
         scan.scanned_bytes,
         initialize_candidate
@@ -950,6 +1707,113 @@ fn namespace_case(
         commit_candidate.max_transaction_bytes,
         canonical_storage.objects,
         canonical_storage.encoded_bytes,
+        verified.maximum_verifier_buffer_bytes,
+        verified.verifier_worker_count,
+        verified.verifier_plan_bytes,
+        verified.verifier_path_state_peak_bytes,
+        verified.verifier_digest_state_peak_bytes,
+        read.maximum_product_read_ahead_bytes,
+        read.read_ahead_hits,
+        read.read_ahead_misses,
+        read.read_ahead_fetches,
+        read.read_ahead_requested_bytes,
+        read.read_ahead_fetched_bytes,
+        read.read_ahead_served_bytes,
+        read.read_ahead_unused_bytes,
+        read.local_calls,
+        read.local_ids,
+        read.local_rows,
+        read.local_bytes,
+        workspace_create.total_ns,
+        workspace_create_non_attach_ns,
+        workspace_create.snapshot_database_calls,
+        workspace_create.snapshot_database_rows,
+        workspace_create.snapshot_database_bytes,
+        workspace_create.snapshot_cache_rows_at_create,
+        workspace_create.snapshot_cache_bytes_at_create,
+        workspace_create.snapshot_store_wide_scans,
+        workspace_create.small_file_prefetch_eligible,
+        workspace_create.small_file_prefetch_bytes,
+        workspace_create.anchor_prefetch_count,
+        workspace_commit.snapshot_database_calls,
+        workspace_commit.snapshot_database_rows,
+        workspace_commit.snapshot_database_bytes,
+        workspace_commit.payload_bytes_read,
+        u64::from(workspace_commit.payload_bytes_read > edit_size),
+        initialization_resources_before.resident_bytes,
+        initialization_resources_after.resident_bytes,
+        initialization_resources_after
+            .resident_bytes
+            .saturating_sub(initialization_resources_before.resident_bytes),
+        initialization_resources_before.peak_resident_bytes,
+        initialization_resources_after.peak_resident_bytes,
+        initialization_resources_after
+            .peak_resident_bytes
+            .saturating_sub(initialization_resources_before.resident_bytes),
+        initialization_resources_before.swaps,
+        initialization_resources_after.swaps,
+        initialization_resources_before.physical_footprint_bytes,
+        initialization_resources_after.physical_footprint_bytes,
+        resource_delta(
+            initialization_resources_after.user_cpu_ns,
+            initialization_resources_before.user_cpu_ns,
+            "initialization user CPU",
+        )?,
+        resource_delta(
+            initialization_resources_after.system_cpu_ns,
+            initialization_resources_before.system_cpu_ns,
+            "initialization system CPU",
+        )?,
+        resource_delta(
+            initialization_resources_after.disk_read_bytes,
+            initialization_resources_before.disk_read_bytes,
+            "initialization disk reads",
+        )?,
+        resource_delta(
+            initialization_resources_after.disk_write_bytes,
+            initialization_resources_before.disk_write_bytes,
+            "initialization disk writes",
+        )?,
+        resource_delta(
+            initialization_resources_after.context_switches,
+            initialization_resources_before.context_switches,
+            "initialization context switches",
+        )?,
+        initialization_resources_before.threads,
+        initialization_resources_after.threads,
+        product_resources_after.resident_bytes,
+        product_resources_after.peak_resident_bytes,
+        product_resources_after
+            .peak_resident_bytes
+            .saturating_sub(initialization_resources_before.resident_bytes),
+        product_resources_after.swaps,
+        product_resources_after.physical_footprint_bytes,
+        resource_delta(
+            product_resources_after.user_cpu_ns,
+            initialization_resources_before.user_cpu_ns,
+            "product user CPU",
+        )?,
+        resource_delta(
+            product_resources_after.system_cpu_ns,
+            initialization_resources_before.system_cpu_ns,
+            "product system CPU",
+        )?,
+        resource_delta(
+            product_resources_after.disk_read_bytes,
+            initialization_resources_before.disk_read_bytes,
+            "product disk reads",
+        )?,
+        resource_delta(
+            product_resources_after.disk_write_bytes,
+            initialization_resources_before.disk_write_bytes,
+            "product disk writes",
+        )?,
+        resource_delta(
+            product_resources_after.context_switches,
+            initialization_resources_before.context_switches,
+            "product context switches",
+        )?,
+        product_resources_after.threads,
     );
     Ok(())
 }
@@ -967,10 +1831,10 @@ fn namespace_init_diagnostic(
         || !valid_digest(fixture_digest)
         || !matches!(
             fixture_cache_profile,
-            "generated-first-use-uncontrolled"
-                | "generated-post-first-use-uncontrolled"
-                | "reused-first-use-uncontrolled"
-                | "reused-post-first-use-uncontrolled"
+            "generated-first-sample-uncontrolled"
+                | "generated-subsequent-sample-uncontrolled"
+                | "reused-first-sample-uncontrolled"
+                | "reused-subsequent-sample-uncontrolled"
         )
     {
         return Err("namespace init-only diagnostic arguments".into());
@@ -987,12 +1851,16 @@ fn namespace_init_diagnostic(
         return Err("stale LayerStack initialization receipt".into());
     }
 
+    let sqlite_resources_before = sqlite_resource_snapshot(&store, true)?;
+    let initialization_resources_before = process_resource_snapshot()?;
     let t0 = Instant::now();
     let initialized = client.initialize_layerstack(
         EntityName::new(format!("{}-{iteration}-init-diagnostic", scenario.id))?,
         LayerStackInitialization::Directory(fixture.to_owned()),
     )?;
     let t1 = Instant::now();
+    let initialization_resources_after = process_resource_snapshot()?;
+    let sqlite_resources_after = sqlite_resource_snapshot(&store, false)?;
     let receipts = store.take_layerstack_initialization_receipts();
     let [scan] = receipts.as_slice() else {
         return Err("LayerStack initialization receipt cardinality".into());
@@ -1019,8 +1887,32 @@ fn namespace_init_diagnostic(
     let layerstack_init_ns = nanos(t0, t1);
     let init_bytes_per_second = rate(fixture_manifest.logical_bytes, layerstack_init_ns);
     let init_files_per_second = rate(fixture_manifest.regular_files, layerstack_init_ns);
+    let initialization_peak_status = phase_peak_status(
+        initialization_resources_before,
+        initialization_resources_after,
+    );
+    let SqliteResourceSnapshot {
+        memory_used_bytes: sqlite_t0_memory_used_bytes,
+        memory_peak_bytes: sqlite_t0_memory_peak_bytes,
+        page_cache_overflow_bytes: sqlite_t0_page_cache_overflow_bytes,
+        page_cache_overflow_peak_bytes: sqlite_t0_page_cache_overflow_peak_bytes,
+        allocation_count: sqlite_t0_allocation_count,
+        allocation_peak_count: sqlite_t0_allocation_peak_count,
+        connection_cache_used_bytes: sqlite_t0_connection_cache_used_bytes,
+        connection_cache_target_bytes: sqlite_t0_connection_cache_target_bytes,
+    } = sqlite_resources_before;
+    let SqliteResourceSnapshot {
+        memory_used_bytes: sqlite_t1_memory_used_bytes,
+        memory_peak_bytes: sqlite_t1_memory_peak_bytes,
+        page_cache_overflow_bytes: sqlite_t1_page_cache_overflow_bytes,
+        page_cache_overflow_peak_bytes: sqlite_t1_page_cache_overflow_peak_bytes,
+        allocation_count: sqlite_t1_allocation_count,
+        allocation_peak_count: sqlite_t1_allocation_peak_count,
+        connection_cache_used_bytes: sqlite_t1_connection_cache_used_bytes,
+        connection_cache_target_bytes: sqlite_t1_connection_cache_target_bytes,
+    } = sqlite_resources_after;
     println!(
-        "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"init-only-diagnostic\",\"nonterminal\":true,\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{layerstack_init_ns},\"teardown_ns\":{teardown_ns},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{}}}",
+        "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"init-only-diagnostic\",\"nonterminal\":true,\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{layerstack_init_ns},\"teardown_ns\":{teardown_ns},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{},\"process_t0_rss_bytes\":{},\"process_t1_rss_bytes\":{},\"process_t1_rss_growth_bytes\":{},\"process_t0_peak_rss_bytes\":{},\"process_t1_peak_rss_bytes\":{},\"process_initialization_incremental_peak_rss_bytes\":{},\"process_initialization_peak_status\":\"{initialization_peak_status}\",\"process_t0_swaps\":{},\"process_t1_swaps\":{},\"process_t0_physical_footprint_bytes\":{},\"process_t1_physical_footprint_bytes\":{},\"initialization_user_cpu_ns\":{},\"initialization_system_cpu_ns\":{},\"initialization_disk_read_bytes\":{},\"initialization_disk_write_bytes\":{},\"initialization_context_switches\":{},\"process_threads_before\":{},\"process_threads_after\":{},\"sqlite_t0_memory_used_bytes\":{sqlite_t0_memory_used_bytes},\"sqlite_t0_memory_peak_bytes\":{sqlite_t0_memory_peak_bytes},\"sqlite_t0_page_cache_overflow_bytes\":{sqlite_t0_page_cache_overflow_bytes},\"sqlite_t0_page_cache_overflow_peak_bytes\":{sqlite_t0_page_cache_overflow_peak_bytes},\"sqlite_t0_allocation_count\":{sqlite_t0_allocation_count},\"sqlite_t0_allocation_peak_count\":{sqlite_t0_allocation_peak_count},\"sqlite_t0_connection_cache_used_bytes\":{sqlite_t0_connection_cache_used_bytes},\"sqlite_connection_cache_target_bytes\":{sqlite_t0_connection_cache_target_bytes},\"sqlite_t1_memory_used_bytes\":{sqlite_t1_memory_used_bytes},\"sqlite_t1_memory_peak_bytes\":{sqlite_t1_memory_peak_bytes},\"sqlite_t1_page_cache_overflow_bytes\":{sqlite_t1_page_cache_overflow_bytes},\"sqlite_t1_page_cache_overflow_peak_bytes\":{sqlite_t1_page_cache_overflow_peak_bytes},\"sqlite_t1_allocation_count\":{sqlite_t1_allocation_count},\"sqlite_t1_allocation_peak_count\":{sqlite_t1_allocation_peak_count},\"sqlite_t1_connection_cache_used_bytes\":{sqlite_t1_connection_cache_used_bytes},\"sqlite_t1_connection_cache_target_bytes\":{sqlite_t1_connection_cache_target_bytes}}}",
         workload_source::NAMESPACE_SCHEMA,
         scenario.id,
         workload_source::NAMESPACE_FIXTURE_PROFILE,
@@ -1061,6 +1953,47 @@ fn namespace_init_diagnostic(
         candidate.max_transaction_bytes,
         canonical.objects,
         canonical.encoded_bytes,
+        initialization_resources_before.resident_bytes,
+        initialization_resources_after.resident_bytes,
+        initialization_resources_after
+            .resident_bytes
+            .saturating_sub(initialization_resources_before.resident_bytes),
+        initialization_resources_before.peak_resident_bytes,
+        initialization_resources_after.peak_resident_bytes,
+        initialization_resources_after
+            .peak_resident_bytes
+            .saturating_sub(initialization_resources_before.resident_bytes),
+        initialization_resources_before.swaps,
+        initialization_resources_after.swaps,
+        initialization_resources_before.physical_footprint_bytes,
+        initialization_resources_after.physical_footprint_bytes,
+        resource_delta(
+            initialization_resources_after.user_cpu_ns,
+            initialization_resources_before.user_cpu_ns,
+            "initialization user CPU",
+        )?,
+        resource_delta(
+            initialization_resources_after.system_cpu_ns,
+            initialization_resources_before.system_cpu_ns,
+            "initialization system CPU",
+        )?,
+        resource_delta(
+            initialization_resources_after.disk_read_bytes,
+            initialization_resources_before.disk_read_bytes,
+            "initialization disk reads",
+        )?,
+        resource_delta(
+            initialization_resources_after.disk_write_bytes,
+            initialization_resources_before.disk_write_bytes,
+            "initialization disk writes",
+        )?,
+        resource_delta(
+            initialization_resources_after.context_switches,
+            initialization_resources_before.context_switches,
+            "initialization context switches",
+        )?,
+        initialization_resources_before.threads,
+        initialization_resources_after.threads,
     );
     Ok(())
 }
@@ -1370,33 +2303,18 @@ fn campaign(
     let process_peak_rss_bytes = linux_process_peak_rss_bytes();
     let cgroup_peak_bytes = read_u64("/sys/fs/cgroup/memory.peak");
     let cgroup_swap_bytes = read_u64("/sys/fs/cgroup/memory.swap.current");
-    let paired_shell = std::env::var("LAYERFS_BENCH_SHELL").as_deref() == Ok("1");
-    let execution_profile = if paired_shell {
-        "fresh-sh-c"
-    } else {
-        "fresh-direct-argv"
-    };
     println!(
-        "{{\"schema\":\"fs-bench-pro-v4-summary\",\"execution_profile\":\"{execution_profile}\",\"acknowledgement_profile\":\"memory-off-live-process\",\"workspace_create_ns\":{create},\"small_commit_ns\":{small_commit},\"small_complete_ns\":{small_complete},\"cold_commit_ns\":{cold_commit},\"cold_complete_ns\":{cold_complete},\"edit16_ns\":{edit16},\"prepend_complete_ns\":{prepend_complete},\"read_complete_ns\":{read_complete},\"registered_total_ns\":{registered_total},\"inner_write_bytes_per_second\":{throughput:.3},\"process_peak_rss_bytes\":{process_peak_rss_bytes},\"cgroup_peak_bytes\":{cgroup_peak_bytes},\"cgroup_swap_bytes\":{cgroup_swap_bytes}}}"
+        "{{\"schema\":\"fs-bench-pro-v4-summary\",\"execution_profile\":\"fresh-direct-argv\",\"acknowledgement_profile\":\"memory-off-live-process\",\"workspace_create_ns\":{create},\"small_commit_ns\":{small_commit},\"small_complete_ns\":{small_complete},\"cold_commit_ns\":{cold_commit},\"cold_complete_ns\":{cold_complete},\"edit16_ns\":{edit16},\"prepend_complete_ns\":{prepend_complete},\"read_complete_ns\":{read_complete},\"registered_total_ns\":{registered_total},\"inner_write_bytes_per_second\":{throughput:.3},\"process_peak_rss_bytes\":{process_peak_rss_bytes},\"cgroup_peak_bytes\":{cgroup_peak_bytes},\"cgroup_swap_bytes\":{cgroup_swap_bytes}}}"
     );
-    let failed = if paired_shell {
-        cold_complete > PAIRED_COLD_COMPLETE_HARD_NS
-            || edit16 > PAIRED_EDIT16_HARD_NS
-            || prepend_complete > PAIRED_PREPEND_HARD_NS
-            || read_complete > PAIRED_READ_HARD_NS
-            || registered_total > PAIRED_TOTAL_HARD_NS
-            || throughput < INNER_WRITE_MIN_BYTES_PER_SECOND
-    } else {
-        create > WORKSPACE_CREATE_HARD_NS
-            || small_commit > SMALL_COMMIT_HARD_NS
-            || small_complete > SMALL_COMPLETE_HARD_NS
-            || cold_complete > COLD_COMPLETE_HARD_NS
-            || edit16 > EDIT16_HARD_NS
-            || prepend_complete > PREPEND_HARD_NS
-            || read_complete > READ_HARD_NS
-            || registered_total > REGISTERED_TOTAL_HARD_NS
-            || throughput < INNER_WRITE_MIN_BYTES_PER_SECOND
-    };
+    let failed = create > WORKSPACE_CREATE_HARD_NS
+        || small_commit > SMALL_COMMIT_HARD_NS
+        || small_complete > SMALL_COMPLETE_HARD_NS
+        || cold_complete > COLD_COMPLETE_HARD_NS
+        || edit16 > EDIT16_HARD_NS
+        || prepend_complete > PREPEND_HARD_NS
+        || read_complete > READ_HARD_NS
+        || registered_total > REGISTERED_TOTAL_HARD_NS
+        || throughput < INNER_WRITE_MIN_BYTES_PER_SECOND;
     if failed {
         return Err("one or more hard performance gates failed".into());
     }
@@ -1601,6 +2519,25 @@ fn parse_read_bytes(output: &OutputPage) -> AnyResult<u64> {
         .lines()
         .find_map(|line| line.strip_prefix("read_bytes=")?.parse().ok())
         .ok_or_else(|| "read output".into())
+}
+
+fn parse_normal_overwrite_mtime(output: &OutputPage) -> AnyResult<(i64, i64)> {
+    let bytes = output
+        .chunks
+        .iter()
+        .flat_map(|chunk| chunk.bytes.iter().copied())
+        .collect::<Vec<_>>();
+    let text = std::str::from_utf8(&bytes)?;
+    let value = |name: &str| -> AnyResult<i64> {
+        text.lines()
+            .find_map(|line| line.strip_prefix(name))
+            .ok_or_else(|| format!("missing normal-overwrite field: {name}").into())
+            .and_then(|value| value.parse().map_err(Into::into))
+    };
+    Ok((
+        value("normal_overwrite_mtime_seconds=")?,
+        value("normal_overwrite_mtime_nanoseconds=")?,
+    ))
 }
 
 fn parse_digest_text(output: &str) -> AnyResult<(u64, String)> {

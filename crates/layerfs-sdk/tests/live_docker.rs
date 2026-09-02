@@ -1,8 +1,8 @@
 use layerfs_sdk::{
     Client, ContainerCreate, ContainerLimits, ContainerManager, CreateWorkspaceSession,
     EndWorkspaceMode, EntityName, ExecutionId, ExecutionTransport, LayerStackInitialization,
-    LayerStackStore, LocalForkSource, NonEmpty, OutputPage, WorkspaceCommitResult, WorkspaceError,
-    WorkspaceId, WorkspacePlacement, WorkspaceProjection,
+    LayerStackStore, LocalForkSource, NonEmpty, OutputPage, SdkError, WorkspaceCommitResult,
+    WorkspaceError, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
 };
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -76,6 +76,39 @@ fn managed_proof(
     let client = Client::connect_with_container(store.clone(), running.binding())?;
     let initialized = client
         .initialize_layerstack(EntityName::new("project")?, LayerStackInitialization::Empty)?;
+    let attachment_branch = client.fork_branch(
+        EntityName::new("attachment-failure")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let attachment_root = format!("/workspace/layerfs-live-{}-attachment", std::process::id());
+    let previous_attachment_failure =
+        std::env::var_os("LAYERFS_WORKSPACE_INJECT_POST_ATTACH_FAILURE");
+    std::env::set_var("LAYERFS_WORKSPACE_INJECT_POST_ATTACH_FAILURE", "1");
+    let attachment = client.create_workspace_session(container_request(
+        attachment_branch,
+        &running.id,
+        &attachment_root,
+    ));
+    match previous_attachment_failure {
+        Some(value) => std::env::set_var("LAYERFS_WORKSPACE_INJECT_POST_ATTACH_FAILURE", value),
+        None => std::env::remove_var("LAYERFS_WORKSPACE_INJECT_POST_ATTACH_FAILURE"),
+    }
+    require(
+        matches!(
+            attachment,
+            Err(SdkError::Workspace(WorkspaceError::InvalidPlacement))
+        ),
+        "injected post-attachment failure",
+    )?;
+    require(
+        client.active_workspace_count()? == 0,
+        "post-attachment active Workspace cleanup",
+    )?;
+    wait_for(Duration::from_secs(5), || {
+        container_clean(name, &attachment_root, "no-attachment-process").unwrap_or(false)
+    })?;
     let lifecycle_branch = client.fork_branch(
         EntityName::new("lifecycle")?,
         LocalForkSource::Layer {

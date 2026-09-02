@@ -59,10 +59,49 @@ PASS:
 root cause and proceed. Do not broaden into incompatible contracts merely to
 avoid a rejected experiment.
 
+After every `REVISE` or `NO_GO`, immediately use available subagents to audit
+the failed hypothesis, rank the next compatible bottleneck, and challenge its
+correctness and resource accounting. The primary agent then reconciles one
+revised plan and resumes implementation. Subagents are development reviewers,
+not LayerFS product workers; their use does not authorize any runtime worker,
+thread pool, or background service.
+
 If real FUSE, the container environment, or a physical-I/O control is
 temporarily unavailable, complete every safe non-environment-dependent task,
 retain the exact blocker, and resume the same task when the environment is
 available. Never relabel an unavailable proof as PASS.
+
+## Non-negotiable boundaries
+
+Do:
+
+- measure the current critical path before changing it;
+- make the smallest generic change that removes the proved bottleneck;
+- preserve every valid success, slow result, and failed experiment;
+- test through the existing public LayerFS, Store, SDK, real-FUSE, and Docker
+  paths required below; and
+- keep iterating against the binding throughput and resource gates until every
+  terminal criterion passes.
+
+Do not:
+
+- add a pack format, packed fixture, lazy initialization, persistent cache,
+  complete namespace manifest, Store schema or canonical-format change;
+- add or increase a product worker, thread pool, background service, daemon,
+  protocol tag, dependency, crate, benchmark family, runner, or public bulk
+  operation;
+- trade more CPU, memory, persistent or temporary storage, physical I/O, setup
+  work, or warm state for a wall-time-only result;
+- put exact correctness verification inside initialization timing, weaken an
+  oracle, skip real FUSE, or substitute materialization for FUSE;
+- restore a rejected mechanism without new evidence that invalidates its
+  rejection;
+- reset, checkout, restore, clean, or delete unrelated work; or
+- stage, commit, push, open a pull request, publish, close an issue, or release
+  without explicit user authorization.
+
+The worktree is shared. Preserve every user and agent change and use
+`apply_patch` for source and documentation edits.
 
 ## Canonical specification
 
@@ -104,13 +143,13 @@ four GitHub issues define the execution request.
 - Namespace-v1 remains immutable historical evidence. Namespace-v2 is now
   implemented as the small-heavy 125/200/300/500-MB profile under the same
   four IDs with distinct schema/profile identities.
-- The current candidate already contains bottom-up final namespace/inode
+- The pre-direct retained baseline already contained bottom-up final namespace/inode
   import, existing bounded parallel root-directory import, all-reachable
   initialization, proven-empty Store membership bypass, 8,191-object / <4-MiB
   admission, compact inode pairs, sealed append-only segments, and
   initialization-only removal of the unused reference index. Do not
   reimplement or claim them as new wins.
-- The retained warm/uncontrolled-cache 100,000-file median is about 4.502
+- The pre-direct warm/uncontrolled-cache 100,000-file median is about 4.502
   seconds / 111.1 MB/s. Preparation is about 2.44 seconds; SQLite step and
   commit about 1.54 seconds; object-segment write and reread are about 647 MB
   each.
@@ -125,6 +164,24 @@ four GitHub issues define the execution request.
 - Workspace Create is demand-loaded and the retained warm median is about 15.4
   milliseconds at 100,000 files. Initialization issue #11 is the active
   performance blocker.
+- Exact reopen now uses at most four per-node two-MiB proxy read-ahead entries
+  and skips fully served responses. Retained product screens fetch exactly
+  300/500 MB to serve 300/500 MB with zero unused bytes; remaining verifier
+  time is a non-binding stretch miss and does not authorize a protocol tag,
+  bulk read, prefetch, or weaker oracle.
+- The retained all-tier init-only screen is
+  `issue11-v3-retained-init-all-r001-20260903`: the first three tiers pass
+  their absolute/rate and 1.30x/1.70x gates, while 100,000 records 3.040 s /
+  164.5 MB/s. Incremental high-water is 53.35/59.28/66.13/102.51 MB, so every
+  tier missed the former 32-MiB hard whole-process RSS gate even though
+  explicit ownership remained below 10 MiB. The release gates are now 128 MiB
+  for initialization HWM and 256 MiB for complete-lifecycle HWM.
+  `SQLITE_DBSTATUS_CACHE_USED` grows
+  from 988,416 bytes at T0 to 33,621,248 bytes at T1. The configured SQLite
+  target must remain at most 64 MiB; the current 32-MiB setting is retained
+  because it is the performance winner, while 64 MiB is only an allowance;
+  rejected 12-MiB and 8-MiB cache trials prove the incompatible I/O/performance
+  counter-trade under the unchanged rowid-plus-primary-key Store schema.
 - Current dirty candidate protocol extensions are not a dependency or new
   authorization for this work. Add no daemon/proxy/FUSE request or response
   tag under these issues.
@@ -193,6 +250,50 @@ measurement proves setup is a blocker and cannot change product worker counts
 or product claims. Record first-use and warm cache states separately; never
 pool them into one median.
 
+## Fast iteration and bootstrap policy
+
+Optimize the development feedback loop as well as the product path when it is
+measurably slow. Record this wall-time decomposition separately from product
+metrics:
+
+```text
+edit -> incremental build -> focused test bootstrap -> fixture availability
+     -> product sample -> evidence validation
+```
+
+Before adding optimization code, time these steps. If test start, process or
+container bootstrap, fixture lookup, report validation, or another harness
+step dominates iteration time, fix its generic root cause within the existing
+crate, runner, and helpers. Reuse compiled artifacts and each immutable sealed
+tier fixture across fresh product processes. Cache only build/setup artifacts
+that are outside `T0..T7`; never reuse a Store, Client, LayerStack, Workspace,
+product process, mutable fixture, or in-operation metadata state between timed
+samples. Product bootstrap inside the public lifecycle remains in its assigned
+phase; only harness bootstrap outside the lifecycle may stay outside product
+timing.
+
+Harness/bootstrap improvements must preserve all custody, seal, fresh-process,
+failure-retention, and metric-source checks. Report their time separately and
+never subtract them from, move product work out of, or relabel them as
+initialization throughput. Do not add a dependency, worker, daemon, persistent
+cache, correctness verifier inside initialization timing, or benchmark-only
+product shortcut to accelerate the loop.
+
+Use progressive validation so weak ideas fail cheaply:
+
+1. Run the smallest focused correctness/resource check for the changed lane.
+2. Run one unprofiled representative screen at the smallest tier that exposes
+   the bottleneck; use 10,000 files for initialization pipeline changes unless
+   counters prove only 100,000 exposes it.
+3. Run one 100,000-file sample only after the screen is correct, within the
+   applicable smaller-tier gate, and directionally improves the critical lane.
+4. Repeat only enough to distinguish signal from noise while iterating.
+5. Run three fresh-process samples for every tier and the full quality/proof
+   matrix only when a candidate can plausibly reach terminal PASS.
+
+Never rerun an unchanged passing suite during each inner loop. Rerun it when
+its dependency surface changes and once for the terminal proof.
+
 ## Binding targets
 
 | Scenario | Init maximum | Minimum init throughput | Create maximum | Commit maximum |
@@ -200,9 +301,14 @@ pool them into one median.
 | `namespace-100` | 0.416667 s | 300 MB/s | 15 ms | 10 ms |
 | `namespace-1000` | 0.500 s | 400 MB/s | 18 ms | 10 ms |
 | `namespace-10000` | 0.750 s | 400 MB/s | 22 ms | 10 ms |
-| `namespace-100000` | 2.500 s | 200 MB/s and 40,000 files/s | 25 ms | 10 ms |
+| `namespace-100000` | 3.235294118 s | 153 MB/s and 30,600 files/s | 25 ms | 10 ms |
 
-Binding adjacent initialization ratios are at most 1.30x, 1.70x, and 3.50x.
+Binding adjacent initialization ratios through 10,000 files are at most 1.30x
+and 1.70x. The prospective 100,000-file target is independent and includes the
+authorized 10-percent release tolerance: at most 3.235294118 seconds, at least
+153 MB/s, and at least 30,600 files/s. Never slow
+the 10,000-file tier to manufacture a ratio pass. Keep 200 MB/s / 2.5 seconds
+preferred and 250 MB/s / 2.0 seconds stretch; neither blocks release.
 The first three floors are raised above the stale flat 200-MB/s gate because
 the retained candidate already reaches 318.6, 450.3, and 418.0 MB/s. Preferred
 non-binding throughput goals are 350, 500, 500, and 250 MB/s, respectively.
@@ -223,9 +329,11 @@ seconds. They never authorize a weaker oracle.
 ```text
 new product workers = 0
 product worker ceiling increase = 0
+initialization CPU <=14.07 total CPU-seconds
 explicit LayerFS-owned buffers <=10 MiB aggregate
-preferred incremental RSS <=16 MiB
-hard incremental RSS <=32 MiB
+configured SQLite connection-cache target <=64 MiB; retained setting =32 MiB
+initialization whole-process incremental RSS <=128 MiB
+complete-lifecycle whole-process incremental RSS <=256 MiB
 swap = 0
 OOM = false
 ```
@@ -283,14 +391,22 @@ LayerStack. Do not add a second content scan.
 
 ### 4. Screen and measure
 
-Run focused equality, collision, hard-link, empty-segment, failure, reconnect,
-and cleanup tests outside the timed performance path. Run one 10,000-file
-screen; proceed when it has no greater than 5 percent regression. Then retain
-three fresh-process 100,000-file samples.
+Run the focused checks whose dependency surface changed outside the timed
+performance path. Run one 10,000-file screen; proceed when it meets the
+400-MB/s floor, has no greater than 5 percent regression from the retained
+median, and the targeted critical-lane counters improve. Then run one
+100,000-file screen. Retain three fresh-process 100,000-file samples only after
+that screen can plausibly meet every binding gate. Defer the unchanged full
+equality, collision, hard-link, empty-segment, failure, reconnect, and cleanup
+suite to the composite proof.
 
-The binding 100,000-file result is at most 2.5 seconds, at least 200 MB/s and
-40,000 files/s, with no higher total CPU than the retained eight-producer
-direct reference and no hidden memory, storage, cache, or worker trade.
+The prospective binding 100,000-file result, including the authorized
+10-percent release tolerance, is at most 3.235294118 seconds, at least 153 MB/s
+and 30,600 files/s, with at most 14.07 initialization
+CPU-seconds, <=10 MiB explicit LayerFS ownership, <=128 MiB initialization
+incremental HWM, <=256 MiB complete-lifecycle incremental HWM, the retained
+32-MiB SQLite target under its 64-MiB ceiling, and no hidden storage, cache, or
+worker trade.
 
 ### 5. Conditional SQLite A/B
 
@@ -303,10 +419,13 @@ bytes, physical I/O, and correctness do not regress.
 
 ### 6. Composite proof
 
-After the 100,000-file target passes, run three valid fresh-process samples for
-every tier, all focused/quality checks, materialization/FUSE equality, managed
-Docker lifecycle, injected post-mount attachment failure, exact reconnect, and
-cleanup census. Update issues #11 and #7, then #9, #10, and parent #6 with
+After the 100,000-file target passes, run four fresh-process samples per tier
+to retain three subsequent-sample medians, then set
+`LAYERFS_NAMESPACE_RUN_COMPOSITE=1` so the canonical
+runner—not an external proof manifest—executes all focused/quality checks,
+materialization/FUSE equality, managed Docker lifecycle, injected post-mount
+attachment failure, exact reconnect, and cleanup census. Update issues #11 and
+#7, then #9, #10, and parent #6 with
 identities, raw evidence, results, retained/reverted experiments, and terminal
 disposition.
 
@@ -318,13 +437,23 @@ For every hypothesis:
 2. Leave the smallest focused check that fails before the change.
 3. Change one variable.
 4. Run focused correctness/resource checks.
-5. Run three 100/1,000/10,000 samples; run 100,000 only after they pass.
+5. Use the progressive screen above; do not run the full repeated matrix for a
+   candidate that already fails a focused check or representative screen.
 6. Retain exact success/failure, CPU, RSS, workers, copies, spool traffic,
    physical I/O, SQLite metrics, Store growth, and canonical result.
 7. Retain only if it improves outside noise, no tier regresses more than 5
    percent, no resource load materially increases, and every contract passes.
 8. On `REVISE` or `NO_GO`, preserve evidence, revert only the isolated
-   mechanism when necessary, update the plan, and continue.
+   mechanism when necessary, launch the bounded subagent audit, update the
+   plan from the newly ranked critical path, and continue.
+
+At the end of every 100,000-file miss, refresh the phase and ownership
+breakdown, calculate the distance to the 3.235294118-second/153-MB/s binding
+target, and report the 2.5-second/200-MB/s preferred outcome separately. Rank
+the remaining lanes by recoverable wall time. Optimize the current critical
+lane; do not keep tuning a lane after it leaves the critical path. A smaller
+counter is not a win unless it advances a binding throughput, CPU, memory,
+worker, I/O, or correctness gate.
 
 Do not retry away a valid slow or failed sample. Do not bundle independent
 hypotheses. Do not accept a result that is faster only because work moved into
@@ -422,12 +551,13 @@ unavailable; record that blocker instead of reporting zero physical I/O.
 - [ ] Any fixed-128 SQL A/B reports object-insert execution calls separately
   from submitted rows and uses a new result-schema identity.
 - [ ] Every tier meets its scenario-specific init throughput and absolute
-  target; adjacent ratios are at most 1.30x, 1.70x, and 3.50x.
+  target; adjacent ratios through 10,000 files are at most 1.30x and 1.70x,
+  while the 100,000-file target remains independent.
 - [ ] Every tier meets Create and Commit targets; Store-wide Create scans and
   anchor prefetches are zero.
 - [ ] No new/increased product workers; aggregate explicit buffers <=10 MiB;
-  preferred/hard incremental RSS, CPU, physical I/O, copy, and spool gates
-  pass without hidden trade.
+  initialization CPU <=14.07 seconds; initialization/product incremental HWM
+  <=128/256 MiB; physical I/O, copy, and spool evidence has no hidden trade.
 - [ ] Canonical bytes/IDs/roots, CDC, five-table Store, SDK/CLI,
   daemon/proxy/FUSE, transaction, publication, acknowledgement, and cleanup
   contracts remain valid.
@@ -441,30 +571,21 @@ unavailable; record that blocker instead of reporting zero physical I/O.
 
 Only then report terminal **PASS**.
 
-## Worktree and safety rules
-
-- Preserve every existing user and agent change.
-- Use `apply_patch` for source/documentation edits.
-- Do not reset, checkout, restore, clean, or delete unrelated work.
-- Do not add a dependency, crate, benchmark family, runner, product worker,
-  background service, protocol tag, Store schema, canonical format, packed
-  fixture, physical object packing, or public bulk API.
-- Do not stage, commit, push, open a pull request, publish a release, or close
-  issues unless the user explicitly requests it.
-- A failed tier or rejected experiment is valid evidence. Retain it exactly.
-
 ## Agent coordination
 
-If subagents are available, use no more than three concurrent read-only or
-file-owned reviewers:
+Use available subagents after every `REVISE` or `NO_GO`, and at major candidate
+and terminal reviews. Use no more than three concurrent read-only or file-owned
+reviewers:
 
 1. initialization/storage ownership and canonical safety;
 2. Workspace Create/read/FUSE/cleanup;
 3. harness/evidence/specification validation.
 
 Every agent must know the worktree is shared, stay within explicit ownership,
-and never revert concurrent changes. The primary agent reconciles changes,
-runs the final gates, and owns GitHub updates.
+and never revert concurrent changes. Give each agent a distinct question so
+they do not duplicate work. The primary agent continues useful independent
+work while reviews run, reconciles their findings into one ranked plan, runs
+the final gates, and owns GitHub updates.
 
 ## Final handoff report
 

@@ -204,6 +204,7 @@ impl DockerProjection {
                 cleanup_ns: 0,
                 unattributed_ns: total_ns.saturating_sub(attributed),
                 docker_calls: 1 + endpoint_inspect,
+                ..Default::default()
             },
         )?;
         let mut child = guard.disarm();
@@ -268,6 +269,7 @@ impl DockerProjection {
                 cleanup_ns: 0,
                 unattributed_ns: total_ns.saturating_sub(attributed),
                 docker_calls: 0,
+                ..Default::default()
             },
         )?;
         Ok(Self {
@@ -549,6 +551,7 @@ fn record_end(
             cleanup_ns,
             unattributed_ns: total_ns.saturating_sub(attributed),
             docker_calls,
+            ..Default::default()
         },
     )
     .map_err(Into::into)

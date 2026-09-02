@@ -22,10 +22,10 @@ multi-Layer and multi-Branch history scaling. The earlier interrupted
 
 ## Goal
 
-Grow one append-only benchmark registry from v0.1.0 through v0.1.4 while
-keeping the implemented payload and paired Cloudflare Computer campaigns
-independently runnable. Each release adds one bounded family, freezes it, and
-reruns all earlier registered rows:
+Grow one append-only LayerFS benchmark registry from v0.1.0 through v0.1.4
+while keeping the registered payload and namespace campaigns independently
+runnable. Each release adds one bounded family, freezes it, and reruns all
+earlier registered rows:
 
 1. v0.1.1: initialization and namespace scaling;
 2. v0.1.2: prepend/range-copy and online Workspace capture;
@@ -42,8 +42,6 @@ reruns all earlier registered rows:
   for the existing ten-byte edit workload.
 - [`benchmark/fs-bench-pro/run.sh`](../../../benchmark/fs-bench-pro/run.sh) for
   the LayerFS payload runner and evidence-custody pattern.
-- [`benchmark/fs-bench-pro/run-paired.sh`](../../../benchmark/fs-bench-pro/run-paired.sh)
-  for the separate Cloudflare Computer comparison boundary.
 - [The v0.1.1 checklist](0.1.1/README.md) for release-level admission and
   compatibility gates.
 - [The namespace-v2 specification](0.1.1/namespace-optimization-spec.md) for
@@ -68,10 +66,8 @@ reruns all earlier registered rows:
   the untimed 10,000-file equality proof.
 - A separate LayerFS-only `run-namespace.sh` supports one-case and `all` modes
   with immutable evidence and a fresh process per tier.
-- Namespace rows never enter `registered_total_ns` or `run-paired.sh`.
-- `run.sh` continues to own the implemented payload campaign, while the
-  Cloudflare Computer campaign runs separately after the LayerFS candidate is
-  stable.
+- Namespace rows never enter `registered_total_ns`.
+- `run.sh` continues to own the implemented LayerFS payload campaign.
 - Every later release reruns all previously registered rows.
 - Once admitted, a scenario's ID, fixture, public operation sequence, timing
   boundary, acknowledgement semantics, oracle, sample rules, and result schema
@@ -124,7 +120,6 @@ Results do not belong in the matrix. Immutable results remain under
 Status meanings:
 
 - **Registered:** implemented and included in the existing LayerFS hard gates.
-- **Paired:** also included in the matched LayerFS-versus-Computer campaign.
 - **Admission:** planned or implemented release-admission evidence, excluded
   from registered totals until an explicit gate is accepted.
 - **Proof:** correctness/resource evidence, not a latency score.
@@ -142,23 +137,17 @@ comparison product:
 | --- | --- | --- | --- |
 | LayerFS payload | `run.sh` | Existing registered 32 MiB LayerFS campaign | Focused regression and candidate evidence |
 | LayerFS namespace | `run-namespace.sh` | 0.1.1 namespace admission and ceiling | Every relevant LayerFS iteration; one selected tier or the full matrix |
-| Paired comparison | `run-paired.sh` | Existing matched LayerFS-versus-Computer payload campaign | After the LayerFS candidate is stable |
 
-The 0.1.1 namespace matrix is LayerFS-only. It is not compared with Cloudflare
-Computer because `layerstack init` has no established matched Computer
-operation and the release question is LayerFS correctness, scaling, and
-resource bounds. The existing paired payload campaign still runs once on the
-candidate to catch comparative regressions.
-
-A future namespace comparison requires its own preregistered matched boundary,
-fixture custody, and separate runner. It must not be added to 0.1.1 by default.
+Both active lanes are LayerFS-only. Release regression is evaluated by
+rerunning every earlier registered LayerFS row; no external comparison runner
+is part of `fs-bench-pro`.
 
 The LayerFS-only runner supports one fast case and the full matrix
-without calling either existing runner:
+without calling the registered payload runner:
 
 ```text
 benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID namespace-10000 1
-benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID all 3
+benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID all 4
 ```
 
 Both modes retain source/container seals and refuse to overwrite evidence. The
@@ -168,11 +157,11 @@ one-case mode is iteration evidence, not a release claim.
 
 | Scenario ID | Fixture | Operation | Projection | Status |
 | --- | --- | --- | --- | --- |
-| `cold-create-32m` | Empty Layer | Create and commit one 32 MiB file | Real FUSE | Registered, paired |
+| `cold-create-32m` | Empty Layer | Create and commit one 32 MiB file | Real FUSE | Registered |
 | `small-edit` | One 32 MiB file | One ten-byte overwrite and Commit | Real FUSE | Registered |
-| `edit16` | One 32 MiB file | Sixteen ten-byte overwrite/Commit cycles | Real FUSE | Registered, paired |
-| `prepend-temp-copy-rename` | One 32 MiB file | Prepend ten bytes through temp-copy-rename | Real FUSE | Registered, paired |
-| `read-32m` | One 32 MiB file | Sequentially read the complete file | Real FUSE | Registered, paired |
+| `edit16` | One 32 MiB file | Sixteen ten-byte overwrite/Commit cycles | Real FUSE | Registered |
+| `prepend-temp-copy-rename` | One 32 MiB file | Prepend ten bytes through temp-copy-rename | Real FUSE | Registered |
+| `read-32m` | One 32 MiB file | Sequentially read the complete file | Real FUSE | Registered |
 
 ## Implemented payload timed boundary
 
@@ -224,8 +213,7 @@ locate the phase. Change the smallest shared root cause, rerun focused checks,
 and create a new immutable run ID.
 
 Never reuse a Workspace, process, Store, evidence directory, or earlier result
-to improve a measurement. Do not run `run-paired.sh` in the inner optimization
-loop; run the smallest failing LayerFS-only namespace case first.
+to improve a measurement. Run the smallest failing LayerFS-only case first.
 
 ## Implemented 0.1.1 namespace admission matrix
 
@@ -242,6 +230,13 @@ never relabeled or pooled with namespace-v2.
 | `namespace-1000` | 1,000 | 10 | 200,000,000 (200 MB) | Real FUSE | Implemented admission |
 | `namespace-10000` | 10,000 | 100 | 300,000,000 (300 MB) | Real FUSE | Implemented admission |
 | `namespace-100000` | 100,000 | 1,000 | 500,000,000 (500 MB) | Real FUSE | Implemented admission ceiling |
+
+The prospective binding 100,000-file gate includes the authorized 10-percent
+release tolerance: initialization at most 3.235294118 seconds, throughput at
+least 153,000,000 B/s, and file rate at least 30,600/s. The 2.5-second / 200
+MB/s preferred goal and 2.0-second / 250 MB/s stretch goal remain visible and
+nonbinding. Historical evidence retains the target identity under which it was
+captured.
 
 `MB` is decimal; the exact byte count is authoritative.
 
@@ -313,7 +308,7 @@ for candidate evidence when runtime permits. Do not set latency hard gates
 until the baseline exists; exactness, bounded resources, source identity, and
 retention of every valid sample are mandatory immediately.
 
-The namespace rows remain outside `registered_total_ns` and the paired campaign.
+The namespace rows remain outside `registered_total_ns`.
 If a tier fails, add the smallest fixed-byte or fixed-file-count diagnostic
 needed to distinguish namespace work from payload work; do not pre-register a
 four-by-four Cartesian matrix.

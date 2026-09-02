@@ -582,6 +582,31 @@ fn read_ahead_never_returns_short_before_source_eof() {
         client.read(NodeId(2), offset as u64, 128 * 1024).unwrap(),
         expected[offset..offset + 128 * 1024]
     );
+    for node in 3..=5 {
+        assert_eq!(
+            client.read(NodeId(node), 0, 64 * 1024).unwrap(),
+            expected[..64 * 1024]
+        );
+    }
+    assert_eq!(
+        client
+            .read(NodeId(2), (offset + 64 * 1024) as u64, 64 * 1024)
+            .unwrap(),
+        expected[offset + 64 * 1024..offset + 128 * 1024]
+    );
+    client.read(NodeId(6), 0, 64 * 1024).unwrap();
+    client
+        .read(NodeId(2), (offset + 64 * 1024) as u64, 64 * 1024)
+        .unwrap();
+    assert_eq!(
+        client.read(NodeId(7), 0, 4 * 1024 * 1024).unwrap().len(),
+        4 * 1024 * 1024
+    );
+    let metrics = client.take_read_metrics();
+    assert_eq!(metrics.max_readahead_bytes, 8 * 1024 * 1024);
+    assert_eq!(metrics.read_ahead_hits, 1);
+    assert_eq!(metrics.read_ahead_misses, 8);
+    assert_eq!(metrics.read_ahead_fetches, metrics.read_ahead_misses);
 }
 
 #[test]

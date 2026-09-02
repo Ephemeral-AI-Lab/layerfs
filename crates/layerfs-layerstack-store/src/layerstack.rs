@@ -1,9 +1,15 @@
 use crate::ids::TypedId;
 use crate::objects::{
     admit_initialization_objects, empty_root, insert_initialization_object_batch,
-    insert_initialization_segment_batch, AppendOnlyInitializationSegment,
-    AppendOnlyInitializationWriter, BuiltRoot, DeferredObjectStore, InitializationSegmentAdmission,
-    InitializationTaskBlock, ObjectBuffer,
+    insert_initialization_segment_batch, BuiltRoot, DeferredObjectStore,
+    InitializationDirectAdmissionWriter, InitializationObjectSlab, InitializationSegmentAdmission,
+    InitializationSlabQueueMetrics, InitializationSlabWriter, InitializationSlabWriterMetrics,
+    InitializationSqlPhase, InitializationTaskObjectBuffer, ObjectBuffer,
+    INITIALIZATION_SLAB_QUEUE_SLOTS,
+};
+#[cfg(test)]
+use crate::objects::{
+    AppendOnlyInitializationSegment, AppendOnlyInitializationWriter, InitializationTaskBlock,
 };
 use crate::records::decode_object_id;
 use crate::{
@@ -22,6 +28,7 @@ impl LayerStackStore {
     ) -> Result<InitializeLayerStackResult> {
         let _operation = self.db.enter_operation()?;
         let mut initialization_diagnostic = InitializationDiagnostic::from_env();
+        let mut cleanup_failed_empty_initialization = false;
         let layer_stack_id = LayerStackId::new();
         let seed = *blake3::hash(layer_stack_id.as_slice()).as_bytes();
         let (
@@ -54,11 +61,12 @@ impl LayerStackStore {
                     return Err(StoreError::InvalidInput("Layer initialization directory"));
                 }
                 let direct_segments = self.db.initialization_store_is_empty()?;
+                cleanup_failed_empty_initialization = direct_segments;
                 if direct_segments {
                     let prepare_started = initialization_diagnostic
                         .as_ref()
                         .map(|_| std::time::Instant::now());
-                    let prepared = prepare_append_only_root_directories(&path, seed)?;
+                    let prepared = direct_initialize_root_directories(&self.db, &path, seed)?;
                     if let (Some(diagnostic), Some(started)) =
                         (initialization_diagnostic.as_mut(), prepare_started)
                     {
@@ -66,20 +74,16 @@ impl LayerStackStore {
                             started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
                     }
                     match prepared {
-                        Some(prepared) => {
-                            let finished =
-                                finish_append_only_initialization(&self.db, prepared, seed)?;
-                            (
-                                finished.root_id,
-                                finished.scanned_files,
-                                finished.scanned_bytes,
-                                finished.final_batch,
-                                finished.receipt,
-                                finished.statement_number,
-                                true,
-                                Some(finished.diagnostics),
-                            )
-                        }
+                        Some(finished) => (
+                            finished.root_id,
+                            finished.scanned_files,
+                            finished.scanned_bytes,
+                            finished.final_batch,
+                            finished.receipt,
+                            finished.statement_number,
+                            true,
+                            Some(finished.diagnostics),
+                        ),
                         None => {
                             let (built, scanned_files, scanned_bytes) =
                                 directory_root(&path, seed)?;
@@ -128,59 +132,85 @@ impl LayerStackStore {
             head_layer_id: layer.id,
         };
         let final_begin_started = fast_diagnostics.as_ref().map(|_| std::time::Instant::now());
-        let mut connection = self.db.writer()?;
-        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let final_begin_ns = final_begin_started
-            .map(|started| started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64)
-            .unwrap_or(0);
-        let final_metrics = if direct_segments {
-            insert_initialization_segment_batch(&transaction, &final_batch, &mut statement_number)?
-        } else {
-            insert_initialization_object_batch(&transaction, &final_batch, &mut statement_number)?
-        };
-        statement_number += 1;
-        crate::schema::fail_transaction_statement(statement_number)?;
-        transaction.execute(
-            crate::statements::layerstack::INSERT_LAYER,
-            rusqlite::params![
-                layer.id.as_slice(),
-                layer.layer_stack_id.as_slice(),
-                Option::<&[u8]>::None,
-                layer.root_id.as_bytes().as_slice(),
-                Option::<&[u8]>::None,
-                Option::<&[u8]>::None,
-            ],
-        )?;
-        statement_number += 1;
-        crate::schema::fail_transaction_statement(statement_number)?;
-        if let Err(error) = transaction.execute(
-            crate::statements::layerstack::INSERT,
-            rusqlite::params![
-                stack.id.as_slice(),
-                stack.name.as_str(),
-                stack.head_layer_id.as_slice()
-            ],
-        ) {
-            drop(transaction);
-            drop(connection);
-            if let Some(existing) = self.layer_stack_by_name(&name)? {
-                return Err(StoreError::LayerStackNameConflict {
-                    name,
-                    existing_id: existing.id,
-                    incoming_id: layer_stack_id,
-                });
+        let publication = (|| -> Result<_> {
+            let mut connection = self.db.writer()?;
+            let transaction =
+                connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let final_begin_ns = final_begin_started
+                .map(|started| started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64)
+                .unwrap_or(0);
+            let final_metrics = if direct_segments {
+                insert_initialization_segment_batch(
+                    &transaction,
+                    &final_batch,
+                    &mut statement_number,
+                )?
+            } else {
+                insert_initialization_object_batch(
+                    &transaction,
+                    &final_batch,
+                    &mut statement_number,
+                )?
+            };
+            #[cfg(debug_assertions)]
+            crate::schema::fail_transaction_statement(u64::MAX)?;
+            statement_number += 1;
+            crate::schema::fail_transaction_statement(statement_number)?;
+            transaction.execute(
+                crate::statements::layerstack::INSERT_LAYER,
+                rusqlite::params![
+                    layer.id.as_slice(),
+                    layer.layer_stack_id.as_slice(),
+                    Option::<&[u8]>::None,
+                    layer.root_id.as_bytes().as_slice(),
+                    Option::<&[u8]>::None,
+                    Option::<&[u8]>::None,
+                ],
+            )?;
+            statement_number += 1;
+            crate::schema::fail_transaction_statement(statement_number)?;
+            if let Err(error) = transaction.execute(
+                crate::statements::layerstack::INSERT,
+                rusqlite::params![
+                    stack.id.as_slice(),
+                    stack.name.as_str(),
+                    stack.head_layer_id.as_slice()
+                ],
+            ) {
+                drop(transaction);
+                drop(connection);
+                if let Some(existing) = self.layer_stack_by_name(&name)? {
+                    return Err(StoreError::LayerStackNameConflict {
+                        name,
+                        existing_id: existing.id,
+                        incoming_id: layer_stack_id,
+                    });
+                }
+                return Err(error.into());
             }
-            return Err(error.into());
-        }
-        let final_commit_started = fast_diagnostics.as_ref().map(|_| std::time::Instant::now());
-        transaction.commit()?;
-        let final_commit_ns = final_commit_started
-            .map(|started| started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64)
-            .unwrap_or(0);
+            let final_commit_started = fast_diagnostics.as_ref().map(|_| std::time::Instant::now());
+            transaction.commit()?;
+            let final_commit_ns = final_commit_started
+                .map(|started| started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64)
+                .unwrap_or(0);
+            Ok((final_metrics, final_begin_ns, final_commit_ns))
+        })();
+        let (final_metrics, final_begin_ns, final_commit_ns) = match publication {
+            Ok(publication) => publication,
+            Err(error) => {
+                if cleanup_failed_empty_initialization {
+                    self.db.clear_failed_direct_initialization()?;
+                }
+                return Err(error);
+            }
+        };
         if let Some(diagnostics) = fast_diagnostics.as_mut() {
-            diagnostics
-                .admission
-                .record_sql_batch(final_metrics, final_begin_ns, final_commit_ns);
+            diagnostics.admission.record_sql_batch(
+                final_metrics,
+                final_begin_ns,
+                final_commit_ns,
+                InitializationSqlPhase::Publication,
+            );
         }
         if direct_segments {
             candidate_receipt.candidate_objects += final_metrics.objects;
@@ -408,116 +438,6 @@ fn finish_parallel_candidate(
     ))
 }
 
-fn finish_append_only_initialization(
-    db: &crate::schema::StoreDb,
-    prepared: PreparedAppendOnlyRoot,
-    seed: [u8; 32],
-) -> Result<FinishedAppendOnlyInitialization> {
-    let PreparedAppendOnlyRoot {
-        metadata,
-        directories,
-        blocks,
-        mut segments,
-        pair_blocks,
-        pairs,
-        mut source,
-    } = prepared;
-    let worker_count = segments.len() as u64;
-    let final_started = std::time::Instant::now();
-    let mut final_objects =
-        AppendOnlyInitializationWriter::new(INITIALIZATION_FINAL_PENDING_BYTES)?;
-    let final_checkpoint = final_objects.checkpoint();
-    let mut children = Vec::with_capacity(directories.len());
-    let mut scanned_files = 0_u64;
-    let mut scanned_bytes = 0_u64;
-    for directory in directories {
-        children.push((directory.name, directory.inode));
-        scanned_files = scanned_files
-            .checked_add(directory.imported.scanned_files)
-            .ok_or(StoreError::Integrity("Layer initialization scan counter"))?;
-        scanned_bytes = scanned_bytes
-            .checked_add(directory.imported.scanned_bytes)
-            .ok_or(StoreError::Integrity("Layer initialization scan counter"))?;
-        source.merge(directory.imported.source);
-    }
-    let content =
-        layerfs_content::filesystem::build_initial_directory(&mut final_objects, children)?;
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
-    let metadata_root = layerfs_content::filesystem::build_portable_metadata(
-        &mut final_objects,
-        layerfs_content::tree::inode::InodeKind::Directory,
-        metadata.permissions().mode(),
-        metadata.mtime(),
-        metadata.mtime_nsec() as u32,
-    )?;
-    let root_inode = layerfs_content::tree::inode::InodeId::allocate(seed, 0);
-    let root_record =
-        final_objects.put(&layerfs_content::tree::inode::codec::encode_inode_record(
-            layerfs_content::tree::inode::InodeRecordV1 {
-                kind: layerfs_content::tree::inode::InodeKind::Directory,
-                namespace_ref_count: 0,
-                content_root: content.0,
-                metadata_root,
-            },
-        )?)?;
-    let mut pair_stream = crate::objects::CompactInodePairStream::new(pairs, pair_blocks)?;
-    let (inode_table, insert_node_peak_len, insert_node_peak_capacity) =
-        layerfs_content::tree::inode::build_initial_inode_table_from_pairs(
-            &mut final_objects,
-            root_inode,
-            std::iter::once(Ok((root_inode, root_record))).chain(&mut pair_stream),
-        )?;
-    let pair_io = pair_stream.finish()?;
-    let root_id = final_objects.put(
-        &layerfs_content::tree::directory::codec::encode_namespace_root(
-            layerfs_content::tree::NamespaceRootV1 {
-                profile_id: layerfs_content::tree::directory::codec::profile_id(),
-                root_directory_inode: root_inode,
-                inode_table_root: inode_table.0,
-            },
-        )?,
-    )?;
-    let final_root_inode_table_wall_ns =
-        final_started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
-    if final_objects.get_calls() != 0 {
-        return Err(StoreError::Integrity("append-only initialization get"));
-    }
-    let final_block = final_objects.block_since(0, 0, final_checkpoint)?;
-    let mut final_objects = final_objects.seal()?;
-    let mut object_io = crate::objects::InitializationSegmentIoMetrics::default();
-    let mut admission = InitializationSegmentAdmission::new(db)?;
-    for block in blocks {
-        let segment = segments
-            .get_mut(block.worker_index)
-            .ok_or(StoreError::Integrity("initialization segment worker"))?;
-        admission.admit_append_only_block(segment, block)?;
-    }
-    for segment in segments {
-        object_io.merge(segment.finish_consumption()?);
-    }
-    admission.admit_append_only_block(&mut final_objects, final_block)?;
-    object_io.merge(final_objects.finish_consumption()?);
-    let admission = admission.finish()?;
-    Ok(FinishedAppendOnlyInitialization {
-        root_id,
-        scanned_files,
-        scanned_bytes,
-        final_batch: admission.final_batch,
-        receipt: admission.receipt,
-        statement_number: admission.statement_number,
-        diagnostics: FastInitializationDiagnostics {
-            worker_count,
-            source,
-            object_io,
-            pair_io,
-            admission: admission.diagnostics,
-            final_root_inode_table_wall_ns,
-            insert_node_peak_len,
-            insert_node_peak_capacity,
-        },
-    })
-}
-
 fn serial_directory_root(path: &std::path::Path, seed: [u8; 32]) -> Result<(BuiltRoot, u64, u64)> {
     let mut objects = ObjectBuffer::empty_all_reachable()?;
     let mut import = NativeImport::new(seed, &mut objects);
@@ -569,6 +489,9 @@ struct SourceImportMetrics {
     single_chunk_files: u64,
     streaming_files: u64,
     cdc_scratch_peak_bytes: u64,
+    metadata_cache_hits: u64,
+    metadata_cache_misses: u64,
+    metadata_cache_peak_entries: u64,
 }
 
 impl SourceImportMetrics {
@@ -587,6 +510,15 @@ impl SourceImportMetrics {
         self.cdc_scratch_peak_bytes = self
             .cdc_scratch_peak_bytes
             .max(other.cdc_scratch_peak_bytes);
+        self.metadata_cache_hits = self
+            .metadata_cache_hits
+            .saturating_add(other.metadata_cache_hits);
+        self.metadata_cache_misses = self
+            .metadata_cache_misses
+            .saturating_add(other.metadata_cache_misses);
+        self.metadata_cache_peak_entries = self
+            .metadata_cache_peak_entries
+            .max(other.metadata_cache_peak_entries);
     }
 }
 
@@ -606,6 +538,23 @@ struct FastInitializationDiagnostics {
     final_root_inode_table_wall_ns: u64,
     insert_node_peak_len: u64,
     insert_node_peak_capacity: u64,
+    slab: InitializationSlabWriterMetrics,
+    queue_peak: u64,
+    queue_peak_bytes: u64,
+    consumer_idle_ns: u64,
+    last_slab_receive_offset_ns: u64,
+    pipeline_wall_ns: u64,
+    active_thread_peak: u64,
+    active_producers_after: u64,
+    task_state_bytes: u64,
+    completed_result_peak_bytes: u64,
+    parent_final_state_peak_bytes: u64,
+    producers: Vec<ProducerDiagnostic>,
+}
+
+struct ProducerDiagnostic {
+    index: usize,
+    metrics: InitializationSlabWriterMetrics,
 }
 
 struct FinishedAppendOnlyInitialization {
@@ -651,31 +600,70 @@ impl InitializationDiagnostic {
         let parent_merge_bytes = if fast_path == 1 { "0" } else { "na" };
         let fast = self.fast.unwrap_or_default();
         let admission = fast.admission;
-        let worker_rounding = fast.worker_count.saturating_sub(1);
-        let prepare_peak = (INITIALIZATION_APPEND_PENDING_BYTES + INITIALIZATION_PAIR_PENDING_BYTES)
-            as u64
-            + fast
-                .source
-                .cdc_scratch_peak_bytes
-                .saturating_mul(fast.worker_count);
-        let admission_peak = admission
-            .batch_peak_payload_bytes
-            .saturating_add(
-                admission
-                    .batch_peak_vec_capacity
-                    .saturating_mul(std::mem::size_of::<crate::CanonicalObject>() as u64),
-            )
-            .saturating_add(admission.pending_index_peak_entries.saturating_mul(256))
-            .saturating_add(INITIALIZATION_APPEND_PENDING_BYTES as u64)
-            .saturating_add(worker_rounding);
-        let final_peak = fast
-            .insert_node_peak_capacity
-            .saturating_add(INITIALIZATION_FINAL_PENDING_BYTES as u64)
-            .saturating_add(INITIALIZATION_PAIR_PENDING_BYTES as u64)
-            .saturating_add(worker_rounding);
-        let explicit_buffer_peak_bytes = prepare_peak.max(admission_peak).max(final_peak);
+        let cdc_peak = fast
+            .source
+            .cdc_scratch_peak_bytes
+            .saturating_mul(fast.worker_count);
+        let explicit_buffer_peak_bytes = if fast.slab.handoffs == 0 {
+            let prepare_peak = (INITIALIZATION_APPEND_PENDING_BYTES
+                + INITIALIZATION_PAIR_PENDING_BYTES) as u64
+                + cdc_peak;
+            let admission_peak = admission
+                .batch_peak_payload_bytes
+                .saturating_add(
+                    admission
+                        .batch_peak_vec_capacity
+                        .saturating_mul(std::mem::size_of::<crate::CanonicalObject>() as u64),
+                )
+                .saturating_add(admission.pending_index_peak_bytes)
+                .saturating_add(INITIALIZATION_APPEND_PENDING_BYTES as u64);
+            let final_peak = fast
+                .insert_node_peak_capacity
+                .saturating_add(INITIALIZATION_FINAL_PENDING_BYTES as u64)
+                .saturating_add(INITIALIZATION_PAIR_PENDING_BYTES as u64);
+            prepare_peak.max(admission_peak).max(final_peak)
+        } else {
+            let slab_headers = fast
+                .worker_count
+                .saturating_add(fast.queue_peak)
+                .saturating_add(1)
+                .saturating_mul(crate::objects::INITIALIZATION_SLAB_OBJECTS as u64)
+                .saturating_mul(std::mem::size_of::<crate::CanonicalObject>() as u64);
+            let pipeline_peak = fast
+                .worker_count
+                .saturating_mul(crate::objects::INITIALIZATION_SLAB_BYTES as u64)
+                .saturating_add(fast.queue_peak_bytes)
+                .saturating_add(crate::objects::INITIALIZATION_SLAB_BYTES as u64)
+                .saturating_add(INITIALIZATION_PAIR_PENDING_BYTES as u64)
+                .saturating_add(cdc_peak)
+                .saturating_add(fast.slab.structural_peak_bytes)
+                .saturating_add(fast.task_state_bytes)
+                .saturating_add(slab_headers)
+                .saturating_add(admission.batch_peak_payload_bytes)
+                .saturating_add(
+                    admission
+                        .batch_peak_vec_capacity
+                        .saturating_mul(std::mem::size_of::<crate::CanonicalObject>() as u64),
+                )
+                .saturating_add(admission.pending_index_peak_bytes);
+            let completed_peak = admission
+                .batch_peak_payload_bytes
+                .saturating_add(
+                    admission
+                        .batch_peak_vec_capacity
+                        .saturating_mul(std::mem::size_of::<crate::CanonicalObject>() as u64),
+                )
+                .saturating_add(admission.pending_index_peak_bytes)
+                .saturating_add(fast.task_state_bytes)
+                .saturating_add(fast.completed_result_peak_bytes)
+                .saturating_add(INITIALIZATION_PAIR_PENDING_BYTES as u64);
+            let final_peak = admission
+                .final_simultaneous_owned_peak_bytes
+                .saturating_add(INITIALIZATION_PAIR_PENDING_BYTES as u64);
+            pipeline_peak.max(completed_peak).max(final_peak)
+        };
         eprintln!(
-            "layerfs-initialization-diagnostic-v1 nonce={} fast_path={} worker_count={} prepare_import_wall_ns={} source_file_open_calls={} source_file_read_calls={} source_file_read_bytes={} source_symlink_metadata_calls={} source_read_dir_calls={} single_chunk_files={} streaming_files={} cdc_scratch_peak_bytes={} explicit_buffer_peak_bytes={} canonical_frame_count={} canonical_payload_bytes={} canonical_framing_bytes={} object_segment_write_calls={} object_segment_write_bytes={} object_segment_raw_read_calls={} object_segment_raw_read_bytes={} object_segment_passes={} pair_segment_write_calls={} pair_segment_write_bytes={} pair_segment_raw_read_calls={} pair_segment_raw_read_bytes={} pair_segment_passes={} parent_merge_bytes={} pending_duplicate_objects={} pending_duplicate_bytes={} cross_batch_skipped_objects={} cross_batch_skipped_bytes={} collision_checks={} admission_batch_peak_objects={} admission_batch_peak_payload_bytes={} admission_batch_peak_vec_capacity={} pending_index_peak_entries={} sql_batch_count={} sql_row_count_shape_count={} sql_submitted_rows={} sql_returned_ids={} sql_skipped_ids={} sql_string_build_ns={} sql_prepare_ns={} sql_bind_step_returning_ns={} conflict_read_calls={} conflict_read_rows={} conflict_read_bytes={} conflict_read_ns={} sql_begin_ns={} sql_commit_ns={} final_root_inode_table_wall_ns={} insert_node_peak_len={} insert_node_peak_capacity={}",
+            "layerfs-initialization-diagnostic-v3 nonce={} fast_path={} worker_count={} prepare_import_wall_ns={} source_file_open_calls={} source_file_read_calls={} source_file_read_bytes={} source_symlink_metadata_calls={} source_read_dir_calls={} single_chunk_files={} streaming_files={} cdc_scratch_peak_bytes={} metadata_cache_hits={} metadata_cache_misses={} metadata_cache_peak_entries={} explicit_buffer_peak_bytes={} explicit_slab_payload_limit_bytes={} explicit_slab_object_limit={} explicit_canonical_object_header_bytes={} explicit_pair_pending_limit_bytes={} canonical_frame_count={} canonical_payload_bytes={} canonical_payload_capacity_bytes={} canonical_payload_capacity_slack_bytes={} canonical_encode_calls={} canonical_hash_calls={} canonical_framing_bytes={} object_segment_write_calls={} object_segment_write_bytes={} object_segment_raw_read_calls={} object_segment_raw_read_bytes={} object_segment_passes={} slab_handoffs={} slab_sent_objects={} slab_sent_bytes={} slab_send_blocked_ns={} slab_partial_peak_objects={} slab_partial_peak_payload_bytes={} slab_queue_peak={} slab_queue_peak_bytes={} slab_consumer_idle_ns={} last_slab_receive_offset_ns={} direct_pipeline_wall_ns={} import_pipeline_thread_peak={} active_producers_after={} task_state_bytes={} completed_result_peak_bytes={} parent_final_state_peak_bytes={} candidate_copy_bytes={} structural_peak_bytes={} parent_payload_copy_bytes={} pair_segment_write_calls={} pair_segment_write_bytes={} pair_segment_raw_read_calls={} pair_segment_raw_read_bytes={} pair_segment_passes={} parent_merge_bytes={} pending_duplicate_objects={} pending_duplicate_bytes={} cross_batch_skipped_objects={} cross_batch_skipped_bytes={} collision_checks={} admission_batch_peak_objects={} admission_batch_peak_payload_bytes={} admission_batch_peak_vec_capacity={} pending_index_peak_entries={} pending_index_peak_bytes={} final_batch_peak_payload_bytes={} final_batch_peak_vec_capacity={} final_pending_index_peak_bytes={} final_simultaneous_owned_peak_bytes={} sql_batch_count={} sql_row_count_shape_count={} sql_submitted_rows={} sql_returned_ids={} sql_skipped_ids={} sql_string_build_ns={} sql_prepare_ns={} sql_bind_step_returning_ns={} conflict_read_calls={} conflict_read_rows={} conflict_read_bytes={} conflict_read_ns={} sql_begin_ns={} sql_commit_ns={} final_root_inode_table_wall_ns={} insert_node_peak_len={} insert_node_peak_capacity={}",
             self.nonce,
             fast_path,
             fast.worker_count,
@@ -690,15 +678,47 @@ impl InitializationDiagnostic {
             fast.source
                 .cdc_scratch_peak_bytes
                 .saturating_mul(fast.worker_count),
+            fast.source.metadata_cache_hits,
+            fast.source.metadata_cache_misses,
+            fast.source.metadata_cache_peak_entries,
             explicit_buffer_peak_bytes,
+            crate::objects::INITIALIZATION_SLAB_BYTES,
+            crate::objects::INITIALIZATION_SLAB_OBJECTS,
+            std::mem::size_of::<crate::CanonicalObject>(),
+            INITIALIZATION_PAIR_PENDING_BYTES,
             fast.object_io.frames,
             fast.object_io.payload_bytes,
+            fast.slab.payload_capacity_bytes,
+            fast.slab
+                .payload_capacity_bytes
+                .saturating_sub(fast.slab.payload_bytes),
+            fast.slab.objects,
+            fast.slab.canonical_hash_calls,
             fast.object_io.framing_bytes,
             fast.object_io.write_calls,
             fast.object_io.write_bytes,
             fast.object_io.raw_read_calls,
             fast.object_io.raw_read_bytes,
             fast.object_io.passes,
+            fast.slab.handoffs,
+            fast.slab.objects,
+            fast.slab.payload_bytes,
+            fast.slab.blocked_ns,
+            fast.slab.partial_peak_objects,
+            fast.slab.partial_peak_payload_bytes,
+            fast.queue_peak,
+            fast.queue_peak_bytes,
+            fast.consumer_idle_ns,
+            fast.last_slab_receive_offset_ns,
+            fast.pipeline_wall_ns,
+            fast.active_thread_peak,
+            fast.active_producers_after,
+            fast.task_state_bytes,
+            fast.completed_result_peak_bytes,
+            fast.parent_final_state_peak_bytes,
+            fast.slab.candidate_copy_bytes,
+            fast.slab.structural_peak_bytes,
+            fast.slab.parent_payload_copy_bytes,
             fast.pair_io.write_calls,
             fast.pair_io.write_bytes,
             fast.pair_io.raw_read_calls,
@@ -714,6 +734,11 @@ impl InitializationDiagnostic {
             admission.batch_peak_payload_bytes,
             admission.batch_peak_vec_capacity,
             admission.pending_index_peak_entries,
+            admission.pending_index_peak_bytes,
+            admission.final_batch_peak_payload_bytes,
+            admission.final_batch_peak_vec_capacity,
+            admission.final_pending_index_peak_bytes,
+            admission.final_simultaneous_owned_peak_bytes,
             admission.sql_batch_count,
             admission.sql_row_shapes.len(),
             admission.sql_submitted_rows,
@@ -732,6 +757,35 @@ impl InitializationDiagnostic {
             fast.insert_node_peak_len,
             fast.insert_node_peak_capacity,
         );
+        eprintln!(
+            "layerfs-initialization-commits-v1 nonce={} pipeline_count={} pipeline_ns={} pipeline_max_ns={} pipeline_max_ordinal={} final_build_count={} final_build_ns={} final_build_max_ns={} final_build_max_ordinal={} publication_ns={} publication_ordinal={} total_count={} total_ns={}",
+            self.nonce,
+            admission.pipeline_commit_count,
+            admission.pipeline_commit_ns,
+            admission.pipeline_commit_max_ns,
+            admission.pipeline_commit_max_ordinal,
+            admission.final_build_commit_count,
+            admission.final_build_commit_ns,
+            admission.final_build_commit_max_ns,
+            admission.final_build_commit_max_ordinal,
+            admission.publication_commit_ns,
+            admission.sql_batch_count,
+            admission.sql_batch_count,
+            admission.sql_commit_ns,
+        );
+        for producer in fast.producers {
+            eprintln!(
+                "layerfs-initialization-producer-v1 nonce={} producer={} wall_ns={} blocked_ns={} tasks={} files={} bytes={} completion_offset_ns={}",
+                self.nonce,
+                producer.index,
+                producer.metrics.producer_wall_ns,
+                producer.metrics.blocked_ns,
+                producer.metrics.producer_tasks,
+                producer.metrics.producer_files,
+                producer.metrics.producer_bytes,
+                producer.metrics.producer_completion_offset_ns,
+            );
+        }
     }
 }
 
@@ -760,6 +814,7 @@ struct PreparedParallelRoot {
     segments: Vec<DeferredObjectStore>,
 }
 
+#[cfg(test)]
 struct PreparedAppendOnlyWorker {
     directories: Vec<PreparedCompactDirectory>,
     blocks: Vec<InitializationTaskBlock>,
@@ -768,19 +823,26 @@ struct PreparedAppendOnlyWorker {
     pairs: crate::objects::CompactInodePairSegment,
 }
 
-struct PreparedAppendOnlyRoot {
-    metadata: std::fs::Metadata,
+struct PreparedDirectWorker {
+    index: usize,
     directories: Vec<PreparedCompactDirectory>,
-    blocks: Vec<InitializationTaskBlock>,
+    pair_blocks: Vec<crate::objects::CompactInodePairBlock>,
+    pairs: crate::objects::CompactInodePairSegment,
+    slab: InitializationSlabWriterMetrics,
+}
+
+#[cfg(test)]
+struct PreparedAppendOnlyRoot {
+    directories: Vec<PreparedCompactDirectory>,
     segments: Vec<AppendOnlyInitializationSegment>,
     pair_blocks: Vec<crate::objects::CompactInodePairBlock>,
     pairs: Vec<crate::objects::CompactInodePairSegment>,
-    source: SourceImportMetrics,
 }
 
 const INITIALIZATION_APPEND_PENDING_BYTES: usize = 1024 * 1024;
 const INITIALIZATION_PAIR_PENDING_BYTES: usize = 256 * 1024;
 const INITIALIZATION_FINAL_PENDING_BYTES: usize = 64 * 1024;
+const INITIALIZATION_TASK_BLOCK_LIMIT: usize = 1_000;
 
 struct RootDirectoryTask {
     name: layerfs_content::CanonicalName,
@@ -788,13 +850,485 @@ struct RootDirectoryTask {
     native: std::path::PathBuf,
 }
 
+fn direct_initialize_root_directories(
+    db: &crate::schema::StoreDb,
+    native: &std::path::Path,
+    seed: [u8; 32],
+) -> Result<Option<FinishedAppendOnlyInitialization>> {
+    let result = direct_initialize_root_directories_inner(db, native, seed);
+    if result.is_err() {
+        db.clear_failed_direct_initialization()?;
+    }
+    result
+}
+
+fn direct_initialize_root_directories_inner(
+    db: &crate::schema::StoreDb,
+    native: &std::path::Path,
+    seed: [u8; 32],
+) -> Result<Option<FinishedAppendOnlyInitialization>> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let parent_payload_copies = crate::objects::ParentPayloadCopyCounter::start();
+    let metadata = std::fs::symlink_metadata(native)?;
+    let mut entries = std::fs::read_dir(native)?.collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by(|left, right| {
+        left.file_name()
+            .as_bytes()
+            .cmp(right.file_name().as_bytes())
+    });
+    if entries.is_empty() {
+        return Ok(None);
+    }
+    let mut tasks = Vec::with_capacity(entries.len());
+    for entry in entries {
+        if !entry.file_type()?.is_dir() {
+            return Ok(None);
+        }
+        let name = layerfs_content::CanonicalName::from_bytes(entry.file_name().as_bytes())?;
+        tasks.push(RootDirectoryTask {
+            logical: child(&layerfs_content::CanonicalPath::root(), &name)?,
+            name,
+            native: entry.path(),
+        });
+    }
+    if tasks.len() > INITIALIZATION_TASK_BLOCK_LIMIT {
+        return Ok(None);
+    }
+    let task_state_bytes = (tasks.capacity() * std::mem::size_of::<RootDirectoryTask>()) as u64
+        + tasks
+            .iter()
+            .map(|task| {
+                task.name.owned_capacity_bytes() as u64
+                    + task.logical.owned_capacity_bytes() as u64
+                    + task.native.as_os_str().as_bytes().len() as u64
+            })
+            .sum::<u64>();
+    let workers = std::thread::available_parallelism()
+        .map(std::num::NonZeroUsize::get)
+        .unwrap_or(1)
+        .min(8)
+        .min(tasks.len());
+    let queue = std::sync::Arc::new(InitializationSlabQueueMetrics::default());
+    let (sender, receiver) =
+        std::sync::mpsc::sync_channel::<InitializationObjectSlab>(INITIALIZATION_SLAB_QUEUE_SLOTS);
+    let pair_pending_bytes = INITIALIZATION_PAIR_PENDING_BYTES.div_ceil(workers).max(64);
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let fallback = std::sync::atomic::AtomicBool::new(false);
+    let active_producers = std::sync::atomic::AtomicU64::new(0);
+    let active_producer_peak = std::sync::atomic::AtomicU64::new(0);
+    let mut admission = InitializationSegmentAdmission::new(db)?;
+    let pipeline_started = std::time::Instant::now();
+    let (prepared, consumer_idle_ns, last_slab_receive_offset_ns) =
+        std::thread::scope(|scope| -> Result<(Vec<PreparedDirectWorker>, u64, u64)> {
+            let handles = (0..workers)
+                .map(|worker_index| {
+                    let next = &next;
+                    let fallback = &fallback;
+                    let active_producers = &active_producers;
+                    let active_producer_peak = &active_producer_peak;
+                    let tasks = &tasks;
+                    let sender = sender.clone();
+                    let queue = queue.clone();
+                    scope.spawn(move || {
+                        let active =
+                            active_producers.fetch_add(1, std::sync::atomic::Ordering::AcqRel) + 1;
+                        active_producer_peak
+                            .fetch_max(active, std::sync::atomic::Ordering::Relaxed);
+                        let producer_started = std::time::Instant::now();
+                        let result = (|| {
+                            let mut directories = Vec::new();
+                            let mut pair_blocks = Vec::new();
+                            let mut objects = InitializationSlabWriter::new(sender, queue);
+                            let mut pairs =
+                                crate::objects::CompactInodePairWriter::new(pair_pending_bytes)?;
+                            let mut structural_peak_bytes = 0_u64;
+                            loop {
+                                if fallback.load(std::sync::atomic::Ordering::Acquire) {
+                                    break;
+                                }
+                                let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                let Some(task) = tasks.get(index) else {
+                                    break;
+                                };
+                                let pair_checkpoint = pairs.checkpoint();
+                                let mut structure = InitializationTaskObjectBuffer::new();
+                                let mut import =
+                                    NativeImport::new_split(seed, &mut objects, &mut structure);
+                                let inode =
+                                    match import.directory(&task.native, &task.logical, false) {
+                                        Ok(inode) => inode,
+                                        Err(StoreError::Core(
+                                            layerfs_content::CoreError::ObjectLimitExceeded,
+                                        )) => {
+                                            fallback
+                                                .store(true, std::sync::atomic::Ordering::Release);
+                                            break;
+                                        }
+                                        Err(error) => return Err(error),
+                                    };
+                                let imported = match import.finish_compact(&mut pairs) {
+                                    Ok(imported) => imported,
+                                    Err(StoreError::Core(
+                                        layerfs_content::CoreError::ObjectLimitExceeded,
+                                    )) => {
+                                        fallback.store(true, std::sync::atomic::Ordering::Release);
+                                        break;
+                                    }
+                                    Err(error) => return Err(error),
+                                };
+                                if imported.hard_links.is_empty() {
+                                    structural_peak_bytes =
+                                        structural_peak_bytes.max(structure.explicit_owned_bytes());
+                                    objects.note_hash_invocations(structure.hash_invocations());
+                                    structure.move_into(&mut objects)?;
+                                } else {
+                                    fallback.store(true, std::sync::atomic::Ordering::Release);
+                                }
+                                pair_blocks.push(pairs.block_since(
+                                    index,
+                                    worker_index,
+                                    pair_checkpoint,
+                                )?);
+                                directories.push(PreparedCompactDirectory {
+                                    index,
+                                    name: task.name.clone(),
+                                    inode,
+                                    imported,
+                                });
+                            }
+                            let mut slab = objects.finish()?;
+                            slab.structural_peak_bytes = structural_peak_bytes;
+                            slab.producer_wall_ns = producer_started
+                                .elapsed()
+                                .as_nanos()
+                                .min(u128::from(u64::MAX))
+                                as u64;
+                            slab.producer_completion_offset_ns = pipeline_started
+                                .elapsed()
+                                .as_nanos()
+                                .min(u128::from(u64::MAX))
+                                as u64;
+                            slab.producer_tasks = directories.len() as u64;
+                            slab.producer_files = directories
+                                .iter()
+                                .map(|directory| directory.imported.scanned_files)
+                                .sum();
+                            slab.producer_bytes = directories
+                                .iter()
+                                .map(|directory| directory.imported.scanned_bytes)
+                                .sum();
+                            Ok::<_, StoreError>((
+                                worker_index,
+                                directories,
+                                pair_blocks,
+                                pairs,
+                                slab,
+                            ))
+                        })();
+                        active_producers.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+                        result
+                    })
+                })
+                .collect::<Vec<_>>();
+            drop(sender);
+
+            let mut consumer_idle_ns = 0_u64;
+            let mut last_slab_receive_offset_ns = 0_u64;
+            let mut admission_error = None;
+            while let Ok(slab) = {
+                let started = std::time::Instant::now();
+                let received = receiver.recv();
+                consumer_idle_ns = consumer_idle_ns
+                    .saturating_add(started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64);
+                received
+            } {
+                last_slab_receive_offset_ns = pipeline_started
+                    .elapsed()
+                    .as_nanos()
+                    .min(u128::from(u64::MAX)) as u64;
+                queue.received(slab.payload_bytes);
+                if admission_error.is_none() {
+                    if let Err(error) = admission.admit_page(slab.objects) {
+                        admission_error = Some(error);
+                    }
+                }
+            }
+
+            let mut output = Vec::with_capacity(workers);
+            let mut worker_error = None;
+            for handle in handles {
+                match handle.join() {
+                    Ok(Ok((index, directories, pair_blocks, pairs, slab))) => {
+                        output.push(PreparedDirectWorker {
+                            index,
+                            directories,
+                            pair_blocks,
+                            pairs: pairs.seal()?,
+                            slab,
+                        });
+                    }
+                    Ok(Err(error)) => {
+                        worker_error.get_or_insert(error);
+                    }
+                    Err(_) => {
+                        worker_error
+                            .get_or_insert(StoreError::Integrity("Layer initialization worker"));
+                    }
+                };
+            }
+            if let Some(error) = admission_error.or(worker_error) {
+                return Err(error);
+            }
+            Ok((output, consumer_idle_ns, last_slab_receive_offset_ns))
+        })?;
+    let pipeline_wall_ns = pipeline_started
+        .elapsed()
+        .as_nanos()
+        .min(u128::from(u64::MAX)) as u64;
+
+    let completed_result_peak_bytes = (prepared.capacity()
+        * std::mem::size_of::<PreparedDirectWorker>()) as u64
+        + prepared
+            .iter()
+            .map(|worker| {
+                (worker.directories.capacity() * std::mem::size_of::<PreparedCompactDirectory>())
+                    as u64
+                    + worker
+                        .directories
+                        .iter()
+                        .map(|directory| {
+                            directory.name.owned_capacity_bytes() as u64
+                                + (directory.imported.hard_links.capacity()
+                                    * std::mem::size_of::<(u64, u64)>())
+                                    as u64
+                        })
+                        .sum::<u64>()
+                    + (worker.pair_blocks.capacity()
+                        * std::mem::size_of::<crate::objects::CompactInodePairBlock>())
+                        as u64
+            })
+            .sum::<u64>()
+        + (tasks.len() * std::mem::size_of::<PreparedCompactDirectory>()) as u64
+        + (tasks.len() * std::mem::size_of::<crate::objects::CompactInodePairBlock>()) as u64
+        + (prepared.len() * std::mem::size_of::<crate::objects::CompactInodePairSegment>()) as u64;
+
+    if fallback.load(std::sync::atomic::Ordering::Acquire) {
+        drop(admission);
+        db.clear_failed_direct_initialization()?;
+        return Ok(None);
+    }
+
+    let mut identities = std::collections::HashSet::new();
+    if prepared
+        .iter()
+        .flat_map(|worker| worker.directories.iter())
+        .flat_map(|directory| directory.imported.hard_links.iter())
+        .any(|identity| !identities.insert(*identity))
+    {
+        drop(admission);
+        db.clear_failed_direct_initialization()?;
+        return Ok(None);
+    }
+
+    let mut directories = Vec::with_capacity(tasks.len());
+    let mut pair_blocks = Vec::with_capacity(tasks.len());
+    let mut pairs = Vec::with_capacity(prepared.len());
+    let mut producers = Vec::with_capacity(prepared.len());
+    let mut slab = InitializationSlabWriterMetrics::default();
+    for worker in prepared {
+        producers.push(ProducerDiagnostic {
+            index: worker.index,
+            metrics: worker.slab,
+        });
+        directories.extend(worker.directories);
+        pair_blocks.extend(worker.pair_blocks);
+        pairs.push(worker.pairs);
+        slab.handoffs = slab.handoffs.saturating_add(worker.slab.handoffs);
+        slab.objects = slab.objects.saturating_add(worker.slab.objects);
+        slab.payload_bytes = slab.payload_bytes.saturating_add(worker.slab.payload_bytes);
+        slab.payload_capacity_bytes = slab
+            .payload_capacity_bytes
+            .saturating_add(worker.slab.payload_capacity_bytes);
+        slab.canonical_hash_calls = slab
+            .canonical_hash_calls
+            .saturating_add(worker.slab.canonical_hash_calls);
+        slab.blocked_ns = slab.blocked_ns.saturating_add(worker.slab.blocked_ns);
+        slab.partial_peak_objects = slab
+            .partial_peak_objects
+            .max(worker.slab.partial_peak_objects);
+        slab.partial_peak_payload_bytes = slab
+            .partial_peak_payload_bytes
+            .max(worker.slab.partial_peak_payload_bytes);
+        slab.candidate_copy_bytes = slab
+            .candidate_copy_bytes
+            .saturating_add(worker.slab.candidate_copy_bytes);
+        slab.structural_peak_bytes = slab
+            .structural_peak_bytes
+            .saturating_add(worker.slab.structural_peak_bytes);
+    }
+    producers.sort_by_key(|producer| producer.index);
+    directories.sort_by_key(|directory| directory.index);
+    pair_blocks.sort_by_key(|block| block.task_ordinal);
+    if directories.len() != tasks.len()
+        || pair_blocks.len() != tasks.len()
+        || directories
+            .iter()
+            .zip(&pair_blocks)
+            .any(|(directory, block)| directory.index != block.task_ordinal)
+    {
+        return Err(StoreError::Integrity("direct initialization task order"));
+    }
+
+    admission.prepare_final_phase()?;
+    let final_started = std::time::Instant::now();
+    let mut children = Vec::with_capacity(directories.len());
+    let mut scanned_files = 0_u64;
+    let mut scanned_bytes = 0_u64;
+    let mut source = SourceImportMetrics {
+        symlink_metadata_calls: 1,
+        read_dir_calls: 1,
+        ..SourceImportMetrics::default()
+    };
+    for directory in directories {
+        children.push((directory.name, directory.inode));
+        scanned_files = scanned_files
+            .checked_add(directory.imported.scanned_files)
+            .ok_or(StoreError::Integrity("Layer initialization scan counter"))?;
+        scanned_bytes = scanned_bytes
+            .checked_add(directory.imported.scanned_bytes)
+            .ok_or(StoreError::Integrity("Layer initialization scan counter"))?;
+        source.merge(directory.imported.source);
+    }
+    let parent_final_state_peak_bytes = (children.capacity()
+        * std::mem::size_of::<(
+            layerfs_content::CanonicalName,
+            layerfs_content::tree::inode::InodeId,
+        )>()) as u64
+        + children
+            .iter()
+            .map(|(name, _)| name.owned_capacity_bytes() as u64)
+            .sum::<u64>();
+    let mut final_objects = InitializationDirectAdmissionWriter::new(&mut admission);
+    final_objects.note_transient_owned_bytes(parent_final_state_peak_bytes)?;
+    let content =
+        match layerfs_content::filesystem::build_initial_directory(&mut final_objects, children) {
+            Ok(content) => content,
+            Err(error) => return Err(final_objects.error(error)),
+        };
+    final_objects.note_transient_owned_bytes(0)?;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let metadata_root = match layerfs_content::filesystem::build_portable_metadata(
+        &mut final_objects,
+        layerfs_content::tree::inode::InodeKind::Directory,
+        metadata.permissions().mode(),
+        metadata.mtime(),
+        metadata.mtime_nsec() as u32,
+    ) {
+        Ok(root) => root,
+        Err(error) => return Err(final_objects.error(error)),
+    };
+    let root_inode = layerfs_content::tree::inode::InodeId::allocate(seed, 0);
+    let root_record =
+        match final_objects.put_owned(layerfs_content::tree::inode::codec::encode_inode_record(
+            layerfs_content::tree::inode::InodeRecordV1 {
+                kind: layerfs_content::tree::inode::InodeKind::Directory,
+                namespace_ref_count: 0,
+                content_root: content.0,
+                metadata_root,
+            },
+        )?) {
+            Ok(root) => root,
+            Err(error) => return Err(final_objects.error(error)),
+        };
+    let mut pair_stream = crate::objects::CompactInodePairStream::new(pairs, pair_blocks)?;
+    let (inode_table, insert_node_peak_len, insert_node_peak_capacity) =
+        match layerfs_content::tree::inode::build_initial_inode_table_from_pairs(
+            &mut final_objects,
+            root_inode,
+            std::iter::once(Ok((root_inode, root_record))).chain(&mut pair_stream),
+        ) {
+            Ok(table) => table,
+            Err(error) => return Err(final_objects.error(error)),
+        };
+    let pair_io = pair_stream.finish()?;
+    let root_id = match final_objects.put_owned(
+        layerfs_content::tree::directory::codec::encode_namespace_root(
+            layerfs_content::tree::NamespaceRootV1 {
+                profile_id: layerfs_content::tree::directory::codec::profile_id(),
+                root_directory_inode: root_inode,
+                inode_table_root: inode_table.0,
+            },
+        )?,
+    ) {
+        Ok(root) => root,
+        Err(error) => return Err(final_objects.error(error)),
+    };
+    slab.objects = slab.objects.saturating_add(final_objects.metrics.objects);
+    slab.payload_bytes = slab
+        .payload_bytes
+        .saturating_add(final_objects.metrics.payload_bytes);
+    slab.payload_capacity_bytes = slab
+        .payload_capacity_bytes
+        .saturating_add(final_objects.metrics.payload_capacity_bytes);
+    slab.canonical_hash_calls = slab
+        .canonical_hash_calls
+        .saturating_add(final_objects.metrics.canonical_hash_calls);
+    slab.candidate_copy_bytes = slab
+        .candidate_copy_bytes
+        .saturating_add(final_objects.metrics.candidate_copy_bytes);
+    slab.parent_payload_copy_bytes = parent_payload_copies.bytes();
+    drop(final_objects);
+    let final_root_inode_table_wall_ns =
+        final_started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+    let queue_peak = queue.peak();
+    let queue_peak_bytes = queue.peak_bytes();
+    let admission = admission.finish()?;
+    Ok(Some(FinishedAppendOnlyInitialization {
+        root_id,
+        scanned_files,
+        scanned_bytes,
+        final_batch: admission.final_batch,
+        receipt: admission.receipt,
+        statement_number: admission.statement_number,
+        diagnostics: FastInitializationDiagnostics {
+            worker_count: workers as u64,
+            source,
+            object_io: crate::objects::InitializationSegmentIoMetrics {
+                frames: slab.objects,
+                payload_bytes: slab.payload_bytes,
+                ..crate::objects::InitializationSegmentIoMetrics::default()
+            },
+            pair_io,
+            admission: admission.diagnostics,
+            final_root_inode_table_wall_ns,
+            insert_node_peak_len,
+            insert_node_peak_capacity,
+            slab,
+            queue_peak,
+            queue_peak_bytes,
+            consumer_idle_ns,
+            last_slab_receive_offset_ns,
+            pipeline_wall_ns,
+            active_thread_peak: active_producer_peak
+                .load(std::sync::atomic::Ordering::Relaxed)
+                .saturating_add(1),
+            active_producers_after: active_producers.load(std::sync::atomic::Ordering::Acquire),
+            task_state_bytes,
+            completed_result_peak_bytes,
+            parent_final_state_peak_bytes,
+            producers,
+        },
+    }))
+}
+
+#[cfg(test)]
 fn prepare_append_only_root_directories(
     native: &std::path::Path,
     seed: [u8; 32],
 ) -> Result<Option<PreparedAppendOnlyRoot>> {
     use std::os::unix::ffi::OsStrExt;
 
-    let metadata = std::fs::symlink_metadata(native)?;
     let mut entries = std::fs::read_dir(native)?.collect::<std::io::Result<Vec<_>>>()?;
     entries.sort_by(|left, right| {
         left.file_name()
@@ -914,7 +1448,7 @@ fn prepare_append_only_root_directories(
     if directories.len() != tasks.len()
         || blocks.len() != tasks.len()
         || pair_blocks.len() != tasks.len()
-        || blocks.len() > 1_000
+        || blocks.len() > INITIALIZATION_TASK_BLOCK_LIMIT
         || directories
             .iter()
             .zip(&blocks)
@@ -928,17 +1462,10 @@ fn prepare_append_only_root_directories(
         ));
     }
     Ok(Some(PreparedAppendOnlyRoot {
-        metadata,
         directories,
-        blocks,
         segments,
         pair_blocks,
         pairs,
-        source: SourceImportMetrics {
-            symlink_metadata_calls: 1,
-            read_dir_calls: 1,
-            ..SourceImportMetrics::default()
-        },
     }))
 }
 
@@ -1104,28 +1631,110 @@ fn finish_parallel_root(
     })
 }
 
-struct NativeImport<'objects, S: ObjectStore> {
+struct NativeImport<'objects, 'structure, S: ObjectStore, T: ObjectStore> {
     seed: [u8; 32],
     objects: &'objects mut S,
+    structure: Option<&'structure mut T>,
     hard_links:
         std::collections::HashMap<(u64, u64), (layerfs_content::tree::inode::InodeId, usize)>,
     records: Vec<Option<ImportedRecord>>,
     scanned_files: u64,
     scanned_bytes: u64,
     source: SourceImportMetrics,
+    metadata_cache: Vec<(
+        layerfs_content::tree::inode::InodeKind,
+        u32,
+        i64,
+        u32,
+        layerfs_content::ObjectId,
+    )>,
+    metadata_cache_next: usize,
 }
 
-impl<'objects, S: ObjectStore> NativeImport<'objects, S> {
+const NATIVE_METADATA_CACHE_ENTRIES: usize = 8;
+
+impl<'objects, S: ObjectStore> NativeImport<'objects, 'objects, S, S> {
     fn new(seed: [u8; 32], objects: &'objects mut S) -> Self {
         Self {
             seed,
             objects,
+            structure: None,
             hard_links: std::collections::HashMap::new(),
             records: Vec::new(),
             scanned_files: 0,
             scanned_bytes: 0,
             source: SourceImportMetrics::default(),
+            metadata_cache: Vec::with_capacity(NATIVE_METADATA_CACHE_ENTRIES),
+            metadata_cache_next: 0,
         }
+    }
+}
+
+impl<'objects, 'structure, S: ObjectStore, T: ObjectStore>
+    NativeImport<'objects, 'structure, S, T>
+{
+    fn new_split(seed: [u8; 32], objects: &'objects mut S, structure: &'structure mut T) -> Self {
+        Self {
+            seed,
+            objects,
+            structure: Some(structure),
+            hard_links: std::collections::HashMap::new(),
+            records: Vec::new(),
+            scanned_files: 0,
+            scanned_bytes: 0,
+            source: SourceImportMetrics::default(),
+            metadata_cache: Vec::with_capacity(NATIVE_METADATA_CACHE_ENTRIES),
+            metadata_cache_next: 0,
+        }
+    }
+
+    fn portable_metadata(
+        &mut self,
+        kind: layerfs_content::tree::inode::InodeKind,
+        mode: u32,
+        mtime_seconds: i64,
+        mtime_nanoseconds: u32,
+    ) -> Result<layerfs_content::ObjectId> {
+        let normalized_mode = mode
+            & if kind == layerfs_content::tree::inode::InodeKind::Directory {
+                0o1777
+            } else {
+                0o777
+            };
+        if let Some((_, _, _, _, root)) = self.metadata_cache.iter().find(|entry| {
+            (entry.0, entry.1, entry.2, entry.3)
+                == (kind, normalized_mode, mtime_seconds, mtime_nanoseconds)
+        }) {
+            self.source.metadata_cache_hits += 1;
+            return Ok(*root);
+        }
+        self.source.metadata_cache_misses += 1;
+        let root = layerfs_content::filesystem::build_portable_metadata(
+            self.objects,
+            kind,
+            normalized_mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+        )?;
+        let entry = (
+            kind,
+            normalized_mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+            root,
+        );
+        if self.metadata_cache.len() < NATIVE_METADATA_CACHE_ENTRIES {
+            self.metadata_cache.push(entry);
+        } else {
+            self.metadata_cache[self.metadata_cache_next] = entry;
+            self.metadata_cache_next =
+                (self.metadata_cache_next + 1) % NATIVE_METADATA_CACHE_ENTRIES;
+        }
+        self.source.metadata_cache_peak_entries = self
+            .source
+            .metadata_cache_peak_entries
+            .max(self.metadata_cache.len() as u64);
+        Ok(root)
     }
 
     fn reserve(&mut self) -> usize {
@@ -1167,7 +1776,7 @@ impl<'objects, S: ObjectStore> NativeImport<'objects, S> {
     }
 
     fn finish_compact(
-        self,
+        mut self,
         pairs: &mut crate::objects::CompactInodePairWriter,
     ) -> Result<CompactImportedTree> {
         #[cfg(test)]
@@ -1178,7 +1787,10 @@ impl<'objects, S: ObjectStore> NativeImport<'objects, S> {
             let (inode, record) =
                 record.ok_or(StoreError::Integrity("Layer initialization inode record"))?;
             let canonical = layerfs_content::tree::inode::codec::encode_inode_record(record)?;
-            let record = self.objects.put(&canonical)?;
+            let record = match self.structure.as_deref_mut() {
+                Some(structure) => structure.put_owned(canonical)?,
+                None => self.objects.put_owned(canonical)?,
+            };
             pairs.push(inode, record)?;
         }
         Ok(CompactImportedTree {
@@ -1277,8 +1889,7 @@ impl<'objects, S: ObjectStore> NativeImport<'objects, S> {
                     .scanned_bytes
                     .checked_add(counters.cdc_bytes_scanned)
                     .ok_or(StoreError::Integrity("Layer initialization scan counter"))?;
-                let metadata_root = filesystem::build_portable_metadata(
-                    self.objects,
+                let metadata_root = self.portable_metadata(
                     InodeKind::RegularFile,
                     entry_metadata.permissions().mode(),
                     entry_metadata.mtime(),
@@ -1307,8 +1918,7 @@ impl<'objects, S: ObjectStore> NativeImport<'objects, S> {
                         .as_bytes()
                         .to_vec(),
                 )?;
-                let metadata_root = filesystem::build_portable_metadata(
-                    self.objects,
+                let metadata_root = self.portable_metadata(
                     InodeKind::Symlink,
                     0o777,
                     entry_metadata.mtime(),
@@ -1339,9 +1949,11 @@ impl<'objects, S: ObjectStore> NativeImport<'objects, S> {
             children.push((name, child_inode));
         }
 
-        let content = filesystem::build_initial_directory(self.objects, children)?;
-        let metadata_root = filesystem::build_portable_metadata(
-            self.objects,
+        let content = match self.structure.as_deref_mut() {
+            Some(structure) => filesystem::build_initial_directory(structure, children)?,
+            None => filesystem::build_initial_directory(self.objects, children)?,
+        };
+        let metadata_root = self.portable_metadata(
             InodeKind::Directory,
             metadata.permissions().mode(),
             metadata.mtime(),
@@ -1537,6 +2149,81 @@ fn child(
 mod tests {
     use super::*;
     use std::os::unix::fs::{symlink, PermissionsExt};
+
+    fn cached_directory_root(
+        path: &std::path::Path,
+        seed: [u8; 32],
+    ) -> (BuiltRoot, SourceImportMetrics) {
+        let mut objects = ObjectBuffer::empty_all_reachable().unwrap();
+        let mut import = NativeImport::new(seed, &mut objects);
+        import
+            .directory(path, &layerfs_content::CanonicalPath::root(), true)
+            .unwrap();
+        let imported = import.finish().unwrap();
+        let source = imported.source;
+        let root = layerfs_content::filesystem::build_initial_namespace(
+            &mut objects,
+            seed,
+            imported.mutations,
+        )
+        .unwrap();
+        (
+            objects
+                .finish_all_reachable(root, imported.scanned_bytes)
+                .unwrap(),
+            source,
+        )
+    }
+
+    #[test]
+    fn native_metadata_cache_is_exact_canonical_and_bounded() {
+        let root = temporary("metadata-cache");
+        for index in 0..10 {
+            let path = root.join(format!("file-{index}"));
+            std::fs::write(&path, index.to_string()).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+            std::fs::File::open(path)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(
+                    std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000 + index),
+                ))
+                .unwrap();
+        }
+        let seed = [0x61; 32];
+        let (unique, metrics) = cached_directory_root(&root, seed);
+        let (legacy, _, _) = legacy_directory_root(&root, seed).unwrap();
+        assert_eq!(unique.root_id, legacy.root_id);
+        assert_eq!(unique.objects.len(), legacy.objects.len());
+        assert_eq!(metrics.metadata_cache_hits, 0);
+        assert_eq!(metrics.metadata_cache_misses, 11);
+        assert_eq!(metrics.metadata_cache_peak_entries, 8);
+        drop(unique);
+        drop(legacy);
+        std::fs::remove_dir_all(&root).unwrap();
+
+        let root = temporary("metadata-cache-reuse");
+        for name in ["first", "second"] {
+            let path = root.join(name);
+            std::fs::write(&path, name).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+            std::fs::File::open(path)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(
+                    std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_123),
+                ))
+                .unwrap();
+        }
+        let (cached, metrics) = cached_directory_root(&root, seed);
+        let (legacy, _, _) = legacy_directory_root(&root, seed).unwrap();
+        assert_eq!(cached.root_id, legacy.root_id);
+        assert_eq!(cached.objects.len(), legacy.objects.len());
+        assert_eq!(metrics.metadata_cache_hits, 1);
+        assert_eq!(metrics.metadata_cache_misses, 2);
+        assert_eq!(metrics.metadata_cache_peak_entries, 2);
+        drop(cached);
+        drop(legacy);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn batched_directory_import_matches_legacy_canonical_root() {
@@ -1761,6 +2448,44 @@ mod tests {
     }
 
     #[test]
+    fn over_task_block_limit_falls_back_before_admission_and_reuses_store() {
+        let root = temporary("compact-root-over-task-limit");
+        let source = root.join("source");
+        std::fs::create_dir(&source).unwrap();
+        for index in 0..1_001 {
+            std::fs::create_dir(source.join(format!("d{index:04}"))).unwrap();
+        }
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+
+        assert!(
+            direct_initialize_root_directories(&store.db, &source, [83; 32])
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(store.store_counts().unwrap().objects, 0);
+
+        let initialized = store
+            .initialize_layerstack(
+                EntityName::new("over-task-limit").unwrap(),
+                LayerStackInitialization::Directory(source.clone()),
+            )
+            .unwrap();
+        let seed = *blake3::hash(initialized.layer_stack_id.as_slice()).as_bytes();
+        let stack = store
+            .layer_stack(initialized.layer_stack_id)
+            .unwrap()
+            .unwrap();
+        let layer = store.layer(stack.head_layer_id).unwrap().unwrap();
+        let (expected, files, _) = directory_root(&source, seed).unwrap();
+        assert_eq!(files, 0);
+        assert_eq!(layer.root_id, expected.root_id);
+
+        drop(expected);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn compact_inode_cross_task_hard_link_falls_back_before_admission() {
         let root = temporary("compact-cross-task-hard-link");
         let source = root.join("source");
@@ -1946,6 +2671,85 @@ mod tests {
     }
 
     #[test]
+    fn multi_batch_publication_failure_removes_admitted_objects() {
+        let root = temporary("multi-batch-publication-failure");
+        let source = root.join("source");
+        for directory in ["left", "right"] {
+            let path = source.join(directory);
+            std::fs::create_dir_all(&path).unwrap();
+            for file in 0..1_500_u64 {
+                std::fs::write(path.join(format!("f{file:04}")), file.to_be_bytes()).unwrap();
+            }
+        }
+        let store_path = root.join("store.sqlite");
+        let store = LayerStackStore::create(&store_path).unwrap();
+        let baseline_bytes = std::fs::metadata(&store_path).unwrap().len();
+        let baseline_pages: i64 = store
+            .db
+            .reader()
+            .unwrap()
+            .pragma_query_value(None, "page_count", |row| row.get(0))
+            .unwrap();
+        let baseline_freelist: i64 = store
+            .db
+            .reader()
+            .unwrap()
+            .pragma_query_value(None, "freelist_count", |row| row.get(0))
+            .unwrap();
+        assert_eq!(baseline_freelist, 0);
+        crate::schema::set_transaction_failure_at(Some(u64::MAX));
+        let result = store.initialize_layerstack(
+            EntityName::new("failed").unwrap(),
+            LayerStackInitialization::Directory(source.clone()),
+        );
+        crate::schema::set_transaction_failure_at(None);
+        assert!(matches!(
+            result,
+            Err(StoreError::Integrity("injected transaction failure"))
+        ));
+        assert_eq!(store.store_counts().unwrap().objects, 0);
+        assert_eq!(store.store_counts().unwrap().layers, 0);
+        assert_eq!(store.store_counts().unwrap().layer_stacks, 0);
+        let failed_bytes = std::fs::metadata(&store_path).unwrap().len();
+        let failed_pages: i64 = store
+            .db
+            .reader()
+            .unwrap()
+            .pragma_query_value(None, "page_count", |row| row.get(0))
+            .unwrap();
+        let failed_freelist: i64 = store
+            .db
+            .reader()
+            .unwrap()
+            .pragma_query_value(None, "freelist_count", |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            baseline_bytes,
+            baseline_pages as u64 * crate::schema::SQLITE_PAGE_SIZE_BYTES as u64
+        );
+        assert_eq!(
+            failed_bytes,
+            failed_pages as u64 * crate::schema::SQLITE_PAGE_SIZE_BYTES as u64
+        );
+        assert!(failed_pages >= baseline_pages);
+        assert!(failed_freelist > baseline_freelist);
+        drop(store);
+
+        let reopened = LayerStackStore::connect(&store_path).unwrap();
+        reopened
+            .initialize_layerstack(
+                EntityName::new("recovered").unwrap(),
+                LayerStackInitialization::Directory(source),
+            )
+            .unwrap();
+        assert_eq!(reopened.store_counts().unwrap().layer_stacks, 1);
+        assert_eq!(reopened.store_counts().unwrap().layers, 1);
+        assert!(reopened.store_counts().unwrap().objects > 0);
+        drop(reopened);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     #[ignore = "large spill correctness gate"]
     fn parallel_large_spill_matches_legacy_after_fresh_store_reopen() {
         let root = temporary("parallel-large-spill");
@@ -2033,6 +2837,45 @@ mod tests {
         assert!(!built.objects.has_reference_index());
 
         drop(built);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn oversized_single_task_clears_direct_admission_and_falls_back() {
+        let root = temporary("oversized-direct-task");
+        let source = root.join("source");
+        let subtree = source.join("subtree");
+        std::fs::create_dir_all(&subtree).unwrap();
+        for file in 0..4_000_u64 {
+            std::fs::write(subtree.join(format!("f{file:04}")), file.to_be_bytes()).unwrap();
+        }
+        let store_path = root.join("store.sqlite");
+        let store = LayerStackStore::create(&store_path).unwrap();
+        assert!(
+            direct_initialize_root_directories(&store.db, &source, [29; 32])
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(store.store_counts().unwrap().objects, 0);
+
+        let initialized = store
+            .initialize_layerstack(
+                EntityName::new("oversized").unwrap(),
+                LayerStackInitialization::Directory(source.clone()),
+            )
+            .unwrap();
+        let seed = *blake3::hash(initialized.layer_stack_id.as_slice()).as_bytes();
+        let stack = store
+            .layer_stack(initialized.layer_stack_id)
+            .unwrap()
+            .unwrap();
+        let layer = store.layer(stack.head_layer_id).unwrap().unwrap();
+        let (expected, files, _) = directory_root(&source, seed).unwrap();
+        assert_eq!(files, 4_000);
+        assert_eq!(layer.root_id, expected.root_id);
+
+        drop(expected);
+        drop(store);
         std::fs::remove_dir_all(root).unwrap();
     }
 

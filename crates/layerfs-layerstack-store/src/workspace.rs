@@ -420,6 +420,22 @@ impl SnapshotReader {
         ))
     }
 
+    pub fn read_metrics_snapshot(&self) -> Result<WorkspaceReadReceipt> {
+        Ok(*self
+            .read_metrics
+            .lock()
+            .map_err(|_| StoreError::Integrity("read metrics"))?)
+    }
+
+    pub fn take_create_metrics(&self) -> Result<(WorkspaceReadReceipt, u64, u64)> {
+        let read = self.take_read_metrics()?;
+        let cache = self
+            .cache
+            .lock()
+            .map_err(|_| StoreError::Integrity("snapshot object cache"))?;
+        Ok((read, cache.rows.len() as u64, cache.bytes as u64))
+    }
+
     pub fn with_read_metrics_from(mut self, previous: &Self) -> Self {
         self.read_metrics = previous.read_metrics.clone();
         self.cache = previous.cache.clone();
@@ -482,6 +498,28 @@ impl SnapshotReader {
         Ok(())
     }
 
+    fn note_snapshot_database(&self, rows: usize, bytes: u64) -> Result<()> {
+        let mut metrics = self
+            .read_metrics
+            .lock()
+            .map_err(|_| StoreError::Integrity("read metrics"))?;
+        metrics.snapshot_database_calls = metrics.snapshot_database_calls.saturating_add(1);
+        metrics.snapshot_database_rows = metrics.snapshot_database_rows.saturating_add(rows as u64);
+        metrics.snapshot_database_bytes = metrics.snapshot_database_bytes.saturating_add(bytes);
+        Ok(())
+    }
+
+    fn note_snapshot_cache(&self, rows: usize, bytes: u64) -> Result<()> {
+        let mut metrics = self
+            .read_metrics
+            .lock()
+            .map_err(|_| StoreError::Integrity("read metrics"))?;
+        metrics.snapshot_cache_hits = metrics.snapshot_cache_hits.saturating_add(1);
+        metrics.snapshot_cache_rows = metrics.snapshot_cache_rows.saturating_add(rows as u64);
+        metrics.snapshot_cache_bytes = metrics.snapshot_cache_bytes.saturating_add(bytes);
+        Ok(())
+    }
+
     fn cached_object(&self, id: ObjectId) -> Result<Option<Vec<u8>>> {
         Ok(self
             .cache
@@ -524,6 +562,7 @@ impl ObjectSource for SnapshotReader {
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
         let started = Instant::now();
         if let Some(bytes) = self.cached_object(id)? {
+            self.note_snapshot_cache(1, bytes.len() as u64)?;
             self.note_local_read(1, 1, bytes.len() as u64, elapsed_ns(started))?;
             return Ok(bytes);
         }
@@ -547,7 +586,11 @@ impl ObjectSource for SnapshotReader {
                 layerfs_content::authenticate_identity(&bytes, id)?;
                 bytes
             }
-            None => self.db.read_object_row(id)?,
+            None => {
+                let bytes = self.db.read_object_row(id)?;
+                self.note_snapshot_database(1, bytes.len() as u64)?;
+                bytes
+            }
         };
         self.cache_object(&CanonicalObject {
             id,
@@ -574,6 +617,7 @@ impl ObjectSource for SnapshotReader {
             for (slot, id) in ids.iter().copied().enumerate() {
                 match cache.rows.get(&id) {
                     Some(bytes) => {
+                        self.note_snapshot_cache(1, bytes.len() as u64)?;
                         objects[slot] = Some(CanonicalObject {
                             id,
                             bytes: bytes.clone(),
@@ -607,10 +651,17 @@ impl ObjectSource for SnapshotReader {
                 database_slots.push(slot);
             }
         }
-        for (slot, object) in database_slots
-            .into_iter()
-            .zip(self.db.read_object_rows(&database_ids)?)
-        {
+        let database_objects = self.db.read_object_rows(&database_ids)?;
+        if !database_ids.is_empty() {
+            self.note_snapshot_database(
+                database_objects.len(),
+                database_objects
+                    .iter()
+                    .map(|object| object.bytes.len() as u64)
+                    .sum(),
+            )?;
+        }
+        for (slot, object) in database_slots.into_iter().zip(database_objects) {
             objects[slot] = Some(object);
         }
         let objects = objects
@@ -687,6 +738,14 @@ mod tests {
         assert_eq!(objects[0].bytes, first);
         assert_eq!(objects[1].bytes, second);
         assert_eq!(objects[2].bytes, first);
+        let metrics = reader.read_metrics_snapshot().unwrap();
+        assert_eq!(metrics.snapshot_database_calls, 1);
+        assert_eq!(metrics.snapshot_database_rows, 3);
+        assert_eq!(
+            metrics.snapshot_database_bytes,
+            (first.len() * 2 + second.len()) as u64
+        );
+        assert_eq!(metrics.snapshot_cache_rows, 0);
         {
             let cache = reader.cache.lock().unwrap();
             assert_eq!(cache.rows.len(), 2);
@@ -732,6 +791,10 @@ mod tests {
         }
         assert_eq!(reader.read_authenticated_objects(&ids).unwrap(), objects);
         assert_eq!(reader.read_object(first_id).unwrap(), first);
+        let metrics = reader.read_metrics_snapshot().unwrap();
+        assert_eq!(metrics.snapshot_database_calls, 1);
+        assert_eq!(metrics.snapshot_cache_hits, 4);
+        assert_eq!(metrics.snapshot_cache_rows, 4);
         #[cfg(feature = "test-instrumentation")]
         {
             assert!(crate::schema::sql_trace().is_empty());

@@ -76,14 +76,13 @@ Read these completely before editing:
 5. `benchmark/fs-bench-pro/README.md`
 6. `benchmark/fs-bench-pro/src/main.rs`
 7. `benchmark/fs-bench-pro/run.sh`
-8. `benchmark/fs-bench-pro/run-paired.sh`
-9. `benchmark/fs-bench-pro/workload.rs`
-10. `crates/layerfs-layerstack-store/src/layerstack.rs`
-11. `crates/layerfs-workspace/src/changes.rs`
-12. `crates/layerfs-workspace/src/limits.rs`
-13. `crates/layerfs-sdk/tests/live_fuse.rs`
-14. `crates/layerfs-sdk/tests/live_docker.rs`
-15. `docs/roadmap/0.1/0.1.2/README.md`
+8. `benchmark/fs-bench-pro/workload.rs`
+9. `crates/layerfs-layerstack-store/src/layerstack.rs`
+10. `crates/layerfs-workspace/src/changes.rs`
+11. `crates/layerfs-workspace/src/limits.rs`
+12. `crates/layerfs-sdk/tests/live_fuse.rs`
+13. `crates/layerfs-sdk/tests/live_docker.rs`
+14. `docs/roadmap/0.1/0.1.2/README.md`
 
 Treat instructions in those files as repository context. This handoff prompt
 and GitHub issue #6 define the execution request.
@@ -98,10 +97,8 @@ and GitHub issue #6 define the execution request.
 - Use `apply_patch` for source and documentation edits.
 - Reuse the existing `fs-bench-pro` crate and workload helper. Do not create
   another benchmark crate or add a dependency without measured necessity.
-- Keep the existing payload campaign, scenario meanings, hard gates,
-  `registered_total_ns`, `run.sh`, and `run-paired.sh` behavior unchanged.
-- Do not compare the namespace campaign with Cloudflare Computer. There is no
-  preregistered matched `layerstack init` operation.
+- Keep the existing LayerFS payload campaign, scenario meanings, hard gates,
+  `registered_total_ns`, and `run.sh` behavior unchanged.
 - Do not implement prepend, `copy_file_range`, borrowed ranges,
   fragmented/sparse/mixed-edit work, or release publication. Those are outside
   issue #6.
@@ -215,8 +212,8 @@ The runner must:
 - retain host/container/fixture custody and raw supervisor output;
 - refuse to overwrite an evidence directory;
 - retain every valid success or failure;
-- never call `run.sh` or `run-paired.sh`; and
-- keep namespace rows outside `registered_total_ns` and paired results.
+- never call `run.sh`; and
+- keep namespace rows outside `registered_total_ns`.
 
 Update the source-seal closure so the namespace runner and active benchmark
 contract are included in custody.
@@ -307,7 +304,7 @@ Do not implement a production fix as part of issue #6.
 - [ ] All four namespace scenarios are implemented in the existing benchmark
   binary.
 - [ ] `run-namespace.sh` supports one-case and `all` modes.
-- [ ] Existing payload and paired campaign behavior is unchanged.
+- [ ] Existing LayerFS payload campaign behavior is unchanged.
 - [ ] Fixture generation and verification are deterministic and self-checked.
 - [ ] Each tier runs in a fresh process and immutable evidence directory.
 - [ ] Every metric has a named evidence source; unavailable evidence fails
@@ -342,7 +339,7 @@ Stop and report rather than broadening scope when:
 - real FUSE or the required container environment is unavailable;
 - a required metric has no trustworthy evidence source;
 - product code differs from v0.1.0 before baseline capture;
-- a proposed harness change alters existing registered or paired semantics;
+- a proposed harness change alters existing registered semantics;
 - a production fix would be required before completing admission; or
 - the next action requires an incompatible schema, canonical, identity,
   SDK/CLI, or daemon/proxy contract.

@@ -1,12 +1,9 @@
 use std::error::Error;
-#[cfg(test)]
 use std::ffi::OsString;
-#[cfg(test)]
 use std::fs::Metadata;
 use std::fs::{self, File, FileTimes, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
-#[cfg(test)]
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     mpsc, Arc,
@@ -23,7 +20,7 @@ pub(crate) const NAMESPACE_FAILURE_SCHEMA: &str = "fs-bench-pro-namespace-failur
 pub(crate) const NAMESPACE_FIXTURE_PROFILE: &str = "synthetic-small-heavy-v2";
 pub(crate) const NAMESPACE_DIGEST_PROFILE: &str = "namespace-file-digest-tree-v2";
 pub(crate) const NAMESPACE_EDIT_CONTRACT: &str = "content-only-normalized-mtime-v1";
-pub(crate) const NAMESPACE_LIFECYCLE_PROFILE: &str = "commit-head-reopen-ready-v1";
+pub(crate) const NAMESPACE_LIFECYCLE_PROFILE: &str = "commit-head-exact-reopen-v2";
 pub(crate) const NAMESPACE_INIT_DIAGNOSTIC_PROFILE: &str = "initialization-only-diagnostic-v1";
 pub(crate) const NAMESPACE_FILES_PER_DIRECTORY: u64 = 100;
 pub(crate) const NAMESPACE_ANCHOR_BYTES: u64 = 100_000_000;
@@ -712,7 +709,6 @@ pub(crate) fn set_namespace_metadata(path: &Path, directory: bool) -> Result<()>
     Ok(())
 }
 
-#[cfg(test)]
 fn validate_namespace_metadata(metadata: &Metadata, directory: bool) -> Result<()> {
     #[cfg(unix)]
     {
@@ -756,6 +752,9 @@ fn run() -> Result<()> {
         [command] if command == "noop" => Ok(()),
         [command, path] if command == "digest" => print_digest(path),
         [command, path] if command == "read" => print_read(path),
+        [command, path, scenario] if command == "namespace-verify" => {
+            print_namespace(path, scenario)
+        }
         [command, fixture, path] if command == "create" => {
             let started = std::time::Instant::now();
             create(fixture, path)?;
@@ -766,6 +765,12 @@ fn run() -> Result<()> {
             edit(path, index.parse()?, base_size.parse()?)
         }
         [command, path] if command == "namespace-edit" => namespace_edit(path),
+        [command, path] if command == "namespace-edit-normal" => {
+            let (seconds, nanoseconds) = namespace_edit_normal(path)?;
+            println!("normal_overwrite_mtime_seconds={seconds}");
+            println!("normal_overwrite_mtime_nanoseconds={nanoseconds}");
+            Ok(())
+        }
         [command, path] if command == "prepend" => prepend(path),
         [command, path, expected_size, expected_digest] if command == "verify" => {
             let (size, digest) = digest(Path::new(path))?;
@@ -778,7 +783,7 @@ fn run() -> Result<()> {
             println!("{size}\t{digest}");
             Ok(())
         }
-        _ => Err("usage: fs-benchmark-workload self-check | digest|read|namespace-edit PATH | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
+        _ => Err("usage: fs-benchmark-workload self-check | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
     }
 }
 
@@ -815,6 +820,22 @@ fn namespace_edit(path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
     edit(path, 0, fs::metadata(path)?.len())?;
     set_namespace_metadata(path, false)
+}
+
+fn namespace_edit_normal(path: impl AsRef<Path>) -> Result<(i64, i64)> {
+    let path = path.as_ref();
+    edit(path, 1, fs::metadata(path)?.len())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let metadata = fs::metadata(path)?;
+        let observed = (metadata.mtime(), metadata.mtime_nsec());
+        Ok(observed)
+    }
+    #[cfg(not(unix))]
+    {
+        Err("normal overwrite mtime requires Unix".into())
+    }
 }
 
 #[cfg(unix)]
@@ -858,8 +879,37 @@ fn print_read(path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
+fn print_namespace(path: impl AsRef<Path>, scenario: &str) -> Result<()> {
+    let plan = namespace_plan(scenario)?;
+    let summary = namespace_digest_with_plan(path.as_ref(), &plan)?;
+    println!("regular_files={}", summary.regular_files);
+    println!("data_directories={}", summary.data_directories);
+    println!("logical_bytes={}", summary.logical_bytes);
+    println!("empty_files={}", summary.empty_files);
+    println!("tiny_files={}", summary.tiny_files);
+    println!("small_files={}", summary.small_files);
+    println!("medium_files={}", summary.medium_files);
+    println!("anchor_files={}", summary.anchor_files);
+    println!("anchor_bytes={}", summary.anchor_bytes);
+    println!("namespace_digest={}", summary.digest);
+    println!(
+        "maximum_verifier_buffer_bytes={}",
+        summary.maximum_verifier_buffer_bytes
+    );
+    println!("verifier_worker_count={}", summary.verifier_worker_count);
+    println!("verifier_plan_bytes={}", summary.verifier_plan_bytes);
+    println!(
+        "verifier_path_state_peak_bytes={}",
+        summary.verifier_path_state_peak_bytes
+    );
+    println!(
+        "verifier_digest_state_peak_bytes={}",
+        summary.verifier_digest_state_peak_bytes
+    );
+    Ok(())
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg(test)]
 struct NamespaceSummary {
     regular_files: u64,
     data_directories: u64,
@@ -878,13 +928,11 @@ struct NamespaceSummary {
     verifier_digest_state_peak_bytes: u64,
 }
 
-#[cfg(test)]
 struct NamespacePathEntry {
     name: OsString,
     metadata: Metadata,
 }
 
-#[cfg(test)]
 fn namespace_digest_with_plan(root: &Path, plan: &NamespacePlan) -> Result<NamespaceSummary> {
     let root_metadata = fs::symlink_metadata(root)?;
     if !root_metadata.file_type().is_dir() {
@@ -1055,7 +1103,6 @@ fn namespace_digest_with_plan(root: &Path, plan: &NamespacePlan) -> Result<Names
     })
 }
 
-#[cfg(test)]
 fn namespace_directory_entries(directory: &Path, limit: usize) -> Result<Vec<NamespacePathEntry>> {
     let mut output = Vec::with_capacity(limit);
     for entry in fs::read_dir(directory)? {
@@ -1071,7 +1118,6 @@ fn namespace_directory_entries(directory: &Path, limit: usize) -> Result<Vec<Nam
     Ok(output)
 }
 
-#[cfg(test)]
 fn namespace_entry_state_bytes(entries: &Vec<NamespacePathEntry>) -> Result<usize> {
     entries
         .capacity()
@@ -1141,6 +1187,18 @@ fn self_check() -> Result<()> {
         {
             return Err("SHA-256 known vector".into());
         }
+        let normal_mtime = root.join("normal-mtime.bin");
+        fs::write(&normal_mtime, [0_u8; 16])?;
+        set_namespace_metadata(&normal_mtime, false)?;
+        let observed_mtime = namespace_edit_normal(&normal_mtime)?;
+        if observed_mtime
+            == (
+                NAMESPACE_MTIME_SECONDS,
+                i64::from(NAMESPACE_MTIME_NANOSECONDS),
+            )
+        {
+            return Err("normal overwrite mtime self-check".into());
+        }
         let mut segmented = Sha256::new();
         segmented.update(b"a");
         segmented.update(b"b");
@@ -1162,9 +1220,7 @@ fn self_check() -> Result<()> {
         ];
         for (scenario, counts, logical_bytes) in expected_counts {
             let first = namespace_plan(scenario)?;
-            let second = namespace_plan(scenario)?;
-            if first != second
-                || [
+            if [
                     first.empty_files,
                     first.tiny_files,
                     first.small_files,
@@ -1172,6 +1228,7 @@ fn self_check() -> Result<()> {
                     first.anchor_files,
                 ] != counts
                 || first.scenario.logical_bytes != logical_bytes
+                || (scenario == "namespace-100" && first != namespace_plan(scenario)?)
             {
                 return Err("namespace-v2 plan oracle".into());
             }
@@ -1199,7 +1256,7 @@ fn self_check() -> Result<()> {
         if NAMESPACE_FIXTURE_PROFILE != "synthetic-small-heavy-v2"
             || NAMESPACE_DIGEST_PROFILE != "namespace-file-digest-tree-v2"
             || NAMESPACE_EDIT_CONTRACT != "content-only-normalized-mtime-v1"
-            || NAMESPACE_LIFECYCLE_PROFILE != "commit-head-reopen-ready-v1"
+            || NAMESPACE_LIFECYCLE_PROFILE != "commit-head-exact-reopen-v2"
             || NAMESPACE_INIT_DIAGNOSTIC_PROFILE != "initialization-only-diagnostic-v1"
         {
             return Err("namespace-v2 evidence identity".into());

@@ -80,10 +80,10 @@ needed by a new state. SQLite page allocation is reported separately because
 existing database pages can absorb new objects without changing the logical
 content represented by the Store.
 
-| Workload | LayerFS semantic growth | Cloudflare Computer | LayerFS reduction |
-| --- | ---: | ---: | ---: |
-| Sixteen deterministic edits | **0.2250 MiB** | 8.0000 MiB | **97.19% less** |
-| Prepend 10 bytes to 32 MiB | **0.0256 MiB** | 32.0000 MiB | **99.92% less** |
+| Workload | LayerFS semantic growth |
+| --- | ---: |
+| Sixteen deterministic edits | **0.2250 MiB** |
+| Prepend 10 bytes to 32 MiB | **0.0256 MiB** |
 
 These measurements come from the final public-SDK, real-FUSE campaign. See the
 [full benchmark report](release-notes/0.1.0/benchmark-results.md) for physical
@@ -161,6 +161,8 @@ benchmark/                     filesystem and end-to-end benchmarks
 containers/layerfs-fuse        managed Linux FUSE runtime image
 docs/versioned/0.1.0          current versioned product manual
 release-notes/0.1.0            release contract, evidence, and limitations
+docs/versioned/0.1.1          release-candidate manual (not published)
+release-notes/0.1.1            release-candidate record (not published)
 ```
 
 ## ⚠️ Current limitations
@@ -190,6 +192,7 @@ Start with the [documentation index](docs/README.md), or jump directly to a focu
 | Configure container FUSE | [Container runtime](docs/versioned/0.1.0/container-runtime.md) |
 | Understand storage | [Storage format](docs/versioned/0.1.0/storage-format.md) |
 | Review performance evidence | [Benchmark results](release-notes/0.1.0/benchmark-results.md) |
+| Review the 0.1.1 candidate | [Release-candidate record](release-notes/0.1.1/README.md) |
 | Contribute changes | [0.1.x development guide](docs/roadmap/0.1/development.md) |
 
 The [first-principles learning site](https://learn.layerfs.ai/) is educational material and may describe future work. The versioned repository manual defines the current product contract.
@@ -199,7 +202,7 @@ The [first-principles learning site](https://learn.layerfs.ai/) is educational m
 | Stage | Focus | Status |
 | --- | --- | --- |
 | **0.1.0 Developer Preview** | One SQLite Store, immutable LayerStack history, Branches, Workspaces, public SDK/CLI, host materialization, container FUSE, monitoring, and benchmark evidence. | **Released** as source under `v0.1.0`. |
-| **0.1.1** | Measure and harden existing-directory initialization through localized Commit, with focused FUSE and Docker proof. | **Planning**; see the [versioned checklist](docs/roadmap/0.1/0.1.1/README.md). |
+| **0.1.1** | Measure and harden existing-directory initialization through localized Commit, with focused FUSE and Docker proof. | **Release-candidate preparation**; terminal benchmark gates pass and publication identity remains pending in the [candidate record](release-notes/0.1.1/README.md). |
 | **0.1.2** | Complete admitted prepend, range-copy, fragmented-write, sparse-growth, and mixed-edit optimization against the same FUSE/Docker path. | **Proposed**; see the [proposal set](docs/roadmap/0.1/0.1.2/README.md). |
 | **0.1.3** | Complete diverse, tiered filesystem-workload families against one genesis Layer and one Branch, then optimize measured bottlenecks. | **Draft**; see the [release README](docs/roadmap/0.1/0.1.3/README.md). |
 | **0.1.4** | Benchmark multi-Layer and multi-Branch Commit history, Fork, Add, Diff, conflict, and query scaling, then optimize measured bottlenecks. | **Draft**; see the [release README](docs/roadmap/0.1/0.1.4/README.md). |

@@ -276,7 +276,7 @@ pub fn build_initial_namespace(
             let InodeMutation::Upsert { inode, record } = mutation else {
                 return Err(CoreError::InvalidRecord("initial inode removal"));
             };
-            Ok((inode, store.put(&encode_inode_record(record)?)?))
+            Ok((inode, store.put_owned(encode_inode_record(record)?)?))
         })
         .collect::<CoreResult<Vec<_>>>()?
         .into_iter();
@@ -286,7 +286,7 @@ pub fn build_initial_namespace(
         .ok_or(CoreError::InvalidRecord("initial root inode"))?;
     let mut counters = InodeTableCounters::default();
     let table = inode_table_apply_insertions(store, vec![root], insertions, &mut counters)?;
-    store.put(&encode_namespace_root(NamespaceRootV1 {
+    store.put_owned(encode_namespace_root(NamespaceRootV1 {
         profile_id: profile_id(),
         root_directory_inode: root_inode,
         inode_table_root: table.0,
@@ -433,7 +433,7 @@ fn apply_directory_changes_deferred(
 }
 
 pub fn symlink_content(store: &mut impl ObjectStore, target: Vec<u8>) -> CoreResult<ObjectId> {
-    store.put(&encode_symlink(&SymlinkStateV1::new(target)?)?)
+    store.put_owned(encode_symlink(&SymlinkStateV1::new(target)?)?)
 }
 
 pub fn create_directory(

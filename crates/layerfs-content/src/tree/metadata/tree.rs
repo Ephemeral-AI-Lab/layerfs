@@ -762,7 +762,7 @@ fn emit_metadata<S: ObjectStore>(
         ),
     };
     let canonical = encode_metadata_node(&node)?;
-    let id = store.put(&canonical)?;
+    let id = store.put_owned(canonical)?;
     Ok(MetadataSummary {
         id,
         min: metadata_node_min(&node),

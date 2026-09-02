@@ -28,7 +28,7 @@ explicit-End architecture.
 
 - [x] Keep the public SDK and real-FUSE lifecycle as the product boundary.
 - [x] Keep container and fixture preparation outside timed regions.
-- [x] Keep LayerFS-only iteration separate from final paired Cloudflare runs.
+- [x] Keep all benchmark iteration LayerFS-only.
 - [ ] Complete the namespace matrix in v0.1.1.
 - [ ] Complete admitted prepend, mixed-edit, and Store-footprint work in
   v0.1.2.
@@ -125,7 +125,6 @@ families: prepend/range-copy, online Workspace capture, and
   registered scenario meanings.
 - [ ] Rerun LayerFS-only payload and namespace matrices after every accepted
   optimization.
-- [ ] Run the paired Cloudflare payload campaign once at candidate stability.
 - [ ] Measure the 500 MB unique-content control's logical, canonical, SQLite,
   other durable, temporary, and physical-I/O bytes.
 - [ ] Reach at most 600 MB total durable Store footprint through a compatible

@@ -3658,3 +3658,147 @@ Retain bounded candidate references. The next measured ownership cost is the bor
 
 - Source seal: `80ba3072118a0c028e3aaa993a47058c6f871a79835628fb247362d331efb07f`
 - Exit status: `1`
+
+## v011-layerfs-registered-regression-r001-20260903 — one-Store public-SDK campaign
+
+### One-Store fs-bench-pro campaign
+
+- Raw evidence: `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/runs/v011-layerfs-registered-regression-r001-20260903/raw/layerfs.jsonl`
+- Result: invalid or incomplete evidence; see `raw/layerfs.stderr`.
+
+- Host memory: `host_peak_rss_bytes=28131328 host_swaps=0 `
+
+- Source seal: `7962d126a448255d3859edba57dd77ff745e7b57821b720a7ea2419b79723d1a`
+- Exit status: `1`
+
+## v011-layerfs-registered-regression-r002-20260903 — one-Store public-SDK campaign
+
+### One-Store fs-bench-pro campaign
+
+- Raw evidence: `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/runs/v011-layerfs-registered-regression-r002-20260903/raw/layerfs.jsonl`
+- Lifecycle samples: 35
+- Workspace Create median: 16152958 ns
+- Small-edit Commit median: 4967375 ns
+- Small-edit complete median: 30486291 ns
+- Cold-create-32m Commit median: 53249083 ns
+- Cold-create-32m complete median: 161882250 ns
+- EDIT16 median: 153524292 ns
+- Prepend median: 299415791 ns
+- Read 32 MiB median: 153871541 ns
+- Registered four-row total: 768693874 ns
+- Inner 32 MiB write throughput: 389508633.999 bytes/s
+
+- Host memory: `host_peak_rss_bytes=92110848 host_swaps=0 `
+
+- Source seal: `3738e4797481583c72d66f4ddd17c630b571cfabc32ad873bbfa957daa076d3a`
+- Exit status: `1`
+
+## v011-layerfs-registered-regression-r003-20260903 — one-Store public-SDK campaign
+
+### One-Store fs-bench-pro campaign
+
+- Raw evidence: `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/runs/v011-layerfs-registered-regression-r003-20260903/raw/layerfs.jsonl`
+- Lifecycle samples: 35
+- Workspace Create median: 16030625 ns
+- Small-edit Commit median: 4242750 ns
+- Small-edit complete median: 29907875 ns
+- Cold-create-32m Commit median: 46926167 ns
+- Cold-create-32m complete median: 136378417 ns
+- EDIT16 median: 152717959 ns
+- Prepend median: 287890291 ns
+- Read 32 MiB median: 145919334 ns
+- Registered four-row total: 722906001 ns
+- Inner 32 MiB write throughput: 450554066.678 bytes/s
+
+- Host memory: `host_peak_rss_bytes=98648064 host_swaps=0 `
+
+- Source seal: `3738e4797481583c72d66f4ddd17c630b571cfabc32ad873bbfa957daa076d3a`
+- Exit status: `1`
+
+## v011-layerfs-registered-regression-r004-20260903 — one-Store public-SDK campaign
+
+### One-Store fs-bench-pro campaign
+
+- Raw evidence: `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/runs/v011-layerfs-registered-regression-r004-20260903/raw/layerfs.jsonl`
+- Lifecycle samples: 35
+- Workspace Create median: 14259333 ns
+- Small-edit Commit median: 4434125 ns
+- Small-edit complete median: 28726208 ns
+- Cold-create-32m Commit median: 50109833 ns
+- Cold-create-32m complete median: 135744875 ns
+- EDIT16 median: 156931375 ns
+- Prepend median: 249462709 ns
+- Read 32 MiB median: 150420417 ns
+- Registered four-row total: 692559376 ns
+- Inner 32 MiB write throughput: 471378794.302 bytes/s
+
+- Host memory: `host_peak_rss_bytes=95436800 host_swaps=0 `
+
+- Source seal: `1f3c09c59f931615eca557bf1b17a2fead0200c0eebf1311638ad12f98bb7c97`
+- Exit status: `1`
+
+## v011-layerfs-registered-regression-r005-20260903 — one-Store public-SDK campaign
+
+### One-Store fs-bench-pro campaign
+
+- Raw evidence: `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/runs/v011-layerfs-registered-regression-r005-20260903/raw/layerfs.jsonl`
+- Lifecycle samples: 35
+- Workspace Create median: 14899042 ns
+- Small-edit Commit median: 4534709 ns
+- Small-edit complete median: 30624250 ns
+- Cold-create-32m Commit median: 46647750 ns
+- Cold-create-32m complete median: 134652792 ns
+- EDIT16 median: 147964792 ns
+- Prepend median: 252647458 ns
+- Read 32 MiB median: 147701875 ns
+- Registered four-row total: 682966917 ns
+- Inner 32 MiB write throughput: 473152421.678 bytes/s
+
+- Host memory: `host_peak_rss_bytes=101203968 host_swaps=0 `
+
+- Source seal: `1f3c09c59f931615eca557bf1b17a2fead0200c0eebf1311638ad12f98bb7c97`
+- Exit status: `1`
+
+## v011-layerfs-registered-regression-r006-20260903 — one-Store public-SDK campaign
+
+### One-Store fs-bench-pro campaign
+
+- Raw evidence: `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/runs/v011-layerfs-registered-regression-r006-20260903/raw/layerfs.jsonl`
+- Lifecycle samples: 75
+- Workspace Create median: 12864541 ns
+- Small-edit Commit median: 4261208 ns
+- Small-edit complete median: 27209084 ns
+- Cold-create-32m Commit median: 43052625 ns
+- Cold-create-32m complete median: 127767875 ns
+- EDIT16 median: 160652125 ns
+- Prepend median: 243328250 ns
+- Read 32 MiB median: 143041292 ns
+- Registered four-row total: 674789542 ns
+- Inner 32 MiB write throughput: 516061916.605 bytes/s
+
+- Host memory: `host_peak_rss_bytes=104202240 host_swaps=0 `
+
+- Source seal: `1f3c09c59f931615eca557bf1b17a2fead0200c0eebf1311638ad12f98bb7c97`
+- Exit status: `0`
+
+## v011-rc-payload-final-r001-20260903 — one-Store public-SDK campaign
+
+### One-Store fs-bench-pro campaign
+
+- Raw evidence: `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/runs/v011-rc-payload-final-r001-20260903/raw/layerfs.jsonl`
+- Lifecycle samples: 75
+- Workspace Create median: 14549667 ns
+- Small-edit Commit median: 4502500 ns
+- Small-edit complete median: 29652666 ns
+- Cold-create-32m Commit median: 45442084 ns
+- Cold-create-32m complete median: 131773958 ns
+- EDIT16 median: 156445958 ns
+- Prepend median: 223763417 ns
+- Read 32 MiB median: 141418125 ns
+- Registered four-row total: 653401458 ns
+- Inner 32 MiB write throughput: 505614815.345 bytes/s
+
+- Host memory: `host_peak_rss_bytes=97124352 host_swaps=0 `
+
+- Source seal: `dd219ed9e7942a42891ff14646ee3c54a4580e6aaeeee7a25a01b30d1453a805`
+- Exit status: `0`

@@ -16,7 +16,8 @@ pub use layerfs_layerstack_store::{
     InitializeLayerStackResult, LayerId, LayerRecord, LayerStackId, LayerStackInitialization,
     LayerStackInitializationReceipt, LayerStackRecord, LayerStackStore, LocalForkSource,
     NodeSummary, ObjectSource, ReconcileChoice, ReconcileConflict, ReconcileConflictKind,
-    StorageReceipt, StoreCounts, StoreError,
+    StorageReceipt, StoreCounts, StoreError, WorkspaceCommitReceipt, WorkspaceLifecycleKind,
+    WorkspaceLifecycleReceipt,
 };
 pub use layerfs_monitor::{
     CandidateStats, CandidateTotals, DatabaseSnapshot, DedupAnalysis, MonitorError,

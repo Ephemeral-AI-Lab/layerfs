@@ -35,4 +35,13 @@ impl LayerStackStore {
             error => error,
         })
     }
+
+    #[doc(hidden)]
+    pub fn inspect_connection<T>(
+        &self,
+        inspect: impl FnOnce(&rusqlite::Connection) -> T,
+    ) -> Result<T> {
+        let connection = self.db.reader()?;
+        Ok(inspect(&connection))
+    }
 }

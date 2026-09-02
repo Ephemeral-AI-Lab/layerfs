@@ -48,6 +48,15 @@ pub trait ObjectStore {
     fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>>;
     fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId>;
 
+    fn put_owned(&mut self, canonical: Vec<u8>) -> CoreResult<ObjectId> {
+        self.put(&canonical)
+    }
+
+    #[doc(hidden)]
+    fn note_transient_owned_bytes(&mut self, _bytes: u64) -> CoreResult<()> {
+        Ok(())
+    }
+
     fn with_authenticated_canonical<T, F>(&self, id: ObjectId, callback: F) -> CoreResult<T>
     where
         F: FnOnce(&[u8]) -> CoreResult<T>,

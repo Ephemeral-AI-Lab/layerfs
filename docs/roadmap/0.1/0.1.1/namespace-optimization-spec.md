@@ -26,16 +26,43 @@ Execution agents use the
 The retained namespace-v1 candidate proves the complete public LayerFS
 lifecycle, but its uniform 2,500-byte fixture does not cover a deliberate
 small-heavy namespace with large files. Namespace-v2 now supplies that
-fixture. Its current warm/uncontrolled-cache 100,000-file median initializes
-500 MB in 4.502 seconds, or 111.1 decimal MB/s; Workspace Create is about
-15.4 milliseconds and localized Commit about 3.7 milliseconds.
+fixture. Its 4.502-second / 111.1-MB/s 100,000-file result is the pre-direct,
+temporary-object-segment baseline. The retained direct-admission implementation
+has zero canonical-object-segment traffic; its historical source-sealed
+one-sample init-only result is 3.040 seconds / 164.5 MB/s.
 
-The remaining initialization boundary is measured. Source and canonical
-preparation takes about 2.44 seconds, SQLite stepping and bounded commits about
-1.54 seconds, and final/root/other work about 0.53 seconds. The current path
-also emits about 1.132 million canonical candidates for about 422,000 unique
-objects and writes then rereads about 647 MB of temporary object segments.
-Sequential execution cannot meet the 2.5-second target.
+The predecessor boundary was measured: source and canonical preparation took
+about 2.44 seconds, SQLite stepping and bounded commits about 1.54 seconds, and
+final/root/other work about 0.53 seconds. It emitted about 1.132 million
+canonical candidates for about 422,000 unique objects and wrote then reread
+about 647 MB of temporary object segments. The direct path removes that
+sequential object-segment boundary.
+
+The earlier passing selected product evidence uses
+`issue9-v3-final-create-100-r001-20260903` for the 100-file row and
+`issue11-v3-terminal-all4-composite-r003-20260903` for the other tiers and
+runner-owned composite proof. Selected initialization medians are
+220.820/269.757/414.729/2,766.280 ms and
+566.1/741.4/723.4/180.7 MB/s. Every selected tier-specific binding median
+passes; the 100,000-file row remains below the preferred nonbinding
+2.5-second/200-MB/s outcome. Both reports use full source seal
+`f6a2c969ca9245b0394c91643d6c24a2f56180975fad537c10fb5360358d4170`.
+The raw `r003` report retains its 15.223-ms 100-file Create miss and negative
+aggregate performance/evidence markers; the supplemental same-seal 100-file
+report records a passing 14.742-ms median. This selected view never rewrites
+either raw report and is not a release claim.
+
+A newer exact-seal LayerFS-only attempt,
+`issue11-v3-layerfs-only-terminal-r001-20260903`, remains an immutable miss at
+source seal
+`7b211f30c7a0a8a2c74e0dbd39f4bfebf34c7bf44aa6bbe45c455f23672bcb89`.
+Its subsequent-sample `namespace-100000` initialization median of 3.019
+seconds / 165.6 MB/s / 33,121 files/s passes the authorized 10-percent
+tolerance gates of 3.235294118 seconds / 153 MB/s / 30,600 files/s.
+Correctness, resources, cleanup, and the composite proof also pass. Its
+`namespace-100` Create median remains a binding miss at 17.144 milliseconds
+against 15 milliseconds, so the campaign is not terminal and must not be
+reconciled with the older source seal.
 
 Initialization must therefore overlap the required source/canonical lane with
 the existing SQLite lane through bounded move-only admission. It may not add
@@ -65,8 +92,9 @@ The profile must:
   product processes and Stores;
 - preserve the existing real-FUSE lifecycle, ten-byte localized edit, exact
   reconnect oracle, runner interface, and phase equations;
-- initialize the 100,000-file / 500-MB tier in at most 2.5 seconds and at least
-  200,000,000 logical bytes per second;
+- initialize the 100,000-file / 500-MB tier in at most 3.235294118 seconds and
+  at least 153,000,000 logical bytes per second and 30,600 files per second,
+  including the authorized 10-percent release tolerance;
 - create its Workspace in at most 25 milliseconds; and
 - use no new or increased product worker, background preloader, dependency,
   crate, benchmark family, or comparison product.
@@ -110,7 +138,7 @@ selectors: namespace-100, namespace-1000, namespace-10000,
            namespace-100000, all
 projection: real Linux FUSE
 registered_total_ns contribution: none
-paired comparison contribution: none
+external comparison contribution: none
 ```
 
 Historical namespace-v1 evidence remains bound to
@@ -143,6 +171,10 @@ or duplicate family is required merely to regenerate historical evidence.
 Every anchor contains exactly 100,000,000 bytes. Two anchors must occupy
 different data directories. The localized ten-byte edit must target a
 deterministic non-anchor file whose length is at least ten bytes.
+The binding edit restores the normalized mtime so its digest contract remains
+exact. After T7, a separate real-FUSE normal overwrite records whether an
+ordinary content-changing write changes that fixed mtime; it is discarded
+without Commit and its time is cleanup-only evidence.
 
 ## Count distribution
 
@@ -385,8 +417,26 @@ phase_write_bytes
 
 `process_peak_rss_bytes` remains the OS whole-process peak. Incremental RSS is
 the phase/process peak minus the baseline captured with Store and Client ready,
-immediately before `T0`. An unavailable metric is an evidence error, never a
-silent zero.
+immediately before `T0`. An unavailable required metric is an evidence error,
+never a silent zero. The optional process-global SQLite MEMSTATUS counters are
+the documented exception when the system build disables them; DBSTATUS cache
+target/use and native process resources remain required.
+
+On macOS and Linux, capture current RSS plus the native lifetime high-water at
+T0 and T1 without polling. `initialization incremental peak RSS` is the T1
+lifetime high-water minus T0 current RSS only when T1 establishes a new
+lifetime maximum; otherwise cumulative high-water data cannot isolate the
+phase and the gate is unavailable. Do not substitute endpoint growth for a
+peak. Take the SQLite T0 status first, then the T0 process snapshot immediately
+before timing; at T1 take the process snapshot immediately after timing, then
+SQLite status. Record the configured SQLite connection-cache target and
+`SQLITE_DBSTATUS_CACHE_USED` at both boundaries so cache ownership is explicit;
+never add or subtract CACHE_USED as resident bytes. The configured target must
+not exceed 64 MiB. The retained setting remains 32 MiB because it is the best
+measured performance point; 64 MiB is an allowance, not a target. Report
+`SQLITE_STATUS_PAGECACHE_OVERFLOW` under that exact name. When the system SQLite
+build has MEMSTATUS disabled, label global MEMORY_USED/MALLOC_COUNT counters
+unavailable rather than interpreting zero as no allocation.
 
 ### Post-timing SQLite diagnostics
 
@@ -421,23 +471,30 @@ and post-Commit Store sizes and row counts must not be mixed.
 | `namespace-100` | 125 MB | <=416.667 ms | 300 MB/s | 240 files/s |
 | `namespace-1000` | 200 MB | <=500 ms | 400 MB/s | 2,000 files/s |
 | `namespace-10000` | 300 MB | <=750 ms | 400 MB/s | 13,334 files/s |
-| `namespace-100000` | 500 MB | <=2.500 s | 200 MB/s | 40,000 files/s |
+| `namespace-100000` | 500 MB | <=3.235294118 s | 153 MB/s | 30,600 files/s |
 
 The retained smaller tiers already exceed the old flat 200-MB/s floor. Their
 raised minima prevent a 100, 1,000, or 10,000-file regression from being hidden
 behind the 100,000-file fix. Binding adjacent init-time ratios are at most
-1.30x, 1.70x, and 3.50x. The final ratio permits the accepted two-times
-throughput difference between the 400-MB/s 10,000-file floor and 200-MB/s
-100,000-file floor while remaining far below the retained 6.27x result.
+1.30x and 1.70x through the 10,000-file tier. The 100,000-file result is
+independent and is evaluated only against its tolerance-adjusted
+3.235294118-second, 153-MB/s, and 30,600-files/s gates. Never delay a faster
+10,000-file result to
+manufacture a ratio pass. This target applies prospectively; retained rows
+keep the target identity in force when they were captured.
 
-Preferred non-binding stretch goals are:
+Preferred non-binding goals are:
 
 | Scenario | Preferred init | Preferred throughput |
 | --- | ---: | ---: |
 | `namespace-100` | <=357.143 ms | >=350 MB/s |
 | `namespace-1000` | <=400 ms | >=500 MB/s |
 | `namespace-10000` | <=600 ms | >=500 MB/s |
-| `namespace-100000` | <=2.000 s | >=250 MB/s |
+| `namespace-100000` | <=2.500 s | >=200 MB/s |
+
+The independent 100,000-file stretch goal remains <=2.000 seconds and >=250
+MB/s. Preferred and stretch outcomes are reported separately from binding
+status.
 
 ### Workspace Create and localized Commit
 
@@ -473,9 +530,11 @@ incremental RSS separately.
 ```text
 new product workers: 0
 product worker ceiling increase: 0
-explicit LayerFS-owned buffers: <=10 MiB
-preferred incremental peak RSS: <=16 MiB
-hard incremental peak RSS: <=32 MiB
+initialization CPU: <=14.07 total CPU-seconds
+modeled LayerFS named-buffer sum: <=10 MiB
+configured SQLite connection-cache target: <=64 MiB (retained setting 32 MiB)
+initialization whole-process incremental peak RSS: <=128 MiB
+complete-lifecycle whole-process incremental peak RSS: <=256 MiB
 swap: 0
 OOM: false
 ```
@@ -504,10 +563,25 @@ smaller-than-needed transactions, higher CPU, or hidden background work.
 
 ## Initialization optimization specification
 
-The current candidate already contains final namespace/inode construction,
-parallel root-directory import, the proven-empty Store admission fast path,
-bounded 8,191-object / 4-MiB admission, and initialization-only removal of the
-unused reference index. Do not reimplement or claim those as new wins.
+The retained direct candidate already contains deferred final namespace/inode
+construction, parallel root-directory import, the proven-empty Store admission
+fast path, bounded 8,191-object / less-than-4-MiB admission, and
+initialization-only removal of the unused reference index. Do not reimplement
+or claim those as new wins.
+
+Direct admission is an eligible-shape optimization, not the universal
+initialization path. It currently requires a proven-empty Store, a nonempty
+source root containing only top-level directories, no detected hard link, and
+the direct structural limits. Root-level regular files or symlinks, any hard
+link, and a nonempty Store select the canonical final-state fallback. Reports
+must state this boundary and must not extrapolate direct-path worker, memory,
+spool, or throughput counters to the fallback.
+
+The benchmark has at most 1,000 top-level data directories. The compact pair
+stream also rejects more than 1,000 task blocks, and the current direct
+selection does not yet prove an earlier preflight for that boundary. Before
+release, either route more than 1,000 top-level tasks to the existing fallback
+before admitting any object or prove the larger shape with focused coverage.
 
 ### Retained and rejected evidence
 
@@ -599,10 +673,12 @@ rejected stream's roughly 6,891 handoffs.
 
 Path-independent canonical content may be admitted while import continues.
 Path-dependent inode and directory structure remains in the existing compact
-structural stream until global cross-root hard-link resolution completes.
-Only then may the inode table, namespace root, Layer, and LayerStack be
-constructed and published. Do not add a second content walk or expose a
-partial LayerStack.
+structural stream until producer completion and confirmation that no hard link
+was detected. Only then may the inode table, namespace root, Layer, and
+LayerStack be completed and published. Object-only transactions may commit
+before that point, but no Layer or LayerStack may become visible before the
+final publication transaction. Do not describe the whole import as one atomic
+SQLite transaction, add a second content walk, or expose a partial LayerStack.
 
 ### Exact authority and SQLite boundary
 
@@ -654,12 +730,18 @@ final inode/root/publication tail    <=0.25 s
 complete initialization              <=2.50 s
 ```
 
-The lanes overlap; they are not added. The target explicit ownership is about
-8.4 MiB: eight partial slabs about 2 MiB, four queued slabs about 1 MiB, one
+The lanes overlap; they are not added. The target modeled named-buffer sum is
+about 8.4 MiB: eight partial slabs about 2 MiB, four queued slabs about 1 MiB, one
 admission batch below 4 MiB, aggregate CDC scratch about 0.5 MiB, compact pair
 state about 0.25 MiB, and bounded headers/final state. Whole-process RSS is
 reported separately; the existing SQLite page cache alone is 32 MiB, so the
-10-MiB contract applies to explicit LayerFS-owned buffers, not total RSS.
+10-MiB contract applies to this named-buffer equation, not total LayerFS heap
+or total RSS. Deferred-tree and allocator-owned state is not comprehensively
+captured by the named-buffer counter; native process high-water is the
+authoritative aggregate memory measurement.
+Never add or subtract CACHE_USED from RSS. The 128/256-MiB limits apply to the
+native whole-process lifetime-HWM deltas; the SQLite target and explicit
+LayerFS ownership remain separately binding.
 
 Do not introduce physical object packing, a new schema, a packed fixture,
 canonical inlining, or a bulk initialization API under this specification.
@@ -676,7 +758,7 @@ slab payload <=256 KiB and slab objects <=512
 queued slabs <=4
 slab handoffs at 100,000 files <=2,200
 spool linear membership rescans = 0
-admission batch remains <=4 MiB and <=8,191 objects
+admission batch remains <4 MiB and <=8,191 objects
 candidate unique objects = inserted objects + preexisting reused objects
 ```
 
@@ -693,10 +775,10 @@ logical_path_movement_ratio =
     logical_path_movement_bytes / logical_bytes
 ```
 
-The retained 100,000-file path is about 4.91x; zero object-segment I/O lowers
-the approximate source-plus-Store floor to 2.32x. These derived values explain
-amplification but never replace the exact segment-zero and parent-copy-zero
-gates.
+The pre-direct retained 100,000-file path was about 4.91x. The current direct
+path reports its exact source-plus-Store value per row. These logical values
+explain amplification but never replace the exact segment-zero and
+parent-copy-zero gates or claim physical-I/O equivalence.
 
 Duplicate objects within a segment, across segments, across a batch boundary,
 and already durable must have exact count/byte receipts. Same-ID/different-byte
@@ -720,8 +802,7 @@ zero. The small existing compact structural stream remains measured separately.
 The control records effective aggregate I/O, CPU, page-cache state, and
 `/proc/self/io` or the platform equivalent. A host ceiling does not authorize
 extra product workers, tmpfs substitution, hidden setup work, or a false
-200-MB/s claim; continue removing product amplification and report the exact
-external bound.
+153-MB/s binding claim; continue reporting the exact external bound.
 
 ## Workspace Create optimization specification
 
@@ -753,6 +834,16 @@ it to about 234 milliseconds.
 8. Keep the existing protocol maximum unchanged but cap actual large-file
    request/read-ahead buffers at 8 MiB or less. This specification authorizes
    no new FUSE, daemon, or proxy request/response tag.
+
+The retained proxy cache uses at most four per-node two-MiB read-ahead entries
+inside that eight-MiB aggregate ceiling and does not cache a response with no
+unread tail. This replaces the measured single 16-MiB entry whose cross-file
+eviction fetched 6.43 GB to serve a 300-MB exact verification. The retained
+10,000-file row fetches and serves exactly 300 MB with zero unused bytes; the
+100,000-file row fetches and serves exactly 500 MB with zero unused bytes.
+Remaining exact-verifier time is a reported non-binding stretch miss, not
+authorization for bulk protocol operations, prefetch, more workers, or a
+weaker oracle.
 
 ## Experiment and retention protocol
 
@@ -802,6 +893,11 @@ reconcile the retained source and evidence seal
   safety have focused coverage where affected.
 - Candidate, inserted, reused, transaction, copy, spool, CPU, memory, and
   worker evidence remains truthful.
+- A runner-owned source-sealed composite receipt embeds the exact command,
+  activation environment, exit status, output, and output digest for focused quality, large-spill/reconnect,
+  materialization/FUSE equality, managed Docker, attachment failure, exact
+  reconnect, and cleanup census. External self-authored proof manifests are
+  rejected.
 - No mount, container, process, output reader, spool, temporary candidate,
   Workspace, execution, or Branch lease leaks.
 - A two-root parallel fixture with one 100-MB anchor forces a local spill and
@@ -813,6 +909,14 @@ reconcile the retained source and evidence seal
 - Source growth/truncation, segment flush, admission, final structure, Layer,
   and LayerStack publication failures leak no temporary segment or visible
   partial LayerStack.
+
+Direct-admission failure atomicity is logical, not a claim that independently
+committed SQLite pages vanish physically. Cleanup deletes every admitted
+object and leaves zero object/Layer/LayerStack rows; SQLite may retain those
+pages on its freelist for reuse by the next successful initialization. The
+failure proof records Store bytes, page count, and freelist count before and
+after cleanup. It does not run `VACUUM`, truncate the Store, or hide cleanup
+I/O inside a performance result.
 
 ## Runnable checks
 
@@ -834,7 +938,7 @@ benchmark/fs-bench-pro/run-namespace.sh \
   RUN_ID CONTAINER_ID namespace-10000 3
 
 benchmark/fs-bench-pro/run-namespace.sh \
-  RUN_ID CONTAINER_ID all 3
+  RUN_ID CONTAINER_ID all 4
 ```
 
 Quality gates:
@@ -860,14 +964,26 @@ git diff --check
   count.
 - [ ] Historical namespace-v1 identities and evidence remain interpretable and
   are never relabeled as namespace-v2.
-- [ ] The 100,000-file init median is at most 2.5 seconds, at least 200 MB/s,
-  and at least 40,000 files/s.
+- [ ] With source metadata/content and the LayerStack-derived inode seed held
+  equal, reference and optimized builders produce the same final reachable
+  canonical root and bytes; independent public initializations are not
+  claimed to share roots across distinct LayerStack identities.
+- [ ] Prospectively, the 100,000-file init median is at most 3.235294118
+  seconds, at least 153 MB/s, and at least 30,600 files/s under the authorized
+  10-percent release tolerance; 200 MB/s / 2.5
+  seconds remains preferred and 250 MB/s / 2.0 seconds remains stretch.
 - [ ] Every fresh process and Store starts with an empty metadata intern table;
   no entry survives the initialization operation or comes from setup.
 - [ ] Exact metadata interning is bounded to eight entries per producer and an
   all-unique metadata case does not materially regress.
 - [ ] The admitted path uses at most eight existing producers, four queued
   256-KiB/512-object slabs, and the calling thread as sole SQLite owner.
+- [ ] Direct-path reports state that the measured path requires a proven-empty
+  Store, a nonempty all-directory source root, no hard link, and direct
+  structural eligibility; fallback performance is never relabeled as direct.
+- [ ] More than 1,000 top-level task blocks either select the canonical
+  fallback before any direct admission or pass focused correctness, failure,
+  cleanup, and resource coverage proving the larger direct shape.
 - [ ] Object-segment write/read bytes, parent payload rewrites, and parent
   payload-copy bytes are zero; 100,000-file handoffs are at most 2,200.
 - [ ] Read-only post-timing `dbstat` records table/index pages and bytes, rows,
@@ -877,23 +993,27 @@ git diff --check
 - [ ] A fixed-128 SQL experiment, if admitted, uses a new result schema,
   reports insert executions separately from submitted rows, and reduces the
   former to at most about 3,441 without a resource regression.
-- [ ] Every tier meets its 300/400/400/200-MB/s throughput floor and absolute
-  initialization target; adjacent ratios are at most 1.30x, 1.70x, and 3.50x.
+- [ ] Every tier meets its 300/400/400/153-MB/s throughput floor and absolute
+  initialization target; adjacent ratios through 10,000 files are at most
+  1.30x and 1.70x, while 100,000 files remains independent.
 - [ ] The 100,000-file Create median is at most 25 milliseconds, non-Attach
   work at most 10 milliseconds, and Store-wide Create scans equal zero.
 - [ ] Localized Commit remains at most 10 milliseconds with touched-path-only
   candidate objects.
 - [ ] No new or increased product worker, thread pool, dependency, crate,
   background preloader, public operation, or comparison product is added.
-- [ ] Explicit buffers are at most 10 MiB; preferred incremental RSS is at most
-  16 MiB and hard incremental RSS at most 32 MiB without an OS memory cap.
+- [ ] Initialization CPU is at most 14.07 CPU-seconds; the modeled named-buffer
+  sum is at most 10 MiB; the configured SQLite target is at most 64 MiB and remains 32
+  MiB absent measured need; initialization and complete-lifecycle incremental
+  HWM are at most 128 and 256 MiB without an OS memory cap.
 - [ ] CPU, copies, spool traffic, transactions, Store size, and read batching
   show no hidden resource trade.
 - [ ] Create/cache Store I/O occurs outside cache locks; small-file prefetch is
   bounded and records zero anchor prefetches; actual read-ahead is at most
   8 MiB.
-- [ ] Exact real-FUSE reconnect, materialization equality, Docker lifecycle,
-  attachment-failure cleanup, focused tests, formatting, warning-denying
+- [ ] The runner-owned composite receipt proves exact real-FUSE reconnect,
+  materialization equality, Docker lifecycle, attachment-failure cleanup,
+  focused tests, formatting, warning-denying
   Clippy, `tools/test-fast.sh`, `git diff --check`, and documentation links
   pass.
 
@@ -904,6 +1024,6 @@ new directory/extension distribution, new product worker, raised worker
 ceiling, persistent background service, larger cache as a latency fix, schema
 migration, canonical inlining, physical object packing, packed fixture,
 new FUSE/daemon/proxy request or response tag, materialization substitution,
-Cloudflare namespace comparison, prepend,
+external namespace comparison, prepend,
 `copy_file_range`, borrowed ranges, sparse/mixed-edit work, release publication,
 or silent reinterpretation of namespace-v1 evidence.

@@ -175,20 +175,20 @@ impl<'a, S: ObjectStore> DeferredDirectory<'a, S> {
     }
 
     pub(crate) fn commit(&mut self, root: DirectoryStateRoot) -> CoreResult<u64> {
-        let Some(state_bytes) = self.objects.get(&root.0).cloned() else {
+        let Some(state_bytes) = self.objects.remove(&root.0) else {
             return Ok(0);
         };
         let state = decode_directory_state(&state_bytes)?;
         let mut committed = BTreeSet::new();
         self.commit_node(state.mapping_root, &mut committed)?;
-        if self.store.put(&state_bytes)? != root.0 {
+        if self.store.put_owned(state_bytes)? != root.0 {
             return Err(CoreError::IdentityMismatch);
         }
         u64::try_from(committed.len()).map_err(|_| CoreError::LengthOverflow)
     }
 
     fn commit_node(&mut self, id: ObjectId, committed: &mut BTreeSet<ObjectId>) -> CoreResult<()> {
-        let Some(canonical) = self.objects.get(&id).cloned() else {
+        let Some(canonical) = self.objects.remove(&id) else {
             return Ok(());
         };
         if !committed.insert(id) {
@@ -199,7 +199,7 @@ impl<'a, S: ObjectStore> DeferredDirectory<'a, S> {
                 self.commit_node(child, committed)?;
             }
         }
-        if self.store.put(&canonical)? != id {
+        if self.store.put_owned(canonical)? != id {
             return Err(CoreError::IdentityMismatch);
         }
         Ok(())
@@ -717,7 +717,7 @@ pub(super) fn emit_directory_node<S: ObjectStore>(
 ) -> CoreResult<NodeSummary> {
     let (max, entries, encoded_bytes, level) = node_fields(&node);
     let canonical = encode_directory_node(&node)?;
-    let id = store.put(&canonical)?;
+    let id = store.put_owned(canonical)?;
     counters.nodes_created = counters
         .nodes_created
         .checked_add(1)

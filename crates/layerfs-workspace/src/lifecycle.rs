@@ -345,16 +345,32 @@ impl Workspaces {
                 return Err(error);
             }
         };
+        #[cfg(debug_assertions)]
+        if std::env::var("LAYERFS_WORKSPACE_INJECT_POST_ATTACH_FAILURE").as_deref() == Ok("1") {
+            drop(handle);
+            std::fs::remove_dir_all(&state)?;
+            return Err(WorkspaceError::InvalidPlacement);
+        }
         *worker
             .projection_handle
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)? = Some(handle);
-        worker
+        let (create_read, cache_rows, cache_bytes) = worker
             .workspace
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?
             .reader
-            .reset_read_metrics()?;
+            .take_create_metrics()?;
+        if matches!(
+            &request.placement,
+            crate::WorkspacePlacement::Container { .. }
+        ) {
+            layerfs_layerstack_store::note_workspace_create_snapshot(
+                create_read,
+                cache_rows,
+                cache_bytes,
+            )?;
+        }
         let session = session(&worker)?;
         self.sessions
             .lock()
@@ -375,6 +391,12 @@ impl Workspaces {
         if worker.has_executions()? {
             return Ok(WorkspaceCommitResult::Busy);
         }
+        let commit_read_before = worker
+            .workspace
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .reader
+            .read_metrics_snapshot()?;
         let started = Instant::now();
         let paused = crate::projection::pause(&worker);
         layerfs_layerstack_store::note_workspace_commit_phase(
@@ -416,14 +438,20 @@ impl Workspaces {
                 .lock()
                 .map_err(|_| WorkspaceError::WorkspaceBusy)?;
             let previous_head = workspace.expected_head;
-            match workspace.commit() {
+            let committed = match workspace.commit() {
                 Ok((outcome, transition)) => Ok((
                     WorkspaceCommitResult::from_outcome(outcome, previous_head),
                     transition,
                 )),
                 Err(error) => WorkspaceError::from_commit(error)
                     .map(|result| (result, CommitTransition::Rebased)),
-            }
+            };
+            let commit_read_after = workspace.reader.read_metrics_snapshot()?;
+            layerfs_layerstack_store::note_workspace_commit_reads(
+                commit_read_before,
+                commit_read_after,
+            )?;
+            committed
         })();
         let presentation = match &result {
             Ok((

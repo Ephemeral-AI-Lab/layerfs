@@ -518,8 +518,12 @@ fn inode_table_apply_insertions_fallible<S: ObjectStore>(
         }
     }
     let (len_bytes, capacity_bytes) = root.allocation_bytes()?;
-    emit_insert_node(store, root, counters)
-        .map(|summary| (InodeTableRoot(summary.id), len_bytes, capacity_bytes))
+    let mut live_tree_bytes = capacity_bytes;
+    store.note_transient_owned_bytes(live_tree_bytes)?;
+    let result = emit_insert_node(store, root, counters, &mut live_tree_bytes)
+        .map(|summary| (InodeTableRoot(summary.id), len_bytes, capacity_bytes));
+    store.note_transient_owned_bytes(0)?;
+    result
 }
 
 enum InsertNode {
@@ -611,15 +615,37 @@ fn emit_insert_node<S: ObjectStore>(
     store: &mut S,
     node: InsertNode,
     counters: &mut InodeTableCounters,
+    live_tree_bytes: &mut u64,
 ) -> CoreResult<Summary> {
     match node {
-        InsertNode::Leaf(entries) => emit(store, InodeTableNodeV1::Leaf(entries), counters),
+        InsertNode::Leaf(entries) => {
+            let owned = (entries.capacity() * std::mem::size_of::<(InodeId, ObjectId)>()) as u64;
+            store.note_transient_owned_bytes(*live_tree_bytes)?;
+            let result = emit(store, InodeTableNodeV1::Leaf(entries), counters);
+            *live_tree_bytes = live_tree_bytes
+                .checked_sub(owned)
+                .ok_or(CoreError::LengthOverflow)?;
+            store.note_transient_owned_bytes(*live_tree_bytes)?;
+            result
+        }
         InsertNode::Branch { level, children } => {
+            let owned = (children.capacity() * std::mem::size_of::<InsertNode>()) as u64;
             let children = children
                 .into_iter()
-                .map(|child| emit_insert_node(store, child, counters))
+                .map(|child| emit_insert_node(store, child, counters, live_tree_bytes))
                 .collect::<CoreResult<Vec<_>>>()?;
-            emit_branch(store, level, children, counters)
+            let summaries = (children.capacity() * std::mem::size_of::<Summary>()) as u64;
+            store.note_transient_owned_bytes(
+                live_tree_bytes
+                    .checked_add(summaries)
+                    .ok_or(CoreError::LengthOverflow)?,
+            )?;
+            let result = emit_branch(store, level, children, counters);
+            *live_tree_bytes = live_tree_bytes
+                .checked_sub(owned)
+                .ok_or(CoreError::LengthOverflow)?;
+            store.note_transient_owned_bytes(*live_tree_bytes)?;
+            result
         }
     }
 }
@@ -1543,7 +1569,7 @@ fn emit<S: ObjectStore>(
     };
     let canonical = encode_inode_table_node(&node)?;
     let min = inode_node_min(&node)?;
-    let id = store.put(&canonical)?;
+    let id = store.put_owned(canonical)?;
     counters.nodes_created = counters
         .nodes_created
         .checked_add(1)

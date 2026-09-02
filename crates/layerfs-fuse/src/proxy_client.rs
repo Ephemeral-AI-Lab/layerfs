@@ -10,7 +10,8 @@ use std::sync::{Mutex, RwLock};
 
 const CONNECTIONS: usize = 1;
 const MAX_PENDING_UNLINKS: usize = 16_384;
-const READ_AHEAD_BYTES: usize = 16 * 1024 * 1024;
+const READ_AHEAD_BYTES: usize = 2 * 1024 * 1024;
+const READ_AHEAD_ENTRIES: usize = 4;
 const WRITE_COALESCE_BYTES: usize = 1024 * 1024;
 type DirectoryEntries = Vec<(NodeId, Kind, Vec<u8>)>;
 type DirectoryEntriesPlus = Vec<(Attr, Vec<u8>)>;
@@ -36,7 +37,7 @@ struct Cache {
     pending_closed: Vec<ClosedCreate>,
     pending_closed_bytes: usize,
     pending_unlinks: Vec<(NodeId, Vec<u8>)>,
-    read_ahead: Option<ReadAhead>,
+    read_ahead: BTreeMap<NodeId, ReadAhead>,
 }
 
 struct CachedDirectory {
@@ -45,7 +46,6 @@ struct CachedDirectory {
 }
 
 struct ReadAhead {
-    node: NodeId,
     offset: u64,
     bytes: Vec<u8>,
     served: usize,
@@ -653,6 +653,7 @@ impl FilesystemPort for ProxyClient {
     fn unpin(&self, node: NodeId, writable: bool) -> PortResult<()> {
         let _gate = self.gate.write().map_err(|_| PortError::Io)?;
         self.flush_write_locked()?;
+        self.invalidate_read_ahead(node)?;
         let pending = self
             .cache
             .lock()
@@ -711,17 +712,34 @@ impl FilesystemPort for ProxyClient {
             fetched.len() as u64,
             output.len() as u64,
         );
+        if fetched.len() <= output.len() {
+            return Ok(output);
+        }
         let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
-        if let Some(previous) = cache.read_ahead.take() {
+        if let Some(previous) = cache.read_ahead.remove(&node) {
             self.read_metrics
                 .note_unused(previous.bytes.len().saturating_sub(previous.served) as u64);
         }
-        cache.read_ahead = Some(ReadAhead {
+        if cache.read_ahead.len() == READ_AHEAD_ENTRIES {
+            if let Some((_, previous)) = cache.read_ahead.pop_first() {
+                self.read_metrics
+                    .note_unused(previous.bytes.len().saturating_sub(previous.served) as u64);
+            }
+        }
+        cache.read_ahead.insert(
             node,
-            offset,
-            bytes: fetched,
-            served: output.len(),
-        });
+            ReadAhead {
+                offset,
+                bytes: fetched,
+                served: output.len(),
+            },
+        );
+        let cached = cache
+            .read_ahead
+            .values()
+            .map(|read| read.bytes.len() as u64)
+            .sum();
+        self.read_metrics.note_config(cached, 0);
         Ok(output)
     }
 
@@ -890,7 +908,7 @@ impl ProxyClient {
     #[doc(hidden)]
     pub fn take_read_metrics(&self) -> crate::FuseReadMetrics {
         if let Ok(mut cache) = self.cache.lock() {
-            if let Some(read) = cache.read_ahead.take() {
+            for (_, read) in std::mem::take(&mut cache.read_ahead) {
                 self.read_metrics
                     .note_unused(read.bytes.len().saturating_sub(read.served) as u64);
             }
@@ -954,7 +972,7 @@ impl ProxyClient {
 
     fn cached_read(&self, node: NodeId, offset: u64, size: usize) -> PortResult<Option<Vec<u8>>> {
         let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
-        let Some(read) = cache.read_ahead.as_mut().filter(|read| read.node == node) else {
+        let Some(read) = cache.read_ahead.get_mut(&node) else {
             return Ok(None);
         };
         let Some(relative) = offset
@@ -981,15 +999,9 @@ impl ProxyClient {
 
     fn invalidate_read_ahead(&self, node: NodeId) -> PortResult<()> {
         let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
-        if cache
-            .read_ahead
-            .as_ref()
-            .is_some_and(|read| read.node == node)
-        {
-            if let Some(read) = cache.read_ahead.take() {
-                self.read_metrics
-                    .note_unused(read.bytes.len().saturating_sub(read.served) as u64);
-            }
+        if let Some(read) = cache.read_ahead.remove(&node) {
+            self.read_metrics
+                .note_unused(read.bytes.len().saturating_sub(read.served) as u64);
         }
         Ok(())
     }

@@ -115,6 +115,10 @@ pub struct WorkspaceCommitReceipt {
     pub in_place_rebase_ns: u64,
     pub resume_ns: u64,
     pub unattributed_ns: u64,
+    pub snapshot_database_calls: u64,
+    pub snapshot_database_rows: u64,
+    pub snapshot_database_bytes: u64,
+    pub payload_bytes_read: u64,
 }
 
 impl WorkspaceCommitReceipt {
@@ -156,13 +160,14 @@ pub enum WorkspaceCommitPhase {
     Resume,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum WorkspaceLifecycleKind {
+    #[default]
     Attach,
     End,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct WorkspaceLifecycleReceipt {
     pub kind: WorkspaceLifecycleKind,
     pub total_ns: u64,
@@ -175,6 +180,15 @@ pub struct WorkspaceLifecycleReceipt {
     pub cleanup_ns: u64,
     pub unattributed_ns: u64,
     pub docker_calls: u64,
+    pub snapshot_database_calls: u64,
+    pub snapshot_database_rows: u64,
+    pub snapshot_database_bytes: u64,
+    pub snapshot_cache_rows_at_create: u64,
+    pub snapshot_cache_bytes_at_create: u64,
+    pub snapshot_store_wide_scans: u64,
+    pub small_file_prefetch_eligible: u64,
+    pub small_file_prefetch_bytes: u64,
+    pub anchor_prefetch_count: u64,
 }
 
 impl WorkspaceLifecycleReceipt {
@@ -289,6 +303,35 @@ pub(crate) fn note_workspace_admission(
     });
 }
 
+pub fn note_workspace_commit_reads(
+    before: WorkspaceReadReceipt,
+    after: WorkspaceReadReceipt,
+) -> Result<()> {
+    WORKSPACE_COMMIT.with(|current| {
+        let mut current = current.borrow_mut();
+        let receipt = current
+            .as_mut()
+            .ok_or(StoreError::Integrity("Workspace Commit timing"))?;
+        receipt.snapshot_database_calls = after
+            .snapshot_database_calls
+            .checked_sub(before.snapshot_database_calls)
+            .ok_or(StoreError::Integrity("Workspace Commit read metrics"))?;
+        receipt.snapshot_database_rows = after
+            .snapshot_database_rows
+            .checked_sub(before.snapshot_database_rows)
+            .ok_or(StoreError::Integrity("Workspace Commit read metrics"))?;
+        receipt.snapshot_database_bytes = after
+            .snapshot_database_bytes
+            .checked_sub(before.snapshot_database_bytes)
+            .ok_or(StoreError::Integrity("Workspace Commit read metrics"))?;
+        receipt.payload_bytes_read = after
+            .payload_bytes_read
+            .checked_sub(before.payload_bytes_read)
+            .ok_or(StoreError::Integrity("Workspace Commit read metrics"))?;
+        Ok(())
+    })
+}
+
 pub fn note_workspace_capture(captured_files: u64, captured_bytes: u64) {
     WORKSPACE_COMMIT.with(|current| {
         if let Some(receipt) = current.borrow_mut().as_mut() {
@@ -324,6 +367,34 @@ pub fn record_workspace_lifecycle(receipt: WorkspaceLifecycleReceipt) -> Result<
             .push(StorageReceipt::WorkspaceLifecycle(receipt));
     });
     Ok(())
+}
+
+pub fn note_workspace_create_snapshot(
+    read: WorkspaceReadReceipt,
+    cache_rows: u64,
+    cache_bytes: u64,
+) -> Result<()> {
+    RECEIPTS.with(|receipts| {
+        let mut receipts = receipts.borrow_mut();
+        let lifecycle = receipts
+            .iter_mut()
+            .rev()
+            .find_map(|receipt| match receipt {
+                StorageReceipt::WorkspaceLifecycle(receipt)
+                    if receipt.kind == WorkspaceLifecycleKind::Attach =>
+                {
+                    Some(receipt)
+                }
+                _ => None,
+            })
+            .ok_or(StoreError::Integrity("Workspace Create lifecycle receipt"))?;
+        lifecycle.snapshot_database_calls = read.snapshot_database_calls;
+        lifecycle.snapshot_database_rows = read.snapshot_database_rows;
+        lifecycle.snapshot_database_bytes = read.snapshot_database_bytes;
+        lifecycle.snapshot_cache_rows_at_create = cache_rows;
+        lifecycle.snapshot_cache_bytes_at_create = cache_bytes;
+        Ok(())
+    })
 }
 
 pub(crate) fn record_candidate(receipt: CandidateReceipt) -> Result<()> {

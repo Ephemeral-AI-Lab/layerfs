@@ -109,7 +109,7 @@ pub(super) fn store_directory_state<S: ObjectStore>(
         mapping_root: node.id,
     };
     let canonical = encode_directory_state(state)?;
-    Ok(DirectoryStateRoot(store.put(&canonical)?))
+    Ok(DirectoryStateRoot(store.put_owned(canonical)?))
 }
 
 pub fn validate_inode_record<S: ObjectRead>(

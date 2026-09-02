@@ -51,8 +51,8 @@ Workspace lifecycle cost.
 
 | Scenario ID | Status | Load | Exact timed operation | Required oracle |
 | --- | --- | --- | --- | --- |
-| `cold-create-32m` | Registered, paired; frozen | Existing 32 MiB fixture | Existing empty-Branch create lifecycle, unchanged | Existing final size, digest, Commit, visibility, and reopen proof |
-| `read-32m` | Registered, paired; frozen | Existing 32 MiB file | Existing complete sequential-read lifecycle, unchanged | Exactly 32 MiB read; root and payload unchanged after reopen |
+| `cold-create-32m` | Registered; frozen | Existing 32 MiB fixture | Existing empty-Branch create lifecycle, unchanged | Existing final size, digest, Commit, visibility, and reopen proof |
+| `read-32m` | Registered; frozen | Existing 32 MiB file | Existing complete sequential-read lifecycle, unchanged | Exactly 32 MiB read; root and payload unchanged after reopen |
 | `payload-create-1m` | Draft | First 1 MiB of the new 100 MiB fixture | Create one file, sync, Commit, visibility, End | Exact 1 MiB size, digest, canonical root, and reopen result |
 | `payload-create-10m` | Draft | First 10 MiB of the same fixture | Same create lifecycle | Exact 10 MiB size, digest, canonical root, and reopen result |
 | `payload-create-100m` | Draft | Complete 100 MiB fixture | Same create lifecycle | Exact 100 MiB size, digest, canonical root, and reopen result |

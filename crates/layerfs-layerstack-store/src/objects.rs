@@ -4,8 +4,9 @@ use layerfs_content::object::access::{ObjectRead, ObjectStore};
 use layerfs_content::object::references::referenced_objects;
 use layerfs_content::{CoreError, CoreResult, ObjectId};
 use rusqlite::{params_from_iter, types::Value, Connection, OptionalExtension};
+#[cfg(test)]
 use std::cell::Cell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,6 +18,10 @@ pub const OBJECT_PAGE_BYTES: usize = 4 * 1024 * 1024;
 pub const ADMISSION_BATCH_COUNT: usize = OBJECT_PAGE_COUNT - 1;
 pub const ADMISSION_BATCH_BYTES: usize = OBJECT_PAGE_BYTES - 1;
 pub(crate) const INITIALIZATION_ADMISSION_BATCH_COUNT: usize = 8191;
+pub(crate) const INITIALIZATION_SLAB_BYTES: usize = 256 * 1024;
+pub(crate) const INITIALIZATION_SLAB_OBJECTS: usize = 512;
+pub(crate) const INITIALIZATION_SLAB_QUEUE_SLOTS: usize = 4;
+pub(crate) const INITIALIZATION_TASK_STRUCTURAL_BYTES: usize = 256 * 1024;
 const CANDIDATE_MEMORY_BYTES: usize = 8 * 1024 * 1024;
 // ponytail: about one million candidate IDs covers the 100k-file tier; move to
 // an on-disk hash index only when a larger measured campaign exceeds this bound.
@@ -71,10 +76,381 @@ fn note_read_batch_clone(bytes: usize) {
 #[cfg(not(feature = "test-instrumentation"))]
 fn note_read_batch_clone(_bytes: usize) {}
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+thread_local! {
+    static PARENT_PAYLOAD_COPY_BYTES: std::cell::Cell<Option<u64>> = const {
+        std::cell::Cell::new(None)
+    };
+}
+
+pub(crate) struct ParentPayloadCopyCounter(Option<u64>);
+
+impl ParentPayloadCopyCounter {
+    pub(crate) fn start() -> Self {
+        Self(PARENT_PAYLOAD_COPY_BYTES.with(|bytes| bytes.replace(Some(0))))
+    }
+
+    pub(crate) fn bytes(&self) -> u64 {
+        PARENT_PAYLOAD_COPY_BYTES.with(|bytes| bytes.get().unwrap_or(0))
+    }
+}
+
+impl Drop for ParentPayloadCopyCounter {
+    fn drop(&mut self) {
+        PARENT_PAYLOAD_COPY_BYTES.with(|bytes| bytes.set(self.0));
+    }
+}
+
+fn note_parent_payload_copy(bytes: usize) {
+    PARENT_PAYLOAD_COPY_BYTES.with(|total| {
+        if let Some(current) = total.get() {
+            total.set(Some(current.saturating_add(bytes as u64)));
+        }
+    });
+}
+
+#[derive(Debug, Eq, PartialEq)]
 pub struct CanonicalObject {
     pub id: ObjectId,
     pub bytes: Vec<u8>,
+}
+
+impl Clone for CanonicalObject {
+    fn clone(&self) -> Self {
+        note_parent_payload_copy(self.bytes.len());
+        Self {
+            id: self.id,
+            bytes: self.bytes.clone(),
+        }
+    }
+}
+
+pub(crate) struct InitializationObjectSlab {
+    pub objects: Vec<CanonicalObject>,
+    pub payload_bytes: usize,
+}
+
+pub(crate) struct InitializationTaskObjectBuffer {
+    objects: Vec<CanonicalObject>,
+    payload_bytes: usize,
+}
+
+impl InitializationTaskObjectBuffer {
+    pub(crate) fn new() -> Self {
+        Self {
+            objects: Vec::with_capacity(128),
+            payload_bytes: 0,
+        }
+    }
+
+    pub(crate) fn explicit_owned_bytes(&self) -> u64 {
+        self.payload_bytes as u64
+            + (self.objects.capacity() * std::mem::size_of::<CanonicalObject>()) as u64
+    }
+
+    pub(crate) fn hash_invocations(&self) -> u64 {
+        self.objects.len() as u64
+    }
+
+    pub(crate) fn move_into(self, store: &mut impl ObjectStore) -> CoreResult<()> {
+        for object in self.objects {
+            if store.put_owned(object.bytes)? != object.id {
+                return Err(CoreError::IdentityMismatch);
+            }
+        }
+        Ok(())
+    }
+
+    fn push_owned(&mut self, canonical: Vec<u8>) -> CoreResult<ObjectId> {
+        let owned = self
+            .payload_bytes
+            .checked_add(canonical.len())
+            .and_then(|payload| {
+                payload.checked_add(
+                    self.objects
+                        .len()
+                        .checked_add(1)?
+                        .checked_mul(std::mem::size_of::<CanonicalObject>())?,
+                )
+            })
+            .ok_or(CoreError::LengthOverflow)?;
+        if owned > INITIALIZATION_TASK_STRUCTURAL_BYTES {
+            return Err(CoreError::ObjectLimitExceeded);
+        }
+        let id = ObjectId::for_bytes(&canonical);
+        self.payload_bytes = self
+            .payload_bytes
+            .checked_add(canonical.len())
+            .ok_or(CoreError::LengthOverflow)?;
+        self.objects.push(CanonicalObject {
+            id,
+            bytes: canonical,
+        });
+        Ok(id)
+    }
+}
+
+impl ObjectStore for InitializationTaskObjectBuffer {
+    fn get(&self, _id: ObjectId) -> CoreResult<Vec<u8>> {
+        Err(CoreError::InvalidRecord("direct structural get"))
+    }
+
+    fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+        self.push_owned(canonical.to_vec())
+    }
+
+    fn put_owned(&mut self, canonical: Vec<u8>) -> CoreResult<ObjectId> {
+        self.push_owned(canonical)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct InitializationSlabWriterMetrics {
+    pub handoffs: u64,
+    pub objects: u64,
+    pub payload_bytes: u64,
+    pub payload_capacity_bytes: u64,
+    pub canonical_hash_calls: u64,
+    pub blocked_ns: u64,
+    pub partial_peak_objects: u64,
+    pub partial_peak_payload_bytes: u64,
+    pub candidate_copy_bytes: u64,
+    pub parent_payload_copy_bytes: u64,
+    pub structural_peak_bytes: u64,
+    pub producer_wall_ns: u64,
+    pub producer_completion_offset_ns: u64,
+    pub producer_tasks: u64,
+    pub producer_files: u64,
+    pub producer_bytes: u64,
+}
+
+#[derive(Default)]
+pub(crate) struct InitializationSlabQueueMetrics {
+    queued: AtomicU64,
+    queued_bytes: AtomicU64,
+    peak: AtomicU64,
+    peak_bytes: AtomicU64,
+}
+
+impl InitializationSlabQueueMetrics {
+    fn before_send(&self, bytes: usize) {
+        let queued = self.queued.fetch_add(1, Ordering::AcqRel) + 1;
+        let queued_bytes =
+            self.queued_bytes.fetch_add(bytes as u64, Ordering::AcqRel) + bytes as u64;
+        self.peak.fetch_max(
+            queued.min(INITIALIZATION_SLAB_QUEUE_SLOTS as u64),
+            Ordering::Relaxed,
+        );
+        self.peak_bytes.fetch_max(
+            queued_bytes.min((INITIALIZATION_SLAB_QUEUE_SLOTS * INITIALIZATION_SLAB_BYTES) as u64),
+            Ordering::Relaxed,
+        );
+    }
+
+    fn send_failed(&self, bytes: usize) {
+        self.received(bytes);
+    }
+
+    pub(crate) fn received(&self, bytes: usize) {
+        self.queued.fetch_sub(1, Ordering::AcqRel);
+        self.queued_bytes.fetch_sub(bytes as u64, Ordering::AcqRel);
+    }
+
+    pub(crate) fn peak(&self) -> u64 {
+        self.peak.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn peak_bytes(&self) -> u64 {
+        self.peak_bytes.load(Ordering::Relaxed)
+    }
+}
+
+pub(crate) struct InitializationSlabWriter {
+    sender: std::sync::mpsc::SyncSender<InitializationObjectSlab>,
+    queue: std::sync::Arc<InitializationSlabQueueMetrics>,
+    objects: Vec<CanonicalObject>,
+    payload_bytes: usize,
+    metrics: InitializationSlabWriterMetrics,
+}
+
+pub(crate) struct InitializationDirectAdmissionWriter<'admission, 'db> {
+    admission: &'admission mut InitializationSegmentAdmission<'db>,
+    error: Option<StoreError>,
+    transient_owned_bytes: u64,
+    pub metrics: InitializationSlabWriterMetrics,
+}
+
+impl<'admission, 'db> InitializationDirectAdmissionWriter<'admission, 'db> {
+    pub(crate) fn new(admission: &'admission mut InitializationSegmentAdmission<'db>) -> Self {
+        Self {
+            admission,
+            error: None,
+            transient_owned_bytes: 0,
+            metrics: InitializationSlabWriterMetrics::default(),
+        }
+    }
+
+    pub(crate) fn error(&mut self, fallback: CoreError) -> StoreError {
+        self.error.take().unwrap_or_else(|| fallback.into())
+    }
+
+    fn push_owned(&mut self, canonical: Vec<u8>, copied: bool) -> CoreResult<ObjectId> {
+        let id = ObjectId::for_bytes(&canonical);
+        self.metrics.canonical_hash_calls += 1;
+        let bytes = canonical.len() as u64;
+        self.metrics.payload_capacity_bytes = self
+            .metrics
+            .payload_capacity_bytes
+            .saturating_add(canonical.capacity() as u64);
+        self.admission
+            .observe_final_owned_bytes(self.transient_owned_bytes, canonical.capacity() as u64);
+        if let Err(error) = self.admission.admit_object(CanonicalObject {
+            id,
+            bytes: canonical,
+        }) {
+            self.error = Some(error);
+            return Err(CoreError::Io);
+        }
+        self.admission
+            .observe_final_owned_bytes(self.transient_owned_bytes, 0);
+        self.metrics.objects += 1;
+        self.metrics.payload_bytes = self.metrics.payload_bytes.saturating_add(bytes);
+        if copied {
+            self.metrics.candidate_copy_bytes =
+                self.metrics.candidate_copy_bytes.saturating_add(bytes);
+        }
+        Ok(id)
+    }
+}
+
+impl ObjectStore for InitializationDirectAdmissionWriter<'_, '_> {
+    fn get(&self, _id: ObjectId) -> CoreResult<Vec<u8>> {
+        Err(CoreError::InvalidRecord("direct initialization get"))
+    }
+
+    fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+        self.push_owned(canonical.to_vec(), true)
+    }
+
+    fn put_owned(&mut self, canonical: Vec<u8>) -> CoreResult<ObjectId> {
+        self.push_owned(canonical, false)
+    }
+
+    fn note_transient_owned_bytes(&mut self, bytes: u64) -> CoreResult<()> {
+        self.transient_owned_bytes = bytes;
+        self.admission.observe_final_owned_bytes(bytes, 0);
+        Ok(())
+    }
+}
+
+impl InitializationSlabWriter {
+    pub(crate) fn new(
+        sender: std::sync::mpsc::SyncSender<InitializationObjectSlab>,
+        queue: std::sync::Arc<InitializationSlabQueueMetrics>,
+    ) -> Self {
+        Self {
+            sender,
+            queue,
+            objects: Vec::with_capacity(INITIALIZATION_SLAB_OBJECTS),
+            payload_bytes: 0,
+            metrics: InitializationSlabWriterMetrics::default(),
+        }
+    }
+
+    pub(crate) fn finish(mut self) -> Result<InitializationSlabWriterMetrics> {
+        self.flush()?;
+        Ok(self.metrics)
+    }
+
+    pub(crate) fn note_hash_invocations(&mut self, calls: u64) {
+        self.metrics.canonical_hash_calls = self.metrics.canonical_hash_calls.saturating_add(calls);
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        if self.objects.is_empty() {
+            return Ok(());
+        }
+        let slab = InitializationObjectSlab {
+            objects: std::mem::take(&mut self.objects),
+            payload_bytes: std::mem::take(&mut self.payload_bytes),
+        };
+        self.queue.before_send(slab.payload_bytes);
+        match self.sender.try_send(slab) {
+            Ok(()) => {}
+            Err(std::sync::mpsc::TrySendError::Full(slab)) => {
+                let started = Instant::now();
+                if let Err(error) = self.sender.send(slab) {
+                    self.queue.send_failed(error.0.payload_bytes);
+                    return Err(StoreError::Integrity("initialization slab receiver"));
+                }
+                self.metrics.blocked_ns =
+                    self.metrics.blocked_ns.saturating_add(elapsed_ns(started));
+            }
+            Err(std::sync::mpsc::TrySendError::Disconnected(slab)) => {
+                self.queue.send_failed(slab.payload_bytes);
+                return Err(StoreError::Integrity("initialization slab receiver"));
+            }
+        }
+        self.metrics.handoffs += 1;
+        self.objects = Vec::with_capacity(INITIALIZATION_SLAB_OBJECTS);
+        Ok(())
+    }
+
+    fn push_owned(&mut self, canonical: Vec<u8>, copied: bool) -> CoreResult<ObjectId> {
+        if canonical.len() > INITIALIZATION_SLAB_BYTES {
+            return Err(CoreError::ObjectLimitExceeded);
+        }
+        if !self.objects.is_empty()
+            && (self.objects.len() == INITIALIZATION_SLAB_OBJECTS
+                || self.payload_bytes.saturating_add(canonical.len()) > INITIALIZATION_SLAB_BYTES)
+        {
+            self.flush().map_err(|_| CoreError::Io)?;
+        }
+        let id = ObjectId::for_bytes(&canonical);
+        self.metrics.canonical_hash_calls += 1;
+        self.payload_bytes += canonical.len();
+        self.metrics.objects += 1;
+        self.metrics.payload_bytes = self
+            .metrics
+            .payload_bytes
+            .saturating_add(canonical.len() as u64);
+        self.metrics.payload_capacity_bytes = self
+            .metrics
+            .payload_capacity_bytes
+            .saturating_add(canonical.capacity() as u64);
+        if copied {
+            self.metrics.candidate_copy_bytes = self
+                .metrics
+                .candidate_copy_bytes
+                .saturating_add(canonical.len() as u64);
+        }
+        self.objects.push(CanonicalObject {
+            id,
+            bytes: canonical,
+        });
+        self.metrics.partial_peak_objects = self
+            .metrics
+            .partial_peak_objects
+            .max(self.objects.len() as u64);
+        self.metrics.partial_peak_payload_bytes = self
+            .metrics
+            .partial_peak_payload_bytes
+            .max(self.payload_bytes as u64);
+        Ok(id)
+    }
+}
+
+impl ObjectStore for InitializationSlabWriter {
+    fn get(&self, _id: ObjectId) -> CoreResult<Vec<u8>> {
+        Err(CoreError::InvalidRecord("direct initialization get"))
+    }
+
+    fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+        self.push_owned(canonical.to_vec(), true)
+    }
+
+    fn put_owned(&mut self, canonical: Vec<u8>) -> CoreResult<ObjectId> {
+        self.push_owned(canonical, false)
+    }
 }
 
 pub trait ObjectSource: Send + Sync {
@@ -261,6 +637,7 @@ pub struct DeferredObjectStore {
     spill_count: u64,
 }
 
+#[cfg(test)]
 pub(crate) struct AppendOnlyInitializationWriter {
     writer: std::fs::File,
     reader: std::fs::File,
@@ -275,6 +652,7 @@ pub(crate) struct AppendOnlyInitializationWriter {
     get_calls: Cell<u64>,
 }
 
+#[cfg(test)]
 pub(crate) struct AppendOnlyInitializationSegment {
     reader: Option<BufReader<CountedFile>>,
     unbuffered_reader: Option<CountedFile>,
@@ -291,6 +669,7 @@ pub(crate) struct AppendOnlyInitializationSegment {
     get_calls: u64,
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct InitializationTaskBlock {
     pub task_ordinal: usize,
@@ -359,19 +738,6 @@ pub(crate) struct InitializationSegmentIoMetrics {
     pub passes: u64,
 }
 
-impl InitializationSegmentIoMetrics {
-    pub(crate) fn merge(&mut self, other: Self) {
-        self.frames = self.frames.saturating_add(other.frames);
-        self.payload_bytes = self.payload_bytes.saturating_add(other.payload_bytes);
-        self.framing_bytes = self.framing_bytes.saturating_add(other.framing_bytes);
-        self.write_calls = self.write_calls.saturating_add(other.write_calls);
-        self.write_bytes = self.write_bytes.saturating_add(other.write_bytes);
-        self.raw_read_calls = self.raw_read_calls.saturating_add(other.raw_read_calls);
-        self.raw_read_bytes = self.raw_read_bytes.saturating_add(other.raw_read_bytes);
-        self.passes = self.passes.saturating_add(other.passes);
-    }
-}
-
 impl Read for CountedFile {
     fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
         self.reads = self.reads.saturating_add(1);
@@ -420,6 +786,7 @@ impl Drop for TempPath {
     }
 }
 
+#[cfg(test)]
 impl AppendOnlyInitializationWriter {
     pub(crate) fn new(pending_limit: usize) -> Result<Self> {
         if pending_limit == 0 {
@@ -559,6 +926,7 @@ impl AppendOnlyInitializationWriter {
     }
 }
 
+#[cfg(test)]
 impl ObjectStore for AppendOnlyInitializationWriter {
     fn get(&self, _id: ObjectId) -> CoreResult<Vec<u8>> {
         self.get_calls.set(self.get_calls.get().saturating_add(1));
@@ -572,6 +940,7 @@ impl ObjectStore for AppendOnlyInitializationWriter {
     }
 }
 
+#[cfg(test)]
 impl AppendOnlyInitializationSegment {
     fn reader(&mut self) -> Result<&mut BufReader<CountedFile>> {
         if self.reader.is_none() {
@@ -1090,6 +1459,11 @@ pub(crate) struct InitializationAdmissionDiagnostics {
     pub batch_peak_payload_bytes: u64,
     pub batch_peak_vec_capacity: u64,
     pub pending_index_peak_entries: u64,
+    pub pending_index_peak_bytes: u64,
+    pub final_batch_peak_payload_bytes: u64,
+    pub final_batch_peak_vec_capacity: u64,
+    pub final_pending_index_peak_bytes: u64,
+    pub final_simultaneous_owned_peak_bytes: u64,
     pub sql_batch_count: u64,
     pub sql_row_shapes: BTreeSet<u64>,
     pub sql_submitted_rows: u64,
@@ -1104,6 +1478,22 @@ pub(crate) struct InitializationAdmissionDiagnostics {
     pub conflict_read_ns: u64,
     pub sql_begin_ns: u64,
     pub sql_commit_ns: u64,
+    pub pipeline_commit_count: u64,
+    pub pipeline_commit_ns: u64,
+    pub pipeline_commit_max_ns: u64,
+    pub pipeline_commit_max_ordinal: u64,
+    pub final_build_commit_count: u64,
+    pub final_build_commit_ns: u64,
+    pub final_build_commit_max_ns: u64,
+    pub final_build_commit_max_ordinal: u64,
+    pub publication_commit_ns: u64,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum InitializationSqlPhase {
+    Pipeline,
+    FinalBuild,
+    Publication,
 }
 
 impl InitializationAdmissionDiagnostics {
@@ -1112,6 +1502,7 @@ impl InitializationAdmissionDiagnostics {
         metrics: ObjectInsertMetrics,
         begin_ns: u64,
         commit_ns: u64,
+        phase: InitializationSqlPhase,
     ) {
         if metrics.submitted_rows != 0 {
             self.sql_batch_count += 1;
@@ -1152,6 +1543,28 @@ impl InitializationAdmissionDiagnostics {
             .saturating_add(metrics.conflict_read_ns);
         self.sql_begin_ns = self.sql_begin_ns.saturating_add(begin_ns);
         self.sql_commit_ns = self.sql_commit_ns.saturating_add(commit_ns);
+        let ordinal = self.sql_batch_count;
+        match phase {
+            InitializationSqlPhase::Pipeline => {
+                self.pipeline_commit_count += 1;
+                self.pipeline_commit_ns = self.pipeline_commit_ns.saturating_add(commit_ns);
+                if commit_ns > self.pipeline_commit_max_ns {
+                    self.pipeline_commit_max_ns = commit_ns;
+                    self.pipeline_commit_max_ordinal = ordinal;
+                }
+            }
+            InitializationSqlPhase::FinalBuild => {
+                self.final_build_commit_count += 1;
+                self.final_build_commit_ns = self.final_build_commit_ns.saturating_add(commit_ns);
+                if commit_ns > self.final_build_commit_max_ns {
+                    self.final_build_commit_max_ns = commit_ns;
+                    self.final_build_commit_max_ordinal = ordinal;
+                }
+            }
+            InitializationSqlPhase::Publication => {
+                self.publication_commit_ns = commit_ns;
+            }
+        }
     }
 }
 
@@ -1176,11 +1589,12 @@ struct AdmissionBatchMetrics {
 pub(crate) struct InitializationSegmentAdmission<'a> {
     db: &'a crate::schema::StoreDb,
     batch: Vec<CanonicalObject>,
-    pending: BTreeMap<ObjectId, usize>,
+    pending: HashMap<ObjectId, usize>,
     batch_bytes: usize,
     statement_number: u64,
     receipt: crate::CandidateReceipt,
     diagnostics: InitializationAdmissionDiagnostics,
+    final_phase: bool,
 }
 
 pub(crate) struct FinishedInitializationAdmission {
@@ -1308,18 +1722,6 @@ impl DeferredObjectStore {
             Ok(())
         })?;
         Ok(Some(ids))
-    }
-
-    pub fn read_prevalidated_objects(&self, ids: &[ObjectId]) -> Result<Vec<CanonicalObject>> {
-        if ids.len() > OBJECT_PAGE_COUNT {
-            return Err(StoreError::InvalidInput("object read page"));
-        }
-        ids.iter()
-            .map(|id| {
-                let bytes = self.get(*id)?.ok_or(StoreError::MissingObject(*id))?;
-                Ok(CanonicalObject { id: *id, bytes })
-            })
-            .collect()
     }
 
     fn order_missing(&self, missing: &SpillableObjectSet) -> Result<IdOrder> {
@@ -1541,15 +1943,38 @@ impl DeferredObjectStore {
         }
     }
 
+    #[cfg(test)]
     fn put(&mut self, id: ObjectId, canonical: &[u8]) -> Result<()> {
-        if let Some(known) = self.get(id)? {
+        layerfs_content::authenticate_identity(canonical, id)?;
+        self.put_prevalidated(id, canonical)
+    }
+
+    fn put_prevalidated(&mut self, id: ObjectId, canonical: &[u8]) -> Result<()> {
+        self.put_owned(id, canonical.to_vec())
+    }
+
+    fn put_owned(&mut self, id: ObjectId, canonical: Vec<u8>) -> Result<()> {
+        let known = match &self.storage {
+            DeferredObjects::Memory { rows, .. } => rows.get(&id).cloned(),
+            DeferredObjects::Spill(_) => self.get(id)?,
+        };
+        if let Some(known) = known {
             return if known == canonical {
                 Ok(())
             } else {
                 Err(StoreError::Integrity("candidate object collision"))
             };
         }
-        let charge = canonical.len().saturating_add(64);
+        let length = canonical.len();
+        let children = if self.references.is_some() {
+            let mut children = referenced_objects(&canonical)?;
+            children.sort();
+            children.dedup();
+            Some(children)
+        } else {
+            None
+        };
+        let charge = length.saturating_add(64);
         if matches!(&self.storage, DeferredObjects::Memory { bytes, .. } if bytes.saturating_add(charge) > CANDIDATE_MEMORY_BYTES)
         {
             self.spill()?;
@@ -1557,28 +1982,25 @@ impl DeferredObjectStore {
         match &mut self.storage {
             DeferredObjects::Memory { order, rows, bytes } => {
                 order.push(id);
-                rows.insert(id, canonical.to_vec());
+                rows.insert(id, canonical);
                 *bytes += charge;
             }
-            DeferredObjects::Spill(spill) => spill.put(id, canonical)?,
+            DeferredObjects::Spill(spill) => spill.put(id, &canonical)?,
         }
         self.reachable.push(id)?;
         self.count += 1;
         self.encoded_bytes = self
             .encoded_bytes
-            .checked_add(canonical.len() as u64)
+            .checked_add(length as u64)
             .ok_or(StoreError::Integrity("candidate bytes"))?;
         self.first_store_write_bytes = self
             .first_store_write_bytes
-            .checked_add(canonical.len() as u64)
+            .checked_add(length as u64)
             .ok_or(StoreError::Integrity("candidate first-store bytes"))?;
         if matches!(self.storage, DeferredObjects::Spill(_)) {
             self.spill_peak_bytes = self.spill_peak_bytes.max(self.encoded_bytes);
         }
-        if self.references.is_some() {
-            let mut children = referenced_objects(canonical)?;
-            children.sort();
-            children.dedup();
+        if let Some(children) = children {
             self.retain_references(id, &children);
         }
         Ok(())
@@ -1870,6 +2292,11 @@ impl<'a> ObjectBuffer<'a> {
     }
 
     #[doc(hidden)]
+    pub fn into_resumable(self) -> DeferredObjectStore {
+        self.objects
+    }
+
+    #[doc(hidden)]
     pub fn into_prevalidated(self) -> Result<DeferredObjectStore> {
         self.objects.all_reachable()
     }
@@ -1914,7 +2341,7 @@ impl<'a> ObjectBuffer<'a> {
 
     pub(crate) fn merge_prevalidated(&mut self, objects: DeferredObjectStore) -> Result<()> {
         objects.visit_prevalidated_order(&objects.reachable, &mut |id, bytes| {
-            self.objects.put(id, bytes)
+            self.objects.put_prevalidated(id, bytes)
         })
     }
 }
@@ -1932,7 +2359,17 @@ impl ObjectStore for ObjectBuffer<'_> {
 
     fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
         let id = ObjectId::for_bytes(canonical);
-        self.objects.put(id, canonical).map_err(|_| CoreError::Io)?;
+        self.objects
+            .put_prevalidated(id, canonical)
+            .map_err(|_| CoreError::Io)?;
+        Ok(id)
+    }
+
+    fn put_owned(&mut self, canonical: Vec<u8>) -> CoreResult<ObjectId> {
+        let id = ObjectId::for_bytes(&canonical);
+        self.objects
+            .put_owned(id, canonical)
+            .map_err(|_| CoreError::Io)?;
         Ok(id)
     }
 }
@@ -1974,7 +2411,7 @@ pub(crate) fn combine_candidates(
     for candidate in candidates {
         candidate.visit_batches(&mut |batch, _| {
             for object in batch {
-                combined.put(object.id, &object.bytes)?;
+                combined.put_prevalidated(object.id, &object.bytes)?;
             }
             Ok(())
         })?;
@@ -2107,16 +2544,6 @@ impl crate::schema::StoreDb {
                     }
                 }
             }
-            let reused_ids = reused.iter().map(|(id, _)| *id).collect::<Vec<_>>();
-            let candidate = objects.read_prevalidated_objects(&reused_ids)?;
-            let durable = self.read_object_rows(&reused_ids)?;
-            if candidate
-                .iter()
-                .zip(&durable)
-                .any(|(candidate, durable)| candidate.bytes != durable.bytes)
-            {
-                return Err(StoreError::Integrity("object collision"));
-            }
             plan.reused_objects += reused.len() as u64;
             plan.reused_bytes = plan
                 .reused_bytes
@@ -2159,6 +2586,15 @@ impl crate::schema::StoreDb {
             [],
             |row| row.get::<_, bool>(0),
         )?)
+    }
+
+    pub(crate) fn clear_failed_direct_initialization(&self) -> Result<()> {
+        let mut connection = self.writer()?;
+        let transaction =
+            connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        transaction.execute("DELETE FROM objects", [])?;
+        transaction.commit()?;
+        Ok(())
     }
 }
 
@@ -2233,25 +2669,18 @@ impl<'a> InitializationSegmentAdmission<'a> {
         Ok(Self {
             db,
             batch: Vec::with_capacity(INITIALIZATION_ADMISSION_BATCH_COUNT),
-            pending: BTreeMap::new(),
+            pending: HashMap::new(),
             batch_bytes: 0,
             statement_number: 0,
             receipt: crate::CandidateReceipt::default(),
             diagnostics: InitializationAdmissionDiagnostics::default(),
+            final_phase: false,
         })
     }
 
     #[cfg(test)]
     pub(crate) fn admit_worker_segment(&mut self, objects: DeferredObjectStore) -> Result<()> {
         self.admit(objects)
-    }
-
-    pub(crate) fn admit_append_only_block(
-        &mut self,
-        segment: &mut AppendOnlyInitializationSegment,
-        block: InitializationTaskBlock,
-    ) -> Result<()> {
-        segment.consume_block(block, |object| self.admit_object(object))
     }
 
     pub(crate) fn finish(self) -> Result<FinishedInitializationAdmission> {
@@ -2263,20 +2692,42 @@ impl<'a> InitializationSegmentAdmission<'a> {
         })
     }
 
+    pub(crate) fn prepare_final_phase(&mut self) -> Result<()> {
+        self.flush_batch()?;
+        self.batch = Vec::with_capacity(INITIALIZATION_SLAB_OBJECTS);
+        self.pending = HashMap::with_capacity(INITIALIZATION_SLAB_OBJECTS);
+        self.final_phase = true;
+        Ok(())
+    }
+
+    fn observe_final_owned_bytes(&mut self, transient: u64, incoming: u64) {
+        if !self.final_phase {
+            return;
+        }
+        let owned = transient
+            .saturating_add(incoming)
+            .saturating_add(self.batch_bytes as u64)
+            .saturating_add((self.batch.capacity() * std::mem::size_of::<CanonicalObject>()) as u64)
+            .saturating_add((self.pending.capacity() * 64) as u64);
+        self.diagnostics.final_simultaneous_owned_peak_bytes = self
+            .diagnostics
+            .final_simultaneous_owned_peak_bytes
+            .max(owned);
+    }
+
     #[cfg(test)]
     fn admit(&mut self, objects: DeferredObjectStore) -> Result<()> {
         objects.consume_prevalidated_pages(|page| self.admit_page(page))
     }
 
-    #[cfg(test)]
-    fn admit_page(&mut self, page: Vec<CanonicalObject>) -> Result<()> {
+    pub(crate) fn admit_page(&mut self, page: Vec<CanonicalObject>) -> Result<()> {
         for object in page {
             self.admit_object(object)?;
         }
         Ok(())
     }
 
-    fn admit_object(&mut self, object: CanonicalObject) -> Result<()> {
+    pub(crate) fn admit_object(&mut self, object: CanonicalObject) -> Result<()> {
         if self.pending.contains_key(&object.id) {
             return self.admit_duplicate(object.id, &object.bytes);
         }
@@ -2329,6 +2780,24 @@ impl<'a> InitializationSegmentAdmission<'a> {
             .diagnostics
             .pending_index_peak_entries
             .max(self.pending.len() as u64);
+        self.diagnostics.pending_index_peak_bytes = self
+            .diagnostics
+            .pending_index_peak_bytes
+            .max((self.pending.capacity() * 64) as u64);
+        if self.final_phase {
+            self.diagnostics.final_batch_peak_payload_bytes = self
+                .diagnostics
+                .final_batch_peak_payload_bytes
+                .max(self.batch_bytes as u64);
+            self.diagnostics.final_batch_peak_vec_capacity = self
+                .diagnostics
+                .final_batch_peak_vec_capacity
+                .max(self.batch.capacity() as u64);
+            self.diagnostics.final_pending_index_peak_bytes = self
+                .diagnostics
+                .final_pending_index_peak_bytes
+                .max((self.pending.capacity() * 64) as u64);
+        }
         Ok(())
     }
 
@@ -2336,17 +2805,26 @@ impl<'a> InitializationSegmentAdmission<'a> {
         if self.batch.is_empty() {
             return Ok(());
         }
-        let batch = std::mem::replace(
-            &mut self.batch,
-            Vec::with_capacity(INITIALIZATION_ADMISSION_BATCH_COUNT),
-        );
+        let capacity = self.batch.capacity();
+        let mut batch = std::mem::take(&mut self.batch);
+        batch.sort_unstable_by(|left, right| left.id.as_bytes().cmp(right.id.as_bytes()));
         let metrics = insert_initialization_segment_admission_batch(
             self.db,
             &batch,
             &mut self.statement_number,
         )?;
-        self.diagnostics
-            .record_sql_batch(metrics.insert, metrics.begin_ns, metrics.commit_ns);
+        drop(batch);
+        self.batch = Vec::with_capacity(capacity);
+        self.diagnostics.record_sql_batch(
+            metrics.insert,
+            metrics.begin_ns,
+            metrics.commit_ns,
+            if self.final_phase {
+                InitializationSqlPhase::FinalBuild
+            } else {
+                InitializationSqlPhase::Pipeline
+            },
+        );
         self.batch_bytes = 0;
         self.pending.clear();
         self.receipt.candidate_objects += metrics.insert.objects;
@@ -2719,6 +3197,17 @@ impl ObjectSource for crate::schema::StoreDb {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parent_payload_copy_counter_has_a_positive_control() {
+        let counter = ParentPayloadCopyCounter::start();
+        let object = CanonicalObject {
+            id: ObjectId::for_bytes(b"parent-copy-control"),
+            bytes: b"parent-copy-control".to_vec(),
+        };
+        let copy = object.clone();
+        assert_eq!(counter.bytes(), copy.bytes.len() as u64);
+    }
 
     fn sealed_segment(objects: Vec<CanonicalObject>) -> DeferredObjectStore {
         let mut segment = DeferredObjectStore::new_all_reachable().unwrap();
@@ -3214,7 +3703,7 @@ mod tests {
         .unwrap();
         transaction.commit().unwrap();
         let mut diagnostics = finished.diagnostics;
-        diagnostics.record_sql_batch(final_metrics, 0, 0);
+        diagnostics.record_sql_batch(final_metrics, 0, 0, InitializationSqlPhase::Publication);
         assert!(final_metrics.objects < retained_objects);
         assert_eq!(diagnostics.cross_batch_skipped_objects, 1);
         assert_eq!(diagnostics.sql_submitted_rows, expected_objects + 1);
@@ -3331,10 +3820,9 @@ mod tests {
         let mut forged = DeferredObjectStore::new_all_reachable().unwrap();
         let forged_bytes = layerfs_content::encode_bytes_object(&u64::MAX.to_le_bytes()).unwrap();
         assert_eq!(forged_bytes.len(), existing.bytes.len());
-        forged.put(existing.id, &forged_bytes).unwrap();
         assert!(matches!(
-            db.plan_initialization_candidate(&forged),
-            Err(StoreError::Integrity("object collision"))
+            forged.put(existing.id, &forged_bytes),
+            Err(StoreError::Integrity("object identity"))
         ));
         {
             let mut connection = db.writer().unwrap();
@@ -3464,6 +3952,36 @@ mod tests {
         let transferred_tail = receiver.objects.read_object(tail_id).unwrap();
         assert_eq!(transferred_tail, tail);
         layerfs_content::authenticate_identity(&transferred_tail, tail_id).unwrap();
+    }
+
+    #[test]
+    fn resumable_transfer_keeps_a_spill_writable() {
+        let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
+        let chunk_bytes = layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES;
+        for index in 0..=CANDIDATE_MEMORY_BYTES / chunk_bytes + 1 {
+            let mut payload = vec![index as u8; chunk_bytes];
+            payload[..8].copy_from_slice(&(index as u64).to_be_bytes());
+            let canonical =
+                layerfs_content::file::extent_codec::encode_chunk_object(&payload).unwrap();
+            objects
+                .put(ObjectId::for_bytes(&canonical), &canonical)
+                .unwrap();
+        }
+        assert!(matches!(objects.storage, DeferredObjects::Spill(_)));
+
+        let objects = ObjectBuffer {
+            source: None,
+            objects,
+        }
+        .into_resumable();
+        let mut resumed = ObjectBuffer {
+            source: None,
+            objects,
+        };
+        let tail = layerfs_content::encode_bytes_object(b"resumed tail").unwrap();
+        let tail_id = ObjectId::for_bytes(&tail);
+        resumed.objects.put(tail_id, &tail).unwrap();
+        assert_eq!(resumed.objects.read_object(tail_id).unwrap(), tail);
     }
 
     #[cfg(feature = "test-instrumentation")]

@@ -50,7 +50,7 @@ deletion, append, prepend, and truncate work.
 | Scenario ID | Status | Load | Exact timed operation | Required oracle |
 | --- | --- | --- | --- | --- |
 | `small-edit` | Registered; frozen | Existing one ten-byte overwrite | Existing complete lifecycle, unchanged | Existing final digest, Commit, visibility, and reopen proof |
-| `edit16` | Registered, paired; frozen | Existing 16 overwrite/Commit cycles | Existing one-Workspace lifecycle, unchanged | Sixteen created Commits and exact final digest/root |
+| `edit16` | Registered; frozen | Existing 16 overwrite/Commit cycles | Existing one-Workspace lifecycle, unchanged | Sixteen created Commits and exact final digest/root |
 | `edit-same-random-1` | Draft | First 1 deterministic write | One process, 1 write, one sync, one Commit, visibility, End | Sequential oracle application yields exact 32 MiB digest/root |
 | `edit-same-random-10` | Draft | First 10 deterministic writes | One process, 10 writes, one sync, one Commit, visibility, End | Sequential oracle application yields exact 32 MiB digest/root |
 | `edit-same-random-100` | Draft | First 100 writes from the same schedule | Same lifecycle with 100 writes | Sequential oracle application yields exact 32 MiB digest/root |

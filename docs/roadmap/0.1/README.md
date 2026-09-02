@@ -100,8 +100,6 @@ The 0.1.x phase is complete when:
 - [ ] Selected failure paths leak no mount, container, process, output reader,
   spool, Workspace, or Branch lease.
 - [ ] The final LayerFS-only campaigns have no unexplained regression.
-- [ ] The final matched Cloudflare payload campaign passes at stable candidate
-  checkpoints, outside the inner optimization loop.
 - [ ] Remaining limitations and incompatible proposals are documented under
   the correct later release.
 - [ ] v1.0.0 can adopt the accumulated registry as benchmark contract v1.

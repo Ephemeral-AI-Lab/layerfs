@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 690" role="img" aria-labelledby="title desc">
+  <title id="title">LayerFS v2 growth ratios from 10,000 to 100,000 files</title>
+  <desc id="desc">A horizontal bar chart showing that logical bytes increase 1.67 times, files increase 10 times, source reads increase 7.47 times, canonical emissions increase 7.82 times, SQLite rows submitted increase 7.69 times, and initialization time increases 6.67 times.</desc>
+  <style>
+    text { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17202a; }
+    .bg { fill: #ffffff; }
+    .title { font-size: 28px; font-weight: 700; }
+    .subtitle, .axis, .note { fill: #667085; }
+    .subtitle { font-size: 16px; }
+    .axis { font-size: 14px; }
+    .label { font-size: 15px; }
+    .value { font-size: 15px; font-weight: 700; }
+    .note { font-size: 13px; }
+    .grid { stroke: #d0d5dd; stroke-width: 1; }
+    .frame { fill: none; stroke: #d0d5dd; stroke-width: 1.25; }
+    .bytes { fill: #98a2b3; }
+    .work { fill: #7c3aed; }
+    .time { fill: #2563eb; }
+  </style>
+
+  <rect class="bg" width="1200" height="690"/>
+  <text class="title" x="80" y="48">At 100k files, cardinality—not bytes—sets the pace</text>
+  <text class="subtitle" x="80" y="76">Growth from the 10,000-file fixture to the 100,000-file fixture</text>
+
+  <line class="grid" x1="335" y1="112" x2="335" y2="586"/>
+  <line class="grid" x1="487" y1="112" x2="487" y2="586"/>
+  <line class="grid" x1="639" y1="112" x2="639" y2="586"/>
+  <line class="grid" x1="791" y1="112" x2="791" y2="586"/>
+  <line class="grid" x1="943" y1="112" x2="943" y2="586"/>
+  <line class="grid" x1="1095" y1="112" x2="1095" y2="586"/>
+  <rect class="frame" x="335" y="112" width="760" height="474"/>
+
+  <text class="axis" x="335" y="613" text-anchor="middle">0×</text>
+  <text class="axis" x="487" y="613" text-anchor="middle">2×</text>
+  <text class="axis" x="639" y="613" text-anchor="middle">4×</text>
+  <text class="axis" x="791" y="613" text-anchor="middle">6×</text>
+  <text class="axis" x="943" y="613" text-anchor="middle">8×</text>
+  <text class="axis" x="1095" y="613" text-anchor="middle">10×</text>
+
+  <text class="label" x="315" y="157" text-anchor="end">Logical bytes</text>
+  <rect class="bytes" x="335" y="132" width="126.9" height="34"/>
+  <text class="value" x="473" y="156">1.67×</text>
+
+  <text class="label" x="315" y="229" text-anchor="end">Regular files</text>
+  <rect class="work" x="335" y="204" width="760" height="34"/>
+  <text class="value" x="1081" y="228" text-anchor="end">10.00×</text>
+
+  <text class="label" x="315" y="301" text-anchor="end">Source reads</text>
+  <rect class="work" x="335" y="276" width="567.7" height="34"/>
+  <text class="value" x="914" y="300">7.47×</text>
+
+  <text class="label" x="315" y="373" text-anchor="end">Canonical emissions</text>
+  <rect class="work" x="335" y="348" width="594.3" height="34"/>
+  <text class="value" x="941" y="372">7.82×</text>
+
+  <text class="label" x="315" y="445" text-anchor="end">SQLite rows submitted</text>
+  <rect class="work" x="335" y="420" width="584.4" height="34"/>
+  <text class="value" x="931" y="444">7.69×</text>
+
+  <text class="label" x="315" y="517" text-anchor="end">Initialization time</text>
+  <rect class="time" x="335" y="492" width="506.9" height="34"/>
+  <text class="value" x="854" y="516">6.67×</text>
+
+  <rect class="bytes" x="335" y="649" width="18" height="12"/>
+  <text class="note" x="361" y="660">input bytes</text>
+  <rect class="work" x="464" y="649" width="18" height="12"/>
+  <text class="note" x="490" y="660">file/object work</text>
+  <rect class="time" x="631" y="649" width="18" height="12"/>
+  <text class="note" x="657" y="660">measured wall time</text>
+  <text class="note" x="1095" y="660" text-anchor="end">Selected current-seal development evidence</text>
+</svg>

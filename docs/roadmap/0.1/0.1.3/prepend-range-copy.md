@@ -56,7 +56,7 @@ cannot do so.
 
 | Scenario ID | Status | Load | Exact timed operation | Required oracle |
 | --- | --- | --- | --- | --- |
-| `prepend-temp-copy-rename` | Registered, paired; frozen | 1 ordinary prepend | Existing complete 32 MiB lifecycle, unchanged | Existing 32 MiB + 10 byte digest/root/reopen proof |
+| `prepend-temp-copy-rename` | Registered; frozen | 1 ordinary prepend | Existing complete 32 MiB lifecycle, unchanged | Existing 32 MiB + 10 byte digest/root/reopen proof |
 | `prepend-10` | Draft | First 10 ordinary prepend operations | One process, 10 temp-copy-rename operations, one Commit | 100 marker bytes followed by original payload |
 | `prepend-100` | Draft | First 100 ordinary operations | Same lifecycle with 100 operations | 1,000 marker bytes followed by original payload |
 | `range-copy-1` | Draft | 1 range-copy prepend | One process, one supported range-copy transfer, one Commit | Canonical root equals ordinary one-operation prepend |
@@ -157,7 +157,7 @@ The budgets are candidate gates, not claims about the unoptimized baseline.
 
 - [ ] Run exactly 6 timed IDs and 7 proof-only IDs.
 - [ ] Preserve the existing prepend row's operation, fixture, timing, result
-  schema, and paired meaning.
+  schema, and registered meaning.
 - [ ] Prove each 1/10/100 schedule is a nested operation prefix.
 - [ ] Prove ordinary and supported range-copy rows produce identical bytes and
   canonical roots at every tier.

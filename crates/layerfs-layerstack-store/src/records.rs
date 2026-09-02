@@ -195,6 +195,12 @@ pub struct StoreStorageSnapshot {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct WorkspaceReadReceipt {
+    pub snapshot_database_calls: u64,
+    pub snapshot_database_rows: u64,
+    pub snapshot_database_bytes: u64,
+    pub snapshot_cache_hits: u64,
+    pub snapshot_cache_rows: u64,
+    pub snapshot_cache_bytes: u64,
     pub max_readahead_bytes: u64,
     pub init_capabilities: u64,
     pub kernel_read_requests: u64,

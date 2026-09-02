@@ -31,6 +31,11 @@ impl CanonicalName {
         &self.bytes
     }
 
+    #[doc(hidden)]
+    pub fn owned_capacity_bytes(&self) -> usize {
+        self.bytes.capacity()
+    }
+
     pub fn as_str(&self) -> &str {
         std::str::from_utf8(&self.bytes).map_or("", |value| value)
     }
@@ -95,6 +100,11 @@ impl CanonicalPath {
 
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
+    }
+
+    #[doc(hidden)]
+    pub fn owned_capacity_bytes(&self) -> usize {
+        self.bytes.capacity()
     }
 
     pub fn as_str(&self) -> &str {

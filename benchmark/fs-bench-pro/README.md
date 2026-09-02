@@ -27,23 +27,23 @@ counts, one exact 100,000,000-byte anchor at the first three tiers, two anchors
 at 100,000 files, and exact 125/200/300/500-million-byte tier budgets. Content
 is unique, path-derived, fully materialized, and streamed with at most 1 MiB of
 fixture scratch. Historical namespace-v1/v2 rows remain immutable; active
-lifecycle rows use `fs-bench-pro-namespace-v3`, `commit-head-reopen-ready-v1`, and
+lifecycle rows use `fs-bench-pro-namespace-v3`, `commit-head-exact-reopen-v2`, and
 `namespace-file-digest-tree-v2`. The v2 custody digest covers root, directory,
 and file type/path/size plus deterministic mode (`0750` directories, `0640`
 files), mtime (`1700000000.0`), and file-content digests during fixture
-generation. Full namespace correctness remains a separate test-only check; the
-active performance process contains no content verifier.
+generation. Product rows run the bounded exact verifier through a fresh
+real-FUSE Workspace after reconnect; that verification is outside
+initialization timing.
 The uniform deterministic mode/mtime values intentionally form a best-case
 metadata-dedup profile. The edit uses the explicit
 `content-only-normalized-mtime-v1` contract, which restores the fixed mtime
 after changing content; a separate normal-overwrite mtime diagnostic is
 required before extrapolating these results to real Workspace edits.
 
-Namespace-admission rows remain outside the existing registered total and the
-paired LayerFS-versus-Computer campaign. The namespace runner is
-LayerFS-only and separate from both `run.sh` and `run-paired.sh`, allowing one
-failing tier to be iterated without running the full or comparative campaigns.
-It supports one-case and `all` modes through `run-namespace.sh`.
+Namespace-admission rows remain outside the existing registered total. The
+namespace runner is separate from `run.sh`, allowing one failing tier to be
+iterated without running the registered payload campaign. Both runners are
+LayerFS-only. `run-namespace.sh` supports one-case and `all` modes.
 
 The implemented payload LayerFS arm uses exactly one local `LayerStackStore`
 and public SDK calls.
@@ -95,14 +95,14 @@ Run the namespace self-check and a sealed LayerFS-only tier or matrix with:
 ```sh
 benchmark/fs-bench-pro/run-namespace.sh --self-check
 benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID namespace-10000 1
-benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID all 3
+benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID all 4
 ```
 
 The namespace runner creates fixtures outside product timing, starts one fresh
 benchmark process per tier/sample, supervises whole-process CPU and peak RSS,
 and retains immutable success or failure evidence under
 `benchmark-results/fs-bench-pro/namespace/RUN_ID`. Namespace rows use their own
-schema and never contribute to payload totals or paired results.
+schema and never contribute to registered payload totals.
 
 To compare isolated product-source variants against the exact same sealed
 fixture without regenerating it, point later runs at the earlier campaign's
@@ -110,17 +110,17 @@ fixture without regenerating it, point later runs at the earlier campaign's
 
 ```sh
 LAYERFS_NAMESPACE_FIXTURE_ROOT=/absolute/earlier-run/scenarios \
-  benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID all 3
+  benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID all 4
 ```
 
 The runner validates and copies each compact manifest into the new immutable
 evidence directory, uses the original fixture in place, and per sample checks
 the manifest SHA plus fixture-root mode and mtime without rereading file bytes.
-It records `generated-first-use-uncontrolled`/`reused-first-use-uncontrolled`
-separately from later
-`*-post-first-use-uncontrolled` rows. It neither warms only the candidate nor
-pretends the writable host fixture is mounted read-only; consequently it does
-not label either state `controlled-warm`.
+It records `generated-first-sample-uncontrolled`/`reused-first-sample-uncontrolled`
+separately from later `*-subsequent-sample-uncontrolled` rows. These names are
+sample ordinals, not cold/warm claims: the runner neither controls the host
+page cache nor warms only the candidate. It also does not pretend the writable
+host fixture is mounted read-only.
 Manifests carrying the earlier `synthetic-small-heavy-v1` or
 `namespace-file-digest-tree-v1` identities are rejected, never relabeled, and
 cannot be pooled with v2 evidence; future runs must generate new manifests.
@@ -129,25 +129,77 @@ cannot be pooled with v2 evidence; future runs must generate new manifests.
 evidence, resource, correctness, cleanup, and quality independently. Missing
 required counters are recorded as unavailable, so a performance hit cannot be
 reported as a complete evidence pass.
-The report also derives the 100,000-file adjacent-ratio ceiling from the actual
-10,000-file median (`100k <= 2 * 10k`): for example, a measured 0.8-second 10k
-median requires at most 1.6 seconds at 100k. The runner never delays a faster
-tier to satisfy that ratio.
+The report enforces the frozen 100→1,000 and 1,000→10,000 adjacent ceilings of
+1.30x and 1.70x. The 100,000-file result is independent: prospectively, with
+the authorized 10-percent release tolerance, at most 3.235294118 seconds, at
+least 153 MB/s, and at least 30,600 files/s. Its
+preferred 200-MB/s / 2.5-second and stretch 250-MB/s / 2.0-second outcomes are
+reported separately and are nonbinding. A faster 10,000-file result is never
+delayed and never creates a stricter 100,000-file target. Historical rows keep
+the target identity that applied when they were captured.
 
-For active namespace-v3 rows, `product_lifecycle_ns` is exactly:
+For active namespace-v3 rows, `reopen_verify_ns` and `complete_product_ns` are
+exactly:
 
 ```text
-layerstack_init_ns + branch_fork_ns + workspace_create_ns + edit_ns +
-commit_ns + workspace_end_ns + reconnect_ns +
-reopen_workspace_create_ns + reopen_workspace_end_ns
+reopen_verify_ns = reconnect_ns + reopen_workspace_create_ns +
+                   reopen_content_verify_ns
+
+complete_product_ns = layerstack_init_ns + branch_fork_ns +
+                      workspace_create_ns + edit_ns + commit_ns +
+                      workspace_end_ns + reopen_verify_ns
 ```
 
-The reconnect phase drops the original Store/Client, opens a fresh pair, and
-proves the Branch head equals the expected Commit. The reopened real-FUSE
-Workspace is created, reaches ready, and is ended cleanly. No content digest,
-full reopen correctness, verifier throughput, or read-ahead claim is made.
+`product_lifecycle_ns` is an exact compatibility alias of
+`complete_product_ns`. Reopened Workspace End is reported separately as
+cleanup after T7. The reconnect phase drops the original Store/Client, opens a
+fresh pair, and proves the Branch head equals the expected Commit. The reopened
+real-FUSE Workspace runs the bounded exact namespace verifier; its digest,
+scratch, worker count, compact plan/path/digest state, and read-ahead counters
+are validated. After T7, a normal overwrite records whether the normalized
+fixture mtime changes. That dirty diagnostic Workspace is discarded, and its
+End time remains cleanup-only.
 `whole_supervised_*` CPU/RSS fields cover the entire process and are never
 described as product-only resources.
+
+The harness records current RSS and the native lifetime high-water at T0, T1,
+and T7. A phase high-water is exact only when the later snapshot establishes a
+new lifetime maximum; otherwise its gate is unavailable. Per-connection
+`SQLITE_DBSTATUS_CACHE_USED` binds the configured cache target and actual T0/T1
+ownership without warming the Store before T0. Process-global memory and
+allocation counters are separately marked `unavailable-disabled` when SQLite
+returns impossible all-zero values; `SQLITE_STATUS_PAGECACHE_OVERFLOW` is
+reported as overflow, not mislabeled as total page-cache ownership. The target
+must be at most 64 MiB and remains 32 MiB; the ceiling is headroom, not a
+request to allocate or fill 64 MiB.
+
+The terminal resource gates are <=14.07 initialization CPU-seconds, <=10 MiB
+recomputed explicit LayerFS ownership, <=128 MiB initialization incremental
+HWM, <=256 MiB complete-lifecycle incremental HWM, zero new product/SQLite
+workers, zero swap, and no OOM. RSS, physical footprint, CACHE_USED, explicit
+ownership, CPU, and physical I/O remain separate fields; none is hidden by
+subtracting another.
+
+`initialization_disk_{read,write}_bytes` remain source-identified native
+diagnostics. The runner does not compare them with logical bytes or Store
+growth: those quantities are not physical-I/O ceilings. A binding physical-I/O
+regression claim requires a source/platform/filesystem/cache-matched control;
+the release gate retains the values as separately reported evidence rather
+than inventing a logical-byte inequality. CPU uses the explicit 14.07-second
+ceiling above. The
+deterministic `logical_path_movement_{bytes,ratio}` fields instead combine the
+exact source read, object-segment traffic, and Store growth equations.
+
+Exact FUSE reads use at most four per-node two-MiB proxy read-ahead entries,
+skip responses with no unread tail, and report the aggregate peak through
+`maximum_product_read_ahead_bytes`. The retained
+`issue9-v3-read4x2m-product-10k-r001-20260903` and
+`issue9-v3-read4x2m-product-100k-r002-20260903` screens fetch exactly the
+logical bytes served with zero unused bytes. Both bind source seal
+`b082f9d06d0d7b052b8b238fa6bafc313ec5aecbd1dcb90a4385595c2c1f3043`;
+they are supporting evidence, not a later-worktree terminal proof. The
+normal-overwrite diagnostic reports `changed=false`; treat the namespace edit
+profile as non-extrapolatable to automatic POSIX write-mtime semantics.
 
 Set `LAYERFS_NAMESPACE_MODE=init-only-diagnostic` with the same four runner
 arguments for a fresh-Store public `initialize_layerstack` diagnostic. It
@@ -161,56 +213,15 @@ refuses host binds or a stale source seal, refuses to overwrite evidence, saves
 source/host/container custody, writes raw JSONL, validates it, and appends a report to
 `benchmark-results/fs-bench-pro/optimization-history.md`.
 
-## Matched LayerFS versus Computer campaign
-
-The cross-product profile uses the same isolated row histories, fresh
-`/bin/sh -c` process shape, real FUSE, native-host authority SQLite, and
-non-crash-durable acknowledgement on both products:
-
-```text
-journal_mode=MEMORY
-synchronous=OFF
-no checkpoint
-no database or directory fsync
-```
-
-Computer still uses its unmodified public
-`Workspace.runtime.exec(sync="wait")` push/FUSE/pull path. Four separately
-prepared computerd containers keep cold-create, EDIT16, prepend, and read from
-sharing executor state. Container and fixture preparation occurs before each
-timed arm.
-
-Build the thin Computer runtime image, which adds only the sealed shared
-workload helper to the pinned product layer:
-
-```sh
-workload_hash=$(shasum -a 256 benchmark/fs-bench-pro/workload.rs | awk '{print $1}')
-docker build \
-  -f benchmark/fs-bench-pro/Dockerfile.computer-runtime \
-  --build-arg WORKLOAD_SOURCE_SHA256="$workload_hash" \
-  -t layerfs-fs-benchmark-pro-computer:fair-host-v3 .
-```
-
-After the LayerFS candidate is stable, run randomized adjacent pairs against
-one already prepared LayerFS daemon container:
-
-```sh
-benchmark/fs-bench-pro/run-paired.sh \
-  RUN_ID \
-  LAYERFS_CONTAINER_ID \
-  /absolute/host/fixture.bin \
-  /fixture/payload.bin \
-  /absolute/cloudflare-computer-root \
-  layerfs-fs-benchmark-pro-computer:fair-host-v3 \
-  7
-```
-
-The runner rejects source/image/fixture mismatch, host binds on the LayerFS
-container, non-FUSE Computer executors, non-pinned Computer product files,
-non-matching SQLite acknowledgement, missing storage census, and incomplete
-pairs. It saves raw pair evidence and `report.md` under
-`benchmark-results/fs-bench-pro/paired/RUN_ID`.
-
-This Cloudflare Computer comparison covers only the existing matched payload
-rows. Namespace rows are LayerFS-only and never contribute to paired results or
-`registered_total_ns`.
+Terminal campaigns set `LAYERFS_NAMESPACE_RUN_COMPOSITE=1`. After all timed
+samples, the runner itself executes the fixed warning-denying Clippy, bounded
+full test, ignored large-spill/reconnect, live-FUSE, and live-Docker commands.
+It writes a source-sealed `layerfs-namespace-runner-composite-proof-v2` receipt
+containing each exact command, exit status, combined output, and output SHA-256,
+then derives the seven focused-quality, large-spill/reconnect,
+materialization/FUSE-equality, managed-Docker, post-attachment-failure,
+exact-reconnect, and cleanup-census checks. External proof manifests are
+rejected because a self-authored `true`/`ok` JSON document is not execution
+evidence. Composite mode requires product `all` with at least four samples;
+missing Docker, `/dev/fuse`, activation environment, or a test success marker
+is a failure, never a successful skip.
