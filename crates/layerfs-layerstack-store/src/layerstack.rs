@@ -352,7 +352,7 @@ fn parallel_root_directories(
                             name: task.name.clone(),
                             inode,
                             imported: import.finish()?,
-                            objects: local.into_prevalidated(),
+                            objects: local.into_prevalidated()?,
                         });
                     }
                     Ok::<_, StoreError>(output)
@@ -886,6 +886,74 @@ mod tests {
             drop(legacy);
             std::fs::remove_dir_all(root).unwrap();
         }
+    }
+
+    #[test]
+    #[ignore = "large spill correctness gate"]
+    fn parallel_large_spill_matches_legacy_after_fresh_store_reopen() {
+        let root = temporary("parallel-large-spill");
+        let source = root.join("source");
+        let left = source.join("left");
+        let right = source.join("right");
+        std::fs::create_dir_all(&left).unwrap();
+        std::fs::create_dir(&right).unwrap();
+
+        let mut anchor = std::fs::File::create(left.join("anchor")).unwrap();
+        let mut buffer = vec![0_u8; 1024 * 1024];
+        let mut remaining = 100_000_000_usize;
+        let mut block = 0_u64;
+        while remaining != 0 {
+            buffer[..8].copy_from_slice(&block.to_le_bytes());
+            let length = remaining.min(buffer.len());
+            std::io::Write::write_all(&mut anchor, &buffer[..length]).unwrap();
+            remaining -= length;
+            block += 1;
+        }
+        drop(anchor);
+        std::fs::write(left.join("tiny"), b"tiny").unwrap();
+        std::fs::write(right.join("empty"), []).unwrap();
+        std::fs::write(right.join("small"), vec![37_u8; 4 * 1024]).unwrap();
+
+        let store_path = root.join("store.sqlite");
+        let store = LayerStackStore::create(&store_path).unwrap();
+        let initialized = store
+            .initialize_layerstack(
+                EntityName::new("large-spill").unwrap(),
+                LayerStackInitialization::Directory(source.clone()),
+            )
+            .unwrap();
+        let seed = *blake3::hash(initialized.layer_stack_id.as_slice()).as_bytes();
+        drop(store);
+
+        let reopened = LayerStackStore::connect(&store_path).unwrap();
+        let stack = reopened
+            .layer_stack(initialized.layer_stack_id)
+            .unwrap()
+            .unwrap();
+        let layer = reopened.layer(stack.head_layer_id).unwrap().unwrap();
+        let (legacy, legacy_files, legacy_bytes) = legacy_directory_root(&source, seed).unwrap();
+        assert_eq!(legacy_files, 4);
+        assert_eq!(legacy_bytes, 100_004_100);
+        assert_eq!(layer.root_id, legacy.root_id);
+        assert_eq!(
+            reopened.store_counts().unwrap().objects,
+            legacy.objects.len()
+        );
+
+        let mut ids = legacy.objects.ids_in_order(usize::MAX).unwrap().unwrap();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len() as u64, legacy.objects.len());
+        for id in ids {
+            assert_eq!(
+                crate::ObjectSource::read_object(&reopened, id).unwrap(),
+                crate::ObjectSource::read_object(&legacy.objects, id).unwrap()
+            );
+        }
+
+        drop(legacy);
+        drop(reopened);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -208,6 +208,6 @@ fn build_capture(receiver: Receiver<CaptureMessage>) -> Result<CapturedContent> 
     Ok(CapturedContent {
         root,
         counters,
-        objects: objects.into_prevalidated(),
+        objects: objects.into_prevalidated()?,
     })
 }

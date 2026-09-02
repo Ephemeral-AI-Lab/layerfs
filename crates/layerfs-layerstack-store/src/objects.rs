@@ -1027,8 +1027,8 @@ impl<'a> ObjectBuffer<'a> {
     }
 
     #[doc(hidden)]
-    pub fn into_prevalidated(self) -> DeferredObjectStore {
-        self.objects
+    pub fn into_prevalidated(self) -> Result<DeferredObjectStore> {
+        self.objects.all_reachable()
     }
 
     pub fn finish(self, root_id: ObjectId, cdc_bytes_scanned: u64) -> Result<BuiltRoot> {
@@ -1776,6 +1776,53 @@ mod tests {
         assert_eq!(visited, vec![root]);
         let canonical = objects.read_object(root).unwrap();
         layerfs_content::authenticate_identity(&canonical, root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prevalidated_transfer_seals_a_nonempty_spill_tail() {
+        let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
+        let chunk_bytes = layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES;
+        for index in 0..=CANDIDATE_MEMORY_BYTES / chunk_bytes + 1 {
+            let mut payload = vec![index as u8; chunk_bytes];
+            payload[..8].copy_from_slice(&(index as u64).to_be_bytes());
+            let canonical =
+                layerfs_content::file::extent_codec::encode_chunk_object(&payload).unwrap();
+            objects
+                .put(ObjectId::for_bytes(&canonical), &canonical)
+                .unwrap();
+        }
+        let tail = layerfs_content::encode_bytes_object(b"pending tail").unwrap();
+        let tail_id = ObjectId::for_bytes(&tail);
+        objects.put(tail_id, &tail).unwrap();
+        let expected_count = objects.len();
+
+        let (path, pending_bytes) = match &objects.storage {
+            DeferredObjects::Spill(spill) => (spill.path.clone(), spill.pending.len()),
+            DeferredObjects::Memory { .. } => panic!("candidate did not spill"),
+        };
+        assert!(pending_bytes > 0);
+
+        let objects = ObjectBuffer {
+            source: None,
+            objects,
+        }
+        .into_prevalidated()
+        .unwrap();
+        let spill = match &objects.storage {
+            DeferredObjects::Spill(spill) => spill,
+            DeferredObjects::Memory { .. } => panic!("candidate did not spill"),
+        };
+        assert!(spill.writer.is_none());
+        assert!(spill.pending.is_empty());
+        assert!(!path.exists());
+
+        let mut receiver = ObjectBuffer::empty_all_reachable().unwrap();
+        receiver.merge_prevalidated(objects).unwrap();
+        assert_eq!(receiver.objects.len(), expected_count);
+        let transferred_tail = receiver.objects.read_object(tail_id).unwrap();
+        assert_eq!(transferred_tail, tail);
+        layerfs_content::authenticate_identity(&transferred_tail, tail_id).unwrap();
     }
 
     #[cfg(feature = "test-instrumentation")]
