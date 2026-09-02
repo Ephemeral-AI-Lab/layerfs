@@ -12,12 +12,14 @@ namespace benchmark and only through the existing real-FUSE and Docker path.
 
 ## Goal
 
-Use v0.1.2 for two measured, compatibility-preserving optimization families
+Use v0.1.2 for three measured, compatibility-preserving optimization families
 against the same sealed FUSE/Docker environment and public SDK lifecycle used
 by v0.1.0 and v0.1.1:
 
 1. prepend and range-copy; and
-2. online Workspace capture during FUSE mutation and Commit.
+2. online Workspace capture during FUSE mutation and Commit; and
+3. total durable Store-footprint efficiency for the 500 MB unique-content
+   namespace control.
 
 Initialization's existing-directory scan remains owned by v0.1.1 even when it
 shares lower-level content or namespace machinery with Workspace capture.
@@ -26,6 +28,7 @@ Candidate inputs:
 
 - [Large and mixed-edit capture resilience](capture-large-mixed-edit-resilience.md)
 - [Extent-aware `copy_file_range` and prepend](copy-file-range-prepend.md)
+- [Store footprint efficiency](store-footprint-efficiency.md)
 
 Each item still needs public-path evidence and a compatibility decision.
 Patch-compatible internal fixes may ship in 0.1.2. Any required Store-schema,
@@ -40,6 +43,7 @@ moves only that item to 0.2.0.
 - [v0.1.3 single-history filesystem-workload draft](../0.1.3/README.md)
 - [Large and mixed-edit capture resilience](capture-large-mixed-edit-resilience.md)
 - [Extent-aware `copy_file_range` and prepend](copy-file-range-prepend.md)
+- [Store footprint efficiency](store-footprint-efficiency.md)
 
 ## Acceptance criteria
 
@@ -56,7 +60,19 @@ moves only that item to 0.2.0.
   regression.
 - [ ] Freeze each admitted v0.1.2 scenario without changing the v0.1.0 or
   v0.1.1 scenario definitions.
-- [ ] Hand the accumulated registry to v0.1.3 after both workstreams have an
-  optimized or measured/no-change disposition.
+- [ ] Measure logical, canonical, SQLite, other durable, total durable,
+  temporary, and physical-I/O bytes for the 500 MB unique-content Store
+  control.
+- [ ] Reach at most 600 MB total durable Store footprint through a compatible
+  mechanism, or retain the exact compatibility or physical lower bound that
+  prevents admission.
+- [ ] Count every pack, index, manifest, sidecar, journal, and checksum in total
+  durable footprint; never report a smaller `store.sqlite` as a total Store
+  win.
+- [ ] Record independent accept, defer, or reject decisions for bounded
+  admission order, SQLite page/layout alternatives, `WITHOUT ROWID`, physical
+  object packing, and structural-pack compression.
+- [ ] Hand the accumulated registry to v0.1.3 after all three workstreams have
+  an optimized or measured/no-change disposition.
 - [ ] Move any incompatible mechanism to 0.2.0 rather than weakening the
   patch-line contract.

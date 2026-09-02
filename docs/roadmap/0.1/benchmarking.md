@@ -29,7 +29,8 @@ reruns all earlier registered rows:
 
 1. v0.1.1: initialization and namespace scaling;
 2. v0.1.2: prepend/range-copy and online Workspace capture;
-3. v0.1.3: filesystem workload families on one genesis Layer and one Branch;
+3. v0.1.3: filesystem workload and exact CAS/CDC deduplication cases on one
+   genesis Layer and one Branch;
    and
 4. v0.1.4: multi-Layer and multi-Branch history.
 
@@ -50,7 +51,7 @@ reruns all earlier registered rows:
   Workspace Create optimization gates.
 - [The v0.1.2 README](0.1.2/README.md) for prepend and capture ownership.
 - [The v0.1.3 README](0.1.3/README.md) and its linked family documents for the
-  single-history workload draft.
+  single-history workload and deduplication draft.
 - [The v0.1.4 README](0.1.4/README.md) for the multi-history operation draft.
 - [The frozen `fs-bench` workload](../../../benchmark/fs-bench/fs-bench.sh) for
   existing mounted-operation controls that must be reused rather than copied.
@@ -316,9 +317,9 @@ The full release admission checklist is in
   when the two paths share internals.
 - [v0.1.3](0.1.3/README.md) indexes one document per filesystem workload family
   for one genesis Layer and one Branch. It owns deterministic tiered load,
-  positional randomness, same-count and count-changing work, namespace
-  mutations, links, and mixed workloads; it does not own Add, multi-Layer Diff,
-  conflicts, or repeated history scaling.
+  positional randomness, same-count and count-changing work, exact CAS/CDC
+  deduplication, namespace mutations, links, and mixed workloads; it does not
+  own Add, multi-Layer Diff, conflicts, or repeated history scaling.
 - [v0.1.4](0.1.4/README.md) drafts multi-Layer and multi-Branch Commit history,
   Fork, Add, Diff, paged Query, conflict, resolution, head movement, historical
   reads, reopen, and storage-reuse coverage.
@@ -326,3 +327,22 @@ The full release admission checklist is in
 Their exact scenario tables are intentionally not preregistered here. Each
 release must first freeze the smallest matrix that answers its product
 questions without a Cartesian workload explosion.
+
+### Draft v0.1.3 namespace deduplication extension
+
+The [v0.1.3 namespace family](0.1.3/namespace-initialization-scale.md) adds
+separately identified CAS/CDC rows through the existing namespace command and
+runner. They never change or replace the v0.1.1 unique-content rows.
+
+| Scenario ID | Role | Status |
+| --- | --- | --- |
+| `namespace-dedup-locality-1` | One 5 MB common-base file; nested-prefix anchor | Draft timed admission |
+| `namespace-dedup-locality-10` | Ten 5 MB files with localized differences | Draft timed admission |
+| `namespace-dedup-locality-100` | One hundred 5 MB files with localized differences | Draft timed admission |
+| `namespace-dedup-mechanisms-proof` | Unique, exact-copy, shifted, common-body, scattered, and CDC-boundary controls | Draft proof |
+| `namespace-dedup-preexisting-proof` | Reuse of a durable base through real-FUSE Workspace Commit | Draft proof |
+
+Every file is independently materialized and fully scanned. The result schema
+reports logical ingest, unique payload and canonical insertion, and SQLite
+growth separately. Dedup-friendly logical throughput never satisfies the
+unique-content initialization throughput gate or enters a pooled total.

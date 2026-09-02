@@ -160,10 +160,11 @@ the [0.1.2 proposals](0.1/0.1.2/README.md). Any item that requires an
 incompatible wire, public API, schema, canonical, or identity change moves to
 0.2.0 with the broader projection and platform work.
 
-### 0.1.2: payload and mixed-edit optimization
+### 0.1.2: payload, mixed-edit, and Store-footprint optimization
 
 After v0.1.1 completes namespace admission, v0.1.2 may accept measured prepend,
-range-copy, fragmented-write, sparse-growth, and mixed-edit work. Each item must
+range-copy, fragmented-write, sparse-growth, mixed-edit, and
+[Store-footprint](0.1/0.1.2/store-footprint-efficiency.md) work. Each item must
 use the same public SDK, real-FUSE, Docker, fresh-process, timing, integrity, and
 acknowledgement boundaries established by v0.1.0.
 
@@ -171,11 +172,14 @@ Keep the existing registered payload and namespace rows stable. Add a new row
 only when it answers a concrete product question, iterate LayerFS-only on the
 smallest failing case, and rerun paired Cloudflare payload evidence only after
 candidate stability. Preserve exact bytes, canonical roots, fresh reopen
-results, Store compatibility, and resource bounds.
+results, Store compatibility, and resource bounds. Storage evidence counts the
+complete durable Store, not only the SQLite file, and must not trade footprint
+for hidden packs, background compaction, CPU, RSS, page cache, or I/O.
 
 ### 0.1.3: single-history filesystem workload completion
 
-After v0.1.2 closes the known prepend and capture paths, v0.1.3 benchmarks the
+After v0.1.2 closes the known prepend, capture, and Store-footprint paths,
+v0.1.3 benchmarks the
 filesystem workload families in the smallest useful history topology: one
 LayerStack, one genesis Layer, and one Branch. The topology is a control
 variable, not the benchmark subject. New scenarios run a deterministic
@@ -205,10 +209,37 @@ Every operation receives an evidence-backed disposition; code changes are
 required only for measured defects or material opportunities. Move only
 incompatible mechanisms to v0.2.0.
 
-### 0.2.0: portable projection foundation
+### 0.2.0: agent Branch integration and portable projection foundation
 
-A minor release may deliberately extend public contracts. The objective is to
-prove that LayerFS semantics survive multiple projection strategies.
+A minor release may deliberately extend public contracts. The
+[0.2 roadmap](0.2/README.md) has two release-defining objectives: make a Branch
+a rapidly iterating multi-agent node or pod while the LayerStack remains main,
+and prove that LayerFS semantics survive multiple projection strategies.
+
+#### Agent Branch reconciliation
+
+The [reconciliation main task](0.2/agent-branch-reconciliation/README.md) replaces the
+single-writer Workspace assumption with an agent-native integration boundary:
+
+```text
+many concurrent Workspaces on one Branch
+  -> immutable tool-call Proposals
+  -> one ordered Branch integration stream
+  -> automatic cumulative reconciliation or structured resolution
+  -> validated linear Branch Commit history
+  -> explicit Branch checkpoint into the LayerStack
+```
+
+Workspace execution remains concurrent. Only candidate acceptance into one
+Branch is ordered. A stale head that reconciles cleanly is an internal retry,
+not a Git-style manual rebase. Genuine conflicts retain bounded Base,
+Incoming, Current, and WorkingTree evidence and remain resumable independently
+of the originating process.
+
+The first implementation should reuse existing Workspace mutation state and
+the three-root filesystem reconciler. Add schema, operation logs, range-aware
+merge, or format-specific adapters only when the frozen correctness matrix
+shows the smaller mechanism is insufficient.
 
 #### Projection conformance
 
@@ -261,6 +292,12 @@ pagination, and structured errors without embedding preview strings.
 
 #### 0.2.0 exit gates
 
+- concurrent Workspaces on one Branch with deterministic linear accepted
+  history;
+- automatic cumulative reconciliation of independent stale candidates;
+- changed-read revalidation and structured resumable write conflicts;
+- exact post-reconciliation validation before Branch publication;
+- explicit Branch/pod checkpoint into LayerStack/main history;
 - one projection conformance suite shared by materialization, FUSE, and
   OverlayFS;
 - capability-detected clone acceleration with verified fallback;

@@ -21,7 +21,7 @@ and shrinking outcomes and reopen to the exact path tree.
 
 - [v0.1.3 shared contract](README.md)
 - [Append-only benchmark contract](../benchmarking.md)
-- [Namespace initialization and scale](namespace-initialization-scale.md)
+- [Namespace initialization, scale, and CAS/CDC deduplication](namespace-initialization-scale.md)
 - [Tiny-file churn](tiny-file-churn.md)
 - [`fs-bench-pro` harness](../../../../benchmark/fs-bench-pro/src/main.rs)
 - [Workspace change planner](../../../../crates/layerfs-workspace/src/changes.rs)

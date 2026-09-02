@@ -9,7 +9,8 @@ sequencing, architecture, acceptance gates, and rationale.
 
 Active maintainer guidance is co-located with its release checklist. See the
 [0.1.x development guide](0.1/development.md) and
-[benchmark contract](0.1/benchmarking.md).
+[benchmark contract](0.1/benchmarking.md). Incompatible multi-agent and
+projection work is tracked in the [0.2 roadmap](0.2/README.md).
 
 ## Legend
 
@@ -29,7 +30,8 @@ explicit-End architecture.
 - [x] Keep container and fixture preparation outside timed regions.
 - [x] Keep LayerFS-only iteration separate from final paired Cloudflare runs.
 - [ ] Complete the namespace matrix in v0.1.1.
-- [ ] Complete admitted prepend and mixed-edit work in v0.1.2.
+- [ ] Complete admitted prepend, mixed-edit, and Store-footprint work in
+  v0.1.2.
 - [ ] Complete single-history filesystem-workload coverage in v0.1.3.
 - [ ] Complete multi-Layer/multi-Branch history coverage in v0.1.4.
 - [ ] Carry the append-only registered matrix through 1.0.0.
@@ -111,8 +113,9 @@ moves to 0.2.0.
 ## Proposed compatibility-preserving 0.1.2 work
 
 The [0.1.2 proposal set](0.1/0.1.2/README.md) continues benchmark-driven
-optimization after the namespace lifecycle is understood. It owns two known
-families: prepend/range-copy and online Workspace capture.
+optimization after the namespace lifecycle is understood. It owns three known
+families: prepend/range-copy, online Workspace capture, and
+[total durable Store-footprint efficiency](0.1/0.1.2/store-footprint-efficiency.md).
 
 - [ ] Admit prepend/range-copy work only from public-path transfer evidence.
 - [ ] Admit fragmented-write, sparse-growth, or mixed-edit work only from a
@@ -123,6 +126,12 @@ families: prepend/range-copy and online Workspace capture.
 - [ ] Rerun LayerFS-only payload and namespace matrices after every accepted
   optimization.
 - [ ] Run the paired Cloudflare payload campaign once at candidate stability.
+- [ ] Measure the 500 MB unique-content control's logical, canonical, SQLite,
+  other durable, temporary, and physical-I/O bytes.
+- [ ] Reach at most 600 MB total durable Store footprint through a compatible
+  mechanism, or retain the exact compatibility or physical lower bound.
+- [ ] Count every pack, index, manifest, sidecar, journal, and checksum rather
+  than treating a smaller `store.sqlite` as a total Store win.
 - [ ] Move only incompatible mechanisms to 0.2.0.
 
 ## Draft compatibility-preserving 0.1.3 work
@@ -155,10 +164,25 @@ history-depth evidence without changing the established product architecture.
 - [ ] Optimize only evidence-backed bottlenecks and rerun the full accumulated
   registry before release.
 
-## 0.2.0: portable projection foundation
+## 0.2.0: agent Branch integration and portable projections
 
 Work that changes the public contract or frozen 0.1.0 compatibility surface
-belongs in a minor release.
+belongs in a minor release. The [0.2 roadmap](0.2/README.md) makes
+[agent Branch reconciliation](0.2/agent-branch-reconciliation/README.md) a
+release-defining main task alongside the portable projection foundation.
+
+- [ ] Treat a Branch as a rapidly iterating node or pod shared by cooperating
+  agents, while the LayerStack remains main.
+- [ ] Permit multiple concurrent Workspaces from different Commits of one
+  Branch.
+- [ ] Reconcile stale Workspace Proposals automatically into one linear Branch
+  history and reserve structured resolution for genuine conflicts.
+- [ ] Track changed read dependencies separately from incompatible writes.
+- [ ] Make conflict work resumable by another agent without retaining the
+  original Workspace process.
+- [ ] Validate the exact reconciled candidate before Branch publication.
+- [ ] Keep pod-to-main LayerStack checkpoints explicit and less frequent than
+  tool-call Commits.
 
 - [ ] Define one projection conformance contract from the proven
   materialization and FUSE behavior.

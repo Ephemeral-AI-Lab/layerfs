@@ -14,25 +14,27 @@ benchmark subjects. That would measure method-call overhead instead of the
 filesystem workloads LayerFS exists to run.
 
 v0.1.3 instead needs one bounded, reproducible matrix for payload, edit,
-namespace, link, metadata, and tool workloads at the simplest LayerFS history
-topology. The fixed topology separates workload cost from the repeated-Commit
-history and Branch fan-out that v0.1.4 owns.
+namespace, exact CAS/CDC deduplication, link, metadata, and tool workloads at
+the simplest LayerFS history topology. The fixed topology separates workload
+cost from the repeated-Commit history and Branch fan-out that v0.1.4 owns.
 
 ## Goal
 
-Register 56 timed and 14 proof-only LayerFS lifecycle cases across exactly 11
+Register 59 timed and 16 proof-only LayerFS lifecycle cases across exactly 11
 filesystem workload families. Every new operation-based curve executes nested
 prefixes of 1, 10, and 100 scheduled operations before one Commit. Frozen rows
-retain their meanings; payload and namespace-scale families retain their
-declared load-unit exceptions.
+retain their meanings; payload and inherited namespace-scale families retain
+their declared load-unit exceptions. The new deduplication profile stays in
+the namespace family and never substitutes dedup-friendly bytes for the
+unique-content initialization control.
 
-The complete release knows 82 definitions:
+The complete release knows 87 definitions:
 
 ```text
-56 timed LayerFS cases
-+ 14 proof-only LayerFS cases
+59 timed LayerFS cases
++ 16 proof-only LayerFS cases
 + 12 frozen fs-bench controls
-= 82 definitions
+= 87 definitions
 ```
 
 The 12 controls remain a separate regression/comparison lane. They never enter
@@ -73,8 +75,11 @@ not permission to add another repeated-Commit curve. v0.1.3 excludes Commit-
 history depth as a new scaling dimension, multiple Branches, Branch fan-out,
 competing publication, conflict resolution, and history-sensitive pagination.
 [v0.1.4](../0.1.4/README.md) owns those shapes. v0.1.3 also does not redefine
-the v0.1.1 namespace-admission matrix or the v0.1.2 prepend and capture
-contracts.
+the namespace-admission profile ultimately admitted by v0.1.1 or the v0.1.2
+prepend, capture, and Store-footprint contracts. Its separately identified
+deduplication rows measure exact sharing and CDC resynchronization; they do not
+satisfy or replace the unique-content namespace throughput or durable-footprint
+gates.
 
 ## Family totals and budgets
 
@@ -88,7 +93,7 @@ outside the family budget and are recorded separately.
 | 1 | [Payload create and read](payload-create-read.md) | 8 | 0 | 20 s | 40 s |
 | 2 | [Same-count file edits](same-count-file-edits.md) | 5 | 0 | 10 s | 20 s |
 | 3 | [Prepend and range-copy](prepend-range-copy.md) | 6 | 7 | 20 s | 40 s |
-| 4 | [Namespace initialization and scale](namespace-initialization-scale.md) | 4 | 0 | 30 s | 60 s |
+| 4 | [Namespace initialization, scale, and CAS/CDC deduplication](namespace-initialization-scale.md) | 7 | 2 | 55 s | 90 s |
 | 5 | [Tiny-file churn](tiny-file-churn.md) | 9 | 0 | 10 s | 20 s |
 | 6 | [Directory construction and traversal](directory-construction-traversal.md) | 6 | 0 | 10 s | 20 s |
 | 7 | [Git and tool workflow](git-tool-workflow.md) | 3 | 0 | 15 s | 30 s |
@@ -96,10 +101,10 @@ outside the family budget and are recorded separately.
 | 9 | [Namespace mutation](namespace-mutation.md) | 3 | 0 | 10 s | 20 s |
 | 10 | [Link/inode topology](link-inode-topology.md) | 3 | 0 | 8 s | 15 s |
 | 11 | [Mixed load-bearing workload](mixed-load-bearing-workload.md) | 3 | 3 | 15 s | 30 s |
-| **LayerFS total** | **11 families** | **56** | **14** | **166 s** | **330 s** |
+| **LayerFS total** | **11 families** | **59** | **16** | **191 s** | **360 s** |
 
-One complete LayerFS campaign therefore targets at most 3 minutes and has a
-hard ceiling of 6 minutes. A family or complete campaign that crosses its hard
+One complete LayerFS campaign therefore targets about 3 minutes and has a hard
+ceiling of 6 minutes. A family or complete campaign that crosses its hard
 ceiling is invalid release evidence, not a result to hide or average away.
 
 ## Shared load, seeds, and lifecycle timing
@@ -161,7 +166,7 @@ statement**, **Goal**, **Files to read**, and **Acceptance criteria**.
 
 ## Acceptance criteria
 
-- [ ] The registry contains exactly the 56 timed and 14 proof-only LayerFS
+- [ ] The registry contains exactly the 59 timed and 16 proof-only LayerFS
   cases in the 11 linked family contracts.
 - [ ] The 12 frozen controls remain separate, unchanged, and excluded from
   family budgets and `registered_total_ns`.
@@ -177,6 +182,11 @@ statement**, **Goal**, **Files to read**, and **Acceptance criteria**.
   projected, one final Commit, exact semantic oracles, fresh reopen
   verification, and deterministic cleanup; inherited frozen rows retain their
   exact historical lifecycle.
+- [ ] Deduplication rows retain exact chunk transcripts, distinguish
+  within-import coalescing from preexisting and borrowed reuse, and report
+  logical ingest separately from unique inserted and physical Store bytes.
+- [ ] Dedup-friendly rows never replace, pool with, or satisfy the inherited
+  unique-content namespace performance rows.
 - [ ] Sync/barrier data is passive evidence attached to the owning workload,
   never a separate family, timed case, or proof case.
 - [ ] Baselines run before optimization; only measured shared root causes
