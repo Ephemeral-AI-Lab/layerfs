@@ -16,16 +16,15 @@ cargo test --manifest-path "$repo/Cargo.toml" --workspace --all-features \
   --no-run --message-format=json >"$temporary/artifacts.jsonl"
 started=$SECONDS
 
-python3 - "$temporary/artifacts.jsonl" "$temporary/executables" "$jobs" <<'PY'
+python3 - "$temporary/artifacts.jsonl" "$jobs" <<'PY'
 import concurrent.futures
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
 
-manifest, run_dir, jobs = sys.argv[1], sys.argv[2], int(sys.argv[3])
+manifest, jobs = sys.argv[1], int(sys.argv[2])
 executables = {}
 with open(manifest, encoding="utf-8") as source:
     for line in source:
@@ -41,13 +40,7 @@ with open(manifest, encoding="utf-8") as source:
 if not executables:
     raise SystemExit("test-fast: Cargo produced no test executables")
 
-os.mkdir(run_dir)
-runnable = []
-for executable, working_directory in sorted(executables.items()):
-    destination = os.path.join(run_dir, os.path.basename(executable))
-    shutil.copyfile(executable, destination)
-    os.chmod(destination, os.stat(executable).st_mode)
-    runnable.append((destination, working_directory))
+runnable = sorted(executables.items())
 
 def run(item):
     executable, working_directory = item

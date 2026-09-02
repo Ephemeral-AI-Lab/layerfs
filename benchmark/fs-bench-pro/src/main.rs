@@ -5,7 +5,7 @@ use layerfs_sdk::{
     WorkspaceCommitResult, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
 };
 use std::ffi::OsString;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -28,67 +28,48 @@ const PAIRED_EDIT16_HARD_NS: u64 = 250_000_000;
 const PAIRED_PREPEND_HARD_NS: u64 = 350_000_000;
 const PAIRED_READ_HARD_NS: u64 = 200_000_000;
 const PAIRED_TOTAL_HARD_NS: u64 = 900_000_000;
-const NAMESPACE_FILE_BYTES: u64 = 2_500;
-const NAMESPACE_FILES_PER_DIRECTORY: u64 = 100;
-const NAMESPACE_EDIT_MARKER: &[u8] = b"E000000001";
-
 #[allow(dead_code)]
 mod workload_source {
     include!("../workload.rs");
-
-    pub(super) struct HarnessSha256(Sha256);
-
-    impl HarnessSha256 {
-        pub(super) fn new() -> Self {
-            Self(Sha256::new())
-        }
-
-        pub(super) fn update(&mut self, bytes: &[u8]) {
-            self.0.update(bytes);
-        }
-
-        pub(super) fn finish(self) -> String {
-            hex(&self.0.finish())
-        }
-    }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct NamespaceScenario {
-    id: &'static str,
-    regular_files: u64,
-    data_directories: u64,
-}
-
-const NAMESPACE_SCENARIOS: [NamespaceScenario; 4] = [
-    NamespaceScenario {
-        id: "namespace-100",
-        regular_files: 100,
-        data_directories: 1,
-    },
-    NamespaceScenario {
-        id: "namespace-1000",
-        regular_files: 1_000,
-        data_directories: 10,
-    },
-    NamespaceScenario {
-        id: "namespace-10000",
-        regular_files: 10_000,
-        data_directories: 100,
-    },
-    NamespaceScenario {
-        id: "namespace-100000",
-        regular_files: 100_000,
-        data_directories: 1_000,
-    },
-];
+type NamespaceScenario = workload_source::NamespaceScenario;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct NamespaceManifest {
     regular_files: u64,
     data_directories: u64,
     logical_bytes: u64,
+    empty_files: u64,
+    tiny_files: u64,
+    small_files: u64,
+    medium_files: u64,
+    anchor_files: u64,
+    anchor_bytes: u64,
+    file_mode: u32,
+    directory_mode: u32,
+    mtime_seconds: i64,
+    mtime_nanoseconds: u32,
     digest: String,
+}
+
+struct GeneratedNamespaceFixture {
+    manifest: NamespaceManifest,
+    edited_digest: String,
+    edit_path: String,
+    edit_size: u64,
+    fixture_plan_ns: u64,
+    fixture_generate_ns: u64,
+    fixture_manifest_ns: u64,
+    maximum_fixture_write_buffer_bytes: u64,
+    fixture_write_calls: u64,
+    fixture_open_calls: u64,
+    fixture_content_bytes_generated: u64,
+    fixture_content_bytes_written: u64,
+    fixture_content_hash_input_bytes: u64,
+    fixture_plan_bytes: u64,
+    fixture_path_state_bytes: u64,
+    fixture_digest_record_bytes: u64,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -99,8 +80,10 @@ struct NamespaceSample {
     edit_ns: u64,
     commit_ns: u64,
     workspace_end_ns: u64,
-    reopen_verify_ns: u64,
-    complete_product_ns: u64,
+    reconnect_ns: u64,
+    reopen_workspace_create_ns: u64,
+    reopen_workspace_end_ns: u64,
+    product_lifecycle_ns: u64,
 }
 
 impl NamespaceSample {
@@ -112,12 +95,18 @@ impl NamespaceSample {
             self.edit_ns,
             self.commit_ns,
             self.workspace_end_ns,
-            self.reopen_verify_ns,
+            self.reconnect_ns,
+            self.reopen_workspace_create_ns,
+            self.reopen_workspace_end_ns,
         ]
         .into_iter()
         .try_fold(0_u64, u64::checked_add)
         .ok_or("namespace phase overflow")?;
-        if phases != self.complete_product_ns || self.reopen_verify_ns == 0 {
+        if phases != self.product_lifecycle_ns
+            || self.reconnect_ns == 0
+            || self.reopen_workspace_create_ns == 0
+            || self.reopen_workspace_end_ns == 0
+        {
             return Err("namespace phase equation".into());
         }
         Ok(())
@@ -190,15 +179,48 @@ fn run() -> AnyResult<()> {
             emit_namespace_manifest(scenario, &manifest);
             Ok(())
         }
-        [command, root, fixture, container, scenario, iteration] if command == "namespace" => {
+        [
+            command,
+            root,
+            fixture,
+            container,
+            scenario,
+            iteration,
+            fixture_digest,
+            edited_digest,
+            edit_path,
+            edit_size,
+            fixture_cache_profile,
+        ] if command == "namespace" => {
             namespace_case(
                 Path::new(root),
                 Path::new(fixture),
                 ContainerId(container.to_string_lossy().into_owned()),
                 namespace_scenario(&scenario.to_string_lossy())?,
                 iteration.to_string_lossy().parse()?,
+                &fixture_digest.to_string_lossy(),
+                &edited_digest.to_string_lossy(),
+                &edit_path.to_string_lossy(),
+                edit_size.to_string_lossy().parse()?,
+                &fixture_cache_profile.to_string_lossy(),
             )
         }
+        [
+            command,
+            root,
+            fixture,
+            scenario,
+            iteration,
+            fixture_digest,
+            fixture_cache_profile,
+        ] if command == "namespace-init-diagnostic" => namespace_init_diagnostic(
+            Path::new(root),
+            Path::new(fixture),
+            namespace_scenario(&scenario.to_string_lossy())?,
+            iteration.to_string_lossy().parse()?,
+            &fixture_digest.to_string_lossy(),
+            &fixture_cache_profile.to_string_lossy(),
+        ),
         [command, root, fixture] if command == "run" => {
             campaign(Path::new(root), Path::new(fixture), None, 3)
         }
@@ -214,7 +236,7 @@ fn run() -> AnyResult<()> {
             Some(ContainerId(container.to_string_lossy().into_owned())),
             iterations.to_string_lossy().parse()?,
         ),
-        _ => Err("usage: fs-benchmark-pro self-check | namespace-fixture FIXTURE SCENARIO | namespace ROOT FIXTURE CONTAINER SCENARIO ITERATION | run ROOT FIXTURE [CONTAINER ITERATIONS]".into()),
+        _ => Err("usage: fs-benchmark-pro self-check | namespace-fixture FIXTURE SCENARIO | namespace ROOT FIXTURE CONTAINER SCENARIO ITERATION FIXTURE_DIGEST EDITED_DIGEST EDIT_PATH EDIT_SIZE FIXTURE_CACHE_PROFILE | namespace-init-diagnostic ROOT FIXTURE SCENARIO ITERATION FIXTURE_DIGEST FIXTURE_CACHE_PROFILE | run ROOT FIXTURE [CONTAINER ITERATIONS]".into()),
     }
 }
 
@@ -235,257 +257,299 @@ fn self_check() -> AnyResult<()> {
 }
 
 fn namespace_scenario(id: &str) -> AnyResult<NamespaceScenario> {
-    NAMESPACE_SCENARIOS
-        .into_iter()
-        .find(|scenario| scenario.id == id)
-        .ok_or_else(|| format!("unknown namespace scenario: {id}").into())
-}
-
-fn namespace_path(index: u64) -> String {
-    format!("d{:04}/f{index:06}", index / NAMESPACE_FILES_PER_DIRECTORY)
-}
-
-fn namespace_content(path: &str) -> Vec<u8> {
-    let mut seed = b"layerfs/fs-bench-pro/namespace-content/v1\0".to_vec();
-    seed.extend_from_slice(path.as_bytes());
-    seed.push(0);
-    (0..NAMESPACE_FILE_BYTES as usize)
-        .map(|index| seed[index % seed.len()] ^ ((index / seed.len()) as u8).wrapping_mul(0x9d))
-        .collect()
-}
-
-fn namespace_edit_offset() -> usize {
-    (2_654_435_761_u64 % (NAMESPACE_FILE_BYTES - NAMESPACE_EDIT_MARKER.len() as u64)) as usize
-}
-
-fn expected_namespace_manifest(scenario: NamespaceScenario, edited: bool) -> NamespaceManifest {
-    let mut digest = workload_source::HarnessSha256::new();
-    digest.update(b"layerfs/fs-bench-pro/namespace-tree/v1\0");
-    for directory in 0..scenario.data_directories {
-        let directory_path = format!("d{directory:04}");
-        digest.update(b"D\0");
-        digest.update(directory_path.as_bytes());
-        digest.update(b"\0");
-        let first = directory * NAMESPACE_FILES_PER_DIRECTORY;
-        for index in first..first + NAMESPACE_FILES_PER_DIRECTORY {
-            let path = namespace_path(index);
-            let mut content = namespace_content(&path);
-            if edited && index == 0 {
-                let offset = namespace_edit_offset();
-                content[offset..offset + NAMESPACE_EDIT_MARKER.len()]
-                    .copy_from_slice(NAMESPACE_EDIT_MARKER);
-            }
-            digest.update(b"F\0");
-            digest.update(path.as_bytes());
-            digest.update(b"\0");
-            digest.update(content.len().to_string().as_bytes());
-            digest.update(b"\0");
-            digest.update(&content);
-            digest.update(b"\0");
-        }
-    }
-    NamespaceManifest {
-        regular_files: scenario.regular_files,
-        data_directories: scenario.data_directories,
-        logical_bytes: scenario.regular_files * NAMESPACE_FILE_BYTES,
-        digest: digest.finish(),
-    }
+    workload_source::namespace_scenario(id)
 }
 
 fn create_namespace_fixture(
     root: &Path,
     scenario: NamespaceScenario,
-) -> AnyResult<NamespaceManifest> {
-    std::fs::create_dir(root)?;
-    let created = (|| -> AnyResult<NamespaceManifest> {
-        for directory in 0..scenario.data_directories {
-            std::fs::create_dir(root.join(format!("d{directory:04}")))?;
-        }
-        for index in 0..scenario.regular_files {
-            let path = namespace_path(index);
-            std::fs::write(root.join(&path), namespace_content(&path))?;
-        }
-        let manifest = inspect_namespace(root)?;
-        validate_namespace_manifest(&manifest, scenario, false)?;
-        Ok(manifest)
-    })();
-    if created.is_err() {
-        let _ = std::fs::remove_dir_all(root);
+) -> AnyResult<GeneratedNamespaceFixture> {
+    if root.exists() {
+        return Err("namespace fixture already exists".into());
     }
-    created
-}
-
-fn inspect_namespace(root: &Path) -> AnyResult<NamespaceManifest> {
-    if !root.is_dir() {
-        return Err("namespace fixture root".into());
-    }
-    let mut pending = vec![root.to_owned()];
-    let mut entries = Vec::new();
-    while let Some(directory) = pending.pop() {
-        for entry in std::fs::read_dir(&directory)? {
-            let entry = entry?;
-            let path = entry.path();
-            let metadata = std::fs::symlink_metadata(&path)?;
-            let relative = path
-                .strip_prefix(root)?
-                .to_str()
-                .ok_or("namespace path is not UTF-8")?
-                .replace(std::path::MAIN_SEPARATOR, "/");
-            if metadata.file_type().is_dir() {
-                entries.push((relative, None, path.clone()));
-                pending.push(path);
-            } else if metadata.file_type().is_file() {
-                entries.push((relative, Some(metadata.len()), path));
-            } else {
-                return Err("namespace fixture entry type".into());
-            }
-        }
-    }
-    entries.sort_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
-    let mut digest = workload_source::HarnessSha256::new();
-    digest.update(b"layerfs/fs-bench-pro/namespace-tree/v1\0");
-    let mut regular_files = 0_u64;
-    let mut data_directories = 0_u64;
-    let mut logical_bytes = 0_u64;
-    let mut buffer = [0_u8; 64 * 1024];
-    for (relative, size, path) in entries {
-        match size {
-            None => {
-                data_directories = data_directories
-                    .checked_add(1)
-                    .ok_or("namespace directory count")?;
-                digest.update(b"D\0");
-                digest.update(relative.as_bytes());
-                digest.update(b"\0");
-            }
-            Some(size) => {
-                regular_files = regular_files.checked_add(1).ok_or("namespace file count")?;
-                logical_bytes = logical_bytes
-                    .checked_add(size)
-                    .ok_or("namespace logical bytes")?;
-                digest.update(b"F\0");
-                digest.update(relative.as_bytes());
-                digest.update(b"\0");
-                digest.update(size.to_string().as_bytes());
-                digest.update(b"\0");
-                let mut file = std::fs::File::open(path)?;
-                loop {
-                    let read = file.read(&mut buffer)?;
-                    if read == 0 {
-                        break;
-                    }
-                    digest.update(&buffer[..read]);
-                }
-                digest.update(b"\0");
-            }
-        }
-    }
-    Ok(NamespaceManifest {
-        regular_files,
-        data_directories,
-        logical_bytes,
-        digest: digest.finish(),
-    })
-}
-
-fn validate_namespace_manifest(
-    actual: &NamespaceManifest,
-    scenario: NamespaceScenario,
-    edited: bool,
-) -> AnyResult<()> {
-    let expected = expected_namespace_manifest(scenario, edited);
-    validate_namespace_manifest_against(actual, &expected)
-}
-
-fn validate_namespace_manifest_against(
-    actual: &NamespaceManifest,
-    expected: &NamespaceManifest,
-) -> AnyResult<()> {
-    if actual != expected {
-        return Err(format!(
-            "namespace manifest mismatch: actual={actual:?} expected={expected:?}"
-        )
-        .into());
-    }
-    Ok(())
-}
-
-fn emit_namespace_manifest(scenario: NamespaceScenario, manifest: &NamespaceManifest) {
-    println!(
-        "{{\"schema\":\"fs-bench-pro-namespace-fixture-v1\",\"scenario\":\"{}\",\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"fixture_digest\":\"{}\"}}",
-        scenario.id,
-        manifest.regular_files,
-        manifest.data_directories,
-        manifest.logical_bytes,
-        manifest.digest,
-    );
-}
-
-fn apply_namespace_edit(path: &Path) -> AnyResult<()> {
-    let mut bytes = std::fs::read(path)?;
-    if bytes.len() != NAMESPACE_FILE_BYTES as usize {
-        return Err("namespace edit target length".into());
-    }
-    let offset = namespace_edit_offset();
-    bytes[offset..offset + NAMESPACE_EDIT_MARKER.len()].copy_from_slice(NAMESPACE_EDIT_MARKER);
-    std::fs::write(path, bytes)?;
-    Ok(())
-}
-
-fn namespace_self_check() -> AnyResult<()> {
-    let scenario = namespace_scenario("namespace-100")?;
-    let root = std::env::temp_dir().join(format!(
-        "fs-benchmark-pro-namespace-{}-{}",
+    let plan_started = Instant::now();
+    let plan = workload_source::namespace_plan(scenario.id)?;
+    let fixture_plan_ns = elapsed_ns(plan_started);
+    let fixture_plan_bytes = workload_source::namespace_plan_owned_bytes(&plan)?;
+    let fixture_path_state_bytes = u64::try_from(
+        plan.files
+            .iter()
+            .try_fold(plan.edit_path.capacity(), |total, file| {
+                total.checked_add(file.relative_path.capacity())
+            })
+            .ok_or("namespace fixture path ownership")?,
+    )?;
+    let parent = root.parent().ok_or("namespace fixture parent")?;
+    let name = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("namespace fixture name")?;
+    let partial = parent.join(format!(
+        ".{name}.partial-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     ));
-    let first = root.join("first");
-    let second = root.join("second");
-    std::fs::create_dir(&root)?;
-    let checked = (|| -> AnyResult<()> {
-        if namespace_edit_offset() != 1_141 {
-            return Err("namespace edit oracle offset".into());
+    let generated = (|| -> AnyResult<GeneratedNamespaceFixture> {
+        std::fs::create_dir(&partial)?;
+        for directory in 0..scenario.data_directories {
+            std::fs::create_dir(partial.join(format!("d{directory:04}")))?;
         }
-        let first_manifest = create_namespace_fixture(&first, scenario)?;
-        let second_manifest = create_namespace_fixture(&second, scenario)?;
-        if first_manifest != second_manifest {
-            return Err("namespace fixture is not deterministic".into());
+        let generated_started = Instant::now();
+        let mut buffer = vec![0_u8; workload_source::NAMESPACE_SCRATCH_BYTES];
+        let maximum_fixture_write_buffer_bytes = u64::try_from(buffer.capacity())?;
+        let mut content_digests = vec![None; plan.files.len()];
+        let fixture_digest_record_bytes = u64::try_from(
+            content_digests
+                .capacity()
+                .checked_mul(std::mem::size_of::<Option<[u8; 32]>>())
+                .ok_or("namespace fixture digest ownership")?,
+        )?;
+        let edit_index = plan
+            .files
+            .iter()
+            .position(|file| file.relative_path == plan.edit_path)
+            .ok_or("namespace fixture edit index")?;
+        let edit_offset = workload_source::namespace_edit_offset(plan.edit_size)?;
+        let mut edited_content_digest = None;
+        let mut fixture_write_calls = 0_u64;
+        let mut fixture_open_calls = 0_u64;
+        let mut fixture_content_bytes_generated = 0_u64;
+        let mut fixture_content_bytes_written = 0_u64;
+        let mut fixture_content_hash_input_bytes = 0_u64;
+        for (index, file) in plan.files.iter().enumerate() {
+            let path = partial.join(&file.relative_path);
+            let mut output = std::fs::File::create(&path)?;
+            fixture_open_calls = fixture_open_calls
+                .checked_add(1)
+                .ok_or("namespace fixture open calls")?;
+            let mut stream = workload_source::NamespaceContentStream::new(scenario, file);
+            let mut content_hash = workload_source::Sha256::new();
+            let mut edited_hash = (index == edit_index).then(workload_source::Sha256::new);
+            let mut offset = 0_u64;
+            while offset < file.size {
+                let count =
+                    usize::try_from((file.size - offset).min(u64::try_from(buffer.len())?))?;
+                stream.fill(&mut buffer[..count]);
+                fixture_content_bytes_generated = fixture_content_bytes_generated
+                    .checked_add(u64::try_from(count)?)
+                    .ok_or("namespace fixture generated bytes")?;
+                output.write_all(&buffer[..count])?;
+                fixture_write_calls = fixture_write_calls
+                    .checked_add(1)
+                    .ok_or("namespace fixture write calls")?;
+                fixture_content_bytes_written = fixture_content_bytes_written
+                    .checked_add(u64::try_from(count)?)
+                    .ok_or("namespace fixture written bytes")?;
+                content_hash.update(&buffer[..count]);
+                fixture_content_hash_input_bytes = fixture_content_hash_input_bytes
+                    .checked_add(u64::try_from(count)?)
+                    .ok_or("namespace fixture hash input bytes")?;
+                if let Some(hash) = edited_hash.as_mut() {
+                    update_edited_hash(hash, &buffer[..count], offset, edit_offset)?;
+                    fixture_content_hash_input_bytes = fixture_content_hash_input_bytes
+                        .checked_add(u64::try_from(count)?)
+                        .ok_or("namespace fixture edited hash input bytes")?;
+                }
+                offset = offset
+                    .checked_add(u64::try_from(count)?)
+                    .ok_or("namespace fixture write offset")?;
+            }
+            if output.metadata()?.len() != file.size {
+                return Err("namespace fixture generated size".into());
+            }
+            drop(output);
+            workload_source::set_namespace_metadata(&path, false)?;
+            content_digests[index] = Some(content_hash.finish());
+            if let Some(hash) = edited_hash {
+                edited_content_digest = Some(hash.finish());
+            }
         }
-        apply_namespace_edit(&first.join(namespace_path(0)))?;
-        let edited = inspect_namespace(&first)?;
-        validate_namespace_manifest(&edited, scenario, true)?;
-        let parsed = parse_namespace_verification_text(&format!(
-            "regular_files={}\ndata_directories={}\nlogical_bytes={}\nnamespace_digest={}\n",
-            edited.regular_files, edited.data_directories, edited.logical_bytes, edited.digest
-        ))?;
-        if parsed != edited {
-            return Err("namespace reopen verification parser".into());
+        for directory in 0..scenario.data_directories {
+            workload_source::set_namespace_metadata(
+                &partial.join(format!("d{directory:04}")),
+                true,
+            )?;
         }
-        std::fs::write(first.join("extra"), b"extra")?;
-        if validate_namespace_manifest(&inspect_namespace(&first)?, scenario, true).is_ok() {
-            return Err("namespace extra path was accepted".into());
-        }
-        std::fs::remove_file(second.join(namespace_path(0)))?;
-        if validate_namespace_manifest(&inspect_namespace(&second)?, scenario, false).is_ok() {
-            return Err("namespace missing path was accepted".into());
-        }
-        NamespaceSample {
-            layerstack_init_ns: 1,
-            branch_fork_ns: 2,
-            workspace_create_ns: 3,
-            edit_ns: 4,
-            commit_ns: 5,
-            workspace_end_ns: 6,
-            reopen_verify_ns: 7,
-            complete_product_ns: 28,
-        }
-        .validate()?;
-        Ok(())
+        workload_source::set_namespace_metadata(&partial, true)?;
+        let fixture_generate_ns = elapsed_ns(generated_started);
+        let manifest_started = Instant::now();
+        let fixture_digest = workload_source::namespace_tree_digest(&plan, &content_digests)?;
+        let original_edit_digest = content_digests[edit_index]
+            .replace(edited_content_digest.ok_or("namespace edited content digest")?)
+            .ok_or("namespace original edit digest")?;
+        let edited_digest = workload_source::namespace_tree_digest(&plan, &content_digests)?;
+        content_digests[edit_index] = Some(original_edit_digest);
+        let manifest = manifest_from_plan(&plan, fixture_digest);
+        std::fs::rename(&partial, root)?;
+        let fixture_manifest_ns = elapsed_ns(manifest_started);
+        Ok(GeneratedNamespaceFixture {
+            manifest,
+            edited_digest,
+            edit_path: plan.edit_path.clone(),
+            edit_size: plan.edit_size,
+            fixture_plan_ns,
+            fixture_generate_ns,
+            fixture_manifest_ns,
+            maximum_fixture_write_buffer_bytes,
+            fixture_write_calls,
+            fixture_open_calls,
+            fixture_content_bytes_generated,
+            fixture_content_bytes_written,
+            fixture_content_hash_input_bytes,
+            fixture_plan_bytes,
+            fixture_path_state_bytes,
+            fixture_digest_record_bytes,
+        })
     })();
-    let _ = std::fs::remove_dir_all(root);
-    checked
+    if generated.is_err() {
+        let _ = std::fs::remove_dir_all(&partial);
+    }
+    generated
+}
+
+fn update_edited_hash(
+    hash: &mut workload_source::Sha256,
+    bytes: &[u8],
+    chunk_offset: u64,
+    edit_offset: u64,
+) -> AnyResult<()> {
+    let chunk_end = chunk_offset
+        .checked_add(u64::try_from(bytes.len())?)
+        .ok_or("namespace edited chunk end")?;
+    let edit_end = edit_offset
+        .checked_add(u64::try_from(workload_source::NAMESPACE_EDIT_MARKER.len())?)
+        .ok_or("namespace edit end")?;
+    if chunk_end <= edit_offset || chunk_offset >= edit_end {
+        hash.update(bytes);
+        return Ok(());
+    }
+    let overlap_start = chunk_offset.max(edit_offset);
+    let overlap_end = chunk_end.min(edit_end);
+    let before = usize::try_from(overlap_start - chunk_offset)?;
+    let after = usize::try_from(overlap_end - chunk_offset)?;
+    let marker_start = usize::try_from(overlap_start - edit_offset)?;
+    let marker_end = usize::try_from(overlap_end - edit_offset)?;
+    hash.update(&bytes[..before]);
+    hash.update(&workload_source::NAMESPACE_EDIT_MARKER[marker_start..marker_end]);
+    hash.update(&bytes[after..]);
+    Ok(())
+}
+
+fn manifest_from_plan(plan: &workload_source::NamespacePlan, digest: String) -> NamespaceManifest {
+    NamespaceManifest {
+        regular_files: plan.scenario.regular_files,
+        data_directories: plan.scenario.data_directories,
+        logical_bytes: plan.scenario.logical_bytes,
+        empty_files: plan.empty_files,
+        tiny_files: plan.tiny_files,
+        small_files: plan.small_files,
+        medium_files: plan.medium_files,
+        anchor_files: plan.anchor_files,
+        anchor_bytes: plan.anchor_bytes,
+        file_mode: workload_source::NAMESPACE_FILE_MODE,
+        directory_mode: workload_source::NAMESPACE_DIRECTORY_MODE,
+        mtime_seconds: workload_source::NAMESPACE_MTIME_SECONDS,
+        mtime_nanoseconds: workload_source::NAMESPACE_MTIME_NANOSECONDS,
+        digest,
+    }
+}
+
+fn emit_namespace_manifest(scenario: NamespaceScenario, fixture: &GeneratedNamespaceFixture) {
+    let manifest = &fixture.manifest;
+    let files_per_second = rate(manifest.regular_files, fixture.fixture_generate_ns);
+    let bytes_per_second = rate(manifest.logical_bytes, fixture.fixture_generate_ns);
+    println!(
+        "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"edited_fixture_digest\":\"{}\",\"edit_path\":\"{}\",\"edit_size\":{},\"fixture_plan_ns\":{},\"fixture_generate_ns\":{},\"fixture_manifest_ns\":{},\"fixture_files_per_second\":{},\"fixture_bytes_per_second\":{},\"fixture_worker_count\":1,\"fixture_cache_profile\":\"generated-warm-uncontrolled\",\"maximum_fixture_write_buffer_bytes\":{},\"fixture_plan_bytes\":{},\"fixture_path_state_bytes\":{},\"fixture_digest_record_bytes\":{},\"fixture_open_calls\":{},\"fixture_write_calls\":{},\"fixture_content_bytes_generated\":{},\"fixture_content_bytes_written\":{},\"fixture_content_hash_input_bytes\":{},\"post_generation_content_rereads\":0,\"complete_file_vec_allocations\":0,\"per_file_fsyncs\":0,\"atomic_publish\":true}}",
+        workload_source::NAMESPACE_FIXTURE_SCHEMA,
+        scenario.id,
+        workload_source::NAMESPACE_FIXTURE_PROFILE,
+        workload_source::NAMESPACE_DIGEST_PROFILE,
+        workload_source::NAMESPACE_EDIT_CONTRACT,
+        manifest.regular_files,
+        manifest.data_directories,
+        manifest.logical_bytes,
+        manifest.empty_files,
+        manifest.tiny_files,
+        manifest.small_files,
+        manifest.medium_files,
+        manifest.anchor_files,
+        manifest.anchor_bytes,
+        manifest.file_mode,
+        manifest.directory_mode,
+        manifest.mtime_seconds,
+        manifest.mtime_nanoseconds,
+        manifest.digest,
+        fixture.edited_digest,
+        fixture.edit_path,
+        fixture.edit_size,
+        fixture.fixture_plan_ns,
+        fixture.fixture_generate_ns,
+        fixture.fixture_manifest_ns,
+        files_per_second,
+        bytes_per_second,
+        fixture.maximum_fixture_write_buffer_bytes,
+        fixture.fixture_plan_bytes,
+        fixture.fixture_path_state_bytes,
+        fixture.fixture_digest_record_bytes,
+        fixture.fixture_open_calls,
+        fixture.fixture_write_calls,
+        fixture.fixture_content_bytes_generated,
+        fixture.fixture_content_bytes_written,
+        fixture.fixture_content_hash_input_bytes,
+    );
+}
+
+fn rate(units: u64, elapsed_ns: u64) -> u64 {
+    u128::from(units)
+        .checked_mul(1_000_000_000)
+        .and_then(|value| value.checked_div(u128::from(elapsed_ns.max(1))))
+        .and_then(|value| u64::try_from(value).ok())
+        .unwrap_or(u64::MAX)
+}
+
+fn namespace_self_check() -> AnyResult<()> {
+    let expected = [
+        ("namespace-100", [1, 78, 15, 5, 1], 125_000_000),
+        ("namespace-1000", [10, 789, 150, 50, 1], 200_000_000),
+        ("namespace-10000", [100, 7_899, 1_500, 500, 1], 300_000_000),
+        (
+            "namespace-100000",
+            [1_000, 78_998, 15_000, 5_000, 2],
+            500_000_000,
+        ),
+    ];
+    for (id, counts, logical_bytes) in expected {
+        let first = workload_source::namespace_plan(id)?;
+        let second = workload_source::namespace_plan(id)?;
+        if first != second
+            || [
+                first.empty_files,
+                first.tiny_files,
+                first.small_files,
+                first.medium_files,
+                first.anchor_files,
+            ] != counts
+            || first.scenario.logical_bytes != logical_bytes
+        {
+            return Err("namespace-v2 planner self-check".into());
+        }
+    }
+    NamespaceSample {
+        layerstack_init_ns: 1,
+        branch_fork_ns: 2,
+        workspace_create_ns: 3,
+        edit_ns: 4,
+        commit_ns: 5,
+        workspace_end_ns: 6,
+        reconnect_ns: 7,
+        reopen_workspace_create_ns: 8,
+        reopen_workspace_end_ns: 9,
+        product_lifecycle_ns: 45,
+    }
+    .validate()?;
+    Ok(())
 }
 
 fn namespace_placement(
@@ -524,56 +588,32 @@ fn sum_metric(left: u64, right: u64, name: &'static str) -> AnyResult<u64> {
     left.checked_add(right).ok_or_else(|| name.into())
 }
 
-fn parse_namespace_verification(output: &OutputPage) -> AnyResult<NamespaceManifest> {
-    let bytes = output
-        .chunks
-        .iter()
-        .flat_map(|chunk| chunk.bytes.iter().copied())
-        .collect::<Vec<_>>();
-    parse_namespace_verification_text(std::str::from_utf8(&bytes)?)
+fn valid_digest(value: &str) -> bool {
+    value.len() == 64
+        && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && value.bytes().all(|byte| !byte.is_ascii_uppercase())
 }
 
-fn parse_namespace_verification_text(output: &str) -> AnyResult<NamespaceManifest> {
-    let mut fields = std::collections::BTreeMap::new();
-    for line in output.lines() {
-        let (name, value) = line
-            .split_once('=')
-            .ok_or("namespace verification output")?;
-        if fields.insert(name, value).is_some() {
-            return Err("duplicate namespace verification field".into());
-        }
-    }
-    if fields.len() != 4 {
-        return Err("namespace verification field count".into());
-    }
-    let digest = fields
-        .remove("namespace_digest")
-        .ok_or("namespace verification digest")?;
-    if digest.len() != 64
-        || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
-        || digest.bytes().any(|byte| byte.is_ascii_uppercase())
-    {
-        return Err("namespace verification digest encoding".into());
-    }
-    let manifest = NamespaceManifest {
-        regular_files: fields
-            .remove("regular_files")
-            .ok_or("namespace verification files")?
-            .parse()?,
-        data_directories: fields
-            .remove("data_directories")
-            .ok_or("namespace verification directories")?
-            .parse()?,
-        logical_bytes: fields
-            .remove("logical_bytes")
-            .ok_or("namespace verification bytes")?
-            .parse()?,
+fn namespace_manifest(scenario: NamespaceScenario, digest: &str) -> AnyResult<NamespaceManifest> {
+    Ok(NamespaceManifest {
+        regular_files: scenario.regular_files,
+        data_directories: scenario.data_directories,
+        logical_bytes: scenario.logical_bytes,
+        empty_files: scenario.empty_files,
+        tiny_files: scenario.tiny_files,
+        small_files: scenario.small_files,
+        medium_files: scenario.medium_files,
+        anchor_files: scenario.anchor_files,
+        anchor_bytes: scenario
+            .anchor_files
+            .checked_mul(workload_source::NAMESPACE_ANCHOR_BYTES)
+            .ok_or("namespace anchor bytes")?,
+        file_mode: workload_source::NAMESPACE_FILE_MODE,
+        directory_mode: workload_source::NAMESPACE_DIRECTORY_MODE,
+        mtime_seconds: workload_source::NAMESPACE_MTIME_SECONDS,
+        mtime_nanoseconds: workload_source::NAMESPACE_MTIME_NANOSECONDS,
         digest: digest.to_owned(),
-    };
-    if !fields.is_empty() {
-        return Err("extra namespace verification field".into());
-    }
-    Ok(manifest)
+    })
 }
 
 fn namespace_case(
@@ -582,18 +622,39 @@ fn namespace_case(
     container_id: ContainerId,
     scenario: NamespaceScenario,
     iteration: usize,
+    fixture_digest: &str,
+    edited_digest: &str,
+    edit_path: &str,
+    edit_size: u64,
+    fixture_cache_profile: &str,
 ) -> AnyResult<()> {
     if iteration == 0 {
         return Err("namespace iteration must be positive".into());
     }
+    if !fixture.is_dir()
+        || !valid_digest(fixture_digest)
+        || !valid_digest(edited_digest)
+        || fixture_digest == edited_digest
+        || !matches!(
+            fixture_cache_profile,
+            "generated-first-use-uncontrolled"
+                | "generated-post-first-use-uncontrolled"
+                | "reused-first-use-uncontrolled"
+                | "reused-post-first-use-uncontrolled"
+        )
+        || edit_path.starts_with('/')
+        || edit_path.contains("..")
+        || edit_size <= u64::try_from(workload_source::NAMESPACE_EDIT_MARKER.len())?
+    {
+        return Err("namespace fixture manifest arguments".into());
+    }
     let setup_started = Instant::now();
-    let fixture_manifest = inspect_namespace(fixture)?;
-    validate_namespace_manifest(&fixture_manifest, scenario, false)?;
-    let expected_edited_manifest = expected_namespace_manifest(scenario, true);
+    let fixture_manifest = namespace_manifest(scenario, fixture_digest)?;
     std::fs::create_dir(root)?;
     let store_path = root.join("store.sqlite");
     let store = Arc::new(LayerStackStore::create(&store_path)?);
     let client = Client::connect(store.clone())?;
+    let store_baseline_bytes = std::fs::metadata(&store_path)?.len();
     let setup_ns = elapsed_ns(setup_started);
 
     let stale = store.take_layerstack_initialization_receipts();
@@ -639,10 +700,8 @@ fn namespace_case(
         workspace.id,
         vec![
             workload.clone(),
-            OsString::from("edit"),
-            OsString::from(namespace_path(0)),
-            OsString::from("0"),
-            OsString::from(NAMESPACE_FILE_BYTES.to_string()),
+            OsString::from("namespace-edit"),
+            OsString::from(edit_path),
         ],
     )?;
     let t4 = Instant::now();
@@ -653,8 +712,14 @@ fn namespace_case(
         let ended = client.end_workspace_session(workspace.id, EndWorkspaceMode::Discard);
         let t6 = Instant::now();
         println!(
-            "{{\"schema\":\"fs-bench-pro-namespace-failure-v1\",\"scenario\":\"{}\",\"iteration\":{iteration},\"failed_phase\":\"commit\",\"error\":{:?},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"edit_ns\":{},\"commit_ns\":{},\"workspace_end_ns\":{},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{}}}",
+            "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"product-lifecycle\",\"fixture_cache_profile\":\"{}\",\"failed_phase\":\"commit\",\"error\":{:?},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"edit_ns\":{},\"commit_ns\":{},\"workspace_end_ns\":{},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{}}}",
+            workload_source::NAMESPACE_FAILURE_SCHEMA,
             scenario.id,
+            workload_source::NAMESPACE_FIXTURE_PROFILE,
+            workload_source::NAMESPACE_DIGEST_PROFILE,
+            workload_source::NAMESPACE_EDIT_CONTRACT,
+            workload_source::NAMESPACE_LIFECYCLE_PROFILE,
+            fixture_cache_profile,
             error,
             nanos(t0, t1),
             nanos(t1, t2),
@@ -665,6 +730,16 @@ fn namespace_case(
             fixture_manifest.regular_files,
             fixture_manifest.data_directories,
             fixture_manifest.logical_bytes,
+            fixture_manifest.empty_files,
+            fixture_manifest.tiny_files,
+            fixture_manifest.small_files,
+            fixture_manifest.medium_files,
+            fixture_manifest.anchor_files,
+            fixture_manifest.anchor_bytes,
+            fixture_manifest.file_mode,
+            fixture_manifest.directory_mode,
+            fixture_manifest.mtime_seconds,
+            fixture_manifest.mtime_nanoseconds,
             fixture_manifest.digest,
             scan.scanned_files,
             scan.scanned_bytes,
@@ -694,41 +769,37 @@ fn namespace_case(
     let initialize_candidate =
         operation_candidate(&snapshot, OperationFamily::LayerStackInitialize)?;
     let commit_candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
+    let reconnect_started = Instant::now();
     drop(client);
     drop(store);
 
     let reopened_store = Arc::new(LayerStackStore::connect(&store_path)?);
-    let reopened = Client::connect(reopened_store)?;
+    let reopened = Client::connect(reopened_store.clone())?;
     visible_head(&reopened, branch, head)?;
-    let verification = reopened
+    let t7 = Instant::now();
+    let reopened_workspace = reopened
         .create_workspace_session(CreateWorkspaceSession {
             branch_id: branch,
-            placement: namespace_placement(&container_id, scenario, iteration, "verify"),
+            placement: namespace_placement(&container_id, scenario, iteration, "reopen"),
             projection: Some(WorkspaceProjection::Fuse),
         })
-        .map_err(|error| format!("namespace reopen Workspace create failed: {error}"))?;
-    let output = execute(
-        &reopened,
-        verification.id,
-        vec![
-            workload,
-            OsString::from("namespace-verify"),
-            OsString::from("."),
-        ],
-    )
-    .map_err(|error| format!("namespace reopen verification execution failed: {error}"))?;
-    let verified = parse_namespace_verification(&output)?;
-    validate_namespace_manifest_against(&verified, &expected_edited_manifest)?;
+        .map_err(|error| format!("namespace reopened Workspace create failed: {error}"))?;
+    let t8 = Instant::now();
     reopened
-        .end_workspace_session(verification.id, EndWorkspaceMode::Clean)
-        .map_err(|error| format!("namespace reopen Workspace End failed: {error}"))?;
-    visible_head(&reopened, branch, head)?;
+        .end_workspace_session(reopened_workspace.id, EndWorkspaceMode::Clean)
+        .map_err(|error| format!("namespace reopened Workspace End failed: {error}"))?;
+    let t9 = Instant::now();
     if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
-        return Err("namespace reopen verification leaked runtime state".into());
+        return Err("namespace reopened Workspace leaked runtime state".into());
     }
-    let t7 = Instant::now();
+    let reopen_snapshot = reopened.monitor_snapshot()?;
+    let store_storage = reopened_store.storage_snapshot()?;
+    let canonical_storage = reopened_store.canonical_storage()?;
+    let store_database_bytes = store_storage.database_bytes;
+    let store_growth_bytes = store_database_bytes.saturating_sub(store_baseline_bytes);
     eprintln!("NAMESPACE_DIAGNOSTIC scan={scan:?}");
     eprintln!("NAMESPACE_DIAGNOSTIC operations={snapshot:?}");
+    eprintln!("NAMESPACE_DIAGNOSTIC reopen_operations={reopen_snapshot:?}");
 
     let sample = NamespaceSample {
         layerstack_init_ns: nanos(t0, t1),
@@ -737,8 +808,27 @@ fn namespace_case(
         edit_ns: nanos(t3, t4),
         commit_ns: nanos(t4, t5),
         workspace_end_ns: nanos(t5, t6),
-        reopen_verify_ns: nanos(t6, t7),
-        complete_product_ns: nanos(t0, t7),
+        reconnect_ns: nanos(reconnect_started, t7),
+        reopen_workspace_create_ns: nanos(t7, t8),
+        reopen_workspace_end_ns: nanos(t8, t9),
+        product_lifecycle_ns: 0,
+    };
+    let sample = NamespaceSample {
+        product_lifecycle_ns: [
+            sample.layerstack_init_ns,
+            sample.branch_fork_ns,
+            sample.workspace_create_ns,
+            sample.edit_ns,
+            sample.commit_ns,
+            sample.workspace_end_ns,
+            sample.reconnect_ns,
+            sample.reopen_workspace_create_ns,
+            sample.reopen_workspace_end_ns,
+        ]
+        .into_iter()
+        .try_fold(0_u64, u64::checked_add)
+        .ok_or("namespace product lifecycle overflow")?,
+        ..sample
     };
     sample.validate()?;
 
@@ -788,22 +878,43 @@ fn namespace_case(
         return Err("namespace combined candidate equation".into());
     }
 
+    let init_bytes_per_second = rate(fixture_manifest.logical_bytes, sample.layerstack_init_ns);
+    let init_files_per_second = rate(fixture_manifest.regular_files, sample.layerstack_init_ns);
     println!(
-        "{{\"schema\":\"fs-bench-pro-namespace-v1\",\"scenario\":\"{}\",\"iteration\":{iteration},\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"edit_ns\":{},\"commit_ns\":{},\"workspace_end_ns\":{},\"reopen_verify_ns\":{},\"complete_product_ns\":{},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"fixture_digest\":\"{}\",\"verified_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{candidate_objects},\"candidate_bytes\":{candidate_bytes},\"inserted_objects\":{inserted_objects},\"inserted_bytes\":{inserted_bytes},\"reused_objects\":{reused_objects},\"reused_bytes\":{reused_bytes},\"max_transaction_objects\":{},\"max_transaction_bytes\":{}}}",
+        "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"product-lifecycle\",\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"edit_ns\":{},\"commit_ns\":{},\"workspace_end_ns\":{},\"reconnect_ns\":{},\"reopen_workspace_create_ns\":{},\"reopen_workspace_end_ns\":{},\"product_lifecycle_ns\":{},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"edit_path\":\"{}\",\"edit_size\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{candidate_objects},\"candidate_bytes\":{candidate_bytes},\"inserted_objects\":{inserted_objects},\"inserted_bytes\":{inserted_bytes},\"reused_objects\":{reused_objects},\"reused_bytes\":{reused_bytes},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialize_candidate_objects\":{},\"initialize_candidate_bytes\":{},\"initialize_inserted_objects\":{},\"initialize_inserted_bytes\":{},\"initialize_reused_objects\":{},\"initialize_reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"commit_candidate_objects\":{},\"commit_candidate_bytes\":{},\"commit_inserted_objects\":{},\"commit_inserted_bytes\":{},\"commit_reused_objects\":{},\"commit_reused_bytes\":{},\"commit_admission_transactions\":{},\"commit_max_transaction_objects\":{},\"commit_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{}}}",
+        workload_source::NAMESPACE_SCHEMA,
         scenario.id,
+        workload_source::NAMESPACE_FIXTURE_PROFILE,
+        workload_source::NAMESPACE_DIGEST_PROFILE,
+        workload_source::NAMESPACE_EDIT_CONTRACT,
+        workload_source::NAMESPACE_LIFECYCLE_PROFILE,
+        fixture_cache_profile,
         sample.layerstack_init_ns,
         sample.branch_fork_ns,
         sample.workspace_create_ns,
         sample.edit_ns,
         sample.commit_ns,
         sample.workspace_end_ns,
-        sample.reopen_verify_ns,
-        sample.complete_product_ns,
+        sample.reconnect_ns,
+        sample.reopen_workspace_create_ns,
+        sample.reopen_workspace_end_ns,
+        sample.product_lifecycle_ns,
         fixture_manifest.regular_files,
         fixture_manifest.data_directories,
         fixture_manifest.logical_bytes,
+        fixture_manifest.empty_files,
+        fixture_manifest.tiny_files,
+        fixture_manifest.small_files,
+        fixture_manifest.medium_files,
+        fixture_manifest.anchor_files,
+        fixture_manifest.anchor_bytes,
+        fixture_manifest.file_mode,
+        fixture_manifest.directory_mode,
+        fixture_manifest.mtime_seconds,
+        fixture_manifest.mtime_nanoseconds,
+        edit_path,
+        edit_size,
         fixture_manifest.digest,
-        verified.digest,
         scan.scanned_files,
         scan.scanned_bytes,
         initialize_candidate
@@ -812,6 +923,143 @@ fn namespace_case(
         initialize_candidate
             .max_transaction_bytes
             .max(commit_candidate.max_transaction_bytes),
+        initialize_candidate.candidate_objects,
+        initialize_candidate.candidate_bytes,
+        initialize_candidate.inserted_objects,
+        initialize_candidate.inserted_bytes,
+        initialize_candidate.reused_objects,
+        initialize_candidate.reused_bytes,
+        initialize_candidate.batch_inserted_objects,
+        initialize_candidate.batch_inserted_bytes,
+        initialize_candidate.final_inserted_objects,
+        initialize_candidate.final_inserted_bytes,
+        initialize_candidate.preexisting_reused_objects,
+        initialize_candidate.preexisting_reused_bytes,
+        initialize_candidate.admission_transactions,
+        initialize_candidate.max_transaction_objects,
+        initialize_candidate.max_transaction_bytes,
+        commit_candidate.candidate_objects,
+        commit_candidate.candidate_bytes,
+        commit_candidate.inserted_objects,
+        commit_candidate.inserted_bytes,
+        commit_candidate.reused_objects,
+        commit_candidate.reused_bytes,
+        commit_candidate.admission_transactions,
+        commit_candidate.max_transaction_objects,
+        commit_candidate.max_transaction_bytes,
+        canonical_storage.objects,
+        canonical_storage.encoded_bytes,
+    );
+    Ok(())
+}
+
+fn namespace_init_diagnostic(
+    root: &Path,
+    fixture: &Path,
+    scenario: NamespaceScenario,
+    iteration: usize,
+    fixture_digest: &str,
+    fixture_cache_profile: &str,
+) -> AnyResult<()> {
+    if iteration == 0
+        || !fixture.is_dir()
+        || !valid_digest(fixture_digest)
+        || !matches!(
+            fixture_cache_profile,
+            "generated-first-use-uncontrolled"
+                | "generated-post-first-use-uncontrolled"
+                | "reused-first-use-uncontrolled"
+                | "reused-post-first-use-uncontrolled"
+        )
+    {
+        return Err("namespace init-only diagnostic arguments".into());
+    }
+    let fixture_manifest = namespace_manifest(scenario, fixture_digest)?;
+    let setup_started = Instant::now();
+    std::fs::create_dir(root)?;
+    let store_path = root.join("store.sqlite");
+    let store = Arc::new(LayerStackStore::create(&store_path)?);
+    let client = Client::connect(store.clone())?;
+    let store_baseline_bytes = std::fs::metadata(&store_path)?.len();
+    let setup_ns = elapsed_ns(setup_started);
+    if !store.take_layerstack_initialization_receipts().is_empty() {
+        return Err("stale LayerStack initialization receipt".into());
+    }
+
+    let t0 = Instant::now();
+    let initialized = client.initialize_layerstack(
+        EntityName::new(format!("{}-{iteration}-init-diagnostic", scenario.id))?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let t1 = Instant::now();
+    let receipts = store.take_layerstack_initialization_receipts();
+    let [scan] = receipts.as_slice() else {
+        return Err("LayerStack initialization receipt cardinality".into());
+    };
+    if scan.layer_stack_id != initialized.layer_stack_id
+        || scan.scanned_files != fixture_manifest.regular_files
+        || scan.scanned_bytes != fixture_manifest.logical_bytes
+    {
+        return Err("LayerStack initialization scan receipt mismatch".into());
+    }
+    let snapshot = client.monitor_snapshot()?;
+    let candidate = operation_candidate(&snapshot, OperationFamily::LayerStackInitialize)?;
+    let storage = store.storage_snapshot()?;
+    let canonical = store.canonical_storage()?;
+    if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
+        return Err("init-only diagnostic created runtime state".into());
+    }
+    let store_database_bytes = storage.database_bytes;
+    let store_growth_bytes = store_database_bytes.saturating_sub(store_baseline_bytes);
+    let teardown_started = Instant::now();
+    drop(client);
+    drop(store);
+    let teardown_ns = elapsed_ns(teardown_started);
+    let layerstack_init_ns = nanos(t0, t1);
+    let init_bytes_per_second = rate(fixture_manifest.logical_bytes, layerstack_init_ns);
+    let init_files_per_second = rate(fixture_manifest.regular_files, layerstack_init_ns);
+    println!(
+        "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"init-only-diagnostic\",\"nonterminal\":true,\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{layerstack_init_ns},\"teardown_ns\":{teardown_ns},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{}}}",
+        workload_source::NAMESPACE_SCHEMA,
+        scenario.id,
+        workload_source::NAMESPACE_FIXTURE_PROFILE,
+        workload_source::NAMESPACE_DIGEST_PROFILE,
+        workload_source::NAMESPACE_EDIT_CONTRACT,
+        workload_source::NAMESPACE_INIT_DIAGNOSTIC_PROFILE,
+        fixture_cache_profile,
+        fixture_manifest.regular_files,
+        fixture_manifest.data_directories,
+        fixture_manifest.logical_bytes,
+        fixture_manifest.empty_files,
+        fixture_manifest.tiny_files,
+        fixture_manifest.small_files,
+        fixture_manifest.medium_files,
+        fixture_manifest.anchor_files,
+        fixture_manifest.anchor_bytes,
+        fixture_manifest.file_mode,
+        fixture_manifest.directory_mode,
+        fixture_manifest.mtime_seconds,
+        fixture_manifest.mtime_nanoseconds,
+        fixture_manifest.digest,
+        scan.scanned_files,
+        scan.scanned_bytes,
+        candidate.candidate_objects,
+        candidate.candidate_bytes,
+        candidate.inserted_objects,
+        candidate.inserted_bytes,
+        candidate.reused_objects,
+        candidate.reused_bytes,
+        candidate.batch_inserted_objects,
+        candidate.batch_inserted_bytes,
+        candidate.final_inserted_objects,
+        candidate.final_inserted_bytes,
+        candidate.preexisting_reused_objects,
+        candidate.preexisting_reused_bytes,
+        candidate.admission_transactions,
+        candidate.max_transaction_objects,
+        candidate.max_transaction_bytes,
+        canonical.objects,
+        canonical.encoded_bytes,
     );
     Ok(())
 }

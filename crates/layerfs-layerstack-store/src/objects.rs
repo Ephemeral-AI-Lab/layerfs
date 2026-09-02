@@ -3,9 +3,10 @@ use layerfs_content::filesystem::{self, ContentChange, ReconcileConflict};
 use layerfs_content::object::access::{ObjectRead, ObjectStore};
 use layerfs_content::object::references::referenced_objects;
 use layerfs_content::{CoreError, CoreResult, ObjectId};
-use rusqlite::{params_from_iter, types::Value, OptionalExtension};
+use rusqlite::{params_from_iter, types::Value, Connection, OptionalExtension};
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -260,6 +261,126 @@ pub struct DeferredObjectStore {
     spill_count: u64,
 }
 
+pub(crate) struct AppendOnlyInitializationWriter {
+    writer: std::fs::File,
+    reader: std::fs::File,
+    path: TempPath,
+    pending: Vec<u8>,
+    pending_limit: usize,
+    end: u64,
+    objects: u64,
+    bytes: u64,
+    write_calls: u64,
+    write_bytes: u64,
+    get_calls: Cell<u64>,
+}
+
+pub(crate) struct AppendOnlyInitializationSegment {
+    reader: Option<BufReader<CountedFile>>,
+    unbuffered_reader: Option<CountedFile>,
+    reader_capacity: usize,
+    _path: TempPath,
+    cursor: u64,
+    end: u64,
+    objects: u64,
+    bytes: u64,
+    read_objects: u64,
+    read_bytes: u64,
+    write_calls: u64,
+    write_bytes: u64,
+    get_calls: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct InitializationTaskBlock {
+    pub task_ordinal: usize,
+    pub worker_index: usize,
+    pub start: u64,
+    pub end: u64,
+    pub object_count: u64,
+    pub byte_count: u64,
+}
+
+pub(crate) struct CompactInodePairWriter {
+    writer: std::fs::File,
+    reader: std::fs::File,
+    path: TempPath,
+    pending: Vec<u8>,
+    pending_limit: usize,
+    end: u64,
+    pairs: u64,
+    write_calls: u64,
+    write_bytes: u64,
+}
+
+pub(crate) struct CompactInodePairSegment {
+    reader: BufReader<CountedFile>,
+    _path: TempPath,
+    cursor: u64,
+    end: u64,
+    pairs: u64,
+    read_pairs: u64,
+    write_calls: u64,
+    write_bytes: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct CompactInodePairBlock {
+    pub task_ordinal: usize,
+    pub worker_index: usize,
+    pub start: u64,
+    pub end: u64,
+    pub pair_count: u64,
+}
+
+pub(crate) struct CompactInodePairStream {
+    segments: Vec<CompactInodePairSegment>,
+    blocks: std::vec::IntoIter<CompactInodePairBlock>,
+    current: Option<(CompactInodePairBlock, u64)>,
+    last_task: Option<usize>,
+    done: bool,
+}
+
+struct CountedFile {
+    file: std::fs::File,
+    reads: u64,
+    bytes: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct InitializationSegmentIoMetrics {
+    pub frames: u64,
+    pub payload_bytes: u64,
+    pub framing_bytes: u64,
+    pub write_calls: u64,
+    pub write_bytes: u64,
+    pub raw_read_calls: u64,
+    pub raw_read_bytes: u64,
+    pub passes: u64,
+}
+
+impl InitializationSegmentIoMetrics {
+    pub(crate) fn merge(&mut self, other: Self) {
+        self.frames = self.frames.saturating_add(other.frames);
+        self.payload_bytes = self.payload_bytes.saturating_add(other.payload_bytes);
+        self.framing_bytes = self.framing_bytes.saturating_add(other.framing_bytes);
+        self.write_calls = self.write_calls.saturating_add(other.write_calls);
+        self.write_bytes = self.write_bytes.saturating_add(other.write_bytes);
+        self.raw_read_calls = self.raw_read_calls.saturating_add(other.raw_read_calls);
+        self.raw_read_bytes = self.raw_read_bytes.saturating_add(other.raw_read_bytes);
+        self.passes = self.passes.saturating_add(other.passes);
+    }
+}
+
+impl Read for CountedFile {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        self.reads = self.reads.saturating_add(1);
+        let bytes = self.file.read(buffer)?;
+        self.bytes = self.bytes.saturating_add(bytes as u64);
+        Ok(bytes)
+    }
+}
+
 enum DeferredObjects {
     Memory {
         order: Vec<ObjectId>,
@@ -296,6 +417,581 @@ struct TempPath(PathBuf);
 impl Drop for TempPath {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+impl AppendOnlyInitializationWriter {
+    pub(crate) fn new(pending_limit: usize) -> Result<Self> {
+        if pending_limit == 0 {
+            return Err(StoreError::InvalidInput("initialization segment buffer"));
+        }
+        let (writer, path) = temporary_file("initialization-segment")?;
+        let reader = std::fs::File::open(&path)?;
+        Ok(Self {
+            writer,
+            reader,
+            path: TempPath(path),
+            pending: Vec::with_capacity(pending_limit),
+            pending_limit,
+            end: 0,
+            objects: 0,
+            bytes: 0,
+            write_calls: 0,
+            write_bytes: 0,
+            get_calls: Cell::new(0),
+        })
+    }
+
+    pub(crate) fn checkpoint(&self) -> (u64, u64, u64) {
+        (self.end, self.objects, self.bytes)
+    }
+
+    pub(crate) fn block_since(
+        &self,
+        task_ordinal: usize,
+        worker_index: usize,
+        checkpoint: (u64, u64, u64),
+    ) -> Result<InitializationTaskBlock> {
+        let (start, objects, bytes) = checkpoint;
+        Ok(InitializationTaskBlock {
+            task_ordinal,
+            worker_index,
+            start,
+            end: self.end,
+            object_count: self
+                .objects
+                .checked_sub(objects)
+                .ok_or(StoreError::Integrity("initialization segment objects"))?,
+            byte_count: self
+                .bytes
+                .checked_sub(bytes)
+                .ok_or(StoreError::Integrity("initialization segment bytes"))?,
+        })
+    }
+
+    pub(crate) fn get_calls(&self) -> u64 {
+        self.get_calls.get()
+    }
+
+    pub(crate) fn seal(mut self) -> Result<AppendOnlyInitializationSegment> {
+        self.flush()?;
+        if self.reader.metadata()?.len() != self.end {
+            return Err(StoreError::Integrity("initialization segment length"));
+        }
+        let Self {
+            writer,
+            mut reader,
+            path,
+            end,
+            objects,
+            bytes,
+            write_calls,
+            write_bytes,
+            get_calls,
+            pending_limit,
+            ..
+        } = self;
+        drop(writer);
+        reader.seek(SeekFrom::Start(0))?;
+        #[cfg(unix)]
+        std::fs::remove_file(&path.0)?;
+        Ok(AppendOnlyInitializationSegment {
+            reader: None,
+            unbuffered_reader: Some(CountedFile {
+                file: reader,
+                reads: 0,
+                bytes: 0,
+            }),
+            reader_capacity: pending_limit,
+            _path: path,
+            cursor: 0,
+            end,
+            objects,
+            bytes,
+            read_objects: 0,
+            read_bytes: 0,
+            write_calls,
+            write_bytes,
+            get_calls: get_calls.get(),
+        })
+    }
+
+    fn append(&mut self, id: ObjectId, canonical: &[u8]) -> Result<()> {
+        let row_len = canonical
+            .len()
+            .checked_add(40)
+            .ok_or(StoreError::Integrity("initialization segment length"))?;
+        if !self.pending.is_empty()
+            && self.pending.len().saturating_add(row_len) > self.pending_limit
+        {
+            self.flush()?;
+        }
+        self.pending.extend_from_slice(id.as_bytes());
+        self.pending
+            .extend_from_slice(&(canonical.len() as u64).to_le_bytes());
+        self.pending.extend_from_slice(canonical);
+        self.end = self
+            .end
+            .checked_add(row_len as u64)
+            .ok_or(StoreError::Integrity("initialization segment length"))?;
+        self.objects = self
+            .objects
+            .checked_add(1)
+            .ok_or(StoreError::Integrity("initialization segment objects"))?;
+        self.bytes = self
+            .bytes
+            .checked_add(canonical.len() as u64)
+            .ok_or(StoreError::Integrity("initialization segment bytes"))?;
+        if self.pending.len() >= self.pending_limit {
+            self.flush()?;
+        }
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        if !self.pending.is_empty() {
+            self.writer.write_all(&self.pending)?;
+            self.write_calls = self.write_calls.saturating_add(1);
+            self.write_bytes = self.write_bytes.saturating_add(self.pending.len() as u64);
+            self.pending.clear();
+        }
+        Ok(())
+    }
+}
+
+impl ObjectStore for AppendOnlyInitializationWriter {
+    fn get(&self, _id: ObjectId) -> CoreResult<Vec<u8>> {
+        self.get_calls.set(self.get_calls.get().saturating_add(1));
+        Err(CoreError::InvalidRecord("append-only initialization get"))
+    }
+
+    fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+        let id = ObjectId::for_bytes(canonical);
+        self.append(id, canonical).map_err(|_| CoreError::Io)?;
+        Ok(id)
+    }
+}
+
+impl AppendOnlyInitializationSegment {
+    fn reader(&mut self) -> Result<&mut BufReader<CountedFile>> {
+        if self.reader.is_none() {
+            let reader = self
+                .unbuffered_reader
+                .take()
+                .ok_or(StoreError::Integrity("initialization segment reader"))?;
+            self.reader = Some(BufReader::with_capacity(self.reader_capacity, reader));
+        }
+        self.reader
+            .as_mut()
+            .ok_or(StoreError::Integrity("initialization segment reader"))
+    }
+
+    pub(crate) fn consume_block(
+        &mut self,
+        block: InitializationTaskBlock,
+        mut visitor: impl FnMut(CanonicalObject) -> Result<()>,
+    ) -> Result<()> {
+        if block.start != self.cursor || block.end > self.end || block.start > block.end {
+            return Err(StoreError::Integrity("initialization segment block order"));
+        }
+        let before_objects = self.read_objects;
+        let before_bytes = self.read_bytes;
+        while self.cursor < block.end {
+            let mut id = [0; 32];
+            self.reader()?.read_exact(&mut id)?;
+            let id = ObjectId::from_bytes(&id)?;
+            let mut length = [0; 8];
+            self.reader()?.read_exact(&mut length)?;
+            let length = usize::try_from(u64::from_le_bytes(length))
+                .map_err(|_| StoreError::Integrity("initialization segment object length"))?;
+            let next = self
+                .cursor
+                .checked_add(40)
+                .and_then(|cursor| cursor.checked_add(length as u64))
+                .ok_or(StoreError::Integrity("initialization segment length"))?;
+            if next > block.end {
+                return Err(StoreError::Integrity("initialization segment block length"));
+            }
+            let mut bytes = vec![0; length];
+            self.reader()?.read_exact(&mut bytes)?;
+            self.cursor = next;
+            self.read_objects += 1;
+            self.read_bytes = self.read_bytes.saturating_add(length as u64);
+            visitor(CanonicalObject { id, bytes })?;
+        }
+        if self.cursor != block.end
+            || self.read_objects - before_objects != block.object_count
+            || self.read_bytes - before_bytes != block.byte_count
+        {
+            return Err(StoreError::Integrity("initialization segment block"));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn finish_consumption(self) -> Result<InitializationSegmentIoMetrics> {
+        if self.end == 0 {
+            let (raw_read_calls, raw_read_bytes) = if let Some(reader) = &self.reader {
+                (reader.get_ref().reads, reader.get_ref().bytes)
+            } else if let Some(reader) = &self.unbuffered_reader {
+                (reader.reads, reader.bytes)
+            } else {
+                return Err(StoreError::Integrity("initialization segment reader"));
+            };
+            if self.cursor != 0
+                || self.objects != 0
+                || self.bytes != 0
+                || self.read_objects != 0
+                || self.read_bytes != 0
+                || self.write_calls != 0
+                || self.write_bytes != 0
+                || raw_read_calls != 0
+                || raw_read_bytes != 0
+                || self.get_calls != 0
+            {
+                return Err(StoreError::Integrity(
+                    "initialization segment consumption",
+                ));
+            }
+            return Ok(InitializationSegmentIoMetrics::default());
+        }
+        let reader = self
+            .reader
+            .ok_or(StoreError::Integrity("initialization segment reader"))?;
+        if self.cursor != self.end
+            || self.read_objects != self.objects
+            || self.read_bytes != self.bytes
+            || self.end != self.bytes.saturating_add(self.objects.saturating_mul(40))
+            || self.write_bytes != self.end
+            || reader.get_ref().bytes != self.end
+            || self.get_calls != 0
+        {
+            return Err(StoreError::Integrity("initialization segment consumption"));
+        }
+        Ok(InitializationSegmentIoMetrics {
+            frames: self.objects,
+            payload_bytes: self.bytes,
+            framing_bytes: self.objects.saturating_mul(40),
+            write_calls: self.write_calls,
+            write_bytes: self.write_bytes,
+            raw_read_calls: reader.get_ref().reads,
+            raw_read_bytes: reader.get_ref().bytes,
+            passes: 1,
+        })
+    }
+
+    #[cfg(test)]
+    fn path(&self) -> &std::path::Path {
+        &self._path.0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reader_capacity(&self) -> usize {
+        self.reader
+            .as_ref()
+            .map_or(self.reader_capacity, BufReader::capacity)
+    }
+
+    #[cfg(test)]
+    fn raw_reads(&self) -> u64 {
+        self.reader
+            .as_ref()
+            .map_or(0, |reader| reader.get_ref().reads)
+    }
+
+    #[cfg(test)]
+    fn raw_read_bytes(&self) -> u64 {
+        self.reader
+            .as_ref()
+            .map_or(0, |reader| reader.get_ref().bytes)
+    }
+}
+
+impl CompactInodePairWriter {
+    pub(crate) fn new(pending_limit: usize) -> Result<Self> {
+        if pending_limit < 64 {
+            return Err(StoreError::InvalidInput("inode pair segment buffer"));
+        }
+        let (writer, path) = temporary_file("initialization-inode-pairs")?;
+        let reader = std::fs::File::open(&path)?;
+        Ok(Self {
+            writer,
+            reader,
+            path: TempPath(path),
+            pending: Vec::with_capacity(pending_limit),
+            pending_limit,
+            end: 0,
+            pairs: 0,
+            write_calls: 0,
+            write_bytes: 0,
+        })
+    }
+
+    pub(crate) fn checkpoint(&self) -> (u64, u64) {
+        (self.end, self.pairs)
+    }
+
+    pub(crate) fn push(
+        &mut self,
+        inode: layerfs_content::tree::inode::InodeId,
+        record: ObjectId,
+    ) -> Result<()> {
+        if !self.pending.is_empty() && self.pending.len() + 64 > self.pending_limit {
+            self.flush()?;
+        }
+        self.pending.extend_from_slice(inode.as_bytes());
+        self.pending.extend_from_slice(record.as_bytes());
+        self.end = self
+            .end
+            .checked_add(64)
+            .ok_or(StoreError::Integrity("inode pair segment length"))?;
+        self.pairs = self
+            .pairs
+            .checked_add(1)
+            .ok_or(StoreError::Integrity("inode pair segment count"))?;
+        if self.pending.len() >= self.pending_limit {
+            self.flush()?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn block_since(
+        &self,
+        task_ordinal: usize,
+        worker_index: usize,
+        checkpoint: (u64, u64),
+    ) -> Result<CompactInodePairBlock> {
+        let (start, pairs) = checkpoint;
+        Ok(CompactInodePairBlock {
+            task_ordinal,
+            worker_index,
+            start,
+            end: self.end,
+            pair_count: self
+                .pairs
+                .checked_sub(pairs)
+                .ok_or(StoreError::Integrity("inode pair segment count"))?,
+        })
+    }
+
+    pub(crate) fn seal(mut self) -> Result<CompactInodePairSegment> {
+        self.flush()?;
+        if self.reader.metadata()?.len() != self.end {
+            return Err(StoreError::Integrity("inode pair segment length"));
+        }
+        let Self {
+            writer,
+            mut reader,
+            path,
+            end,
+            pairs,
+            write_calls,
+            write_bytes,
+            pending_limit,
+            ..
+        } = self;
+        drop(writer);
+        reader.seek(SeekFrom::Start(0))?;
+        #[cfg(unix)]
+        std::fs::remove_file(&path.0)?;
+        Ok(CompactInodePairSegment {
+            reader: BufReader::with_capacity(
+                pending_limit,
+                CountedFile {
+                    file: reader,
+                    reads: 0,
+                    bytes: 0,
+                },
+            ),
+            _path: path,
+            cursor: 0,
+            end,
+            pairs,
+            read_pairs: 0,
+            write_calls,
+            write_bytes,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pending_capacity(&self) -> usize {
+        self.pending.capacity()
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        if !self.pending.is_empty() {
+            self.writer.write_all(&self.pending)?;
+            self.write_calls = self.write_calls.saturating_add(1);
+            self.write_bytes = self.write_bytes.saturating_add(self.pending.len() as u64);
+            self.pending.clear();
+        }
+        Ok(())
+    }
+}
+
+impl CompactInodePairSegment {
+    fn read_pair(
+        &mut self,
+        block_end: u64,
+    ) -> Result<(layerfs_content::tree::inode::InodeId, ObjectId)> {
+        let next = self
+            .cursor
+            .checked_add(64)
+            .ok_or(StoreError::Integrity("inode pair segment length"))?;
+        if next > block_end {
+            return Err(StoreError::Integrity("inode pair block length"));
+        }
+        let mut pair = [0; 64];
+        self.reader.read_exact(&mut pair)?;
+        self.cursor = next;
+        self.read_pairs += 1;
+        Ok((
+            layerfs_content::tree::inode::InodeId::from_slice(&pair[..32])?,
+            ObjectId::from_bytes(&pair[32..])?,
+        ))
+    }
+
+    fn consumed(&self) -> bool {
+        self.cursor == self.end && self.read_pairs == self.pairs
+    }
+
+    #[cfg(test)]
+    fn path(&self) -> &std::path::Path {
+        &self._path.0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reader_capacity(&self) -> usize {
+        self.reader.capacity()
+    }
+
+    #[cfg(test)]
+    fn raw_reads(&self) -> u64 {
+        self.reader.get_ref().reads
+    }
+
+    #[cfg(test)]
+    fn raw_read_bytes(&self) -> u64 {
+        self.reader.get_ref().bytes
+    }
+}
+
+impl CompactInodePairStream {
+    pub(crate) fn new(
+        segments: Vec<CompactInodePairSegment>,
+        blocks: Vec<CompactInodePairBlock>,
+    ) -> Result<Self> {
+        if blocks.len() > 1_000
+            || blocks.iter().enumerate().any(|(task, block)| {
+                block.task_ordinal != task
+                    || block.worker_index >= segments.len()
+                    || block.start > block.end
+                    || block.pair_count.checked_mul(64) != Some(block.end - block.start)
+            })
+        {
+            return Err(StoreError::Integrity("inode pair block order"));
+        }
+        Ok(Self {
+            segments,
+            blocks: blocks.into_iter(),
+            current: None,
+            last_task: None,
+            done: false,
+        })
+    }
+
+    fn fail(
+        &mut self,
+        error: StoreError,
+    ) -> Option<CoreResult<(layerfs_content::tree::inode::InodeId, ObjectId)>> {
+        self.done = true;
+        Some(Err(core_read_error(error)))
+    }
+
+    pub(crate) fn finish(self) -> Result<InitializationSegmentIoMetrics> {
+        if !self.done
+            || self.current.is_some()
+            || self.blocks.len() != 0
+            || !self.segments.iter().all(CompactInodePairSegment::consumed)
+        {
+            return Err(StoreError::Integrity("inode pair segment consumption"));
+        }
+        let mut metrics = InitializationSegmentIoMetrics::default();
+        for segment in self.segments {
+            if segment.end != segment.pairs.saturating_mul(64)
+                || segment.write_bytes != segment.end
+                || segment.reader.get_ref().bytes != segment.end
+            {
+                return Err(StoreError::Integrity("inode pair segment consumption"));
+            }
+            metrics.frames = metrics.frames.saturating_add(segment.pairs);
+            metrics.payload_bytes = metrics.payload_bytes.saturating_add(segment.end);
+            metrics.write_calls = metrics.write_calls.saturating_add(segment.write_calls);
+            metrics.write_bytes = metrics.write_bytes.saturating_add(segment.write_bytes);
+            metrics.raw_read_calls = metrics
+                .raw_read_calls
+                .saturating_add(segment.reader.get_ref().reads);
+            metrics.raw_read_bytes = metrics
+                .raw_read_bytes
+                .saturating_add(segment.reader.get_ref().bytes);
+            metrics.passes = metrics.passes.saturating_add(1);
+        }
+        Ok(metrics)
+    }
+}
+
+impl Iterator for CompactInodePairStream {
+    type Item = CoreResult<(layerfs_content::tree::inode::InodeId, ObjectId)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+        loop {
+            if let Some((block, read)) = self.current {
+                let segment = match self.segments.get_mut(block.worker_index) {
+                    Some(segment) => segment,
+                    None => {
+                        return self.fail(StoreError::Integrity("inode pair segment worker"));
+                    }
+                };
+                if segment.cursor == block.end {
+                    if read != block.pair_count {
+                        return self.fail(StoreError::Integrity("inode pair block count"));
+                    }
+                    self.last_task = Some(block.task_ordinal);
+                    self.current = None;
+                    continue;
+                }
+                match segment.read_pair(block.end) {
+                    Ok(pair) => {
+                        self.current = Some((block, read + 1));
+                        return Some(Ok(pair));
+                    }
+                    Err(error) => return self.fail(error),
+                }
+            }
+
+            let Some(block) = self.blocks.next() else {
+                self.done = true;
+                if self.segments.iter().all(CompactInodePairSegment::consumed) {
+                    return None;
+                }
+                return Some(Err(CoreError::InvalidRecord(
+                    "inode pair segment consumption",
+                )));
+            };
+            if self
+                .last_task
+                .is_some_and(|task| block.task_ordinal != task + 1)
+                || self
+                    .segments
+                    .get(block.worker_index)
+                    .is_none_or(|segment| segment.cursor != block.start)
+            {
+                return self.fail(StoreError::Integrity("inode pair block order"));
+            }
+            self.current = Some((block, 0));
+        }
     }
 }
 
@@ -371,6 +1067,94 @@ pub(crate) struct ObjectInsertMetrics {
     pub insert_ns: u64,
     pub objects: u64,
     pub bytes: u64,
+    pub submitted_rows: u64,
+    pub returned_ids: u64,
+    pub skipped_ids: u64,
+    pub skipped_bytes: u64,
+    pub collision_checks: u64,
+    pub sql_string_build_ns: u64,
+    pub sql_prepare_ns: u64,
+    pub sql_bind_step_returning_ns: u64,
+    pub conflict_read_calls: u64,
+    pub conflict_read_rows: u64,
+    pub conflict_read_bytes: u64,
+    pub conflict_read_ns: u64,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct InitializationAdmissionDiagnostics {
+    pub pending_duplicate_objects: u64,
+    pub pending_duplicate_bytes: u64,
+    pub cross_batch_skipped_objects: u64,
+    pub cross_batch_skipped_bytes: u64,
+    pub collision_checks: u64,
+    pub batch_peak_objects: u64,
+    pub batch_peak_payload_bytes: u64,
+    pub batch_peak_vec_capacity: u64,
+    pub pending_index_peak_entries: u64,
+    pub sql_batch_count: u64,
+    pub sql_row_shapes: BTreeSet<u64>,
+    pub sql_submitted_rows: u64,
+    pub sql_returned_ids: u64,
+    pub sql_skipped_ids: u64,
+    pub sql_string_build_ns: u64,
+    pub sql_prepare_ns: u64,
+    pub sql_bind_step_returning_ns: u64,
+    pub conflict_read_calls: u64,
+    pub conflict_read_rows: u64,
+    pub conflict_read_bytes: u64,
+    pub conflict_read_ns: u64,
+    pub sql_begin_ns: u64,
+    pub sql_commit_ns: u64,
+}
+
+impl InitializationAdmissionDiagnostics {
+    pub(crate) fn record_sql_batch(
+        &mut self,
+        metrics: ObjectInsertMetrics,
+        begin_ns: u64,
+        commit_ns: u64,
+    ) {
+        if metrics.submitted_rows != 0 {
+            self.sql_batch_count += 1;
+            self.sql_row_shapes.insert(metrics.submitted_rows);
+        }
+        self.cross_batch_skipped_objects = self
+            .cross_batch_skipped_objects
+            .saturating_add(metrics.skipped_ids);
+        self.cross_batch_skipped_bytes = self
+            .cross_batch_skipped_bytes
+            .saturating_add(metrics.skipped_bytes);
+        self.collision_checks = self
+            .collision_checks
+            .saturating_add(metrics.collision_checks);
+        self.sql_submitted_rows = self
+            .sql_submitted_rows
+            .saturating_add(metrics.submitted_rows);
+        self.sql_returned_ids = self.sql_returned_ids.saturating_add(metrics.returned_ids);
+        self.sql_skipped_ids = self.sql_skipped_ids.saturating_add(metrics.skipped_ids);
+        self.sql_string_build_ns = self
+            .sql_string_build_ns
+            .saturating_add(metrics.sql_string_build_ns);
+        self.sql_prepare_ns = self.sql_prepare_ns.saturating_add(metrics.sql_prepare_ns);
+        self.sql_bind_step_returning_ns = self
+            .sql_bind_step_returning_ns
+            .saturating_add(metrics.sql_bind_step_returning_ns);
+        self.conflict_read_calls = self
+            .conflict_read_calls
+            .saturating_add(metrics.conflict_read_calls);
+        self.conflict_read_rows = self
+            .conflict_read_rows
+            .saturating_add(metrics.conflict_read_rows);
+        self.conflict_read_bytes = self
+            .conflict_read_bytes
+            .saturating_add(metrics.conflict_read_bytes);
+        self.conflict_read_ns = self
+            .conflict_read_ns
+            .saturating_add(metrics.conflict_read_ns);
+        self.sql_begin_ns = self.sql_begin_ns.saturating_add(begin_ns);
+        self.sql_commit_ns = self.sql_commit_ns.saturating_add(commit_ns);
+    }
 }
 
 pub(crate) struct PlannedAdmission {
@@ -389,6 +1173,23 @@ struct AdmissionBatchMetrics {
     insert: ObjectInsertMetrics,
     begin_ns: u64,
     commit_ns: u64,
+}
+
+pub(crate) struct InitializationSegmentAdmission<'a> {
+    db: &'a crate::schema::StoreDb,
+    batch: Vec<CanonicalObject>,
+    pending: BTreeMap<ObjectId, usize>,
+    batch_bytes: usize,
+    statement_number: u64,
+    receipt: crate::CandidateReceipt,
+    diagnostics: InitializationAdmissionDiagnostics,
+}
+
+pub(crate) struct FinishedInitializationAdmission {
+    pub final_batch: Vec<CanonicalObject>,
+    pub statement_number: u64,
+    pub receipt: crate::CandidateReceipt,
+    pub diagnostics: InitializationAdmissionDiagnostics,
 }
 
 enum SeenStorage {
@@ -558,6 +1359,50 @@ impl DeferredObjectStore {
             }
             DeferredObjects::Spill(spill) => spill.visit_ordered(order, visitor),
         }
+    }
+
+    #[cfg(test)]
+    fn consume_prevalidated_pages(
+        mut self,
+        mut visitor: impl FnMut(Vec<CanonicalObject>) -> Result<()>,
+    ) -> Result<()> {
+        let mut page = Vec::with_capacity(INITIALIZATION_ADMISSION_BATCH_COUNT);
+        let mut page_bytes = 0_usize;
+        let mut push = |object: CanonicalObject| {
+            if !page.is_empty()
+                && (page.len() == INITIALIZATION_ADMISSION_BATCH_COUNT
+                    || page_bytes.saturating_add(object.bytes.len()) > ADMISSION_BATCH_BYTES)
+            {
+                visitor(std::mem::replace(
+                    &mut page,
+                    Vec::with_capacity(INITIALIZATION_ADMISSION_BATCH_COUNT),
+                ))?;
+                page_bytes = 0;
+            }
+            page_bytes = page_bytes.saturating_add(object.bytes.len());
+            page.push(object);
+            Ok(())
+        };
+        match &mut self.storage {
+            DeferredObjects::Memory { rows, .. } => self.reachable.visit(|id| {
+                push(CanonicalObject {
+                    id,
+                    bytes: rows.remove(&id).ok_or(StoreError::MissingObject(id))?,
+                })
+            })?,
+            DeferredObjects::Spill(spill) => {
+                spill.visit_ordered(&self.reachable, &mut |id, bytes| {
+                    push(CanonicalObject {
+                        id,
+                        bytes: bytes.to_vec(),
+                    })
+                })?;
+            }
+        }
+        if !page.is_empty() {
+            visitor(page)?;
+        }
+        Ok(())
     }
 
     pub fn visit_batches(
@@ -1194,88 +2039,8 @@ impl crate::schema::StoreDb {
     }
 
     pub fn read_object_rows(&self, ids: &[ObjectId]) -> Result<Vec<CanonicalObject>> {
-        if ids.len() > OBJECT_PAGE_COUNT {
-            return Err(StoreError::InvalidInput("object read page"));
-        }
-        if ids.is_empty() {
-            return Ok(Vec::new());
-        }
-        let mut values = ids
-            .iter()
-            .map(|id| Value::Blob(id.as_bytes().to_vec()))
-            .collect::<Vec<_>>();
-        values.resize(OBJECT_PAGE_COUNT, Value::Null);
         let connection = self.reader()?;
-        let mut statement = connection.prepare_cached(crate::statements::objects::GET_MANY_128)?;
-        let mut rows = BTreeMap::new();
-        for row in statement.query_map(params_from_iter(values), |row| {
-            Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?))
-        })? {
-            let (id, bytes) = row?;
-            let id = ObjectId::from_bytes(&id)?;
-            layerfs_content::authenticate_identity(&bytes, id)?;
-            note_read_batch_hash();
-            if rows.insert(id, bytes).is_some() {
-                return Err(StoreError::Integrity("duplicate visible object"));
-            }
-        }
-        let mut remaining = BTreeMap::<ObjectId, usize>::new();
-        for id in ids {
-            *remaining.entry(*id).or_default() += 1;
-        }
-        if rows.len() != remaining.len() || rows.keys().any(|id| !remaining.contains_key(id)) {
-            return Err(StoreError::Integrity("visible object cardinality"));
-        }
-        let mut output = Vec::with_capacity(ids.len());
-        for id in ids {
-            let count = *remaining
-                .get(id)
-                .ok_or(StoreError::Integrity("visible object order"))?;
-            let bytes = if count == 1 {
-                remaining.remove(id);
-                rows.remove(id)
-                    .ok_or(StoreError::Integrity("visible object missing"))?
-            } else {
-                remaining.insert(*id, count - 1);
-                let bytes = rows
-                    .get(id)
-                    .ok_or(StoreError::Integrity("visible object missing"))?
-                    .clone();
-                note_read_batch_clone(bytes.len());
-                bytes
-            };
-            output.push(CanonicalObject { id: *id, bytes });
-        }
-        if !rows.is_empty() || !remaining.is_empty() {
-            return Err(StoreError::Integrity("visible object order"));
-        }
-        Ok(output)
-    }
-
-    pub(crate) fn read_small_object_rows(
-        &self,
-        max_object_bytes: usize,
-        max_total_bytes: usize,
-    ) -> Result<Vec<CanonicalObject>> {
-        let connection = self.reader()?;
-        let mut statement = connection.prepare_cached(
-            "SELECT object_id, bytes FROM objects WHERE length(bytes) <= ?1 ORDER BY rowid DESC",
-        )?;
-        let mut rows = statement.query([max_object_bytes as i64])?;
-        let mut output = Vec::new();
-        let mut charged = 0_usize;
-        while let Some(row) = rows.next()? {
-            let id = ObjectId::from_bytes(&row.get::<_, Vec<u8>>(0)?)?;
-            let bytes = row.get::<_, Vec<u8>>(1)?;
-            layerfs_content::authenticate_identity(&bytes, id)?;
-            let charge = bytes.len().saturating_add(64);
-            if charged.saturating_add(charge) > max_total_bytes {
-                break;
-            }
-            charged += charge;
-            output.push(CanonicalObject { id, bytes });
-        }
-        Ok(output)
+        read_object_rows_from_connection(&connection, ids)
     }
 
     pub fn object_membership(&self, ids: &[ObjectId]) -> Result<BTreeMap<ObjectId, u64>> {
@@ -1326,6 +2091,7 @@ impl crate::schema::StoreDb {
             let ids = batch.iter().map(|(id, _)| *id).collect::<Vec<_>>();
             let known = self.object_membership(&ids)?;
             let mut missing = Vec::new();
+            let mut reused = Vec::new();
             for (id, bytes) in batch {
                 plan.candidate_objects += 1;
                 plan.candidate_bytes = plan.candidate_bytes.saturating_add(*bytes);
@@ -1334,8 +2100,7 @@ impl crate::schema::StoreDb {
                         return Err(StoreError::Integrity("object length collision"));
                     }
                     Some(_) => {
-                        plan.reused_objects += 1;
-                        plan.reused_bytes = plan.reused_bytes.saturating_add(*bytes);
+                        reused.push((*id, *bytes));
                     }
                     None => {
                         missing.push(*id);
@@ -1344,6 +2109,20 @@ impl crate::schema::StoreDb {
                     }
                 }
             }
+            let reused_ids = reused.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+            let candidate = objects.read_prevalidated_objects(&reused_ids)?;
+            let durable = self.read_object_rows(&reused_ids)?;
+            if candidate
+                .iter()
+                .zip(&durable)
+                .any(|(candidate, durable)| candidate.bytes != durable.bytes)
+            {
+                return Err(StoreError::Integrity("object collision"));
+            }
+            plan.reused_objects += reused.len() as u64;
+            plan.reused_bytes = plan
+                .reused_bytes
+                .saturating_add(reused.iter().map(|(_, bytes)| *bytes).sum::<u64>());
             plan.missing.insert_page(&missing)?;
             Ok(())
         })?;
@@ -1360,12 +2139,7 @@ impl crate::schema::StoreDb {
         &self,
         objects: &DeferredObjectStore,
     ) -> Result<CandidatePlan> {
-        let empty = self.reader()?.query_row(
-            "SELECT NOT EXISTS(SELECT 1 FROM objects LIMIT 1)",
-            [],
-            |row| row.get::<_, bool>(0),
-        )?;
-        if !empty {
+        if !self.initialization_store_is_empty()? {
             return self.plan_candidate(objects);
         }
         Ok(CandidatePlan {
@@ -1379,6 +2153,230 @@ impl crate::schema::StoreDb {
             reused_objects: 0,
             reused_bytes: 0,
         })
+    }
+
+    pub(crate) fn initialization_store_is_empty(&self) -> Result<bool> {
+        Ok(self.reader()?.query_row(
+            "SELECT NOT EXISTS(SELECT 1 FROM objects LIMIT 1)",
+            [],
+            |row| row.get::<_, bool>(0),
+        )?)
+    }
+}
+
+fn read_object_rows_from_connection(
+    connection: &Connection,
+    ids: &[ObjectId],
+) -> Result<Vec<CanonicalObject>> {
+    if ids.len() > OBJECT_PAGE_COUNT {
+        return Err(StoreError::InvalidInput("object read page"));
+    }
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut values = ids
+        .iter()
+        .map(|id| Value::Blob(id.as_bytes().to_vec()))
+        .collect::<Vec<_>>();
+    values.resize(OBJECT_PAGE_COUNT, Value::Null);
+    let mut statement = connection.prepare_cached(crate::statements::objects::GET_MANY_128)?;
+    let mut rows = BTreeMap::new();
+    for row in statement.query_map(params_from_iter(values), |row| {
+        Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?))
+    })? {
+        let (id, bytes) = row?;
+        let id = ObjectId::from_bytes(&id)?;
+        layerfs_content::authenticate_identity(&bytes, id)?;
+        note_read_batch_hash();
+        if rows.insert(id, bytes).is_some() {
+            return Err(StoreError::Integrity("duplicate visible object"));
+        }
+    }
+    let mut remaining = BTreeMap::<ObjectId, usize>::new();
+    for id in ids {
+        *remaining.entry(*id).or_default() += 1;
+    }
+    if rows.len() != remaining.len() || rows.keys().any(|id| !remaining.contains_key(id)) {
+        return Err(StoreError::Integrity("visible object cardinality"));
+    }
+    let mut output = Vec::with_capacity(ids.len());
+    for id in ids {
+        let count = *remaining
+            .get(id)
+            .ok_or(StoreError::Integrity("visible object order"))?;
+        let bytes = if count == 1 {
+            remaining.remove(id);
+            rows.remove(id)
+                .ok_or(StoreError::Integrity("visible object missing"))?
+        } else {
+            remaining.insert(*id, count - 1);
+            let bytes = rows
+                .get(id)
+                .ok_or(StoreError::Integrity("visible object missing"))?
+                .clone();
+            note_read_batch_clone(bytes.len());
+            bytes
+        };
+        output.push(CanonicalObject { id: *id, bytes });
+    }
+    if !rows.is_empty() || !remaining.is_empty() {
+        return Err(StoreError::Integrity("visible object order"));
+    }
+    Ok(output)
+}
+
+impl<'a> InitializationSegmentAdmission<'a> {
+    pub(crate) fn new(db: &'a crate::schema::StoreDb) -> Result<Self> {
+        if !db.initialization_store_is_empty()? {
+            return Err(StoreError::Integrity(
+                "direct initialization requires empty Store",
+            ));
+        }
+        Ok(Self {
+            db,
+            batch: Vec::with_capacity(INITIALIZATION_ADMISSION_BATCH_COUNT),
+            pending: BTreeMap::new(),
+            batch_bytes: 0,
+            statement_number: 0,
+            receipt: crate::CandidateReceipt::default(),
+            diagnostics: InitializationAdmissionDiagnostics::default(),
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn admit_worker_segment(&mut self, objects: DeferredObjectStore) -> Result<()> {
+        self.admit(objects)
+    }
+
+    pub(crate) fn admit_append_only_block(
+        &mut self,
+        segment: &mut AppendOnlyInitializationSegment,
+        block: InitializationTaskBlock,
+    ) -> Result<()> {
+        segment.consume_block(block, |object| self.admit_object(object))
+    }
+
+    pub(crate) fn finish(self) -> Result<FinishedInitializationAdmission> {
+        Ok(FinishedInitializationAdmission {
+            final_batch: self.batch,
+            statement_number: self.statement_number,
+            receipt: self.receipt,
+            diagnostics: self.diagnostics,
+        })
+    }
+
+    #[cfg(test)]
+    fn admit(&mut self, objects: DeferredObjectStore) -> Result<()> {
+        objects.consume_prevalidated_pages(|page| self.admit_page(page))
+    }
+
+    #[cfg(test)]
+    fn admit_page(&mut self, page: Vec<CanonicalObject>) -> Result<()> {
+        for object in page {
+            self.admit_object(object)?;
+        }
+        Ok(())
+    }
+
+    fn admit_object(&mut self, object: CanonicalObject) -> Result<()> {
+        if self.pending.contains_key(&object.id) {
+            return self.admit_duplicate(object.id, &object.bytes);
+        }
+        self.push_pending(object)
+    }
+
+    fn admit_duplicate(&mut self, id: ObjectId, bytes: &[u8]) -> Result<()> {
+        let index = *self
+            .pending
+            .get(&id)
+            .ok_or(StoreError::Integrity("pending initialization object"))?;
+        self.diagnostics.collision_checks += 1;
+        if self.batch[index].bytes != bytes {
+            return Err(StoreError::Integrity("object collision"));
+        }
+        self.diagnostics.pending_duplicate_objects += 1;
+        self.diagnostics.pending_duplicate_bytes = self
+            .diagnostics
+            .pending_duplicate_bytes
+            .saturating_add(bytes.len() as u64);
+        Ok(())
+    }
+
+    fn push_pending(&mut self, object: CanonicalObject) -> Result<()> {
+        if object.bytes.len() > ADMISSION_BATCH_BYTES {
+            return Err(StoreError::Integrity("canonical object admission size"));
+        }
+        if !self.batch.is_empty()
+            && (self.batch.len() == INITIALIZATION_ADMISSION_BATCH_COUNT
+                || self.batch_bytes.saturating_add(object.bytes.len()) > ADMISSION_BATCH_BYTES)
+        {
+            self.flush_batch()?;
+        }
+        self.batch_bytes = self.batch_bytes.saturating_add(object.bytes.len());
+        self.pending.insert(object.id, self.batch.len());
+        self.batch.push(object);
+        self.diagnostics.batch_peak_objects = self
+            .diagnostics
+            .batch_peak_objects
+            .max(self.batch.len() as u64);
+        self.diagnostics.batch_peak_payload_bytes = self
+            .diagnostics
+            .batch_peak_payload_bytes
+            .max(self.batch_bytes as u64);
+        self.diagnostics.batch_peak_vec_capacity = self
+            .diagnostics
+            .batch_peak_vec_capacity
+            .max(self.batch.capacity() as u64);
+        self.diagnostics.pending_index_peak_entries = self
+            .diagnostics
+            .pending_index_peak_entries
+            .max(self.pending.len() as u64);
+        Ok(())
+    }
+
+    fn flush_batch(&mut self) -> Result<()> {
+        if self.batch.is_empty() {
+            return Ok(());
+        }
+        let batch = std::mem::replace(
+            &mut self.batch,
+            Vec::with_capacity(INITIALIZATION_ADMISSION_BATCH_COUNT),
+        );
+        let metrics = insert_initialization_segment_admission_batch(
+            self.db,
+            &batch,
+            &mut self.statement_number,
+        )?;
+        self.diagnostics
+            .record_sql_batch(metrics.insert, metrics.begin_ns, metrics.commit_ns);
+        self.batch_bytes = 0;
+        self.pending.clear();
+        self.receipt.candidate_objects += metrics.insert.objects;
+        self.receipt.candidate_bytes = self
+            .receipt
+            .candidate_bytes
+            .saturating_add(metrics.insert.bytes);
+        self.receipt.inserted_objects += metrics.insert.objects;
+        self.receipt.inserted_bytes = self
+            .receipt
+            .inserted_bytes
+            .saturating_add(metrics.insert.bytes);
+        self.receipt.batch_inserted_objects = self
+            .receipt
+            .batch_inserted_objects
+            .saturating_add(metrics.insert.objects);
+        self.receipt.batch_inserted_bytes = self
+            .receipt
+            .batch_inserted_bytes
+            .saturating_add(metrics.insert.bytes);
+        self.receipt.admission_transactions += 1;
+        self.receipt.max_transaction_objects = self
+            .receipt
+            .max_transaction_objects
+            .max(metrics.insert.objects);
+        self.receipt.max_transaction_bytes =
+            self.receipt.max_transaction_bytes.max(metrics.insert.bytes);
+        Ok(())
     }
 }
 
@@ -1523,6 +2521,26 @@ fn insert_admission_batch(
     })
 }
 
+fn insert_initialization_segment_admission_batch(
+    db: &crate::schema::StoreDb,
+    batch: &[CanonicalObject],
+    statement_number: &mut u64,
+) -> Result<AdmissionBatchMetrics> {
+    let begin_started = Instant::now();
+    let mut connection = db.writer()?;
+    let transaction =
+        connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+    let begin_ns = elapsed_ns(begin_started);
+    let insert = insert_initialization_segment_batch(&transaction, batch, statement_number)?;
+    let commit_started = Instant::now();
+    transaction.commit()?;
+    Ok(AdmissionBatchMetrics {
+        insert,
+        begin_ns,
+        commit_ns: elapsed_ns(commit_started),
+    })
+}
+
 pub(crate) fn insert_object_batch(
     transaction: &rusqlite::Transaction<'_>,
     objects: &[CanonicalObject],
@@ -1607,6 +2625,89 @@ pub(crate) fn insert_initialization_object_batch(
     })
 }
 
+pub(crate) fn insert_initialization_segment_batch(
+    transaction: &rusqlite::Transaction<'_>,
+    objects: &[CanonicalObject],
+    statement_number: &mut u64,
+) -> Result<ObjectInsertMetrics> {
+    if objects.is_empty() {
+        return Ok(ObjectInsertMetrics::default());
+    }
+    for _ in objects {
+        *statement_number += 1;
+        crate::schema::fail_transaction_statement(*statement_number)?;
+    }
+    let started = Instant::now();
+    let prepare_started = Instant::now();
+    let mut statement = transaction.prepare_cached(crate::statements::objects::INSERT)?;
+    let sql_prepare_ns = elapsed_ns(prepare_started);
+    let step_started = Instant::now();
+    let mut inserted_objects = 0_u64;
+    let mut inserted_bytes = 0_u64;
+    let mut skipped = Vec::new();
+    for object in objects {
+        if statement.execute(rusqlite::params![
+            object.id.as_bytes().as_slice(),
+            object.bytes.as_slice()
+        ])? == 0
+        {
+            skipped.push(object);
+        } else {
+            inserted_objects += 1;
+            inserted_bytes = inserted_bytes.saturating_add(object.bytes.len() as u64);
+        }
+    }
+    let sql_bind_step_returning_ns = elapsed_ns(step_started);
+    drop(statement);
+    let skipped_bytes = skipped
+        .iter()
+        .map(|object| object.bytes.len() as u64)
+        .sum::<u64>();
+    let mut conflict_read_calls = 0_u64;
+    let mut conflict_read_rows = 0_u64;
+    let mut conflict_read_bytes = 0_u64;
+    let mut conflict_read_ns = 0_u64;
+    for page in skipped.chunks(OBJECT_PAGE_COUNT) {
+        let ids = page.iter().map(|object| object.id).collect::<Vec<_>>();
+        let conflict_started = Instant::now();
+        let durable = read_object_rows_from_connection(transaction, &ids)?;
+        conflict_read_ns = conflict_read_ns.saturating_add(elapsed_ns(conflict_started));
+        conflict_read_calls += 1;
+        conflict_read_rows = conflict_read_rows.saturating_add(durable.len() as u64);
+        conflict_read_bytes = conflict_read_bytes.saturating_add(
+            durable
+                .iter()
+                .map(|object| object.bytes.len() as u64)
+                .sum::<u64>(),
+        );
+        if durable
+            .iter()
+            .zip(page)
+            .any(|(durable, object)| durable.bytes != object.bytes)
+        {
+            return Err(StoreError::Integrity("object collision"));
+        }
+    }
+    Ok(ObjectInsertMetrics {
+        insert_ns: elapsed_ns(started),
+        objects: inserted_objects,
+        bytes: inserted_bytes,
+        submitted_rows: objects.len() as u64,
+        returned_ids: inserted_objects,
+        skipped_ids: skipped.len() as u64,
+        skipped_bytes,
+        collision_checks: skipped.len() as u64,
+        sql_string_build_ns: 0,
+        sql_prepare_ns,
+        sql_bind_step_returning_ns,
+        conflict_read_calls,
+        conflict_read_rows,
+        conflict_read_bytes,
+        conflict_read_ns,
+        ..ObjectInsertMetrics::default()
+    })
+}
+
 impl ObjectSource for crate::schema::StoreDb {
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
         self.read_object_row(id)
@@ -1620,6 +2721,540 @@ impl ObjectSource for crate::schema::StoreDb {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sealed_segment(objects: Vec<CanonicalObject>) -> DeferredObjectStore {
+        let mut segment = DeferredObjectStore::new_all_reachable().unwrap();
+        for object in objects {
+            segment.put(object.id, &object.bytes).unwrap();
+        }
+        segment.all_reachable().unwrap()
+    }
+
+    fn finish_segment_admission(
+        db: &crate::schema::StoreDb,
+        admission: InitializationSegmentAdmission<'_>,
+    ) -> (crate::CandidateReceipt, Vec<ObjectId>) {
+        let finished = admission.finish().unwrap();
+        let ids = finished
+            .final_batch
+            .iter()
+            .map(|object| object.id)
+            .collect::<Vec<_>>();
+        let mut statement_number = finished.statement_number;
+        let mut connection = db.writer().unwrap();
+        let transaction = connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .unwrap();
+        let metrics = insert_initialization_segment_batch(
+            &transaction,
+            &finished.final_batch,
+            &mut statement_number,
+        )
+        .unwrap();
+        transaction.commit().unwrap();
+        let mut receipt = finished.receipt;
+        receipt.candidate_objects += metrics.objects;
+        receipt.candidate_bytes = receipt.candidate_bytes.saturating_add(metrics.bytes);
+        receipt.inserted_objects += metrics.objects;
+        receipt.inserted_bytes = receipt.inserted_bytes.saturating_add(metrics.bytes);
+        receipt.final_inserted_objects = metrics.objects;
+        receipt.final_inserted_bytes = metrics.bytes;
+        receipt.max_transaction_objects = receipt.max_transaction_objects.max(metrics.objects);
+        receipt.max_transaction_bytes = receipt.max_transaction_bytes.max(metrics.bytes);
+        assert_eq!(receipt.candidate_objects, receipt.inserted_objects);
+        assert_eq!(receipt.candidate_bytes, receipt.inserted_bytes);
+        assert_eq!(
+            receipt.inserted_objects,
+            receipt.batch_inserted_objects + receipt.final_inserted_objects
+        );
+        assert_eq!(
+            receipt.inserted_bytes,
+            receipt.batch_inserted_bytes + receipt.final_inserted_bytes
+        );
+        (receipt, ids)
+    }
+
+    #[test]
+    fn memory_segment_moves_owned_canonical_bytes() {
+        let bytes = layerfs_content::encode_bytes_object(b"owned").unwrap();
+        let id = ObjectId::for_bytes(&bytes);
+        let mut segment = DeferredObjectStore::new_all_reachable().unwrap();
+        segment.put(id, &bytes).unwrap();
+        let original = match &segment.storage {
+            DeferredObjects::Memory { rows, .. } => rows.get(&id).unwrap().as_ptr(),
+            DeferredObjects::Spill(_) => panic!("small segment spilled"),
+        };
+        segment
+            .all_reachable()
+            .unwrap()
+            .consume_prevalidated_pages(|page| {
+                assert_eq!(page.len(), 1);
+                assert_eq!(page[0].id, id);
+                assert_eq!(page[0].bytes.as_ptr(), original);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn append_only_writer_rejects_and_counts_outer_gets() {
+        let writer = AppendOnlyInitializationWriter::new(64).unwrap();
+        let path = writer.path.0.clone();
+        assert!(ObjectStore::get(&writer, ObjectId::for_bytes(b"missing")).is_err());
+        assert_eq!(writer.get_calls(), 1);
+        drop(writer);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn empty_append_only_segment_finishes_without_a_read_pass() {
+        let writer = AppendOnlyInitializationWriter::new(64).unwrap();
+        let path = writer.path.0.clone();
+        let segment = writer.seal().unwrap();
+        assert!(!path.exists());
+        assert_eq!(
+            segment.finish_consumption().unwrap(),
+            InitializationSegmentIoMetrics::default()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn append_only_blocks_are_written_once_read_forward_and_unlinked() {
+        let first = layerfs_content::encode_bytes_object(b"first").unwrap();
+        let second = layerfs_content::encode_bytes_object(b"second").unwrap();
+        let mut writer = AppendOnlyInitializationWriter::new(64).unwrap();
+        let first_checkpoint = writer.checkpoint();
+        let first_id = ObjectStore::put(&mut writer, &first).unwrap();
+        let first_block = writer.block_since(0, 0, first_checkpoint).unwrap();
+        let second_checkpoint = writer.checkpoint();
+        let second_id = ObjectStore::put(&mut writer, &second).unwrap();
+        let second_block = writer.block_since(1, 0, second_checkpoint).unwrap();
+        assert_eq!(first_block.object_count, 1);
+        assert_eq!(first_block.byte_count, first.len() as u64);
+        assert_eq!(second_block.object_count, 1);
+        assert_eq!(second_block.byte_count, second.len() as u64);
+        assert_eq!(second_block.end, (first.len() + second.len() + 80) as u64);
+        assert_eq!(writer.get_calls(), 0);
+        let path = writer.path.0.clone();
+        let mut segment = writer.seal().unwrap();
+        assert!(segment.reader_capacity() <= 64);
+        assert_eq!(segment.path(), path);
+        assert!(!path.exists());
+        assert!(segment.consume_block(second_block, |_| Ok(())).is_err());
+        let mut ids = Vec::new();
+        segment
+            .consume_block(first_block, |object| {
+                ids.push(object.id);
+                Ok(())
+            })
+            .unwrap();
+        segment
+            .consume_block(second_block, |object| {
+                ids.push(object.id);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(ids, vec![first_id, second_id]);
+        assert_eq!(segment.raw_read_bytes(), second_block.end);
+        assert!(
+            segment.raw_reads()
+                < first_block
+                    .object_count
+                    .saturating_add(second_block.object_count)
+                    * 3
+        );
+        segment.finish_consumption().unwrap();
+
+        let mut failed = AppendOnlyInitializationWriter::new(64).unwrap();
+        ObjectStore::put(&mut failed, &first).unwrap();
+        failed.flush().unwrap();
+        failed.writer.set_len(0).unwrap();
+        let failed_path = failed.path.0.clone();
+        assert!(failed.seal().is_err());
+        assert!(!failed_path.exists());
+    }
+
+    #[test]
+    fn buffered_append_reader_scales_raw_reads_with_bytes_not_tiny_frames() {
+        let capacity = 4096;
+        let mut writer = AppendOnlyInitializationWriter::new(capacity).unwrap();
+        let checkpoint = writer.checkpoint();
+        for index in 0_u64..5_000 {
+            let canonical = layerfs_content::encode_bytes_object(&index.to_be_bytes()).unwrap();
+            ObjectStore::put(&mut writer, &canonical).unwrap();
+        }
+        let block = writer.block_since(0, 0, checkpoint).unwrap();
+        let mut segment = writer.seal().unwrap();
+        let mut frames = 0_u64;
+        segment
+            .consume_block(block, |_| {
+                frames += 1;
+                Ok(())
+            })
+            .unwrap();
+        let expected_max_reads = block.end.div_ceil(capacity as u64).saturating_add(1);
+        assert_eq!(frames, 5_000);
+        assert_eq!(segment.raw_read_bytes(), block.end);
+        assert!(segment.raw_reads() <= expected_max_reads);
+        assert!(segment.raw_reads() * 10 < frames);
+        let metrics = segment.finish_consumption().unwrap();
+        assert_eq!(metrics.frames, frames);
+        assert_eq!(metrics.write_bytes, block.end);
+        assert_eq!(metrics.raw_read_bytes, block.end);
+    }
+
+    #[test]
+    fn append_only_reversed_worker_completion_sorts_to_task_order() {
+        let first = layerfs_content::encode_bytes_object(b"first-task").unwrap();
+        let second = layerfs_content::encode_bytes_object(b"second-task").unwrap();
+        let mut worker_zero = AppendOnlyInitializationWriter::new(64).unwrap();
+        let zero_checkpoint = worker_zero.checkpoint();
+        let second_id = ObjectStore::put(&mut worker_zero, &second).unwrap();
+        let second_block = worker_zero.block_since(1, 0, zero_checkpoint).unwrap();
+        let mut worker_one = AppendOnlyInitializationWriter::new(64).unwrap();
+        let one_checkpoint = worker_one.checkpoint();
+        let first_id = ObjectStore::put(&mut worker_one, &first).unwrap();
+        let first_block = worker_one.block_since(0, 1, one_checkpoint).unwrap();
+        let mut segments = vec![worker_zero.seal().unwrap(), worker_one.seal().unwrap()];
+        let mut completed = vec![second_block, first_block];
+        completed.sort_by_key(|block| block.task_ordinal);
+        let mut ids = Vec::new();
+        for block in completed {
+            segments[block.worker_index]
+                .consume_block(block, |object| {
+                    ids.push(object.id);
+                    Ok(())
+                })
+                .unwrap();
+        }
+        assert_eq!(ids, vec![first_id, second_id]);
+        for segment in segments {
+            segment.finish_consumption().unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn compact_inode_pair_sidecar_is_bounded_forward_only_and_unlinked() {
+        let mut writer = CompactInodePairWriter::new(128).unwrap();
+        let pair_buffer_capacity = writer.pending_capacity();
+        assert!(pair_buffer_capacity >= 128);
+        let first_checkpoint = writer.checkpoint();
+        let first = (
+            layerfs_content::tree::inode::InodeId::allocate([1; 32], 1),
+            ObjectId::for_bytes(b"first-record"),
+        );
+        writer.push(first.0, first.1).unwrap();
+        let first_block = writer.block_since(0, 0, first_checkpoint).unwrap();
+        let second_checkpoint = writer.checkpoint();
+        let second = (
+            layerfs_content::tree::inode::InodeId::allocate([1; 32], 2),
+            ObjectId::for_bytes(b"second-record"),
+        );
+        writer.push(second.0, second.1).unwrap();
+        let second_block = writer.block_since(1, 0, second_checkpoint).unwrap();
+        assert_eq!((first_block.start, first_block.end), (0, 64));
+        assert_eq!((second_block.start, second_block.end), (64, 128));
+        let path = writer.path.0.clone();
+        let segment = writer.seal().unwrap();
+        assert_eq!(segment.path(), path);
+        assert!(!path.exists());
+        assert!(
+            CompactInodePairStream::new(vec![segment], vec![second_block, first_block]).is_err()
+        );
+
+        let mut writer = CompactInodePairWriter::new(1024).unwrap();
+        let checkpoint = writer.checkpoint();
+        writer.push(first.0, first.1).unwrap();
+        let first_block = writer.block_since(0, 0, checkpoint).unwrap();
+        let checkpoint = writer.checkpoint();
+        writer.push(second.0, second.1).unwrap();
+        let second_block = writer.block_since(1, 0, checkpoint).unwrap();
+        let mut segment = writer.seal().unwrap();
+        assert!(segment.reader_capacity() <= 1024);
+        let pairs = vec![
+            segment.read_pair(first_block.end).unwrap(),
+            segment.read_pair(second_block.end).unwrap(),
+        ];
+        assert_eq!(pairs, vec![first, second]);
+        assert_eq!(segment.raw_read_bytes(), second_block.end);
+        assert!(segment.raw_reads() < 2);
+        assert!(segment.consumed());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spilled_segment_streams_bounded_pages_once_and_unlinks() {
+        let first = layerfs_content::encode_bytes_object(b"first").unwrap();
+        let first_id = ObjectId::for_bytes(&first);
+        let tail = layerfs_content::encode_bytes_object(b"pending tail").unwrap();
+        let tail_id = ObjectId::for_bytes(&tail);
+        let mut segment = DeferredObjectStore::new_all_reachable().unwrap();
+        segment.put(first_id, &first).unwrap();
+        segment.spill().unwrap();
+        segment.put(tail_id, &tail).unwrap();
+        let path = match &segment.storage {
+            DeferredObjects::Spill(spill) => {
+                assert!(!spill.pending.is_empty());
+                spill.path.clone()
+            }
+            DeferredObjects::Memory { .. } => panic!("forced segment did not spill"),
+        };
+        let mut ids = Vec::new();
+        segment
+            .all_reachable()
+            .unwrap()
+            .consume_prevalidated_pages(|page| {
+                assert!(page.len() <= INITIALIZATION_ADMISSION_BATCH_COUNT);
+                assert!(
+                    page.iter().map(|object| object.bytes.len()).sum::<usize>()
+                        <= ADMISSION_BATCH_BYTES
+                );
+                ids.extend(page.into_iter().map(|object| object.id));
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(ids, vec![first_id, tail_id]);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn segment_admission_deduplicates_across_pending_segments() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-segment-admission-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let db = crate::schema::StoreDb::create(root.join("store.sqlite")).unwrap();
+
+        let shared = layerfs_content::encode_bytes_object(b"shared").unwrap();
+        let shared_id = ObjectId::for_bytes(&shared);
+        let mut admission = InitializationSegmentAdmission::new(&db).unwrap();
+        admission
+            .admit_worker_segment(sealed_segment(vec![CanonicalObject {
+                id: shared_id,
+                bytes: shared.clone(),
+            }]))
+            .unwrap();
+        admission
+            .admit_worker_segment(sealed_segment(vec![CanonicalObject {
+                id: shared_id,
+                bytes: shared,
+            }]))
+            .unwrap();
+        let finished = admission.finish().unwrap();
+        assert_eq!(finished.receipt, crate::CandidateReceipt::default());
+        assert_eq!(finished.final_batch.len(), 1);
+        assert_eq!(finished.diagnostics.pending_duplicate_objects, 1);
+        assert_eq!(
+            finished.diagnostics.pending_duplicate_bytes,
+            finished.final_batch[0].bytes.len() as u64
+        );
+        assert_eq!(finished.diagnostics.collision_checks, 1);
+
+        drop(db);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn direct_admission_honors_every_frozen_count_boundary() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-segment-boundaries-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        for count in [0_usize, 1, 127, 128, 8190, 8191] {
+            let db = crate::schema::StoreDb::create(root.join(format!("{count}.sqlite"))).unwrap();
+            let objects = (0..count)
+                .map(|index| {
+                    let bytes = layerfs_content::encode_bytes_object(&(index as u64).to_be_bytes())
+                        .unwrap();
+                    CanonicalObject {
+                        id: ObjectId::for_bytes(&bytes),
+                        bytes,
+                    }
+                })
+                .collect::<Vec<_>>();
+            let expected_bytes = objects
+                .iter()
+                .map(|object| object.bytes.len() as u64)
+                .sum::<u64>();
+            assert!(expected_bytes < ADMISSION_BATCH_BYTES as u64);
+            let mut admission = InitializationSegmentAdmission::new(&db).unwrap();
+            admission
+                .admit_worker_segment(sealed_segment(objects))
+                .unwrap();
+            let (receipt, _) = finish_segment_admission(&db, admission);
+            assert_eq!(receipt.candidate_objects, count as u64);
+            assert_eq!(receipt.candidate_bytes, expected_bytes);
+            assert_eq!(receipt.max_transaction_objects, count as u64);
+            assert_eq!(receipt.max_transaction_bytes, expected_bytes);
+            drop(db);
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn direct_admission_is_independent_of_segment_order() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-segment-order-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let canonical = [
+            b"shared".as_slice(),
+            b"left".as_slice(),
+            b"right".as_slice(),
+        ]
+        .map(|payload| layerfs_content::encode_bytes_object(payload).unwrap());
+        let ids = canonical
+            .iter()
+            .map(|bytes| ObjectId::for_bytes(bytes))
+            .collect::<Vec<_>>();
+        let mut results = Vec::new();
+        for reverse in [false, true] {
+            let db =
+                crate::schema::StoreDb::create(root.join(format!("{reverse}.sqlite"))).unwrap();
+            let left = sealed_segment(vec![
+                CanonicalObject {
+                    id: ids[0],
+                    bytes: canonical[0].clone(),
+                },
+                CanonicalObject {
+                    id: ids[1],
+                    bytes: canonical[1].clone(),
+                },
+            ]);
+            let right = sealed_segment(vec![
+                CanonicalObject {
+                    id: ids[0],
+                    bytes: canonical[0].clone(),
+                },
+                CanonicalObject {
+                    id: ids[2],
+                    bytes: canonical[2].clone(),
+                },
+            ]);
+            let mut admission = InitializationSegmentAdmission::new(&db).unwrap();
+            let mut segments = if reverse {
+                vec![right, left]
+            } else {
+                vec![left, right]
+            };
+            for segment in segments.drain(..) {
+                admission.admit_worker_segment(segment).unwrap();
+            }
+            let (receipt, _) = finish_segment_admission(&db, admission);
+            let mut sorted_ids = ids.to_vec();
+            sorted_ids.sort_unstable();
+            let rows = db.read_object_rows(&sorted_ids).unwrap();
+            results.push((receipt, rows));
+            drop(db);
+        }
+        assert_eq!(results[0], results[1]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn segment_admission_deduplicates_after_a_batch_boundary() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-segment-boundary-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let db = crate::schema::StoreDb::create(root.join("store.sqlite")).unwrap();
+        let mut objects = Vec::new();
+        for index in 0_u64..130 {
+            let mut payload = vec![index as u8; layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES];
+            payload[..8].copy_from_slice(&index.to_le_bytes());
+            let bytes = layerfs_content::file::extent_codec::encode_chunk_object(&payload).unwrap();
+            objects.push(CanonicalObject {
+                id: ObjectId::for_bytes(&bytes),
+                bytes,
+            });
+        }
+        let duplicate = objects[0].clone();
+        let duplicate_id = duplicate.id;
+        let expected_objects = objects.len() as u64;
+        let mut admission = InitializationSegmentAdmission::new(&db).unwrap();
+        admission
+            .admit_worker_segment(sealed_segment(objects))
+            .unwrap();
+        assert!(admission.receipt.admission_transactions > 0);
+        admission
+            .admit_worker_segment(sealed_segment(vec![duplicate]))
+            .unwrap();
+        let finished = admission.finish().unwrap();
+        let retained_objects = finished.final_batch.len() as u64;
+        let mut statement_number = finished.statement_number;
+        let mut connection = db.writer().unwrap();
+        let transaction = connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .unwrap();
+        let final_metrics = insert_initialization_segment_batch(
+            &transaction,
+            &finished.final_batch,
+            &mut statement_number,
+        )
+        .unwrap();
+        transaction.commit().unwrap();
+        let mut diagnostics = finished.diagnostics;
+        diagnostics.record_sql_batch(final_metrics, 0, 0);
+        assert!(final_metrics.objects < retained_objects);
+        assert_eq!(diagnostics.cross_batch_skipped_objects, 1);
+        assert_eq!(diagnostics.sql_submitted_rows, expected_objects + 1);
+        assert_eq!(
+            diagnostics.sql_returned_ids + diagnostics.sql_skipped_ids,
+            diagnostics.sql_submitted_rows
+        );
+        assert_eq!(diagnostics.conflict_read_rows, 1);
+        assert_eq!(
+            finished.receipt.batch_inserted_objects + final_metrics.objects,
+            expected_objects
+        );
+
+        let forged = layerfs_content::file::extent_codec::encode_chunk_object(&vec![
+            255;
+            layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES
+        ])
+        .unwrap();
+        let transaction = connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .unwrap();
+        assert!(matches!(
+            insert_initialization_segment_batch(
+                &transaction,
+                &[CanonicalObject {
+                    id: duplicate_id,
+                    bytes: forged,
+                }],
+                &mut statement_number,
+            ),
+            Err(StoreError::Integrity("object collision"))
+        ));
+        drop(transaction);
+
+        drop(connection);
+        drop(db);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn planned_admission_keeps_every_object_transaction_below_the_frozen_bounds() {
@@ -1695,6 +3330,14 @@ mod tests {
         }
         assert_eq!(db.plan_candidate(&objects).unwrap().reused_objects, 300);
         let existing = admission.final_batch[0].clone();
+        let mut forged = DeferredObjectStore::new_all_reachable().unwrap();
+        let forged_bytes = layerfs_content::encode_bytes_object(&u64::MAX.to_le_bytes()).unwrap();
+        assert_eq!(forged_bytes.len(), existing.bytes.len());
+        forged.put(existing.id, &forged_bytes).unwrap();
+        assert!(matches!(
+            db.plan_initialization_candidate(&forged),
+            Err(StoreError::Integrity("object collision"))
+        ));
         {
             let mut connection = db.writer().unwrap();
             let transaction = connection
@@ -1711,7 +3354,7 @@ mod tests {
         }
         let collision = CanonicalObject {
             id: existing.id,
-            bytes: layerfs_content::encode_bytes_object(&u64::MAX.to_le_bytes()).unwrap(),
+            bytes: forged_bytes,
         };
         let mut connection = db.writer().unwrap();
         let transaction = connection

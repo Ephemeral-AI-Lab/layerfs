@@ -29,14 +29,13 @@ pub struct SnapshotReader {
     cache: Arc<Mutex<SnapshotCache>>,
 }
 
-const SNAPSHOT_CACHE_BYTES: usize = 64 * 1024 * 1024;
+const SNAPSHOT_CACHE_BYTES: usize = 8 * 1024 * 1024;
 const SNAPSHOT_CACHE_OBJECT_BYTES: usize = 1024;
 
 #[derive(Default)]
 struct SnapshotCache {
     rows: HashMap<ObjectId, Vec<u8>>,
     bytes: usize,
-    loaded: bool,
 }
 
 pub struct PinnedSnapshot {
@@ -484,7 +483,6 @@ impl SnapshotReader {
     }
 
     fn cached_object(&self, id: ObjectId) -> Result<Option<Vec<u8>>> {
-        self.load_snapshot_cache()?;
         Ok(self
             .cache
             .lock()
@@ -494,49 +492,30 @@ impl SnapshotReader {
             .cloned())
     }
 
-    fn load_snapshot_cache(&self) -> Result<()> {
-        let mut cache = self
-            .cache
-            .lock()
-            .map_err(|_| StoreError::Integrity("snapshot object cache"))?;
-        if cache.loaded {
-            return Ok(());
-        }
-        let started = Instant::now();
-        let objects = self
-            .db
-            .read_small_object_rows(SNAPSHOT_CACHE_OBJECT_BYTES, SNAPSHOT_CACHE_BYTES)?;
-        let rows = objects.len();
-        let bytes = objects.iter().map(|object| object.bytes.len() as u64).sum();
-        for object in objects {
-            let charge = object.bytes.len().saturating_add(64);
-            cache.bytes += charge;
-            cache.rows.insert(object.id, object.bytes);
-        }
-        cache.loaded = true;
-        drop(cache);
-        self.note_local_read(rows, rows, bytes, elapsed_ns(started))
+    fn cache_object(&self, object: &CanonicalObject) -> Result<()> {
+        self.cache_objects(std::slice::from_ref(object))
     }
 
-    fn cache_object(&self, object: &CanonicalObject) -> Result<()> {
-        if object.bytes.len() > SNAPSHOT_CACHE_OBJECT_BYTES {
-            return Ok(());
-        }
+    fn cache_objects(&self, objects: &[CanonicalObject]) -> Result<()> {
         let mut cache = self
             .cache
             .lock()
             .map_err(|_| StoreError::Integrity("snapshot object cache"))?;
-        if cache.rows.contains_key(&object.id) {
-            return Ok(());
+        for object in objects {
+            if object.bytes.len() > SNAPSHOT_CACHE_OBJECT_BYTES
+                || cache.rows.contains_key(&object.id)
+            {
+                continue;
+            }
+            let charge = object.bytes.len().saturating_add(64);
+            // ponytail: requested immutable objects share one fixed 8 MiB cap;
+            // add eviction only if measured reads need it.
+            if cache.bytes.saturating_add(charge) > SNAPSHOT_CACHE_BYTES {
+                continue;
+            }
+            cache.bytes += charge;
+            cache.rows.insert(object.id, object.bytes.clone());
         }
-        let charge = object.bytes.len().saturating_add(64);
-        // ponytail: retain the first 64 MiB of small immutable structure; add
-        // eviction only if a larger namespace proves this bounded cache misses.
-        if cache.bytes.saturating_add(charge) > SNAPSHOT_CACHE_BYTES {
-            return Ok(());
-        }
-        cache.bytes += charge;
-        cache.rows.insert(object.id, object.bytes.clone());
         Ok(())
     }
 }
@@ -586,11 +565,25 @@ impl ObjectSource for SnapshotReader {
         let mut objects = vec![None; ids.len()];
         let mut database_ids = Vec::new();
         let mut database_slots = Vec::new();
-        for (slot, id) in ids.iter().copied().enumerate() {
-            if let Some(bytes) = self.cached_object(id)? {
-                objects[slot] = Some(CanonicalObject { id, bytes });
-                continue;
+        let mut missing = Vec::new();
+        {
+            let cache = self
+                .cache
+                .lock()
+                .map_err(|_| StoreError::Integrity("snapshot object cache"))?;
+            for (slot, id) in ids.iter().copied().enumerate() {
+                match cache.rows.get(&id) {
+                    Some(bytes) => {
+                        objects[slot] = Some(CanonicalObject {
+                            id,
+                            bytes: bytes.clone(),
+                        });
+                    }
+                    None => missing.push((slot, id)),
+                }
             }
+        }
+        for (slot, id) in missing {
             let mut candidate = None;
             for overlay in &self.overlays {
                 match overlay
@@ -608,7 +601,6 @@ impl ObjectSource for SnapshotReader {
                 }
             }
             if let Some(object) = candidate {
-                self.cache_object(&object)?;
                 objects[slot] = Some(object);
             } else {
                 database_ids.push(id);
@@ -619,13 +611,13 @@ impl ObjectSource for SnapshotReader {
             .into_iter()
             .zip(self.db.read_object_rows(&database_ids)?)
         {
-            self.cache_object(&object)?;
             objects[slot] = Some(object);
         }
         let objects = objects
             .into_iter()
             .collect::<Option<Vec<_>>>()
             .ok_or(StoreError::Integrity("object read batch"))?;
+        self.cache_objects(&objects)?;
         self.note_local_read(
             ids.len(),
             objects.len(),
@@ -638,4 +630,119 @@ impl ObjectSource for SnapshotReader {
 
 fn elapsed_ns(started: Instant) -> u64 {
     started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_cache_reads_only_requested_authenticated_objects_and_reuses_them() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-demand-cache-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let first = layerfs_content::encode_bytes_object(b"first").unwrap();
+        let second = layerfs_content::encode_bytes_object(b"second").unwrap();
+        let unrelated = layerfs_content::encode_bytes_object(b"unrelated").unwrap();
+        let corrupt = layerfs_content::encode_bytes_object(b"corrupt").unwrap();
+        let first_id = ObjectId::for_bytes(&first);
+        let second_id = ObjectId::for_bytes(&second);
+        let unrelated_id = ObjectId::for_bytes(&unrelated);
+        let corrupt_id = ObjectId::for_bytes(b"different bytes");
+        {
+            let connection = store.db.writer().unwrap();
+            for (id, bytes) in [
+                (first_id, first.as_slice()),
+                (second_id, second.as_slice()),
+                (unrelated_id, unrelated.as_slice()),
+                (corrupt_id, corrupt.as_slice()),
+            ] {
+                connection
+                    .execute(
+                        crate::statements::objects::INSERT,
+                        rusqlite::params![id.as_bytes().as_slice(), bytes],
+                    )
+                    .unwrap();
+            }
+        }
+
+        let reader = store.snapshot_reader(first_id);
+        #[cfg(feature = "test-instrumentation")]
+        {
+            crate::schema::reset_sql_trace();
+            crate::objects::reset_read_batch_counters();
+        }
+        let ids = [first_id, second_id, first_id];
+        let objects = reader.read_authenticated_objects(&ids).unwrap();
+        assert_eq!(
+            objects.iter().map(|object| object.id).collect::<Vec<_>>(),
+            ids
+        );
+        assert_eq!(objects[0].bytes, first);
+        assert_eq!(objects[1].bytes, second);
+        assert_eq!(objects[2].bytes, first);
+        {
+            let cache = reader.cache.lock().unwrap();
+            assert_eq!(cache.rows.len(), 2);
+            assert!(!cache.rows.contains_key(&unrelated_id));
+            assert!(!cache.rows.contains_key(&corrupt_id));
+        }
+        #[cfg(feature = "test-instrumentation")]
+        {
+            let trace = crate::schema::sql_trace();
+            assert!(trace.iter().all(|sql| !sql.contains("length(bytes)")));
+            assert_eq!(
+                trace
+                    .iter()
+                    .filter(|sql| sql.contains("WHERE object_id IN"))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                crate::objects::read_batch_counters(),
+                crate::objects::ReadBatchCounters {
+                    unique_hashes: 2,
+                    cloned_bytes: first.len() as u64,
+                }
+            );
+        }
+
+        store
+            .db
+            .writer()
+            .unwrap()
+            .execute(
+                "DELETE FROM objects WHERE object_id IN (?1, ?2)",
+                rusqlite::params![
+                    first_id.as_bytes().as_slice(),
+                    second_id.as_bytes().as_slice()
+                ],
+            )
+            .unwrap();
+        #[cfg(feature = "test-instrumentation")]
+        {
+            crate::schema::reset_sql_trace();
+            crate::objects::reset_read_batch_counters();
+        }
+        assert_eq!(reader.read_authenticated_objects(&ids).unwrap(), objects);
+        assert_eq!(reader.read_object(first_id).unwrap(), first);
+        #[cfg(feature = "test-instrumentation")]
+        {
+            assert!(crate::schema::sql_trace().is_empty());
+            assert_eq!(
+                crate::objects::read_batch_counters(),
+                crate::objects::ReadBatchCounters::default()
+            );
+        }
+
+        drop(reader);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

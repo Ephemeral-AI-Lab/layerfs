@@ -470,11 +470,42 @@ pub(crate) fn inode_table_apply_insertions<S: ObjectStore>(
     insertions: impl IntoIterator<Item = (InodeId, ObjectId)>,
     counters: &mut InodeTableCounters,
 ) -> CoreResult<InodeTableRoot> {
+    inode_table_apply_insertions_fallible(store, initial, insertions.into_iter().map(Ok), counters)
+        .map(|result| result.0)
+}
+
+#[doc(hidden)]
+pub fn build_initial_inode_table_from_pairs<S: ObjectStore>(
+    store: &mut S,
+    root_inode: InodeId,
+    pairs: impl IntoIterator<Item = CoreResult<(InodeId, ObjectId)>>,
+) -> CoreResult<(InodeTableRoot, u64, u64)> {
+    let mut pairs = pairs.into_iter();
+    let root = pairs
+        .next()
+        .transpose()?
+        .filter(|(inode, _)| *inode == root_inode)
+        .ok_or(CoreError::InvalidRecord("initial root inode"))?;
+    inode_table_apply_insertions_fallible(
+        store,
+        vec![root],
+        pairs,
+        &mut InodeTableCounters::default(),
+    )
+}
+
+fn inode_table_apply_insertions_fallible<S: ObjectStore>(
+    store: &mut S,
+    initial: Vec<(InodeId, ObjectId)>,
+    insertions: impl IntoIterator<Item = CoreResult<(InodeId, ObjectId)>>,
+    counters: &mut InodeTableCounters,
+) -> CoreResult<(InodeTableRoot, u64, u64)> {
     if initial.is_empty() || initial.len() > 127 {
         return Err(CoreError::InvalidRecord("initial inode table"));
     }
     let mut root = InsertNode::Leaf(initial);
-    for (inode, record) in insertions {
+    for insertion in insertions {
+        let (inode, record) = insertion?;
         if let Some(right) = root.insert(inode, record) {
             let level = root
                 .level()
@@ -486,7 +517,9 @@ pub(crate) fn inode_table_apply_insertions<S: ObjectStore>(
             };
         }
     }
-    emit_insert_node(store, root, counters).map(|summary| InodeTableRoot(summary.id))
+    let (len_bytes, capacity_bytes) = root.allocation_bytes()?;
+    emit_insert_node(store, root, counters)
+        .map(|summary| (InodeTableRoot(summary.id), len_bytes, capacity_bytes))
 }
 
 enum InsertNode {
@@ -498,6 +531,42 @@ enum InsertNode {
 }
 
 impl InsertNode {
+    fn allocation_bytes(&self) -> CoreResult<(u64, u64)> {
+        match self {
+            Self::Leaf(entries) => Ok((
+                u64::try_from(entries.len())
+                    .map_err(|_| CoreError::LengthOverflow)?
+                    .checked_mul(std::mem::size_of::<(InodeId, ObjectId)>() as u64)
+                    .ok_or(CoreError::LengthOverflow)?,
+                u64::try_from(entries.capacity())
+                    .map_err(|_| CoreError::LengthOverflow)?
+                    .checked_mul(std::mem::size_of::<(InodeId, ObjectId)>() as u64)
+                    .ok_or(CoreError::LengthOverflow)?,
+            )),
+            Self::Branch { children, .. } => children.iter().try_fold(
+                (
+                    u64::try_from(children.len())
+                        .map_err(|_| CoreError::LengthOverflow)?
+                        .checked_mul(std::mem::size_of::<Self>() as u64)
+                        .ok_or(CoreError::LengthOverflow)?,
+                    u64::try_from(children.capacity())
+                        .map_err(|_| CoreError::LengthOverflow)?
+                        .checked_mul(std::mem::size_of::<Self>() as u64)
+                        .ok_or(CoreError::LengthOverflow)?,
+                ),
+                |(len, capacity), child| {
+                    let child = child.allocation_bytes()?;
+                    Ok((
+                        len.checked_add(child.0).ok_or(CoreError::LengthOverflow)?,
+                        capacity
+                            .checked_add(child.1)
+                            .ok_or(CoreError::LengthOverflow)?,
+                    ))
+                },
+            ),
+        }
+    }
+
     fn level(&self) -> u8 {
         match self {
             Self::Leaf(_) => 0,
