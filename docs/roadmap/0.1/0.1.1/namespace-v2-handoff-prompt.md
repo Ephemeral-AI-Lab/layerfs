@@ -197,13 +197,15 @@ pool them into one median.
 
 | Scenario | Init maximum | Minimum init throughput | Create maximum | Commit maximum |
 | --- | ---: | ---: | ---: | ---: |
-| `namespace-100` | 0.625 s | 200 MB/s | 15 ms | 10 ms |
-| `namespace-1000` | 1.000 s | 200 MB/s | 18 ms | 10 ms |
-| `namespace-10000` | 1.500 s | 200 MB/s | 22 ms | 10 ms |
+| `namespace-100` | 0.416667 s | 300 MB/s | 15 ms | 10 ms |
+| `namespace-1000` | 0.500 s | 400 MB/s | 18 ms | 10 ms |
+| `namespace-10000` | 0.750 s | 400 MB/s | 22 ms | 10 ms |
 | `namespace-100000` | 2.500 s | 200 MB/s and 40,000 files/s | 25 ms | 10 ms |
 
-Preferred adjacent initialization ratios are 1.60x, 1.50x, and 1.67x. No
-final ratio may exceed 2.0x.
+Binding adjacent initialization ratios are at most 1.30x, 1.70x, and 3.50x.
+The first three floors are raised above the stale flat 200-MB/s gate because
+the retained candidate already reaches 318.6, 450.3, and 418.0 MB/s. Preferred
+non-binding throughput goals are 350, 500, 500, and 250 MB/s, respectively.
 
 At 100,000 files:
 
@@ -342,6 +344,8 @@ every explicit ownership component and aggregate peak
 sealed segment/spool calls/bytes/passes
 unique/duplicate/collision counts
 SQLite prepare/insert/commit/transactions/rows/bytes/pages
+SQLite object table/primary-key-index pages and bytes
+SQLite object insert execution calls for any fixed-row A/B
 Create bootstrap Store calls/rows/bytes/cache charge
 small-file prefetch eligibility/bytes
 anchor prefetch count/bytes
@@ -350,6 +354,51 @@ fixture/schema/cache/source/container identities
 ```
 
 An unavailable required field is an evidence error, not zero.
+
+### Post-timing SQLite write-path custody
+
+After the product timestamp, open the exact completed Store read-only and
+retain `dbstat` output for the `objects` table, its primary-key index, page
+size/count, free-list pages, object rows, canonical bytes, and Store
+amplification. Do not run `ANALYZE`, `VACUUM`, change pragmas, or combine
+initialization-only values with a post-Commit Store state.
+
+Record the read-only commands and raw output, including:
+
+```bash
+sqlite3 -readonly -header -column STORE.sqlite \
+  'SELECT name, count(*) AS pages, sum(pgsize) AS allocated_bytes,
+          sum(payload) AS payload_bytes, sum(unused) AS unused_bytes
+     FROM dbstat GROUP BY name ORDER BY allocated_bytes DESC;'
+
+sqlite3 -readonly STORE.sqlite \
+  'EXPLAIN INSERT INTO objects(object_id, bytes)
+   VALUES(zeroblob(32), zeroblob(1))
+   ON CONFLICT(object_id) DO NOTHING;'
+```
+
+The expected current VDBE path is `NoConflict` plus `IdxInsert` into
+`sqlite_autoindex_objects_1` and `Insert` into the rowid `objects` table.
+Conflict payload reads are about 82 calls, 1,148 rows, 97 KiB, and 9--10 ms;
+do not add a read cache, payload prefetch, reader worker, or larger read-ahead
+without new contrary evidence.
+
+Any attached profiler output is nonterminal diagnostic evidence. Retain:
+
+```text
+profiler tool/interval/duration
+attached profiler result and unprofiled reference result
+source commit and source seal
+host identity
+raw artifact path and SHA-256
+exact permission or collection failure
+```
+
+Never convert call-stack samples into syscall counts. The current exploratory
+profile took 6.103 seconds versus the unprofiled 4.502-second median and is
+therefore unsuitable as a performance result. Its `/tmp` path is not durable
+custody. `fs_usage` produced no data because elevated permission was
+unavailable; record that blocker instead of reporting zero physical I/O.
 
 ## Acceptance criteria for terminal PASS
 
@@ -366,8 +415,14 @@ An unavailable required field is an evidence error, not zero.
   slabs to the calling thread as sole SQLite owner; no new worker exists.
 - [ ] At 100,000 files, object-segment write/read, parent payload rewrite, and
   parent payload-copy bytes are zero and slab handoffs are at most 2,200.
-- [ ] Every tier meets 200 MB/s and its absolute init target; adjacent ratios
-  <=2x.
+- [ ] Read-only post-timing `dbstat` binds object-table, primary-key-index,
+  page, row, canonical-byte, and amplification values to one exact Store.
+- [ ] No initialization database-read cache, payload prefetch, reader worker,
+  or larger read-ahead is added without a new measured payload-read hotspot.
+- [ ] Any fixed-128 SQL A/B reports object-insert execution calls separately
+  from submitted rows and uses a new result-schema identity.
+- [ ] Every tier meets its scenario-specific init throughput and absolute
+  target; adjacent ratios are at most 1.30x, 1.70x, and 3.50x.
 - [ ] Every tier meets Create and Commit targets; Store-wide Create scans and
   anchor prefetches are zero.
 - [ ] No new/increased product workers; aggregate explicit buffers <=10 MiB;

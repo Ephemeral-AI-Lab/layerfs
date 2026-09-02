@@ -92,9 +92,10 @@ in-operation common-result reuse, not a warm or persistent product cache.
 
 The new path may neither add a worker nor change canonical bytes, the Store
 schema, eager initialization, or visibility-last publication. Correctness is
-proved outside the timed initialization measurement. No result becomes PASS
-until the 100,000-file median is at most 2.5 seconds, at least 200 MB/s, and
-meets the CPU and memory gates.
+proved outside the timed initialization measurement. The binding throughput
+floors are 300/400/400/200 MB/s for 100/1,000/10,000/100,000 files. No result
+becomes PASS until every tier meets its floor, the 100,000-file median is at
+most 2.5 seconds and 40,000 files/s, and the CPU and memory gates pass.
 
 ## Benchmark contract
 

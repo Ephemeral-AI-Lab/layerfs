@@ -388,19 +388,56 @@ the phase/process peak minus the baseline captured with Store and Client ready,
 immediately before `T0`. An unavailable metric is an evidence error, never a
 silent zero.
 
+### Post-timing SQLite diagnostics
+
+After the product timestamp, inspect the completed Store read-only through
+SQLite `dbstat` and retain:
+
+```text
+sqlite_objects_table_pages
+sqlite_objects_table_bytes
+sqlite_objects_primary_key_index_pages
+sqlite_objects_primary_key_index_bytes
+sqlite_page_size_bytes
+sqlite_page_count
+sqlite_freelist_pages
+sqlite_object_rows
+sqlite_canonical_object_bytes
+sqlite_store_to_canonical_ratio
+sqlite_store_to_logical_ratio
+```
+
+These are diagnostic report values, not work inside `T0..T7`. Do not run
+`ANALYZE`, `VACUUM`, mutate pragmas, or otherwise rewrite the evidence Store.
+Bind every database-anatomy row to one exact Store state; initialization-only
+and post-Commit Store sizes and row counts must not be mixed.
+
 ## Performance targets
 
 ### Initialization
 
 | Scenario | Logical bytes | Init target | Minimum throughput | Minimum file rate |
 | --- | ---: | ---: | ---: | ---: |
-| `namespace-100` | 125 MB | <=625 ms | 200 MB/s | 160 files/s |
-| `namespace-1000` | 200 MB | <=1.000 s | 200 MB/s | 1,000 files/s |
-| `namespace-10000` | 300 MB | <=1.500 s | 200 MB/s | 6,667 files/s |
+| `namespace-100` | 125 MB | <=416.667 ms | 300 MB/s | 240 files/s |
+| `namespace-1000` | 200 MB | <=500 ms | 400 MB/s | 2,000 files/s |
+| `namespace-10000` | 300 MB | <=750 ms | 400 MB/s | 13,334 files/s |
 | `namespace-100000` | 500 MB | <=2.500 s | 200 MB/s | 40,000 files/s |
 
-Preferred adjacent init-time ratios follow byte growth: 1.60x, 1.50x, and
-1.67x. No adjacent ratio may exceed 2.0x in the final candidate.
+The retained smaller tiers already exceed the old flat 200-MB/s floor. Their
+raised minima prevent a 100, 1,000, or 10,000-file regression from being hidden
+behind the 100,000-file fix. Binding adjacent init-time ratios are at most
+1.30x, 1.70x, and 3.50x. The final ratio permits the accepted two-times
+throughput difference between the 400-MB/s 10,000-file floor and 200-MB/s
+100,000-file floor while remaining far below the retained 6.27x result.
+
+Preferred non-binding stretch goals are:
+
+| Scenario | Preferred init | Preferred throughput |
+| --- | ---: | ---: |
+| `namespace-100` | <=357.143 ms | >=350 MB/s |
+| `namespace-1000` | <=400 ms | >=500 MB/s |
+| `namespace-10000` | <=600 ms | >=500 MB/s |
+| `namespace-100000` | <=2.000 s | >=250 MB/s |
 
 ### Workspace Create and localized Commit
 
@@ -461,8 +498,8 @@ explicit_buffer_peak =
 Measure 6-, 8-, and 10-MiB explicit aggregate-buffer candidates at 10,000 and
 100,000 files when spooling or backpressure is introduced. Select one budget
 for every tier: the smallest candidate whose throughput is within 5 percent of
-the fastest correct candidate and still meets the binding 200-MB/s gate. Do
-not retune per tier. Low memory may not be purchased with repeated spool scans,
+the fastest correct candidate and still meets that tier's binding throughput
+gate. Do not retune per tier. Low memory may not be purchased with repeated spool scans,
 smaller-than-needed transactions, higher CPU, or hidden background work.
 
 ## Initialization optimization specification
@@ -576,6 +613,21 @@ bounded pages. Preserve the exact nonempty-Store fallback. Never add a
 temporary database, full ID set, linear spill membership scan, second SQLite
 owner, or database worker.
 
+The retained 100,000-file Store is write-bound inside SQLite. Its rowid
+`objects` table has a separate `sqlite_autoindex_objects_1` primary-key index.
+For each unique object, VDBE executes a `NoConflict` primary-key probe,
+`IdxInsert` into that index, and `Insert` into the table. Bounded transaction
+commit writes dirty pages through the pager to `pwrite`; canonical payload
+`pread` is not a sampled hotspot.
+
+Actual cross-transaction conflict work is only about 82 calls, 1,148 rows, 97
+KiB, and 9--10 milliseconds, versus about 1.15 seconds of SQLite row stepping
+and 0.38 seconds of commit. Do not add an initialization object-read cache,
+payload prefetch, collision-read cache, database reader worker, or larger
+read-ahead unless new evidence makes object-payload reads a critical path.
+A `WITHOUT ROWID` table could remove the separate primary-key index, but it is
+a Store-schema change and is not authorized by v0.1.1 or issue #11.
+
 The first direct-pipeline candidate retains the proved cached single-row
 SQLite statement and approximately 130 bounded transactions. If and only if
 the complete candidate lands between 2.5 and 2.75 seconds and SQLite row step
@@ -585,6 +637,10 @@ remainder statement per transaction and perform bounded byte comparison only
 for actual preexisting conflicts. Retain it only if SQL execution falls to at
 most 0.8 seconds without increasing Store bytes, physical I/O, CPU, RSS, or
 transaction size. This is not authorization for a generic bulk API.
+When this conditional A/B is implemented, its new result-schema identity must
+add `sqlite_object_insert_execute_calls`. The row count remains about 423,200;
+the fixed-128 candidate must reduce insert executions to at most about 3,441.
+Do not reinterpret historical namespace-v3 rows as having that field.
 
 ### Time and ownership budgets
 
@@ -623,6 +679,24 @@ spool linear membership rescans = 0
 admission batch remains <=4 MiB and <=8,191 objects
 candidate unique objects = inserted objects + preexisting reused objects
 ```
+
+Reports derive logical path movement without relabelling it as physical I/O:
+
+```text
+logical_path_movement_bytes =
+    source_read_bytes
+  + object_segment_write_bytes
+  + object_segment_read_bytes
+  + store_growth_bytes
+
+logical_path_movement_ratio =
+    logical_path_movement_bytes / logical_bytes
+```
+
+The retained 100,000-file path is about 4.91x; zero object-segment I/O lowers
+the approximate source-plus-Store floor to 2.32x. These derived values explain
+amplification but never replace the exact segment-zero and parent-copy-zero
+gates.
 
 Duplicate objects within a segment, across segments, across a batch boundary,
 and already durable must have exact count/byte receipts. Same-ID/different-byte
@@ -796,7 +870,15 @@ git diff --check
   256-KiB/512-object slabs, and the calling thread as sole SQLite owner.
 - [ ] Object-segment write/read bytes, parent payload rewrites, and parent
   payload-copy bytes are zero; 100,000-file handoffs are at most 2,200.
-- [ ] Adjacent initialization ratios are at most 2.0x.
+- [ ] Read-only post-timing `dbstat` records table/index pages and bytes, rows,
+  canonical bytes, page/free-list state, and amplification for one exact Store.
+- [ ] No database-read cache, payload prefetch, reader worker, or larger
+  read-ahead is added without new evidence that payload reads are material.
+- [ ] A fixed-128 SQL experiment, if admitted, uses a new result schema,
+  reports insert executions separately from submitted rows, and reduces the
+  former to at most about 3,441 without a resource regression.
+- [ ] Every tier meets its 300/400/400/200-MB/s throughput floor and absolute
+  initialization target; adjacent ratios are at most 1.30x, 1.70x, and 3.50x.
 - [ ] The 100,000-file Create median is at most 25 milliseconds, non-Attach
   work at most 10 milliseconds, and Store-wide Create scans equal zero.
 - [ ] Localized Commit remains at most 10 milliseconds with touched-path-only
