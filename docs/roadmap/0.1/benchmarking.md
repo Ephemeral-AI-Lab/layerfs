@@ -60,8 +60,10 @@ reruns all earlier registered rows:
 
 - The v0.1.1 namespace matrix has exactly `namespace-100`, `namespace-1000`,
   `namespace-10000`, and `namespace-100000`.
-- Every regular file has 2,500 unique deterministic bytes derived from its
-  path, with 100 regular files per directory.
+- Historical namespace-v1 retains 2,500 unique deterministic bytes per file.
+  Active namespace-v2 uses the separately identified small-heavy
+  125/200/300/500-MB profile and exact class/anchor equations in the v0.1.1
+  specification. The two profiles are never pooled.
 - Every timed namespace row uses real FUSE; materialization is used only for
   the untimed 10,000-file equality proof.
 - A separate LayerFS-only `run-namespace.sh` supports one-case and `all` modes
@@ -227,39 +229,48 @@ loop; run the smallest failing LayerFS-only namespace case first.
 
 ## Implemented 0.1.1 namespace admission matrix
 
-This section records the implemented namespace-v1 admission matrix and its
-historical evidence contract. The proposed
-[namespace-v2 replacement](0.1.1/namespace-optimization-spec.md) keeps the same
-four scenario IDs, `all`, runner, real-FUSE lifecycle, and registered-total
-exclusion. It changes the fixture profile and result-schema version instead of
-creating a second benchmark family. Namespace-v1 evidence must never be
-relabeled as namespace-v2.
+This section records the implemented namespace-v1 historical contract and the
+active [namespace-v2 profile](0.1.1/namespace-optimization-spec.md).
+Namespace-v2 keeps the same four scenario IDs, `all`, runner, real-FUSE
+projection, and registered-total exclusion while using distinct schema,
+fixture, digest, edit, and cache-profile identities. Namespace-v1 evidence is
+never relabeled or pooled with namespace-v2.
 
-The namespace campaign grows regular-file count and logical bytes together by
-10x while holding each file at exactly 2,500 unique deterministic bytes derived
-from its path. Use 100 regular files per directory.
-
-| Scenario ID | Regular files | Directories | Logical bytes | Projection | Status |
+| Scenario ID | Regular files | Directories | Namespace-v2 logical bytes | Projection | Status |
 | --- | ---: | ---: | ---: | --- | --- |
-| `namespace-100` | 100 | 1 | 250,000 (0.25 MB) | Real FUSE | Implemented admission |
-| `namespace-1000` | 1,000 | 10 | 2,500,000 (2.5 MB) | Real FUSE | Implemented admission |
-| `namespace-10000` | 10,000 | 100 | 25,000,000 (25 MB) | Real FUSE | Implemented admission |
-| `namespace-100000` | 100,000 | 1,000 | 250,000,000 (250 MB) | Real FUSE | Implemented admission ceiling |
+| `namespace-100` | 100 | 1 | 125,000,000 (125 MB) | Real FUSE | Implemented admission |
+| `namespace-1000` | 1,000 | 10 | 200,000,000 (200 MB) | Real FUSE | Implemented admission |
+| `namespace-10000` | 10,000 | 100 | 300,000,000 (300 MB) | Real FUSE | Implemented admission |
+| `namespace-100000` | 100,000 | 1,000 | 500,000,000 (500 MB) | Real FUSE | Implemented admission ceiling |
 
 `MB` is decimal; the exact byte count is authoritative.
 
 `regular_files` excludes directories. The fixture manifest records regular
 files, directories, logical bytes, and a deterministic digest separately.
-Content must be unique across files so Store deduplication cannot collapse the
-fixture into one repeated payload.
+Namespace-v2 allocates exact 1-percent empty, 79-percent tiny, 15-percent small,
+and 5-percent medium counts after one 100-MB anchor per tier and a second anchor
+at 100,000 files. Every nonempty file contains deterministic unique
+path-derived bytes. Use 100 regular files per directory and one deterministic
+non-anchor as the unchanged-length ten-byte edit target.
 
-Use one existing 2,500-byte file as the edit target and reuse the current
-ten-byte positional `edit` workload. The edit does not change file length.
+Namespace-v2 identities are:
 
-Materialization is not a timed `fs-bench-pro` row. It is used only for one
-untimed equality proof at 10,000 files / 25 MB: materialization and real FUSE
-must produce the same logical state and canonical root. That proof must not be
-mixed into the real-FUSE performance matrix.
+```text
+schema: fs-bench-pro-namespace-v3
+fixture_profile: synthetic-small-heavy-v2
+fixture_digest_profile: namespace-file-digest-tree-v2
+edit_contract: content-only-normalized-mtime-v1
+```
+
+Issue [#11](https://github.com/Ephemeral-AI-Lab/layerfs/issues/11) owns the
+bounded cold direct-admission continuation toward 200 MB/s. It may not change
+this scenario matrix or use a benchmark scenario name in product behavior.
+
+Materialization is not a timed `fs-bench-pro` row. Namespace-v1 retains its
+historical untimed equality proof at 10,000 files / 25 MB. Active namespace-v2
+uses the same proof boundary at 10,000 files / 300 MB. Materialization and real
+FUSE must produce the same logical state and canonical root, and neither proof
+is mixed into the real-FUSE performance matrix.
 
 Fixture generation stays outside LayerFS timing. Each admission case measures
 and emits these phases separately:

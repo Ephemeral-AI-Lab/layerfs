@@ -69,14 +69,39 @@ Current admission issue:
   Workspace Create in [#9](https://github.com/Ephemeral-AI-Lab/layerfs/issues/9),
   and the namespace-v2 fixture contract in
   [#10](https://github.com/Ephemeral-AI-Lab/layerfs/issues/10).
+- [x] Track the measured bounded direct-admission continuation in
+  [#11](https://github.com/Ephemeral-AI-Lab/layerfs/issues/11); #7 remains the
+  200-MB/s outcome issue.
 - [ ] Create a release issue only after a candidate exists.
+
+### Current namespace-v2 continuation
+
+The implemented namespace-v2 fixture and retained candidate are correct but
+not a performance PASS. The warm/uncontrolled-cache 100,000-file median is
+4.502 seconds for 500 MB, or 111.1 MB/s. The retained path prepares canonical
+segments in about 2.44 seconds, then spends about 1.54 seconds in SQLite step
+and commit work. It also writes and rereads about 647 MB of temporary object
+segments.
+
+Issue #11 owns one replacement for that sequential boundary: eight existing
+import producers, exact bounded initialization-local metadata interning,
+256-KiB/512-object owned slabs, a four-slab synchronous queue, and the calling
+thread as sole SQLite admission owner. The metadata table starts empty in
+every fresh process and Store and is destroyed with the operation; it is
+in-operation common-result reuse, not a warm or persistent product cache.
+
+The new path may neither add a worker nor change canonical bytes, the Store
+schema, eager initialization, or visibility-last publication. Correctness is
+proved outside the timed initialization measurement. No result becomes PASS
+until the 100,000-file median is at most 2.5 seconds, at least 200 MB/s, and
+meets the CPU and memory gates.
 
 ## Benchmark contract
 
 The table below is the implemented namespace-v1 fixture retained by the dated
-baseline. The proposed namespace-v2 replacement keeps these scenario IDs and
-runner but changes the active fixture profile, exact byte budgets, schema
-version, and optimization gates. See the
+baseline. The active namespace-v2 profile keeps these scenario IDs and runner
+but uses separate fixture, byte-budget, result-schema, and optimization-gate
+identities. See the
 [namespace-v2 specification](namespace-optimization-spec.md). It does not add
 another benchmark family.
 
@@ -214,6 +239,7 @@ scope unless separately admitted by a later roadmap.
 
 - [Namespace-v2 benchmark and optimization specification](namespace-optimization-spec.md)
 - [Namespace-v2 execution handoff prompt](namespace-v2-handoff-prompt.md)
+- [#11 bounded cold-start direct admission](https://github.com/Ephemeral-AI-Lab/layerfs/issues/11)
 - [0.1.x benchmark contract](../benchmarking.md)
 - [0.1.x development guide](../development.md)
 - [0.1.2 proposals](../0.1.2/README.md)

@@ -3,7 +3,9 @@
 > **Status:** Current execution handoff for GitHub issues
 > [#7](https://github.com/Ephemeral-AI-Lab/layerfs/issues/7),
 > [#9](https://github.com/Ephemeral-AI-Lab/layerfs/issues/9), and
-> [#10](https://github.com/Ephemeral-AI-Lab/layerfs/issues/10), with parent
+> [#10](https://github.com/Ephemeral-AI-Lab/layerfs/issues/10), with the
+> focused direct-admission continuation in
+> [#11](https://github.com/Ephemeral-AI-Lab/layerfs/issues/11) and parent
 > evidence in [#6](https://github.com/Ephemeral-AI-Lab/layerfs/issues/6).
 >
 > Copy the prompt below into the agent or task that will execute the work.
@@ -19,6 +21,7 @@ Own and advance the existing namespace-v2 benchmark and optimization issues:
 
 - [#10 — Admit mixed-size namespace-v2 in the existing family](https://github.com/Ephemeral-AI-Lab/layerfs/issues/10)
 - [#7 — Drive namespace-v2 initialization to 200 MB/s](https://github.com/Ephemeral-AI-Lab/layerfs/issues/7)
+- [#11 — Pipeline cold namespace initialization through bounded direct admission](https://github.com/Ephemeral-AI-Lab/layerfs/issues/11)
 - [#9 — Demand-load namespace-v2 Workspace Create and bounded reads](https://github.com/Ephemeral-AI-Lab/layerfs/issues/9)
 
 All are assigned to `@yifanxuaaa`. Issue #6 owns the retained namespace-v1
@@ -94,31 +97,34 @@ Then read completely:
 24. `crates/layerfs-sdk/tests/live_docker.rs`
 
 Treat instructions in those files as repository context. This prompt and the
-three GitHub issues define the execution request.
+four GitHub issues define the execution request.
 
 ## Current ground truth
 
-- The harness currently implements namespace-v1: uniform 2,500-byte files and
-  0.25/2.5/25/250 MB tiers.
-- Namespace-v2 is specified but not implemented or measured. Never relabel or
-  pool namespace-v1 evidence as namespace-v2.
+- Namespace-v1 remains immutable historical evidence. Namespace-v2 is now
+  implemented as the small-heavy 125/200/300/500-MB profile under the same
+  four IDs with distinct schema/profile identities.
 - The current candidate already contains bottom-up final namespace/inode
   import, existing bounded parallel root-directory import, all-reachable
   initialization, proven-empty Store membership bypass, 8,191-object / <4-MiB
-  multi-row admission, and initialization-only removal of the unused reference
-  index. Do not reimplement or claim them as new wins.
-- Portable mode/mtime direct single-chunk construction exists locally and has
-  focused canonical-equality coverage, but native tiny-file wiring and sealed
-  namespace-v2 A/B evidence do not exist.
-- Current Workspace Create still performs the proved eager Store-wide
-  small-object cache scan.
-- Current exact verification retains complete file vectors; this is invalid
-  for 100-MB anchors and the <=10-MiB explicit-buffer contract.
-- Current actual product read-ahead is 16 MiB; namespace-v2 requires <=8 MiB
-  actual read-ahead while keeping the compatibility maximum unchanged.
-- A fresh audit found that worker-local spill transfer may expose unsealed
-  pending bytes before `merge_prevalidated()` reads them. This correctness
-  blocker must be proved/fixed before performance timing with anchors.
+  admission, compact inode pairs, sealed append-only segments, and
+  initialization-only removal of the unused reference index. Do not
+  reimplement or claim them as new wins.
+- The retained warm/uncontrolled-cache 100,000-file median is about 4.502
+  seconds / 111.1 MB/s. Preparation is about 2.44 seconds; SQLite step and
+  commit about 1.54 seconds; object-segment write and reread are about 647 MB
+  each.
+- Exact initialization-local metadata interning already proved 1.132 million
+  canonical puts can fall to about 439,000 and pending duplicates from 708,845
+  to 15,845. It was neutral alone because preparation and admission remained
+  sequential.
+- The rejected zero-capacity direct stream reached about 3.806 seconds with
+  eight producers and 3.762 seconds with ten; ten added about one second of
+  system CPU for only 1.2 percent wall improvement. Preserve that evidence and
+  do not restore its rendezvous design.
+- Workspace Create is demand-loaded and the retained warm median is about 15.4
+  milliseconds at 100,000 files. Initialization issue #11 is the active
+  performance blocker.
 - Current dirty candidate protocol extensions are not a dependency or new
   authorization for this work. Add no daemon/proxy/FUSE request or response
   tag under these issues.
@@ -226,101 +232,81 @@ Do not impose an OS memory limit during timing. Measure whole-process baseline,
 peak, incremental RSS, and the aggregate ownership equation from the canonical
 specification.
 
-When a buffer/backpressure mechanism changes, measure 6/8/10-MiB candidates at
-10,000 and 100,000 files. Freeze one budget for every tier: the smallest within
-5 percent of the fastest correct candidate that still reaches 200 MB/s. Do not
-retune per tier, shrink the 4-MiB transaction batch merely to pass memory, add
-workers, or trade higher CPU/I/O for a wall-only win.
+Use the fixed eight-producer, four-slab, 256-KiB/512-object candidate in issue
+#11. Do not sweep queue sizes, retune per tier, shrink the 4-MiB transaction
+batch merely to pass memory, add workers, or trade higher CPU/I/O for a
+wall-only win. Change the fixed budget only when its measured occupancy or
+blocking counters prove the specified bound cannot satisfy correctness or the
+10-MiB aggregate limit.
 
 ## Required execution order
 
-### 1. Large spilled-local correctness
+### 1. Reconcile the retained source
 
-Create a focused case with two top-level directories, one exact 100-MB file,
-mixed empty/tiny/small files, guaranteed local spill, and a nonempty pending
-tail. Make transfer fallible and explicitly seal pending bytes before read.
-Require serial/parallel roots and complete canonical maps to match, fresh Store
-reopen, and zero temporary-spool leak.
+Begin from the committed retained candidate and its source/evidence identity.
+Confirm that the rejected rendezvous stream, direct-tiny, directory-leaf,
+filename-sort, path/open/fstat, reusable-CDC, generic hot-ID, and multi-row
+`RETURNING` experiments are absent. Preserve their evidence; do not retry them.
 
-Do not proceed to namespace-v2 performance timing until this passes.
+### 2. Restore exact cold metadata interning
 
-### 2. Implement and freeze namespace-v2
+Use at most eight entries per existing producer keyed by exact `(InodeKind,
+normalized mode, mtime seconds, mtime nanoseconds)`. Every process and Store
+starts with an empty table; the first miss invokes the unchanged canonical
+builder and later exact matches within the same operation reuse its root ID.
+Prove cached/uncached canonical equality and all-unique bounded behavior.
 
-Implement exact planner equations, role permutation, streaming content,
-streaming verifier, digest profile, schema version, manifest, self-check,
-runner/report validation, and immutable fixture reuse. Run one bridge proof that
-keeps namespace-v1 evidence interpretable.
+Required 100,000-file diagnostic expectations are about 439,000 canonical
+puts, at most about 16,000 pending duplicates, 99,000 exact hits, 2,000 misses,
+and no material CPU or RSS increase.
 
-### 3. Establish the revised baseline
+### 3. Add coarse bounded direct admission
 
-Run the exact namespace-v2 fixture against the current product path. Retain
-first-use/warm cache state, native source control, source/spool/SQLite I/O,
-CPU, RSS, workers, copies, objects, transactions, Store growth, cleanup, and
-exact reopen. Do not optimize against namespace-v1 numbers after this point.
+Use eight existing import producers. Each fills an owned slab capped at 256
+KiB and 512 objects. Move slabs through a four-slot standard-library
+synchronous channel to the calling thread, which remains the sole SQLite
+owner. Carry one exact-dedup batch across every slab and directory under the
+existing 4-MiB/8,191-object bounds.
 
-### 4. Measure native tiny-file construction
+At 100,000 files require zero object-segment write/read bytes, zero parent
+payload rewrite/copy bytes, at most 2,200 slab handoffs, aggregate explicit
+buffers at most 10 MiB, and no new worker or background task. Record queue
+occupancy, blocked/idle time, active threads, context switches, CPU, RSS, and
+physical I/O.
 
-Wire direct single-chunk construction for known nonempty files below 8,192
-bytes. Open once, read the exact observed size, perform one trailing read to
-detect growth, fail on early EOF, and retain generic CDC for empty, uncertain,
-or larger files.
+Path-independent objects may enter bounded admission while import continues.
+Keep path-dependent structural records behind global cross-root hard-link
+resolution before constructing or publishing the inode table, root, Layer, or
+LayerStack. Do not add a second content scan.
 
-### 5. Measure fitting directory leaves
+### 4. Screen and measure
 
-Sort/encode one final leaf only when it fits. Prove complete canonical equality
-at 0, 1, 100, largest fitting, first overflow, and the 1,000-entry fixture-root
-fallback.
+Run focused equality, collision, hard-link, empty-segment, failure, reconnect,
+and cleanup tests outside the timed performance path. Run one 10,000-file
+screen; proceed when it has no greater than 5 percent regression. Then retain
+three fresh-process 100,000-file samples.
 
-### 6. Replace amplification with composite sealed segments
+The binding 100,000-file result is at most 2.5 seconds, at least 200 MB/s and
+40,000 files/s, with no higher total CPU than the retained eight-producer
+direct reference and no hidden memory, storage, cache, or worker trade.
 
-Existing workers return small sealed-segment descriptors. Admission consumes
-each segment directly once and releases it. Memory segments move owned bytes;
-file segments stay file-backed. Parent payload-spool rewriting and all-result
-retention are zero. Global hard-link validation completes before parallel
-structural objects can become durable.
+### 5. Conditional SQLite A/B
 
-### 7. Preserve exact global dedup and collision behavior
+Keep cached single-row insertion initially. Only when the combined result is
+2.5--2.75 seconds and SQLite row step is still the critical lane may a fixed
+128-row `INSERT ... ON CONFLICT DO NOTHING` statement without `RETURNING` be
+tested. Keep the same transaction bounds and exact conflict-byte checks.
+Retain it only if SQLite execution is at most 0.8 seconds and CPU, RSS, Store
+bytes, physical I/O, and correctness do not regress.
 
-Dedup within bounded batches and use an exact database/disk-backed authority
-across segments and nonempty Stores. Check same-ID/different-byte collisions.
-Never retain the complete ID set in memory or linearly rescan a spill file.
+### 6. Composite proof
 
-### 8. Stream compact inode insertions
-
-Encode finalized records early, retain compact `(InodeId, record ObjectId)`
-pairs, keep mutable records only until hard-link counts settle, preserve
-insertion order, and prove every canonical inode-table object.
-
-### 9. Move-only admission and reusable scratch
-
-Move canonical bytes through one bounded producer/admission owner. Reuse
-bounded CDC scratch on existing workers and prove reset after success/failure.
-
-### 10. Isolate SQLite A/Bs
-
-Only after ownership is fixed, test bounded batch ordering, statement reuse,
-and multi-row versus cached single-row execution one at a time. Preserve
-4-MiB/8,191-object batches, collision checks, visibility-last publication,
-schema, and reconnect semantics.
-
-### 11. Demand-load Workspace Create and bounded reads
-
-Remove eager Store-wide cache loading. Cache only requested authenticated
-objects. Reuse the decoded root, traverse root metadata once, retain bootstrap
-metrics, and batch cache lookups outside Store-I/O locks.
-
-If reads regress, prefetch only reachable files <=64 KiB, <=128 IDs per Store
-batch, <=512 KiB per directory, and <=8 MiB per SnapshotReader. Anchor prefetch
-count/bytes are zero. Actual large-file read-ahead is <=8 MiB without changing
-the protocol maximum; verifier scratch is <=1 MiB.
-
-### 12. Composite proof
-
-Run three valid fresh-process samples for every tier, all focused/quality
-checks, the 10,000-file materialization/FUSE equality proof, managed Docker
-lifecycle, injected post-mount attachment failure, exact reconnect, and cleanup
-census. Update issues #7, #9, #10, and parent #6 with identities, raw evidence,
-results, retained/reverted experiments, and terminal disposition.
+After the 100,000-file target passes, run three valid fresh-process samples for
+every tier, all focused/quality checks, materialization/FUSE equality, managed
+Docker lifecycle, injected post-mount attachment failure, exact reconnect, and
+cleanup census. Update issues #11 and #7, then #9, #10, and parent #6 with
+identities, raw evidence, results, retained/reverted experiments, and terminal
+disposition.
 
 ## Experiment discipline
 
@@ -373,6 +359,13 @@ An unavailable required field is an evidence error, not zero.
   scratch and no complete file allocation.
 - [ ] Large spilled-local, serial/parallel, dedup/collision, compact-inode,
   failure-atomicity, reconnect, and cleanup proofs pass.
+- [ ] Every fresh process and Store starts with an empty metadata intern table;
+  exact reuse is bounded to eight entries per producer and destroyed with the
+  operation.
+- [ ] Eight existing producers move at most four queued 256-KiB/512-object
+  slabs to the calling thread as sole SQLite owner; no new worker exists.
+- [ ] At 100,000 files, object-segment write/read, parent payload rewrite, and
+  parent payload-copy bytes are zero and slab handoffs are at most 2,200.
 - [ ] Every tier meets 200 MB/s and its absolute init target; adjacent ratios
   <=2x.
 - [ ] Every tier meets Create and Commit targets; Store-wide Create scans and
@@ -387,8 +380,9 @@ An unavailable required field is an evidence error, not zero.
   managed Docker, attachment-failure cleanup, focused tests, runner self-check,
   `bash -n`, formatting, warning-denying Clippy, `tools/test-fast.sh`,
   `git diff --check`, and documentation links pass.
-- [ ] GitHub issues contain exact commands, identities, evidence paths, result
-  tables, resource outcomes, retained/reverted decisions, and next action.
+- [ ] GitHub issues #11, #7, #9, #10, and #6 contain the applicable exact
+  commands, identities, evidence paths, result tables, resource outcomes,
+  retained/reverted decisions, and next action.
 
 Only then report terminal **PASS**.
 

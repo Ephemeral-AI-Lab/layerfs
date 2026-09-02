@@ -1,7 +1,9 @@
 # LayerFS 0.1.1 namespace-v2 benchmark and optimization specification
 
-> **Status:** Proposed replacement admission contract. It is not implemented,
-> registered, or release evidence yet.
+> **Status:** Namespace-v2 is implemented and has retained provisional
+> evidence, but initialization remains below its binding performance gate.
+> The bounded direct-admission continuation is specified here and tracked by
+> issue #11; no release candidate exists.
 >
 > **History:** Namespace-v1 used uniform 2,500-byte files. Its source-bound
 > evidence remains immutable. Namespace-v2 keeps the same LayerFS-only family,
@@ -11,8 +13,10 @@
 > **Ownership:** GitHub issues
 > [#7](https://github.com/Ephemeral-AI-Lab/layerfs/issues/7),
 > [#9](https://github.com/Ephemeral-AI-Lab/layerfs/issues/9), and
-> [#10](https://github.com/Ephemeral-AI-Lab/layerfs/issues/10), assigned to
-> `@yifanxuaaa`.
+> [#10](https://github.com/Ephemeral-AI-Lab/layerfs/issues/10), with the
+> focused initialization pipeline in
+> [#11](https://github.com/Ephemeral-AI-Lab/layerfs/issues/11). All are
+> assigned to `@yifanxuaaa`.
 
 Execution agents use the
 [namespace-v2 handoff prompt](namespace-v2-handoff-prompt.md).
@@ -20,20 +24,23 @@ Execution agents use the
 ## Problem statement
 
 The retained namespace-v1 candidate proves the complete public LayerFS
-lifecycle, but its uniform 2,500-byte fixture does not cover a realistic
-small-heavy namespace with large files. Its 100,000-file evidence also shows
-two independent performance problems:
+lifecycle, but its uniform 2,500-byte fixture does not cover a deliberate
+small-heavy namespace with large files. Namespace-v2 now supplies that
+fixture. Its current warm/uncontrolled-cache 100,000-file median initializes
+500 MB in 4.502 seconds, or 111.1 decimal MB/s; Workspace Create is about
+15.4 milliseconds and localized Commit about 3.7 milliseconds.
 
-- initialization processes 250 MB in 6.799 seconds, or 36.77 decimal MB/s;
-- Workspace Create grows to about 234 milliseconds even though real-FUSE
-  Attach remains about 15 milliseconds.
+The remaining initialization boundary is measured. Source and canonical
+preparation takes about 2.44 seconds, SQLite stepping and bounded commits about
+1.54 seconds, and final/root/other work about 0.53 seconds. The current path
+also emits about 1.132 million canonical candidates for about 422,000 unique
+objects and writes then rereads about 647 MB of temporary object segments.
+Sequential execution cannot meet the 2.5-second target.
 
-The initialization path must become a bounded streaming pipeline that performs
-each required scan, canonical construction, hash, and admission once. Workspace
-Create must demand-load only the pinned root instead of scanning the Store.
-Neither improvement may add or increase product workers, hide work in setup,
-raise memory bounds to buy latency, or change canonical, Store, SDK, CLI,
-daemon, proxy, FUSE, or acknowledgement contracts.
+Initialization must therefore overlap the required source/canonical lane with
+the existing SQLite lane through bounded move-only admission. It may not add
+workers, retain namespace-sized state, hide work in setup, or change canonical,
+Store, SDK, CLI, daemon, proxy, FUSE, or acknowledgement contracts.
 
 ## Goal
 
@@ -112,14 +119,15 @@ a new result-schema and fixture-profile identity so no old result is silently
 reinterpreted:
 
 ```text
-schema: fs-bench-pro-namespace-v2
-fixture_profile: synthetic-small-heavy-v1
-fixture_digest_profile: namespace-file-digest-tree-v1
+schema: fs-bench-pro-namespace-v3
+fixture_profile: synthetic-small-heavy-v2
+fixture_digest_profile: namespace-file-digest-tree-v2
+edit_contract: content-only-normalized-mtime-v1
 ```
 
-The active implementation may replace the v1 generator after one bridge proof
-retains both exact contracts. No runtime selector, second runner, or duplicate
-family is required merely to regenerate historical evidence.
+The active implementation has replaced the v1 generator after retaining both
+exact contracts through the bridge proof. No runtime selector, second runner,
+or duplicate family is required merely to regenerate historical evidence.
 
 ## Scenario matrix
 
@@ -464,54 +472,138 @@ parallel root-directory import, the proven-empty Store admission fast path,
 bounded 8,191-object / 4-MiB admission, and initialization-only removal of the
 unused reference index. Do not reimplement or claim those as new wins.
 
-Measure one variable at a time in this order:
+### Retained and rejected evidence
 
-1. **Seal spilled worker-local transfers.** A 100-MB anchor forces a local
-   candidate spill. Before timing, make transfer explicitly fallible and seal
-   pending spill bytes, close/flush the writer, and preserve a readable
-   segment. Prove a nonempty pending tail, serial/parallel canonical equality,
-   fresh reopen, and cleanup. Do not perform a second reachability traversal.
-2. **Known single-chunk construction.** Directly emit byte-identical payload,
-   extent-leaf, and file-state objects for known nonempty inputs below the
-   8,192-byte CDC minimum, including portable mode and mtime. Retain the
-   generic path at empty, unknown, changing, or larger inputs. For a native
-   tiny file, open once, read the exact observed length, perform one trailing
-   read to detect growth, and fail on early EOF.
-3. **Fitting initial-directory leaf.** Sort once and encode one final leaf and
-   state when every entry fits. Fall back at the first overflow. Prove complete
-   canonical-object equality at empty, one, 100, largest-fitting, first
-   overflow, and the 1,000-entry fixture root. The root may use the existing
-   fallback; do not claim a direct multi-page builder.
-4. **Composite sealed segments.** Replace all-result retention and worker-spool
-   to parent-spool copying with small sealed-segment descriptors. Admission
-   consumes each segment directly once and releases it. Memory-backed segments
-   move owned vectors; file-backed segments remain file-backed. Global
-   hard-link validation completes before any parallel structural object can
-   become durable.
-5. **Exact cross-segment dedup and collision authority.** Deduplicate inside
-   each bounded batch. On a proven-empty Store, use the database uniqueness
-   authority while identifying actual inserted IDs and checking skipped IDs
-   for byte equality. Preserve the existing exact nonempty-Store reuse path or
-   an equally exact disk-backed authority. Never use a complete in-memory set
-   or linear spill-file membership scan.
-6. **Compact inode stream.** Encode finalized inode records early and retain
-   compact `(InodeId, record ObjectId)` pairs. Keep mutable records only while
-   hard-link counts are unresolved. Consume compact segment insertions without
-   materializing another complete mutation vector. Preserve insertion order
-   and prove every canonical inode-table object, not only logical lookup.
-7. **Move-only admission.** Transfer owned canonical bytes through one bounded
-   producer/admission path; do not clone them into local, parent, spool, and
-   SQLite owners.
-8. **Reusable CDC scratch.** Reuse bounded scratch per existing importer worker
-   for non-tiny inputs, including anchors. Reset it exactly across success and
-   callback failure; include aggregate scratch in the 10-MiB equation.
-9. **Bounded ID/order state.** Spill large order and ID collections
-   sequentially with a small page. Allow at most one required complete spool
-   read per phase and no linear membership rescans.
-10. **SQLite A/Bs.** Test bounded batch ordering, statement reuse, and current
-   multi-row versus cached single-row execution one at a time. Preserve the
-   4-MiB/8,191-object bounds, collision checks, visibility-last publication,
-   schema, and reconnect behavior.
+The retained warm/uncontrolled-cache 100,000-file result is:
+
+```text
+source/canonical preparation       about 2.44 s
+SQLite row step                    about 1.15 s
+SQLite bounded commits             about 0.38 s
+final inode/root                   about 0.13 s
+other admission/publication        about 0.40 s
+complete initialization            about 4.50 s / 111.1 MB/s
+whole-process CPU                  about 15.9 CPU-s
+whole-process peak RSS             about 99 MiB
+```
+
+It performs about 100,000 source opens, 101,001 metadata observations, 210,687
+source reads, 1.132 million canonical puts, 708,845 duplicate-candidate
+comparisons, 423,200 SQLite row submissions, and 130 transactions. It writes
+and rereads about 647 MB of object segments.
+
+A zero-capacity direct-stream experiment removed object-segment I/O but did
+not remove duplicate construction or smooth producer/admission scheduling.
+Eight producers reached about 3.806 seconds / 131 MB/s; ten reached about
+3.762 seconds / 133 MB/s while adding about one second of system CPU. At eight
+producers the consumer was idle for about 2.07 seconds while producers
+accumulated about 8.56 blocked seconds. That rendezvous implementation is
+rejected; eight producers are the maximum retained candidate because ten buys
+only about 1.2 percent wall time.
+
+Exact eight-entry portable-metadata interning reduced canonical puts from
+about 1.132 million to 439,000 and pending duplicates from 708,845 to 15,845,
+with 99,000 exact hits and 2,000 misses. It reduced user CPU but was not a
+standalone wall-time win while segment preparation and SQLite remained
+sequential. It is retained only as a prerequisite of the corrected pipeline.
+
+Do not repeat native direct-tiny, fitting-directory-leaf, filename-sort,
+path-reuse, open/fstat, reusable-CDC, generic hot-ID, ten-or-more-producer,
+temporary-SQLite-authority, giant-transaction, or multi-row-`RETURNING`
+experiments. Their retained evidence is neutral, slower, more memory-hungry,
+or incompatible with the resource goal.
+
+### Cold bounded metadata interning
+
+Every fresh process and Store begins with an empty initialization-local table.
+Each producer retains at most eight exact entries:
+
+```text
+(InodeKind, normalized mode, mtime seconds, mtime nanoseconds)
+  -> canonical metadata-root ObjectId
+```
+
+The first miss invokes the unchanged canonical builder and emits the complete
+graph. A hit reuses only that deterministic root ID during the same
+initialization. A difference in any key field is a miss. The table is destroyed
+with the operation and is never persistent, shared across samples, or filled
+during setup. This is bounded common-result interning inside a cold operation,
+not warm-cache evidence.
+
+An all-unique metadata case must remain bounded to eight entries per producer
+and have no material regression. Do not add a complete object-ID set, full
+namespace manifest, or generic namespace-sized cache.
+
+### Coarse move-only direct admission
+
+Use eight existing import producers and the calling thread as the sole SQLite
+owner. Each producer fills an owned slab under both limits:
+
+```text
+payload bytes <= 256 KiB
+objects <= 512
+```
+
+Move full slabs through one standard-library synchronous channel that holds at
+most four slabs. Moving a `CanonicalObject` moves its payload `Vec`; no parent
+payload copy or second canonical allocation is allowed. The caller carries one
+exact-dedup admission batch across all producer, slab, task, and directory
+boundaries under the existing limits:
+
+```text
+payload bytes < 4 MiB
+objects <= 8,191
+```
+
+The path must record slab sends, queue occupancy and bytes, producer blocked
+time, consumer idle time, active threads, context switches, and payload-copy
+bytes. At 100,000 files, target at most 2,200 slab handoffs instead of the
+rejected stream's roughly 6,891 handoffs.
+
+Path-independent canonical content may be admitted while import continues.
+Path-dependent inode and directory structure remains in the existing compact
+structural stream until global cross-root hard-link resolution completes.
+Only then may the inode table, namespace root, Layer, and LayerStack be
+constructed and published. Do not add a second content walk or expose a
+partial LayerStack.
+
+### Exact authority and SQLite boundary
+
+Deduplicate and byte-compare exact repeated IDs inside the current transaction
+batch. Across batches and Stores, the existing `objects` primary key remains
+the only global authority. Read and authenticate only actual conflict IDs in
+bounded pages. Preserve the exact nonempty-Store fallback. Never add a
+temporary database, full ID set, linear spill membership scan, second SQLite
+owner, or database worker.
+
+The first direct-pipeline candidate retains the proved cached single-row
+SQLite statement and approximately 130 bounded transactions. If and only if
+the complete candidate lands between 2.5 and 2.75 seconds and SQLite row step
+remains on the measured critical path, one fixed 128-row `INSERT ... ON
+CONFLICT DO NOTHING` statement without `RETURNING` may be tested. Use one exact
+remainder statement per transaction and perform bounded byte comparison only
+for actual preexisting conflicts. Retain it only if SQL execution falls to at
+most 0.8 seconds without increasing Store bytes, physical I/O, CPU, RSS, or
+transaction size. This is not authorization for a generic bulk API.
+
+### Time and ownership budgets
+
+For the 500-MB tier:
+
+```text
+source/canonical producer lane       <=2.10 s
+SQLite insertion/commit lane         <=1.50 s
+overlapped producer/admission window <=2.25 s
+final inode/root/publication tail    <=0.25 s
+complete initialization              <=2.50 s
+```
+
+The lanes overlap; they are not added. The target explicit ownership is about
+8.4 MiB: eight partial slabs about 2 MiB, four queued slabs about 1 MiB, one
+admission batch below 4 MiB, aggregate CDC scratch about 0.5 MiB, compact pair
+state about 0.25 MiB, and bounded headers/final state. Whole-process RSS is
+reported separately; the existing SQLite page cache alone is 32 MiB, so the
+10-MiB contract applies to explicit LayerFS-owned buffers, not total RSS.
 
 Do not introduce physical object packing, a new schema, a packed fixture,
 canonical inlining, or a bulk initialization API under this specification.
@@ -520,9 +612,13 @@ Those require a separate incompatible-contract decision.
 Required ownership invariants:
 
 ```text
-worker segment writes <= one complete segment pass
-admission segment reads <= one complete required pass
+object segment writes = 0
+object segment reads = 0
 parent payload spool rewrite = 0
+parent payload copy bytes = 0
+slab payload <=256 KiB and slab objects <=512
+queued slabs <=4
+slab handoffs at 100,000 files <=2,200
 spool linear membership rescans = 0
 admission batch remains <=4 MiB and <=8,191 objects
 candidate unique objects = inserted objects + preexisting reused objects
@@ -544,12 +640,14 @@ SQLite 4-MiB batch admission
 combined source -> segment -> SQLite path
 ```
 
-A safe composite path still reads 500 MB of source, writes and reads sealed
-segments, and writes SQLite pages. The control records effective aggregate I/O,
-CPU, page-cache state, and `/proc/self/io` or the platform equivalent. A host
-ceiling does not authorize extra product workers, tmpfs substitution, hidden
-setup work, or a false 200-MB/s claim; continue removing product amplification
-and report the exact external bound.
+A safe direct path still reads 500 MB of source and writes the unchanged
+canonical rows and SQLite pages, but object-segment write/read bytes must be
+zero. The small existing compact structural stream remains measured separately.
+The control records effective aggregate I/O, CPU, page-cache state, and
+`/proc/self/io` or the platform equivalent. A host ceiling does not authorize
+extra product workers, tmpfs substitution, hidden setup work, or a false
+200-MB/s claim; continue removing product amplification and report the exact
+external bound.
 
 ## Workspace Create optimization specification
 
@@ -600,18 +698,16 @@ For every hypothesis:
 8. Revert a rejected isolated experiment, record why, and continue with the
    next ranked hypothesis. Do not retry away valid slow results.
 
-The required implementation order is:
+The current required implementation order is:
 
 ```text
-large spilled-local correctness proof
--> freeze and implement namespace-v2 fixture/oracle
--> revised same-fixture baseline
--> native single-chunk path
--> fitting-directory path
--> composite sealed segments
--> compact inode stream and exact dedup authority
--> reusable CDC scratch
--> isolated SQLite A/Bs
+reconcile the retained source and evidence seal
+-> restore exact cold initialization-local metadata interning
+-> prove cached/uncached canonical equality and all-unique bounded behavior
+-> add eight-producer, four-slab move-only direct admission
+-> run one 10,000-file screen
+-> run three fresh-process 100,000-file samples
+-> test fixed-128 no-RETURNING SQL only if SQLite remains the critical lane
 -> final four-tier proof
 ```
 
@@ -692,6 +788,14 @@ git diff --check
   are never relabeled as namespace-v2.
 - [ ] The 100,000-file init median is at most 2.5 seconds, at least 200 MB/s,
   and at least 40,000 files/s.
+- [ ] Every fresh process and Store starts with an empty metadata intern table;
+  no entry survives the initialization operation or comes from setup.
+- [ ] Exact metadata interning is bounded to eight entries per producer and an
+  all-unique metadata case does not materially regress.
+- [ ] The admitted path uses at most eight existing producers, four queued
+  256-KiB/512-object slabs, and the calling thread as sole SQLite owner.
+- [ ] Object-segment write/read bytes, parent payload rewrites, and parent
+  payload-copy bytes are zero; 100,000-file handoffs are at most 2,200.
 - [ ] Adjacent initialization ratios are at most 2.0x.
 - [ ] The 100,000-file Create median is at most 25 milliseconds, non-Attach
   work at most 10 milliseconds, and Store-wide Create scans equal zero.
