@@ -1728,7 +1728,7 @@ mod tests {
             let store = LayerStackStore::create(&store_path).unwrap();
             let initialized = store
                 .initialize_layerstack(
-                    EntityName::new(&format!("root-{count}")).unwrap(),
+                    EntityName::new(format!("root-{count}")).unwrap(),
                     LayerStackInitialization::Directory(source.clone()),
                 )
                 .unwrap();

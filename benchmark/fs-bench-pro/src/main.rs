@@ -616,6 +616,7 @@ fn namespace_manifest(scenario: NamespaceScenario, digest: &str) -> AnyResult<Na
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn namespace_case(
     root: &Path,
     fixture: &Path,

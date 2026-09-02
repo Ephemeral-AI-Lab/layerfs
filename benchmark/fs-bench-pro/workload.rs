@@ -891,7 +891,7 @@ fn namespace_digest_with_plan(root: &Path, plan: &NamespacePlan) -> Result<Names
         return Err("namespace root is not a directory".into());
     }
     validate_namespace_metadata(&root_metadata, true)?;
-    let verifier_plan_bytes = namespace_plan_owned_bytes(&plan)?;
+    let verifier_plan_bytes = namespace_plan_owned_bytes(plan)?;
     let mut directories_seen = vec![0_u8; usize::try_from(plan.scenario.data_directories)?];
     for entry in fs::read_dir(root)? {
         let entry = entry?;
@@ -1034,7 +1034,7 @@ fn namespace_digest_with_plan(root: &Path, plan: &NamespacePlan) -> Result<Names
                 return Err("duplicate namespace file result".into());
             }
         }
-        let digest = namespace_tree_digest(&plan, &digests)?;
+        let digest = namespace_tree_digest(plan, &digests)?;
         Ok(NamespaceSummary {
             regular_files: plan.scenario.regular_files,
             data_directories: plan.scenario.data_directories,

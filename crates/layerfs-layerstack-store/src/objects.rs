@@ -648,9 +648,7 @@ impl AppendOnlyInitializationSegment {
                 || raw_read_bytes != 0
                 || self.get_calls != 0
             {
-                return Err(StoreError::Integrity(
-                    "initialization segment consumption",
-                ));
+                return Err(StoreError::Integrity("initialization segment consumption"));
             }
             return Ok(InitializationSegmentIoMetrics::default());
         }
