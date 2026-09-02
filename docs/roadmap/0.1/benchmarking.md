@@ -13,17 +13,25 @@ The immutable reportable 0.1.0 result remains in the
 
 ## Problem statement
 
-`fs-bench-pro` implements the registered 32 MiB payload campaign, but it cannot
-yet measure the v0.1.1 existing-directory lifecycle across growing namespaces.
-The namespace command and its LayerFS-only runner do not exist, so the earlier
-interrupted 9,000-empty-file probe is not reproducible release evidence.
+`fs-bench-pro` implements the registered 32 MiB payload campaign, but the
+public benchmark surface remains incomplete. It does not yet provide accepted
+release evidence for growing namespaces, the known prepend/capture paths,
+diverse tiered filesystem workloads in a single-history topology, or
+multi-Layer and multi-Branch history scaling. The earlier interrupted
+9,000-empty-file probe is not reproducible release evidence.
 
 ## Goal
 
-Add a separate LayerFS-only namespace campaign that measures initialization,
-real-FUSE Workspace creation, one localized edit, Commit, End, and exact reopen
-verification at the four canonical tiers below. Keep the implemented payload
-and paired Cloudflare Computer campaigns unchanged and independently runnable.
+Grow one append-only benchmark registry from v0.1.0 through v0.1.4 while
+keeping the implemented payload and paired Cloudflare Computer campaigns
+independently runnable. Each release adds one bounded family, freezes it, and
+reruns all earlier registered rows:
+
+1. v0.1.1: initialization and namespace scaling;
+2. v0.1.2: prepend/range-copy and online Workspace capture;
+3. v0.1.3: filesystem workload families on one genesis Layer and one Branch;
+   and
+4. v0.1.4: multi-Layer and multi-Branch history.
 
 ## Files to read
 
@@ -37,10 +45,19 @@ and paired Cloudflare Computer campaigns unchanged and independently runnable.
   for the separate Cloudflare Computer comparison boundary.
 - [The v0.1.1 checklist](0.1.1/README.md) for release-level admission and
   compatibility gates.
+- [The namespace-v2 specification](0.1.1/namespace-optimization-spec.md) for
+  the proposed small-heavy fixture replacement and measured initialization /
+  Workspace Create optimization gates.
+- [The v0.1.2 README](0.1.2/README.md) for prepend and capture ownership.
+- [The v0.1.3 README](0.1.3/README.md) and its linked family documents for the
+  single-history workload draft.
+- [The v0.1.4 README](0.1.4/README.md) for the multi-history operation draft.
+- [The frozen `fs-bench` workload](../../../benchmark/fs-bench/fs-bench.sh) for
+  existing mounted-operation controls that must be reused rather than copied.
 
 ## Acceptance criteria
 
-- The planned namespace matrix has exactly `namespace-100`, `namespace-1000`,
+- The v0.1.1 namespace matrix has exactly `namespace-100`, `namespace-1000`,
   `namespace-10000`, and `namespace-100000`.
 - Every regular file has 2,500 unique deterministic bytes derived from its
   path, with 100 regular files per directory.
@@ -52,8 +69,44 @@ and paired Cloudflare Computer campaigns unchanged and independently runnable.
 - `run.sh` continues to own the implemented payload campaign, while the
   Cloudflare Computer campaign runs separately after the LayerFS candidate is
   stable.
-- Documentation continues to say the namespace campaign is unimplemented until
-  both its command and runner exist.
+- Every later release reruns all previously registered rows.
+- Once admitted, a scenario's ID, fixture, public operation sequence, timing
+  boundary, acknowledgement semantics, oracle, sample rules, and result schema
+  remain frozen through 1.0.0.
+- A benchmark correction retains the old row and evidence and introduces a new
+  scenario ID or schema version.
+- v0.1.3 family documents and the v0.1.4 README remain drafts until their
+  fixtures and exact matrices are admitted.
+
+## Release sequence
+
+| Release | New benchmark family | Optimization rule |
+| --- | --- | --- |
+| v0.1.0 | Registered 32 MiB payload lifecycle | Frozen baseline |
+| v0.1.1 | Existing-directory initialization and namespace scale | Fix correctness/resource blockers and measured initialization or localized-Commit bottlenecks |
+| v0.1.2 | Prepend/range-copy and online Workspace capture | Optimize only retained public-path failures or material opportunities |
+| v0.1.3 | Diverse filesystem workloads; one genesis Layer and one Branch; no new history-depth axis | Use tiered seeded schedules; change code only where evidence warrants it |
+| v0.1.4 | Multi-Layer, multi-Branch, and Commit-history scaling | Optimize measured history, fan-out, publication, diff, query, or conflict bottlenecks |
+
+The accumulated v0.1.0-v0.1.4 registry is the proposed benchmark contract v1
+for 1.0.0.
+
+## Append-only freeze policy
+
+Admission freezes the scenario definition, not one host's observed result.
+Immutable results remain bound to their source, harness, fixture, host,
+container, cache, and acknowledgement identities.
+
+Never silently change an admitted row. If its definition is defective:
+
+1. retain its evidence;
+2. mark the row deprecated with the exact reason;
+3. add a new scenario ID or result-schema version; and
+4. run the old and new rows together once when practical.
+
+Every release candidate runs its new rows plus all earlier registered rows.
+LayerFS-only operations remain LayerFS-only unless another product exposes a
+preregistered boundary with genuinely matched semantics.
 
 ## Test matrix authority
 
@@ -73,9 +126,9 @@ Status meanings:
   from registered totals until an explicit gate is accepted.
 - **Proof:** correctness/resource evidence, not a latency score.
 
-Only the registered payload campaign is implemented today. The namespace
-command and `run-namespace.sh` described below are the v0.1.1 implementation
-plan; neither exists yet.
+Only completed, verified, source-bound rows become registered. Work in a dirty
+tree or an unverified runner remains admission work even if implementation
+files exist.
 
 ## Execution lanes
 
@@ -85,7 +138,7 @@ comparison product:
 | Lane | Runner | Purpose | When to run |
 | --- | --- | --- | --- |
 | LayerFS payload | `run.sh` | Existing registered 32 MiB LayerFS campaign | Focused regression and candidate evidence |
-| LayerFS namespace | `run-namespace.sh` (not implemented) | 0.1.1 namespace admission and ceiling | Every relevant LayerFS iteration; one selected tier or the full matrix |
+| LayerFS namespace | `run-namespace.sh` | 0.1.1 namespace admission and ceiling | Every relevant LayerFS iteration; one selected tier or the full matrix |
 | Paired comparison | `run-paired.sh` | Existing matched LayerFS-versus-Computer payload campaign | After the LayerFS candidate is stable |
 
 The 0.1.1 namespace matrix is LayerFS-only. It is not compared with Cloudflare
@@ -97,7 +150,7 @@ candidate to catch comparative regressions.
 A future namespace comparison requires its own preregistered matched boundary,
 fixture custody, and separate runner. It must not be added to 0.1.1 by default.
 
-The planned LayerFS-only runner must support one fast case and the full matrix
+The LayerFS-only runner supports one fast case and the full matrix
 without calling either existing runner:
 
 ```text
@@ -171,7 +224,15 @@ Never reuse a Workspace, process, Store, evidence directory, or earlier result
 to improve a measurement. Do not run `run-paired.sh` in the inner optimization
 loop; run the smallest failing LayerFS-only namespace case first.
 
-## Planned 0.1.1 namespace admission matrix
+## Implemented 0.1.1 namespace admission matrix
+
+This section records the implemented namespace-v1 admission matrix and its
+historical evidence contract. The proposed
+[namespace-v2 replacement](0.1.1/namespace-optimization-spec.md) keeps the same
+four scenario IDs, `all`, runner, real-FUSE lifecycle, and registered-total
+exclusion. It changes the fixture profile and result-schema version instead of
+creating a second benchmark family. Namespace-v1 evidence must never be
+relabeled as namespace-v2.
 
 The namespace campaign grows regular-file count and logical bytes together by
 10x while holding each file at exactly 2,500 unique deterministic bytes derived
@@ -179,10 +240,10 @@ from its path. Use 100 regular files per directory.
 
 | Scenario ID | Regular files | Directories | Logical bytes | Projection | Status |
 | --- | ---: | ---: | ---: | --- | --- |
-| `namespace-100` | 100 | 1 | 250,000 (0.25 MB) | Real FUSE | Planned admission |
-| `namespace-1000` | 1,000 | 10 | 2,500,000 (2.5 MB) | Real FUSE | Planned admission |
-| `namespace-10000` | 10,000 | 100 | 25,000,000 (25 MB) | Real FUSE | Planned admission |
-| `namespace-100000` | 100,000 | 1,000 | 250,000,000 (250 MB) | Real FUSE | Planned admission ceiling |
+| `namespace-100` | 100 | 1 | 250,000 (0.25 MB) | Real FUSE | Implemented admission |
+| `namespace-1000` | 1,000 | 10 | 2,500,000 (2.5 MB) | Real FUSE | Implemented admission |
+| `namespace-10000` | 10,000 | 100 | 25,000,000 (25 MB) | Real FUSE | Implemented admission |
+| `namespace-100000` | 100,000 | 1,000 | 250,000,000 (250 MB) | Real FUSE | Implemented admission ceiling |
 
 `MB` is decimal; the exact byte count is authoritative.
 
@@ -230,6 +291,10 @@ Evidence sources are explicit:
   LayerFS operation/storage receipts or new passive instrumentation;
 - an unavailable field is an evidence error, never a silently emitted zero.
 
+Initialization admission is bounded below 8,192 objects and 4 MiB per
+transaction. The existing Workspace Commit bound remains below 128 objects and
+4 MiB; namespace admission does not relax the registered payload campaign.
+
 Run every tier in a fresh process so process peak RSS belongs to that tier.
 Start with one exploratory sample. Retain at least three valid samples per tier
 for candidate evidence when runtime permits. Do not set latency hard gates
@@ -243,3 +308,21 @@ four-by-four Cartesian matrix.
 
 The full release admission checklist is in
 [0.1.1/README.md](0.1.1/README.md).
+
+## Planned later benchmark families
+
+- [v0.1.2](0.1.2/README.md) owns prepend/range-copy and online Workspace
+  capture. Initialization's directory scan remains a v0.1.1 measurement even
+  when the two paths share internals.
+- [v0.1.3](0.1.3/README.md) indexes one document per filesystem workload family
+  for one genesis Layer and one Branch. It owns deterministic tiered load,
+  positional randomness, same-count and count-changing work, namespace
+  mutations, links, and mixed workloads; it does not own Add, multi-Layer Diff,
+  conflicts, or repeated history scaling.
+- [v0.1.4](0.1.4/README.md) drafts multi-Layer and multi-Branch Commit history,
+  Fork, Add, Diff, paged Query, conflict, resolution, head movement, historical
+  reads, reopen, and storage-reuse coverage.
+
+Their exact scenario tables are intentionally not preregistered here. Each
+release must first freeze the smallest matrix that answers its product
+questions without a Cartesian workload explosion.

@@ -186,6 +186,8 @@ mod client {
                     "daemon did not start execution",
                 ));
             }
+            stream.set_read_timeout(None)?;
+            stream.set_write_timeout(None)?;
             Ok(Exec { stream })
         }
 
@@ -674,6 +676,14 @@ mod client {
                     vec![b"/bin/true".to_vec()],
                 )
                 .unwrap();
+            match &exec.stream.0 {
+                Transport::Tcp(stream) => {
+                    assert_eq!(stream.read_timeout().unwrap(), None);
+                    assert_eq!(stream.write_timeout().unwrap(), None);
+                }
+                #[cfg(target_os = "linux")]
+                Transport::Unix(_) => panic!("expected TCP execution stream"),
+            }
             drop(exec);
             drop(owner);
             server.join().unwrap();

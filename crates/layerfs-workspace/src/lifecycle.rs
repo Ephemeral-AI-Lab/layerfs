@@ -129,7 +129,7 @@ impl Workspace {
                 expected_head,
                 expected_base: pinned.branch.base_layer_id,
                 root: pinned.root,
-                reader: pinned.reader,
+                reader: pinned.reader.with_read_metrics_from(&self.reader),
             },
             &rebase_spool,
             self.policy,
@@ -216,10 +216,7 @@ impl Workspace {
                 std::fs::remove_file(spool)?;
             }
         }
-        self.reader = committed
-            .reader
-            .clone()
-            .with_read_metrics_from(&self.reader);
+        self.reader = committed.reader.clone();
         self.expected_head = expected_head;
         self.expected_base = committed.expected_base;
         self.base_root = committed.base_root;
@@ -256,12 +253,11 @@ impl Workspace {
                 expected_head,
                 expected_base: pinned.branch.base_layer_id,
                 root: pinned.root,
-                reader: pinned.reader,
+                reader: pinned.reader.with_read_metrics_from(&metrics),
             },
             &spool,
             self.policy,
         )?;
-        committed.reader = committed.reader.clone().with_read_metrics_from(&metrics);
         committed.state = WorkspaceState::Active;
         *self = committed;
         Ok(())

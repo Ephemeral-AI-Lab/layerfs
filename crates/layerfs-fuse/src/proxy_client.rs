@@ -13,6 +13,7 @@ const MAX_PENDING_UNLINKS: usize = 16_384;
 const READ_AHEAD_BYTES: usize = 16 * 1024 * 1024;
 const WRITE_COALESCE_BYTES: usize = 1024 * 1024;
 type DirectoryEntries = Vec<(NodeId, Kind, Vec<u8>)>;
+type DirectoryEntriesPlus = Vec<(Attr, Vec<u8>)>;
 
 pub struct ProxyClient {
     streams: Vec<Mutex<TcpStream>>,
@@ -178,7 +179,7 @@ impl ProxyClient {
     }
 
     fn buffer_write(&self, node: NodeId, offset: u64, value: &[u8]) -> PortResult<()> {
-        let _gate = self.gate.read().map_err(|_| PortError::Io)?;
+        let _gate = self.gate.write().map_err(|_| PortError::Io)?;
         if self.paused.load(Ordering::Acquire) {
             return Err(PortError::Busy);
         }
@@ -272,7 +273,7 @@ impl ProxyClient {
     }
 
     fn exchange_for(&self, node: NodeId, request: Request) -> PortResult<Response> {
-        let _gate = self.gate.write().map_err(|_| PortError::Io)?;
+        let _gate = self.gate.read().map_err(|_| PortError::Io)?;
         if self.paused.load(Ordering::Acquire) {
             return Err(PortError::Busy);
         }
@@ -395,6 +396,20 @@ impl FilesystemPort for ProxyClient {
         match self.exchange(Request::Readdir(node))? {
             Response::Entries(entries) => {
                 self.remember_directory(node, &entries)?;
+                Ok(entries)
+            }
+            _ => Err(PortError::Io),
+        }
+    }
+
+    fn readdirplus(&self, node: NodeId) -> PortResult<Vec<(Attr, Vec<u8>)>> {
+        self.barrier()?;
+        if let Some(entries) = self.cached_readdirplus(node)? {
+            return Ok(entries);
+        }
+        match self.exchange(Request::ReaddirPlus(node))? {
+            Response::EntriesPlus(entries) => {
+                self.remember_directory_plus(node, &entries)?;
                 Ok(entries)
             }
             _ => Err(PortError::Io),
@@ -916,6 +931,27 @@ impl ProxyClient {
         Ok(Some(output))
     }
 
+    fn cached_readdirplus(&self, node: NodeId) -> PortResult<Option<DirectoryEntriesPlus>> {
+        let cache = self.cache.lock().map_err(|_| PortError::Io)?;
+        let Some(directory) = cache.directories.get(&node) else {
+            return Ok(None);
+        };
+        let mut output = Vec::with_capacity(directory.special.len() + directory.entries.len());
+        for (node, _, name) in &directory.special {
+            let Some(attr) = cache.attrs.get(node).copied() else {
+                return Ok(None);
+            };
+            output.push((attr, name.clone()));
+        }
+        for (name, (node, _)) in &directory.entries {
+            let Some(attr) = cache.attrs.get(node).copied() else {
+                return Ok(None);
+            };
+            output.push((attr, name.clone()));
+        }
+        Ok(Some(output))
+    }
+
     fn cached_read(&self, node: NodeId, offset: u64, size: usize) -> PortResult<Option<Vec<u8>>> {
         let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
         let Some(read) = cache.read_ahead.as_mut().filter(|read| read.node == node) else {
@@ -1132,6 +1168,31 @@ impl ProxyClient {
             .map_err(|_| PortError::Io)?
             .directories
             .insert(node, CachedDirectory { special, entries });
+        Ok(())
+    }
+
+    fn remember_directory_plus(&self, node: NodeId, entries: &[(Attr, Vec<u8>)]) -> PortResult<()> {
+        let special = entries
+            .iter()
+            .filter(|(_, name)| matches!(name.as_slice(), b"." | b".."))
+            .map(|(attr, name)| (attr.node, attr.kind, name.clone()))
+            .collect();
+        let directory_entries = entries
+            .iter()
+            .filter(|(_, name)| !matches!(name.as_slice(), b"." | b".."))
+            .map(|(attr, name)| (name.clone(), (attr.node, attr.kind)))
+            .collect();
+        let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
+        cache
+            .attrs
+            .extend(entries.iter().map(|(attr, _)| (attr.node, *attr)));
+        cache.directories.insert(
+            node,
+            CachedDirectory {
+                special,
+                entries: directory_entries,
+            },
+        );
         Ok(())
     }
 }

@@ -15,8 +15,12 @@ pub const OBJECT_PAGE_COUNT: usize = 128;
 pub const OBJECT_PAGE_BYTES: usize = 4 * 1024 * 1024;
 pub const ADMISSION_BATCH_COUNT: usize = OBJECT_PAGE_COUNT - 1;
 pub const ADMISSION_BATCH_BYTES: usize = OBJECT_PAGE_BYTES - 1;
+pub(crate) const INITIALIZATION_ADMISSION_BATCH_COUNT: usize = 8191;
 const CANDIDATE_MEMORY_BYTES: usize = 8 * 1024 * 1024;
-const CANDIDATE_INDEX_BYTES: usize = 8 * 1024 * 1024;
+// ponytail: about one million candidate IDs covers the 100k-file tier; move to
+// an on-disk hash index only when a larger measured campaign exceeds this bound.
+const CANDIDATE_INDEX_BYTES: usize = 64 * 1024 * 1024;
+const CANDIDATE_SPILL_BUFFER_BYTES: usize = 1024 * 1024;
 
 #[cfg(feature = "test-instrumentation")]
 thread_local! {
@@ -266,8 +270,12 @@ enum DeferredObjects {
 }
 
 struct SpillObjects {
-    file: Mutex<std::fs::File>,
+    writer: Option<std::fs::File>,
+    reader: Mutex<std::fs::File>,
     path: PathBuf,
+    pending: Vec<u8>,
+    pending_index: BTreeMap<ObjectId, (usize, usize)>,
+    end: u64,
     index: Option<BTreeMap<ObjectId, (u64, u64)>>,
     index_bytes: usize,
 }
@@ -348,6 +356,7 @@ pub struct SpillableObjectSet {
 pub(crate) struct CandidatePlan {
     missing: SpillableObjectSet,
     missing_order: IdOrder,
+    all_missing: bool,
     pub candidate_objects: u64,
     pub candidate_bytes: u64,
     pub inserted_objects: u64,
@@ -443,6 +452,14 @@ impl SpillableObjectSet {
 
 impl DeferredObjectStore {
     pub fn new() -> Result<Self> {
+        Self::with_reference_index(true)
+    }
+
+    pub(crate) fn new_all_reachable() -> Result<Self> {
+        Self::with_reference_index(false)
+    }
+
+    fn with_reference_index(reference_index: bool) -> Result<Self> {
         Ok(Self {
             storage: DeferredObjects::Memory {
                 order: Vec::new(),
@@ -450,7 +467,7 @@ impl DeferredObjectStore {
                 bytes: 0,
             },
             reachable: IdOrder::empty(),
-            references: Some(BTreeMap::new()),
+            references: reference_index.then(BTreeMap::new),
             reference_bytes: 0,
             count: 0,
             encoded_bytes: 0,
@@ -592,6 +609,9 @@ impl DeferredObjectStore {
     }
 
     fn reachable_from(mut self, root: ObjectId) -> Result<Self> {
+        if let DeferredObjects::Spill(spill) = &mut self.storage {
+            spill.flush()?;
+        }
         let mut seen = SpillableObjectSet::empty()?;
         seen.insert_page(&[root])?;
         let mut active = BTreeSet::new();
@@ -699,6 +719,7 @@ impl DeferredObjectStore {
             }
             DeferredObjects::Spill(spill) => spill.put(id, canonical)?,
         }
+        self.reachable.push(id)?;
         self.count += 1;
         self.encoded_bytes = self
             .encoded_bytes
@@ -732,9 +753,14 @@ impl DeferredObjectStore {
             return Ok(());
         };
         let (file, path) = temporary_file("candidate-objects")?;
+        let reader = std::fs::File::open(&path)?;
         let mut spill = SpillObjects {
-            file: Mutex::new(file),
+            writer: Some(file),
+            reader: Mutex::new(reader),
             path,
+            pending: Vec::with_capacity(CANDIDATE_SPILL_BUFFER_BYTES),
+            pending_index: BTreeMap::new(),
+            end: 0,
             index: Some(BTreeMap::new()),
             index_bytes: 0,
         };
@@ -750,27 +776,59 @@ impl DeferredObjectStore {
         self.spill_peak_bytes = self.spill_peak_bytes.max(self.encoded_bytes);
         Ok(())
     }
+
+    fn all_reachable(mut self) -> Result<Self> {
+        if let DeferredObjects::Spill(spill) = &mut self.storage {
+            spill.seal()?;
+        }
+        Ok(self)
+    }
 }
 
 impl SpillObjects {
     fn seal(&mut self) -> Result<()> {
-        let read_only = std::fs::File::open(&self.path)?;
-        let writable = std::mem::replace(&mut self.file, Mutex::new(read_only));
-        drop(writable);
+        self.flush()?;
+        self.writer = None;
         #[cfg(unix)]
         std::fs::remove_file(&self.path)?;
         Ok(())
     }
 
+    fn flush(&mut self) -> Result<()> {
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        self.writer
+            .as_mut()
+            .ok_or(StoreError::Integrity("sealed candidate spool"))?
+            .write_all(&self.pending)?;
+        self.pending.clear();
+        self.pending_index.clear();
+        Ok(())
+    }
+
     fn put(&mut self, id: ObjectId, canonical: &[u8]) -> Result<()> {
-        let mut file = self
-            .file
-            .lock()
-            .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
-        let start = file.seek(SeekFrom::End(0))?;
-        file.write_all(id.as_bytes())?;
-        file.write_all(&(canonical.len() as u64).to_le_bytes())?;
-        file.write_all(canonical)?;
+        let row_len = canonical
+            .len()
+            .checked_add(40)
+            .ok_or(StoreError::Integrity("candidate object length"))?;
+        if !self.pending.is_empty()
+            && self.pending.len().saturating_add(row_len) > CANDIDATE_SPILL_BUFFER_BYTES
+        {
+            self.flush()?;
+        }
+        let start = self.end;
+        let pending_offset = self.pending.len() + 40;
+        self.pending.extend_from_slice(id.as_bytes());
+        self.pending
+            .extend_from_slice(&(canonical.len() as u64).to_le_bytes());
+        self.pending.extend_from_slice(canonical);
+        self.pending_index
+            .insert(id, (pending_offset, canonical.len()));
+        self.end = self
+            .end
+            .checked_add(row_len as u64)
+            .ok_or(StoreError::Integrity("candidate object length"))?;
         if let Some(index) = &mut self.index {
             if self.index_bytes.saturating_add(64) > CANDIDATE_INDEX_BYTES {
                 self.index = None;
@@ -780,12 +838,15 @@ impl SpillObjects {
                 self.index_bytes += 64;
             }
         }
+        if self.pending.len() >= CANDIDATE_SPILL_BUFFER_BYTES {
+            self.flush()?;
+        }
         Ok(())
     }
 
     fn visit_ids(&self, visitor: &mut dyn FnMut(ObjectId) -> Result<()>) -> Result<()> {
         let mut file = self
-            .file
+            .reader
             .lock()
             .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
         file.seek(SeekFrom::Start(0))?;
@@ -812,7 +873,7 @@ impl SpillObjects {
         visitor: &mut dyn FnMut(ObjectId, &[u8]) -> Result<()>,
     ) -> Result<()> {
         let mut file = self
-            .file
+            .reader
             .lock()
             .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
         file.seek(SeekFrom::Start(0))?;
@@ -846,8 +907,11 @@ impl SpillObjects {
     }
 
     fn get(&self, id: ObjectId) -> Result<Option<Vec<u8>>> {
+        if let Some((offset, length)) = self.pending_index.get(&id) {
+            return Ok(Some(self.pending[*offset..*offset + *length].to_vec()));
+        }
         let mut file = self
-            .file
+            .reader
             .lock()
             .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
         if let Some(index) = &self.index {
@@ -900,7 +964,7 @@ impl SpillObjects {
                 .ok_or(StoreError::MissingObject(id));
         }
         let mut file = self
-            .file
+            .reader
             .lock()
             .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
         file.seek(SeekFrom::Start(0))?;
@@ -947,6 +1011,13 @@ impl<'a> ObjectBuffer<'a> {
         })
     }
 
+    pub(crate) fn empty_all_reachable() -> Result<Self> {
+        Ok(Self {
+            source: None,
+            objects: DeferredObjectStore::new_all_reachable()?,
+        })
+    }
+
     #[doc(hidden)]
     pub fn resume_prevalidated(source: &'a dyn ObjectSource, objects: DeferredObjectStore) -> Self {
         Self {
@@ -974,6 +1045,33 @@ impl<'a> ObjectBuffer<'a> {
                 spill_count: objects.spill_count,
             },
             objects,
+        })
+    }
+
+    pub(crate) fn finish_all_reachable(
+        self,
+        root_id: ObjectId,
+        cdc_bytes_scanned: u64,
+    ) -> Result<BuiltRoot> {
+        let encode_hash_invocations = self.objects.len();
+        let objects = self.objects.all_reachable()?;
+        Ok(BuiltRoot {
+            root_id,
+            counters: BuildCounters {
+                cdc_bytes_scanned,
+                encode_hash_invocations,
+                first_store_write_bytes: objects.first_store_write_bytes,
+                reachable_copy_write_bytes: 0,
+                spill_peak_bytes: objects.spill_peak_bytes,
+                spill_count: objects.spill_count,
+            },
+            objects,
+        })
+    }
+
+    pub(crate) fn merge_prevalidated(&mut self, objects: DeferredObjectStore) -> Result<()> {
+        objects.visit_prevalidated_order(&objects.reachable, &mut |id, bytes| {
+            self.objects.put(id, bytes)
         })
     }
 }
@@ -1154,6 +1252,32 @@ impl crate::schema::StoreDb {
         Ok(output)
     }
 
+    pub(crate) fn read_small_object_rows(
+        &self,
+        max_object_bytes: usize,
+        max_total_bytes: usize,
+    ) -> Result<Vec<CanonicalObject>> {
+        let connection = self.reader()?;
+        let mut statement = connection.prepare_cached(
+            "SELECT object_id, bytes FROM objects WHERE length(bytes) <= ?1 ORDER BY rowid DESC",
+        )?;
+        let mut rows = statement.query([max_object_bytes as i64])?;
+        let mut output = Vec::new();
+        let mut charged = 0_usize;
+        while let Some(row) = rows.next()? {
+            let id = ObjectId::from_bytes(&row.get::<_, Vec<u8>>(0)?)?;
+            let bytes = row.get::<_, Vec<u8>>(1)?;
+            layerfs_content::authenticate_identity(&bytes, id)?;
+            let charge = bytes.len().saturating_add(64);
+            if charged.saturating_add(charge) > max_total_bytes {
+                break;
+            }
+            charged += charge;
+            output.push(CanonicalObject { id, bytes });
+        }
+        Ok(output)
+    }
+
     pub fn object_membership(&self, ids: &[ObjectId]) -> Result<BTreeMap<ObjectId, u64>> {
         if ids.len() > OBJECT_PAGE_COUNT {
             return Err(StoreError::InvalidInput("object membership page"));
@@ -1190,6 +1314,7 @@ impl crate::schema::StoreDb {
         let mut plan = CandidatePlan {
             missing: SpillableObjectSet::empty()?,
             missing_order: IdOrder::empty(),
+            all_missing: false,
             candidate_objects: 0,
             candidate_bytes: 0,
             inserted_objects: 0,
@@ -1230,6 +1355,31 @@ impl crate::schema::StoreDb {
         plan.missing_order = objects.order_missing(&plan.missing)?;
         Ok(plan)
     }
+
+    pub(crate) fn plan_initialization_candidate(
+        &self,
+        objects: &DeferredObjectStore,
+    ) -> Result<CandidatePlan> {
+        let empty = self.reader()?.query_row(
+            "SELECT NOT EXISTS(SELECT 1 FROM objects LIMIT 1)",
+            [],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if !empty {
+            return self.plan_candidate(objects);
+        }
+        Ok(CandidatePlan {
+            missing: SpillableObjectSet::empty()?,
+            missing_order: IdOrder::empty(),
+            all_missing: true,
+            candidate_objects: objects.len(),
+            candidate_bytes: objects.encoded_bytes(),
+            inserted_objects: objects.len(),
+            inserted_bytes: objects.encoded_bytes(),
+            reused_objects: 0,
+            reused_bytes: 0,
+        })
+    }
 }
 
 pub(crate) fn admit_planned_objects(
@@ -1238,7 +1388,44 @@ pub(crate) fn admit_planned_objects(
     plan: &CandidatePlan,
     statement_number: &mut u64,
 ) -> Result<PlannedAdmission> {
-    let mut batch = Vec::with_capacity(ADMISSION_BATCH_COUNT);
+    admit_planned_objects_with_limits(
+        db,
+        objects,
+        plan,
+        statement_number,
+        ADMISSION_BATCH_COUNT,
+        ADMISSION_BATCH_BYTES,
+        false,
+    )
+}
+
+pub(crate) fn admit_initialization_objects(
+    db: &crate::schema::StoreDb,
+    objects: &DeferredObjectStore,
+    plan: &CandidatePlan,
+    statement_number: &mut u64,
+) -> Result<PlannedAdmission> {
+    admit_planned_objects_with_limits(
+        db,
+        objects,
+        plan,
+        statement_number,
+        INITIALIZATION_ADMISSION_BATCH_COUNT,
+        ADMISSION_BATCH_BYTES,
+        true,
+    )
+}
+
+fn admit_planned_objects_with_limits(
+    db: &crate::schema::StoreDb,
+    objects: &DeferredObjectStore,
+    plan: &CandidatePlan,
+    statement_number: &mut u64,
+    batch_count: usize,
+    batch_bytes_limit: usize,
+    bulk_insert: bool,
+) -> Result<PlannedAdmission> {
+    let mut batch = Vec::with_capacity(batch_count);
     let mut batch_bytes = 0_usize;
     let mut admission = PlannedAdmission {
         final_batch: Vec::new(),
@@ -1251,15 +1438,20 @@ pub(crate) fn admit_planned_objects(
         insert_ns: 0,
         commit_ns: 0,
     };
-    objects.visit_prevalidated_order(&plan.missing_order, &mut |id, bytes| {
-        if bytes.len() > ADMISSION_BATCH_BYTES {
+    let order = if plan.all_missing {
+        &objects.reachable
+    } else {
+        &plan.missing_order
+    };
+    objects.visit_prevalidated_order(order, &mut |id, bytes| {
+        if bytes.len() > batch_bytes_limit {
             return Err(StoreError::Integrity("canonical object admission size"));
         }
         if !batch.is_empty()
-            && (batch.len() == ADMISSION_BATCH_COUNT
-                || batch_bytes.saturating_add(bytes.len()) > ADMISSION_BATCH_BYTES)
+            && (batch.len() == batch_count
+                || batch_bytes.saturating_add(bytes.len()) > batch_bytes_limit)
         {
-            let metrics = insert_admission_batch(db, &batch, statement_number)?;
+            let metrics = insert_admission_batch(db, &batch, statement_number, bulk_insert)?;
             admission.batch_inserted_objects = admission
                 .batch_inserted_objects
                 .saturating_add(metrics.insert.objects);
@@ -1296,8 +1488,8 @@ pub(crate) fn admit_planned_objects(
     admission.max_transaction_bytes = admission.max_transaction_bytes.max(final_bytes);
     if admission.batch_inserted_objects + final_objects != plan.inserted_objects
         || admission.batch_inserted_bytes + final_bytes != plan.inserted_bytes
-        || admission.max_transaction_objects >= OBJECT_PAGE_COUNT as u64
-        || admission.max_transaction_bytes >= OBJECT_PAGE_BYTES as u64
+        || admission.max_transaction_objects > batch_count as u64
+        || admission.max_transaction_bytes > batch_bytes_limit as u64
     {
         return Err(StoreError::Integrity(
             "bounded candidate admission equation",
@@ -1310,13 +1502,18 @@ fn insert_admission_batch(
     db: &crate::schema::StoreDb,
     batch: &[CanonicalObject],
     statement_number: &mut u64,
+    bulk_insert: bool,
 ) -> Result<AdmissionBatchMetrics> {
     let begin_started = Instant::now();
     let mut connection = db.writer()?;
     let transaction =
         connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     let begin_ns = elapsed_ns(begin_started);
-    let insert = insert_object_batch(&transaction, batch, statement_number)?;
+    let insert = if bulk_insert {
+        insert_initialization_object_batch(&transaction, batch, statement_number)?
+    } else {
+        insert_object_batch(&transaction, batch, statement_number)?
+    };
     let commit_started = Instant::now();
     transaction.commit()?;
     Ok(AdmissionBatchMetrics {
@@ -1369,6 +1566,47 @@ pub(crate) fn insert_object_batch(
     Ok(metrics)
 }
 
+pub(crate) fn insert_initialization_object_batch(
+    transaction: &rusqlite::Transaction<'_>,
+    objects: &[CanonicalObject],
+    statement_number: &mut u64,
+) -> Result<ObjectInsertMetrics> {
+    if objects.is_empty() {
+        return Ok(ObjectInsertMetrics::default());
+    }
+    for _ in objects {
+        *statement_number += 1;
+        crate::schema::fail_transaction_statement(*statement_number)?;
+    }
+    let mut sql = String::with_capacity(80 + objects.len() * 6);
+    sql.push_str("INSERT INTO objects(object_id, bytes) VALUES ");
+    for index in 0..objects.len() {
+        if index != 0 {
+            sql.push(',');
+        }
+        sql.push_str("(?,?)");
+    }
+    sql.push_str(" ON CONFLICT(object_id) DO NOTHING");
+    let started = Instant::now();
+    let inserted = transaction.execute(
+        &sql,
+        params_from_iter(
+            objects
+                .iter()
+                .flat_map(|object| [object.id.as_bytes().as_slice(), object.bytes.as_slice()]),
+        ),
+    )?;
+    if inserted != objects.len() {
+        return Err(StoreError::Integrity("unexpected existing object"));
+    }
+    Ok(ObjectInsertMetrics {
+        insert_ns: elapsed_ns(started),
+        objects: objects.len() as u64,
+        bytes: objects.iter().map(|object| object.bytes.len() as u64).sum(),
+        ..ObjectInsertMetrics::default()
+    })
+}
+
 impl ObjectSource for crate::schema::StoreDb {
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
         self.read_object_row(id)
@@ -1400,9 +1638,43 @@ mod tests {
             let canonical = layerfs_content::encode_bytes_object(&index.to_le_bytes()).unwrap();
             let id = ObjectId::for_bytes(&canonical);
             objects.put(id, &canonical).unwrap();
-            objects.reachable.push(id).unwrap();
         }
-        let plan = db.plan_candidate(&objects).unwrap();
+        let plan = db.plan_initialization_candidate(&objects).unwrap();
+        assert!(plan.all_missing);
+        let mut initialization_statement_number = 0;
+        let initialization = admit_initialization_objects(
+            &db,
+            &objects,
+            &plan,
+            &mut initialization_statement_number,
+        )
+        .unwrap();
+        assert_eq!(initialization.transactions, 0);
+        assert_eq!(initialization.final_batch.len(), 300);
+        assert_eq!(initialization.max_transaction_objects, 300);
+        let bulk_db = crate::schema::StoreDb::create(root.join("bulk.sqlite")).unwrap();
+        {
+            let mut connection = bulk_db.writer().unwrap();
+            let transaction = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .unwrap();
+            let metrics = insert_initialization_object_batch(
+                &transaction,
+                &initialization.final_batch,
+                &mut initialization_statement_number,
+            )
+            .unwrap();
+            assert_eq!(metrics.objects, 300);
+            transaction.commit().unwrap();
+        }
+        assert_eq!(
+            bulk_db
+                .plan_initialization_candidate(&objects)
+                .unwrap()
+                .reused_objects,
+            300
+        );
+
         let mut statement_number = 0;
         let admission = admit_planned_objects(&db, &objects, &plan, &mut statement_number).unwrap();
         assert_eq!(admission.transactions, 2);
@@ -1488,7 +1760,8 @@ mod tests {
             DeferredObjects::Spill(spill) => spill,
             DeferredObjects::Memory { .. } => panic!("candidate did not spill"),
         };
-        assert!(spill.file.lock().unwrap().write_all(&[0]).is_err());
+        assert!(spill.writer.is_none());
+        assert!(spill.reader.lock().unwrap().write_all(&[0]).is_err());
         let mut missing = SpillableObjectSet::empty().unwrap();
         missing.insert_page(&[root]).unwrap();
         let order = objects.order_missing(&missing).unwrap();

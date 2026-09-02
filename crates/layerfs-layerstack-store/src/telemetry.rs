@@ -1,4 +1,4 @@
-use crate::{Result, StoreError, WorkspaceReadReceipt};
+use crate::{LayerStackId, Result, StoreError, WorkspaceReadReceipt};
 use std::cell::RefCell;
 use std::time::Instant;
 
@@ -27,15 +27,27 @@ pub struct CandidateReceipt {
     pub max_transaction_bytes: u64,
 }
 
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LayerStackInitializationReceipt {
+    pub layer_stack_id: LayerStackId,
+    pub scanned_files: u64,
+    pub scanned_bytes: u64,
+}
+
 impl CandidateReceipt {
     fn validate(self) -> Result<()> {
+        self.validate_with_max_objects(crate::objects::ADMISSION_BATCH_COUNT as u64)
+    }
+
+    fn validate_with_max_objects(self, max_objects: u64) -> Result<()> {
         if self.candidate_objects != self.inserted_objects + self.reused_objects
             || self.candidate_bytes != self.inserted_bytes + self.reused_bytes
             || self.inserted_objects != self.batch_inserted_objects + self.final_inserted_objects
             || self.inserted_bytes != self.batch_inserted_bytes + self.final_inserted_bytes
             || self.reused_objects != self.preexisting_reused_objects
             || self.reused_bytes != self.preexisting_reused_bytes
-            || self.max_transaction_objects >= crate::objects::OBJECT_PAGE_COUNT as u64
+            || self.max_transaction_objects > max_objects
             || self.max_transaction_bytes >= crate::objects::OBJECT_PAGE_BYTES as u64
         {
             return Err(StoreError::Integrity("candidate equation"));
@@ -195,6 +207,7 @@ pub enum StorageReceipt {
 
 thread_local! {
     static RECEIPTS: RefCell<Vec<StorageReceipt>> = const { RefCell::new(Vec::new()) };
+    static LAYERSTACK_INITIALIZATIONS: RefCell<Vec<LayerStackInitializationReceipt>> = const { RefCell::new(Vec::new()) };
     static WORKSPACE_COMMIT: RefCell<Option<WorkspaceCommitReceipt>> = const { RefCell::new(None) };
 }
 
@@ -323,6 +336,21 @@ pub(crate) fn record_candidate(receipt: CandidateReceipt) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn record_initialization_candidate(receipt: CandidateReceipt) -> Result<()> {
+    receipt
+        .validate_with_max_objects(crate::objects::INITIALIZATION_ADMISSION_BATCH_COUNT as u64)?;
+    RECEIPTS.with(|receipts| {
+        receipts
+            .borrow_mut()
+            .push(StorageReceipt::Candidate(receipt));
+    });
+    Ok(())
+}
+
+pub(crate) fn record_layerstack_initialization(receipt: LayerStackInitializationReceipt) {
+    LAYERSTACK_INITIALIZATIONS.with(|receipts| receipts.borrow_mut().push(receipt));
+}
+
 pub fn record_fuse_write(receipt: FuseWriteReceipt) -> Result<()> {
     RECEIPTS.with(|receipts| {
         receipts
@@ -343,6 +371,10 @@ pub fn record_workspace_read(receipt: WorkspaceReadReceipt) -> Result<()> {
 
 pub fn take_storage_receipts() -> Vec<StorageReceipt> {
     RECEIPTS.with(|receipts| std::mem::take(&mut *receipts.borrow_mut()))
+}
+
+pub(crate) fn take_layerstack_initialization_receipts() -> Vec<LayerStackInitializationReceipt> {
+    LAYERSTACK_INITIALIZATIONS.with(|receipts| std::mem::take(&mut *receipts.borrow_mut()))
 }
 
 fn elapsed_ns(started: Instant) -> u64 {

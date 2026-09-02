@@ -3,6 +3,8 @@ use layerfs_content::file::rope::{self, FileMutationBatch, FileStateRoot, RopeCo
 use layerfs_content::filesystem::{self, ContentChange, InodeMutation, LogicalCounters};
 use layerfs_content::object::access::ObjectRead;
 use layerfs_content::object::{ContentDigestWriter, ObjectId};
+use layerfs_content::tree::inode::codec::decode_inode_record;
+use layerfs_content::tree::inode::{inode_table_lookup, InodeTableCounters};
 use layerfs_content::tree::inode::{InodeId, InodeKind, InodeRecordV1};
 use layerfs_content::CanonicalPath;
 use layerfs_layerstack_store::{
@@ -31,6 +33,9 @@ struct FinalEntry {
 
 impl Workspace {
     pub(crate) fn build_candidate(&mut self) -> Result<BuiltRoot> {
+        if let Some(candidate) = self.build_localized_candidate()? {
+            return Ok(candidate);
+        }
         let captured = self.take_capture();
         if let Some(captured) = &captured {
             layerfs_layerstack_store::note_workspace_capture(1, captured.len);
@@ -337,6 +342,135 @@ impl Workspace {
         let built = objects.finish(root, cdc_bytes_scanned);
         note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
         built
+    }
+
+    fn build_localized_candidate(&mut self) -> Result<Option<BuiltRoot>> {
+        let started = Instant::now();
+        if self.nodes.values().any(|node| {
+            matches!(&node.data, Data::Directory(directory) if !directory.changes.is_empty())
+        }) {
+            return Ok(None);
+        }
+        let mut changed = BTreeSet::new();
+        for path in self.mutation_paths.keys() {
+            let Some(node) = self
+                .nodes
+                .iter()
+                .find_map(|(node, value)| value.paths.contains(path).then_some(*node))
+            else {
+                return Ok(None);
+            };
+            if self.nodes[&node].canonical.is_none() {
+                return Ok(None);
+            }
+            changed.insert(node);
+        }
+        if changed.is_empty() || self.dirty.iter().any(|node| !changed.contains(node)) {
+            return Ok(None);
+        }
+        let charge = self
+            .mutation_paths
+            .keys()
+            .map(|path| path_charge(path))
+            .sum();
+        self.policy.check_final_delta(charge)?;
+        note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
+
+        let captured = self.take_capture();
+        if let Some(captured) = &captured {
+            layerfs_layerstack_store::note_workspace_capture(1, captured.len);
+        }
+        let started = Instant::now();
+        let reader = CoreReader(&self.reader);
+        let mut entries = Vec::with_capacity(changed.len());
+        for node in changed {
+            let inode = self.nodes[&node]
+                .canonical
+                .ok_or(StorageError::Integrity("localized inode"))?;
+            let record_id = inode_table_lookup(
+                &reader,
+                self.base_inodes,
+                inode,
+                &mut InodeTableCounters::default(),
+            )?
+            .ok_or(StorageError::Integrity("localized inode record"))?;
+            let record = reader.with_authenticated_canonical(record_id, decode_inode_record)?;
+            let metadata = portable_metadata(&reader, record.metadata_root, record.kind)?;
+            let attr = self.attr(node)?;
+            if kind(record.kind) != attr.kind {
+                return Err(StorageError::Integrity("localized inode kind"));
+            }
+            entries.push((
+                node,
+                attr,
+                BaseEntry {
+                    inode,
+                    record,
+                    mode: metadata.permission_mode,
+                    mtime_seconds: metadata.mtime_seconds,
+                    mtime_nanoseconds: metadata.mtime_nanoseconds,
+                },
+            ));
+        }
+        note_commit_phase(WorkspaceCommitPhase::DirtyCompare, started);
+
+        let started = Instant::now();
+        let mut objects = ObjectBuffer::new(&self.reader)?;
+        let mut mutations = Vec::new();
+        let mut cdc_bytes_scanned = 0_u64;
+        for (node, attr, base) in entries {
+            let mut record = base.record;
+            if attr.kind == Kind::File && self.file_may_differ(node, record.content_root)? {
+                match self.mutate_existing_file(&mut objects, node, base)? {
+                    Some((content, counters)) => {
+                        record.content_root = content.0;
+                        cdc_bytes_scanned = cdc_bytes_scanned
+                            .checked_add(counters.cdc_bytes_scanned)
+                            .ok_or(StorageError::Integrity("CDC counter"))?;
+                    }
+                    None if self.incremental_file_supported(node, record.content_root) => {}
+                    None => {
+                        let (content, counters) =
+                            rope::build(&mut objects, WorkspaceFileReader::new(self, node)?)?;
+                        record.content_root = content.0;
+                        cdc_bytes_scanned = cdc_bytes_scanned
+                            .checked_add(counters.cdc_bytes_scanned)
+                            .ok_or(StorageError::Integrity("CDC counter"))?;
+                    }
+                }
+            }
+            if base.mode != attr.mode
+                || base.mtime_seconds != attr.mtime_seconds
+                || base.mtime_nanoseconds != attr.mtime_nanoseconds
+            {
+                record.metadata_root = filesystem::build_portable_metadata(
+                    &mut objects,
+                    record.kind,
+                    attr.mode,
+                    attr.mtime_seconds,
+                    attr.mtime_nanoseconds,
+                )?;
+            }
+            if record != base.record {
+                mutations.push(InodeMutation::Upsert {
+                    inode: base.inode,
+                    record,
+                });
+            }
+        }
+        note_commit_phase(WorkspaceCommitPhase::Content, started);
+
+        let started = Instant::now();
+        let root = if mutations.is_empty() {
+            self.base_root
+        } else {
+            filesystem::apply_inode_mutations(&mut objects, self.base_root, mutations)?.root()
+        };
+        note_commit_phase(WorkspaceCommitPhase::Namespace, started);
+        let started = Instant::now();
+        let built = objects.finish(root, cdc_bytes_scanned);
+        note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
+        built.map(Some)
     }
 
     pub(crate) fn resolution_fingerprint(
@@ -1160,7 +1294,17 @@ mod tests {
                     LocalForkSource::Layer { layer_id: layer },
                 )
                 .unwrap();
-            let mut workspace = Workspace::open(store.clone(), branch, root.join("spool")).unwrap();
+            let policy = if case == "overwrite" {
+                crate::ResourcePolicy {
+                    max_final_delta_memory_bytes: 1024,
+                    ..crate::ResourcePolicy::default()
+                }
+            } else {
+                crate::ResourcePolicy::default()
+            };
+            let mut workspace =
+                Workspace::open_with_policy(store.clone(), branch, root.join("spool"), policy)
+                    .unwrap();
             let file = workspace.lookup(ROOT, b"payload").unwrap().node;
             let original_inode = workspace.nodes[&file].canonical.unwrap();
             let mut expected = base.clone();

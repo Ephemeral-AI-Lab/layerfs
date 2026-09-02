@@ -98,7 +98,7 @@ For each case record:
 
 ## Patch-release boundary
 
-The following are eligible for 0.1.1 when proved:
+The following are eligible for 0.1.2 when proved:
 
 - internal frontier indexes;
 - more direct use of already captured ranges;

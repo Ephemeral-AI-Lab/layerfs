@@ -14,8 +14,9 @@ pub use layerfs_layerstack_store::{
     AddLayerResult, BranchId, BranchRecord, BuildCounters, CandidateReceipt, CanonicalStorage,
     CommitId, CommitRecord, DiffAspects, DiffEntry, DiffRequest, EntityName,
     InitializeLayerStackResult, LayerId, LayerRecord, LayerStackId, LayerStackInitialization,
-    LayerStackRecord, LayerStackStore, LocalForkSource, NodeSummary, ObjectSource, ReconcileChoice,
-    ReconcileConflict, ReconcileConflictKind, StorageReceipt, StoreCounts, StoreError,
+    LayerStackInitializationReceipt, LayerStackRecord, LayerStackStore, LocalForkSource,
+    NodeSummary, ObjectSource, ReconcileChoice, ReconcileConflict, ReconcileConflictKind,
+    StorageReceipt, StoreCounts, StoreError,
 };
 pub use layerfs_monitor::{
     CandidateStats, CandidateTotals, DatabaseSnapshot, DedupAnalysis, MonitorError,

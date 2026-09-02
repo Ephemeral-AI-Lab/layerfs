@@ -29,7 +29,7 @@ impl Monitor {
     pub fn record(&self, receipt: OperationReceipt) -> MonitorResult<()> {
         if receipt
             .candidate
-            .is_some_and(|candidate| !candidate.validate())
+            .is_some_and(|candidate| !candidate.validate_for(receipt.operation.family))
         {
             return Err(MonitorError::Integrity("candidate equation"));
         }

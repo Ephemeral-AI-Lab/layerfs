@@ -1,4 +1,5 @@
 use crate::{ResourcePolicy, WorkspaceState};
+use layerfs_content::file::extent_codec::decode_file_state;
 use layerfs_content::file::rope::{read_all_bounded, state, FileStateRoot, RopeCounters};
 use layerfs_content::filesystem::{self as logical, LogicalCounters};
 use layerfs_content::object::access::ObjectRead;
@@ -8,7 +9,8 @@ use layerfs_content::tree::directory::{
 };
 use layerfs_content::tree::inode::codec::decode_inode_record;
 use layerfs_content::tree::inode::{
-    inode_table_lookup, InodeId, InodeKind, InodeTableCounters, InodeTableRoot,
+    inode_table_lookup, inode_table_lookup_many, InodeId, InodeKind, InodeTableCounters,
+    InodeTableRoot,
 };
 use layerfs_content::tree::metadata::{metadata_lookup, MetadataKey, PortableMetadataV1};
 use layerfs_content::{CanonicalName, CanonicalPath};
@@ -108,6 +110,7 @@ pub struct Workspace {
     pub(crate) policy: ResourcePolicy,
     pub(crate) nodes: HashMap<NodeId, Node>,
     pub(crate) canonical_nodes: HashMap<InodeId, NodeId>,
+    directory_parents: HashMap<NodeId, NodeId>,
     pub(crate) dirty: BTreeSet<NodeId>,
     pub(crate) reserved: BTreeSet<NodeId>,
     pub(crate) next_node: u64,
@@ -227,6 +230,7 @@ impl Workspace {
             policy,
             nodes: HashMap::from([(ROOT, root)]),
             canonical_nodes: HashMap::from([(resolved.inode, ROOT)]),
+            directory_parents: HashMap::from([(ROOT, ROOT)]),
             dirty: BTreeSet::new(),
             reserved: BTreeSet::new(),
             next_node: 2,
@@ -275,13 +279,21 @@ impl Workspace {
     }
 
     pub fn readdir(&mut self, node: NodeId) -> Result<Vec<(NodeId, Kind, Vec<u8>)>> {
+        Ok(self
+            .readdirplus(node)?
+            .into_iter()
+            .map(|(attr, name)| (attr.node, attr.kind, name))
+            .collect())
+    }
+
+    pub fn readdirplus(&mut self, node: NodeId) -> Result<Vec<(Attr, Vec<u8>)>> {
         let parent = self.parent_of(node)?;
         let mut output = VecDeque::from([
-            (node, Kind::Directory, b".".to_vec()),
-            (parent, Kind::Directory, b"..".to_vec()),
+            (self.attr(node)?, b".".to_vec()),
+            (self.attr(parent)?, b"..".to_vec()),
         ]);
         for (name, child) in self.directory_entries(node)? {
-            output.push_back((child, self.attr(child)?.kind, name));
+            output.push_back((self.attr(child)?, name));
         }
         Ok(output.into())
     }
@@ -352,7 +364,9 @@ impl Workspace {
         )?
         .ok_or(StorageError::NotFound("name"))?;
         let path = self.child_path(parent, name)?;
-        self.materialize(inode, path)
+        let node = self.materialize(inode, path)?;
+        self.remember_directory_parent(node, parent)?;
+        Ok(node)
     }
 
     fn materialize(&mut self, inode: InodeId, path: String) -> Result<NodeId> {
@@ -369,17 +383,38 @@ impl Workspace {
         )?
         .ok_or(StorageError::Integrity("Workspace inode"))?;
         let record = reader.with_authenticated_canonical(record_id, decode_inode_record)?;
+        self.materialize_record(inode, path, record, None)
+    }
+
+    fn materialize_record(
+        &mut self,
+        inode: InodeId,
+        path: String,
+        record: layerfs_content::tree::inode::InodeRecordV1,
+        file_len: Option<u64>,
+    ) -> Result<NodeId> {
+        if let Some(node) = self.canonical_nodes.get(&inode).copied() {
+            self.nodes.get_mut(&node).unwrap().paths.insert(path);
+            return Ok(node);
+        }
+        let reader = CoreReader(&self.reader);
         let portable = portable_metadata(&reader, record.metadata_root, record.kind)?;
         let data = match record.kind {
             InodeKind::RegularFile => {
-                let state = state(
-                    &reader,
-                    FileStateRoot(record.content_root),
-                    &mut RopeCounters::default(),
-                )?;
+                let len = match file_len {
+                    Some(len) => len,
+                    None => {
+                        state(
+                            &reader,
+                            FileStateRoot(record.content_root),
+                            &mut RopeCounters::default(),
+                        )?
+                        .logical_len
+                    }
+                };
                 Data::File(FileData::Base {
                     root: FileStateRoot(record.content_root),
-                    len: state.logical_len,
+                    len,
                 })
             }
             InodeKind::Directory => Data::Directory(DirectoryData {
@@ -407,6 +442,7 @@ impl Workspace {
     }
 
     pub(crate) fn directory_entries(&mut self, node: NodeId) -> Result<BTreeMap<Vec<u8>, NodeId>> {
+        let parent = node;
         let (base, changes) = {
             let directory = self.directory(node)?;
             (directory.base, directory.changes.clone())
@@ -430,12 +466,70 @@ impl Workspace {
             }
         }
         let mut entries = BTreeMap::new();
+        let mut pending = Vec::new();
         for (name, inode) in base_entries {
             if changes.contains_key(name.as_bytes()) {
                 continue;
             }
             let path = join(&prefix, name.as_bytes())?;
-            entries.insert(name.as_bytes().to_vec(), self.materialize(inode, path)?);
+            if let Some(child) = self.canonical_nodes.get(&inode).copied() {
+                self.nodes.get_mut(&child).unwrap().paths.insert(path);
+                self.remember_directory_parent(child, parent)?;
+                entries.insert(name.as_bytes().to_vec(), child);
+            } else {
+                pending.push((name, inode, path));
+            }
+        }
+        for pending in pending.chunks(128) {
+            let reader = self.reader.clone();
+            let core = CoreReader(&reader);
+            let inodes = pending
+                .iter()
+                .map(|(_, inode, _)| *inode)
+                .collect::<Vec<_>>();
+            let record_ids = inode_table_lookup_many(
+                &core,
+                self.base_inodes,
+                &inodes,
+                &mut InodeTableCounters::default(),
+            )?
+            .into_iter()
+            .map(|record| record.ok_or(StorageError::Integrity("Workspace inode")))
+            .collect::<Result<Vec<_>>>()?;
+            let mut records = BTreeMap::new();
+            core.get_authenticated_batch(&record_ids, |id, payload| {
+                records.insert(
+                    id,
+                    decode_inode_record(&layerfs_content::encode_bytes_object(payload)?)?,
+                );
+                Ok(())
+            })?;
+            let file_states = records
+                .values()
+                .filter(|record| record.kind == InodeKind::RegularFile)
+                .map(|record| record.content_root)
+                .collect::<Vec<_>>();
+            let mut file_lengths = BTreeMap::new();
+            core.get_authenticated_batch(&file_states, |id, payload| {
+                file_lengths.insert(
+                    id,
+                    decode_file_state(&layerfs_content::encode_bytes_object(payload)?)?.logical_len,
+                );
+                Ok(())
+            })?;
+            for ((name, inode, path), record_id) in pending.iter().zip(record_ids) {
+                let record = *records
+                    .get(&record_id)
+                    .ok_or(StorageError::Integrity("Workspace inode record"))?;
+                let child = self.materialize_record(
+                    *inode,
+                    path.clone(),
+                    record,
+                    file_lengths.get(&record.content_root).copied(),
+                )?;
+                self.remember_directory_parent(child, parent)?;
+                entries.insert(name.as_bytes().to_vec(), child);
+            }
         }
         for (name, desired) in changes {
             if let Some(child) = desired {
@@ -515,15 +609,30 @@ impl Workspace {
     }
 
     fn parent_of(&self, node: NodeId) -> Result<NodeId> {
-        if node == ROOT {
-            return Ok(ROOT);
-        }
-        let path = self.path_of(node)?;
-        let parent = path.rsplit_once('/').map_or("", |(parent, _)| parent);
-        self.nodes
-            .iter()
-            .find_map(|(id, node)| node.paths.contains(parent).then_some(*id))
+        self.directory_parents
+            .get(&node)
+            .copied()
             .ok_or(StorageError::Integrity("Workspace parent"))
+    }
+
+    fn remember_directory_parent(&mut self, node: NodeId, parent: NodeId) -> Result<()> {
+        if !matches!(
+            self.nodes
+                .get(&node)
+                .ok_or(StorageError::NotFound("node"))?
+                .data,
+            Data::Directory(_)
+        ) {
+            return Ok(());
+        }
+        match self.directory_parents.get(&node).copied() {
+            Some(known) if known != parent => Err(StorageError::Integrity("Workspace parent")),
+            Some(_) => Ok(()),
+            None => {
+                self.directory_parents.insert(node, parent);
+                Ok(())
+            }
+        }
     }
 }
 
@@ -748,6 +857,9 @@ impl Workspace {
             .changes
             .insert(target.to_vec(), Some(node));
         self.replace_path_prefix(&source, &destination);
+        if source_directory {
+            self.directory_parents.insert(node, target_parent);
+        }
         self.note_mutation([source, destination])?;
         Ok(())
     }
@@ -820,7 +932,7 @@ impl Workspace {
         self.directory_mut(parent)?
             .changes
             .insert(name.to_vec(), Some(node));
-        Ok(())
+        self.remember_directory_parent(node, parent)
     }
 
     fn replace_path_prefix(&mut self, source: &str, target: &str) {
@@ -850,6 +962,7 @@ impl Workspace {
             .is_some_and(|value| value.paths.is_empty() && value.pins == 0)
         {
             self.dirty.remove(&node);
+            self.directory_parents.remove(&node);
             if let Some(value) = self.nodes.remove(&node) {
                 self.open_spools.remove(&node);
                 if let Some(inode) = value.canonical {
@@ -894,6 +1007,7 @@ mod tests {
     struct Snapshot {
         nodes: std::collections::HashMap<NodeId, Node>,
         canonical_nodes: std::collections::HashMap<layerfs_content::tree::inode::InodeId, NodeId>,
+        directory_parents: std::collections::HashMap<NodeId, NodeId>,
         dirty: BTreeSet<NodeId>,
         next_node: u64,
         spool_bytes: u64,
@@ -903,6 +1017,7 @@ mod tests {
         Snapshot {
             nodes: workspace.nodes.clone(),
             canonical_nodes: workspace.canonical_nodes.clone(),
+            directory_parents: workspace.directory_parents.clone(),
             dirty: workspace.dirty.clone(),
             next_node: workspace.next_node,
             spool_bytes: workspace.spool_bytes,
@@ -946,6 +1061,23 @@ mod tests {
             .unwrap();
         assert_eq!(directory.node, node);
         assert_eq!(workspace.lookup(ROOT, b"directory").unwrap().node, node);
+        assert_eq!(workspace.parent_of(node).unwrap(), ROOT);
+        let child = workspace.mkdir(ROOT, b"child", 0o700).unwrap().node;
+        workspace
+            .rename(ROOT, b"child", node, b"moved", true)
+            .unwrap();
+        assert_eq!(workspace.parent_of(child).unwrap(), node);
+        assert_eq!(
+            workspace
+                .readdirplus(child)
+                .unwrap()
+                .into_iter()
+                .find(|(_, name)| name == b"..")
+                .unwrap()
+                .0
+                .node,
+            node,
+        );
         assert!(workspace
             .mkdir_reserved(ROOT, b"duplicate", 0o700, node)
             .is_err());

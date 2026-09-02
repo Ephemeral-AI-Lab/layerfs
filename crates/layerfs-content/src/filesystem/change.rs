@@ -1,5 +1,5 @@
 use super::{InodeMutation, LogicalCounters};
-use crate::file::rope::build;
+use crate::file::rope::build_bytes;
 use crate::filesystem;
 use crate::object::access::ObjectStore;
 use crate::tree::inode::{InodeId, InodeKind, InodeRecordV1};
@@ -93,7 +93,7 @@ pub fn write_file<S: ObjectStore, R: Read>(
     mode: u32,
     seed: [u8; 32],
 ) -> CoreResult<filesystem::CandidateRoot> {
-    let inode = allocated_inode(seed, path.as_str());
+    let inode = allocated_inode(seed, path);
     let candidate = filesystem::replace_file(store, root, path, bytes, |store| {
         Ok((inode, metadata(store, InodeKind::RegularFile, mode)?))
     })?;
@@ -113,7 +113,7 @@ fn apply_change<S: ObjectStore>(
             mode,
         } => {
             let path = path(value)?;
-            let inode = allocated_inode(seed, value);
+            let inode = allocated_inode_text(seed, value);
             let candidate =
                 filesystem::replace_file(store, root, &path, Cursor::new(bytes), |store| {
                     Ok((inode, metadata(store, InodeKind::RegularFile, *mode)?))
@@ -139,7 +139,7 @@ fn apply_change<S: ObjectStore>(
                 store,
                 root,
                 &path(value)?,
-                allocated_inode(seed, value),
+                allocated_inode_text(seed, value),
                 metadata,
             )?
         }
@@ -152,7 +152,7 @@ fn apply_change<S: ObjectStore>(
                 store,
                 root,
                 &path(value)?,
-                allocated_inode(seed, value),
+                allocated_inode_text(seed, value),
                 target.clone(),
                 metadata,
             )?
@@ -202,7 +202,8 @@ pub fn set_mtime<S: ObjectStore>(
         mtime_seconds: seconds,
         mtime_nanoseconds: nanoseconds,
     };
-    let (mtime_root, _) = build(store, Cursor::new(portable.mtime_bytes()?))?;
+    let mtime = portable.mtime_bytes()?;
+    let (mtime_root, _) = build_bytes(store, &mtime)?;
     let metadata_root = replace_metadata_entry(
         store,
         resolved.record.metadata_root,
@@ -243,10 +244,8 @@ pub fn set_mode<S: ObjectStore>(
         mtime_seconds: 0,
         mtime_nanoseconds: 0,
     };
-    let (mode_root, _) = build(
-        store,
-        Cursor::new(portable.mode_bytes(resolved.record.kind)?),
-    )?;
+    let mode = portable.mode_bytes(resolved.record.kind)?;
+    let (mode_root, _) = build_bytes(store, &mode)?;
     let metadata_root = replace_metadata_entry(
         store,
         resolved.record.metadata_root,
@@ -274,6 +273,17 @@ pub(super) fn metadata<S: ObjectStore>(
     kind: InodeKind,
     mode: u32,
 ) -> CoreResult<ObjectId> {
+    build_portable_metadata(store, kind, mode, 0, 0)
+}
+
+#[doc(hidden)]
+pub fn build_portable_metadata<S: ObjectStore>(
+    store: &mut S,
+    kind: InodeKind,
+    mode: u32,
+    mtime_seconds: i64,
+    mtime_nanoseconds: u32,
+) -> CoreResult<ObjectId> {
     let portable = PortableMetadataV1 {
         permission_mode: mode
             & if kind == InodeKind::Directory {
@@ -281,11 +291,13 @@ pub(super) fn metadata<S: ObjectStore>(
             } else {
                 0o777
             },
-        mtime_seconds: 0,
-        mtime_nanoseconds: 0,
+        mtime_seconds,
+        mtime_nanoseconds,
     };
-    let (mode, _) = build(store, Cursor::new(portable.mode_bytes(kind)?))?;
-    let (mtime, _) = build(store, Cursor::new(portable.mtime_bytes()?))?;
+    let mode_bytes = portable.mode_bytes(kind)?;
+    let mtime_bytes = portable.mtime_bytes()?;
+    let (mode, _) = build_bytes(store, &mode_bytes)?;
+    let (mtime, _) = build_bytes(store, &mtime_bytes)?;
     build_metadata_tree(
         store,
         &[
@@ -310,7 +322,12 @@ fn path(value: &str) -> CoreResult<CanonicalPath> {
     }
 }
 
-fn allocated_inode(seed: [u8; 32], path: &str) -> InodeId {
+#[doc(hidden)]
+pub fn allocated_inode(seed: [u8; 32], path: &CanonicalPath) -> InodeId {
+    allocated_inode_text(seed, path.as_str())
+}
+
+fn allocated_inode_text(seed: [u8; 32], path: &str) -> InodeId {
     let mut bytes = Vec::with_capacity(seed.len() + path.len());
     bytes.extend_from_slice(&seed);
     bytes.extend_from_slice(path.as_bytes());

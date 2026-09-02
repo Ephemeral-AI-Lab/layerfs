@@ -34,6 +34,45 @@ pub fn build<S: ObjectStore, R: Read>(
     Ok((FileStateRoot(id), counters))
 }
 
+/// Builds a known byte slice without starting the streaming CDC scanner when
+/// the frozen profile guarantees that it is exactly one chunk.
+pub fn build_bytes<S: ObjectStore>(
+    store: &mut S,
+    bytes: &[u8],
+) -> CoreResult<(FileStateRoot, RopeCounters)> {
+    if bytes.is_empty() || bytes.len() >= crate::file::cdc::MINIMUM_CHUNK_BYTES {
+        return build(store, bytes);
+    }
+
+    let canonical = encode_chunk_object(bytes)?;
+    let payload = store.put(&canonical)?;
+    let logical_len = u64::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?;
+    let logical_length = u32::try_from(bytes.len()).map_err(|_| CoreError::LengthOverflow)?;
+    let node = ExtentNodeV3::Leaf {
+        subtree_logical_bytes: logical_len,
+        extents: vec![ExtentSliceV3::new(payload, 0, logical_length)?],
+    };
+    let mapping_root = store.put(&encode_node(&node)?)?;
+    let state = FileStateV3 {
+        logical_len,
+        extent_count: 1,
+        tree_level: 0,
+        profile_id: profile_id(),
+        mapping_root,
+    };
+    let root = store.put(&encode_file_state(state)?)?;
+    Ok((
+        FileStateRoot(root),
+        RopeCounters {
+            payload_bytes_written: logical_len,
+            cdc_bytes_scanned: logical_len,
+            chunks_created: 1,
+            nodes_created: 1,
+            ..RopeCounters::default()
+        },
+    ))
+}
+
 fn build_mapping<S: ObjectStore, R: Read>(
     store: &mut S,
     source: R,
@@ -247,4 +286,53 @@ fn pending_len(pending: &Pending) -> usize {
 
 pub(super) fn add(left: u64, right: u64) -> CoreResult<u64> {
     left.checked_add(right).ok_or(CoreError::LengthOverflow)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::file::rope::read_all;
+    use std::collections::BTreeMap;
+
+    #[derive(Default)]
+    struct MemoryStore(BTreeMap<ObjectId, Vec<u8>>);
+
+    impl ObjectStore for MemoryStore {
+        fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+            self.0.get(&id).cloned().ok_or(CoreError::MissingObject)
+        }
+
+        fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+            let id = ObjectId::for_bytes(canonical);
+            if self
+                .0
+                .insert(id, canonical.to_vec())
+                .is_some_and(|prior| prior != canonical)
+            {
+                return Err(CoreError::IdentityMismatch);
+            }
+            Ok(id)
+        }
+    }
+
+    #[test]
+    fn known_single_chunk_bytes_match_streaming_builder_exactly() {
+        for length in [1, 2_500, 8_191, 8_192] {
+            let bytes = (0..length)
+                .map(|index| (index as u8).wrapping_mul(37).wrapping_add(11))
+                .collect::<Vec<_>>();
+            let mut streaming = MemoryStore::default();
+            let mut known = MemoryStore::default();
+            let (streaming_root, streaming_counters) =
+                build(&mut streaming, bytes.as_slice()).unwrap();
+            let (known_root, known_counters) = build_bytes(&mut known, &bytes).unwrap();
+
+            assert_eq!(known_root, streaming_root, "length={length}");
+            assert_eq!(known.0, streaming.0, "length={length}");
+            assert_eq!(known_counters, streaming_counters, "length={length}");
+            let mut actual = Vec::new();
+            read_all(&known, known_root, &mut actual).unwrap();
+            assert_eq!(actual, bytes, "length={length}");
+        }
+    }
 }

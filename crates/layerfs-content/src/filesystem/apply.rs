@@ -1,7 +1,7 @@
 use super::resolve::{namespace, resolve, resolve_parent, LogicalCounters};
 use crate::file::rope::{build, replace, FileStateRoot};
 use crate::object::access::ObjectStore;
-use crate::tree::directory::codec::{encode_namespace_root, encode_symlink};
+use crate::tree::directory::codec::{encode_namespace_root, encode_symlink, profile_id};
 use crate::tree::directory::SymlinkStateV1;
 use crate::tree::directory::{
     directory_insert, directory_lookup, directory_page_after, directory_remove, directory_rename,
@@ -9,8 +9,9 @@ use crate::tree::directory::{
 };
 use crate::tree::inode::codec::{decode_inode_record, encode_inode_record};
 use crate::tree::inode::{
-    inode_table_lookup, inode_table_remove, inode_table_upsert, DeferredInodes, InodeId, InodeKind,
-    InodeRecordV1, InodeTableRoot,
+    inode_table_apply_insertions, inode_table_entries, inode_table_lookup, inode_table_remove,
+    inode_table_upsert, DeferredInodes, InodeId, InodeKind, InodeRecordV1, InodeTableCounters,
+    InodeTableRoot,
 };
 use crate::tree::NamespaceRootV1;
 use crate::{CanonicalPath, CoreError, CoreResult, ObjectId};
@@ -226,6 +227,72 @@ pub fn apply_inode_mutations(
     Ok(apply_inode_mutations_deferred(store, root, mutations)?.value)
 }
 
+#[doc(hidden)]
+pub fn apply_initial_inode_upserts(
+    store: &mut impl ObjectStore,
+    root: ObjectId,
+    mutations: impl IntoIterator<Item = InodeMutation>,
+) -> CoreResult<CandidateRoot> {
+    let mut counters = LogicalCounters::default();
+    let namespace = namespace(store, root)?;
+    let initial = inode_table_entries(
+        store,
+        InodeTableRoot(namespace.inode_table_root),
+        &mut counters.inode_table,
+    )?;
+    if initial.len() != 1 {
+        return Err(CoreError::InvalidRecord("initial inode table"));
+    }
+    let mut insertions = Vec::new();
+    for mutation in mutations {
+        let InodeMutation::Upsert { inode, record } = mutation else {
+            return Err(CoreError::InvalidRecord("initial inode removal"));
+        };
+        insertions.push((inode, store.put(&encode_inode_record(record)?)?));
+    }
+    let table =
+        inode_table_apply_insertions(store, initial, insertions, &mut counters.inode_table)?;
+    let candidate = store.put(&encode_namespace_root(NamespaceRootV1 {
+        inode_table_root: table.0,
+        ..namespace
+    })?)?;
+    Ok(CandidateRoot {
+        parent_root: root,
+        root: candidate,
+        counters,
+    })
+}
+
+#[doc(hidden)]
+pub fn build_initial_namespace(
+    store: &mut impl ObjectStore,
+    seed: [u8; 32],
+    mutations: impl IntoIterator<Item = InodeMutation>,
+) -> CoreResult<ObjectId> {
+    let root_inode = InodeId::allocate(seed, 0);
+    let mut insertions = mutations
+        .into_iter()
+        .map(|mutation| {
+            let InodeMutation::Upsert { inode, record } = mutation else {
+                return Err(CoreError::InvalidRecord("initial inode removal"));
+            };
+            Ok((inode, store.put(&encode_inode_record(record)?)?))
+        })
+        .collect::<CoreResult<Vec<_>>>()?
+        .into_iter();
+    let root = insertions
+        .next()
+        .filter(|(inode, _)| *inode == root_inode)
+        .ok_or(CoreError::InvalidRecord("initial root inode"))?;
+    let mut counters = InodeTableCounters::default();
+    let table = inode_table_apply_insertions(store, vec![root], insertions, &mut counters)?;
+    store.put(&encode_namespace_root(NamespaceRootV1 {
+        profile_id: profile_id(),
+        root_directory_inode: root_inode,
+        inode_table_root: table.0,
+    })?)
+}
+
 struct DeferredBatchResult<T> {
     value: T,
     peak_bytes: usize,
@@ -293,6 +360,21 @@ pub fn apply_directory_changes(
 )> {
     let (root, counters, _) = apply_directory_changes_observed(store, root, changes)?;
     Ok((root, counters))
+}
+
+#[doc(hidden)]
+pub fn build_initial_directory(
+    store: &mut impl ObjectStore,
+    entries: impl IntoIterator<Item = (crate::CanonicalName, InodeId)>,
+) -> CoreResult<DirectoryStateRoot> {
+    let mut deferred = DeferredDirectory::new(store);
+    let mut root = empty_directory(&mut deferred)?;
+    for (name, inode) in entries {
+        root = directory_insert(&mut deferred, root, name, inode)?.0;
+        deferred.prune_to(root)?;
+    }
+    deferred.commit(root)?;
+    Ok(root)
 }
 
 pub fn apply_directory_changes_observed(

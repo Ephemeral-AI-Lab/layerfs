@@ -256,7 +256,11 @@ pub(super) fn load_shallow<S: ObjectRead>(
     Ok(ValidatedNode { node, summary })
 }
 
-fn inode_node_shape(id: ObjectId, node: &InodeTableNodeV1, root: bool) -> CoreResult<Summary> {
+pub(super) fn inode_node_shape(
+    id: ObjectId,
+    node: &InodeTableNodeV1,
+    root: bool,
+) -> CoreResult<Summary> {
     let (max, entries, level, count) = match node {
         InodeTableNodeV1::Leaf(entries) => (
             entries

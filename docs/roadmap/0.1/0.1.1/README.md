@@ -32,13 +32,16 @@ existing directory
 ```
 
 The baseline decides whether initialization, localized Commit planning, both,
-or neither need a fix. If it finds no patch-worthy defect, do not publish
-0.1.1 merely to complete the roadmap.
+or neither need a production fix. v0.1.1 still completes and freezes the
+reproducible namespace benchmark; operations without a measured defect close
+as measured with no code change.
 
 ## Files to read
 
 Read the contracts and harness first:
 
+- [Namespace-v2 benchmark and optimization specification](namespace-optimization-spec.md)
+- [Namespace-v2 execution handoff prompt](namespace-v2-handoff-prompt.md)
 - [Baseline](baseline-2026-09-02.md)
 - [0.1.x benchmark contract](../benchmarking.md)
 - [Benchmark harness](../../../../benchmark/fs-bench-pro/src/main.rs)
@@ -61,11 +64,21 @@ Current admission issue:
 - [x] Assign it to `@yifanxuaaa`.
 - [x] Track benchmark implementation, the 0.1.0 baseline, admission decisions,
   real-FUSE correctness, and cleanup in that issue.
-- [ ] Create a separate fix issue only after evidence admits an independent
-  root cause.
+- [x] Track the admitted initialization continuation in
+  [#7](https://github.com/Ephemeral-AI-Lab/layerfs/issues/7), demand-loaded
+  Workspace Create in [#9](https://github.com/Ephemeral-AI-Lab/layerfs/issues/9),
+  and the namespace-v2 fixture contract in
+  [#10](https://github.com/Ephemeral-AI-Lab/layerfs/issues/10).
 - [ ] Create a release issue only after a candidate exists.
 
 ## Benchmark contract
+
+The table below is the implemented namespace-v1 fixture retained by the dated
+baseline. The proposed namespace-v2 replacement keeps these scenario IDs and
+runner but changes the active fixture profile, exact byte budgets, schema
+version, and optimization gates. See the
+[namespace-v2 specification](namespace-optimization-spec.md). It does not add
+another benchmark family.
 
 | Scenario | Regular files | Directories | Bytes per file | Logical bytes |
 | --- | ---: | ---: | ---: | ---: |
@@ -90,44 +103,44 @@ after the LayerFS candidate is stable.
 
 ### Harness
 
-- [ ] Add all four namespace scenarios to `fs-bench-pro`.
-- [ ] Add a separate `run-namespace.sh` with one-case and full-matrix modes.
-- [ ] Run each tier in a fresh process and immutable evidence directory.
-- [ ] Refuse to overwrite evidence and retain every valid sample.
-- [ ] Record exact source, harness, container, host, and fixture identities.
-- [ ] Reuse the existing fresh-process ten-byte positional overwrite.
-- [ ] Verify missing, extra, and changed paths after a fresh Store reconnect.
+- [x] Add all four namespace scenarios to `fs-bench-pro`.
+- [x] Add a separate `run-namespace.sh` with one-case and full-matrix modes.
+- [x] Run each tier in a fresh process and immutable evidence directory.
+- [x] Refuse to overwrite evidence and retain every valid sample.
+- [x] Record exact source, harness, container, host, and fixture identities.
+- [x] Reuse the existing fresh-process ten-byte positional overwrite.
+- [x] Verify missing, extra, and changed paths after a fresh Store reconnect.
 
 ### Measurements
 
-- [ ] Report initialization, Branch fork, Workspace create, edit, Commit, End,
+- [x] Report initialization, Branch fork, Workspace create, edit, Commit, End,
   reopen verification, and complete lifecycle time separately.
-- [ ] Define `complete_product_ns` from immediately before LayerStack
+- [x] Define `complete_product_ns` from immediately before LayerStack
   initialization through completed reconnect/reopen verification; exclude and
   record fixture, Store, Client, container, and report setup.
-- [ ] Report CPU time, peak RSS, scanned files and bytes, candidate/inserted/
+- [x] Report CPU time, peak RSS, scanned files and bytes, candidate/inserted/
   reused objects and bytes, and transaction maxima.
-- [ ] Name and retain the evidence source for every metric; reject unavailable
+- [x] Name and retain the evidence source for every metric; reject unavailable
   fields instead of emitting silent zero defaults.
 - [ ] Run one exploratory sample per tier against the 0.1.0 product path.
 - [ ] Repeat only where needed to distinguish a defect from environment noise.
-- [ ] Do not invent a fixed latency gate before the baseline exists.
-- [ ] Record accept, defer, or reject decisions for initialization and Commit.
+- [x] Do not invent a fixed latency gate before the baseline exists.
+- [x] Record accept, defer, or reject decisions for initialization and Commit.
 
 ### Conditional root-cause fixes
 
 For every admitted defect:
 
-- [ ] Add one focused check that fails on 0.1.0 and passes on the candidate.
-- [ ] Profile the public path and fix the shared root cause.
-- [ ] Reuse existing builders and mutation state before adding machinery.
-- [ ] Preserve file bytes, directory order, links, modes, mtimes, canonical
+- [x] Add one focused check that fails on 0.1.0 and passes on the candidate.
+- [x] Profile the public path and fix the shared root cause.
+- [x] Reuse existing builders and mutation state before adding machinery.
+- [x] Preserve file bytes, directory order, links, modes, mtimes, canonical
   identities, bounded admission, and visibility-last publication.
-- [ ] Preserve rename, hard-link, metadata, and open-unlink behavior touched by
+- [x] Preserve rename, hard-link, metadata, and open-unlink behavior touched by
   a Commit-planner change.
-- [ ] Keep the final-delta resource bound; do not hide whole-tree planning by
+- [x] Keep the final-delta resource bound; do not hide whole-tree planning by
   raising it.
-- [ ] Prove unchanged persistent subtrees are reused where applicable.
+- [x] Prove unchanged persistent subtrees are reused where applicable.
 - [ ] Rerun all four namespace tiers and verify the reopened result exactly.
 
 ### FUSE and cleanup proof
@@ -135,12 +148,12 @@ For every admitted defect:
 - [ ] Complete every timed tier through real Linux FUSE.
 - [ ] Treat 100,000 files / 250 MB as the ceiling without a pre-baseline
   latency threshold.
-- [ ] At 10,000 files / 25 MB, prove untimed materialization and FUSE produce
+- [x] At 10,000 files / 25 MB, prove untimed materialization and FUSE produce
   the same logical state and canonical root.
-- [ ] Run Docker create/start/attach/execute/Commit/End/stop/remove.
-- [ ] After mount success, inject daemon-attachment failure and prove no leaked
+- [x] Run Docker create/start/attach/execute/Commit/End/stop/remove.
+- [x] After mount success, inject daemon-attachment failure and prove no leaked
   mount, container, process, output reader, spool, Workspace, or Branch lease.
-- [ ] Document the proved subset without claiming universal POSIX support.
+- [x] Document the proved subset without claiming universal POSIX support.
 
 ## Compatibility gates
 
@@ -151,8 +164,9 @@ For every admitted defect:
 - [x] Preserve Store visibility, transaction, and acknowledgement semantics.
 - [x] Preserve documented SDK and CLI behavior.
 - [x] Preserve compatibility with the released container-daemon protocol.
-- [x] Preserve existing memory, paging, transaction, and cleanup bounds.
-- [ ] Audit the selected candidate diff against every item above.
+- [x] Preserve existing memory, paging, Workspace transaction, and cleanup
+  bounds; initialization has its own bounded 8,191-object admission batches.
+- [x] Audit the selected candidate diff against every item above.
 
 An incompatible change belongs in 0.2.0.
 
@@ -165,14 +179,16 @@ An incompatible change belongs in 0.2.0.
 - [ ] Initialization and localized Commit costs are reported separately.
 - [ ] Every admitted defect has one focused failing check and one shared
   root-cause fix.
-- [ ] A released 0.1.0 Store opens on the candidate.
-- [ ] Frozen canonical fixtures remain unchanged.
-- [ ] `cargo fmt --all -- --check` passes.
-- [ ] `tools/test-fast.sh` passes below its 120-second warm-suite ceiling.
-- [ ] Warning-denying workspace Clippy passes.
-- [ ] `git diff --check` passes.
-- [ ] Real-FUSE, Docker, equality, and cleanup proofs pass on capable Linux.
+- [x] A released 0.1.0 Store opens on the candidate.
+- [x] Frozen canonical fixtures remain unchanged.
+- [x] `cargo fmt --all -- --check` passes.
+- [x] `tools/test-fast.sh` passes below its 120-second warm-suite ceiling.
+- [x] Warning-denying workspace Clippy passes.
+- [x] `git diff --check` passes.
+- [x] Real-FUSE, Docker, equality, and cleanup proofs pass on capable Linux.
 - [ ] The full LayerFS-only namespace matrix has candidate-source evidence.
+- [ ] Admit the four namespace scenario definitions into the append-only
+  registry without changing the frozen v0.1.0 rows.
 - [ ] Existing registered payload rows have no unexplained regression.
 - [ ] The existing paired LayerFS/Cloudflare payload campaign passes once after
   candidate stability; it is not part of the optimization loop.
@@ -196,9 +212,13 @@ scope unless separately admitted by a later roadmap.
 
 ## References
 
+- [Namespace-v2 benchmark and optimization specification](namespace-optimization-spec.md)
+- [Namespace-v2 execution handoff prompt](namespace-v2-handoff-prompt.md)
 - [0.1.x benchmark contract](../benchmarking.md)
 - [0.1.x development guide](../development.md)
 - [0.1.2 proposals](../0.1.2/README.md)
+- [0.1.3 draft](../0.1.3/README.md)
+- [0.1.4 draft](../0.1.4/README.md)
 - [Baseline — 2026-09-02](baseline-2026-09-02.md)
 - [Agent handoff prompt](handoff-prompt.md)
 

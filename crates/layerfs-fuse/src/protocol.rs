@@ -43,6 +43,7 @@ pub(crate) enum Request {
     Fence,
     PinRead(NodeId),
     MkdirReserved(NodeId, Vec<u8>, u32, NodeId),
+    ReaddirPlus(NodeId),
 }
 
 impl Request {
@@ -115,6 +116,7 @@ pub(crate) enum Response {
     Unit,
     Error(PortError),
     Node(NodeId),
+    EntriesPlus(Vec<(Attr, Vec<u8>)>),
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -374,6 +376,7 @@ fn encode_request(request: &Request) -> std::io::Result<Vec<u8>> {
             bytes.extend_from_slice(&mode.to_be_bytes());
             put_node(&mut bytes, *node);
         }
+        Request::ReaddirPlus(node) => unary(&mut bytes, 27, *node),
     }
     Ok(bytes)
 }
@@ -549,6 +552,7 @@ fn decode_request(bytes: &[u8]) -> std::io::Result<Request> {
             input.u32()?,
             input.node()?,
         ),
+        27 => Request::ReaddirPlus(input.node()?),
         _ => return Err(invalid("request tag")),
     };
     input.done()?;
@@ -626,6 +630,17 @@ pub(crate) fn write_response_measured(
         Response::Node(node) => {
             bytes.push(6);
             put_node(&mut bytes, *node);
+        }
+        Response::EntriesPlus(entries) => {
+            if entries.len() > MAX_ENTRIES {
+                return Err(invalid("entry count"));
+            }
+            bytes.push(7);
+            bytes.extend_from_slice(&(entries.len() as u32).to_be_bytes());
+            for (attr, name) in entries {
+                put_attr(&mut bytes, *attr);
+                put_bytes(&mut bytes, name)?;
+            }
         }
     }
     let encode_ns = elapsed_ns(started);
@@ -714,6 +729,17 @@ pub(crate) fn read_response_measured(
         4 => Response::Unit,
         5 => Response::Error(port_error(input.u8()?)?),
         6 => Response::Node(input.node()?),
+        7 => {
+            let count = input.u32()? as usize;
+            if count > MAX_ENTRIES {
+                return Err(invalid("entry count"));
+            }
+            let mut entries = Vec::with_capacity(count);
+            for _ in 0..count {
+                entries.push((input.attr()?, input.bytes()?.to_vec()));
+            }
+            Response::EntriesPlus(entries)
+        }
         _ => return Err(invalid("response tag")),
     };
     input.done()?;
@@ -983,6 +1009,35 @@ mod tests {
             panic!("read pin")
         };
         assert_eq!(node, NodeId(9));
+
+        bytes.clear();
+        write_request(&mut bytes, &Request::ReaddirPlus(NodeId(11))).unwrap();
+        let Request::ReaddirPlus(node) = read_request(&mut bytes.as_slice()).unwrap() else {
+            panic!("readdir plus")
+        };
+        assert_eq!(node, NodeId(11));
+
+        let expected = Attr {
+            node: NodeId(12),
+            size: 2500,
+            kind: Kind::File,
+            mode: 0o644,
+            links: 1,
+            mtime_seconds: 7,
+            mtime_nanoseconds: 11,
+        };
+        bytes.clear();
+        write_response(
+            &mut bytes,
+            &Response::EntriesPlus(vec![(expected, b"file".to_vec())]),
+        )
+        .unwrap();
+        let Response::EntriesPlus(entries) = read_response(&mut bytes.as_slice()).unwrap() else {
+            panic!("entries plus")
+        };
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, expected);
+        assert_eq!(entries[0].1, b"file");
 
         bytes.clear();
         let entries = vec![(

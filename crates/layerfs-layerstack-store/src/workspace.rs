@@ -12,6 +12,7 @@ use crate::{
 };
 use layerfs_content::ObjectId;
 use rusqlite::{OptionalExtension, TransactionBehavior};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -25,6 +26,17 @@ pub struct SnapshotReader {
     root: ObjectId,
     overlays: Vec<Arc<Mutex<DeferredObjectStore>>>,
     read_metrics: Arc<Mutex<WorkspaceReadReceipt>>,
+    cache: Arc<Mutex<SnapshotCache>>,
+}
+
+const SNAPSHOT_CACHE_BYTES: usize = 64 * 1024 * 1024;
+const SNAPSHOT_CACHE_OBJECT_BYTES: usize = 1024;
+
+#[derive(Default)]
+struct SnapshotCache {
+    rows: HashMap<ObjectId, Vec<u8>>,
+    bytes: usize,
+    loaded: bool,
 }
 
 pub struct PinnedSnapshot {
@@ -84,6 +96,7 @@ impl LayerStackStore {
                 root,
                 overlays: Vec::new(),
                 read_metrics: Arc::new(Mutex::new(WorkspaceReadReceipt::default())),
+                cache: Arc::new(Mutex::new(SnapshotCache::default())),
             },
         })
     }
@@ -94,6 +107,7 @@ impl LayerStackStore {
             root,
             overlays: Vec::new(),
             read_metrics: Arc::new(Mutex::new(WorkspaceReadReceipt::default())),
+            cache: Arc::new(Mutex::new(SnapshotCache::default())),
         }
     }
 
@@ -103,6 +117,7 @@ impl LayerStackStore {
             root: prepared.root_id,
             overlays: vec![prepared.objects.clone()],
             read_metrics: Arc::new(Mutex::new(WorkspaceReadReceipt::default())),
+            cache: Arc::new(Mutex::new(SnapshotCache::default())),
         }
     }
 
@@ -172,6 +187,7 @@ impl LayerStackStore {
             root: working_root,
             overlays: vec![working.clone(), prepared.objects.clone()],
             read_metrics: Arc::new(Mutex::new(WorkspaceReadReceipt::default())),
+            cache: Arc::new(Mutex::new(SnapshotCache::default())),
         };
         let selected = apply_reconcile_choices(
             &reader,
@@ -407,6 +423,7 @@ impl SnapshotReader {
 
     pub fn with_read_metrics_from(mut self, previous: &Self) -> Self {
         self.read_metrics = previous.read_metrics.clone();
+        self.cache = previous.cache.clone();
         self
     }
 
@@ -465,11 +482,72 @@ impl SnapshotReader {
         metrics.local_read_auth_ns = metrics.local_read_auth_ns.saturating_add(elapsed_ns);
         Ok(())
     }
+
+    fn cached_object(&self, id: ObjectId) -> Result<Option<Vec<u8>>> {
+        self.load_snapshot_cache()?;
+        Ok(self
+            .cache
+            .lock()
+            .map_err(|_| StoreError::Integrity("snapshot object cache"))?
+            .rows
+            .get(&id)
+            .cloned())
+    }
+
+    fn load_snapshot_cache(&self) -> Result<()> {
+        let mut cache = self
+            .cache
+            .lock()
+            .map_err(|_| StoreError::Integrity("snapshot object cache"))?;
+        if cache.loaded {
+            return Ok(());
+        }
+        let started = Instant::now();
+        let objects = self
+            .db
+            .read_small_object_rows(SNAPSHOT_CACHE_OBJECT_BYTES, SNAPSHOT_CACHE_BYTES)?;
+        let rows = objects.len();
+        let bytes = objects.iter().map(|object| object.bytes.len() as u64).sum();
+        for object in objects {
+            let charge = object.bytes.len().saturating_add(64);
+            cache.bytes += charge;
+            cache.rows.insert(object.id, object.bytes);
+        }
+        cache.loaded = true;
+        drop(cache);
+        self.note_local_read(rows, rows, bytes, elapsed_ns(started))
+    }
+
+    fn cache_object(&self, object: &CanonicalObject) -> Result<()> {
+        if object.bytes.len() > SNAPSHOT_CACHE_OBJECT_BYTES {
+            return Ok(());
+        }
+        let mut cache = self
+            .cache
+            .lock()
+            .map_err(|_| StoreError::Integrity("snapshot object cache"))?;
+        if cache.rows.contains_key(&object.id) {
+            return Ok(());
+        }
+        let charge = object.bytes.len().saturating_add(64);
+        // ponytail: retain the first 64 MiB of small immutable structure; add
+        // eviction only if a larger namespace proves this bounded cache misses.
+        if cache.bytes.saturating_add(charge) > SNAPSHOT_CACHE_BYTES {
+            return Ok(());
+        }
+        cache.bytes += charge;
+        cache.rows.insert(object.id, object.bytes.clone());
+        Ok(())
+    }
 }
 
 impl ObjectSource for SnapshotReader {
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
         let started = Instant::now();
+        if let Some(bytes) = self.cached_object(id)? {
+            self.note_local_read(1, 1, bytes.len() as u64, elapsed_ns(started))?;
+            return Ok(bytes);
+        }
         let mut candidate = None;
         for overlay in &self.overlays {
             match overlay
@@ -492,6 +570,10 @@ impl ObjectSource for SnapshotReader {
             }
             None => self.db.read_object_row(id)?,
         };
+        self.cache_object(&CanonicalObject {
+            id,
+            bytes: bytes.clone(),
+        })?;
         self.note_local_read(1, 1, bytes.len() as u64, elapsed_ns(started))?;
         Ok(bytes)
     }
@@ -505,6 +587,10 @@ impl ObjectSource for SnapshotReader {
         let mut database_ids = Vec::new();
         let mut database_slots = Vec::new();
         for (slot, id) in ids.iter().copied().enumerate() {
+            if let Some(bytes) = self.cached_object(id)? {
+                objects[slot] = Some(CanonicalObject { id, bytes });
+                continue;
+            }
             let mut candidate = None;
             for overlay in &self.overlays {
                 match overlay
@@ -522,6 +608,7 @@ impl ObjectSource for SnapshotReader {
                 }
             }
             if let Some(object) = candidate {
+                self.cache_object(&object)?;
                 objects[slot] = Some(object);
             } else {
                 database_ids.push(id);
@@ -532,6 +619,7 @@ impl ObjectSource for SnapshotReader {
             .into_iter()
             .zip(self.db.read_object_rows(&database_ids)?)
         {
+            self.cache_object(&object)?;
             objects[slot] = Some(object);
         }
         let objects = objects

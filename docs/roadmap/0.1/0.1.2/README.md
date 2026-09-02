@@ -12,9 +12,15 @@ namespace benchmark and only through the existing real-FUSE and Docker path.
 
 ## Goal
 
-Use v0.1.2 for measured, compatibility-preserving payload and edit
-optimizations against the same sealed FUSE/Docker environment and public SDK
-lifecycle used by v0.1.0 and v0.1.1.
+Use v0.1.2 for two measured, compatibility-preserving optimization families
+against the same sealed FUSE/Docker environment and public SDK lifecycle used
+by v0.1.0 and v0.1.1:
+
+1. prepend and range-copy; and
+2. online Workspace capture during FUSE mutation and Commit.
+
+Initialization's existing-directory scan remains owned by v0.1.1 even when it
+shares lower-level content or namespace machinery with Workspace capture.
 
 Candidate inputs:
 
@@ -31,6 +37,7 @@ moves only that item to 0.2.0.
 - [0.1.x phase](../README.md)
 - [0.1.x benchmark contract](../benchmarking.md)
 - [v0.1.1 checklist](../0.1.1/README.md)
+- [v0.1.3 single-history filesystem-workload draft](../0.1.3/README.md)
 - [Large and mixed-edit capture resilience](capture-large-mixed-edit-resilience.md)
 - [Extent-aware `copy_file_range` and prepend](copy-file-range-prepend.md)
 
@@ -47,5 +54,9 @@ moves only that item to 0.2.0.
 - [ ] Add one focused regression check for every retained optimization.
 - [ ] Rerun registered payload and namespace matrices and explain every
   regression.
+- [ ] Freeze each admitted v0.1.2 scenario without changing the v0.1.0 or
+  v0.1.1 scenario definitions.
+- [ ] Hand the accumulated registry to v0.1.3 after both workstreams have an
+  optimized or measured/no-change disposition.
 - [ ] Move any incompatible mechanism to 0.2.0 rather than weakening the
   patch-line contract.

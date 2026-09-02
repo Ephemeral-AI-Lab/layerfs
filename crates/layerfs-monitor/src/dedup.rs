@@ -44,14 +44,21 @@ pub(crate) fn analyze(
     }
     let candidates = receipts
         .iter()
-        .filter_map(|receipt| receipt.candidate)
-        .try_fold(CandidateTotals::default(), |mut total, candidate| {
-            if !candidate.validate() {
-                return Err(MonitorError::Integrity("candidate equation"));
-            }
-            add_candidate(&mut total, candidate);
-            Ok(total)
-        })?;
+        .filter_map(|receipt| {
+            receipt
+                .candidate
+                .map(|candidate| (receipt.operation.family, candidate))
+        })
+        .try_fold(
+            CandidateTotals::default(),
+            |mut total, (family, candidate)| {
+                if !candidate.validate_for(family) {
+                    return Err(MonitorError::Integrity("candidate equation"));
+                }
+                add_candidate(&mut total, candidate);
+                Ok(total)
+            },
+        )?;
     Ok(DedupAnalysis {
         physical_objects: physical.objects,
         physical_bytes: physical.encoded_bytes,

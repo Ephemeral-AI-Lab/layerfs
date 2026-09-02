@@ -212,21 +212,24 @@ pub fn decode_namespace_root(canonical: &[u8]) -> CoreResult<NamespaceRootV1> {
 }
 
 pub fn profile_id() -> ObjectId {
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(b"layerfs/namespace-profile/bplus/v1\0");
-    bytes.extend_from_slice(&1_u16.to_be_bytes());
-    bytes.extend_from_slice(&8192_u32.to_be_bytes());
-    for value in [13_u16, 31, 2, 5] {
-        bytes.extend_from_slice(&value.to_be_bytes());
-    }
-    bytes.push(31);
-    for value in [255_u16, 4096, 64, 255, 127, 64, 127, 128, 64, 64, 2] {
-        bytes.extend_from_slice(&value.to_be_bytes());
-    }
-    bytes.extend_from_slice(&[
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 1, 1, 1, 2, 4, 8, 8, 32, 32, 1,
-    ]);
-    ObjectId::from_bytes(blake3::hash(&bytes).as_bytes()).expect("BLAKE3 digest width")
+    static PROFILE_ID: std::sync::OnceLock<ObjectId> = std::sync::OnceLock::new();
+    *PROFILE_ID.get_or_init(|| {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"layerfs/namespace-profile/bplus/v1\0");
+        bytes.extend_from_slice(&1_u16.to_be_bytes());
+        bytes.extend_from_slice(&8192_u32.to_be_bytes());
+        for value in [13_u16, 31, 2, 5] {
+            bytes.extend_from_slice(&value.to_be_bytes());
+        }
+        bytes.push(31);
+        for value in [255_u16, 4096, 64, 255, 127, 64, 127, 128, 64, 64, 2] {
+            bytes.extend_from_slice(&value.to_be_bytes());
+        }
+        bytes.extend_from_slice(&[
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 1, 1, 1, 2, 4, 8, 8, 32, 32, 1,
+        ]);
+        ObjectId::from_bytes(blake3::hash(&bytes).as_bytes()).expect("BLAKE3 digest width")
+    })
 }
 
 pub(crate) fn exact_value<'a>(

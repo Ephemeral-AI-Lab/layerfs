@@ -1,5 +1,5 @@
 use super::codec::{decode_inode_table_node, encode_inode_table_node, InodeTableNodeV1};
-use super::cursor::{inode_node_min, load, load_shallow};
+use super::cursor::{inode_node_min, inode_node_shape, load, load_shallow};
 use super::{
     GeneratedInodeTable, InodeId, InodeKind, InodeRecordV1, InodeTableCounters, InodeTableRoot,
     Summary,
@@ -31,6 +31,102 @@ pub fn inode_table_lookup<S: ObjectRead>(
     counters: &mut InodeTableCounters,
 ) -> CoreResult<Option<ObjectId>> {
     lookup_from(store, root.0, true, None, None, key, counters)
+}
+
+pub fn inode_table_lookup_many<S: ObjectRead>(
+    store: &S,
+    root: InodeTableRoot,
+    keys: &[InodeId],
+    counters: &mut InodeTableCounters,
+) -> CoreResult<Vec<Option<ObjectId>>> {
+    if keys.len() > 128 {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
+    struct Pending {
+        slot: usize,
+        key: InodeId,
+        node: ObjectId,
+        root: bool,
+        expected_max: Option<InodeId>,
+        expected_level: Option<u8>,
+    }
+    let mut pending = keys
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(slot, key)| Pending {
+            slot,
+            key,
+            node: root.0,
+            root: true,
+            expected_max: None,
+            expected_level: None,
+        })
+        .collect::<Vec<_>>();
+    let mut output = vec![None; keys.len()];
+    while !pending.is_empty() {
+        let ids = pending
+            .iter()
+            .map(|pending| pending.node)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        counters.nodes_read = counters
+            .nodes_read
+            .checked_add(ids.len() as u64)
+            .ok_or(CoreError::LengthOverflow)?;
+        let mut nodes = BTreeMap::new();
+        store.get_authenticated_batch(&ids, |id, payload| {
+            nodes.insert(
+                id,
+                decode_inode_table_node(&crate::encode_bytes_object(payload)?)?,
+            );
+            Ok(())
+        })?;
+        if nodes.len() != ids.len() {
+            return Err(CoreError::MissingObject);
+        }
+        let mut next = Vec::new();
+        for lookup in pending {
+            let node = nodes.get(&lookup.node).ok_or(CoreError::MissingObject)?;
+            let summary = inode_node_shape(lookup.node, node, lookup.root)?;
+            if lookup
+                .expected_max
+                .is_some_and(|expected| summary.max != expected)
+                || lookup
+                    .expected_level
+                    .is_some_and(|expected| summary.level != expected)
+            {
+                return Err(CoreError::InvalidRecord("inode child summary"));
+            }
+            match node {
+                InodeTableNodeV1::Leaf(entries) => {
+                    output[lookup.slot] = leaf_lookup(entries, lookup.key);
+                }
+                InodeTableNodeV1::Branch {
+                    level, children, ..
+                } => {
+                    let index = children
+                        .partition_point(|entry| entry.0 < lookup.key)
+                        .min(children.len() - 1);
+                    next.push(Pending {
+                        slot: lookup.slot,
+                        key: lookup.key,
+                        node: children[index].1,
+                        root: false,
+                        expected_max: Some(children[index].0),
+                        expected_level: Some(
+                            level
+                                .checked_sub(1)
+                                .ok_or(CoreError::InvalidRecord("inode child summary"))?,
+                        ),
+                    });
+                }
+            }
+        }
+        pending = next;
+    }
+    Ok(output)
 }
 
 pub(crate) fn inode_table_lookup_pair<S: ObjectRead>(
@@ -366,6 +462,97 @@ pub fn generated_inode_table_upsert<S: ObjectStore>(
     let summary = summary(store, root.0 .0, &mut counters)?;
     upsert_validated(store, summary, key, record, counters)
         .map(|(root, counters)| (GeneratedInodeTable(root), counters))
+}
+
+pub(crate) fn inode_table_apply_insertions<S: ObjectStore>(
+    store: &mut S,
+    initial: Vec<(InodeId, ObjectId)>,
+    insertions: impl IntoIterator<Item = (InodeId, ObjectId)>,
+    counters: &mut InodeTableCounters,
+) -> CoreResult<InodeTableRoot> {
+    if initial.is_empty() || initial.len() > 127 {
+        return Err(CoreError::InvalidRecord("initial inode table"));
+    }
+    let mut root = InsertNode::Leaf(initial);
+    for (inode, record) in insertions {
+        if let Some(right) = root.insert(inode, record) {
+            let level = root
+                .level()
+                .checked_add(1)
+                .ok_or(CoreError::MappingDepthExceeded)?;
+            root = InsertNode::Branch {
+                level,
+                children: vec![root, right],
+            };
+        }
+    }
+    emit_insert_node(store, root, counters).map(|summary| InodeTableRoot(summary.id))
+}
+
+enum InsertNode {
+    Leaf(Vec<(InodeId, ObjectId)>),
+    Branch {
+        level: u8,
+        children: Vec<InsertNode>,
+    },
+}
+
+impl InsertNode {
+    fn level(&self) -> u8 {
+        match self {
+            Self::Leaf(_) => 0,
+            Self::Branch { level, .. } => *level,
+        }
+    }
+
+    fn max(&self) -> CoreResult<InodeId> {
+        match self {
+            Self::Leaf(entries) => entries.last().map(|entry| entry.0),
+            Self::Branch { children, .. } => children.last().map(InsertNode::max).transpose()?,
+        }
+        .ok_or(CoreError::InvalidRecord("empty inode table"))
+    }
+
+    fn insert(&mut self, inode: InodeId, record: ObjectId) -> Option<Self> {
+        match self {
+            Self::Leaf(entries) => {
+                match entries.binary_search_by_key(&inode, |entry| entry.0) {
+                    Ok(index) => entries[index].1 = record,
+                    Err(index) => entries.insert(index, (inode, record)),
+                }
+                (entries.len() > 127).then(|| Self::Leaf(entries.split_off(64)))
+            }
+            Self::Branch { level, children } => {
+                let index = children
+                    .partition_point(|child| child.max().is_ok_and(|max| max < inode))
+                    .min(children.len() - 1);
+                if let Some(right) = children[index].insert(inode, record) {
+                    children.insert(index + 1, right);
+                }
+                (children.len() > 127).then(|| Self::Branch {
+                    level: *level,
+                    children: children.split_off(64),
+                })
+            }
+        }
+    }
+}
+
+fn emit_insert_node<S: ObjectStore>(
+    store: &mut S,
+    node: InsertNode,
+    counters: &mut InodeTableCounters,
+) -> CoreResult<Summary> {
+    match node {
+        InsertNode::Leaf(entries) => emit(store, InodeTableNodeV1::Leaf(entries), counters),
+        InsertNode::Branch { level, children } => {
+            let children = children
+                .into_iter()
+                .map(|child| emit_insert_node(store, child, counters))
+                .collect::<CoreResult<Vec<_>>>()?;
+            emit_branch(store, level, children, counters)
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1363,4 +1550,58 @@ fn walk_inode_node<S: ObjectRead>(
         }
     }
     Ok(loaded.summary)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Default)]
+    struct MemoryStore(BTreeMap<ObjectId, Vec<u8>>);
+
+    impl ObjectStore for MemoryStore {
+        fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+            self.0.get(&id).cloned().ok_or(CoreError::MissingObject)
+        }
+
+        fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+            let id = ObjectId::for_bytes(canonical);
+            self.0.insert(id, canonical.to_vec());
+            Ok(id)
+        }
+    }
+
+    #[test]
+    fn batch_lookup_matches_sequential_with_fewer_node_reads() {
+        let mut store = MemoryStore::default();
+        let entries = (0..400_u64)
+            .map(|index| {
+                (
+                    InodeId::allocate([91; 32], index),
+                    ObjectId::for_bytes(&index.to_be_bytes()),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut table = inode_table_from_root(&mut store, entries[0].0, entries[0].1).unwrap();
+        for (inode, record) in entries.iter().copied().skip(1) {
+            table = inode_table_upsert(&mut store, table, inode, record)
+                .unwrap()
+                .0;
+        }
+        let mut keys = entries
+            .iter()
+            .step_by(4)
+            .map(|entry| entry.0)
+            .collect::<Vec<_>>();
+        keys.push(InodeId::allocate([92; 32], 999));
+        let mut sequential_counters = InodeTableCounters::default();
+        let sequential = keys
+            .iter()
+            .map(|key| inode_table_lookup(&store, table, *key, &mut sequential_counters).unwrap())
+            .collect::<Vec<_>>();
+        let mut batch_counters = InodeTableCounters::default();
+        let batch = inode_table_lookup_many(&store, table, &keys, &mut batch_counters).unwrap();
+        assert_eq!(batch, sequential);
+        assert!(batch_counters.nodes_read < sequential_counters.nodes_read);
+    }
 }

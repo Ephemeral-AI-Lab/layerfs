@@ -111,6 +111,12 @@ LayerFS-only focused rows drive iteration. The paired Cloudflare payload
 campaign is a stable-candidate comparison and regression check, not part of the
 inner optimization loop.
 
+The 0.1.x benchmark registry is append-only. Once a scenario is admitted, its
+fixture, public operation sequence, timing boundary, correctness oracle, and
+result schema remain frozen through 1.0.0. Later patch releases add rows and
+rerun all earlier rows; they do not rewrite them. A benchmark correction uses a
+new scenario ID or schema version and retains the superseded evidence.
+
 ### 0.1.0: immutable baseline — complete
 
 The released `v0.1.0` source, manual, verification, artifacts, checksums, and
@@ -167,9 +173,37 @@ smallest failing case, and rerun paired Cloudflare payload evidence only after
 candidate stability. Preserve exact bytes, canonical roots, fresh reopen
 results, Store compatibility, and resource bounds.
 
-Do not reserve another 0.1.x version speculatively. Stop the patch line when the
-completed benchmark matrix has no evidence-backed defect within the existing
-architecture. Move only incompatible mechanisms to v0.2.0.
+### 0.1.3: single-history filesystem workload completion
+
+After v0.1.2 closes the known prepend and capture paths, v0.1.3 benchmarks the
+filesystem workload families in the smallest useful history topology: one
+LayerStack, one genesis Layer, and one Branch. The topology is a control
+variable, not the benchmark subject. New scenarios run a deterministic
+filesystem workload through real FUSE, one final Commit or proved `UpToDate`,
+End, and exact fresh reopen. Previously registered rows such as `edit16` retain
+their frozen multi-Commit sequence; v0.1.3 does not add Commit depth as a scale
+axis. The
+[0.1.3 README](0.1/0.1.3/README.md) indexes one draft document per family.
+
+Families use geometric 1/10/100 load tiers where applicable, nested seeded
+schedules, random unaligned positions, explicit same-count and count-changing
+classification, and separate path/inode/byte deltas. Supporting SDK lifecycle
+phases remain measured, but standalone control-plane microbenchmarks are not the
+v0.1.3 goal. Commit-history depth, Add, multi-Layer Diff, conflict handling, and
+Branch fan-out wait for v0.1.4.
+
+### 0.1.4: multi-Layer and multi-Branch history
+
+v0.1.4 extends the same public-path contract to bounded history depth and
+Branch fan-out. The [0.1.4 README](0.1/0.1.4/README.md) owns Fork from Layer and
+Commit, repeated Commit history, Add outcomes, Layer/Branch Diff, paged Query,
+conflict and resolution, head movement, historical reads, reopen, and storage
+reuse.
+
+Use a few preregistered geometric profiles rather than a Cartesian matrix.
+Every operation receives an evidence-backed disposition; code changes are
+required only for measured defects or material opportunities. Move only
+incompatible mechanisms to v0.2.0.
 
 ### 0.2.0: portable projection foundation
 

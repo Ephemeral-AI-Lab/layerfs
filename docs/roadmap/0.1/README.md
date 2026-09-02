@@ -42,18 +42,41 @@ allowed.
 - [Development guide](development.md)
 - [v0.1.1 task and checklist](0.1.1/README.md)
 - [v0.1.2 proposals](0.1.2/README.md)
+- [v0.1.3 draft](0.1.3/README.md)
+- [v0.1.4 draft](0.1.4/README.md)
 
 ## Release sequence
 
 - [0.1.1 task and checklist](0.1.1/README.md)
 - [0.1.2 proposals](0.1.2/README.md)
+- [0.1.3 single-history filesystem-workload draft](0.1.3/README.md)
+- [0.1.4 multi-history operation draft](0.1.4/README.md)
 - [Development guide](development.md)
 - [Benchmark contract](benchmarking.md)
 
-v0.1.1 completes and admits the large-namespace lifecycle. v0.1.2 owns
-patch-compatible prepend, range-copy, fragmented-write, sparse-growth, and
-mixed-edit work that survives evidence and compatibility gates. Do not reserve
-v0.1.3: create another patch only for a new measured defect.
+| Release | Benchmark completion and optimization scope |
+| --- | --- |
+| v0.1.0 | Frozen payload baseline: create, small edit, EDIT16, prepend, and read. |
+| v0.1.1 | Existing-directory initialization and namespace scaling through localized Commit and exact reopen. |
+| v0.1.2 | Prepend/range-copy and online Workspace-capture workloads. |
+| v0.1.3 | Diverse, tiered filesystem workloads against one genesis Layer and one Branch. |
+| v0.1.4 | Multi-Layer and multi-Branch Commit history, Fork, Add, Diff, conflict, and query scaling. |
+
+Benchmark each admitted operation, but optimize only measured defects or
+material opportunities. A passing operation may close as measured with no code
+change.
+
+## Append-only benchmark freeze
+
+The registry grows from v0.1.0 through v0.1.4, but every admitted row is frozen
+through 1.0.0. Its scenario ID, fixture generator and digest, public operation
+sequence, timed boundary, acknowledgement semantics, correctness/reopen oracle,
+sample rules, resource envelope, and result schema must not change in place.
+
+Each release adds its rows and reruns all earlier registered rows. If a harness
+defect requires a semantic correction, retain and deprecate the old row, add a
+new scenario ID or schema version, and run both once when practical. Freeze
+workloads and evidence—not one machine's observed latency as a universal value.
 
 ## Compatibility boundary
 
@@ -66,10 +89,12 @@ that fails this boundary moves to 0.2.0.
 
 The 0.1.x phase is complete when:
 
-- [ ] The registered payload and namespace matrices pass with exact reopen
-  proof.
+- [ ] The v0.1.0-v0.1.4 registered matrices pass with exact reopen proof.
 - [ ] CPU, RSS, FUSE I/O, Store growth, object reuse, transaction maxima, and
   cleanup evidence are retained for every registered lifecycle.
+- [ ] Every admitted scenario remains byte-for-byte and boundary-for-boundary
+  compatible with its frozen definition, or has an explicitly versioned
+  replacement that retains the earlier evidence.
 - [ ] Every accepted optimization has a focused regression check and improves
   the production SDK/FUSE path.
 - [ ] Selected failure paths leak no mount, container, process, output reader,
@@ -79,8 +104,6 @@ The 0.1.x phase is complete when:
   checkpoints, outside the inner optimization loop.
 - [ ] Remaining limitations and incompatible proposals are documented under
   the correct later release.
-- [ ] No remaining change is justified by current evidence within the existing
-  architecture.
+- [ ] v1.0.0 can adopt the accumulated registry as benchmark contract v1.
 
-Stop the 0.1.x line when these conditions hold. Do not publish another patch
-merely because a speculative micro-optimization is imaginable.
+Do not add code merely because a speculative micro-optimization is imaginable.

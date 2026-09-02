@@ -71,13 +71,22 @@ pub struct CandidateStats {
 
 impl CandidateStats {
     pub fn validate(self) -> bool {
+        self.validate_for(OperationFamily::WorkspaceCommit)
+    }
+
+    pub fn validate_for(self, family: OperationFamily) -> bool {
+        let max_transaction_objects = if family == OperationFamily::LayerStackInitialize {
+            8192
+        } else {
+            128
+        };
         self.candidate_objects == self.inserted_objects + self.reused_objects
             && self.candidate_bytes == self.inserted_bytes + self.reused_bytes
             && self.inserted_objects == self.batch_inserted_objects + self.final_inserted_objects
             && self.inserted_bytes == self.batch_inserted_bytes + self.final_inserted_bytes
             && self.reused_objects == self.preexisting_reused_objects
             && self.reused_bytes == self.preexisting_reused_bytes
-            && self.max_transaction_objects < 128
+            && self.max_transaction_objects < max_transaction_objects
             && self.max_transaction_bytes < 4 * 1024 * 1024
     }
 }

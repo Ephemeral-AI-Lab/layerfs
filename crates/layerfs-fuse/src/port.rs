@@ -12,7 +12,7 @@ pub enum Kind {
     Symlink,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Attr {
     pub node: NodeId,
     pub size: u64,
@@ -44,6 +44,12 @@ pub trait FilesystemPort: Send + Sync {
     fn attr(&self, node: NodeId) -> PortResult<Attr>;
     fn readlink(&self, node: NodeId) -> PortResult<Vec<u8>>;
     fn readdir(&self, node: NodeId) -> PortResult<Vec<(NodeId, Kind, Vec<u8>)>>;
+    fn readdirplus(&self, node: NodeId) -> PortResult<Vec<(Attr, Vec<u8>)>> {
+        self.readdir(node)?
+            .into_iter()
+            .map(|(node, _, name)| self.attr(node).map(|attr| (attr, name)))
+            .collect()
+    }
     fn create_file(&self, parent: NodeId, name: &[u8], mode: u32) -> PortResult<Attr>;
     fn create_file_open(&self, parent: NodeId, name: &[u8], mode: u32) -> PortResult<Attr> {
         let attr = self.create_file(parent, name, mode)?;

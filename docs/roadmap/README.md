@@ -30,8 +30,9 @@ explicit-End architecture.
 - [x] Keep LayerFS-only iteration separate from final paired Cloudflare runs.
 - [ ] Complete the namespace matrix in v0.1.1.
 - [ ] Complete admitted prepend and mixed-edit work in v0.1.2.
-- [ ] Stop the patch line when the completed matrix has no evidence-backed
-  defect within the existing architecture.
+- [ ] Complete single-history filesystem-workload coverage in v0.1.3.
+- [ ] Complete multi-Layer/multi-Branch history coverage in v0.1.4.
+- [ ] Carry the append-only registered matrix through 1.0.0.
 
 New projections, platforms, remote topology, or incompatible contracts do not
 belong in this phase.
@@ -110,7 +111,8 @@ moves to 0.2.0.
 ## Proposed compatibility-preserving 0.1.2 work
 
 The [0.1.2 proposal set](0.1/0.1.2/README.md) continues benchmark-driven
-optimization after the namespace lifecycle is understood.
+optimization after the namespace lifecycle is understood. It owns two known
+families: prepend/range-copy and online Workspace capture.
 
 - [ ] Admit prepend/range-copy work only from public-path transfer evidence.
 - [ ] Admit fragmented-write, sparse-growth, or mixed-edit work only from a
@@ -122,6 +124,36 @@ optimization after the namespace lifecycle is understood.
   optimization.
 - [ ] Run the paired Cloudflare payload campaign once at candidate stability.
 - [ ] Move only incompatible mechanisms to 0.2.0.
+
+## Draft compatibility-preserving 0.1.3 work
+
+The [0.1.3 README](0.1/0.1.3/README.md) indexes one document per filesystem
+workload family. The topology stays fixed at one LayerStack, one genesis Layer,
+and one Branch so the workloads—not Layer or Branch fan-out—own the
+measurement. New tiered rows use one final Commit; inherited frozen rows such
+as `edit16` retain their historical Commit sequence.
+
+- [ ] Freeze deterministic 1/10/100 load tiers, seed-bound schedules, exact
+  oracles, and one shared result schema.
+- [ ] Cover payload, same-count and count-changing edits, range-copy, namespace
+  scale and mutation, file churn, directories, Git, links, and mixed workloads.
+- [ ] Optimize only operations with a measured defect or material opportunity.
+- [ ] Rerun every registered v0.1.0-v0.1.2 scenario before release.
+- [ ] Leave repeated Commit history, Add, multi-Layer Diff, conflicts, and
+  Branch fan-out to v0.1.4.
+
+## Draft compatibility-preserving 0.1.4 work
+
+The [0.1.4 README](0.1/0.1.4/README.md) adds multi-Layer, multi-Branch, and
+history-depth evidence without changing the established product architecture.
+
+- [ ] Measure bounded Commit-history depths and Branch fan-out profiles.
+- [ ] Measure Fork from Layer and Commit, Add outcomes, Layer/Branch Diff,
+  query pagination, conflicts, resolution, and head movement.
+- [ ] Prove historical immutability, exact reopen, incremental storage growth,
+  and bounded resources.
+- [ ] Optimize only evidence-backed bottlenecks and rerun the full accumulated
+  registry before release.
 
 ## 0.2.0: portable projection foundation
 
@@ -214,6 +246,12 @@ belongs in a minor release.
 
 ## Continuous benchmark checklist
 
+- [ ] Treat the benchmark registry as append-only: once admitted, a scenario's
+  fixture, operation sequence, timing boundary, oracle, and schema remain
+  frozen through 1.0.0.
+- [ ] Replace a defective benchmark with a new scenario ID or schema version;
+  retain and explain the old row and evidence.
+- [ ] Run every previously registered scenario for each later 0.1.x candidate.
 - [ ] Keep public SDK or CLI operations as the timed product boundary.
 - [ ] Keep fresh workload processes; do not introduce a persistent execution
   shell for benchmark speed.

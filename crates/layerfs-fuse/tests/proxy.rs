@@ -10,6 +10,7 @@ struct Fixture {
     links: Mutex<Vec<Vec<u8>>>,
     unlinks: Mutex<Vec<Vec<u8>>>,
     root_entries: usize,
+    lookups: std::sync::atomic::AtomicUsize,
     readdirs: std::sync::atomic::AtomicUsize,
     reservations: std::sync::atomic::AtomicUsize,
     fsyncs: std::sync::atomic::AtomicUsize,
@@ -21,6 +22,8 @@ struct Fixture {
 
 impl FilesystemPort for Fixture {
     fn lookup(&self, parent: NodeId, name: &[u8]) -> PortResult<Attr> {
+        self.lookups
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         match (parent, name) {
             (_, b"missing") => Err(PortError::NotFound),
             (NodeId(1), b"existing-dir") => self.attr(NodeId(3)),
@@ -269,6 +272,7 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
         links: Mutex::new(Vec::new()),
         unlinks: Mutex::new(Vec::new()),
         root_entries: 3,
+        lookups: std::sync::atomic::AtomicUsize::new(0),
         readdirs: std::sync::atomic::AtomicUsize::new(0),
         reservations: std::sync::atomic::AtomicUsize::new(0),
         fsyncs: std::sync::atomic::AtomicUsize::new(0),
@@ -301,7 +305,7 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
     host.control("resume").unwrap();
     assert!(client.attr(NodeId(2)).is_ok());
     assert!(ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).is_err());
-    assert_eq!(client.readdir(NodeId(1)).unwrap().len(), 3);
+    assert_eq!(client.readdirplus(NodeId(1)).unwrap().len(), 3);
     assert_eq!(
         fixture.readdirs.load(std::sync::atomic::Ordering::Relaxed),
         1,
@@ -309,6 +313,11 @@ fn capability_scopes_a_bounded_typed_proxy_session() {
     );
     let directory = client.lookup(NodeId(1), b"existing-dir").unwrap();
     assert_eq!(directory.node, NodeId(3));
+    assert_eq!(
+        fixture.lookups.load(std::sync::atomic::Ordering::Relaxed),
+        0,
+        "READDIRPLUS attributes must satisfy the following lookup locally",
+    );
     assert_eq!(
         client
             .lookup(directory.node, b"existing-child")
@@ -514,6 +523,7 @@ fn connect_does_not_enumerate_or_reserve_a_hundred_thousand_entry_root() {
         links: Mutex::new(Vec::new()),
         unlinks: Mutex::new(Vec::new()),
         root_entries: 100_000,
+        lookups: std::sync::atomic::AtomicUsize::new(0),
         readdirs: std::sync::atomic::AtomicUsize::new(0),
         reservations: std::sync::atomic::AtomicUsize::new(0),
         fsyncs: std::sync::atomic::AtomicUsize::new(0),
@@ -551,6 +561,7 @@ fn read_ahead_never_returns_short_before_source_eof() {
         links: Mutex::new(Vec::new()),
         unlinks: Mutex::new(Vec::new()),
         root_entries: 3,
+        lookups: std::sync::atomic::AtomicUsize::new(0),
         readdirs: std::sync::atomic::AtomicUsize::new(0),
         reservations: std::sync::atomic::AtomicUsize::new(0),
         fsyncs: std::sync::atomic::AtomicUsize::new(0),
@@ -581,6 +592,7 @@ fn deferred_mutation_errors_surface_at_the_next_synchronization_point() {
         links: Mutex::new(Vec::new()),
         unlinks: Mutex::new(Vec::new()),
         root_entries: 3,
+        lookups: std::sync::atomic::AtomicUsize::new(0),
         readdirs: std::sync::atomic::AtomicUsize::new(0),
         reservations: std::sync::atomic::AtomicUsize::new(0),
         fsyncs: std::sync::atomic::AtomicUsize::new(0),

@@ -1,7 +1,8 @@
 use std::error::Error;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{mpsc, Arc, Mutex};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const PREPEND: &[u8] = b"PREPEND010";
@@ -20,6 +21,7 @@ fn run() -> Result<()> {
         [command] if command == "noop" => Ok(()),
         [command, path] if command == "digest" => print_digest(path),
         [command, path] if command == "read" => print_read(path),
+        [command, path] if command == "namespace-verify" => print_namespace(path),
         [command, fixture, path] if command == "create" => {
             let started = std::time::Instant::now();
             create(fixture, path)?;
@@ -41,7 +43,7 @@ fn run() -> Result<()> {
             println!("{size}\t{digest}");
             Ok(())
         }
-        _ => Err("usage: fs-benchmark-workload self-check | digest|read PATH | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
+        _ => Err("usage: fs-benchmark-workload self-check | digest|read|namespace-verify PATH | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
     }
 }
 
@@ -115,6 +117,168 @@ fn print_read(path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
+fn print_namespace(path: impl AsRef<Path>) -> Result<()> {
+    let summary = namespace_digest(path.as_ref())?;
+    println!("regular_files={}", summary.regular_files);
+    println!("data_directories={}", summary.data_directories);
+    println!("logical_bytes={}", summary.logical_bytes);
+    println!("namespace_digest={}", summary.digest);
+    Ok(())
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct NamespaceSummary {
+    regular_files: u64,
+    data_directories: u64,
+    logical_bytes: u64,
+    digest: String,
+}
+
+fn namespace_digest(root: &Path) -> Result<NamespaceSummary> {
+    if !root.is_dir() {
+        return Err("namespace root is not a directory".into());
+    }
+    let mut entries = Vec::new();
+    collect_namespace(root, root, &mut entries)?;
+    entries.sort_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
+
+    let mut hash = Sha256::new();
+    hash.update(b"layerfs/fs-bench-pro/namespace-tree/v1\0");
+    let mut regular_files = 0_u64;
+    let mut data_directories = 0_u64;
+    let mut logical_bytes = 0_u64;
+    let tasks = Arc::new(Mutex::new(
+        entries
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, _, directory, _))| !directory)
+            .map(|(index, (_, path, _, size))| (index, path.clone(), *size))
+            .collect::<std::collections::VecDeque<_>>(),
+    ));
+    let workers = std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(1)
+        .min(
+            tasks
+                .lock()
+                .map_err(|_| "namespace task queue")?
+                .len()
+                .max(1),
+        );
+    let (sender, receiver) = mpsc::sync_channel::<std::result::Result<(usize, Vec<u8>), String>>(
+        workers.saturating_mul(2),
+    );
+    std::thread::scope(|scope| -> Result<()> {
+        for _ in 0..workers {
+            let tasks = Arc::clone(&tasks);
+            let sender = sender.clone();
+            scope.spawn(move || loop {
+                let task = match tasks.lock() {
+                    Ok(mut tasks) => tasks.pop_front(),
+                    Err(_) => {
+                        let _ = sender.send(Err("namespace task queue".to_owned()));
+                        return;
+                    }
+                };
+                let Some((index, path, expected_size)) = task else {
+                    return;
+                };
+                let result = (|| -> std::result::Result<_, String> {
+                    let capacity = usize::try_from(expected_size)
+                        .map_err(|_| "namespace file size overflow".to_owned())?;
+                    let mut bytes = Vec::with_capacity(capacity);
+                    File::open(path)
+                        .and_then(|mut file| file.read_to_end(&mut bytes))
+                        .map_err(|error| error.to_string())?;
+                    if bytes.len() as u64 != expected_size {
+                        return Err("namespace file changed during verification".to_owned());
+                    }
+                    Ok((index, bytes))
+                })();
+                if sender.send(result).is_err() {
+                    return;
+                }
+            });
+        }
+        drop(sender);
+        let mut pending = std::collections::BTreeMap::new();
+        for (index, (relative, _, directory, expected_size)) in entries.iter().enumerate() {
+            if *directory {
+                data_directories = data_directories
+                    .checked_add(1)
+                    .ok_or("namespace directory count overflow")?;
+                hash.update(b"D\0");
+                hash.update(relative.as_bytes());
+                hash.update(b"\0");
+                continue;
+            }
+            while !pending.contains_key(&index) {
+                let (ready, bytes) = receiver
+                    .recv()
+                    .map_err(|_| "namespace file reader stopped")?
+                    .map_err(|error| -> Box<dyn Error> { error.into() })?;
+                pending.insert(ready, bytes);
+            }
+            let bytes = pending
+                .remove(&index)
+                .ok_or("namespace file result ordering")?;
+            regular_files = regular_files
+                .checked_add(1)
+                .ok_or("namespace file count overflow")?;
+            logical_bytes = logical_bytes
+                .checked_add(*expected_size)
+                .ok_or("namespace logical byte overflow")?;
+            hash.update(b"F\0");
+            hash.update(relative.as_bytes());
+            hash.update(b"\0");
+            hash.update(expected_size.to_string().as_bytes());
+            hash.update(b"\0");
+            hash.update(&bytes);
+            hash.update(b"\0");
+        }
+        Ok(())
+    })?;
+    Ok(NamespaceSummary {
+        regular_files,
+        data_directories,
+        logical_bytes,
+        digest: hex(&hash.finish()),
+    })
+}
+
+fn collect_namespace(
+    root: &Path,
+    directory: &Path,
+    output: &mut Vec<(String, PathBuf, bool, u64)>,
+) -> Result<()> {
+    let mut entries = fs::read_dir(directory)?.collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let path = entry.path();
+        let relative = path
+            .strip_prefix(root)?
+            .components()
+            .map(|component| {
+                component
+                    .as_os_str()
+                    .to_str()
+                    .ok_or("namespace path is not UTF-8")
+            })
+            .collect::<std::result::Result<Vec<_>, _>>()?
+            .join("/");
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_dir() {
+            output.push((relative, path.clone(), true, 0));
+            collect_namespace(root, &path, output)?;
+        } else if metadata.file_type().is_file() {
+            output.push((relative, path, false, metadata.len()));
+        } else {
+            return Err("namespace contains a non-directory, non-regular entry".into());
+        }
+    }
+    Ok(())
+}
+
 fn digest(path: &Path) -> Result<(u64, String)> {
     let mut input = BufReader::with_capacity(1024 * 1024, File::open(path)?);
     let mut hash = Sha256::new();
@@ -147,7 +311,10 @@ fn self_check() -> Result<()> {
         fs::write(&fixture, &expected)?;
         create(&fixture, &payload)?;
         let mut read = BufReader::with_capacity(1024, File::open(&payload)?);
-        assert_eq!(std::io::copy(&mut read, &mut std::io::sink())?, expected.len() as u64);
+        assert_eq!(
+            std::io::copy(&mut read, &mut std::io::sink())?,
+            expected.len() as u64
+        );
         edit(&payload, 0, expected.len() as u64)?;
         prepend(&payload)?;
         let mut expected = expected;
@@ -163,6 +330,23 @@ fn self_check() -> Result<()> {
         expected_hash.update(&expected);
         if size != expected.len() as u64 || actual != hex(&expected_hash.finish()) {
             return Err("workload digest oracle mismatch".into());
+        }
+        let namespace = root.join("namespace");
+        fs::create_dir(&namespace)?;
+        fs::create_dir(namespace.join("d0000"))?;
+        fs::write(namespace.join("d0000/f000000"), b"first")?;
+        fs::write(namespace.join("d0000/f000001"), b"second")?;
+        let before = namespace_digest(&namespace)?;
+        if before.regular_files != 2
+            || before.data_directories != 1
+            || before.logical_bytes != 11
+            || before != namespace_digest(&namespace)?
+        {
+            return Err("namespace digest oracle mismatch".into());
+        }
+        fs::write(namespace.join("d0000/f000001"), b"changed")?;
+        if namespace_digest(&namespace)?.digest == before.digest {
+            return Err("namespace digest missed a content change".into());
         }
         Ok(())
     })();

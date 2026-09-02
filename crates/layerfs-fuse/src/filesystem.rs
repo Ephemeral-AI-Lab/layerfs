@@ -5,8 +5,8 @@ use crate::Kind;
 use fuser::{
     AccessFlags, BsdFileFlags, FileHandle, Filesystem, FopenFlags, Generation, INodeNo, InitFlags,
     KernelConfig, LockOwner, OpenFlags, RenameFlags, ReplyAttr, ReplyCreate, ReplyData,
-    ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyStatfs, ReplyWrite, Request, TimeOrNow,
-    WriteFlags,
+    ReplyDirectory, ReplyDirectoryPlus, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyStatfs, ReplyWrite,
+    Request, TimeOrNow, WriteFlags,
 };
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
@@ -33,6 +33,8 @@ impl Filesystem for LayerFs {
         let wanted = InitFlags::FUSE_ASYNC_READ
             | InitFlags::FUSE_BIG_WRITES
             | InitFlags::FUSE_PARALLEL_DIROPS
+            | InitFlags::FUSE_DO_READDIRPLUS
+            | InitFlags::FUSE_READDIRPLUS_AUTO
             | InitFlags::FUSE_MAX_PAGES;
         let capabilities = config.capabilities() & wanted;
         let _ = config.add_capabilities(capabilities);
@@ -425,6 +427,44 @@ impl Filesystem for LayerFs {
                         (index + 1) as u64,
                         file_type(kind),
                         OsStr::from_bytes(&name),
+                    ) {
+                        break;
+                    }
+                }
+                reply.ok();
+            }
+            Err(error) => reply.error(error),
+        }
+    }
+
+    fn readdirplus(
+        &self,
+        _request: &Request,
+        _ino: INodeNo,
+        handle: FileHandle,
+        offset: u64,
+        mut reply: ReplyDirectoryPlus,
+    ) {
+        let result = self
+            .handle(handle)
+            .and_then(|node| self.port.readdirplus(node).map_err(errno));
+        match result {
+            Ok(entries) => {
+                for (index, (attr, name)) in entries.into_iter().enumerate().skip(offset as usize) {
+                    let attr = match self.attr(attr) {
+                        Ok(attr) => attr,
+                        Err(error) => {
+                            reply.error(error);
+                            return;
+                        }
+                    };
+                    if reply.add(
+                        attr.ino,
+                        (index + 1) as u64,
+                        OsStr::from_bytes(&name),
+                        &TTL,
+                        &attr,
+                        Generation(0),
                     ) {
                         break;
                     }

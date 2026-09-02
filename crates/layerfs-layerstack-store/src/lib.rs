@@ -31,8 +31,9 @@ pub use store::LayerStackStore;
 pub use telemetry::{
     begin_workspace_commit, note_workspace_capture, note_workspace_commit_phase, record_fuse_write,
     record_workspace_lifecycle, record_workspace_read, take_storage_receipts, CandidateReceipt,
-    CaptureMode, FuseWriteReceipt, StorageReceipt, WorkspaceCommitPhase, WorkspaceCommitReceipt,
-    WorkspaceCommitTimer, WorkspaceLifecycleKind, WorkspaceLifecycleReceipt,
+    CaptureMode, FuseWriteReceipt, LayerStackInitializationReceipt, StorageReceipt,
+    WorkspaceCommitPhase, WorkspaceCommitReceipt, WorkspaceCommitTimer, WorkspaceLifecycleKind,
+    WorkspaceLifecycleReceipt,
 };
 pub use workspace::{
     CommitOutcome, PinnedSnapshot, PreparedReconciliation, SnapshotReader, WorkspaceLease,

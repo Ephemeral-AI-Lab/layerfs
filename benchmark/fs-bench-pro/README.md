@@ -10,7 +10,7 @@ sections 17–19.
 
 - The existing registered payload campaign is implemented: 32 MiB cold create,
   small edit, EDIT16, prepend, and read.
-- The 0.1.1 namespace-admission campaign is specified but not implemented yet:
+- The 0.1.1 namespace-admission campaign is implemented separately:
   `namespace-100`, `namespace-1000`, `namespace-10000`, and
   `namespace-100000`.
 - The canonical scenario and status table is the
@@ -20,16 +20,16 @@ The benchmark contract also carries the canonical **Problem statement**,
 **Goal**, **Files to read**, and **Acceptance criteria** for the v0.1.1
 namespace work; this README records harness usage and implementation status.
 
-Each planned namespace fixture has 2,500 unique deterministic bytes per regular
+Each namespace fixture has 2,500 unique deterministic bytes per regular
 file and 100 regular files per directory. All timed namespace rows use real
 FUSE. Materialization is reserved for one untimed equality proof at 10,000
 files / 25 MB.
 
 Namespace-admission rows remain outside the existing registered total and the
-paired LayerFS-versus-Computer campaign. The planned namespace runner is
+paired LayerFS-versus-Computer campaign. The namespace runner is
 LayerFS-only and separate from both `run.sh` and `run-paired.sh`, allowing one
 failing tier to be iterated without running the full or comparative campaigns.
-It will support one-case and `all` modes; `run-namespace.sh` does not exist yet.
+It supports one-case and `all` modes through `run-namespace.sh`.
 
 The implemented payload LayerFS arm uses exactly one local `LayerStackStore`
 and public SDK calls.
@@ -74,7 +74,21 @@ benchmark/fs-bench-pro/run.sh RUN_ID CONTAINER_ID HOST_FIXTURE CONTAINER_FIXTURE
 ```
 
 This command runs only the implemented payload campaign. It does not run the
-planned namespace matrix.
+namespace matrix.
+
+Run the namespace self-check and a sealed LayerFS-only tier or matrix with:
+
+```sh
+benchmark/fs-bench-pro/run-namespace.sh --self-check
+benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID namespace-10000 1
+benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID all 3
+```
+
+The namespace runner creates fixtures outside product timing, starts one fresh
+benchmark process per tier/sample, supervises process CPU and peak RSS, and
+retains immutable success or failure evidence under
+`benchmark-results/fs-bench-pro/namespace/RUN_ID`. Namespace rows use their own
+schema and never contribute to payload totals or paired results.
 
 The container must run the current sealed image with TCP port `41273` published
 only on `127.0.0.1`; its fixture must match `HOST_FIXTURE` byte-for-byte. The

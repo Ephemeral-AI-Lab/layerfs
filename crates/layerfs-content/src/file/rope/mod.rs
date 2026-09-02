@@ -5,7 +5,7 @@ mod read;
 mod state;
 mod validate;
 
-pub use build::build;
+pub use build::{build, build_bytes};
 pub use diff::diff_ranges;
 pub use edit::{replace, FileMutationBatch, FILE_MUTATION_BATCH_MAX_DEFERRED_BYTES};
 pub use read::{

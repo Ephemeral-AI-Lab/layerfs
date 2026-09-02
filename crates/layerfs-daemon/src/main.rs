@@ -684,7 +684,10 @@ mod linux {
                 let _ = write_locked(&writer, Kind::Exit, &exit.encode());
             }
             (_, 3) => send_error_locked(&writer, RemoteError::OutputFailed),
-            _ => send_error_locked(&writer, RemoteError::InfrastructureLost),
+            (status, reason) => {
+                eprintln!("layerfs-daemon: execution failed reason={reason} status={status:?}");
+                send_error_locked(&writer, RemoteError::InfrastructureLost)
+            }
         }
         termination.finished.store(true, Ordering::Release);
         if let Ok(stream) = writer.lock() {
@@ -923,12 +926,26 @@ mod linux {
         }
         terminate_workspace_execs(&shared, request.workspace_id);
         let cleanup = cleanup_mount(&root, created_root);
+        let status_success = status
+            .as_ref()
+            .is_some_and(|status| status.as_ref().is_ok_and(|status| status.success()));
         let success = close
             && !lost
             && termination.reason.load(Ordering::Acquire) == 0
-            && status.is_some_and(|status| status.is_ok_and(|status| status.success()))
+            && status_success
             && cleanup.is_ok();
+        if !success {
+            eprintln!(
+                "layerfs-daemon: mount failed close={close} lost={lost} reason={} status={status:?} cleanup={cleanup:?}",
+                termination.reason.load(Ordering::Acquire),
+            );
+        }
         termination.finished.store(true, Ordering::Release);
+        let _ = waiter.join();
+        let _ = stdout.join();
+        if let Some(stderr) = stderr {
+            let _ = stderr.join();
+        }
         if success {
             let _ = protocol::write_frame(&mut stream, Kind::WorkspaceClosed, &[]);
         } else if close && !lost {
@@ -936,11 +953,6 @@ mod linux {
         }
         finished.store(true, Ordering::Release);
         let _ = stream.shutdown(std::net::Shutdown::Both);
-        let _ = waiter.join();
-        let _ = stdout.join();
-        if let Some(stderr) = stderr {
-            let _ = stderr.join();
-        }
         let _ = lifecycle.join();
     }
 
@@ -1090,7 +1102,7 @@ mod linux {
 
     fn drain_mount_output<R: Read + Send + 'static>(mut reader: R) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
-            let _ = io::copy(&mut reader, &mut io::sink());
+            let _ = io::copy(&mut reader, &mut io::stderr().lock());
         })
     }
 

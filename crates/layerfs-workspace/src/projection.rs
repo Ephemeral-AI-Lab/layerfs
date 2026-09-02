@@ -5,7 +5,10 @@ use layerfs_materialization::{
     Attr as MaterializedAttr, CaptureSink, Entry, Kind as MaterializedKind, MaterializationError,
     MaterializationSource, NodeId as MaterializedNode, Result as MaterializedResult,
 };
+use std::collections::HashMap;
 use std::io::Read;
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Weak};
 
@@ -97,6 +100,12 @@ pub(crate) fn capture(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<()> {
         .workspace
         .lock()
         .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+    if let Some((files, bytes)) =
+        capture_localized_materialization(&mut workspace, &root).map_err(materialization_error)?
+    {
+        layerfs_layerstack_store::note_workspace_capture(files, bytes);
+        return Ok(());
+    }
     static CAPTURE_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let capture_spool = workspace
         .spool
@@ -437,6 +446,19 @@ impl FilesystemPort for FuseView {
             })
     }
 
+    fn readdirplus(
+        &self,
+        node: layerfs_fuse::NodeId,
+    ) -> layerfs_fuse::PortResult<Vec<(layerfs_fuse::Attr, Vec<u8>)>> {
+        self.with(|workspace| workspace.readdirplus(NodeId(node.0)))
+            .map(|entries| {
+                entries
+                    .into_iter()
+                    .map(|(attr, name)| (fuse_attr(attr), name))
+                    .collect()
+            })
+    }
+
     fn create_file(
         &self,
         parent: layerfs_fuse::NodeId,
@@ -763,6 +785,208 @@ impl MaterializationSource for MaterializedView {
     fn readlink(&self, node: MaterializedNode) -> MaterializedResult<Vec<u8>> {
         self.with(|workspace| workspace.readlink(NodeId(node.0)))
     }
+}
+
+struct MaterializedCaptureEntry {
+    node: NodeId,
+    kind: Kind,
+    native: PathBuf,
+}
+
+fn capture_localized_materialization(
+    workspace: &mut Workspace,
+    root: &Path,
+) -> MaterializedResult<Option<(u64, u64)>> {
+    let root_metadata = std::fs::symlink_metadata(root)?;
+    if !root_metadata.is_dir() {
+        return Ok(None);
+    }
+    let mut entries = Vec::new();
+    let mut workspace_links = HashMap::new();
+    let mut native_links = HashMap::new();
+    if !collect_materialized_namespace(
+        workspace,
+        ROOT,
+        root,
+        &mut entries,
+        &mut workspace_links,
+        &mut native_links,
+    )? {
+        return Ok(None);
+    }
+
+    let mut files = 0_u64;
+    let mut bytes = 0_u64;
+    for entry in entries {
+        let metadata = std::fs::symlink_metadata(&entry.native)?;
+        match entry.kind {
+            Kind::Directory => {}
+            Kind::File => {
+                files = files.saturating_add(1);
+                bytes = bytes.saturating_add(metadata.len());
+                patch_materialized_file(workspace, entry.node, &entry.native, metadata.len())?;
+            }
+            Kind::Symlink => {}
+        }
+        patch_materialized_metadata(workspace, entry.node, entry.kind, &metadata)?;
+    }
+    patch_materialized_metadata(workspace, ROOT, Kind::Directory, &root_metadata)?;
+    Ok(Some((files, bytes)))
+}
+
+fn collect_materialized_namespace(
+    workspace: &mut Workspace,
+    directory: NodeId,
+    native: &Path,
+    output: &mut Vec<MaterializedCaptureEntry>,
+    workspace_links: &mut HashMap<NodeId, (u64, u64)>,
+    native_links: &mut HashMap<(u64, u64), NodeId>,
+) -> MaterializedResult<bool> {
+    let mut expected = workspace
+        .readdir(directory)
+        .map_err(|_| MaterializationError::Port("Workspace"))?
+        .into_iter()
+        .filter(|(_, _, name)| name != b"." && name != b"..")
+        .collect::<Vec<_>>();
+    expected.sort_by(|left, right| left.2.cmp(&right.2));
+    let mut actual = std::fs::read_dir(native)?.collect::<std::io::Result<Vec<_>>>()?;
+    actual.sort_by(|left, right| {
+        left.file_name()
+            .as_bytes()
+            .cmp(right.file_name().as_bytes())
+    });
+    if expected.len() != actual.len() {
+        return Ok(false);
+    }
+
+    for ((node, kind, name), actual) in expected.into_iter().zip(actual) {
+        if name != actual.file_name().as_bytes() {
+            return Ok(false);
+        }
+        let path = actual.path();
+        let metadata = std::fs::symlink_metadata(&path)?;
+        let actual_kind = if metadata.file_type().is_dir() {
+            Kind::Directory
+        } else if metadata.file_type().is_file() {
+            Kind::File
+        } else if metadata.file_type().is_symlink() {
+            Kind::Symlink
+        } else {
+            return Ok(false);
+        };
+        if kind != actual_kind {
+            return Ok(false);
+        }
+        let identity = (metadata.dev(), metadata.ino());
+        if workspace_links
+            .get(&node)
+            .is_some_and(|expected| *expected != identity)
+            || native_links
+                .get(&identity)
+                .is_some_and(|expected| *expected != node)
+        {
+            return Ok(false);
+        }
+        workspace_links.insert(node, identity);
+        native_links.insert(identity, node);
+        if kind == Kind::Symlink
+            && workspace
+                .readlink(node)
+                .map_err(|_| MaterializationError::Port("Workspace"))?
+                != std::fs::read_link(&path)?.as_os_str().as_bytes()
+        {
+            return Ok(false);
+        }
+        output.push(MaterializedCaptureEntry {
+            node,
+            kind,
+            native: path.clone(),
+        });
+        if kind == Kind::Directory
+            && !collect_materialized_namespace(
+                workspace,
+                node,
+                &path,
+                output,
+                workspace_links,
+                native_links,
+            )?
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn patch_materialized_file(
+    workspace: &mut Workspace,
+    node: NodeId,
+    native: &Path,
+    len: u64,
+) -> MaterializedResult<()> {
+    let mut source = std::fs::File::open(native)?;
+    let mut offset = 0_u64;
+    let mut bytes = [0_u8; 64 * 1024];
+    loop {
+        let read = source.read(&mut bytes)?;
+        if read == 0 {
+            break;
+        }
+        let actual = workspace
+            .read(node, offset, read)
+            .map_err(|_| MaterializationError::Port("Workspace"))?;
+        if let Some(first) = (0..read).find(|index| actual.get(*index) != Some(&bytes[*index])) {
+            let last = (first..read)
+                .rfind(|index| actual.get(*index) != Some(&bytes[*index]))
+                .expect("first differing byte")
+                + 1;
+            workspace
+                .write(node, offset + first as u64, &bytes[first..last])
+                .map_err(|_| MaterializationError::Port("Workspace"))?;
+        }
+        offset += read as u64;
+    }
+    if workspace
+        .attr(node)
+        .map_err(|_| MaterializationError::Port("Workspace"))?
+        .size
+        != len
+    {
+        workspace
+            .truncate(node, len)
+            .map_err(|_| MaterializationError::Port("Workspace"))?;
+    }
+    Ok(())
+}
+
+fn patch_materialized_metadata(
+    workspace: &mut Workspace,
+    node: NodeId,
+    kind: Kind,
+    metadata: &std::fs::Metadata,
+) -> MaterializedResult<()> {
+    let attr = workspace
+        .attr(node)
+        .map_err(|_| MaterializationError::Port("Workspace"))?;
+    let mode = metadata.permissions().mode()
+        & if kind == Kind::Directory {
+            0o1777
+        } else {
+            0o777
+        };
+    if attr.mode != mode {
+        workspace
+            .chmod(node, mode)
+            .map_err(|_| MaterializationError::Port("Workspace"))?;
+    }
+    if attr.mtime_seconds != metadata.mtime()
+        || attr.mtime_nanoseconds != metadata.mtime_nsec() as u32
+    {
+        workspace
+            .set_mtime(node, metadata.mtime(), metadata.mtime_nsec() as u32)
+            .map_err(|_| MaterializationError::Port("Workspace"))?;
+    }
+    Ok(())
 }
 
 struct WorkspaceCapture<'a> {

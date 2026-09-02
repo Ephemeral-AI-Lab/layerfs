@@ -277,8 +277,11 @@ Update issue #6 with:
 - localized Commit accept/defer/reject decision; and
 - recommended next action.
 
-If neither defect is admitted, close issue #6 without creating a v0.1.1
-release issue.
+Close issue #6 when the benchmark evidence and both admission decisions are
+complete. If neither defect is admitted, retain the measured/no-change
+disposition and create a release issue for the benchmark-only v0.1.1 candidate.
+If evidence admits defects, create the focused fix issues first and create the
+release issue after their candidate evidence passes.
 
 If evidence admits one root cause, create one focused fix issue. If it admits
 two independent root causes, create two. If both share one root cause, create
@@ -286,7 +289,7 @@ one. Every follow-up issue must contain explicit **Problem statement**,
 **Goal**, **Files to read**, and **Acceptance criteria** sections and be
 assigned to `@yifanxuaaa`.
 
-Do not implement the production fix as part of issue #6.
+Do not implement a production fix as part of issue #6.
 
 ## Acceptance criteria
 

@@ -319,6 +319,10 @@ fn dispatch(port: &dyn crate::FilesystemPort, request: Request) -> Response {
             Ok(entries) => Response::Entries(entries),
             Err(error) => Response::Error(error),
         },
+        Request::ReaddirPlus(node) => match port.readdirplus(node) {
+            Ok(entries) => Response::EntriesPlus(entries),
+            Err(error) => Response::Error(error),
+        },
         Request::CreateFile(parent, name, mode) => {
             response_attr(port.create_file(parent, &name, mode))
         }

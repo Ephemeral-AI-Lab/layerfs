@@ -56,19 +56,22 @@ pub fn decode_chunk_payload(value: &[u8]) -> CoreResult<&[u8]> {
 }
 
 pub fn profile_id() -> ObjectId {
-    let mut bytes = Vec::with_capacity(96);
-    bytes.extend_from_slice(b"layerfs/mapping-profile/bplus-extent/v3\0");
-    bytes.extend_from_slice(&VERSION.to_be_bytes());
-    bytes.extend_from_slice(&[LEAF, BRANCH, FILE_STATE, 0]);
-    bytes.extend_from_slice(&64_u16.to_be_bytes());
-    bytes.extend_from_slice(&128_u16.to_be_bytes());
-    bytes.extend_from_slice(&0_u16.to_be_bytes());
-    bytes.extend_from_slice(&2_u16.to_be_bytes());
-    bytes.push(31);
-    bytes.extend_from_slice(&32_768_u32.to_be_bytes());
-    bytes.extend_from_slice(&[4, 4, 8, 1, 1, 1, 1, 1]);
-    bytes.extend_from_slice(&crate::file::cdc::profile_id());
-    ObjectId::from_bytes(blake3::hash(&bytes).as_bytes()).expect("BLAKE3 digest width")
+    static PROFILE_ID: std::sync::OnceLock<ObjectId> = std::sync::OnceLock::new();
+    *PROFILE_ID.get_or_init(|| {
+        let mut bytes = Vec::with_capacity(96);
+        bytes.extend_from_slice(b"layerfs/mapping-profile/bplus-extent/v3\0");
+        bytes.extend_from_slice(&VERSION.to_be_bytes());
+        bytes.extend_from_slice(&[LEAF, BRANCH, FILE_STATE, 0]);
+        bytes.extend_from_slice(&64_u16.to_be_bytes());
+        bytes.extend_from_slice(&128_u16.to_be_bytes());
+        bytes.extend_from_slice(&0_u16.to_be_bytes());
+        bytes.extend_from_slice(&2_u16.to_be_bytes());
+        bytes.push(31);
+        bytes.extend_from_slice(&32_768_u32.to_be_bytes());
+        bytes.extend_from_slice(&[4, 4, 8, 1, 1, 1, 1, 1]);
+        bytes.extend_from_slice(&crate::file::cdc::profile_id());
+        ObjectId::from_bytes(blake3::hash(&bytes).as_bytes()).expect("BLAKE3 digest width")
+    })
 }
 
 pub fn encode_node(node: &ExtentNodeV3) -> CoreResult<Vec<u8>> {

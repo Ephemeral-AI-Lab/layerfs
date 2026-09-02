@@ -1,7 +1,7 @@
 use layerfs_content::filesystem::ContentChange;
 use layerfs_layerstack_store::{
     apply_changes, AddLayerResult, CommitOutcome, EntityName, LayerStackInitialization,
-    LayerStackStore, LocalForkSource, ObjectSource, StoreError,
+    LayerStackInitializationReceipt, LayerStackStore, LocalForkSource, ObjectSource, StoreError,
 };
 use std::collections::BTreeSet;
 
@@ -174,6 +174,34 @@ fn one_store_initialize_fork_commit_add_and_dedup_are_atomic() {
     assert_eq!(counts.branches, 1);
     assert_eq!(counts.commits, 1);
     assert_eq!(store.canonical_storage().unwrap().objects, counts.objects);
+
+    drop(store);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn directory_initialization_receipt_counts_scanned_files_and_bytes() {
+    let root = temp("initialization-receipt");
+    let source = root.join("source");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("first"), b"one").unwrap();
+    std::fs::write(source.join("second"), b"twenty").unwrap();
+    let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+    store.take_layerstack_initialization_receipts();
+    let initialized = store
+        .initialize_layerstack(
+            EntityName::new("receipt").unwrap(),
+            LayerStackInitialization::Directory(source),
+        )
+        .unwrap();
+    assert_eq!(
+        store.take_layerstack_initialization_receipts(),
+        vec![LayerStackInitializationReceipt {
+            layer_stack_id: initialized.layer_stack_id,
+            scanned_files: 2,
+            scanned_bytes: 9,
+        }]
+    );
 
     drop(store);
     std::fs::remove_dir_all(root).unwrap();
