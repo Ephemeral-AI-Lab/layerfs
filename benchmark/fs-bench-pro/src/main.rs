@@ -1992,9 +1992,15 @@ fn count_changing_performance_case(
         && (commit.edit_piece_count == 0
             || commit.edit_piece_height == 0
             || commit.edit_piece_logical_charge == 0))
-        || commit.edit_spool_allocated_bytes != fuse.spool_write_bytes
-        || commit.edit_spool_live_bytes + commit.edit_spool_superseded_bytes
-            != commit.edit_spool_allocated_bytes
+        || if scenario.kind.temp_copy() {
+            fuse.spool_write_bytes < commit.edit_spool_allocated_bytes
+                || commit.edit_spool_allocated_bytes != commit.edit_spool_live_bytes
+                || commit.edit_spool_superseded_bytes != 0
+        } else {
+            commit.edit_spool_allocated_bytes != fuse.spool_write_bytes
+                || commit.edit_spool_live_bytes + commit.edit_spool_superseded_bytes
+                    != commit.edit_spool_allocated_bytes
+        }
         || commit.edit_metric_nodes_scanned == 0
         || (scenario.kind == workload_source::edit_count_changing::Kind::Sparse
             && (fuse.spool_write_bytes > supplied
