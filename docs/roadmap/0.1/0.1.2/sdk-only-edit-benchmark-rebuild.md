@@ -127,18 +127,80 @@ emit z as eight little-endian bytes
 ```
 
 Generation uses a fixed bounded block and never materializes the 500 MiB file
-in memory. The preparation manifest freezes each tier's SHA-256, initialized
-Layer/Branch root, canonical file root, extent count, and Store identity before
-performance collection.
+in memory. The fixture file is created with directory mode `0750`, file mode
+`0640`, and mtime `1700000000`. These qualified values are frozen before
+performance collection:
+
+| Tier | Fixture SHA-256 | Canonical file root | Ordered chunk-map SHA-256 | `C0` |
+| --- | --- | --- | --- | ---: |
+| 1 MiB | `d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc` | `8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078` | `dcea0efdabc05e8cc5634505601cf682ee362c7e16e6a6c228b4b699b16b3eea` | 54 |
+| 10 MiB | `29c89128c748e4404f31b0147d447bd524d7b75afc98d56ac4debac762ee4b79` | `dd79a6666e83927d787c8a7679b06f4c98ca5f80b6abd48d94b5e8f84aad1c85` | `85cc86ea39b444756034d586424a0575b325aabea5beaf7c249a20b4aadb1638` | 544 |
+| 100 MiB | `1bb2d79d54f72ae15eb0bb76ad715b9aafeba8ff8f9aa4f47bad3e3f101885bd` | `bbee7155df021324495d88954be4db125eca49442b50aadc16439f61f6c32efe` | `113604cbe8daefa95427d079c28e82bc6c1a78fd353bc7839b5e72c78cbd84b2` | 5,394 |
+| 500 MiB | `bd782f202ec4c40a2070a1d08b78f5135a0ac604b871e4907846740bde906157` | `e4ab3cdbf81fe421e6bd2df0b34e57639845dcf244d127507cf15d6ebe01e9a3` | `9fe7687518d436f9b88c2e983566dd4110fd118b749becf9b087fb60fcc33ee3` | 26,995 |
+
+The preparation manifest also freezes the initialized Layer/Branch root and
+Store identity for each prepared Store. A Branch root is scoped to that Store
+because inode allocation is intentionally Store-local; both source arms copy
+the same prepared Store and must begin with the same frozen Branch root.
 
 ### Replacement profile
 
-All ordinary 4 KiB replacement bytes are generated before timing from a
-separate SplitMix64 stream seeded by the family, scenario, and operation index.
-The definition module freezes the domain encoding and edit-plan digest. The
-five performance repetitions use the same plan; repetition changes run order,
-not benchmark semantics. Baseline, candidate, and verifier consume the exact
-same byte-identical plan.
+All ordinary Inline replacement bytes are generated before timing from a
+separate SplitMix64 stream. Its initial state is the first eight bytes,
+interpreted as a big-endian `u64`, of:
+
+```text
+SHA-256(
+  "layerfs/fs-bench-pro/sdk-edit-replacement-seed/v1\\0"
+  || family_id || "\\0" || operation_key || "\\0"
+)
+```
+
+It then emits the standard fixture profile's SplitMix64 little-endian byte
+stream. Empty Inline replacements use the standard SHA-256 of empty input;
+Zero replacements hash their logical zero bytes. The edit-plan digest is:
+
+```text
+SHA-256(
+  "layerfs/fs-bench-pro/sdk-file-edit-plan/v1\\0"
+  || family_id || "\\0" || scenario_id || "\\0"
+  || initial_len_be_u64 || start_be_u64 || delete_len_be_u64
+  || replacement_kind_byte   # I or Z
+  || replacement_len_be_u64 || replacement_sha256_raw_32
+)
+```
+
+The exact ordered scenario registries, per-scenario edit-plan digests, payload
+seeds/digests, and final lengths are constants in the family definition
+modules and are emitted byte-for-byte to `scenario-registry.tsv`. Their frozen
+family-manifest SHA-256 values are:
+
+| Family | Definition manifest SHA-256 |
+| --- | --- |
+| `edit_length_preserving` | `f809969232c0a48f91ded2b48b0919c745ac17170d7ff375e18edcb6e5e8ab5d` |
+| `edit_length_changing` | `298dbe2d39b318c10cddb4f67097942235aa4faba9eb2929f07a47ca3d0a8762` |
+| `edit_canonical_chunk_count` | `e83ba1c930bcc1ddad7de2698ef3b78f68ce7fd97b36c085bebdef3c937da122` |
+| Combined ordered registry | `1802225a9ef5231e3d1245d85b8425b3532d20d0440f625d3aecf95d69968fde` |
+
+The five performance repetitions use the same plan; repetition changes run
+order, not benchmark semantics. Baseline, candidate, and verifier consume the
+exact same byte-identical plan.
+
+The ordinary Inline payload seeds and SHA-256 values are:
+
+| Operation key | Seed | Replacement SHA-256 |
+| --- | ---: | --- |
+| `overwrite-head-4k` | 3,686,764,519,212,284,394 | `faca857b3e7f8b1b8f46c19b1625a1b9995248ae9ac85eae672b85fbc9932375` |
+| `overwrite-middle-4k` | 10,800,757,348,883,211,881 | `f2ebe7d18fdbdd17c8aaff760ad8eeb0dfd82dadf874c41dad175ff916b2a6c5` |
+| `overwrite-tail-4k` | 3,866,307,116,232,060,780 | `37cf5837649769db2eccb504f2af96c69b9e514304374ed7d74c3b1299c2f385` |
+| `insert-middle-4k` | 6,313,238,748,831,594,097 | `568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616` |
+| `delete-middle-4k` | 14,631,710,363,380,426,233 | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+| `append-tail-4k` | 10,524,769,729,031,953,950 | `50495bfeedccb8983ead82f1fc3a55b7a45bb5741ecc79970b8a846616f95d22` |
+| `prepend-head-4k` | 11,539,886,650,128,519,955 | `a675326972c1cb5168b42d324036fab260ccb91b9df982eaace85cd05682cbdb` |
+| `replace-grow-middle-2k-to-4k` | 6,297,716,278,452,503,078 | `5d682316189ab7e945b298632c929e67f90a2b1aa13987181aef3f501421d93e` |
+| `replace-shrink-middle-4k-to-2k` | 1,824,427,086,451,703,536 | `5e24d5a26d23669833f39b2c5b3c9f6a3620ba16d3505c710020d31704a8744b` |
+| `truncate-tail-4k` | 9,706,727,036,258,497,900 | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+| `zero-extend-tail-4k` | 7,852,731,424,507,589,290 | `ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7` |
 
 ## Shared operation vocabulary
 
@@ -279,20 +341,33 @@ must never call them the same thing.
 ### Fixed operation
 
 Every member performs one same-length 64 KiB overwrite at the fixed logical
-range `[491,520, 557,056)`—64 KiB centered at 512 KiB. Because all larger
-fixtures extend the 1 MiB prefix, the base bytes and local edit position are
-identical at every tier. A 64 KiB replacement exceeds the frozen 32 KiB maximum
-CDC chunk and exercises multiple replacement chunks.
+range `[147,456, 212,992)`. Because all larger fixtures extend the 1 MiB prefix,
+the base bytes and local edit position are identical at every tier. A 64 KiB
+replacement exceeds the frozen 32 KiB maximum CDC chunk and exercises multiple
+replacement chunks.
+
+Qualification proved that the earlier prospective range
+`[491,520, 557,056)` overlapped only four canonical extents and removed only two
+whole extents. A 64 KiB replacement requires at least two extents under the
+frozen 32 KiB maximum, so a negative delta was mathematically impossible. The
+revised range is the first nearby 64 KiB range that removes three whole extents
+and supports all three outcomes with the same per-outcome bytes at every tier.
+This correction was frozen before harness implementation or performance
+collection, as the prospective stop-and-revise rule requires.
 
 ### Outcomes and membership
 
 Prepare and freeze exactly three deterministic 64 KiB replacement payloads:
 
-```text
-chunk-count-preserve
-chunk-count-increase
-chunk-count-decrease
-```
+| Outcome | Payload definition | Payload SHA-256 |
+| --- | --- | --- |
+| `chunk-count-preserve` | replacement SplitMix64 seed `4` | `6403e9f46c8e5034759add37d4d64ecffbeee1f26b719809d4f04a1e02864978` |
+| `chunk-count-increase` | replacement SplitMix64 seed `2` | `ba71e3adc4ce9f1645d8f622f6c2600ca8236146f1d6817fce183f80170dade0` |
+| `chunk-count-decrease` | 65,536 zero bytes (seed `0`) | `de2f256064a0af797747c2b97505dc0b9f3df0de4f489eac731c23ae9ca9cc31` |
+
+The nonzero canonical payload stream initializes
+`state = 0x4348554e4b434e54 xor seed` and otherwise uses the standard SplitMix64
+algorithm above.
 
 Each payload is byte-identical at all four file-size tiers and has one frozen
 digest. Each outcome must verify both its exact frozen `(C0, C1)` pair at every
@@ -304,10 +379,43 @@ increase: C1 > C0
 decrease: C1 < C0
 ```
 
-A sign-only result is insufficient. Preparation freezes replacement digest,
-base/final extent counts, exact delta, final file digest, canonical file root,
-and ordered chunk-map digest before performance collection. Candidate output
-must never be used to retroactively choose or rename the outcome.
+A sign-only result is insufficient. The exact qualified outcomes are:
+
+| Outcome | Tier | `(C0, C1, delta)` | Final file SHA-256 | Canonical file root | Ordered chunk-map SHA-256 |
+| --- | --- | --- | --- | --- | --- |
+| preserve | 1 MiB | `(54, 54, 0)` | `a3374b0be7c654cf87f2b8d411d657e170c821837dcce8661759aa5fe1fc7070` | `644ab1b651adc897f95da15461e32e587565b7e2789b377524c8e88aaf03e4a6` | `4c3514314a7daf61074e6b3a3093fb3beb07699a296d87b30e5e7ec316dea714` |
+| preserve | 10 MiB | `(544, 544, 0)` | `231b62f873d1c1b498809d40bd92235a5cdf08150abaf802422e109fee490fcc` | `feef5c7528ffb92220caca77fdd89d2d1cce257e977cc204cef1e676ade6e493` | `d38ce6c671b657acee99b8a8848efd653a91dc5bc67005e6e38e9f2e42b96ec1` |
+| preserve | 100 MiB | `(5,394, 5,394, 0)` | `f8e906873405662688d8c8add82abef06155c084f84957f0043103fc55d909f3` | `edfd0588251dddcb7fbbd4993a18d9d10e96d43c2ba07f3fa9c11389cd2e88cc` | `6a6ffdee08de34fd91ff016ec43309913930612585695f6ffc7ca40667a5c82b` |
+| preserve | 500 MiB | `(26,995, 26,995, 0)` | `5d8205919a2abe3f7c51f1592ceed0977b39fa2c7e6a4568b541e6fa9ed51437` | `728adcbeb98753983afe97b0c2fde4d92251e044e6330d7919012879bc9a1c39` | `1fbf938ddc01cf94487c897c1e001268412f42cafec46e16488554d1178f6afc` |
+| increase | 1 MiB | `(54, 55, +1)` | `b320ec162166c71532c93f1013e42b6d0beb9f194c467e043c07057f55101055` | `3756ef696b53388b234cc2c5877240c82a2ed660e9a462e86168bf4ebd9c4fcd` | `98eb01c06366048bf9e53da461bd01da68f7f2af182fc7420f6b1befab5b3c22` |
+| increase | 10 MiB | `(544, 545, +1)` | `a5afa52cc6527313281971d1bb816d593cb173abf024a09689406a9b7afe01b5` | `e24afbe82dcb11d8d6084b77d519cf342127d29c4cad7db74fd275ae6ca3fc4d` | `2a5fc94a51cbeef53d196210d5118735f3a8d016f5c0bec198afdf3703965ad6` |
+| increase | 100 MiB | `(5,394, 5,395, +1)` | `b95945fead470121e03fa4d1e640582a5d2a2ae63d66ff66b537ce407e408c7d` | `1b5c0ee5c643aaea649b7a76f1b325093f4887ce0e6fddfce1e221f2d5826567` | `1edb462942b53fbf3fb8353ec6f9bced7f23d7ba7628b067a03655a657e3b450` |
+| increase | 500 MiB | `(26,995, 26,996, +1)` | `3accd704e6596ce90622d134a35591efe89f6ccb6e84a3d88b5e4aea6378bfd4` | `95fc3c70f8ea88cb3bee08ed9aa9c0fc4aae28eeac480f9d323c0665ddd9dd67` | `db2bebd5ac72048df698a4f6d4b42de4e07c66275397695fa5ee117639fe13b0` |
+| decrease | 1 MiB | `(54, 53, -1)` | `dab7df0938e609ac80dddfc7fb6c0ed0a3e2643d5eb9181197cdd0e185920ed6` | `d0b2112fb3ce304634515ec0126759d4d54ce41ddd6ec6772646286445af35dc` | `5d10305e079c3d9c458a25bcfdf159df9d6a2aeb459262d16d852b3170370b85` |
+| decrease | 10 MiB | `(544, 543, -1)` | `94d1d712c610775c38ae1be46233ff351e9104ce6af67543d4be3b6c5b8f0d4d` | `3a36a0494a2ad58411826e27d75bfaaa1970594efc06bc165496323256f71552` | `4610f5bfef022392b9edabd15b66bf70bf6f03f35ed0480e3e29d2378b28e238` |
+| decrease | 100 MiB | `(5,394, 5,393, -1)` | `0865e1e1cdef049bfb49b5888808fdf87b1add29c45c7da55ff0c5d1f43db961` | `e7405b58a6e108d5cb4f7949766cb43a25b755a71233fb39e5694331950d41f3` | `6acf193d7fe65d835a09dbe2576015c1d14d8a2814cb599a31666727390e520f` |
+| decrease | 500 MiB | `(26,995, 26,994, -1)` | `af536c25d5ee02671afa6eb0194534973d7f1595b6a84cf82acbf5305e7a145d` | `b3c43de62a637318f417a091cc82fe3b9c5bccf9d61d33127207182614e14e2e` | `3d81624ed5a969b832d45fd97fc39a8acad32863a8fead9a6dbc62ad6239be15` |
+
+Preparation freezes these values before performance collection. Candidate
+output must never be used to retroactively choose or rename the outcome.
+
+The 12 canonical per-scenario edit-plan digests, in preserve/increase/decrease
+outcome order and 1/10/100/500 MiB size order, are:
+
+```text
+98670b9838650ba214b4d03a0a17c07bee03aaaa0cf98620653e1ac26ad498dc
+c711f36b9c0007beb924f7281baddc20e6c638f65ed921ce8f89a31643d69ed8
+8ae7d9acf7a126c6ced5b50f472590b12186a9c86f4c1f78d94c7ee02d16cbb3
+38b01ee197b5d7ebda259af756e91717b5e60fa81f3c72ecd6a354d1b456a4b0
+79d0ec79d07f8a0d3734e1a666c6bc6f3d8e7495b60380a4adafd49b0aac4008
+8313dc5ebc5ee365a2d4446f0b62d4a24ba7285afcbcb294729a88eae3677b01
+62fd7352d7faf0829ce7794fda7f263da51f9051cd5692059ec29e5a2b108382
+331528a1ee71328f87cab410eb5302a0f083bdeee9986ddce61cc3d2db0bc2fd
+e5446d891dde9d5ae6db3e2b577e2932b1facbe78c8c1d9c6cfe068dbb5b05c3
+029a74fa27a49b21982fb61387da2917a52d0a71957034e9c4263b6ef7f4c63d
+8fc6cf7a01c72f01878cb4a89e8d001005f7c2ce41ed8fa8c9150efc709faee8
+a3ac2301c04c3a040b448e05d078df1bbc499cfb38bc71f32ec6e2ccdf57bb1d
+```
 
 Each outcome has `on-1mib-ops-1`, `on-10mib-ops-1`, `on-100mib-ops-1`, and
 `on-500mib-ops-1` IDs.
@@ -371,6 +479,20 @@ The table counts **280 final-candidate rows**. An optimization comparison adds
 Issue #20 terminal admission uses the directional 560-row form: 280 authentic
 baseline rows and 280 candidate rows in the frozen adjacent order above. The
 old POSIX rows are never a baseline.
+
+Before either source arm runs, write and seal `sample-order.tsv`. Registry
+order is operation/outcome-major with sizes `1, 10, 100, 500` MiB. Repetitions
+1–5 rotate that registry left by these frozen offsets:
+
+| Family | Rotation offsets |
+| --- | --- |
+| `edit_length_preserving` | `0, 5, 10, 3, 8` |
+| `edit_length_changing` | `0, 13, 26, 7, 20` |
+| `edit_canonical_chunk_count` | `0, 4, 8, 1, 5` |
+
+Within each resulting scenario/repetition cell, source arms stay adjacent and
+use the baseline/candidate direction sequence shown above. The unique row key
+is `(family, scenario_id, repetition, source_arm)`.
 
 Every ID uses one frozen edit-plan digest across its five performance
 repetitions, so one verifier receipt per ID is sufficient. The receipt records
@@ -801,6 +923,21 @@ shell/POSIX/FUSE mutation, spool allocation, and fallback; exact bounded CDC;
 bounded base reads and candidate bytes; and complete cleanup.
 
 ## Evidence layout
+
+The exact JSON schema identifiers are frozen as:
+
+| Artifact | `schema` value |
+| --- | --- |
+| Performance row | `fs-bench-pro-sdk-edit-performance-v1` |
+| Verification aggregate receipt | `fs-bench-pro-sdk-edit-verification-v1` |
+| Performance/verification summary | `fs-bench-pro-sdk-edit-summary-v1` |
+| Run status | `fs-bench-pro-sdk-edit-status-v1` |
+| Fixture manifest | `fs-bench-pro-sdk-edit-fixture-v1` |
+| Daemon cgroup sample | `fs-bench-pro-sdk-edit-cgroup-v1` |
+| Supervisor process RSS sample | `fs-bench-pro-sdk-edit-process-rss-v1` |
+
+Schema changes require a new identifier; missing required fields are failures,
+not implicit zeroes.
 
 Each family writes:
 
