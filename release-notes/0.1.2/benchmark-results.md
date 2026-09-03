@@ -11,8 +11,11 @@ paths, and hashes without pretending the multi-gigabyte raw runs are hosted.
 
 Final production-seal conformance covers the Workspace unit suite, all seven
 file-edit groups, reconciliation, diagnostic-seed gating/decoding, scoped
-warning-denying Clippy, and two real Linux FUSE proofs. Its final manifest and
-production seal are recorded in [verification.md](verification.md).
+warning-denying Clippy, and two real Linux FUSE proofs. It is retained at
+`final-v012-issue14-19af57ef`, manifest
+`9e18afc5ccafba5434b10044b9dec0a79842b51234513ad9ef3f178e08564f4e`.
+The final custody bridge manifest is
+`516b436eca0b73f30bc3d15cfd6f93eb0308938ea4124be5582d04efb3c8473d`.
 
 The last complete record before the release-only version/docs and final seed
 gate proof is:
@@ -103,9 +106,9 @@ These are correctness supplements, never performance samples.
 No patch-compatible mechanism reaches the 600,000,000-byte primary goal. The
 owner accepted the exact blocker and retained the current ObjectId/SQLite
 format. The layout/pack experiment manifest is
-`b685533bc1c8a01172efcdf519bd0e448bbb3ab78e03a701bd7052ef4010079c`;
+`7c3c2cf0d45768352142448548f364a0126117dd35c13206a408d215d722d7b1`;
 the terminal disposition manifest is
-`bab335bdaf9c3eef9515d876ec4c49043b51f9093a6262f55bde8537cb01f99b`.
+`f825494d3fafa0837b607209d59e9b1249014844cb19286cb18f3396e27c016a`.
 
 The physical-pack experiment establishes a conservative object-storage lower
 bound of `562,513,789` bytes: `542,909,962` pack bytes, `18,817,024` location

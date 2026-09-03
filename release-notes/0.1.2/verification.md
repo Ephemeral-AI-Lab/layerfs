@@ -53,6 +53,22 @@ v0.1.1 `WorkspaceCommitResult`, `WorkspaceState`, `OperationFamily`, and
 `WorkspaceCommitReceipt` shapes remain exact, while edit diagnostics and
 detailed presentation status are additive types.
 
+Final conformance directory:
+`benchmark-results/fs-bench-pro/edit-engine-acceptance/final-v012-issue14-19af57ef`.
+Its manifest SHA-256 is
+`9e18afc5ccafba5434b10044b9dec0a79842b51234513ad9ef3f178e08564f4e`.
+The measured release-candidate identity is source seal
+`14842002c48af00e38061529d835b55c447c18cd46fbcefd7f5bbb34a88e703a`,
+product seal
+`7559be73d672b9922ad7913e70f8afe0cd21a06ca3f18a90215fc7be4adfd924`,
+harness seal
+`6bb76a1968f7c0217e10324f1285b951161be73547048c6ba08b8f1fe272e88d`,
+and workload SHA-256
+`a2b39fb7b4773c97423760e3d1daa538ea759af3c915decd7031c272cabcb62e`.
+The final custody bridge is
+`benchmark-results/fs-bench-pro/v012-release/final-custody-19af57ef`, manifest
+`516b436eca0b73f30bc3d15cfd6f93eb0308938ea4124be5582d04efb3c8473d`.
+
 ## Retained benchmark proof
 
 The authoritative paths, formulas, counts, medians, and manifest hashes are in
