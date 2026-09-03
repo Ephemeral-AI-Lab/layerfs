@@ -16,6 +16,7 @@ invocation_started=$(python3 -c 'import time; print(time.monotonic_ns())')
 invocation_argv=("$@")
 performance_external_wall_ns=0
 verification_external_wall_ns=0
+verification_failure=
 control_external_wall_ns=0
 count_changing_verifiers=(insert-middle-4k-on-8m-proof delete-middle-4k-on-8m-proof rewrite-full-grow-8m-to-12m-proof rewrite-full-shrink-8m-to-4m-proof)
 
@@ -518,8 +519,8 @@ PY
   fi
   set -e
   printf '%s\n' "$status" >"$verify_dir/exit-status.txt"
-  [[ $status == 0 ]] || die "verification failed: $case_id seed $sample_seed"
   verification_external_wall_ns=$(( verification_external_wall_ns + $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
+  if [[ $status != 0 ]]; then verification_failure="$case_id seed $sample_seed"; return 1; fi
 }
 
 if [[ $mode == performance ]]; then
@@ -674,12 +675,20 @@ overall_status=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))
 if [[ $overall_status == target-pass || $overall_status == tolerated-pass ]]; then admission_eligible=true; else admission_eligible=false; fi
 if [[ $admission_eligible == true && $mode == admission ]]; then
   if [[ $family_kind == same-count ]]; then
-    run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$container" repeat-a
+    run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$container" repeat-a || true
   else
-    run_verify prepend-temp-copy-rename 1 "$container" repeat-a
-    run_verify sparse-write-past-eof-gap-60k-payload-4k-ops-100 1 "$container" repeat-a
-    for verifier in "${count_changing_verifiers[@]}"; do run_verify "$verifier" 1 "$container" repeat-a; done
+    verification_cases=(prepend-temp-copy-rename sparse-write-past-eof-gap-60k-payload-4k-ops-100 "${count_changing_verifiers[@]}")
+    for verifier in "${verification_cases[@]}"; do run_verify "$verifier" 1 "$container" repeat-a || break; done
   fi
+fi
+if [[ -n $verification_failure ]]; then
+  overall_status=hard-failure
+  admission_eligible=false
+  printf '%s\n' "$verification_failure" >"$run_dir/verification/failure.txt"
+  python3 - "$run_dir/summary.json" "$verification_failure" <<'PY'
+import json,sys
+p=sys.argv[1]; data=json.load(open(p)); data['performance_status']=data['status']; data['verification_status']='hard-failure'; data['verification_failure']=sys.argv[2]; data['status']='hard-failure'; open(p,'w').write(json.dumps(data,sort_keys=True,separators=(',',':'))+'\n')
+PY
 fi
 printf '%s\n' "$performance_external_wall_ns" >"$run_dir/environment/performance-external-wall-ns.txt"
 printf '%s\n' "$control_external_wall_ns" >"$run_dir/environment/control-external-wall-ns.txt"

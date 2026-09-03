@@ -2395,7 +2395,7 @@ fn count_changing_verify_case(
     let process_before = process_resource_snapshot()?;
     let container_before = container_cgroup_snapshot(&container_id)?;
     let initialized = client.initialize_layerstack(
-        EntityName::new(format!("verify-{case_id}-{source}-{seed}"))?,
+        EntityName::new(format!("count-changing-verify-{seed}"))?,
         LayerStackInitialization::Directory(fixture.to_owned()),
     )?;
     let branch = client.fork_branch(
