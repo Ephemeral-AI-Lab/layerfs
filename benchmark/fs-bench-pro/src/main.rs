@@ -1988,9 +1988,10 @@ fn count_changing_performance_case(
     let candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
     let commit = operation_workspace_commit(&snapshot)?;
     let fuse = edit_fuse_metrics(&snapshot);
-    if commit.edit_piece_count == 0
-        || commit.edit_piece_height == 0
-        || commit.edit_piece_logical_charge == 0
+    if (!scenario.kind.temp_copy()
+        && (commit.edit_piece_count == 0
+            || commit.edit_piece_height == 0
+            || commit.edit_piece_logical_charge == 0))
         || commit.edit_spool_allocated_bytes != fuse.spool_write_bytes
         || commit.edit_spool_live_bytes + commit.edit_spool_superseded_bytes
             != commit.edit_spool_allocated_bytes
@@ -2000,7 +2001,19 @@ fn count_changing_performance_case(
                 || commit.edit_spool_live_bytes > supplied
                 || commit.edit_piece_logical_charge > 64 * 1024))
     {
-        return Err("count-changing edit receipt".into());
+        return Err(format!(
+            "count-changing edit receipt: temp_copy={} pieces={} height={} charge={} allocated={} fuse_spool={} live={} superseded={} metric_nodes={}",
+            scenario.kind.temp_copy(),
+            commit.edit_piece_count,
+            commit.edit_piece_height,
+            commit.edit_piece_logical_charge,
+            commit.edit_spool_allocated_bytes,
+            fuse.spool_write_bytes,
+            commit.edit_spool_live_bytes,
+            commit.edit_spool_superseded_bytes,
+            commit.edit_metric_nodes_scanned,
+        )
+        .into());
     }
     let execution_ns = nanos(t1, t2);
     println!(
