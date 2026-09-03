@@ -955,17 +955,27 @@ fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
         .unwrap_or(1)
         .min(16);
     let worker_buffer_bytes = (NAMESPACE_SCRATCH_BYTES / workers).max(4096);
-    for chunk in directories.chunks(workers) {
+    for chunk in directories.chunks(workers.saturating_mul(4)) {
         let (sender, receiver) = mpsc::sync_channel(chunk.len());
         let mut groups = vec![None; chunk.len()];
+        let next = AtomicUsize::new(0);
         std::thread::scope(|scope| -> Result<()> {
-            for (index, directory) in chunk.iter().enumerate() {
+            for _ in 0..workers.min(chunk.len()) {
                 let sender = sender.clone();
+                let next = &next;
                 scope.spawn(move || {
                     let mut buffer = vec![0_u8; worker_buffer_bytes];
-                    let result = collect_records(root, directory, &mut buffer)
-                        .map_err(|error| error.to_string());
-                    let _ = sender.send((index, result));
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(directory) = chunk.get(index) else {
+                            return;
+                        };
+                        let result = collect_records(root, directory, &mut buffer)
+                            .map_err(|error| error.to_string());
+                        if sender.send((index, result)).is_err() {
+                            return;
+                        }
+                    }
                 });
             }
             drop(sender);
