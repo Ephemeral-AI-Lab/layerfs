@@ -697,6 +697,42 @@ mod tests {
         (root, workspace)
     }
 
+    fn workspace_with_file(
+        label: &str,
+    ) -> (
+        std::path::PathBuf,
+        Workspace,
+        layerfs_layerstack_store::BranchId,
+    ) {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-file-edit-source-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source = root.join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("file"), b"abcdefghij").unwrap();
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let layer = store
+            .initialize_layerstack(
+                EntityName::new("project").unwrap(),
+                LayerStackInitialization::Directory(source),
+            )
+            .unwrap()
+            .genesis_layer_id;
+        let branch = store
+            .fork_branch(
+                EntityName::new("main").unwrap(),
+                LocalForkSource::Layer { layer_id: layer },
+            )
+            .unwrap();
+        let workspace = Workspace::open(store, branch, root.join("spool")).unwrap();
+        (root, workspace, branch)
+    }
+
     #[test]
     fn edit_limit_and_sparse_physical_charge_are_exact() {
         let (root, mut workspace) = workspace("limits");
@@ -778,6 +814,84 @@ mod tests {
             .is_err());
         assert_eq!(workspace.inline_bytes, MAX_INLINE_PER_WORKSPACE);
         assert_eq!(workspace.attr(extra).unwrap().size, 0);
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn generation_overflow_rejects_without_logical_or_physical_change() {
+        let (root, mut workspace, _) = workspace_with_file("generation-overflow");
+        let file = workspace.lookup(ROOT, b"file").unwrap().node;
+        workspace.mutation_generation = u64::MAX;
+        let before = workspace.nodes[&file].clone();
+        let charges = (
+            workspace.spool_bytes,
+            workspace.inline_bytes,
+            workspace.piece_allocation_bytes,
+        );
+        assert!(workspace
+            .edit_many(
+                file,
+                vec![(0, 0, crate::WorkspaceFileReplacement::Inline(b"P".to_vec()),)],
+            )
+            .is_err());
+        assert_eq!(workspace.nodes[&file], before);
+        assert_eq!(
+            (
+                workspace.spool_bytes,
+                workspace.inline_bytes,
+                workspace.piece_allocation_bytes,
+            ),
+            charges
+        );
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn discard_reclaims_one_live_base_inline_zero_spool_composition() {
+        let (root, mut workspace, branch) = workspace_with_file("mixed-discard");
+        let branch_root = workspace.store.pin_branch(branch).unwrap().root;
+        let file = workspace.lookup(ROOT, b"file").unwrap().node;
+        workspace
+            .edit_many(
+                file,
+                vec![
+                    (1, 2, crate::WorkspaceFileReplacement::Inline(b"X".to_vec())),
+                    (2, 0, crate::WorkspaceFileReplacement::Zero(2)),
+                ],
+            )
+            .unwrap();
+        let end = workspace.attr(file).unwrap().size;
+        workspace.write(file, end, b"S").unwrap();
+        let Data::File(FileData::Edited { spool, pieces, .. }) = &workspace.nodes[&file].data
+        else {
+            panic!("edited file")
+        };
+        let spool = spool.clone();
+        let variants = pieces.pieces();
+        assert!(variants
+            .iter()
+            .any(|piece| matches!(piece, Piece::Base { .. })));
+        assert!(variants
+            .iter()
+            .any(|piece| matches!(piece, Piece::Inline { .. })));
+        assert!(variants
+            .iter()
+            .any(|piece| matches!(piece, Piece::Zero { .. })));
+        assert!(variants
+            .iter()
+            .any(|piece| matches!(piece, Piece::Spool { .. })));
+        assert!(spool.exists());
+        workspace.discard().unwrap();
+        assert_eq!(
+            workspace.store.pin_branch(branch).unwrap().root,
+            branch_root
+        );
+        assert_eq!(workspace.spool_bytes, 0);
+        assert_eq!(workspace.inline_bytes, 0);
+        assert_eq!(workspace.piece_allocation_bytes, 0);
+        assert!(!spool.exists());
         drop(workspace);
         std::fs::remove_dir_all(root).unwrap();
     }

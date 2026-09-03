@@ -11,6 +11,14 @@ pub(crate) const MAX_RESULT_BYTES: u64 = 1024 * 1024 * 1024 * 1024;
 pub(crate) const MAX_LOGICAL_ZERO_BYTES: u64 = 1024 * 1024 * 1024;
 pub(crate) const MAX_PREDICTED_ZERO_EXTENTS: u64 = 131_072;
 
+pub(crate) fn check_logical_allocation_charge(bytes: u64) -> Result<()> {
+    if bytes <= MAX_PIECE_ALLOCATION {
+        Ok(())
+    } else {
+        Err(StoreError::InvalidInput("workspace piece allocation limit"))
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Piece {
     Base {
@@ -217,7 +225,7 @@ impl PieceTree {
         next.root = merge(&merge(&left, &middle)?, &right)?;
         let predicted_zero_extents = link_zero_len(&next.root).div_ceil(8_192);
         if next.count() > MAX_PIECES_PER_FILE
-            || next.logical_allocation_charge()? > MAX_PIECE_ALLOCATION
+            || check_logical_allocation_charge(next.logical_allocation_charge()?).is_err()
             || next.len() > MAX_RESULT_BYTES
             || link_zero_len(&next.root) > MAX_LOGICAL_ZERO_BYTES
             || predicted_zero_extents > MAX_PREDICTED_ZERO_EXTENTS
@@ -477,6 +485,8 @@ mod tests {
             assert_eq!(pieces.iter().map(Piece::len).sum::<u64>(), 1);
             assert!(visited < 64, "offset={offset} visited={visited}");
         }
+        assert!(tree.replace(0, 0, [Piece::Zero { len: 1 }]).is_err());
+        assert_eq!(tree.count(), MAX_PIECES_PER_FILE);
     }
 
     #[test]
@@ -500,5 +510,22 @@ mod tests {
                 }]
             )
             .is_err());
+    }
+
+    #[test]
+    fn result_length_ceiling_accepts_exact_and_rejects_plus_one() {
+        let root = FileStateRoot(ObjectId::for_bytes(b"large-base"));
+        let exact = PieceTree::base(root, MAX_RESULT_BYTES).unwrap();
+        assert_eq!(exact.len(), MAX_RESULT_BYTES);
+        assert!(exact
+            .replace(MAX_RESULT_BYTES, 0, [Piece::Zero { len: 1 }])
+            .is_err());
+        assert_eq!(exact.len(), MAX_RESULT_BYTES);
+    }
+
+    #[test]
+    fn logical_allocation_charge_accepts_exact_and_rejects_plus_one() {
+        assert!(check_logical_allocation_charge(MAX_PIECE_ALLOCATION).is_ok());
+        assert!(check_logical_allocation_charge(MAX_PIECE_ALLOCATION + 1).is_err());
     }
 }

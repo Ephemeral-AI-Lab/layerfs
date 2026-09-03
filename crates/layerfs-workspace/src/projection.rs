@@ -388,7 +388,7 @@ pub(crate) fn refresh(
     daemon: Option<&crate::daemon::DaemonOwner>,
 ) -> WorkspaceResult<()> {
     end(worker)?;
-    #[cfg(test)]
+    #[cfg(debug_assertions)]
     if INJECT_REFRESH_FAILURE.with(|inject| inject.replace(false)) {
         return Err(WorkspaceError::Io(std::io::Error::other(
             "injected projection refresh failure",
@@ -402,12 +402,12 @@ pub(crate) fn refresh(
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(debug_assertions)]
 thread_local! {
     static INJECT_REFRESH_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-#[cfg(test)]
+#[cfg(debug_assertions)]
 pub(crate) fn inject_refresh_failure_once() {
     INJECT_REFRESH_FAILURE.with(|inject| inject.set(true));
 }

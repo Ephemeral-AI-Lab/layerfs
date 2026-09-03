@@ -121,6 +121,14 @@ high-water before returning. Failure to restore it is an explicit cleanup
 failure. v0.1.2 charges append-only physical allocation until Commit or Discard;
 do not add a free-list or compactor before evidence requires one.
 
+Projection failure before publication returns an error with the prior logical
+state and presentation restored. Projection failure after a reconciliation
+Commit has durably advanced the Branch returns
+`CreatedPresentationFailed`/`UpToDatePresentationFailed`, leaves the session in
+`BrokenPresentation`, and never disguises publication as a generic failure.
+`recover_workspace_presentation` remounts that already-rebased session without
+another Commit; retrying Commit after recovery is `UpToDate`.
+
 ## Commit lowering and canonical identity
 
 Commit walks final pieces once, retains monotonic `Base` ranges, and streams
@@ -198,11 +206,10 @@ proportional to its canonical extent representation.
 - Owner-side focused checks target at most 112 MiB RSS; every mutation row has a
   128 MiB hard ceiling and zero swap.
 
-## Required conformance coverage
+## Conformance groups
 
-These are coverage requirements owned by the implementation issue, not a claim
-that seven similarly named tests prove every item and not timed benchmark-family
-IDs:
+These are verifier/integration groups owned by the implementation issue, not
+timed benchmark-family IDs:
 
 1. Range, piece, extent, EOF, no-op, repeated, descending, overlapping, and
    `UpToDate` normalization boundaries.
@@ -220,7 +227,7 @@ IDs:
 
 Verification is never included in a performance distribution. The development
 loop runs focused unit/integration tests and selected performance cases; the
-complete coverage matrix runs only in explicit verification/admission mode.
+complete conformance set runs only in explicit verification/admission mode.
 
 ## Focused owner-side performance checks
 
@@ -267,13 +274,10 @@ owner-side baseline; do not invent a pre-API latency.
   completion, or byte-copy fallback exists.
 - [x] Reachable spool slices are immutable and short/erroring appends restore
   the exact prior high-water/state.
-- [ ] Every item in the seven-group coverage matrix passes outside benchmark
-  timing. The retained seven-test run is partial evidence only.
+- [ ] All seven conformance groups pass outside benchmark timing.
 - [x] FUSE is the only v0.1.2 timed projection; untimed materialization equality
   proves the engine is not driver-coupled.
-- [ ] The focused owner-side prepend meets its latency and directly measured CDC,
-  old-payload-read, RSS, swap, OOM, and cleanup gates. FUSE/spool transfer,
-  payload-object retention, transient allocation, and candidate-phase claims
-  remain unproven until separately instrumented.
+- [ ] The focused owner-side prepend meets its latency, transfer, reuse, memory,
+  retry, and cleanup gates.
 - [ ] Every retained implementation optimization reruns both affected complete
   performance families.

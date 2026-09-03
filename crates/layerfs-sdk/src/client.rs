@@ -200,10 +200,26 @@ impl Client {
             |result| match result {
                 WorkspaceCommitResult::Created { .. } => OperationOutcome::Success,
                 WorkspaceCommitResult::UpToDate { .. } => OperationOutcome::UpToDate,
+                WorkspaceCommitResult::CreatedPresentationFailed { .. } => {
+                    OperationOutcome::Success
+                }
+                WorkspaceCommitResult::UpToDatePresentationFailed { .. } => {
+                    OperationOutcome::UpToDate
+                }
                 WorkspaceCommitResult::Busy => OperationOutcome::Busy,
                 WorkspaceCommitResult::HeadMoved { .. } => OperationOutcome::HeadMoved,
             },
         )
+    }
+
+    pub fn recover_workspace_presentation(
+        &self,
+        workspace_id: WorkspaceId,
+    ) -> Result<WorkspaceSession> {
+        self.0
+            .workspaces
+            .recover_workspace_presentation(workspace_id)
+            .map_err(Into::into)
     }
 
     pub fn edit_workspace_file_range(&self, edit: WorkspaceFileRangeEdit) -> Result<()> {

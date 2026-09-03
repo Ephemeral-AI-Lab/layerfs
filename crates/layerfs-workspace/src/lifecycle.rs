@@ -500,13 +500,54 @@ impl Workspaces {
         };
         if let Err(error) = presentation {
             let _ = crate::projection::end(&worker);
-            return Err(error);
+            return match result {
+                Ok((result, _)) => {
+                    worker
+                        .workspace
+                        .lock()
+                        .map_err(|_| WorkspaceError::WorkspaceBusy)?
+                        .state = WorkspaceState::BrokenPresentation;
+                    Ok(result.presentation_failed())
+                }
+                Err(_) => Err(error),
+            };
         }
         match result {
             Ok((result, _)) => Ok(result),
             Err(WorkspaceError::WorkspaceBusy) => Ok(WorkspaceCommitResult::Busy),
             Err(error) => Err(error),
         }
+    }
+
+    pub fn recover_workspace_presentation(
+        &self,
+        id: WorkspaceId,
+    ) -> WorkspaceResult<WorkspaceSession> {
+        let worker = self.worker(id)?;
+        if worker.has_executions()?
+            || worker
+                .workspace
+                .lock()
+                .map_err(|_| WorkspaceError::WorkspaceBusy)?
+                .state
+                != WorkspaceState::BrokenPresentation
+        {
+            return Err(WorkspaceError::InvalidExecution);
+        }
+        crate::projection::pause(&worker)?;
+        let _quiesced = worker.quiesce()?;
+        crate::projection::end(&worker)?;
+        let handle = crate::projection::attach(&worker, self.daemon_mount_owner()?)?;
+        *worker
+            .projection_handle
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)? = Some(handle);
+        let mut workspace = worker
+            .workspace
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        workspace.state = WorkspaceState::Active;
+        Ok(session_locked(&worker, &workspace))
     }
 
     pub fn edit_workspace_file_range(&self, edit: WorkspaceFileRangeEdit) -> WorkspaceResult<()> {
@@ -1005,6 +1046,53 @@ mod tests {
         assert!(worker.projection_handle.lock().unwrap().is_some());
         assert_eq!(std::fs::read(root.join("mount/file")).unwrap(), b"abcdef");
         worker.workspace.lock().unwrap().unpin(node).unwrap();
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn callback_and_execution_reject_owner_edit_without_state_change() {
+        let (root, workspaces, branch, store) = fixture("admission-busy");
+        let session = session(&root, &workspaces, branch);
+        let worker = workspaces.worker(session.id).unwrap();
+        let before = {
+            let workspace = worker.workspace.lock().unwrap();
+            (
+                workspace.nodes.clone(),
+                workspace.dirty.clone(),
+                workspace.mutation_generation,
+                workspace.spool_bytes,
+                workspace.inline_bytes,
+                workspace.piece_allocation_bytes,
+                store.pin_branch(branch).unwrap().root,
+            )
+        };
+        let callback = worker.enter_callback().unwrap();
+        assert!(matches!(
+            prepend(&workspaces, session.id),
+            Err(WorkspaceError::WorkspaceBusy)
+        ));
+        drop(callback);
+        worker.note_execution(true).unwrap();
+        assert!(matches!(
+            prepend(&workspaces, session.id),
+            Err(WorkspaceError::WorkspaceBusy)
+        ));
+        worker.note_execution(false).unwrap();
+        {
+            let workspace = worker.workspace.lock().unwrap();
+            assert_eq!(workspace.nodes, before.0);
+            assert_eq!(workspace.dirty, before.1);
+            assert_eq!(workspace.mutation_generation, before.2);
+            assert_eq!(workspace.spool_bytes, before.3);
+            assert_eq!(workspace.inline_bytes, before.4);
+            assert_eq!(workspace.piece_allocation_bytes, before.5);
+        }
+        assert_eq!(store.pin_branch(branch).unwrap().root, before.6);
+        assert_eq!(std::fs::read(root.join("mount/file")).unwrap(), b"abcdef");
+        assert!(worker.projection_handle.lock().unwrap().is_some());
         workspaces
             .end_workspace_session(session.id, EndWorkspaceMode::Clean)
             .unwrap();

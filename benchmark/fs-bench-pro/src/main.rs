@@ -3310,7 +3310,7 @@ fn workspace_range_acceptance(
     }
     std::fs::create_dir(root)?;
     let store = Arc::new(LayerStackStore::create(root.join("store.sqlite"))?);
-    let client = Client::connect(store)?;
+    let client = Client::connect(store.clone())?;
     let initialized = client.initialize_layerstack(
         EntityName::new(case)?,
         LayerStackInitialization::Directory(fixture.to_owned()),
@@ -3321,6 +3321,8 @@ fn workspace_range_acceptance(
             layer_id: initialized.genesis_layer_id,
         },
     )?;
+    let base = store.pin_branch(branch)?;
+    let old_payload_ids = payload_ids(&base.reader, base.root, "payload.bin")?;
     let resources_before = process_resource_snapshot()?;
     let cgroup_before = container_cgroup_snapshot(&container_id)?;
     let t0 = Instant::now();
@@ -3362,6 +3364,13 @@ fn workspace_range_acceptance(
         result => return Err(format!("Workspace range Commit failed: {result:?}").into()),
     };
     visible_head(&client, branch, head)?;
+    let committed_root = store
+        .commit(head.ok_or("Workspace range Commit ID")?)?
+        .ok_or("Workspace range Commit")?
+        .root_id;
+    let committed = store.pin_branch(branch)?;
+    let new_payload_ids = payload_ids(&committed.reader, committed_root, "payload.bin")?;
+    let old_payload_ids_lost = old_payload_ids.difference(&new_payload_ids).count() as u64;
     let edit_commit_ns = elapsed_ns(edit_started);
     let commit_ns = elapsed_ns(commit_started);
     client.end_workspace_session(session.id, EndWorkspaceMode::Clean)?;
@@ -3369,6 +3378,32 @@ fn workspace_range_acceptance(
     let resources_after = process_resource_snapshot()?;
     let cgroup_after = container_cgroup_snapshot(&container_id)?;
     let commit = operation_workspace_commit(&client.monitor_snapshot()?)?;
+    let snapshot = client.monitor_snapshot()?;
+    let fuse_writes = snapshot
+        .operations
+        .iter()
+        .flat_map(|operation| operation.storage.iter())
+        .filter_map(|receipt| match receipt {
+            StorageReceipt::FuseWrite(receipt) => Some(*receipt),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let [fuse] = fuse_writes.as_slice() else {
+        return Err("Workspace range FUSE receipt cardinality".into());
+    };
+    let unchanged_fuse_transfer_bytes = fuse
+        .kernel_write_bytes
+        .saturating_add(fuse.client_request_copy_bytes)
+        .saturating_add(fuse.frame_payload_copy_bytes)
+        .saturating_add(fuse.client_frame_bytes)
+        .saturating_add(fuse.host_frame_bytes)
+        .saturating_add(fuse.host_decode_copy_bytes);
+    if fuse.spool_write_bytes != 0
+        || unchanged_fuse_transfer_bytes != 0
+        || (case == "workspace-range-prepend-head-10b-on-32m" && old_payload_ids_lost != 0)
+    {
+        return Err("Workspace range transfer or payload retention".into());
+    }
     if resources_before.swaps != 0
         || resources_after.swaps != 0
         || cgroup_before.swap_current != 0
@@ -3381,17 +3416,48 @@ fn workspace_range_acceptance(
         return Err("Workspace range resource or cleanup failure".into());
     }
     println!(
-        "{{\"schema\":\"fs-bench-pro-edit-engine-acceptance-v1\",\"case\":\"{case}\",\"operations\":{operations},\"initial_file_bytes\":{initial_len},\"final_file_bytes\":{current_len},\"supplied_bytes\":{},\"workspace_create_ns\":{},\"edit_ns\":{edit_ns},\"commit_ns\":{commit_ns},\"edit_commit_ns\":{edit_commit_ns},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"replacement_cdc_bytes\":{},\"old_payload_bytes_read\":{},\"process_peak_rss_bytes\":{},\"cgroup_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"cleanup_status\":\"pass\"}}",
+        "{{\"schema\":\"fs-bench-pro-edit-engine-acceptance-v1\",\"case\":\"{case}\",\"operations\":{operations},\"initial_file_bytes\":{initial_len},\"final_file_bytes\":{current_len},\"supplied_bytes\":{},\"workspace_create_ns\":{},\"edit_ns\":{edit_ns},\"commit_ns\":{commit_ns},\"edit_commit_ns\":{edit_commit_ns},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"replacement_cdc_bytes\":{},\"old_payload_bytes_read\":{},\"unchanged_fuse_transfer_bytes\":{},\"spool_write_bytes\":{},\"old_payload_object_ids\":{},\"old_payload_object_ids_lost\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"candidate_plan_ns\":{},\"content_ns\":{},\"object_admission_ns\":{},\"publication_ns\":{},\"process_peak_rss_bytes\":{},\"cgroup_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"cleanup_status\":\"pass\"}}",
         operations * replacement_len as u64,
         nanos(t0, t1),
         nanos(t0, t4),
         rate(operations, edit_ns),
         commit.cdc_bytes_scanned,
         commit.payload_bytes_read,
+        unchanged_fuse_transfer_bytes,
+        fuse.spool_write_bytes,
+        old_payload_ids.len(),
+        old_payload_ids_lost,
+        commit.edit_piece_count,
+        commit.edit_piece_height,
+        commit.edit_piece_logical_charge,
+        commit.candidate_plan_ns,
+        commit.content_ns,
+        commit.object_admission_ns,
+        commit.publication_ns,
         resources_after.peak_resident_bytes,
         cgroup_after.memory_peak,
     );
     Ok(())
+}
+
+fn payload_ids(
+    store: &dyn layerfs_layerstack_store::ObjectSource,
+    root: layerfs_content::ObjectId,
+    path: &str,
+) -> AnyResult<std::collections::BTreeSet<layerfs_content::ObjectId>> {
+    let store = layerfs_layerstack_store::CoreReader(store);
+    let path = layerfs_content::CanonicalPath::new(path)?;
+    let (stat, _) = layerfs_content::filesystem::stat(&store, root, &path)?;
+    let mut ids = std::collections::BTreeSet::new();
+    layerfs_content::file::rope::visit_extents(
+        &store,
+        layerfs_content::file::rope::FileStateRoot(stat.content_root),
+        |extents| {
+            ids.extend(extents.iter().map(|extent| extent.payload_object_id));
+            Ok(())
+        },
+    )?;
+    Ok(ids)
 }
 
 fn campaign(

@@ -6,6 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+layerfs-content = { path = "../../crates/layerfs-content" }
+layerfs-layerstack-store = { path = "../../crates/layerfs-layerstack-store" }
 layerfs-sdk = { path = "../../crates/layerfs-sdk" }
 rusqlite.workspace = true
 

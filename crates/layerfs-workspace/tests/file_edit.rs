@@ -3,14 +3,29 @@ use layerfs_layerstack_store::{
     LocalForkSource, ObjectBuffer,
 };
 use layerfs_workspace::{
-    CreateWorkspaceSession, EndWorkspaceMode, WorkspaceCommitResult, WorkspaceFileRangeEdit,
-    WorkspaceFileReplacement, WorkspacePlacement, WorkspaceProjection, WorkspaceSession,
-    Workspaces,
+    inject_candidate_failure_once, CreateWorkspaceSession, EndWorkspaceMode, WorkspaceCommitResult,
+    WorkspaceFileRangeEdit, WorkspaceFileReplacement, WorkspacePlacement, WorkspaceProjection,
+    WorkspaceSession, Workspaces,
 };
+use std::os::unix::fs::MetadataExt;
 
 fn fixture(
     label: &str,
     bytes: &[u8],
+) -> (
+    std::path::PathBuf,
+    Workspaces,
+    layerfs_layerstack_store::BranchId,
+    LayerStackStore,
+) {
+    fixture_with(label, |source| {
+        std::fs::write(source.join("file"), bytes).unwrap();
+    })
+}
+
+fn fixture_with(
+    label: &str,
+    build: impl FnOnce(&std::path::Path),
 ) -> (
     std::path::PathBuf,
     Workspaces,
@@ -27,7 +42,7 @@ fn fixture(
     ));
     let source = root.join("source");
     std::fs::create_dir_all(&source).unwrap();
-    std::fs::write(source.join("file"), bytes).unwrap();
+    build(&source);
     let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
     let layer = store
         .initialize_layerstack(
@@ -144,9 +159,72 @@ fn group_1_range_piece_eof_noop_and_repeated_boundaries() {
 }
 
 #[test]
+fn group_1_descending_overlapping_repeated_and_up_to_date_normalize_exactly() {
+    let (root, workspaces, branch, _) = fixture("normalize", b"0123456789");
+    let (session, mount) = open_session(&root, &workspaces, branch, "mount");
+    workspaces
+        .edit_workspace_file_ranges(vec![
+            WorkspaceFileRangeEdit {
+                workspace_id: session.id,
+                path: "file".into(),
+                start: 8,
+                delete_len: 2,
+                replacement: WorkspaceFileReplacement::Inline(b"XY".to_vec()),
+            },
+            WorkspaceFileRangeEdit {
+                workspace_id: session.id,
+                path: "file".into(),
+                start: 2,
+                delete_len: 2,
+                replacement: WorkspaceFileReplacement::Inline(b"AB".to_vec()),
+            },
+            WorkspaceFileRangeEdit {
+                workspace_id: session.id,
+                path: "file".into(),
+                start: 1,
+                delete_len: 4,
+                replacement: WorkspaceFileReplacement::Inline(b"wxyz".to_vec()),
+            },
+            WorkspaceFileRangeEdit {
+                workspace_id: session.id,
+                path: "file".into(),
+                start: 1,
+                delete_len: 4,
+                replacement: WorkspaceFileReplacement::Inline(b"wxyz".to_vec()),
+            },
+        ])
+        .unwrap();
+    assert_eq!(std::fs::read(mount.join("file")).unwrap(), b"0wxyz567XY");
+    assert!(matches!(
+        workspaces.commit_workspace_session(session.id).unwrap(),
+        WorkspaceCommitResult::Created { .. }
+    ));
+    edit(
+        &workspaces,
+        &session,
+        1,
+        4,
+        WorkspaceFileReplacement::Inline(b"wxyz".to_vec()),
+    )
+    .unwrap();
+    assert!(matches!(
+        workspaces.commit_workspace_session(session.id).unwrap(),
+        WorkspaceCommitResult::UpToDate { .. }
+    ));
+    workspaces
+        .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+        .unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn group_2_projection_refresh_commit_and_reopen_are_exact() {
     let (root, workspaces, branch, _) = fixture("projection", b"abcdef");
     let (session, mount) = open_session(&root, &workspaces, branch, "mount");
+    assert_eq!(
+        workspaces.session(session.id).unwrap().mutation_generation,
+        0
+    );
     edit(
         &workspaces,
         &session,
@@ -155,6 +233,10 @@ fn group_2_projection_refresh_commit_and_reopen_are_exact() {
         WorkspaceFileReplacement::Inline(b"XYZ".to_vec()),
     )
     .unwrap();
+    assert_eq!(
+        workspaces.session(session.id).unwrap().mutation_generation,
+        1
+    );
     assert_eq!(std::fs::read(mount.join("file")).unwrap(), b"abXYZef");
     edit(
         &workspaces,
@@ -164,6 +246,10 @@ fn group_2_projection_refresh_commit_and_reopen_are_exact() {
         WorkspaceFileReplacement::Zero(3),
     )
     .unwrap();
+    assert_eq!(
+        workspaces.session(session.id).unwrap().mutation_generation,
+        2
+    );
     assert_eq!(std::fs::read(mount.join("file")).unwrap(), b"a\0\0\0XYZef");
     assert!(matches!(
         workspaces.commit_workspace_session(session.id).unwrap(),
@@ -217,6 +303,66 @@ fn group_3_hard_link_aliases_share_one_edited_inode() {
     workspaces
         .end_workspace_session(session.id, EndWorkspaceMode::Discard)
         .unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn group_3_rename_parent_replace_unlink_and_final_alias_reclamation_are_inode_exact() {
+    let (root, workspaces, branch, _) = fixture_with("alias-lifecycle", |source| {
+        std::fs::create_dir(source.join("parent")).unwrap();
+        std::fs::write(source.join("parent/file"), b"abcdef").unwrap();
+        std::fs::hard_link(source.join("parent/file"), source.join("parent/alias")).unwrap();
+        std::fs::write(source.join("target"), b"replace-me").unwrap();
+    });
+    let (session, mount) = open_session(&root, &workspaces, branch, "mount");
+    std::fs::rename(mount.join("parent"), mount.join("moved")).unwrap();
+    std::fs::rename(mount.join("moved/alias"), mount.join("renamed")).unwrap();
+    std::fs::rename(mount.join("moved/file"), mount.join("target")).unwrap();
+    workspaces
+        .edit_workspace_file_range(WorkspaceFileRangeEdit {
+            workspace_id: session.id,
+            path: "target".into(),
+            start: 1,
+            delete_len: 3,
+            replacement: WorkspaceFileReplacement::Inline(b"X".to_vec()),
+        })
+        .unwrap();
+    assert_eq!(std::fs::read(mount.join("target")).unwrap(), b"aXef");
+    assert_eq!(std::fs::read(mount.join("renamed")).unwrap(), b"aXef");
+    assert_eq!(
+        std::fs::metadata(mount.join("target")).unwrap().ino(),
+        std::fs::metadata(mount.join("renamed")).unwrap().ino()
+    );
+    std::fs::remove_file(mount.join("target")).unwrap();
+    workspaces
+        .edit_workspace_file_range(WorkspaceFileRangeEdit {
+            workspace_id: session.id,
+            path: "renamed".into(),
+            start: 1,
+            delete_len: 1,
+            replacement: WorkspaceFileReplacement::Inline(b"YZ".to_vec()),
+        })
+        .unwrap();
+    assert_eq!(std::fs::read(mount.join("renamed")).unwrap(), b"aYZef");
+    std::fs::remove_file(mount.join("renamed")).unwrap();
+    assert!(matches!(
+        workspaces.commit_workspace_session(session.id).unwrap(),
+        WorkspaceCommitResult::Created { .. }
+    ));
+    workspaces
+        .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+        .unwrap();
+    let (reopened, reopen) = open_session(&root, &workspaces, branch, "reopen");
+    assert!(!reopen.join("target").exists());
+    assert!(!reopen.join("renamed").exists());
+    assert!(reopen.join("moved").is_dir());
+    workspaces
+        .end_workspace_session(reopened.id, EndWorkspaceMode::Clean)
+        .unwrap();
+    assert!(std::fs::read_dir(root.join("runtime/workspaces"))
+        .unwrap()
+        .next()
+        .is_none());
     std::fs::remove_dir_all(root).unwrap();
 }
 
@@ -283,6 +429,76 @@ fn group_5_commit_publication_is_exactly_once_and_retry_is_up_to_date() {
         .end_workspace_session(session.id, EndWorkspaceMode::Clean)
         .unwrap();
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn group_5_candidate_admission_and_publication_failures_retry_once() {
+    let inserted_objects = {
+        let (root, workspaces, branch, store) = fixture("commit-boundary-count", b"abcdef");
+        let (session, _) = open_session(&root, &workspaces, branch, "mount");
+        edit(
+            &workspaces,
+            &session,
+            0,
+            0,
+            WorkspaceFileReplacement::Inline(b"P".to_vec()),
+        )
+        .unwrap();
+        let before = store.store_counts().unwrap().objects;
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::Created { .. }
+        ));
+        let inserted = store.store_counts().unwrap().objects - before;
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+        inserted
+    };
+    for failure in [
+        None,
+        Some(1_u64),
+        Some(inserted_objects + 1),
+        Some(inserted_objects + 2),
+    ] {
+        let label = format!("commit-boundary-{}", failure.unwrap_or(0));
+        let (root, workspaces, branch, store) = fixture(&label, b"abcdef");
+        let (session, mount) = open_session(&root, &workspaces, branch, "mount");
+        edit(
+            &workspaces,
+            &session,
+            0,
+            0,
+            WorkspaceFileReplacement::Inline(b"P".to_vec()),
+        )
+        .unwrap();
+        let before = store.store_counts().unwrap();
+        let branch_before = store.branch(branch).unwrap().unwrap();
+        match failure {
+            None => inject_candidate_failure_once(),
+            Some(statement) => set_transaction_failure_at(Some(statement)),
+        }
+        let failed = workspaces.commit_workspace_session(session.id);
+        set_transaction_failure_at(None);
+        assert!(failed.is_err(), "failure={failure:?} result={failed:?}");
+        assert_eq!(store.store_counts().unwrap(), before);
+        assert_eq!(store.branch(branch).unwrap().unwrap(), branch_before);
+        assert_eq!(std::fs::read(mount.join("file")).unwrap(), b"Pabcdef");
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::Created { .. }
+        ));
+        assert_eq!(store.store_counts().unwrap().commits, before.commits + 1);
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::UpToDate { .. }
+        ));
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[test]

@@ -223,6 +223,8 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 name = "fs-benchmark-pro"
 version = "0.1.1"
 dependencies = [
+ "layerfs-content",
+ "layerfs-layerstack-store",
  "layerfs-sdk",
  "rusqlite",
 ]

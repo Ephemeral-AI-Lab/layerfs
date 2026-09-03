@@ -4,7 +4,8 @@ use layerfs_layerstack_store::{
     LayerStackStore, LocalForkSource,
 };
 use layerfs_workspace::{
-    EndWorkspaceMode, ResolveChoice, WorkspaceCommitResult, WorkspacePlacement, Workspaces,
+    inject_projection_refresh_failure_once, EndWorkspaceMode, ResolveChoice, WorkspaceCommitResult,
+    WorkspacePlacement, WorkspaceState, Workspaces,
 };
 
 #[test]
@@ -70,6 +71,95 @@ fn materialized_resolution_ignores_unrelated_edits_and_remains_writable_after_co
 
     drop(workspaces);
     drop(store);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn published_commit_reports_projection_failure_and_recovers_without_recommit() {
+    let root = temp();
+    std::fs::create_dir_all(&root).unwrap();
+    let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+    let initialized = store
+        .initialize_layerstack(
+            EntityName::new("project").unwrap(),
+            LayerStackInitialization::Empty,
+        )
+        .unwrap();
+    let accepted = store
+        .fork_branch(
+            EntityName::new("accepted").unwrap(),
+            LocalForkSource::Layer {
+                layer_id: initialized.genesis_layer_id,
+            },
+        )
+        .unwrap();
+    let stale = store
+        .fork_branch(
+            EntityName::new("stale").unwrap(),
+            LocalForkSource::Layer {
+                layer_id: initialized.genesis_layer_id,
+            },
+        )
+        .unwrap();
+    commit(&store, accepted, b"layer");
+    let AddLayerResult::Added { layer_id: current } = store.add_layer(accepted).unwrap() else {
+        panic!("accepted Add")
+    };
+    commit(&store, stale, b"branch");
+    let commits_before = store.store_counts().unwrap().commits;
+    let previous_head = store.branch(stale).unwrap().unwrap().head_commit_id;
+
+    let workspaces = Workspaces::new(root.join("runtime"), store.clone()).unwrap();
+    let (workspace_id, _) = workspaces
+        .create_reconciliation_workspace(stale, current)
+        .unwrap();
+    let conflict = workspaces
+        .workspace_conflicts(workspace_id, None)
+        .unwrap()
+        .conflicts[0]
+        .conflict_id;
+    workspaces
+        .resolve_workspace_conflict(workspace_id, conflict, ResolveChoice::Layer)
+        .unwrap();
+    let WorkspacePlacement::Host { root: mount } =
+        workspaces.session(workspace_id).unwrap().session.placement
+    else {
+        panic!("materialized host Workspace")
+    };
+    std::fs::write(mount.join("a"), b"once").unwrap();
+    inject_projection_refresh_failure_once();
+    let WorkspaceCommitResult::CreatedPresentationFailed {
+        previous_head: observed_previous,
+        commit_id,
+    } = workspaces.commit_workspace_session(workspace_id).unwrap()
+    else {
+        panic!("published presentation failure")
+    };
+    assert_eq!(observed_previous, previous_head);
+    assert_eq!(
+        store.branch(stale).unwrap().unwrap().head_commit_id,
+        Some(commit_id)
+    );
+    assert_eq!(store.store_counts().unwrap().commits, commits_before + 1);
+    assert_eq!(
+        workspaces.session(workspace_id).unwrap().session.state,
+        WorkspaceState::BrokenPresentation
+    );
+
+    let recovered = workspaces
+        .recover_workspace_presentation(workspace_id)
+        .unwrap();
+    assert_eq!(recovered.state, WorkspaceState::Active);
+    assert_eq!(std::fs::read(mount.join("z")).unwrap(), b"layer");
+    assert_eq!(std::fs::read(mount.join("a")).unwrap(), b"once");
+    assert!(matches!(
+        workspaces.commit_workspace_session(workspace_id).unwrap(),
+        WorkspaceCommitResult::UpToDate { head: Some(head) } if head == commit_id
+    ));
+    assert_eq!(store.store_counts().unwrap().commits, commits_before + 1);
+    workspaces
+        .end_workspace_session(workspace_id, EndWorkspaceMode::Clean)
+        .unwrap();
     std::fs::remove_dir_all(root).unwrap();
 }
 

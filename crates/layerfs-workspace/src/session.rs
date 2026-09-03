@@ -298,6 +298,13 @@ pub enum WorkspaceCommitResult {
     UpToDate {
         head: Option<CommitId>,
     },
+    CreatedPresentationFailed {
+        previous_head: Option<CommitId>,
+        commit_id: CommitId,
+    },
+    UpToDatePresentationFailed {
+        head: Option<CommitId>,
+    },
     Busy,
     HeadMoved {
         expected: Option<CommitId>,
@@ -318,6 +325,20 @@ impl WorkspaceCommitResult {
             layerfs_layerstack_store::CommitOutcome::UpToDate { .. } => Self::UpToDate {
                 head: previous_head,
             },
+        }
+    }
+
+    pub(crate) fn presentation_failed(self) -> Self {
+        match self {
+            Self::Created {
+                previous_head,
+                commit_id,
+            } => Self::CreatedPresentationFailed {
+                previous_head,
+                commit_id,
+            },
+            Self::UpToDate { head } => Self::UpToDatePresentationFailed { head },
+            result => result,
         }
     }
 }

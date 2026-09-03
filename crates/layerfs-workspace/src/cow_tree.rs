@@ -435,7 +435,11 @@ impl Workspace {
             canonical: Some(inode),
             paths: BTreeSet::from([path]),
             mode: portable.permission_mode,
-            links: record.namespace_ref_count as u32,
+            links: if record.kind == InodeKind::Directory {
+                2
+            } else {
+                record.namespace_ref_count as u32
+            },
             pins: 0,
             mtime_seconds: portable.mtime_seconds,
             mtime_nanoseconds: portable.mtime_nanoseconds,

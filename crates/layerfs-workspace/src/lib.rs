@@ -41,3 +41,15 @@ pub use session::{
     WorkspaceId, WorkspacePlacement, WorkspaceProjection, WorkspaceResult, WorkspaceSession,
     WorkspaceSummary,
 };
+
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn inject_projection_refresh_failure_once() {
+    projection::inject_refresh_failure_once();
+}
+
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub fn inject_candidate_failure_once() {
+    changes::inject_candidate_failure_once();
+}

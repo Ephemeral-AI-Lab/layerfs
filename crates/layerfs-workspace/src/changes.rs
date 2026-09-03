@@ -33,6 +33,12 @@ struct FinalEntry {
 
 impl Workspace {
     pub(crate) fn build_candidate(&mut self) -> Result<BuiltRoot> {
+        #[cfg(debug_assertions)]
+        if INJECT_CANDIDATE_FAILURE.with(|inject| inject.replace(false)) {
+            return Err(StorageError::Integrity(
+                "injected Workspace candidate failure",
+            ));
+        }
         if let Some(candidate) = self.build_localized_candidate()? {
             return Ok(candidate);
         }
@@ -883,6 +889,16 @@ impl Workspace {
             )?
             .target)
     }
+}
+
+#[cfg(debug_assertions)]
+thread_local! {
+    static INJECT_CANDIDATE_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(debug_assertions)]
+pub(crate) fn inject_candidate_failure_once() {
+    INJECT_CANDIDATE_FAILURE.with(|inject| inject.set(true));
 }
 
 fn note_commit_phase(phase: WorkspaceCommitPhase, started: Instant) {
