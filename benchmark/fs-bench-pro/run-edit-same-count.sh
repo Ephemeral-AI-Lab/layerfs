@@ -348,6 +348,7 @@ await_daemon_exit() {
   set -e
   stopped=$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}} {{.State.OOMKilled}}' "$active_container")
   [[ $status == 0 && $exit_code == 0 && $stopped == 'exited 0 false' ]] || die "daemon did not exit cleanly after sample"
+  if [[ $family_kind == same-count ]]; then sleep 0.2; fi
 }
 
 run_precondition() {

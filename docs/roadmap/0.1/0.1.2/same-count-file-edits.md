@@ -230,6 +230,10 @@ arms have the same image/commit/product/harness/workload identity, report A/A
 repeatability, classify it with label-invariant `max(A/B, B/A)`, and make no
 baseline/candidate improvement claim. For a directional candidate/baseline row:
 
+The one-shot A/A daemon is observed at clean exit after every sample, followed
+by the retained 200 ms Docker Desktop settling interval outside all measured
+phase and family-wall receipts.
+
 ```text
 median(candidate / unchanged baseline) <= 1.05
 ```
