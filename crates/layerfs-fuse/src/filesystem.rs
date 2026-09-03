@@ -539,7 +539,7 @@ impl Filesystem for LayerFs {
                 &attr,
                 Generation(0),
                 FileHandle(handle),
-                FopenFlags::FOPEN_KEEP_CACHE,
+                FopenFlags::FOPEN_DIRECT_IO,
             ),
             Err(error) => reply.error(error),
         }

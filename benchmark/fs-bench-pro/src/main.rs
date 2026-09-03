@@ -2083,8 +2083,13 @@ fn count_changing_performance_case(
     let process_before = process_resource_snapshot()?;
     let container_before = container_cgroup_snapshot(&container_id)?;
     let init_started = Instant::now();
+    let layerstack_name = if scenario.cohort == "primary" {
+        format!("{}-{source}-{seed}", scenario.id)
+    } else {
+        format!("scale-{}-{seed}", scenario.kind.operation())
+    };
     let initialized = client.initialize_layerstack(
-        EntityName::new(format!("{}-{source}-{seed}", scenario.id))?,
+        EntityName::new(layerstack_name)?,
         LayerStackInitialization::Directory(fixture.to_owned()),
     )?;
     let layerstack_init_ns = elapsed_ns(init_started);
