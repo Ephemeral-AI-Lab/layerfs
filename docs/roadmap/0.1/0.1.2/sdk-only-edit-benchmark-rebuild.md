@@ -190,6 +190,14 @@ sample remains pristine, sample mutation cannot alter the master or next
 sample, cross-family reuse preserves the artifact identity, and invalidation,
 corruption, concurrent builders, and interrupted publication fail safely.
 
+Before performance, a separate preparation-only canonical-path qualifier runs
+on disposable pristine Store clones and seals exact expected Branch, file,
+mapping roots and extent counts for every plan in `qualification.tsv`. It does
+not execute inside the performance or verifier process. Each source-arm
+verifier consumes these presealed expectations and independently checks its
+streamed byte oracle; agreement between the two measured arms alone is not an
+expected-root proof. These expected values are never input to the mutation.
+
 ### Replacement profile
 
 All ordinary Inline replacement bytes are generated before timing from a
@@ -866,6 +874,33 @@ cohorts as process RSS. The cgroup sampler uses the same maximum 1 ms interval,
 T0/T3 boundary observations, interior-observation requirement, and coverage
 failure semantics.
 
+### Clock-domain and boundary implementation
+
+Host T0/T1/T3/T4 and external RSS observations use the same native
+`CLOCK_MONOTONIC_RAW` domain. T2 reuses T1; no wall-clock query or resource RPC
+is inserted between T3 and End. The daemon sampler uses an `Instant`-relative
+monotonic epoch, not an assumed host/VM wall-clock alignment.
+
+An authenticated pre-edit start response supplies daemon receive/send times.
+Together with host send/receive times, it bounds offset uncertainty after
+subtracting daemon processing time. At most five pre-edit calibration setups
+may be discarded; no mutation or performance sample has run at that point.
+Offset uncertainty must be at most 400 microseconds, followed by a fixed
+untimed 2 ms sampler-settle interval. The receipt declares a conservative
+1000 ppm clock-rate allowance, applied to the observed calibration-to-T3 age;
+that age is capped at two seconds. Total uncertainty is carried into the
+existing one-millisecond coverage gate, never added as a tolerance to it.
+
+For mapped boundaries `M0`, `M3` and total uncertainty `U`, choose baseline
+`B <= M0-U` and final sample `F >= M3+U`. Require worst-case distances
+`M0+U-B <= 1 ms` and `F-(M3-U) <= 1 ms`. An interior witness must lie strictly
+between `M0+U` and `M3-U`. Domain, dirty/writeback, swap, and total sampled peaks
+cover the expanded possible phase `[M0-U, M3+U]` and are labeled conservative
+uncertainty-bounded phase peaks. The final lifetime guard uses the first
+boundary sample at or after `M3+U`. Raw records retain calibration operands,
+mapped bounds, worst distances, and an interior witness so the report
+generator independently recomputes coverage. Missing bracketing sides fail.
+
 If the required phase/sample scope or attribution is unavailable, the row is
 admission-ineligible. Do not substitute a campaign-lifetime peak, subtract
 process RSS from cgroup memory, or classify physical spool disk as RSS.
@@ -911,10 +946,10 @@ performance summaries. There is no synthetic 100 GiB verifier.
 run-edit-*.sh --self-check
     no Docker or product execution; target under 2 seconds
 
-run-edit-*.sh RUN_ID CONTAINER --case ID --repetition 1 --mode performance
+run-edit-*.sh RUN_ID CONTAINER --case ID --repetition 1 --mode performance --source candidate
     exactly one final-source row; no verifier; admission_eligible=false
 
-run-edit-*.sh RUN_ID CONTAINER --case ID --mode verify
+run-edit-*.sh RUN_ID CONTAINER --case ID --mode verify --source candidate
     exactly one verifier; admission_eligible=false
 
 run-edit-*.sh RUN_ID CONTAINER --all --mode admission
@@ -945,6 +980,11 @@ one 500 MiB verifier        30 seconds
 The family wrapper computes its ceiling from registered workers and prepare /
 verify budgets. It does not use one arbitrary 150-second operation timeout.
 Setup walls are always reported separately.
+The external performance supervisor additionally caps the whole
+edit/Commit/End region at two seconds. This stronger development tripwire
+enforces the individual two-second call ceilings without adding phase-marker
+work between the public calls; the complete fresh-worker ceiling remains ten
+seconds.
 
 ## Static and runtime route enforcement
 
@@ -1049,6 +1089,28 @@ Before implementation or collection:
 5. only then edit the harness, definitions, or runners.
 
 ## Completion gates
+
+### Documentation-only finalization bridge
+
+Retain the exact measured candidate revision and its repository-gate receipts.
+After its family evidence passes, generated human reports and evidence may be
+committed at a later revision only through a checked documentation-only bridge:
+product, source, harness, Cargo lock, contract, workload, preparation
+compatibility, and both report generators plus the custody helper must remain
+byte-identical. The intervening diff is limited to the release-note documents,
+the v0.1.2 roadmap README, optimization history, and the explicitly named new
+SDK family/build/repository-gate/terminal evidence directories. The frozen
+specification and benchmark rules are not editable through this bridge.
+
+Run a second complete repository-gate sequence on that documentation-complete
+commit, recording both its revision and the measured candidate plus the exact
+approved diff. A final evidence-record commit may add only those gate/terminal
+artifacts and the release evidence-selector JSON; it cannot change human claims
+or code. The terminal evaluator requires both gate sets and validates this
+last evidence-only diff. This avoids self-referential report/commit hashes
+without reusing stale product evidence or relaxing any benchmark gate.
+
+### Terminal checklist
 
 - [ ] All active edit mutations use the public SDK and zero forbidden routes.
 - [ ] One definition and one runner own each of the three complete families.

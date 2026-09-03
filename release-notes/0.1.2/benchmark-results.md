@@ -43,6 +43,8 @@ families.
 Empirical edit claims stop at 500 MiB. No synthetic, measured, or extrapolated
 100 GiB result is permitted.
 
-The report generator remains bound to the archival evidence until issue #20
-produces sealed raw JSONL. It must be rebuilt from that new raw evidence before
-this document can become a final candidate report.
+The report generator now accepts only a manifest naming all three sealed
+SDK-only family runs and the exact-candidate repository gates. It fails closed
+while those inputs are incomplete; there is no archival fallback. This blocker
+record becomes a generated candidate report only after the complete terminal
+evaluation passes.

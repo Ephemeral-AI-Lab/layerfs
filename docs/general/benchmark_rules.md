@@ -392,6 +392,13 @@ rss_final_bytes
 Sampling MUST cover both timed boundaries and contain at least one interior
 observation. A missed boundary, an excessive gap, or otherwise incomplete
 coverage makes the phase peak unavailable and the row admission-ineligible.
+Different clock domains MUST NOT be compared as though their epochs were
+identical. Calibrate offset and uncertainty outside operation timing, retain
+all calibration operands and any bounded clock-rate allowance, and propagate
+uncertainty into boundary selection and guaranteed-interior checks. A nominally
+nearby sample on the wrong possible side of a boundary is not coverage. Sampled
+maxima over an uncertainty-expanded interval MUST be labeled conservative;
+uncertainty MUST NOT hide a possible phase spike or relax the boundary/gap gate.
 Resettable cgroup `memory.peak` remains an exact total peak; polled cgroup
 domains require the same coverage disclosure.
 
