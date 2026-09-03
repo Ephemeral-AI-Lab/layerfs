@@ -6,7 +6,13 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 repo=$(cd "$here/../.." && pwd -P)
 family_kind=${LAYERFS_EDIT_FAMILY:-same-count}
 [[ $family_kind == same-count || $family_kind == count-changing ]] || { printf 'unknown edit family: %s\n' "$family_kind" >&2; exit 2; }
-if [[ $family_kind == same-count ]]; then evidence_version=v3; else evidence_version=v2; fi
+if [[ $family_kind == same-count ]]; then
+  evidence_version=v3
+  performance_schema=fs-bench-pro-edit-performance-v1
+else
+  evidence_version=v3
+  performance_schema=fs-bench-pro-edit-performance-v2
+fi
 if [[ $family_kind == same-count ]]; then
   results_root=${LAYERFS_SAME_COUNT_RESULTS_ROOT:-$repo/benchmark-results/fs-bench-pro/edit-same-count}
 else
@@ -227,11 +233,13 @@ if [[ -n $paired_container ]]; then
   if [[ $source_arm == a-a-repeatability ]]; then [[ $(docker inspect -f '{{.Image}}' "$paired_container") == $(docker inspect -f '{{.Image}}' "$container") ]] || die "A/A repeatability requires identical image identity"; fi
 fi
 if [[ $family_kind == count-changing && $source_arm == baseline-candidate ]]; then
-  expected_baseline_revision=a7583306f9793bd17fdfa4ff7ada667606dfe4b3
-  expected_baseline_source_seal=9e46b9f7347d669993b68835bc150664ee11cf9d4f1efab9ec4d5f3545322cd0
   expected_baseline_workload=ce1e14e7c3078190085311c9b6a558bba6caa86a4930a2e26095ddf2de220ffc
-  read -r baseline_revision baseline_source_seal baseline_workload < <(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "dev.layerfs.source-seal"}} {{index .Config.Labels "dev.layerfs.workload-source-sha256"}}' "$paired_container")
-  [[ $baseline_revision == "$expected_baseline_revision" && $baseline_source_seal == "$expected_baseline_source_seal" && $baseline_workload == "$expected_baseline_workload" ]] || die "count-changing baseline custody"
+  expected_product_seal=$("$here/run-namespace.sh" --product-seal)
+  read -r baseline_revision baseline_source_seal baseline_product_seal baseline_workload < <(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "dev.layerfs.source-seal"}} {{index .Config.Labels "dev.layerfs.product-seal"}} {{index .Config.Labels "dev.layerfs.workload-source-sha256"}}' "$paired_container")
+  read -r candidate_revision candidate_product_seal candidate_workload < <(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "dev.layerfs.product-seal"}} {{index .Config.Labels "dev.layerfs.workload-source-sha256"}}' "$container")
+  [[ $baseline_revision == "$candidate_revision" && $candidate_revision == $(git -C "$repo" rev-parse HEAD) ]] || die "baseline/candidate revision custody"
+  [[ $baseline_product_seal == "$expected_product_seal" && $candidate_product_seal == "$expected_product_seal" ]] || die "baseline/candidate product seal custody"
+  [[ $baseline_workload == "$expected_baseline_workload" && $candidate_workload == $(shasum -a 256 "$here/workload.rs" | awk '{print $1}') ]] || die "baseline/candidate workload custody"
   candidate_container_id=$(docker inspect -f '{{.Id}}' "$container")
   baseline_container_id=$(docker inspect -f '{{.Id}}' "$paired_container")
   [[ $candidate_container_id != "$baseline_container_id" ]] || die "baseline/candidate containers must be distinct"
@@ -243,12 +251,6 @@ import sys
 parse=lambda value: datetime.fromisoformat(value.replace('Z','+00:00'))
 assert abs((parse(sys.argv[1])-parse(sys.argv[2])).total_seconds()) <= 60
 PY
-  [[ $(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$container") == $(git -C "$repo" rev-parse HEAD) ]] || die "candidate revision custody"
-  [[ $(docker inspect -f '{{index .Config.Labels "dev.layerfs.workload-source-sha256"}}' "$container") == $(shasum -a 256 "$here/workload.rs" | awk '{print $1}') ]] || die "candidate workload custody"
-  git -C "$repo" diff --quiet "$expected_baseline_revision" HEAD -- \
-    crates/layerfs-content crates/layerfs-daemon crates/layerfs-layerstack-store \
-    crates/layerfs-sdk crates/layerfs-workspace crates/layerfs-fuse \
-    crates/layerfs-materialization crates/layerfs-monitor || die "baseline/candidate product sources differ"
 fi
 
 cp "$prepared/identity.txt" "$run_dir/environment/prepared-identity.txt"
@@ -259,8 +261,8 @@ cp "$prepared/image.json" "$run_dir/environment/image.json"
 cp "$prepared/static-edit-proof.json" "$run_dir/environment/static-edit-proof.json"
 cp -R "$prepared/issue14-r005-custody" "$run_dir/environment/issue14-r005-custody"
 if [[ $family_kind == count-changing && $source_arm == baseline-candidate ]]; then
-  printf 'baseline_revision=%s\nbaseline_source_seal=%s\nbaseline_workload_sha256=%s\nbaseline_container_id=%s\ncandidate_container_id=%s\nbaseline_created=%s\ncandidate_created=%s\nmaximum_creation_skew_seconds=60\nproduct_source_diff=none\nattribution=portable-container-workload-implementation\n' \
-    "$baseline_revision" "$baseline_source_seal" "$baseline_workload" "$baseline_container_id" "$candidate_container_id" "$baseline_created" "$candidate_created" >"$run_dir/environment/baseline-custody.txt"
+  printf 'baseline_revision=%s\nbaseline_source_seal=%s\nbaseline_product_seal=%s\nbaseline_workload_sha256=%s\ncandidate_revision=%s\ncandidate_product_seal=%s\ncandidate_workload_sha256=%s\nbaseline_container_id=%s\ncandidate_container_id=%s\nbaseline_created=%s\ncandidate_created=%s\nmaximum_creation_skew_seconds=60\nproduct_source_diff=none\nattribution=portable-container-workload-implementation\n' \
+    "$baseline_revision" "$baseline_source_seal" "$baseline_product_seal" "$baseline_workload" "$candidate_revision" "$candidate_product_seal" "$candidate_workload" "$baseline_container_id" "$candidate_container_id" "$baseline_created" "$candidate_created" >"$run_dir/environment/baseline-custody.txt"
 fi
 docker inspect "$container" >"$run_dir/environment/container.json"
 if [[ -n $paired_container ]]; then docker inspect "$paired_container" >"$run_dir/environment/paired-container.json"; fi
@@ -390,7 +392,10 @@ seal_failed_run() {
   printf '%s\n' "${failure_reason:-unhandled runner failure}" >"$run_dir/environment/failure.txt"
   failure_command_safe=${failure_command:-unknown}
   if [[ -n ${daemon_capability:-} ]]; then failure_command_safe=${failure_command_safe//$daemon_capability/[REDACTED]}; fi
-  printf 'exit_status=%s\nline=%s\ncommand=%s\nsummary_stderr=%s\n' "$status" "${failure_line:-unknown}" "$failure_command_safe" "$run_dir/environment/summary.stderr.txt" >"$run_dir/environment/failure-context.txt"
+  printf 'exit_status=%s\nfailing_status=%s\nline=%s\ncommand=%s\nmode=%s\ncase=%s\nseed=%s\narm=%s\nstderr=%s\nsummary_stderr=%s\n' \
+    "$status" "${failure_exit_status:-$status}" "${failure_line:-unknown}" "$failure_command_safe" "$mode" \
+    "${failure_case:-not-applicable}" "${failure_seed:-not-applicable}" "${failure_arm:-$source_arm}" \
+    "${failure_stderr:-not-applicable}" "$run_dir/environment/summary.stderr.txt" >"$run_dir/environment/failure-context.txt"
   python3 - "$run_dir/run-status.json" "$family_kind" "$evidence_version" "$mode" "$source_arm" "${failure_reason:-unhandled runner failure}" <<'PY'
 import json,sys
 path,family,version,mode,source,reason=sys.argv[1:]
@@ -410,7 +415,7 @@ fixture_for() {
 }
 
 run_performance() {
-  local case_id=$1 sample_seed=$2 ordinal=$3 active_container=$4 active_arm=$5 fixture sample_dir cache status wall_started benchmark_command
+  local case_id=$1 sample_seed=$2 ordinal=$3 active_container=$4 active_arm=$5 fixture sample_dir cache status wall_started benchmark_command command_line
   wall_started=$(python3 -c 'import time; print(time.monotonic_ns())')
   fixture=$(fixture_for "$case_id")
   sample_dir="$run_dir/scenarios/$case_id/$active_arm/seed-$sample_seed"
@@ -418,6 +423,7 @@ run_performance() {
   cache=$([[ $ordinal == 1 ]] && printf generated-first-sample-uncontrolled || printf generated-subsequent-sample-uncontrolled)
   ensure_container "$active_container"
   benchmark_command=$([[ $family_kind == same-count ]] && printf same-count-performance || printf count-changing-performance)
+  command_line=$LINENO
   set +e
   perl -e 'alarm 5; exec @ARGV' env \
     LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload \
@@ -432,13 +438,23 @@ run_performance() {
   if [[ $status != 0 ]]; then
     docker inspect "$active_container" >"$sample_dir/container-failure.json" 2>/dev/null || true
     docker logs "$active_container" >"$sample_dir/container-failure.log" 2>&1 || true
-    die "performance failed: $case_id seed $sample_seed"
+    failure_line=$command_line
+    failure_command="$binary $benchmark_command <work> <fixture> $container_id $case_id $sample_seed $active_arm $cache"
+    failure_reason="performance failed: $case_id seed $sample_seed"
+    failure_exit_status=$status
+    failure_case=$case_id
+    failure_seed=$sample_seed
+    failure_arm=$active_arm
+    failure_stderr="$sample_dir/supervisor.txt"
+    die "$failure_reason"
   fi
   await_daemon_exit "$active_container"
-  python3 - "$sample_dir/raw.jsonl" "$case_id" "$sample_dir/classification.json" "$mode" "$family_kind" <<'PY'
+  command_line=$LINENO
+  set +e
+  python3 - "$sample_dir/raw.jsonl" "$case_id" "$sample_dir/classification.json" "$mode" "$family_kind" "$performance_schema" 2>"$sample_dir/classification.stderr.txt" <<'PY'
 import json, sys
 rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith('{')]
-rows=[x for x in rows if x.get('schema') == 'fs-bench-pro-edit-performance-v1']
+rows=[x for x in rows if x.get('schema') == sys.argv[6]]
 assert len(rows)==1 and rows[0]['scenario_id']==sys.argv[2]
 r=rows[0]
 assert r['attempted_operations']==r['completed_operations']==r['operation_count']
@@ -489,7 +505,20 @@ if sys.argv[4] in ('admission','repeatability'):
 else:
     assert overall in ('target-pass','tolerated-pass')
 PY
-  grep '"schema":"fs-bench-pro-edit-performance-v1"' "$sample_dir/raw.jsonl" >>"$run_dir/performance/raw.jsonl"
+  status=$?
+  set -e
+  if [[ $status != 0 ]]; then
+    failure_line=$command_line
+    failure_command="python3 classify $case_id seed $sample_seed $active_arm"
+    failure_reason="classification failed: $case_id seed $sample_seed"
+    failure_exit_status=$status
+    failure_case=$case_id
+    failure_seed=$sample_seed
+    failure_arm=$active_arm
+    failure_stderr="$sample_dir/classification.stderr.txt"
+    die "$failure_reason"
+  fi
+  grep "\"schema\":\"$performance_schema\"" "$sample_dir/raw.jsonl" >>"$run_dir/performance/raw.jsonl"
   performance_external_wall_ns=$(( performance_external_wall_ns + $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
 }
 
@@ -552,7 +581,7 @@ oracle_digest() {
 }
 
 run_verify() {
-  local case_id=$1 sample_seed=$2 active_container=$3 active_arm=$4 fixture expected expected_size verify_dir status wall_started structural_oracle
+  local case_id=$1 sample_seed=$2 active_container=$3 active_arm=$4 fixture expected expected_size verify_dir status wall_started verifier_wall_ns structural_oracle
   wall_started=$(python3 -c 'import time; print(time.monotonic_ns())')
   if [[ $family_kind == count-changing ]] && printf '%s\n' "${count_changing_verifiers[@]}" | grep -Fx "$case_id" >/dev/null; then
     structural_oracle="$run_dir/oracles/$case_id.bin"
@@ -652,7 +681,9 @@ PY
   set -e
   printf '%s\n' "$status" >"$verify_dir/exit-status.txt"
   if [[ $status == 0 ]]; then await_daemon_exit "$active_container"; fi
-  verification_external_wall_ns=$(( verification_external_wall_ns + $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
+  verifier_wall_ns=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
+  printf '%s\n' "$verifier_wall_ns" >"$verify_dir/external-wall-ns.txt"
+  verification_external_wall_ns=$(( verification_external_wall_ns + verifier_wall_ns ))
   if [[ $status != 0 ]]; then verification_failure="$case_id seed $sample_seed"; return 1; fi
 }
 

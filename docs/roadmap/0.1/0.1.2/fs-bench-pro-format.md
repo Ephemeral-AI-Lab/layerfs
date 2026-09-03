@@ -174,12 +174,13 @@ workspace_end_ns      = T4 - T3
 complete_lifecycle_ns = T4 - T0
 ```
 
-Add operation throughput without moving these boundaries:
+Add operation throughput from the mutation-only sub-interval without moving the
+public lifecycle boundaries:
 
 ```text
-operations_per_second = completed_operations * 1e9 / execution_ns
-supplied_bytes_per_second = supplied_bytes * 1e9 / execution_ns
-rewrite_bytes_per_second = copied_payload_bytes * 1e9 / execution_ns
+operations_per_second = completed_operations * 1e9 / inner_edit_ns
+supplied_bytes_per_second = supplied_bytes * 1e9 / inner_edit_ns
+rewrite_bytes_per_second = copied_payload_bytes * 1e9 / inner_edit_ns
 ```
 
 Use `null` plus a status for an inapplicable or unavailable rate; never emit a
@@ -191,7 +192,7 @@ Create an append-only schema rather than changing `fs-bench-pro-v4` in place:
 
 ```json
 {
-  "schema": "fs-bench-pro-edit-performance-v1",
+  "schema": "fs-bench-pro-edit-performance-v2",
   "family_id": "edit-count-changing",
   "scenario_id": "append-tail-4k-ops-100",
   "display_name": "Append 4 KiB at tail, 100 operations",
@@ -233,6 +234,12 @@ process/cgroup RSS, swap, OOM, timeout, cache profile, source seal, image digest
 and receipt-availability statuses. Keep fields flat unless a repeated structure
 has independently justified nesting; existing parsers are line-oriented.
 
+`fs-bench-pro-edit-performance-v1` remains the same-count schema and identifies
+the superseded count-changing diagnostic runs. Count-changing release evidence
+uses the append-only `v2` identity: `inner_edit_ns` contains only the selected
+filesystem mutation calls, while the cheap final-length validity check runs
+immediately afterward and still invalidates a wrong result.
+
 Frozen v0.1.0 rows continue to emit their original schema plus a v0.1.2 wrapper
 record containing `family_id`, descriptive `display_name`, source arm, and
 campaign identity. Do not rewrite historical raw lines.
@@ -243,7 +250,7 @@ Keep verifier results separate:
 
 ```json
 {
-  "schema": "fs-bench-pro-edit-verification-v1",
+  "schema": "fs-bench-pro-edit-verification-v2",
   "family_id": "edit-count-changing",
   "scenario_id": "append-tail-4k-ops-100",
   "verification_id": "exact-result",
@@ -257,12 +264,17 @@ Keep verifier results separate:
   "fresh_reopen_status": "pass",
   "resource_status": "pass",
   "cleanup_status": "pass",
+  "setup_ns": 10000000,
   "verification_ns": 25000000
 }
 ```
 
 Failure injection and conformance groups use the same verifier stream with a
 descriptive `verification_id`. They do not masquerade as timed scenarios.
+The `v2` verifier schema separates Store/init/Workspace preparation in
+`setup_ns` from edit, Commit, oracle, reconnect, reopen, digest, resource, and
+cleanup proof work in `verification_ns`; the runner also retains each
+verifier's external command wall separately.
 
 ## Evidence layout
 

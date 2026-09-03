@@ -197,6 +197,10 @@ LAYERFS_COUNT_CHANGING_ANCHOR_FIXTURE=/absolute/registered-32m-directory \
 Directional baseline/candidate admission gates every scenario's ratio of
 medians. Identical-source A/A may use the owner-approved symmetric aggregate
 family-wall rule, but it never replaces directional optimization evidence.
+Both directional images must carry the same final product seal and revision;
+only their workload/source seals differ. Count-changing release receipts use
+performance schema `v2`, whose `inner_edit_ns` excludes the post-operation
+final-length validity check while still requiring that check to pass.
 The frozen 32 MiB anchor's absolute path, size, digest, environment variable,
 and exact command are part of custody.
 

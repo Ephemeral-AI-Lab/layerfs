@@ -79,6 +79,13 @@ arm identities. Terminal acceptance uses distinct sealed baseline and candidate
 containers; identical-source diagnostics use alternating A/A labels on one
 prepared daemon and make no improvement claim.
 
+For `fs-bench-pro-edit-performance-v2`, `inner_edit_ns` begins immediately
+before the first selected append/truncate/sparse/rewrite call and ends after the
+last call's required `sync_all` and rename. The workload reports and validates
+the final file length immediately after that interval. This corrects the
+superseded `v1` count-changing diagnostic boundary, which also charged an
+internal per-operation `stat` validity check to throughput.
+
 The benchmark daemon is one-shot. After each measured process disconnects, the
 runner observes its clean container exit before starting the next arm. Baseline
 and candidate use distinct containers created within 60 seconds of each other
@@ -268,9 +275,11 @@ median(candidate / unchanged baseline) <= 1.05
 
 The frozen baseline is source `a7583306`, workload SHA-256
 `ce1e14e7c3078190085311c9b6a558bba6caa86a4930a2e26095ddf2de220ffc`.
-Baseline and candidate retain identical LayerFS product sources; the comparison
-therefore attributes changes only to the portable container workload algorithm,
-not to the universal edit engine. Admission also runs one exact baseline
+Baseline and candidate images carry the same final-candidate product seal and
+revision but distinct workload/source seals. The baseline carries the frozen
+v0.1.2 temp-copy workload while the candidate carries the release workload, so
+the comparison attributes changes only to the portable container workload
+algorithm, not to the universal edit engine. Admission also runs one exact baseline
 byte/root/reopen proof beside the complete candidate verifier set.
 
 Any pair above `1.05` requires phase/counter disposition; `1.10` remains the

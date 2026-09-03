@@ -1342,9 +1342,6 @@ fn count_changing_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<(
             }
             Kind::FrozenPrepend => return Err("frozen count-changing workload".into()),
         }
-        if fs::metadata(path)?.len() != edit.final_len {
-            return Err("count-changing operation length".into());
-        }
         supplied += edit.inserted as u64;
         inserted += edit.inserted as u64;
         deleted += edit.deleted as u64;
@@ -1353,9 +1350,13 @@ fn count_changing_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<(
         logical_zero += edit.logical_zero as u64;
     }
     let inner_edit_ns = started.elapsed().as_nanos();
+    let final_file_bytes = fs::metadata(path)?.len();
+    if final_file_bytes != schedule.last().ok_or("empty count-changing schedule")?.final_len {
+        return Err("count-changing final length".into());
+    }
     println!("attempted_operations={}", schedule.len());
     println!("completed_operations={}", schedule.len());
-    println!("final_file_bytes={}", fs::metadata(path)?.len());
+    println!("final_file_bytes={final_file_bytes}");
     println!("initial_inode={initial_inode}");
     println!("final_inode={}", fs::metadata(path)?.ino());
     println!("supplied_bytes={supplied}");

@@ -2560,6 +2560,7 @@ fn count_changing_verify_case(
     {
         return Err("count-changing verification arguments".into());
     }
+    let setup_started = Instant::now();
     std::fs::create_dir(root)?;
     let store = Arc::new(LayerStackStore::create(root.join("store.sqlite"))?);
     let client = Client::connect(store.clone())?;
@@ -2591,6 +2592,8 @@ fn count_changing_verify_case(
         },
         projection: Some(WorkspaceProjection::Fuse),
     })?;
+    let setup_ns = elapsed_ns(setup_started);
+    let verification_started = Instant::now();
     let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
         .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
     let mut argv = vec![workload.clone()];
@@ -2732,14 +2735,17 @@ fn count_changing_verify_case(
         })
         .transpose()?
         .unwrap_or(0);
+    let verification_ns = elapsed_ns(verification_started);
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"fixture_cache_profile\":\"{}\",\"initial_file_bytes\":{},\"final_file_bytes\":{},\"logical_zero_bytes_verified\":{},\"sha256\":\"{}\",\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"{}\",\"canonical_root\":\"{}\",\"canonical_file_root\":\"{}\",\"independent_canonical_file_root\":\"{}\",\"old_payload_object_ids\":{},\"old_payload_object_ids_retained\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"reused_objects\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"process_peak_rss_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"independent_oracle\":true,\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"fixture_cache_profile\":\"{}\",\"setup_ns\":{},\"verification_ns\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"logical_zero_bytes_verified\":{},\"sha256\":\"{}\",\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"{}\",\"canonical_root\":\"{}\",\"canonical_file_root\":\"{}\",\"independent_canonical_file_root\":\"{}\",\"old_payload_object_ids\":{},\"old_payload_object_ids_retained\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"reused_objects\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"process_peak_rss_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"independent_oracle\":true,\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
         workload_source::edit_count_changing::VERIFICATION_SCHEMA,
         workload_source::edit_count_changing::FAMILY_ID,
         case_id,
         source,
         seed,
         fixture_cache_profile,
+        setup_ns,
+        verification_ns,
         initial_size,
         expected_size,
         logical_zero_bytes_verified,
@@ -3037,6 +3043,7 @@ fn same_count_verify_case(
     {
         return Err("same-count verification arguments".into());
     }
+    let setup_started = Instant::now();
     let (client, branch) = case_client(
         root,
         &format!("verify-{}-{source}-{seed}", scenario.id),
@@ -3049,6 +3056,8 @@ fn same_count_verify_case(
         placement: same_count_placement(&container_id, scenario, seed, "verify-prepare"),
         projection: Some(WorkspaceProjection::Fuse),
     })?;
+    let setup_ns = elapsed_ns(setup_started);
+    let verification_started = Instant::now();
     let commit_id = if scenario.frozen {
         let mut head = None;
         for operation in 0..scenario.operations {
@@ -3139,13 +3148,16 @@ fn same_count_verify_case(
     if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
         return Err("same-count verifier cleanup".into());
     }
+    let verification_ns = elapsed_ns(verification_started);
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"mode\":\"verify\",\"source_arm\":\"{}\",\"seed\":{},\"final_file_bytes\":{},\"sha256\":\"{}\",\"canonical_root\":\"{}\",\"fresh_reconnect\":true,\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"mode\":\"verify\",\"source_arm\":\"{}\",\"seed\":{},\"setup_ns\":{},\"verification_ns\":{},\"final_file_bytes\":{},\"sha256\":\"{}\",\"canonical_root\":\"{}\",\"fresh_reconnect\":true,\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
         workload_source::edit_same_count::VERIFICATION_SCHEMA,
         workload_source::edit_same_count::FAMILY_ID,
         scenario.id,
         source,
         seed,
+        setup_ns,
+        verification_ns,
         expected_size,
         expected_digest,
         committed_root,
@@ -3170,6 +3182,7 @@ fn same_count_fragmentation_verify(
     {
         return Err("same-count fragmentation verifier arguments".into());
     }
+    let setup_started = Instant::now();
     std::fs::create_dir(root)?;
     let store = Arc::new(LayerStackStore::create(root.join("store.sqlite"))?);
     let client = Client::connect(store.clone())?;
@@ -3187,6 +3200,8 @@ fn same_count_fragmentation_verify(
         .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
     let oracle_workload =
         std::env::var_os("LAYERFS_BENCH_ORACLE_WORKLOAD").ok_or("same-count oracle workload")?;
+    let setup_ns = elapsed_ns(setup_started);
+    let verification_started = Instant::now();
     let mut checkpoints = Vec::with_capacity(6);
     for cohort in ["increasing", "descending", "hotspot"] {
         for operations in [100_u64, 1_000] {
@@ -3366,13 +3381,16 @@ fn same_count_fragmentation_verify(
     if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
         return Err("same-count fragmentation cleanup".into());
     }
+    let verification_ns = elapsed_ns(verification_started);
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"live_metadata_ratio_limit\":12,\"tree_visit_ratio_limit\":18,\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"cleanup_status\":\"pass\",\"performance_distribution\":false,\"status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"setup_ns\":{},\"verification_ns\":{},\"live_metadata_ratio_limit\":12,\"tree_visit_ratio_limit\":18,\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"cleanup_status\":\"pass\",\"performance_distribution\":false,\"status\":\"pass\"}}",
         workload_source::edit_same_count::VERIFICATION_SCHEMA,
         workload_source::edit_same_count::FAMILY_ID,
         workload_source::edit_same_count::VERIFIER_ID,
         source,
         seed,
+        setup_ns,
+        verification_ns,
     );
     Ok(())
 }

@@ -7,6 +7,7 @@ ARG LAYERFS_SOURCE_COMMIT
 ARG LAYERFS_SOURCE_TREE
 ARG LAYERFS_SOURCE_DIRTY
 ARG LAYERFS_SOURCE_SEAL
+ARG LAYERFS_PRODUCT_SEAL
 ARG WORKLOAD_SOURCE_SHA256
 
 WORKDIR /src
@@ -25,6 +26,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     test "${#LAYERFS_SOURCE_COMMIT}" -eq 40 \
  && test "${#LAYERFS_SOURCE_TREE}" -eq 40 \
  && test "${#LAYERFS_SOURCE_SEAL}" -eq 64 \
+ && test "${#LAYERFS_PRODUCT_SEAL}" -eq 64 \
  && test "${#WORKLOAD_SOURCE_SHA256}" -eq 64 \
  && echo "$WORKLOAD_SOURCE_SHA256  /workload/workload.rs" | sha256sum -c - \
  && case "$LAYERFS_SOURCE_DIRTY" in true|false) ;; *) exit 1 ;; esac \
@@ -49,6 +51,7 @@ ARG LAYERFS_SOURCE_COMMIT
 ARG LAYERFS_SOURCE_TREE
 ARG LAYERFS_SOURCE_DIRTY
 ARG LAYERFS_SOURCE_SEAL
+ARG LAYERFS_PRODUCT_SEAL
 ARG WORKLOAD_SOURCE_SHA256
 
 RUN mkdir -p /run/layerfs /workspace /var/tmp/layerfs-owned \
@@ -68,6 +71,7 @@ LABEL org.opencontainers.image.source="https://github.com/Ephemeral-AI-Lab/layer
       org.opencontainers.image.source-tree="$LAYERFS_SOURCE_TREE" \
       dev.layerfs.source-dirty="$LAYERFS_SOURCE_DIRTY" \
       dev.layerfs.source-seal="$LAYERFS_SOURCE_SEAL" \
+      dev.layerfs.product-seal="$LAYERFS_PRODUCT_SEAL" \
       dev.layerfs.workload-source-sha256="$WORKLOAD_SOURCE_SHA256"
 
 ENV LAYERFS_SOURCE_COMMIT="$LAYERFS_SOURCE_COMMIT" \

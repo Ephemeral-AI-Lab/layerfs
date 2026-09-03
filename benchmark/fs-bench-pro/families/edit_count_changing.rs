@@ -1,8 +1,8 @@
 pub(crate) const FAMILY_ID: &str = "edit_count_changing";
 pub(crate) const FIXTURE_BYTES: u64 = 256 * 1024;
 pub(crate) const FIXTURE_PROFILE: &str = "edit-throughput-256k-v1";
-pub(crate) const PERFORMANCE_SCHEMA: &str = "fs-bench-pro-edit-performance-v1";
-pub(crate) const VERIFICATION_SCHEMA: &str = "fs-bench-pro-edit-verification-v1";
+pub(crate) const PERFORMANCE_SCHEMA: &str = "fs-bench-pro-edit-performance-v2";
+pub(crate) const VERIFICATION_SCHEMA: &str = "fs-bench-pro-edit-verification-v2";
 pub(crate) const SEEDS: [u8; 3] = [1, 2, 3];
 pub(crate) const VERIFIERS: [&str; 4] = [
     "insert-middle-4k-on-8m-proof",
