@@ -7,7 +7,7 @@ repo=$(cd "$here/../.." && pwd -P)
 results_root=${LAYERFS_STORE_RESULTS_ROOT:-$repo/benchmark-results/fs-bench-pro/store-footprint}
 prepared_root=${LAYERFS_STORE_PREPARED_ROOT:-${TMPDIR:-/tmp}/layerfs-fs-bench-pro-store-footprint}
 primary_control=store-footprint-unique-100000
-evidence_version=v2
+evidence_version=v3
 
 die() { printf 'fs-bench-pro Store footprint: %s\n' "$*" >&2; exit 2; }
 
@@ -277,8 +277,11 @@ schema_digest=hashlib.sha256(json.dumps([page_size,user_version,schema],separato
 digest=hashlib.sha256(b'layerfs/fs-bench-pro/object-set/v1\0'); rows=bytes_=0
 for object_id,length in connection.execute('SELECT object_id,length(bytes) FROM objects ORDER BY object_id'):
  digest.update(len(object_id).to_bytes(8,'big')); digest.update(object_id); digest.update(length.to_bytes(8,'big')); rows+=1; bytes_+=length
+shape=hashlib.sha256(b'layerfs/fs-bench-pro/object-shape/v1\0')
+for tag,length,count in connection.execute('SELECT substr(bytes,1,1),length(bytes),count(*) FROM objects GROUP BY substr(bytes,1,1),length(bytes) ORDER BY substr(bytes,1,1),length(bytes)'):
+ shape.update(len(tag).to_bytes(8,'big'));shape.update(tag);shape.update(length.to_bytes(8,'big'));shape.update(count.to_bytes(8,'big'))
 connection.close()
-json.dump({'schema':'fs-bench-pro-store-object-set-v1','object_set_digest':digest.hexdigest(),'schema_digest':schema_digest,'page_size':page_size,'user_version':user_version,'canonical_objects':rows,'canonical_bytes':bytes_},open(out,'w'),sort_keys=True,separators=(',',':'));open(out,'a').write('\n')
+json.dump({'schema':'fs-bench-pro-store-object-set-v2','object_set_digest':digest.hexdigest(),'object_shape_digest':shape.hexdigest(),'schema_digest':schema_digest,'page_size':page_size,'user_version':user_version,'canonical_objects':rows,'canonical_bytes':bytes_},open(out,'w'),sort_keys=True,separators=(',',':'));open(out,'a').write('\n')
 PY
   after_sha=$(shasum -a 256 "$sample_dir/work/store.sqlite" | awk '{print $1}')
   [[ $before_sha == "$after_sha" ]] || die "dbstat mutated Store"
@@ -298,7 +301,7 @@ assert q['sqlite_page_size_bytes']*q['sqlite_page_count']==r['sqlite_database_by
 assert q['sqlite_object_rows']==r['canonical_objects'] and q['sqlite_canonical_object_bytes']==r['canonical_bytes']
 assert c['file_count']==r['durable_store_files'] and c['total_bytes']==r['total_durable_store_bytes']
 assert o['canonical_objects']==r['canonical_objects'] and o['canonical_bytes']==r['canonical_bytes'] and o['page_size']==q['sqlite_page_size_bytes']
-r.update(q);r.update({k:o[k] for k in ('object_set_digest','schema_digest','user_version')})
+r.update(q);r.update({k:o[k] for k in ('object_set_digest','object_shape_digest','schema_digest','user_version')})
 r.update({'tier':int(tier),'reportable':int(tier)==100000,'initialization_temporary_write_bytes':initialization_temporary_write,'temporary_write_bytes':temporary_write,'temporary_read_bytes':temporary_read,'temporary_peak_upper_bound_bytes':temporary_peak,'peak_disk_upper_bound_bytes':r['total_durable_store_bytes']+temporary_peak,'durable_census_status':'pass','dbstat_store_sha256_unchanged':True})
 json.dump(r,open(out,'w'),sort_keys=True,separators=(',',':'));open(out,'a').write('\n')
 PY
@@ -353,7 +356,7 @@ if mode=='admission':
   assert len(baseline_rows)==9 and all(x['reportable'] and x['tier']==100000 for x in baseline_rows)
   baseline_verification=[json.loads(x) for x in (baseline/'verification/raw.jsonl').read_text().splitlines()]
   assert len(baseline_verification)==3
-  identity=('fixture_digest','edited_fixture_digest','canonical_root','canonical_objects','canonical_bytes','object_set_digest','schema_digest','sqlite_page_size_bytes','user_version')
+  identity=('fixture_digest','edited_fixture_digest','canonical_objects','canonical_bytes','object_shape_digest','schema_digest','sqlite_page_size_bytes','user_version')
   def exact(rows): return {(x['control_id'],x['seed']):tuple(x[k] for k in identity) for x in rows}
   assert exact(baseline_rows)==exact(performance) and exact(baseline_verification)==exact(verification)
   baseline_medians=grouped_medians(baseline_rows)
@@ -401,7 +404,7 @@ if source=='candidate' and mode=='admission':
  lines += ['','## Baseline comparison','', '| Kind | Control | Metric | Baseline | Candidate | Ratio | Disposition |','|---|---|---|---:|---:|---:|---|']
  for row in summary['performance_resource_comparisons']: lines.append(f'| {row["kind"]} | `{row["control_id"]}` | {row["metric"]} | {row["baseline_median"]:.0f} | {row["candidate_median"]:.0f} | {row["ratio"]:.4f} | {row["status"]} |')
  for row in summary['verification_resource_comparisons']: lines.append(f'| {row["kind"]} | `{row["control_id"]}` | {row["metric"]} | {row["baseline"]:.0f} | {row["candidate"]:.0f} | {row["ratio"]:.4f} | {row["status"]} |')
-lines += ['','## Accounting','', '- Every Store-owned file is listed with size and SHA-256 in each sample’s `durable-census.json`.','- SQLite table/index/payload/slack are retained in `sqlite.json` and `dbstat.txt`; pre/post census hashes prove read-only inspection.','- Canonical root, authenticated object-set digest, schema digest, page size, CDC identity, and fixture digests bind baseline/candidate equality.','- Initialization segment reads/writes and Workspace spool bytes are counted; peak disk is conservatively bounded as durable bytes plus simultaneous temporary upper bounds.','- Full tree digest and metadata verification runs only in separate verification samples and streams bounded directory state.','']
+lines += ['','## Accounting','', '- Every Store-owned file is listed with size and SHA-256 in each sample’s `durable-census.json`.','- SQLite table/index/payload/slack are retained in `sqlite.json` and `dbstat.txt`; pre/post census hashes prove read-only inspection.','- Each fresh Store authenticates its own canonical root/object-set digest; cross-arm equality uses semantic fixture/tree identity plus the canonical tag/encoded-length/count shape digest because public initialization intentionally allocates a fresh LayerStackId.','- Schema digest, page size, CDC identity, cache, Store creation, host, Docker, container limits, and fixture digests are exact custody gates.','- Initialization segment reads/writes and Workspace spool bytes are counted; peak disk is conservatively bounded as durable bytes plus simultaneous temporary upper bounds.','- Full tree digest and metadata verification runs only in separate verification samples and streams bounded directory state.','']
 (root/'report.md').write_text('\n'.join(lines))
 PY
 docker inspect "$container" >"$run_dir/environment/container-after.json"

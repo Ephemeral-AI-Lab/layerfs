@@ -1,7 +1,7 @@
 pub(crate) const FAMILY_ID: &str = "store_footprint";
 pub(crate) const FIXTURE_SCHEMA: &str = "fs-bench-pro-store-footprint-fixture-v1";
-pub(crate) const PERFORMANCE_SCHEMA: &str = "fs-bench-pro-store-footprint-performance-v2";
-pub(crate) const VERIFICATION_SCHEMA: &str = "fs-bench-pro-store-footprint-verification-v2";
+pub(crate) const PERFORMANCE_SCHEMA: &str = "fs-bench-pro-store-footprint-performance-v3";
+pub(crate) const VERIFICATION_SCHEMA: &str = "fs-bench-pro-store-footprint-verification-v3";
 pub(crate) const LOGICAL_BYTES: u64 = 500_000_000;
 pub(crate) const PRIMARY_CONTROL_ID: &str = "store-footprint-unique-100000";
 pub(crate) const SEEDS: [u8; 3] = [1, 2, 3];
@@ -49,8 +49,8 @@ pub(crate) fn control(id: &str) -> Result<Control, String> {
 pub(crate) fn self_check() -> Result<(), String> {
     if FAMILY_ID != "store_footprint"
         || FIXTURE_SCHEMA != "fs-bench-pro-store-footprint-fixture-v1"
-        || PERFORMANCE_SCHEMA != "fs-bench-pro-store-footprint-performance-v2"
-        || VERIFICATION_SCHEMA != "fs-bench-pro-store-footprint-verification-v2"
+        || PERFORMANCE_SCHEMA != "fs-bench-pro-store-footprint-performance-v3"
+        || VERIFICATION_SCHEMA != "fs-bench-pro-store-footprint-verification-v3"
         || CONTROLS.len() != 3
         || CONTROLS.iter().enumerate().any(|(index, control)| {
             control.id.is_empty()

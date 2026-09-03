@@ -283,8 +283,13 @@ The runner freezes these additional envelopes before candidate collection:
 - explanatory-control storage: no increase from the exact baseline.
 
 Baseline/candidate custody requires identical host, Docker, harness, workload,
-CDC, fixture, cache, Store-creation, SQLite schema/page-size, canonical root,
-canonical object-set digest, and object/byte counts. The only admitted product
+CDC, fixture, cache, Store-creation, SQLite schema/page-size, canonical object
+shape, and object/byte counts. Each fresh Store retains and authenticates its
+exact canonical root and object-set digest through reconnect. Raw cross-Store
+root equality is not a valid requirement because the public initialization path
+deliberately seeds inode identity from a fresh UUIDv7 LayerStackId; v3 therefore
+uses the exact semantic tree digest plus a tag/encoded-length/count object-shape
+digest for cross-arm equality. The only admitted product
 diff is the measured bounded encoded-length ordering in object admission.
 Source-arm and seed labels never enter Store entity metadata. The exact verifier
 streams lexicographically ordered records one directory at a time instead of
