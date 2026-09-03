@@ -27,6 +27,8 @@ pub struct ProxyClient {
     pending: AtomicU64,
     metrics: AtomicFuseWriteMetrics,
     read_metrics: AtomicFuseReadMetrics,
+    #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+    notifier: std::sync::OnceLock<fuser::Notifier>,
 }
 
 #[derive(Default)]
@@ -107,6 +109,8 @@ impl ProxyClient {
             pending: AtomicU64::new(0),
             metrics: AtomicFuseWriteMetrics::default(),
             read_metrics: AtomicFuseReadMetrics::default(),
+            #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+            notifier: std::sync::OnceLock::new(),
         };
         Ok(client)
     }
@@ -303,6 +307,35 @@ impl ProxyClient {
     #[doc(hidden)]
     pub fn resume(&self) {
         self.paused.store(false, Ordering::Release);
+    }
+
+    #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+    pub fn set_notifier(&self, notifier: fuser::Notifier) -> std::io::Result<()> {
+        self.notifier
+            .set(notifier)
+            .map_err(|_| std::io::Error::other("LayerFS notifier already set"))
+    }
+
+    fn invalidate_file(&self, node: NodeId) -> PortResult<()> {
+        let _gate = self.gate.write().map_err(|_| PortError::Io)?;
+        if node.0 == 0 || !self.paused.load(Ordering::Acquire) {
+            return Err(PortError::Invalid);
+        }
+        self.cache
+            .lock()
+            .map_err(|_| PortError::Io)?
+            .attrs
+            .remove(&node);
+        self.invalidate_read_ahead(node)?;
+        // A mounted proxy must invalidate both kernel attributes and file pages.
+        // Unmounted protocol clients have no kernel cache to invalidate.
+        #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+        if let Some(notifier) = self.notifier.get() {
+            notifier
+                .inval_inode(fuser::INodeNo(node.0), 0, 0)
+                .map_err(|_| PortError::Io)?;
+        }
+        Ok(())
     }
 
     fn barrier_locked(&self) -> PortResult<()> {
@@ -1293,6 +1326,15 @@ pub fn serve_remote_control(
                 metrics.write_to(&mut stream)?;
                 continue;
             }
+            if command == [b'i'] {
+                let mut node = [0; 8];
+                stream.read_exact(&mut node)?;
+                let accepted = client
+                    .invalidate_file(NodeId(u64::from_le_bytes(node)))
+                    .is_ok();
+                stream.write_all(&[u8::from(accepted)])?;
+                continue;
+            }
             let accepted = u8::from(apply_control(&client, command[0]).is_ok());
             stream.write_all(&[accepted])?;
         }
@@ -1387,6 +1429,8 @@ mod tests {
             pending: AtomicU64::new(2),
             metrics: AtomicFuseWriteMetrics::default(),
             read_metrics: AtomicFuseReadMetrics::default(),
+            #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+            notifier: std::sync::OnceLock::new(),
         };
 
         assert_eq!(client.barrier_locked(), Err(PortError::NoSpace));
@@ -1413,6 +1457,8 @@ mod tests {
             pending: AtomicU64::new(0),
             metrics: AtomicFuseWriteMetrics::default(),
             read_metrics: AtomicFuseReadMetrics::default(),
+            #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+            notifier: std::sync::OnceLock::new(),
         };
 
         client.flush_write_for(NodeId(3)).unwrap();
