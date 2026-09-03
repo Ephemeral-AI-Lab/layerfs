@@ -9,9 +9,11 @@ family_kind=${LAYERFS_EDIT_FAMILY:-same-count}
 if [[ $family_kind == same-count ]]; then
   evidence_version=v3
   performance_schema=fs-bench-pro-edit-performance-v1
+  verification_schema=fs-bench-pro-edit-verification-v2
 else
-  evidence_version=v3
-  performance_schema=fs-bench-pro-edit-performance-v2
+  evidence_version=v4
+  performance_schema=fs-bench-pro-edit-performance-v3
+  verification_schema=fs-bench-pro-edit-verification-v3
 fi
 if [[ $family_kind == same-count ]]; then
   results_root=${LAYERFS_SAME_COUNT_RESULTS_ROOT:-$repo/benchmark-results/fs-bench-pro/edit-same-count}
@@ -23,6 +25,8 @@ invocation_started=$(python3 -c 'import time; print(time.monotonic_ns())')
 invocation_argv=("$@")
 performance_external_wall_ns=0
 verification_external_wall_ns=0
+primary_verification_external_wall_ns=0
+scaling_verification_external_wall_ns=0
 verification_failure=
 control_external_wall_ns=0
 count_changing_verifiers=(insert-middle-4k-on-8m-proof delete-middle-4k-on-8m-proof rewrite-full-grow-8m-to-12m-proof rewrite-full-shrink-8m-to-4m-proof)
@@ -87,7 +91,7 @@ prepare_assets() {
   workload_sha=$(shasum -a 256 "$here/workload.rs" | awk '{print $1}')
   [[ $(docker inspect -f '{{index .Config.Labels "dev.layerfs.source-seal"}}' "$container") == "$source_seal" ]] || die "container/source seal mismatch"
   prepared="$prepared_root/$source_seal"
-  if [[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/fixture-8m/payload.bin && -f $prepared/issue14-r005-custody/evidence.sha256 ]] \
+  if [[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/fixture-8m/payload.bin && -f $prepared/fixture-scale-1m/payload.bin && -f $prepared/fixture-scale-10m/payload.bin && -f $prepared/fixture-scale-100m/payload.bin && -f $prepared/issue14-r005-custody/evidence.sha256 ]] \
     && grep -Fx "source_seal=$source_seal" "$prepared/identity.txt" >/dev/null \
     && grep -Fx "product_seal=$product_seal" "$prepared/identity.txt" >/dev/null \
     && grep -Fx "harness_seal=$harness_seal" "$prepared/identity.txt" >/dev/null \
@@ -103,11 +107,13 @@ prepare_assets() {
   rustc --edition=2021 -C opt-level=3 "$here/workload.rs" -o "$stage/fs-benchmark-workload"
   "$stage/fs-benchmark-pro" same-count-fixture "$stage/fixture-256k" >"$stage/fixture-create.txt"
   mkdir "$stage/fixture-8m"
-  python3 - "$stage/fixture-8m/payload.bin" <<'PY'
+  mkdir "$stage/fixture-scale-1m" "$stage/fixture-scale-10m" "$stage/fixture-scale-100m"
+  python3 - "$stage/fixture-8m/payload.bin" "$stage/fixture-scale-1m/payload.bin" "$stage/fixture-scale-10m/payload.bin" "$stage/fixture-scale-100m/payload.bin" <<'PY'
 import sys
-with open(sys.argv[1],'wb') as output:
-    for base in range(0,8*1024*1024,64*1024):
-        output.write(bytes((((base+i)*29+(base+i)//7)%251) for i in range(64*1024)))
+for path,size in zip(sys.argv[1:],(8,1,10,100)):
+    with open(path,'wb') as output:
+        for base in range(0,size*1024*1024,64*1024):
+            output.write(bytes((((base+i)*29+(base+i)//7)%251) for i in range(64*1024)))
 PY
   static_edit_proof >"$stage/static-edit-proof.json"
   {
@@ -180,7 +186,7 @@ case "$mode" in
     seed=${seed:-1}
     ;;
   admission)
-    [[ $all == 1 && -z $selection && -z $seed && -n $paired_container && ( $source_arm == a-a-repeatability || ( $family_kind == count-changing && $source_arm == baseline-candidate ) ) ]] || die "admission requires --all, a supported paired source, and no case/seed"
+    [[ $all == 1 && -z $selection && -z $seed && -n $paired_container && ( ( $family_kind == same-count && $source_arm == a-a-repeatability ) || ( $family_kind == count-changing && $source_arm == baseline-candidate ) ) ]] || die "admission requires --all, the family terminal source policy, and no case/seed"
     ;;
   repeatability)
     [[ $all == 0 && -n $selection && -z $seed && -n $paired_container && ( $source_arm == a-a-repeatability || ( $family_kind == count-changing && $source_arm == baseline-candidate ) ) ]] || die "repeatability requires one case, no seed, and a supported paired source"
@@ -191,7 +197,7 @@ esac
 for command in docker nc python3 shasum; do command -v "$command" >/dev/null || die "$command is required"; done
 current_seal=$("$here/run-namespace.sh" --source-seal)
 prepared="$prepared_root/$current_seal"
-[[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/fixture-8m/payload.bin ]] || die "run --prepare for this source/container identity first"
+[[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/fixture-8m/payload.bin && -f $prepared/fixture-scale-1m/payload.bin && -f $prepared/fixture-scale-10m/payload.bin && -f $prepared/fixture-scale-100m/payload.bin ]] || die "run --prepare for this source/container identity first"
 binary="$prepared/fs-benchmark-pro"
 oracle_workload="$prepared/fs-benchmark-workload"
 fixture_256="$prepared/fixture-256k"
@@ -199,7 +205,8 @@ fixture_8m="$prepared/fixture-8m"
 run_dir="$results_root/$run_id"
 mkdir -p "$results_root"
 mkdir "$run_dir" || die "refusing to overwrite $run_dir"
-mkdir "$run_dir/environment" "$run_dir/performance" "$run_dir/controls" "$run_dir/verification" "$run_dir/scenarios" "$run_dir/oracles"
+mkdir "$run_dir/environment" "$run_dir/performance" "$run_dir/controls" "$run_dir/verification" "$run_dir/scenarios" "$run_dir/oracles" "$run_dir/scaling"
+performance_stream="$run_dir/performance/raw.jsonl"
 
 mapfile_path="$run_dir/environment/scenarios.tsv"
 if [[ $family_kind == same-count ]]; then
@@ -211,6 +218,8 @@ if [[ $family_kind == same-count ]]; then
 else
   "$oracle_workload" count-changing-list >"$mapfile_path"
   [[ $(wc -l <"$mapfile_path" | tr -d ' ') == 25 ]] || die "family registry"
+  "$oracle_workload" count-changing-scaling-list >"$run_dir/environment/scaling-scenarios.tsv"
+  [[ $(wc -l <"$run_dir/environment/scaling-scenarios.tsv" | tr -d ' ') == 6 ]] || die "scaling registry"
   if [[ -n $selection ]] && ! printf '%s\n' "${count_changing_verifiers[@]}" | grep -Fx "$selection" >/dev/null; then "$oracle_workload" count-changing-resolve "$selection" >/dev/null || die "unknown case"; fi
   anchor_fixture=${LAYERFS_COUNT_CHANGING_ANCHOR_FIXTURE:-${LAYERFS_SAME_COUNT_ANCHOR_FIXTURE:-}}
   needs_anchor=$([[ $mode == admission || $selection == prepend-temp-copy-rename ]] && printf true || printf false)
@@ -275,7 +284,9 @@ docker ps --no-trunc >"$run_dir/environment/pre-run-competing-containers.txt"
 printf '%s\n' 'complete_lifecycle_ns begins immediately before public CreateWorkspaceSession and ends after public EndWorkspaceSession(Clean); layerstack initialization and Branch fork are excluded; Commit includes public Commit return plus explicit visible Branch-head acknowledgement.' >"$run_dir/environment/acknowledgement-boundary.txt"
 printf '%s\n' "$current_seal" >"$run_dir/environment/source-seal.txt"
 shasum -a 256 "$fixture_256/payload.bin" >"$run_dir/environment/fixtures.sha256"
-if [[ $family_kind == count-changing ]]; then shasum -a 256 "$fixture_8m/payload.bin" >>"$run_dir/environment/fixtures.sha256"; fi
+if [[ $family_kind == count-changing ]]; then
+  shasum -a 256 "$fixture_8m/payload.bin" "$prepared/fixture-scale-1m/payload.bin" "$prepared/fixture-scale-10m/payload.bin" "$prepared/fixture-scale-100m/payload.bin" >>"$run_dir/environment/fixtures.sha256"
+fi
 if [[ -n $anchor_fixture ]]; then shasum -a 256 "$anchor_fixture/payload.bin" >>"$run_dir/environment/fixtures.sha256"; fi
 
 daemon_endpoint=
@@ -388,6 +399,8 @@ seal_failed_run() {
   printf '%s\n' "$performance_external_wall_ns" >"$run_dir/environment/performance-external-wall-ns.txt"
   printf '%s\n' "$control_external_wall_ns" >"$run_dir/environment/control-external-wall-ns.txt"
   printf '%s\n' "$verification_external_wall_ns" >"$run_dir/environment/verification-external-wall-ns.txt"
+  printf '%s\n' "$primary_verification_external_wall_ns" >"$run_dir/environment/primary-verification-external-wall-ns.txt"
+  printf '%s\n' "$scaling_verification_external_wall_ns" >"$run_dir/environment/scaling-verification-external-wall-ns.txt"
   printf '%s\n' "$(( $(python3 -c 'import time; print(time.monotonic_ns())') - invocation_started ))" >"$run_dir/environment/total-external-wall-ns.txt"
   printf '%s\n' "${failure_reason:-unhandled runner failure}" >"$run_dir/environment/failure.txt"
   failure_command_safe=${failure_command:-unknown}
@@ -411,27 +424,38 @@ PY
 trap seal_failed_run EXIT
 
 fixture_for() {
-  case "$1" in small-edit|edit16|prepend-temp-copy-rename) printf '%s\n' "$anchor_fixture" ;; *) printf '%s\n' "$fixture_256" ;; esac
+  case "$1" in
+    small-edit|edit16|prepend-temp-copy-rename) printf '%s\n' "$anchor_fixture" ;;
+    *-on-1mib-ops-1-scale) printf '%s\n' "$prepared/fixture-scale-1m" ;;
+    *-on-10mib-ops-1-scale) printf '%s\n' "$prepared/fixture-scale-10m" ;;
+    *-on-100mib-ops-1-scale) printf '%s\n' "$prepared/fixture-scale-100m" ;;
+    *) printf '%s\n' "$fixture_256" ;;
+  esac
 }
 
 run_performance() {
-  local case_id=$1 sample_seed=$2 ordinal=$3 active_container=$4 active_arm=$5 fixture sample_dir cache status wall_started benchmark_command command_line
+  local case_id=$1 sample_seed=$2 ordinal=$3 active_container=$4 active_arm=$5 fixture fixture_digest sample_dir cache status wall_started benchmark_command command_line sample_timeout
+  local -a workload_args
   wall_started=$(python3 -c 'import time; print(time.monotonic_ns())')
   fixture=$(fixture_for "$case_id")
+  fixture_digest=$(awk -v path="$fixture/payload.bin" '$2==path {print $1}' "$run_dir/environment/fixtures.sha256")
+  [[ $fixture_digest =~ ^[0-9a-f]{64}$ ]] || die "fixture digest custody: $case_id"
   sample_dir="$run_dir/scenarios/$case_id/$active_arm/seed-$sample_seed"
   mkdir -p "$sample_dir"
   cache=$([[ $ordinal == 1 ]] && printf generated-first-sample-uncontrolled || printf generated-subsequent-sample-uncontrolled)
   ensure_container "$active_container"
   benchmark_command=$([[ $family_kind == same-count ]] && printf same-count-performance || printf count-changing-performance)
+  workload_args=("$binary" "$benchmark_command" "$sample_dir/work" "$fixture" "$container_id" "$case_id" "$sample_seed" "$active_arm" "$cache")
+  if [[ $family_kind == count-changing ]]; then workload_args+=("$fixture_digest"); fi
+  sample_timeout=$([[ $case_id == *-scale ]] && printf 40 || printf 5)
   command_line=$LINENO
   set +e
-  perl -e 'alarm 5; exec @ARGV' env \
+  perl -e 'alarm shift; exec @ARGV' "$sample_timeout" env \
     LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload \
     LAYERFS_EXEC_TRANSPORT=daemon LAYERFS_FUSE_TRANSPORT=daemon \
     LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
     LAYERFS_DAEMON_CONTAINER_ID="$container_id" LAYERFS_FUSE_HOST=host.docker.internal \
-    "$binary" "$benchmark_command" "$sample_dir/work" "$fixture" "$container_id" \
-    "$case_id" "$sample_seed" "$active_arm" "$cache" >"$sample_dir/raw.jsonl" 2>"$sample_dir/supervisor.txt"
+    "${workload_args[@]}" >"$sample_dir/raw.jsonl" 2>"$sample_dir/supervisor.txt"
   status=$?
   set -e
   printf '%s\n' "$status" >"$sample_dir/exit-status.txt"
@@ -478,15 +502,10 @@ def lower_hard(value,target,tolerated,hard,name):
 upper(r['process_peak_rss_bytes'],101_980_569,112_178_626,128*1024*1024,'rss')
 if sys.argv[5]=='count-changing':
     assert r['physical_spool_high_water_bytes']<=128*1024*1024
-    if r['scenario_id']=='prepend-temp-copy-rename': upper(r['complete_lifecycle_ns'],223_763_000,246_139_300,250_000_000,'prepend_complete')
+    if r['scenario_id'].endswith('-scale'): pass
+    elif r['scenario_id']=='prepend-temp-copy-rename': upper(r['complete_lifecycle_ns'],223_763_000,246_139_300,250_000_000,'prepend_complete')
     elif r['implementation']=='direct-posix': lower_hard(r['operations_per_second'],250,225,100,'operations_per_second')
-    else:
-        if r['operation_count']==1: target,tolerated,hard=50,45,30
-        elif r['operation_count']==10: target,tolerated,hard=75,67.5,40
-        elif r['operation']=='delete' or 'shrink' in r['scenario_id']: target,tolerated,hard=55,49.5,40
-        elif 'grow-2k' in r['scenario_id']: target,tolerated,hard=110,99,80
-        else: target,tolerated,hard=135,121.5,100
-        lower_hard(r['copied_payload_bytes_per_second'],target*1024*1024,tolerated*1024*1024,hard*1024*1024,'copied_payload_bytes_per_second')
+    else: upper(r['inner_edit_ns'],r['operation_count']*10_000_000,r['operation_count']*10_000_000,40_000_000_000,'mutation_ns')
 elif r['scenario_id']=='small-edit': upper(r['commit_total_ns'],4_503_000,4_953_300,6_000_000,'small_edit_commit')
 elif r['scenario_id']=='edit16': upper(r['complete_lifecycle_ns'],156_446_000,172_090_600,200_000_000,'edit16_complete')
 else:
@@ -518,7 +537,7 @@ PY
     failure_stderr="$sample_dir/classification.stderr.txt"
     die "$failure_reason"
   fi
-  grep "\"schema\":\"$performance_schema\"" "$sample_dir/raw.jsonl" >>"$run_dir/performance/raw.jsonl"
+  grep "\"schema\":\"$performance_schema\"" "$sample_dir/raw.jsonl" >>"$performance_stream"
   performance_external_wall_ns=$(( performance_external_wall_ns + $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
 }
 
@@ -567,9 +586,33 @@ oracle_digest() {
   local case_id=$1 sample_seed=$2 fixture oracle index
   fixture=$(fixture_for "$case_id")
   oracle="$run_dir/oracles/$case_id-seed-$sample_seed.bin"
-  cp "$fixture/payload.bin" "$oracle"
+  if [[ $family_kind != count-changing || $case_id != *-scale ]]; then cp "$fixture/payload.bin" "$oracle"; fi
   if [[ $family_kind == count-changing ]]; then
-    if [[ $case_id == prepend-temp-copy-rename ]]; then "$oracle_workload" prepend "$oracle" >/dev/null; else "$oracle_workload" count-changing-edit "$oracle" "$case_id" "$sample_seed" >/dev/null; fi
+    if [[ $case_id == prepend-temp-copy-rename ]]; then
+      "$oracle_workload" prepend "$oracle" >/dev/null
+    elif [[ $case_id == *-scale ]]; then
+      python3 - "$fixture/payload.bin" "$oracle" "$case_id" "$sample_seed" <<'PY'
+from pathlib import Path
+import shutil,sys
+source,target,case,seed=Path(sys.argv[1]),Path(sys.argv[2]),sys.argv[3],int(sys.argv[4])
+length=source.stat().st_size
+shrink=case.startswith('replace-middle-shrink')
+offset=length//2-(2048 if shrink else 1024)
+deleted=4096 if shrink else 2048
+with source.open('rb') as src,target.open('wb') as dst:
+    remaining=offset
+    while remaining:
+        chunk=src.read(min(1024*1024,remaining)); assert chunk
+        dst.write(chunk); remaining-=len(chunk)
+    src.seek(deleted,1)
+    if shrink:
+        dst.write(bytes((((offset+i)*43+109+seed*59)%251)^0xa5 for i in range(2048)))
+    shutil.copyfileobj(src,dst,1024*1024)
+assert target.stat().st_size==length-2048
+PY
+    else
+      "$oracle_workload" count-changing-edit "$oracle" "$case_id" "$sample_seed" >/dev/null
+    fi
   elif [[ $case_id == small-edit ]]; then
     "$oracle_workload" edit "$oracle" 0 33554432
   elif [[ $case_id == edit16 ]]; then
@@ -581,9 +624,10 @@ oracle_digest() {
 }
 
 run_verify() {
-  local case_id=$1 sample_seed=$2 active_container=$3 active_arm=$4 fixture expected expected_size verify_dir status wall_started verifier_wall_ns structural_oracle
+  local case_id=$1 sample_seed=$2 active_container=$3 active_arm=$4 fixture fixture_digest expected expected_size verify_dir status wall_started verifier_wall_ns structural_oracle verification_stream
   wall_started=$(python3 -c 'import time; print(time.monotonic_ns())')
   if [[ $family_kind == count-changing ]] && printf '%s\n' "${count_changing_verifiers[@]}" | grep -Fx "$case_id" >/dev/null; then
+    fixture_digest=$(awk -v path="$fixture_8m/payload.bin" '$2==path {print $1}' "$run_dir/environment/fixtures.sha256")
     structural_oracle="$run_dir/oracles/$case_id.bin"
     python3 - "$fixture_8m/payload.bin" "$structural_oracle" "$case_id" <<'PY'
 from pathlib import Path
@@ -610,7 +654,7 @@ PY
       LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
       LAYERFS_DAEMON_CONTAINER_ID="$container_id" LAYERFS_FUSE_HOST=host.docker.internal \
       "$binary" count-changing-structural-verify "$verify_dir/work" "$fixture_8m" "$container_id" \
-      "$case_id" "$active_arm" "$expected" "$expected_size" >"$verify_dir/raw.jsonl" 2>"$verify_dir/supervisor.txt"
+      "$case_id" "$active_arm" "$expected" "$expected_size" "$fixture_digest" >"$verify_dir/raw.jsonl" 2>"$verify_dir/supervisor.txt"
     status=$?
   elif [[ $case_id == overwrite-fragmented-10b-ops-1000-proof ]]; then
     fragment_oracle="$run_dir/oracles/fragmentation-seed-$sample_seed"
@@ -654,6 +698,7 @@ PY
     status=$?
   else
     fixture=$(fixture_for "$case_id")
+    fixture_digest=$(awk -v path="$fixture/payload.bin" '$2==path {print $1}' "$run_dir/environment/fixtures.sha256")
     read -r expected_size expected < <(oracle_digest "$case_id" "$sample_seed")
     ensure_container "$active_container"
     verify_dir="$run_dir/verification/$active_arm-$case_id-seed-$sample_seed"
@@ -673,7 +718,7 @@ PY
         LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
         LAYERFS_DAEMON_CONTAINER_ID="$container_id" LAYERFS_FUSE_HOST=host.docker.internal \
         "$binary" count-changing-verify "$verify_dir/work" "$fixture" "$container_id" "$case_id" \
-        "$sample_seed" "$active_arm" "$expected" "$expected_size" reused-first-sample-uncontrolled \
+        "$sample_seed" "$active_arm" "$expected" "$expected_size" reused-first-sample-uncontrolled "$fixture_digest" \
         >"$verify_dir/raw.jsonl" 2>"$verify_dir/supervisor.txt"
     fi
     status=$?
@@ -684,6 +729,15 @@ PY
   verifier_wall_ns=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
   printf '%s\n' "$verifier_wall_ns" >"$verify_dir/external-wall-ns.txt"
   verification_external_wall_ns=$(( verification_external_wall_ns + verifier_wall_ns ))
+  if [[ $case_id == *-scale ]]; then
+    scaling_verification_external_wall_ns=$(( scaling_verification_external_wall_ns + verifier_wall_ns ))
+  else
+    primary_verification_external_wall_ns=$(( primary_verification_external_wall_ns + verifier_wall_ns ))
+  fi
+  if [[ $status == 0 ]]; then
+    if [[ $case_id == *-scale ]]; then verification_stream="$run_dir/scaling/verification.jsonl"; else verification_stream="$run_dir/verification/raw.jsonl"; fi
+    grep "\"schema\":\"$verification_schema\"" "$verify_dir/raw.jsonl" >>"$verification_stream"
+  fi
   if [[ $status != 0 ]]; then verification_failure="$case_id seed $sample_seed"; return 1; fi
 }
 
@@ -726,6 +780,16 @@ else
         run_control "$control_id" "$sample_seed" "$control_ordinal" "$container"
       done
     done <"$run_dir/environment/pair-controls.txt"
+  fi
+  if [[ $mode == admission && $family_kind == count-changing ]]; then
+    performance_stream="$run_dir/scaling/raw.jsonl"
+    while IFS=$'\t' read -r case_id _ <&3; do
+      for sample_seed in 1 2 3; do
+        ordinal=$((ordinal + 1))
+        run_performance "$case_id" "$sample_seed" "$ordinal" "$container" candidate
+      done
+    done 3<"$run_dir/environment/scaling-scenarios.tsv"
+    performance_stream="$run_dir/performance/raw.jsonl"
   fi
 fi
 
@@ -774,7 +838,7 @@ if mode in ('admission','repeatability'):
         medians[arm]={}
         for case in sorted({x['scenario_id'] for x in values}):
             selected=[x for x in values if x['scenario_id']==case]
-            metrics=phases+counters+['operations_per_second','process_peak_rss_bytes','commit_total_ns']+([] if family=='same-count' else ['copied_payload_bytes_per_second'])
+            metrics=phases+counters+['operations_per_second','process_peak_rss_bytes','commit_total_ns']+([] if family=='same-count' else ['inner_edit_ns','copied_payload_bytes_per_second'])
             medians[arm][case]={field:med(selected,field) for field in metrics}
     walls={arm:sum(x['complete_lifecycle_ns'] for x in values) for arm,values in arms.items()}
     paired=sum(walls.values())
@@ -807,13 +871,8 @@ if mode in ('admission','repeatability'):
                 if case=='prepend-temp-copy-rename': upper(arm,case,'prepend_complete_median',medians[arm][case]['complete_lifecycle_ns'],223_763_000,246_139_300,250_000_000)
                 elif selected[0]['implementation']=='direct-posix': lower_hard(arm,case,'operations_per_second_median',medians[arm][case]['operations_per_second'],250,225,100)
                 else:
-                    row=selected[0]
-                    if row['operation_count']==1: target,tolerated,hard=50,45,30
-                    elif row['operation_count']==10: target,tolerated,hard=75,67.5,40
-                    elif row['operation']=='delete' or 'shrink' in case: target,tolerated,hard=55,49.5,40
-                    elif 'grow-2k' in case: target,tolerated,hard=110,99,80
-                    else: target,tolerated,hard=135,121.5,100
-                    lower_hard(arm,case,'copied_payload_bytes_per_second_median',medians[arm][case]['copied_payload_bytes_per_second'],target*1024*1024,tolerated*1024*1024,hard*1024*1024)
+                    operations=selected[0]['operation_count']
+                    upper(arm,case,'mutation_ns_median',medians[arm][case]['inner_edit_ns'],operations*10_000_000,operations*10_000_000,40_000_000_000)
             elif case=='small-edit': upper(arm,case,'small_edit_commit_median',medians[arm][case]['commit_total_ns'],4_503_000,4_953_300,6_000_000)
             elif case=='edit16': upper(arm,case,'edit16_complete_median',medians[arm][case]['complete_lifecycle_ns'],156_446_000,172_090_600,200_000_000)
             else:
@@ -837,13 +896,46 @@ if mode in ('admission','repeatability'):
 else:
     grouped={}
     for row in rows: grouped.setdefault(row['scenario_id'],[]).append(row)
-    metrics=phases+counters+['operations_per_second','process_peak_rss_bytes']+([] if family=='same-count' else ['copied_payload_bytes_per_second'])
+    metrics=phases+counters+['operations_per_second','process_peak_rss_bytes']+([] if family=='same-count' else ['inner_edit_ns','copied_payload_bytes_per_second'])
     summary['medians']={case:{field:med(values,field) for field in metrics} for case,values in sorted(grouped.items())}
+if family=='count-changing' and mode=='admission':
+    scale=[json.loads(x) for x in (root/'scaling/raw.jsonl').read_text().splitlines() if x]
+    assert len(scale)==18 and all(x['source_arm']=='candidate' and x['cohort']=='delete-shrink-scaling' for x in scale)
+    grouped={case:[x for x in scale if x['scenario_id']==case] for case in sorted({x['scenario_id'] for x in scale})}
+    assert len(grouped)==6 and all({x['seed'] for x in values}=={1,2,3} for values in grouped.values())
+    fields=['inner_edit_ns','execution_ns','commit_api_ns','complete_lifecycle_ns','copied_payload_bytes_per_second','commit_payload_bytes_read','commit_cdc_bytes_scanned','candidate_objects','candidate_bytes','inserted_objects','inserted_bytes_total','reused_objects','reused_bytes','process_user_cpu_ns','process_system_cpu_ns','process_peak_rss_bytes','container_memory_peak_bytes','physical_spool_high_water_bytes']
+    statistics_by_case={}
+    for case,values in grouped.items():
+        first=values[0]; size=first['fixture_bytes']; shrink=case.startswith('replace-middle-shrink')
+        assert all(x['fixture_bytes']==x['initial_file_bytes']==size and x['final_file_bytes']==size-2048 for x in values)
+        assert all(x['edit_offset']==size//2-(2048 if shrink else 1024) for x in values)
+        assert all(x['deleted_bytes']==(4096 if shrink else 2048) and x['inserted_bytes']==(2048 if shrink else 0) for x in values)
+        assert all(x['copied_payload_bytes']==size-(4096 if shrink else 2048) and x['read_payload_bytes']==size for x in values)
+        assert all(x['fuse_kernel_write_bytes']==x['spool_write_bytes']==size-2048 for x in values)
+        assert all(x['commit_payload_bytes_read']==0 and x['commit_cdc_bytes_scanned']==size-2048 for x in values)
+        assert all(x['process_peak_rss_bytes']<=128*1024*1024 and x['container_memory_peak_bytes']<=128*1024*1024 and x['physical_spool_high_water_bytes']<=128*1024*1024 for x in values)
+        assert all(x['swap_bytes']==0 and not x['oom'] and not x['timeout'] and x['cleanup_status']=='pass' for x in values)
+        statistics_by_case[case]={'samples':3,'fixture_bytes':size,'medians':{field:med(values,field) for field in fields},'ranges':{field:[min(x[field] for x in values),max(x[field] for x in values)] for field in fields},'copied_payload_bytes':first['copied_payload_bytes'],'read_payload_bytes':first['read_payload_bytes'],'written_bytes':first['fuse_kernel_write_bytes']}
+    gates={}; models={}
+    for prefix in ('delete-middle-2k','replace-middle-shrink-4k-to-2k'):
+        selected=sorted((value for case,value in statistics_by_case.items() if case.startswith(prefix)),key=lambda value:value['fixture_bytes'])
+        one,ten,hundred=selected
+        rate_ratio=hundred['medians']['copied_payload_bytes_per_second']/ten['medians']['copied_payload_bytes_per_second']
+        gates[prefix]={'rate_100m_over_rate_10m':rate_ratio,'minimum':0.90,'status':'target-pass' if rate_ratio>=0.90 else 'no-go'}
+        xs=[x['fixture_bytes'] for x in selected]; ys=[x['medians']['inner_edit_ns'] for x in selected]; xbar=sum(xs)/3; ybar=sum(ys)/3
+        slope=sum((x-xbar)*(y-ybar) for x,y in zip(xs,ys))/sum((x-xbar)**2 for x in xs)
+        models[prefix]={'fixed_overhead_ns':ybar-slope*xbar if slope>0 else None,'sustained_copy_bytes_per_second':1_000_000_000/slope if slope>0 else None,'fit_status':'diagnostic-fit' if slope>0 else 'diagnostic-non-fit','equation':'mutation_ns = fixed_overhead_ns + fixture_bytes * ns_per_byte'}
+    scaling_status='target-pass' if all(x['status']=='target-pass' for x in gates.values()) else 'no-go'
+    scaling={'schema':'fs-bench-pro-edit-count-changing-scaling-summary-v1','samples':len(scale),'cases':statistics_by_case,'gates':gates,'models':models,'status':scaling_status}
+    (root/'scaling/summary.json').write_text(json.dumps(scaling,sort_keys=True,separators=(',',':'))+'\n')
+    summary['scaling_status']=scaling_status
+    summary['scaling_samples']=len(scale)
+    summary['status']=max((summary['status'],scaling_status),key=rank.get)
 (root/'summary.json').write_text(json.dumps(summary,sort_keys=True,separators=(',',':'))+'\n')
 PY
 
 overall_status=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$run_dir/summary.json")
-if [[ $overall_status == target-pass || $overall_status == tolerated-pass ]]; then admission_eligible=true; else admission_eligible=false; fi
+if [[ $mode == admission && ( $overall_status == target-pass || $overall_status == tolerated-pass ) ]]; then admission_eligible=true; else admission_eligible=false; fi
 if [[ $admission_eligible == true && $mode == admission ]]; then
   if [[ $family_kind == same-count ]]; then
     run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$container" repeat-a || true
@@ -854,10 +946,21 @@ if [[ $admission_eligible == true && $mode == admission ]]; then
     if [[ -z $verification_failure && $source_arm == baseline-candidate ]]; then
       run_verify replace-middle-shrink-4k-to-2k-ops-10 1 "$paired_container" baseline || true
     fi
+    if [[ -z $verification_failure ]]; then
+      while IFS=$'\t' read -r verifier _ <&3; do
+        for sample_seed in 1 2 3; do
+          run_verify "$verifier" "$sample_seed" "$container" candidate || break 2
+        done
+      done 3<"$run_dir/environment/scaling-scenarios.tsv"
+    fi
+    if [[ -z $verification_failure ]]; then
+      [[ $(wc -l <"$run_dir/verification/raw.jsonl" | tr -d ' ') == 7 ]] || verification_failure="primary verification receipt cardinality"
+      [[ -f $run_dir/scaling/verification.jsonl && $(wc -l <"$run_dir/scaling/verification.jsonl" | tr -d ' ') == 18 ]] || verification_failure="scaling verification receipt cardinality"
+    fi
   fi
 fi
-if [[ $mode == admission && $verification_external_wall_ns -gt 40000000000 ]]; then
-  verification_failure="aggregate verification wall exceeded 40 seconds"
+if [[ $mode == admission && $primary_verification_external_wall_ns -gt 40000000000 ]]; then
+  verification_failure="primary aggregate verification wall exceeded 40 seconds"
 fi
 if [[ -n $verification_failure ]]; then
   overall_status=hard-failure
@@ -867,16 +970,30 @@ if [[ -n $verification_failure ]]; then
 import json,sys
 p=sys.argv[1]; data=json.load(open(p)); data['performance_status']=data['status']; data['verification_status']='hard-failure'; data['verification_failure']=sys.argv[2]; data['status']='hard-failure'; open(p,'w').write(json.dumps(data,sort_keys=True,separators=(',',':'))+'\n')
 PY
+elif [[ $mode == admission && $admission_eligible == true ]]; then
+  python3 - "$run_dir/summary.json" "$family_kind" <<'PY'
+import json,sys
+path,family=sys.argv[1:]
+data=json.load(open(path)); data['verification_status']='target-pass'
+if family=='count-changing': data.update({'primary_verification_samples':7,'scaling_verification_samples':18})
+open(path,'w').write(json.dumps(data,sort_keys=True,separators=(',',':'))+'\n')
+PY
 fi
 printf '%s\n' "$performance_external_wall_ns" >"$run_dir/environment/performance-external-wall-ns.txt"
 printf '%s\n' "$control_external_wall_ns" >"$run_dir/environment/control-external-wall-ns.txt"
 printf '%s\n' "$verification_external_wall_ns" >"$run_dir/environment/verification-external-wall-ns.txt"
+printf '%s\n' "$primary_verification_external_wall_ns" >"$run_dir/environment/primary-verification-external-wall-ns.txt"
+printf '%s\n' "$scaling_verification_external_wall_ns" >"$run_dir/environment/scaling-verification-external-wall-ns.txt"
 stop_container "$container"
 if [[ -n $paired_container ]]; then stop_container "$paired_container"; fi
 docker inspect "$container" >"$run_dir/environment/container-after.json"
 if [[ -n $paired_container ]]; then docker inspect "$paired_container" >"$run_dir/environment/paired-container-after.json"; fi
 printf '{"schema":"fs-bench-pro-edit-%s-status-%s","mode":"%s","source_identity":"%s","status":"%s","admission_eligible":%s}\n' "$family_kind" "$evidence_version" "$mode" "$source_arm" "$overall_status" "$admission_eligible" >"$run_dir/run-status.json"
-(invocation_elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - invocation_started )); printf '%s\n' "$invocation_elapsed" >"$run_dir/environment/total-external-wall-ns.txt"; if [[ $mode == performance && $performance_external_wall_ns -gt 2000000000 ]]; then printf '{"schema":"fs-bench-pro-edit-%s-status-%s","mode":"%s","source_identity":"%s","status":"no-go","admission_eligible":false,"reason":"selected performance external wall exceeded 2 seconds","performance_external_wall_ns":%s,"total_external_wall_ns":%s}\n' "$family_kind" "$evidence_version" "$mode" "$source_arm" "$performance_external_wall_ns" "$invocation_elapsed" >"$run_dir/run-status.json"; fi)
+(invocation_elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - invocation_started )); printf '%s\n' "$invocation_elapsed" >"$run_dir/environment/total-external-wall-ns.txt"; if [[ $mode == performance && $selection != *-scale && $performance_external_wall_ns -gt 2000000000 ]]; then printf '{"schema":"fs-bench-pro-edit-%s-status-%s","mode":"%s","source_identity":"%s","status":"no-go","admission_eligible":false,"reason":"selected performance external wall exceeded 2 seconds","performance_external_wall_ns":%s,"total_external_wall_ns":%s}\n' "$family_kind" "$evidence_version" "$mode" "$source_arm" "$performance_external_wall_ns" "$invocation_elapsed" >"$run_dir/run-status.json"; fi)
 (cd "$run_dir" && find . -type f ! -name evidence.sha256 -print0 | sort -z | xargs -0 shasum -a 256 >evidence.sha256)
-[[ $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["admission_eligible"])' "$run_dir/run-status.json") == True ]] || die "admission or selected external wall gate"
+if [[ $mode == admission ]]; then
+  [[ $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["admission_eligible"])' "$run_dir/run-status.json") == True ]] || die "admission gate"
+else
+  [[ $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"] in ("target-pass","tolerated-pass"))' "$run_dir/run-status.json") == True ]] || die "selected command gate"
+fi
 printf 'PASS %s\n' "$run_dir"

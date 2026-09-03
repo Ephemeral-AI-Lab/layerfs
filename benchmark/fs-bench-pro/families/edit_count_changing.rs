@@ -1,8 +1,8 @@
 pub(crate) const FAMILY_ID: &str = "edit_count_changing";
 pub(crate) const FIXTURE_BYTES: u64 = 256 * 1024;
 pub(crate) const FIXTURE_PROFILE: &str = "edit-throughput-256k-v1";
-pub(crate) const PERFORMANCE_SCHEMA: &str = "fs-bench-pro-edit-performance-v2";
-pub(crate) const VERIFICATION_SCHEMA: &str = "fs-bench-pro-edit-verification-v2";
+pub(crate) const PERFORMANCE_SCHEMA: &str = "fs-bench-pro-edit-performance-v3";
+pub(crate) const VERIFICATION_SCHEMA: &str = "fs-bench-pro-edit-verification-v3";
 pub(crate) const SEEDS: [u8; 3] = [1, 2, 3];
 pub(crate) const VERIFIERS: [&str; 4] = [
     "insert-middle-4k-on-8m-proof",
@@ -61,6 +61,8 @@ pub(crate) struct Scenario {
     pub(crate) kind: Kind,
     pub(crate) paired_same_count_control_id: &'static str,
     pub(crate) frozen: bool,
+    pub(crate) fixture_bytes: u64,
+    pub(crate) cohort: &'static str,
 }
 
 macro_rules! scenario {
@@ -72,6 +74,8 @@ macro_rules! scenario {
             kind: Kind::$kind,
             paired_same_count_control_id: $control,
             frozen: false,
+            fixture_bytes: FIXTURE_BYTES,
+            cohort: "primary",
         }
     };
 }
@@ -84,6 +88,8 @@ pub(crate) const SCENARIOS: [Scenario; 25] = [
         kind: Kind::FrozenPrepend,
         paired_same_count_control_id: "not-applicable-frozen-anchor",
         frozen: true,
+        fixture_bytes: 32 * 1024 * 1024,
+        cohort: "primary",
     },
     scenario!("prepend-head-4k-ops-1", "Prepend 4 KiB at head, 1 operation", 1, Prepend, "overwrite-head-4k-ops-1"),
     scenario!("prepend-head-4k-ops-10", "Prepend 4 KiB at head, 10 operations", 10, Prepend, "overwrite-head-4k-ops-10"),
@@ -111,6 +117,30 @@ pub(crate) const SCENARIOS: [Scenario; 25] = [
     scenario!("replace-middle-shrink-4k-to-2k-ops-100", "Replace middle 4 KiB with 2 KiB, 100 operations", 100, Shrink, "overwrite-middle-2k-ops-100"),
 ];
 
+macro_rules! scaling_scenario {
+    ($id:literal, $display:literal, $bytes:expr, $kind:ident) => {
+        Scenario {
+            id: $id,
+            display_name: $display,
+            operations: 1,
+            kind: Kind::$kind,
+            paired_same_count_control_id: "not-applicable-scaling-file-size-cohort",
+            frozen: false,
+            fixture_bytes: $bytes,
+            cohort: "delete-shrink-scaling",
+        }
+    };
+}
+
+pub(crate) const SCALING_SCENARIOS: [Scenario; 6] = [
+    scaling_scenario!("delete-middle-2k-on-1mib-ops-1-scale", "Delete middle 2 KiB on 1 MiB", 1024 * 1024, Delete),
+    scaling_scenario!("delete-middle-2k-on-10mib-ops-1-scale", "Delete middle 2 KiB on 10 MiB", 10 * 1024 * 1024, Delete),
+    scaling_scenario!("delete-middle-2k-on-100mib-ops-1-scale", "Delete middle 2 KiB on 100 MiB", 100 * 1024 * 1024, Delete),
+    scaling_scenario!("replace-middle-shrink-4k-to-2k-on-1mib-ops-1-scale", "Replace middle 4 KiB with 2 KiB on 1 MiB", 1024 * 1024, Shrink),
+    scaling_scenario!("replace-middle-shrink-4k-to-2k-on-10mib-ops-1-scale", "Replace middle 4 KiB with 2 KiB on 10 MiB", 10 * 1024 * 1024, Shrink),
+    scaling_scenario!("replace-middle-shrink-4k-to-2k-on-100mib-ops-1-scale", "Replace middle 4 KiB with 2 KiB on 100 MiB", 100 * 1024 * 1024, Shrink),
+];
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Edit {
     pub(crate) offset: u64,
@@ -124,6 +154,7 @@ pub(crate) struct Edit {
 pub(crate) fn scenario(id: &str) -> Result<Scenario, String> {
     SCENARIOS
         .into_iter()
+        .chain(SCALING_SCENARIOS)
         .find(|scenario| scenario.id == id)
         .ok_or_else(|| format!("unknown count-changing scenario: {id}"))
 }
@@ -152,7 +183,7 @@ pub(crate) fn schedule(scenario: Scenario, seed: u8) -> Result<Vec<Edit>, String
     if scenario.frozen || !SEEDS.contains(&seed) {
         return Err("count-changing schedule identity".into());
     }
-    let mut length = FIXTURE_BYTES;
+    let mut length = scenario.fixture_bytes;
     let mut edits = Vec::with_capacity(scenario.operations);
     for _ in 0..scenario.operations {
         let (offset, deleted, inserted, logical_zero) = match scenario.kind {
@@ -197,9 +228,43 @@ pub(crate) fn self_check() -> Result<(), String> {
     if FAMILY_ID != "edit_count_changing"
         || SCENARIOS.len() != 25
         || SCENARIOS.iter().filter(|row| row.frozen).count() != 1
+        || SCALING_SCENARIOS.len() != 6
         || VERIFIERS.len() != 4
     {
         return Err("count-changing family identity".into());
+    }
+    for (index, scenario) in SCALING_SCENARIOS.iter().enumerate() {
+        if SCENARIOS.iter().any(|row| row.id == scenario.id)
+            || SCALING_SCENARIOS[..index]
+                .iter()
+                .any(|prior| prior.id == scenario.id)
+            || scenario.operations != 1
+            || !matches!(scenario.fixture_bytes, 1_048_576 | 10_485_760 | 104_857_600)
+            || scenario.cohort != "delete-shrink-scaling"
+            || scenario.paired_same_count_control_id
+                != "not-applicable-scaling-file-size-cohort"
+        {
+            return Err("count-changing scaling registry".into());
+        }
+        for seed in SEEDS {
+            let edits = schedule(*scenario, seed)?;
+            let [edit] = edits.as_slice() else {
+                return Err("count-changing scaling schedule".into());
+            };
+            let (offset, deleted, inserted) = match scenario.kind {
+                Kind::Delete => (scenario.fixture_bytes / 2 - 1024, 2048, 0),
+                Kind::Shrink => (scenario.fixture_bytes / 2 - 2048, 4096, 2048),
+                _ => return Err("count-changing scaling kind".into()),
+            };
+            if edit.offset != offset
+                || edit.deleted != deleted
+                || edit.inserted != inserted
+                || edit.prior_len != scenario.fixture_bytes
+                || edit.final_len != scenario.fixture_bytes - 2048
+            {
+                return Err("count-changing scaling algebra".into());
+            }
+        }
     }
     for (index, scenario) in SCENARIOS.iter().enumerate() {
         if SCENARIOS[..index].iter().any(|prior| prior.id == scenario.id)

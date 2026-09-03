@@ -1065,6 +1065,15 @@ fn run() -> Result<()> {
             }
             Ok(())
         }
+        [command] if command == "count-changing-scaling-list" => {
+            for scenario in edit_count_changing::SCALING_SCENARIOS {
+                println!(
+                    "{}\t{}\t{}",
+                    scenario.id, scenario.display_name, scenario.fixture_bytes
+                );
+            }
+            Ok(())
+        }
         [command] if command == "count-changing-self-check" => {
             edit_count_changing::self_check()?;
             println!("count-changing-self-check=pass");
@@ -1159,7 +1168,7 @@ fn run() -> Result<()> {
             println!("{size}\t{digest}");
             Ok(())
         }
-        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | same-count-self-check | same-count-list | same-count-resolve CASE | same-count-control-resolve CASE | count-changing-self-check | count-changing-list | count-changing-resolve CASE | store-footprint-self-check | store-footprint-list | store-footprint-resolve CASE | store-footprint-fixture ROOT CASE TIER | store-footprint-digest ROOT | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | same-count-edit PATH CASE SEED | same-count-control-edit PATH CASE SEED | same-count-fragmented PATH COHORT COUNT SEED | count-changing-edit PATH CASE SEED | count-changing-proof PATH VERIFIER | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
+        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | same-count-self-check | same-count-list | same-count-resolve CASE | same-count-control-resolve CASE | count-changing-self-check | count-changing-list | count-changing-scaling-list | count-changing-resolve CASE | store-footprint-self-check | store-footprint-list | store-footprint-resolve CASE | store-footprint-fixture ROOT CASE TIER | store-footprint-digest ROOT | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | same-count-edit PATH CASE SEED | same-count-control-edit PATH CASE SEED | same-count-fragmented PATH COHORT COUNT SEED | count-changing-edit PATH CASE SEED | count-changing-proof PATH VERIFIER | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
     }
 }
 
@@ -1291,7 +1300,7 @@ fn count_changing_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<(
     let path = path.as_ref();
     let scenario = edit_count_changing::scenario(case)?;
     let schedule = edit_count_changing::schedule(scenario, seed)?;
-    if fs::metadata(path)?.len() != edit_count_changing::FIXTURE_BYTES {
+    if fs::metadata(path)?.len() != scenario.fixture_bytes {
         return Err("count-changing fixture length".into());
     }
     let initial_inode = fs::metadata(path)?.ino();

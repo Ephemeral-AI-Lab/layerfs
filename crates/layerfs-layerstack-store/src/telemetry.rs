@@ -244,7 +244,13 @@ thread_local! {
 }
 
 pub struct WorkspaceCommitTimer(Instant);
-pub struct WorkspaceCommitDiagnosticsGuard;
+/// Diagnostics capture is thread-affine because its state is thread-local.
+///
+/// ```compile_fail
+/// fn require_send(_: impl Send) {}
+/// require_send(layerfs_layerstack_store::capture_workspace_commit_diagnostics().unwrap());
+/// ```
+pub struct WorkspaceCommitDiagnosticsGuard(std::marker::PhantomData<std::rc::Rc<()>>);
 
 impl Drop for WorkspaceCommitDiagnosticsGuard {
     fn drop(&mut self) {
@@ -375,7 +381,7 @@ pub fn capture_workspace_commit_diagnostics() -> Result<WorkspaceCommitDiagnosti
             return Err(StoreError::Integrity("nested Workspace Commit diagnostics"));
         }
         WORKSPACE_COMMIT_DIAGNOSTICS.with(|diagnostics| diagnostics.borrow_mut().clear());
-        Ok(WorkspaceCommitDiagnosticsGuard)
+        Ok(WorkspaceCommitDiagnosticsGuard(std::marker::PhantomData))
     })
 }
 
