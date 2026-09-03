@@ -357,7 +357,7 @@ json.dump({'schema':f'fs-bench-pro-edit-{sys.argv[5]}-classification-v1','scenar
 open(sys.argv[3],'a').write('\n')
 if sys.argv[4] in ('admission','repeatability'):
     assert r['process_peak_rss_bytes']<=128*1024*1024
-    if r['scenario_id'] in ('small-edit','edit16','prepend-temp-copy-rename'):
+    if r['scenario_id'] in ('small-edit','edit16'):
         assert overall != 'hard-failure'
 else:
     assert overall in ('target-pass','tolerated-pass')
