@@ -1,7 +1,6 @@
 # LayerFS 0.1.2 Developer Preview
 
-> **Status:** Draft release body; no `v0.1.2` tag or GitHub Release is
-> currently published.
+> Source-only Developer Preview release.
 
 LayerFS 0.1.2 adds failure-atomic regular-file range editing through one
 shared owner-side/FUSE piece engine while preserving the v0.1.1 storage, CLI,
@@ -47,7 +46,7 @@ Physical packs remain deferred to open issue #18.
 
 ## Start here
 
-LayerFS 0.1.2 is source-only. After publication:
+LayerFS 0.1.2 is source-only. Build from the immutable tag:
 
 ```bash
 git clone --branch v0.1.2 --depth 1 https://github.com/Ephemeral-AI-Lab/layerfs.git

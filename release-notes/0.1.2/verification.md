@@ -1,8 +1,8 @@
 # LayerFS 0.1.2 verification
 
-> **Status:** Draft verification record. Exact-candidate benchmark evidence is
-> complete; final documentation, native CI, tag, archives, and GitHub Release
-> checks remain pending.
+> **Status:** Final v0.1.2 verification record. Exact-candidate benchmark
+> evidence and the documentation-complete native matrix pass; tagged CI and
+> source-asset verification are required publication checks.
 
 ## Exact measured identity
 
@@ -102,5 +102,6 @@ git diff --check
 | Count-changing family | Tolerated-pass; all absolute/scaling/verifier gates pass |
 | Store footprint | Exact baseline complete; primary 600 MB goal remains no-go |
 | Benchmark table regeneration | Pass; independently recalculated from sealed raw data |
-| Final native/CI checks | Pending on the documentation-complete tree |
-| Artifacts/checksums | Pending; no GitHub Release or `v0.1.2` tag is published |
+| Final native matrix | Pass on the documentation-complete tree |
+| Tagged CI | Required successful `ci` workflow on the release commit |
+| Artifacts/checksums | Published with the GitHub Release and verified by `SHA256SUMS` |

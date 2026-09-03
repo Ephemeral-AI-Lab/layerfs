@@ -1,7 +1,8 @@
 # Store footprint efficiency
 
 > **Status:** Complete with the exact patch-compatible blocker retained. The
-> terminal v4 baseline is `issue16-baseline-terminal-v4-fabf5eb8`; disposable
+> terminal exact-candidate v4 baseline is `final-v012-store-c6c14d5a`, manifest
+> `7907b11fa3db15cca13fda6a99a949c3ee0b984cb743270ba182cc0ef586271b`; disposable
 > layout/pack evidence is `issue16-layout-experiments-fabf5eb8`. Physical
 > packing is deferred to [issue #18](https://github.com/Ephemeral-AI-Lab/layerfs/issues/18).
 > Tracked by [GitHub issue #16](https://github.com/Ephemeral-AI-Lab/layerfs/issues/16).
@@ -335,19 +336,19 @@ control and one separate exact verifier Store per control:
 
 | Control | Canonical bytes | Durable median | Verifier phase |
 | --- | ---: | ---: | ---: |
-| `store-footprint-unique-100000` | 542,909,962 | 661,061,632 | 43.182 s, target pass |
-| `store-footprint-metadata-cardinality-100000` | 579,605,932 | 734,003,200 | 64.372 s, tolerated pass |
-| `store-footprint-large-object-500m` | 501,649,815 | 596,377,600 | 4.103 s, target pass |
+| `store-footprint-unique-100000` | 542,909,962 | 662,831,104 | 41.986 s, target pass |
+| `store-footprint-metadata-cardinality-100000` | 579,605,932 | 733,544,448 | 63.356 s, tolerated pass |
+| `store-footprint-large-object-500m` | 501,649,815 | 596,377,600 | 4.097 s, target pass |
 
 All roots and object-set digests repeat exactly across the three Stores for
-each control. Aggregate verifier-process wall is 124.821 seconds. Every Store
+each control. Aggregate verifier external wall is 123.163 seconds. Every Store
 has one counted durable file, read-only `dbstat` custody, exact FUSE tree
 digest/reopen, zero swap/OOM, and deterministic cleanup.
 
 Mechanism decisions are final:
 
 - current/ObjectId bounded order: **retain**, but it misses the primary target
-  at 661,061,632 bytes;
+  at 662,831,104 median bytes;
 - generation order: **reject**; it saves zero bytes and regresses
   initialization/complete about seven percent at 1,000 files;
 - encoded-length order: **reject**; it grows the 1,000-file Store 2.79 percent,
@@ -366,6 +367,10 @@ No compatible mechanism in the required order reaches 600 MB. The only
 measured mechanism that does changes the physical Store format, which the
 patch boundary expressly forbids. ObjectId order therefore remains the v0.1.2
 product result, with the exact blocker and minor-release handoff retained.
+The owner decision is mechanism-level: the refreshed `c6c14d5a` measurement
+does not expose a new patch-compatible mechanism, so the existing decision to
+accept the measured blocker and defer physical packs to #18 applies to the
+updated exact numbers above.
 
 ## Files to read
 

@@ -1,7 +1,7 @@
 # LayerFS 0.1.2 final-candidate benchmark results
 
-> **Status:** Exact-candidate evidence is complete at `c6c14d5a`; the release
-> remains withdrawn until final documentation/CI checks and publication.
+> **Status:** Final v0.1.2 evidence, measured at code/harness candidate
+> `c6c14d5a` and published with the documentation-only release commit.
 
 **Headline:** Every 256 KiB count-changing temp-copy sample had a batch-average
 mutation time below 10 ms/op; full LayerFS lifecycle medians were
@@ -33,7 +33,9 @@ classified as slow because of a secondary throughput conversion.
 | Universal conformance | benchmark-results/fs-bench-pro/edit-engine-acceptance/final-v012-issue14-c6c14d5a | deca3578ce3aabbad6ff61c41c5d42297e6d8f02fbd699a4b523194193b2aa4b | pass |
 | Owner-side timing supplement | benchmark-results/fs-bench-pro/edit-engine-acceptance/final-v012-issue14-performance-c6c14d5a-r3 | 0494d0d9c33ea79e488b3078e18714e86b17995df27e5123c11ecc285861f9e3 | pass; 9 measurements |
 | Same-count | benchmark-results/fs-bench-pro/edit-same-count/final-v012-same-count-c6c14d5a | 07a17444ac938abbe27d3955fd6cb3eeca92f2a87ca10770a61777608e06cc05 | target-pass |
+| Same-count anchor replay | benchmark-results/fs-bench-pro/edit-same-count/final-v012-same-count-c6c14d5a-anchor-custody | a401fd0092246d380fe626daa55d4e413543bbc2c299241410263416899bad63 | custody pass; no measurement rerun |
 | Count-changing | benchmark-results/fs-bench-pro/edit-count-changing/final-v012-count-changing-c6c14d5a | 491da0d15babd56b38eef00e85f282f318e0f44a847ee5a0a7b289733d979e97 | tolerated-pass |
+| Count-changing anchor replay | benchmark-results/fs-bench-pro/edit-count-changing/final-v012-count-changing-c6c14d5a-anchor-custody | 6c9145ae590d58dced850aa836c273036af07ae39842a214cad1b5eb110d284c | custody pass; no measurement rerun |
 | Store footprint | benchmark-results/fs-bench-pro/store-footprint/final-v012-store-c6c14d5a | 7907b11fa3db15cca13fda6a99a949c3ee0b984cb743270ba182cc0ef586271b | baseline complete; footprint blocker |
 
 Commit `c6c14d5a5a740665f5efbce439493f681bd7dd95`, tree `7c8b843c354fa49f4afa344d66c358a776bfd0d0`, source seal `6b3c039e4237a8ab27eebc5ea4752bc8ad9f58039725ac9b2e3230119b171ec9`, product seal

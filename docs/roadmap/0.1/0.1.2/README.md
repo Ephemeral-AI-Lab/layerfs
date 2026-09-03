@@ -1,9 +1,9 @@
 # LayerFS 0.1.2
 
-> **Status:** Release stopped while reopened issue #15 completes its
-> prospectively defined 31-ID count-changing family and exact scaling
-> verification. Earlier 25-ID results remain immutable superseded evidence.
-> The Store blocker remains accepted; authenticated physical packs remain
+> **Status:** Complete and released under annotated tag `v0.1.2`. The exact
+> 31-ID count-changing family and scaling verification pass at the final
+> measured candidate. Earlier campaigns remain immutable historical evidence;
+> the Store blocker is accepted and authenticated physical packs remain
 > deferred to open issue #18.
 
 ## Release structure
@@ -296,15 +296,15 @@ ceilings. `WorkspaceFileRangeEdit` is additive and owner-side.
   reuse shared harness helpers.
 - [x] Each family runner defaults to one explicit performance case/seed and
   requires `--all` for full admission.
-- [ ] Exactly 45 timed edit IDs (39 original plus 6 count-changing scaling
+- [x] Exactly 45 timed edit IDs (39 original plus 6 count-changing scaling
   IDs), their separate verification/conformance proofs, and three Store
   controls are frozen.
-- [ ] Frozen v0.1.0 rows retain their identities and the later benchmark plan
+- [x] Frozen v0.1.0 rows retain their identities and the later benchmark plan
   inherits the two complete edit families without silently adding members.
 - [x] Performance timing contains no digest/root/reopen/failure/materialization
   verifier work.
 - [x] One environment-independent edit engine serves ordinary write/truncate
   and owner-side range editing with no fallback or alternate canonical path.
-- [ ] Paired regression, frozen anchor, absolute mutation, scaling, RSS,
+- [x] Paired regression, frozen anchor, absolute mutation, scaling, RSS,
   zero-swap, and cleanup gates pass.
-- [ ] Explicit verification passes before evidence is published.
+- [x] Explicit verification passes before evidence is published.

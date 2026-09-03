@@ -18,14 +18,18 @@ EVIDENCE = {
     "conformance": REPO / "benchmark-results/fs-bench-pro/edit-engine-acceptance/final-v012-issue14-c6c14d5a",
     "owner": REPO / "benchmark-results/fs-bench-pro/edit-engine-acceptance/final-v012-issue14-performance-c6c14d5a-r3",
     "same": REPO / "benchmark-results/fs-bench-pro/edit-same-count/final-v012-same-count-c6c14d5a",
+    "same_anchor": REPO / "benchmark-results/fs-bench-pro/edit-same-count/final-v012-same-count-c6c14d5a-anchor-custody",
     "count": REPO / "benchmark-results/fs-bench-pro/edit-count-changing/final-v012-count-changing-c6c14d5a",
+    "count_anchor": REPO / "benchmark-results/fs-bench-pro/edit-count-changing/final-v012-count-changing-c6c14d5a-anchor-custody",
     "store": REPO / "benchmark-results/fs-bench-pro/store-footprint/final-v012-store-c6c14d5a",
 }
 MANIFESTS = {
     "conformance": "deca3578ce3aabbad6ff61c41c5d42297e6d8f02fbd699a4b523194193b2aa4b",
     "owner": "0494d0d9c33ea79e488b3078e18714e86b17995df27e5123c11ecc285861f9e3",
     "same": "07a17444ac938abbe27d3955fd6cb3eeca92f2a87ca10770a61777608e06cc05",
+    "same_anchor": "a401fd0092246d380fe626daa55d4e413543bbc2c299241410263416899bad63",
     "count": "491da0d15babd56b38eef00e85f282f318e0f44a847ee5a0a7b289733d979e97",
+    "count_anchor": "6c9145ae590d58dced850aa836c273036af07ae39842a214cad1b5eb110d284c",
     "store": "7907b11fa3db15cca13fda6a99a949c3ee0b984cb743270ba182cc0ef586271b",
 }
 COMMIT = "c6c14d5a5a740665f5efbce439493f681bd7dd95"
@@ -157,7 +161,9 @@ def main(verify_all: bool) -> tuple[str, str]:
     conformance = seals["conformance"]
     owner = seals["owner"]
     same = seals["same"]
+    same_anchor = seals["same_anchor"]
     count = seals["count"]
+    count_anchor = seals["count_anchor"]
     store = seals["store"]
 
     conformance_status = conformance.json("run-status.json")
@@ -181,6 +187,17 @@ def main(verify_all: bool) -> tuple[str, str]:
     store_summary = store.json("summary.json")
     store_rows = store.jsonl("performance/raw.jsonl")
     store_verify = store.jsonl("verification/raw.jsonl")
+    for anchor, variable, source_manifest in (
+        (same_anchor, "LAYERFS_SAME_COUNT_ANCHOR_FIXTURE", MANIFESTS["same"]),
+        (count_anchor, "LAYERFS_COUNT_CHANGING_ANCHOR_FIXTURE", MANIFESTS["count"]),
+    ):
+        custody = anchor.json("custody.json")
+        command = anchor.text("environment/command.txt").strip()
+        assert custody["status"] == "pass" and not anchor.json("run-status.json")["measurement_rerun"]
+        assert custody["anchor_bytes"] == 33_554_432
+        assert custody["anchor_sha256"] == "0dea714b8c52c3bbd282eca2e47ca7a1806f35661bc876c21616162312a96c11"
+        assert custody["source_evidence_manifest_sha256"] == source_manifest
+        assert command == custody["command"] and command.startswith(f"{variable}=/private/tmp/layerfs-edit32-fixture.AIKeS7 ")
 
     assert conformance_status["status"] == owner_status["status"] == "pass"
     assert same_status == {"schema": "fs-bench-pro-edit-same-count-status-v3", "mode": "admission", "source_identity": "a-a-repeatability", "status": "target-pass", "admission_eligible": True}
@@ -248,8 +265,8 @@ def main(verify_all: bool) -> tuple[str, str]:
     lines = [
         "# LayerFS 0.1.2 final-candidate benchmark results",
         "",
-        "> **Status:** Exact-candidate evidence is complete at `c6c14d5a`; the release",
-        "> remains withdrawn until final documentation/CI checks and publication.",
+        "> **Status:** Final v0.1.2 evidence, measured at code/harness candidate",
+        "> `c6c14d5a` and published with the documentation-only release commit.",
         "",
         "**Headline:** Every 256 KiB count-changing temp-copy sample had a batch-average",
         "mutation time below 10 ms/op; full LayerFS lifecycle medians were",
@@ -281,7 +298,9 @@ def main(verify_all: bool) -> tuple[str, str]:
         ["Universal conformance", EVIDENCE["conformance"].relative_to(REPO).as_posix(), MANIFESTS["conformance"], "pass"],
         ["Owner-side timing supplement", EVIDENCE["owner"].relative_to(REPO).as_posix(), MANIFESTS["owner"], "pass; 9 measurements"],
         ["Same-count", EVIDENCE["same"].relative_to(REPO).as_posix(), MANIFESTS["same"], "target-pass"],
+        ["Same-count anchor replay", EVIDENCE["same_anchor"].relative_to(REPO).as_posix(), MANIFESTS["same_anchor"], "custody pass; no measurement rerun"],
         ["Count-changing", EVIDENCE["count"].relative_to(REPO).as_posix(), MANIFESTS["count"], "tolerated-pass"],
+        ["Count-changing anchor replay", EVIDENCE["count_anchor"].relative_to(REPO).as_posix(), MANIFESTS["count_anchor"], "custody pass; no measurement rerun"],
         ["Store footprint", EVIDENCE["store"].relative_to(REPO).as_posix(), MANIFESTS["store"], "baseline complete; footprint blocker"],
     ]
     lines += md_table(["Evidence", "Immutable local path", "Manifest SHA-256", "Disposition"], evidence_rows)
@@ -533,8 +552,7 @@ def main(verify_all: bool) -> tuple[str, str]:
     github = [
         "# LayerFS 0.1.2 Developer Preview",
         "",
-        "> **Status:** Draft release body; no `v0.1.2` tag or GitHub Release is",
-        "> currently published.",
+        "> Source-only Developer Preview release.",
         "",
         "LayerFS 0.1.2 adds failure-atomic regular-file range editing through one",
         "shared owner-side/FUSE piece engine while preserving the v0.1.1 storage, CLI,",
@@ -583,7 +601,7 @@ def main(verify_all: bool) -> tuple[str, str]:
         "",
         "## Start here",
         "",
-        "LayerFS 0.1.2 is source-only. After publication:",
+        "LayerFS 0.1.2 is source-only. Build from the immutable tag:",
         "",
         "```bash",
         "git clone --branch v0.1.2 --depth 1 https://github.com/Ephemeral-AI-Lab/layerfs.git",

@@ -1,8 +1,7 @@
 # Count-changing file-edit performance family
 
-> **Status:** Reopened for a prospective v4 family expansion before replacement
-> evidence. The earlier 25-ID campaigns remain immutable evidence for the
-> superseded smaller family. The terminal family contains 25 primary IDs, six
+> **Status:** Complete at exact candidate `c6c14d5a`. Earlier campaigns remain
+> immutable historical evidence. The terminal family contains 25 primary IDs, six
 > family-owned delete/shrink size-scaling IDs, seven existing primary verifier
 > receipts, and one exact reopen verifier per scaling sample in the fixed MacBook/Docker
 > Desktop/managed Linux container/real-FUSE environment.
@@ -369,7 +368,9 @@ kernel write/spool bytes         33,554,442
 Run three paired seed samples in alternating order. For each new row:
 
 ```text
-median(candidate / unchanged baseline) <= 1.05
+median(candidate complete_lifecycle_ns)
+------------------------------------------------ <= 1.05
+median(unchanged baseline complete_lifecycle_ns)
 ```
 
 The frozen baseline is source `a7583306`, workload SHA-256
@@ -388,15 +389,34 @@ no-go boundary. Require at least a
 20-percent improvement only when baseline evidence proves a defect and the
 retained implementation claims to optimize it.
 
-The authoritative ratio-of-medians supplement has exactly three tolerated
-rows: `prepend-head-4k-ops-10` (`1.074673`),
-`sparse-write-past-eof-gap-60k-payload-4k-ops-1` (`1.056144`), and
-`sparse-write-past-eof-gap-60k-payload-4k-ops-10` (`1.056600`). Their complete
-phase and counter dispositions are retained in
-`issue15-terminal-ratio-dispositions-e76ef180`. All structural and byte-work
-counters are `1.0`; the remaining phase spread is tolerated and makes no
-improvement claim. The older `insert-middle-4k-ops-100` note used the
-superseded statistic and is not an authoritative tolerance disposition.
+The exact `c6c14d5a` admission has five tolerated rows:
+
+- `append-tail-4k-ops-100` (`1.076766`): execution (`1.067x`), visibility
+  (`1.078x`), and teardown (`1.101x`) account for the spread; all structural,
+  byte-work, and request counters are unchanged.
+- `delete-middle-2k-ops-100` (`1.096621`, the family maximum): execution is
+  `1.104x` and Commit/visibility `1.088x`; the candidate issues fewer FUSE
+  writes (`0.804x`) with identical bytes, objects, CDC work, and spool work, so
+  the result is streaming/Commit wall variance rather than added work.
+- `insert-middle-4k-ops-1` (`1.079309`): the short single-operation execution
+  phase is `1.252x`, while create/end and every work counter remain equivalent;
+  fixed per-process/FUSE overhead dominates this small sample.
+- `replace-middle-shrink-4k-to-2k-ops-10` (`1.056754`): create is `1.088x` and
+  execution `1.100x`, while the candidate uses `0.600x` the FUSE write requests
+  with identical logical, CDC, object, and spool work.
+- `sparse-write-past-eof-gap-60k-payload-4k-ops-1` (`1.053121`): execution is
+  faster (`0.887x`); Commit (`1.118x`) and teardown (`1.361x`) explain the
+  tolerated lifecycle result, with no counter evidence of additional sparse
+  payload work.
+
+These are ratio-of-medians dispositions, not medians of paired ratios. None
+claims improvement. The terminal evidence is
+`benchmark-results/fs-bench-pro/edit-count-changing/final-v012-count-changing-c6c14d5a`,
+manifest SHA-256
+`491da0d15babd56b38eef00e85f282f318e0f44a847ee5a0a7b289733d979e97`.
+It contains 150 primary rows, 45 controls, 18 scaling rows, seven primary
+verifier receipts, and 18 scaling verifier receipts. Its anchor replay custody
+manifest is `6c9145ae590d58dced850aa836c273036af07ae39842a214cad1b5eb110d284c`.
 
 Provisional family performance budget for one 75-sample source arm:
 
@@ -410,6 +430,12 @@ The paired baseline/candidate accounting budget is 20/40 seconds. The 256 KiB
 fixture keeps 100-operation temp-rewrite curves bounded while the frozen 32 MiB
 prepend retains the large-file control. Freeze final operation/s and payload-
 throughput floors after the unchanged implementation is measured.
+
+The strict 10 ms/op mutation gate is an explicit owner decision: absolute
+256 KiB mutation latency is the primary usability measure, while calculated
+copied-payload MiB/s is secondary. The exact no-tolerance formula is
+`median(inner_edit_ns) <= operation_count * 10,000,000 ns`; individual
+operations inside a batch are not timed separately.
 
 The family applies a 128 MiB physical-spool high-water ceiling, intentionally
 stricter than the universal engine's 1 GiB product safety ceiling.
@@ -485,18 +511,18 @@ performance distribution. Existing primary proof commands retain their
 
 ## Acceptance criteria
 
-- [ ] One family module and one runner own all 31 timed IDs, seven existing
+- [x] One family module and one runner own all 31 timed IDs, seven existing
   primary verifier receipts, and 18 scaling reopen verifiers while reusing
   shared harness code.
 - [x] The runner defaults to one explicit case/seed in performance mode and
   cannot run the full family without `--all`.
 - [x] The frozen prepend retains operation, fixture, timing, schema, and oracle.
 - [x] Every 1/10/100 curve is an exact prefix and declares its same-count control.
-- [ ] Every performance row reports latency, operations/s, phase, I/O, object,
+- [x] Every performance row reports latency, operations/s, phase, I/O, object,
   CPU, memory, and cleanup receipts without verifier work in its timer.
-- [ ] Sparse zero, pair, relative regression, anchor, family-wall, scaling,
+- [x] Sparse zero, pair, relative regression, anchor, family-wall, scaling,
   RSS, and
   zero-swap gates pass.
-- [ ] Explicit verification proves all seven primary receipts (prepend, sparse,
+- [x] Explicit verification proves all seven primary receipts (prepend, sparse,
   four large/adversarial proofs, and baseline semantics) and all 18 scaling
   samples before publication.

@@ -1,9 +1,9 @@
 # Same-count file-edit performance family
 
-> **Status:** Implemented and final-source revalidated by the v3 A/A campaign
-> `issue13-final-source-terminal-v3b-025c542f` plus the separate verifier
-> `issue13-final-source-fragmentation-v3-025c542f`. The original terminal
-> campaign is `issue13-terminal-final2-bed5a590`. The earlier
+> **Status:** Complete at exact candidate `c6c14d5a` in
+> `final-v012-same-count-c6c14d5a`, manifest
+> `07a17444ac938abbe27d3955fd6cb3eeca92f2a87ca10770a61777608e06cc05`.
+> Earlier campaigns remain immutable diagnostic history. The earlier
 > `issue13-terminal-aa-final-e8226e4c` run is immutable diagnostic history and
 > release-ineligible because its A/A classifier was label-dependent. The family
 > has 14 timed performance IDs and one separate verification group.
@@ -278,12 +278,14 @@ not add 42 unregistered exact-verifier rows. Its timeout is 20 seconds per
 verifier invocation.
 
 The final-source v3 campaign retains 84 performance rows. Its symmetric
-aggregate A/A ratio is `1.011798`, arm lifecycle walls are `1.290230 s` and
-`1.305452 s`, and the paired wall is `2.595682 s`; all are target passes. The
-lowest new-row median is `908 ops/s`, peak RSS is `77,643,776` bytes, and swap
-and OOM are zero. The separate verifier passes all increasing, descending, and
-hotspot 100/1,000 checkpoints, exact roots, fresh FUSE reopen, structural
-ratios, and cleanup in `2.667270 s` external wall.
+aggregate A/A ratio is `1.004258171`, arm lifecycle walls are `1.436397 s` and
+`1.442514 s`, and the paired measured lifecycle is `2.878911 s`; all are target
+passes. Peak RSS is `77,758,464` bytes, and swap and OOM are zero. Six separate
+correctness receipts pass all increasing, descending, and hotspot 100/1,000
+checkpoints, exact roots, fresh FUSE reopen, structural ratios, and cleanup;
+one additional timing/status receipt records `2.715882 s` aggregate verifier
+external wall. The exact anchor replay custody manifest is
+`a401fd0092246d380fe626daa55d4e413543bbc2c299241410263416899bad63`.
 
 ## Files to read
 

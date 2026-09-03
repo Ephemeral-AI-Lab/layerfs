@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 release contract
 
-> **Status:** Draft Developer Preview contract pending corrected publication.
+> **Status:** Released Developer Preview contract under annotated tag `v0.1.2`.
 
 ## Identity
 

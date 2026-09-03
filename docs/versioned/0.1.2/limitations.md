@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 limitations
 
-> **Status:** Draft limitations for the withdrawn `v0.1.2` release candidate.
+> **Status:** Released limitations for the `v0.1.2` Developer Preview.
 
 The [0.1.1 limitations](../0.1.1/limitations.md) remain in force: LayerFS is a
 Developer Preview, does not claim crash- or power-loss durability at every
