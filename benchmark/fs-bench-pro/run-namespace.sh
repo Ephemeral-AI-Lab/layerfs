@@ -89,9 +89,13 @@ family_cli_parse() {
       [[ $all -eq 0 && -n "$selection" && ( -z "$seed" || "$seed" =~ ^[123]$ ) ]] || return 2
       seed=${seed:-1}; seed_start=$seed; iterations=$seed
       ;;
-    admission)
+    admission|collect)
       [[ $all -eq 1 && -z "$selection" && -z "$seed" ]] || return 2
       selection=all; seed_start=1; iterations=3
+      ;;
+    verify-all)
+      [[ $all -eq 1 && -z "$selection" && -z "$seed" ]] || return 2
+      selection=all; seed_start=1; iterations=1; family_mode=verify
       ;;
     *) return 2 ;;
   esac
@@ -121,6 +125,8 @@ PY
   (family_cli_parse --case namespace-100 --seed 1 --source candidate)
   (family_cli_parse --case namespace-100 --source baseline --mode verify)
   (family_cli_parse --all --source candidate --mode admission)
+  (family_cli_parse --all --source candidate --mode collect)
+  (family_cli_parse --all --source candidate --mode verify-all)
   ! (family_cli_parse --all --source candidate) || die "performance --all self-check"
   ! (family_cli_parse --case namespace-100 --seed 1) || die "explicit source self-check"
   ! (family_cli_parse --case namespace-100 --seed 1 --source candidate --mode performance --mode verify) ||
@@ -549,7 +555,7 @@ output_path.write_text(json.dumps({
 PY
     if [[ $family_interface -eq 1 ]]; then
       command_mode=$family_mode
-      [[ "$command_mode" == admission ]] && command_mode=performance
+      [[ "$command_mode" == admission || "$command_mode" == collect ]] && command_mode=performance
       benchmark_command=(
         env
         LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload
@@ -667,7 +673,7 @@ PY
     fi
     if [[ $family_interface -eq 1 ]]; then
       command_mode=$family_mode
-      [[ "$command_mode" == admission ]] && command_mode=performance
+      [[ "$command_mode" == admission || "$command_mode" == collect ]] && command_mode=performance
       set +e
       python3 - "$sample_dir/raw/namespace.jsonl" "$scenario_dir/fixture-manifest.json" \
         "$sample_dir/result.json" "$scenario" "$iteration" "$source_arm" "$command_mode" \
@@ -694,7 +700,7 @@ common = (
 )
 if not common:
     raise SystemExit("family identity")
-if mode == "performance":
+if mode in ("performance", "collect"):
     fields = {
         "attempted_operations", "branch_fork_ns", "candidate_bytes", "candidate_objects",
         "cgroup_memory_peak_bytes", "cleanup_status", "commit_api_ns",
@@ -1785,7 +1791,7 @@ performance_pass = bool(performance) and all(
 verification_pass = bool(verification) and all(row.get("status") == "pass" for row in verification)
 resource_pass = ((not performance or performance_pass)
                  and (not verification or all(row.get("resource_status") == "pass" for row in verification)))
-if mode == "performance":
+if mode in ("performance", "collect"):
     overall = "performance-complete-verification-not-run" if performance_pass else "fail"
 elif mode == "verify":
     overall = "verification-complete-performance-not-run" if verification_pass else "fail"

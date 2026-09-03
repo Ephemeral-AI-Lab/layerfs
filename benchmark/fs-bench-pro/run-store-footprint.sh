@@ -70,6 +70,7 @@ case "$mode" in
   performance) [[ $all == 0 && -n $selection && $seed =~ ^[123]$ && $tier =~ ^(100|1000|10000)$ && -z $baseline_run ]] || die "selected performance arguments" ;;
   verify) [[ $all == 0 && -n $selection && ${seed:-1} =~ ^[123]$ && $tier =~ ^(100|1000|10000|100000)$ && -z $baseline_run ]] || die "selected verify arguments"; seed=${seed:-1} ;;
   admission) [[ $all == 1 && -z $selection && -z $seed && $tier_set == 0 ]] || die "admission requires --all and no case/seed/tier"; tier=100000 ;;
+  collect|verify-all) [[ $all == 1 && -z $selection && -z $seed && $tier_set == 0 && -z $baseline_run ]] || die "full phase requires --all and no case/seed/tier/baseline"; tier=100000 ;;
   *) die "unknown mode: $mode" ;;
 esac
 if [[ $mode == admission && $source_arm == candidate ]]; then
@@ -81,7 +82,7 @@ elif [[ -n $baseline_run ]]; then
 fi
 
 for command in cargo docker nc python3 rustc sqlite3; do command -v "$command" >/dev/null || die "$command is required"; done
-if [[ $mode == admission ]]; then
+if [[ $mode == admission || $mode == collect || $mode == verify-all ]]; then
   git -C "$repo" diff-files --quiet || die "admission requires a clean tracked worktree"
   git -C "$repo" diff-index --cached --quiet HEAD -- || die "admission requires an index equal to HEAD"
   [[ $(git -C "$repo" write-tree) == $(git -C "$repo" rev-parse HEAD^{tree}) ]] || die "admission tree differs from HEAD"
@@ -264,7 +265,7 @@ PY
   )
   ensure_daemon
   nonce=$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')
-  if [[ $sample_mode == verify ]]; then timeout_seconds=90; elif [[ $mode == admission ]]; then timeout_seconds=30; else timeout_seconds=5; fi
+  if [[ $sample_mode == verify ]]; then timeout_seconds=90; elif [[ $mode == admission || $mode == collect ]]; then timeout_seconds=30; else timeout_seconds=5; fi
   failure_case=$control
   failure_seed=$sample_seed
   failure_mode=$sample_mode
@@ -369,8 +370,12 @@ if [[ $mode == performance || $mode == verify ]]; then
   run_sample "$selection" "$seed" "$mode"
 else
   while IFS=$'\t' read -r control _; do precondition_fixture "$control"; done <"$mapfile"
-  while IFS=$'\t' read -r control _; do for sample_seed in 1 2 3; do run_sample "$control" "$sample_seed" performance; done; done <"$mapfile"
-  while IFS=$'\t' read -r control _; do run_sample "$control" 1 verify; done <"$mapfile"
+  if [[ $mode != verify-all ]]; then
+    while IFS=$'\t' read -r control _; do for sample_seed in 1 2 3; do run_sample "$control" "$sample_seed" performance; done; done <"$mapfile"
+  fi
+  if [[ $mode != collect ]]; then
+    while IFS=$'\t' read -r control _; do run_sample "$control" 1 verify; done <"$mapfile"
+  fi
 fi
 printf '%s\n' "$performance_external_wall_ns" >"$run_dir/environment/performance-external-wall-ns.txt"
 printf '%s\n' "$verification_external_wall_ns" >"$run_dir/environment/verification-external-wall-ns.txt"
@@ -446,7 +451,11 @@ if mode=='admission':
   accepted_status=max((performance_status,verifier_status,verification_summary['status']),key=rank.get)
   summary.update({'status':('target-pass' if accepted_status in ('target-pass','local-step-exception') else 'tolerated-pass') if eligible else 'no-go','admission_eligible':eligible})
 else:
- summary['status']='performance-complete-verification-not-run' if mode=='performance' else verification_summary['status']
+ summary['status']='performance-complete-verification-not-run' if mode in ('performance','collect') else verification_summary['status']
+ if mode=='collect':
+  assert len(performance)==9 and not verification
+  assert {(x['control_id'],x['seed']) for x in performance}=={(c,s) for c in ('store-footprint-unique-100000','store-footprint-metadata-cardinality-100000','store-footprint-large-object-500m') for s in (1,2,3)}
+ if mode=='verify-all': assert len(verification)==3 and not performance
  summary['admission_eligible']=False
 (root/'performance/summary.json').write_text(json.dumps(performance_summary,sort_keys=True,separators=(',',':'))+'\n')
 (root/'verification/summary.json').write_text(json.dumps(verification_summary,sort_keys=True,separators=(',',':'))+'\n')
