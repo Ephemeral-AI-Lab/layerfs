@@ -3527,6 +3527,10 @@ fn store_footprint_case(
             },
             projection: Some(WorkspaceProjection::Fuse),
         })?;
+        eprintln!(
+            "layerfs-store-verifier-phase-v1 event=workspace-created elapsed_ns={}",
+            elapsed_ns(verification_started)
+        );
         let output = execute_workload(
             &reopened,
             reopened_workspace.id,
@@ -3536,6 +3540,10 @@ fn store_footprint_case(
                 OsString::from("."),
             ],
         )?;
+        eprintln!(
+            "layerfs-store-verifier-phase-v1 event=tree-digest-complete elapsed_ns={}",
+            elapsed_ns(verification_started)
+        );
         if output_u64(&output, "regular_files")? != expected_files
             || output_u64(&output, "logical_bytes")? != expected_logical_bytes
             || output_string(&output, "tree_digest")? != edited_digest
@@ -3543,6 +3551,10 @@ fn store_footprint_case(
             return Err("Store-footprint exact reopen digest".into());
         }
         reopened.end_workspace_session(reopened_workspace.id, EndWorkspaceMode::Clean)?;
+        eprintln!(
+            "layerfs-store-verifier-phase-v1 event=workspace-ended elapsed_ns={}",
+            elapsed_ns(verification_started)
+        );
         verification_ns = elapsed_ns(verification_started);
     }
     if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
