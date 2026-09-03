@@ -281,5 +281,5 @@ owner-side baseline; do not invent a pre-API latency.
   proves the engine is not driver-coupled.
 - [x] The focused owner-side prepend meets its latency, transfer, reuse, memory,
   retry, and cleanup gates.
-- [ ] Every retained implementation optimization reruns both affected complete
+- [x] Every retained implementation optimization reruns both affected complete
   performance families.

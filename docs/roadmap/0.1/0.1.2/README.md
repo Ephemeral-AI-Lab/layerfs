@@ -1,10 +1,8 @@
 # LayerFS 0.1.2
 
-> **Status:** Implementation in progress. The family runner format and universal
-> regular-file edit engine are implemented; edit families and Store-footprint
-> admission remain sequential follow-up work. No new scenario is registered
-> until its operation, fixture, load, timing, schema, and performance receipts
-> are frozen together.
+> **Status:** Completed and released in v0.1.2. Issues #17, #14, #13, #15, and
+> #16 finished in order. The owner accepted the exact patch-compatible Store
+> blocker; authenticated physical packs remain deferred to open issue #18.
 
 ## Release structure
 
@@ -124,7 +122,7 @@ Examples:
 overwrite-head-4k-ops-100
 append-tail-4k-ops-100
 insert-middle-4k-ops-10
-truncate-tail-4k-ops-1
+truncate-tail-2k-ops-1
 sparse-write-past-eof-gap-60k-payload-4k-ops-100
 replace-middle-grow-2k-to-4k-ops-10
 ```
@@ -276,22 +274,22 @@ ceilings. `WorkspaceFileRangeEdit` is additive and owner-side.
 
 ## Acceptance criteria
 
-- [ ] Issue 0 lands the shared benchmark format before the implementation and
+- [x] Issue 0 lands the shared benchmark format before the implementation and
   family issues collect evidence.
-- [ ] One shared implementation issue, two complete edit performance families,
+- [x] One shared implementation issue, two complete edit performance families,
   and one Store-footprint family finish in v0.1.2.
-- [ ] All benchmark files and runners live under `benchmark/fs-bench-pro` and
+- [x] All benchmark files and runners live under `benchmark/fs-bench-pro` and
   reuse shared harness helpers.
-- [ ] Each family runner defaults to one explicit performance case/seed and
+- [x] Each family runner defaults to one explicit performance case/seed and
   requires `--all` for full admission.
-- [ ] Exactly 39 timed edit IDs, 12 separate verification/conformance groups,
+- [x] Exactly 39 timed edit IDs, 12 separate verification/conformance groups,
   and three Store controls are frozen.
-- [ ] Frozen v0.1.0 rows retain their identities and v0.1.3 inherits the two
+- [x] Frozen v0.1.0 rows retain their identities and v0.1.3 inherits the two
   complete edit families without adding members.
-- [ ] Performance timing contains no digest/root/reopen/failure/materialization
+- [x] Performance timing contains no digest/root/reopen/failure/materialization
   verifier work.
-- [ ] One environment-independent edit engine serves ordinary write/truncate
+- [x] One environment-independent edit engine serves ordinary write/truncate
   and owner-side range editing with no fallback or alternate canonical path.
-- [ ] Paired regression, frozen anchor, provisional family, throughput, RSS,
+- [x] Paired regression, frozen anchor, provisional family, throughput, RSS,
   zero-swap, and cleanup gates pass.
-- [ ] Explicit verification passes before evidence is published.
+- [x] Explicit verification passes before evidence is published.

@@ -1,7 +1,7 @@
 # `fs-bench-pro` v0.1.2 family format
 
-> **Status:** Implemented for the `init_namespace` family; issues 1–4 add their
-> family definitions and runners sequentially. All files remain under
+> **Status:** Complete for all four family definitions and runners in v0.1.2.
+> All files remain under
 > `benchmark/fs-bench-pro`. Tracked by
 > [GitHub issue #17](https://github.com/Ephemeral-AI-Lab/layerfs/issues/17).
 
@@ -336,14 +336,14 @@ schema checks. It starts no container and runs no product benchmark.
 
 ## Acceptance criteria
 
-- [ ] All new family code and runners live under `benchmark/fs-bench-pro`.
-- [ ] Exactly one pure definition file and one runner exist per new family;
+- [x] All new family code and runners live under `benchmark/fs-bench-pro`.
+- [x] Exactly one pure definition file and one runner exist per new family;
   shared host/workload/lifecycle/evidence code is not copied.
-- [ ] The Docker workload and host harness consume the same family definitions.
-- [ ] One selected performance case/seed is the default development path;
+- [x] The Docker workload and host harness consume the same family definitions.
+- [x] One selected performance case/seed is the default development path;
   complete family execution requires explicit `--all`.
-- [ ] Performance and verification use different schemas, files, summaries, and
+- [x] Performance and verification use different schemas, files, summaries, and
   status fields, and verification never enters performance time.
-- [ ] Existing payload/namespace commands and raw schemas remain compatible.
-- [ ] Paired order, invalid-run handling, receipts, custody, and evidence layout
+- [x] Existing payload/namespace commands and raw schemas remain compatible.
+- [x] Paired order, invalid-run handling, receipts, custody, and evidence layout
   are deterministic and self-checked.

@@ -221,7 +221,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "fs-benchmark-pro"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "layerfs-content",
  "layerfs-layerstack-store",
@@ -310,7 +310,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "clap",
@@ -321,14 +321,14 @@ dependencies = [
 
 [[package]]
 name = "layerfs-content"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
 ]
 
 [[package]]
 name = "layerfs-daemon"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "nix 0.29.0",
@@ -336,14 +336,14 @@ dependencies = [
 
 [[package]]
 name = "layerfs-eval"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "layerfs-sdk",
 ]
 
 [[package]]
 name = "layerfs-fuse"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "fuser",
  "layerfs-content",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-layerstack-store"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "layerfs-content",
@@ -360,14 +360,14 @@ dependencies = [
 
 [[package]]
 name = "layerfs-materialization"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "layerfs-content",
 ]
 
 [[package]]
 name = "layerfs-monitor"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "layerfs-layerstack-store",
  "layerfs-workspace",
@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-sdk"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "layerfs-content",
  "layerfs-layerstack-store",
@@ -385,7 +385,7 @@ dependencies = [
 
 [[package]]
 name = "layerfs-workspace"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "layerfs-content",
  "layerfs-daemon",

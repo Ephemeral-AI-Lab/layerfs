@@ -40,15 +40,15 @@ allowed.
 - [Roadmap architecture](../architecture.md)
 - [Benchmark contract](benchmarking.md)
 - [Development guide](development.md)
-- [v0.1.1 task and checklist](0.1.1/README.md)
-- [v0.1.2 proposals](0.1.2/README.md)
+- [v0.1.1 released history](0.1.1/README.md)
+- [v0.1.2 completed release plan](0.1.2/README.md)
 - [v0.1.3 draft](0.1.3/README.md)
 - [v0.1.4 draft](0.1.4/README.md)
 
 ## Release sequence
 
-- [0.1.1 task and checklist](0.1.1/README.md)
-- [0.1.2 proposals](0.1.2/README.md)
+- [0.1.1 released history](0.1.1/README.md)
+- [0.1.2 completed release plan](0.1.2/README.md)
 - [0.1.3 single-history filesystem-workload draft](0.1.3/README.md)
 - [0.1.4 multi-history operation draft](0.1.4/README.md)
 - [Development guide](development.md)

@@ -324,7 +324,7 @@ four-by-four Cartesian matrix.
 The full release admission checklist is in
 [0.1.1/README.md](0.1.1/README.md).
 
-## Proposed v0.1.2 issue and family inventory
+## Completed v0.1.2 issue and family inventory
 
 v0.1.2 starts with one parent and five ordered sub-issues:
 
@@ -396,8 +396,8 @@ contract is in [same-count-file-edits.md](0.1.2/same-count-file-edits.md).
 | `prepend-head-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
 | `append-tail-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
 | `insert-middle-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
-| `delete-middle-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
-| `truncate-tail-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `delete-middle-2k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `truncate-tail-2k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
 | `sparse-write-past-eof-gap-60k-payload-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
 | `replace-middle-grow-2k-to-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
 | `replace-middle-shrink-4k-to-2k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |

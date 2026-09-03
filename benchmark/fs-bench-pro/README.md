@@ -16,15 +16,18 @@ sections 17–19.
   `namespace-100000`.
 - The v0.1.2 same-count edit family is implemented with 14 timed IDs and its
   separate fragmentation verifier.
+- The v0.1.2 count-changing family is implemented with 25 timed IDs, paired
+  controls, and four separate verifier groups.
+- The v0.1.2 Store-footprint family is implemented with three controls,
+  durable-census/dbstat custody, and separate exact verification.
 - The canonical scenario and status table is the
   [0.1.x benchmark matrix](../../docs/roadmap/0.1/benchmarking.md).
 
 ## v0.1.2 family format
 
 The [v0.1.2 harness contract](../../docs/roadmap/0.1/0.1.2/fs-bench-pro-format.md)
-keeps all new work in this crate. The namespace and same-count families are
-implemented; later issues add the remaining family files only when their work
-begins:
+keeps all new work in this crate. All four family definitions and runners are
+implemented:
 
 ```text
 families/init_namespace.rs           + run-namespace.sh
@@ -38,15 +41,14 @@ digest/root/reopen and adversarial proofs are separate `verify`/`admission`
 modes and never enter performance timing. `run-namespace.sh` is the v0.1.1
 `init_namespace` compatibility runner and the v0.1.2 family runner. Its pure
 definitions live in `families/init_namespace.rs`; raw IDs and descriptive
-aliases resolve to the same frozen scenarios. The count-changing and
-Store-footprint files above remain proposed until their v0.1.2 issues are
-implemented. Existing `run.sh`, legacy
+aliases resolve to the same frozen scenarios. Existing `run.sh`, legacy
 `run-namespace.sh` positional commands, and raw schemas keep their frozen
 meanings.
 
-The benchmark contract also carries the canonical **Problem statement**,
-**Goal**, **Files to read**, and **Acceptance criteria** for the v0.1.1
-namespace work; this README records harness usage and implementation status.
+The benchmark contract carries the canonical problem statements, goals, files
+to read, and acceptance criteria; this README records harness usage and final
+implementation status. See the
+[v0.1.2 evidence index](../../release-notes/0.1.2/benchmark-results.md).
 
 Namespace-v2 keeps 100 regular files per data directory and uses the frozen
 `synthetic-small-heavy-v2` profile: exact Hamilton empty/tiny/small/medium
@@ -179,6 +181,39 @@ The runner's `--self-check` performs no Docker command and must finish within
 two seconds. Performance mode runs no digest/root/reopen verifier. Admission
 retains 42 performance samples per arm, then runs only the separate 1,000-edit
 fragmentation proof for each arm.
+
+Run a selected count-changing row, one verifier, or a directional admission:
+
+```sh
+benchmark/fs-bench-pro/run-edit-count-changing.sh RUN_ID CONTAINER \
+  --case insert-middle-4k-ops-100 --seed 1 --source candidate
+benchmark/fs-bench-pro/run-edit-count-changing.sh RUN_ID CONTAINER \
+  --case insert-middle-4k-on-8m-proof --seed 1 --source candidate --mode verify
+LAYERFS_COUNT_CHANGING_ANCHOR_FIXTURE=/absolute/registered-32m-directory \
+  benchmark/fs-bench-pro/run-edit-count-changing.sh RUN_ID CANDIDATE_CONTAINER \
+  --all --source baseline-candidate --mode admission --paired-container BASELINE_CONTAINER
+```
+
+Directional baseline/candidate admission gates every scenario's ratio of
+medians. Identical-source A/A may use the owner-approved symmetric aggregate
+family-wall rule, but it never replaces directional optimization evidence.
+The frozen 32 MiB anchor's absolute path, size, digest, environment variable,
+and exact command are part of custody.
+
+Run a selected Store sample/verifier or the complete baseline admission:
+
+```sh
+benchmark/fs-bench-pro/run-store-footprint.sh RUN_ID CONTAINER \
+  --case store-footprint-unique-100000 --seed 1 --source baseline --mode performance --tier 100000
+benchmark/fs-bench-pro/run-store-footprint.sh RUN_ID CONTAINER \
+  --case store-footprint-metadata-cardinality-100000 --seed 1 --source baseline --mode verify --tier 100000
+benchmark/fs-bench-pro/run-store-footprint.sh RUN_ID CONTAINER \
+  --all --source baseline --mode admission
+```
+
+Store verification checks content, file and directory metadata, authenticated
+roots, fresh reconnect, resources, durable census, and cleanup in a separate
+stream. Store controls never enter edit-family walls or `registered_total_ns`.
 
 To compare isolated product-source variants against the exact same sealed
 fixture without regenerating it, point later runs at the earlier campaign's

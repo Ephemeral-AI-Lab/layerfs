@@ -39,5 +39,6 @@ source seal, use public operations, keep comparison boundaries matched, retain
 every valid preregistered sample, and disclose setup excluded from timing.
 Exploratory measurements may guide engineering but are not release claims.
 
-The 0.1.0 evidence is published in
-[the benchmark report](../../release-notes/0.1.0/benchmark-results.md).
+The current evidence index is the
+[0.1.2 benchmark report](../../release-notes/0.1.2/benchmark-results.md);
+earlier release records remain immutable under `release-notes/`.

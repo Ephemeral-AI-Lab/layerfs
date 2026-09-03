@@ -1,7 +1,7 @@
 # LayerFS roadmap
 
 > **Status:** Living roadmap. This checklist is planning material, not part of
-> the LayerFS 0.1.0 product or compatibility contract.
+> the LayerFS 0.1.2 product or compatibility contract.
 
 This file answers two questions: what is implemented in the current source,
 and what should happen next. See [Roadmap architecture](architecture.md) for
@@ -29,8 +29,8 @@ explicit-End architecture.
 - [x] Keep the public SDK and real-FUSE lifecycle as the product boundary.
 - [x] Keep container and fixture preparation outside timed regions.
 - [x] Keep all benchmark iteration LayerFS-only.
-- [ ] Complete the namespace matrix in v0.1.1.
-- [ ] Adapt `fs-bench-pro`, implement universal regular-file editing, and
+- [x] Complete the namespace matrix in v0.1.1.
+- [x] Adapt `fs-bench-pro`, implement universal regular-file editing, and
   complete the same-count, count-changing, and Store-footprint work in v0.1.2.
 - [ ] Complete single-history filesystem-workload coverage in v0.1.3.
 - [ ] Complete multi-Layer/multi-Branch history coverage in v0.1.4.
@@ -39,7 +39,7 @@ explicit-End architecture.
 New projections, platforms, remote topology, or incompatible contracts do not
 belong in this phase.
 
-## Current baseline: LayerFS 0.1.0
+## Foundational baseline: LayerFS 0.1.0
 
 ### Implemented product surface
 
@@ -85,7 +85,7 @@ belong in this phase.
 - [x] Record executables, helpers, and runtime images as not published at
   0.1.0.
 
-## Next: compatibility-preserving 0.1.1 work
+## Released compatibility-preserving 0.1.1 work
 
 The 0.1.1 line must preserve the 0.1.0 schema, identities, canonical bytes,
 CDC profile, public SDK behavior, CLI grammar, daemon protocol, and resource
@@ -94,15 +94,15 @@ bounds. The detailed and authoritative working list is the
 
 - [x] Define the compatibility boundary and one existing-directory lifecycle.
 - [x] Record the initial dated planning baseline.
-- [ ] Complete the controlled namespace-size admission measurement.
-- [ ] Decide whether initialization, localized Commit, both, or neither are
+- [x] Complete the controlled namespace-size admission measurement.
+- [x] Decide whether initialization, localized Commit, both, or neither are
   admitted defects.
-- [ ] Add one failing check per admitted defect and fix the shared root cause.
-- [ ] Prove every timed tier through real Linux FUSE and one untimed
+- [x] Add one failing check per admitted defect and fix the shared root cause.
+- [x] Prove every timed tier through real Linux FUSE and one untimed
   materialization/FUSE equality case.
-- [ ] Prove one managed Docker lifecycle and attachment-failure cleanup case.
-- [ ] Pass compatibility, correctness, resource, benchmark, and release gates.
-- [ ] Create the immutable 0.1.1 manual and release record only after a source
+- [x] Prove one managed Docker lifecycle and attachment-failure cleanup case.
+- [x] Pass compatibility, correctness, resource, benchmark, and release gates.
+- [x] Create the immutable 0.1.1 manual and release record only after a source
   candidate passes.
 
 Universal Workspace file edit, broad refactors, and new projection types are deferred from
@@ -110,7 +110,7 @@ Universal Workspace file edit, broad refactors, and new projection types are def
 family are tracked in the [v0.1.2 plan](0.1/0.1.2/README.md); it requires no
 daemon or FUSE wire operation.
 
-## Proposed compatibility-preserving 0.1.2 work
+## Released compatibility-preserving 0.1.2 work
 
 The [v0.1.2 plan](0.1/0.1.2/README.md) continues benchmark-driven optimization
 after the namespace lifecycle is understood. It first adapts
@@ -120,32 +120,31 @@ case and separate verifier modes, then implements the
 same-count and count-changing performance families, and measures
 [total durable Store footprint](0.1/0.1.2/store-footprint-efficiency.md).
 
-- [ ] Add the owner-side public SDK `WorkspaceFileRangeEdit` semantic and one common
+- [x] Add the owner-side public SDK `WorkspaceFileRangeEdit` semantic and one common
   internal edit engine for ordinary write/truncate, with bounded all-or-nothing
   behavior and no alternate edit or copy fallback.
-- [ ] Baseline both complete edit families before optimizing a shared
+- [x] Baseline both complete edit families before optimizing a shared
   fragmented-write, sparse-growth, replacement, or planning defect.
-- [ ] Time only the fixed MacBook/Docker/Linux-FUSE environment; keep owner-side
+- [x] Time only the fixed MacBook/Docker/Linux-FUSE environment; keep owner-side
   range editing as implementation acceptance rather than another family axis.
-- [ ] Retain exact bytes, expression-appropriate canonical roots, fresh reopen
+- [x] Retain exact bytes, expression-appropriate canonical roots, fresh reopen
   proof, and existing registered scenario meanings; do not require structural
   splice and ordinary full-stream rewrite to share a root.
-- [ ] Rerun LayerFS-only payload and namespace matrices after every accepted
-  optimization.
-- [ ] Measure the 500 MB unique-content control's logical, canonical, SQLite,
+- [x] Rerun every affected registered edit row after accepted optimizations.
+- [x] Measure the 500 MB unique-content control's logical, canonical, SQLite,
   other durable, temporary, and physical-I/O bytes.
-- [ ] Reach at most 600 MB total durable Store footprint through a compatible
+- [x] Reach at most 600 MB total durable Store footprint through a compatible
   mechanism, or retain the exact compatibility or physical lower bound.
-- [ ] Count every pack, index, manifest, sidecar, journal, and checksum rather
+- [x] Count every pack, index, manifest, sidecar, journal, and checksum rather
   than treating a smaller `store.sqlite` as a total Store win.
-- [ ] Move only incompatible mechanisms to 0.2.0.
+- [x] Defer authenticated physical packs to open minor-release issue #18.
 
 ## Draft compatibility-preserving 0.1.3 work
 
 The [0.1.3 README](0.1/0.1.3/README.md) owns eight remaining complete filesystem
 workload families. The topology stays fixed at one LayerStack, one genesis
 Layer, and one Branch so the workloads—not Layer or Branch fan-out—own the
-measurement. The three v0.1.2 mutation families are inherited and rerun without
+measurement. The two v0.1.2 edit families are inherited and rerun without
 new members.
 
 - [ ] Freeze deterministic 1/10/100 load tiers, seed-bound schedules, exact

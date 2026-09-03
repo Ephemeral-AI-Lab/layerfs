@@ -318,8 +318,8 @@ floors are therefore frozen by schedule and transformation:
 
 The selected pre-freeze baseline was 56.4 MiB/s for one fsynced 256 KiB rewrite;
 the first complete run later recorded 44.3-44.7 MiB/s and is correctly retained
-as a no-go rather than used to move the frozen threshold. Linux
-A selected Linux `copy_file_range` diagnostic produced the same FUSE request
+as a no-go rather than used to move the frozen threshold. A selected Linux
+`copy_file_range` diagnostic produced the same FUSE request
 count and no improvement, so portable streaming temp-copy remains authoritative.
 
 Sparse growth allocates no live RAM or physical spool proportional to the zero
