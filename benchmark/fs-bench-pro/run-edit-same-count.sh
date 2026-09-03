@@ -155,7 +155,7 @@ while [[ $# -gt 0 ]]; do
     *) die "unknown argument: $1" ;;
   esac
 done
-[[ $source_arm == baseline || $source_arm == candidate || $source_arm == repeat-a || $source_arm == repeat-b || $source_arm == a-a-repeatability ]] || die "explicit source arm is required"
+[[ $source_arm == baseline || $source_arm == candidate || $source_arm == repeat-a || $source_arm == repeat-b || $source_arm == a-a-repeatability || $source_arm == baseline-candidate ]] || die "explicit source arm is required"
 case "$mode" in
   performance)
     [[ $all == 0 && -n $selection && $seed =~ ^[123]$ && -z $paired_container && $source_arm != a-a-repeatability ]] || die "performance requires one case, seed, and one concrete source arm"
@@ -165,7 +165,7 @@ case "$mode" in
     seed=${seed:-1}
     ;;
   admission)
-    [[ $all == 1 && -z $selection && -z $seed && -n $paired_container && $source_arm == a-a-repeatability ]] || die "admission requires --all --source a-a-repeatability --paired-container and no case/seed"
+    [[ $all == 1 && -z $selection && -z $seed && -n $paired_container && ( $source_arm == a-a-repeatability || ( $family_kind == count-changing && $source_arm == baseline-candidate ) ) ]] || die "admission requires --all, a supported paired source, --paired-container, and no case/seed"
     ;;
   repeatability)
     [[ $all == 0 && -n $selection && -z $seed && -n $paired_container && $source_arm == a-a-repeatability ]] || die "repeatability requires one case, no seed, --source a-a-repeatability, and --paired-container"
@@ -212,9 +212,10 @@ docker exec "$container" test -c /dev/fuse 2>/dev/null || {
   [[ $(docker inspect -f '{{.State.Running}}' "$container") != true ]] || die "container lacks /dev/fuse"
 }
 if [[ -n $paired_container ]]; then
-  [[ $(docker inspect -f '{{index .Config.Labels "dev.layerfs.source-seal"}}' "$paired_container") == "$current_seal" ]] || die "paired container/source seal mismatch"
+  paired_seal=$(docker inspect -f '{{index .Config.Labels "dev.layerfs.source-seal"}}' "$paired_container")
+  if [[ $source_arm == a-a-repeatability ]]; then [[ $paired_seal == "$current_seal" ]] || die "paired container/source seal mismatch"; else [[ $paired_seal != "$current_seal" ]] || die "baseline/candidate containers must have distinct source seals"; fi
   docker inspect "$paired_container" | python3 -c 'import json,sys; assert not any(x.get("Type") == "bind" for x in json.load(sys.stdin)[0].get("Mounts", []))' || die "paired product container has a bind mount"
-  [[ $(docker inspect -f '{{.Image}}' "$paired_container") == $(docker inspect -f '{{.Image}}' "$container") ]] || die "A/A repeatability requires identical image identity"
+  if [[ $source_arm == a-a-repeatability ]]; then [[ $(docker inspect -f '{{.Image}}' "$paired_container") == $(docker inspect -f '{{.Image}}' "$container") ]] || die "A/A repeatability requires identical image identity"; fi
 fi
 
 cp "$prepared/identity.txt" "$run_dir/environment/prepared-identity.txt"
@@ -530,7 +531,11 @@ else
   if [[ $mode == repeatability ]]; then printf '%s\tselected\n' "$selection" >"$run_dir/environment/repeatability-selection.tsv"; family_map="$run_dir/environment/repeatability-selection.tsv"; else family_map="$mapfile_path"; fi
   while IFS=$'\t' read -r case_id _ <&3; do
     for sample_seed in 1 2 3; do
-      if [[ $sample_seed == 2 ]]; then
+      if [[ $source_arm == baseline-candidate && $sample_seed == 2 ]]; then
+        order=("$paired_container baseline" "$container candidate")
+      elif [[ $source_arm == baseline-candidate ]]; then
+        order=("$container candidate" "$paired_container baseline")
+      elif [[ $sample_seed == 2 ]]; then
         order=("$paired_container repeat-b" "$container repeat-a")
       else
         order=("$container repeat-a" "$paired_container repeat-b")
@@ -590,7 +595,8 @@ def symmetric_ratio(left,right): return max(ratio(left,right),ratio(right,left))
 if mode in ('admission','repeatability'):
     expected=(84 if family=='same-count' else 150) if mode=='admission' else 6
     assert len(rows)==expected
-    arms={arm:[x for x in rows if x['source_arm']==arm] for arm in ('repeat-a','repeat-b')}
+    arm_names=('baseline','candidate') if source=='baseline-candidate' else ('repeat-a','repeat-b')
+    arms={arm:[x for x in rows if x['source_arm']==arm] for arm in arm_names}
     assert all(len(values)==expected//2 for values in arms.values())
     medians={}
     for arm,values in arms.items():
@@ -604,7 +610,10 @@ if mode in ('admission','repeatability'):
     if family=='same-count': arm_target,arm_tolerated,arm_hard,paired_target,paired_tolerated,paired_hard=3_000_000_000,3_300_000_000,6_000_000_000,6_000_000_000,6_600_000_000,12_000_000_000
     else: arm_target,arm_tolerated,arm_hard,paired_target,paired_tolerated,paired_hard=10_000_000_000,11_000_000_000,20_000_000_000,20_000_000_000,22_000_000_000,40_000_000_000
     wall_status='target-pass' if max(walls.values())<=arm_target and paired<=paired_target else 'tolerated-pass' if max(walls.values())<=arm_tolerated and paired<=paired_tolerated else 'no-go' if max(walls.values())<=arm_hard and paired<=paired_hard else 'hard-failure'
-    ratios={case:symmetric_ratio(medians['repeat-a'][case]['complete_lifecycle_ns'],medians['repeat-b'][case]['complete_lifecycle_ns']) for case in medians['repeat-a']}
+    if source=='baseline-candidate':
+        ratios={case:ratio(medians['baseline'][case]['complete_lifecycle_ns'],medians['candidate'][case]['complete_lifecycle_ns']) for case in medians['baseline']}
+    else:
+        ratios={case:symmetric_ratio(medians['repeat-a'][case]['complete_lifecycle_ns'],medians['repeat-b'][case]['complete_lifecycle_ns']) for case in medians['repeat-a']}
     ratio_status='target-pass' if max(ratios.values())<=1.05 else 'tolerated-pass' if max(ratios.values())<=1.10 else 'no-go'
     rank={'target-pass':0,'tolerated-pass':1,'no-go':2,'hard-failure':3}
     absolute=[]
@@ -617,7 +626,8 @@ if mode in ('admission','repeatability'):
     def lower_hard(arm,case,metric,value,target,tolerated,hard):
         state='target-pass' if value>=target else 'tolerated-pass' if value>=tolerated else 'no-go' if value>=hard else 'hard-failure'
         absolute.append({'arm':arm,'scenario_id':case,'metric':metric,'value':value,'target':target,'tolerated':tolerated,'hard':hard,'status':state})
-    for arm,values in arms.items():
+    absolute_arms={'candidate':arms['candidate']} if source=='baseline-candidate' else arms
+    for arm,values in absolute_arms.items():
         for case in medians[arm]:
             selected=[x for x in values if x['scenario_id']==case]
             upper(arm,case,'rss_max',max(x['process_peak_rss_bytes'] for x in selected),101_980_569,112_178_626,128*1024*1024)
@@ -641,10 +651,16 @@ if mode in ('admission','repeatability'):
     dispositions={}
     for case,value in ratios.items():
         if value<=1.05: continue
-        phase_rows={field:{'ratio':symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]),'under_2ms_exception':False,'exception_reason':'A/A repeatability has no candidate arm; local-step exception is inapplicable'} for field in phases}
-        counter_rows={field:symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]) for field in counters}
-        dispositions[case]={'reason':'identical-source A/A scheduling variance; no improvement claim','complete_ratio':value,'phase_ratios':phase_rows,'counter_ratios':counter_rows}
-    summary.update({'comparison_type':'A/A repeatability','medians':medians,'arm_complete_lifecycle_ns':walls,'paired_complete_lifecycle_ns':paired,'family_wall_status':wall_status,'complete_lifecycle_ratios':ratios,'ratio_status':ratio_status,'absolute_classification':absolute,'absolute_status':absolute_status,'phase_counter_dispositions':dispositions})
+        if source=='baseline-candidate':
+            phase_rows={field:{'ratio':ratio(medians['baseline'][case][field],medians['candidate'][case][field]),'candidate_ns':medians['candidate'][case][field],'under_2ms_exception':field in ('workspace_create_ns','workspace_end_ns') and medians['candidate'][case][field]<2_000_000} for field in phases}
+            counter_rows={field:ratio(medians['baseline'][case][field],medians['candidate'][case][field]) for field in counters}
+            reason='directional candidate/baseline comparison; retained phase and counter disposition'
+        else:
+            phase_rows={field:{'ratio':symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]),'under_2ms_exception':False,'exception_reason':'A/A repeatability has no candidate arm; local-step exception is inapplicable'} for field in phases}
+            counter_rows={field:symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]) for field in counters}
+            reason='identical-source A/A scheduling variance; no improvement claim'
+        dispositions[case]={'reason':reason,'complete_ratio':value,'phase_ratios':phase_rows,'counter_ratios':counter_rows}
+    summary.update({'comparison_type':'directional baseline/candidate' if source=='baseline-candidate' else 'A/A repeatability','medians':medians,'arm_complete_lifecycle_ns':walls,'paired_complete_lifecycle_ns':paired,'family_wall_status':wall_status,'complete_lifecycle_ratios':ratios,'ratio_status':ratio_status,'absolute_classification':absolute,'absolute_status':absolute_status,'phase_counter_dispositions':dispositions})
     summary['status']=max((wall_status,ratio_status,absolute_status),key=rank.get)
 else:
     grouped={}
