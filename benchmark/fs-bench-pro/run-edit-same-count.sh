@@ -173,9 +173,10 @@ daemon_endpoint=
 daemon_capability=
 container_id=
 ensure_container() {
-  local active_container=$1
+  local active_container=$1 stopped
   if [[ $(docker inspect -f '{{.State.Running}}' "$active_container") != true ]]; then
-    [[ $(docker inspect -f '{{.State.ExitCode}} {{.State.OOMKilled}}' "$active_container") == '0 false' ]] || die "container stopped abnormally"
+    stopped=$(docker inspect -f '{{.State.ExitCode}} {{.State.OOMKilled}}' "$active_container")
+    [[ $stopped == '0 false' || $stopped == '143 false' ]] || die "container stopped abnormally"
     docker start "$active_container" >/dev/null
   fi
   container_id=$(docker inspect -f '{{.Id}}' "$active_container")
@@ -343,7 +344,10 @@ else
       fi
       for pair in "${order[@]}"; do
         ordinal=$((ordinal + 1))
-        run_performance "$case_id" "$sample_seed" "$ordinal" "${pair% *}" "${pair##* }"
+        active=${pair% *}
+        inactive=$([[ $active == "$container" ]] && printf '%s' "$paired_container" || printf '%s' "$container")
+        if [[ $(docker inspect -f '{{.State.Running}}' "$inactive") == true ]]; then docker stop "$inactive" >/dev/null; fi
+        run_performance "$case_id" "$sample_seed" "$ordinal" "$active" "${pair##* }"
       done
     done
   done 3<"$mapfile_path"
