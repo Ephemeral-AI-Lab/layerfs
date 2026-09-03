@@ -15,6 +15,7 @@ pub(crate) struct EditCheckpoint {
     value: crate::cow_tree::Node,
     dirty: bool,
     spool_bytes: u64,
+    spool_bytes_peak: u64,
     inline_bytes: u64,
     piece_allocation_bytes: u64,
     spool_write_metrics: crate::cow_tree::SpoolWriteMetrics,
@@ -93,6 +94,7 @@ impl Workspace {
             height,
             charge,
             self.spool_bytes,
+            self.spool_bytes_peak,
             spool_live,
             self.spool_bytes.saturating_sub(spool_live),
             metric_nodes_scanned,
@@ -110,6 +112,7 @@ impl Workspace {
                 .clone(),
             dirty: self.dirty.contains(&node),
             spool_bytes: self.spool_bytes,
+            spool_bytes_peak: self.spool_bytes_peak,
             inline_bytes: self.inline_bytes,
             piece_allocation_bytes: self.piece_allocation_bytes,
             spool_write_metrics: self.spool_write_metrics,
@@ -134,6 +137,7 @@ impl Workspace {
             self.dirty.remove(&checkpoint.node);
         }
         self.spool_bytes = checkpoint.spool_bytes;
+        self.spool_bytes_peak = checkpoint.spool_bytes_peak;
         self.inline_bytes = checkpoint.inline_bytes;
         self.piece_allocation_bytes = checkpoint.piece_allocation_bytes;
         self.spool_write_metrics = checkpoint.spool_write_metrics;
@@ -428,6 +432,7 @@ impl Workspace {
             - old.logical_allocation_charge()?
             + next.logical_allocation_charge()?;
         self.spool_bytes += appended;
+        self.spool_bytes_peak = self.spool_bytes_peak.max(self.spool_bytes);
         let Data::File(FileData::Edited {
             pieces,
             edits: current_edits,
@@ -495,6 +500,7 @@ impl Workspace {
             }
         }
         self.spool_bytes = 0;
+        self.spool_bytes_peak = 0;
         self.inline_bytes = 0;
         self.piece_allocation_bytes = 0;
         Ok(())
@@ -766,10 +772,12 @@ mod tests {
         workspace.write(file, 0, b"base").unwrap();
         let before = workspace.nodes[&file].clone();
         let before_charge = workspace.spool_bytes;
+        let before_peak = workspace.spool_bytes_peak;
         INJECT_SHORT_APPEND.with(|inject| inject.set(true));
         assert!(workspace.write(file, 4, b"failure").is_err());
         assert_eq!(workspace.nodes[&file], before);
         assert_eq!(workspace.spool_bytes, before_charge);
+        assert_eq!(workspace.spool_bytes_peak, before_peak);
         let Data::File(FileData::Edited {
             spool,
             spool_high_water,

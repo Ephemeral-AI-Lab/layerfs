@@ -1543,7 +1543,23 @@ fn same_count_performance_case(
     source: &str,
     fixture_cache_profile: &str,
 ) -> AnyResult<()> {
-    let scenario = workload_source::edit_same_count::scenario(scenario_id)?;
+    let (scenario, supplemental_control) =
+        match workload_source::edit_same_count::scenario(scenario_id) {
+            Ok(scenario) => (scenario, false),
+            Err(_) => {
+                let control = workload_source::edit_same_count::pair_control(scenario_id)?;
+                (
+                    workload_source::edit_same_count::Scenario {
+                        id: control.id,
+                        display_name: control.id,
+                        operations: control.operations,
+                        position: control.position,
+                        frozen: false,
+                    },
+                    true,
+                )
+            }
+        };
     if scenario.frozen {
         return same_count_anchor_performance_case(
             root,
@@ -1617,7 +1633,11 @@ fn same_count_performance_case(
         workspace.id,
         vec![
             workload,
-            OsString::from("same-count-edit"),
+            OsString::from(if supplemental_control {
+                "same-count-control-edit"
+            } else {
+                "same-count-edit"
+            }),
             OsString::from("payload.bin"),
             OsString::from(scenario.id),
             OsString::from(seed.to_string()),
@@ -1684,7 +1704,7 @@ fn same_count_performance_case(
     }
     let execution_ns = nanos(t1, t2);
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"overwrite\",\"position\":\"{}\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":{},\"unique_bytes\":{},\"overlapping_bytes\":{},\"identical_bytes\":{},\"superseded_bytes\":{},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"commit_total_ns\":{},\"commit_pause_fence_ns\":{},\"commit_quiesce_ns\":{},\"commit_capture_ns\":{},\"commit_candidate_plan_ns\":{},\"commit_dirty_compare_ns\":{},\"commit_content_ns\":{},\"commit_namespace_ns\":{},\"commit_candidate_finish_ns\":{},\"commit_local_admission_ns\":{},\"commit_object_admission_ns\":{},\"commit_publication_ns\":{},\"commit_rebase_ns\":{},\"commit_resume_ns\":{},\"commit_unattributed_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_context_switches\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_current_bytes\":{},\"container_memory_peak_bytes\":{},\"container_pids_current\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"overwrite\",\"position\":\"{}\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":{},\"unique_bytes\":{},\"overlapping_bytes\":{},\"identical_bytes\":{},\"superseded_bytes\":{},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"commit_total_ns\":{},\"commit_pause_fence_ns\":{},\"commit_quiesce_ns\":{},\"commit_capture_ns\":{},\"commit_candidate_plan_ns\":{},\"commit_dirty_compare_ns\":{},\"commit_content_ns\":{},\"commit_namespace_ns\":{},\"commit_candidate_finish_ns\":{},\"commit_local_admission_ns\":{},\"commit_object_admission_ns\":{},\"commit_publication_ns\":{},\"commit_rebase_ns\":{},\"commit_resume_ns\":{},\"commit_unattributed_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_context_switches\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_current_bytes\":{},\"container_memory_peak_bytes\":{},\"container_pids_current\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
         workload_source::edit_same_count::PERFORMANCE_SCHEMA,
         workload_source::edit_same_count::FAMILY_ID,
         scenario.id,
@@ -1728,6 +1748,7 @@ fn same_count_performance_case(
         fuse.spool_write_bytes,
         fuse.spool_write_open_count,
         commit.edit_spool_allocated_bytes,
+        commit.edit_spool_peak_bytes,
         commit.edit_spool_live_bytes,
         commit.edit_spool_superseded_bytes,
         commit.edit_piece_count,
@@ -2002,9 +2023,12 @@ fn count_changing_performance_case(
                     != commit.edit_spool_allocated_bytes
         }
         || commit.edit_metric_nodes_scanned == 0
+        || commit.edit_spool_peak_bytes < commit.edit_spool_allocated_bytes
+        || commit.edit_spool_peak_bytes > 128 * 1024 * 1024
         || (scenario.kind == workload_source::edit_count_changing::Kind::Sparse
             && (fuse.spool_write_bytes > supplied
                 || commit.edit_spool_live_bytes > supplied
+                || commit.edit_spool_peak_bytes > supplied
                 || commit.edit_piece_logical_charge > 64 * 1024))
     {
         return Err(format!(
@@ -2023,13 +2047,22 @@ fn count_changing_performance_case(
     }
     let execution_ns = nanos(t1, t2);
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"paired_same_count_control_id\":\"{}\",\"pair_fixture_bytes\":{},\"pair_byte_quantity_match\":true,\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"{}\",\"position\":\"{}\",\"implementation\":\"{}\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"{}\",\"supplied_bytes\":{},\"inserted_bytes\":{},\"deleted_bytes\":{},\"overlapping_bytes\":{},\"superseded_bytes\":{},\"logical_zero_bytes\":{},\"copied_payload_bytes\":{},\"read_payload_bytes\":{},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"copied_payload_bytes_per_second\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"commit_total_ns\":{},\"commit_pause_fence_ns\":{},\"commit_quiesce_ns\":{},\"commit_capture_ns\":{},\"commit_candidate_plan_ns\":{},\"commit_dirty_compare_ns\":{},\"commit_content_ns\":{},\"commit_namespace_ns\":{},\"commit_candidate_finish_ns\":{},\"commit_local_admission_ns\":{},\"commit_object_admission_ns\":{},\"commit_publication_ns\":{},\"commit_rebase_ns\":{},\"commit_resume_ns\":{},\"commit_unattributed_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_context_switches\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_current_bytes\":{},\"container_memory_peak_bytes\":{},\"container_pids_current\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"paired_same_count_control_id\":\"{}\",\"pair_fixture_bytes\":{},\"pair_byte_quantity_match\":null,\"pair_byte_quantity_basis\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"{}\",\"position\":\"{}\",\"implementation\":\"{}\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"{}\",\"supplied_bytes\":{},\"inserted_bytes\":{},\"deleted_bytes\":{},\"overlapping_bytes\":{},\"superseded_bytes\":{},\"logical_zero_bytes\":{},\"copied_payload_bytes\":{},\"read_payload_bytes\":{},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"copied_payload_bytes_per_second\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"commit_total_ns\":{},\"commit_pause_fence_ns\":{},\"commit_quiesce_ns\":{},\"commit_capture_ns\":{},\"commit_candidate_plan_ns\":{},\"commit_dirty_compare_ns\":{},\"commit_content_ns\":{},\"commit_namespace_ns\":{},\"commit_candidate_finish_ns\":{},\"commit_local_admission_ns\":{},\"commit_object_admission_ns\":{},\"commit_publication_ns\":{},\"commit_rebase_ns\":{},\"commit_resume_ns\":{},\"commit_unattributed_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_context_switches\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_current_bytes\":{},\"container_memory_peak_bytes\":{},\"container_pids_current\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
         workload_source::edit_count_changing::PERFORMANCE_SCHEMA,
         workload_source::edit_count_changing::FAMILY_ID,
         scenario.id,
         scenario.display_name,
         scenario.paired_same_count_control_id,
         workload_source::edit_count_changing::FIXTURE_BYTES,
+        if matches!(
+            scenario.kind,
+            workload_source::edit_count_changing::Kind::Delete
+                | workload_source::edit_count_changing::Kind::Truncate
+        ) {
+            "deleted_bytes"
+        } else {
+            "supplied_bytes"
+        },
         source,
         seed,
         workload_source::edit_count_changing::FIXTURE_PROFILE,
@@ -2078,6 +2111,7 @@ fn count_changing_performance_case(
         fuse.spool_write_bytes,
         fuse.spool_write_open_count,
         commit.edit_spool_allocated_bytes,
+        commit.edit_spool_peak_bytes,
         commit.edit_spool_live_bytes,
         commit.edit_spool_superseded_bytes,
         commit.edit_piece_count,
@@ -2188,6 +2222,18 @@ fn count_changing_anchor_performance_case(
         ],
     )?;
     let t2 = Instant::now();
+    let attempted = output_u64(&output, "attempted_operations")?;
+    let completed = output_u64(&output, "completed_operations")?;
+    let final_bytes = output_u64(&output, "final_file_bytes")?;
+    let initial_inode = output_u64(&output, "initial_inode")?;
+    let final_inode = output_u64(&output, "final_inode")?;
+    if attempted != 1
+        || completed != 1
+        || final_bytes != MIB_32 + 10
+        || initial_inode == final_inode
+    {
+        return Err("count-changing anchor observed workload".into());
+    }
     let head = match client.commit_workspace_session(workspace.id)? {
         WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
         result => return Err(format!("count-changing anchor Commit failed: {result:?}").into()),
@@ -2205,6 +2251,7 @@ fn count_changing_anchor_performance_case(
         || container_after.swap_current != 0
         || container_before.oom != container_after.oom
         || container_before.oom_kill != container_after.oom_kill
+        || container_after.memory_peak > 128 * 1024 * 1024
         || client.active_workspace_count()? != 0
         || client.active_execution_count()? != 0
     {
@@ -2214,6 +2261,15 @@ fn count_changing_anchor_performance_case(
     let candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
     let commit = operation_workspace_commit(&snapshot)?;
     let fuse = edit_fuse_metrics(&snapshot);
+    if fuse.kernel_write_bytes != MIB_32 + 10
+        || fuse.spool_write_bytes != MIB_32 + 10
+        || commit.edit_spool_allocated_bytes != MIB_32 + 10
+        || commit.edit_spool_peak_bytes != MIB_32 + 10
+        || commit.edit_spool_live_bytes != MIB_32 + 10
+        || commit.edit_spool_superseded_bytes != 0
+    {
+        return Err("count-changing anchor FUSE/spool receipt".into());
+    }
     let execution_ns = nanos(t1, t2);
     let complete = nanos(t0, t4);
     emit_sample(
@@ -2230,7 +2286,7 @@ fn count_changing_anchor_performance_case(
         },
     );
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"paired_same_count_control_id\":\"{}\",\"pair_fixture_bytes\":{},\"pair_byte_quantity_match\":false,\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"legacy_schema_emitted\":true,\"fixture_profile\":\"registered-32m-v0.1.0\",\"fixture_cache_profile\":\"{}\",\"operation\":\"prepend\",\"position\":\"head\",\"implementation\":\"temp-copy-fsync-rename\",\"operation_count\":1,\"attempted_operations\":1,\"completed_operations\":1,\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":10,\"inserted_bytes\":10,\"deleted_bytes\":0,\"overlapping_bytes\":0,\"superseded_bytes\":0,\"logical_zero_bytes\":0,\"copied_payload_bytes\":{},\"read_payload_bytes\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"copied_payload_bytes_per_second\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"spool_write_bytes\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"commit_total_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"paired_same_count_control_id\":\"{}\",\"pair_fixture_bytes\":{},\"pair_byte_quantity_match\":null,\"pair_byte_quantity_basis\":\"not-applicable-frozen-anchor\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"legacy_schema_emitted\":true,\"fixture_profile\":\"registered-32m-v0.1.0\",\"fixture_cache_profile\":\"{}\",\"operation\":\"prepend\",\"position\":\"head\",\"implementation\":\"temp-copy-fsync-rename\",\"operation_count\":1,\"attempted_operations\":1,\"completed_operations\":1,\"initial_file_bytes\":{},\"final_file_bytes\":{},\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"replaced\",\"supplied_bytes\":10,\"inserted_bytes\":10,\"deleted_bytes\":0,\"overlapping_bytes\":0,\"superseded_bytes\":0,\"logical_zero_bytes\":0,\"copied_payload_bytes\":{},\"read_payload_bytes\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"copied_payload_bytes_per_second\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"spool_write_bytes\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"commit_total_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
         workload_source::edit_count_changing::PERFORMANCE_SCHEMA,
         workload_source::edit_count_changing::FAMILY_ID,
         scenario.id,
@@ -2241,7 +2297,9 @@ fn count_changing_anchor_performance_case(
         seed,
         fixture_cache_profile,
         MIB_32,
-        MIB_32 + 10,
+        final_bytes,
+        initial_inode,
+        final_inode,
         MIB_32,
         MIB_32,
         nanos(t0, t1),
@@ -2260,6 +2318,7 @@ fn count_changing_anchor_performance_case(
         fuse.kernel_write_bytes,
         fuse.spool_write_bytes,
         commit.edit_spool_allocated_bytes,
+        commit.edit_spool_peak_bytes,
         commit.edit_spool_live_bytes,
         commit.edit_spool_superseded_bytes,
         commit.edit_piece_count,
@@ -2313,12 +2372,11 @@ fn count_changing_verify_case(
         None
     } else {
         let scenario = workload_source::edit_count_changing::scenario(case_id)?;
-        if scenario.frozen {
-            return Err("frozen count-changing verifier uses retained oracle".into());
-        }
         Some(scenario)
     };
-    let initial_size = if structural {
+    let initial_size = if scenario.is_some_and(|scenario| scenario.frozen) {
+        MIB_32
+    } else if structural {
         8 * 1024 * 1024
     } else {
         workload_source::edit_count_changing::FIXTURE_BYTES
@@ -2362,7 +2420,9 @@ fn count_changing_verify_case(
     let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
         .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
     let mut argv = vec![workload.clone()];
-    if structural {
+    if scenario.is_some_and(|scenario| scenario.frozen) {
+        argv.extend([OsString::from("prepend"), OsString::from("payload.bin")]);
+    } else if structural {
         argv.extend([
             OsString::from("count-changing-proof"),
             OsString::from("payload.bin"),
@@ -2399,6 +2459,9 @@ fn count_changing_verify_case(
     if structural && case_id.starts_with("rewrite-full") && receipt.payload_bytes_read != 0 {
         return Err("count-changing full replacement read old payload".into());
     }
+    if receipt.edit_spool_peak_bytes > 128 * 1024 * 1024 {
+        return Err("count-changing verifier spool peak".into());
+    }
     client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
     let committed = store
         .commit(head)?
@@ -2408,6 +2471,12 @@ fn count_changing_verify_case(
     let core = layerfs_layerstack_store::CoreReader(&pinned.reader);
     let path = layerfs_content::CanonicalPath::new("payload.bin")?;
     let (stat, _) = layerfs_content::filesystem::stat(&core, committed.root_id, &path)?;
+    let oracle_file = std::env::var_os("LAYERFS_BENCH_ORACLE_FILE")
+        .ok_or("count-changing independent oracle file")?;
+    let expected_file_root = independent_whole_file_root(&pinned.reader, Path::new(&oracle_file))?;
+    if stat.content_root != expected_file_root.0 {
+        return Err("count-changing independent canonical root".into());
+    }
     let reopened = client.create_workspace_session(CreateWorkspaceSession {
         branch_id: branch,
         placement: WorkspacePlacement::Container {
@@ -2444,13 +2513,22 @@ fn count_changing_verify_case(
         || container_after.swap_current != 0
         || container_before.oom != container_after.oom
         || container_before.oom_kill != container_after.oom_kill
+        || container_after.memory_peak > 128 * 1024 * 1024
         || client.active_workspace_count()? != 0
         || client.active_execution_count()? != 0
     {
         return Err("count-changing verifier resource or cleanup".into());
     }
+    let logical_zero_bytes_verified = scenario
+        .filter(|scenario| scenario.kind == workload_source::edit_count_changing::Kind::Sparse)
+        .map(|scenario| {
+            workload_source::edit_count_changing::schedule(scenario, seed)
+                .map(|edits| edits.into_iter().map(|edit| edit.logical_zero as u64).sum())
+        })
+        .transpose()?
+        .unwrap_or(0);
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"fixture_cache_profile\":\"{}\",\"initial_file_bytes\":{},\"final_file_bytes\":{},\"sha256\":\"{}\",\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"{}\",\"canonical_root\":\"{}\",\"canonical_file_root\":\"{}\",\"old_payload_object_ids\":{},\"old_payload_object_ids_retained\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"reused_objects\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"process_peak_rss_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"independent_oracle\":true,\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"fixture_cache_profile\":\"{}\",\"initial_file_bytes\":{},\"final_file_bytes\":{},\"logical_zero_bytes_verified\":{},\"sha256\":\"{}\",\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"{}\",\"canonical_root\":\"{}\",\"canonical_file_root\":\"{}\",\"independent_canonical_file_root\":\"{}\",\"old_payload_object_ids\":{},\"old_payload_object_ids_retained\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"reused_objects\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"process_peak_rss_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"independent_oracle\":true,\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
         workload_source::edit_count_changing::VERIFICATION_SCHEMA,
         workload_source::edit_count_changing::FAMILY_ID,
         case_id,
@@ -2459,6 +2537,7 @@ fn count_changing_verify_case(
         fixture_cache_profile,
         initial_size,
         expected_size,
+        logical_zero_bytes_verified,
         expected_digest,
         initial_inode,
         final_inode,
@@ -2469,6 +2548,7 @@ fn count_changing_verify_case(
         },
         committed.root_id,
         stat.content_root,
+        expected_file_root.0,
         old_payload_ids.len(),
         old_payload_ids.intersection(&new_payload_ids).count(),
         receipt.payload_bytes_read,
@@ -2477,6 +2557,7 @@ fn count_changing_verify_case(
         receipt.edit_piece_height,
         receipt.edit_piece_logical_charge,
         receipt.edit_spool_allocated_bytes,
+        receipt.edit_spool_peak_bytes,
         receipt.edit_spool_live_bytes,
         receipt.edit_spool_superseded_bytes,
         candidate.candidate_objects,
@@ -2489,6 +2570,17 @@ fn count_changing_verify_case(
         container_after.memory_peak,
     );
     Ok(())
+}
+
+fn independent_whole_file_root(
+    reader: &layerfs_layerstack_store::SnapshotReader,
+    oracle: &Path,
+) -> AnyResult<layerfs_content::file::rope::FileStateRoot> {
+    let mut objects = layerfs_layerstack_store::ObjectBuffer::new(reader)?;
+    let mut batch = layerfs_content::file::rope::FileMutationBatch::new(&mut objects, None)?;
+    batch.replace(0, 0, std::fs::File::open(oracle)?)?;
+    let (root, _) = batch.finish()?;
+    Ok(root)
 }
 
 #[allow(clippy::too_many_arguments)]

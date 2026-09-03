@@ -232,6 +232,7 @@ impl Workspace {
         self.nodes = nodes;
         self.canonical_nodes = canonical_nodes;
         self.spool_bytes = retained_spool_bytes;
+        self.spool_bytes_peak = retained_spool_bytes;
         self.inline_bytes = retained_inline_bytes;
         self.piece_allocation_bytes = retained_piece_allocation_bytes;
         self.mutation_generation = 0;

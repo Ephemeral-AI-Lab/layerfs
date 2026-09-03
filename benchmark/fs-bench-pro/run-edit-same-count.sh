@@ -16,6 +16,7 @@ invocation_started=$(python3 -c 'import time; print(time.monotonic_ns())')
 invocation_argv=("$@")
 performance_external_wall_ns=0
 verification_external_wall_ns=0
+control_external_wall_ns=0
 count_changing_verifiers=(insert-middle-4k-on-8m-proof delete-middle-4k-on-8m-proof rewrite-full-grow-8m-to-12m-proof rewrite-full-shrink-8m-to-4m-proof)
 
 die() { printf 'fs-bench-pro %s: %s\n' "$family_kind" "$*" >&2; exit 2; }
@@ -183,7 +184,7 @@ fixture_8m="$prepared/fixture-8m"
 run_dir="$results_root/$run_id"
 mkdir -p "$results_root"
 mkdir "$run_dir" || die "refusing to overwrite $run_dir"
-mkdir "$run_dir/environment" "$run_dir/performance" "$run_dir/verification" "$run_dir/scenarios" "$run_dir/oracles"
+mkdir "$run_dir/environment" "$run_dir/performance" "$run_dir/controls" "$run_dir/verification" "$run_dir/scenarios" "$run_dir/oracles"
 
 mapfile_path="$run_dir/environment/scenarios.tsv"
 if [[ $family_kind == same-count ]]; then
@@ -316,8 +317,10 @@ if sys.argv[5]=='same-count': assert r['initial_file_bytes']==r['final_file_byte
 else:
     assert r['initial_file_bytes']!=r['final_file_bytes'] and r['paired_same_count_control_id']
     if r['operation']=='sparse-write':
-        assert r['logical_zero_bytes']>0 and r['spool_write_bytes']<=r['supplied_bytes']
+        assert r['logical_zero_bytes']>0 and r['spool_write_bytes']<=r['supplied_bytes'] and r['physical_spool_high_water_bytes']<=r['supplied_bytes']
 assert not r['oom'] and not r['timeout'] and r['swap_bytes']==0 and r['cleanup_status']=='pass'
+assert r['container_memory_peak_bytes']<=128*1024*1024
+assert r['physical_spool_high_water_bytes']<=128*1024*1024
 states=[]
 def upper(value,target,tolerated,hard,name):
     state='target-pass' if value<=target else 'tolerated-pass' if value<=tolerated else 'no-go' if value<=hard else 'hard-failure'
@@ -361,13 +364,49 @@ PY
   performance_external_wall_ns=$(( performance_external_wall_ns + $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
 }
 
+run_control() {
+  local control_id=$1 sample_seed=$2 ordinal=$3 active_container=$4 sample_dir status wall_started cache
+  wall_started=$(python3 -c 'import time; print(time.monotonic_ns())')
+  sample_dir="$run_dir/controls/$control_id/seed-$sample_seed"
+  mkdir -p "$sample_dir"
+  cache=$([[ $ordinal == 1 ]] && printf generated-first-sample-uncontrolled || printf generated-subsequent-sample-uncontrolled)
+  ensure_container "$active_container"
+  set +e
+  perl -e 'alarm 5; exec @ARGV' env \
+    LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload \
+    LAYERFS_EXEC_TRANSPORT=daemon LAYERFS_FUSE_TRANSPORT=daemon \
+    LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
+    LAYERFS_DAEMON_CONTAINER_ID="$container_id" LAYERFS_FUSE_HOST=host.docker.internal \
+    "$binary" same-count-performance "$sample_dir/work" "$fixture_256" "$container_id" \
+    "$control_id" "$sample_seed" repeat-a "$cache" >"$sample_dir/raw.jsonl" 2>"$sample_dir/supervisor.txt"
+  status=$?
+  set -e
+  printf '%s\n' "$status" >"$sample_dir/exit-status.txt"
+  [[ $status == 0 ]] || die "pair control failed: $control_id seed $sample_seed"
+  python3 - "$sample_dir/raw.jsonl" "$control_id" <<'PY'
+import json,sys
+rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith('{')]
+rows=[x for x in rows if x.get('schema')=='fs-bench-pro-edit-performance-v1']
+assert len(rows)==1 and rows[0]['scenario_id']==sys.argv[2]
+r=rows[0]
+assert r['initial_file_bytes']==r['final_file_bytes']==262144
+assert r['attempted_operations']==r['completed_operations']==r['operation_count']
+assert r['spool_allocated_bytes']==r['spool_live_bytes']+r['spool_superseded_bytes']
+assert r['physical_spool_high_water_bytes']>=r['spool_allocated_bytes']
+assert r['process_peak_rss_bytes']<=128*1024*1024 and r['container_memory_peak_bytes']<=128*1024*1024
+assert r['swap_bytes']==0 and not r['oom'] and not r['timeout'] and r['cleanup_status']=='pass'
+PY
+  grep '"schema":"fs-bench-pro-edit-performance-v1"' "$sample_dir/raw.jsonl" >>"$run_dir/controls/raw.jsonl"
+  control_external_wall_ns=$(( control_external_wall_ns + $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
+}
+
 oracle_digest() {
   local case_id=$1 sample_seed=$2 fixture oracle index
   fixture=$(fixture_for "$case_id")
   oracle="$run_dir/oracles/$case_id-seed-$sample_seed.bin"
   cp "$fixture/payload.bin" "$oracle"
   if [[ $family_kind == count-changing ]]; then
-    "$oracle_workload" count-changing-edit "$oracle" "$case_id" "$sample_seed" >/dev/null
+    if [[ $case_id == prepend-temp-copy-rename ]]; then "$oracle_workload" prepend "$oracle" >/dev/null; else "$oracle_workload" count-changing-edit "$oracle" "$case_id" "$sample_seed" >/dev/null; fi
   elif [[ $case_id == small-edit ]]; then
     "$oracle_workload" edit "$oracle" 0 33554432
   elif [[ $case_id == edit16 ]]; then
@@ -403,7 +442,7 @@ PY
     verify_dir="$run_dir/verification/$active_arm-$case_id"
     mkdir -p "$verify_dir"
     set +e
-    perl -e 'alarm 40; exec @ARGV' env LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload \
+    perl -e 'alarm 40; exec @ARGV' env LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload LAYERFS_BENCH_ORACLE_FILE="$structural_oracle" \
       LAYERFS_EXEC_TRANSPORT=daemon LAYERFS_FUSE_TRANSPORT=daemon \
       LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
       LAYERFS_DAEMON_CONTAINER_ID="$container_id" LAYERFS_FUSE_HOST=host.docker.internal \
@@ -466,7 +505,7 @@ PY
         "$sample_seed" "$active_arm" "$expected" reused-first-sample-uncontrolled \
         >"$verify_dir/raw.jsonl" 2>"$verify_dir/supervisor.txt"
     else
-      perl -e 'alarm 40; exec @ARGV' env LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload \
+      perl -e 'alarm 40; exec @ARGV' env LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload LAYERFS_BENCH_ORACLE_FILE="$run_dir/oracles/$case_id-seed-$sample_seed.bin" \
         LAYERFS_EXEC_TRANSPORT=daemon LAYERFS_FUSE_TRANSPORT=daemon \
         LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
         LAYERFS_DAEMON_CONTAINER_ID="$container_id" LAYERFS_FUSE_HOST=host.docker.internal \
@@ -503,12 +542,15 @@ else
       done
     done
   done 3<"$family_map"
-  if [[ $mode == admission ]]; then
-    if [[ $family_kind == same-count ]]; then
-      run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$container" repeat-a
-    else
-      for verifier in "${count_changing_verifiers[@]}"; do run_verify "$verifier" 1 "$container" repeat-a; done
-    fi
+  if [[ $mode == admission && $family_kind == count-changing ]]; then
+    cut -f3 "$mapfile_path" | grep -v '^not-applicable-' | sort -u >"$run_dir/environment/pair-controls.txt"
+    control_ordinal=0
+    while IFS= read -r control_id; do
+      for sample_seed in 1 2 3; do
+        control_ordinal=$((control_ordinal + 1))
+        run_control "$control_id" "$sample_seed" "$control_ordinal" "$container"
+      done
+    done <"$run_dir/environment/pair-controls.txt"
   fi
 fi
 
@@ -520,6 +562,26 @@ rows=[]
 raw=root/'performance/raw.jsonl'
 if raw.exists(): rows=[json.loads(x) for x in raw.read_text().splitlines() if x]
 summary={'schema':f'fs-bench-pro-edit-{family}-summary-v2','mode':mode,'source_identity':source,'samples':len(rows),'status':'target-pass'}
+if family=='count-changing' and mode=='admission':
+    controls=[json.loads(x) for x in (root/'controls/raw.jsonl').read_text().splitlines() if x]
+    assert len(controls)==45
+    by_id={(x['scenario_id'],x['seed']):x for x in controls}
+    validations={}
+    for row in rows:
+        control_id=row['paired_same_count_control_id']
+        if control_id.startswith('not-applicable-'):
+            continue
+        control=by_id[(control_id,row['seed'])]
+        quantity=row['deleted_bytes'] if row['pair_byte_quantity_basis']=='deleted_bytes' else row['supplied_bytes']
+        assert row['pair_byte_quantity_match'] is None
+        assert row['pair_fixture_bytes']==row['initial_file_bytes']==control['initial_file_bytes']==control['final_file_bytes']==262144
+        assert row['position']==control['position'] and row['operation_count']==control['operation_count']
+        assert quantity==control['supplied_bytes']
+        assert control['layerstack_visible_ns']==control['workspace_create_ns']+control['execution_ns']+control['commit_api_ns']
+        assert control['complete_lifecycle_ns']==control['layerstack_visible_ns']+control['workspace_end_ns']
+        validations[control_id]={'fixture_bytes':262144,'position':control['position'],'operation_count':control['operation_count'],'byte_quantity':control['supplied_bytes'],'source_identity':'current-sealed-control-cohort','timing_boundary':'Create-through-Commit-visibility-through-End','status':'pass'}
+    assert len(validations)==15
+    summary.update({'pair_validation_status':'target-pass','pair_control_samples':len(controls),'pair_controls':validations})
 phases=['workspace_create_ns','execution_ns','commit_api_ns','layerstack_visible_ns','workspace_end_ns','complete_lifecycle_ns']
 counters=['fuse_kernel_write_requests','fuse_kernel_write_bytes','spool_write_bytes','candidate_objects','candidate_bytes','inserted_objects','reused_objects','commit_payload_bytes_read','commit_cdc_bytes_scanned','tree_visits','metric_nodes_scanned']
 def med(values,field): return float(statistics.median(x[field] for x in values))
@@ -590,18 +652,28 @@ else:
     metrics=phases+counters+['operations_per_second','process_peak_rss_bytes']+([] if family=='same-count' else ['copied_payload_bytes_per_second'])
     summary['medians']={case:{field:med(values,field) for field in metrics} for case,values in sorted(grouped.items())}
 (root/'summary.json').write_text(json.dumps(summary,sort_keys=True,separators=(',',':'))+'\n')
-if summary['status'] not in ('target-pass','tolerated-pass'): raise SystemExit(f"{family} admission {summary['status']}")
 PY
 
 overall_status=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$run_dir/summary.json")
+if [[ $overall_status == target-pass || $overall_status == tolerated-pass ]]; then admission_eligible=true; else admission_eligible=false; fi
+if [[ $admission_eligible == true && $mode == admission ]]; then
+  if [[ $family_kind == same-count ]]; then
+    run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$container" repeat-a
+  else
+    run_verify prepend-temp-copy-rename 1 "$container" repeat-a
+    run_verify sparse-write-past-eof-gap-60k-payload-4k-ops-100 1 "$container" repeat-a
+    for verifier in "${count_changing_verifiers[@]}"; do run_verify "$verifier" 1 "$container" repeat-a; done
+  fi
+fi
 printf '%s\n' "$performance_external_wall_ns" >"$run_dir/environment/performance-external-wall-ns.txt"
+printf '%s\n' "$control_external_wall_ns" >"$run_dir/environment/control-external-wall-ns.txt"
 printf '%s\n' "$verification_external_wall_ns" >"$run_dir/environment/verification-external-wall-ns.txt"
 stop_container "$container"
 if [[ -n $paired_container ]]; then stop_container "$paired_container"; fi
 docker inspect "$container" >"$run_dir/environment/container-after.json"
 if [[ -n $paired_container ]]; then docker inspect "$paired_container" >"$run_dir/environment/paired-container-after.json"; fi
-printf '{"schema":"fs-bench-pro-edit-%s-status-v2","mode":"%s","source_identity":"%s","status":"%s","admission_eligible":true}\n' "$family_kind" "$mode" "$source_arm" "$overall_status" >"$run_dir/run-status.json"
+printf '{"schema":"fs-bench-pro-edit-%s-status-v2","mode":"%s","source_identity":"%s","status":"%s","admission_eligible":%s}\n' "$family_kind" "$mode" "$source_arm" "$overall_status" "$admission_eligible" >"$run_dir/run-status.json"
 (invocation_elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - invocation_started )); printf '%s\n' "$invocation_elapsed" >"$run_dir/environment/total-external-wall-ns.txt"; if [[ $mode == performance && $performance_external_wall_ns -gt 2000000000 ]]; then printf '{"schema":"fs-bench-pro-edit-%s-status-v2","mode":"%s","source_identity":"%s","status":"no-go","admission_eligible":false,"reason":"selected performance external wall exceeded 2 seconds","performance_external_wall_ns":%s,"total_external_wall_ns":%s}\n' "$family_kind" "$mode" "$source_arm" "$performance_external_wall_ns" "$invocation_elapsed" >"$run_dir/run-status.json"; fi)
 (cd "$run_dir" && find . -type f ! -name evidence.sha256 -print0 | sort -z | xargs -0 shasum -a 256 >evidence.sha256)
-[[ $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["admission_eligible"])' "$run_dir/run-status.json") == True ]] || die "selected external wall gate"
+[[ $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["admission_eligible"])' "$run_dir/run-status.json") == True ]] || die "admission or selected external wall gate"
 printf 'PASS %s\n' "$run_dir"

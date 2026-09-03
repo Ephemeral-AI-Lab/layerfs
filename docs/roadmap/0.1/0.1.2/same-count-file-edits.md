@@ -126,7 +126,7 @@ overwrite-middle-4k-ops-100
 ```
 
 Replace 4 KiB at deterministic positions within the middle half of the file.
-This is the same-count control for middle insert/delete/grow/shrink.
+This is the same-count control for middle insert and grow replacement.
 
 ### Tail overwrite
 
@@ -157,9 +157,9 @@ Count-changing results retain `paired_same_count_control_id`:
 | Same-count control | Count-changing operations it controls |
 | --- | --- |
 | `overwrite-head-4k-ops-N` | `prepend-head-4k-ops-N` |
-| `overwrite-middle-4k-ops-N` | middle insert, grow-replace, and shrink-replace rows |
+| `overwrite-middle-4k-ops-N` | middle insert and grow-replace rows |
 | `overwrite-tail-4k-ops-N` | append and sparse write-past-EOF rows |
-| supplemental `overwrite-middle-2k-ops-N` | corrected 2 KiB middle deletion rows |
+| supplemental `overwrite-middle-2k-ops-N` | 2 KiB middle deletion and shrink-replace rows |
 | supplemental `overwrite-tail-2k-ops-N` | corrected 2 KiB tail truncation rows |
 
 The pair holds fixture, seed, operation count, supplied bytes where applicable,

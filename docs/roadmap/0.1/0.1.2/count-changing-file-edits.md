@@ -73,7 +73,8 @@ MacBook host with host-resident Store and Client
 Fixture generation, Store/Client/container preparation, source sealing, full
 verification, fresh reconnect, and report generation are outside timing. Cache
 policy, image digest, resource limits, and acknowledgement boundary are exact
-baseline/candidate identities.
+arm identities. Identical-source acceptance uses alternating A/A labels on one
+prepared daemon and makes no improvement claim.
 
 ## Frozen v0.1.0 anchor
 
@@ -188,7 +189,7 @@ replace-middle-shrink-4k-to-2k-ops-100
 ```
 
 Delete 4 KiB and insert 2 KiB for a `-2 KiB` delta. Pair with
-`overwrite-middle-4k-ops-N`.
+`overwrite-middle-2k-ops-N` so supplied byte quantity also remains exact.
 
 ## Pair contract
 
@@ -269,7 +270,7 @@ target <= 10 s
 hard   <= 20 s
 ```
 
-The paired baseline/candidate accounting budget is 20/40 seconds. The 256 KiB
+The paired A/A accounting budget is 20/40 seconds. The 256 KiB
 fixture keeps 100-operation temp-rewrite curves bounded while the frozen 32 MiB
 prepend retains the large-file control. Freeze final operation/s and payload-
 throughput floors after the unchanged implementation is measured.

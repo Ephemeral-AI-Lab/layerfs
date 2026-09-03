@@ -82,7 +82,7 @@ pub(crate) const SCENARIOS: [Scenario; 25] = [
         display_name: "legacy-prepend-head-10b-on-32m-temp-copy-rename",
         operations: 1,
         kind: Kind::FrozenPrepend,
-        paired_same_count_control_id: "small-edit",
+        paired_same_count_control_id: "not-applicable-frozen-anchor",
         frozen: true,
     },
     scenario!("prepend-head-4k-ops-1", "Prepend 4 KiB at head, 1 operation", 1, Prepend, "overwrite-head-4k-ops-1"),
@@ -106,9 +106,9 @@ pub(crate) const SCENARIOS: [Scenario; 25] = [
     scenario!("replace-middle-grow-2k-to-4k-ops-1", "Replace middle 2 KiB with 4 KiB, 1 operation", 1, Grow, "overwrite-middle-4k-ops-1"),
     scenario!("replace-middle-grow-2k-to-4k-ops-10", "Replace middle 2 KiB with 4 KiB, 10 operations", 10, Grow, "overwrite-middle-4k-ops-10"),
     scenario!("replace-middle-grow-2k-to-4k-ops-100", "Replace middle 2 KiB with 4 KiB, 100 operations", 100, Grow, "overwrite-middle-4k-ops-100"),
-    scenario!("replace-middle-shrink-4k-to-2k-ops-1", "Replace middle 4 KiB with 2 KiB, 1 operation", 1, Shrink, "overwrite-middle-4k-ops-1"),
-    scenario!("replace-middle-shrink-4k-to-2k-ops-10", "Replace middle 4 KiB with 2 KiB, 10 operations", 10, Shrink, "overwrite-middle-4k-ops-10"),
-    scenario!("replace-middle-shrink-4k-to-2k-ops-100", "Replace middle 4 KiB with 2 KiB, 100 operations", 100, Shrink, "overwrite-middle-4k-ops-100"),
+    scenario!("replace-middle-shrink-4k-to-2k-ops-1", "Replace middle 4 KiB with 2 KiB, 1 operation", 1, Shrink, "overwrite-middle-2k-ops-1"),
+    scenario!("replace-middle-shrink-4k-to-2k-ops-10", "Replace middle 4 KiB with 2 KiB, 10 operations", 10, Shrink, "overwrite-middle-2k-ops-10"),
+    scenario!("replace-middle-shrink-4k-to-2k-ops-100", "Replace middle 4 KiB with 2 KiB, 100 operations", 100, Shrink, "overwrite-middle-2k-ops-100"),
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

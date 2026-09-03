@@ -215,8 +215,12 @@ Retained v0.1.1 anchors:
 | inner write throughput | 505.6 MB/s / >=314.6 MB/s |
 | host peak RSS | 97.1 MB / <=128 MiB |
 
-For every new performance row, run three alternating baseline/candidate seed
-pairs and require:
+For every new performance row, run three alternating seed pairs. When the two
+arms intentionally have identical commit/product/harness/workload identity,
+use one prepared daemon and alternate A/A labels; this removes daemon-instance
+state as an undeclared variable while every row still receives a fresh Store,
+Branch, Workspace, and workload process. Distinct baseline/candidate source
+identities require distinct sealed containers. Require:
 
 ```text
 median(candidate / unchanged baseline) <= 1.05

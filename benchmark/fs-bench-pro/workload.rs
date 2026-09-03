@@ -1103,7 +1103,9 @@ fn write_all_at(file: &File, bytes: &[u8], offset: u64) -> std::io::Result<()> {
 }
 
 fn prepend(path: impl AsRef<Path>) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
     let path = path.as_ref();
+    let before = fs::metadata(path)?;
     let temporary = path.with_extension("bin.prepend.tmp");
     let mut source = BufReader::with_capacity(1024 * 1024, File::open(path)?);
     let target = File::create(&temporary)?;
@@ -1113,6 +1115,12 @@ fn prepend(path: impl AsRef<Path>) -> Result<()> {
     writer.flush()?;
     writer.get_ref().sync_all()?;
     fs::rename(temporary, path)?;
+    let after = fs::metadata(path)?;
+    println!("attempted_operations=1");
+    println!("completed_operations=1");
+    println!("final_file_bytes={}", after.len());
+    println!("initial_inode={}", before.ino());
+    println!("final_inode={}", after.ino());
     Ok(())
 }
 

@@ -125,6 +125,7 @@ pub struct WorkspaceCommitReceipt {
     pub edit_piece_height: u64,
     pub edit_piece_logical_charge: u64,
     pub edit_spool_allocated_bytes: u64,
+    pub edit_spool_peak_bytes: u64,
     pub edit_spool_live_bytes: u64,
     pub edit_spool_superseded_bytes: u64,
     pub edit_tree_visits: u64,
@@ -275,6 +276,7 @@ pub fn note_workspace_commit_edit_state(
     piece_height: u64,
     piece_logical_charge: u64,
     spool_allocated_bytes: u64,
+    spool_peak_bytes: u64,
     spool_live_bytes: u64,
     spool_superseded_bytes: u64,
     metric_nodes_scanned: u64,
@@ -286,6 +288,7 @@ pub fn note_workspace_commit_edit_state(
             receipt.edit_piece_height = piece_height;
             receipt.edit_piece_logical_charge = piece_logical_charge;
             receipt.edit_spool_allocated_bytes = spool_allocated_bytes;
+            receipt.edit_spool_peak_bytes = spool_peak_bytes;
             receipt.edit_spool_live_bytes = spool_live_bytes;
             receipt.edit_spool_superseded_bytes = spool_superseded_bytes;
             receipt.edit_metric_nodes_scanned = metric_nodes_scanned;
