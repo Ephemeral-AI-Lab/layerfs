@@ -119,6 +119,7 @@ pub struct WorkspaceCommitReceipt {
     pub snapshot_database_rows: u64,
     pub snapshot_database_bytes: u64,
     pub payload_bytes_read: u64,
+    pub cdc_bytes_scanned: u64,
 }
 
 impl WorkspaceCommitReceipt {
@@ -280,6 +281,14 @@ pub fn note_workspace_commit_phase(phase: WorkspaceCommitPhase, elapsed_ns: u64)
             WorkspaceCommitPhase::Resume => &mut receipt.resume_ns,
         };
         *target = target.saturating_add(elapsed_ns);
+    });
+}
+
+pub(crate) fn note_workspace_commit_cdc(bytes: u64) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.cdc_bytes_scanned = bytes;
+        }
     });
 }
 

@@ -131,6 +131,21 @@ pub struct WorkspaceDiff {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkspaceFileRangeEdit {
+    pub workspace_id: WorkspaceId,
+    pub path: String,
+    pub start: u64,
+    pub delete_len: u64,
+    pub replacement: WorkspaceFileReplacement,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WorkspaceFileReplacement {
+    Inline(Vec<u8>),
+    Zero(u64),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NonEmpty<T>(T);
 
 impl NonEmpty<Vec<OsString>> {

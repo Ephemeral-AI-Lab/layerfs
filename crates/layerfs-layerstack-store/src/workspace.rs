@@ -227,6 +227,7 @@ impl LayerStackStore {
         built: BuiltRoot,
     ) -> Result<CommitOutcome> {
         let _operation = self.db.enter_operation()?;
+        crate::telemetry::note_workspace_commit_cdc(built.counters.cdc_bytes_scanned);
         if built.root_id == expected_root && new_base_layer_id == expected.base_layer_id {
             return Ok(CommitOutcome::UpToDate {
                 root_id: expected_root,

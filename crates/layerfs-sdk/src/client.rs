@@ -13,8 +13,8 @@ use layerfs_monitor::{
 use layerfs_workspace::{
     ConflictCursor, ConflictId, ConflictPage, ContainerBinding, CreateWorkspaceSession,
     EndWorkspaceMode, ExecutionId, NonEmpty, OutputReader, ResolveChoice, ResolveResult,
-    WorkspaceCommitResult, WorkspaceEndResult, WorkspaceExecution, WorkspaceId, WorkspaceSession,
-    Workspaces,
+    WorkspaceCommitResult, WorkspaceEndResult, WorkspaceExecution, WorkspaceFileRangeEdit,
+    WorkspaceId, WorkspaceSession, Workspaces,
 };
 use std::ffi::OsString;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -203,6 +203,29 @@ impl Client {
                 WorkspaceCommitResult::Busy => OperationOutcome::Busy,
                 WorkspaceCommitResult::HeadMoved { .. } => OperationOutcome::HeadMoved,
             },
+        )
+    }
+
+    pub fn edit_workspace_file_range(&self, edit: WorkspaceFileRangeEdit) -> Result<()> {
+        let operation =
+            workspace_operation(OperationFamily::WorkspaceFileRangeEdit, edit.workspace_id);
+        self.observe(
+            operation,
+            || self.0.workspaces.edit_workspace_file_range(edit),
+            |_| OperationOutcome::Success,
+        )
+    }
+
+    pub fn edit_workspace_file_ranges(&self, edits: Vec<WorkspaceFileRangeEdit>) -> Result<()> {
+        let workspace_id = edits
+            .first()
+            .ok_or(SdkError::InvalidRequest("Workspace file range edits"))?
+            .workspace_id;
+        let operation = workspace_operation(OperationFamily::WorkspaceFileRangeEdit, workspace_id);
+        self.observe(
+            operation,
+            || self.0.workspaces.edit_workspace_file_ranges(edits),
+            |_| OperationOutcome::Success,
         )
     }
 

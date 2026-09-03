@@ -31,6 +31,7 @@ pub use layerfs_workspace::{
     ExecutionEvent, ExecutionId, ExecutionReceipt, ExecutionSummary, ExecutionTransport, NonEmpty,
     OutputChunk, OutputPage, OutputReader, OutputStream, ResolveChoice, ResolveResult,
     RunningContainer, WorkspaceCommitResult, WorkspaceConflict, WorkspaceDetail,
-    WorkspaceEndResult, WorkspaceError, WorkspaceExecution, WorkspaceId, WorkspacePlacement,
-    WorkspaceProjection, WorkspaceState, WorkspaceSummary,
+    WorkspaceEndResult, WorkspaceError, WorkspaceExecution, WorkspaceFileRangeEdit,
+    WorkspaceFileReplacement, WorkspaceId, WorkspacePlacement, WorkspaceProjection, WorkspaceState,
+    WorkspaceSummary,
 };

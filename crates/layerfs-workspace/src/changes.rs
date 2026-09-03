@@ -698,12 +698,12 @@ impl Workspace {
             .data
         {
             Data::File(FileData::Base { root, .. }) if root.0 == base => Ok(false),
-            Data::File(FileData::Overlay {
+            Data::File(FileData::Edited {
                 base: Some((root, base_len)),
-                len,
-                dirty,
+                pieces,
                 ..
-            }) if root.0 == base => Ok(*len != *base_len || !dirty.is_empty()),
+            }) if root.0 == base => Ok(pieces.len() != *base_len
+                || !matches!(pieces.pieces().as_slice(), [crate::file_edit::Piece::Base { root: piece_root, offset: 0, len }] if *piece_root == *root && *len == *base_len)),
             Data::File(_) => Ok(!self.file_matches(node, base)?),
             _ => Err(StorageError::InvalidInput("file")),
         }
@@ -712,7 +712,7 @@ impl Workspace {
     fn incremental_file_supported(&self, node: NodeId, base: ObjectId) -> bool {
         matches!(
             self.nodes.get(&node).map(|node| &node.data),
-            Some(Data::File(FileData::Overlay {
+            Some(Data::File(FileData::Edited {
                 base: Some((root, _)),
                 ..
             })) if root.0 == base
@@ -725,10 +725,9 @@ impl Workspace {
         node: NodeId,
         base: BaseEntry,
     ) -> Result<Option<(FileStateRoot, RopeCounters)>> {
-        let Data::File(FileData::Overlay {
+        let Data::File(FileData::Edited {
             base: Some((file_root, _)),
-            len: final_len,
-            dirty,
+            pieces,
             ..
         }) = &self
             .nodes
@@ -741,41 +740,74 @@ impl Workspace {
         if file_root.0 != base.record.content_root {
             return Ok(None);
         }
-        let (file_root, final_len, dirty) = (*file_root, *final_len, dirty.clone());
+        let (file_root, pieces) = (*file_root, pieces.pieces());
         let mut batch = FileMutationBatch::new(objects, Some(file_root))?;
         let mut changed = false;
-        for (start, end) in dirty {
-            let end = end.min(final_len);
-            if start >= end {
-                continue;
+        let original_len = layerfs_content::file::rope::state(
+            &CoreReader(&self.reader),
+            file_root,
+            &mut RopeCounters::default(),
+        )?
+        .logical_len;
+        let mut base_cursor = 0_u64;
+        let mut final_cursor = 0_u64;
+        let mut replacement_len = 0_u64;
+        for piece in pieces {
+            match piece {
+                crate::file_edit::Piece::Base { root, offset, len } => {
+                    if root != file_root || offset < base_cursor {
+                        return Err(StorageError::Integrity("Workspace base piece order"));
+                    }
+                    let delete_len = offset - base_cursor;
+                    if (delete_len != 0 || replacement_len != 0)
+                        && (delete_len != replacement_len
+                            || final_cursor != base_cursor
+                            || !self.workspace_range_matches_base(
+                                node,
+                                file_root,
+                                final_cursor,
+                                final_cursor + replacement_len,
+                            )?)
+                    {
+                        batch.replace(
+                            final_cursor,
+                            delete_len,
+                            WorkspaceRangeReader::new(self, node, final_cursor, replacement_len)?,
+                        )?;
+                        changed = true;
+                    }
+                    final_cursor += replacement_len + len;
+                    replacement_len = 0;
+                    base_cursor = offset + len;
+                }
+                piece => {
+                    replacement_len = replacement_len
+                        .checked_add(piece.len())
+                        .ok_or(StorageError::InvalidInput("file length"))?
+                }
             }
-            let current_len = batch.logical_len()?;
-            if start > current_len {
-                return Err(StorageError::Integrity("Workspace dirty range gap"));
-            }
-            let delete_end = end.min(current_len);
-            let delete_len = delete_end.saturating_sub(start);
-            if delete_len == end - start
-                && self.workspace_range_matches_base(node, file_root, start, end)?
-            {
-                continue;
-            }
+        }
+        let delete_len = original_len
+            .checked_sub(base_cursor)
+            .ok_or(StorageError::Integrity("Workspace base piece order"))?;
+        if (delete_len != 0 || replacement_len != 0)
+            && (delete_len != replacement_len
+                || final_cursor != base_cursor
+                || !self.workspace_range_matches_base(
+                    node,
+                    file_root,
+                    final_cursor,
+                    final_cursor + replacement_len,
+                )?)
+        {
             batch.replace(
-                start,
+                final_cursor,
                 delete_len,
-                WorkspaceRangeReader::new(self, node, start, end - start)?,
+                WorkspaceRangeReader::new(self, node, final_cursor, replacement_len)?,
             )?;
             changed = true;
         }
-        if final_len < batch.logical_len()? {
-            batch.replace(
-                final_len,
-                batch.logical_len()?.saturating_sub(final_len),
-                std::io::empty(),
-            )?;
-            changed = true;
-        }
-        if batch.logical_len()? != final_len {
+        if batch.logical_len()? != self.attr(node)?.size {
             return Err(StorageError::Integrity("Workspace file mutation length"));
         }
         if !changed {
@@ -818,27 +850,15 @@ impl Workspace {
             .data
         {
             Data::File(FileData::Base { root, .. }) if root.0 == base => return Ok(true),
-            Data::File(FileData::Overlay {
+            Data::File(FileData::Edited {
                 base: Some((root, base_len)),
-                len,
-                dirty,
+                pieces,
                 ..
-            }) if root.0 == base && len == base_len && dirty.is_empty() => return Ok(true),
-            Data::File(FileData::Overlay {
-                base: Some((root, base_len)),
-                len,
-                dirty,
-                ..
-            }) if root.0 == base => {
-                if len != base_len {
-                    return Ok(false);
-                }
-                for (start, end) in dirty {
-                    if !self.workspace_range_matches_base(node, *root, *start, *end)? {
-                        return Ok(false);
-                    }
-                }
-                return Ok(true);
+            }) if root.0 == base
+                && pieces.len() == *base_len
+                && matches!(pieces.pieces().as_slice(), [crate::file_edit::Piece::Base { root: piece_root, offset: 0, len }] if *piece_root == *root && *len == *base_len) =>
+            {
+                return Ok(true)
             }
             Data::File(_) => {}
             _ => return Err(StorageError::InvalidInput("file")),
@@ -962,17 +982,26 @@ impl<'a> WorkspaceFileReader<'a> {
             .ok_or(StorageError::NotFound("node"))?
             .data
         {
-            Data::File(FileData::Overlay {
+            Data::File(FileData::Edited {
                 base: None,
                 spool,
-                charged,
+                spool_high_water,
+                pieces,
                 ..
-            }) if fully_charged(charged, len) => {
-                let file = workspace.spool_file(node, spool)?;
-                if file.metadata()?.len() != len {
-                    return Err(StorageError::Integrity("spool length"));
-                }
-                WorkspaceFileSource::Direct(file)
+            }) if *spool_high_water == len
+                && pieces
+                    .pieces()
+                    .iter()
+                    .try_fold(0_u64, |offset, piece| match piece {
+                        crate::file_edit::Piece::Spool {
+                            offset: source,
+                            len,
+                        } if *source == offset => offset.checked_add(*len),
+                        _ => None,
+                    })
+                    == Some(len) =>
+            {
+                WorkspaceFileSource::Direct(workspace.spool_file(node, spool)?)
             }
             Data::File(_) => WorkspaceFileSource::Mixed { workspace, node },
             _ => return Err(StorageError::InvalidInput("file")),
@@ -1014,10 +1043,6 @@ impl Read for WorkspaceFileReader<'_> {
             }
         }
     }
-}
-
-fn fully_charged(charged: &BTreeMap<u64, u64>, len: u64) -> bool {
-    (len == 0 && charged.is_empty()) || (charged.len() == 1 && charged.get(&0) == Some(&len))
 }
 
 fn apply_one(
@@ -1395,5 +1420,93 @@ mod tests {
             drop(store);
             std::fs::remove_dir_all(root).unwrap();
         }
+    }
+
+    #[test]
+    fn owner_prepend_scans_only_replacement_and_retains_every_base_payload() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-owner-prepend-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source = root.join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("payload"), vec![0x5a; 1024 * 1024]).unwrap();
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let layer = store
+            .initialize_layerstack(
+                EntityName::new("project").unwrap(),
+                LayerStackInitialization::Directory(source),
+            )
+            .unwrap()
+            .genesis_layer_id;
+        let branch = store
+            .fork_branch(
+                EntityName::new("main").unwrap(),
+                LocalForkSource::Layer { layer_id: layer },
+            )
+            .unwrap();
+        let mut workspace = Workspace::open(store.clone(), branch, root.join("spool")).unwrap();
+        let file = workspace.lookup(ROOT, b"payload").unwrap().node;
+        let base_root = match workspace.nodes[&file].data {
+            Data::File(FileData::Base { root, .. }) => root,
+            _ => panic!("base file"),
+        };
+        let mut base_payloads = BTreeSet::new();
+        rope::visit_extents(&CoreReader(&workspace.reader), base_root, |extents| {
+            base_payloads.extend(extents.iter().map(|extent| extent.payload_object_id));
+            Ok(())
+        })
+        .unwrap();
+        workspace
+            .edit_many(
+                file,
+                vec![(
+                    0,
+                    0,
+                    crate::WorkspaceFileReplacement::Inline(b"PREPEND010".to_vec()),
+                )],
+            )
+            .unwrap();
+        let reads_before = workspace.reader.read_metrics_snapshot().unwrap();
+        let built = workspace.build_candidate().unwrap();
+        let reads_after = workspace.reader.read_metrics_snapshot().unwrap();
+        assert_eq!(built.counters.cdc_bytes_scanned, 10);
+        assert_eq!(
+            reads_after.payload_bytes_read - reads_before.payload_bytes_read,
+            0
+        );
+        let record = store.branch(branch).unwrap().unwrap();
+        let outcome = store
+            .commit_candidate(&record, workspace.base_root, workspace.expected_base, built)
+            .unwrap();
+        let CommitOutcome::Committed { root_id, .. } = outcome else {
+            panic!("prepend commit")
+        };
+        let reader = store.snapshot_reader(root_id);
+        let resolved = filesystem::resolve(
+            &CoreReader(&reader),
+            root_id,
+            &CanonicalPath::new("payload").unwrap(),
+            &mut LogicalCounters::default(),
+        )
+        .unwrap();
+        let mut final_payloads = BTreeSet::new();
+        rope::visit_extents(
+            &CoreReader(&reader),
+            FileStateRoot(resolved.record.content_root),
+            |extents| {
+                final_payloads.extend(extents.iter().map(|extent| extent.payload_object_id));
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert!(base_payloads.is_subset(&final_payloads));
+        drop(workspace);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

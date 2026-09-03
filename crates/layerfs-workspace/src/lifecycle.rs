@@ -1,8 +1,8 @@
 use crate::{
     worker::WorkspaceWorker, CreateWorkspaceSession, EndWorkspaceMode, Workspace,
     WorkspaceCommitResult, WorkspaceDetail, WorkspaceDiff, WorkspaceEndResult, WorkspaceError,
-    WorkspaceId, WorkspaceProjection, WorkspaceResult, WorkspaceSession, WorkspaceSummary,
-    Workspaces,
+    WorkspaceFileRangeEdit, WorkspaceId, WorkspaceProjection, WorkspaceResult, WorkspaceSession,
+    WorkspaceSummary, Workspaces,
 };
 use layerfs_layerstack_store::{
     CommitOutcome, Result, StoreError as StorageError, WorkspaceCommitPhase,
@@ -144,13 +144,16 @@ impl Workspace {
         let mut obsolete_spools = Vec::new();
         let mut retained_spool_nodes = std::collections::BTreeSet::new();
         let mut retained_spool_bytes = 0_u64;
+        let mut retained_inline_bytes = 0_u64;
+        let mut retained_piece_allocation_bytes = 0_u64;
         for (id, old) in current {
             if old.paths.is_empty() {
                 if old.pins != 0 {
                     let mut retained = old;
                     retained.canonical = None;
-                    if let crate::cow_tree::Data::File(crate::cow_tree::FileData::Overlay {
-                        charged,
+                    if let crate::cow_tree::Data::File(crate::cow_tree::FileData::Edited {
+                        spool_high_water,
+                        pieces,
                         ..
                     }) = &retained.data
                     {
@@ -158,8 +161,12 @@ impl Workspace {
                             return Err(StorageError::Integrity("spool descriptor"));
                         }
                         retained_spool_nodes.insert(id);
-                        retained_spool_bytes = retained_spool_bytes
-                            .saturating_add(charged.iter().map(|(start, end)| end - start).sum());
+                        retained_spool_bytes =
+                            retained_spool_bytes.saturating_add(*spool_high_water);
+                        retained_inline_bytes =
+                            retained_inline_bytes.saturating_add(pieces.inline_len());
+                        retained_piece_allocation_bytes = retained_piece_allocation_bytes
+                            .saturating_add(pieces.allocation_bytes()?);
                     }
                     nodes.insert(id, retained);
                 }
@@ -198,7 +205,7 @@ impl Workspace {
                     return Err(StorageError::Integrity("committed Workspace inode"));
                 }
             }
-            if let crate::cow_tree::Data::File(crate::cow_tree::FileData::Overlay {
+            if let crate::cow_tree::Data::File(crate::cow_tree::FileData::Edited {
                 spool, ..
             }) = old.data
             {
@@ -224,6 +231,8 @@ impl Workspace {
         self.nodes = nodes;
         self.canonical_nodes = canonical_nodes;
         self.spool_bytes = retained_spool_bytes;
+        self.inline_bytes = retained_inline_bytes;
+        self.piece_allocation_bytes = retained_piece_allocation_bytes;
         self.mutation_generation = 0;
         self.mutation_paths.clear();
         self.dirty.clear();
@@ -496,6 +505,62 @@ impl Workspaces {
             Err(WorkspaceError::WorkspaceBusy) => Ok(WorkspaceCommitResult::Busy),
             Err(error) => Err(error),
         }
+    }
+
+    pub fn edit_workspace_file_range(&self, edit: WorkspaceFileRangeEdit) -> WorkspaceResult<()> {
+        self.edit_workspace_file_ranges(vec![edit])
+    }
+
+    pub fn edit_workspace_file_ranges(
+        &self,
+        edits: Vec<WorkspaceFileRangeEdit>,
+    ) -> WorkspaceResult<()> {
+        let first = edits.first().ok_or(WorkspaceError::InvalidExecution)?;
+        if edits
+            .iter()
+            .any(|edit| edit.workspace_id != first.workspace_id || edit.path != first.path)
+        {
+            return Err(WorkspaceError::InvalidExecution);
+        }
+        let workspace_id = first.workspace_id;
+        let path = first.path.clone();
+        let worker = self.worker(workspace_id)?;
+        if worker.has_executions()? {
+            return Err(WorkspaceError::WorkspaceBusy);
+        }
+        crate::projection::pause(&worker)?;
+        let quiesced = worker.wait_for_writers().and_then(|()| worker.quiesce());
+        let _quiesced = match quiesced {
+            Ok(value) => value,
+            Err(error) => {
+                crate::projection::resume(&worker)?;
+                return Err(error);
+            }
+        };
+        if let Err(error) = crate::projection::capture(&worker) {
+            crate::projection::resume(&worker)?;
+            return Err(error);
+        }
+        let result = (|| {
+            let mut workspace = worker
+                .workspace
+                .lock()
+                .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+            let node = lookup_path(&mut workspace, &path)?;
+            workspace.edit_many(
+                node,
+                edits
+                    .into_iter()
+                    .map(|edit| (edit.start, edit.delete_len, edit.replacement))
+                    .collect(),
+            )?;
+            Ok(())
+        })();
+        if result.is_err() {
+            crate::projection::resume(&worker)?;
+            return result;
+        }
+        crate::projection::refresh(&worker, self.daemon_mount_owner()?)
     }
 
     pub fn end_workspace_session(

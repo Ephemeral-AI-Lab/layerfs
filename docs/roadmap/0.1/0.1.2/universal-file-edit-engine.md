@@ -1,8 +1,8 @@
 # Universal Workspace regular-file edit engine
 
-> **Status:** Proposed v0.1.2 implementation workstream and GitHub sub-issue.
-> It is not a benchmark family. Performance families exercise it through the
-> fixed Docker/FUSE product path; focused owner-side checks remain here.
+> **Status:** Implemented in v0.1.2. It is not a benchmark family. Performance
+> families exercise it through the fixed Docker/FUSE product path; focused
+> owner-side checks remain here.
 > Tracked by [GitHub issue #14](https://github.com/Ephemeral-AI-Lab/layerfs/issues/14).
 
 ## Objective
@@ -69,7 +69,7 @@ only for the fixed Docker/FUSE path.
 
 ```text
 Workspace FileData::Edited
-└── one balanced implicit piece tree
+└── one persistent balanced implicit treap
     ├── Base(root, source_offset, length)
     ├── Inline(owner, source_offset, length)
     ├── Zero(length)
@@ -96,6 +96,12 @@ Ordinary FUSE operations lower as follows:
 Owner-side range editing supplies bounded `Inline`, `Zero`, or empty
 replacement. New-file sequential capture may retain its streaming producer but
 must converge on the same canonical representation.
+
+`Client::edit_workspace_file_range` is the singular owner-side operation.
+`Client::edit_workspace_file_ranges` applies one prevalidated same-file batch
+with a single projection refresh; it exists so a 100-edit workload does not
+remount FUSE 100 times. The batch builds its final persistent root before
+publishing any edit, so a rejected member leaves the prior file state exact.
 
 ## Immutable spool and failure atomicity
 
@@ -181,6 +187,8 @@ proportional to its canonical extent representation.
 - At most 2 MiB charged tree/edit allocation, measured from allocation capacity.
 - Existing 1 GiB physical spool ceiling, charged append-only until cleanup.
 - Explicit result-length, logical-zero, and predicted-zero-extent ceilings.
+  The implemented ceilings are 1 TiB result length, 1 GiB logical zero, and
+  131,072 predicted minimum-size zero extents.
 - Approximately 64 KiB fixed FastCDC storage, plus separately measured existing
   candidate/cache/request/projection buffers.
 - No complete-file allocation.
@@ -248,17 +256,17 @@ owner-side baseline; do not invent a pre-API latency.
 
 ## Acceptance criteria
 
-- [ ] One piece engine serves ordinary FUSE write/truncate and owner-side range
+- [x] One piece engine serves ordinary FUSE write/truncate and owner-side range
   editing; no second edit log exists.
-- [ ] Commit reuses existing `FileMutationBatch` and structural splice; no OS
+- [x] Commit reuses existing `FileMutationBatch` and structural splice; no OS
   copy primitive, CDC suffix scan, alternate canonical editor, partial
   completion, or byte-copy fallback exists.
-- [ ] Reachable spool slices are immutable and short/erroring appends restore
+- [x] Reachable spool slices are immutable and short/erroring appends restore
   the exact prior high-water/state.
-- [ ] All seven conformance groups pass outside benchmark timing.
-- [ ] FUSE is the only v0.1.2 timed projection; untimed materialization equality
+- [x] All seven conformance groups pass outside benchmark timing.
+- [x] FUSE is the only v0.1.2 timed projection; untimed materialization equality
   proves the engine is not driver-coupled.
-- [ ] The focused owner-side prepend meets its latency, transfer, reuse, memory,
+- [x] The focused owner-side prepend meets its latency, transfer, reuse, memory,
   retry, and cleanup gates.
 - [ ] Every retained implementation optimization reruns both affected complete
   performance families.

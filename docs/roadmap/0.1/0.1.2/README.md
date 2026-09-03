@@ -1,8 +1,10 @@
 # LayerFS 0.1.2
 
-> **Status:** Proposed universal regular-file editing and performance-family
-> release. No new scenario is registered until its operation, fixture, load,
-> timing, schema, and performance receipts are frozen together.
+> **Status:** Implementation in progress. The family runner format and universal
+> regular-file edit engine are implemented; edit families and Store-footprint
+> admission remain sequential follow-up work. No new scenario is registered
+> until its operation, fixture, load, timing, schema, and performance receipts
+> are frozen together.
 
 ## Release structure
 

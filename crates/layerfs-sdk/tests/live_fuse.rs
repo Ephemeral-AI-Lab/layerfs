@@ -1,7 +1,7 @@
 use layerfs_sdk::{
     Client, CommitId, CreateWorkspaceSession, EndWorkspaceMode, EntityName,
     LayerStackInitialization, LayerStackStore, LocalForkSource, WorkspaceCommitResult,
-    WorkspacePlacement, WorkspaceProjection,
+    WorkspaceFileRangeEdit, WorkspaceFileReplacement, WorkspacePlacement, WorkspaceProjection,
 };
 use std::os::unix::fs::FileExt;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -12,6 +12,94 @@ const FILES_PER_DIRECTORY: usize = 100;
 const BYTES_PER_FILE: usize = 2_500;
 const EDIT_TARGET: &str = "data-0000/file-00000.bin";
 const EDIT_MARKER: &[u8; 10] = b"E000000001";
+
+#[test]
+fn owner_range_edits_have_materialization_and_real_fuse_root_equality() {
+    if std::env::var_os("LAYERFS_LIVE_FUSE").is_none() {
+        return;
+    }
+    let root = temp("owner-range-equality");
+    let fixture = root.join("fixture");
+    std::fs::create_dir(&fixture).unwrap();
+    std::fs::write(
+        fixture.join("payload.bin"),
+        (0..256 * 1024)
+            .map(|index| ((index * 29 + index / 7) % 251) as u8)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let store = Arc::new(LayerStackStore::create(root.join("store.sqlite")).unwrap());
+    let client = Client::connect(store.clone()).unwrap();
+    let initialized = client
+        .initialize_layerstack(
+            EntityName::new("owner-range").unwrap(),
+            LayerStackInitialization::Directory(fixture),
+        )
+        .unwrap();
+    let mut commits = Vec::new();
+    for (name, projection) in [
+        ("materialized", WorkspaceProjection::Materialize),
+        ("fuse", WorkspaceProjection::Fuse),
+    ] {
+        let branch = client
+            .fork_branch(
+                EntityName::new(name).unwrap(),
+                LocalForkSource::Layer {
+                    layer_id: initialized.genesis_layer_id,
+                },
+            )
+            .unwrap();
+        let mount = root.join(name);
+        let session = client
+            .create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: WorkspacePlacement::Host {
+                    root: mount.clone(),
+                },
+                projection: Some(projection),
+            })
+            .unwrap();
+        client
+            .edit_workspace_file_ranges(vec![
+                WorkspaceFileRangeEdit {
+                    workspace_id: session.id,
+                    path: "payload.bin".into(),
+                    start: 0,
+                    delete_len: 0,
+                    replacement: WorkspaceFileReplacement::Inline(b"PREPEND010".to_vec()),
+                },
+                WorkspaceFileRangeEdit {
+                    workspace_id: session.id,
+                    path: "payload.bin".into(),
+                    start: 32 * 1024,
+                    delete_len: 4096,
+                    replacement: WorkspaceFileReplacement::Zero(2048),
+                },
+                WorkspaceFileRangeEdit {
+                    workspace_id: session.id,
+                    path: "payload.bin".into(),
+                    start: 128 * 1024,
+                    delete_len: 1024,
+                    replacement: WorkspaceFileReplacement::Inline(vec![0x5a; 3072]),
+                },
+            ])
+            .unwrap();
+        let bytes = std::fs::read(mount.join("payload.bin")).unwrap();
+        assert_eq!(bytes.len(), 262_154);
+        commits.push((commit(&client, session.id), bytes));
+        client
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+    }
+    assert_eq!(commits[0].1, commits[1].1);
+    assert_eq!(
+        store.commit(commits[0].0).unwrap().unwrap().root_id,
+        store.commit(commits[1].0).unwrap().unwrap().root_id
+    );
+    drop(client);
+    drop(store);
+    std::fs::remove_dir_all(root).unwrap();
+}
 
 #[test]
 fn namespace_10000_materialization_and_real_fuse_have_one_canonical_root() {

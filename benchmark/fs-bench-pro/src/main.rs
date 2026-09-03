@@ -2,7 +2,8 @@ use layerfs_sdk::{
     BranchId, CandidateStats, Client, CommitId, ContainerId, CreateWorkspaceSession,
     EndWorkspaceMode, EntityName, ExecutionTransport, LayerStackInitialization, LayerStackStore,
     LocalForkSource, NonEmpty, OperationFamily, OutputPage, Query, QueryItem, QueryKind,
-    StorageReceipt, WorkspaceCommitResult, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
+    StorageReceipt, WorkspaceCommitResult, WorkspaceFileRangeEdit, WorkspaceFileReplacement,
+    WorkspaceId, WorkspacePlacement, WorkspaceProjection,
 };
 use std::ffi::OsString;
 use std::io::Write;
@@ -726,6 +727,14 @@ fn run() -> AnyResult<()> {
             Some(ContainerId(container.to_string_lossy().into_owned())),
             iterations.to_string_lossy().parse()?,
         ),
+        [command, root, fixture, container, case] if command == "workspace-range" => {
+            workspace_range_acceptance(
+                Path::new(root),
+                Path::new(fixture),
+                ContainerId(container.to_string_lossy().into_owned()),
+                &case.to_string_lossy(),
+            )
+        }
         _ => Err("usage: fs-benchmark-pro self-check | namespace-fixture FIXTURE SCENARIO | namespace ROOT FIXTURE CONTAINER SCENARIO ITERATION FIXTURE_DIGEST EDITED_DIGEST EDIT_PATH EDIT_SIZE FIXTURE_CACHE_PROFILE | namespace-performance|namespace-verify-case ROOT FIXTURE CONTAINER SCENARIO SEED SOURCE FIXTURE_DIGEST EDITED_DIGEST EDIT_PATH EDIT_SIZE FIXTURE_CACHE_PROFILE | namespace-init-diagnostic ROOT FIXTURE SCENARIO ITERATION FIXTURE_DIGEST FIXTURE_CACHE_PROFILE | run ROOT FIXTURE [CONTAINER ITERATIONS]".into()),
     }
 }
@@ -2372,6 +2381,115 @@ fn namespace_init_diagnostic(
         )?,
         initialization_resources_before.threads,
         initialization_resources_after.threads,
+    );
+    Ok(())
+}
+
+fn workspace_range_acceptance(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    case: &str,
+) -> AnyResult<()> {
+    let (operations, replacement_len, delete_len, position) = match case {
+        "workspace-range-prepend-head-10b-on-32m" => (1_u64, 10_usize, 0_u64, "head"),
+        "workspace-range-overwrite-middle-4k-on-256k-100" => {
+            (100, 4 * 1024, 4 * 1024, "distributed")
+        }
+        "workspace-range-insert-middle-4k-on-256k-100" => (100, 4 * 1024, 0, "middle"),
+        _ => return Err("unknown Workspace range acceptance case".into()),
+    };
+    let payload = fixture.join("payload.bin");
+    let initial_len = std::fs::metadata(&payload)?.len();
+    if !fixture.is_dir()
+        || (operations == 1 && initial_len != MIB_32)
+        || (operations == 100 && initial_len != 256 * 1024)
+        || root.exists()
+    {
+        return Err("Workspace range acceptance arguments".into());
+    }
+    std::fs::create_dir(root)?;
+    let store = Arc::new(LayerStackStore::create(root.join("store.sqlite"))?);
+    let client = Client::connect(store)?;
+    let initialized = client.initialize_layerstack(
+        EntityName::new(case)?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let branch = client.fork_branch(
+        EntityName::new("main")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let resources_before = process_resource_snapshot()?;
+    let cgroup_before = container_cgroup_snapshot(&container_id)?;
+    let t0 = Instant::now();
+    let session = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: WorkspacePlacement::Container {
+            container_id: container_id.clone(),
+            root: PathBuf::from(format!("/workspace/{case}-{}", std::process::id())),
+        },
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let t1 = Instant::now();
+    let edit_started = Instant::now();
+    let mut current_len = initial_len;
+    let mut edits = Vec::with_capacity(operations as usize);
+    for operation in 0..operations {
+        let start = match position {
+            "head" => 0,
+            "middle" => current_len / 2,
+            _ => (operation + 1).saturating_mul(2_654_435_761) % (current_len - 4096),
+        };
+        let bytes = (0..replacement_len)
+            .map(|index| (operation as usize + index * 29) as u8)
+            .collect();
+        edits.push(WorkspaceFileRangeEdit {
+            workspace_id: session.id,
+            path: "payload.bin".to_owned(),
+            start,
+            delete_len,
+            replacement: WorkspaceFileReplacement::Inline(bytes),
+        });
+        current_len = current_len - delete_len + replacement_len as u64;
+    }
+    client.edit_workspace_file_ranges(edits)?;
+    let edit_ns = elapsed_ns(edit_started);
+    let commit_started = Instant::now();
+    let head = match client.commit_workspace_session(session.id)? {
+        WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
+        result => return Err(format!("Workspace range Commit failed: {result:?}").into()),
+    };
+    visible_head(&client, branch, head)?;
+    let edit_commit_ns = elapsed_ns(edit_started);
+    let commit_ns = elapsed_ns(commit_started);
+    client.end_workspace_session(session.id, EndWorkspaceMode::Clean)?;
+    let t4 = Instant::now();
+    let resources_after = process_resource_snapshot()?;
+    let cgroup_after = container_cgroup_snapshot(&container_id)?;
+    let commit = operation_workspace_commit(&client.monitor_snapshot()?)?;
+    if resources_before.swaps != 0
+        || resources_after.swaps != 0
+        || cgroup_before.swap_current != 0
+        || cgroup_after.swap_current != 0
+        || cgroup_before.oom != cgroup_after.oom
+        || cgroup_before.oom_kill != cgroup_after.oom_kill
+        || client.active_workspace_count()? != 0
+        || client.active_execution_count()? != 0
+    {
+        return Err("Workspace range resource or cleanup failure".into());
+    }
+    println!(
+        "{{\"schema\":\"fs-bench-pro-edit-engine-acceptance-v1\",\"case\":\"{case}\",\"operations\":{operations},\"initial_file_bytes\":{initial_len},\"final_file_bytes\":{current_len},\"supplied_bytes\":{},\"workspace_create_ns\":{},\"edit_ns\":{edit_ns},\"commit_ns\":{commit_ns},\"edit_commit_ns\":{edit_commit_ns},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"replacement_cdc_bytes\":{},\"old_payload_bytes_read\":{},\"process_peak_rss_bytes\":{},\"cgroup_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"cleanup_status\":\"pass\"}}",
+        operations * replacement_len as u64,
+        nanos(t0, t1),
+        nanos(t0, t4),
+        rate(operations, edit_ns),
+        commit.cdc_bytes_scanned,
+        commit.payload_bytes_read,
+        resources_after.peak_resident_bytes,
+        cgroup_after.memory_peak,
     );
     Ok(())
 }

@@ -7,6 +7,7 @@ mod daemon;
 mod docker;
 mod docker_engine;
 mod execution;
+mod file_edit;
 mod file_io;
 mod lifecycle;
 
@@ -36,6 +37,7 @@ pub use session::{
     ContainerId, CreateWorkspaceSession, DaemonTiming, EndWorkspaceMode, ExecutionEvent,
     ExecutionId, ExecutionReceipt, ExecutionSummary, ExecutionTransport, NonEmpty, OutputChunk,
     OutputStream, WorkspaceCommitResult, WorkspaceDetail, WorkspaceDiff, WorkspaceEndResult,
-    WorkspaceError, WorkspaceExecution, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
-    WorkspaceResult, WorkspaceSession, WorkspaceSummary,
+    WorkspaceError, WorkspaceExecution, WorkspaceFileRangeEdit, WorkspaceFileReplacement,
+    WorkspaceId, WorkspacePlacement, WorkspaceProjection, WorkspaceResult, WorkspaceSession,
+    WorkspaceSummary,
 };

@@ -53,7 +53,7 @@ impl Workspace {
             && offset == 0
             && matches!(
                 self.nodes.get(&node).map(|node| &node.data),
-                Some(Data::File(FileData::Overlay { base: None, .. }))
+                Some(Data::File(FileData::Edited { base: None, .. }))
             );
         if matches!(self.capture, CaptureState::Idle)
             && (!eligible || self.start_capture(node).is_err())
@@ -143,17 +143,12 @@ impl Workspace {
         };
         let exact = matches!(
             self.nodes.get(&captured.node).map(|node| &node.data),
-            Some(Data::File(FileData::Overlay {
+            Some(Data::File(FileData::Edited {
                 base: None,
-                len,
-                dirty,
-                charged,
+                pieces,
                 ..
-            })) if *len == captured.len
-                && dirty.len() == 1
-                && dirty.get(&0) == Some(len)
-                && charged.len() == 1
-                && charged.get(&0) == Some(len)
+            })) if pieces.len() == captured.len
+                && matches!(pieces.pieces().as_slice(), [crate::file_edit::Piece::Spool { offset: 0, len }] if *len == captured.len)
         );
         exact.then_some(*captured)
     }
