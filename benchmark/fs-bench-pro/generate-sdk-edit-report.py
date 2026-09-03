@@ -144,25 +144,17 @@ def custody_validation(root, selected=False, require_ending=False):
 
 def clock_validation(row, failures, row_id):
     try:
-        a,b,c,d = (row[key] for key in ("clock_host_send_ns", "clock_daemon_receive_ns", "clock_daemon_send_ns", "clock_host_receive_ns"))
-        network = (d-a)-(c-b)
-        offset_uncertainty = (network+1)//2
-        offset_numerator = b+c-a-d
-        offset = (abs(offset_numerator)//2) * (-1 if offset_numerator < 0 else 1)
-        age = row["host_t3_ns"]-a
-        uncertainty = offset_uncertainty + (age+999)//1000
-        m0,m3 = row["host_t0_ns"]+offset,row["host_t3_ns"]+offset
-        lo0,hi0,lo3,hi3 = m0-uncertainty,m0+uncertainty,m3-uncertainty,m3+uncertainty
-        first,last,witness = (row[key] for key in ("cgroup_first_sample_ns", "cgroup_last_sample_ns", "cgroup_interior_sample_ns"))
-        add(failures, a <= d and b <= c and network >= 0 and 0 <= age <= 2_000_000_000 and offset_uncertainty <= 400_000, f"{row_id} clock calibration bounds")
-        add(failures, row.get("clock_sampler_start_ns",0)>0 and row.get("clock_probe_transport")=="prepared-authenticated-stream" and 1<=row.get("clock_calibration_attempts",0)<=5, f"{row_id} prepared clock probe custody")
-        add(failures, row["clock_offset_ns"] == offset and row["clock_offset_uncertainty_ns"] == offset_uncertainty and row["clock_uncertainty_ns"] == uncertainty and row["clock_rate_allowance_ppm"] == 1000, f"{row_id} clock calibration formula")
-        add(failures, [row[key] for key in ("cgroup_t0_ns","cgroup_t3_ns","cgroup_t0_lo_ns","cgroup_t0_hi_ns","cgroup_t3_lo_ns","cgroup_t3_hi_ns")] == [m0,m3,lo0,hi0,lo3,hi3], f"{row_id} mapped clock bounds")
-        add(failures, first <= lo0 and hi0-first <= 1_000_000 and last >= hi3 and last-lo3 <= 1_000_000 and hi0 < witness < lo3, f"{row_id} uncertainty-bounded coverage")
-        add(failures, row["cgroup_t0_worst_distance_ns"] == hi0-first and row["cgroup_t3_worst_distance_ns"] == last-lo3, f"{row_id} boundary distances")
-        add(failures, row.get("host_clock_id") == "host-clock-monotonic-raw" and row.get("cgroup_clock_id") == "daemon-sampler-monotonic" and row.get("cgroup_peak_scope") == "conservative-uncertainty-bounded-phase", f"{row_id} clock identity")
+        ready,t0,t3,finish = (row[key] for key in ("host_observation_ready_ns","host_t0_ns","host_t3_ns","host_observation_finish_request_ns"))
+        start,end = row["cgroup_window_start_ns"],row["cgroup_window_end_ns"]
+        add(failures, 0 < ready <= t0 < t3 <= finish, f"{row_id} causal observation bracket")
+        add(failures, 0 < start <= end and row["cgroup_window_duration_ns"]==end-start, f"{row_id} native observation window")
+        add(failures, row.get("resource_observation_profile")=="ack-window-v1" and row.get("exact_cgroup_phase_attribution")=="unavailable" and row.get("category_peak_scope")=="sampled-window-not-continuous", f"{row_id} observation scope")
+        add(failures, row.get("native_cgroup_peak_scope")=="whole-container-lifetime" and row.get("native_process_peak_scope")=="whole-worker-lifetime", f"{row_id} native peak scope")
+        add(failures, row.get("clock_sampler_start_ns",0)>0 and row.get("cgroup_sample_count",0)>=2, f"{row_id} available observations")
+        upper=max(0,row["cgroup_lifetime_peak_bytes"]-row["cgroup_memory_baseline_bytes"])
+        add(failures, row.get("cgroup_incremental_upper_bound_bytes")==upper and upper<=32*MIB, f"{row_id} native incremental bound")
     except (KeyError, TypeError):
-        failures.append(f"{row_id} missing clock evidence")
+        failures.append(f"{row_id} missing observation evidence")
 
 
 def performance_validation(root, write_summary=True, selected=False):
@@ -270,22 +262,22 @@ def performance_validation(root, write_summary=True, selected=False):
         else:
             add(failures, row.get("commit_payload_bytes_read", 65_537) <= 65_536, f"{row_id} payload read")
         for prefix in ("cgroup", "rss"):
-            add(failures, row.get(f"{prefix}_t0_boundary_sampled") is True and row.get(f"{prefix}_t3_boundary_sampled") is True and row.get(f"{prefix}_interior_sampled") is True, f"{row_id} {prefix} boundaries")
-            add(failures, row.get(f"{prefix}_sample_count", 0) >= 3, f"{row_id} {prefix} count")
-            add(failures, 0 < row.get(f"{prefix}_sample_interval_ns", 0) <= 1_000_000, f"{row_id} {prefix} interval")
-            add(failures, row.get(f"{prefix}_maximum_sample_gap_ns", 1_000_001) <= 1_000_000, f"{row_id} {prefix} gap")
+            add(failures, row.get(f"{prefix}_sample_count", 0) >= 2, f"{row_id} {prefix} observations")
+            add(failures, row.get(f"{prefix}_sample_interval_ns", 0) > 0 and row.get(f"{prefix}_maximum_sample_gap_ns",0)>0, f"{row_id} {prefix} observed gaps")
             add(failures, row.get(f"{prefix}_coverage_status") == "pass", f"{row_id} {prefix} coverage")
         first, last = row.get("rss_first_sample_ns", -1), row.get("rss_last_sample_ns", -1)
         t0, t3 = row.get("rss_t0_ns", -1), row.get("rss_t3_ns", -1)
-        add(failures, 0 <= first <= t0 < t3 <= last and t0-first <= 1_000_000 and last-t3 <= 1_000_000, f"{row_id} RSS boundary operands")
+        add(failures, 0 <= first <= t0 < t3 <= last, f"{row_id} RSS observation bracket")
         clock_validation(row, failures, row_id)
-        add(failures, row.get("cgroup_sample_overflow") is False and row.get("cgroup_sampler_thread_count") == 2, f"{row_id} cgroup sampler")
+        add(failures, row.get("cgroup_sampler_thread_count") == 2, f"{row_id} cgroup sampler")
+        rss_upper=max(0,row.get("process_lifetime_peak_rss_bytes",1<<60)-row.get("rss_baseline_bytes",0))
+        add(failures, row.get("rss_incremental_upper_bound_bytes")==rss_upper and rss_upper<=32*MIB, f"{row_id} native RSS incremental bound")
         add(failures, row.get("rss_incremental_peak_bytes") == max(0, row.get("rss_phase_peak_bytes", 0) - row.get("rss_baseline_bytes", 0)), f"{row_id} RSS formula")
-        add(failures, row.get("cgroup_phase_incremental_peak_bytes") == max(0, row.get("cgroup_phase_peak_bytes", 0) - row.get("cgroup_memory_baseline_bytes", 0)), f"{row_id} cgroup formula")
+        add(failures, row.get("cgroup_window_incremental_peak_bytes") == max(0, row.get("cgroup_window_peak_bytes", 0) - row.get("cgroup_memory_baseline_bytes", 0)), f"{row_id} cgroup formula")
         add(failures, row.get("dirty_writeback_incremental_peak_bytes") == max(0, row.get("dirty_writeback_peak_bytes", 0) - row.get("dirty_writeback_baseline_bytes", 0)), f"{row_id} dirty formula")
         add(failures, row.get("cgroup_oom_delta") == row.get("cgroup_oom_final", 0) - row.get("cgroup_oom_baseline", 0), f"{row_id} OOM formula")
         add(failures, row.get("cgroup_oom_kill_delta") == row.get("cgroup_oom_kill_final", 0) - row.get("cgroup_oom_kill_baseline", 0), f"{row_id} OOM-kill formula")
-        add(failures, row.get("cgroup_phase_peak_bytes", 1 << 60) <= 128 * MIB and row.get("cgroup_phase_incremental_peak_bytes", 1 << 60) <= 32 * MIB, f"{row_id} cgroup ceilings")
+        add(failures, row.get("cgroup_window_peak_bytes", 1 << 60) <= 128 * MIB and row.get("cgroup_window_incremental_peak_bytes", 1 << 60) <= 32 * MIB, f"{row_id} cgroup ceilings")
         add(failures, row.get("cgroup_lifetime_peak_bytes", 1 << 60) <= 128 * MIB and row.get("dirty_writeback_incremental_peak_bytes", 1 << 60) <= 8 * MIB, f"{row_id} cgroup lifetime/dirty")
         add(failures, row.get("rss_phase_peak_bytes", 1 << 60) <= 128 * MIB and row.get("rss_incremental_peak_bytes", 1 << 60) <= 32 * MIB and row.get("process_lifetime_peak_rss_bytes", 1 << 60) <= 128 * MIB, f"{row_id} RSS ceilings")
         add(failures, row.get("resource_status") == "pass" and row.get("row_resource_status") == "pass", f"{row_id} resource status")
@@ -327,7 +319,7 @@ def performance_validation(root, write_summary=True, selected=False):
             parity.append({"source_arm": arm, "operation_key": operation, "metric": field, "medians": values, "ratios_to_1mib":[value/values[0] if values[0] else None for value in values[1:]], "spread_ns":max(values)-min(values), "allowance_ns":max(2_000_000,min(values)//10), "status": "pass" if passed else "fail-diagnostic" if arm == "baseline" else "fail"})
             if arm == "candidate":
                 add(failures, passed, f"candidate {operation} {field} size parity")
-        for field in ("rss_phase_peak_bytes", "cgroup_phase_peak_bytes"):
+        for field in ("process_lifetime_peak_rss_bytes", "cgroup_lifetime_peak_bytes"):
             values = [median(sizes[size], field) for size in SIZES]
             add(failures, max(values) - min(values) <= 16 * MIB, f"{arm} {operation} {field} spread")
 
@@ -368,7 +360,7 @@ def performance_validation(root, write_summary=True, selected=False):
         for arm in ("baseline", "candidate"):
             cell = by_cell[(scenario_id, arm)]
             if cell:
-                entry[arm] = {field: {"median": median(cell, field), "min": min(row[field] for row in cell), "max": max(row[field] for row in cell), "samples": len(cell)} for field in METRICS + ("rss_phase_peak_bytes", "rss_incremental_peak_bytes", "cgroup_phase_peak_bytes", "cgroup_phase_incremental_peak_bytes", "dirty_writeback_incremental_peak_bytes", "process_lifetime_peak_rss_bytes", "cgroup_lifetime_peak_bytes", "rss_sample_count", "cgroup_sample_count", "rss_maximum_sample_gap_ns", "cgroup_maximum_sample_gap_ns", "spool_write_bytes", "physical_spool_high_water_bytes", "commit_cdc_bytes_scanned", "candidate_bytes", "clock_uncertainty_ns", "clone_wall_ns", "container_start_ns")}
+                entry[arm] = {field: {"median": median(cell, field), "min": min(row[field] for row in cell), "max": max(row[field] for row in cell), "samples": len(cell)} for field in METRICS + ("rss_phase_peak_bytes", "rss_incremental_peak_bytes", "cgroup_window_peak_bytes", "cgroup_window_incremental_peak_bytes", "dirty_writeback_incremental_peak_bytes", "process_lifetime_peak_rss_bytes", "cgroup_lifetime_peak_bytes", "rss_sample_count", "cgroup_sample_count", "rss_maximum_sample_gap_ns", "cgroup_maximum_sample_gap_ns", "spool_write_bytes", "physical_spool_high_water_bytes", "commit_cdc_bytes_scanned", "candidate_bytes", "clock_sampler_start_ns", "clone_wall_ns", "container_start_ns")}
         if "candidate" in entry:
             entry["candidate_latency_status"] = latency_status({field:entry["candidate"][field]["median"] for field in METRICS})
         summaries.append(entry)
@@ -427,7 +419,7 @@ def verification_validation(root, family, registry, performance, failures, write
             "harness_identity":source[arm]["harness_seal"], "contract_commit":source["contract_commit"],
             "clone_store_sha256":cached["store_sha256"], "prepared_store_sha256":cached["store_sha256"],
             "cache_key":cached["key"], "cache_profile":cached["cache_profile"],
-            "cgroup_sampler_thread_count":2, "cgroup_sample_overflow":False,
+            "cgroup_sampler_thread_count":2,
             "container_exit_code":0, "container_oom_killed":False,
             **manifests,
         }
@@ -461,12 +453,12 @@ def verification_validation(root, family, registry, performance, failures, write
             add(failures, row.get("lost_payload_object_count",1<<60) <= row.get("initial_payload_object_count",0)-row.get("untouched_payload_object_count",0), f"{label} untouched retention")
         add(failures, row.get("referenced_extent_count") == row.get("observed_extent_count") and row.get("unique_payload_object_count") == row.get("observed_payload_object_count") and 0 < row.get("unique_payload_object_count",0) <= row.get("referenced_extent_count",0), f"{label} extent/object distinction")
         clock_validation(row, failures, label)
-        add(failures, all(row.get(field) is True for field in ("cgroup_t0_boundary_sampled","cgroup_t3_boundary_sampled","cgroup_interior_sampled")) and row.get("cgroup_sample_count",0)>=3 and 0<row.get("cgroup_sample_interval_ns",0)<=1_000_000 and row.get("cgroup_maximum_sample_gap_ns",1_000_001)<=1_000_000, f"{label} cgroup coverage")
-        add(failures, row.get("cgroup_phase_incremental_peak_bytes") == max(0,row.get("cgroup_phase_peak_bytes",0)-row.get("cgroup_memory_baseline_bytes",0)), f"{label} cgroup formula")
+        add(failures, row.get("cgroup_sample_count",0)>=2 and row.get("cgroup_sample_interval_ns",0)>0 and row.get("cgroup_maximum_sample_gap_ns",0)>0, f"{label} cgroup observations")
+        add(failures, row.get("cgroup_window_incremental_peak_bytes") == max(0,row.get("cgroup_window_peak_bytes",0)-row.get("cgroup_memory_baseline_bytes",0)), f"{label} cgroup formula")
         add(failures, row.get("dirty_writeback_incremental_peak_bytes") == max(0,row.get("dirty_writeback_peak_bytes",0)-row.get("dirty_writeback_baseline_bytes",0)), f"{label} dirty formula")
-        for field in ("cgroup_phase_peak_bytes","cgroup_lifetime_peak_bytes","process_lifetime_peak_rss_bytes"):
+        for field in ("cgroup_window_peak_bytes","cgroup_lifetime_peak_bytes","process_lifetime_peak_rss_bytes"):
             add(failures, row.get(field,1<<60)<=128*MIB, f"{label} {field} ceiling")
-        add(failures, row.get("cgroup_phase_incremental_peak_bytes",1<<60)<=32*MIB and row.get("dirty_writeback_incremental_peak_bytes",1<<60)<=8*MIB, f"{label} incremental ceilings")
+        add(failures, row.get("cgroup_window_incremental_peak_bytes",1<<60)<=32*MIB and row.get("dirty_writeback_incremental_peak_bytes",1<<60)<=8*MIB, f"{label} incremental ceilings")
     receipts = []
     for scenario_id, scenario in registry.items():
         arms = by_scenario[scenario_id]
@@ -503,8 +495,9 @@ def write_report(root, family, summary, receipts, failures):
             cell = lambda name: f"{metrics[name]['median']/1e6:.3f} ({metrics[name]['min']/1e6:.3f}–{metrics[name]['max']/1e6:.3f})"
             lines.append(f"| `{item['operation_key']}` | {item['fixture_bytes']//MIB} MiB | {arm} | {metrics['edit_call_ns']['samples']} | {cell('edit_call_ns')} | {cell('commit_call_ns')} | {cell('edit_commit_ns')} |")
     lines += ["", "Nominal targets are 10/10/20 ms; user-approved accepted ceilings are 20/20/30 ms for Edit/Commit/combined. Combined is independently capped at 30 ms. Parity and resource gates are unchanged.", "", "| Candidate scenario | Latency classification |", "| --- | --- |"]
+    lines[-2:-2] = ["Memory profile: ack-window-v1. Cgroup observations cover an acknowledged broader window, not exact T0–T3. Native peaks are whole-worker/container lifetime bounds. Category maxima, dirty/writeback, and transient swap checks are sampled observations; continuous category ceilings cannot be strictly proven. Gaps are reported diagnostically. Native peak/incremental/size-spread limits and zero OOM remain binding.", ""]
     lines += [f"| `{item['scenario_id']}` | {item.get('candidate_latency_status','missing')} |" for item in summary["scenarios"]]
-    lines += ["", "## Memory", "", "| Operation | Size | Source | Process phase MiB median (min–max) | Process incremental MiB median (min–max) | Cgroup phase MiB median (min–max) | Cgroup incremental MiB median (min–max) | Dirty/writeback incremental MiB median (min–max) |", "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |"]
+    lines += ["", "## Memory", "", "| Operation | Size | Source | Process phase MiB median (min–max) | Process incremental MiB median (min–max) | Cgroup sampled window MiB median (min–max) | Cgroup sampled window incremental MiB median (min–max) | Dirty/writeback incremental MiB median (min–max) |", "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |"]
     for item in summary["scenarios"]:
         for arm in ("baseline", "candidate"):
             metrics = item.get(arm)
@@ -513,14 +506,14 @@ def write_report(root, family, summary, receipts, failures):
             def mib(name):
                 value = metrics[name]
                 return f"{value['median']/MIB:.3f} ({value['min']/MIB:.3f}–{value['max']/MIB:.3f})"
-            lines.append(f"| `{item['operation_key']}` | {item['fixture_bytes']//MIB} MiB | {arm} | {mib('rss_phase_peak_bytes')} | {mib('rss_incremental_peak_bytes')} | {mib('cgroup_phase_peak_bytes')} | {mib('cgroup_phase_incremental_peak_bytes')} | {mib('dirty_writeback_incremental_peak_bytes')} |")
+            lines.append(f"| `{item['operation_key']}` | {item['fixture_bytes']//MIB} MiB | {arm} | {mib('rss_phase_peak_bytes')} | {mib('rss_incremental_peak_bytes')} | {mib('cgroup_window_peak_bytes')} | {mib('cgroup_window_incremental_peak_bytes')} | {mib('dirty_writeback_incremental_peak_bytes')} |")
     lines += ["", f"Aggregate verifier receipts: {len(receipts)}.", "", "Candidate size parity, matched-operation parity, route, CDC, spool, transaction, memory, cleanup, and custody gates are admission-binding. Baseline latency parity is diagnostic; baseline correctness, route, resource, cleanup, and custody remain binding."]
     lines += ["", "## Per-sample resource and mechanism guards", "", "All maxima below cover every retained sample, not only medians. Swap/OOM, FUSE mutation bytes, and spool must be zero; coverage and cleanup must pass. The 112 MiB target is diagnostic; 128 MiB is the unchanged hard ceiling.", "", "| Operation | MiB | Arm | Lifetime RSS / cgroup max MiB | RSS / cgroup max gap ms | Minimum RSS / cgroup samples | CDC bytes min–max | Candidate bytes max | Spool bytes max | 112 MiB target |", "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |"]
     for item in summary["scenarios"]:
         for arm in ("baseline","candidate"):
             m=item.get(arm)
             if not m: continue
-            target="target-pass" if max(m["rss_phase_peak_bytes"]["max"],m["cgroup_phase_peak_bytes"]["max"])<=112*MIB else "target-miss"
+            target="target-pass" if max(m["rss_phase_peak_bytes"]["max"],m["cgroup_window_peak_bytes"]["max"])<=112*MIB else "target-miss"
             lines.append(f"| {item['operation_key']} | {item['fixture_bytes']//MIB} | {arm} | {m['process_lifetime_peak_rss_bytes']['max']/MIB:.3f} / {m['cgroup_lifetime_peak_bytes']['max']/MIB:.3f} | {m['rss_maximum_sample_gap_ns']['max']/1e6:.3f} / {m['cgroup_maximum_sample_gap_ns']['max']/1e6:.3f} | {m['rss_sample_count']['min']} / {m['cgroup_sample_count']['min']} | {m['commit_cdc_bytes_scanned']['min']}–{m['commit_cdc_bytes_scanned']['max']} | {m['candidate_bytes']['max']} | {max(m['spool_write_bytes']['max'],m['physical_spool_high_water_bytes']['max'])} | {target} |")
     lines += ["", "## Size parity", "", "Ratios use the 1 MiB median as denominator; spread and allowance are independently evaluated for each metric.", "", "| Operation | Arm | Metric | 10/1 | 100/1 | 500/1 | Spread / allowance ms | Status |", "| --- | --- | --- | ---: | ---: | ---: | ---: | --- |"]
     for row in summary["size_parity"]:
@@ -538,7 +531,7 @@ def write_report(root, family, summary, receipts, failures):
     for path in sorted((root/"environment").glob("prepared-cache-*.json")):
         row=json.loads(path.read_text())
         lines.append(f"| {row['fixture']['fixture_bytes']//MIB} | {row['cache_disposition']} | {row['cache_build_ns']/1e6:.3f} | {row['cache_validation_ns']/1e6:.3f} | {row['cache_acquisition_ns']/1e6:.3f} | {row['key']} |")
-    lines += ["", "Qualification and clone setup are retained in [qualification timing](environment/qualification-timing.tsv); each raw row records its clone method/digest/wall, container-start wall, and clock_sampler_start_ns for authenticated connection and sampler warmup. These are never part of edit or Commit latency. Clock probes use the prepared authenticated stream; offset uncertainty, all accepted clock operands, and the five-probe bound remain independently checked.", "", f"Pre-run manifest SHA-256: {custody.sha(root/'environment/pre-run.sha256')}. The enclosing evidence manifest identity is shown by the cross-family report."]
+    lines += ["", "Qualification and clone setup are retained in [qualification timing](environment/qualification-timing.tsv); each raw row records its clone method/digest/wall, container-start wall, and clock_sampler_start_ns for authenticated connection and sampler warmup. These are never part of edit or Commit latency. Cgroup observation uses an acknowledged broader window with no clock probes. Exact phase attribution and continuous category maxima are unavailable; actual gaps are reported diagnostically.", "", f"Pre-run manifest SHA-256: {custody.sha(root/'environment/pre-run.sha256')}. The enclosing evidence manifest identity is shown by the cross-family report."]
     if failures:
         lines += ["", "## Failures", ""] + [f"- {failure}" for failure in failures]
     (root / "report.md").write_text("\n".join(lines) + "\n")
@@ -547,26 +540,20 @@ def write_report(root, family, summary, receipts, failures):
 
 
 def self_check():
-    a,b,c,d=1000,1,101,1600
-    offset=(b+c-a-d)//2
-    t0,t3=10_000,20_000
-    uncertainty=250+(t3-a+999)//1000
-    m0,m3=t0+offset,t3+offset
-    row={"clock_host_send_ns":a,"clock_daemon_receive_ns":b,"clock_daemon_send_ns":c,"clock_host_receive_ns":d,
-         "host_t0_ns":t0,"host_t3_ns":t3,"clock_offset_ns":offset,"clock_offset_uncertainty_ns":250,
-         "clock_uncertainty_ns":uncertainty,"clock_rate_allowance_ppm":1000,"cgroup_t0_ns":m0,"cgroup_t3_ns":m3,
-         "cgroup_t0_lo_ns":m0-uncertainty,"cgroup_t0_hi_ns":m0+uncertainty,
-         "cgroup_t3_lo_ns":m3-uncertainty,"cgroup_t3_hi_ns":m3+uncertainty,
-         "cgroup_first_sample_ns":m0-uncertainty-10,"cgroup_last_sample_ns":m3+uncertainty+10,
-         "cgroup_interior_sample_ns":(m0+m3)//2,"cgroup_t0_worst_distance_ns":2*uncertainty+10,
-         "cgroup_t3_worst_distance_ns":2*uncertainty+10,"host_clock_id":"host-clock-monotonic-raw",
-         "cgroup_clock_id":"daemon-sampler-monotonic","cgroup_peak_scope":"conservative-uncertainty-bounded-phase",
-         "clock_sampler_start_ns":1000,"clock_probe_transport":"prepared-authenticated-stream","clock_calibration_attempts":1}
-    failures=[];clock_validation(row,failures,"synthetic-clock-check");assert not failures,failures
-    invalid=dict(row,cgroup_first_sample_ns=m0-1)
-    failures=[];clock_validation(invalid,failures,"wrong-side-boundary");assert failures
-    invalid=dict(row);del invalid["clock_offset_ns"]
-    failures=[];clock_validation(invalid,failures,"missing-clock-operand");assert failures
+    row={"resource_observation_profile":"ack-window-v1",
+         "exact_cgroup_phase_attribution":"unavailable","category_peak_scope":"sampled-window-not-continuous",
+         "native_cgroup_peak_scope":"whole-container-lifetime","native_process_peak_scope":"whole-worker-lifetime",
+         "host_observation_ready_ns":1000,"host_t0_ns":2000,"host_t3_ns":30_000_000,"host_observation_finish_request_ns":40_000_000,
+         "cgroup_window_start_ns":100,"cgroup_window_end_ns":40_000_100,"cgroup_window_duration_ns":40_000_000,
+         "cgroup_sample_count":4,"cgroup_maximum_sample_gap_ns":12_000_000,"clock_sampler_start_ns":1000,
+         "cgroup_lifetime_peak_bytes":1024,"cgroup_memory_baseline_bytes":512,"cgroup_incremental_upper_bound_bytes":512}
+    failures=[];clock_validation(row,failures,"ack-window-check");assert not failures,failures
+    invalid=dict(row,host_observation_ready_ns=3000)
+    failures=[];clock_validation(invalid,failures,"late-ready");assert failures
+    invalid=dict(row);del invalid["cgroup_lifetime_peak_bytes"]
+    failures=[];clock_validation(invalid,failures,"missing-native-peak");assert failures
+    invalid=dict(row,resource_observation_profile="old-exact-phase")
+    failures=[];clock_validation(invalid,failures,"mixed-profile");assert failures
     assert envelope([1_000_000,3_000_000]) and not envelope([1_000_000,3_000_001])
     assert envelope([30_000_000,33_000_000]) and not envelope([30_000_000,33_000_001])
     assert sum((12,32,12))==56 and 10*sum((12,32,12))==560

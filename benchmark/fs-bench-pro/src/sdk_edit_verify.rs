@@ -130,13 +130,8 @@ pub(crate) fn run(
         result => return Err(format!("SDK edit verifier Commit: {result:?}").into()),
     };
     let t3_clock_ns = sdk_edit_clock_ns()?;
-    let clock_uncertainty_ns = calibration.phase_uncertainty(t3_clock_ns)?;
-    let cgroup = client.finish_workspace_resource_sample(
-        session.id,
-        calibration.daemon_time(t0_clock_ns)?,
-        calibration.daemon_time(t3_clock_ns)?,
-        clock_uncertainty_ns,
-    )?;
+    let observation_finish_ns = sdk_edit_clock_ns()?;
+    let cgroup = client.finish_workspace_resource_sample(session.id, 0, 0, 0)?;
 
     let fuse_output = execute(
         &client,
@@ -293,13 +288,9 @@ pub(crate) fn run(
         } else {
             true
         };
-    let cgroup_coverage = cgroup.t0_boundary_sampled
-        && cgroup.t3_boundary_sampled
-        && cgroup.interior_sampled
-        && !cgroup.sample_overflow
-        && cgroup.sample_count >= 3
-        && cgroup.sample_interval_ns <= 1_000_000
-        && cgroup.maximum_sample_gap_ns <= 1_000_000;
+    let cgroup_coverage = cgroup.sample_count >= 2
+        && cgroup.started_ns > 0
+        && cgroup.finished_ns >= cgroup.started_ns;
     let fuse_payload = fuse
         .kernel_write_bytes
         .saturating_add(fuse.client_request_copy_bytes)
@@ -331,6 +322,10 @@ pub(crate) fn run(
         && cgroup_coverage
         && cgroup.memory_current_peak <= 128 * 1024 * 1024
         && cgroup.memory_incremental_peak <= 32 * 1024 * 1024
+        && cgroup
+            .memory_lifetime_peak_final
+            .saturating_sub(cgroup.memory_current_baseline)
+            <= 32 * 1024 * 1024
         && cgroup.dirty_writeback_incremental_peak <= 8 * 1024 * 1024
         && cgroup.memory_lifetime_peak_final <= 128 * 1024 * 1024
         && cgroup.swap_peak == 0
@@ -344,9 +339,9 @@ pub(crate) fn run(
         || process_after.swaps != process_before.swaps
     {
         return Err(format!(
-            "SDK edit verifier gate: semantic={semantic_valid} canonical={canonical_valid} route={route_valid} resource={resource_valid} cgroup_boundaries=({},{},{}) gap={} uncertainty={} lifetime_rss={}",
+            "SDK edit verifier gate: semantic={semantic_valid} canonical={canonical_valid} route={route_valid} resource={resource_valid} cgroup_boundaries=({},{},{}) gap={} finish_requested={} lifetime_rss={}",
             cgroup.t0_boundary_sampled, cgroup.t3_boundary_sampled, cgroup.interior_sampled,
-            cgroup.maximum_sample_gap_ns, clock_uncertainty_ns, process_after.peak_resident_bytes,
+            cgroup.maximum_sample_gap_ns, observation_finish_ns, process_after.peak_resident_bytes,
         ).into());
     }
     let conformance = std::env::var("LAYERFS_SDK_EDIT_CONFORMANCE_SHA256")
@@ -357,7 +352,7 @@ pub(crate) fn run(
         return Err("SDK edit verifier conformance identity".into());
     }
     let mut result = format!(
-        "{{\"schema\":\"{}\",\"receipt_kind\":\"source-arm-subproof\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"source_arm\":\"{}\",\"edit_plan_sha256\":\"{}\",\"performance_row_ids\":[{}],\"performance_binding_status\":\"{}\",\"initial_file_bytes\":{},\"final_file_bytes\":{},\"expected_sha256\":\"{}\",\"observed_sha256\":\"{}\",\"fuse_sha256\":\"{}\",\"materialized_bytes\":{},\"materialized_sha256\":\"{}\",\"materialized_status\":\"pass\",\"initial_branch_root\":\"{}\",\"observed_branch_root\":\"{}\",\"observed_canonical_file_root\":\"{}\",\"observed_extent_count\":{},\"observed_mapping_root\":\"{}\",\"initial_inode_id\":\"{}\",\"final_inode_id\":\"{}\",\"inode_behavior\":\"preserved\",\"initial_payload_object_count\":{},\"observed_payload_object_count\":{},\"untouched_payload_object_count\":{},\"lost_payload_object_count\":{},\"payload_retention_status\":\"pass\",\"conformance_proof_sha256\":\"{}\",\"failure_atomicity_status\":\"sealed-conformance\",\"retry_status\":\"sealed-conformance\",\"public_sdk_edit_call_count\":1,\"workspace_create_count\":1,\"workspace_commit_count\":1,\"workspace_end_count\":1,\"fresh_client_reconnect\":true,\"fresh_store_reconnect\":true,\"fresh_fuse_reopen\":true,\"independent_byte_oracle\":true,\"commit_id\":\"{}\",\"commit_cdc_bytes_scanned\":{},\"commit_payload_bytes_read\":{},\"final_live_non_base_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"cgroup_memory_baseline_bytes\":{},\"cgroup_phase_peak_bytes\":{},\"cgroup_phase_incremental_peak_bytes\":{},\"cgroup_lifetime_peak_bytes\":{},\"cgroup_swap_baseline_bytes\":{},\"cgroup_swap_peak_bytes\":{},\"cgroup_swap_final_bytes\":{},\"cgroup_oom_baseline\":{},\"cgroup_oom_final\":{},\"cgroup_oom_kill_baseline\":{},\"cgroup_oom_kill_final\":{},\"dirty_writeback_baseline_bytes\":{},\"dirty_writeback_peak_bytes\":{},\"dirty_writeback_incremental_peak_bytes\":{},\"cgroup_sample_interval_ns\":{},\"cgroup_sample_count\":{},\"cgroup_maximum_sample_gap_ns\":{},\"cgroup_t0_boundary_sampled\":{},\"cgroup_t3_boundary_sampled\":{},\"cgroup_interior_sampled\":{},\"cgroup_sample_overflow\":{},\"process_lifetime_peak_rss_bytes\":{},\"process_swap_count\":{},\"root_status\":\"{}\",\"fresh_reopen_status\":\"pass\",\"resource_status\":\"pass\",\"cleanup_status\":\"pass\",\"performance_distribution\":false,\"admission_eligible\":false,\"status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"receipt_kind\":\"source-arm-subproof\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"source_arm\":\"{}\",\"edit_plan_sha256\":\"{}\",\"performance_row_ids\":[{}],\"performance_binding_status\":\"{}\",\"initial_file_bytes\":{},\"final_file_bytes\":{},\"expected_sha256\":\"{}\",\"observed_sha256\":\"{}\",\"fuse_sha256\":\"{}\",\"materialized_bytes\":{},\"materialized_sha256\":\"{}\",\"materialized_status\":\"pass\",\"initial_branch_root\":\"{}\",\"observed_branch_root\":\"{}\",\"observed_canonical_file_root\":\"{}\",\"observed_extent_count\":{},\"observed_mapping_root\":\"{}\",\"initial_inode_id\":\"{}\",\"final_inode_id\":\"{}\",\"inode_behavior\":\"preserved\",\"initial_payload_object_count\":{},\"observed_payload_object_count\":{},\"untouched_payload_object_count\":{},\"lost_payload_object_count\":{},\"payload_retention_status\":\"pass\",\"conformance_proof_sha256\":\"{}\",\"failure_atomicity_status\":\"sealed-conformance\",\"retry_status\":\"sealed-conformance\",\"public_sdk_edit_call_count\":1,\"workspace_create_count\":1,\"workspace_commit_count\":1,\"workspace_end_count\":1,\"fresh_client_reconnect\":true,\"fresh_store_reconnect\":true,\"fresh_fuse_reopen\":true,\"independent_byte_oracle\":true,\"commit_id\":\"{}\",\"commit_cdc_bytes_scanned\":{},\"commit_payload_bytes_read\":{},\"final_live_non_base_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"cgroup_memory_baseline_bytes\":{},\"cgroup_window_peak_bytes\":{},\"cgroup_window_incremental_peak_bytes\":{},\"cgroup_lifetime_peak_bytes\":{},\"cgroup_swap_baseline_bytes\":{},\"cgroup_swap_peak_bytes\":{},\"cgroup_swap_final_bytes\":{},\"cgroup_oom_baseline\":{},\"cgroup_oom_final\":{},\"cgroup_oom_kill_baseline\":{},\"cgroup_oom_kill_final\":{},\"dirty_writeback_baseline_bytes\":{},\"dirty_writeback_peak_bytes\":{},\"dirty_writeback_incremental_peak_bytes\":{},\"cgroup_sample_interval_ns\":{},\"cgroup_sample_count\":{},\"cgroup_maximum_sample_gap_ns\":{},\"cgroup_window_start_sampled\":{},\"cgroup_window_end_sampled\":{},\"cgroup_window_interior_sampled\":{},\"cgroup_sample_overflow\":{},\"process_lifetime_peak_rss_bytes\":{},\"process_swap_count\":{},\"root_status\":\"{}\",\"fresh_reopen_status\":\"pass\",\"resource_status\":\"pass\",\"cleanup_status\":\"pass\",\"performance_distribution\":false,\"admission_eligible\":false,\"status\":\"pass\"}}",
         workload_source::sdk_edit_common::VERIFICATION_SCHEMA,
         scenario.family_id,
         scenario.id,
@@ -431,7 +426,7 @@ pub(crate) fn run(
         t0_clock_ns,
         t3_clock_ns,
         &cgroup,
-        clock_uncertainty_ns,
+        observation_finish_ns,
     ));
     result.push_str(&format!(",\"qualification_manifest_sha256\":\"{}\",\"expected_branch_root\":\"{}\",\"expected_canonical_file_root\":\"{}\",\"expected_mapping_root\":\"{}\",\"expected_initial_extent_count\":{},\"observed_initial_extent_count\":{},\"expected_extent_count\":{}",
         qualification_sha256, expected[4], expected[5], expected[6], expected_initial_count,

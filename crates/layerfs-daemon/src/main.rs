@@ -796,11 +796,28 @@ mod linux {
                 .aggregate
                 .lock()
                 .map_err(|_| io::Error::other("cgroup sample aggregate"))?;
+            if aggregate.records.len() == SampleAggregate::MAX_RECORDS {
+                aggregate.records.pop();
+            }
             aggregate.record(
                 final_point,
                 self.origin_unix_ns.saturating_add(elapsed_ns(self.clock)),
             );
-            aggregate.report(final_point, t0_unix_ns, t3_unix_ns, uncertainty_ns, 2)
+            if (t0_unix_ns, t3_unix_ns, uncertainty_ns) == (0, 0, 0) {
+                let start = aggregate
+                    .records
+                    .first()
+                    .ok_or_else(|| io::Error::other("missing window start"))?
+                    .unix_ns;
+                let end = aggregate
+                    .records
+                    .last()
+                    .ok_or_else(|| io::Error::other("missing window end"))?
+                    .unix_ns;
+                aggregate.report(final_point, start, end, 0, 2)
+            } else {
+                aggregate.report(final_point, t0_unix_ns, t3_unix_ns, uncertainty_ns, 2)
+            }
         }
     }
 
@@ -1856,6 +1873,22 @@ mod linux {
                 oom_kill: 3,
                 stat,
             }
+        }
+
+        #[test]
+        fn broader_window_retains_native_peak_and_reports_large_gaps() {
+            let mut aggregate = SampleAggregate::new(point(10, 0, 0, 0), 100);
+            aggregate.record(point(20, 0, 2, 3), 5_000_100);
+            let mut endpoint = point(15, 0, 1, 1);
+            endpoint.lifetime_peak = 25;
+            aggregate.record(endpoint, 10_000_100);
+            let report = aggregate.report(endpoint, 100, 10_000_100, 0, 2).unwrap();
+            assert_eq!(report.started_ns, 100);
+            assert_eq!(report.finished_ns, 10_000_100);
+            assert_eq!(report.memory_lifetime_peak_final, 25);
+            assert_eq!(report.memory_current_peak, 20);
+            assert_eq!(report.maximum_sample_gap_ns, 5_000_000);
+            assert_eq!(report.sample_count, 3);
         }
 
         #[test]

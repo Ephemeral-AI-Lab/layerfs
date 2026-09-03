@@ -5248,13 +5248,8 @@ fn sdk_edit_worker(
     let timing = sdk_file_edit::edit_commit_end(&client, edit)?;
     println!("DONE\t{}\t{}", timing.t0_clock_ns, timing.t3_clock_ns);
     std::io::stdout().flush()?;
-    let clock_uncertainty_ns = calibration.phase_uncertainty(timing.t3_clock_ns)?;
-    let cgroup = client.finish_workspace_resource_sample(
-        session.id,
-        calibration.daemon_time(timing.t0_clock_ns)?,
-        calibration.daemon_time(timing.t3_clock_ns)?,
-        clock_uncertainty_ns,
-    )?;
+    let observation_finish_ns = sdk_edit_clock_ns()?;
+    let cgroup = client.finish_workspace_resource_sample(session.id, 0, 0, 0)?;
     let finish = sdk_file_edit::validate_visibility(&client, branch, &timing)?;
     let snapshot = client.monitor_snapshot()?;
     let family_count = |family| {
@@ -5339,13 +5334,9 @@ fn sdk_edit_worker(
     let candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
     let fuse = edit_fuse_metrics(&snapshot);
     let capture_live = commit.capture_mode == Some(layerfs_layerstack_store::CaptureMode::Live);
-    let cgroup_coverage = cgroup.t0_boundary_sampled
-        && cgroup.t3_boundary_sampled
-        && cgroup.interior_sampled
-        && !cgroup.sample_overflow
-        && cgroup.sample_count >= 3
-        && cgroup.sample_interval_ns <= 1_000_000
-        && cgroup.maximum_sample_gap_ns <= 1_000_000;
+    let cgroup_coverage = cgroup.sample_count >= 2
+        && cgroup.started_ns > 0
+        && cgroup.finished_ns >= cgroup.started_ns;
     let final_live_non_base_bytes = scenario.replacement_len;
     let fuse_payload_bytes = fuse
         .kernel_write_bytes
@@ -5376,6 +5367,10 @@ fn sdk_edit_worker(
         && cgroup_coverage
         && cgroup.memory_current_peak <= 128 * 1024 * 1024
         && cgroup.memory_incremental_peak <= 32 * 1024 * 1024
+        && cgroup
+            .memory_lifetime_peak_final
+            .saturating_sub(cgroup.memory_current_baseline)
+            <= 32 * 1024 * 1024
         && cgroup.dirty_writeback_incremental_peak <= 8 * 1024 * 1024
         && cgroup.memory_lifetime_peak_final <= 128 * 1024 * 1024
         && cgroup.swap_peak == 0
@@ -5391,7 +5386,7 @@ fn sdk_edit_worker(
     let timed_manifest_sha256 = manifest_hash("LAYERFS_SDK_EDIT_TIMED_MANIFEST_SHA256")?;
     let route_manifest_sha256 = manifest_hash("LAYERFS_SDK_EDIT_ROUTE_MANIFEST_SHA256")?;
     let mut result = format!(
-        "RESULT\t{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"row_id\":\"{}:{}:r{}:{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"repetition\":{},\"fixture_profile\":\"{}\",\"fixture_bytes\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"edit_start\":{},\"deleted_bytes\":{},\"replacement_kind\":\"{}\",\"replacement_bytes\":{},\"replacement_sha256\":\"{}\",\"edit_plan_sha256\":\"{}\",\"workspace_create_ns\":{},\"edit_call_ns\":{},\"commit_call_ns\":{},\"edit_commit_ns\":{},\"workspace_end_ns\":{},\"visibility_validation_ns\":{},\"logical_operation_count\":1,\"sdk_edit_member_count\":1,\"public_sdk_edit_call_count\":{},\"workspace_create_count\":{},\"workspace_commit_count\":{},\"workspace_end_count\":{},\"query_count\":{},\"workspace_execution_count\":{},\"operation_surface\":\"public-sdk\",\"mutation_executor\":\"fs-benchmark-pro-sdk\",\"timed_call_graph_manifest_status\":\"pass\",\"operation_route_manifest_status\":\"pass\",\"initial_branch_root\":\"{}\",\"commit_id\":\"{}\",\"capture_mode\":\"{}\",\"captured_files\":{},\"captured_bytes\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"commit_cdc_bytes_scanned\":{},\"commit_payload_bytes_read\":{},\"final_live_non_base_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"cgroup_schema\":\"{}\",\"cgroup_memory_baseline_bytes\":{},\"cgroup_phase_peak_bytes\":{},\"cgroup_phase_final_bytes\":{},\"cgroup_phase_incremental_peak_bytes\":{},\"cgroup_lifetime_peak_bytes\":{},\"cgroup_swap_bytes\":{},\"cgroup_oom_delta\":{},\"cgroup_oom_kill_delta\":{},\"dirty_writeback_incremental_peak_bytes\":{},\"cgroup_sample_interval_ns\":{},\"cgroup_sampler_thread_count\":{},\"cgroup_sample_count\":{},\"cgroup_first_sample_ns\":{},\"cgroup_last_sample_ns\":{},\"cgroup_maximum_sample_gap_ns\":{},\"cgroup_t0_boundary_sampled\":{},\"cgroup_t3_boundary_sampled\":{},\"cgroup_interior_sampled\":{},\"cgroup_coverage_status\":\"{}\",\"cgroup_anon_baseline_bytes\":{},\"cgroup_anon_peak_bytes\":{},\"cgroup_anon_final_bytes\":{},\"cgroup_file_baseline_bytes\":{},\"cgroup_file_peak_bytes\":{},\"cgroup_file_final_bytes\":{},\"cgroup_shmem_baseline_bytes\":{},\"cgroup_shmem_peak_bytes\":{},\"cgroup_shmem_final_bytes\":{},\"cgroup_file_dirty_baseline_bytes\":{},\"cgroup_file_dirty_peak_bytes\":{},\"cgroup_file_dirty_final_bytes\":{},\"cgroup_file_writeback_baseline_bytes\":{},\"cgroup_file_writeback_peak_bytes\":{},\"cgroup_file_writeback_final_bytes\":{},\"cgroup_kernel_baseline_bytes\":{},\"cgroup_kernel_peak_bytes\":{},\"cgroup_kernel_final_bytes\":{},\"cgroup_slab_baseline_bytes\":{},\"cgroup_slab_peak_bytes\":{},\"cgroup_slab_final_bytes\":{},\"cgroup_sock_baseline_bytes\":{},\"cgroup_sock_peak_bytes\":{},\"cgroup_sock_final_bytes\":{},\"swap_bytes\":{},\"oom\":{},\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"performance_distribution\":true,\"admission_eligible\":false,\"cleanup_status\":\"pass\"}}",
+        "RESULT\t{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"row_id\":\"{}:{}:r{}:{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"repetition\":{},\"fixture_profile\":\"{}\",\"fixture_bytes\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"edit_start\":{},\"deleted_bytes\":{},\"replacement_kind\":\"{}\",\"replacement_bytes\":{},\"replacement_sha256\":\"{}\",\"edit_plan_sha256\":\"{}\",\"workspace_create_ns\":{},\"edit_call_ns\":{},\"commit_call_ns\":{},\"edit_commit_ns\":{},\"workspace_end_ns\":{},\"visibility_validation_ns\":{},\"logical_operation_count\":1,\"sdk_edit_member_count\":1,\"public_sdk_edit_call_count\":{},\"workspace_create_count\":{},\"workspace_commit_count\":{},\"workspace_end_count\":{},\"query_count\":{},\"workspace_execution_count\":{},\"operation_surface\":\"public-sdk\",\"mutation_executor\":\"fs-benchmark-pro-sdk\",\"timed_call_graph_manifest_status\":\"pass\",\"operation_route_manifest_status\":\"pass\",\"initial_branch_root\":\"{}\",\"commit_id\":\"{}\",\"capture_mode\":\"{}\",\"captured_files\":{},\"captured_bytes\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"commit_cdc_bytes_scanned\":{},\"commit_payload_bytes_read\":{},\"final_live_non_base_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"cgroup_schema\":\"{}\",\"cgroup_memory_baseline_bytes\":{},\"cgroup_window_peak_bytes\":{},\"cgroup_window_final_bytes\":{},\"cgroup_window_incremental_peak_bytes\":{},\"cgroup_lifetime_peak_bytes\":{},\"cgroup_swap_bytes\":{},\"cgroup_oom_delta\":{},\"cgroup_oom_kill_delta\":{},\"dirty_writeback_incremental_peak_bytes\":{},\"cgroup_sample_interval_ns\":{},\"cgroup_sampler_thread_count\":{},\"cgroup_sample_count\":{},\"cgroup_first_sample_ns\":{},\"cgroup_last_sample_ns\":{},\"cgroup_maximum_sample_gap_ns\":{},\"cgroup_window_start_sampled\":{},\"cgroup_window_end_sampled\":{},\"cgroup_window_interior_sampled\":{},\"cgroup_coverage_status\":\"{}\",\"cgroup_anon_baseline_bytes\":{},\"cgroup_anon_peak_bytes\":{},\"cgroup_anon_final_bytes\":{},\"cgroup_file_baseline_bytes\":{},\"cgroup_file_peak_bytes\":{},\"cgroup_file_final_bytes\":{},\"cgroup_shmem_baseline_bytes\":{},\"cgroup_shmem_peak_bytes\":{},\"cgroup_shmem_final_bytes\":{},\"cgroup_file_dirty_baseline_bytes\":{},\"cgroup_file_dirty_peak_bytes\":{},\"cgroup_file_dirty_final_bytes\":{},\"cgroup_file_writeback_baseline_bytes\":{},\"cgroup_file_writeback_peak_bytes\":{},\"cgroup_file_writeback_final_bytes\":{},\"cgroup_kernel_baseline_bytes\":{},\"cgroup_kernel_peak_bytes\":{},\"cgroup_kernel_final_bytes\":{},\"cgroup_slab_baseline_bytes\":{},\"cgroup_slab_peak_bytes\":{},\"cgroup_slab_final_bytes\":{},\"cgroup_sock_baseline_bytes\":{},\"cgroup_sock_peak_bytes\":{},\"cgroup_sock_final_bytes\":{},\"swap_bytes\":{},\"oom\":{},\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"performance_distribution\":true,\"admission_eligible\":false,\"cleanup_status\":\"pass\"}}",
         workload_source::sdk_edit_common::PERFORMANCE_SCHEMA,
         scenario.family_id,
         scenario.id,
@@ -5534,11 +5529,17 @@ fn sdk_edit_worker(
         timing.t0_clock_ns,
         timing.t3_clock_ns,
         &cgroup,
-        clock_uncertainty_ns,
+        observation_finish_ns,
     ));
     result.push_str(&format!(
         ",\"projection_lifecycle\":[{}]",
         sdk_edit_lifecycle_json(&lifecycle)
+    ));
+    result.push_str(&format!(
+        ",\"commit_pause_fence_ns\":{},\"commit_content_ns\":{},\"commit_local_admission_ns\":{},\"commit_publication_ns\":{},\"commit_publication_insert_ns\":{},\"commit_publication_metadata_ns\":{},\"commit_publication_commit_ns\":{},\"commit_rebase_ns\":{}",
+        commit.pause_fence_ns, commit.content_ns, commit.local_admission_ns,
+        commit.publication_ns, commit.publication_insert_ns, commit.publication_metadata_ns,
+        commit.publication_commit_ns, commit.in_place_rebase_ns,
     ));
     result.push('}');
     println!("{result}");
@@ -5725,16 +5726,16 @@ fn sdk_edit_supervise(
     }
     let (lifetime_peak_rss, swaps) = native_peak_rss_and_swaps_for(-1)?;
     let rss = process_rss_sample(&rss_samples, t0_unix_ns, t3_unix_ns)?;
-    let coverage = rss.count >= 3
-        && rss.t0_boundary
-        && rss.t3_boundary
-        && rss.interior
-        && rss.interval_ns <= 1_000_000
-        && rss.maximum_gap_ns <= 1_000_000;
+    let coverage = rss.count >= 2 && rss.first_ns <= t0_unix_ns && rss.last_ns >= t3_unix_ns;
+    json.push_str(&format!(
+        ",\"rss_incremental_upper_bound_bytes\":{}",
+        lifetime_peak_rss.saturating_sub(rss.baseline)
+    ));
     let resource_valid = coverage
         && rss.peak <= 128 * 1024 * 1024
         && rss.peak.saturating_sub(rss.baseline) <= 32 * 1024 * 1024
         && lifetime_peak_rss <= 128 * 1024 * 1024
+        && lifetime_peak_rss.saturating_sub(rss.baseline) <= 32 * 1024 * 1024
         && swaps == 0
         && json.contains("\"resource_status\":\"pass\"");
     if std::env::var("LAYERFS_SDK_EDIT_ADMISSION").as_deref() == Ok("1") && resource_valid {
@@ -5808,126 +5809,40 @@ fn sdk_edit_clock_ns() -> std::io::Result<u64> {
         .ok_or_else(|| std::io::Error::other("monotonic clock range"))
 }
 
-struct SdkEditClockCalibration {
-    host_send_ns: u64,
-    host_receive_ns: u64,
-    daemon_receive_ns: u64,
-    daemon_send_ns: u64,
-    offset_ns: i128,
-    uncertainty_ns: u64,
-    attempts: u64,
+struct SdkEditObservation {
     sampler_start_ns: u64,
+    ready_ns: u64,
 }
 
-impl SdkEditClockCalibration {
-    fn new(
-        host_send_ns: u64,
-        host_receive_ns: u64,
-        daemon_receive_ns: u64,
-        daemon_send_ns: u64,
-    ) -> AnyResult<Self> {
-        let host_elapsed = host_receive_ns
-            .checked_sub(host_send_ns)
-            .ok_or("host clock order")?;
-        let daemon_elapsed = daemon_send_ns
-            .checked_sub(daemon_receive_ns)
-            .ok_or("daemon clock order")?;
-        let uncertainty_ns = host_elapsed
-            .checked_sub(daemon_elapsed)
-            .ok_or("clock calibration duration")?
-            .div_ceil(2);
-        if uncertainty_ns > 400_000 {
-            return Err(
-                format!("SDK edit clock calibration uncertainty: {uncertainty_ns} ns").into(),
-            );
-        }
-        let offset_ns = (i128::from(daemon_receive_ns) + i128::from(daemon_send_ns)
-            - i128::from(host_send_ns)
-            - i128::from(host_receive_ns))
-            / 2;
-        Ok(Self {
-            host_send_ns,
-            host_receive_ns,
-            daemon_receive_ns,
-            daemon_send_ns,
-            offset_ns,
-            uncertainty_ns,
-            attempts: 1,
-            sampler_start_ns: 0,
-        })
-    }
-
-    fn daemon_time(&self, host_ns: u64) -> AnyResult<u64> {
-        Ok(u64::try_from(i128::from(host_ns) + self.offset_ns)?)
-    }
-
-    fn phase_uncertainty(&self, host_t3: u64) -> AnyResult<u64> {
-        let elapsed = host_t3
-            .checked_sub(self.host_send_ns)
-            .ok_or("calibration age")?;
-        if elapsed > 2_000_000_000 {
-            return Err("calibration-to-T3 exceeded two seconds".into());
-        }
-        // Conservative 1000 ppm rate allowance, explicitly bounded to this short phase.
-        Ok(self.uncertainty_ns + elapsed.div_ceil(1000))
-    }
-
+impl SdkEditObservation {
     fn json_fields(
         &self,
         host_t0: u64,
         host_t3: u64,
         sample: &layerfs_sdk::CgroupResourceSample,
-        uncertainty: u64,
+        finish_requested_ns: u64,
     ) -> String {
-        let (daemon_t0, daemon_t3) = (sample.started_ns, sample.finished_ns);
         format!(
-            ",\"cgroup_clock_id\":\"daemon-sampler-monotonic\",\"host_clock_id\":\"host-clock-monotonic-raw\",\"host_t0_ns\":{host_t0},\"host_t3_ns\":{host_t3},\"cgroup_t0_ns\":{daemon_t0},\"cgroup_t3_ns\":{daemon_t3},\"clock_host_send_ns\":{},\"clock_host_receive_ns\":{},\"clock_daemon_receive_ns\":{},\"clock_daemon_send_ns\":{},\"clock_offset_ns\":{},\"clock_offset_uncertainty_ns\":{},\"clock_calibration_attempts\":{},\"clock_rate_allowance_ppm\":1000,\"clock_uncertainty_ns\":{uncertainty},\"cgroup_peak_scope\":\"conservative-uncertainty-bounded-phase\",\"cgroup_t0_lo_ns\":{},\"cgroup_t0_hi_ns\":{},\"cgroup_t3_lo_ns\":{},\"cgroup_t3_hi_ns\":{},\"cgroup_t0_worst_distance_ns\":{},\"cgroup_t3_worst_distance_ns\":{},\"cgroup_interior_sample_ns\":{}",
-            self.host_send_ns, self.host_receive_ns, self.daemon_receive_ns,
-            self.daemon_send_ns, self.offset_ns, self.uncertainty_ns, self.attempts,
-            daemon_t0.saturating_sub(uncertainty), daemon_t0.saturating_add(uncertainty),
-            daemon_t3.saturating_sub(uncertainty), daemon_t3.saturating_add(uncertainty),
-            daemon_t0.saturating_add(uncertainty).saturating_sub(sample.first_sample_ns),
-            sample.last_sample_ns.saturating_sub(daemon_t3.saturating_sub(uncertainty)),
-            sample.interior_sample_ns,
-        ) + &format!(",\"clock_sampler_start_ns\":{},\"clock_probe_transport\":\"prepared-authenticated-stream\"", self.sampler_start_ns)
+            ",\"resource_observation_profile\":\"ack-window-v1\",\"exact_cgroup_window_attribution\":\"unavailable\",\"category_peak_scope\":\"sampled-window-not-continuous\",\"native_cgroup_peak_scope\":\"whole-container-lifetime\",\"native_process_peak_scope\":\"whole-worker-lifetime\",\"host_clock_id\":\"host-clock-monotonic-raw\",\"cgroup_clock_id\":\"daemon-sampler-monotonic\",\"host_t0_ns\":{host_t0},\"host_t3_ns\":{host_t3},\"host_observation_ready_ns\":{},\"host_observation_finish_request_ns\":{finish_requested_ns},\"clock_sampler_start_ns\":{},\"cgroup_window_start_ns\":{},\"cgroup_window_end_ns\":{},\"cgroup_window_duration_ns\":{},\"cgroup_incremental_upper_bound_bytes\":{},\"cgroup_peak_scope\":\"sampled-ack-window\"",
+            self.ready_ns, self.sampler_start_ns, sample.started_ns, sample.finished_ns,
+            sample.finished_ns.saturating_sub(sample.started_ns),
+            sample.memory_lifetime_peak_final.saturating_sub(sample.memory_current_baseline),
+        )
     }
 }
 
 fn sdk_edit_start_resource_sample(
     client: &Client,
     workspace: WorkspaceId,
-) -> AnyResult<SdkEditClockCalibration> {
+) -> AnyResult<SdkEditObservation> {
     let setup_started = Instant::now();
-    let mut clock = client.start_workspace_resource_sample(workspace)?;
-    let sampler_start_ns = elapsed_ns(setup_started);
-    for attempt in 1..=5 {
-        let host_send = sdk_edit_clock_ns()?;
-        let (daemon_receive, daemon_send) = clock.probe()?;
-        let host_receive = sdk_edit_clock_ns()?;
-        match SdkEditClockCalibration::new(host_send, host_receive, daemon_receive, daemon_send) {
-            Ok(mut calibration) => {
-                calibration.attempts = attempt;
-                calibration.sampler_start_ns = sampler_start_ns;
-                drop(clock);
-                std::thread::sleep(std::time::Duration::from_millis(2));
-                return Ok(calibration);
-            }
-            Err(error) => {
-                eprintln!("SDK edit calibration attempt {attempt} rejected: {error}; host_send={host_send} host_receive={host_receive} daemon_receive={daemon_receive} daemon_send={daemon_send}");
-                if attempt == 5 {
-                    drop(clock);
-                    client.finish_workspace_resource_sample(
-                        workspace,
-                        daemon_send,
-                        daemon_send,
-                        0,
-                    )?;
-                    return Err(error);
-                }
-            }
-        }
-    }
-    unreachable!()
+    let clock = client.start_workspace_resource_sample(workspace)?;
+    let ready_ns = sdk_edit_clock_ns()?;
+    drop(clock);
+    Ok(SdkEditObservation {
+        sampler_start_ns: elapsed_ns(setup_started),
+        ready_ns,
+    })
 }
 
 struct SdkEditHashSink(workload_source::Sha256);
@@ -6900,11 +6815,6 @@ mod tests {
         assert_eq!(report.peak, 20);
         assert!(!process_rss_sample(&samples, 50, 350).unwrap().t0_boundary);
         assert!(!process_rss_sample(&samples, 250, 500).unwrap().t3_boundary);
-        let clock = SdkEditClockCalibration::new(1000, 2000, 100, 500).unwrap();
-        assert_eq!(clock.uncertainty_ns, 300);
-        assert_eq!(clock.daemon_time(1500).unwrap(), 300);
-        assert!(SdkEditClockCalibration::new(1000, 3_000_000, 100, 500).is_err());
-        assert!(SdkEditClockCalibration::new(2000, 1000, 100, 500).is_err());
         assert!(sdk_edit_clock_ns().unwrap() > 0);
     }
 

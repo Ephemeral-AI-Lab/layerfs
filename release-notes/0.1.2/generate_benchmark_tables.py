@@ -106,7 +106,7 @@ def render(families, source, environment):
              "", "All three families pass as one 56-ID matrix: 280 baseline + 280 candidate performance rows, 56 aggregate verifier receipts, and 112 source-arm subproofs.",
              "", "Candidate medians satisfy the user-approved accepted 20/20/30 ms edit/Commit/combined ceilings, size parity, matched-operation parity, no-amplification, memory, correctness, cleanup, and custody gates. Nominal targets remain 10/10/20 ms; each family report distinguishes nominal-pass from accepted-with-tolerance. Combined latency is independently capped at 30 ms. Baseline latency is diagnostic; baseline correctness and resources remain binding.",
              "", "Measurements cover exact 1/10/100/500 MiB tiers on the recorded host/Docker Desktop/FUSE environment. No empirical claim extends above 500 MiB.",
-             "", "Only pristine input Stores are reused. Every sample receives a fresh writable clone, worker, Workspace, and container. Clone/hash conditioning is not a cold-cache claim. Cgroup peaks conservatively include calibrated clock uncertainty; process RSS, cgroup memory, and spool disk remain separate.",
+             "", "Only pristine input Stores are reused. Every sample receives a fresh writable clone, worker, Workspace, and container. Clone/hash conditioning is not a cold-cache claim. The user-approved ack-window-v1 profile brackets cgroup observation by acknowledgments before Edit and after Commit; exact cgroup phase attribution is unavailable. Native whole-worker/container high-water marks conservatively bound total peaks; category maxima and transient swap checks are sampled observations, not continuous proofs. Actual windows and sampling gaps are retained without clock-precision abort gates. Process RSS, cgroup memory, and spool disk remain separate.",
              "", "## Evidence manifests", "", "| Family | IDs | Rows | Aggregate proofs | Manifest SHA-256 |", "| --- | ---: | ---: | ---: | --- |"]
     for family in EXPECTED:
         item = families[family]
@@ -127,7 +127,7 @@ def render(families, source, environment):
         for scenario in item["summary"]["scenarios"]:
             for arm in ("baseline","candidate"):
                 metrics = scenario[arm]
-                lines.append(f"| {scenario['operation_key']} | {scenario['fixture_bytes']//reporter.MIB} | {arm} | {cell(metrics['rss_phase_peak_bytes'],reporter.MIB)} | {cell(metrics['rss_incremental_peak_bytes'],reporter.MIB)} | {cell(metrics['cgroup_phase_peak_bytes'],reporter.MIB)} | {cell(metrics['cgroup_phase_incremental_peak_bytes'],reporter.MIB)} |")
+                lines.append(f"| {scenario['operation_key']} | {scenario['fixture_bytes']//reporter.MIB} | {arm} | {cell(metrics['rss_phase_peak_bytes'],reporter.MIB)} | {cell(metrics['rss_incremental_peak_bytes'],reporter.MIB)} | {cell(metrics['cgroup_window_peak_bytes'],reporter.MIB)} | {cell(metrics['cgroup_window_incremental_peak_bytes'],reporter.MIB)} |")
     lines += ["", "## Broad one-operation diagnostic", "", "Nonbinding target: combined-median spread ≤5 ms; alert above 7 ms. This does not replace byte-matched parity gates.",
               "", "| MiB | Minimum operation | Maximum operation | Combined spread ms | Diagnostic |", "| ---: | --- | --- | ---: | --- |"]
     for size in reporter.SIZES:
