@@ -1377,9 +1377,9 @@ fn rewrite_file_range(
     deleted: u64,
     replacement: &[u8],
 ) -> Result<u64> {
-    let mut source = BufReader::with_capacity(64 * 1024, File::open(path)?);
+    let mut source = BufReader::with_capacity(1024 * 1024, File::open(path)?);
     let target = File::create(temporary)?;
-    let mut output = BufWriter::with_capacity(64 * 1024, target);
+    let mut output = BufWriter::with_capacity(1024 * 1024, target);
     let prefix = std::io::copy(&mut source.by_ref().take(offset), &mut output)?;
     if prefix != offset {
         return Err("count-changing rewrite prefix".into());
