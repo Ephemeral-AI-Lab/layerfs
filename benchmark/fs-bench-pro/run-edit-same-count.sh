@@ -14,10 +14,10 @@ self_check() {
   bash -n "$0"
   scratch=$(mktemp -d "${TMPDIR:-/tmp}/layerfs-same-count-self-check.XXXXXX")
   trap 'rm -rf -- "$scratch"' EXIT
-  rustc --edition=2021 "$here/workload.rs" -o "$scratch/workload"
-  "$scratch/workload" same-count-self-check | grep -Fx 'same-count-self-check=pass' >/dev/null
-  [[ $("$scratch/workload" same-count-list | wc -l | tr -d ' ') == 14 ]] || die "scenario count"
-  "$scratch/workload" same-count-resolve overwrite-middle-4k-ops-100 >/dev/null
+  printf 'mod family { include!(r#"%s"#); } fn main() { family::self_check().unwrap(); assert_eq!(family::SCENARIOS.len(), 14); }\n' \
+    "$here/families/edit_same_count.rs" >"$scratch/check.rs"
+  rustc --edition=2021 -Awarnings "$scratch/check.rs" -o "$scratch/check"
+  "$scratch/check"
   elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - started ))
   (( elapsed < 2000000000 )) || die "self-check exceeded two seconds"
   rm -rf -- "$scratch"
@@ -235,12 +235,12 @@ elif [[ $mode == verify ]]; then
   run_verify "$selection" "$seed"
 else
   ordinal=0
-  while IFS=$'\t' read -r case_id _; do
+  while IFS=$'\t' read -r case_id _ <&3; do
     for sample_seed in 1 2 3; do ordinal=$((ordinal + 1)); run_performance "$case_id" "$sample_seed" "$ordinal"; done
-  done <"$mapfile_path"
-  while IFS=$'\t' read -r case_id _; do
+  done 3<"$mapfile_path"
+  while IFS=$'\t' read -r case_id _ <&3; do
     for sample_seed in 1 2 3; do run_verify "$case_id" "$sample_seed"; done
-  done <"$mapfile_path"
+  done 3<"$mapfile_path"
   run_verify overwrite-fragmented-10b-ops-1000-proof 1
 fi
 
