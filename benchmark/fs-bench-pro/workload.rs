@@ -1405,15 +1405,7 @@ fn rewrite_file_range(
         source.consume(consumed);
         remaining -= consumed as u64;
     }
-    let buffered = {
-        let available = source.fill_buf()?;
-        output.write_all(available)?;
-        available.len()
-    };
-    source.consume(buffered);
-    let suffix = (buffered as u64)
-        .checked_add(std::io::copy(&mut source, &mut output)?)
-        .ok_or("count-changing suffix bytes")?;
+    let suffix = std::io::copy(&mut source, &mut output)?;
     output.flush()?;
     output.into_inner()?.sync_all()?;
     fs::rename(temporary, path)?;
