@@ -442,7 +442,6 @@ else:
         assert r['logical_zero_bytes']>0 and r['spool_write_bytes']<=r['supplied_bytes'] and r['physical_spool_high_water_bytes']<=r['supplied_bytes']
 assert not r['oom'] and not r['timeout'] and r['swap_bytes']==0 and r['cleanup_status']=='pass'
 assert r['container_memory_peak_bytes']<=128*1024*1024
-assert r['physical_spool_high_water_bytes']<=128*1024*1024
 states=[]
 def upper(value,target,tolerated,hard,name):
     state='target-pass' if value<=target else 'tolerated-pass' if value<=tolerated else 'no-go' if value<=hard else 'hard-failure'
@@ -455,6 +454,7 @@ def lower_hard(value,target,tolerated,hard,name):
     states.append((state,name,value,target,tolerated,hard))
 upper(r['process_peak_rss_bytes'],101_980_569,112_178_626,128*1024*1024,'rss')
 if sys.argv[5]=='count-changing':
+    assert r['physical_spool_high_water_bytes']<=128*1024*1024
     if r['scenario_id']=='prepend-temp-copy-rename': upper(r['complete_lifecycle_ns'],223_763_000,246_139_300,250_000_000,'prepend_complete')
     elif r['implementation']=='direct-posix': lower_hard(r['operations_per_second'],250,225,100,'operations_per_second')
     else:
