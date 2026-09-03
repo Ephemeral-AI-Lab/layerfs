@@ -29,8 +29,9 @@ as an indivisible unit, and reruns all earlier registered rows:
 
 1. v0.1.1: initialization and namespace scaling;
 2. v0.1.2: one `fs-bench-pro` family-format workstream, one universal edit
-   implementation, same-count and count-changing edit performance families,
-   and Store-footprint efficiency;
+   implementation, a 14-ID same-count family, a 31-ID count-changing family
+   including its six delete/shrink file-size scaling rows, and Store-footprint
+   efficiency;
 3. v0.1.3: eight remaining filesystem workload and exact CAS/CDC
    deduplication families on one
    genesis Layer and one Branch;
@@ -91,12 +92,17 @@ as an indivisible unit, and reruns all earlier registered rows:
 | --- | --- | --- |
 | v0.1.0 | Registered 32 MiB payload lifecycle | Frozen baseline |
 | v0.1.1 | Existing-directory initialization and namespace scale | Fix correctness/resource blockers and measured initialization or localized-Commit bottlenecks |
-| v0.1.2 | `fs-bench-pro` family format; universal edit engine; same-count and count-changing edit performance; Store footprint | Keep development case-local, benchmark the fixed Docker/FUSE path, and optimize only retained family evidence |
+| v0.1.2 | `fs-bench-pro` family format; universal edit engine; same-count and expanded count-changing edit performance; Store footprint | Keep development case-local, use absolute mutation latency for small temp-copy edits, verify 1/10/100 MiB scaling separately, and optimize only retained family evidence |
 | v0.1.3 | Eight remaining diverse filesystem families; one genesis Layer and one Branch; no new history-depth axis | Use tiered seeded schedules; change code only where evidence warrants it |
 | v0.1.4 | Multi-Layer, multi-Branch, and Commit-history scaling | Optimize measured history, fan-out, publication, diff, query, or conflict bottlenecks |
 
 The accumulated v0.1.0-v0.1.4 registry is the proposed benchmark contract v1
 for 1.0.0.
+
+v0.1.2 does not add a canonical CDC chunk-cardinality family. That proposed
+axis is distinct from logical-length preservation/change and is deferred until
+its CDC maps, exact byte-quantity controls, payload ObjectId counters, and
+owner-side structural-edit matrix can be specified as one complete family.
 
 ## Append-only freeze policy
 
@@ -339,11 +345,13 @@ All files remain under `benchmark/fs-bench-pro`. Timed edit rows use the fixed
 MacBook/Docker Desktop/managed Linux container/real-FUSE environment. The
 environment is recorded in campaign identity, not scenario names.
 
-The edit performance registry contains 39 timed IDs. Each source arm runs three
-seeds per ID, or 117 samples; a paired baseline/candidate admission contains 234
-executions. Twelve verification/conformance groups remain outside performance
-timing. Store controls remain outside `registered_total_ns` and edit-family
-walls.
+The edit performance registry contains 45 timed IDs: 39 original rows plus six
+count-changing file-size scaling rows. Complete performance admission contains
+252 executions: 84 same-count A/A samples, 150 primary count-changing
+baseline/candidate samples, and 18 final-candidate scaling samples. Thirty-three
+verification groups/receipts remain outside performance timing: seven universal,
+one same-count, seven primary count-changing, and 18 scaling reopen receipts.
+Store controls remain outside `registered_total_ns` and edit-family walls.
 
 ### Issue 0: `fs-bench-pro` family format
 
@@ -401,13 +409,16 @@ contract is in [same-count-file-edits.md](0.1.2/same-count-file-edits.md).
 | `sparse-write-past-eof-gap-60k-payload-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
 | `replace-middle-grow-2k-to-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
 | `replace-middle-shrink-4k-to-2k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `delete-middle-2k-on-{1,10,100}mib-ops-1-scale` | Timed file-size scaling | v0.1.2 admission |
+| `replace-middle-shrink-4k-to-2k-on-{1,10,100}mib-ops-1-scale` | Timed file-size scaling | v0.1.2 admission |
 | `insert-middle-4k-on-8m-proof` | Verification | Separate from performance |
 | `delete-middle-4k-on-8m-proof` | Verification | Separate from performance |
 | `rewrite-full-grow-8m-to-12m-proof` | Verification | Separate from performance |
 | `rewrite-full-shrink-8m-to-4m-proof` | Verification | Separate from performance |
 
-This is 25 timed IDs and four verification groups. Every timed result names its
-same-count control. The exact operation contract is in
+This is 31 timed IDs. The 25 primary IDs retain their same-count controls and
+seven existing verifier receipts; the six scaling IDs are explicitly unpaired
+and add 18 exact reopen receipts. The exact operation contract is in
 [count-changing-file-edits.md](0.1.2/count-changing-file-edits.md).
 
 ### Issue 4: Store-footprint efficiency

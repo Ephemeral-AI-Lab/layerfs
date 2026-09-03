@@ -1,11 +1,11 @@
 # Count-changing file-edit performance family
 
-> **Status:** Implemented and accepted by the fresh-container directional
-> campaign at `issue15-terminal-final-fresh-bb95b08c` plus the immutable
-> ratio/custody supplement at
-> `issue15-terminal-authoritative-supplement-d1a7389b`. The family contains 25
-> timed performance IDs and four large verification groups in the fixed
-> MacBook/Docker Desktop/managed Linux container/real-FUSE environment.
+> **Status:** Reopened for a prospective v4 family expansion before replacement
+> evidence. The earlier 25-ID campaigns remain immutable evidence for the
+> superseded smaller family. The terminal family contains 25 primary IDs, six
+> family-owned delete/shrink size-scaling IDs, seven existing primary verifier
+> receipts, and one exact reopen verifier per scaling sample in the fixed MacBook/Docker
+> Desktop/managed Linux container/real-FUSE environment.
 > Tracked by [GitHub issue #15](https://github.com/Ephemeral-AI-Lab/layerfs/issues/15).
 
 ## Question
@@ -23,6 +23,20 @@ result length  != prior length
 Each row declares its same-count control so length-changing cost can be
 separated from position, supplied bytes, operation count, environment, and
 lifecycle overhead.
+
+## Prospective scope decision
+
+This is an expansion of the existing count-changing family, not a new
+canonical CDC chunk-cardinality family. Delete and shrinking replacement both
+change logical length and already belong to this runner, workload, lifecycle,
+and verifier. The six scaling IDs measure file-size scaling of their existing
+POSIX temp-copy/fsync/rename implementation; they do not claim to measure
+payload-chunk cardinality.
+
+A canonical CDC chunk-cardinality family is explicitly deferred beyond
+v0.1.2. That axis needs separately sealed CDC chunk maps, exact same-byte
+controls, payload ObjectId deltas, and owner-side structural-edit cases. Mixing
+it into these logical-length cases would leave both families ambiguous.
 
 ## One definition file and one runner
 
@@ -79,12 +93,20 @@ arm identities. Terminal acceptance uses distinct sealed baseline and candidate
 containers; identical-source diagnostics use alternating A/A labels on one
 prepared daemon and make no improvement claim.
 
-For `fs-bench-pro-edit-performance-v2`, `inner_edit_ns` begins immediately
-before the first selected append/truncate/sparse/rewrite call and ends after the
-last call's required `sync_all` and rename. The workload reports and validates
-the final file length immediately after that interval. This corrects the
-superseded `v1` count-changing diagnostic boundary, which also charged an
-internal per-operation `stat` validity check to throughput.
+For `fs-bench-pro-edit-performance-v2` and the expanded-family `v3`,
+`inner_edit_ns` starts immediately
+before the selected filesystem-mutation loop and stops immediately after the
+loop. It includes each operation's open, read, write, flush, required
+`sync_all`, and rename. It excludes argument/schedule construction, the initial
+fixture stat and inode read, workload-process launch, and the final
+length/inode/output work. `execution_ns` separately measures workload-process
+invocation through output completion. The final file length is still validated
+immediately after `inner_edit_ns`. This corrects the superseded `v1` boundary,
+which charged an internal per-operation `stat` validity check to throughput.
+
+The expanded family uses performance schema `v3`, verifier schema `v3`, and
+family summary/status schema `v4`. The 25-ID `v2`/`v3` attempts remain
+immutable and are never pooled with the expanded family.
 
 The benchmark daemon is one-shot. After each measured process disconnects, the
 runner observes its clean container exit before starting the next arm. Baseline
@@ -206,9 +228,47 @@ replace-middle-shrink-4k-to-2k-ops-100
 Delete 4 KiB and insert 2 KiB for a `-2 KiB` delta. Pair with
 `overwrite-middle-2k-ops-N` so supplied byte quantity also remains exact.
 
+## Family-owned delete/shrink scaling cohort
+
+These six IDs ship and admit with the 25 primary IDs:
+
+| Scenario ID | Initial bytes | Operation |
+| --- | ---: | --- |
+| `delete-middle-2k-on-1mib-ops-1-scale` | 1,048,576 | Delete 2 KiB at `L/2 - 1024` |
+| `delete-middle-2k-on-10mib-ops-1-scale` | 10,485,760 | Delete 2 KiB at `L/2 - 1024` |
+| `delete-middle-2k-on-100mib-ops-1-scale` | 104,857,600 | Delete 2 KiB at `L/2 - 1024` |
+| `replace-middle-shrink-4k-to-2k-on-1mib-ops-1-scale` | 1,048,576 | Replace 4 KiB at `L/2 - 2048` with 2 KiB |
+| `replace-middle-shrink-4k-to-2k-on-10mib-ops-1-scale` | 10,485,760 | Replace 4 KiB at `L/2 - 2048` with 2 KiB |
+| `replace-middle-shrink-4k-to-2k-on-100mib-ops-1-scale` | 104,857,600 | Replace 4 KiB at `L/2 - 2048` with 2 KiB |
+
+Each size uses three seeds and one fresh Store, Branch, Workspace, and workload
+process per sample. Fixture byte `i` is exactly
+`((i * 29 + floor(i / 7)) mod 251)`. Delete seeds are intentional repeat
+labels because they supply no replacement bytes; shrinking replacement bytes
+vary by seed.
+
+For initial length `L`, the exact algebra is:
+
+| Operation | Final bytes | Copied bytes | Read bytes | Written/FUSE/spool bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Delete | `L - 2,048` | `L - 2,048` | `L` | `L - 2,048` |
+| Shrink | `L - 2,048` | `L - 4,096` | `L` | `L - 2,048` |
+
+Scaling cases are an explicitly unpaired, final-candidate supplement: their
+purpose is to fit and verify the file-size model, not to compare unequal
+fixtures to a 256 KiB same-count control. Their result folder remains under the
+count-changing family, with separate `scaling/` performance, summary, and
+verification streams.
+
+Those streams are valid only when they bind to the primary candidate's exact
+revision/tree, source/product/harness/workload seals, image, and container
+lineage within the same terminal campaign. Rows from another candidate identity
+cannot be mixed in after collection.
+
 ## Pair contract
 
-Every result contains `paired_same_count_control_id`. A pair holds constant:
+Every one of the 25 primary results contains a real
+`paired_same_count_control_id`. A primary pair holds constant:
 
 - 256 KiB fixture identity;
 - seed and deterministic replacement-byte stream;
@@ -222,6 +282,8 @@ may replace an inode, while direct append/truncate and owner-side implementation
 checks preserve it; every scenario therefore uses its own exact inode and
 canonical-root oracle. Cross-expression comparison requires final byte/digest
 equality only where the declared transformations are equivalent.
+Scaling rows instead carry the exact sentinel
+`not-applicable-scaling-file-size-cohort`; they are never treated as paired.
 
 ## Verification groups
 
@@ -256,6 +318,27 @@ SHA-256, expression-appropriate root/inode behavior, fresh reopen, and complete
 cleanup. Missing receipts invalidate the run.
 
 ## Baseline and targets
+
+### Primary absolute mutation gate
+
+For every non-anchor 256 KiB temp-copy row, the primary metric is average
+mutation time per operation:
+
+```text
+median(inner_edit_ns) <= operation_count * 10,000,000 ns
+displayed mutation ms/op = median(inner_edit_ns) / operation_count / 1,000,000
+```
+
+This 10 ms-per-operation boundary is the sole temp-copy latency admission
+threshold: a larger median is no-go. There is no 10–11 ms tolerated band.
+
+Copied-payload MiB/s remains a secondary
+diagnostic and cannot independently fail a row whose primary latency gate
+passes. Direct-POSIX operation/s gates and the frozen 32 MiB prepend lifecycle
+gate remain unchanged.
+
+This policy is prospective. All earlier MiB/s-gated evidence retains its
+original status and is not reinterpreted.
 
 Retained prepend anchor:
 
@@ -313,9 +396,8 @@ throughput floors after the unchanged implementation is measured.
 The family applies a 128 MiB physical-spool high-water ceiling, intentionally
 stricter than the universal engine's 1 GiB product safety ceiling.
 
-The unchanged-source pre-publication baselines showed that required
-per-operation fsync makes one shared copied-byte rate invalid. The prospective
-floors are therefore frozen by schedule and transformation:
+The earlier copied-byte floors remain visible only to explain and reproduce the
+superseded evidence:
 
 | Schedule | Target | Tolerated | Hard |
 | --- | ---: | ---: | ---: |
@@ -331,12 +413,42 @@ as a no-go rather than used to move the frozen threshold. A selected Linux
 `copy_file_range` diagnostic produced the same FUSE request
 count and no improvement, so portable streaming temp-copy remains authoritative.
 
+### Scaling classification
+
+The 1 MiB absolute mutation time is measured and reported without a
+predeclared 10 ms target: the 256 KiB data plus fixed FUSE/fsync/rename overhead
+does not justify that bound prospectively. The 10 MiB and 100 MiB cases must
+show non-superlinear behavior. For delete and shrink independently, the median
+100 MiB copied-payload rate may degrade by no more than 10 percent from the
+median 10 MiB rate:
+
+```text
+rate_100m >= 0.90 * rate_10m
+mutation latency ~= fixed overhead + file_size / sustained copy rate
+```
+
+Every scaling row reports N, mutation/workload/Commit/complete-lifecycle
+median and min-max, exact copied/read/written bytes, secondary effective copy
+rate, CPU, process/cgroup RSS, spool high-water, swap, OOM, and cleanup. Exact
+byte/digest/canonical-root/fresh-reconnect/FUSE-reopen verification runs
+separately for all 18 samples. RSS, cgroup memory, and physical spool are hard
+limited to 128 MiB; swap, OOM, timeout, and cleanup failures are never
+tolerated. Each scaling performance or verifier process has a 40-second hard
+timeout with no tolerated timeout band; the scaling cohort has no aggregate
+latency target.
+
+Overall family admission is the worst status across the 25 primary directional
+member gates, the delete and shrink 100 MiB-versus-10 MiB scaling gates, all
+seven existing primary verifier receipts, all 18 scaling verifier receipts,
+and every resource/cleanup gate. A missing row or receipt is ineligible.
+
 Sparse growth allocates no live RAM or physical spool proportional to the zero
 gap. Complete-process RSS targets at most 105 percent of the retained
 97,124,352-byte peak, hard at most 128 MiB, with zero swap.
 
 Separate full-family verification is not part of the development loop or the
-performance distribution. Its provisional admission timeout is 40 seconds.
+performance distribution. Existing primary proof commands retain their
+40-second timeout; each scaling proof independently uses the same hard timeout.
 
 ## Files to read
 
@@ -351,15 +463,18 @@ performance distribution. Its provisional admission timeout is 40 seconds.
 
 ## Acceptance criteria
 
-- [x] One family module and one runner own all 25 timed IDs and four verifier
-  groups while reusing shared harness code.
+- [ ] One family module and one runner own all 31 timed IDs, seven existing
+  primary verifier receipts, and 18 scaling reopen verifiers while reusing
+  shared harness code.
 - [x] The runner defaults to one explicit case/seed in performance mode and
   cannot run the full family without `--all`.
 - [x] The frozen prepend retains operation, fixture, timing, schema, and oracle.
 - [x] Every 1/10/100 curve is an exact prefix and declares its same-count control.
-- [x] Every performance row reports latency, operations/s, phase, I/O, object,
+- [ ] Every performance row reports latency, operations/s, phase, I/O, object,
   CPU, memory, and cleanup receipts without verifier work in its timer.
-- [x] Sparse zero, pair, relative regression, anchor, family-wall, RSS, and
+- [ ] Sparse zero, pair, relative regression, anchor, family-wall, scaling,
+  RSS, and
   zero-swap gates pass.
-- [x] Explicit verification proves exact bytes/length/root/inode/reopen and all
-  four large/adversarial groups before publication.
+- [ ] Explicit verification proves all seven primary receipts (prepend, sparse,
+  four large/adversarial proofs, and baseline semantics) and all 18 scaling
+  samples before publication.

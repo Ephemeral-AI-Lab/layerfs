@@ -1,8 +1,10 @@
 # LayerFS 0.1.2
 
-> **Status:** Completed and released in v0.1.2. Issues #17, #14, #13, #15, and
-> #16 finished in order. The owner accepted the exact patch-compatible Store
-> blocker; authenticated physical packs remain deferred to open issue #18.
+> **Status:** Release stopped while reopened issue #15 completes its
+> prospectively defined 31-ID count-changing family and exact scaling
+> verification. Earlier 25-ID results remain immutable superseded evidence.
+> The Store blocker remains accepted; authenticated physical packs remain
+> deferred to open issue #18.
 
 ## Release structure
 
@@ -17,6 +19,9 @@ v0.1.2 has five ordered sub-issues:
 The first item is shared implementation, not a benchmark family. The two edit
 families classify workloads by the semantic difference under test: file length
 is preserved or changed. Store footprint remains separately accounted evidence.
+The six new delete/shrink file-size scaling IDs remain in the count-changing
+family. Canonical CDC chunk cardinality is a different axis and is explicitly
+deferred beyond v0.1.2 rather than mixed into this expansion.
 
 ## GitHub tracking
 
@@ -95,18 +100,24 @@ never enters performance timing.
 | --- | ---: | ---: | --- |
 | Universal edit implementation | 0 registered family rows | 7 groups + focused owner-side checks | focused tests/cases |
 | Same-count family | 14 | 1 group | `run-edit-same-count.sh` |
-| Count-changing family | 25 | 4 groups | `run-edit-count-changing.sh` |
+| Count-changing family | 31 (25 primary + 6 scaling) | 7 primary + 18 scaling = 25 receipts | `run-edit-count-changing.sh` |
 | Store footprint | 0 mutation rows | 3 controls x 3 fresh Stores per source/candidate | `run-store-footprint.sh` |
-| **Mutation total** | **39** | **12 groups** | — |
+| **Mutation total** | **45** | **7 universal + 1 same-count + 25 count-changing = 33 proof groups/receipts** | — |
 
-One candidate performance arm contains 117 samples:
+One complete candidate performance collection contains 135 samples:
 
 ```text
-39 timed IDs * 3 seeds
+45 timed IDs * 3 seeds
 ```
 
-A full paired unchanged/candidate collection contains 234 executions. That full
+The 25 primary count-changing IDs retain paired baseline/candidate execution;
+the 6 scaling IDs are an unpaired final-candidate supplement because their
+purpose is file-size modeling, not comparison with a 256 KiB control. Complete
 collection is admission work, not the normal development loop.
+
+Complete final performance admission executes 252 samples: 84 same-count A/A,
+150 primary count-changing baseline/candidate, and 18 scaling candidate
+samples. Verification walls and Store controls are reported separately.
 
 ## Descriptive scenario naming
 
@@ -234,7 +245,8 @@ Provisional family budgets, to be frozen after unchanged-source measurement:
 | --- | ---: | ---: | ---: |
 | Same-count, 42 samples | 3 / 6 s target/hard | 6 / 12 s | 20 s |
 | Count-changing, 75 samples | 10 / 20 s | 20 / 40 s | 40 s |
-| **Edit total** | **13 / 26 s** | **26 / 52 s** | **60 s** |
+| Count-changing scaling, 18 candidate samples | reported; no aggregate latency gate | unpaired | 40 s per sample |
+| **Primary edit total** | **13 / 26 s** | **26 / 52 s** | **60 s plus scaling proofs** |
 
 The universal implementation's conformance timeout is separately 30 seconds,
 so complete admission verification has a 90-second aggregate timeout. That is
@@ -282,14 +294,15 @@ ceilings. `WorkspaceFileRangeEdit` is additive and owner-side.
   reuse shared harness helpers.
 - [x] Each family runner defaults to one explicit performance case/seed and
   requires `--all` for full admission.
-- [x] Exactly 39 timed edit IDs, 12 separate verification/conformance groups,
-  and three Store controls are frozen.
-- [x] Frozen v0.1.0 rows retain their identities and v0.1.3 inherits the two
-  complete edit families without adding members.
+- [ ] Exactly 45 timed edit IDs (39 original plus 6 count-changing scaling
+  IDs), their separate verification/conformance proofs, and three Store
+  controls are frozen.
+- [ ] Frozen v0.1.0 rows retain their identities and the later benchmark plan
+  inherits the two complete edit families without silently adding members.
 - [x] Performance timing contains no digest/root/reopen/failure/materialization
   verifier work.
 - [x] One environment-independent edit engine serves ordinary write/truncate
   and owner-side range editing with no fallback or alternate canonical path.
-- [x] Paired regression, frozen anchor, provisional family, throughput, RSS,
+- [ ] Paired regression, frozen anchor, absolute mutation, scaling, RSS,
   zero-swap, and cleanup gates pass.
-- [x] Explicit verification passes before evidence is published.
+- [ ] Explicit verification passes before evidence is published.

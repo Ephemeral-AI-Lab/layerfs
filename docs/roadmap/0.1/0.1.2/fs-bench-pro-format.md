@@ -155,6 +155,13 @@ No command named only `run` may silently execute every family. Existing
 - Produces independent performance, verification, resource, cleanup, custody,
   and overall admission statuses.
 
+For the expanded count-changing family, admission owns 25 paired primary IDs
+plus six final-candidate scaling IDs. The scaling IDs remain in
+`edit_count_changing.rs` and `run-edit-count-changing.sh`; they write separate
+`scaling/` streams and do not acquire fictitious 256 KiB same-count controls.
+The six exact IDs, fixture algebra, gates, and verifier coverage are frozen in
+[the count-changing family specification](count-changing-file-edits.md).
+
 ## Timing schema
 
 Retain the existing lifecycle equations:
@@ -192,37 +199,46 @@ Create an append-only schema rather than changing `fs-bench-pro-v4` in place:
 
 ```json
 {
-  "schema": "fs-bench-pro-edit-performance-v2",
-  "family_id": "edit-count-changing",
-  "scenario_id": "append-tail-4k-ops-100",
-  "display_name": "Append 4 KiB at tail, 100 operations",
+  "schema": "fs-bench-pro-edit-performance-v3",
+  "family_id": "edit_count_changing",
+  "scenario_id": "delete-middle-2k-on-1mib-ops-1-scale",
+  "display_name": "Delete middle 2 KiB on 1 MiB",
+  "cohort": "delete-shrink-scaling",
   "mode": "performance",
   "source_arm": "candidate",
   "seed": 1,
   "seed_label": "layerfs-v0.1.2-seed-1",
   "execution_profile": "macbook-docker-desktop-linux-fuse-v1",
-  "fixture_profile": "edit-throughput-256k-v1",
+  "fixture_profile": "count-changing-scaling-1048576-bytes-v1",
   "fixture_digest": "...",
-  "operation": "append",
-  "position": "tail",
-  "operation_count": 100,
-  "attempted_operations": 100,
-  "completed_operations": 100,
-  "paired_same_count_control_id": "overwrite-tail-4k-ops-100",
-  "initial_file_bytes": 262144,
-  "final_file_bytes": 671744,
-  "supplied_bytes": 409600,
-  "inserted_bytes": 409600,
-  "deleted_bytes": 0,
+  "operation": "delete",
+  "position": "middle",
+  "implementation": "temp-copy-fsync-rename",
+  "operation_count": 1,
+  "attempted_operations": 1,
+  "completed_operations": 1,
+  "paired_same_count_control_id": "not-applicable-scaling-file-size-cohort",
+  "fixture_bytes": 1048576,
+  "initial_file_bytes": 1048576,
+  "edit_offset": 523264,
+  "final_file_bytes": 1046528,
+  "supplied_bytes": 0,
+  "inserted_bytes": 0,
+  "deleted_bytes": 2048,
+  "copied_payload_bytes": 1046528,
+  "read_payload_bytes": 1048576,
   "logical_zero_bytes": 0,
   "workspace_create_ns": 14550000,
-  "execution_ns": 100000000,
+  "execution_ns": 15000000,
+  "inner_edit_ns": 12000000,
+  "mutation_ns_per_operation": 12000000,
+  "mutation_metric_role": "diagnostic-scaling",
   "commit_api_ns": 5000000,
-  "layerstack_visible_ns": 119550000,
+  "layerstack_visible_ns": 34550000,
   "workspace_end_ns": 4000000,
-  "complete_lifecycle_ns": 123550000,
-  "operations_per_second": 1000.0,
-  "supplied_bytes_per_second": 4096000.0,
+  "complete_lifecycle_ns": 38550000,
+  "operations_per_second": 83,
+  "copied_payload_bytes_per_second": 87210666,
   "verification_status": "not-run-performance-mode",
   "cleanup_status": "pass"
 }
@@ -235,10 +251,13 @@ and receipt-availability statuses. Keep fields flat unless a repeated structure
 has independently justified nesting; existing parsers are line-oriented.
 
 `fs-bench-pro-edit-performance-v1` remains the same-count schema and identifies
-the superseded count-changing diagnostic runs. Count-changing release evidence
-uses the append-only `v2` identity: `inner_edit_ns` contains only the selected
-filesystem mutation calls, while the cheap final-length validity check runs
-immediately afterward and still invalidates a wrong result.
+the earliest superseded count-changing diagnostic runs. Count-changing `v2`
+corrected `inner_edit_ns` so it contains only the selected filesystem mutation
+calls, while the cheap final-length validity check runs immediately afterward
+and still invalidates a wrong result. Expanded-family release evidence uses
+append-only `v3`, adds an explicit cohort/fixture/edit contract, and makes
+average mutation latency the primary 256 KiB temp-copy gate. Copied MiB/s is a
+secondary diagnostic.
 
 Frozen v0.1.0 rows continue to emit their original schema plus a v0.1.2 wrapper
 record containing `family_id`, descriptive `display_name`, source arm, and
@@ -250,17 +269,33 @@ Keep verifier results separate:
 
 ```json
 {
-  "schema": "fs-bench-pro-edit-verification-v2",
-  "family_id": "edit-count-changing",
-  "scenario_id": "append-tail-4k-ops-100",
+  "schema": "fs-bench-pro-edit-verification-v3",
+  "family_id": "edit_count_changing",
+  "scenario_id": "delete-middle-2k-on-1mib-ops-1-scale",
   "verification_id": "exact-result",
   "mode": "verify",
+  "source_arm": "candidate",
+  "seed": 1,
   "status": "pass",
-  "expected_file_bytes": 671744,
-  "observed_file_bytes": 671744,
+  "cohort": "delete-shrink-scaling",
+  "fixture_profile": "count-changing-scaling-1048576-bytes-v1",
+  "fixture_digest": "...",
+  "fixture_bytes": 1048576,
+  "edit_offset": 523264,
+  "deleted_bytes": 2048,
+  "inserted_bytes": 0,
+  "expected_file_bytes": 1046528,
+  "observed_file_bytes": 1046528,
   "expected_sha256": "...",
   "observed_sha256": "...",
+  "expected_canonical_file_root": "...",
+  "observed_canonical_file_root": "...",
+  "expected_canonical_root": "...",
+  "observed_canonical_root": "...",
   "root_status": "pass",
+  "independent_oracle": true,
+  "fresh_reconnect": true,
+  "fresh_fuse_reopen": true,
   "fresh_reopen_status": "pass",
   "resource_status": "pass",
   "cleanup_status": "pass",
@@ -271,10 +306,12 @@ Keep verifier results separate:
 
 Failure injection and conformance groups use the same verifier stream with a
 descriptive `verification_id`. They do not masquerade as timed scenarios.
-The `v2` verifier schema separates Store/init/Workspace preparation in
+The `v2` verifier schema introduced separate Store/init/Workspace preparation in
 `setup_ns` from edit, Commit, oracle, reconnect, reopen, digest, resource, and
 cleanup proof work in `verification_ns`; the runner also retains each
-verifier's external command wall separately.
+verifier's external command wall separately. Count-changing `v3` additionally
+binds the scaling cohort's fixture length, edit offset, byte algebra, expected
+and observed result, and exact reopen proof.
 
 ## Evidence layout
 
@@ -292,6 +329,10 @@ benchmark-results/fs-bench-pro/<family>/<run-id>/
 ├── verification/
 │   ├── raw.jsonl
 │   └── summary.json
+├── scaling/
+│   ├── raw.jsonl
+│   ├── summary.json
+│   └── verification.jsonl
 ├── scenarios/<scenario>/<source>/<seed>/
 │   └── raw receipts and logs
 ├── run-status.json
@@ -317,7 +358,8 @@ Summary rows report:
 
 - median candidate and baseline phase walls;
 - candidate-median/baseline-median ratios from three paired seeds;
-- operations/s and payload throughput;
+- average mutation latency per operation as the primary 256 KiB temp-copy
+  metric, plus operations/s and payload throughput as appropriate;
 - absolute frozen gates where applicable;
 - target/hard outcomes;
 - CPU/RSS/swap and FUSE/spool/object receipts; and
@@ -335,7 +377,9 @@ family IDs unique and in stable order
 every 1/10 prefix equals the 100-operation schedule prefix
 every count-changing row changes length on every operation
 every same-count row preserves length on every operation
-every count-changing row resolves a valid same-count control
+every primary count-changing row resolves a valid same-count control
+every count-changing scaling row is explicitly unpaired and satisfies its
+fixture/edit/final/copied/read byte algebra
 all offsets and checked length equations remain valid through 100 operations
 performance mode cannot invoke verifier code
 --all is required for complete-family execution
