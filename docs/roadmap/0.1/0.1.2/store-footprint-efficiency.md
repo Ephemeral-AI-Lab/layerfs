@@ -276,7 +276,9 @@ The runner freezes these additional envelopes before candidate collection:
 
 - selected performance samples: hard 5-second supervision;
 - admission performance samples: hard 30-second supervision;
-- exact verifier samples: hard 60-second supervision, 180 seconds aggregate;
+- exact verifier phase: hard 60 seconds; its whole-process watchdog is 90
+  seconds so the separately gated initialization/setup phase does not consume
+  the verifier allowance; verifier processes remain 180 seconds aggregate;
 - CPU, process RSS/physical footprint, cgroup peak, temporary bytes, physical
   I/O, and complete lifecycle: candidate at most `1.10x` the exact baseline;
 - primary storage: at most `600,000,000` durable bytes;

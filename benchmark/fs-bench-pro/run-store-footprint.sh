@@ -235,7 +235,7 @@ PY
   )
   ensure_daemon
   nonce=$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')
-  if [[ $sample_mode == verify ]]; then timeout_seconds=60; elif [[ $mode == admission ]]; then timeout_seconds=30; else timeout_seconds=5; fi
+  if [[ $sample_mode == verify ]]; then timeout_seconds=90; elif [[ $mode == admission ]]; then timeout_seconds=30; else timeout_seconds=5; fi
   failure_case=$control
   failure_seed=$sample_seed
   failure_mode=$sample_mode
@@ -309,6 +309,7 @@ assert q['sqlite_page_size_bytes']*q['sqlite_page_count']==r['sqlite_database_by
 assert q['sqlite_object_rows']==r['canonical_objects'] and q['sqlite_canonical_object_bytes']==r['canonical_bytes']
 assert c['file_count']==r['durable_store_files'] and c['total_bytes']==r['total_durable_store_bytes']
 assert o['canonical_objects']==r['canonical_objects'] and o['canonical_bytes']==r['canonical_bytes'] and o['page_size']==q['sqlite_page_size_bytes']
+if r['mode']=='verify': assert r['verification_ns']<=60_000_000_000 and r['initialization_ns']<=30_000_000_000
 r.update(q);r.update({k:o[k] for k in ('object_set_digest','object_shape_digest','schema_digest','user_version')})
 r.update({'tier':int(tier),'reportable':int(tier)==100000,'initialization_temporary_write_bytes':initialization_temporary_write,'temporary_write_bytes':temporary_write,'temporary_read_bytes':temporary_read,'temporary_peak_upper_bound_bytes':temporary_peak,'peak_disk_upper_bound_bytes':r['total_durable_store_bytes']+temporary_peak,'durable_census_status':'pass','dbstat_store_sha256_unchanged':True})
 json.dump(r,open(out,'w'),sort_keys=True,separators=(',',':'));open(out,'a').write('\n')
@@ -368,7 +369,7 @@ if mode=='admission':
  summary['primary_storage_classification']='target-pass' if primary_bytes<=600_000_000 else 'tolerated-nonterminal-miss' if primary_bytes<=660_000_000 else 'no-go'
  summary['explanatory_control_bytes']={control:row['total_durable_store_bytes'] for control,row in medians.items() if control!=primary}
  if source=='baseline':
-  summary.update({'status':'baseline-complete','admission_eligible':False,'resource_envelope_multiplier':1.10,'selected_performance_timeout_seconds':5,'admission_performance_timeout_seconds':30,'per_verifier_timeout_seconds':60,'aggregate_verifier_timeout_seconds':180})
+  summary.update({'status':'baseline-complete','admission_eligible':False,'resource_envelope_multiplier':1.10,'selected_performance_timeout_seconds':5,'admission_performance_timeout_seconds':30,'verifier_phase_timeout_seconds':60,'verifier_process_timeout_seconds':90,'aggregate_verifier_timeout_seconds':180})
  else:
   baseline_summary=json.load(open(baseline/'summary.json'))
   baseline_rows=[json.loads(x) for x in (baseline/'performance/raw.jsonl').read_text().splitlines()]
