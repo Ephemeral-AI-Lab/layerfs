@@ -39,10 +39,12 @@ self_check() {
   "$scratch/check"
   static_edit_proof >/dev/null
   python3 - <<'PY'
+import statistics
 def symmetric_ratio(left, right):
     return max(left / right, right / left) if left and right else (1.0 if left == right else float('inf'))
 assert symmetric_ratio(31_459_250, 27_816_750) > 1.10
 assert symmetric_ratio(100, 105) == 1.05
+assert statistics.median([5_648_958, 4_100_000, 4_200_000]) == 4_200_000
 PY
   elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - started ))
   (( elapsed < 2000000000 )) || die "self-check exceeded two seconds"
@@ -274,7 +276,7 @@ run_performance() {
   set -e
   printf '%s\n' "$status" >"$sample_dir/exit-status.txt"
   [[ $status == 0 ]] || die "performance failed: $case_id seed $sample_seed"
-  python3 - "$sample_dir/raw.jsonl" "$case_id" "$sample_dir/classification.json" <<'PY'
+  python3 - "$sample_dir/raw.jsonl" "$case_id" "$sample_dir/classification.json" "$mode" <<'PY'
 import json, sys
 rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith('{')]
 rows=[x for x in rows if x.get('schema') == 'fs-bench-pro-edit-performance-v1']
@@ -302,7 +304,10 @@ rank={'target-pass':0,'tolerated-pass':1,'no-go':2,'hard-failure':3}
 overall=max(states,key=lambda x:rank[x[0]])[0]
 json.dump({'schema':'fs-bench-pro-edit-same-count-classification-v1','scenario_id':r['scenario_id'],'seed':r['seed'],'metrics':[{'status':s,'metric':n,'value':v,'target':t,'tolerated':q,'hard':h} for s,n,v,t,q,h in states],'status':overall},open(sys.argv[3],'w'),sort_keys=True,separators=(',',':'))
 open(sys.argv[3],'a').write('\n')
-assert overall in ('target-pass','tolerated-pass')
+if sys.argv[4] in ('admission','repeatability'):
+    assert overall != 'hard-failure'
+else:
+    assert overall in ('target-pass','tolerated-pass')
 PY
   grep '"schema":"fs-bench-pro-edit-performance-v1"' "$sample_dir/raw.jsonl" >>"$run_dir/performance/raw.jsonl"
   performance_external_wall_ns=$(( performance_external_wall_ns + $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
@@ -437,21 +442,38 @@ if mode in ('admission','repeatability'):
         medians[arm]={}
         for case in sorted({x['scenario_id'] for x in values}):
             selected=[x for x in values if x['scenario_id']==case]
-            medians[arm][case]={field:med(selected,field) for field in phases+counters+['operations_per_second','process_peak_rss_bytes']}
+            medians[arm][case]={field:med(selected,field) for field in phases+counters+['operations_per_second','process_peak_rss_bytes','commit_total_ns']}
     walls={arm:sum(x['complete_lifecycle_ns'] for x in values) for arm,values in arms.items()}
     paired=sum(walls.values())
     wall_status='target-pass' if max(walls.values())<=3_000_000_000 and paired<=6_000_000_000 else 'tolerated-pass' if max(walls.values())<=3_300_000_000 and paired<=6_600_000_000 else 'no-go' if max(walls.values())<=6_000_000_000 and paired<=12_000_000_000 else 'hard-failure'
     ratios={case:symmetric_ratio(medians['repeat-a'][case]['complete_lifecycle_ns'],medians['repeat-b'][case]['complete_lifecycle_ns']) for case in medians['repeat-a']}
     ratio_status='target-pass' if max(ratios.values())<=1.05 else 'tolerated-pass' if max(ratios.values())<=1.10 else 'no-go'
+    rank={'target-pass':0,'tolerated-pass':1,'no-go':2,'hard-failure':3}
+    absolute=[]
+    def upper(arm,case,metric,value,target,tolerated,hard):
+        state='target-pass' if value<=target else 'tolerated-pass' if value<=tolerated else 'no-go' if value<=hard else 'hard-failure'
+        absolute.append({'arm':arm,'scenario_id':case,'metric':metric,'value':value,'target':target,'tolerated':tolerated,'hard':hard,'status':state})
+    def lower(arm,case,metric,value,target,tolerated):
+        state='target-pass' if value>=target else 'tolerated-pass' if value>=tolerated else 'no-go'
+        absolute.append({'arm':arm,'scenario_id':case,'metric':metric,'value':value,'target':target,'tolerated':tolerated,'hard':None,'status':state})
+    for arm,values in arms.items():
+        for case in medians[arm]:
+            selected=[x for x in values if x['scenario_id']==case]
+            upper(arm,case,'rss_max',max(x['process_peak_rss_bytes'] for x in selected),101_980_569,112_178_626,128*1024*1024)
+            if case=='small-edit': upper(arm,case,'small_edit_commit_median',medians[arm][case]['commit_total_ns'],4_503_000,4_953_300,6_000_000)
+            elif case=='edit16': upper(arm,case,'edit16_complete_median',medians[arm][case]['complete_lifecycle_ns'],156_446_000,172_090_600,200_000_000)
+            else:
+                target,tolerated=(250,225) if selected[0]['position']=='distributed' else (500,450)
+                lower(arm,case,'operations_per_second_median',medians[arm][case]['operations_per_second'],target,tolerated)
+    absolute_status=max((x['status'] for x in absolute),key=rank.get)
     dispositions={}
     for case,value in ratios.items():
         if value<=1.05: continue
         phase_rows={field:{'ratio':symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]),'under_2ms_exception':False,'exception_reason':'A/A repeatability has no candidate arm; local-step exception is inapplicable'} for field in phases}
         counter_rows={field:symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]) for field in counters}
         dispositions[case]={'reason':'identical-source A/A scheduling variance; no improvement claim','complete_ratio':value,'phase_ratios':phase_rows,'counter_ratios':counter_rows}
-    summary.update({'comparison_type':'A/A repeatability','medians':medians,'arm_complete_lifecycle_ns':walls,'paired_complete_lifecycle_ns':paired,'family_wall_status':wall_status,'complete_lifecycle_ratios':ratios,'ratio_status':ratio_status,'phase_counter_dispositions':dispositions})
-    order={'target-pass':0,'tolerated-pass':1,'no-go':2,'hard-failure':3}
-    summary['status']=max((wall_status,ratio_status),key=order.get)
+    summary.update({'comparison_type':'A/A repeatability','medians':medians,'arm_complete_lifecycle_ns':walls,'paired_complete_lifecycle_ns':paired,'family_wall_status':wall_status,'complete_lifecycle_ratios':ratios,'ratio_status':ratio_status,'absolute_classification':absolute,'absolute_status':absolute_status,'phase_counter_dispositions':dispositions})
+    summary['status']=max((wall_status,ratio_status,absolute_status),key=rank.get)
 else:
     grouped={}
     for row in rows: grouped.setdefault(row['scenario_id'],[]).append(row)
