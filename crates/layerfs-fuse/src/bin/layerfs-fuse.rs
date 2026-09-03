@@ -47,8 +47,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let endpoint = endpoint.to_str().ok_or("endpoint text")?;
     let client = Arc::new(layerfs_fuse::ProxyClient::connect(endpoint, capability)?);
     let control = layerfs_fuse::serve_remote_control(endpoint, capability, client.clone())?;
-    let mut mount = layerfs_fuse::mount_host(client.clone(), &mountpoint, 0, 0)?;
-    client.set_notifier(mount.notifier()?)?;
+    let mut mount = layerfs_fuse::mount_host(client, &mountpoint, 0, 0)?;
     println!("READY");
     let mountpoint_text = mountpoint.to_string_lossy();
     let mountinfo_text = std::fs::read_to_string("/proc/self/mountinfo")?;

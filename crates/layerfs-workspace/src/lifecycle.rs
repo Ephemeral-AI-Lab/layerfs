@@ -670,9 +670,9 @@ impl Workspaces {
                     .map(|edit| (edit.start, edit.delete_len, edit.replacement))
                     .collect(),
             );
-            Ok((result, checkpoint, node))
+            Ok((result, checkpoint))
         })();
-        let (result, checkpoint, node) = match result {
+        let (result, checkpoint) = match result {
             Ok(value) => value,
             Err(error) => {
                 crate::projection::resume(&worker)?;
@@ -688,7 +688,7 @@ impl Workspaces {
             crate::projection::resume(&worker)?;
             return Err(error.into());
         }
-        match crate::projection::refresh_file(&worker, node, self.daemon_mount_owner()?) {
+        match crate::projection::refresh(&worker, self.daemon_mount_owner()?) {
             Ok(()) => Ok(()),
             Err(refresh_error) => {
                 let restored = worker
@@ -697,8 +697,7 @@ impl Workspaces {
                     .map_err(|_| WorkspaceError::WorkspaceBusy)?
                     .restore_edit(checkpoint);
                 if restored.is_err()
-                    || crate::projection::refresh_file(&worker, node, self.daemon_mount_owner()?)
-                        .is_err()
+                    || crate::projection::refresh(&worker, self.daemon_mount_owner()?).is_err()
                 {
                     if let Ok(mut workspace) = worker.workspace.lock() {
                         workspace.presentation_failed = true;
@@ -1033,61 +1032,6 @@ mod tests {
             delete_len: 0,
             replacement: crate::WorkspaceFileReplacement::Inline(b"P".to_vec()),
         })
-    }
-
-    #[test]
-    #[cfg(all(target_os = "linux", feature = "host-fuse"))]
-    fn live_fuse_owner_edit_invalidates_warm_pages_and_rolls_back_resume_failure() {
-        if std::env::var_os("LAYERFS_LIVE_FUSE").is_none() {
-            return;
-        }
-        use std::os::unix::fs::MetadataExt;
-        let (root, workspaces, branch, store) = fixture("live-invalidation");
-        let session = workspaces
-            .create_workspace_session(CreateWorkspaceSession {
-                branch_id: branch,
-                placement: crate::WorkspacePlacement::Host {
-                    root: root.join("mount"),
-                },
-                projection: Some(WorkspaceProjection::Fuse),
-            })
-            .unwrap();
-        let file = root.join("mount/file");
-        let inode = std::fs::metadata(&file).unwrap().ino();
-        let branch_before = store.pin_branch(branch).unwrap().root;
-        assert_eq!(std::fs::read(&file).unwrap(), b"abcdef");
-        crate::projection::inject_resume_failure_once();
-        assert!(prepend(&workspaces, session.id).is_err());
-        assert_eq!(std::fs::read(&file).unwrap(), b"abcdef");
-        assert_eq!(store.pin_branch(branch).unwrap().root, branch_before);
-        assert!(
-            !workspaces
-                .worker(session.id)
-                .unwrap()
-                .workspace
-                .lock()
-                .unwrap()
-                .presentation_failed
-        );
-        prepend(&workspaces, session.id).unwrap();
-        assert_eq!(std::fs::read(&file).unwrap(), b"Pabcdef");
-        assert_eq!(std::fs::metadata(&file).unwrap().ino(), inode);
-        assert_eq!(std::fs::metadata(&file).unwrap().len(), 7);
-        workspaces
-            .edit_workspace_file_range(WorkspaceFileRangeEdit {
-                workspace_id: session.id,
-                path: "file".into(),
-                start: 1,
-                delete_len: 6,
-                replacement: crate::WorkspaceFileReplacement::Inline(b"Q".to_vec()),
-            })
-            .unwrap();
-        assert_eq!(std::fs::read(&file).unwrap(), b"PQ");
-        assert_eq!(std::fs::metadata(&file).unwrap().ino(), inode);
-        workspaces
-            .end_workspace_session(session.id, EndWorkspaceMode::Discard)
-            .unwrap();
-        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
