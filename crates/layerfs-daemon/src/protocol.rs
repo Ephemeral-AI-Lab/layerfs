@@ -183,9 +183,15 @@ impl ResourceSampleFinishRequest {
                 payload[48..].try_into().expect("uncertainty width"),
             ),
         };
-        if request.t0_unix_ns == 0
-            || request.t3_unix_ns < request.t0_unix_ns
-            || request.uncertainty_ns > 1_000_000
+        let whole_window = (
+            request.t0_unix_ns,
+            request.t3_unix_ns,
+            request.uncertainty_ns,
+        ) == (0, 0, 0);
+        if !whole_window
+            && (request.t0_unix_ns == 0
+                || request.t3_unix_ns < request.t0_unix_ns
+                || request.uncertainty_ns > 1_000_000)
         {
             return Err(invalid("daemon resource sample boundaries"));
         }
@@ -880,6 +886,37 @@ pub fn invalid(message: &'static str) -> io::Error {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn acknowledged_window_finish_accepts_only_the_exact_zero_sentinel() {
+        let request = super::ResourceSampleFinishRequest {
+            owner_id: [1; 16],
+            workspace_id: [2; 16],
+            t0_unix_ns: 0,
+            t3_unix_ns: 0,
+            uncertainty_ns: 0,
+        };
+        assert_eq!(
+            super::ResourceSampleFinishRequest::decode(&request.encode()).unwrap(),
+            request
+        );
+        assert!(super::ResourceSampleFinishRequest::decode(
+            &super::ResourceSampleFinishRequest {
+                t3_unix_ns: 1,
+                ..request
+            }
+            .encode()
+        )
+        .is_err());
+        assert!(super::ResourceSampleFinishRequest::decode(
+            &super::ResourceSampleFinishRequest {
+                uncertainty_ns: 1,
+                ..request
+            }
+            .encode()
+        )
+        .is_err());
+    }
+
     #[test]
     fn clock_probe_frames_are_single_write_and_exact() {
         #[derive(Default)]
