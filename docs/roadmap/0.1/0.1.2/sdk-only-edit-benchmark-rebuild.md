@@ -929,6 +929,18 @@ The evidence claim stops at the measured 500 MiB tier. Complexity analysis may
 explain the absence of a term proportional to untouched bytes, but it is not a
 measurement above 500 MiB.
 
+### Container build-cache integrity
+
+Before compiling the daemon/helper image, clean the cached Cargo artifacts for
+the three locally compiled product packages (`layerfs-content`, `layerfs-daemon`,
+and `layerfs-fuse`) for the selected target. External dependency downloads and
+build artifacts may remain cached. Docker can restore an older source layer
+whose timestamps precede a shared target cache; source labels alone therefore
+do not prove that Cargo rebuilt the corresponding product. Preserve build logs
+and verify actual helper identities across the source arms. The incomplete
+`terminal-6690b6e6` campaign exposed this stale-helper failure and is invalid,
+not an operation-latency or calibration failure. Do not overwrite or reuse it.
+
 ## Performance and verification separation
 
 Performance emits timings, counters, resource data, cleanup status, and:
