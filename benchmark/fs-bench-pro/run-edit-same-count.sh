@@ -273,12 +273,12 @@ mkdir "$pending_stop_root"
 mkdir -p "$runner_stop_root"
 ensure_container() {
   local active_container=$1 stopped active_id marker
-  if [[ $active_container == "$container" && -n $primary_daemon_endpoint ]]; then
+  if [[ $active_container == "$container" && -n $primary_daemon_endpoint && $(docker inspect -f '{{.State.Running}}' "$active_container") == true ]]; then
     container_id=$primary_container_id
     daemon_endpoint=$primary_daemon_endpoint
     daemon_capability=$primary_daemon_capability
     return
-  elif [[ -n $paired_container && $active_container == "$paired_container" && -n $paired_daemon_endpoint ]]; then
+  elif [[ -n $paired_container && $active_container == "$paired_container" && -n $paired_daemon_endpoint && $(docker inspect -f '{{.State.Running}}' "$active_container") == true ]]; then
     container_id=$paired_container_id
     daemon_endpoint=$paired_daemon_endpoint
     daemon_capability=$paired_daemon_capability
@@ -325,6 +325,16 @@ stop_container() {
     : >"$runner_stop_root/$target_id"
     docker stop "$target" >/dev/null
   fi
+}
+
+await_daemon_exit() {
+  local active_container=$1 exit_code status stopped
+  set +e
+  exit_code=$(perl -e 'alarm 5; exec @ARGV' docker wait "$active_container")
+  status=$?
+  set -e
+  stopped=$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}} {{.State.OOMKilled}}' "$active_container")
+  [[ $status == 0 && $exit_code == 0 && $stopped == 'exited 0 false' ]] || die "daemon did not exit cleanly after sample"
 }
 
 seal_failed_run() {
@@ -376,10 +386,11 @@ run_performance() {
   set -e
   printf '%s\n' "$status" >"$sample_dir/exit-status.txt"
   if [[ $status != 0 ]]; then
-    if [[ $active_container == "$container" ]]; then primary_daemon_endpoint=; else paired_daemon_endpoint=; fi
-    ensure_container "$active_container"
+    docker inspect "$active_container" >"$sample_dir/container-failure.json" 2>/dev/null || true
+    docker logs "$active_container" >"$sample_dir/container-failure.log" 2>&1 || true
     die "performance failed: $case_id seed $sample_seed"
   fi
+  await_daemon_exit "$active_container"
   python3 - "$sample_dir/raw.jsonl" "$case_id" "$sample_dir/classification.json" "$mode" "$family_kind" <<'PY'
 import json, sys
 rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith('{')]
@@ -457,10 +468,11 @@ run_control() {
   set -e
   printf '%s\n' "$status" >"$sample_dir/exit-status.txt"
   if [[ $status != 0 ]]; then
-    primary_daemon_endpoint=
-    ensure_container "$active_container"
+    docker inspect "$active_container" >"$sample_dir/container-failure.json" 2>/dev/null || true
+    docker logs "$active_container" >"$sample_dir/container-failure.log" 2>&1 || true
     die "pair control failed: $control_id seed $sample_seed"
   fi
+  await_daemon_exit "$active_container"
   python3 - "$sample_dir/raw.jsonl" "$control_id" <<'PY'
 import json,sys
 rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith('{')]
@@ -595,6 +607,7 @@ PY
   fi
   set -e
   printf '%s\n' "$status" >"$verify_dir/exit-status.txt"
+  if [[ $status == 0 ]]; then await_daemon_exit "$active_container"; fi
   verification_external_wall_ns=$(( verification_external_wall_ns + $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
   if [[ $status != 0 ]]; then verification_failure="$case_id seed $sample_seed"; return 1; fi
 }
