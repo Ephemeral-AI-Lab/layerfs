@@ -134,7 +134,7 @@ if [[ ${1:-} == --prepare ]]; then
   exit 0
 fi
 
-[[ $# -ge 2 ]] || die "usage: run-edit-same-count.sh --prepare CONTAINER_ID | RUN_ID CONTAINER_ID --case CASE --seed 1 --source ARM [--mode performance|verify] | RUN_ID CONTAINER_A --case CASE --source a-a-repeatability|baseline-candidate --mode repeatability --paired-container CONTAINER_B | RUN_ID CONTAINER_A --all --source a-a-repeatability|baseline-candidate --mode admission --paired-container CONTAINER_B"
+[[ $# -ge 2 ]] || die "usage: run-edit-same-count.sh --prepare CONTAINER_ID | RUN_ID CONTAINER_ID --case CASE --seed 1 --source ARM [--mode performance|verify] | RUN_ID CONTAINER --case CASE --source a-a-repeatability --mode repeatability | RUN_ID CONTAINER --all --source a-a-repeatability --mode admission | count-changing paired baseline/candidate modes require --paired-container"
 run_id=$1
 container=$2
 shift 2
@@ -159,6 +159,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ $source_arm == baseline || $source_arm == candidate || $source_arm == repeat-a || $source_arm == repeat-b || $source_arm == a-a-repeatability || $source_arm == baseline-candidate ]] || die "explicit source arm is required"
+if [[ $source_arm == a-a-repeatability ]]; then
+  [[ -z $paired_container || $paired_container == "$container" ]] || die "A/A repeatability uses one prepared daemon container"
+  paired_container=$container
+fi
 case "$mode" in
   performance)
     [[ $all == 0 && -n $selection && $seed =~ ^[123]$ && -z $paired_container && $source_arm != a-a-repeatability ]] || die "performance requires one case, seed, and one concrete source arm"
@@ -168,10 +172,10 @@ case "$mode" in
     seed=${seed:-1}
     ;;
   admission)
-    [[ $all == 1 && -z $selection && -z $seed && -n $paired_container && ( $source_arm == a-a-repeatability || ( $family_kind == count-changing && $source_arm == baseline-candidate ) ) ]] || die "admission requires --all, a supported paired source, --paired-container, and no case/seed"
+    [[ $all == 1 && -z $selection && -z $seed && -n $paired_container && ( $source_arm == a-a-repeatability || ( $family_kind == count-changing && $source_arm == baseline-candidate ) ) ]] || die "admission requires --all, a supported paired source, and no case/seed"
     ;;
   repeatability)
-    [[ $all == 0 && -n $selection && -z $seed && -n $paired_container && ( $source_arm == a-a-repeatability || ( $family_kind == count-changing && $source_arm == baseline-candidate ) ) ]] || die "repeatability requires one case, no seed, a supported paired source, and --paired-container"
+    [[ $all == 0 && -n $selection && -z $seed && -n $paired_container && ( $source_arm == a-a-repeatability || ( $family_kind == count-changing && $source_arm == baseline-candidate ) ) ]] || die "repeatability requires one case, no seed, and a supported paired source"
     ;;
   *) die "unknown mode: $mode" ;;
 esac
