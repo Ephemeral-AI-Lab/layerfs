@@ -304,7 +304,7 @@ seed 3: baseline -> candidate
 Summary rows report:
 
 - median candidate and baseline phase walls;
-- median of three paired candidate/baseline ratios;
+- candidate-median/baseline-median ratios from three paired seeds;
 - operations/s and payload throughput;
 - absolute frozen gates where applicable;
 - target/hard outcomes;

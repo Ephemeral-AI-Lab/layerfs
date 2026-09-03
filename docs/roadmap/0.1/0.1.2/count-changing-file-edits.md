@@ -78,9 +78,9 @@ containers; identical-source diagnostics use alternating A/A labels on one
 prepared daemon and make no improvement claim.
 
 The benchmark daemon is one-shot. After each measured process disconnects, the
-runner observes its clean container exit and applies a fixed 200 ms Docker
-Desktop cleanup cooldown before starting the next arm. This cooldown is outside
-all phase, complete-lifecycle, and family-wall receipts.
+runner observes its clean container exit before starting the next arm. Baseline
+and candidate use distinct containers created within 60 seconds of each other
+and receive the same retained untimed preconditioning sample before collection.
 
 ## Frozen v0.1.0 anchor
 
