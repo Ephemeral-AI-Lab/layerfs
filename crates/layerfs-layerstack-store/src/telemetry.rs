@@ -120,6 +120,14 @@ pub struct WorkspaceCommitReceipt {
     pub snapshot_database_bytes: u64,
     pub payload_bytes_read: u64,
     pub cdc_bytes_scanned: u64,
+    pub edit_count: u64,
+    pub edit_piece_count: u64,
+    pub edit_piece_height: u64,
+    pub edit_piece_logical_charge: u64,
+    pub edit_spool_allocated_bytes: u64,
+    pub edit_spool_live_bytes: u64,
+    pub edit_spool_superseded_bytes: u64,
+    pub edit_tree_visits: u64,
 }
 
 impl WorkspaceCommitReceipt {
@@ -257,6 +265,37 @@ pub fn begin_workspace_commit(mode: CaptureMode) -> Result<WorkspaceCommitTimer>
         });
         Ok(WorkspaceCommitTimer(Instant::now()))
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn note_workspace_commit_edit_state(
+    edit_count: u64,
+    piece_count: u64,
+    piece_height: u64,
+    piece_logical_charge: u64,
+    spool_allocated_bytes: u64,
+    spool_live_bytes: u64,
+    spool_superseded_bytes: u64,
+) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.edit_count = edit_count;
+            receipt.edit_piece_count = piece_count;
+            receipt.edit_piece_height = piece_height;
+            receipt.edit_piece_logical_charge = piece_logical_charge;
+            receipt.edit_spool_allocated_bytes = spool_allocated_bytes;
+            receipt.edit_spool_live_bytes = spool_live_bytes;
+            receipt.edit_spool_superseded_bytes = spool_superseded_bytes;
+        }
+    });
+}
+
+pub fn note_workspace_commit_tree_visits(visits: u64) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.edit_tree_visits = receipt.edit_tree_visits.saturating_add(visits);
+        }
+    });
 }
 
 pub fn note_workspace_commit_phase(phase: WorkspaceCommitPhase, elapsed_ns: u64) {

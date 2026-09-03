@@ -14,14 +14,17 @@ sections 17–19.
   existing family:
   `namespace-100`, `namespace-1000`, `namespace-10000`, and
   `namespace-100000`.
+- The v0.1.2 same-count edit family is implemented with 14 timed IDs and its
+  separate fragmentation verifier.
 - The canonical scenario and status table is the
   [0.1.x benchmark matrix](../../docs/roadmap/0.1/benchmarking.md).
 
 ## v0.1.2 family format
 
 The [v0.1.2 harness contract](../../docs/roadmap/0.1/0.1.2/fs-bench-pro-format.md)
-keeps all new work in this crate. The namespace family is implemented; later
-issues add the other family files only when their work begins:
+keeps all new work in this crate. The namespace and same-count families are
+implemented; later issues add the remaining family files only when their work
+begins:
 
 ```text
 families/init_namespace.rs           + run-namespace.sh
@@ -35,8 +38,9 @@ digest/root/reopen and adversarial proofs are separate `verify`/`admission`
 modes and never enter performance timing. `run-namespace.sh` is the v0.1.1
 `init_namespace` compatibility runner and the v0.1.2 family runner. Its pure
 definitions live in `families/init_namespace.rs`; raw IDs and descriptive
-aliases resolve to the same frozen scenarios. Other family files above remain
-proposed until their v0.1.2 issues are implemented. Existing `run.sh`, legacy
+aliases resolve to the same frozen scenarios. The count-changing and
+Store-footprint files above remain proposed until their v0.1.2 issues are
+implemented. Existing `run.sh`, legacy
 `run-namespace.sh` positional commands, and raw schemas keep their frozen
 meanings.
 
@@ -145,6 +149,24 @@ and retains immutable success or failure evidence. Legacy rows remain under
 `benchmark-results/fs-bench-pro/init_namespace/RUN_ID` with separate
 `performance/` and `verification/` streams. Namespace rows never contribute to
 registered payload totals.
+
+Run a selected same-count performance row, an exact verifier, or the full
+admission with:
+
+```sh
+benchmark/fs-bench-pro/run-edit-same-count.sh RUN_ID CONTAINER_ID \
+  --case overwrite-middle-4k-ops-100 --seed 1 --source candidate
+benchmark/fs-bench-pro/run-edit-same-count.sh RUN_ID CONTAINER_ID \
+  --case overwrite-middle-4k-ops-100 --seed 1 --source candidate --mode verify
+LAYERFS_SAME_COUNT_ANCHOR_FIXTURE=/absolute/registered-32m-directory \
+  benchmark/fs-bench-pro/run-edit-same-count.sh RUN_ID CONTAINER_ID \
+  --all --source candidate --mode admission
+```
+
+The runner's `--self-check` performs no Docker command and must finish within
+two seconds. Performance mode runs no digest/root/reopen verifier. Admission
+retains 42 performance samples, then runs the exact case verifiers and the
+separate 1,000-edit fragmentation proof.
 
 To compare isolated product-source variants against the exact same sealed
 fixture without regenerating it, point later runs at the earlier campaign's

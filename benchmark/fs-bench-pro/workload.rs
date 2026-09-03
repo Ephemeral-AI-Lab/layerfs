@@ -14,6 +14,10 @@ pub(crate) mod init_namespace {
     include!("families/init_namespace.rs");
 }
 pub(crate) use init_namespace::*;
+#[allow(dead_code)]
+pub(crate) mod edit_same_count {
+    include!("families/edit_same_count.rs");
+}
 
 pub(crate) type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const PREPEND: &[u8] = b"PREPEND010";
@@ -684,6 +688,22 @@ fn run() -> Result<()> {
             println!("{}\t{}\t{}", scenario.id, scenario.alias, scenario.display_name);
             Ok(())
         }
+        [command] if command == "same-count-list" => {
+            for scenario in edit_same_count::SCENARIOS {
+                println!("{}\t{}", scenario.id, scenario.display_name);
+            }
+            Ok(())
+        }
+        [command] if command == "same-count-self-check" => {
+            edit_same_count::self_check()?;
+            println!("same-count-self-check=pass");
+            Ok(())
+        }
+        [command, case] if command == "same-count-resolve" => {
+            let scenario = edit_same_count::scenario(case)?;
+            println!("{}\t{}", scenario.id, scenario.display_name);
+            Ok(())
+        }
         [command] if command == "noop" => Ok(()),
         [command, path] if command == "digest" => print_digest(path),
         [command, path] if command == "read" => print_read(path),
@@ -712,6 +732,12 @@ fn run() -> Result<()> {
             println!("normal_overwrite_mtime_nanoseconds={nanoseconds}");
             Ok(())
         }
+        [command, path, case, seed] if command == "same-count-edit" => {
+            same_count_edit(path, case, seed.parse()?)
+        }
+        [command, path, cohort, count, seed] if command == "same-count-fragmented" => {
+            same_count_fragmented(path, cohort, count.parse()?, seed.parse()?)
+        }
         [command, path] if command == "prepend" => prepend(path),
         [command, path, expected_size, expected_digest] if command == "verify" => {
             let (size, digest) = digest(Path::new(path))?;
@@ -724,7 +750,7 @@ fn run() -> Result<()> {
             println!("{size}\t{digest}");
             Ok(())
         }
-        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
+        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | same-count-self-check | same-count-list | same-count-resolve CASE | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | same-count-edit PATH CASE SEED | same-count-fragmented PATH COHORT COUNT SEED | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
     }
 }
 
@@ -777,6 +803,81 @@ fn namespace_edit_normal(path: impl AsRef<Path>) -> Result<(i64, i64)> {
     {
         Err("normal overwrite mtime requires Unix".into())
     }
+}
+
+fn same_count_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<()> {
+    let path = path.as_ref();
+    let scenario = edit_same_count::scenario(case)?;
+    let schedule = edit_same_count::schedule(scenario, seed)?;
+    let file = OpenOptions::new().read(true).write(true).open(path)?;
+    if file.metadata()?.len() != edit_same_count::FIXTURE_BYTES {
+        return Err("same-count fixture length".into());
+    }
+    let mut coverage = vec![false; edit_same_count::FIXTURE_BYTES as usize];
+    let mut supplied = 0_u64;
+    let mut identical = 0_u64;
+    let started = std::time::Instant::now();
+    for (operation, edit) in schedule.iter().copied().enumerate() {
+        let bytes = edit_same_count::replacement_bytes(seed, operation, edit);
+        let mut before = vec![0; edit.len];
+        read_exact_at(&file, &mut before, edit.offset)?;
+        identical += before
+            .iter()
+            .zip(&bytes)
+            .filter(|(left, right)| left == right)
+            .count() as u64;
+        write_all_at(&file, &bytes, edit.offset)?;
+        supplied += edit.len as u64;
+        coverage[edit.offset as usize..edit.offset as usize + edit.len].fill(true);
+    }
+    let inner_edit_ns = started.elapsed().as_nanos();
+    file.sync_all()?;
+    let unique = coverage.into_iter().filter(|covered| *covered).count() as u64;
+    println!("attempted_operations={}", schedule.len());
+    println!("completed_operations={}", schedule.len());
+    println!("final_file_bytes={}", file.metadata()?.len());
+    println!("supplied_bytes={supplied}");
+    println!("unique_bytes={unique}");
+    println!("overlapping_bytes={}", supplied - unique);
+    println!("identical_bytes={identical}");
+    println!("superseded_bytes={}", supplied - unique);
+    println!("inner_edit_ns={inner_edit_ns}");
+    Ok(())
+}
+
+fn same_count_fragmented(path: impl AsRef<Path>, cohort: &str, count: usize, seed: u8) -> Result<()> {
+    let path = path.as_ref();
+    let schedule = edit_same_count::fragmented_schedule(cohort, count, seed)?;
+    let file = OpenOptions::new().read(true).write(true).open(path)?;
+    if file.metadata()?.len() != edit_same_count::FIXTURE_BYTES {
+        return Err("same-count fragmented fixture length".into());
+    }
+    for (operation, edit) in schedule.iter().copied().enumerate() {
+        write_all_at(
+            &file,
+            &edit_same_count::replacement_bytes(seed, operation, edit),
+            edit.offset,
+        )?;
+    }
+    file.sync_all()?;
+    println!("attempted_operations={}", schedule.len());
+    println!("completed_operations={}", schedule.len());
+    println!("final_file_bytes={}", file.metadata()?.len());
+    Ok(())
+}
+
+#[cfg(unix)]
+fn read_exact_at(file: &File, bytes: &mut [u8], offset: u64) -> std::io::Result<()> {
+    use std::os::unix::fs::FileExt;
+    file.read_exact_at(bytes, offset)
+}
+
+#[cfg(not(unix))]
+fn read_exact_at(file: &File, bytes: &mut [u8], offset: u64) -> std::io::Result<()> {
+    use std::io::{Seek, SeekFrom};
+    let mut file = file;
+    file.seek(SeekFrom::Start(offset))?;
+    file.read_exact(bytes)
 }
 
 #[cfg(unix)]
@@ -1089,6 +1190,7 @@ fn digest(path: &Path) -> Result<(u64, String)> {
 
 fn self_check() -> Result<()> {
     init_namespace::self_check()?;
+    edit_same_count::self_check()?;
     let root = std::env::temp_dir().join(format!(
         "fs-benchmark-pro-{}-{}",
         std::process::id(),
@@ -1117,6 +1219,12 @@ fn self_check() -> Result<()> {
         let expected = [PREPEND, &expected].concat();
         if fs::read(&payload)? != expected {
             return Err("workload byte oracle mismatch".into());
+        }
+        let same_count = root.join("same-count.bin");
+        fs::write(&same_count, edit_same_count::fixture_bytes())?;
+        same_count_edit(&same_count, "overwrite-middle-4k-ops-1", 1)?;
+        if fs::metadata(&same_count)?.len() != edit_same_count::FIXTURE_BYTES {
+            return Err("same-count workload length".into());
         }
         let (size, actual) = digest(&payload)?;
         let mut expected_hash = Sha256::new();

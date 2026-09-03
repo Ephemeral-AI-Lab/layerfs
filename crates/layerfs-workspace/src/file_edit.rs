@@ -165,6 +165,24 @@ impl PieceTree {
         link_inline_len(&self.root)
     }
 
+    pub(crate) fn height(&self) -> usize {
+        fn height(root: &Link) -> usize {
+            root.as_ref()
+                .map_or(0, |node| 1 + height(&node.left).max(height(&node.right)))
+        }
+        height(&self.root)
+    }
+
+    pub(crate) fn spool_len(&self) -> u64 {
+        let mut bytes = 0_u64;
+        visit(&self.root, &mut |piece, _| {
+            if matches!(piece, Piece::Spool { .. }) {
+                bytes = bytes.saturating_add(piece.len());
+            }
+        });
+        bytes
+    }
+
     pub(crate) fn logical_allocation_charge(&self) -> Result<u64> {
         (self.count() as u64)
             .checked_mul(std::mem::size_of::<PieceNode>() as u64)
@@ -243,6 +261,7 @@ impl PieceTree {
                 );
             },
         );
+        layerfs_layerstack_store::note_workspace_commit_tree_visits(visited as u64);
         Ok((output, visited))
     }
 

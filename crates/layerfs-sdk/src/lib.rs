@@ -12,7 +12,7 @@ pub use result::{Result, SdkError};
 
 pub use layerfs_layerstack_store::{
     AddLayerResult, BranchId, BranchRecord, BuildCounters, CandidateReceipt, CanonicalStorage,
-    CommitId, CommitRecord, DiffAspects, DiffEntry, DiffRequest, EntityName,
+    CommitId, CommitRecord, DiffAspects, DiffEntry, DiffRequest, EntityName, FuseWriteReceipt,
     InitializeLayerStackResult, LayerId, LayerRecord, LayerStackId, LayerStackInitialization,
     LayerStackInitializationReceipt, LayerStackRecord, LayerStackStore, LocalForkSource,
     NodeSummary, ObjectSource, ReconcileChoice, ReconcileConflict, ReconcileConflictKind,

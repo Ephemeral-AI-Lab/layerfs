@@ -1,9 +1,9 @@
 use layerfs_sdk::{
     BranchId, CandidateStats, Client, CommitId, ContainerId, CreateWorkspaceSession,
-    EndWorkspaceMode, EntityName, ExecutionTransport, LayerStackInitialization, LayerStackStore,
-    LocalForkSource, NonEmpty, OperationFamily, OutputPage, Query, QueryItem, QueryKind,
-    StorageReceipt, WorkspaceCommitResult, WorkspaceFileRangeEdit, WorkspaceFileReplacement,
-    WorkspaceId, WorkspacePlacement, WorkspaceProjection,
+    EndWorkspaceMode, EntityName, ExecutionTransport, FuseWriteReceipt, LayerStackInitialization,
+    LayerStackStore, LocalForkSource, NonEmpty, OperationFamily, OutputPage, Query, QueryItem,
+    QueryKind, StorageReceipt, WorkspaceCommitResult, WorkspaceFileRangeEdit,
+    WorkspaceFileReplacement, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
 };
 use std::ffi::OsString;
 use std::io::Write;
@@ -464,6 +464,18 @@ struct NamespaceVerification {
     verifier_digest_state_peak_bytes: u64,
 }
 
+#[derive(Clone)]
+struct FragmentCheckpoint {
+    cohort: &'static str,
+    operations: u64,
+    piece_count: u64,
+    piece_height: u64,
+    piece_charge: u64,
+    tree_visits: u64,
+    digest: String,
+    root: String,
+}
+
 #[derive(Clone, Copy)]
 struct NamespaceReadMetrics {
     maximum_product_read_ahead_bytes: u64,
@@ -618,6 +630,21 @@ fn run() -> AnyResult<()> {
             emit_namespace_manifest(scenario, &manifest);
             Ok(())
         }
+        [command, fixture] if command == "same-count-fixture" => {
+            if Path::new(fixture).exists() {
+                return Err("same-count fixture already exists".into());
+            }
+            std::fs::create_dir(fixture)?;
+            std::fs::write(
+                Path::new(fixture).join("payload.bin"),
+                workload_source::edit_same_count::fixture_bytes(),
+            )?;
+            println!(
+                "fixture_bytes={}",
+                workload_source::edit_same_count::FIXTURE_BYTES
+            );
+            Ok(())
+        }
         [
             command,
             root,
@@ -712,6 +739,50 @@ fn run() -> AnyResult<()> {
             &fixture_digest.to_string_lossy(),
             &fixture_cache_profile.to_string_lossy(),
         ),
+        [command, root, fixture, container, scenario, seed, source, fixture_cache_profile]
+            if command == "same-count-performance" =>
+        {
+            same_count_performance_case(
+                Path::new(root),
+                Path::new(fixture),
+                ContainerId(container.to_string_lossy().into_owned()),
+                &scenario.to_string_lossy(),
+                seed.to_string_lossy().parse()?,
+                &source.to_string_lossy(),
+                &fixture_cache_profile.to_string_lossy(),
+            )
+        }
+        [
+            command,
+            root,
+            fixture,
+            container,
+            scenario,
+            seed,
+            source,
+            expected_digest,
+            fixture_cache_profile,
+        ] if command == "same-count-verify" => same_count_verify_case(
+            Path::new(root),
+            Path::new(fixture),
+            ContainerId(container.to_string_lossy().into_owned()),
+            &scenario.to_string_lossy(),
+            seed.to_string_lossy().parse()?,
+            &source.to_string_lossy(),
+            &expected_digest.to_string_lossy(),
+            &fixture_cache_profile.to_string_lossy(),
+        ),
+        [command, root, fixture, container, source, seed]
+            if command == "same-count-fragmentation-verify" =>
+        {
+            same_count_fragmentation_verify(
+                Path::new(root),
+                Path::new(fixture),
+                ContainerId(container.to_string_lossy().into_owned()),
+                &source.to_string_lossy(),
+                seed.to_string_lossy().parse()?,
+            )
+        }
         [command, root, fixture] if command == "run" => {
             campaign(Path::new(root), Path::new(fixture), None, 3)
         }
@@ -751,6 +822,7 @@ fn self_check() -> AnyResult<()> {
     }
     .validate()?;
     namespace_self_check()?;
+    workload_source::edit_same_count::self_check()?;
     println!("PASS fs-bench-pro one-Store lifecycle equations");
     Ok(())
 }
@@ -1358,6 +1430,834 @@ fn output_u64(output: &OutputPage, name: &str) -> AnyResult<u64> {
         })
         .find_map(|line| line.strip_prefix(&prefix)?.parse().ok())
         .ok_or_else(|| format!("missing workload field: {name}").into())
+}
+
+fn operation_fuse_write(snapshot: &layerfs_sdk::MonitorSnapshot) -> AnyResult<FuseWriteReceipt> {
+    let mut writes = snapshot.operations.iter().flat_map(|operation| {
+        operation
+            .storage
+            .iter()
+            .filter_map(|receipt| match receipt {
+                StorageReceipt::FuseWrite(receipt) => Some(*receipt),
+                _ => None,
+            })
+    });
+    let write = writes.next().ok_or("same-count FUSE write receipt")?;
+    if writes.next().is_some() || write.kernel_write_requests == 0 {
+        return Err("same-count FUSE write receipt cardinality".into());
+    }
+    Ok(write)
+}
+
+fn same_count_placement(
+    container_id: &ContainerId,
+    scenario: workload_source::edit_same_count::Scenario,
+    seed: u8,
+    phase: &str,
+) -> WorkspacePlacement {
+    WorkspacePlacement::Container {
+        container_id: container_id.clone(),
+        root: PathBuf::from(format!(
+            "/workspace/layerfs-{}-{seed}-{phase}-{}",
+            scenario.id,
+            std::process::id()
+        )),
+    }
+}
+
+fn same_count_performance_case(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    scenario_id: &str,
+    seed: u8,
+    source: &str,
+    fixture_cache_profile: &str,
+) -> AnyResult<()> {
+    let scenario = workload_source::edit_same_count::scenario(scenario_id)?;
+    if scenario.frozen {
+        return same_count_anchor_performance_case(
+            root,
+            fixture,
+            container_id,
+            scenario,
+            seed,
+            source,
+            fixture_cache_profile,
+        );
+    }
+    if !workload_source::edit_same_count::SEEDS.contains(&seed)
+        || !matches!(source, "baseline" | "candidate")
+        || !matches!(
+            fixture_cache_profile,
+            "generated-first-sample-uncontrolled"
+                | "generated-subsequent-sample-uncontrolled"
+                | "reused-first-sample-uncontrolled"
+                | "reused-subsequent-sample-uncontrolled"
+        )
+        || root.exists()
+        || !fixture.is_dir()
+        || std::fs::metadata(fixture.join("payload.bin"))?.len()
+            != workload_source::edit_same_count::FIXTURE_BYTES
+    {
+        return Err("same-count performance arguments".into());
+    }
+    std::fs::create_dir(root)?;
+    let store_path = root.join("store.sqlite");
+    let store = Arc::new(LayerStackStore::create(&store_path)?);
+    let client = Client::connect(store.clone())?;
+    let store_baseline_bytes = std::fs::metadata(&store_path)?.len();
+    let process_before = process_resource_snapshot()?;
+    let container_before = container_cgroup_snapshot(&container_id)?;
+
+    let init_started = Instant::now();
+    let initialized = client.initialize_layerstack(
+        EntityName::new(format!("{}-{source}-{seed}", scenario.id))?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let layerstack_init_ns = elapsed_ns(init_started);
+    let scan_receipts = store.take_layerstack_initialization_receipts();
+    let [scan] = scan_receipts.as_slice() else {
+        return Err("same-count initialization receipt cardinality".into());
+    };
+    if scan.scanned_files != 1
+        || scan.scanned_bytes != workload_source::edit_same_count::FIXTURE_BYTES
+    {
+        return Err("same-count initialization receipt".into());
+    }
+    let branch_started = Instant::now();
+    let branch = client.fork_branch(
+        EntityName::new("main")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let branch_fork_ns = elapsed_ns(branch_started);
+
+    let t0 = Instant::now();
+    let workspace = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: same_count_placement(&container_id, scenario, seed, "performance"),
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let t1 = Instant::now();
+    let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    let output = execute_workload(
+        &client,
+        workspace.id,
+        vec![
+            workload,
+            OsString::from("same-count-edit"),
+            OsString::from("payload.bin"),
+            OsString::from(scenario.id),
+            OsString::from(seed.to_string()),
+        ],
+    )?;
+    let t2 = Instant::now();
+    let attempted = output_u64(&output, "attempted_operations")?;
+    let completed = output_u64(&output, "completed_operations")?;
+    let final_bytes = output_u64(&output, "final_file_bytes")?;
+    let supplied = output_u64(&output, "supplied_bytes")?;
+    let unique = output_u64(&output, "unique_bytes")?;
+    let overlapping = output_u64(&output, "overlapping_bytes")?;
+    let identical = output_u64(&output, "identical_bytes")?;
+    let superseded = output_u64(&output, "superseded_bytes")?;
+    let inner_edit_ns = output_u64(&output, "inner_edit_ns")?;
+    if attempted != scenario.operations as u64
+        || completed != attempted
+        || final_bytes != workload_source::edit_same_count::FIXTURE_BYTES
+        || supplied != unique + overlapping
+        || superseded != overlapping
+    {
+        return Err("same-count workload validity".into());
+    }
+    let head = match client.commit_workspace_session(workspace.id)? {
+        WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
+        result => return Err(format!("same-count Commit failed: {result:?}").into()),
+    };
+    let commit_return = Instant::now();
+    visible_head(&client, branch, head)?;
+    let t3 = Instant::now();
+    client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    let t4 = Instant::now();
+    if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
+        return Err("same-count cleanup".into());
+    }
+    let process_after = process_resource_snapshot()?;
+    let container_after = container_cgroup_snapshot(&container_id)?;
+    if process_before.swaps != 0
+        || process_after.swaps != 0
+        || container_before.swap_current != 0
+        || container_after.swap_current != 0
+        || container_before.oom != container_after.oom
+        || container_before.oom_kill != container_after.oom_kill
+    {
+        return Err("same-count swap or OOM".into());
+    }
+    let snapshot = client.monitor_snapshot()?;
+    let initialize_candidate =
+        operation_candidate(&snapshot, OperationFamily::LayerStackInitialize)?;
+    let candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
+    let commit = operation_workspace_commit(&snapshot)?;
+    let fuse = operation_fuse_write(&snapshot)?;
+    if commit.edit_count != completed
+        || commit.edit_piece_count == 0
+        || commit.edit_piece_height == 0
+        || commit.edit_piece_logical_charge == 0
+        || commit.edit_spool_allocated_bytes != fuse.spool_write_bytes
+        || commit.edit_spool_live_bytes + commit.edit_spool_superseded_bytes
+            != commit.edit_spool_allocated_bytes
+        || commit.edit_tree_visits == 0
+    {
+        return Err("same-count edit receipt".into());
+    }
+    let execution_ns = nanos(t1, t2);
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"overwrite\",\"position\":\"{}\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":{},\"unique_bytes\":{},\"overlapping_bytes\":{},\"identical_bytes\":{},\"superseded_bytes\":{},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"commit_total_ns\":{},\"commit_pause_fence_ns\":{},\"commit_quiesce_ns\":{},\"commit_capture_ns\":{},\"commit_candidate_plan_ns\":{},\"commit_dirty_compare_ns\":{},\"commit_content_ns\":{},\"commit_namespace_ns\":{},\"commit_candidate_finish_ns\":{},\"commit_local_admission_ns\":{},\"commit_object_admission_ns\":{},\"commit_publication_ns\":{},\"commit_rebase_ns\":{},\"commit_resume_ns\":{},\"commit_unattributed_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_context_switches\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_current_bytes\":{},\"container_memory_peak_bytes\":{},\"container_pids_current\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        workload_source::edit_same_count::PERFORMANCE_SCHEMA,
+        workload_source::edit_same_count::FAMILY_ID,
+        scenario.id,
+        scenario.display_name,
+        source,
+        seed,
+        workload_source::edit_same_count::FIXTURE_PROFILE,
+        fixture_cache_profile,
+        scenario.position.name(),
+        scenario.operations,
+        attempted,
+        completed,
+        workload_source::edit_same_count::FIXTURE_BYTES,
+        final_bytes,
+        supplied,
+        unique,
+        overlapping,
+        identical,
+        superseded,
+        layerstack_init_ns,
+        branch_fork_ns,
+        nanos(t0, t1),
+        execution_ns,
+        inner_edit_ns,
+        nanos(t2, commit_return),
+        nanos(commit_return, t3),
+        nanos(t2, t3),
+        nanos(t0, t3),
+        nanos(t3, t4),
+        nanos(t0, t4),
+        rate(completed, inner_edit_ns),
+        rate(supplied, inner_edit_ns),
+        fuse.max_write_bytes,
+        fuse.kernel_write_requests,
+        fuse.kernel_write_bytes,
+        fuse.client_request_copy_bytes,
+        fuse.frame_payload_copy_bytes,
+        fuse.client_frame_bytes,
+        fuse.host_frame_bytes,
+        fuse.host_decode_copy_bytes,
+        fuse.spool_write_bytes,
+        fuse.spool_write_open_count,
+        commit.edit_spool_allocated_bytes,
+        commit.edit_spool_live_bytes,
+        commit.edit_spool_superseded_bytes,
+        commit.edit_piece_count,
+        commit.edit_piece_height,
+        commit.edit_piece_logical_charge,
+        commit.edit_tree_visits,
+        commit.total_ns,
+        commit.pause_fence_ns,
+        commit.quiesce_ns,
+        commit.capture_ns,
+        commit.candidate_plan_ns,
+        commit.dirty_compare_ns,
+        commit.content_ns,
+        commit.namespace_ns,
+        commit.candidate_finish_ns,
+        commit.local_admission_ns,
+        commit.object_admission_ns,
+        commit.publication_ns,
+        commit.in_place_rebase_ns,
+        commit.resume_ns,
+        commit.unattributed_ns,
+        candidate.candidate_objects,
+        candidate.candidate_bytes,
+        candidate.inserted_objects,
+        candidate.inserted_bytes,
+        candidate.reused_objects,
+        candidate.reused_bytes,
+        candidate.admission_transactions,
+        candidate.max_transaction_objects,
+        candidate.max_transaction_bytes,
+        initialize_candidate.candidate_objects,
+        initialize_candidate.candidate_bytes,
+        scan.scanned_files,
+        scan.scanned_bytes,
+        commit.payload_bytes_read,
+        commit.cdc_bytes_scanned,
+        resource_delta(process_after.user_cpu_ns, process_before.user_cpu_ns, "same-count user CPU")?,
+        resource_delta(process_after.system_cpu_ns, process_before.system_cpu_ns, "same-count system CPU")?,
+        resource_delta(process_after.disk_read_bytes, process_before.disk_read_bytes, "same-count disk read")?,
+        resource_delta(process_after.disk_write_bytes, process_before.disk_write_bytes, "same-count disk write")?,
+        resource_delta(process_after.context_switches, process_before.context_switches, "same-count context switches")?,
+        process_after.peak_resident_bytes,
+        process_after.physical_footprint_bytes,
+        container_after.memory_current,
+        container_after.memory_peak,
+        container_after.pids_current,
+        store_baseline_bytes,
+        std::fs::metadata(&store_path)?.len(),
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn same_count_anchor_performance_case(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    scenario: workload_source::edit_same_count::Scenario,
+    seed: u8,
+    source: &str,
+    fixture_cache_profile: &str,
+) -> AnyResult<()> {
+    if !scenario.frozen
+        || !workload_source::edit_same_count::SEEDS.contains(&seed)
+        || !matches!(source, "baseline" | "candidate")
+        || fixture_cache_profile.is_empty()
+        || root.exists()
+        || std::fs::metadata(fixture.join("payload.bin"))?.len() != MIB_32
+    {
+        return Err("same-count anchor arguments".into());
+    }
+    let (client, branch) = case_client(
+        root,
+        &format!("{}-{source}-{seed}", scenario.id),
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let mut oracle = std::fs::read(fixture.join("payload.bin"))?;
+    let mut coverage = vec![false; MIB_32 as usize];
+    let mut identical = 0_u64;
+    for operation in 0..scenario.operations {
+        let index = if scenario.id == "small-edit" {
+            0_u64
+        } else {
+            operation as u64 + 1
+        };
+        let marker = format!("E{:09}", index + 1);
+        let offset = (index + 1) * 2_654_435_761 % (MIB_32 - 10);
+        let range = offset as usize..offset as usize + 10;
+        identical += oracle[range.clone()]
+            .iter()
+            .zip(marker.as_bytes())
+            .filter(|(left, right)| left == right)
+            .count() as u64;
+        oracle[range.clone()].copy_from_slice(marker.as_bytes());
+        coverage[range].fill(true);
+    }
+    let unique = coverage.into_iter().filter(|covered| *covered).count() as u64;
+    drop(oracle);
+    let process_before = process_resource_snapshot()?;
+    let container_before = container_cgroup_snapshot(&container_id)?;
+    let t0 = Instant::now();
+    let workspace = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: same_count_placement(&container_id, scenario, seed, "performance"),
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let t1 = Instant::now();
+    let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    let mut execution_ns = 0_u64;
+    let mut commit_call_ns = 0_u64;
+    let mut visibility_ack_ns = 0_u64;
+    for operation in 0..scenario.operations {
+        let started = Instant::now();
+        let output = execute_workload(
+            &client,
+            workspace.id,
+            vec![
+                workload.clone(),
+                OsString::from("edit"),
+                OsString::from("payload.bin"),
+                OsString::from(if scenario.id == "small-edit" {
+                    "0".to_owned()
+                } else {
+                    (operation + 1).to_string()
+                }),
+                OsString::from(MIB_32.to_string()),
+            ],
+        )?;
+        execution_ns = execution_ns.saturating_add(elapsed_ns(started));
+        if output.receipt.is_none() {
+            return Err("same-count anchor execution receipt".into());
+        }
+        let started = Instant::now();
+        let head = match client.commit_workspace_session(workspace.id)? {
+            WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
+            result => return Err(format!("same-count anchor Commit failed: {result:?}").into()),
+        };
+        commit_call_ns = commit_call_ns.saturating_add(elapsed_ns(started));
+        let started = Instant::now();
+        visible_head(&client, branch, head)?;
+        visibility_ack_ns = visibility_ack_ns.saturating_add(elapsed_ns(started));
+    }
+    let t3 = Instant::now();
+    client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    let t4 = Instant::now();
+    let process_after = process_resource_snapshot()?;
+    let container_after = container_cgroup_snapshot(&container_id)?;
+    if process_before.swaps != 0
+        || process_after.swaps != 0
+        || container_before.swap_current != 0
+        || container_after.swap_current != 0
+        || container_before.oom != container_after.oom
+        || container_before.oom_kill != container_after.oom_kill
+        || client.active_workspace_count()? != 0
+        || client.active_execution_count()? != 0
+    {
+        return Err("same-count anchor resource or cleanup".into());
+    }
+    let snapshot = client.monitor_snapshot()?;
+    let commits = snapshot
+        .operations
+        .iter()
+        .filter(|operation| operation.operation.family == OperationFamily::WorkspaceCommit)
+        .flat_map(|operation| operation.storage.iter())
+        .filter_map(|receipt| match receipt {
+            StorageReceipt::WorkspaceCommit(receipt) => Some(*receipt),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let fuses = snapshot
+        .operations
+        .iter()
+        .flat_map(|operation| operation.storage.iter())
+        .filter_map(|receipt| match receipt {
+            StorageReceipt::FuseWrite(receipt) => Some(*receipt),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let candidates = snapshot
+        .operations
+        .iter()
+        .filter(|operation| operation.operation.family == OperationFamily::WorkspaceCommit)
+        .filter_map(|operation| operation.candidate)
+        .collect::<Vec<_>>();
+    if commits.len() != scenario.operations
+        || fuses.len() != scenario.operations
+        || candidates.len() != scenario.operations
+    {
+        return Err("same-count anchor receipt cardinality".into());
+    }
+    let complete = nanos(t0, t4);
+    let sample = LifecycleSample {
+        workspace_create_ns: nanos(t0, t1),
+        execution_ns,
+        commit_api_ns: commit_call_ns.saturating_add(visibility_ack_ns),
+        layerstack_visible_ns: nanos(t0, t3),
+        workspace_end_ns: nanos(t3, t4),
+        complete_lifecycle_ns: complete,
+        inner_write_ns: None,
+    };
+    if scenario.id == "small-edit" {
+        emit_sample("small-edit", usize::from(seed), &sample);
+    } else {
+        println!(
+            "{{\"schema\":\"fs-bench-pro-v4\",\"case\":\"edit16\",\"iteration\":{},\"complete_lifecycle_ns\":{complete}}}",
+            seed
+        );
+    }
+    let sum = |values: Vec<u64>| values.into_iter().fold(0_u64, u64::saturating_add);
+    let supplied = scenario.operations as u64 * 10;
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"legacy_schema_emitted\":true,\"fixture_profile\":\"registered-32m-v0.1.0\",\"fixture_cache_profile\":\"{}\",\"operation\":\"overwrite\",\"position\":\"distributed\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":{},\"unique_bytes\":{},\"overlapping_bytes\":{},\"identical_bytes\":{},\"superseded_bytes\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"spool_write_bytes\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes_peak\":{},\"spool_superseded_bytes\":{},\"piece_count_peak\":{},\"piece_height_peak\":{},\"piece_logical_charge_bytes_peak\":{},\"tree_visits\":{},\"commit_total_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        workload_source::edit_same_count::PERFORMANCE_SCHEMA,
+        workload_source::edit_same_count::FAMILY_ID,
+        scenario.id,
+        scenario.display_name,
+        source,
+        seed,
+        fixture_cache_profile,
+        scenario.operations,
+        scenario.operations,
+        scenario.operations,
+        MIB_32,
+        MIB_32,
+        supplied,
+        unique,
+        supplied - unique,
+        identical,
+        supplied - unique,
+        sample.workspace_create_ns,
+        execution_ns,
+        commit_call_ns,
+        visibility_ack_ns,
+        sample.commit_api_ns,
+        sample.layerstack_visible_ns,
+        sample.workspace_end_ns,
+        complete,
+        rate(scenario.operations as u64, execution_ns),
+        rate(supplied, execution_ns),
+        sum(fuses.iter().map(|receipt| receipt.kernel_write_requests).collect()),
+        sum(fuses.iter().map(|receipt| receipt.kernel_write_bytes).collect()),
+        sum(fuses.iter().map(|receipt| receipt.spool_write_bytes).collect()),
+        sum(commits.iter().map(|receipt| receipt.edit_spool_allocated_bytes).collect()),
+        commits.iter().map(|receipt| receipt.edit_spool_live_bytes).max().unwrap_or(0),
+        sum(commits.iter().map(|receipt| receipt.edit_spool_superseded_bytes).collect()),
+        commits.iter().map(|receipt| receipt.edit_piece_count).max().unwrap_or(0),
+        commits.iter().map(|receipt| receipt.edit_piece_height).max().unwrap_or(0),
+        commits.iter().map(|receipt| receipt.edit_piece_logical_charge).max().unwrap_or(0),
+        sum(commits.iter().map(|receipt| receipt.edit_tree_visits).collect()),
+        sum(commits.iter().map(|receipt| receipt.total_ns).collect()),
+        sum(candidates.iter().map(|candidate| candidate.candidate_objects).collect()),
+        sum(candidates.iter().map(|candidate| candidate.candidate_bytes).collect()),
+        sum(candidates.iter().map(|candidate| candidate.inserted_objects).collect()),
+        sum(candidates.iter().map(|candidate| candidate.inserted_bytes).collect()),
+        sum(candidates.iter().map(|candidate| candidate.reused_objects).collect()),
+        sum(candidates.iter().map(|candidate| candidate.reused_bytes).collect()),
+        candidates.iter().map(|candidate| candidate.max_transaction_objects).max().unwrap_or(0),
+        candidates.iter().map(|candidate| candidate.max_transaction_bytes).max().unwrap_or(0),
+        sum(commits.iter().map(|receipt| receipt.payload_bytes_read).collect()),
+        sum(commits.iter().map(|receipt| receipt.cdc_bytes_scanned).collect()),
+        process_after.peak_resident_bytes,
+        process_after.physical_footprint_bytes,
+        container_after.memory_peak,
+    );
+    if scenario.id == "small-edit" && commits[0].total_ns > SMALL_COMMIT_HARD_NS {
+        return Err("small-edit anchor hard gate".into());
+    }
+    if scenario.id == "edit16" && complete > EDIT16_HARD_NS {
+        return Err("edit16 anchor hard gate".into());
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn same_count_verify_case(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    scenario_id: &str,
+    seed: u8,
+    source: &str,
+    expected_digest: &str,
+    fixture_cache_profile: &str,
+) -> AnyResult<()> {
+    let scenario = workload_source::edit_same_count::scenario(scenario_id)?;
+    let expected_size = if scenario.frozen {
+        MIB_32
+    } else {
+        workload_source::edit_same_count::FIXTURE_BYTES
+    };
+    if !workload_source::edit_same_count::SEEDS.contains(&seed)
+        || !matches!(source, "baseline" | "candidate")
+        || !valid_digest(expected_digest)
+        || fixture_cache_profile.is_empty()
+        || root.exists()
+        || std::fs::metadata(fixture.join("payload.bin"))?.len() != expected_size
+    {
+        return Err("same-count verification arguments".into());
+    }
+    let (client, branch) = case_client(
+        root,
+        &format!("verify-{}-{source}-{seed}", scenario.id),
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    let workspace = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: same_count_placement(&container_id, scenario, seed, "verify-prepare"),
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let commit_id = if scenario.frozen {
+        let mut head = None;
+        for operation in 0..scenario.operations {
+            execute_workload(
+                &client,
+                workspace.id,
+                vec![
+                    workload.clone(),
+                    OsString::from("edit"),
+                    OsString::from("payload.bin"),
+                    OsString::from(if scenario.id == "small-edit" {
+                        "0".to_owned()
+                    } else {
+                        (operation + 1).to_string()
+                    }),
+                    OsString::from(MIB_32.to_string()),
+                ],
+            )?;
+            head = match client.commit_workspace_session(workspace.id)? {
+                WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
+                result => {
+                    return Err(format!("same-count verifier Commit failed: {result:?}").into())
+                }
+            };
+        }
+        head.ok_or("same-count verifier anchor head")?
+    } else {
+        let output = execute_workload(
+            &client,
+            workspace.id,
+            vec![
+                workload.clone(),
+                OsString::from("same-count-edit"),
+                OsString::from("payload.bin"),
+                OsString::from(scenario.id),
+                OsString::from(seed.to_string()),
+            ],
+        )?;
+        if output_u64(&output, "completed_operations")? != scenario.operations as u64
+            || output_u64(&output, "final_file_bytes")? != expected_size
+        {
+            return Err("same-count verifier preparation".into());
+        }
+        match client.commit_workspace_session(workspace.id)? {
+            WorkspaceCommitResult::Created { commit_id, .. } => commit_id,
+            result => return Err(format!("same-count verifier Commit failed: {result:?}").into()),
+        }
+    };
+    visible_head(&client, branch, Some(commit_id))?;
+    client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    let committed_root = client
+        .query(Query::new(QueryKind::Commits).limit(512))?
+        .items
+        .into_iter()
+        .find_map(|item| match item {
+            QueryItem::Commit(commit) if commit.id == commit_id => Some(commit.root_id),
+            _ => None,
+        })
+        .ok_or("same-count committed root")?;
+    drop(client);
+
+    let store = Arc::new(LayerStackStore::connect(root.join("store.sqlite"))?);
+    let reopened = Client::connect(store.clone())?;
+    let pinned = store.pin_branch(branch)?;
+    if pinned.root != committed_root || pinned.branch.head_commit_id != Some(commit_id) {
+        return Err("same-count reopened root".into());
+    }
+    let workspace = reopened.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: same_count_placement(&container_id, scenario, seed, "verify-reopen"),
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let output = execute_workload(
+        &reopened,
+        workspace.id,
+        vec![
+            workload,
+            OsString::from("verify"),
+            OsString::from("payload.bin"),
+            OsString::from(expected_size.to_string()),
+            OsString::from(expected_digest),
+        ],
+    )?;
+    if parse_digest(&output)? != (expected_size, expected_digest.to_owned()) {
+        return Err("same-count verifier digest".into());
+    }
+    reopened.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
+        return Err("same-count verifier cleanup".into());
+    }
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"mode\":\"verify\",\"source_arm\":\"{}\",\"seed\":{},\"final_file_bytes\":{},\"sha256\":\"{}\",\"canonical_root\":\"{}\",\"fresh_reconnect\":true,\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
+        workload_source::edit_same_count::VERIFICATION_SCHEMA,
+        workload_source::edit_same_count::FAMILY_ID,
+        scenario.id,
+        source,
+        seed,
+        expected_size,
+        expected_digest,
+        committed_root,
+    );
+    Ok(())
+}
+
+fn same_count_fragmentation_verify(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    source: &str,
+    seed: u8,
+) -> AnyResult<()> {
+    if root.exists()
+        || !matches!(source, "baseline" | "candidate")
+        || !workload_source::edit_same_count::SEEDS.contains(&seed)
+        || std::fs::metadata(fixture.join("payload.bin"))?.len()
+            != workload_source::edit_same_count::FIXTURE_BYTES
+    {
+        return Err("same-count fragmentation verifier arguments".into());
+    }
+    std::fs::create_dir(root)?;
+    let store = Arc::new(LayerStackStore::create(root.join("store.sqlite"))?);
+    let client = Client::connect(store.clone())?;
+    let initialized = client.initialize_layerstack(
+        EntityName::new(format!("fragmentation-{source}-{seed}"))?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    let mut checkpoints = Vec::with_capacity(6);
+    for cohort in ["increasing", "descending", "hotspot"] {
+        for operations in [100_u64, 1_000] {
+            let branch = client.fork_branch(
+                EntityName::new(format!("{cohort}-{operations}"))?,
+                LocalForkSource::Layer {
+                    layer_id: initialized.genesis_layer_id,
+                },
+            )?;
+            let workspace = client.create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: WorkspacePlacement::Container {
+                    container_id: container_id.clone(),
+                    root: PathBuf::from(format!(
+                        "/workspace/layerfs-fragment-{cohort}-{operations}-{seed}-{}",
+                        std::process::id()
+                    )),
+                },
+                projection: Some(WorkspaceProjection::Fuse),
+            })?;
+            let output = execute_workload(
+                &client,
+                workspace.id,
+                vec![
+                    workload.clone(),
+                    OsString::from("same-count-fragmented"),
+                    OsString::from("payload.bin"),
+                    OsString::from(cohort),
+                    OsString::from(operations.to_string()),
+                    OsString::from(seed.to_string()),
+                ],
+            )?;
+            if output_u64(&output, "completed_operations")? != operations
+                || output_u64(&output, "final_file_bytes")?
+                    != workload_source::edit_same_count::FIXTURE_BYTES
+            {
+                return Err("same-count fragmentation workload".into());
+            }
+            let before = execute_workload(
+                &client,
+                workspace.id,
+                vec![
+                    workload.clone(),
+                    OsString::from("digest"),
+                    OsString::from("payload.bin"),
+                ],
+            )?;
+            let (size, digest) = parse_digest(&before)?;
+            if size != workload_source::edit_same_count::FIXTURE_BYTES {
+                return Err("same-count fragmentation size".into());
+            }
+            let commit_id = match client.commit_workspace_session(workspace.id)? {
+                WorkspaceCommitResult::Created { commit_id, .. } => commit_id,
+                result => return Err(format!("same-count fragmentation Commit: {result:?}").into()),
+            };
+            visible_head(&client, branch, Some(commit_id))?;
+            client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+            let root_id = store.commit(commit_id)?.ok_or("fragment commit")?.root_id;
+            let snapshot = client.monitor_snapshot()?;
+            let operation = snapshot
+                .operations
+                .iter()
+                .find(|operation| {
+                    operation.operation.family == OperationFamily::WorkspaceCommit
+                        && operation.operation.workspace_id == Some(workspace.id)
+                })
+                .ok_or("same-count fragmentation operation")?;
+            let receipt = operation
+                .storage
+                .iter()
+                .find_map(|receipt| match receipt {
+                    StorageReceipt::WorkspaceCommit(receipt) => Some(*receipt),
+                    _ => None,
+                })
+                .ok_or("same-count fragmentation receipt")?;
+            let reopened = client.create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: WorkspacePlacement::Container {
+                    container_id: container_id.clone(),
+                    root: PathBuf::from(format!(
+                        "/workspace/layerfs-fragment-reopen-{cohort}-{operations}-{seed}-{}",
+                        std::process::id()
+                    )),
+                },
+                projection: Some(WorkspaceProjection::Fuse),
+            })?;
+            let output = execute_workload(
+                &client,
+                reopened.id,
+                vec![
+                    workload.clone(),
+                    OsString::from("digest"),
+                    OsString::from("payload.bin"),
+                ],
+            )?;
+            if parse_digest(&output)? != (size, digest.clone())
+                || store.pin_branch(branch)?.root != root_id
+            {
+                return Err("same-count fragmentation reopen".into());
+            }
+            client.end_workspace_session(reopened.id, EndWorkspaceMode::Clean)?;
+            let checkpoint = FragmentCheckpoint {
+                cohort,
+                operations,
+                piece_count: receipt.edit_piece_count,
+                piece_height: receipt.edit_piece_height,
+                piece_charge: receipt.edit_piece_logical_charge,
+                tree_visits: receipt.edit_tree_visits,
+                digest,
+                root: root_id.to_string(),
+            };
+            println!(
+                "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"cohort\":\"{}\",\"operations\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"final_file_bytes\":{},\"sha256\":\"{}\",\"canonical_root\":\"{}\",\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"status\":\"pass\"}}",
+                workload_source::edit_same_count::VERIFICATION_SCHEMA,
+                workload_source::edit_same_count::FAMILY_ID,
+                workload_source::edit_same_count::VERIFIER_ID,
+                source,
+                seed,
+                cohort,
+                operations,
+                checkpoint.piece_count,
+                checkpoint.piece_height,
+                checkpoint.piece_charge,
+                checkpoint.tree_visits,
+                size,
+                checkpoint.digest,
+                checkpoint.root,
+            );
+            checkpoints.push(checkpoint);
+        }
+    }
+    for cohort in ["increasing", "descending", "hotspot"] {
+        let hundred = checkpoints
+            .iter()
+            .find(|row| row.cohort == cohort && row.operations == 100)
+            .ok_or("fragment checkpoint 100")?;
+        let thousand = checkpoints
+            .iter()
+            .find(|row| row.cohort == cohort && row.operations == 1_000)
+            .ok_or("fragment checkpoint 1000")?;
+        if thousand.piece_count > 12 * hundred.piece_count.max(1)
+            || thousand.piece_height > 12 * hundred.piece_height.max(1)
+            || thousand.piece_charge > 12 * hundred.piece_charge.max(1)
+            || thousand.tree_visits > 18 * hundred.tree_visits.max(1)
+        {
+            return Err(format!("same-count fragmentation structural gate: {cohort}").into());
+        }
+    }
+    if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
+        return Err("same-count fragmentation cleanup".into());
+    }
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"live_metadata_ratio_limit\":12,\"tree_visit_ratio_limit\":18,\"complete_interval_map_clones\":0,\"full_interval_map_rescans\":0,\"later_offset_rekeys\":0,\"complete_file_materializations\":0,\"cleanup_status\":\"pass\",\"performance_distribution\":false,\"status\":\"pass\"}}",
+        workload_source::edit_same_count::VERIFICATION_SCHEMA,
+        workload_source::edit_same_count::FAMILY_ID,
+        workload_source::edit_same_count::VERIFIER_ID,
+        source,
+        seed,
+    );
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3212,6 +4112,42 @@ mod tests {
     #[test]
     fn namespace_family_registry_and_dispatch_are_exact() {
         workload_source::init_namespace::self_check().unwrap();
+    }
+
+    #[test]
+    fn same_count_family_registry_and_schedules_are_exact() {
+        use workload_source::edit_same_count::{self, Position};
+        edit_same_count::self_check().unwrap();
+        assert_eq!(edit_same_count::SCENARIOS.len(), 14);
+        assert_eq!(edit_same_count::SCENARIOS[0].id, "small-edit");
+        assert_eq!(edit_same_count::SCENARIOS[1].id, "edit16");
+        assert_eq!(
+            edit_same_count::VERIFIER_ID,
+            "overwrite-fragmented-10b-ops-1000-proof"
+        );
+        for seed in edit_same_count::SEEDS {
+            for position in [
+                Position::Head,
+                Position::Middle,
+                Position::Tail,
+                Position::Distributed,
+            ] {
+                let scenarios = edit_same_count::SCENARIOS
+                    .iter()
+                    .filter(|scenario| !scenario.frozen && scenario.position == position)
+                    .copied()
+                    .collect::<Vec<_>>();
+                let hundred = edit_same_count::schedule(scenarios[2], seed).unwrap();
+                assert_eq!(
+                    edit_same_count::schedule(scenarios[0], seed).unwrap(),
+                    hundred[..1]
+                );
+                assert_eq!(
+                    edit_same_count::schedule(scenarios[1], seed).unwrap(),
+                    hundred[..10]
+                );
+            }
+        }
     }
 
     #[test]

@@ -447,6 +447,7 @@ impl Workspaces {
                 .workspace
                 .lock()
                 .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+            workspace.note_commit_edit_state()?;
             let previous_head = workspace.expected_head;
             let committed = match workspace.commit() {
                 Ok((outcome, transition)) => Ok((

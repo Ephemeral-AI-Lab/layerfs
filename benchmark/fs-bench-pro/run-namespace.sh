@@ -58,6 +58,12 @@ print(digest.hexdigest())
 PY
 }
 
+if [[ ${1:-} == --source-seal ]]; then
+  [[ $# -eq 1 ]] || die "--source-seal takes no arguments"
+  seal source
+  exit 0
+fi
+
 family_cli_parse() {
   selection= seed= source_arm= family_mode=performance all=0 mode_set=0
   while [[ $# -gt 0 ]]; do

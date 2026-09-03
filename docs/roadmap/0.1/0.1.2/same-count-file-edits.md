@@ -1,6 +1,6 @@
 # Same-count file-edit performance family
 
-> **Status:** Proposed v0.1.2 family: 14 timed performance IDs and one separate
+> **Status:** Implemented v0.1.2 family: 14 timed performance IDs and one separate
 > verification group. The fixed environment is MacBook/Docker Desktop/managed
 > Linux container/real FUSE; environment and implementation route are not
 > scenario-name axes.
@@ -37,9 +37,10 @@ The runner requires an explicit case unless `--all` is supplied and defaults to
 performance-only execution:
 
 ```text
-run-edit-same-count.sh \
+run-edit-same-count.sh RUN_ID CONTAINER_ID \
   --case overwrite-middle-4k-ops-100 \
   --seed 1 \
+  --source candidate \
   --mode performance
 ```
 
@@ -187,6 +188,11 @@ Following the v0.1.1 report style, retain per sample:
 - candidate/inserted/reused objects and bytes plus transaction maxima;
 - CPU, peak RSS, cgroup peak, swap, timeout/OOM, and cleanup status.
 
+`inner_edit_ns` spans the selected positional write calls only and defines
+operations/s and supplied-byte/s. The final file fence is outside that inner
+throughput interval but remains inside execution, Commit visibility, and
+complete-lifecycle timing.
+
 Verification mode additionally records exact bytes, SHA-256, canonical root,
 fresh reopen, and complete cleanup. Missing required receipts invalidate the
 run; they are never inferred as zero.
@@ -212,18 +218,25 @@ Any pair above `1.10` requires phase/counter disposition. Require at least a
 20-percent improvement only when baseline evidence proves a defect and the
 retained implementation claims to optimize it.
 
-Provisional family performance budget for one 42-sample source arm:
+Frozen new-row operation/s floors are:
+
+```text
+head / middle / tail       target 500, tolerated 450
+distributed variable-size target 250, tolerated 225
+```
+
+The family performance budget for one 42-sample source arm is:
 
 ```text
 14 timed IDs * 3 seeds
-target <= 3 s
-hard   <= 6 s
+target <= 3.0 s
+tolerated <= 3.3 s
+hard <= 6.0 s
 ```
 
-The paired baseline/candidate accounting budget is 6/12 seconds. Freeze final
-new-row operation/s floors and the aggregate budget only after the unchanged
-implementation is measured. Complete-process RSS targets at most 105 percent of
-the retained peak, hard at most 128 MiB, with zero swap.
+The paired baseline/candidate accounting budget is target/tolerated/hard
+6.0/6.6/12.0 seconds. Complete-process RSS targets at most 105 percent of the
+retained 97,124,352-byte peak, hard at most 128 MiB, with zero swap.
 
 Separate full-family verification is not part of the development loop or the
 performance distribution. Its provisional admission timeout is 20 seconds.
@@ -241,15 +254,15 @@ performance distribution. Its provisional admission timeout is 20 seconds.
 
 ## Acceptance criteria
 
-- [ ] One family module and one runner own all 14 timed IDs and the verifier
+- [x] One family module and one runner own all 14 timed IDs and the verifier
   group while reusing shared harness code.
-- [ ] The runner defaults to one explicit case/seed in performance mode and
+- [x] The runner defaults to one explicit case/seed in performance mode and
   cannot run the full family without `--all`.
-- [ ] Frozen anchors retain their operation, fixture, timing, schema, and oracle.
-- [ ] New 1/10/100 schedules are exact prefixes and preserve 256 KiB length.
-- [ ] Every performance row reports latency, operations/s, phase, I/O, object,
+- [x] Frozen anchors retain their operation, fixture, timing, schema, and oracle.
+- [x] New 1/10/100 schedules are exact prefixes and preserve 256 KiB length.
+- [x] Every performance row reports latency, operations/s, phase, I/O, object,
   CPU, memory, and cleanup receipts without verifier work in its timer.
-- [ ] Paired regression, absolute anchor, family-wall, RSS, and zero-swap gates
+- [x] Paired regression, absolute anchor, family-wall, RSS, and zero-swap gates
   pass.
-- [ ] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
+- [x] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
   structural limits before publication.

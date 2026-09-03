@@ -65,6 +65,38 @@ impl ReadPlan {
 }
 
 impl Workspace {
+    pub(crate) fn note_commit_edit_state(&self) -> Result<()> {
+        let mut edits = 0_u64;
+        let mut pieces = 0_u64;
+        let mut height = 0_u64;
+        let mut charge = 0_u64;
+        let mut spool_live = 0_u64;
+        for node in self.dirty.iter().filter_map(|node| self.nodes.get(node)) {
+            if let Data::File(FileData::Edited {
+                pieces: tree,
+                edits: file_edits,
+                ..
+            }) = &node.data
+            {
+                edits = edits.saturating_add(u64::from(*file_edits));
+                pieces = pieces.saturating_add(tree.count() as u64);
+                height = height.max(tree.height() as u64);
+                charge = charge.saturating_add(tree.logical_allocation_charge()?);
+                spool_live = spool_live.saturating_add(tree.spool_len());
+            }
+        }
+        layerfs_layerstack_store::note_workspace_commit_edit_state(
+            edits,
+            pieces,
+            height,
+            charge,
+            self.spool_bytes,
+            spool_live,
+            self.spool_bytes.saturating_sub(spool_live),
+        );
+        Ok(())
+    }
+
     pub(crate) fn edit_checkpoint(&self, node: NodeId) -> Result<EditCheckpoint> {
         Ok(EditCheckpoint {
             node,

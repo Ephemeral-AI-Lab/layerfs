@@ -16,6 +16,7 @@ COPY tools ./tools
 COPY benchmark/fs-bench-pro ./benchmark/fs-bench-pro
 COPY benchmark/fs-bench-pro/workload.rs /workload/workload.rs
 COPY benchmark/fs-bench-pro/families/init_namespace.rs /workload/families/init_namespace.rs
+COPY benchmark/fs-bench-pro/families/edit_same_count.rs /workload/families/edit_same_count.rs
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
