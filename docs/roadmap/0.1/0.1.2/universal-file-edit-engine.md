@@ -1,7 +1,7 @@
 # Universal Workspace regular-file edit engine
 
-> **Status:** Implemented in v0.1.2 with audit-corrected, scoped terminal
-> verification in `issue14-terminal-r003-20260903`. It is not a benchmark family. Performance
+> **Status:** Implementation complete; terminal verification is being repaired in
+> v0.1.2. It is not a benchmark family. Performance
 > families exercise it through the fixed Docker/FUSE product path; focused
 > owner-side checks remain here.
 > Tracked by [GitHub issue #14](https://github.com/Ephemeral-AI-Lab/layerfs/issues/14).
@@ -267,15 +267,13 @@ owner-side baseline; do not invent a pre-API latency.
   completion, or byte-copy fallback exists.
 - [x] Reachable spool slices are immutable and short/erroring appends restore
   the exact prior high-water/state.
-- [x] The r003 refresh-rollback, pin-Busy, range-pruning, live-FUSE handle,
-  materialization/FUSE equality, partial integration, and lint checks pass
-  outside benchmark timing. The broader seven-group matrix remains a roadmap;
-  r003 does not claim complete coverage.
+- [ ] Every item in the seven-group coverage matrix passes outside benchmark
+  timing. The retained seven-test run is partial evidence only.
 - [x] FUSE is the only v0.1.2 timed projection; untimed materialization equality
   proves the engine is not driver-coupled.
-- [x] The focused owner-side prepend meets its latency and directly measured CDC,
+- [ ] The focused owner-side prepend meets its latency and directly measured CDC,
   old-payload-read, RSS, swap, OOM, and cleanup gates. FUSE/spool transfer,
   payload-object retention, transient allocation, and candidate-phase claims
-  are explicitly excluded because they were not separately instrumented.
+  remain unproven until separately instrumented.
 - [ ] Every retained implementation optimization reruns both affected complete
   performance families.
