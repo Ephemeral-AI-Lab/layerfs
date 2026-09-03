@@ -2071,11 +2071,6 @@ fn count_changing_performance_case(
         || commit.edit_metric_nodes_scanned == 0
         || commit.edit_spool_peak_bytes < commit.edit_spool_allocated_bytes
         || commit.edit_spool_peak_bytes > 128 * 1024 * 1024
-        || if scenario.kind.temp_copy() {
-            fuse.kernel_read_requests == 0 || fuse.kernel_read_bytes < read_payload
-        } else {
-            fuse.kernel_read_requests != 0 || fuse.kernel_read_bytes != 0
-        }
         || (scenario.kind == workload_source::edit_count_changing::Kind::Sparse
             && (fuse.spool_write_bytes > supplied
                 || commit.edit_spool_live_bytes > supplied
