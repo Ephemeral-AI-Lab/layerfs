@@ -645,6 +645,21 @@ fn run() -> AnyResult<()> {
             );
             Ok(())
         }
+        [command, fixture] if command == "count-changing-fixture" => {
+            if Path::new(fixture).exists() {
+                return Err("count-changing fixture already exists".into());
+            }
+            std::fs::create_dir(fixture)?;
+            std::fs::write(
+                Path::new(fixture).join("payload.bin"),
+                workload_source::edit_count_changing::fixture_bytes(),
+            )?;
+            println!(
+                "fixture_bytes={}",
+                workload_source::edit_count_changing::FIXTURE_BYTES
+            );
+            Ok(())
+        }
         [
             command,
             root,
@@ -752,6 +767,19 @@ fn run() -> AnyResult<()> {
                 &fixture_cache_profile.to_string_lossy(),
             )
         }
+        [command, root, fixture, container, scenario, seed, source, fixture_cache_profile]
+            if command == "count-changing-performance" =>
+        {
+            count_changing_performance_case(
+                Path::new(root),
+                Path::new(fixture),
+                ContainerId(container.to_string_lossy().into_owned()),
+                &scenario.to_string_lossy(),
+                seed.to_string_lossy().parse()?,
+                &source.to_string_lossy(),
+                &fixture_cache_profile.to_string_lossy(),
+            )
+        }
         [
             command,
             root,
@@ -772,6 +800,45 @@ fn run() -> AnyResult<()> {
             &expected_digest.to_string_lossy(),
             &fixture_cache_profile.to_string_lossy(),
         ),
+        [
+            command,
+            root,
+            fixture,
+            container,
+            scenario,
+            seed,
+            source,
+            expected_digest,
+            expected_size,
+            fixture_cache_profile,
+        ] if command == "count-changing-verify" => count_changing_verify_case(
+            Path::new(root),
+            Path::new(fixture),
+            ContainerId(container.to_string_lossy().into_owned()),
+            &scenario.to_string_lossy(),
+            seed.to_string_lossy().parse()?,
+            &source.to_string_lossy(),
+            &expected_digest.to_string_lossy(),
+            expected_size.to_string_lossy().parse()?,
+            &fixture_cache_profile.to_string_lossy(),
+            false,
+        ),
+        [command, root, fixture, container, verifier, source, expected_digest, expected_size]
+            if command == "count-changing-structural-verify" =>
+        {
+            count_changing_verify_case(
+                Path::new(root),
+                Path::new(fixture),
+                ContainerId(container.to_string_lossy().into_owned()),
+                &verifier.to_string_lossy(),
+                1,
+                &source.to_string_lossy(),
+                &expected_digest.to_string_lossy(),
+                expected_size.to_string_lossy().parse()?,
+                "reused-verifier-uncontrolled",
+                true,
+            )
+        }
         [command, root, fixture, oracle, container, source, seed]
             if command == "same-count-fragmentation-verify" =>
         {
@@ -1710,6 +1777,697 @@ fn same_count_performance_case(
         container_after.pids_current,
         store_baseline_bytes,
         std::fs::metadata(&store_path)?.len(),
+    );
+    Ok(())
+}
+
+#[derive(Default)]
+struct EditFuseMetrics {
+    max_write_bytes: u64,
+    kernel_write_requests: u64,
+    kernel_write_bytes: u64,
+    client_request_copy_bytes: u64,
+    frame_payload_copy_bytes: u64,
+    client_frame_bytes: u64,
+    host_frame_bytes: u64,
+    host_decode_copy_bytes: u64,
+    spool_write_bytes: u64,
+    spool_write_open_count: u64,
+}
+
+fn edit_fuse_metrics(snapshot: &layerfs_sdk::MonitorSnapshot) -> EditFuseMetrics {
+    let mut total = EditFuseMetrics::default();
+    for receipt in snapshot.operations.iter().flat_map(|operation| {
+        operation
+            .storage
+            .iter()
+            .filter_map(|receipt| match receipt {
+                StorageReceipt::FuseWrite(receipt) => Some(receipt),
+                _ => None,
+            })
+    }) {
+        total.max_write_bytes = total.max_write_bytes.max(receipt.max_write_bytes);
+        total.kernel_write_requests = total
+            .kernel_write_requests
+            .saturating_add(receipt.kernel_write_requests);
+        total.kernel_write_bytes = total
+            .kernel_write_bytes
+            .saturating_add(receipt.kernel_write_bytes);
+        total.client_request_copy_bytes = total
+            .client_request_copy_bytes
+            .saturating_add(receipt.client_request_copy_bytes);
+        total.frame_payload_copy_bytes = total
+            .frame_payload_copy_bytes
+            .saturating_add(receipt.frame_payload_copy_bytes);
+        total.client_frame_bytes = total
+            .client_frame_bytes
+            .saturating_add(receipt.client_frame_bytes);
+        total.host_frame_bytes = total
+            .host_frame_bytes
+            .saturating_add(receipt.host_frame_bytes);
+        total.host_decode_copy_bytes = total
+            .host_decode_copy_bytes
+            .saturating_add(receipt.host_decode_copy_bytes);
+        total.spool_write_bytes = total
+            .spool_write_bytes
+            .saturating_add(receipt.spool_write_bytes);
+        total.spool_write_open_count = total
+            .spool_write_open_count
+            .saturating_add(receipt.spool_write_open_count);
+    }
+    total
+}
+
+fn count_changing_placement(
+    container_id: &ContainerId,
+    scenario: workload_source::edit_count_changing::Scenario,
+    seed: u8,
+    phase: &str,
+) -> WorkspacePlacement {
+    WorkspacePlacement::Container {
+        container_id: container_id.clone(),
+        root: PathBuf::from(format!(
+            "/workspace/layerfs-{}-{seed}-{phase}-{}",
+            scenario.id,
+            std::process::id()
+        )),
+    }
+}
+
+fn count_changing_performance_case(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    scenario_id: &str,
+    seed: u8,
+    source: &str,
+    fixture_cache_profile: &str,
+) -> AnyResult<()> {
+    let scenario = workload_source::edit_count_changing::scenario(scenario_id)?;
+    if scenario.frozen {
+        return count_changing_anchor_performance_case(
+            root,
+            fixture,
+            container_id,
+            scenario,
+            seed,
+            source,
+            fixture_cache_profile,
+        );
+    }
+    if !workload_source::edit_count_changing::SEEDS.contains(&seed)
+        || !matches!(source, "baseline" | "candidate" | "repeat-a" | "repeat-b")
+        || root.exists()
+        || !fixture.is_dir()
+        || std::fs::metadata(fixture.join("payload.bin"))?.len()
+            != workload_source::edit_count_changing::FIXTURE_BYTES
+    {
+        return Err("count-changing performance arguments".into());
+    }
+    let schedule = workload_source::edit_count_changing::schedule(scenario, seed)?;
+    let expected_final = schedule
+        .last()
+        .ok_or("count-changing empty schedule")?
+        .final_len;
+    std::fs::create_dir(root)?;
+    let store_path = root.join("store.sqlite");
+    let store = Arc::new(LayerStackStore::create(&store_path)?);
+    let client = Client::connect(store.clone())?;
+    let store_baseline_bytes = std::fs::metadata(&store_path)?.len();
+    let process_before = process_resource_snapshot()?;
+    let container_before = container_cgroup_snapshot(&container_id)?;
+    let init_started = Instant::now();
+    let initialized = client.initialize_layerstack(
+        EntityName::new(format!("{}-{source}-{seed}", scenario.id))?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let layerstack_init_ns = elapsed_ns(init_started);
+    let scan_receipts = store.take_layerstack_initialization_receipts();
+    let [scan] = scan_receipts.as_slice() else {
+        return Err("count-changing initialization receipt cardinality".into());
+    };
+    let branch_started = Instant::now();
+    let branch = client.fork_branch(
+        EntityName::new("main")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let branch_fork_ns = elapsed_ns(branch_started);
+    let t0 = Instant::now();
+    let workspace = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: count_changing_placement(&container_id, scenario, seed, "performance"),
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let t1 = Instant::now();
+    let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    let output = execute_workload(
+        &client,
+        workspace.id,
+        vec![
+            workload,
+            OsString::from("count-changing-edit"),
+            OsString::from("payload.bin"),
+            OsString::from(scenario.id),
+            OsString::from(seed.to_string()),
+        ],
+    )?;
+    let t2 = Instant::now();
+    let attempted = output_u64(&output, "attempted_operations")?;
+    let completed = output_u64(&output, "completed_operations")?;
+    let final_bytes = output_u64(&output, "final_file_bytes")?;
+    let initial_inode = output_u64(&output, "initial_inode")?;
+    let final_inode = output_u64(&output, "final_inode")?;
+    let supplied = output_u64(&output, "supplied_bytes")?;
+    let inserted = output_u64(&output, "inserted_bytes")?;
+    let deleted = output_u64(&output, "deleted_bytes")?;
+    let overlapping = output_u64(&output, "overlapping_bytes")?;
+    let superseded = output_u64(&output, "superseded_bytes")?;
+    let logical_zero = output_u64(&output, "logical_zero_bytes")?;
+    let copied_payload = output_u64(&output, "copied_payload_bytes")?;
+    let read_payload = output_u64(&output, "read_payload_bytes")?;
+    let inner_edit_ns = output_u64(&output, "inner_edit_ns")?;
+    if attempted != scenario.operations as u64
+        || completed != attempted
+        || final_bytes != expected_final
+        || final_bytes == workload_source::edit_count_changing::FIXTURE_BYTES
+        || supplied != inserted
+        || superseded != deleted
+        || scenario.kind.temp_copy() == (initial_inode == final_inode)
+    {
+        return Err("count-changing workload validity".into());
+    }
+    let head = match client.commit_workspace_session(workspace.id)? {
+        WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
+        result => return Err(format!("count-changing Commit failed: {result:?}").into()),
+    };
+    let commit_return = Instant::now();
+    visible_head(&client, branch, head)?;
+    let t3 = Instant::now();
+    client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    let t4 = Instant::now();
+    if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
+        return Err("count-changing cleanup".into());
+    }
+    let process_after = process_resource_snapshot()?;
+    let container_after = container_cgroup_snapshot(&container_id)?;
+    if process_before.swaps != 0
+        || process_after.swaps != 0
+        || container_before.swap_current != 0
+        || container_after.swap_current != 0
+        || container_before.oom != container_after.oom
+        || container_before.oom_kill != container_after.oom_kill
+    {
+        return Err("count-changing swap or OOM".into());
+    }
+    let snapshot = client.monitor_snapshot()?;
+    let initialize_candidate =
+        operation_candidate(&snapshot, OperationFamily::LayerStackInitialize)?;
+    let candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
+    let commit = operation_workspace_commit(&snapshot)?;
+    let fuse = edit_fuse_metrics(&snapshot);
+    if commit.edit_piece_count == 0
+        || commit.edit_piece_height == 0
+        || commit.edit_piece_logical_charge == 0
+        || commit.edit_spool_allocated_bytes != fuse.spool_write_bytes
+        || commit.edit_spool_live_bytes + commit.edit_spool_superseded_bytes
+            != commit.edit_spool_allocated_bytes
+        || commit.edit_metric_nodes_scanned == 0
+        || (scenario.kind == workload_source::edit_count_changing::Kind::Sparse
+            && (fuse.spool_write_bytes > supplied
+                || commit.edit_spool_live_bytes > supplied
+                || commit.edit_piece_logical_charge > 64 * 1024))
+    {
+        return Err("count-changing edit receipt".into());
+    }
+    let execution_ns = nanos(t1, t2);
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"paired_same_count_control_id\":\"{}\",\"pair_fixture_bytes\":{},\"pair_byte_quantity_match\":true,\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"{}\",\"position\":\"{}\",\"implementation\":\"{}\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"{}\",\"supplied_bytes\":{},\"inserted_bytes\":{},\"deleted_bytes\":{},\"overlapping_bytes\":{},\"superseded_bytes\":{},\"logical_zero_bytes\":{},\"copied_payload_bytes\":{},\"read_payload_bytes\":{},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"copied_payload_bytes_per_second\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"commit_total_ns\":{},\"commit_pause_fence_ns\":{},\"commit_quiesce_ns\":{},\"commit_capture_ns\":{},\"commit_candidate_plan_ns\":{},\"commit_dirty_compare_ns\":{},\"commit_content_ns\":{},\"commit_namespace_ns\":{},\"commit_candidate_finish_ns\":{},\"commit_local_admission_ns\":{},\"commit_object_admission_ns\":{},\"commit_publication_ns\":{},\"commit_rebase_ns\":{},\"commit_resume_ns\":{},\"commit_unattributed_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_context_switches\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_current_bytes\":{},\"container_memory_peak_bytes\":{},\"container_pids_current\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        workload_source::edit_count_changing::PERFORMANCE_SCHEMA,
+        workload_source::edit_count_changing::FAMILY_ID,
+        scenario.id,
+        scenario.display_name,
+        scenario.paired_same_count_control_id,
+        workload_source::edit_count_changing::FIXTURE_BYTES,
+        source,
+        seed,
+        workload_source::edit_count_changing::FIXTURE_PROFILE,
+        fixture_cache_profile,
+        scenario.kind.operation(),
+        scenario.kind.position(),
+        if scenario.kind.temp_copy() { "temp-copy-fsync-rename" } else { "direct-posix" },
+        scenario.operations,
+        attempted,
+        completed,
+        workload_source::edit_count_changing::FIXTURE_BYTES,
+        final_bytes,
+        initial_inode,
+        final_inode,
+        if scenario.kind.temp_copy() { "replaced" } else { "preserved" },
+        supplied,
+        inserted,
+        deleted,
+        overlapping,
+        superseded,
+        logical_zero,
+        copied_payload,
+        read_payload,
+        layerstack_init_ns,
+        branch_fork_ns,
+        nanos(t0, t1),
+        execution_ns,
+        inner_edit_ns,
+        nanos(t2, commit_return),
+        nanos(commit_return, t3),
+        nanos(t2, t3),
+        nanos(t0, t3),
+        nanos(t3, t4),
+        nanos(t0, t4),
+        rate(completed, inner_edit_ns),
+        rate(supplied, inner_edit_ns),
+        rate(copied_payload, inner_edit_ns),
+        fuse.max_write_bytes,
+        fuse.kernel_write_requests,
+        fuse.kernel_write_bytes,
+        fuse.client_request_copy_bytes,
+        fuse.frame_payload_copy_bytes,
+        fuse.client_frame_bytes,
+        fuse.host_frame_bytes,
+        fuse.host_decode_copy_bytes,
+        fuse.spool_write_bytes,
+        fuse.spool_write_open_count,
+        commit.edit_spool_allocated_bytes,
+        commit.edit_spool_live_bytes,
+        commit.edit_spool_superseded_bytes,
+        commit.edit_piece_count,
+        commit.edit_piece_height,
+        commit.edit_piece_logical_charge,
+        commit.edit_tree_visits,
+        commit.edit_metric_nodes_scanned,
+        commit.total_ns,
+        commit.pause_fence_ns,
+        commit.quiesce_ns,
+        commit.capture_ns,
+        commit.candidate_plan_ns,
+        commit.dirty_compare_ns,
+        commit.content_ns,
+        commit.namespace_ns,
+        commit.candidate_finish_ns,
+        commit.local_admission_ns,
+        commit.object_admission_ns,
+        commit.publication_ns,
+        commit.in_place_rebase_ns,
+        commit.resume_ns,
+        commit.unattributed_ns,
+        candidate.candidate_objects,
+        candidate.candidate_bytes,
+        candidate.inserted_objects,
+        candidate.inserted_bytes,
+        candidate.reused_objects,
+        candidate.reused_bytes,
+        candidate.admission_transactions,
+        candidate.max_transaction_objects,
+        candidate.max_transaction_bytes,
+        initialize_candidate.candidate_objects,
+        initialize_candidate.candidate_bytes,
+        scan.scanned_files,
+        scan.scanned_bytes,
+        commit.payload_bytes_read,
+        commit.cdc_bytes_scanned,
+        resource_delta(process_after.user_cpu_ns, process_before.user_cpu_ns, "count-changing user CPU")?,
+        resource_delta(process_after.system_cpu_ns, process_before.system_cpu_ns, "count-changing system CPU")?,
+        resource_delta(process_after.disk_read_bytes, process_before.disk_read_bytes, "count-changing disk read")?,
+        resource_delta(process_after.disk_write_bytes, process_before.disk_write_bytes, "count-changing disk write")?,
+        resource_delta(process_after.context_switches, process_before.context_switches, "count-changing context switches")?,
+        process_after.peak_resident_bytes,
+        process_after.physical_footprint_bytes,
+        container_after.memory_current,
+        container_after.memory_peak,
+        container_after.pids_current,
+        store_baseline_bytes,
+        std::fs::metadata(&store_path)?.len(),
+    );
+    Ok(())
+}
+
+fn count_changing_anchor_performance_case(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    scenario: workload_source::edit_count_changing::Scenario,
+    seed: u8,
+    source: &str,
+    fixture_cache_profile: &str,
+) -> AnyResult<()> {
+    if scenario.id != "prepend-temp-copy-rename"
+        || !workload_source::edit_count_changing::SEEDS.contains(&seed)
+        || !matches!(source, "baseline" | "candidate" | "repeat-a" | "repeat-b")
+        || root.exists()
+        || !fixture.is_dir()
+        || std::fs::metadata(fixture.join("payload.bin"))?.len() != MIB_32
+    {
+        return Err("count-changing anchor arguments".into());
+    }
+    std::fs::create_dir(root)?;
+    let store_path = root.join("store.sqlite");
+    let store = Arc::new(LayerStackStore::create(&store_path)?);
+    let client = Client::connect(store.clone())?;
+    let process_before = process_resource_snapshot()?;
+    let container_before = container_cgroup_snapshot(&container_id)?;
+    let initialized = client.initialize_layerstack(
+        EntityName::new(format!("{}-{source}-{seed}", scenario.id))?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let scan_receipts = store.take_layerstack_initialization_receipts();
+    let [scan] = scan_receipts.as_slice() else {
+        return Err("count-changing anchor initialization receipt".into());
+    };
+    let branch = client.fork_branch(
+        EntityName::new("main")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let t0 = Instant::now();
+    let workspace = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: count_changing_placement(&container_id, scenario, seed, "performance"),
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let t1 = Instant::now();
+    let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    let output = execute_workload(
+        &client,
+        workspace.id,
+        vec![
+            workload,
+            OsString::from("prepend"),
+            OsString::from("payload.bin"),
+        ],
+    )?;
+    let t2 = Instant::now();
+    let head = match client.commit_workspace_session(workspace.id)? {
+        WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
+        result => return Err(format!("count-changing anchor Commit failed: {result:?}").into()),
+    };
+    let commit_return = Instant::now();
+    visible_head(&client, branch, head)?;
+    let t3 = Instant::now();
+    client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    let t4 = Instant::now();
+    let process_after = process_resource_snapshot()?;
+    let container_after = container_cgroup_snapshot(&container_id)?;
+    if process_before.swaps != 0
+        || process_after.swaps != 0
+        || container_before.swap_current != 0
+        || container_after.swap_current != 0
+        || container_before.oom != container_after.oom
+        || container_before.oom_kill != container_after.oom_kill
+        || client.active_workspace_count()? != 0
+        || client.active_execution_count()? != 0
+    {
+        return Err("count-changing anchor resource or cleanup".into());
+    }
+    let snapshot = client.monitor_snapshot()?;
+    let candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
+    let commit = operation_workspace_commit(&snapshot)?;
+    let fuse = edit_fuse_metrics(&snapshot);
+    let execution_ns = nanos(t1, t2);
+    let complete = nanos(t0, t4);
+    emit_sample(
+        "prepend-temp-copy-rename",
+        usize::from(seed),
+        &LifecycleSample {
+            workspace_create_ns: nanos(t0, t1),
+            execution_ns,
+            commit_api_ns: nanos(t2, t3),
+            layerstack_visible_ns: nanos(t0, t3),
+            workspace_end_ns: nanos(t3, t4),
+            complete_lifecycle_ns: complete,
+            inner_write_ns: None,
+        },
+    );
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"paired_same_count_control_id\":\"{}\",\"pair_fixture_bytes\":{},\"pair_byte_quantity_match\":false,\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"legacy_schema_emitted\":true,\"fixture_profile\":\"registered-32m-v0.1.0\",\"fixture_cache_profile\":\"{}\",\"operation\":\"prepend\",\"position\":\"head\",\"implementation\":\"temp-copy-fsync-rename\",\"operation_count\":1,\"attempted_operations\":1,\"completed_operations\":1,\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":10,\"inserted_bytes\":10,\"deleted_bytes\":0,\"overlapping_bytes\":0,\"superseded_bytes\":0,\"logical_zero_bytes\":0,\"copied_payload_bytes\":{},\"read_payload_bytes\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"copied_payload_bytes_per_second\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"spool_write_bytes\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"commit_total_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        workload_source::edit_count_changing::PERFORMANCE_SCHEMA,
+        workload_source::edit_count_changing::FAMILY_ID,
+        scenario.id,
+        scenario.display_name,
+        scenario.paired_same_count_control_id,
+        MIB_32,
+        source,
+        seed,
+        fixture_cache_profile,
+        MIB_32,
+        MIB_32 + 10,
+        MIB_32,
+        MIB_32,
+        nanos(t0, t1),
+        execution_ns,
+        execution_ns,
+        nanos(t2, commit_return),
+        nanos(commit_return, t3),
+        nanos(t2, t3),
+        nanos(t0, t3),
+        nanos(t3, t4),
+        complete,
+        rate(1, execution_ns),
+        rate(10, execution_ns),
+        rate(MIB_32, execution_ns),
+        fuse.kernel_write_requests,
+        fuse.kernel_write_bytes,
+        fuse.spool_write_bytes,
+        commit.edit_spool_allocated_bytes,
+        commit.edit_spool_live_bytes,
+        commit.edit_spool_superseded_bytes,
+        commit.edit_piece_count,
+        commit.edit_piece_height,
+        commit.edit_piece_logical_charge,
+        commit.edit_tree_visits,
+        commit.edit_metric_nodes_scanned,
+        commit.total_ns,
+        candidate.candidate_objects,
+        candidate.candidate_bytes,
+        candidate.inserted_objects,
+        candidate.inserted_bytes,
+        candidate.reused_objects,
+        candidate.reused_bytes,
+        candidate.max_transaction_objects,
+        candidate.max_transaction_bytes,
+        scan.scanned_files,
+        scan.scanned_bytes,
+        commit.payload_bytes_read,
+        commit.cdc_bytes_scanned,
+        process_after.peak_resident_bytes,
+        process_after.physical_footprint_bytes,
+        container_after.memory_peak,
+    );
+    if complete > PREPEND_HARD_NS {
+        return Err("count-changing anchor hard gate".into());
+    }
+    if output.receipt.is_none() {
+        return Err("count-changing anchor execution receipt".into());
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn count_changing_verify_case(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    case_id: &str,
+    seed: u8,
+    source: &str,
+    expected_digest: &str,
+    expected_size: u64,
+    fixture_cache_profile: &str,
+    structural: bool,
+) -> AnyResult<()> {
+    let scenario = if structural {
+        if !workload_source::edit_count_changing::VERIFIERS.contains(&case_id) {
+            return Err("unknown count-changing verifier".into());
+        }
+        None
+    } else {
+        let scenario = workload_source::edit_count_changing::scenario(case_id)?;
+        if scenario.frozen {
+            return Err("frozen count-changing verifier uses retained oracle".into());
+        }
+        Some(scenario)
+    };
+    let initial_size = if structural {
+        8 * 1024 * 1024
+    } else {
+        workload_source::edit_count_changing::FIXTURE_BYTES
+    };
+    if !workload_source::edit_count_changing::SEEDS.contains(&seed)
+        || !matches!(source, "baseline" | "candidate" | "repeat-a" | "repeat-b")
+        || root.exists()
+        || !fixture.is_dir()
+        || std::fs::metadata(fixture.join("payload.bin"))?.len() != initial_size
+    {
+        return Err("count-changing verification arguments".into());
+    }
+    std::fs::create_dir(root)?;
+    let store = Arc::new(LayerStackStore::create(root.join("store.sqlite"))?);
+    let client = Client::connect(store.clone())?;
+    let process_before = process_resource_snapshot()?;
+    let container_before = container_cgroup_snapshot(&container_id)?;
+    let initialized = client.initialize_layerstack(
+        EntityName::new(format!("verify-{case_id}-{source}-{seed}"))?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let branch = client.fork_branch(
+        EntityName::new("main")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let base = store.pin_branch(branch)?;
+    let old_payload_ids = payload_ids(&base.reader, base.root, "payload.bin")?;
+    let workspace = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: WorkspacePlacement::Container {
+            container_id: container_id.clone(),
+            root: PathBuf::from(format!(
+                "/workspace/layerfs-verify-{case_id}-{seed}-{}",
+                std::process::id()
+            )),
+        },
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    let mut argv = vec![workload.clone()];
+    if structural {
+        argv.extend([
+            OsString::from("count-changing-proof"),
+            OsString::from("payload.bin"),
+            OsString::from(case_id),
+        ]);
+    } else {
+        argv.extend([
+            OsString::from("count-changing-edit"),
+            OsString::from("payload.bin"),
+            OsString::from(case_id),
+            OsString::from(seed.to_string()),
+        ]);
+    }
+    let output = execute_workload(&client, workspace.id, argv)?;
+    let initial_inode = output_u64(&output, "initial_inode")?;
+    let final_inode = output_u64(&output, "final_inode")?;
+    if output_u64(&output, "attempted_operations")? == 0
+        || output_u64(&output, "attempted_operations")?
+            != output_u64(&output, "completed_operations")?
+        || output_u64(&output, "final_file_bytes")? != expected_size
+        || scenario
+            .is_some_and(|scenario| scenario.kind.temp_copy() == (initial_inode == final_inode))
+        || (structural && initial_inode == final_inode)
+    {
+        return Err("count-changing verifier workload".into());
+    }
+    let head = match client.commit_workspace_session(workspace.id)? {
+        WorkspaceCommitResult::Created { commit_id, .. } => commit_id,
+        result => return Err(format!("count-changing verifier Commit failed: {result:?}").into()),
+    };
+    let snapshot = client.monitor_snapshot()?;
+    let receipt = operation_workspace_commit(&snapshot)?;
+    let candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
+    if structural && case_id.starts_with("rewrite-full") && receipt.payload_bytes_read != 0 {
+        return Err("count-changing full replacement read old payload".into());
+    }
+    client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    let committed = store
+        .commit(head)?
+        .ok_or("count-changing verifier commit")?;
+    let pinned = store.pin_branch(branch)?;
+    let new_payload_ids = payload_ids(&pinned.reader, committed.root_id, "payload.bin")?;
+    let core = layerfs_layerstack_store::CoreReader(&pinned.reader);
+    let path = layerfs_content::CanonicalPath::new("payload.bin")?;
+    let (stat, _) = layerfs_content::filesystem::stat(&core, committed.root_id, &path)?;
+    let reopened = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: WorkspacePlacement::Container {
+            container_id: container_id.clone(),
+            root: PathBuf::from(format!(
+                "/workspace/layerfs-reopen-{case_id}-{seed}-{}",
+                std::process::id()
+            )),
+        },
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let digest_output = execute_workload(
+        &client,
+        reopened.id,
+        vec![
+            workload,
+            OsString::from("digest"),
+            OsString::from("payload.bin"),
+        ],
+    )?;
+    let (reopened_size, reopened_digest) = parse_digest(&digest_output)?;
+    if reopened_size != expected_size
+        || reopened_digest != expected_digest
+        || store.pin_branch(branch)?.root != committed.root_id
+    {
+        return Err("count-changing verifier reopen".into());
+    }
+    client.end_workspace_session(reopened.id, EndWorkspaceMode::Clean)?;
+    let process_after = process_resource_snapshot()?;
+    let container_after = container_cgroup_snapshot(&container_id)?;
+    if process_before.swaps != 0
+        || process_after.swaps != 0
+        || container_before.swap_current != 0
+        || container_after.swap_current != 0
+        || container_before.oom != container_after.oom
+        || container_before.oom_kill != container_after.oom_kill
+        || client.active_workspace_count()? != 0
+        || client.active_execution_count()? != 0
+    {
+        return Err("count-changing verifier resource or cleanup".into());
+    }
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"fixture_cache_profile\":\"{}\",\"initial_file_bytes\":{},\"final_file_bytes\":{},\"sha256\":\"{}\",\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"{}\",\"canonical_root\":\"{}\",\"canonical_file_root\":\"{}\",\"old_payload_object_ids\":{},\"old_payload_object_ids_retained\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"reused_objects\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"process_peak_rss_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"independent_oracle\":true,\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
+        workload_source::edit_count_changing::VERIFICATION_SCHEMA,
+        workload_source::edit_count_changing::FAMILY_ID,
+        case_id,
+        source,
+        seed,
+        fixture_cache_profile,
+        initial_size,
+        expected_size,
+        expected_digest,
+        initial_inode,
+        final_inode,
+        if structural || scenario.is_some_and(|scenario| scenario.kind.temp_copy()) {
+            "replaced"
+        } else {
+            "preserved"
+        },
+        committed.root_id,
+        stat.content_root,
+        old_payload_ids.len(),
+        old_payload_ids.intersection(&new_payload_ids).count(),
+        receipt.payload_bytes_read,
+        receipt.cdc_bytes_scanned,
+        receipt.edit_piece_count,
+        receipt.edit_piece_height,
+        receipt.edit_piece_logical_charge,
+        receipt.edit_spool_allocated_bytes,
+        receipt.edit_spool_live_bytes,
+        receipt.edit_spool_superseded_bytes,
+        candidate.candidate_objects,
+        candidate.candidate_bytes,
+        candidate.inserted_objects,
+        candidate.reused_objects,
+        candidate.max_transaction_objects,
+        candidate.max_transaction_bytes,
+        process_after.peak_resident_bytes,
+        container_after.memory_peak,
     );
     Ok(())
 }
@@ -4291,6 +5049,36 @@ mod tests {
                     edit_same_count::schedule(scenarios[1], seed).unwrap(),
                     hundred[..10]
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn count_changing_family_registry_and_schedules_are_exact() {
+        use workload_source::edit_count_changing;
+        edit_count_changing::self_check().unwrap();
+        assert_eq!(edit_count_changing::SCENARIOS.len(), 25);
+        assert_eq!(
+            edit_count_changing::SCENARIOS[0].id,
+            "prepend-temp-copy-rename"
+        );
+        assert_eq!(edit_count_changing::VERIFIERS.len(), 4);
+        for seed in edit_count_changing::SEEDS {
+            for start in (1..edit_count_changing::SCENARIOS.len()).step_by(3) {
+                let hundred =
+                    edit_count_changing::schedule(edit_count_changing::SCENARIOS[start + 2], seed)
+                        .unwrap();
+                assert_eq!(
+                    edit_count_changing::schedule(edit_count_changing::SCENARIOS[start], seed)
+                        .unwrap(),
+                    hundred[..1]
+                );
+                assert_eq!(
+                    edit_count_changing::schedule(edit_count_changing::SCENARIOS[start + 1], seed)
+                        .unwrap(),
+                    hundred[..10]
+                );
+                assert!(hundred.iter().all(|edit| edit.prior_len != edit.final_len));
             }
         }
     }

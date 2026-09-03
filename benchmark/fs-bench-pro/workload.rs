@@ -775,6 +775,9 @@ fn run() -> Result<()> {
         [command, path, case, seed] if command == "count-changing-edit" => {
             count_changing_edit(path, case, seed.parse()?)
         }
+        [command, path, verifier] if command == "count-changing-proof" => {
+            count_changing_proof(path, verifier)
+        }
         [command, path] if command == "prepend" => prepend(path),
         [command, path, expected_size, expected_digest] if command == "verify" => {
             let (size, digest) = digest(Path::new(path))?;
@@ -787,7 +790,7 @@ fn run() -> Result<()> {
             println!("{size}\t{digest}");
             Ok(())
         }
-        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | same-count-self-check | same-count-list | same-count-resolve CASE | same-count-control-resolve CASE | count-changing-self-check | count-changing-list | count-changing-resolve CASE | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | same-count-edit PATH CASE SEED | same-count-control-edit PATH CASE SEED | same-count-fragmented PATH COHORT COUNT SEED | count-changing-edit PATH CASE SEED | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
+        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | same-count-self-check | same-count-list | same-count-resolve CASE | same-count-control-resolve CASE | count-changing-self-check | count-changing-list | count-changing-resolve CASE | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | same-count-edit PATH CASE SEED | same-count-control-edit PATH CASE SEED | same-count-fragmented PATH COHORT COUNT SEED | count-changing-edit PATH CASE SEED | count-changing-proof PATH VERIFIER | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
     }
 }
 
@@ -914,6 +917,7 @@ fn same_count_fragmented(path: impl AsRef<Path>, cohort: &str, count: usize, see
 
 fn count_changing_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<()> {
     use edit_count_changing::Kind;
+    use std::os::unix::fs::MetadataExt;
 
     let path = path.as_ref();
     let scenario = edit_count_changing::scenario(case)?;
@@ -921,6 +925,7 @@ fn count_changing_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<(
     if fs::metadata(path)?.len() != edit_count_changing::FIXTURE_BYTES {
         return Err("count-changing fixture length".into());
     }
+    let initial_inode = fs::metadata(path)?.ino();
     let temporary = path.with_extension("count-changing.tmp");
     let mut supplied = 0_u64;
     let mut inserted = 0_u64;
@@ -950,20 +955,13 @@ fn count_changing_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<(
                 file.sync_all()?;
             }
             Kind::Prepend | Kind::Insert | Kind::Delete | Kind::Grow | Kind::Shrink => {
-                let mut source = BufReader::with_capacity(64 * 1024, File::open(path)?);
-                let target = File::create(&temporary)?;
-                let mut output = BufWriter::with_capacity(64 * 1024, target);
-                let prefix = std::io::copy(&mut source.by_ref().take(edit.offset), &mut output)?;
-                if prefix != edit.offset {
-                    return Err("count-changing rewrite prefix".into());
-                }
-                output.write_all(&replacement)?;
-                source.seek(SeekFrom::Start(edit.offset + edit.deleted as u64))?;
-                let suffix = std::io::copy(&mut source, &mut output)?;
-                output.flush()?;
-                output.into_inner()?.sync_all()?;
-                fs::rename(&temporary, path)?;
-                let copied = prefix.checked_add(suffix).ok_or("count-changing copied bytes")?;
+                let copied = rewrite_file_range(
+                    path,
+                    &temporary,
+                    edit.offset,
+                    edit.deleted as u64,
+                    &replacement,
+                )?;
                 copied_payload = copied_payload
                     .checked_add(copied)
                     .ok_or("count-changing copied payload")?;
@@ -987,6 +985,8 @@ fn count_changing_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<(
     println!("attempted_operations={}", schedule.len());
     println!("completed_operations={}", schedule.len());
     println!("final_file_bytes={}", fs::metadata(path)?.len());
+    println!("initial_inode={initial_inode}");
+    println!("final_inode={}", fs::metadata(path)?.ino());
     println!("supplied_bytes={supplied}");
     println!("inserted_bytes={inserted}");
     println!("deleted_bytes={deleted}");
@@ -996,6 +996,81 @@ fn count_changing_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<(
     println!("copied_payload_bytes={copied_payload}");
     println!("read_payload_bytes={read_payload}");
     println!("inner_edit_ns={inner_edit_ns}");
+    Ok(())
+}
+
+fn rewrite_file_range(
+    path: &Path,
+    temporary: &Path,
+    offset: u64,
+    deleted: u64,
+    replacement: &[u8],
+) -> Result<u64> {
+    let mut source = BufReader::with_capacity(64 * 1024, File::open(path)?);
+    let target = File::create(temporary)?;
+    let mut output = BufWriter::with_capacity(64 * 1024, target);
+    let prefix = std::io::copy(&mut source.by_ref().take(offset), &mut output)?;
+    if prefix != offset {
+        return Err("count-changing rewrite prefix".into());
+    }
+    output.write_all(replacement)?;
+    source.seek(SeekFrom::Start(offset + deleted))?;
+    let suffix = std::io::copy(&mut source, &mut output)?;
+    output.flush()?;
+    output.into_inner()?.sync_all()?;
+    fs::rename(temporary, path)?;
+    prefix
+        .checked_add(suffix)
+        .ok_or_else(|| "count-changing copied bytes".into())
+}
+
+fn count_changing_proof(path: impl AsRef<Path>, verifier: &str) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    const MIB: u64 = 1024 * 1024;
+    let path = path.as_ref();
+    let temporary = path.with_extension("count-changing-proof.tmp");
+    if fs::metadata(path)?.len() != 8 * MIB {
+        return Err("count-changing proof fixture".into());
+    }
+    let initial_inode = fs::metadata(path)?.ino();
+    match verifier {
+        "insert-middle-4k-on-8m-proof" => {
+            let bytes = (0..4096)
+                .map(|index| ((index * 17 + 3) % 251) as u8)
+                .collect::<Vec<_>>();
+            rewrite_file_range(path, &temporary, 4 * MIB, 0, &bytes)?;
+        }
+        "delete-middle-4k-on-8m-proof" => {
+            rewrite_file_range(path, &temporary, 4 * MIB - 2048, 4096, &[])?;
+        }
+        "rewrite-full-grow-8m-to-12m-proof" | "rewrite-full-shrink-8m-to-4m-proof" => {
+            let final_len = if verifier.contains("grow") {
+                12 * MIB
+            } else {
+                4 * MIB
+            };
+            let mut output = BufWriter::with_capacity(64 * 1024, File::create(&temporary)?);
+            let mut offset = 0_u64;
+            let mut buffer = vec![0_u8; 64 * 1024];
+            while offset < final_len {
+                let count = usize::try_from((final_len - offset).min(buffer.len() as u64))?;
+                for (index, byte) in buffer[..count].iter_mut().enumerate() {
+                    *byte = (((offset + index as u64) * 31 + final_len / MIB) % 251) as u8;
+                }
+                output.write_all(&buffer[..count])?;
+                offset += count as u64;
+            }
+            output.flush()?;
+            output.into_inner()?.sync_all()?;
+            fs::rename(&temporary, path)?;
+        }
+        _ => return Err("unknown count-changing proof".into()),
+    }
+    println!("attempted_operations=1");
+    println!("completed_operations=1");
+    println!("final_file_bytes={}", fs::metadata(path)?.len());
+    println!("initial_inode={initial_inode}");
+    println!("final_inode={}", fs::metadata(path)?.ino());
     Ok(())
 }
 
