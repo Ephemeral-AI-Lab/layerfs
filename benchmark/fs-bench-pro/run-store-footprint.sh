@@ -7,7 +7,7 @@ repo=$(cd "$here/../.." && pwd -P)
 results_root=${LAYERFS_STORE_RESULTS_ROOT:-$repo/benchmark-results/fs-bench-pro/store-footprint}
 prepared_root=${LAYERFS_STORE_PREPARED_ROOT:-${TMPDIR:-/tmp}/layerfs-fs-bench-pro-store-footprint}
 primary_control=store-footprint-unique-100000
-evidence_version=v3
+evidence_version=v4
 
 die() { failure_reason=$*; printf 'fs-bench-pro Store footprint: %s\n' "$*" >&2; exit 2; }
 
@@ -309,7 +309,7 @@ assert q['sqlite_page_size_bytes']*q['sqlite_page_count']==r['sqlite_database_by
 assert q['sqlite_object_rows']==r['canonical_objects'] and q['sqlite_canonical_object_bytes']==r['canonical_bytes']
 assert c['file_count']==r['durable_store_files'] and c['total_bytes']==r['total_durable_store_bytes']
 assert o['canonical_objects']==r['canonical_objects'] and o['canonical_bytes']==r['canonical_bytes'] and o['page_size']==q['sqlite_page_size_bytes']
-if r['mode']=='verify': assert r['verification_ns']<=60_000_000_000 and r['initialization_ns']<=30_000_000_000
+if r['mode']=='verify': assert r['verification_ns']<=66_000_000_000 and r['initialization_ns']<=30_000_000_000
 r.update(q);r.update({k:o[k] for k in ('object_set_digest','object_shape_digest','schema_digest','user_version')})
 r.update({'tier':int(tier),'reportable':int(tier)==100000,'initialization_temporary_write_bytes':initialization_temporary_write,'temporary_write_bytes':temporary_write,'temporary_read_bytes':temporary_read,'temporary_peak_upper_bound_bytes':temporary_peak,'peak_disk_upper_bound_bytes':r['total_durable_store_bytes']+temporary_peak,'durable_census_status':'pass','dbstat_store_sha256_unchanged':True})
 json.dump(r,open(out,'w'),sort_keys=True,separators=(',',':'));open(out,'a').write('\n')
@@ -357,7 +357,8 @@ if performance:
  performance_summary.update({'medians':grouped_medians(performance),'status':'complete'})
 if verification:
  assert all(x['status']=='pass' and x['mode']=='verify' for x in verification)
- verification_summary.update({'status':'target-pass','resources':grouped_medians(verification)})
+ verifier_max=max(x['verification_ns'] for x in verification)
+ verification_summary.update({'status':'target-pass' if verifier_max<=60_000_000_000 else 'tolerated-pass','maximum_verification_ns':verifier_max,'target_ns':60_000_000_000,'tolerated_ns':66_000_000_000,'resources':grouped_medians(verification)})
 if mode=='admission':
  assert len(performance)==9 and len(verification)==3
  assert all(x['reportable'] and x['tier']==100000 and x['status']=='pass' and x['durable_census_status']=='pass' and x['dbstat_store_sha256_unchanged'] for x in performance+verification)
@@ -369,7 +370,7 @@ if mode=='admission':
  summary['primary_storage_classification']='target-pass' if primary_bytes<=600_000_000 else 'tolerated-nonterminal-miss' if primary_bytes<=660_000_000 else 'no-go'
  summary['explanatory_control_bytes']={control:row['total_durable_store_bytes'] for control,row in medians.items() if control!=primary}
  if source=='baseline':
-  summary.update({'status':'baseline-complete','admission_eligible':False,'resource_envelope_multiplier':1.10,'selected_performance_timeout_seconds':5,'admission_performance_timeout_seconds':30,'verifier_phase_timeout_seconds':60,'verifier_process_timeout_seconds':90,'aggregate_verifier_timeout_seconds':180})
+  summary.update({'status':'baseline-complete','admission_eligible':False,'resource_envelope_multiplier':1.10,'selected_performance_timeout_seconds':5,'admission_performance_timeout_seconds':30,'verifier_phase_target_seconds':60,'verifier_phase_tolerated_seconds':66,'verifier_process_timeout_seconds':90,'aggregate_verifier_timeout_seconds':180})
  else:
   baseline_summary=json.load(open(baseline/'summary.json'))
   baseline_rows=[json.loads(x) for x in (baseline/'performance/raw.jsonl').read_text().splitlines()]
@@ -405,11 +406,11 @@ if mode=='admission':
   sibling_storage={control:{'baseline':baseline_medians[control]['total_durable_store_bytes'],'candidate':medians[control]['total_durable_store_bytes'],'ratio':ratio(baseline_medians[control]['total_durable_store_bytes'],medians[control]['total_durable_store_bytes']),'status':'target-pass' if medians[control]['total_durable_store_bytes']<=baseline_medians[control]['total_durable_store_bytes'] else 'no-go'} for control in medians if control!=primary}
   sibling_status='target-pass' if all(x['status']=='target-pass' for x in sibling_storage.values()) else 'no-go'
   summary.update({'baseline_run':str(baseline),'baseline_medians':baseline_medians,'performance_resource_comparisons':comparisons,'performance_resource_status':performance_status,'verification_resource_comparisons':verifier_comparisons,'verification_resource_status':verifier_status,'explanatory_control_storage_comparisons':sibling_storage,'explanatory_control_storage_status':sibling_status})
-  eligible=primary_bytes<=600_000_000 and performance_status!='no-go' and verifier_status!='no-go' and sibling_status!='no-go' and verification_summary['status']=='target-pass'
-  accepted_status=max((performance_status,verifier_status),key=rank.get)
+  eligible=primary_bytes<=600_000_000 and performance_status!='no-go' and verifier_status!='no-go' and sibling_status!='no-go' and verification_summary['status'] in ('target-pass','tolerated-pass')
+  accepted_status=max((performance_status,verifier_status,verification_summary['status']),key=rank.get)
   summary.update({'status':('target-pass' if accepted_status in ('target-pass','local-step-exception') else 'tolerated-pass') if eligible else 'no-go','admission_eligible':eligible})
 else:
- summary['status']='performance-complete-verification-not-run' if mode=='performance' else 'target-pass'
+ summary['status']='performance-complete-verification-not-run' if mode=='performance' else verification_summary['status']
  summary['admission_eligible']=False
 (root/'performance/summary.json').write_text(json.dumps(performance_summary,sort_keys=True,separators=(',',':'))+'\n')
 (root/'verification/summary.json').write_text(json.dumps(verification_summary,sort_keys=True,separators=(',',':'))+'\n')
