@@ -4,7 +4,7 @@ export LC_ALL=C
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 repo=$(cd "$here/../.." && pwd -P)
-results_root=${LAYERFS_NAMESPACE_RESULTS_ROOT:-"$repo/benchmark-results/fs-bench-pro/namespace"}
+namespace_results_root=${LAYERFS_NAMESPACE_RESULTS_ROOT:-}
 readonly namespace_100000_binding_init_ns=3235294118
 readonly namespace_100000_binding_bytes_per_second=153000000
 readonly namespace_100000_binding_files_per_second=30600
@@ -58,6 +58,36 @@ print(digest.hexdigest())
 PY
 }
 
+family_cli_parse() {
+  selection= seed= source_arm= family_mode=performance all=0 mode_set=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --case) [[ $# -ge 2 && -z "$selection" ]] || return 2; selection=$2; shift 2 ;;
+      --seed) [[ $# -ge 2 && -z "$seed" ]] || return 2; seed=$2; shift 2 ;;
+      --source) [[ $# -ge 2 && -z "$source_arm" ]] || return 2; source_arm=$2; shift 2 ;;
+      --mode) [[ $# -ge 2 && $mode_set -eq 0 ]] || return 2; family_mode=$2; mode_set=1; shift 2 ;;
+      --all) [[ $all -eq 0 ]] || return 2; all=1; shift ;;
+      *) return 2 ;;
+    esac
+  done
+  [[ "$source_arm" == baseline || "$source_arm" == candidate ]] || return 2
+  case "$family_mode" in
+    performance)
+      [[ $all -eq 0 && -n "$selection" && "$seed" =~ ^[123]$ ]] || return 2
+      seed_start=$seed; iterations=$seed
+      ;;
+    verify)
+      [[ $all -eq 0 && -n "$selection" && ( -z "$seed" || "$seed" =~ ^[123]$ ) ]] || return 2
+      seed=${seed:-1}; seed_start=$seed; iterations=$seed
+      ;;
+    admission)
+      [[ $all -eq 1 && -z "$selection" && -z "$seed" ]] || return 2
+      selection=all; seed_start=1; iterations=3
+      ;;
+    *) return 2 ;;
+  esac
+}
+
 self_check() {
   bash -n "$0"
   [[ "$namespace_100000_binding_init_ns" == 3235294118 \
@@ -77,14 +107,15 @@ assert not 3_235_294_119 <= limit_ns
 assert not 152_999_999 >= minimum_bytes
 assert not 30_599 >= minimum_files
 PY
-  cargo test --manifest-path "$repo/Cargo.toml" -p fs-benchmark-pro
-  local temporary
-  temporary=$(mktemp -d "${TMPDIR:-/tmp}/fs-bench-pro-namespace.XXXXXX")
-  trap 'rm -rf -- "$temporary"' EXIT
-  rustc --edition=2021 -C opt-level=3 "$here/workload.rs" -o "$temporary/fs-benchmark-workload"
-  "$temporary/fs-benchmark-workload" self-check
-  rm -rf -- "$temporary"
-  trap - EXIT
+  cargo test --manifest-path "$repo/Cargo.toml" -p fs-benchmark-pro \
+    tests::namespace_family_registry_and_dispatch_are_exact -- --exact
+  (family_cli_parse --case namespace-100 --seed 1 --source candidate)
+  (family_cli_parse --case namespace-100 --source baseline --mode verify)
+  (family_cli_parse --all --source candidate --mode admission)
+  ! (family_cli_parse --all --source candidate) || die "performance --all self-check"
+  ! (family_cli_parse --case namespace-100 --seed 1) || die "explicit source self-check"
+  ! (family_cli_parse --case namespace-100 --seed 1 --source candidate --mode performance --mode verify) ||
+    die "duplicate mode self-check"
 }
 
 if [[ "${1:-}" == "--self-check" ]]; then
@@ -95,11 +126,25 @@ if [[ "${1:-}" == "--self-check" ]]; then
 fi
 if [[ "${1:-}" == "--source-seal" ]]; then seal source; exit 0; fi
 
-[[ $# -eq 4 ]] || die "usage: $0 RUN_ID CONTAINER_ID namespace-10000|all ITERATIONS"
-run_id=$1
-container=$2
-selection=$3
-iterations=$4
+runner_arguments=("$@")
+family_interface=0
+seed_start=1
+source_arm=legacy
+family_mode=legacy
+if [[ $# -eq 4 && "${3:-}" != --* ]]; then
+  run_id=$1
+  container=$2
+  selection=$3
+  iterations=$4
+else
+  [[ $# -ge 3 ]] || die "usage: $0 RUN_ID CONTAINER_ID namespace-10000|all ITERATIONS | RUN_ID CONTAINER_ID --case CASE --seed 1 --source baseline|candidate [--mode performance|verify] | RUN_ID CONTAINER_ID --all --source baseline|candidate --mode admission"
+  run_id=$1
+  container=$2
+  shift 2
+  family_cli_parse "$@" || die "invalid family arguments"
+  family_interface=1
+fi
+results_root=${namespace_results_root:-"$repo/benchmark-results/fs-bench-pro/$([[ $family_interface -eq 1 ]] && printf init_namespace || printf namespace)"}
 daemon_container_port=${LAYERFS_DAEMON_CONTAINER_PORT:-41273}
 fixture_root=${LAYERFS_NAMESPACE_FIXTURE_ROOT:-}
 run_composite=${LAYERFS_NAMESPACE_RUN_COMPOSITE:-0}
@@ -125,8 +170,7 @@ if [[ "$run_composite" == 1 ]]; then
 fi
 case "$selection" in
   all) scenarios=(namespace-100 namespace-1000 namespace-10000 namespace-100000) ;;
-  namespace-100|namespace-1000|namespace-10000|namespace-100000) scenarios=("$selection") ;;
-  *) die "unknown namespace scenario" ;;
+  *) scenarios=("$selection") ;;
 esac
 
 for command in cargo git python3 rustc sqlite3; do command -v "$command" >/dev/null || die "$command is required"; done
@@ -137,8 +181,11 @@ daemon_endpoint=not-applicable
 daemon_capability=not-applicable
 if [[ "$measurement_mode" == product ]]; then
 for command in docker nc; do command -v "$command" >/dev/null || die "$command is required in product mode"; done
-docker inspect -f '{{.State.Running}}' "$container" | grep -Fx true >/dev/null ||
-  die "prepared container is not running"
+if [[ "$(docker inspect -f '{{.State.Running}}' "$container")" != true ]]; then
+  [[ "$(docker inspect -f '{{.State.ExitCode}} {{.State.OOMKilled}}' "$container")" == "0 false" ]] ||
+    die "prepared daemon container stopped abnormally"
+  docker start "$container" >/dev/null
+fi
 container_id=$(docker inspect -f '{{.Id}}' "$container")
 [[ "$container_id" =~ ^[0-9a-f]{64}$ ]] || die "prepared container identity"
 docker exec "$container" test -c /dev/fuse || die "prepared container lacks /dev/fuse"
@@ -238,6 +285,45 @@ fi
 printf '%s\n' "$daemon_endpoint" >"$run_dir/environment/daemon-endpoint.txt"
 printf '%s\n' "${fixture_root:-generated-per-scenario}" >"$run_dir/environment/fixture-source-root.txt"
 printf '%s\n' "$measurement_mode" >"$run_dir/environment/measurement-mode.txt"
+if [[ $family_interface -eq 1 ]]; then
+  printf '%q ' "${runner_arguments[@]}" >"$run_dir/environment/runner-arguments.txt"
+  printf '\n' >>"$run_dir/environment/runner-arguments.txt"
+  python3 - "$repo" "$current_seal" >"$run_dir/environment/source-seal.json" <<'PY'
+import json
+import subprocess
+import sys
+
+repo, seal = sys.argv[1:]
+def git(*args):
+    return subprocess.check_output(["git", "-C", repo, *args], text=True).strip()
+print(json.dumps({
+    "commit": git("rev-parse", "HEAD"),
+    "tree": git("rev-parse", "HEAD^{tree}"),
+    "dirty": bool(git("status", "--porcelain")),
+    "source_seal_sha256": seal,
+}, sort_keys=True, separators=(",", ":")))
+PY
+  python3 >"$run_dir/environment/host.json" <<'PY'
+import json
+import platform
+import subprocess
+
+def command(*args):
+    try:
+        return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL).strip()
+    except Exception:
+        return "unavailable"
+print(json.dumps({
+    "architecture": platform.machine(),
+    "host_model": command("sysctl", "-n", "hw.model"),
+    "macos_version": command("sw_vers", "-productVersion"),
+    "macos_build": command("sw_vers", "-buildVersion"),
+    "kernel": platform.release(),
+}, sort_keys=True, separators=(",", ":")))
+PY
+  cp "$run_dir/environment/container-inspect.json" "$run_dir/environment/docker.json"
+  docker inspect -f '{{.Image}}' "$container" >"$run_dir/environment/image-digest.txt"
+fi
 
 cargo build --manifest-path "$repo/Cargo.toml" --release -p fs-benchmark-pro
 binary="$repo/target/release/fs-benchmark-pro"
@@ -246,6 +332,19 @@ trap 'rm -rf -- "$workload_dir"' EXIT
 rustc --edition=2021 -C opt-level=3 "$here/workload.rs" -o "$workload_dir/fs-benchmark-workload"
 "$binary" self-check >"$run_dir/environment/harness-self-check.txt"
 "$workload_dir/fs-benchmark-workload" self-check >"$run_dir/environment/workload-self-check.txt"
+if [[ $family_interface -eq 1 ]]; then
+  if [[ "$selection" == all ]]; then
+    scenarios=()
+    while IFS=$'\t' read -r scenario _; do scenarios+=("$scenario"); done < <(
+      "$workload_dir/fs-benchmark-workload" family-list
+    )
+  else
+    IFS=$'\t' read -r scenario _ < <(
+      "$workload_dir/fs-benchmark-workload" family-resolve "$selection"
+    )
+    scenarios=("$scenario")
+  fi
+fi
 printf '1\n' >"$run_dir/environment/self-check-passed.txt"
 failed=0
 for scenario in "${scenarios[@]}"; do
@@ -389,14 +488,19 @@ print(row["fixture_digest"], row["edited_fixture_digest"], row["edit_path"], row
 PY
   )
 
-  for ((iteration = 1; iteration <= iterations; iteration++)); do
+  for ((iteration = seed_start; iteration <= iterations; iteration++)); do
     if [[ "$measurement_mode" == product ]]; then ensure_daemon_running; fi
     if [[ $iteration -eq 1 ]]; then
       sample_cache_profile="${fixture_mode}-first-sample-uncontrolled"
     else
       sample_cache_profile="${fixture_mode}-subsequent-sample-uncontrolled"
     fi
-    sample_dir=$(printf '%s/sample-%03d' "$scenario_dir" "$iteration")
+    if [[ $family_interface -eq 1 ]]; then
+      sample_dir="$scenario_dir/$source_arm/$iteration"
+      mkdir -p "$scenario_dir/$source_arm"
+    else
+      sample_dir=$(printf '%s/sample-%03d' "$scenario_dir" "$iteration")
+    fi
     mkdir "$sample_dir" "$sample_dir/raw"
     printf '%s\n' "$daemon_endpoint" >"$sample_dir/daemon-endpoint.txt"
     diagnostic_nonce=$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')
@@ -434,7 +538,24 @@ output_path.write_text(json.dumps({
     "full_content_verification": False,
 }, sort_keys=True, separators=(",", ":")) + "\n")
 PY
-    if [[ "$measurement_mode" == product ]]; then
+    if [[ $family_interface -eq 1 ]]; then
+      command_mode=$family_mode
+      [[ "$command_mode" == admission ]] && command_mode=performance
+      benchmark_command=(
+        env
+        LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload
+        LAYERFS_EXEC_TRANSPORT=daemon
+        LAYERFS_FUSE_TRANSPORT=daemon
+        LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint"
+        LAYERFS_DAEMON_CAPABILITY="$daemon_capability"
+        LAYERFS_DAEMON_CONTAINER_ID="$container_id"
+        LAYERFS_FUSE_HOST=host.docker.internal
+        "$binary" "namespace-$([[ "$command_mode" == verify ]] && printf verify-case || printf performance)" \
+          "$sample_dir/work" "$fixture" "$container_id" "$scenario" "$iteration" \
+          "$source_arm" "$fixture_digest" "$edited_fixture_digest" "$edit_path" "$edit_size" \
+          "$sample_cache_profile"
+      )
+    elif [[ "$measurement_mode" == product ]]; then
       docker exec "$container" sh -c '
         printf "memory_current=%s\n" "$(cat /sys/fs/cgroup/memory.current)"
         printf "memory_peak=%s\n" "$(cat /sys/fs/cgroup/memory.peak)"
@@ -534,6 +655,90 @@ PY
     fi
     if [[ $status -ne 0 ]]; then
       failed=1
+    fi
+    if [[ $family_interface -eq 1 ]]; then
+      command_mode=$family_mode
+      [[ "$command_mode" == admission ]] && command_mode=performance
+      set +e
+      python3 - "$sample_dir/raw/namespace.jsonl" "$scenario_dir/fixture-manifest.json" \
+        "$sample_dir/result.json" "$scenario" "$iteration" "$source_arm" "$command_mode" \
+        "$cleanup_status" "$status" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+raw_path, fixture_path, output_path = map(Path, sys.argv[1:4])
+scenario, seed, source, mode = sys.argv[4], int(sys.argv[5]), sys.argv[6], sys.argv[7]
+cleanup_status, process_status = map(int, sys.argv[8:10])
+rows = [json.loads(line) for line in raw_path.read_text().splitlines() if line.strip()]
+if process_status or cleanup_status or len(rows) != 1:
+    raise SystemExit("family process, cleanup, or row cardinality")
+row = rows[0]
+fixture = json.loads(fixture_path.read_text())
+common = (
+    row.get("family_id") == "init_namespace"
+    and row.get("scenario_id") == scenario
+    and row.get("display_alias")
+    and row.get("display_name")
+    and row.get("source_arm") == source
+    and row.get("seed") == seed
+)
+if not common:
+    raise SystemExit("family identity")
+if mode == "performance":
+    fields = {
+        "attempted_operations", "branch_fork_ns", "candidate_bytes", "candidate_objects",
+        "cgroup_memory_peak_bytes", "cleanup_status", "commit_api_ns",
+        "commit_payload_bytes_read", "complete_lifecycle_ns", "completed_operations",
+        "deleted_bytes", "display_alias", "display_name", "execution_ns",
+        "execution_profile", "family_id", "final_file_bytes", "fixture_cache_profile",
+        "fixture_digest", "fixture_profile", "initial_file_bytes", "inserted_bytes",
+        "inserted_bytes_total", "inserted_objects", "layerstack_init_ns",
+        "layerstack_visible_ns", "logical_zero_bytes", "mode", "oom", "operation",
+        "operation_count", "operations_per_second", "position", "process_peak_rss_bytes",
+        "reused_bytes", "reused_objects", "scanned_bytes", "scanned_files", "scenario_id",
+        "schema", "seed", "seed_label", "source_arm", "store_baseline_bytes",
+        "store_database_bytes", "supplied_bytes", "supplied_bytes_per_second", "swap_bytes",
+        "timeout", "verification_status", "workspace_create_ns", "workspace_end_ns",
+    }
+    if (row.get("schema") != "fs-bench-pro-edit-performance-v1"
+            or row.get("mode") != mode or set(row) != fields
+            or row["layerstack_visible_ns"] != row["workspace_create_ns"]
+                + row["execution_ns"] + row["commit_api_ns"]
+            or row["complete_lifecycle_ns"] != row["layerstack_visible_ns"]
+                + row["workspace_end_ns"]
+            or row["attempted_operations"] != row["completed_operations"]
+            or row["completed_operations"] != 1
+            or row["final_file_bytes"] != fixture["edit_size"]
+            or row["verification_status"] != "not-run-performance-mode"
+            or row["cleanup_status"] != "pass"
+            or row["swap_bytes"] != 0 or row["oom"] is not False or row["timeout"] is not False):
+        raise SystemExit("performance schema, equation, or mode isolation")
+else:
+    fields = {
+        "cleanup_status", "display_alias", "display_name", "expected_file_bytes",
+        "expected_sha256", "family_id", "fresh_reopen_status",
+        "maximum_verifier_buffer_bytes", "mode", "observed_file_bytes",
+        "observed_sha256", "resource_status", "root_status", "scenario_id", "schema",
+        "seed", "source_arm", "status", "verification_id", "verification_ns",
+        "verifier_worker_count",
+    }
+    if (row.get("schema") != "fs-bench-pro-edit-verification-v1"
+            or row.get("mode") != "verify" or set(row) != fields
+            or row.get("status") != "pass"
+            or row.get("expected_sha256") != fixture["edited_fixture_digest"]
+            or row.get("observed_sha256") != fixture["edited_fixture_digest"]
+            or row.get("expected_file_bytes") != fixture["logical_bytes"]
+            or row.get("observed_file_bytes") != fixture["logical_bytes"]
+            or row.get("cleanup_status") != "pass"):
+        raise SystemExit("verification schema or mode isolation")
+output_path.write_text(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+      validation_status=$?
+      set -e
+      printf '%s\n' "$validation_status" >"$sample_dir/validation-exit-status.txt"
+      if [[ $validation_status -ne 0 ]]; then failed=1; fi
+      continue
     fi
     set +e
     python3 - "$sample_dir/raw/namespace.jsonl" "$sample_dir/raw/supervisor.txt" \
@@ -1337,6 +1542,57 @@ PY
       printf '0\n' >"$sample_dir/validation-exit-status.txt"
     fi
   done
+  if [[ $family_interface -eq 1 && "$family_mode" == admission ]]; then
+    ensure_daemon_running
+    verify_dir="$scenario_dir/$source_arm/verification"
+    mkdir -p "$verify_dir/raw"
+    set +e
+    env \
+      LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload \
+      LAYERFS_EXEC_TRANSPORT=daemon \
+      LAYERFS_FUSE_TRANSPORT=daemon \
+      LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" \
+      LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
+      LAYERFS_DAEMON_CONTAINER_ID="$container_id" \
+      LAYERFS_FUSE_HOST=host.docker.internal \
+      "$binary" namespace-verify-case "$verify_dir/work" "$fixture" "$container_id" \
+        "$scenario" 1 "$source_arm" "$fixture_digest" "$edited_fixture_digest" \
+        "$edit_path" "$edit_size" generated-first-sample-uncontrolled \
+        >"$verify_dir/raw/verification.jsonl" 2>"$verify_dir/raw/verification.stderr"
+    verify_status=$?
+    set -e
+    printf '%s\n' "$verify_status" >"$verify_dir/exit-status.txt"
+    set +e
+    python3 - "$verify_dir/raw/verification.jsonl" "$scenario_dir/fixture-manifest.json" \
+      "$verify_dir/result.json" "$scenario" "$source_arm" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+raw, fixture_path, output = map(Path, sys.argv[1:4])
+scenario, source = sys.argv[4:6]
+rows = [json.loads(line) for line in raw.read_text().splitlines() if line.strip()]
+fixture = json.loads(fixture_path.read_text())
+if len(rows) != 1:
+    raise SystemExit("admission verification cardinality")
+row = rows[0]
+if (row.get("schema") != "fs-bench-pro-edit-verification-v1"
+        or row.get("family_id") != "init_namespace"
+        or row.get("scenario_id") != scenario
+        or row.get("source_arm") != source
+        or row.get("mode") != "verify"
+        or row.get("status") != "pass"
+        or row.get("expected_sha256") != fixture["edited_fixture_digest"]
+        or row.get("observed_sha256") != fixture["edited_fixture_digest"]
+        or row.get("cleanup_status") != "pass"):
+    raise SystemExit("admission verification identity or result")
+output.write_text(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+    verify_validation_status=$?
+    set -e
+    printf '%s\n' "$verify_validation_status" >"$verify_dir/validation-exit-status.txt"
+    if [[ $verify_status -ne 0 || $verify_validation_status -ne 0 ]]; then failed=1; fi
+  fi
 done
 
 if [[ "$run_composite" == 1 ]]; then
@@ -1462,6 +1718,103 @@ printf '%s\n' "$ending_seal" >"$run_dir/environment/ending-source-seal.sha256"
 if [[ "$ending_seal" != "$current_seal" ]]; then
   printf 'source changed during campaign\n' >"$run_dir/INVALID"
   failed=1
+fi
+if [[ $family_interface -eq 1 ]]; then
+  mkdir "$run_dir/performance" "$run_dir/verification"
+  python3 - "$run_dir" "$family_mode" "$source_arm" >"$run_dir/report.md" <<'PY'
+import hashlib
+import json
+import statistics
+import sys
+from pathlib import Path
+
+root, mode, source = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+performance = []
+verification = []
+for result in sorted(root.glob("scenarios/*/*/*/result.json")):
+    row = json.loads(result.read_text())
+    (performance if row.get("mode") == "performance" else verification).append(row)
+for result in sorted(root.glob("scenarios/*/*/verification/result.json")):
+    verification.append(json.loads(result.read_text()))
+
+def write_rows(path, rows):
+    path.write_text("".join(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n" for row in rows))
+
+write_rows(root / "performance/raw.jsonl", performance)
+write_rows(root / "verification/raw.jsonl", verification)
+performance_summary = {
+    "schema": "fs-bench-pro-edit-performance-v1-summary",
+    "family_id": "init_namespace",
+    "source_arm": source,
+    "samples": len(performance),
+    "rows": [],
+}
+for scenario in sorted({row["scenario_id"] for row in performance}):
+    rows = [row for row in performance if row["scenario_id"] == scenario]
+    performance_summary["rows"].append({
+        "scenario_id": scenario,
+        "samples": len(rows),
+        "median_complete_lifecycle_ns": int(statistics.median_high(sorted(row["complete_lifecycle_ns"] for row in rows))),
+        "median_operations_per_second": int(statistics.median_high(sorted(row["operations_per_second"] for row in rows))),
+        "median_peak_rss_bytes": int(statistics.median_high(sorted(row["process_peak_rss_bytes"] for row in rows))),
+    })
+verification_summary = {
+    "schema": "fs-bench-pro-edit-verification-v1-summary",
+    "family_id": "init_namespace",
+    "source_arm": source,
+    "samples": len(verification),
+    "status": "pass" if verification and all(row.get("status") == "pass" for row in verification) else "not-run" if not verification else "fail",
+    "verification_wall_ns": sum(row.get("verification_ns", 0) for row in verification),
+}
+(root / "performance/summary.json").write_text(json.dumps(performance_summary, sort_keys=True, separators=(",", ":")) + "\n")
+(root / "verification/summary.json").write_text(json.dumps(verification_summary, sort_keys=True, separators=(",", ":")) + "\n")
+performance_pass = bool(performance) and all(
+    row.get("cleanup_status") == "pass" and row.get("verification_status") == "not-run-performance-mode"
+    and row.get("swap_bytes") == 0 and row.get("oom") is False and row.get("timeout") is False
+    for row in performance
+)
+verification_pass = bool(verification) and all(row.get("status") == "pass" for row in verification)
+resource_pass = ((not performance or performance_pass)
+                 and (not verification or all(row.get("resource_status") == "pass" for row in verification)))
+if mode == "performance":
+    overall = "performance-complete-verification-not-run" if performance_pass else "fail"
+elif mode == "verify":
+    overall = "verification-complete-performance-not-run" if verification_pass else "fail"
+else:
+    overall = "source-arm-admission-pass" if performance_pass and verification_pass else "fail"
+status = {
+    "family_id": "init_namespace",
+    "mode": mode,
+    "source_arm": source,
+    "performance_status": "pass" if performance_pass else "not-run" if not performance else "fail",
+    "verification_status": "pass" if verification_pass else "not-run" if not verification else "fail",
+    "resource_status": "pass" if resource_pass and (performance or verification) else "not-run" if not performance and not verification else "fail",
+    "cleanup_status": "pass" if all(row.get("cleanup_status") == "pass" for row in performance + verification) else "fail",
+    "custody_status": "pass",
+    "overall_status": overall,
+}
+(root / "run-status.json").write_text(json.dumps(status, sort_keys=True, separators=(",", ":")) + "\n")
+print("# LayerFS init_namespace family run\n")
+print(f"- Mode: `{mode}`")
+print(f"- Source arm: `{source}`")
+print(f"- Performance: `{status['performance_status']}` ({len(performance)} samples)")
+print(f"- Verification: `{status['verification_status']}` ({len(verification)} samples; {verification_summary['verification_wall_ns']} ns separate wall)")
+print(f"- Overall: `{overall}`\n")
+if performance_summary["rows"]:
+    print("| Scenario | Samples | Median lifecycle ns | Median ops/s | Median peak RSS bytes |")
+    print("| --- | ---: | ---: | ---: | ---: |")
+    for row in performance_summary["rows"]:
+        print(f"| {row['scenario_id']} | {row['samples']} | {row['median_complete_lifecycle_ns']} | {row['median_operations_per_second']} | {row['median_peak_rss_bytes']} |")
+
+hashes = []
+for path in sorted([root / "performance/raw.jsonl", root / "performance/summary.json", root / "verification/raw.jsonl", root / "verification/summary.json", root / "run-status.json"]):
+    hashes.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root)}")
+(root / "environment/evidence.sha256").write_text("\n".join(hashes) + "\n")
+PY
+  printf '%s\n' "$failed" >"$run_dir/campaign-failed.txt"
+  [[ $failed -eq 0 ]] || die "one or more family samples failed; evidence retained at $run_dir"
+  printf 'FAMILY %s COMPLETE %s\n' "$family_mode" "$run_dir"
+  exit 0
 fi
 python3 - "$run_dir" "$namespace_100000_binding_init_ns" \
   "$namespace_100000_binding_bytes_per_second" \

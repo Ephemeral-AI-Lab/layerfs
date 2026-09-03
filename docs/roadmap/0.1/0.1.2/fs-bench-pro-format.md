@@ -1,8 +1,9 @@
 # `fs-bench-pro` v0.1.2 family format
 
-> **Status:** Proposed harness contract for the v0.1.2 implementation and
-> performance-family issues. All files remain under `benchmark/fs-bench-pro`.
-> Tracked by [GitHub issue #17](https://github.com/Ephemeral-AI-Lab/layerfs/issues/17).
+> **Status:** Implemented for the `init_namespace` family; issues 1–4 add their
+> family definitions and runners sequentially. All files remain under
+> `benchmark/fs-bench-pro`. Tracked by
+> [GitHub issue #17](https://github.com/Ephemeral-AI-Lab/layerfs/issues/17).
 
 ## Goal
 

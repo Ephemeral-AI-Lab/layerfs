@@ -9,29 +9,16 @@ use std::sync::{
     mpsc, Arc,
 };
 
+#[allow(dead_code)]
+pub(crate) mod init_namespace {
+    include!("families/init_namespace.rs");
+}
+pub(crate) use init_namespace::*;
+
 pub(crate) type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const PREPEND: &[u8] = b"PREPEND010";
 #[allow(dead_code)]
-pub(crate) const NAMESPACE_SCHEMA: &str = "fs-bench-pro-namespace-v3";
-#[allow(dead_code)]
-pub(crate) const NAMESPACE_FIXTURE_SCHEMA: &str = "fs-bench-pro-namespace-fixture-v2";
-#[allow(dead_code)]
-pub(crate) const NAMESPACE_FAILURE_SCHEMA: &str = "fs-bench-pro-namespace-failure-v3";
-pub(crate) const NAMESPACE_FIXTURE_PROFILE: &str = "synthetic-small-heavy-v2";
-pub(crate) const NAMESPACE_DIGEST_PROFILE: &str = "namespace-file-digest-tree-v2";
-pub(crate) const NAMESPACE_EDIT_CONTRACT: &str = "content-only-normalized-mtime-v1";
-pub(crate) const NAMESPACE_LIFECYCLE_PROFILE: &str = "commit-head-exact-reopen-v2";
-pub(crate) const NAMESPACE_INIT_DIAGNOSTIC_PROFILE: &str = "initialization-only-diagnostic-v1";
-pub(crate) const NAMESPACE_FILES_PER_DIRECTORY: u64 = 100;
-pub(crate) const NAMESPACE_ANCHOR_BYTES: u64 = 100_000_000;
-#[allow(dead_code)]
 pub(crate) const NAMESPACE_SCRATCH_BYTES: usize = 1024 * 1024;
-pub(crate) const NAMESPACE_EDIT_MARKER: &[u8] = b"E000000001";
-pub(crate) const NAMESPACE_FILE_MODE: u32 = 0o640;
-pub(crate) const NAMESPACE_DIRECTORY_MODE: u32 = 0o750;
-pub(crate) const NAMESPACE_MTIME_SECONDS: i64 = 1_700_000_000;
-#[allow(dead_code)]
-pub(crate) const NAMESPACE_MTIME_NANOSECONDS: u32 = 0;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(u8)]
@@ -55,66 +42,6 @@ impl NamespaceClass {
         }
     }
 }
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct NamespaceScenario {
-    pub(crate) id: &'static str,
-    pub(crate) regular_files: u64,
-    pub(crate) data_directories: u64,
-    pub(crate) logical_bytes: u64,
-    pub(crate) anchor_files: u64,
-    pub(crate) empty_files: u64,
-    pub(crate) tiny_files: u64,
-    pub(crate) small_files: u64,
-    pub(crate) medium_files: u64,
-}
-
-pub(crate) const NAMESPACE_SCENARIOS: [NamespaceScenario; 4] = [
-    NamespaceScenario {
-        id: "namespace-100",
-        regular_files: 100,
-        data_directories: 1,
-        logical_bytes: 125_000_000,
-        anchor_files: 1,
-        empty_files: 1,
-        tiny_files: 78,
-        small_files: 15,
-        medium_files: 5,
-    },
-    NamespaceScenario {
-        id: "namespace-1000",
-        regular_files: 1_000,
-        data_directories: 10,
-        logical_bytes: 200_000_000,
-        anchor_files: 1,
-        empty_files: 10,
-        tiny_files: 789,
-        small_files: 150,
-        medium_files: 50,
-    },
-    NamespaceScenario {
-        id: "namespace-10000",
-        regular_files: 10_000,
-        data_directories: 100,
-        logical_bytes: 300_000_000,
-        anchor_files: 1,
-        empty_files: 100,
-        tiny_files: 7_899,
-        small_files: 1_500,
-        medium_files: 500,
-    },
-    NamespaceScenario {
-        id: "namespace-100000",
-        regular_files: 100_000,
-        data_directories: 1_000,
-        logical_bytes: 500_000_000,
-        anchor_files: 2,
-        empty_files: 1_000,
-        tiny_files: 78_998,
-        small_files: 15_000,
-        medium_files: 5_000,
-    },
-];
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct NamespaceFilePlan {
@@ -147,10 +74,7 @@ struct PlannedRole {
 }
 
 pub(crate) fn namespace_scenario(id: &str) -> Result<NamespaceScenario> {
-    NAMESPACE_SCENARIOS
-        .into_iter()
-        .find(|scenario| scenario.id == id)
-        .ok_or_else(|| format!("unknown namespace scenario: {id}").into())
+    init_namespace::namespace_scenario(id).map_err(Into::into)
 }
 
 pub(crate) fn namespace_plan(id: &str) -> Result<NamespacePlan> {
@@ -749,6 +673,17 @@ fn run() -> Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     match args.as_slice() {
         [command] if command == "self-check" => self_check(),
+        [command] if command == "family-list" => {
+            for scenario in NAMESPACE_SCENARIOS {
+                println!("{}\t{}\t{}", scenario.id, scenario.alias, scenario.display_name);
+            }
+            Ok(())
+        }
+        [command, case] if command == "family-resolve" => {
+            let scenario = namespace_scenario(case)?;
+            println!("{}\t{}\t{}", scenario.id, scenario.alias, scenario.display_name);
+            Ok(())
+        }
         [command] if command == "noop" => Ok(()),
         [command, path] if command == "digest" => print_digest(path),
         [command, path] if command == "read" => print_read(path),
@@ -764,7 +699,13 @@ fn run() -> Result<()> {
         [command, path, index, base_size] if command == "edit" => {
             edit(path, index.parse()?, base_size.parse()?)
         }
-        [command, path] if command == "namespace-edit" => namespace_edit(path),
+        [command, path] if command == "namespace-edit" => {
+            namespace_edit(path)?;
+            println!("attempted_operations=1");
+            println!("completed_operations=1");
+            println!("final_file_bytes={}", fs::metadata(path)?.len());
+            Ok(())
+        }
         [command, path] if command == "namespace-edit-normal" => {
             let (seconds, nanoseconds) = namespace_edit_normal(path)?;
             println!("normal_overwrite_mtime_seconds={seconds}");
@@ -783,7 +724,7 @@ fn run() -> Result<()> {
             println!("{size}\t{digest}");
             Ok(())
         }
-        _ => Err("usage: fs-benchmark-workload self-check | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
+        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
     }
 }
 
@@ -1147,6 +1088,7 @@ fn digest(path: &Path) -> Result<(u64, String)> {
 }
 
 fn self_check() -> Result<()> {
+    init_namespace::self_check()?;
     let root = std::env::temp_dir().join(format!(
         "fs-benchmark-pro-{}-{}",
         std::process::id(),
@@ -1221,12 +1163,12 @@ fn self_check() -> Result<()> {
         for (scenario, counts, logical_bytes) in expected_counts {
             let first = namespace_plan(scenario)?;
             if [
-                    first.empty_files,
-                    first.tiny_files,
-                    first.small_files,
-                    first.medium_files,
-                    first.anchor_files,
-                ] != counts
+                first.empty_files,
+                first.tiny_files,
+                first.small_files,
+                first.medium_files,
+                first.anchor_files,
+            ] != counts
                 || first.scenario.logical_bytes != logical_bytes
                 || (scenario == "namespace-100" && first != namespace_plan(scenario)?)
             {

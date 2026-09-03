@@ -647,6 +647,58 @@ fn run() -> AnyResult<()> {
             command,
             root,
             fixture,
+            container,
+            scenario,
+            seed,
+            source,
+            fixture_digest,
+            edited_digest,
+            edit_path,
+            edit_size,
+            fixture_cache_profile,
+        ] if command == "namespace-performance" => namespace_performance_case(
+            Path::new(root),
+            Path::new(fixture),
+            ContainerId(container.to_string_lossy().into_owned()),
+            namespace_scenario(&scenario.to_string_lossy())?,
+            seed.to_string_lossy().parse()?,
+            &source.to_string_lossy(),
+            &fixture_digest.to_string_lossy(),
+            &edited_digest.to_string_lossy(),
+            &edit_path.to_string_lossy(),
+            edit_size.to_string_lossy().parse()?,
+            &fixture_cache_profile.to_string_lossy(),
+        ),
+        [
+            command,
+            root,
+            fixture,
+            container,
+            scenario,
+            seed,
+            source,
+            fixture_digest,
+            edited_digest,
+            edit_path,
+            edit_size,
+            fixture_cache_profile,
+        ] if command == "namespace-verify-case" => namespace_verify_case(
+            Path::new(root),
+            Path::new(fixture),
+            ContainerId(container.to_string_lossy().into_owned()),
+            namespace_scenario(&scenario.to_string_lossy())?,
+            seed.to_string_lossy().parse()?,
+            &source.to_string_lossy(),
+            &fixture_digest.to_string_lossy(),
+            &edited_digest.to_string_lossy(),
+            &edit_path.to_string_lossy(),
+            edit_size.to_string_lossy().parse()?,
+            &fixture_cache_profile.to_string_lossy(),
+        ),
+        [
+            command,
+            root,
+            fixture,
             scenario,
             iteration,
             fixture_digest,
@@ -674,7 +726,7 @@ fn run() -> AnyResult<()> {
             Some(ContainerId(container.to_string_lossy().into_owned())),
             iterations.to_string_lossy().parse()?,
         ),
-        _ => Err("usage: fs-benchmark-pro self-check | namespace-fixture FIXTURE SCENARIO | namespace ROOT FIXTURE CONTAINER SCENARIO ITERATION FIXTURE_DIGEST EDITED_DIGEST EDIT_PATH EDIT_SIZE FIXTURE_CACHE_PROFILE | namespace-init-diagnostic ROOT FIXTURE SCENARIO ITERATION FIXTURE_DIGEST FIXTURE_CACHE_PROFILE | run ROOT FIXTURE [CONTAINER ITERATIONS]".into()),
+        _ => Err("usage: fs-benchmark-pro self-check | namespace-fixture FIXTURE SCENARIO | namespace ROOT FIXTURE CONTAINER SCENARIO ITERATION FIXTURE_DIGEST EDITED_DIGEST EDIT_PATH EDIT_SIZE FIXTURE_CACHE_PROFILE | namespace-performance|namespace-verify-case ROOT FIXTURE CONTAINER SCENARIO SEED SOURCE FIXTURE_DIGEST EDITED_DIGEST EDIT_PATH EDIT_SIZE FIXTURE_CACHE_PROFILE | namespace-init-diagnostic ROOT FIXTURE SCENARIO ITERATION FIXTURE_DIGEST FIXTURE_CACHE_PROFILE | run ROOT FIXTURE [CONTAINER ITERATIONS]".into()),
     }
 }
 
@@ -948,6 +1000,7 @@ fn rate(units: u64, elapsed_ns: u64) -> u64 {
 }
 
 fn namespace_self_check() -> AnyResult<()> {
+    workload_source::init_namespace::self_check()?;
     if NAMESPACE_100000_BINDING_INIT_NS != 3_235_294_118
         || NAMESPACE_100000_BINDING_BYTES_PER_SECOND != 153_000_000
         || NAMESPACE_100000_BINDING_FILES_PER_SECOND != 30_600
@@ -1248,6 +1301,331 @@ fn namespace_manifest(scenario: NamespaceScenario, digest: &str) -> AnyResult<Na
         mtime_nanoseconds: workload_source::NAMESPACE_MTIME_NANOSECONDS,
         digest: digest.to_owned(),
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_namespace_family_arguments(
+    fixture: &Path,
+    seed: u8,
+    source: &str,
+    fixture_digest: &str,
+    edited_digest: &str,
+    edit_path: &str,
+    edit_size: u64,
+    fixture_cache_profile: &str,
+) -> AnyResult<()> {
+    if !fixture.is_dir()
+        || !workload_source::SEEDS.contains(&seed)
+        || !matches!(source, "baseline" | "candidate")
+        || !valid_digest(fixture_digest)
+        || !valid_digest(edited_digest)
+        || fixture_digest == edited_digest
+        || !matches!(
+            fixture_cache_profile,
+            "generated-first-sample-uncontrolled"
+                | "generated-subsequent-sample-uncontrolled"
+                | "reused-first-sample-uncontrolled"
+                | "reused-subsequent-sample-uncontrolled"
+        )
+        || edit_path.starts_with('/')
+        || edit_path.contains("..")
+        || edit_size <= u64::try_from(workload_source::NAMESPACE_EDIT_MARKER.len())?
+    {
+        return Err("namespace family arguments".into());
+    }
+    Ok(())
+}
+
+fn output_u64(output: &OutputPage, name: &str) -> AnyResult<u64> {
+    let prefix = format!("{name}=");
+    output
+        .chunks
+        .iter()
+        .flat_map(|chunk| {
+            String::from_utf8_lossy(&chunk.bytes)
+                .lines()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .find_map(|line| line.strip_prefix(&prefix)?.parse().ok())
+        .ok_or_else(|| format!("missing workload field: {name}").into())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn namespace_performance_case(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    scenario: NamespaceScenario,
+    seed: u8,
+    source: &str,
+    fixture_digest: &str,
+    edited_digest: &str,
+    edit_path: &str,
+    edit_size: u64,
+    fixture_cache_profile: &str,
+) -> AnyResult<()> {
+    validate_namespace_family_arguments(
+        fixture,
+        seed,
+        source,
+        fixture_digest,
+        edited_digest,
+        edit_path,
+        edit_size,
+        fixture_cache_profile,
+    )?;
+    let fixture_manifest = namespace_manifest(scenario, fixture_digest)?;
+    std::fs::create_dir(root)?;
+    let store_path = root.join("store.sqlite");
+    let store = Arc::new(LayerStackStore::create(&store_path)?);
+    let client = Client::connect(store.clone())?;
+    let store_baseline_bytes = std::fs::metadata(&store_path)?.len();
+    let process_before = process_resource_snapshot()?;
+    let container_before = container_cgroup_snapshot(&container_id)?;
+
+    let init_started = Instant::now();
+    let initialized = client.initialize_layerstack(
+        EntityName::new(format!("{}-{source}-{seed}", scenario.id))?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let layerstack_init_ns = elapsed_ns(init_started);
+    let scan_receipts = store.take_layerstack_initialization_receipts();
+    let [scan] = scan_receipts.as_slice() else {
+        return Err("LayerStack initialization receipt cardinality".into());
+    };
+    if scan.layer_stack_id != initialized.layer_stack_id
+        || scan.scanned_files != fixture_manifest.regular_files
+        || scan.scanned_bytes != fixture_manifest.logical_bytes
+    {
+        return Err("LayerStack initialization scan receipt mismatch".into());
+    }
+    let branch_started = Instant::now();
+    let branch = client.fork_branch(
+        EntityName::new("main")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let branch_fork_ns = elapsed_ns(branch_started);
+
+    let t0 = Instant::now();
+    let workspace = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: namespace_placement(&container_id, scenario, usize::from(seed), "performance"),
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let t1 = Instant::now();
+    let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    let output = execute_workload(
+        &client,
+        workspace.id,
+        vec![
+            workload,
+            OsString::from("namespace-edit"),
+            OsString::from(edit_path),
+        ],
+    )?;
+    let t2 = Instant::now();
+    let attempted_operations = output_u64(&output, "attempted_operations")?;
+    let completed_operations = output_u64(&output, "completed_operations")?;
+    let final_file_bytes = output_u64(&output, "final_file_bytes")?;
+    if attempted_operations != 1 || completed_operations != 1 || final_file_bytes != edit_size {
+        return Err("namespace performance workload validity".into());
+    }
+    let head = match client.commit_workspace_session(workspace.id)? {
+        WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
+        result => return Err(format!("namespace performance Commit failed: {result:?}").into()),
+    };
+    visible_head(&client, branch, head)?;
+    let t3 = Instant::now();
+    client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    let t4 = Instant::now();
+    if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
+        return Err("namespace performance cleanup".into());
+    }
+    let process_after = process_resource_snapshot()?;
+    let container_after = container_cgroup_snapshot(&container_id)?;
+    if process_before.swaps != 0
+        || process_after.swaps != 0
+        || container_before.swap_current != 0
+        || container_after.swap_current != 0
+        || container_after.oom != container_before.oom
+        || container_after.oom_kill != container_before.oom_kill
+    {
+        return Err("namespace performance swap or OOM".into());
+    }
+    let snapshot = client.monitor_snapshot()?;
+    let initialize_candidate =
+        operation_candidate(&snapshot, OperationFamily::LayerStackInitialize)?;
+    let commit_candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
+    let commit_receipt = operation_workspace_commit(&snapshot)?;
+    let store_database_bytes = std::fs::metadata(&store_path)?.len();
+    let execution_ns = nanos(t1, t2);
+    let supplied_bytes = u64::try_from(workload_source::NAMESPACE_EDIT_MARKER.len())?;
+    let operations_per_second = rate(completed_operations, execution_ns);
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_alias\":\"{}\",\"display_name\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"seed_label\":\"layerfs-v0.1.2-seed-{}\",\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_digest\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"overwrite\",\"position\":\"deterministic-non-anchor\",\"operation_count\":1,\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":{},\"inserted_bytes\":0,\"deleted_bytes\":0,\"logical_zero_bytes\":0,\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"commit_payload_bytes_read\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"process_peak_rss_bytes\":{},\"cgroup_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        workload_source::PERFORMANCE_SCHEMA,
+        workload_source::FAMILY_ID,
+        scenario.id,
+        scenario.alias,
+        scenario.display_name,
+        source,
+        seed,
+        seed,
+        workload_source::NAMESPACE_FIXTURE_PROFILE,
+        fixture_digest,
+        fixture_cache_profile,
+        attempted_operations,
+        completed_operations,
+        edit_size,
+        final_file_bytes,
+        supplied_bytes,
+        layerstack_init_ns,
+        branch_fork_ns,
+        nanos(t0, t1),
+        execution_ns,
+        nanos(t2, t3),
+        nanos(t0, t3),
+        nanos(t3, t4),
+        nanos(t0, t4),
+        operations_per_second,
+        rate(supplied_bytes, execution_ns),
+        scan.scanned_files,
+        scan.scanned_bytes,
+        initialize_candidate.candidate_objects + commit_candidate.candidate_objects,
+        initialize_candidate.candidate_bytes + commit_candidate.candidate_bytes,
+        initialize_candidate.inserted_objects + commit_candidate.inserted_objects,
+        initialize_candidate.inserted_bytes + commit_candidate.inserted_bytes,
+        initialize_candidate.reused_objects + commit_candidate.reused_objects,
+        initialize_candidate.reused_bytes + commit_candidate.reused_bytes,
+        commit_receipt.payload_bytes_read,
+        store_baseline_bytes,
+        store_database_bytes,
+        process_after.peak_resident_bytes,
+        container_after.memory_peak,
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn namespace_verify_case(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    scenario: NamespaceScenario,
+    seed: u8,
+    source: &str,
+    fixture_digest: &str,
+    edited_digest: &str,
+    edit_path: &str,
+    edit_size: u64,
+    fixture_cache_profile: &str,
+) -> AnyResult<()> {
+    validate_namespace_family_arguments(
+        fixture,
+        seed,
+        source,
+        fixture_digest,
+        edited_digest,
+        edit_path,
+        edit_size,
+        fixture_cache_profile,
+    )?;
+    std::fs::create_dir(root)?;
+    let store_path = root.join("store.sqlite");
+    let store = Arc::new(LayerStackStore::create(&store_path)?);
+    let client = Client::connect(store.clone())?;
+    let initialized = client.initialize_layerstack(
+        EntityName::new(format!("{}-{source}-{seed}-verify", scenario.id))?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let branch = client.fork_branch(
+        EntityName::new("main")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let workspace = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: namespace_placement(
+            &container_id,
+            scenario,
+            usize::from(seed),
+            "verify-prepare",
+        ),
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    execute_workload(
+        &client,
+        workspace.id,
+        vec![
+            workload.clone(),
+            OsString::from("namespace-edit"),
+            OsString::from(edit_path),
+        ],
+    )?;
+    let head = match client.commit_workspace_session(workspace.id)? {
+        WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
+        result => {
+            return Err(format!("namespace verifier preparation Commit failed: {result:?}").into())
+        }
+    };
+    client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    drop(client);
+    drop(store);
+
+    let started = Instant::now();
+    let reopened_store = Arc::new(LayerStackStore::connect(&store_path)?);
+    let reopened = Client::connect(reopened_store)?;
+    visible_head(&reopened, branch, head)?;
+    let reopened_workspace = reopened.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: namespace_placement(&container_id, scenario, usize::from(seed), "verify"),
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let output = execute_workload(
+        &reopened,
+        reopened_workspace.id,
+        vec![
+            workload,
+            OsString::from("namespace-verify"),
+            OsString::from("."),
+            OsString::from(scenario.id),
+        ],
+    )?;
+    let verified = parse_namespace_verification(&output)?;
+    let expected = namespace_manifest(scenario, edited_digest)?;
+    if verified.manifest != expected {
+        return Err("namespace exact verifier mismatch".into());
+    }
+    reopened.end_workspace_session(reopened_workspace.id, EndWorkspaceMode::Clean)?;
+    if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
+        return Err("namespace verifier cleanup".into());
+    }
+    let verification_ns = elapsed_ns(started);
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_alias\":\"{}\",\"display_name\":\"{}\",\"verification_id\":\"exact-result\",\"mode\":\"verify\",\"source_arm\":\"{}\",\"seed\":{},\"status\":\"pass\",\"expected_file_bytes\":{},\"observed_file_bytes\":{},\"expected_sha256\":\"{}\",\"observed_sha256\":\"{}\",\"root_status\":\"pass\",\"fresh_reopen_status\":\"pass\",\"resource_status\":\"pass\",\"cleanup_status\":\"pass\",\"verification_ns\":{},\"maximum_verifier_buffer_bytes\":{},\"verifier_worker_count\":{}}}",
+        workload_source::VERIFICATION_SCHEMA,
+        workload_source::FAMILY_ID,
+        scenario.id,
+        scenario.alias,
+        scenario.display_name,
+        source,
+        seed,
+        expected.logical_bytes,
+        verified.manifest.logical_bytes,
+        expected.digest,
+        verified.manifest.digest,
+        verification_ns,
+        verified.maximum_verifier_buffer_bytes,
+        verified.verifier_worker_count,
+    );
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2714,8 +3092,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn namespace_family_registry_and_dispatch_are_exact() {
+        workload_source::init_namespace::self_check().unwrap();
+    }
+
+    #[test]
     fn lifecycle_equations_and_median_are_exact() {
-        self_check().unwrap();
+        LifecycleSample {
+            workspace_create_ns: 1,
+            execution_ns: 2,
+            commit_api_ns: 3,
+            layerstack_visible_ns: 6,
+            workspace_end_ns: 4,
+            complete_lifecycle_ns: 10,
+            inner_write_ns: Some(1),
+        }
+        .validate()
+        .unwrap();
         assert_eq!(median(vec![5, 1, 3]), 3);
     }
 }

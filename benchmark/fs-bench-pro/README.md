@@ -17,10 +17,11 @@ sections 17–19.
 - The canonical scenario and status table is the
   [0.1.x benchmark matrix](../../docs/roadmap/0.1/benchmarking.md).
 
-## Proposed v0.1.2 family format
+## v0.1.2 family format
 
 The [v0.1.2 harness contract](../../docs/roadmap/0.1/0.1.2/fs-bench-pro-format.md)
-keeps all new work in this crate and proposes:
+keeps all new work in this crate. The namespace family is implemented; later
+issues add the other family files only when their work begins:
 
 ```text
 families/init_namespace.rs           + run-namespace.sh
@@ -31,12 +32,13 @@ families/store_footprint.rs       + run-store-footprint.sh
 
 Each runner defaults to one explicit case/seed in performance-only mode. Full
 digest/root/reopen and adversarial proofs are separate `verify`/`admission`
-modes and never enter performance timing. `run-namespace.sh` is already the
-v0.1.1 `init_namespace` family runner; issue 0 only proposes extracting its pure
-definitions into `families/init_namespace.rs` and adding descriptive CLI/display
-aliases without renaming historical raw IDs. Other files above remain proposed
-until their v0.1.2 issues are implemented; existing `run.sh`,
-`run-namespace.sh`, and raw schemas keep their frozen meanings.
+modes and never enter performance timing. `run-namespace.sh` is the v0.1.1
+`init_namespace` compatibility runner and the v0.1.2 family runner. Its pure
+definitions live in `families/init_namespace.rs`; raw IDs and descriptive
+aliases resolve to the same frozen scenarios. Other family files above remain
+proposed until their v0.1.2 issues are implemented. Existing `run.sh`, legacy
+`run-namespace.sh` positional commands, and raw schemas keep their frozen
+meanings.
 
 The benchmark contract also carries the canonical **Problem statement**,
 **Goal**, **Files to read**, and **Acceptance criteria** for the v0.1.1
@@ -119,11 +121,30 @@ benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID namespace-10000 1
 benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID all 4
 ```
 
+The v0.1.2 family interface keeps performance and exact verification separate:
+
+```sh
+benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID \
+  --case namespace-100-files-125mb --seed 1 --source candidate
+benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID \
+  --case namespace-100 --source candidate --mode verify
+benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID \
+  --all --source candidate --mode admission
+```
+
+`performance` is the default and requires one case, seed, and explicit source
+arm. `verify` writes no performance row. `admission` requires `--all`, runs all
+three seeds for the selected source arm, and then writes the exact verifier
+stream separately. Run baseline and candidate source-arm admissions against
+the same sealed fixture before paired comparison.
+
 The namespace runner creates fixtures outside product timing, starts one fresh
 benchmark process per tier/sample, supervises whole-process CPU and peak RSS,
-and retains immutable success or failure evidence under
-`benchmark-results/fs-bench-pro/namespace/RUN_ID`. Namespace rows use their own
-schema and never contribute to registered payload totals.
+and retains immutable success or failure evidence. Legacy rows remain under
+`benchmark-results/fs-bench-pro/namespace/RUN_ID`; family-mode rows use
+`benchmark-results/fs-bench-pro/init_namespace/RUN_ID` with separate
+`performance/` and `verification/` streams. Namespace rows never contribute to
+registered payload totals.
 
 To compare isolated product-source variants against the exact same sealed
 fixture without regenerating it, point later runs at the earlier campaign's

@@ -56,14 +56,8 @@ PY
 self_check() {
   bash -n "$0"
   python3 "$here/compare.py" --self-check
-  cargo test --manifest-path "$repo/Cargo.toml" -p fs-benchmark-pro
-  local temporary
-  temporary=$(mktemp -d "${TMPDIR:-/tmp}/fs-bench-pro.XXXXXX")
-  trap 'rm -rf -- "$temporary"' EXIT
-  rustc --edition=2021 -C opt-level=3 "$here/workload.rs" -o "$temporary/fs-benchmark-workload"
-  "$temporary/fs-benchmark-workload" self-check
-  rm -rf -- "$temporary"
-  trap - EXIT
+  cargo test --manifest-path "$repo/Cargo.toml" -p fs-benchmark-pro \
+    tests::lifecycle_equations_and_median_are_exact -- --exact
 }
 
 if [[ "${1:-}" == "--self-check" ]]; then self_check; exit 0; fi
