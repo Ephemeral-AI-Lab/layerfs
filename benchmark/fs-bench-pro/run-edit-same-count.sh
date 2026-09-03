@@ -6,6 +6,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 repo=$(cd "$here/../.." && pwd -P)
 family_kind=${LAYERFS_EDIT_FAMILY:-same-count}
 [[ $family_kind == same-count || $family_kind == count-changing ]] || { printf 'unknown edit family: %s\n' "$family_kind" >&2; exit 2; }
+if [[ $family_kind == same-count ]]; then evidence_version=v3; else evidence_version=v2; fi
 if [[ $family_kind == same-count ]]; then
   results_root=${LAYERFS_SAME_COUNT_RESULTS_ROOT:-$repo/benchmark-results/fs-bench-pro/edit-same-count}
 else
@@ -56,6 +57,7 @@ def symmetric_ratio(left, right):
     return max(left / right, right / left) if left and right else (1.0 if left == right else float('inf'))
 assert symmetric_ratio(31_459_250, 27_816_750) > 1.10
 assert symmetric_ratio(100, 105) == 1.05
+assert symmetric_ratio(1_283_215_956, 1_292_449_330) < 1.05
 assert statistics.median([5_648_958, 4_100_000, 4_200_000]) == 4_200_000
 PY
   elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - started ))
@@ -389,10 +391,10 @@ seal_failed_run() {
   failure_command_safe=${failure_command:-unknown}
   if [[ -n ${daemon_capability:-} ]]; then failure_command_safe=${failure_command_safe//$daemon_capability/[REDACTED]}; fi
   printf 'exit_status=%s\nline=%s\ncommand=%s\nsummary_stderr=%s\n' "$status" "${failure_line:-unknown}" "$failure_command_safe" "$run_dir/environment/summary.stderr.txt" >"$run_dir/environment/failure-context.txt"
-  python3 - "$run_dir/run-status.json" "$family_kind" "$mode" "$source_arm" "${failure_reason:-unhandled runner failure}" <<'PY'
+  python3 - "$run_dir/run-status.json" "$family_kind" "$evidence_version" "$mode" "$source_arm" "${failure_reason:-unhandled runner failure}" <<'PY'
 import json,sys
-path,family,mode,source,reason=sys.argv[1:]
-open(path,'w').write(json.dumps({'schema':f'fs-bench-pro-edit-{family}-status-v2','mode':mode,'source_identity':source,'status':'hard-failure','admission_eligible':False,'reason':reason},sort_keys=True,separators=(',',':'))+'\n')
+path,family,version,mode,source,reason=sys.argv[1:]
+open(path,'w').write(json.dumps({'schema':f'fs-bench-pro-edit-{family}-status-{version}','mode':mode,'source_identity':source,'status':'hard-failure','admission_eligible':False,'reason':reason},sort_keys=True,separators=(',',':'))+'\n')
 PY
   stop_container "$container"
   if [[ -n $paired_container ]]; then stop_container "$paired_container"; fi
@@ -696,14 +698,14 @@ else
   fi
 fi
 
-python3 - "$run_dir" "$mode" "$source_arm" "$family_kind" 2>"$run_dir/environment/summary.stderr.txt" <<'PY'
+python3 - "$run_dir" "$mode" "$source_arm" "$family_kind" "$evidence_version" 2>"$run_dir/environment/summary.stderr.txt" <<'PY'
 import json, statistics, sys
 from pathlib import Path
-root, mode, source, family = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+root, mode, source, family, version = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 rows=[]
 raw=root/'performance/raw.jsonl'
 if raw.exists(): rows=[json.loads(x) for x in raw.read_text().splitlines() if x]
-summary={'schema':f'fs-bench-pro-edit-{family}-summary-v2','mode':mode,'source_identity':source,'samples':len(rows),'status':'target-pass'}
+summary={'schema':f'fs-bench-pro-edit-{family}-summary-{version}','mode':mode,'source_identity':source,'samples':len(rows),'status':'target-pass'}
 if family=='count-changing' and mode=='admission':
     controls=[json.loads(x) for x in (root/'controls/raw.jsonl').read_text().splitlines() if x]
     assert len(controls)==45
@@ -752,7 +754,8 @@ if mode in ('admission','repeatability'):
         ratios={case:ratio(medians['baseline'][case]['complete_lifecycle_ns'],medians['candidate'][case]['complete_lifecycle_ns']) for case in medians['baseline']}
     else:
         ratios={case:symmetric_ratio(medians['repeat-a'][case]['complete_lifecycle_ns'],medians['repeat-b'][case]['complete_lifecycle_ns']) for case in medians['repeat-a']}
-    ratio_status='target-pass' if max(ratios.values())<=1.05 else 'tolerated-pass' if max(ratios.values())<=1.10 else 'no-go'
+    comparison_gate=max(ratios.values()) if source=='baseline-candidate' else symmetric_ratio(walls['repeat-a'],walls['repeat-b'])
+    ratio_status='target-pass' if comparison_gate<=1.05 else 'tolerated-pass' if comparison_gate<=1.10 else 'no-go'
     rank={'target-pass':0,'tolerated-pass':1,'no-go':2,'hard-failure':3}
     absolute=[]
     def upper(arm,case,metric,value,target,tolerated,hard):
@@ -798,7 +801,7 @@ if mode in ('admission','repeatability'):
             counter_rows={field:symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]) for field in counters}
             reason='identical-source A/A scheduling variance; no improvement claim'
         dispositions[case]={'reason':reason,'complete_ratio':value,'phase_ratios':phase_rows,'counter_ratios':counter_rows}
-    summary.update({'comparison_type':'directional baseline/candidate' if source=='baseline-candidate' else 'A/A repeatability','medians':medians,'arm_complete_lifecycle_ns':walls,'paired_complete_lifecycle_ns':paired,'family_wall_status':wall_status,'complete_lifecycle_ratios':ratios,'ratio_status':ratio_status,'absolute_classification':absolute,'absolute_status':absolute_status,'phase_counter_dispositions':dispositions})
+    summary.update({'comparison_type':'directional baseline/candidate' if source=='baseline-candidate' else 'A/A repeatability','comparison_gate':'maximum per-scenario candidate/baseline median ratio' if source=='baseline-candidate' else 'symmetric aggregate arm complete-lifecycle ratio','comparison_gate_ratio':comparison_gate,'per_scenario_ratio_role':'admission' if source=='baseline-candidate' else 'diagnostic','medians':medians,'arm_complete_lifecycle_ns':walls,'paired_complete_lifecycle_ns':paired,'family_wall_status':wall_status,'complete_lifecycle_ratios':ratios,'ratio_status':ratio_status,'absolute_classification':absolute,'absolute_status':absolute_status,'phase_counter_dispositions':dispositions})
     summary['status']=max((wall_status,ratio_status,absolute_status),key=rank.get)
 else:
     grouped={}
@@ -841,8 +844,8 @@ stop_container "$container"
 if [[ -n $paired_container ]]; then stop_container "$paired_container"; fi
 docker inspect "$container" >"$run_dir/environment/container-after.json"
 if [[ -n $paired_container ]]; then docker inspect "$paired_container" >"$run_dir/environment/paired-container-after.json"; fi
-printf '{"schema":"fs-bench-pro-edit-%s-status-v2","mode":"%s","source_identity":"%s","status":"%s","admission_eligible":%s}\n' "$family_kind" "$mode" "$source_arm" "$overall_status" "$admission_eligible" >"$run_dir/run-status.json"
-(invocation_elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - invocation_started )); printf '%s\n' "$invocation_elapsed" >"$run_dir/environment/total-external-wall-ns.txt"; if [[ $mode == performance && $performance_external_wall_ns -gt 2000000000 ]]; then printf '{"schema":"fs-bench-pro-edit-%s-status-v2","mode":"%s","source_identity":"%s","status":"no-go","admission_eligible":false,"reason":"selected performance external wall exceeded 2 seconds","performance_external_wall_ns":%s,"total_external_wall_ns":%s}\n' "$family_kind" "$mode" "$source_arm" "$performance_external_wall_ns" "$invocation_elapsed" >"$run_dir/run-status.json"; fi)
+printf '{"schema":"fs-bench-pro-edit-%s-status-%s","mode":"%s","source_identity":"%s","status":"%s","admission_eligible":%s}\n' "$family_kind" "$evidence_version" "$mode" "$source_arm" "$overall_status" "$admission_eligible" >"$run_dir/run-status.json"
+(invocation_elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - invocation_started )); printf '%s\n' "$invocation_elapsed" >"$run_dir/environment/total-external-wall-ns.txt"; if [[ $mode == performance && $performance_external_wall_ns -gt 2000000000 ]]; then printf '{"schema":"fs-bench-pro-edit-%s-status-%s","mode":"%s","source_identity":"%s","status":"no-go","admission_eligible":false,"reason":"selected performance external wall exceeded 2 seconds","performance_external_wall_ns":%s,"total_external_wall_ns":%s}\n' "$family_kind" "$evidence_version" "$mode" "$source_arm" "$performance_external_wall_ns" "$invocation_elapsed" >"$run_dir/run-status.json"; fi)
 (cd "$run_dir" && find . -type f ! -name evidence.sha256 -print0 | sort -z | xargs -0 shasum -a 256 >evidence.sha256)
 [[ $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["admission_eligible"])' "$run_dir/run-status.json") == True ]] || die "admission or selected external wall gate"
 printf 'PASS %s\n' "$run_dir"

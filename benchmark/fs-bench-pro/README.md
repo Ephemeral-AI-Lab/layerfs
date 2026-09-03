@@ -169,7 +169,11 @@ Terminal identical-source admission uses one sealed daemon container with
 `--source a-a-repeatability`, alternates A/A labels per seed, and reports
 repeatability rather than an improvement claim. Each label still receives a
 fresh Store, Branch, Workspace, and workload process. Distinct sealed
-containers remain required for directional baseline/candidate admission.
+containers remain required for directional baseline/candidate admission. The
+v3 identical-source classifier gates the symmetric aggregate arm lifecycle
+ratio; per-scenario ratios remain diagnostics because short A/A lifecycles were
+not stable admission statistics. Directional comparisons still gate each
+scenario independently.
 
 The runner's `--self-check` performs no Docker command and must finish within
 two seconds. Performance mode runs no digest/root/reopen verifier. Admission

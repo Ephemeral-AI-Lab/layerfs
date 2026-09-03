@@ -1,6 +1,7 @@
 # Same-count file-edit performance family
 
-> **Status:** Implemented and accepted by the symmetric alternating A/A campaign
+> **Status:** Implemented; final-source revalidation is in progress under the
+> prospective v3 A/A classifier. The original terminal campaign is
 > `issue13-terminal-final2-bed5a590`. The earlier
 > `issue13-terminal-aa-final-e8226e4c` run is immutable diagnostic history and
 > release-ineligible because its A/A classifier was label-dependent. The family
@@ -227,8 +228,12 @@ host peak RSS               97,124,352 bytes
 
 Run three paired seed samples in alternating A/B, B/A, A/B order. When both
 arms have the same image/commit/product/harness/workload identity, report A/A
-repeatability, classify it with label-invariant `max(A/B, B/A)`, and make no
-baseline/candidate improvement claim. For a directional candidate/baseline row:
+repeatability, classify the aggregate arm complete-lifecycle walls with the
+label-invariant `max(A/B, B/A)`, retain per-scenario symmetric ratios as
+diagnostics, and make no baseline/candidate improvement claim. This v3 rule is
+prospective: repeated final-source v2 runs failed on different short scenarios
+despite identical structural counters and passing aggregate walls. Directional
+candidate/baseline evidence continues to gate each scenario separately:
 
 The one-shot A/A daemon is observed at clean exit after every sample, followed
 by the retained 200 ms Docker Desktop settling interval outside all measured
@@ -292,7 +297,7 @@ verifier invocation.
 - [x] New 1/10/100 schedules are exact prefixes and preserve 256 KiB length.
 - [x] Every performance row reports latency, operations/s, phase, I/O, object,
   CPU, memory, and cleanup receipts without verifier work in its timer.
-- [x] Symmetric A/A repeatability, absolute anchor, family-wall, RSS, and
-  zero-swap gates pass in replacement evidence.
+- [ ] Final-source symmetric aggregate A/A repeatability, absolute anchor,
+  family-wall, RSS, and zero-swap gates pass in v3 replacement evidence.
 - [x] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
   structural limits before publication.
