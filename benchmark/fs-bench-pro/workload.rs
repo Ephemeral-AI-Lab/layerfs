@@ -871,50 +871,101 @@ fn create_store_footprint_fixture(root: &Path, control_id: &str, tier: u64) -> R
 }
 
 fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
-    fn walk(
-        root: &Path,
-        path: &Path,
-        hash: &mut Sha256,
-        files: &mut u64,
-        logical_bytes: &mut u64,
-    ) -> Result<()> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    fn file_record(root: &Path, path: &Path) -> Result<StoreFixtureRecord> {
+        let relative = path.strip_prefix(root)?;
+        let metadata = fs::metadata(path)?;
+        let (_, digest) = digest(path)?;
+        let mut content_digest = [0_u8; 32];
+        for (index, byte) in content_digest.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&digest[index * 2..index * 2 + 2], 16)?;
+        }
+        Ok(StoreFixtureRecord {
+            path: relative.to_string_lossy().into_owned(),
+            size: metadata.len(),
+            mode: metadata.permissions().mode() & 0o7777,
+            mtime_seconds: metadata.mtime(),
+            content_digest,
+        })
+    }
+    fn collect_records(root: &Path, path: &Path) -> Result<Vec<StoreFixtureRecord>> {
         let mut entries = fs::read_dir(path)?.collect::<std::io::Result<Vec<_>>>()?;
         entries.sort_unstable_by_key(|entry| entry.file_name());
+        let mut output = Vec::with_capacity(entries.len());
         for entry in entries {
             let path = entry.path();
             if path.is_dir() {
-                walk(root, &path, hash, files, logical_bytes)?;
+                output.extend(collect_records(root, &path)?);
             } else if path.is_file() {
-                let relative = path.strip_prefix(root)?;
-                let metadata = entry.metadata()?;
-                let (_, digest) = digest(&path)?;
-                let mut content_digest = [0_u8; 32];
-                for (index, byte) in content_digest.iter_mut().enumerate() {
-                    *byte = u8::from_str_radix(&digest[index * 2..index * 2 + 2], 16)?;
-                }
-                store_tree_hash_record(
-                    hash,
-                    &StoreFixtureRecord {
-                        path: relative.to_string_lossy().into_owned(),
-                        size: metadata.len(),
-                        mode: metadata.permissions().mode() & 0o7777,
-                        mtime_seconds: metadata.mtime(),
-                        content_digest,
-                    },
-                );
-                *files = files.checked_add(1).ok_or("Store digest file count")?;
-                *logical_bytes = logical_bytes
-                    .checked_add(metadata.len())
-                    .ok_or("Store digest logical bytes")?;
+                output.push(file_record(root, &path)?);
             }
+        }
+        Ok(output)
+    }
+    fn append(
+        hash: &mut Sha256,
+        records: Vec<StoreFixtureRecord>,
+        files: &mut u64,
+        logical_bytes: &mut u64,
+    ) -> Result<()> {
+        for record in records {
+            *files = files.checked_add(1).ok_or("Store digest file count")?;
+            *logical_bytes = logical_bytes
+                .checked_add(record.size)
+                .ok_or("Store digest logical bytes")?;
+            store_tree_hash_record(hash, &record);
         }
         Ok(())
     }
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
     let mut hash = Sha256::new();
     hash.update(b"layerfs/fs-bench-pro/store-footprint-tree/v1\0");
     let (mut files, mut logical_bytes) = (0, 0);
-    walk(root, root, &mut hash, &mut files, &mut logical_bytes)?;
+    let mut entries = fs::read_dir(root)?.collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_unstable_by_key(|entry| entry.file_name());
+    let mut directories = Vec::new();
+    for entry in entries {
+        if entry.path().is_dir() {
+            directories.push(entry.path());
+        } else {
+            append(
+                &mut hash,
+                vec![file_record(root, &entry.path())?],
+                &mut files,
+                &mut logical_bytes,
+            )?;
+        }
+    }
+    let workers = std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(1)
+        .min(16);
+    for chunk in directories.chunks(workers) {
+        let (sender, receiver) = mpsc::sync_channel(chunk.len());
+        let mut groups = vec![None; chunk.len()];
+        std::thread::scope(|scope| -> Result<()> {
+            for (index, directory) in chunk.iter().enumerate() {
+                let sender = sender.clone();
+                scope.spawn(move || {
+                    let result = collect_records(root, directory).map_err(|error| error.to_string());
+                    let _ = sender.send((index, result));
+                });
+            }
+            drop(sender);
+            for _ in chunk {
+                let (index, result) = receiver.recv()?;
+                groups[index] = Some(result.map_err(|error| -> Box<dyn Error> { error.into() })?);
+            }
+            Ok(())
+        })?;
+        for group in groups {
+            append(
+                &mut hash,
+                group.ok_or("Store digest worker result")?,
+                &mut files,
+                &mut logical_bytes,
+            )?;
+        }
+    }
     Ok((files, logical_bytes, hex(&hash.finish())))
 }
 
