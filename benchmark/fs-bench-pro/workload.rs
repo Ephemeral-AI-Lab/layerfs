@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use std::fs::Metadata;
 use std::fs::{self, File, FileTimes, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     mpsc, Arc,
@@ -687,13 +687,17 @@ fn store_tree_digest(records: &[StoreFixtureRecord]) -> String {
     let mut hash = Sha256::new();
     hash.update(b"layerfs/fs-bench-pro/store-footprint-tree/v1\0");
     for record in records {
-        hash_field(&mut hash, record.path.as_bytes());
-        hash.update(&record.size.to_be_bytes());
-        hash.update(&record.mode.to_be_bytes());
-        hash.update(&record.mtime_seconds.to_be_bytes());
-        hash.update(&record.content_digest);
+        store_tree_hash_record(&mut hash, record);
     }
     hex(&hash.finish())
+}
+
+fn store_tree_hash_record(hash: &mut Sha256, record: &StoreFixtureRecord) {
+    hash_field(hash, record.path.as_bytes());
+    hash.update(&record.size.to_be_bytes());
+    hash.update(&record.mode.to_be_bytes());
+    hash.update(&record.mtime_seconds.to_be_bytes());
+    hash.update(&record.content_digest);
 }
 
 fn store_metadata_seconds(kind: store_footprint::Kind, index: usize) -> i64 {
@@ -867,39 +871,51 @@ fn create_store_footprint_fixture(root: &Path, control_id: &str, tier: u64) -> R
 }
 
 fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
-    fn collect(root: &Path, path: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
-        for entry in fs::read_dir(path)? {
-            let path = entry?.path();
+    fn walk(
+        root: &Path,
+        path: &Path,
+        hash: &mut Sha256,
+        files: &mut u64,
+        logical_bytes: &mut u64,
+    ) -> Result<()> {
+        let mut entries = fs::read_dir(path)?.collect::<std::io::Result<Vec<_>>>()?;
+        entries.sort_unstable_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let path = entry.path();
             if path.is_dir() {
-                collect(root, &path, files)?;
+                walk(root, &path, hash, files, logical_bytes)?;
             } else if path.is_file() {
-                files.push(path.strip_prefix(root)?.to_owned());
+                let relative = path.strip_prefix(root)?;
+                let metadata = entry.metadata()?;
+                let (_, digest) = digest(&path)?;
+                let mut content_digest = [0_u8; 32];
+                for (index, byte) in content_digest.iter_mut().enumerate() {
+                    *byte = u8::from_str_radix(&digest[index * 2..index * 2 + 2], 16)?;
+                }
+                store_tree_hash_record(
+                    hash,
+                    &StoreFixtureRecord {
+                        path: relative.to_string_lossy().into_owned(),
+                        size: metadata.len(),
+                        mode: metadata.permissions().mode() & 0o7777,
+                        mtime_seconds: metadata.mtime(),
+                        content_digest,
+                    },
+                );
+                *files = files.checked_add(1).ok_or("Store digest file count")?;
+                *logical_bytes = logical_bytes
+                    .checked_add(metadata.len())
+                    .ok_or("Store digest logical bytes")?;
             }
         }
         Ok(())
     }
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
-    let mut paths = Vec::new();
-    collect(root, root, &mut paths)?;
-    paths.sort();
-    let mut records = Vec::with_capacity(paths.len());
-    for relative in paths {
-        let path = root.join(&relative);
-        let metadata = fs::metadata(&path)?;
-        let (_, digest) = digest(&path)?;
-        let bytes = (0..32)
-            .map(|index| u8::from_str_radix(&digest[index * 2..index * 2 + 2], 16))
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-        records.push(StoreFixtureRecord {
-            path: relative.to_string_lossy().into_owned(),
-            size: metadata.len(),
-            mode: metadata.permissions().mode() & 0o7777,
-            mtime_seconds: metadata.mtime(),
-            content_digest: bytes.try_into().map_err(|_| "Store digest")?,
-        });
-    }
-    let logical_bytes = records.iter().map(|record| record.size).sum();
-    Ok((records.len() as u64, logical_bytes, store_tree_digest(&records)))
+    let mut hash = Sha256::new();
+    hash.update(b"layerfs/fs-bench-pro/store-footprint-tree/v1\0");
+    let (mut files, mut logical_bytes) = (0, 0);
+    walk(root, root, &mut hash, &mut files, &mut logical_bytes)?;
+    Ok((files, logical_bytes, hex(&hash.finish())))
 }
 
 fn main() {

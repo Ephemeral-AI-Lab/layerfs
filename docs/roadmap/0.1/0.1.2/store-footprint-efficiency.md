@@ -1,8 +1,9 @@
 # Store footprint efficiency
 
-> **Status:** Proposed v0.1.2 storage-evidence family: 3 controls, each measured
-> with 3 fresh Stores per unchanged baseline and retained candidate. Current
-> namespace evidence is provisional and is not a frozen v0.1.2 baseline.
+> **Status:** Implemented and in baseline/candidate measurement: 3 controls,
+> each measured with 3 fresh Stores per unchanged baseline and retained
+> candidate. Interrupted or diagnostic evidence is not a frozen v0.1.2
+> baseline.
 > Tracked by [GitHub issue #16](https://github.com/Ephemeral-AI-Lab/layerfs/issues/16).
 
 ## Problem statement
@@ -147,6 +148,13 @@ benchmark environment. They do not enter `registered_total_ns`, replace the
 unique-content namespace performance row, or weaken exact FUSE reopen
 verification.
 
+The `600 MB` admission target applies to the primary
+`store-footprint-unique-100000` question. Metadata-cardinality and large-object
+rows are explanatory controls: they must retain complete accounting, exact
+identity, baseline-relative performance/resource gates, and no Store-footprint
+regression, but their deliberately different canonical object sets are not
+individually compared with the primary control's `600 MB` limit.
+
 ## Required execution order
 
 ### 1. Freeze a fair baseline
@@ -176,8 +184,10 @@ The ObjectId candidate tests primary-key locality. The encoded-length candidate
 tests row-table packing for mixed BLOB sizes. Do not globally sort all objects,
 add a complete index, or add an external spool merely to reorder admission.
 
-Retain a candidate only when total durable footprint improves outside noise and
-initialization, Commit, and exact reopen do not regress more than five percent.
+Retain a candidate only when total durable footprint improves outside noise.
+Initialization, Commit, and exact reopen target at most `1.05x` baseline and
+may use the global tolerated band through `1.10x` with explicit disposition;
+anything above `1.10x` is no-go.
 
 ### 3. Measure SQLite layout alternatives without admitting them prematurely
 
@@ -262,6 +272,24 @@ Reject a candidate that saves reported SQLite bytes by:
 The selected result must retain zero swap, no OOM, deterministic cleanup, and
 no residual pack, journal, spool, process, mount, Workspace, or Branch lease.
 
+The runner freezes these additional envelopes before candidate collection:
+
+- selected performance samples: hard 5-second supervision;
+- admission performance samples: hard 30-second supervision;
+- exact verifier samples: hard 60-second supervision, 180 seconds aggregate;
+- CPU, process RSS/physical footprint, cgroup peak, temporary bytes, physical
+  I/O, and complete lifecycle: candidate at most `1.10x` the exact baseline;
+- primary storage: at most `600,000,000` durable bytes;
+- explanatory-control storage: no increase from the exact baseline.
+
+Baseline/candidate custody requires identical host, Docker, harness, workload,
+CDC, fixture, cache, Store-creation, SQLite schema/page-size, canonical root,
+canonical object-set digest, and object/byte counts. The only admitted product
+diff is the measured bounded encoded-length ordering in object admission.
+Source-arm and seed labels never enter Store entity metadata. The exact verifier
+streams lexicographically ordered records one directory at a time instead of
+retaining all 100,000 paths and records.
+
 ## Admission decisions
 
 Classify each mechanism independently:
@@ -318,9 +346,9 @@ stretch target.
   not rely on hidden files or background work.
 - [ ] Exact canonical bytes, ObjectIds, roots, collision behavior, Commit,
   materialization, FUSE, fresh reopen, and cleanup proofs pass.
-- [ ] Initialization, localized Commit, and exact reopen regress no more than
-  five percent; CPU, RSS, page cache, temporary bytes, and physical I/O satisfy
-  the retained resource envelope.
+- [ ] Initialization, localized Commit, and exact reopen meet the `1.05x`
+  target or explicitly disposed `1.10x` tolerated band; CPU, RSS, page cache,
+  temporary bytes, and physical I/O satisfy the retained resource envelope.
 - [ ] No Store-footprint candidate alters the Store schema, required page size,
   canonical format, CDC profile, identity, public API, or daemon/proxy contract.
 - [ ] Every incompatible but evidence-backed mechanism receives a focused

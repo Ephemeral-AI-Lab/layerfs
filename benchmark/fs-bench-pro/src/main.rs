@@ -3419,7 +3419,7 @@ fn store_footprint_case(
     let store_baseline_bytes = std::fs::metadata(&store_path)?.len();
     let initialization_started = Instant::now();
     let initialized = client.initialize_layerstack(
-        EntityName::new(format!("store-footprint-{source}-{seed}"))?,
+        EntityName::new("store-footprint")?,
         LayerStackInitialization::Directory(fixture.to_owned()),
     )?;
     let initialization_ns = elapsed_ns(initialization_started);
@@ -3572,7 +3572,7 @@ fn store_footprint_case(
         workload_source::store_footprint::PERFORMANCE_SCHEMA
     };
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"control_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"fixture_digest\":\"{}\",\"edited_fixture_digest\":\"{}\",\"regular_files\":{},\"logical_bytes\":{},\"attempted_operations\":{},\"completed_operations\":{},\"final_file_bytes\":{},\"initialization_ns\":{},\"commit_ns\":{},\"reopen_ns\":{},\"verification_ns\":{},\"complete_ns\":{},\"store_baseline_bytes\":{},\"sqlite_database_bytes\":{},\"other_durable_store_bytes\":{},\"total_durable_store_bytes\":{},\"durable_store_files\":{},\"canonical_objects\":{},\"canonical_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"commit_candidate_objects\":{},\"commit_candidate_bytes\":{},\"commit_payload_bytes_read\":{},\"fuse_kernel_write_bytes\":{},\"workspace_spool_write_bytes\":{},\"workspace_spool_allocated_bytes\":{},\"workspace_spool_peak_bytes\":{},\"workspace_spool_live_bytes\":{},\"workspace_spool_superseded_bytes\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"control_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"fixture_digest\":\"{}\",\"edited_fixture_digest\":\"{}\",\"canonical_root\":\"{}\",\"regular_files\":{},\"logical_bytes\":{},\"attempted_operations\":{},\"completed_operations\":{},\"final_file_bytes\":{},\"initialization_ns\":{},\"commit_ns\":{},\"reopen_ns\":{},\"verification_ns\":{},\"complete_ns\":{},\"store_baseline_bytes\":{},\"sqlite_database_bytes\":{},\"other_durable_store_bytes\":{},\"total_durable_store_bytes\":{},\"durable_store_files\":{},\"canonical_objects\":{},\"canonical_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"commit_candidate_objects\":{},\"commit_candidate_bytes\":{},\"commit_payload_bytes_read\":{},\"fuse_kernel_write_bytes\":{},\"workspace_spool_write_bytes\":{},\"workspace_spool_allocated_bytes\":{},\"workspace_spool_peak_bytes\":{},\"workspace_spool_live_bytes\":{},\"workspace_spool_superseded_bytes\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
         schema,
         workload_source::store_footprint::FAMILY_ID,
         control.id,
@@ -3582,6 +3582,7 @@ fn store_footprint_case(
         seed,
         fixture_digest,
         edited_digest,
+        pinned.root,
         expected_files,
         expected_logical_bytes,
         attempted_operations,

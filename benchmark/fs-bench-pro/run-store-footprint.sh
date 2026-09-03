@@ -6,6 +6,8 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 repo=$(cd "$here/../.." && pwd -P)
 results_root=${LAYERFS_STORE_RESULTS_ROOT:-$repo/benchmark-results/fs-bench-pro/store-footprint}
 prepared_root=${LAYERFS_STORE_PREPARED_ROOT:-${TMPDIR:-/tmp}/layerfs-fs-bench-pro-store-footprint}
+primary_control=store-footprint-unique-100000
+evidence_version=v2
 
 die() { printf 'fs-bench-pro Store footprint: %s\n' "$*" >&2; exit 2; }
 
@@ -64,6 +66,10 @@ fi
 
 for command in cargo docker nc python3 rustc sqlite3; do command -v "$command" >/dev/null || die "$command is required"; done
 source_seal=$("$here/run-namespace.sh" --source-seal)
+product_seal=$("$here/run-namespace.sh" --product-seal)
+harness_seal=$("$here/run-namespace.sh" --harness-seal)
+workload_sha=$(shasum -a 256 "$here/workload.rs" | awk '{print $1}')
+cdc_identity=$(git -C "$repo" rev-parse HEAD:crates/layerfs-content/src/file/cdc)
 [[ $(docker inspect -f '{{index .Config.Labels "dev.layerfs.source-seal"}}' "$container") == "$source_seal" ]] || die "container/source seal mismatch"
 docker inspect "$container" | python3 -c 'import json,sys; assert not any(x.get("Type") == "bind" for x in json.load(sys.stdin)[0].get("Mounts", []))' || die "container has a bind mount"
 container_id=$(docker inspect -f '{{.Id}}' "$container")
@@ -107,6 +113,10 @@ cp "$run_dir/environment/runner-arguments.txt" "$run_dir/environment/command.txt
 printf '%s\n' "$source_seal" >"$run_dir/environment/source-seal.txt"
 source_commit=$(git -C "$repo" rev-parse HEAD)
 printf '%s\n' "$source_commit" >"$run_dir/environment/source-commit.txt"
+printf '%s\n' "$product_seal" >"$run_dir/environment/product-seal.txt"
+printf '%s\n' "$harness_seal" >"$run_dir/environment/harness-seal.txt"
+printf '%s\n' "$workload_sha" >"$run_dir/environment/workload-sha256.txt"
+printf '%s\n' "$cdc_identity" >"$run_dir/environment/cdc-identity.txt"
 printf '{"schema":"fs-bench-pro-source-seal-v1","source_commit":"%s","source_seal":"%s"}\n' "$source_commit" "$source_seal" >"$run_dir/environment/source-seal.json"
 docker inspect "$container" >"$run_dir/environment/container.json"
 docker image inspect "$(docker inspect -f '{{.Image}}' "$container")" >"$run_dir/environment/image.json"
@@ -119,7 +129,46 @@ json.dump({'schema':'fs-bench-pro-host-v1','architecture':platform.machine(),'pl
 PY
 printf '%s\n' 'Store is host-resident; FUSE projection and workload are in the managed Docker Desktop Linux container. Initialization, Commit, Branch visibility, End, reconnect, and root validation are measured; full tree digest is verify-only.' >"$run_dir/environment/acknowledgement-boundary.txt"
 printf '%s\n' 'sealed fixture reused outside measured regions; every sample uses a fresh Store, Branch, Workspace, and workload process' >"$run_dir/environment/cache-profile.txt"
+printf '%s\n' 'LayerStackStore::create(root/store.sqlite); host-resident regular file; SQLite schema v4; 64 KiB requested page size' >"$run_dir/environment/store-creation-profile.txt"
 "$oracle_workload" store-footprint-list >"$run_dir/controls/registry.tsv"
+
+if [[ -n $baseline_run ]]; then
+  for file in harness-seal.txt workload-sha256.txt cdc-identity.txt cache-profile.txt store-creation-profile.txt docker.json host.json source-commit.txt; do
+    [[ -f $baseline_run/environment/$file ]] || die "baseline custody missing $file"
+  done
+  cmp -s "$run_dir/environment/harness-seal.txt" "$baseline_run/environment/harness-seal.txt" || die "baseline/candidate harness identity"
+  cmp -s "$run_dir/environment/workload-sha256.txt" "$baseline_run/environment/workload-sha256.txt" || die "baseline/candidate workload identity"
+  cmp -s "$run_dir/environment/cdc-identity.txt" "$baseline_run/environment/cdc-identity.txt" || die "baseline/candidate CDC identity"
+  cmp -s "$run_dir/environment/cache-profile.txt" "$baseline_run/environment/cache-profile.txt" || die "baseline/candidate cache profile"
+  cmp -s "$run_dir/environment/store-creation-profile.txt" "$baseline_run/environment/store-creation-profile.txt" || die "baseline/candidate Store creation profile"
+  cmp -s "$run_dir/environment/docker.json" "$baseline_run/environment/docker.json" || die "baseline/candidate Docker identity"
+  python3 - "$baseline_run/environment/host.json" "$run_dir/environment/host.json" <<'PY' || die "baseline/candidate host identity"
+import json,sys
+left,right=map(lambda path:json.load(open(path)),sys.argv[1:])
+assert (left['architecture'],left['platform'])==(right['architecture'],right['platform'])
+PY
+  python3 - "$baseline_run/environment/container.json" "$run_dir/environment/container.json" <<'PY' || die "baseline/candidate container resource identity"
+import json,sys
+left,right=map(lambda path:json.load(open(path))[0],sys.argv[1:])
+keys=('Privileged','CapAdd','CapDrop','Devices','Memory','MemorySwap','MemoryReservation','NanoCpus','CpuQuota','CpuPeriod','CpusetCpus','PidsLimit','ReadonlyRootfs')
+assert {k:left['HostConfig'].get(k) for k in keys}=={k:right['HostConfig'].get(k) for k in keys}
+def ports(value): return {k:[x.get('HostIp') for x in v or []] for k,v in value['HostConfig'].get('PortBindings',{}).items()}
+assert ports(left)==ports(right)=={'41273/tcp':['127.0.0.1']}
+assert not left.get('Mounts') and not right.get('Mounts')
+PY
+  baseline_commit=$(<"$baseline_run/environment/source-commit.txt")
+  changed=$(git -C "$repo" diff --name-only "$baseline_commit" "$source_commit" -- crates/layerfs-content crates/layerfs-daemon crates/layerfs-layerstack-store crates/layerfs-sdk crates/layerfs-workspace crates/layerfs-fuse crates/layerfs-materialization crates/layerfs-monitor)
+  [[ $changed == crates/layerfs-layerstack-store/src/objects.rs ]] || die "candidate product diff is not the allowed bounded-order change"
+  git -C "$repo" diff --unified=0 "$baseline_commit" "$source_commit" -- crates/layerfs-layerstack-store/src/objects.rs >"$run_dir/environment/allowed-candidate.patch"
+  python3 - "$run_dir/environment/allowed-candidate.patch" <<'PY' || die "candidate product diff exceeds encoded-length ordering"
+import sys
+text=open(sys.argv[1]).read()
+removed=[x[1:] for x in text.splitlines() if x.startswith('-') and not x.startswith('---')]
+added=[x[1:] for x in text.splitlines() if x.startswith('+') and not x.startswith('+++')]
+assert removed==['        batch.sort_unstable_by(|left, right| left.id.as_bytes().cmp(right.id.as_bytes()));']
+assert added==['        batch.sort_unstable_by(|left, right| {','            left.bytes','                .len()','                .cmp(&right.bytes.len())','                .then_with(|| left.id.as_bytes().cmp(right.id.as_bytes()))','        });']
+PY
+fi
 
 seal_failed_run() {
   local status=$?
@@ -127,9 +176,9 @@ seal_failed_run() {
   [[ $status != 0 && ! -f $run_dir/evidence.sha256 ]] || exit "$status"
   set +e
   printf '%s\n' "${failure_reason:-unhandled runner failure}" >"$run_dir/environment/failure.txt"
-  python3 - "$run_dir/run-status.json" "$mode" "$source_arm" "${failure_reason:-unhandled runner failure}" <<'PY'
+  python3 - "$run_dir/run-status.json" "$evidence_version" "$mode" "$source_arm" "${failure_reason:-unhandled runner failure}" <<'PY'
 import json,sys
-json.dump({'schema':'fs-bench-pro-store-footprint-status-v1','mode':sys.argv[2],'source_arm':sys.argv[3],'status':'hard-failure','admission_eligible':False,'reason':sys.argv[4]},open(sys.argv[1],'w'),sort_keys=True,separators=(',',':'));open(sys.argv[1],'a').write('\n')
+json.dump({'schema':f'fs-bench-pro-store-footprint-status-{sys.argv[2]}','mode':sys.argv[3],'source_arm':sys.argv[4],'status':'hard-failure','admission_eligible':False,'reason':sys.argv[5]},open(sys.argv[1],'w'),sort_keys=True,separators=(',',':'));open(sys.argv[1],'a').write('\n')
 PY
   docker stop "$container" >/dev/null 2>&1 || true
   docker inspect "$container" >"$run_dir/environment/container-after.json" 2>/dev/null || true
@@ -166,8 +215,11 @@ await_daemon() {
   [[ $code == 0 && $(docker inspect -f '{{.State.Status}} {{.State.OOMKilled}}' "$container") == 'exited false' ]] || die "daemon exit"
 }
 
+performance_external_wall_ns=0
+verification_external_wall_ns=0
+
 run_sample() {
-  local control=$1 sample_seed=$2 sample_mode=$3 fixture_dir manifest sample_dir status raw_target before_sha after_sha nonce control_manifest
+  local control=$1 sample_seed=$2 sample_mode=$3 fixture_dir manifest sample_dir status raw_target before_sha after_sha nonce control_manifest timeout_seconds sample_started sample_wall_ns
   fixture_dir=$(fixture_for "$control")
   manifest="$fixture_dir/manifest.json"
   control_manifest="$run_dir/controls/$control.json"
@@ -181,8 +233,10 @@ PY
   )
   ensure_daemon
   nonce=$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')
+  if [[ $sample_mode == verify ]]; then timeout_seconds=60; elif [[ $mode == admission ]]; then timeout_seconds=30; else timeout_seconds=5; fi
+  sample_started=$(python3 -c 'import time; print(time.monotonic_ns())')
   set +e
-  /usr/bin/time -l -p env LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE="$nonce" \
+  /usr/bin/time -l -p perl -e 'alarm shift; exec @ARGV' "$timeout_seconds" env LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE="$nonce" \
     LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload \
     LAYERFS_EXEC_TRANSPORT=daemon LAYERFS_FUSE_TRANSPORT=daemon \
     LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
@@ -195,6 +249,9 @@ PY
   printf '%s\n' "$status" >"$sample_dir/exit-status.txt"
   [[ $status == 0 ]] || die "$sample_mode failed: $control seed $sample_seed"
   await_daemon
+  sample_wall_ns=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - sample_started ))
+  printf '%s\n' "$sample_wall_ns" >"$sample_dir/external-wall-ns.txt"
+  if [[ $sample_mode == performance ]]; then performance_external_wall_ns=$((performance_external_wall_ns + sample_wall_ns)); else verification_external_wall_ns=$((verification_external_wall_ns + sample_wall_ns)); fi
   python3 - "$sample_dir/work" "$sample_dir/durable-census.json" <<'PY'
 import hashlib,json,sys
 from pathlib import Path
@@ -209,13 +266,27 @@ PY
   before_sha=$(shasum -a 256 "$sample_dir/work/store.sqlite" | awk '{print $1}')
   sqlite3 -readonly -json "$sample_dir/work/store.sqlite" "SELECT page_size AS sqlite_page_size_bytes,page_count AS sqlite_page_count,freelist_count AS sqlite_freelist_pages,(SELECT count(*) FROM objects) AS sqlite_object_rows,(SELECT coalesce(sum(length(bytes)),0) FROM objects) AS sqlite_canonical_object_bytes,(SELECT coalesce(sum(pgsize),0) FROM dbstat WHERE name='objects') AS sqlite_objects_table_bytes,(SELECT coalesce(sum(payload),0) FROM dbstat WHERE name='objects') AS sqlite_objects_table_payload_bytes,(SELECT coalesce(sum(unused),0) FROM dbstat WHERE name='objects') AS sqlite_objects_table_unused_bytes,(SELECT coalesce(sum(pgsize),0) FROM dbstat WHERE name='sqlite_autoindex_objects_1') AS sqlite_objects_index_bytes FROM pragma_page_size,pragma_page_count,pragma_freelist_count;" >"$sample_dir/sqlite.json"
   sqlite3 -readonly -header -column "$sample_dir/work/store.sqlite" 'SELECT name,count(*) AS pages,sum(pgsize) AS allocated_bytes,sum(payload) AS payload_bytes,sum(unused) AS unused_bytes FROM dbstat GROUP BY name ORDER BY allocated_bytes DESC;' >"$sample_dir/dbstat.txt"
+  python3 - "$sample_dir/work/store.sqlite" "$sample_dir/object-set.json" <<'PY'
+import hashlib,json,sqlite3,sys
+db,out=sys.argv[1:]
+connection=sqlite3.connect(f'file:{db}?mode=ro',uri=True)
+page_size=connection.execute('PRAGMA page_size').fetchone()[0]
+user_version=connection.execute('PRAGMA user_version').fetchone()[0]
+schema=connection.execute("SELECT type,name,tbl_name,coalesce(sql,'') FROM sqlite_master ORDER BY type,name").fetchall()
+schema_digest=hashlib.sha256(json.dumps([page_size,user_version,schema],separators=(',',':')).encode()).hexdigest()
+digest=hashlib.sha256(b'layerfs/fs-bench-pro/object-set/v1\0'); rows=bytes_=0
+for object_id,length in connection.execute('SELECT id,length(bytes) FROM objects ORDER BY id'):
+ digest.update(len(object_id).to_bytes(8,'big')); digest.update(object_id); digest.update(length.to_bytes(8,'big')); rows+=1; bytes_+=length
+connection.close()
+json.dump({'schema':'fs-bench-pro-store-object-set-v1','object_set_digest':digest.hexdigest(),'schema_digest':schema_digest,'page_size':page_size,'user_version':user_version,'canonical_objects':rows,'canonical_bytes':bytes_},open(out,'w'),sort_keys=True,separators=(',',':'));open(out,'a').write('\n')
+PY
   after_sha=$(shasum -a 256 "$sample_dir/work/store.sqlite" | awk '{print $1}')
   [[ $before_sha == "$after_sha" ]] || die "dbstat mutated Store"
-  python3 - "$sample_dir/raw.jsonl" "$sample_dir/sqlite.json" "$sample_dir/supervisor.txt" "$sample_dir/durable-census.json" "$sample_dir/result.json" "$tier" <<'PY'
+  python3 - "$sample_dir/raw.jsonl" "$sample_dir/sqlite.json" "$sample_dir/supervisor.txt" "$sample_dir/durable-census.json" "$sample_dir/object-set.json" "$sample_dir/result.json" "$tier" <<'PY'
 import json,re,sys
-raw,sqlite,supervisor,census,out,tier=sys.argv[1:]
+raw,sqlite,supervisor,census,object_set,out,tier=sys.argv[1:]
 rows=[json.loads(x) for x in open(raw) if x.startswith('{')]; assert len(rows)==1
-r=rows[0]; q=json.load(open(sqlite)); assert len(q)==1; q=q[0]; c=json.load(open(census))
+r=rows[0]; q=json.load(open(sqlite)); assert len(q)==1; q=q[0]; c=json.load(open(census)); o=json.load(open(object_set))
 text=open(supervisor).read(); lines=[x for x in text.splitlines() if x.startswith('layerfs-initialization-diagnostic-v3 ')]
 assert len(lines)==1
 metrics=dict(re.findall(r'([a-z0-9_]+)=([^ ]+)',lines[0]))
@@ -226,7 +297,8 @@ temporary_peak=initialization_temporary_write+r['workspace_spool_peak_bytes']
 assert q['sqlite_page_size_bytes']*q['sqlite_page_count']==r['sqlite_database_bytes']
 assert q['sqlite_object_rows']==r['canonical_objects'] and q['sqlite_canonical_object_bytes']==r['canonical_bytes']
 assert c['file_count']==r['durable_store_files'] and c['total_bytes']==r['total_durable_store_bytes']
-r.update(q)
+assert o['canonical_objects']==r['canonical_objects'] and o['canonical_bytes']==r['canonical_bytes'] and o['page_size']==q['sqlite_page_size_bytes']
+r.update(q);r.update({k:o[k] for k in ('object_set_digest','schema_digest','user_version')})
 r.update({'tier':int(tier),'reportable':int(tier)==100000,'initialization_temporary_write_bytes':initialization_temporary_write,'temporary_write_bytes':temporary_write,'temporary_read_bytes':temporary_read,'temporary_peak_upper_bound_bytes':temporary_peak,'peak_disk_upper_bound_bytes':r['total_durable_store_bytes']+temporary_peak,'durable_census_status':'pass','dbstat_store_sha256_unchanged':True})
 json.dump(r,open(out,'w'),sort_keys=True,separators=(',',':'));open(out,'a').write('\n')
 PY
@@ -240,68 +312,96 @@ else
   while IFS=$'\t' read -r control _; do for sample_seed in 1 2 3; do run_sample "$control" "$sample_seed" performance; done; done <"$mapfile"
   while IFS=$'\t' read -r control _; do run_sample "$control" 1 verify; done <"$mapfile"
 fi
+printf '%s\n' "$performance_external_wall_ns" >"$run_dir/environment/performance-external-wall-ns.txt"
+printf '%s\n' "$verification_external_wall_ns" >"$run_dir/environment/verification-external-wall-ns.txt"
+(( verification_external_wall_ns <= 180000000000 )) || die "aggregate verification wall exceeded 180 seconds"
+if [[ -n $baseline_run ]]; then cmp -s "$run_dir/environment/container-kernel-fuse.txt" "$baseline_run/environment/container-kernel-fuse.txt" || die "baseline/candidate kernel or FUSE identity"; fi
 
-python3 - "$run_dir" "$mode" "$source_arm" "$baseline_run" <<'PY'
+python3 - "$run_dir" "$mode" "$source_arm" "$baseline_run" "$evidence_version" "$primary_control" <<'PY'
 import json,statistics,sys
 from pathlib import Path
-root,mode,source,baseline=Path(sys.argv[1]),sys.argv[2],sys.argv[3],sys.argv[4]
+root,mode,source,baseline,version,primary=Path(sys.argv[1]),sys.argv[2],sys.argv[3],Path(sys.argv[4]),sys.argv[5],sys.argv[6]
 performance=[json.loads(x) for x in (root/'performance/raw.jsonl').read_text().splitlines()] if (root/'performance/raw.jsonl').exists() else []
 verification=[json.loads(x) for x in (root/'verification/raw.jsonl').read_text().splitlines()] if (root/'verification/raw.jsonl').exists() else []
-summary={'schema':'fs-bench-pro-store-footprint-summary-v1','mode':mode,'source_arm':source,'samples':len(performance),'verification_samples':len(verification)}
-metrics=('total_durable_store_bytes','initialization_ns','commit_ns','reopen_ns','complete_ns','canonical_objects','canonical_bytes','process_peak_rss_bytes','temporary_peak_upper_bound_bytes','peak_disk_upper_bound_bytes')
+summary={'schema':f'fs-bench-pro-store-footprint-summary-{version}','mode':mode,'source_arm':source,'samples':len(performance),'verification_samples':len(verification),'primary_control_id':primary}
+metrics=('total_durable_store_bytes','initialization_ns','commit_ns','reopen_ns','complete_ns','canonical_objects','canonical_bytes','process_user_cpu_ns','process_system_cpu_ns','process_disk_read_bytes','process_disk_write_bytes','process_peak_rss_bytes','process_physical_footprint_bytes','container_memory_peak_bytes','temporary_write_bytes','temporary_read_bytes','temporary_peak_upper_bound_bytes','peak_disk_upper_bound_bytes')
 def grouped_medians(rows):
  return {control:{k:statistics.median(x[k] for x in rows if x['control_id']==control) for k in metrics} for control in sorted({x['control_id'] for x in rows})}
-performance_summary={'schema':'fs-bench-pro-store-footprint-performance-summary-v1','mode':mode,'source_arm':source,'samples':len(performance),'status':'no-performance-samples'}
-verification_summary={'schema':'fs-bench-pro-store-footprint-verification-summary-v1','mode':mode,'source_arm':source,'samples':len(verification),'status':'not-run'}
+performance_summary={'schema':f'fs-bench-pro-store-footprint-performance-summary-{version}','mode':mode,'source_arm':source,'samples':len(performance),'status':'no-performance-samples'}
+verification_summary={'schema':f'fs-bench-pro-store-footprint-verification-summary-{version}','mode':mode,'source_arm':source,'samples':len(verification),'status':'not-run'}
 if performance:
  performance_summary.update({'medians':grouped_medians(performance),'status':'complete'})
 if verification:
  assert all(x['status']=='pass' and x['mode']=='verify' for x in verification)
- verification_summary['status']='target-pass'
+ verification_summary.update({'status':'target-pass','resources':grouped_medians(verification)})
 if mode=='admission':
  assert len(performance)==9 and len(verification)==3
  assert all(x['reportable'] and x['tier']==100000 and x['status']=='pass' and x['durable_census_status']=='pass' and x['dbstat_store_sha256_unchanged'] for x in performance+verification)
  assert {(x['control_id'],x['seed']) for x in performance}=={(c,s) for c in ('store-footprint-unique-100000','store-footprint-metadata-cardinality-100000','store-footprint-large-object-500m') for s in (1,2,3)}
  medians=grouped_medians(performance)
  summary['medians']=medians
- maximum=max(x['total_durable_store_bytes'] for x in medians.values())
- summary['maximum_total_durable_store_bytes']=maximum
- summary['storage_classification']='target-pass' if maximum<=600_000_000 else 'tolerated-nonterminal-miss' if maximum<=660_000_000 else 'no-go'
+ primary_bytes=medians[primary]['total_durable_store_bytes']
+ summary['primary_total_durable_store_bytes']=primary_bytes
+ summary['primary_storage_classification']='target-pass' if primary_bytes<=600_000_000 else 'tolerated-nonterminal-miss' if primary_bytes<=660_000_000 else 'no-go'
+ summary['explanatory_control_bytes']={control:row['total_durable_store_bytes'] for control,row in medians.items() if control!=primary}
  if source=='baseline':
-  summary.update({'status':'baseline-complete','admission_eligible':False})
+  summary.update({'status':'baseline-complete','admission_eligible':False,'resource_envelope_multiplier':1.10,'selected_performance_timeout_seconds':5,'admission_performance_timeout_seconds':30,'per_verifier_timeout_seconds':60,'aggregate_verifier_timeout_seconds':180})
  else:
   baseline_summary=json.load(open(baseline/'summary.json'))
   baseline_rows=[json.loads(x) for x in (baseline/'performance/raw.jsonl').read_text().splitlines()]
   assert baseline_summary['mode']=='admission' and baseline_summary['source_arm']=='baseline' and baseline_summary['status']=='baseline-complete'
   assert len(baseline_rows)==9 and all(x['reportable'] and x['tier']==100000 for x in baseline_rows)
-  assert {(x['control_id'],x['seed'],x['fixture_digest'],x['edited_fixture_digest']) for x in baseline_rows}=={(x['control_id'],x['seed'],x['fixture_digest'],x['edited_fixture_digest']) for x in performance}
+  baseline_verification=[json.loads(x) for x in (baseline/'verification/raw.jsonl').read_text().splitlines()]
+  assert len(baseline_verification)==3
+  identity=('fixture_digest','edited_fixture_digest','canonical_root','canonical_objects','canonical_bytes','object_set_digest','schema_digest','sqlite_page_size_bytes','user_version')
+  def exact(rows): return {(x['control_id'],x['seed']):tuple(x[k] for k in identity) for x in rows}
+  assert exact(baseline_rows)==exact(performance) and exact(baseline_verification)==exact(verification)
   baseline_medians=grouped_medians(baseline_rows)
   comparisons=[]
   rank={'target-pass':0,'local-step-exception':0,'tolerated-pass':1,'no-go':2}
+  def ratio(before,after): return after/before if before else (1.0 if after==0 else float('inf'))
   for control in medians:
-   for metric in ('initialization_ns','commit_ns','reopen_ns'):
-    before=baseline_medians[control][metric]; after=medians[control][metric]; ratio=after/before
-    status='local-step-exception' if after<2_000_000 else 'target-pass' if ratio<=1.05 else 'tolerated-pass' if ratio<=1.10 else 'no-go'
-    comparisons.append({'control_id':control,'metric':metric,'baseline_median_ns':before,'candidate_median_ns':after,'ratio':ratio,'percent_change':(ratio-1)*100,'status':status})
+   for metric in ('initialization_ns','commit_ns','reopen_ns','complete_ns'):
+    before=baseline_medians[control][metric]; after=medians[control][metric]; value=ratio(before,after)
+    status='local-step-exception' if metric!='complete_ns' and after<2_000_000 else 'target-pass' if value<=1.05 else 'tolerated-pass' if value<=1.10 else 'no-go'
+    comparisons.append({'kind':'performance','control_id':control,'metric':metric,'baseline_median':before,'candidate_median':after,'ratio':value,'percent_change':(value-1)*100,'status':status})
+   for metric in ('process_user_cpu_ns','process_system_cpu_ns','process_disk_read_bytes','process_disk_write_bytes','process_peak_rss_bytes','process_physical_footprint_bytes','container_memory_peak_bytes','temporary_write_bytes','temporary_read_bytes','temporary_peak_upper_bound_bytes','peak_disk_upper_bound_bytes'):
+    before=baseline_medians[control][metric]; after=medians[control][metric]; value=ratio(before,after)
+    status='target-pass' if value<=1.05 else 'tolerated-pass' if value<=1.10 else 'no-go'
+    comparisons.append({'kind':'resource','control_id':control,'metric':metric,'baseline_median':before,'candidate_median':after,'ratio':value,'percent_change':(value-1)*100,'status':status})
+  verifier_comparisons=[]
+  base_verify={x['control_id']:x for x in baseline_verification}; candidate_verify={x['control_id']:x for x in verification}
+  for control in sorted(candidate_verify):
+   for metric in ('process_user_cpu_ns','process_system_cpu_ns','process_disk_read_bytes','process_disk_write_bytes','process_peak_rss_bytes','process_physical_footprint_bytes','container_memory_peak_bytes','temporary_write_bytes','temporary_read_bytes','temporary_peak_upper_bound_bytes','peak_disk_upper_bound_bytes'):
+    before=base_verify[control][metric];after=candidate_verify[control][metric];value=ratio(before,after)
+    status='target-pass' if value<=1.05 else 'tolerated-pass' if value<=1.10 else 'no-go'
+    verifier_comparisons.append({'kind':'verification-resource','control_id':control,'metric':metric,'baseline':before,'candidate':after,'ratio':value,'percent_change':(value-1)*100,'status':status})
   performance_status=max((x['status'] for x in comparisons),key=rank.get)
-  summary.update({'baseline_run':str(baseline),'baseline_medians':baseline_medians,'performance_comparisons':comparisons,'performance_status':performance_status})
-  eligible=maximum<=600_000_000 and performance_status!='no-go' and verification_summary['status']=='target-pass'
-  summary.update({'status':('target-pass' if performance_status in ('target-pass','local-step-exception') else 'tolerated-pass') if eligible else 'no-go','admission_eligible':eligible})
+  verifier_status=max((x['status'] for x in verifier_comparisons),key=rank.get)
+  sibling_storage={control:{'baseline':baseline_medians[control]['total_durable_store_bytes'],'candidate':medians[control]['total_durable_store_bytes'],'ratio':ratio(baseline_medians[control]['total_durable_store_bytes'],medians[control]['total_durable_store_bytes']),'status':'target-pass' if medians[control]['total_durable_store_bytes']<=baseline_medians[control]['total_durable_store_bytes'] else 'no-go'} for control in medians if control!=primary}
+  sibling_status='target-pass' if all(x['status']=='target-pass' for x in sibling_storage.values()) else 'no-go'
+  summary.update({'baseline_run':str(baseline),'baseline_medians':baseline_medians,'performance_resource_comparisons':comparisons,'performance_resource_status':performance_status,'verification_resource_comparisons':verifier_comparisons,'verification_resource_status':verifier_status,'explanatory_control_storage_comparisons':sibling_storage,'explanatory_control_storage_status':sibling_status})
+  eligible=primary_bytes<=600_000_000 and performance_status!='no-go' and verifier_status!='no-go' and sibling_status!='no-go' and verification_summary['status']=='target-pass'
+  accepted_status=max((performance_status,verifier_status),key=rank.get)
+  summary.update({'status':('target-pass' if accepted_status in ('target-pass','local-step-exception') else 'tolerated-pass') if eligible else 'no-go','admission_eligible':eligible})
 else:
  summary['status']='performance-complete-verification-not-run' if mode=='performance' else 'target-pass'
  summary['admission_eligible']=mode=='verify'
 (root/'performance/summary.json').write_text(json.dumps(performance_summary,sort_keys=True,separators=(',',':'))+'\n')
 (root/'verification/summary.json').write_text(json.dumps(verification_summary,sort_keys=True,separators=(',',':'))+'\n')
 (root/'summary.json').write_text(json.dumps(summary,sort_keys=True,separators=(',',':'))+'\n')
-(root/'run-status.json').write_text(json.dumps({'schema':'fs-bench-pro-store-footprint-status-v1','mode':mode,'source_arm':source,'status':summary['status'],'admission_eligible':summary['admission_eligible']},sort_keys=True,separators=(',',':'))+'\n')
+(root/'run-status.json').write_text(json.dumps({'schema':f'fs-bench-pro-store-footprint-status-{version}','mode':mode,'source_arm':source,'status':summary['status'],'admission_eligible':summary['admission_eligible']},sort_keys=True,separators=(',',':'))+'\n')
 lines=['# Store-footprint benchmark report','',f'- Mode: `{mode}`',f'- Source arm: `{source}`',f'- Status: `{summary["status"]}`',f'- Performance samples: {len(performance)}',f'- Verification samples: {len(verification)}','', '## Results','']
 if performance:
  lines += ['| Control | Durable bytes | Canonical bytes | Ratio | Init ms | Commit ms | Reopen ms |','|---|---:|---:|---:|---:|---:|---:|']
  for control,row in grouped_medians(performance).items(): lines.append(f'| `{control}` | {row["total_durable_store_bytes"]:,.0f} | {row["canonical_bytes"]:,.0f} | {row["total_durable_store_bytes"]/row["canonical_bytes"]:.4f} | {row["initialization_ns"]/1e6:.3f} | {row["commit_ns"]/1e6:.3f} | {row["reopen_ns"]/1e6:.3f} |')
+if mode=='admission':
+ lines += ['',f'- Primary `600,000,000`-byte gate: `{primary}` = {summary["primary_total_durable_store_bytes"]:,.0f} bytes ({summary["primary_storage_classification"]}).','- Metadata-cardinality and large-object rows are explanatory controls with full accounting and baseline-relative non-regression gates; they do not inherit the primary control’s 600 MB threshold.']
 if source=='candidate' and mode=='admission':
- lines += ['','## Baseline comparison','', '| Control | Phase | Baseline ms | Candidate ms | Ratio | Disposition |','|---|---|---:|---:|---:|---|']
- for row in summary['performance_comparisons']: lines.append(f'| `{row["control_id"]}` | {row["metric"]} | {row["baseline_median_ns"]/1e6:.3f} | {row["candidate_median_ns"]/1e6:.3f} | {row["ratio"]:.4f} | {row["status"]} |')
-lines += ['','## Accounting','', '- Every Store-owned file is listed with size and SHA-256 in each sample’s `durable-census.json`.','- SQLite table/index/payload/slack are retained in `sqlite.json` and `dbstat.txt`; pre/post census hashes prove read-only inspection.','- Initialization segment reads/writes are parsed from the authenticated initialization diagnostic; peak disk is conservatively bounded as durable bytes plus all temporary writes.','- Full tree digest and metadata verification runs only in the separate verification samples.','']
+ lines += ['','## Baseline comparison','', '| Kind | Control | Metric | Baseline | Candidate | Ratio | Disposition |','|---|---|---|---:|---:|---:|---|']
+ for row in summary['performance_resource_comparisons']: lines.append(f'| {row["kind"]} | `{row["control_id"]}` | {row["metric"]} | {row["baseline_median"]:.0f} | {row["candidate_median"]:.0f} | {row["ratio"]:.4f} | {row["status"]} |')
+ for row in summary['verification_resource_comparisons']: lines.append(f'| {row["kind"]} | `{row["control_id"]}` | {row["metric"]} | {row["baseline"]:.0f} | {row["candidate"]:.0f} | {row["ratio"]:.4f} | {row["status"]} |')
+lines += ['','## Accounting','', '- Every Store-owned file is listed with size and SHA-256 in each sample’s `durable-census.json`.','- SQLite table/index/payload/slack are retained in `sqlite.json` and `dbstat.txt`; pre/post census hashes prove read-only inspection.','- Canonical root, authenticated object-set digest, schema digest, page size, CDC identity, and fixture digests bind baseline/candidate equality.','- Initialization segment reads/writes and Workspace spool bytes are counted; peak disk is conservatively bounded as durable bytes plus simultaneous temporary upper bounds.','- Full tree digest and metadata verification runs only in separate verification samples and streams bounded directory state.','']
 (root/'report.md').write_text('\n'.join(lines))
 PY
 docker inspect "$container" >"$run_dir/environment/container-after.json"
