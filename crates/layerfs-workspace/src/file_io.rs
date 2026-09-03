@@ -197,7 +197,9 @@ impl Workspace {
             .ok_or(StoreError::InvalidInput("write length"))?;
         self.ensure_edited(node)?;
         let (spool, high_water, old, edits) = self.edited_state(node)?;
-        self.spool_file(node, &spool)?;
+        if bytes.is_none() {
+            self.spool_file(node, &spool)?;
+        }
         let start = offset.min(old_len);
         let delete_len = if offset < old_len {
             (old_len - offset).min(byte_len as u64)
