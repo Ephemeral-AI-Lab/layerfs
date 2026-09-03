@@ -6,7 +6,7 @@ use layerfs_sdk::{
     WorkspaceFileReplacement, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
 };
 use std::ffi::OsString;
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -2406,6 +2406,9 @@ fn count_changing_verify_case(
     )?;
     let base = store.pin_branch(branch)?;
     let old_payload_ids = payload_ids(&base.reader, base.root, "payload.bin")?;
+    let base_core = layerfs_layerstack_store::CoreReader(&base.reader);
+    let base_path = layerfs_content::CanonicalPath::new("payload.bin")?;
+    let (base_stat, _) = layerfs_content::filesystem::stat(&base_core, base.root, &base_path)?;
     let workspace = client.create_workspace_session(CreateWorkspaceSession {
         branch_id: branch,
         placement: WorkspacePlacement::Container {
@@ -2473,7 +2476,37 @@ fn count_changing_verify_case(
     let (stat, _) = layerfs_content::filesystem::stat(&core, committed.root_id, &path)?;
     let oracle_file = std::env::var_os("LAYERFS_BENCH_ORACLE_FILE")
         .ok_or("count-changing independent oracle file")?;
-    let expected_file_root = independent_whole_file_root(&pinned.reader, Path::new(&oracle_file))?;
+    let direct = scenario.filter(|scenario| !scenario.kind.temp_copy());
+    let (oracle_base, edit_start, delete_len, oracle_offset) = match direct.map(|row| row.kind) {
+        Some(workload_source::edit_count_changing::Kind::Truncate) => (
+            Some(layerfs_content::file::rope::FileStateRoot(
+                base_stat.content_root,
+            )),
+            expected_size,
+            initial_size - expected_size,
+            expected_size,
+        ),
+        Some(
+            workload_source::edit_count_changing::Kind::Append
+            | workload_source::edit_count_changing::Kind::Sparse,
+        ) => (
+            Some(layerfs_content::file::rope::FileStateRoot(
+                base_stat.content_root,
+            )),
+            initial_size,
+            0,
+            initial_size,
+        ),
+        _ => (None, 0, 0, 0),
+    };
+    let expected_file_root = independent_file_edit_root(
+        &pinned.reader,
+        oracle_base,
+        Path::new(&oracle_file),
+        edit_start,
+        delete_len,
+        oracle_offset,
+    )?;
     if stat.content_root != expected_file_root.0 {
         return Err("count-changing independent canonical root".into());
     }
@@ -2572,13 +2605,19 @@ fn count_changing_verify_case(
     Ok(())
 }
 
-fn independent_whole_file_root(
+fn independent_file_edit_root(
     reader: &layerfs_layerstack_store::SnapshotReader,
+    base: Option<layerfs_content::file::rope::FileStateRoot>,
     oracle: &Path,
+    start: u64,
+    delete_len: u64,
+    oracle_offset: u64,
 ) -> AnyResult<layerfs_content::file::rope::FileStateRoot> {
     let mut objects = layerfs_layerstack_store::ObjectBuffer::new(reader)?;
-    let mut batch = layerfs_content::file::rope::FileMutationBatch::new(&mut objects, None)?;
-    batch.replace(0, 0, std::fs::File::open(oracle)?)?;
+    let mut batch = layerfs_content::file::rope::FileMutationBatch::new(&mut objects, base)?;
+    let mut replacement = std::fs::File::open(oracle)?;
+    replacement.seek(SeekFrom::Start(oracle_offset))?;
+    batch.replace(start, delete_len, replacement)?;
     let (root, _) = batch.finish()?;
     Ok(root)
 }
