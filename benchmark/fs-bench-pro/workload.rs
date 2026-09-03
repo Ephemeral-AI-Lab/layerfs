@@ -2,7 +2,7 @@ use std::error::Error;
 use std::ffi::OsString;
 use std::fs::Metadata;
 use std::fs::{self, File, FileTimes, OpenOptions};
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -1014,7 +1014,10 @@ fn rewrite_file_range(
         return Err("count-changing rewrite prefix".into());
     }
     output.write_all(replacement)?;
-    source.seek(SeekFrom::Start(offset + deleted))?;
+    let skipped = std::io::copy(&mut source.by_ref().take(deleted), &mut std::io::sink())?;
+    if skipped != deleted {
+        return Err("count-changing rewrite deletion".into());
+    }
     let suffix = std::io::copy(&mut source, &mut output)?;
     output.flush()?;
     output.into_inner()?.sync_all()?;
