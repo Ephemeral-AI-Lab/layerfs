@@ -71,7 +71,10 @@ impl Workspace {
         let mut height = 0_u64;
         let mut charge = 0_u64;
         let mut spool_live = 0_u64;
+        let mut metric_nodes_scanned = 0_u64;
+        let mut forbidden = crate::file_edit::ForbiddenEditCounters::default();
         for node in self.dirty.iter().filter_map(|node| self.nodes.get(node)) {
+            metric_nodes_scanned = metric_nodes_scanned.saturating_add(1);
             if let Data::File(FileData::Edited {
                 pieces: tree,
                 edits: file_edits,
@@ -83,6 +86,19 @@ impl Workspace {
                 height = height.max(tree.height() as u64);
                 charge = charge.saturating_add(tree.logical_allocation_charge()?);
                 spool_live = spool_live.saturating_add(tree.spool_len());
+                let counters = tree.forbidden_counters();
+                forbidden.complete_interval_map_clones = forbidden
+                    .complete_interval_map_clones
+                    .saturating_add(counters.complete_interval_map_clones);
+                forbidden.full_interval_map_rescans = forbidden
+                    .full_interval_map_rescans
+                    .saturating_add(counters.full_interval_map_rescans);
+                forbidden.later_offset_rekeys = forbidden
+                    .later_offset_rekeys
+                    .saturating_add(counters.later_offset_rekeys);
+                forbidden.complete_file_materializations = forbidden
+                    .complete_file_materializations
+                    .saturating_add(counters.complete_file_materializations);
             }
         }
         layerfs_layerstack_store::note_workspace_commit_edit_state(
@@ -93,6 +109,11 @@ impl Workspace {
             self.spool_bytes,
             spool_live,
             self.spool_bytes.saturating_sub(spool_live),
+            metric_nodes_scanned,
+            forbidden.complete_interval_map_clones,
+            forbidden.full_interval_map_rescans,
+            forbidden.later_offset_rekeys,
+            forbidden.complete_file_materializations,
         );
         Ok(())
     }

@@ -159,14 +159,21 @@ benchmark/fs-bench-pro/run-edit-same-count.sh RUN_ID CONTAINER_ID \
 benchmark/fs-bench-pro/run-edit-same-count.sh RUN_ID CONTAINER_ID \
   --case overwrite-middle-4k-ops-100 --seed 1 --source candidate --mode verify
 LAYERFS_SAME_COUNT_ANCHOR_FIXTURE=/absolute/registered-32m-directory \
-  benchmark/fs-bench-pro/run-edit-same-count.sh RUN_ID CONTAINER_ID \
-  --all --source candidate --mode admission
+  benchmark/fs-bench-pro/run-edit-same-count.sh RUN_ID CONTAINER_A \
+  --all --source a-a-repeatability --mode admission \
+  --paired-container CONTAINER_B
 ```
+
+Run `run-edit-same-count.sh --prepare CONTAINER_ID` once before selected rows.
+Prepared assets are keyed by source identity outside selected-run wall timing.
+Terminal admission uses two identical sealed containers with `--source
+a-a-repeatability --paired-container SECOND_CONTAINER`, alternates their order
+per seed, and reports A/A repeatability rather than an improvement claim.
 
 The runner's `--self-check` performs no Docker command and must finish within
 two seconds. Performance mode runs no digest/root/reopen verifier. Admission
-retains 42 performance samples, then runs the exact case verifiers and the
-separate 1,000-edit fragmentation proof.
+retains 42 performance samples per arm, then runs only the separate 1,000-edit
+fragmentation proof for each arm.
 
 To compare isolated product-source variants against the exact same sealed
 fixture without regenerating it, point later runs at the earlier campaign's

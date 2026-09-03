@@ -82,6 +82,14 @@ impl Piece {
 
 type Link = Option<Arc<PieceNode>>;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct ForbiddenEditCounters {
+    pub(crate) complete_interval_map_clones: u64,
+    pub(crate) full_interval_map_rescans: u64,
+    pub(crate) later_offset_rekeys: u64,
+    pub(crate) complete_file_materializations: u64,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct PieceNode {
     piece: Piece,
@@ -92,6 +100,8 @@ struct PieceNode {
     count: usize,
     inline_len: u64,
     zero_len: u64,
+    spool_len: u64,
+    height: usize,
 }
 
 impl PieceNode {
@@ -116,6 +126,15 @@ impl PieceNode {
             )
             .and_then(|len| len.checked_add(link_zero_len(&right)))
             .ok_or(StoreError::InvalidInput("logical zero bytes"))?;
+        let spool_len = link_spool_len(&left)
+            .checked_add(
+                matches!(piece, Piece::Spool { .. })
+                    .then(|| piece.len())
+                    .unwrap_or(0),
+            )
+            .and_then(|len| len.checked_add(link_spool_len(&right)))
+            .ok_or(StoreError::InvalidInput("spool bytes"))?;
+        let height = 1 + link_height(&left).max(link_height(&right));
         Ok(Arc::new(Self {
             piece,
             priority,
@@ -125,6 +144,8 @@ impl PieceNode {
             count,
             inline_len,
             zero_len,
+            spool_len,
+            height,
         }))
     }
 }
@@ -133,6 +154,7 @@ impl PieceNode {
 pub(crate) struct PieceTree {
     root: Link,
     serial: u64,
+    forbidden: ForbiddenEditCounters,
 }
 
 impl PieceTree {
@@ -140,6 +162,7 @@ impl PieceTree {
         Self {
             root: None,
             serial: 0,
+            forbidden: ForbiddenEditCounters::default(),
         }
     }
 
@@ -174,21 +197,15 @@ impl PieceTree {
     }
 
     pub(crate) fn height(&self) -> usize {
-        fn height(root: &Link) -> usize {
-            root.as_ref()
-                .map_or(0, |node| 1 + height(&node.left).max(height(&node.right)))
-        }
-        height(&self.root)
+        link_height(&self.root)
     }
 
     pub(crate) fn spool_len(&self) -> u64 {
-        let mut bytes = 0_u64;
-        visit(&self.root, &mut |piece, _| {
-            if matches!(piece, Piece::Spool { .. }) {
-                bytes = bytes.saturating_add(piece.len());
-            }
-        });
-        bytes
+        link_spool_len(&self.root)
+    }
+
+    pub(crate) fn forbidden_counters(&self) -> ForbiddenEditCounters {
+        self.forbidden
     }
 
     pub(crate) fn logical_allocation_charge(&self) -> Result<u64> {
@@ -299,6 +316,14 @@ fn link_inline_len(link: &Link) -> u64 {
 
 fn link_zero_len(link: &Link) -> u64 {
     link.as_ref().map_or(0, |node| node.zero_len)
+}
+
+fn link_spool_len(link: &Link) -> u64 {
+    link.as_ref().map_or(0, |node| node.spool_len)
+}
+
+fn link_height(link: &Link) -> usize {
+    link.as_ref().map_or(0, |node| node.height)
 }
 
 fn merge(left: &Link, right: &Link) -> Result<Link> {
@@ -478,6 +503,7 @@ mod tests {
             tree = tree.replace(offset, 1, [Piece::Zero { len: 1 }]).unwrap();
         }
         assert_eq!(tree.count(), MAX_PIECES_PER_FILE);
+        assert_eq!(tree.forbidden_counters(), ForbiddenEditCounters::default());
         assert!(tree.logical_allocation_charge().unwrap() <= MAX_PIECE_ALLOCATION);
         assert!(depth(&tree.root) < 64, "depth={}", depth(&tree.root));
         for offset in [0, 4_096, 8_192] {

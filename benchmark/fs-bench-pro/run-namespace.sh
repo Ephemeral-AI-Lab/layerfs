@@ -58,11 +58,14 @@ print(digest.hexdigest())
 PY
 }
 
-if [[ ${1:-} == --source-seal ]]; then
-  [[ $# -eq 1 ]] || die "--source-seal takes no arguments"
-  seal source
-  exit 0
-fi
+case ${1:-} in
+  --source-seal|--product-seal|--harness-seal)
+    [[ $# -eq 1 ]] || die "$1 takes no arguments"
+    kind=${1#--}
+    seal "${kind%-seal}"
+    exit 0
+    ;;
+esac
 
 family_cli_parse() {
   selection= seed= source_arm= family_mode=performance all=0 mode_set=0

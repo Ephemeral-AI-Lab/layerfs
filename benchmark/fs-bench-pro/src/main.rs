@@ -474,6 +474,7 @@ struct FragmentCheckpoint {
     tree_visits: u64,
     digest: String,
     root: String,
+    forbidden: [u64; 4],
 }
 
 #[derive(Clone, Copy)]
@@ -772,12 +773,13 @@ fn run() -> AnyResult<()> {
             &expected_digest.to_string_lossy(),
             &fixture_cache_profile.to_string_lossy(),
         ),
-        [command, root, fixture, container, source, seed]
+        [command, root, fixture, oracle, container, source, seed]
             if command == "same-count-fragmentation-verify" =>
         {
             same_count_fragmentation_verify(
                 Path::new(root),
                 Path::new(fixture),
+                Path::new(oracle),
                 ContainerId(container.to_string_lossy().into_owned()),
                 &source.to_string_lossy(),
                 seed.to_string_lossy().parse()?,
@@ -1487,7 +1489,7 @@ fn same_count_performance_case(
         );
     }
     if !workload_source::edit_same_count::SEEDS.contains(&seed)
-        || !matches!(source, "baseline" | "candidate")
+        || !matches!(source, "baseline" | "candidate" | "repeat-a" | "repeat-b")
         || !matches!(
             fixture_cache_profile,
             "generated-first-sample-uncontrolled"
@@ -1609,12 +1611,19 @@ fn same_count_performance_case(
         || commit.edit_spool_live_bytes + commit.edit_spool_superseded_bytes
             != commit.edit_spool_allocated_bytes
         || commit.edit_tree_visits == 0
+        || commit.edit_metric_nodes_scanned != 1
+        || [
+            commit.complete_interval_map_clones,
+            commit.full_interval_map_rescans,
+            commit.later_offset_rekeys,
+            commit.complete_file_materializations,
+        ] != [0; 4]
     {
         return Err("same-count edit receipt".into());
     }
     let execution_ns = nanos(t1, t2);
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"overwrite\",\"position\":\"{}\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":{},\"unique_bytes\":{},\"overlapping_bytes\":{},\"identical_bytes\":{},\"superseded_bytes\":{},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"commit_total_ns\":{},\"commit_pause_fence_ns\":{},\"commit_quiesce_ns\":{},\"commit_capture_ns\":{},\"commit_candidate_plan_ns\":{},\"commit_dirty_compare_ns\":{},\"commit_content_ns\":{},\"commit_namespace_ns\":{},\"commit_candidate_finish_ns\":{},\"commit_local_admission_ns\":{},\"commit_object_admission_ns\":{},\"commit_publication_ns\":{},\"commit_rebase_ns\":{},\"commit_resume_ns\":{},\"commit_unattributed_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_context_switches\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_current_bytes\":{},\"container_memory_peak_bytes\":{},\"container_pids_current\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"overwrite\",\"position\":\"{}\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":{},\"unique_bytes\":{},\"overlapping_bytes\":{},\"identical_bytes\":{},\"superseded_bytes\":{},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"complete_interval_map_clones\":{},\"full_interval_map_rescans\":{},\"later_offset_rekeys\":{},\"complete_file_materializations\":{},\"commit_total_ns\":{},\"commit_pause_fence_ns\":{},\"commit_quiesce_ns\":{},\"commit_capture_ns\":{},\"commit_candidate_plan_ns\":{},\"commit_dirty_compare_ns\":{},\"commit_content_ns\":{},\"commit_namespace_ns\":{},\"commit_candidate_finish_ns\":{},\"commit_local_admission_ns\":{},\"commit_object_admission_ns\":{},\"commit_publication_ns\":{},\"commit_rebase_ns\":{},\"commit_resume_ns\":{},\"commit_unattributed_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_context_switches\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_current_bytes\":{},\"container_memory_peak_bytes\":{},\"container_pids_current\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
         workload_source::edit_same_count::PERFORMANCE_SCHEMA,
         workload_source::edit_same_count::FAMILY_ID,
         scenario.id,
@@ -1664,6 +1673,11 @@ fn same_count_performance_case(
         commit.edit_piece_height,
         commit.edit_piece_logical_charge,
         commit.edit_tree_visits,
+        commit.edit_metric_nodes_scanned,
+        commit.complete_interval_map_clones,
+        commit.full_interval_map_rescans,
+        commit.later_offset_rekeys,
+        commit.complete_file_materializations,
         commit.total_ns,
         commit.pause_fence_ns,
         commit.quiesce_ns,
@@ -1722,7 +1736,7 @@ fn same_count_anchor_performance_case(
 ) -> AnyResult<()> {
     if !scenario.frozen
         || !workload_source::edit_same_count::SEEDS.contains(&seed)
-        || !matches!(source, "baseline" | "candidate")
+        || !matches!(source, "baseline" | "candidate" | "repeat-a" | "repeat-b")
         || fixture_cache_profile.is_empty()
         || root.exists()
         || std::fs::metadata(fixture.join("payload.bin"))?.len() != MIB_32
@@ -1870,7 +1884,7 @@ fn same_count_anchor_performance_case(
     let sum = |values: Vec<u64>| values.into_iter().fold(0_u64, u64::saturating_add);
     let supplied = scenario.operations as u64 * 10;
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"legacy_schema_emitted\":true,\"fixture_profile\":\"registered-32m-v0.1.0\",\"fixture_cache_profile\":\"{}\",\"operation\":\"overwrite\",\"position\":\"distributed\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":{},\"unique_bytes\":{},\"overlapping_bytes\":{},\"identical_bytes\":{},\"superseded_bytes\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"spool_write_bytes\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes_peak\":{},\"spool_superseded_bytes\":{},\"piece_count_peak\":{},\"piece_height_peak\":{},\"piece_logical_charge_bytes_peak\":{},\"tree_visits\":{},\"commit_total_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"legacy_schema_emitted\":true,\"fixture_profile\":\"registered-32m-v0.1.0\",\"fixture_cache_profile\":\"{}\",\"operation\":\"overwrite\",\"position\":\"distributed\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"supplied_bytes\":{},\"unique_bytes\":{},\"overlapping_bytes\":{},\"identical_bytes\":{},\"superseded_bytes\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"spool_write_bytes\":{},\"spool_allocated_bytes\":{},\"spool_live_bytes_peak\":{},\"spool_superseded_bytes\":{},\"piece_count_peak\":{},\"piece_height_peak\":{},\"piece_logical_charge_bytes_peak\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"complete_interval_map_clones\":{},\"full_interval_map_rescans\":{},\"later_offset_rekeys\":{},\"complete_file_materializations\":{},\"commit_total_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
         workload_source::edit_same_count::PERFORMANCE_SCHEMA,
         workload_source::edit_same_count::FAMILY_ID,
         scenario.id,
@@ -1908,6 +1922,26 @@ fn same_count_anchor_performance_case(
         commits.iter().map(|receipt| receipt.edit_piece_height).max().unwrap_or(0),
         commits.iter().map(|receipt| receipt.edit_piece_logical_charge).max().unwrap_or(0),
         sum(commits.iter().map(|receipt| receipt.edit_tree_visits).collect()),
+        sum(commits
+            .iter()
+            .map(|receipt| receipt.edit_metric_nodes_scanned)
+            .collect()),
+        sum(commits
+            .iter()
+            .map(|receipt| receipt.complete_interval_map_clones)
+            .collect()),
+        sum(commits
+            .iter()
+            .map(|receipt| receipt.full_interval_map_rescans)
+            .collect()),
+        sum(commits
+            .iter()
+            .map(|receipt| receipt.later_offset_rekeys)
+            .collect()),
+        sum(commits
+            .iter()
+            .map(|receipt| receipt.complete_file_materializations)
+            .collect()),
         sum(commits.iter().map(|receipt| receipt.total_ns).collect()),
         sum(candidates.iter().map(|candidate| candidate.candidate_objects).collect()),
         sum(candidates.iter().map(|candidate| candidate.candidate_bytes).collect()),
@@ -1950,7 +1984,7 @@ fn same_count_verify_case(
         workload_source::edit_same_count::FIXTURE_BYTES
     };
     if !workload_source::edit_same_count::SEEDS.contains(&seed)
-        || !matches!(source, "baseline" | "candidate")
+        || !matches!(source, "baseline" | "candidate" | "repeat-a" | "repeat-b")
         || !valid_digest(expected_digest)
         || fixture_cache_profile.is_empty()
         || root.exists()
@@ -2077,12 +2111,14 @@ fn same_count_verify_case(
 fn same_count_fragmentation_verify(
     root: &Path,
     fixture: &Path,
+    oracle: &Path,
     container_id: ContainerId,
     source: &str,
     seed: u8,
 ) -> AnyResult<()> {
     if root.exists()
-        || !matches!(source, "baseline" | "candidate")
+        || !matches!(source, "baseline" | "candidate" | "repeat-a" | "repeat-b")
+        || !oracle.is_dir()
         || !workload_source::edit_same_count::SEEDS.contains(&seed)
         || std::fs::metadata(fixture.join("payload.bin"))?.len()
             != workload_source::edit_same_count::FIXTURE_BYTES
@@ -2096,11 +2132,32 @@ fn same_count_fragmentation_verify(
         EntityName::new(format!("fragmentation-{source}-{seed}"))?,
         LayerStackInitialization::Directory(fixture.to_owned()),
     )?;
+    let base = store.pin_branch(client.fork_branch(
+        EntityName::new("oracle-base")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?)?;
     let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
         .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    let oracle_workload =
+        std::env::var_os("LAYERFS_BENCH_ORACLE_WORKLOAD").ok_or("same-count oracle workload")?;
     let mut checkpoints = Vec::with_capacity(6);
     for cohort in ["increasing", "descending", "hotspot"] {
         for operations in [100_u64, 1_000] {
+            let oracle_case = oracle.join(format!("{cohort}-{operations}"));
+            let oracle_file = oracle_case.join("payload.bin");
+            let (oracle_size, oracle_digest) =
+                process_digest(&oracle_workload, oracle_file.as_os_str())?;
+            if oracle_size != workload_source::edit_same_count::FIXTURE_BYTES {
+                return Err("same-count independent oracle size".into());
+            }
+            let expected_file_root = independent_file_root(
+                &base.reader,
+                base.root,
+                &oracle_file,
+                &oracle_case.join("ranges.txt"),
+            )?;
             let branch = client.fork_branch(
                 EntityName::new(format!("{cohort}-{operations}"))?,
                 LocalForkSource::Layer {
@@ -2146,8 +2203,8 @@ fn same_count_fragmentation_verify(
                 ],
             )?;
             let (size, digest) = parse_digest(&before)?;
-            if size != workload_source::edit_same_count::FIXTURE_BYTES {
-                return Err("same-count fragmentation size".into());
+            if size != oracle_size || digest != oracle_digest {
+                return Err("same-count independent oracle digest".into());
             }
             let commit_id = match client.commit_workspace_session(workspace.id)? {
                 WorkspaceCommitResult::Created { commit_id, .. } => commit_id,
@@ -2156,6 +2213,14 @@ fn same_count_fragmentation_verify(
             visible_head(&client, branch, Some(commit_id))?;
             client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
             let root_id = store.commit(commit_id)?.ok_or("fragment commit")?.root_id;
+            let (committed_file, _) = layerfs_content::filesystem::stat(
+                &layerfs_layerstack_store::CoreReader(&store.snapshot_reader(root_id)),
+                root_id,
+                &layerfs_content::CanonicalPath::new("payload.bin")?,
+            )?;
+            if committed_file.content_root != expected_file_root.0 {
+                return Err("same-count independent canonical file root".into());
+            }
             let snapshot = client.monitor_snapshot()?;
             let operation = snapshot
                 .operations
@@ -2208,9 +2273,15 @@ fn same_count_fragmentation_verify(
                 tree_visits: receipt.edit_tree_visits,
                 digest,
                 root: root_id.to_string(),
+                forbidden: [
+                    receipt.complete_interval_map_clones,
+                    receipt.full_interval_map_rescans,
+                    receipt.later_offset_rekeys,
+                    receipt.complete_file_materializations,
+                ],
             };
             println!(
-                "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"cohort\":\"{}\",\"operations\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"final_file_bytes\":{},\"sha256\":\"{}\",\"canonical_root\":\"{}\",\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"status\":\"pass\"}}",
+                "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"cohort\":\"{}\",\"operations\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"complete_interval_map_clones\":{},\"full_interval_map_rescans\":{},\"later_offset_rekeys\":{},\"complete_file_materializations\":{},\"final_file_bytes\":{},\"sha256\":\"{}\",\"canonical_root\":\"{}\",\"canonical_file_root\":\"{}\",\"independent_oracle\":true,\"fresh_fuse_reopen\":true,\"performance_distribution\":false,\"status\":\"pass\"}}",
                 workload_source::edit_same_count::VERIFICATION_SCHEMA,
                 workload_source::edit_same_count::FAMILY_ID,
                 workload_source::edit_same_count::VERIFIER_ID,
@@ -2222,9 +2293,15 @@ fn same_count_fragmentation_verify(
                 checkpoint.piece_height,
                 checkpoint.piece_charge,
                 checkpoint.tree_visits,
+                receipt.edit_metric_nodes_scanned,
+                checkpoint.forbidden[0],
+                checkpoint.forbidden[1],
+                checkpoint.forbidden[2],
+                checkpoint.forbidden[3],
                 size,
                 checkpoint.digest,
                 checkpoint.root,
+                expected_file_root.0,
             );
             checkpoints.push(checkpoint);
         }
@@ -2245,19 +2322,64 @@ fn same_count_fragmentation_verify(
         {
             return Err(format!("same-count fragmentation structural gate: {cohort}").into());
         }
+        if hundred.forbidden != [0; 4] || thousand.forbidden != [0; 4] {
+            return Err(format!("same-count forbidden edit path: {cohort}").into());
+        }
     }
     if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
         return Err("same-count fragmentation cleanup".into());
     }
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"live_metadata_ratio_limit\":12,\"tree_visit_ratio_limit\":18,\"complete_interval_map_clones\":0,\"full_interval_map_rescans\":0,\"later_offset_rekeys\":0,\"complete_file_materializations\":0,\"cleanup_status\":\"pass\",\"performance_distribution\":false,\"status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"verifier_id\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"live_metadata_ratio_limit\":12,\"tree_visit_ratio_limit\":18,\"forbidden_counters_source\":\"WorkspaceCommitReceipt\",\"complete_interval_map_clones\":{},\"full_interval_map_rescans\":{},\"later_offset_rekeys\":{},\"complete_file_materializations\":{},\"cleanup_status\":\"pass\",\"performance_distribution\":false,\"status\":\"pass\"}}",
         workload_source::edit_same_count::VERIFICATION_SCHEMA,
         workload_source::edit_same_count::FAMILY_ID,
         workload_source::edit_same_count::VERIFIER_ID,
         source,
         seed,
+        checkpoints.iter().map(|row| row.forbidden[0]).sum::<u64>(),
+        checkpoints.iter().map(|row| row.forbidden[1]).sum::<u64>(),
+        checkpoints.iter().map(|row| row.forbidden[2]).sum::<u64>(),
+        checkpoints.iter().map(|row| row.forbidden[3]).sum::<u64>(),
     );
     Ok(())
+}
+
+fn independent_file_root(
+    reader: &layerfs_layerstack_store::SnapshotReader,
+    base_root: layerfs_content::ObjectId,
+    oracle_file: &Path,
+    ranges_file: &Path,
+) -> AnyResult<layerfs_content::file::rope::FileStateRoot> {
+    let core = layerfs_layerstack_store::CoreReader(reader);
+    let path = layerfs_content::CanonicalPath::new("payload.bin")?;
+    let (base_file, _) = layerfs_content::filesystem::stat(&core, base_root, &path)?;
+    let oracle = std::fs::read(oracle_file)?;
+    let mut objects = layerfs_layerstack_store::ObjectBuffer::new(reader)?;
+    let mut batch = layerfs_content::file::rope::FileMutationBatch::new(
+        &mut objects,
+        Some(layerfs_content::file::rope::FileStateRoot(
+            base_file.content_root,
+        )),
+    )?;
+    let mut prior_end = 0_usize;
+    for line in std::fs::read_to_string(ranges_file)?.lines() {
+        let (start, end) = line
+            .split_once(' ')
+            .ok_or("same-count independent oracle range")?;
+        let start: usize = start.parse()?;
+        let end: usize = end.parse()?;
+        if start < prior_end || start >= end || end > oracle.len() {
+            return Err("same-count independent oracle range order".into());
+        }
+        batch.replace(
+            start as u64,
+            (end - start) as u64,
+            std::io::Cursor::new(&oracle[start..end]),
+        )?;
+        prior_end = end;
+    }
+    let (root, _) = batch.finish()?;
+    Ok(root)
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -44,6 +44,18 @@ run-edit-same-count.sh RUN_ID CONTAINER_ID \
   --mode performance
 ```
 
+Prepare the source/image-identity cache once outside selected-run timing:
+
+```text
+run-edit-same-count.sh --prepare CONTAINER_ID
+```
+
+The cache is keyed by the complete source seal and retains the host binary,
+oracle workload, deterministic fixture, product/harness/workload seals, and the
+issue-14 custody reference. A selected performance invocation must finish in
+under two seconds and performs no build, fixture generation, or environment
+discovery.
+
 Modes:
 
 | Mode | Development behavior |
@@ -208,13 +220,19 @@ edit16 complete median     156.446 ms, hard <= 200 ms
 host peak RSS               97,124,352 bytes
 ```
 
-Run three paired seed samples in alternating order. For each new row:
+Run three paired seed samples in alternating A/B, B/A, A/B order. When both
+arms have the same image/commit/product/harness/workload identity, report A/A
+repeatability and make no baseline/candidate improvement claim. For each new
+row:
 
 ```text
 median(candidate / unchanged baseline) <= 1.05
 ```
 
-Any pair above `1.10` requires phase/counter disposition. Require at least a
+Ratios at most `1.05` pass. Ratios above `1.05` through `1.10` are tolerated
+passes only with retained phase/counter disposition. Ratios above `1.10` are
+no-go. The less-than-2-ms exception applies only to named nonaggregate phases,
+never complete lifecycle or family walls. Require at least a
 20-percent improvement only when baseline evidence proves a defect and the
 retained implementation claims to optimize it.
 
@@ -239,7 +257,10 @@ The paired baseline/candidate accounting budget is target/tolerated/hard
 retained 97,124,352-byte peak, hard at most 128 MiB, with zero swap.
 
 Separate full-family verification is not part of the development loop or the
-performance distribution. Its provisional admission timeout is 20 seconds.
+performance distribution. Admission runs the frozen 42-row performance
+campaign plus only the separately defined fragmentation verifier group; it does
+not add 42 unregistered exact-verifier rows. Its timeout is 20 seconds per
+verifier invocation.
 
 ## Files to read
 
@@ -254,15 +275,15 @@ performance distribution. Its provisional admission timeout is 20 seconds.
 
 ## Acceptance criteria
 
-- [x] One family module and one runner own all 14 timed IDs and the verifier
+- [ ] One family module and one runner own all 14 timed IDs and the verifier
   group while reusing shared harness code.
-- [x] The runner defaults to one explicit case/seed in performance mode and
+- [ ] The runner defaults to one explicit case/seed in performance mode and
   cannot run the full family without `--all`.
-- [x] Frozen anchors retain their operation, fixture, timing, schema, and oracle.
-- [x] New 1/10/100 schedules are exact prefixes and preserve 256 KiB length.
-- [x] Every performance row reports latency, operations/s, phase, I/O, object,
+- [ ] Frozen anchors retain their operation, fixture, timing, schema, and oracle.
+- [ ] New 1/10/100 schedules are exact prefixes and preserve 256 KiB length.
+- [ ] Every performance row reports latency, operations/s, phase, I/O, object,
   CPU, memory, and cleanup receipts without verifier work in its timer.
-- [x] Paired regression, absolute anchor, family-wall, RSS, and zero-swap gates
+- [ ] Paired regression, absolute anchor, family-wall, RSS, and zero-swap gates
   pass.
-- [x] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
+- [ ] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
   structural limits before publication.
