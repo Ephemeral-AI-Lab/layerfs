@@ -1,0 +1,18 @@
+{
+  "schema": "layerfs-v012-release-refresh-v1",
+  "measured_source": "e978edd19f189d56ca8678bae4dcdc7b6cd4f409",
+  "sdk_measured_source": "3337728e9846a200d7a5cc08d076de18f1d5436c",
+  "sdk_performance_samples": 560,
+  "sdk_verification_proofs": 112,
+  "namespace_performance_samples": 12,
+  "namespace_verification_proofs": 4,
+  "store_performance_samples": 9,
+  "store_verification_proofs": 3,
+  "legacy_payload": "archival diagnostic; excluded from current release decision by user direction",
+  "raw_sha256": {
+    "benchmark-results/fs-bench-pro/init_namespace/release-v012-e978edd1-performance/performance/raw.jsonl": "aa10fa04609ffdfdb5d0098a6b1bd2b75438657bdf891bbc3fdceb9d9a7b67ec",
+    "benchmark-results/fs-bench-pro/init_namespace/release-v012-e978edd1-verification/verification/raw.jsonl": "8628b964b19bb3ba7ae01cc6def210529e936fd82668688cec6c864850eb908c",
+    "benchmark-results/fs-bench-pro/store-footprint/release-v012-e978edd1-performance/performance/raw.jsonl": "543f66c29437682c5cb0e1e2657db7d493cf715a2b39ede520aaa44cdbb19c20",
+    "benchmark-results/fs-bench-pro/store-footprint/release-v012-e978edd1-verification/verification/raw.jsonl": "5cbfe59e6bfd52d0f5fde8f9f402e2cdbc703fa3d5694d11b4bc8b637c75953e"
+  }
+}

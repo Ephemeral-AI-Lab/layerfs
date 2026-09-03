@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 CLI reference
 
-> **Status:** Release candidate draft for LayerFS 0.1.2.
+> **Status:** Released for LayerFS 0.1.2.
 
 The 0.1.2 release does not add or remove a documented CLI operation. Its
 command grammar, context ownership, typed identifiers, query paging behavior,

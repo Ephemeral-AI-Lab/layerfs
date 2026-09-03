@@ -3802,3 +3802,25 @@ Retain bounded candidate references. The next measured ownership cost is the bor
 
 - Source seal: `dd219ed9e7942a42891ff14646ee3c54a4580e6aaeeee7a25a01b30d1453a805`
 - Exit status: `0`
+
+## release-v012-e978edd1-payload — one-Store public-SDK campaign
+
+### One-Store fs-bench-pro campaign
+
+- Raw evidence: `/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/runs/release-v012-e978edd1-payload/raw/layerfs.jsonl`
+- Lifecycle samples: 15
+- Workspace Create median: 16059916 ns
+- Small-edit Commit median: 3336000 ns
+- Small-edit complete median: 28434375 ns
+- Cold-create-32m Commit median: 134190375 ns
+- Cold-create-32m complete median: 228602500 ns
+- EDIT16 median: 118299667 ns
+- Prepend median: 308471208 ns
+- Read 32 MiB median: 165781583 ns
+- Registered four-row total: 821154958 ns
+- Inner 32 MiB write throughput: 451616795.982 bytes/s
+
+- Host memory: `host_peak_rss_bytes=93077504 host_swaps=0 `
+
+- Source seal: `68f6e6d2ae2cb1f27a866679da0fbbc15d104ec57cd86024ce9ad4171acc7457`
+- Exit status: `1`

@@ -1,11 +1,11 @@
 # LayerFS 0.1.2
 
-> **Status:** SDK-only terminal evidence collected and verified; v0.1.2 remains unreleased.
+> **Status:** Completed v0.1.2 release checklist; source-bound evidence linked below.
 
-LayerFS 0.1.1 is the active released Developer Preview. LayerFS 0.1.2 is
-unreleased. SDK-only evidence for
-[issue #20](https://github.com/Ephemeral-AI-Lab/layerfs/issues/20) is linked below. Parent issue
-[#12](https://github.com/Ephemeral-AI-Lab/layerfs/issues/12) remains open.
+LayerFS 0.1.2 includes the completed
+[issue #20](https://github.com/Ephemeral-AI-Lab/layerfs/issues/20) SDK campaign
+and the [release refresh](release-refresh.md) under parent
+[#12](https://github.com/Ephemeral-AI-Lab/layerfs/issues/12).
 
 ## Ordered work
 
@@ -56,10 +56,11 @@ observations and native lifetime bounds, not exact-phase proof.
 POSIX/FUSE families. Their raw evidence is immutable but cannot serve as an
 active member, baseline, paired arm, or release claim.
 
-The universal engine and Store evidence remain supporting work. Completion of
-#20 makes #12 eligible for a later release-finalization step; it does not tag,
-publish, or close #12. Empirical edit claims stop at 500 MiB, with no 100 GiB
-synthetic or extrapolated claim.
+The namespace and Store supporting families have fresh release-source
+measurements and separate passing verification, recorded in the
+[supporting report](../../../../release-notes/0.1.2/supporting-benchmarks.md).
+Empirical edit claims stop at 500 MiB, with no 100 GiB synthetic or extrapolated
+claim. #18 remains far-future unscheduled storage-alternative exploration.
 
 ## Completion
 
@@ -67,4 +68,4 @@ synthetic or extrapolated claim.
 - [x] Three SDK-only family definitions and runners implement exactly 56 IDs.
 - [x] 560 terminal performance rows and all 56 verifier receipts pass the approved final policy.
 - Final repository-gate status and checked source bridge: [evidence selector](../../../../release-notes/0.1.2/sdk-edit-evidence.json).
-- Issue closure is recorded on GitHub after final verification and push; parent #12 stays open.
+- #20 is closed. Parent #12 closes after final release verification, push and publication.

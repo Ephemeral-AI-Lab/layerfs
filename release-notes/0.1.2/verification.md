@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 verification
 
-> **Status:** Unreleased. Terminal benchmark validation is complete; the final repository-gate receipt and admission state are pinned by the evidence selector.
+> **Status:** Released v0.1.2 verification record; source identities and scope are explicit.
 
 | Gate | Evidence/status |
 | --- | --- |
@@ -12,7 +12,10 @@
 | Memory | Sampled ack-window-v1 scope plus native lifetime bounds; no exact-phase claim |
 | Cleanup/custody | Native container exits checked; scratch recovery and sealed originals retained |
 | Final repository commands | Exact revision, results and manifest in selector below |
-| Publication | Not performed or authorized; #12 remains open |
+| Namespace refresh | 12 performance samples; 4 separate passing proofs on `e978edd1` |
+| Store-footprint refresh | 9 performance samples; 3 separate passing proofs on `e978edd1` |
+| Release native checks | 237 passed, 0 failed, 1 pre-existing ignored test; fmt/Clippy/diff checks passed on unchanged `e978edd1` production sources |
+| Publication | Authorized through #12 after exact-source final checks |
 
 The [evidence selector](sdk-edit-evidence.json) and
 [final report](../../benchmark-results/fs-bench-pro/sdk-edit-terminal/final-3337728e/report.md)
@@ -39,5 +42,24 @@ The final selector records the documentation revision and gate manifest.
 The isolated baseline verifier InvalidRequest, six-proof recovery, metadata
 cleanup recovery, alias correction, and original strict findings are disclosed
 in [benchmark results](benchmark-results.md). No failed attempt was erased or
-pooled into timing distributions. Issue #20 closes only after final evidence
-validation and push; it does not close #12 or publish v0.1.2.
+pooled into timing distributions. Issue #20 closed after final validation and
+push. Issue #12 separately owns release finalization. The
+[supporting benchmark tables](supporting-benchmarks.md) record the refresh.
+The daemon close-ACK fix has a failing-before/passing-after Linux regression,
+11 passing Linux daemon tests, Linux Clippy, and four passing real TCP/FUSE
+verifier runs at 10/500 MiB.
+
+The original SDK selector certifies its recorded source, not an assertion that
+later release code is byte-identical. The production delta for release is the
+daemon close-order fix; new runner modes only separate supporting-family
+collection from verification. SDK edit/Commit implementation and original raw
+measurements remain unchanged. Final native checks and GitHub CI bind the later
+source; the annotated tag identifies the published documentation-complete tree.
+
+Release native logs are retained in
+`benchmark-results/fs-bench-pro/release-v012/final-gates/`. Source `e978edd1`
+also passed [GitHub CI](https://github.com/Ephemeral-AI-Lab/layerfs/actions/runs/33813242849).
+The final documentation-complete tag must pass its own CI before publication.
+The benchmark-data release asset includes selected raw streams and the release
+evidence index; it excludes private machine-identifying host logs and large
+input/output databases.

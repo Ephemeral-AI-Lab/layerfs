@@ -349,6 +349,14 @@ the empirical measured-size set or support latency, throughput, RSS, cgroup, or
 
 ## 10. Measure and attribute memory honestly
 
+The exact-phase rules below apply when a report claims phase-local precision.
+An explicitly approved, documented broader-window profile may instead use
+causal start/finish acknowledgements, sampled category observations and native
+lifetime bounds. Report gaps and unavailable exact attribution; never rename
+these observations as exact phase peaks or continuous category maxima. The
+v0.1.2 SDK campaign's approved `ack-window-v1` profile is one such exception.
+Memory observation precision is not itself a product latency target.
+
 A report MUST NOT collapse all resource domains into one field called
 `memory`. It MUST distinguish:
 

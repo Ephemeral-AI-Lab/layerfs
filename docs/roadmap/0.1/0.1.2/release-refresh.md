@@ -14,9 +14,11 @@ recorded at candidate `3337728e`; it is not relabeled as a later-source run.
    1/2/3, followed later by one independent verifier per tier.
 3. Refresh `store_footprint`: all three registered 500 MB controls, three fresh
    Stores per control, followed later by one verifier per control.
-4. Exercise the frozen 32 MiB payload compatibility campaign separately. Its
-   historical POSIX/FUSE lifecycle is not an SDK-edit benchmark or a speedup
-   comparator for the new edit families. Preserve its original timing meaning.
+4. User clarification after the retained compatibility diagnostic: the old
+   32 MiB payload campaign is obsolete for the current release decision. Do not
+   rerun, optimize, or apply its temp-copy/rename timing gates to SDK edits.
+   Preserve the diagnostic and its failed historical gates without relabeling
+   it as a pass. Active release tables cover the five current families.
 5. Collect performance before final verification. Add only thin full-family
    `collect` / `verify-all` entrypoints where existing runners otherwise force
    verification immediately; preserve original commands and raw schemas.

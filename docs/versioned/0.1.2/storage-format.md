@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 storage format
 
-> **Status:** Release candidate draft for LayerFS 0.1.2.
+> **Status:** Released for LayerFS 0.1.2.
 
 The 0.1.2 release preserves the five-table SQLite schema, canonical object
 encodings, identity domains, content-defined chunking profile, immutable

@@ -1,6 +1,23 @@
-# LayerFS 0.1.2 SDK-only benchmark evidence
+# LayerFS 0.1.2 benchmark evidence
 
-> **Status:** Terminal performance and correctness evidence passes the explicitly approved policy. Publication is not authorized; v0.1.2 remains unreleased.
+> **Status:** Released v0.1.2 evidence with explicitly documented source boundaries and accepted limitations.
+
+The [supporting-family refresh](supporting-benchmarks.md) records fresh namespace
+initialization and Store-footprint results on release-candidate source
+`e978edd19f189d56ca8678bae4dcdc7b6cd4f409`, with performance and verification
+collected separately. The obsolete 32 MiB POSIX payload compatibility campaign
+is excluded from the current release decision by explicit user direction; its
+failed historical timing gates remain preserved in
+`benchmark-results/fs-bench-pro/runs/release-v012-e978edd1-payload`.
+It is not pooled with or used to describe the SDK prepend result. Namespace
+and Store lifecycle controls are also not SDK-edit speedup comparators.
+
+## Three SDK-only edit families
+
+Download the [portable benchmark data](https://github.com/Ephemeral-AI-Lab/layerfs/releases/download/v0.1.2/layerfs-0.1.2-benchmark-data.tar.gz)
+for the selected raw performance/proof streams. Its own manifest describes the
+included subset; full local-run manifests also reference unbundled databases,
+binaries and environment logs.
 
 The [complete report](../../benchmark-results/fs-bench-pro/sdk-edit-terminal/final-3337728e/report.md)
 contains both arms' per-operation/per-size timing and memory tables, five
@@ -61,11 +78,20 @@ field alias in memory and applies recorded user approvals. Original raw rows,
 subproofs, and frozen FAIL classifications are retained, not relabeled as
 strict passes. Its self-check rejects conflicting aliases and confirms real
 resource failures remain failures. Final source validation allows the approved
-specification amendment and documentation/evidence changes only; compiled
-product and harness remain byte-identical to the measured candidate.
+specification amendment and documentation/evidence changes only at #20 closure
+(`ac73cba9`). That completed validation is not a claim that later release
+sources are byte-identical to the measured candidate. Release finalization adds
+the independently verified daemon close-acknowledgement fix and supporting-runner
+phase separation; original #20 evidence is preserved under its exact source.
 
 One baseline 10 MiB zero-extension verifier returned InvalidRequest despite
-normal container exit without OOM. Its cause is unproven. The failed attempt
+normal container exit without OOM. Subsequent investigation proved a daemon
+race: the close acknowledgement preceded watcher/registry cleanup, allowing an
+immediate remount to encounter a stale reservation. Commit `95d09244` drains
+the watcher and releases the reservation before acknowledging close, without
+adding retries or sleeps. A deterministic failing-before/passing-after Linux
+test and real TCP/FUSE verification at 10 MiB (three runs) and 500 MiB passed.
+The failed attempt
 is retained under the length-changing bundle's verification/attempts/. Only
 six missing proofs were retried; all passed, and the original 58-proof prefix
 and all performance bytes stayed unchanged. Temporary read-only metadata
@@ -73,5 +99,6 @@ copies required scoped cleanup recovery; input caches/build receipts remain inta
 
 Historical POSIX/FUSE results and earlier incomplete campaigns are not pooled,
 comparators, or admission evidence. Empirical claims stop at **500 MiB**; no
-100 GiB or other-environment extrapolation is made. Issue #12 remains the
-separate release-finalization decision; these results create no tag or Release.
+100 GiB or other-environment extrapolation is made. Issue #12 owns final release
+validation and publication; the SDK measurements alone do not certify all
+release activities.

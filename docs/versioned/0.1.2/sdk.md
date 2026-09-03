@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 Rust SDK reference
 
-> **Status:** Release candidate draft for LayerFS 0.1.2.
+> **Status:** Released for LayerFS 0.1.2.
 
 The 0.1.2 release preserves the documented Client, Store, LayerStack,
 Layer, Branch, Commit, Workspace, Monitor, query, diff, execution, output,
@@ -27,5 +27,7 @@ retry the already-published Commit.
 
 The piece tree, physical spool slices, benchmark diagnostics, benchmark-only
 initialization seed, presentation-recovery flag, and object admission are
-private implementation details. `WorkspaceState`, `WorkspaceCommitResult`,
-`OperationFamily`, and `WorkspaceCommitReceipt` retain their v0.1.1 shapes.
+implementation details rather than portable benchmark guarantees. Existing
+Workspace and Commit operations remain available; monitoring adds the file-range
+edit operation and diagnostic receipts. Use matching-version SDK/daemon builds
+for resource-observation helpers; those observations are environment-specific.

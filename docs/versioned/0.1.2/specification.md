@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 specification
 
-> **Status:** Release candidate draft for LayerFS 0.1.2; delta over the
+> **Status:** Released for LayerFS 0.1.2; delta over the
 > [0.1.1 specification](../0.1.1/specification.md).
 
 LayerFS 0.1.2 retains the 0.1.1 product model: one local SQLite Store per

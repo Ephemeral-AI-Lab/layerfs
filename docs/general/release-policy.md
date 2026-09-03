@@ -44,7 +44,8 @@ the [LayerFS benchmark rules](benchmark_rules.md). An authenticity, timing,
 family-completeness, memory-attribution, custody, or claim-mapping failure
 blocks publication independently of numerical performance.
 
-LayerFS 0.1.1 is the active released Developer Preview. The
-[0.1.2 benchmark report](../../release-notes/0.1.2/benchmark-results.md) is a
-prerelease blocker record until issue #20 completes; earlier release records
-remain immutable under `release-notes/`.
+The [0.1.2 benchmark report](../../release-notes/0.1.2/benchmark-results.md)
+records complete SDK edit evidence and the release-source namespace/Store
+refresh. Its explicitly approved tolerances and sampled-memory limitations are
+part of the published claim, not strict-threshold passes. Earlier release
+records remain immutable under `release-notes/`.
