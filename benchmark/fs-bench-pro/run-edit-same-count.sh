@@ -21,7 +21,7 @@ control_external_wall_ns=0
 count_changing_verifiers=(insert-middle-4k-on-8m-proof delete-middle-4k-on-8m-proof rewrite-full-grow-8m-to-12m-proof rewrite-full-shrink-8m-to-4m-proof)
 
 capture_failure() { failure_line=$1; failure_command=$2; }
-die() { failure_reason=$*; printf 'fs-bench-pro %s: %s\n' "$family_kind" "$failure_reason" >&2; exit 2; }
+die() { failure_line=${failure_line:-${BASH_LINENO[0]:-unknown}}; failure_command=${failure_command:-"die: $*"}; failure_reason=$*; printf 'fs-bench-pro %s: %s\n' "$family_kind" "$failure_reason" >&2; exit 2; }
 trap 'capture_failure "$LINENO" "$BASH_COMMAND"' ERR
 
 static_edit_proof() {
@@ -362,7 +362,7 @@ run_precondition() {
     LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
     LAYERFS_DAEMON_CONTAINER_ID="$container_id" LAYERFS_FUSE_HOST=host.docker.internal \
     "$binary" same-count-performance "$precondition_dir/work" "$fixture_256" "$container_id" \
-    overwrite-head-4k-ops-1 1 "$active_arm" generated-precondition-uncontrolled \
+    overwrite-head-4k-ops-1 1 "$active_arm" generated-first-sample-uncontrolled \
     >"$precondition_dir/raw.jsonl" 2>"$precondition_dir/supervisor.txt"
   status=$?
   set -e
