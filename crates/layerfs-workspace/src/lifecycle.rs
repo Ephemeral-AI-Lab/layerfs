@@ -1,8 +1,8 @@
 use crate::{
     worker::WorkspaceWorker, CreateWorkspaceSession, EndWorkspaceMode, Workspace,
     WorkspaceCommitResult, WorkspaceCommitStatus, WorkspaceDetail, WorkspaceDiff,
-    WorkspaceEndResult, WorkspaceError, WorkspaceFileRangeEdit, WorkspaceId, WorkspaceProjection,
-    WorkspaceResult, WorkspaceSession, WorkspaceSummary, Workspaces,
+    WorkspaceEndResult, WorkspaceError, WorkspaceFileRangeEdit, WorkspaceId, WorkspacePlacement,
+    WorkspaceProjection, WorkspaceResult, WorkspaceSession, WorkspaceSummary, Workspaces,
 };
 use layerfs_layerstack_store::{
     CommitOutcome, Result, StoreError as StorageError, WorkspaceCommitPhase,
@@ -591,6 +591,33 @@ impl Workspaces {
 
     pub fn edit_workspace_file_range(&self, edit: WorkspaceFileRangeEdit) -> WorkspaceResult<()> {
         self.edit_workspace_file_ranges(vec![edit])
+    }
+
+    pub fn start_workspace_resource_sample(&self, id: WorkspaceId) -> WorkspaceResult<(u64, u64)> {
+        let worker = self.worker(id)?;
+        let WorkspacePlacement::Container { container_id, .. } = &worker.request.placement else {
+            return Err(WorkspaceError::InvalidPlacement);
+        };
+        let owner = self
+            .daemon_mount_owner()?
+            .filter(|owner| owner.accepts(container_id))
+            .ok_or(WorkspaceError::InvalidPlacement)?;
+        owner.start_resource_sample(id).map_err(Into::into)
+    }
+
+    pub fn finish_workspace_resource_sample(
+        &self,
+        id: WorkspaceId,
+        t0_unix_ns: u64,
+        t3_unix_ns: u64,
+        uncertainty_ns: u64,
+    ) -> WorkspaceResult<layerfs_daemon::protocol::CgroupResourceSample> {
+        let owner = self
+            .daemon_mount_owner()?
+            .ok_or(WorkspaceError::InvalidPlacement)?;
+        owner
+            .finish_resource_sample(id, t0_unix_ns, t3_unix_ns, uncertainty_ns)
+            .map_err(Into::into)
     }
 
     pub fn edit_workspace_file_ranges(

@@ -1,16 +1,19 @@
 use layerfs_sdk::{
     BranchId, CandidateStats, Client, CommitId, ContainerId, CreateWorkspaceSession,
     EndWorkspaceMode, EntityName, ExecutionTransport, FuseWriteReceipt, LayerStackInitialization,
-    LayerStackStore, LocalForkSource, NonEmpty, OperationFamily, OutputPage, Query, QueryItem,
-    QueryKind, StorageReceipt, WorkspaceCommitResult, WorkspaceFileRangeEdit,
+    LayerStackStore, LocalForkSource, NonEmpty, OperationFamily, OperationOutcome, OutputPage,
+    Query, QueryItem, QueryKind, StorageReceipt, WorkspaceCommitResult, WorkspaceFileRangeEdit,
     WorkspaceFileReplacement, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
 };
 use std::ffi::OsString;
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::Arc;
+use std::process::{Command, Stdio};
+use std::sync::{mpsc, Arc};
 use std::time::Instant;
+
+mod sdk_edit_verify;
+mod sdk_file_edit;
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -204,15 +207,58 @@ unsafe extern "C" {
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn native_peak_rss_and_swaps() -> AnyResult<(u64, u64)> {
+    native_peak_rss_and_swaps_for(0)
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn native_peak_rss_and_swaps_for(who: i32) -> AnyResult<(u64, u64)> {
     let mut usage = NativeRusage::default();
-    // SAFETY: RUSAGE_SELF writes exactly one native rusage C-layout structure.
-    if unsafe { getrusage(0, std::ptr::from_mut(&mut usage)) } != 0 {
+    // SAFETY: getrusage writes exactly one native rusage C-layout structure.
+    if unsafe { getrusage(who, std::ptr::from_mut(&mut usage)) } != 0 {
         return Err(std::io::Error::last_os_error().into());
     }
     let peak = u64::try_from(usage.max_rss)?;
     #[cfg(target_os = "linux")]
     let peak = peak.checked_mul(1024).ok_or("Linux peak RSS overflow")?;
     Ok((peak, u64::try_from(usage.swaps)?))
+}
+
+#[cfg(target_os = "macos")]
+fn process_current_rss(pid: u32) -> AnyResult<u64> {
+    const RUSAGE_INFO_V2: i32 = 2;
+    let mut usage = DarwinRusageInfoV2::default();
+    // SAFETY: proc_pid_rusage receives a correctly sized C-layout V2 buffer.
+    if unsafe {
+        proc_pid_rusage(
+            i32::try_from(pid)?,
+            RUSAGE_INFO_V2,
+            std::ptr::from_mut(&mut usage).cast(),
+        )
+    } != 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(usage.resident_size)
+}
+
+#[cfg(target_os = "linux")]
+fn process_current_rss(pid: u32) -> AnyResult<u64> {
+    let status = std::fs::read_to_string(format!("/proc/{pid}/status"))?;
+    status
+        .lines()
+        .find_map(|line| line.strip_prefix("VmRSS:")?.split_whitespace().next())
+        .ok_or_else(|| "Linux child RSS unavailable".into())
+        .and_then(|value| {
+            value
+                .parse::<u64>()?
+                .checked_mul(1024)
+                .ok_or_else(|| "Linux child RSS overflow".into())
+        })
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn process_current_rss(_pid: u32) -> AnyResult<u64> {
+    Err("child RSS is unsupported on this host".into())
 }
 
 #[cfg(target_os = "macos")]
@@ -910,6 +956,65 @@ fn run() -> AnyResult<()> {
                 &case.to_string_lossy(),
             )
         }
+        [command, family] if command == "sdk-edit-self-check" => {
+            sdk_edit_self_check(&family.to_string_lossy())
+        }
+        [command, family] if command == "sdk-edit-registry" => {
+            sdk_edit_registry_output(&family.to_string_lossy())
+        }
+        [command, root, size] if command == "sdk-edit-prepare" => {
+            sdk_edit_prepare(Path::new(root), size.to_string_lossy().parse()?)
+        }
+        [command, size] if command == "sdk-edit-fixture-info" => {
+            sdk_edit_fixture_info(size.to_string_lossy().parse()?)
+        }
+        [command, root, branch, family, scenario] if command == "sdk-edit-qualify" => {
+            sdk_edit_qualify(
+                Path::new(root),
+                branch.to_string_lossy().parse()?,
+                &family.to_string_lossy(),
+                &scenario.to_string_lossy(),
+            )
+        }
+        [command, root, branch, family, scenario, source, repetition, container]
+            if command == "sdk-edit-worker" =>
+        {
+            sdk_edit_worker(
+                Path::new(root),
+                branch.to_string_lossy().parse()?,
+                &family.to_string_lossy(),
+                &scenario.to_string_lossy(),
+                &source.to_string_lossy(),
+                repetition.to_string_lossy().parse()?,
+                ContainerId(container.to_string_lossy().into_owned()),
+            )
+        }
+        [command, root, branch, family, scenario, source, repetition, container]
+            if command == "sdk-edit-run" =>
+        {
+            sdk_edit_supervise(
+                Path::new(root),
+                &branch.to_string_lossy(),
+                &family.to_string_lossy(),
+                &scenario.to_string_lossy(),
+                &source.to_string_lossy(),
+                repetition.to_string_lossy().parse()?,
+                &container.to_string_lossy(),
+            )
+        }
+        [command, root, branch, family, scenario, source, container, performance_rows]
+            if command == "sdk-edit-verify" =>
+        {
+            sdk_edit_verify(
+                Path::new(root),
+                branch.to_string_lossy().parse()?,
+                &family.to_string_lossy(),
+                &scenario.to_string_lossy(),
+                &source.to_string_lossy(),
+                ContainerId(container.to_string_lossy().into_owned()),
+                &performance_rows.to_string_lossy(),
+            )
+        }
         _ => Err("usage: fs-benchmark-pro self-check | namespace-fixture FIXTURE SCENARIO | namespace ROOT FIXTURE CONTAINER SCENARIO ITERATION FIXTURE_DIGEST EDITED_DIGEST EDIT_PATH EDIT_SIZE FIXTURE_CACHE_PROFILE | namespace-performance|namespace-verify-case ROOT FIXTURE CONTAINER SCENARIO SEED SOURCE FIXTURE_DIGEST EDITED_DIGEST EDIT_PATH EDIT_SIZE FIXTURE_CACHE_PROFILE | namespace-init-diagnostic ROOT FIXTURE SCENARIO ITERATION FIXTURE_DIGEST FIXTURE_CACHE_PROFILE | run ROOT FIXTURE [CONTAINER ITERATIONS]".into()),
     }
 }
@@ -928,8 +1033,36 @@ fn self_check() -> AnyResult<()> {
     namespace_self_check()?;
     workload_source::edit_same_count::self_check()?;
     workload_source::edit_count_changing::self_check()?;
+    workload_source::edit_length_preserving::self_check()?;
+    workload_source::edit_length_changing::self_check()?;
+    workload_source::edit_canonical_chunk_count::self_check()?;
+    sdk_edit_combined_registry_self_check()?;
     workload_source::store_footprint::self_check()?;
     println!("PASS fs-bench-pro one-Store lifecycle equations");
+    Ok(())
+}
+
+fn sdk_edit_combined_registry_self_check() -> AnyResult<()> {
+    let mut combined = workload_source::sdk_edit_common::registry_tsv(
+        &workload_source::edit_length_preserving::registry(),
+    );
+    for rows in [
+        workload_source::edit_length_changing::registry(),
+        workload_source::edit_canonical_chunk_count::registry(),
+    ] {
+        for line in workload_source::sdk_edit_common::registry_tsv(&rows)
+            .lines()
+            .skip(1)
+        {
+            combined.push_str(line);
+            combined.push('\n');
+        }
+    }
+    if workload_source::sdk_edit_common::sha256_hex(combined.as_bytes())
+        != workload_source::sdk_edit_common::COMBINED_REGISTRY_SHA256
+    {
+        return Err("combined SDK edit registry manifest".into());
+    }
     Ok(())
 }
 
@@ -4818,6 +4951,1031 @@ fn namespace_init_diagnostic(
     Ok(())
 }
 
+fn sdk_edit_registry(family: &str) -> AnyResult<Vec<workload_source::sdk_edit_common::Scenario>> {
+    match family {
+        "edit_length_preserving" => Ok(workload_source::edit_length_preserving::registry()),
+        "edit_length_changing" => Ok(workload_source::edit_length_changing::registry()),
+        "edit_canonical_chunk_count" => Ok(workload_source::edit_canonical_chunk_count::registry()),
+        _ => Err("unknown SDK edit family".into()),
+    }
+}
+
+fn sdk_edit_self_check(family: &str) -> AnyResult<()> {
+    let started = Instant::now();
+    match family {
+        "edit_length_preserving" => workload_source::edit_length_preserving::self_check()?,
+        "edit_length_changing" => workload_source::edit_length_changing::self_check()?,
+        "edit_canonical_chunk_count" => workload_source::edit_canonical_chunk_count::self_check()?,
+        _ => return Err("unknown SDK edit family".into()),
+    }
+    let elapsed = elapsed_ns(started);
+    if elapsed >= 2_000_000_000 {
+        return Err("SDK edit self-check exceeded two seconds".into());
+    }
+    let (rotations, manifest) = match family {
+        "edit_length_preserving" => (
+            workload_source::edit_length_preserving::ROTATIONS,
+            workload_source::edit_length_preserving::DEFINITION_MANIFEST_SHA256,
+        ),
+        "edit_length_changing" => (
+            workload_source::edit_length_changing::ROTATIONS,
+            workload_source::edit_length_changing::DEFINITION_MANIFEST_SHA256,
+        ),
+        "edit_canonical_chunk_count" => (
+            workload_source::edit_canonical_chunk_count::ROTATIONS,
+            workload_source::edit_canonical_chunk_count::DEFINITION_MANIFEST_SHA256,
+        ),
+        _ => unreachable!(),
+    };
+    println!(
+        "{{\"schema\":\"fs-bench-pro-sdk-edit-self-check-v1\",\"family_id\":\"{family}\",\"registered_ids\":{},\"registry_manifest_sha256\":\"{}\",\"combined_registry_sha256\":\"{}\",\"rotations\":[{},{},{},{},{}],\"elapsed_ns\":{elapsed},\"container_started\":false,\"status\":\"pass\"}}",
+        sdk_edit_registry(family)?.len(), manifest, workload_source::sdk_edit_common::COMBINED_REGISTRY_SHA256, rotations[0], rotations[1], rotations[2], rotations[3], rotations[4]
+    );
+    Ok(())
+}
+
+fn sdk_edit_registry_output(family: &str) -> AnyResult<()> {
+    sdk_edit_self_check(family)?;
+    print!(
+        "{}",
+        workload_source::sdk_edit_common::registry_tsv(&sdk_edit_registry(family)?)
+    );
+    Ok(())
+}
+
+fn sdk_edit_scenario(
+    family: &str,
+    scenario_id: &str,
+) -> AnyResult<workload_source::sdk_edit_common::Scenario> {
+    sdk_edit_registry(family)?
+        .into_iter()
+        .find(|row| row.id == scenario_id)
+        .ok_or_else(|| "unknown SDK edit scenario".into())
+}
+
+fn sdk_edit_fixture_info(fixture_bytes: u64) -> AnyResult<()> {
+    use workload_source::sdk_edit_common as fixture;
+    let index = fixture::SIZES
+        .iter()
+        .position(|size| *size == fixture_bytes)
+        .ok_or("SDK edit fixture size")?;
+    println!("{{\"fixture_profile\":\"{}\",\"fixture_bytes\":{},\"fixture_sha256\":\"{}\",\"canonical_file_root\":\"{}\",\"mapping_root\":\"{}\",\"extent_count\":{},\"directory_mode\":488,\"file_mode\":416,\"mtime_seconds\":1700000000,\"generator_seed\":{}}}",
+        fixture::FIXTURE_PROFILE, fixture_bytes, fixture::FIXTURE_SHA256[index],
+        fixture::FIXTURE_FILE_ROOT[index], fixture::FIXTURE_MAP_ROOT[index], fixture::FIXTURE_EXTENTS[index], 0x4c41_5945_5246_5331_u64);
+    Ok(())
+}
+
+fn sdk_edit_prepare(root: &Path, fixture_bytes: u64) -> AnyResult<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let size_index = workload_source::sdk_edit_common::SIZES
+        .iter()
+        .position(|size| *size == fixture_bytes)
+        .ok_or("SDK edit fixture size")?;
+    if root.exists() {
+        return Err("SDK edit prepared root already exists".into());
+    }
+    std::fs::create_dir(root)?;
+    let fixture = root.join("fixture");
+    std::fs::create_dir(&fixture)?;
+    std::fs::set_permissions(&fixture, std::fs::Permissions::from_mode(0o750))?;
+    let payload = fixture.join("payload.bin");
+    let mut output = std::io::BufWriter::new(
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&payload)?,
+    );
+    let mut hash = workload_source::Sha256::new();
+    let mut state = 0x4c41_5945_5246_5331_u64;
+    let mut buffer = [0_u8; 1024 * 1024];
+    let mut remaining = fixture_bytes;
+    while remaining != 0 {
+        let take = usize::try_from(remaining.min(buffer.len() as u64))?;
+        workload_source::sdk_edit_common::fixture_block(&mut state, &mut buffer[..take]);
+        output.write_all(&buffer[..take])?;
+        hash.update(&buffer[..take]);
+        remaining -= take as u64;
+    }
+    output.flush()?;
+    output.get_ref().sync_all()?;
+    std::fs::set_permissions(&payload, std::fs::Permissions::from_mode(0o640))?;
+    let fixed_time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    std::fs::File::open(&payload)?.set_times(
+        std::fs::FileTimes::new()
+            .set_accessed(fixed_time)
+            .set_modified(fixed_time),
+    )?;
+    let fixture_sha256 = workload_source::hex(&hash.finish());
+    if fixture_sha256 != workload_source::sdk_edit_common::FIXTURE_SHA256[size_index] {
+        return Err("SDK edit fixture digest".into());
+    }
+
+    let store_path = root.join("store.sqlite");
+    let store = Arc::new(LayerStackStore::create(&store_path)?);
+    let client = Client::connect(store.clone())?;
+    let initialized = client.initialize_layerstack(
+        EntityName::new(format!("sdk-edit-{fixture_bytes}"))?,
+        LayerStackInitialization::Directory(fixture.clone()),
+    )?;
+    let branch = client.fork_branch(
+        EntityName::new("main")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let pinned = store.pin_branch(branch)?;
+    let reader = layerfs_layerstack_store::CoreReader(&pinned.reader);
+    let path = layerfs_content::CanonicalPath::new("payload.bin")?;
+    let (stat, _) = layerfs_content::filesystem::stat(&reader, pinned.root, &path)?;
+    let state = layerfs_content::file::rope::state(
+        &reader,
+        layerfs_content::file::rope::FileStateRoot(stat.content_root),
+        &mut Default::default(),
+    )?;
+    if stat.content_root.to_string()
+        != workload_source::sdk_edit_common::FIXTURE_FILE_ROOT[size_index]
+        || state.mapping_root.to_string()
+            != workload_source::sdk_edit_common::FIXTURE_MAP_ROOT[size_index]
+        || state.extent_count != workload_source::sdk_edit_common::FIXTURE_EXTENTS[size_index]
+    {
+        return Err("SDK edit initialized fixture identity".into());
+    }
+    println!(
+        "{{\"schema\":\"{}\",\"fixture_profile\":\"{}\",\"fixture_bytes\":{},\"fixture_sha256\":\"{}\",\"branch_id\":\"{}\",\"branch_root\":\"{}\",\"canonical_file_root\":\"{}\",\"mapping_root\":\"{}\",\"extent_count\":{},\"directory_mode\":488,\"file_mode\":416,\"mtime_seconds\":1700000000}}",
+        workload_source::sdk_edit_common::FIXTURE_SCHEMA,
+        workload_source::sdk_edit_common::FIXTURE_PROFILE,
+        fixture_bytes,
+        fixture_sha256,
+        branch,
+        pinned.root,
+        stat.content_root,
+        state.mapping_root,
+        state.extent_count,
+    );
+    drop(client);
+    drop(store);
+    std::fs::remove_dir_all(fixture)?;
+    Ok(())
+}
+
+fn sdk_edit_qualify(
+    root: &Path,
+    branch: BranchId,
+    family: &str,
+    scenario_id: &str,
+) -> AnyResult<()> {
+    let scenario = sdk_edit_scenario(family, scenario_id)?;
+    let store = LayerStackStore::connect(root.join("store.sqlite"))?;
+    let initial = store.pin_branch(branch)?;
+    let reader = layerfs_layerstack_store::CoreReader(&initial.reader);
+    let path = layerfs_content::CanonicalPath::new("payload.bin")?;
+    let (initial_file, _) = layerfs_content::filesystem::stat(&reader, initial.root, &path)?;
+    let initial_state = layerfs_content::file::rope::state(
+        &reader,
+        layerfs_content::file::rope::FileStateRoot(initial_file.content_root),
+        &mut Default::default(),
+    )?;
+    if initial_state.logical_len != scenario.fixture_bytes {
+        return Err("SDK edit qualification fixture length".into());
+    }
+    let replacement = match scenario.replacement_kind {
+        workload_source::sdk_edit_common::ReplacementKind::Inline => {
+            workload_source::sdk_edit_common::replacement_bytes(&scenario)
+        }
+        workload_source::sdk_edit_common::ReplacementKind::Zero => {
+            vec![0; scenario.replacement_len as usize]
+        }
+    };
+    // Preparation only: this canonical-path oracle never enters a performance or verifier process.
+    let mut objects = layerfs_layerstack_store::ObjectBuffer::new(&initial.reader)?;
+    let expected = layerfs_content::filesystem::replace_range(
+        &mut objects,
+        initial.root,
+        &path,
+        scenario.start,
+        scenario.delete_len,
+        std::io::Cursor::new(replacement),
+    )?;
+    let (file, _) = layerfs_content::filesystem::stat(&objects, expected.root(), &path)?;
+    let state = layerfs_content::file::rope::state(
+        &objects,
+        layerfs_content::file::rope::FileStateRoot(file.content_root),
+        &mut Default::default(),
+    )?;
+    let expected_sha256 = if family == workload_source::edit_canonical_chunk_count::FAMILY_ID {
+        let frozen = workload_source::edit_canonical_chunk_count::expected(&scenario);
+        if state.extent_count != frozen.final_count
+            || file.content_root.to_string() != frozen.file_root
+            || state.mapping_root.to_string() != frozen.map_sha256
+        {
+            return Err("SDK edit qualification frozen canonical identity".into());
+        }
+        frozen.final_sha256
+    } else {
+        "-"
+    };
+    println!(
+        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+        family,
+        scenario_id,
+        scenario.plan_sha256,
+        initial.root,
+        expected.root(),
+        file.content_root,
+        state.mapping_root,
+        initial_state.extent_count,
+        state.extent_count,
+        expected_sha256
+    );
+    Ok(())
+}
+
+fn sdk_edit_worker(
+    root: &Path,
+    branch: BranchId,
+    family: &str,
+    scenario_id: &str,
+    source_arm: &str,
+    repetition: u8,
+    container: ContainerId,
+) -> AnyResult<()> {
+    if !root.is_dir()
+        || !matches!(source_arm, "baseline" | "candidate")
+        || !(1..=5).contains(&repetition)
+    {
+        return Err("SDK edit worker arguments".into());
+    }
+    let scenario = sdk_edit_scenario(family, scenario_id)?;
+    let store = Arc::new(LayerStackStore::connect(root.join("store.sqlite"))?);
+    let initial = store.pin_branch(branch)?;
+    let initial_branch_root = initial.root;
+    let client = Client::connect(store.clone())?;
+    let create_started = Instant::now();
+    let session = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: WorkspacePlacement::Container {
+            container_id: container,
+            root: PathBuf::from(format!(
+                "/workspace/sdk-edit-{}-{source_arm}-{repetition}-{}",
+                std::process::id(),
+                scenario.fixture_bytes
+            )),
+        },
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let workspace_create_ns = elapsed_ns(create_started);
+    let replacement = match scenario.replacement_kind {
+        workload_source::sdk_edit_common::ReplacementKind::Inline => {
+            WorkspaceFileReplacement::Inline(workload_source::sdk_edit_common::replacement_bytes(
+                &scenario,
+            ))
+        }
+        workload_source::sdk_edit_common::ReplacementKind::Zero => {
+            WorkspaceFileReplacement::Zero(scenario.replacement_len)
+        }
+    };
+    let edit = WorkspaceFileRangeEdit {
+        workspace_id: session.id,
+        path: "payload.bin".to_owned(),
+        start: scenario.start,
+        delete_len: scenario.delete_len,
+        replacement,
+    };
+    let calibration = sdk_edit_start_resource_sample(&client, session.id)?;
+    println!("READY");
+    std::io::stdout().flush()?;
+    sdk_edit_control("GO")?;
+    let timing = sdk_file_edit::edit_commit_end(&client, edit)?;
+    println!("DONE\t{}\t{}", timing.t0_clock_ns, timing.t3_clock_ns);
+    std::io::stdout().flush()?;
+    let clock_uncertainty_ns = calibration.phase_uncertainty(timing.t3_clock_ns)?;
+    let cgroup = client.finish_workspace_resource_sample(
+        session.id,
+        calibration.daemon_time(timing.t0_clock_ns)?,
+        calibration.daemon_time(timing.t3_clock_ns)?,
+        clock_uncertainty_ns,
+    )?;
+    let finish = sdk_file_edit::validate_visibility(&client, branch, &timing)?;
+    let snapshot = client.monitor_snapshot()?;
+    let family_count = |family| {
+        snapshot
+            .operations
+            .iter()
+            .filter(|receipt| receipt.operation.family == family)
+            .count()
+    };
+    let create_count = family_count(OperationFamily::WorkspaceCreate);
+    let edit_count = family_count(OperationFamily::WorkspaceFileRangeEdit);
+    let commit_count = family_count(OperationFamily::WorkspaceCommit);
+    let end_count = family_count(OperationFamily::WorkspaceEnd);
+    let query_count = family_count(OperationFamily::Query);
+    let execution_count = family_count(OperationFamily::WorkspaceExec)
+        + family_count(OperationFamily::WorkspaceShell)
+        + family_count(OperationFamily::WorkspaceOutput)
+        + family_count(OperationFamily::WorkspaceStop);
+    let lifecycle = snapshot
+        .operations
+        .iter()
+        .flat_map(|operation| operation.storage.iter())
+        .filter_map(|receipt| match receipt {
+            StorageReceipt::WorkspaceLifecycle(receipt) => Some(*receipt),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let lifecycle_kinds = lifecycle
+        .iter()
+        .map(|receipt| receipt.kind)
+        .collect::<Vec<_>>();
+    let runtime_route_valid = snapshot.operations.iter().all(|receipt| {
+        let expected_workspace = matches!(
+            receipt.operation.family,
+            OperationFamily::WorkspaceFileRangeEdit
+                | OperationFamily::WorkspaceCommit
+                | OperationFamily::WorkspaceEnd
+        );
+        receipt.outcome == OperationOutcome::Success
+            && (!expected_workspace || receipt.operation.workspace_id == Some(session.id))
+            && (receipt.operation.family != OperationFamily::WorkspaceCreate
+                || receipt.operation.branch_id == Some(branch))
+    }) && (lifecycle_kinds
+        == [
+            layerfs_sdk::WorkspaceLifecycleKind::Attach,
+            layerfs_sdk::WorkspaceLifecycleKind::End,
+            layerfs_sdk::WorkspaceLifecycleKind::Attach,
+            layerfs_sdk::WorkspaceLifecycleKind::End,
+        ]
+        || lifecycle_kinds
+            == [
+                layerfs_sdk::WorkspaceLifecycleKind::Attach,
+                layerfs_sdk::WorkspaceLifecycleKind::End,
+            ])
+        && lifecycle.iter().all(|receipt| receipt.docker_calls == 0);
+    if (
+        create_count,
+        edit_count,
+        commit_count,
+        end_count,
+        query_count,
+        execution_count,
+    ) != (1, 1, 1, 1, 1, 0)
+        || !runtime_route_valid
+        || client.active_workspace_count()? != 0
+        || client.active_execution_count()? != 0
+    {
+        return Err(format!(
+            "SDK edit runtime route manifest: counts={:?} lifecycle={lifecycle_kinds:?}",
+            (
+                create_count,
+                edit_count,
+                commit_count,
+                end_count,
+                query_count,
+                execution_count
+            )
+        )
+        .into());
+    }
+    let commit = operation_workspace_commit(&snapshot)?;
+    let candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
+    let fuse = edit_fuse_metrics(&snapshot);
+    let capture_live = commit.capture_mode == Some(layerfs_layerstack_store::CaptureMode::Live);
+    let cgroup_coverage = cgroup.t0_boundary_sampled
+        && cgroup.t3_boundary_sampled
+        && cgroup.interior_sampled
+        && !cgroup.sample_overflow
+        && cgroup.sample_count >= 3
+        && cgroup.sample_interval_ns <= 1_000_000
+        && cgroup.maximum_sample_gap_ns <= 1_000_000;
+    let final_live_non_base_bytes = scenario.replacement_len;
+    let fuse_payload_bytes = fuse
+        .kernel_write_bytes
+        .saturating_add(fuse.client_request_copy_bytes)
+        .saturating_add(fuse.frame_payload_copy_bytes)
+        .saturating_add(fuse.client_frame_bytes)
+        .saturating_add(fuse.host_frame_bytes)
+        .saturating_add(fuse.host_decode_copy_bytes);
+    let resource_valid = capture_live
+        && commit.captured_files == 0
+        && commit.captured_bytes == 0
+        && fuse.kernel_write_requests == 0
+        && fuse_payload_bytes == 0
+        && fuse.spool_write_bytes == 0
+        && commit.edit_spool_allocated_bytes == 0
+        && commit.edit_spool_peak_bytes == 0
+        && commit.edit_spool_live_bytes == 0
+        && commit.edit_spool_superseded_bytes == 0
+        && commit.cdc_bytes_scanned == final_live_non_base_bytes
+        && candidate.candidate_bytes <= final_live_non_base_bytes + 8 * 1024 * 1024
+        && candidate.inserted_bytes <= candidate.candidate_bytes
+        && candidate.max_transaction_objects <= 127
+        && candidate.max_transaction_bytes < 4 * 1024 * 1024
+        && commit.edit_piece_count <= 3
+        && commit.edit_piece_logical_charge <= 1024
+        && (family != workload_source::edit_length_changing::FAMILY_ID
+            || commit.payload_bytes_read == 0)
+        && cgroup_coverage
+        && cgroup.memory_current_peak <= 128 * 1024 * 1024
+        && cgroup.memory_incremental_peak <= 32 * 1024 * 1024
+        && cgroup.dirty_writeback_incremental_peak <= 8 * 1024 * 1024
+        && cgroup.memory_lifetime_peak_final <= 128 * 1024 * 1024
+        && cgroup.swap_peak == 0
+        && cgroup.oom_delta == 0
+        && cgroup.oom_kill_delta == 0;
+    let manifest_hash = |name| -> AnyResult<String> {
+        let value = std::env::var(name)?;
+        if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err("SDK edit route manifest identity".into());
+        }
+        Ok(value)
+    };
+    let timed_manifest_sha256 = manifest_hash("LAYERFS_SDK_EDIT_TIMED_MANIFEST_SHA256")?;
+    let route_manifest_sha256 = manifest_hash("LAYERFS_SDK_EDIT_ROUTE_MANIFEST_SHA256")?;
+    let mut result = format!(
+        "RESULT\t{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"row_id\":\"{}:{}:r{}:{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"repetition\":{},\"fixture_profile\":\"{}\",\"fixture_bytes\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"edit_start\":{},\"deleted_bytes\":{},\"replacement_kind\":\"{}\",\"replacement_bytes\":{},\"replacement_sha256\":\"{}\",\"edit_plan_sha256\":\"{}\",\"workspace_create_ns\":{},\"edit_call_ns\":{},\"commit_call_ns\":{},\"edit_commit_ns\":{},\"workspace_end_ns\":{},\"visibility_validation_ns\":{},\"logical_operation_count\":1,\"sdk_edit_member_count\":1,\"public_sdk_edit_call_count\":{},\"workspace_create_count\":{},\"workspace_commit_count\":{},\"workspace_end_count\":{},\"query_count\":{},\"workspace_execution_count\":{},\"operation_surface\":\"public-sdk\",\"mutation_executor\":\"fs-benchmark-pro-sdk\",\"timed_call_graph_manifest_status\":\"pass\",\"operation_route_manifest_status\":\"pass\",\"initial_branch_root\":\"{}\",\"commit_id\":\"{}\",\"capture_mode\":\"{}\",\"captured_files\":{},\"captured_bytes\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"commit_cdc_bytes_scanned\":{},\"commit_payload_bytes_read\":{},\"final_live_non_base_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"cgroup_schema\":\"{}\",\"cgroup_memory_baseline_bytes\":{},\"cgroup_phase_peak_bytes\":{},\"cgroup_phase_final_bytes\":{},\"cgroup_phase_incremental_peak_bytes\":{},\"cgroup_lifetime_peak_bytes\":{},\"cgroup_swap_bytes\":{},\"cgroup_oom_delta\":{},\"cgroup_oom_kill_delta\":{},\"dirty_writeback_incremental_peak_bytes\":{},\"cgroup_sample_interval_ns\":{},\"cgroup_sampler_thread_count\":{},\"cgroup_sample_count\":{},\"cgroup_first_sample_ns\":{},\"cgroup_last_sample_ns\":{},\"cgroup_maximum_sample_gap_ns\":{},\"cgroup_t0_boundary_sampled\":{},\"cgroup_t3_boundary_sampled\":{},\"cgroup_interior_sampled\":{},\"cgroup_coverage_status\":\"{}\",\"cgroup_anon_baseline_bytes\":{},\"cgroup_anon_peak_bytes\":{},\"cgroup_anon_final_bytes\":{},\"cgroup_file_baseline_bytes\":{},\"cgroup_file_peak_bytes\":{},\"cgroup_file_final_bytes\":{},\"cgroup_shmem_baseline_bytes\":{},\"cgroup_shmem_peak_bytes\":{},\"cgroup_shmem_final_bytes\":{},\"cgroup_file_dirty_baseline_bytes\":{},\"cgroup_file_dirty_peak_bytes\":{},\"cgroup_file_dirty_final_bytes\":{},\"cgroup_file_writeback_baseline_bytes\":{},\"cgroup_file_writeback_peak_bytes\":{},\"cgroup_file_writeback_final_bytes\":{},\"cgroup_kernel_baseline_bytes\":{},\"cgroup_kernel_peak_bytes\":{},\"cgroup_kernel_final_bytes\":{},\"cgroup_slab_baseline_bytes\":{},\"cgroup_slab_peak_bytes\":{},\"cgroup_slab_final_bytes\":{},\"cgroup_sock_baseline_bytes\":{},\"cgroup_sock_peak_bytes\":{},\"cgroup_sock_final_bytes\":{},\"swap_bytes\":{},\"oom\":{},\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"performance_distribution\":true,\"admission_eligible\":false,\"cleanup_status\":\"pass\"}}",
+        workload_source::sdk_edit_common::PERFORMANCE_SCHEMA,
+        scenario.family_id,
+        scenario.id,
+        scenario.family_id,
+        scenario.id,
+        repetition,
+        source_arm,
+        source_arm,
+        repetition,
+        workload_source::sdk_edit_common::FIXTURE_PROFILE,
+        scenario.fixture_bytes,
+        scenario.fixture_bytes,
+        scenario.final_bytes,
+        scenario.start,
+        scenario.delete_len,
+        scenario.replacement_kind.name(),
+        scenario.replacement_len,
+        scenario.payload_sha256,
+        scenario.plan_sha256,
+        workspace_create_ns,
+        timing.edit_call_ns,
+        timing.commit_call_ns,
+        timing.edit_commit_ns,
+        timing.workspace_end_ns,
+        finish.visibility_validation_ns,
+        edit_count,
+        create_count,
+        commit_count,
+        end_count,
+        query_count,
+        execution_count,
+        initial_branch_root,
+        timing.commit_id,
+        if capture_live { "Live" } else { "invalid" },
+        commit.captured_files,
+        commit.captured_bytes,
+        fuse.max_write_bytes,
+        fuse.kernel_write_requests,
+        fuse.kernel_write_bytes,
+        fuse.client_request_copy_bytes,
+        fuse.frame_payload_copy_bytes,
+        fuse.client_frame_bytes,
+        fuse.host_frame_bytes,
+        fuse.host_decode_copy_bytes,
+        fuse.spool_write_bytes,
+        fuse.spool_write_open_count,
+        commit.edit_spool_allocated_bytes,
+        commit.edit_spool_peak_bytes,
+        commit.edit_spool_live_bytes,
+        commit.edit_spool_superseded_bytes,
+        commit.edit_piece_count,
+        commit.edit_piece_height,
+        commit.edit_piece_logical_charge,
+        commit.edit_tree_visits,
+        commit.edit_metric_nodes_scanned,
+        commit.cdc_bytes_scanned,
+        commit.payload_bytes_read,
+        final_live_non_base_bytes,
+        candidate.candidate_objects,
+        candidate.candidate_bytes,
+        candidate.inserted_objects,
+        candidate.inserted_bytes,
+        candidate.reused_objects,
+        candidate.reused_bytes,
+        candidate.admission_transactions,
+        candidate.max_transaction_objects,
+        candidate.max_transaction_bytes,
+        workload_source::sdk_edit_common::CGROUP_SCHEMA,
+        cgroup.memory_current_baseline,
+        cgroup.memory_current_peak,
+        cgroup.memory_current_final,
+        cgroup.memory_incremental_peak,
+        cgroup.memory_lifetime_peak_final,
+        cgroup.swap_peak,
+        cgroup.oom_delta,
+        cgroup.oom_kill_delta,
+        cgroup.dirty_writeback_incremental_peak,
+        cgroup.sample_interval_ns,
+        cgroup.sampler_thread_count,
+        cgroup.sample_count,
+        cgroup.first_sample_ns,
+        cgroup.last_sample_ns,
+        cgroup.maximum_sample_gap_ns,
+        cgroup.t0_boundary_sampled,
+        cgroup.t3_boundary_sampled,
+        cgroup.interior_sampled,
+        if cgroup_coverage { "pass" } else { "fail" },
+        cgroup.stat_baseline[0],
+        cgroup.stat_peak[0],
+        cgroup.stat_final[0],
+        cgroup.stat_baseline[1],
+        cgroup.stat_peak[1],
+        cgroup.stat_final[1],
+        cgroup.stat_baseline[2],
+        cgroup.stat_peak[2],
+        cgroup.stat_final[2],
+        cgroup.stat_baseline[3],
+        cgroup.stat_peak[3],
+        cgroup.stat_final[3],
+        cgroup.stat_baseline[4],
+        cgroup.stat_peak[4],
+        cgroup.stat_final[4],
+        cgroup.stat_baseline[5],
+        cgroup.stat_peak[5],
+        cgroup.stat_final[5],
+        cgroup.stat_baseline[6],
+        cgroup.stat_peak[6],
+        cgroup.stat_final[6],
+        cgroup.stat_baseline[7],
+        cgroup.stat_peak[7],
+        cgroup.stat_final[7],
+        cgroup.swap_peak,
+        cgroup.oom_delta != 0 || cgroup.oom_kill_delta != 0,
+    );
+    if result.pop() != Some('}') {
+        return Err("SDK edit performance JSON".into());
+    }
+    result.push_str(&format!(
+        ",\"operation_key\":\"{}\",\"payload_seed\":{},\"cgroup_memory_lifetime_peak_baseline_bytes\":{},\"cgroup_memory_lifetime_peak_final_bytes\":{},\"cgroup_swap_baseline_bytes\":{},\"cgroup_swap_peak_bytes\":{},\"cgroup_swap_final_bytes\":{},\"cgroup_oom_baseline\":{},\"cgroup_oom_final\":{},\"cgroup_oom_kill_baseline\":{},\"cgroup_oom_kill_final\":{},\"dirty_writeback_baseline_bytes\":{},\"dirty_writeback_peak_bytes\":{},\"cgroup_sample_overflow\":{},\"active_workspace_count_after_end\":0,\"active_execution_count_after_end\":0,\"timed_call_graph_manifest_sha256\":\"{}\",\"operation_route_manifest_sha256\":\"{}\",\"resource_status\":\"{}\"}}",
+        scenario.operation_key,
+        scenario.payload_seed,
+        cgroup.memory_lifetime_peak_baseline,
+        cgroup.memory_lifetime_peak_final,
+        cgroup.swap_baseline,
+        cgroup.swap_peak,
+        cgroup.swap_final,
+        cgroup.oom_baseline,
+        cgroup.oom_final,
+        cgroup.oom_kill_baseline,
+        cgroup.oom_kill_final,
+        cgroup.dirty_writeback_baseline,
+        cgroup.dirty_writeback_peak,
+        cgroup.sample_overflow,
+        timed_manifest_sha256,
+        route_manifest_sha256,
+        if resource_valid { "pass" } else { "fail" },
+    ));
+    result.pop();
+    result.push_str(&calibration.json_fields(
+        timing.t0_clock_ns,
+        timing.t3_clock_ns,
+        &cgroup,
+        clock_uncertainty_ns,
+    ));
+    result.push_str(&format!(
+        ",\"projection_lifecycle\":[{}]",
+        sdk_edit_lifecycle_json(&lifecycle)
+    ));
+    result.push('}');
+    println!("{result}");
+    Ok(())
+}
+
+fn sdk_edit_control(expected: &str) -> AnyResult<()> {
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    if line.trim_end() != expected {
+        return Err("SDK edit worker control protocol".into());
+    }
+    Ok(())
+}
+
+fn sdk_edit_lifecycle_json(receipts: &[layerfs_sdk::WorkspaceLifecycleReceipt]) -> String {
+    receipts
+        .iter()
+        .map(|receipt| match receipt.kind {
+            layerfs_sdk::WorkspaceLifecycleKind::Attach => "\"attach\"",
+            layerfs_sdk::WorkspaceLifecycleKind::End => "\"end\"",
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+struct ProcessRssSample {
+    baseline: u64,
+    peak: u64,
+    final_value: u64,
+    interval_ns: u64,
+    count: u64,
+    first_ns: u64,
+    last_ns: u64,
+    maximum_gap_ns: u64,
+    t0_boundary: bool,
+    t3_boundary: bool,
+    interior: bool,
+}
+
+fn process_rss_sample(
+    samples: &[(u64, u64)],
+    t0_unix_ns: u64,
+    t3_unix_ns: u64,
+) -> AnyResult<ProcessRssSample> {
+    let before = samples
+        .iter()
+        .rposition(|(time, _)| *time <= t0_unix_ns)
+        .unwrap_or(0);
+    let after = samples
+        .iter()
+        .position(|(time, _)| *time >= t3_unix_ns)
+        .unwrap_or(samples.len().saturating_sub(1));
+    let selected = samples
+        .get(before..=after)
+        .ok_or("SDK edit RSS boundary order")?;
+    let (first_ns, baseline) = selected[0];
+    let (last_ns, final_value) = selected[selected.len() - 1];
+    let peak = selected
+        .iter()
+        .filter(|(time, _)| *time >= t0_unix_ns && *time <= t3_unix_ns)
+        .map(|(_, rss)| *rss)
+        .fold(baseline, u64::max);
+    let interior = selected
+        .iter()
+        .any(|(time, _)| *time > t0_unix_ns && *time < t3_unix_ns);
+    let mut gaps = selected
+        .windows(2)
+        .map(|pair| pair[1].0.saturating_sub(pair[0].0))
+        .collect::<Vec<_>>();
+    gaps.sort_unstable();
+    Ok(ProcessRssSample {
+        baseline,
+        peak,
+        final_value,
+        interval_ns: gaps.get(gaps.len() / 2).copied().unwrap_or(u64::MAX),
+        count: selected.len() as u64,
+        first_ns,
+        last_ns,
+        maximum_gap_ns: gaps.iter().copied().max().unwrap_or(u64::MAX),
+        t0_boundary: first_ns <= t0_unix_ns && t0_unix_ns - first_ns <= 1_000_000,
+        t3_boundary: last_ns >= t3_unix_ns && last_ns - t3_unix_ns <= 1_000_000,
+        interior,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sdk_edit_supervise(
+    root: &Path,
+    branch: &str,
+    family: &str,
+    scenario: &str,
+    source_arm: &str,
+    repetition: u8,
+    container: &str,
+) -> AnyResult<()> {
+    let executable = std::env::current_exe()?;
+    let mut owned_child = SdkEditChild(
+        Command::new(executable)
+            .arg("sdk-edit-worker")
+            .arg(root)
+            .arg(branch)
+            .arg(family)
+            .arg(scenario)
+            .arg(source_arm)
+            .arg(repetition.to_string())
+            .arg(container)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()?,
+    );
+    let child = &mut owned_child.0;
+    let pid = child.id();
+    let mut input = child.stdin.take().ok_or("SDK edit worker stdin")?;
+    let output = child.stdout.take().ok_or("SDK edit worker stdout")?;
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(output).lines() {
+            if send.send(line).is_err() {
+                return;
+            }
+        }
+    });
+    let ready = receive.recv_timeout(std::time::Duration::from_secs(10))??;
+    if ready != "READY" {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err("SDK edit worker ready protocol".into());
+    }
+    let worker_started = Instant::now();
+    let mut rss_samples = Vec::with_capacity(131_072);
+    rss_samples.push((sdk_edit_clock_ns()?, process_current_rss(pid)?));
+    input.write_all(b"GO\n")?;
+    input.flush()?;
+    let (t0_unix_ns, t3_unix_ns) = loop {
+        match receive.try_recv() {
+            Ok(Ok(line)) if line.starts_with("DONE\t") => {
+                let fields = line.split('\t').collect::<Vec<_>>();
+                if fields.len() != 3 {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("SDK edit worker boundary protocol".into());
+                }
+                break (fields[1].parse()?, fields[2].parse()?);
+            }
+            Ok(Ok(_)) | Ok(Err(_)) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("SDK edit worker phase protocol".into());
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                let _ = child.wait();
+                return Err("SDK edit worker disconnected".into());
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
+        }
+        if worker_started.elapsed() > std::time::Duration::from_secs(2) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("SDK edit/Commit/End two-second watchdog".into());
+        }
+        let rss = process_current_rss(pid)?;
+        if rss_samples.len() == rss_samples.capacity() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("SDK edit RSS sample capacity".into());
+        }
+        rss_samples.push((sdk_edit_clock_ns()?, rss));
+    };
+    rss_samples.push((sdk_edit_clock_ns()?, process_current_rss(pid)?));
+    drop(input);
+    let remaining = std::time::Duration::from_secs(10).saturating_sub(worker_started.elapsed());
+    let result = receive.recv_timeout(remaining)??;
+    let Some(mut json) = result.strip_prefix("RESULT\t").map(str::to_owned) else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err("SDK edit worker result protocol".into());
+    };
+    let status = child.wait()?;
+    reader.join().map_err(|_| "SDK edit worker reader")?;
+    if !status.success() || json.pop() != Some('}') {
+        return Err("SDK edit worker exit".into());
+    }
+    let (lifetime_peak_rss, swaps) = native_peak_rss_and_swaps_for(-1)?;
+    let rss = process_rss_sample(&rss_samples, t0_unix_ns, t3_unix_ns)?;
+    let coverage = rss.count >= 3
+        && rss.t0_boundary
+        && rss.t3_boundary
+        && rss.interior
+        && rss.interval_ns <= 1_000_000
+        && rss.maximum_gap_ns <= 1_000_000;
+    let resource_valid = coverage
+        && rss.peak <= 128 * 1024 * 1024
+        && rss.peak.saturating_sub(rss.baseline) <= 32 * 1024 * 1024
+        && lifetime_peak_rss <= 128 * 1024 * 1024
+        && swaps == 0
+        && json.contains("\"resource_status\":\"pass\"");
+    if std::env::var("LAYERFS_SDK_EDIT_ADMISSION").as_deref() == Ok("1") && resource_valid {
+        json = json.replace(
+            "\"admission_eligible\":false",
+            "\"admission_eligible\":true",
+        );
+    }
+    println!(
+        "{},\"rss_clock_id\":\"host-clock-monotonic-raw\",\"rss_t0_ns\":{},\"rss_t3_ns\":{},\"process_rss_schema\":\"{}\",\"rss_baseline_bytes\":{},\"rss_phase_peak_bytes\":{},\"rss_incremental_peak_bytes\":{},\"rss_final_bytes\":{},\"process_lifetime_peak_rss_bytes\":{},\"rss_sample_interval_ns\":{},\"rss_sample_count\":{},\"rss_first_sample_ns\":{},\"rss_last_sample_ns\":{},\"rss_maximum_sample_gap_ns\":{},\"rss_t0_boundary_sampled\":{},\"rss_t3_boundary_sampled\":{},\"rss_interior_sampled\":{},\"rss_coverage_status\":\"{}\",\"process_swap_count\":{},\"row_resource_status\":\"{}\"}}",
+        json,
+        t0_unix_ns,
+        t3_unix_ns,
+        workload_source::sdk_edit_common::PROCESS_RSS_SCHEMA,
+        rss.baseline,
+        rss.peak,
+        rss.peak.saturating_sub(rss.baseline),
+        rss.final_value,
+        lifetime_peak_rss,
+        rss.interval_ns,
+        rss.count,
+        rss.first_ns,
+        rss.last_ns,
+        rss.maximum_gap_ns,
+        rss.t0_boundary,
+        rss.t3_boundary,
+        rss.interior,
+        if coverage { "pass" } else { "fail" },
+        swaps,
+        if resource_valid { "pass" } else { "fail" },
+    );
+    Ok(())
+}
+
+struct SdkEditChild(std::process::Child);
+
+impl Drop for SdkEditChild {
+    fn drop(&mut self) {
+        if matches!(self.0.try_wait(), Ok(None)) {
+            let _ = self.0.kill();
+        }
+        let _ = self.0.wait();
+    }
+}
+
+fn sdk_edit_clock_ns() -> std::io::Result<u64> {
+    #[repr(C)]
+    struct Timespec {
+        seconds: i64,
+        nanoseconds: i64,
+    }
+    unsafe extern "C" {
+        fn clock_gettime(clock: i32, value: *mut Timespec) -> i32;
+    }
+    let mut value = Timespec {
+        seconds: 0,
+        nanoseconds: 0,
+    };
+    // SAFETY: CLOCK_MONOTONIC_RAW is 4 on both supported hosts; value is a native timespec.
+    if unsafe { clock_gettime(4, &mut value) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    u64::try_from(value.seconds)
+        .ok()
+        .and_then(|seconds| seconds.checked_mul(1_000_000_000))
+        .and_then(|base| {
+            u64::try_from(value.nanoseconds)
+                .ok()
+                .and_then(|ns| base.checked_add(ns))
+        })
+        .ok_or_else(|| std::io::Error::other("monotonic clock range"))
+}
+
+struct SdkEditClockCalibration {
+    host_send_ns: u64,
+    host_receive_ns: u64,
+    daemon_receive_ns: u64,
+    daemon_send_ns: u64,
+    offset_ns: i128,
+    uncertainty_ns: u64,
+    attempts: u64,
+}
+
+impl SdkEditClockCalibration {
+    fn new(
+        host_send_ns: u64,
+        host_receive_ns: u64,
+        daemon_receive_ns: u64,
+        daemon_send_ns: u64,
+    ) -> AnyResult<Self> {
+        let host_elapsed = host_receive_ns
+            .checked_sub(host_send_ns)
+            .ok_or("host clock order")?;
+        let daemon_elapsed = daemon_send_ns
+            .checked_sub(daemon_receive_ns)
+            .ok_or("daemon clock order")?;
+        let uncertainty_ns = host_elapsed
+            .checked_sub(daemon_elapsed)
+            .ok_or("clock calibration duration")?
+            .div_ceil(2);
+        if uncertainty_ns > 400_000 {
+            return Err(
+                format!("SDK edit clock calibration uncertainty: {uncertainty_ns} ns").into(),
+            );
+        }
+        let offset_ns = (i128::from(daemon_receive_ns) + i128::from(daemon_send_ns)
+            - i128::from(host_send_ns)
+            - i128::from(host_receive_ns))
+            / 2;
+        Ok(Self {
+            host_send_ns,
+            host_receive_ns,
+            daemon_receive_ns,
+            daemon_send_ns,
+            offset_ns,
+            uncertainty_ns,
+            attempts: 1,
+        })
+    }
+
+    fn daemon_time(&self, host_ns: u64) -> AnyResult<u64> {
+        Ok(u64::try_from(i128::from(host_ns) + self.offset_ns)?)
+    }
+
+    fn phase_uncertainty(&self, host_t3: u64) -> AnyResult<u64> {
+        let elapsed = host_t3
+            .checked_sub(self.host_send_ns)
+            .ok_or("calibration age")?;
+        if elapsed > 2_000_000_000 {
+            return Err("calibration-to-T3 exceeded two seconds".into());
+        }
+        // Conservative 1000 ppm rate allowance, explicitly bounded to this short phase.
+        Ok(self.uncertainty_ns + elapsed.div_ceil(1000))
+    }
+
+    fn json_fields(
+        &self,
+        host_t0: u64,
+        host_t3: u64,
+        sample: &layerfs_sdk::CgroupResourceSample,
+        uncertainty: u64,
+    ) -> String {
+        let (daemon_t0, daemon_t3) = (sample.started_ns, sample.finished_ns);
+        format!(
+            ",\"cgroup_clock_id\":\"daemon-sampler-monotonic\",\"host_clock_id\":\"host-clock-monotonic-raw\",\"host_t0_ns\":{host_t0},\"host_t3_ns\":{host_t3},\"cgroup_t0_ns\":{daemon_t0},\"cgroup_t3_ns\":{daemon_t3},\"clock_host_send_ns\":{},\"clock_host_receive_ns\":{},\"clock_daemon_receive_ns\":{},\"clock_daemon_send_ns\":{},\"clock_offset_ns\":{},\"clock_offset_uncertainty_ns\":{},\"clock_calibration_attempts\":{},\"clock_rate_allowance_ppm\":1000,\"clock_uncertainty_ns\":{uncertainty},\"cgroup_peak_scope\":\"conservative-uncertainty-bounded-phase\",\"cgroup_t0_lo_ns\":{},\"cgroup_t0_hi_ns\":{},\"cgroup_t3_lo_ns\":{},\"cgroup_t3_hi_ns\":{},\"cgroup_t0_worst_distance_ns\":{},\"cgroup_t3_worst_distance_ns\":{},\"cgroup_interior_sample_ns\":{}",
+            self.host_send_ns, self.host_receive_ns, self.daemon_receive_ns,
+            self.daemon_send_ns, self.offset_ns, self.uncertainty_ns, self.attempts,
+            daemon_t0.saturating_sub(uncertainty), daemon_t0.saturating_add(uncertainty),
+            daemon_t3.saturating_sub(uncertainty), daemon_t3.saturating_add(uncertainty),
+            daemon_t0.saturating_add(uncertainty).saturating_sub(sample.first_sample_ns),
+            sample.last_sample_ns.saturating_sub(daemon_t3.saturating_sub(uncertainty)),
+            sample.interior_sample_ns,
+        )
+    }
+}
+
+fn sdk_edit_start_resource_sample(
+    client: &Client,
+    workspace: WorkspaceId,
+) -> AnyResult<SdkEditClockCalibration> {
+    for attempt in 1..=5 {
+        let host_send = sdk_edit_clock_ns()?;
+        let (daemon_receive, daemon_send) = client.start_workspace_resource_sample(workspace)?;
+        let host_receive = sdk_edit_clock_ns()?;
+        match SdkEditClockCalibration::new(host_send, host_receive, daemon_receive, daemon_send) {
+            Ok(mut calibration) => {
+                calibration.attempts = attempt;
+                std::thread::sleep(std::time::Duration::from_millis(2));
+                return Ok(calibration);
+            }
+            Err(error) => {
+                eprintln!("SDK edit calibration attempt {attempt} rejected: {error}");
+                client.finish_workspace_resource_sample(workspace, daemon_send, daemon_send, 0)?;
+                if attempt == 5 {
+                    return Err(error);
+                }
+            }
+        }
+    }
+    unreachable!()
+}
+
+struct SdkEditHashSink(workload_source::Sha256);
+
+impl Write for SdkEditHashSink {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn sdk_edit_digest_inode(output: &OutputPage) -> AnyResult<(u64, String, u64)> {
+    let bytes = output
+        .chunks
+        .iter()
+        .flat_map(|chunk| chunk.bytes.iter().copied())
+        .collect::<Vec<_>>();
+    for line in std::str::from_utf8(&bytes)?.lines() {
+        let fields = line.split('\t').collect::<Vec<_>>();
+        if fields.len() == 3 && (fields[1].len() == 64 || fields[1] == "stat-only") {
+            return Ok((fields[0].parse()?, fields[1].to_owned(), fields[2].parse()?));
+        }
+    }
+    Err("SDK edit digest-inode output".into())
+}
+
+fn sdk_edit_hash(
+    source: &dyn layerfs_layerstack_store::ObjectSource,
+    root: layerfs_content::ObjectId,
+) -> AnyResult<String> {
+    let reader = layerfs_layerstack_store::CoreReader(source);
+    let path = layerfs_content::CanonicalPath::new("payload.bin")?;
+    let mut sink = SdkEditHashSink(workload_source::Sha256::new());
+    layerfs_content::filesystem::stream(&reader, root, &path, &mut sink)?;
+    Ok(workload_source::hex(&sink.0.finish()))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sdk_edit_verify(
+    root: &Path,
+    branch: BranchId,
+    family: &str,
+    scenario_id: &str,
+    source_arm: &str,
+    container: ContainerId,
+    performance_rows: &str,
+) -> AnyResult<()> {
+    sdk_edit_verify::run(
+        root,
+        branch,
+        family,
+        scenario_id,
+        source_arm,
+        container,
+        performance_rows,
+    )
+}
 fn workspace_range_acceptance(
     root: &Path,
     fixture: &Path,
@@ -5707,6 +6865,52 @@ fn elapsed_ns(start: Instant) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sdk_edit_child_guard_reaps_on_early_return() {
+        let child = SdkEditChild(Command::new("/bin/sleep").arg("30").spawn().unwrap());
+        let pid = child.0.id();
+        drop(child);
+        assert!(!Command::new("/bin/kill")
+            .args(["-0", &pid.to_string()])
+            .stderr(Stdio::null())
+            .status()
+            .unwrap()
+            .success());
+    }
+
+    #[test]
+    fn sdk_edit_sampling_rejects_missing_boundaries_and_uncalibrated_clocks() {
+        let samples = [(200, 10), (300, 20), (400, 15)];
+        let report = process_rss_sample(&samples, 250, 350).unwrap();
+        assert!(report.t0_boundary && report.t3_boundary && report.interior);
+        assert_eq!(report.peak, 20);
+        assert!(!process_rss_sample(&samples, 50, 350).unwrap().t0_boundary);
+        assert!(!process_rss_sample(&samples, 250, 500).unwrap().t3_boundary);
+        let clock = SdkEditClockCalibration::new(1000, 2000, 100, 500).unwrap();
+        assert_eq!(clock.uncertainty_ns, 300);
+        assert_eq!(clock.daemon_time(1500).unwrap(), 300);
+        assert!(SdkEditClockCalibration::new(1000, 3_000_000, 100, 500).is_err());
+        assert!(SdkEditClockCalibration::new(2000, 1000, 100, 500).is_err());
+        assert!(sdk_edit_clock_ns().unwrap() > 0);
+    }
+
+    #[test]
+    fn sdk_edit_family_registries_are_exact() {
+        workload_source::edit_length_preserving::self_check().unwrap();
+        workload_source::edit_length_changing::self_check().unwrap();
+        workload_source::edit_canonical_chunk_count::self_check().unwrap();
+        sdk_edit_combined_registry_self_check().unwrap();
+        assert_eq!(
+            workload_source::edit_length_preserving::registry().len(),
+            12
+        );
+        assert_eq!(workload_source::edit_length_changing::registry().len(), 32);
+        assert_eq!(
+            workload_source::edit_canonical_chunk_count::registry().len(),
+            12
+        );
+    }
 
     #[test]
     fn namespace_family_registry_and_dispatch_are_exact() {

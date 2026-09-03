@@ -25,6 +25,7 @@ pub use container::{
     ContainerResult, ContainerStatus, CreatedContainer, RunningContainer,
 };
 pub(crate) use cow_tree::{Attr, Kind, NodeId, Workspace, ROOT};
+pub use layerfs_daemon::protocol::CgroupResourceSample;
 pub use lifecycle::WorkspaceState;
 pub(crate) use limits::ResourcePolicy;
 pub use output::{OutputPage, OutputReader};

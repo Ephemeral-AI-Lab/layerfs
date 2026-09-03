@@ -205,6 +205,28 @@ impl DaemonOwner {
             )
             .map(DaemonMount)
     }
+
+    pub(crate) fn start_resource_sample(
+        &self,
+        workspace_id: WorkspaceId,
+    ) -> std::io::Result<(u64, u64)> {
+        self.client.start_resource_sample(workspace_id.bytes())
+    }
+
+    pub(crate) fn finish_resource_sample(
+        &self,
+        workspace_id: WorkspaceId,
+        t0_unix_ns: u64,
+        t3_unix_ns: u64,
+        uncertainty_ns: u64,
+    ) -> std::io::Result<layerfs_daemon::protocol::CgroupResourceSample> {
+        self.client.finish_resource_sample(
+            workspace_id.bytes(),
+            t0_unix_ns,
+            t3_unix_ns,
+            uncertainty_ns,
+        )
+    }
 }
 
 #[cfg(unix)]

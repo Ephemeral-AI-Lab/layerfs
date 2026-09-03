@@ -3,9 +3,10 @@
 #[cfg(target_os = "linux")]
 mod linux {
     use layerfs_daemon::protocol::{
-        self, DaemonTiming, ExecRequest, Exit, Kind, MountRequest, RemoteError, ServerHello,
-        AUTH_OK_BYTES, BOUND_AUTH_BYTES, BOUND_OK_BYTES, CAPABILITY_PATH, CLIENT_AUTH_BYTES,
-        MAX_CONTROL, SOCKET_PATH, WORKSPACE_ROOT,
+        self, CgroupResourceSample, DaemonTiming, ExecRequest, Exit, Kind, MountRequest,
+        RemoteError, ResourceSampleFinishRequest, ResourceSampleRequest, ServerHello,
+        AUTH_OK_BYTES, BOUND_AUTH_BYTES, BOUND_OK_BYTES, CAPABILITY_PATH, CGROUP_STAT_FIELDS,
+        CLIENT_AUTH_BYTES, MAX_CONTROL, SOCKET_PATH, WORKSPACE_ROOT,
     };
     use nix::mount::{umount2, MntFlags};
     use nix::sys::resource::{getrlimit, Resource};
@@ -16,7 +17,7 @@ mod linux {
     use std::collections::BTreeMap;
     use std::ffi::{OsStr, OsString};
     use std::fs;
-    use std::io::{self, BufRead, BufReader, Read, Write};
+    use std::io::{self, BufRead, BufReader, Read, Seek, Write};
     use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
     use std::os::unix::ffi::{OsStrExt, OsStringExt};
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -77,6 +78,8 @@ mod linux {
         owner_id: [u8; 16],
         active: BTreeMap<[u8; 16], Active>,
         mounts: BTreeMap<[u8; 16], ActiveMount>,
+        samples: BTreeMap<[u8; 16], ResourceSampler>,
+        sample_starting: bool,
     }
 
     struct ActiveMount {
@@ -108,6 +111,15 @@ mod linux {
     struct Termination {
         reason: AtomicU8,
         finished: AtomicBool,
+    }
+
+    struct ResourceSampler {
+        stop: Arc<AtomicBool>,
+        threads: Vec<std::thread::JoinHandle<io::Result<()>>>,
+        aggregate: Arc<Mutex<SampleAggregate>>,
+        files: CgroupFiles,
+        clock: Instant,
+        origin_unix_ns: u64,
     }
 
     impl Listener {
@@ -284,6 +296,8 @@ mod linux {
                 owner_id: owner.id,
                 active: BTreeMap::new(),
                 mounts: BTreeMap::new(),
+                samples: BTreeMap::new(),
+                sample_starting: false,
             }),
             drained: Condvar::new(),
             limit,
@@ -320,7 +334,7 @@ mod linux {
             .state
             .lock()
             .map_err(|_| io::Error::other("daemon state"))?;
-        while !state.active.is_empty() || !state.mounts.is_empty() {
+        while !state.active.is_empty() || !state.mounts.is_empty() || !state.samples.is_empty() {
             state = shared
                 .drained
                 .wait(state)
@@ -430,7 +444,7 @@ mod linux {
         std::thread::spawn(move || {
             let mut byte = [0];
             while matches!(stream.read(&mut byte), Ok(1)) {}
-            let active = {
+            let (active, samples) = {
                 let Ok(mut state) = shared.state.lock() else {
                     return;
                 };
@@ -446,11 +460,13 @@ mod linux {
                         .values()
                         .map(|mount| (mount.pgid, mount.termination.clone())),
                 );
-                active
+                (active, std::mem::take(&mut state.samples))
             };
             for (pgid, termination) in active {
                 termination.terminate(pgid, 2);
             }
+            drop(samples);
+            shared.drained.notify_all();
             wake.connect();
         });
     }
@@ -527,8 +543,493 @@ mod linux {
         match frame.kind {
             Kind::Exec => handle_exec(stream, accepted, decode_started, frame.payload, shared),
             Kind::Mount => handle_mount(stream, frame.payload, shared),
+            Kind::ResourceSampleStart => {
+                handle_resource_sample_start(stream, accepted, frame.payload, shared)
+            }
+            Kind::ResourceSampleFinish => {
+                handle_resource_sample_finish(stream, frame.payload, shared)
+            }
             _ => send_error(&mut stream, RemoteError::InvalidRequest),
         }
+    }
+
+    fn handle_resource_sample_start(
+        mut stream: ControlStream,
+        calibration_started: Instant,
+        payload: Vec<u8>,
+        shared: Arc<Shared>,
+    ) {
+        let Ok(request) = ResourceSampleRequest::decode(&payload) else {
+            send_error(&mut stream, RemoteError::InvalidRequest);
+            return;
+        };
+        let reserved = shared.state.lock().is_ok_and(|mut state| {
+            if !state.owner_live
+                || state.owner_id != request.owner_id
+                || !state
+                    .mounts
+                    .get(&request.workspace_id)
+                    .is_some_and(|mount| mount.ready)
+                || state.sample_starting
+                || !state.samples.is_empty()
+            {
+                return false;
+            }
+            state.sample_starting = true;
+            true
+        });
+        if !reserved {
+            send_error(&mut stream, RemoteError::InvalidRequest);
+            return;
+        }
+        let sampler = match ResourceSampler::start(calibration_started) {
+            Ok(sampler) => sampler,
+            Err(_) => {
+                if let Ok(mut state) = shared.state.lock() {
+                    state.sample_starting = false;
+                }
+                send_error(&mut stream, RemoteError::InfrastructureLost);
+                return;
+            }
+        };
+        let accepted = shared.state.lock().is_ok_and(|mut state| {
+            state.sample_starting = false;
+            if !state.owner_live
+                || state.owner_id != request.owner_id
+                || !state
+                    .mounts
+                    .get(&request.workspace_id)
+                    .is_some_and(|mount| mount.ready)
+                || !state.samples.is_empty()
+            {
+                return false;
+            }
+            state.samples.insert(request.workspace_id, sampler);
+            true
+        });
+        if accepted {
+            let mut calibration = [0_u8; 16];
+            calibration[..8].copy_from_slice(&1_u64.to_be_bytes());
+            calibration[8..].copy_from_slice(
+                &elapsed_ns(calibration_started)
+                    .saturating_add(1)
+                    .to_be_bytes(),
+            );
+            let _ = protocol::write_frame(&mut stream, Kind::ResourceSampleStarted, &calibration);
+        } else {
+            send_error(&mut stream, RemoteError::InvalidRequest);
+        }
+    }
+
+    fn handle_resource_sample_finish(
+        mut stream: ControlStream,
+        payload: Vec<u8>,
+        shared: Arc<Shared>,
+    ) {
+        let Ok(request) = ResourceSampleFinishRequest::decode(&payload) else {
+            send_error(&mut stream, RemoteError::InvalidRequest);
+            return;
+        };
+        let sampler = shared.state.lock().ok().and_then(|mut state| {
+            (state.owner_live && state.owner_id == request.owner_id)
+                .then(|| state.samples.remove(&request.workspace_id))
+                .flatten()
+        });
+        let Some(sampler) = sampler else {
+            send_error(&mut stream, RemoteError::InvalidRequest);
+            return;
+        };
+        match sampler.finish(
+            request.t0_unix_ns,
+            request.t3_unix_ns,
+            request.uncertainty_ns,
+        ) {
+            Ok(sample) => {
+                let _ = protocol::write_frame(&mut stream, Kind::ResourceSample, &sample.encode());
+            }
+            Err(_) => send_error(&mut stream, RemoteError::InfrastructureLost),
+        }
+        shared.drained.notify_all();
+    }
+
+    struct CgroupFiles {
+        current: fs::File,
+        peak: fs::File,
+        swap: fs::File,
+        events: fs::File,
+        stat: fs::File,
+    }
+
+    #[derive(Clone, Copy)]
+    struct CgroupPoint {
+        current: u64,
+        lifetime_peak: u64,
+        swap: u64,
+        oom: u64,
+        oom_kill: u64,
+        stat: [u64; CGROUP_STAT_FIELDS],
+    }
+
+    #[derive(Clone, Copy)]
+    struct SampleRecord {
+        unix_ns: u64,
+        point: CgroupPoint,
+    }
+
+    struct SampleAggregate {
+        baseline_endpoint: CgroupPoint,
+        records: Vec<SampleRecord>,
+        overflow: bool,
+    }
+
+    impl ResourceSampler {
+        fn start(clock: Instant) -> io::Result<Self> {
+            const THREADS: usize = 2;
+            let mut files = CgroupFiles::open()?;
+            let provisional = files.read()?;
+            let origin_unix_ns = 1_u64;
+            let stop = Arc::new(AtomicBool::new(false));
+            let aggregate = Arc::new(Mutex::new(SampleAggregate::new(
+                provisional,
+                origin_unix_ns,
+            )));
+            let mut threads = Vec::with_capacity(THREADS);
+            for _ in 0..THREADS {
+                let mut thread_files = CgroupFiles::open()?;
+                let thread_stop = stop.clone();
+                let thread_aggregate = aggregate.clone();
+                threads.push(std::thread::spawn(move || {
+                    while !thread_stop.load(Ordering::Acquire) {
+                        let point = thread_files.read_phase(provisional)?;
+                        let elapsed = elapsed_ns(clock);
+                        thread_aggregate
+                            .lock()
+                            .map_err(|_| io::Error::other("cgroup sample aggregate"))?
+                            .record(point, origin_unix_ns.saturating_add(elapsed));
+                    }
+                    Ok(())
+                }));
+            }
+            let warmup_deadline = Instant::now() + Duration::from_secs(2);
+            while aggregate
+                .lock()
+                .map_err(|_| io::Error::other("cgroup sample aggregate"))?
+                .records
+                .len()
+                < THREADS * 2
+            {
+                if threads.iter().any(|thread| thread.is_finished())
+                    || Instant::now() >= warmup_deadline
+                {
+                    stop.store(true, Ordering::Release);
+                    for thread in threads {
+                        let _ = thread.join();
+                    }
+                    return Err(io::Error::other("cgroup sampler warmup"));
+                }
+                std::thread::yield_now();
+            }
+            let baseline = files.read()?;
+            aggregate
+                .lock()
+                .map_err(|_| io::Error::other("cgroup sample aggregate"))?
+                .reset(baseline, origin_unix_ns.saturating_add(elapsed_ns(clock)));
+            Ok(Self {
+                stop,
+                threads,
+                aggregate,
+                files,
+                clock,
+                origin_unix_ns,
+            })
+        }
+
+        fn finish(
+            mut self,
+            t0_unix_ns: u64,
+            t3_unix_ns: u64,
+            uncertainty_ns: u64,
+        ) -> io::Result<CgroupResourceSample> {
+            self.stop.store(true, Ordering::Release);
+            for thread in self.threads.drain(..) {
+                thread
+                    .join()
+                    .map_err(|_| io::Error::other("cgroup sampler thread"))??;
+            }
+            let final_point = self.files.read()?;
+            let mut aggregate = self
+                .aggregate
+                .lock()
+                .map_err(|_| io::Error::other("cgroup sample aggregate"))?;
+            aggregate.record(
+                final_point,
+                self.origin_unix_ns.saturating_add(elapsed_ns(self.clock)),
+            );
+            aggregate.report(final_point, t0_unix_ns, t3_unix_ns, uncertainty_ns, 2)
+        }
+    }
+
+    impl Drop for ResourceSampler {
+        fn drop(&mut self) {
+            self.stop.store(true, Ordering::Release);
+            for thread in self.threads.drain(..) {
+                let _ = thread.join();
+            }
+        }
+    }
+
+    impl SampleAggregate {
+        const MAX_RECORDS: usize = 16_384;
+
+        fn new(baseline: CgroupPoint, unix_ns: u64) -> Self {
+            let mut records = Vec::with_capacity(Self::MAX_RECORDS);
+            records.push(SampleRecord {
+                unix_ns,
+                point: baseline,
+            });
+            Self {
+                baseline_endpoint: baseline,
+                records,
+                overflow: false,
+            }
+        }
+
+        fn reset(&mut self, baseline: CgroupPoint, unix_ns: u64) {
+            self.baseline_endpoint = baseline;
+            self.records.clear();
+            self.records.push(SampleRecord {
+                unix_ns,
+                point: baseline,
+            });
+            self.overflow = false;
+        }
+
+        fn record(&mut self, point: CgroupPoint, unix_ns: u64) {
+            if self
+                .records
+                .last()
+                .is_some_and(|record| unix_ns <= record.unix_ns)
+            {
+                return;
+            }
+            if self.records.len() == Self::MAX_RECORDS {
+                self.overflow = true;
+                return;
+            }
+            self.records.push(SampleRecord { unix_ns, point });
+        }
+
+        fn report(
+            &self,
+            endpoint: CgroupPoint,
+            t0_unix_ns: u64,
+            t3_unix_ns: u64,
+            uncertainty_ns: u64,
+            threads: u64,
+        ) -> io::Result<CgroupResourceSample> {
+            let t0_lo = t0_unix_ns
+                .checked_sub(uncertainty_ns)
+                .ok_or_else(|| io::Error::other("T0 clock bound"))?;
+            let t0_hi = t0_unix_ns
+                .checked_add(uncertainty_ns)
+                .ok_or_else(|| io::Error::other("T0 clock bound"))?;
+            let t3_lo = t3_unix_ns
+                .checked_sub(uncertainty_ns)
+                .ok_or_else(|| io::Error::other("T3 clock bound"))?;
+            let t3_hi = t3_unix_ns
+                .checked_add(uncertainty_ns)
+                .ok_or_else(|| io::Error::other("T3 clock bound"))?;
+            let before = self
+                .records
+                .iter()
+                .rposition(|record| record.unix_ns <= t0_lo)
+                .unwrap_or(0);
+            let after = self
+                .records
+                .iter()
+                .position(|record| record.unix_ns >= t3_hi)
+                .unwrap_or(self.records.len().saturating_sub(1));
+            if after < before || self.records.is_empty() {
+                return Err(io::Error::other("cgroup sample boundary order"));
+            }
+            let selected = &self.records[before..=after];
+            let baseline = selected[0];
+            let final_sample = selected[selected.len() - 1];
+            let mut peak = baseline.point;
+            let mut dirty_writeback_peak =
+                baseline.point.stat[3].saturating_add(baseline.point.stat[4]);
+            let mut interior = 0_u64;
+            let mut interior_sample_ns = 0;
+            let mut gaps = Vec::with_capacity(selected.len().saturating_sub(1));
+            for pair in selected.windows(2) {
+                gaps.push(pair[1].unix_ns.saturating_sub(pair[0].unix_ns));
+            }
+            for record in selected {
+                if record.unix_ns > t0_hi && record.unix_ns < t3_lo {
+                    interior = interior.saturating_add(1);
+                    interior_sample_ns = record.unix_ns;
+                }
+                if record.unix_ns < t0_lo || record.unix_ns > t3_hi {
+                    continue;
+                }
+                peak.current = peak.current.max(record.point.current);
+                peak.lifetime_peak = peak.lifetime_peak.max(record.point.lifetime_peak);
+                peak.swap = peak.swap.max(record.point.swap);
+                for index in 0..CGROUP_STAT_FIELDS {
+                    peak.stat[index] = peak.stat[index].max(record.point.stat[index]);
+                }
+                dirty_writeback_peak = dirty_writeback_peak
+                    .max(record.point.stat[3].saturating_add(record.point.stat[4]));
+            }
+            gaps.sort_unstable();
+            let maximum_gap_ns = gaps.iter().copied().max().unwrap_or(u64::MAX);
+            let sample_interval_ns = gaps.get(gaps.len() / 2).copied().unwrap_or(u64::MAX);
+            let dirty_writeback_baseline =
+                baseline.point.stat[3].saturating_add(baseline.point.stat[4]);
+            Ok(CgroupResourceSample {
+                memory_current_baseline: baseline.point.current,
+                memory_current_peak: peak.current,
+                memory_current_final: final_sample.point.current,
+                memory_incremental_peak: peak.current.saturating_sub(baseline.point.current),
+                memory_lifetime_peak_baseline: baseline.point.lifetime_peak,
+                memory_lifetime_peak_final: final_sample.point.lifetime_peak,
+                swap_baseline: baseline.point.swap,
+                swap_peak: peak.swap,
+                swap_final: final_sample.point.swap,
+                oom_baseline: self.baseline_endpoint.oom,
+                oom_final: endpoint.oom,
+                oom_delta: endpoint.oom.saturating_sub(self.baseline_endpoint.oom),
+                oom_kill_baseline: self.baseline_endpoint.oom_kill,
+                oom_kill_final: endpoint.oom_kill,
+                oom_kill_delta: endpoint
+                    .oom_kill
+                    .saturating_sub(self.baseline_endpoint.oom_kill),
+                dirty_writeback_baseline,
+                dirty_writeback_peak,
+                dirty_writeback_incremental_peak: dirty_writeback_peak
+                    .saturating_sub(dirty_writeback_baseline),
+                sample_interval_ns,
+                sample_count: selected.len() as u64,
+                first_sample_ns: baseline.unix_ns,
+                last_sample_ns: final_sample.unix_ns,
+                maximum_sample_gap_ns: maximum_gap_ns,
+                started_ns: t0_unix_ns,
+                finished_ns: t3_unix_ns,
+                sampler_thread_count: threads,
+                interior_sample_ns,
+                stat_baseline: baseline.point.stat,
+                stat_peak: peak.stat,
+                stat_final: final_sample.point.stat,
+                t0_boundary_sampled: baseline.unix_ns <= t0_lo
+                    && t0_hi - baseline.unix_ns <= 1_000_000,
+                t3_boundary_sampled: final_sample.unix_ns >= t3_hi
+                    && final_sample.unix_ns - t3_lo <= 1_000_000,
+                interior_sampled: interior != 0,
+                sample_overflow: self.overflow,
+            })
+        }
+    }
+
+    impl CgroupFiles {
+        fn open() -> io::Result<Self> {
+            Ok(Self {
+                current: fs::File::open("/sys/fs/cgroup/memory.current")?,
+                peak: fs::File::open("/sys/fs/cgroup/memory.peak")?,
+                swap: fs::File::open("/sys/fs/cgroup/memory.swap.current")?,
+                events: fs::File::open("/sys/fs/cgroup/memory.events")?,
+                stat: fs::File::open("/sys/fs/cgroup/memory.stat")?,
+            })
+        }
+
+        fn read(&mut self) -> io::Result<CgroupPoint> {
+            let mut buffer = [0_u8; 4096];
+            let current = read_cgroup_number(&mut self.current, &mut buffer)?;
+            let lifetime_peak = read_cgroup_number(&mut self.peak, &mut buffer)?;
+            let swap = read_cgroup_number(&mut self.swap, &mut buffer)?;
+            let events = read_cgroup_text(&mut self.events, &mut buffer)?;
+            let oom = cgroup_key(events, "oom")?;
+            let oom_kill = cgroup_key(events, "oom_kill")?;
+            let stat_text = read_cgroup_text(&mut self.stat, &mut buffer)?;
+            let mut stat = [0_u64; CGROUP_STAT_FIELDS];
+            for (index, name) in [
+                "anon",
+                "file",
+                "shmem",
+                "file_dirty",
+                "file_writeback",
+                "kernel",
+                "slab",
+                "sock",
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                stat[index] = cgroup_key(stat_text, name)?;
+            }
+            Ok(CgroupPoint {
+                current,
+                lifetime_peak,
+                swap,
+                oom,
+                oom_kill,
+                stat,
+            })
+        }
+
+        fn read_phase(&mut self, prior: CgroupPoint) -> io::Result<CgroupPoint> {
+            let mut buffer = [0_u8; 4096];
+            let current = read_cgroup_number(&mut self.current, &mut buffer)?;
+            let lifetime_peak = read_cgroup_number(&mut self.peak, &mut buffer)?;
+            let swap = read_cgroup_number(&mut self.swap, &mut buffer)?;
+            let stat_text = read_cgroup_text(&mut self.stat, &mut buffer)?;
+            let mut stat = [0_u64; CGROUP_STAT_FIELDS];
+            for (index, name) in [
+                "anon",
+                "file",
+                "shmem",
+                "file_dirty",
+                "file_writeback",
+                "kernel",
+                "slab",
+                "sock",
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                stat[index] = cgroup_key(stat_text, name)?;
+            }
+            Ok(CgroupPoint {
+                current,
+                lifetime_peak,
+                swap,
+                stat,
+                ..prior
+            })
+        }
+    }
+
+    fn read_cgroup_number(file: &mut fs::File, buffer: &mut [u8]) -> io::Result<u64> {
+        read_cgroup_text(file, buffer)?
+            .trim()
+            .parse()
+            .map_err(|_| protocol::invalid("cgroup number"))
+    }
+
+    fn read_cgroup_text<'a>(file: &mut fs::File, buffer: &'a mut [u8]) -> io::Result<&'a str> {
+        file.rewind()?;
+        let read = file.read(buffer)?;
+        std::str::from_utf8(&buffer[..read]).map_err(|_| protocol::invalid("cgroup text"))
+    }
+
+    fn cgroup_key(text: &str, key: &str) -> io::Result<u64> {
+        text.lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(' ')?;
+                (name == key).then_some(value)
+            })
+            .ok_or_else(|| protocol::invalid("cgroup key"))?
+            .parse()
+            .map_err(|_| protocol::invalid("cgroup value"))
     }
 
     fn handle_exec(
@@ -1302,6 +1803,73 @@ mod linux {
                 .zip(right)
                 .fold(0_u8, |different, (left, right)| different | (left ^ right))
                 == 0
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn point(current: u64, swap: u64, dirty: u64, writeback: u64) -> CgroupPoint {
+            let mut stat = [0; CGROUP_STAT_FIELDS];
+            stat[3] = dirty;
+            stat[4] = writeback;
+            CgroupPoint {
+                current,
+                lifetime_peak: current,
+                swap,
+                oom: 2,
+                oom_kill: 3,
+                stat,
+            }
+        }
+
+        #[test]
+        fn merged_resource_samples_bind_boundaries_and_operands() {
+            let baseline = point(10, 0, 2, 3);
+            let mut aggregate = SampleAggregate::new(baseline, 100);
+            aggregate.reset(baseline, 200);
+            aggregate.record(point(999, 9, 99, 99), 199);
+            assert_eq!(aggregate.records.len(), 1);
+            aggregate.record(point(20, 1, 7, 5), 300);
+            aggregate.record(point(15, 0, 4, 4), 400);
+            let mut endpoint = point(15, 0, 4, 4);
+            endpoint.oom = 4;
+            endpoint.oom_kill = 4;
+            let report = aggregate.report(endpoint, 250, 350, 0, 2).unwrap();
+            assert_eq!(report.sample_count, 3);
+            assert_eq!(report.memory_current_peak, 20);
+            assert_eq!(report.memory_incremental_peak, 10);
+            assert_eq!(report.swap_peak, 1);
+            assert_eq!(report.dirty_writeback_baseline, 5);
+            assert_eq!(report.dirty_writeback_peak, 12);
+            assert_eq!(report.dirty_writeback_incremental_peak, 7);
+            assert_eq!(report.oom_delta, 2);
+            assert_eq!(report.oom_kill_delta, 1);
+            assert_eq!(report.sample_interval_ns, 100);
+            assert_eq!(report.maximum_sample_gap_ns, 100);
+            assert!(report.t0_boundary_sampled);
+            assert!(report.t3_boundary_sampled);
+            assert!(report.interior_sampled);
+            assert!(!report.sample_overflow);
+            assert!(
+                !aggregate
+                    .report(endpoint, 50, 350, 0, 2)
+                    .unwrap()
+                    .t0_boundary_sampled
+            );
+            assert!(
+                !aggregate
+                    .report(endpoint, 250, 500, 0, 2)
+                    .unwrap()
+                    .t3_boundary_sampled
+            );
+            assert_eq!(report.memory_lifetime_peak_final, 15);
+            let uncertain = aggregate.report(endpoint, 350, 370, 60, 2).unwrap();
+            assert_eq!(uncertain.memory_current_peak, 20);
+            assert!(!uncertain.interior_sampled);
+            assert_eq!(uncertain.interior_sample_ns, 0);
+            assert!(!uncertain.t3_boundary_sampled);
+        }
     }
 
     fn elapsed_ns(started: Instant) -> u64 {

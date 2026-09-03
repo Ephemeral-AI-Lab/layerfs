@@ -6,6 +6,59 @@ historical architecture is retained in
 [`docs/research/history/v2-replacement/spec.md`](../../docs/research/history/v2-replacement/spec.md),
 sections 17–19.
 
+## Active SDK-only edit admission
+
+Issue #20 is governed by the [SDK-only edit specification](../../docs/roadmap/0.1/0.1.2/sdk-only-edit-benchmark-rebuild.md)
+and [benchmark rules](../../docs/general/benchmark_rules.md). Exactly three
+families own 12/32/12 IDs at 1/10/100/500 MiB:
+
+```text
+families/edit_length_preserving.rs    + run-edit-length-preserving.sh
+families/edit_length_changing.rs      + run-edit-length-changing.sh
+families/edit_canonical_chunk_count.rs + run-edit-canonical-chunk-count.sh
+```
+
+Each performance row invokes one singular public SDK edit, Commit, End, and
+post-End Branch query. Verification is separate, with prequalified exact roots,
+independent streamed bytes, fresh Client/Store reconnect, read-only pre/post
+FUSE inode checks, materialized equality, and payload-retention checks.
+
+```bash
+cargo build --release -p fs-benchmark-pro
+benchmark/fs-bench-pro/run-edit-length-preserving.sh --self-check
+benchmark/fs-bench-pro/run-edit-length-preserving.sh RUN_ID IMAGE --case overwrite-head-4k-on-1mib-ops-1 --repetition 1 --mode performance --source candidate
+benchmark/fs-bench-pro/run-edit-length-preserving.sh RUN_ID IMAGE --case overwrite-head-4k-on-1mib-ops-1 --mode verify --source candidate
+python3 benchmark/fs-bench-pro/sdk-edit-custody.py cache-self-check target/release/fs-benchmark-pro
+```
+
+Selected runs are non-admission diagnostics; a valid numerical miss is a no-go,
+not a generic pass. Preparation uses the shared immutable
+`sdk-edit-prepared-store-cache-v1` cache. Override its location with
+`LAYERFS_SDK_EDIT_PREPARED_ROOT`. Cache compatibility excludes unrelated
+Workspace presentation changes; every sample and qualifier still receives an
+independent writable clone. Cached/hashed/cloned inputs are not called cold.
+
+For each authentic clean source arm, build retained assets with:
+
+```bash
+python3 benchmark/fs-bench-pro/sdk-edit-custody.py build OUTPUT_DIR IMAGE
+```
+
+This retains the host binary plus sealed build/conformance/image evidence.
+Admission requires `LAYERFS_SDK_EDIT_BASELINE_BIN`, `..._CANDIDATE_BIN`,
+`..._BASELINE_IMAGE`, `..._CANDIDATE_IMAGE`, `..._BASELINE_REVISION`,
+`..._CANDIDATE_REVISION`, `..._BASELINE_BUILD`, and `..._CANDIDATE_BUILD` (the two
+build evidence directories), then `RUN_ID IMAGE --all --mode admission` on each
+family wrapper. The exact product-only treatment must leave the harness,
+workload, report generators, contract, and input-preparation compatibility
+unchanged.
+
+The release generator consumes a manifest naming all three final family
+directories and hashes plus the sealed repository-gate directory. It fails
+closed until all 560 performance rows, 56 aggregate receipts, 112 subproofs,
+common source/environment/input identities, and repository gates pass. It
+generates unpublished evidence documents only; it never tags or publishes.
+
 ## Campaign inventory
 
 - The existing registered payload campaign is implemented: 32 MiB cold create,
@@ -14,20 +67,21 @@ sections 17–19.
   existing family:
   `namespace-100`, `namespace-1000`, `namespace-10000`, and
   `namespace-100000`.
-- The v0.1.2 same-count edit family is implemented with 14 timed IDs and its
-  separate fragmentation verifier.
-- The v0.1.2 count-changing family is implemented with 25 timed IDs, paired
-  controls, and four separate verifier groups.
+- The earlier same-count edit family has 14 timed IDs and a separate
+  fragmentation verifier; it is archival, not active SDK admission.
+- The earlier count-changing family has 25 timed IDs and paired controls;
+  it is archival, not active SDK admission.
 - The v0.1.2 Store-footprint family is implemented with three controls,
   durable-census/dbstat custody, and separate exact verification.
 - The canonical scenario and status table is the
   [0.1.x benchmark matrix](../../docs/roadmap/0.1/benchmarking.md).
 
-## v0.1.2 family format
+## Historical and supporting family formats
 
 The [v0.1.2 harness contract](../../docs/roadmap/0.1/0.1.2/fs-bench-pro-format.md)
-keeps all new work in this crate. All four family definitions and runners are
-implemented:
+keeps all new work in this crate. These earlier definitions/runners remain
+available for reproducibility and supporting evidence, not active SDK edit
+admission:
 
 ```text
 families/init_namespace.rs           + run-namespace.sh

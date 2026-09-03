@@ -28,13 +28,13 @@ pub use layerfs_monitor::{
     SemanticOperation, TimingFragment,
 };
 pub use layerfs_workspace::{
-    ConflictCursor, ConflictId, ConflictKind, ConflictPage, ContainerBinding, ContainerCreate,
-    ContainerError, ContainerId, ContainerLimits, ContainerManager, ContainerResult,
-    ContainerStatus, CreateWorkspaceSession, CreatedContainer, DaemonTiming, EndWorkspaceMode,
-    ExecutionEvent, ExecutionId, ExecutionReceipt, ExecutionSummary, ExecutionTransport, NonEmpty,
-    OutputChunk, OutputPage, OutputReader, OutputStream, ResolveChoice, ResolveResult,
-    RunningContainer, WorkspaceCommitResult, WorkspaceCommitStatus, WorkspaceConflict,
-    WorkspaceDetail, WorkspaceEndResult, WorkspaceError, WorkspaceExecution,
+    CgroupResourceSample, ConflictCursor, ConflictId, ConflictKind, ConflictPage, ContainerBinding,
+    ContainerCreate, ContainerError, ContainerId, ContainerLimits, ContainerManager,
+    ContainerResult, ContainerStatus, CreateWorkspaceSession, CreatedContainer, DaemonTiming,
+    EndWorkspaceMode, ExecutionEvent, ExecutionId, ExecutionReceipt, ExecutionSummary,
+    ExecutionTransport, NonEmpty, OutputChunk, OutputPage, OutputReader, OutputStream,
+    ResolveChoice, ResolveResult, RunningContainer, WorkspaceCommitResult, WorkspaceCommitStatus,
+    WorkspaceConflict, WorkspaceDetail, WorkspaceEndResult, WorkspaceError, WorkspaceExecution,
     WorkspaceFileRangeEdit, WorkspaceFileReplacement, WorkspaceId, WorkspacePlacement,
     WorkspaceProjection, WorkspaceState, WorkspaceSummary,
 };

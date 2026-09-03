@@ -23,6 +23,22 @@ pub(crate) mod edit_count_changing {
     include!("families/edit_count_changing.rs");
 }
 #[allow(dead_code)]
+pub(crate) mod sdk_edit_common {
+    include!("families/sdk_edit_common.rs");
+}
+#[allow(dead_code)]
+pub(crate) mod edit_length_preserving {
+    include!("families/edit_length_preserving.rs");
+}
+#[allow(dead_code)]
+pub(crate) mod edit_length_changing {
+    include!("families/edit_length_changing.rs");
+}
+#[allow(dead_code)]
+pub(crate) mod edit_canonical_chunk_count {
+    include!("families/edit_canonical_chunk_count.rs");
+}
+#[allow(dead_code)]
 pub(crate) mod store_footprint {
     include!("families/store_footprint.rs");
 }
@@ -1115,6 +1131,13 @@ fn run() -> Result<()> {
         }
         [command] if command == "noop" => Ok(()),
         [command, path] if command == "digest" => print_digest(path),
+        [command, path] if command == "digest-inode" => print_digest_inode(path),
+        [command, path] if command == "stat-inode" => {
+            use std::os::unix::fs::MetadataExt;
+            let metadata = fs::metadata(path)?;
+            println!("{}\tstat-only\t{}", metadata.len(), metadata.ino());
+            Ok(())
+        }
         [command, path] if command == "read" => print_read(path),
         [command, path, scenario] if command == "namespace-verify" => {
             print_namespace(path, scenario)
@@ -1517,6 +1540,14 @@ fn prepend(path: impl AsRef<Path>) -> Result<()> {
 fn print_digest(path: impl AsRef<Path>) -> Result<()> {
     let (size, digest) = digest(path.as_ref())?;
     println!("{size}\t{digest}");
+    Ok(())
+}
+
+fn print_digest_inode(path: impl AsRef<Path>) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    let path = path.as_ref();
+    let (size, digest) = digest(path)?;
+    println!("{size}\t{digest}\t{}", fs::metadata(path)?.ino());
     Ok(())
 }
 

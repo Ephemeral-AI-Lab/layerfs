@@ -229,10 +229,13 @@ impl Client {
     }
 
     pub fn edit_workspace_file_range(&self, edit: WorkspaceFileRangeEdit) -> Result<()> {
-        self.0
-            .workspaces
-            .edit_workspace_file_range(edit)
-            .map_err(Into::into)
+        let operation =
+            workspace_operation(OperationFamily::WorkspaceFileRangeEdit, edit.workspace_id);
+        self.observe(
+            operation,
+            || self.0.workspaces.edit_workspace_file_range(edit),
+            |_| OperationOutcome::Success,
+        )
     }
 
     /// Applies one public, prevalidated same-file edit batch with one projection refresh.
@@ -247,6 +250,26 @@ impl Client {
         self.0
             .workspaces
             .edit_workspace_file_ranges(edits)
+            .map_err(Into::into)
+    }
+
+    pub fn start_workspace_resource_sample(&self, workspace_id: WorkspaceId) -> Result<(u64, u64)> {
+        self.0
+            .workspaces
+            .start_workspace_resource_sample(workspace_id)
+            .map_err(Into::into)
+    }
+
+    pub fn finish_workspace_resource_sample(
+        &self,
+        workspace_id: WorkspaceId,
+        t0_unix_ns: u64,
+        t3_unix_ns: u64,
+        uncertainty_ns: u64,
+    ) -> Result<layerfs_workspace::CgroupResourceSample> {
+        self.0
+            .workspaces
+            .finish_workspace_resource_sample(workspace_id, t0_unix_ns, t3_unix_ns, uncertainty_ns)
             .map_err(Into::into)
     }
 

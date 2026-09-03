@@ -5,8 +5,9 @@ pub mod protocol;
 #[cfg(unix)]
 mod client {
     use crate::protocol::{
-        self, ExecRequest, Exit, Kind, MountRequest, RemoteError, ServerHello, AUTH_OK_BYTES,
-        BOUND_AUTH_BYTES, BOUND_OK_BYTES, CLIENT_AUTH_BYTES,
+        self, ExecRequest, Exit, Kind, MountRequest, RemoteError, ResourceSampleFinishRequest,
+        ResourceSampleRequest, ServerHello, AUTH_OK_BYTES, BOUND_AUTH_BYTES, BOUND_OK_BYTES,
+        CLIENT_AUTH_BYTES,
     };
     #[cfg(target_os = "linux")]
     use crate::protocol::{CAPABILITY_PATH, SOCKET_PATH};
@@ -220,6 +221,58 @@ mod client {
                 stream: Some(stream),
                 mountinfo: ready.payload,
             })
+        }
+
+        pub fn start_resource_sample(&self, workspace_id: [u8; 16]) -> io::Result<(u64, u64)> {
+            let request = ResourceSampleRequest {
+                owner_id: self.owner_id,
+                workspace_id,
+            }
+            .encode();
+            let mut stream =
+                self.connect_bound(Kind::ResourceSampleStart, &request, Duration::from_secs(2))?;
+            let response = protocol::read_frame(&mut stream)?;
+            if response.kind == Kind::Error {
+                return Err(remote_error(&response.payload));
+            }
+            if response.kind != Kind::ResourceSampleStarted {
+                return Err(protocol::invalid("daemon did not start resource sample"));
+            }
+            Ok((
+                u64::from_be_bytes(
+                    response.payload[..8]
+                        .try_into()
+                        .expect("clock receive width"),
+                ),
+                u64::from_be_bytes(response.payload[8..].try_into().expect("clock send width")),
+            ))
+        }
+
+        pub fn finish_resource_sample(
+            &self,
+            workspace_id: [u8; 16],
+            t0_unix_ns: u64,
+            t3_unix_ns: u64,
+            uncertainty_ns: u64,
+        ) -> io::Result<protocol::CgroupResourceSample> {
+            let request = ResourceSampleFinishRequest {
+                owner_id: self.owner_id,
+                workspace_id,
+                t0_unix_ns,
+                t3_unix_ns,
+                uncertainty_ns,
+            }
+            .encode();
+            let mut stream =
+                self.connect_bound(Kind::ResourceSampleFinish, &request, Duration::from_secs(2))?;
+            let response = protocol::read_frame(&mut stream)?;
+            if response.kind == Kind::Error {
+                return Err(remote_error(&response.payload));
+            }
+            if response.kind != Kind::ResourceSample {
+                return Err(protocol::invalid("daemon did not finish resource sample"));
+            }
+            protocol::CgroupResourceSample::decode(&response.payload)
         }
 
         fn connect_bound(

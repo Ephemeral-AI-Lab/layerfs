@@ -30,6 +30,10 @@ pub enum Kind {
     WorkspaceReady = 9,
     Close = 10,
     WorkspaceClosed = 11,
+    ResourceSampleStart = 12,
+    ResourceSampleStarted = 13,
+    ResourceSampleFinish = 14,
+    ResourceSample = 15,
 }
 
 impl TryFrom<u8> for Kind {
@@ -48,6 +52,10 @@ impl TryFrom<u8> for Kind {
             9 => Ok(Self::WorkspaceReady),
             10 => Ok(Self::Close),
             11 => Ok(Self::WorkspaceClosed),
+            12 => Ok(Self::ResourceSampleStart),
+            13 => Ok(Self::ResourceSampleStarted),
+            14 => Ok(Self::ResourceSampleFinish),
+            15 => Ok(Self::ResourceSample),
             _ => Err(invalid("unknown daemon frame kind")),
         }
     }
@@ -113,6 +121,215 @@ pub struct MountRequest {
     pub root: Vec<u8>,
     pub endpoint: Vec<u8>,
     pub capability: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ResourceSampleRequest {
+    pub owner_id: [u8; 16],
+    pub workspace_id: [u8; 16],
+}
+
+impl ResourceSampleRequest {
+    pub fn encode(self) -> [u8; 32] {
+        let mut bytes = [0; 32];
+        bytes[..16].copy_from_slice(&self.owner_id);
+        bytes[16..].copy_from_slice(&self.workspace_id);
+        bytes
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 32 {
+            return Err(invalid("daemon resource sample request"));
+        }
+        Ok(Self {
+            owner_id: payload[..16].try_into().expect("owner id width"),
+            workspace_id: payload[16..].try_into().expect("workspace id width"),
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ResourceSampleFinishRequest {
+    pub owner_id: [u8; 16],
+    pub workspace_id: [u8; 16],
+    pub t0_unix_ns: u64,
+    pub t3_unix_ns: u64,
+    pub uncertainty_ns: u64,
+}
+
+impl ResourceSampleFinishRequest {
+    pub fn encode(self) -> [u8; 56] {
+        let mut bytes = [0; 56];
+        bytes[..16].copy_from_slice(&self.owner_id);
+        bytes[16..32].copy_from_slice(&self.workspace_id);
+        bytes[32..40].copy_from_slice(&self.t0_unix_ns.to_be_bytes());
+        bytes[40..48].copy_from_slice(&self.t3_unix_ns.to_be_bytes());
+        bytes[48..].copy_from_slice(&self.uncertainty_ns.to_be_bytes());
+        bytes
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != 56 {
+            return Err(invalid("daemon resource sample finish request"));
+        }
+        let request = Self {
+            owner_id: payload[..16].try_into().expect("owner id width"),
+            workspace_id: payload[16..32].try_into().expect("workspace id width"),
+            t0_unix_ns: u64::from_be_bytes(payload[32..40].try_into().expect("T0 width")),
+            t3_unix_ns: u64::from_be_bytes(payload[40..48].try_into().expect("T3 width")),
+            uncertainty_ns: u64::from_be_bytes(
+                payload[48..].try_into().expect("uncertainty width"),
+            ),
+        };
+        if request.t0_unix_ns == 0
+            || request.t3_unix_ns < request.t0_unix_ns
+            || request.uncertainty_ns > 1_000_000
+        {
+            return Err(invalid("daemon resource sample boundaries"));
+        }
+        Ok(request)
+    }
+}
+
+pub const CGROUP_STAT_FIELDS: usize = 8;
+const CGROUP_SAMPLE_VALUES: usize = 27 + CGROUP_STAT_FIELDS * 3;
+const CGROUP_SAMPLE_BYTES: usize = CGROUP_SAMPLE_VALUES * 8 + 4;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CgroupResourceSample {
+    pub memory_current_baseline: u64,
+    pub memory_current_peak: u64,
+    pub memory_current_final: u64,
+    pub memory_incremental_peak: u64,
+    pub memory_lifetime_peak_baseline: u64,
+    pub memory_lifetime_peak_final: u64,
+    pub swap_baseline: u64,
+    pub swap_peak: u64,
+    pub swap_final: u64,
+    pub oom_baseline: u64,
+    pub oom_final: u64,
+    pub oom_delta: u64,
+    pub oom_kill_baseline: u64,
+    pub oom_kill_final: u64,
+    pub oom_kill_delta: u64,
+    pub dirty_writeback_baseline: u64,
+    pub dirty_writeback_peak: u64,
+    pub dirty_writeback_incremental_peak: u64,
+    pub sample_interval_ns: u64,
+    pub sample_count: u64,
+    pub first_sample_ns: u64,
+    pub last_sample_ns: u64,
+    pub maximum_sample_gap_ns: u64,
+    pub started_ns: u64,
+    pub finished_ns: u64,
+    pub sampler_thread_count: u64,
+    pub interior_sample_ns: u64,
+    pub stat_baseline: [u64; CGROUP_STAT_FIELDS],
+    pub stat_peak: [u64; CGROUP_STAT_FIELDS],
+    pub stat_final: [u64; CGROUP_STAT_FIELDS],
+    pub t0_boundary_sampled: bool,
+    pub t3_boundary_sampled: bool,
+    pub interior_sampled: bool,
+    pub sample_overflow: bool,
+}
+
+impl CgroupResourceSample {
+    pub fn encode(self) -> [u8; CGROUP_SAMPLE_BYTES] {
+        let mut bytes = [0; CGROUP_SAMPLE_BYTES];
+        let mut values = [0_u64; CGROUP_SAMPLE_VALUES];
+        values[..27].copy_from_slice(&[
+            self.memory_current_baseline,
+            self.memory_current_peak,
+            self.memory_current_final,
+            self.memory_incremental_peak,
+            self.memory_lifetime_peak_baseline,
+            self.memory_lifetime_peak_final,
+            self.swap_baseline,
+            self.swap_peak,
+            self.swap_final,
+            self.oom_baseline,
+            self.oom_final,
+            self.oom_delta,
+            self.oom_kill_baseline,
+            self.oom_kill_final,
+            self.oom_kill_delta,
+            self.dirty_writeback_baseline,
+            self.dirty_writeback_peak,
+            self.dirty_writeback_incremental_peak,
+            self.sample_interval_ns,
+            self.sample_count,
+            self.first_sample_ns,
+            self.last_sample_ns,
+            self.maximum_sample_gap_ns,
+            self.started_ns,
+            self.finished_ns,
+            self.sampler_thread_count,
+            self.interior_sample_ns,
+        ]);
+        values[27..35].copy_from_slice(&self.stat_baseline);
+        values[35..43].copy_from_slice(&self.stat_peak);
+        values[43..51].copy_from_slice(&self.stat_final);
+        for (index, value) in values.into_iter().enumerate() {
+            let start = index * 8;
+            bytes[start..start + 8].copy_from_slice(&value.to_be_bytes());
+        }
+        bytes[CGROUP_SAMPLE_VALUES * 8] = u8::from(self.t0_boundary_sampled);
+        bytes[CGROUP_SAMPLE_VALUES * 8 + 1] = u8::from(self.t3_boundary_sampled);
+        bytes[CGROUP_SAMPLE_VALUES * 8 + 2] = u8::from(self.interior_sampled);
+        bytes[CGROUP_SAMPLE_VALUES * 8 + 3] = u8::from(self.sample_overflow);
+        bytes
+    }
+
+    pub fn decode(payload: &[u8]) -> io::Result<Self> {
+        if payload.len() != CGROUP_SAMPLE_BYTES
+            || payload[CGROUP_SAMPLE_VALUES * 8..]
+                .iter()
+                .any(|value| *value > 1)
+        {
+            return Err(invalid("daemon cgroup resource sample"));
+        }
+        let mut values = [0_u64; CGROUP_SAMPLE_VALUES];
+        for (index, value) in values.iter_mut().enumerate() {
+            let start = index * 8;
+            *value = u64::from_be_bytes(payload[start..start + 8].try_into().expect("u64 width"));
+        }
+        Ok(Self {
+            memory_current_baseline: values[0],
+            memory_current_peak: values[1],
+            memory_current_final: values[2],
+            memory_incremental_peak: values[3],
+            memory_lifetime_peak_baseline: values[4],
+            memory_lifetime_peak_final: values[5],
+            swap_baseline: values[6],
+            swap_peak: values[7],
+            swap_final: values[8],
+            oom_baseline: values[9],
+            oom_final: values[10],
+            oom_delta: values[11],
+            oom_kill_baseline: values[12],
+            oom_kill_final: values[13],
+            oom_kill_delta: values[14],
+            dirty_writeback_baseline: values[15],
+            dirty_writeback_peak: values[16],
+            dirty_writeback_incremental_peak: values[17],
+            sample_interval_ns: values[18],
+            sample_count: values[19],
+            first_sample_ns: values[20],
+            last_sample_ns: values[21],
+            maximum_sample_gap_ns: values[22],
+            started_ns: values[23],
+            finished_ns: values[24],
+            sampler_thread_count: values[25],
+            interior_sample_ns: values[26],
+            stat_baseline: values[27..35].try_into().expect("cgroup baseline width"),
+            stat_peak: values[35..43].try_into().expect("cgroup peak width"),
+            stat_final: values[43..51].try_into().expect("cgroup final width"),
+            t0_boundary_sampled: payload[CGROUP_SAMPLE_VALUES * 8] == 1,
+            t3_boundary_sampled: payload[CGROUP_SAMPLE_VALUES * 8 + 1] == 1,
+            interior_sampled: payload[CGROUP_SAMPLE_VALUES * 8 + 2] == 1,
+            sample_overflow: payload[CGROUP_SAMPLE_VALUES * 8 + 3] == 1,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -361,6 +578,18 @@ fn validate_frame(kind: Kind, length: usize) -> io::Result<()> {
         Kind::WorkspaceReady if length == 0 => Err(invalid("daemon WorkspaceReady payload")),
         Kind::Error if length != 1 => Err(invalid("daemon error frame payload")),
         Kind::Exit if length != 62 => Err(invalid("daemon Exit payload")),
+        Kind::ResourceSampleStart if length != 32 => {
+            Err(invalid("daemon resource sample request payload"))
+        }
+        Kind::ResourceSampleStarted if length != 16 => {
+            Err(invalid("daemon resource sample clock calibration payload"))
+        }
+        Kind::ResourceSampleFinish if length != 56 => {
+            Err(invalid("daemon resource sample finish payload"))
+        }
+        Kind::ResourceSample if length != CGROUP_SAMPLE_BYTES => {
+            Err(invalid("daemon cgroup resource sample payload"))
+        }
         _ => Ok(()),
     }
 }
@@ -652,11 +881,52 @@ mod tests {
             capability: [3; 32],
         };
         let mount_payload = mount.encode().unwrap();
+        let resource = ResourceSampleRequest {
+            owner_id: [1; 16],
+            workspace_id: [2; 16],
+        };
+        let resource_payload = resource.encode();
+        assert_eq!(
+            ResourceSampleRequest::decode(&resource_payload).unwrap(),
+            resource
+        );
+        let finish = ResourceSampleFinishRequest {
+            owner_id: [1; 16],
+            workspace_id: [2; 16],
+            t0_unix_ns: 10,
+            t3_unix_ns: 20,
+            uncertainty_ns: 1,
+        };
+        assert_eq!(
+            ResourceSampleFinishRequest::decode(&finish.encode()).unwrap(),
+            finish
+        );
+        let mut invalid_finish = finish.encode();
+        invalid_finish[40..48].copy_from_slice(&9_u64.to_be_bytes());
+        assert!(ResourceSampleFinishRequest::decode(&invalid_finish).is_err());
+        assert!(validate_frame(Kind::ResourceSampleStarted, 16).is_ok());
+        assert!(validate_frame(Kind::ResourceSampleStarted, 0).is_err());
+        let sample = CgroupResourceSample {
+            memory_current_baseline: 1,
+            memory_current_peak: 2,
+            sample_count: 3,
+            stat_peak: [4; CGROUP_STAT_FIELDS],
+            t0_boundary_sampled: true,
+            t3_boundary_sampled: true,
+            interior_sampled: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            CgroupResourceSample::decode(&sample.encode()).unwrap(),
+            sample
+        );
 
         let mut bytes = Vec::new();
         write_frame(&mut bytes, Kind::Exec, &payload).unwrap();
         write_frame(&mut bytes, Kind::Started, &[]).unwrap();
         write_frame(&mut bytes, Kind::Mount, &mount_payload).unwrap();
+        write_frame(&mut bytes, Kind::ResourceSampleStart, &resource_payload).unwrap();
+        write_frame(&mut bytes, Kind::ResourceSample, &sample.encode()).unwrap();
         write_frame(&mut bytes, Kind::Close, &[]).unwrap();
         let mut one_byte = OneByte(IoCursor::new(bytes));
         assert_eq!(read_frame(&mut one_byte).unwrap().kind, Kind::Exec);
@@ -664,6 +934,14 @@ mod tests {
         let frame = read_frame(&mut one_byte).unwrap();
         assert_eq!(frame.kind, Kind::Mount);
         assert_eq!(MountRequest::decode(&frame.payload).unwrap(), mount);
+        assert_eq!(
+            read_frame(&mut one_byte).unwrap().kind,
+            Kind::ResourceSampleStart
+        );
+        assert_eq!(
+            read_frame(&mut one_byte).unwrap().kind,
+            Kind::ResourceSample
+        );
         assert_eq!(read_frame(&mut one_byte).unwrap().kind, Kind::Close);
 
         let mut trailing = payload.clone();
