@@ -2806,7 +2806,7 @@ impl<'a> InitializationSegmentAdmission<'a> {
             return Ok(());
         }
         let capacity = self.batch.capacity();
-        let mut batch = std::mem::take(&mut self.batch);
+        let batch = std::mem::take(&mut self.batch);
         let metrics = insert_initialization_segment_admission_batch(
             self.db,
             &batch,
