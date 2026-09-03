@@ -894,10 +894,17 @@ Host T0/T1/T3/T4 and external RSS observations use the same native
 is inserted between T3 and End. The daemon sampler uses an `Instant`-relative
 monotonic epoch, not an assumed host/VM wall-clock alignment.
 
-An authenticated pre-edit start response supplies daemon receive/send times.
-Together with host send/receive times, it bounds offset uncertainty after
-subtracting daemon processing time. At most five pre-edit calibration setups
-may be discarded; no mutation or performance sample has run at that point.
+Prospective calibration correction, 2026-09-04: establish the authenticated
+owner/Workspace-bound sampler connection and warm the sampler before the clock
+bracket. Retain that connection for at most five bounded pre-edit clock probes.
+Each probe supplies daemon receive/send times in the same sampler epoch;
+together with host send/receive times they bound offset uncertainty after
+subtracting daemon processing time. This excludes connection/authentication and
+sampler-start setup from the clock bracket, not from reported setup cost:
+`clock_sampler_start_ns` reports that wall time separately. A rejected probe is
+not a rejected operation sample: no edit or performance sample has run yet.
+Exhausting all five probes fails before editing. Do not retry the operation,
+select a favorable timed result, or reset the sampler between probes.
 Offset uncertainty must be at most 400 microseconds, followed by a fixed
 untimed 2 ms sampler-settle interval. The receipt declares a conservative
 1000 ppm clock-rate allowance, applied to the observed calibration-to-T3 age;
