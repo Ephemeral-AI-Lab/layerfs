@@ -143,6 +143,53 @@ Store identity for each prepared Store. A Branch root is scoped to that Store
 because inode allocation is intentionally Store-local; both source arms copy
 the same prepared Store and must begin with the same frozen Branch root.
 
+### Reusable preparation profile
+
+`sdk-edit-prepared-store-cache-v1` persists only the initialized pristine Store,
+Branch identity, fixture manifest, and producing-source provenance. The raw
+fixture is removed after initialization; a duplicate 500 MiB input is not
+retained. Entries are shared across the three families and selected development
+invocations, and only requested exact tiers are prepared.
+
+The key binds the fixture profile, generator/seed, exact tier and digest,
+directory/file mode and mtime, Store format/configuration, and a conservative
+preparation compatibility digest. That digest covers fixture-preparation code
+and initialization/content/Store/SDK dependencies; unrelated run IDs, family
+IDs, source-arm names, and whole candidate revisions are not cache keys.
+Producing revision, binary digest, and preparation command remain provenance.
+Relevant initialization or format changes invalidate the entry; unknown
+compatibility fails closed. Both measured source arms use the exact same
+qualified Store SHA-256 and initial Branch root.
+
+Build into a sibling staging directory under per-key coordination, validate
+after all preparation handles/processes exit, then atomically publish a sealed
+immutable entry. The current Store uses MEMORY journaling and rejects WAL;
+unexpected sidecars or incomplete entries are rejected, not recovered through
+invented WAL handling. Qualification runs on a disposable clone and never
+opens the cached master writable.
+
+Every performance or verifier worker still receives a fresh writable APFS
+copy-on-write clone or explicitly recorded independent byte copy, never a hard
+link. Master integrity is checked once on acquisition/run; its sealed digest
+is reused for comparison with every admission clone digest. No per-sample
+source rehash is required. Normal cleanup removes ephemeral sample clones, not
+the shared prepared input. Corrupt entries fail closed and may be quarantined
+before a fully validated replacement is published.
+
+Cache key/hit/miss/provenance and build, validation, clone, qualification, and
+container-start walls are setup evidence, separate from all edit/Commit
+metrics. OS-cache effects remain declared: neither a cloned nor a hashed Store
+is called cold, and changed conditioning profiles are never pooled. The cache
+cannot contain edited state, Commit results, live Workspaces, product reader
+caches, or previous benchmark/verifier receipts. Expected roots remain
+verification-only. Latency, resource, correctness, isolation, and custody gates
+are unchanged.
+
+Focused checks must prove a second selected run reuses preparation, each
+sample remains pristine, sample mutation cannot alter the master or next
+sample, cross-family reuse preserves the artifact identity, and invalidation,
+corruption, concurrent builders, and interrupted publication fail safely.
+
 ### Replacement profile
 
 All ordinary Inline replacement bytes are generated before timing from a

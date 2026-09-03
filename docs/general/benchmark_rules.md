@@ -194,6 +194,41 @@ process high-water memory.
 Cache state MUST be declared and enforced equally. Cold and warm rows MUST NOT
 be pooled. Preconditioning MUST be untimed, deterministic, and recorded.
 
+### Reusable immutable input preparation
+
+Benchmarks MAY persist initialized pristine input Stores across development
+invocations and compatible source arms. This is preparation reuse, never an
+optimization of the measured operation. They MUST NOT cache post-edit state,
+Commit results, live Workspaces, reader caches, measured-process state, or
+performance/verifier receipts. Expected-result data is verification-only and
+MUST NOT be supplied to mutation as a shortcut or used to prime selected ranges.
+
+A prepared-input cache MUST use a content/metadata/format compatibility key,
+not merely a schema version or the whole candidate revision. Until explicit
+compatibility is dependable, a conservative digest of preparation-related
+source and configuration MUST invalidate relevant changes. Exact producing
+revision and binary provenance MUST remain recorded. Unknown compatibility
+fails closed; paired arms MUST use the identical qualified Store artifact.
+
+Entries MUST be complete and quiescent before same-filesystem atomic
+publication, with per-key coordination. Half-built entries, unexpected
+sidecars, and corrupt manifests MUST NOT be consumed. Every mutation sample
+MUST receive a fresh independent writable copy or real copy-on-write clone;
+hard links to the immutable master are forbidden. Qualification that can open
+a Store writable MUST also use a disposable clone. Normal sample cleanup MUST
+NOT delete the shared prepared entry.
+
+Validate the master once per acquisition/run and retain its sealed digest;
+repeated source rehashing per sample is unnecessary. Admission clone identity
+checks remain mandatory. Cache acquisition, validation, preparation, cloning,
+qualification, and container setup time MUST be reported outside operation
+timers. A lighter development-only policy requires an explicit non-admission
+profile; it cannot fabricate an identity pass. APFS clones and hashed inputs
+MUST NOT be called cold: ordinary OS-cache effects and actual clone/copy method
+MUST be declared and treated consistently, and changed profiles MUST NOT be
+pooled. Tests MUST cover invalidation, corruption, concurrent/interrupted
+publication, cross-family reuse, and sample-to-master isolation.
+
 Verification MUST use a separate mode, stream, schema, summary, and status. A
 full digest, payload enumeration, root oracle, reconnect, reopen, or
 materialization proof MUST NOT enter a performance distribution. Verification
