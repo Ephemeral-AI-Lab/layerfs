@@ -1,8 +1,9 @@
 # Same-count file-edit performance family
 
-> **Status:** Implemented; final-source revalidation is in progress under the
-> prospective v3 A/A classifier. The original terminal campaign is
-> `issue13-terminal-final2-bed5a590`. The earlier
+> **Status:** Implemented and final-source revalidated by the v3 A/A campaign
+> `issue13-final-source-terminal-v3b-025c542f` plus the separate verifier
+> `issue13-final-source-fragmentation-v3-025c542f`. The original terminal
+> campaign is `issue13-terminal-final2-bed5a590`. The earlier
 > `issue13-terminal-aa-final-e8226e4c` run is immutable diagnostic history and
 > release-ineligible because its A/A classifier was label-dependent. The family
 > has 14 timed performance IDs and one separate verification group.
@@ -276,6 +277,14 @@ campaign plus only the separately defined fragmentation verifier group; it does
 not add 42 unregistered exact-verifier rows. Its timeout is 20 seconds per
 verifier invocation.
 
+The final-source v3 campaign retains 84 performance rows. Its symmetric
+aggregate A/A ratio is `1.011798`, arm lifecycle walls are `1.290230 s` and
+`1.305452 s`, and the paired wall is `2.595682 s`; all are target passes. The
+lowest new-row median is `908 ops/s`, peak RSS is `77,643,776` bytes, and swap
+and OOM are zero. The separate verifier passes all increasing, descending, and
+hotspot 100/1,000 checkpoints, exact roots, fresh FUSE reopen, structural
+ratios, and cleanup in `2.667270 s` external wall.
+
 ## Files to read
 
 - [v0.1.2 release plan](README.md)
@@ -297,7 +306,7 @@ verifier invocation.
 - [x] New 1/10/100 schedules are exact prefixes and preserve 256 KiB length.
 - [x] Every performance row reports latency, operations/s, phase, I/O, object,
   CPU, memory, and cleanup receipts without verifier work in its timer.
-- [ ] Final-source symmetric aggregate A/A repeatability, absolute anchor,
+- [x] Final-source symmetric aggregate A/A repeatability, absolute anchor,
   family-wall, RSS, and zero-swap gates pass in v3 replacement evidence.
 - [x] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
   structural limits before publication.
