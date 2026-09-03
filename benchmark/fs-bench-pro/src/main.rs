@@ -3453,7 +3453,7 @@ fn store_footprint_case(
     })?;
     let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
         .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
-    execute_workload(
+    let output = execute_workload(
         &client,
         workspace.id,
         vec![
@@ -3462,6 +3462,15 @@ fn store_footprint_case(
             OsString::from(edit_path),
         ],
     )?;
+    let attempted_operations = output_u64(&output, "attempted_operations")?;
+    let completed_operations = output_u64(&output, "completed_operations")?;
+    let final_file_bytes = output_u64(&output, "final_file_bytes")?;
+    if attempted_operations != 1
+        || completed_operations != attempted_operations
+        || final_file_bytes != edit_size
+    {
+        return Err("Store-footprint workload validity".into());
+    }
     let commit_started = Instant::now();
     let head = match client.commit_workspace_session(workspace.id)? {
         WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
@@ -3476,6 +3485,14 @@ fn store_footprint_case(
     let snapshot = client.monitor_snapshot()?;
     let commit_candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
     let commit_receipt = operation_workspace_commit(&snapshot)?;
+    let fuse = operation_fuse_write(&snapshot)?;
+    if commit_receipt.edit_spool_allocated_bytes != fuse.spool_write_bytes
+        || commit_receipt.edit_spool_live_bytes + commit_receipt.edit_spool_superseded_bytes
+            != commit_receipt.edit_spool_allocated_bytes
+        || commit_receipt.edit_spool_peak_bytes < commit_receipt.edit_spool_allocated_bytes
+    {
+        return Err("Store-footprint Workspace temporary-byte accounting".into());
+    }
     drop(client);
     drop(store);
 
@@ -3555,7 +3572,7 @@ fn store_footprint_case(
         workload_source::store_footprint::PERFORMANCE_SCHEMA
     };
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"control_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"fixture_digest\":\"{}\",\"edited_fixture_digest\":\"{}\",\"regular_files\":{},\"logical_bytes\":{},\"initialization_ns\":{},\"commit_ns\":{},\"reopen_ns\":{},\"verification_ns\":{},\"complete_ns\":{},\"store_baseline_bytes\":{},\"sqlite_database_bytes\":{},\"other_durable_store_bytes\":{},\"total_durable_store_bytes\":{},\"durable_store_files\":{},\"canonical_objects\":{},\"canonical_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"commit_candidate_objects\":{},\"commit_candidate_bytes\":{},\"commit_payload_bytes_read\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"control_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"fixture_digest\":\"{}\",\"edited_fixture_digest\":\"{}\",\"regular_files\":{},\"logical_bytes\":{},\"attempted_operations\":{},\"completed_operations\":{},\"final_file_bytes\":{},\"initialization_ns\":{},\"commit_ns\":{},\"reopen_ns\":{},\"verification_ns\":{},\"complete_ns\":{},\"store_baseline_bytes\":{},\"sqlite_database_bytes\":{},\"other_durable_store_bytes\":{},\"total_durable_store_bytes\":{},\"durable_store_files\":{},\"canonical_objects\":{},\"canonical_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"commit_candidate_objects\":{},\"commit_candidate_bytes\":{},\"commit_payload_bytes_read\":{},\"fuse_kernel_write_bytes\":{},\"workspace_spool_write_bytes\":{},\"workspace_spool_allocated_bytes\":{},\"workspace_spool_peak_bytes\":{},\"workspace_spool_live_bytes\":{},\"workspace_spool_superseded_bytes\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
         schema,
         workload_source::store_footprint::FAMILY_ID,
         control.id,
@@ -3567,6 +3584,9 @@ fn store_footprint_case(
         edited_digest,
         expected_files,
         expected_logical_bytes,
+        attempted_operations,
+        completed_operations,
+        final_file_bytes,
         initialization_ns,
         commit_ns,
         reopen_ns,
@@ -3584,6 +3604,12 @@ fn store_footprint_case(
         commit_candidate.candidate_objects,
         commit_candidate.candidate_bytes,
         commit_receipt.payload_bytes_read,
+        fuse.kernel_write_bytes,
+        fuse.spool_write_bytes,
+        commit_receipt.edit_spool_allocated_bytes,
+        commit_receipt.edit_spool_peak_bytes,
+        commit_receipt.edit_spool_live_bytes,
+        commit_receipt.edit_spool_superseded_bytes,
         resource_delta(process_after.user_cpu_ns, process_before.user_cpu_ns, "Store user CPU")?,
         resource_delta(
             process_after.system_cpu_ns,
