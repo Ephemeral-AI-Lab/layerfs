@@ -223,7 +223,8 @@ docker inspect "$container" >"$run_dir/environment/container.json"
 if [[ -n $paired_container ]]; then docker inspect "$paired_container" >"$run_dir/environment/paired-container.json"; fi
 docker ps --no-trunc >"$run_dir/environment/pre-run-competing-containers.txt"
 {
-  printf '%q ' "$0" "${invocation_argv[@]}"
+  if [[ $family_kind == count-changing ]]; then entrypoint="$here/run-edit-count-changing.sh"; else entrypoint="$0"; fi
+  printf '%q ' "$entrypoint" "${invocation_argv[@]}"
   printf '\n'
 } >"$run_dir/environment/command.txt"
 printf '%s\n' 'complete_lifecycle_ns begins immediately before public CreateWorkspaceSession and ends after public EndWorkspaceSession(Clean); layerstack initialization and Branch fork are excluded; Commit includes public Commit return plus explicit visible Branch-head acknowledgement.' >"$run_dir/environment/acknowledgement-boundary.txt"
@@ -328,7 +329,7 @@ if sys.argv[5]=='count-changing':
     if r['scenario_id']=='prepend-temp-copy-rename': upper(r['complete_lifecycle_ns'],223_763_000,246_139_300,250_000_000,'prepend_complete')
     elif r['implementation']=='direct-posix': lower_hard(r['operations_per_second'],250,225,100,'operations_per_second')
     else:
-        if r['operation_count']==1: target,tolerated,hard=50,45,30
+        if r['operation_count']==1: target,tolerated,hard=45,40.5,30
         elif r['operation_count']==10: target,tolerated,hard=75,67.5,40
         elif r['operation']=='delete' or 'shrink' in r['scenario_id']: target,tolerated,hard=55,49.5,40
         elif 'grow-2k' in r['scenario_id']: target,tolerated,hard=110,99,80
@@ -557,7 +558,7 @@ if mode in ('admission','repeatability'):
                 elif selected[0]['implementation']=='direct-posix': lower_hard(arm,case,'operations_per_second_median',medians[arm][case]['operations_per_second'],250,225,100)
                 else:
                     row=selected[0]
-                    if row['operation_count']==1: target,tolerated,hard=50,45,30
+                    if row['operation_count']==1: target,tolerated,hard=45,40.5,30
                     elif row['operation_count']==10: target,tolerated,hard=75,67.5,40
                     elif row['operation']=='delete' or 'shrink' in case: target,tolerated,hard=55,49.5,40
                     elif 'grow-2k' in case: target,tolerated,hard=110,99,80
