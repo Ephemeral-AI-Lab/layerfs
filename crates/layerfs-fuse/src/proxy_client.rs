@@ -23,6 +23,7 @@ pub struct ProxyClient {
     write_buffer: Mutex<Option<BufferedWrite>>,
     reservation: Mutex<Reservation>,
     gate: RwLock<()>,
+    callbacks: RwLock<()>,
     paused: AtomicBool,
     pending: AtomicU64,
     metrics: AtomicFuseWriteMetrics,
@@ -105,6 +106,7 @@ impl ProxyClient {
             write_buffer: Mutex::new(None),
             reservation: Mutex::new(Reservation::default()),
             gate: RwLock::new(()),
+            callbacks: RwLock::new(()),
             paused: AtomicBool::new(false),
             pending: AtomicU64::new(0),
             metrics: AtomicFuseWriteMetrics::default(),
@@ -118,6 +120,14 @@ impl ProxyClient {
     fn exchange(&self, request: Request) -> PortResult<Response> {
         let index = self.next.fetch_add(1, Ordering::Relaxed) % self.streams.len();
         self.exchange_at(index, request)
+    }
+
+    fn enter_callback(&self) -> PortResult<std::sync::RwLockReadGuard<'_, ()>> {
+        let guard = self.callbacks.read().map_err(|_| PortError::Io)?;
+        if self.paused.load(Ordering::Acquire) {
+            return Err(PortError::Busy);
+        }
+        Ok(guard)
     }
 
     fn exchange_at(&self, index: usize, request: Request) -> PortResult<Response> {
@@ -297,6 +307,8 @@ impl ProxyClient {
 
     #[doc(hidden)]
     pub fn pause(&self) -> PortResult<()> {
+        // Drain complete callbacks, including cache fills after transport replies.
+        let _callbacks = self.callbacks.write().map_err(|_| PortError::Io)?;
         let _gate = self.gate.write().map_err(|_| PortError::Io)?;
         self.flush_pending_locked()?;
         self.barrier_locked()?;
@@ -317,6 +329,7 @@ impl ProxyClient {
     }
 
     fn invalidate_file(&self, node: NodeId) -> PortResult<()> {
+        let _callbacks = self.callbacks.write().map_err(|_| PortError::Io)?;
         let _gate = self.gate.write().map_err(|_| PortError::Io)?;
         if node.0 == 0 || !self.paused.load(Ordering::Acquire) {
             return Err(PortError::Invalid);
@@ -383,6 +396,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn lookup(&self, parent: NodeId, name: &[u8]) -> PortResult<Attr> {
+        let _callback = self.enter_callback()?;
         if let Some(cached) = self.cached_lookup(parent, name)? {
             return cached;
         }
@@ -398,6 +412,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn attr(&self, node: NodeId) -> PortResult<Attr> {
+        let _callback = self.enter_callback()?;
         if let Some(attr) = self
             .cache
             .lock()
@@ -418,10 +433,12 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn readlink(&self, node: NodeId) -> PortResult<Vec<u8>> {
+        let _callback = self.enter_callback()?;
         bytes(self.exchange_at(self.node_stream(node), Request::Readlink(node))?)
     }
 
     fn readdir(&self, node: NodeId) -> PortResult<Vec<(NodeId, Kind, Vec<u8>)>> {
+        let _callback = self.enter_callback()?;
         self.barrier()?;
         if let Some(entries) = self.cached_readdir(node)? {
             return Ok(entries);
@@ -436,6 +453,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn readdirplus(&self, node: NodeId) -> PortResult<Vec<(Attr, Vec<u8>)>> {
+        let _callback = self.enter_callback()?;
         self.barrier()?;
         if let Some(entries) = self.cached_readdirplus(node)? {
             return Ok(entries);
@@ -450,6 +468,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn create_file(&self, parent: NodeId, name: &[u8], mode: u32) -> PortResult<Attr> {
+        let _callback = self.enter_callback()?;
         self.flush_unlink_for(parent, name)?;
         let attr = attr(self.exchange(Request::CreateFile(parent, name.to_vec(), mode))?)?;
         self.remember(parent, name, attr)?;
@@ -457,6 +476,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn create_file_open(&self, parent: NodeId, name: &[u8], mode: u32) -> PortResult<Attr> {
+        let _callback = self.enter_callback()?;
         self.flush_unlink_for(parent, name)?;
         let reservable = self
             .cache
@@ -505,6 +525,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn mkdir(&self, parent: NodeId, name: &[u8], mode: u32) -> PortResult<Attr> {
+        let _callback = self.enter_callback()?;
         self.flush_unlink_for(parent, name)?;
         let reservable = self
             .cache
@@ -539,6 +560,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn symlink(&self, parent: NodeId, name: &[u8], target: Vec<u8>) -> PortResult<Attr> {
+        let _callback = self.enter_callback()?;
         self.flush_unlink_for(parent, name)?;
         let attr = attr(self.exchange(Request::Symlink(parent, name.to_vec(), target))?)?;
         self.remember(parent, name, attr)?;
@@ -546,6 +568,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn link(&self, node: NodeId, parent: NodeId, name: &[u8]) -> PortResult<Attr> {
+        let _callback = self.enter_callback()?;
         self.flush_pending_create(node)?;
         self.flush_unlink_for(parent, name)?;
         let attr = attr(self.exchange(Request::Link(node, parent, name.to_vec()))?)?;
@@ -554,6 +577,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn unlink(&self, parent: NodeId, name: &[u8], directory: bool) -> PortResult<()> {
+        let _callback = self.enter_callback()?;
         self.flush_write()?;
         let pending = self
             .cache
@@ -598,6 +622,7 @@ impl FilesystemPort for ProxyClient {
         new_name: &[u8],
         no_replace: bool,
     ) -> PortResult<()> {
+        let _callback = self.enter_callback()?;
         self.flush_write()?;
         let moved = self
             .cache
@@ -675,6 +700,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn pin(&self, node: NodeId, truncate: bool, writable: bool) -> PortResult<()> {
+        let _callback = self.enter_callback()?;
         self.flush_pending_create(node)?;
         if !truncate && !writable {
             return self.send_at(self.node_stream(node), Request::PinRead(node));
@@ -684,6 +710,8 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn unpin(&self, node: NodeId, writable: bool) -> PortResult<()> {
+        // Releases remain permitted while paused so owner quiescence can drain handles.
+        let _callback = self.callbacks.read().map_err(|_| PortError::Io)?;
         let _gate = self.gate.write().map_err(|_| PortError::Io)?;
         self.flush_write_locked()?;
         self.invalidate_read_ahead(node)?;
@@ -731,6 +759,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn read(&self, node: NodeId, offset: u64, size: usize) -> PortResult<Vec<u8>> {
+        let _callback = self.enter_callback()?;
         self.read_metrics.note_kernel_read(size as u64);
         self.flush_pending_create(node)?;
         self.flush_write_for(node)?;
@@ -777,6 +806,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn write(&self, node: NodeId, offset: u64, value: &[u8]) -> PortResult<usize> {
+        let _callback = self.enter_callback()?;
         self.metrics.note_kernel_write(value.len() as u64);
         self.invalidate_read_ahead(node)?;
         if is_zero(value) {
@@ -833,6 +863,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn truncate(&self, node: NodeId, size: u64) -> PortResult<()> {
+        let _callback = self.enter_callback()?;
         self.flush_write()?;
         self.invalidate_read_ahead(node)?;
         if size == 0 {
@@ -862,6 +893,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn chmod(&self, node: NodeId, mode: u32) -> PortResult<()> {
+        let _callback = self.enter_callback()?;
         self.flush_write()?;
         {
             let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
@@ -888,6 +920,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn set_mtime(&self, node: NodeId, seconds: i64, nanos: u32) -> PortResult<()> {
+        let _callback = self.enter_callback()?;
         self.flush_write()?;
         {
             let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
@@ -919,6 +952,7 @@ impl FilesystemPort for ProxyClient {
     }
 
     fn fsync(&self, node: Option<NodeId>) -> PortResult<()> {
+        let _callback = self.enter_callback()?;
         if let Some(node) = node {
             self.flush_pending_create(node)?;
         }
@@ -1392,6 +1426,73 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
+    fn metadata_cache_fill_is_inside_owner_pause_barrier() {
+        let (stream, mut server) = stream_pair();
+        let client = ProxyClient {
+            streams: vec![Mutex::new(stream)],
+            next: AtomicUsize::new(0),
+            cache: Mutex::new(Cache::default()),
+            write_buffer: Mutex::new(None),
+            reservation: Mutex::new(Reservation::default()),
+            gate: RwLock::new(()),
+            callbacks: RwLock::new(()),
+            paused: AtomicBool::new(false),
+            pending: AtomicU64::new(0),
+            metrics: AtomicFuseWriteMetrics::default(),
+            read_metrics: AtomicFuseReadMetrics::default(),
+            #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+            notifier: std::sync::OnceLock::new(),
+        };
+        let old = Attr {
+            node: NodeId(2),
+            size: 6,
+            kind: Kind::File,
+            mode: 0o600,
+            links: 1,
+            mtime_seconds: 0,
+            mtime_nanoseconds: 0,
+        };
+        std::thread::scope(|scope| {
+            let request = scope.spawn(|| client.attr(NodeId(2)));
+            assert!(matches!(
+                read_request(&mut server).unwrap(),
+                Request::Attr(NodeId(2))
+            ));
+            let cache = client.cache.lock().unwrap();
+            write_response(&mut server, &Response::Attr(old)).unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+            loop {
+                if client.gate.try_write().is_ok() {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "response did not drain"
+                );
+                std::thread::yield_now();
+            }
+            // The transport has finished, but the callback cannot fill its cache yet.
+            assert!(client.callbacks.try_write().is_err());
+            drop(cache);
+            assert_eq!(request.join().unwrap().unwrap(), old);
+        });
+        client.pause().unwrap();
+        client.invalidate_file(NodeId(2)).unwrap();
+        assert!(client.cache.lock().unwrap().attrs.is_empty());
+        client.resume();
+        std::thread::scope(|scope| {
+            let request = scope.spawn(|| client.attr(NodeId(2)));
+            assert!(matches!(
+                read_request(&mut server).unwrap(),
+                Request::Attr(NodeId(2))
+            ));
+            let new = Attr { size: 9, ..old };
+            write_response(&mut server, &Response::Attr(new)).unwrap();
+            assert_eq!(request.join().unwrap().unwrap(), new);
+        });
+    }
+
+    #[test]
     fn multi_stream_barrier_drains_every_stream_after_the_first_error() {
         let (client_a, mut server_a) = stream_pair();
         let (client_b, mut server_b) = stream_pair();
@@ -1425,6 +1526,7 @@ mod tests {
             write_buffer: Mutex::new(None),
             reservation: Mutex::new(Reservation::default()),
             gate: RwLock::new(()),
+            callbacks: RwLock::new(()),
             paused: AtomicBool::new(false),
             pending: AtomicU64::new(2),
             metrics: AtomicFuseWriteMetrics::default(),
@@ -1453,6 +1555,7 @@ mod tests {
             })),
             reservation: Mutex::new(Reservation::default()),
             gate: RwLock::new(()),
+            callbacks: RwLock::new(()),
             paused: AtomicBool::new(false),
             pending: AtomicU64::new(0),
             metrics: AtomicFuseWriteMetrics::default(),
