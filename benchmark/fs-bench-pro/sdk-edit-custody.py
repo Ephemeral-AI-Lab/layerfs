@@ -418,6 +418,11 @@ def build(destination, image_tag):
     run("image-build", command + ["."])
     image = json.loads(output("docker", "image", "inspect", image_tag))[0]
     validate_image(image, identity)
+    run("image-binaries", ["docker", "run", "--rm", "--entrypoint", "sha256sum", image["Id"],
+                           "/usr/local/bin/layerfs-daemon", "/usr/local/bin/layerfs-fuse", "/usr/local/bin/fs-benchmark-workload"])
+    image_binaries = {path: digest for digest, path in
+                      (line.split() for line in (evidence / "image-binaries.stdout.txt").read_text().splitlines())}
+    assert len(image_binaries) == 3 and all(len(digest) == 64 for digest in image_binaries.values())
     require_clean(revision)
     assert build_configuration() == configuration, "build configuration changed"
     binary = destination / "fs-benchmark-pro"
@@ -425,6 +430,7 @@ def build(destination, image_tag):
     write_json(evidence / "image.json", image)
     receipt = {"schema": "fs-bench-pro-sdk-edit-build-v1", **identity,
                "binary_sha256": sha(binary), "image_id": image["Id"], "image_tag": image_tag,
+               "image_binaries_sha256": image_binaries,
                "rustc": output("rustc", "-Vv"), "cargo": output("cargo", "-V"),
                "build_configuration":configuration,
                "commands_sha256": sha(evidence / "commands.json"), "status": "pass"}
