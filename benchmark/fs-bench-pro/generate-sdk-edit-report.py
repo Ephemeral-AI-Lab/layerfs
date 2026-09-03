@@ -123,7 +123,8 @@ def custody_validation(root, selected=False, require_ending=False):
             expected = custody.source_identity(receipt["revision"])
             assert all(receipt[key] == value for key, value in expected.items())
             commands = json.loads((build_dir / "commands.json").read_text())
-            assert len(commands) == 4 and all(command["exit_code"] == 0 for command in commands)
+            assert len(commands) == 5 and all(command["exit_code"] == 0 for command in commands)
+            custody.validate_image_binaries(build_dir, receipt)
             for test in ("group_4_invalid_type_range_overflow_and_limits_are_atomic", "group_5_commit_publication_is_exactly_once_and_retry_is_up_to_date"):
                 assert "1 passed" in (build_dir / f"{test}.stdout.txt").read_text(), "conformance execution"
             custody.validate_image(image, receipt)

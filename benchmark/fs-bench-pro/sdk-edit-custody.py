@@ -450,9 +450,20 @@ def validate_build(evidence, binary, revision):
     assert sha(binary) == receipt["binary_sha256"], "build binary identity"
     assert sha(evidence / "commands.json") == receipt["commands_sha256"]
     commands = json.loads((evidence / "commands.json").read_text())
-    assert len(commands) == 4 and all(command["exit_code"] == 0 for command in commands)
+    assert len(commands) == 5 and all(command["exit_code"] == 0 for command in commands)
+    validate_image_binaries(evidence, receipt)
     validate_image(json.loads((evidence / "image.json").read_text()), receipt)
     return receipt
+
+
+def validate_image_binaries(evidence, receipt):
+    evidence = Path(evidence)
+    paths = ["/usr/local/bin/layerfs-daemon", "/usr/local/bin/layerfs-fuse", "/usr/local/bin/fs-benchmark-workload"]
+    commands = json.loads((evidence / "commands.json").read_text())
+    assert commands[-1]["argv"] == ["docker", "run", "--rm", "--entrypoint", "sha256sum", receipt["image_id"], *paths]
+    actual = {path:digest for digest,path in (line.split() for line in (evidence / "image-binaries.stdout.txt").read_text().splitlines())}
+    assert set(actual) == set(paths) and actual == receipt["image_binaries_sha256"]
+    assert all(len(value)==64 and all(c in "0123456789abcdef" for c in value) for value in actual.values())
 
 
 def capture(run_dir, baseline_bin, candidate_bin, baseline_revision, candidate_revision,
