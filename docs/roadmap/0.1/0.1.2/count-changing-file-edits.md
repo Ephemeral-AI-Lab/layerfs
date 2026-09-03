@@ -273,9 +273,20 @@ therefore attributes changes only to the portable container workload algorithm,
 not to the universal edit engine. Admission also runs one exact baseline
 byte/root/reopen proof beside the complete candidate verifier set.
 
-Any pair above `1.10` requires phase/counter disposition. Require at least a
+Any pair above `1.05` requires phase/counter disposition; `1.10` remains the
+no-go boundary. Require at least a
 20-percent improvement only when baseline evidence proves a defect and the
 retained implementation claims to optimize it.
+
+The authoritative ratio-of-medians supplement has exactly three tolerated
+rows: `prepend-head-4k-ops-10` (`1.074673`),
+`sparse-write-past-eof-gap-60k-payload-4k-ops-1` (`1.056144`), and
+`sparse-write-past-eof-gap-60k-payload-4k-ops-10` (`1.056600`). Their complete
+phase and counter dispositions are retained in
+`issue15-terminal-ratio-dispositions-e76ef180`. All structural and byte-work
+counters are `1.0`; the remaining phase spread is tolerated and makes no
+improvement claim. The older `insert-middle-4k-ops-100` note used the
+superseded statistic and is not an authoritative tolerance disposition.
 
 Provisional family performance budget for one 75-sample source arm:
 
