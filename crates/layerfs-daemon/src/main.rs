@@ -1336,7 +1336,7 @@ mod linux {
             );
             (child, created_root)
         };
-        let _guard = MountGuard {
+        let guard = MountGuard {
             shared: shared.clone(),
             id: request.workspace_id,
         };
@@ -1500,13 +1500,30 @@ mod linux {
             let _ = stderr.join();
         }
         if success {
-            let _ = protocol::write_frame(&mut stream, Kind::WorkspaceClosed, &[]);
+            acknowledge_mount_close(&mut stream, &finished, lifecycle, guard);
+            return;
         } else if close && !lost {
             send_error(&mut stream, RemoteError::InfrastructureLost);
         }
         finished.store(true, Ordering::Release);
         let _ = stream.shutdown(std::net::Shutdown::Both);
         let _ = lifecycle.join();
+    }
+
+    fn acknowledge_mount_close(
+        stream: &mut ControlStream,
+        finished: &AtomicBool,
+        lifecycle: std::thread::JoinHandle<()>,
+        guard: MountGuard,
+    ) {
+        // A caller may remount this workspace/root as soon as it receives the ACK.
+        // Retire every old callback and its registry reservation before publishing it.
+        finished.store(true, Ordering::Release);
+        let _ = stream.shutdown(Shutdown::Read);
+        let _ = lifecycle.join();
+        drop(guard);
+        let _ = protocol::write_frame(&mut *stream, Kind::WorkspaceClosed, &[]);
+        let _ = stream.shutdown(Shutdown::Both);
     }
 
     fn watch_mount(
@@ -1857,9 +1874,97 @@ mod linux {
                 == 0
     }
 
+    fn elapsed_ns(started: Instant) -> u64 {
+        started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn workspace_closed_waits_for_watcher_and_releases_mount_reservation() {
+            let id = [7; 16];
+            let root = b"/workspace/remount".to_vec();
+            let shared = Arc::new(Shared {
+                state: Mutex::new(State {
+                    owner_live: true,
+                    owner: Binding::Tcp,
+                    owner_id: [1; 16],
+                    active: BTreeMap::new(),
+                    mounts: BTreeMap::from([(
+                        id,
+                        ActiveMount {
+                            root: root.clone(),
+                            alive: false,
+                            ready: false,
+                            pgid: 0,
+                            termination: Arc::new(Termination::new()),
+                        },
+                    )]),
+                    samples: BTreeMap::new(),
+                    sample_starting: false,
+                }),
+                drained: Condvar::new(),
+                limit: 1,
+                capability: [0; 32],
+                boot_id: [0; 16],
+            });
+            let guard = MountGuard {
+                shared: shared.clone(),
+                id,
+            };
+            let (server, mut client) = UnixStream::pair().unwrap();
+            let mut server = ControlStream::Unix(server);
+            let finished = Arc::new(AtomicBool::new(false));
+            let (events, received) = std::sync::mpsc::channel();
+            let watcher = watch_mount(
+                server.try_clone().unwrap(),
+                events,
+                finished.clone(),
+                shared.clone(),
+                id,
+            );
+            protocol::write_frame(&mut client, Kind::Close, &[]).unwrap();
+            assert!(matches!(
+                received.recv_timeout(Duration::from_secs(2)),
+                Ok(MountEvent::Close)
+            ));
+            let (draining, drained) = std::sync::mpsc::channel();
+            let (release, released) = std::sync::mpsc::channel();
+            let lifecycle = std::thread::spawn(move || {
+                watcher.join().unwrap();
+                draining.send(()).unwrap();
+                // Hold the old watcher at its final return, exposing the old ACK race.
+                let _ = released.recv();
+            });
+            let handler = std::thread::spawn(move || {
+                acknowledge_mount_close(&mut server, &finished, lifecycle, guard);
+            });
+            drained.recv_timeout(Duration::from_secs(2)).unwrap();
+            client.set_nonblocking(true).unwrap();
+            let early_ack = protocol::read_frame(&mut client);
+            let waiting =
+                matches!(&early_ack, Err(error) if error.kind() == io::ErrorKind::WouldBlock);
+            release.send(()).unwrap();
+            assert!(
+                waiting,
+                "WorkspaceClosed arrived before watcher/registry cleanup"
+            );
+            client.set_nonblocking(false).unwrap();
+            client
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            assert_eq!(
+                protocol::read_frame(&mut client).unwrap().kind,
+                Kind::WorkspaceClosed
+            );
+            let state = shared.state.lock().unwrap();
+            assert!(!state.mounts.contains_key(&id));
+            assert!(!state.mounts.values().any(|mount| mount.root == root));
+            drop(state);
+            handler.join().unwrap();
+        }
 
         fn point(current: u64, swap: u64, dirty: u64, writeback: u64) -> CgroupPoint {
             let mut stat = [0; CGROUP_STAT_FIELDS];
@@ -1938,10 +2043,6 @@ mod linux {
             assert_eq!(uncertain.interior_sample_ns, 0);
             assert!(!uncertain.t3_boundary_sampled);
         }
-    }
-
-    fn elapsed_ns(started: Instant) -> u64 {
-        started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
     }
 }
 
