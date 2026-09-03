@@ -1,5 +1,8 @@
 # LayerFS 0.1.2 Developer Preview
 
+> **Status:** Draft release body; no `v0.1.2` tag or GitHub Release is currently
+> published.
+
 LayerFS 0.1.2 preserves the v0.1.1 storage, CLI, daemon, projection, and
 Workspace lifecycle contracts while adding universal regular-file range
 editing.

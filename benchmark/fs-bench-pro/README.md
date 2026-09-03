@@ -194,12 +194,12 @@ LAYERFS_COUNT_CHANGING_ANCHOR_FIXTURE=/absolute/registered-32m-directory \
   --all --source baseline-candidate --mode admission --paired-container BASELINE_CONTAINER
 ```
 
-Directional baseline/candidate admission gates every scenario's ratio of
-medians. Identical-source A/A may use the owner-approved symmetric aggregate
-family-wall rule, but it never replaces directional optimization evidence.
+Directional baseline/candidate admission gates every primary scenario's ratio
+of medians. Identical-source A/A is diagnostic repeatability only and is
+rejected as count-changing terminal admission.
 Both directional images must carry the same final product seal and revision;
-only their workload/source seals differ. Count-changing release receipts use
-performance schema `v2`, whose `inner_edit_ns` excludes the post-operation
+only their workload/source seals differ. Expanded count-changing release receipts use
+performance schema `v3`, whose `inner_edit_ns` excludes the post-operation
 final-length validity check while still requiring that check to pass.
 The frozen 32 MiB anchor's absolute path, size, digest, environment variable,
 and exact command are part of custody.

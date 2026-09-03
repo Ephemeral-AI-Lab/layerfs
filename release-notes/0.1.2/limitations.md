@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 limitations
 
-> **Status:** Released limitations for the `v0.1.2` Developer Preview.
+> **Status:** Draft limitations for the withdrawn `v0.1.2` release candidate.
 
 LayerFS remains a Developer Preview for local evaluation, integration,
 benchmark reproduction, and design research—not production storage.

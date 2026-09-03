@@ -1,6 +1,7 @@
 # LayerFS 0.1.2 terminal benchmark evidence
 
-> **Status:** Final Developer Preview evidence index for `v0.1.2`.
+> **Status:** Draft evidence index. Final-candidate tables are being regenerated
+> under the prospectively expanded count-changing v3/v4 contract.
 
 The raw directories below are immutable local custody, not Git-tracked release
 assets. Each identity is the SHA-256 of that directory's `evidence.sha256`

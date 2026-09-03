@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 verification
 
-> **Status:** Developer Preview source verification record for `v0.1.2`.
+> **Status:** Draft source verification record pending final-candidate rerun.
 
 ## Release identity
 

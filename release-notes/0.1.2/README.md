@@ -1,7 +1,7 @@
 # LayerFS 0.1.2 Developer Preview
 
-> **Status:** Developer Preview release record, frozen by the annotated
-> `v0.1.2` tag.
+> **Status:** Draft release record. The premature tag and GitHub Release were
+> withdrawn while exact release-candidate evidence is regenerated.
 
 LayerFS 0.1.2 preserves the v0.1.1 storage, CLI, daemon, projection, and
 Workspace lifecycle contracts while adding failure-atomic regular-file range

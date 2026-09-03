@@ -1,6 +1,7 @@
 # LayerFS 0.1.2 artifacts
 
-> **Status:** Source-only Developer Preview artifact manifest for `v0.1.2`.
+> **Status:** Draft artifact manifest; no `v0.1.2` tag or GitHub Release is
+> currently published.
 
 ## Release coordinates
 

@@ -241,11 +241,22 @@ These six IDs ship and admit with the 25 primary IDs:
 | `replace-middle-shrink-4k-to-2k-on-10mib-ops-1-scale` | 10,485,760 | Replace 4 KiB at `L/2 - 2048` with 2 KiB |
 | `replace-middle-shrink-4k-to-2k-on-100mib-ops-1-scale` | 104,857,600 | Replace 4 KiB at `L/2 - 2048` with 2 KiB |
 
+These six IDs are the complete middle destructive suffix-relocation scaling
+cohort for v0.1.2. They support claims about delete and shrinking replacement
+through portable temp-copy/fsync/rename only; they do not generalize to every
+temp-copy shape or to owner-side structural edits.
+
 Each size uses three seeds and one fresh Store, Branch, Workspace, and workload
 process per sample. Fixture byte `i` is exactly
 `((i * 29 + floor(i / 7)) mod 251)`. Delete seeds are intentional repeat
 labels because they supply no replacement bytes; shrinking replacement bytes
 vary by seed.
+
+That fixture is periodic and deliberately exercises sequential FUSE copy,
+spool, fsync, rename, and lifecycle scaling. CDC/candidate/object counters are
+retained to expose hidden Commit work, but this cohort makes no claim about
+unique-content CDC or ObjectId cardinality; that belongs to the deferred
+canonical CDC family.
 
 For initial length `L`, the exact algebra is:
 
@@ -253,6 +264,11 @@ For initial length `L`, the exact algebra is:
 | --- | ---: | ---: | ---: | ---: |
 | Delete | `L - 2,048` | `L - 2,048` | `L` | `L - 2,048` |
 | Shrink | `L - 2,048` | `L - 4,096` | `L` | `L - 2,048` |
+
+Both rows require `commit_payload_bytes_read = 0` and
+`commit_cdc_bytes_scanned = L - 2,048`. Candidate/inserted/reused object and
+byte counters are reported as medians and min-max ranges so periodic-content
+reuse cannot hide Commit work.
 
 Scaling cases are an explicitly unpaired, final-candidate supplement: their
 purpose is to fit and verify the file-size model, not to compare unequal
@@ -361,8 +377,10 @@ The frozen baseline is source `a7583306`, workload SHA-256
 Baseline and candidate images carry the same final-candidate product seal and
 revision but distinct workload/source seals. The baseline carries the frozen
 v0.1.2 temp-copy workload while the candidate carries the release workload, so
-the comparison attributes changes only to the portable container workload
-algorithm, not to the universal edit engine. Admission also runs one exact baseline
+the comparison measures the combined workload change: 64 KiB to 1 MiB
+streaming buffers plus removal of per-operation `stat` from the mutation-only
+timer. It does not attribute improvement to either change in isolation or to
+the universal edit engine. Admission also runs one exact baseline
 byte/root/reopen proof beside the complete candidate verifier set.
 
 Any pair above `1.05` requires phase/counter disposition; `1.10` remains the
@@ -441,6 +459,10 @@ Overall family admission is the worst status across the 25 primary directional
 member gates, the delete and shrink 100 MiB-versus-10 MiB scaling gates, all
 seven existing primary verifier receipts, all 18 scaling verifier receipts,
 and every resource/cleanup gate. A missing row or receipt is ineligible.
+Selected performance and verify commands may succeed, but always record
+`admission_eligible = false`; only complete directional `admission --all` can
+be release-eligible. Count-changing A/A remains a diagnostic repeatability mode
+and is rejected as terminal admission.
 
 Sparse growth allocates no live RAM or physical spool proportional to the zero
 gap. Complete-process RSS targets at most 105 percent of the retained

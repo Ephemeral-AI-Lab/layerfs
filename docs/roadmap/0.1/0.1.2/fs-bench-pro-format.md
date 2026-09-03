@@ -244,10 +244,12 @@ Create an append-only schema rather than changing `fs-bench-pro-v4` in place:
 }
 ```
 
-The actual schema additionally requires FUSE/spool counts, piece/tree work,
+The evidence directory additionally requires FUSE/spool counts, piece/tree work,
 candidate/inserted/reused object and byte counts, transaction maxima, CPU,
 process/cgroup RSS, swap, OOM, timeout, cache profile, source seal, image digest,
-and receipt-availability statuses. Keep fields flat unless a repeated structure
+and receipt-availability statuses. Source seal and image digest are campaign
+custody rather than duplicated row fields. `seed_label` is display-only; the
+integer `seed` is authoritative. Keep row fields flat unless a repeated structure
 has independently justified nesting; existing parsers are line-oriented.
 
 `fs-bench-pro-edit-performance-v1` remains the same-count schema and identifies
@@ -290,8 +292,8 @@ Keep verifier results separate:
   "observed_sha256": "...",
   "expected_canonical_file_root": "...",
   "observed_canonical_file_root": "...",
-  "expected_canonical_root": "...",
-  "observed_canonical_root": "...",
+  "committed_root": "...",
+  "reopened_branch_root": "...",
   "root_status": "pass",
   "independent_oracle": true,
   "fresh_reconnect": true,
@@ -341,8 +343,9 @@ benchmark-results/fs-bench-pro/<family>/<run-id>/
 
 Performance, verification, resource, cleanup, custody, and overall admission
 statuses remain independent in `run-status.json`. A development performance run
-may have overall status `performance-complete-verification-not-run`; it must not
-be labeled release evidence.
+may have overall status `performance-complete-verification-not-run`; selected
+performance and verify commands always set `admission_eligible=false` even when
+their command status passes. They must not be labeled release evidence.
 
 ## Pairing and summaries
 
