@@ -1,7 +1,7 @@
 # LayerFS 0.1.2 manual
 
-> **Status:** Released Developer Preview manual, frozen by the annotated
-> `v0.1.2` tag.
+> **Status:** Draft Developer Preview manual for the withdrawn `v0.1.2`
+> release candidate; no tag is currently published.
 
 LayerFS 0.1.2 preserves the 0.1.1 CLI, canonical-object, Store, daemon, and
 Workspace contracts. It adds owner-side regular-file range editing and unifies

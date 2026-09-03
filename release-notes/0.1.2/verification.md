@@ -2,6 +2,9 @@
 
 > **Status:** Draft source verification record pending final-candidate rerun.
 
+The detailed pass/publication language below records the withdrawn campaign and
+is nonterminal until every table is regenerated against the exact candidate.
+
 ## Release identity
 
 | Field | Result |
@@ -107,4 +110,4 @@ to gate every member. Performance and verification streams remain separate.
 | Count-changing family | Pass; authoritative directional evidence; final A/A explicitly diagnostic/no-go |
 | Store footprint | Accepted exact blocker; complete census and final metadata verifier |
 | Documentation audit | Pass; active manual, roadmap, registry, limitations, and local links agree |
-| Artifacts/checksums | Published with the GitHub Release and verified by `SHA256SUMS` |
+| Artifacts/checksums | Pending; no GitHub Release or `v0.1.2` tag is published |

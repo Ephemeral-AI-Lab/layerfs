@@ -19,12 +19,12 @@
 
 | Artifact | Name | SHA-256 | Status |
 | --- | --- | --- | --- |
-| Source archive | `layerfs-0.1.2.tar.gz` | `SHA256SUMS` | Published |
-| Source archive | `layerfs-0.1.2.zip` | `SHA256SUMS` | Published |
-| Lockfile | `Cargo.lock` | `SHA256SUMS` | Published |
-| License | `LICENSE` | `SHA256SUMS` | Published |
-| Checksum manifest | `SHA256SUMS` | GitHub asset digest | Published |
-| Verification evidence | CI logs and tracked benchmark summary | GitHub-hosted summary; raw runs retained locally by exact path/hash | Published by reference |
+| Source archive | `layerfs-0.1.2.tar.gz` | `SHA256SUMS` | Planned; not published |
+| Source archive | `layerfs-0.1.2.zip` | `SHA256SUMS` | Planned; not published |
+| Lockfile | `Cargo.lock` | `SHA256SUMS` | Planned; not published |
+| License | `LICENSE` | `SHA256SUMS` | Planned; not published |
+| Checksum manifest | `SHA256SUMS` | GitHub asset digest | Planned; not published |
+| Verification evidence | CI logs and tracked benchmark summary | GitHub-hosted summary; raw runs retained locally by exact path/hash | Planned; not published |
 
 No executable, crate package, helper binary, or runtime image is published by
 this source-only Developer Preview.

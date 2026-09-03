@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 storage format
 
-> **Status:** Released compatibility record for `v0.1.2`.
+> **Status:** Draft compatibility record for the withdrawn `v0.1.2` candidate.
 
 The 0.1.2 release preserves the five-table SQLite schema, canonical object
 encodings, identity domains, content-defined chunking profile, immutable

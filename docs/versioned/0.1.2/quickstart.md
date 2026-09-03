@@ -1,6 +1,7 @@
 # LayerFS 0.1.2 quickstart
 
-> **Status:** Released instructions for `v0.1.2`.
+> **Status:** Draft instructions for the withdrawn `v0.1.2` candidate; the tag
+> used below is not currently published.
 
 Build from the immutable release tag:
 

@@ -3,8 +3,10 @@ use layerfs_sdk::{
     LayerStackInitialization, LayerStackStore, LocalForkSource, WorkspaceCommitResult,
     WorkspaceFileRangeEdit, WorkspaceFileReplacement, WorkspacePlacement, WorkspaceProjection,
 };
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::FileExt;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::io::AsRawFd;
 use std::sync::Arc;
 
 const DATA_DIRECTORIES: usize = 100;
@@ -169,6 +171,109 @@ fn owner_range_edits_have_materialization_and_real_fuse_root_equality() {
         store.commit(commits[0].0).unwrap().unwrap().root_id,
         store.commit(commits[1].0).unwrap().unwrap().root_id
     );
+    drop(client);
+    drop(store);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn created_fuse_files_are_coherent_and_mmap_after_reopen() {
+    if std::env::var_os("LAYERFS_LIVE_FUSE").is_none() {
+        return;
+    }
+    let root = temp("created-file-direct-io");
+    let fixture = root.join("fixture");
+    std::fs::create_dir(&fixture).unwrap();
+    std::fs::write(fixture.join("seed"), b"seed").unwrap();
+    let store = Arc::new(LayerStackStore::create(root.join("store.sqlite")).unwrap());
+    let client = Client::connect(store.clone()).unwrap();
+    let layer = client
+        .initialize_layerstack(
+            EntityName::new("created-file-direct-io").unwrap(),
+            LayerStackInitialization::Directory(fixture),
+        )
+        .unwrap()
+        .genesis_layer_id;
+    let branch = client
+        .fork_branch(
+            EntityName::new("main").unwrap(),
+            LocalForkSource::Layer { layer_id: layer },
+        )
+        .unwrap();
+    let mount = root.join("mount");
+    let session = client
+        .create_workspace_session(CreateWorkspaceSession {
+            branch_id: branch,
+            placement: WorkspacePlacement::Host {
+                root: mount.clone(),
+            },
+            projection: Some(WorkspaceProjection::Fuse),
+        })
+        .unwrap();
+    assert!(is_fuse_mount(&mount));
+
+    let path = mount.join("created");
+    let mut first = std::fs::File::options()
+        .create_new(true)
+        .read(true)
+        .write(true)
+        .open(&path)
+        .unwrap();
+    first.write_all(b"abcdef").unwrap();
+    first.sync_all().unwrap();
+    first.seek(SeekFrom::Start(0)).unwrap();
+    let mut bytes = Vec::new();
+    first.read_to_end(&mut bytes).unwrap();
+    assert_eq!(bytes, b"abcdef");
+
+    let second = std::fs::File::open(&path).unwrap();
+    let mut bytes = [0; 6];
+    second.read_exact_at(&mut bytes, 0).unwrap();
+    assert_eq!(&bytes, b"abcdef");
+    first.write_all_at(b"XYZ", 1).unwrap();
+    first.sync_all().unwrap();
+    second.read_exact_at(&mut bytes, 0).unwrap();
+    assert_eq!(&bytes, b"aXYZef");
+
+    let mapping = unsafe {
+        libc::mmap(
+            std::ptr::null_mut(),
+            6,
+            libc::PROT_READ,
+            libc::MAP_SHARED,
+            first.as_raw_fd(),
+            0,
+        )
+    };
+    assert_eq!(mapping, libc::MAP_FAILED);
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::ENODEV)
+    );
+
+    drop(second);
+    drop(first);
+    let reopened = std::fs::File::open(&path).unwrap();
+    let mapping = unsafe {
+        libc::mmap(
+            std::ptr::null_mut(),
+            6,
+            libc::PROT_READ,
+            libc::MAP_SHARED,
+            reopened.as_raw_fd(),
+            0,
+        )
+    };
+    assert_ne!(mapping, libc::MAP_FAILED);
+    assert_eq!(
+        unsafe { std::slice::from_raw_parts(mapping.cast::<u8>(), 6) },
+        b"aXYZef"
+    );
+    assert_eq!(unsafe { libc::munmap(mapping, 6) }, 0);
+    drop(reopened);
+    client
+        .end_workspace_session(session.id, EndWorkspaceMode::Discard)
+        .unwrap();
     drop(client);
     drop(store);
     std::fs::remove_dir_all(root).unwrap();

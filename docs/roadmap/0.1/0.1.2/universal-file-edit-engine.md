@@ -204,6 +204,11 @@ proportional to its canonical extent representation.
   131,072 predicted minimum-size zero extents.
 - Approximately 64 KiB fixed FastCDC storage, plus separately measured existing
   candidate/cache/request/projection buffers.
+- A file handle returned by FUSE `create` uses direct I/O so large sequential
+  writes do not accumulate in the kernel page cache. Reads and writes remain
+  coherent through that handle and concurrent handles. Linux mmap on the open
+  create handle is rejected with `ENODEV`; after it closes, an ordinary reopen
+  uses the retained-cache policy and supports read-only mmap.
 - No complete-file allocation.
 - Owner-side focused checks target at most 112 MiB RSS; every mutation row has a
   128 MiB hard ceiling and zero swap.

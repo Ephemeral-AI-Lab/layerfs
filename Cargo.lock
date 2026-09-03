@@ -381,6 +381,7 @@ dependencies = [
  "layerfs-layerstack-store",
  "layerfs-monitor",
  "layerfs-workspace",
+ "libc",
 ]
 
 [[package]]

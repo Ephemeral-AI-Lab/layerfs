@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 Rust SDK reference
 
-> **Status:** Released compatibility record for `v0.1.2`.
+> **Status:** Draft compatibility record for the withdrawn `v0.1.2` candidate.
 
 The 0.1.2 release preserves the documented Client, Store, LayerStack,
 Layer, Branch, Commit, Workspace, Monitor, query, diff, execution, output,

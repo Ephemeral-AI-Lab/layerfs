@@ -3,6 +3,10 @@
 > **Status:** Draft evidence index. Final-candidate tables are being regenerated
 > under the prospectively expanded count-changing v3/v4 contract.
 
+All “final,” “authoritative,” and passing claims below describe the withdrawn
+campaign and are nonterminal until this file is replaced from exact-candidate
+evidence. They must not be used to publish or tag `v0.1.2`.
+
 The raw directories below are immutable local custody, not Git-tracked release
 assets. Each identity is the SHA-256 of that directory's `evidence.sha256`
 manifest. The tracked release record and issue comments publish the summary,

@@ -84,7 +84,7 @@ if [[ ${1:-} == --self-check ]]; then
 fi
 
 prepare_assets() {
-  local container=$1 source_seal product_seal harness_seal prepared stage workload_sha custody custody_sha source_commit source_tree image_id image_revision cache_name
+  local container=$1 source_seal product_seal harness_seal prepared stage workload_sha custody custody_sha custody_override source_commit source_tree image_id image_revision cache_name
   source_seal=$("$here/run-namespace.sh" --source-seal)
   product_seal=$("$here/run-namespace.sh" --product-seal)
   harness_seal=$("$here/run-namespace.sh" --harness-seal)
@@ -93,12 +93,33 @@ prepare_assets() {
   source_tree=$(git -C "$repo" rev-parse HEAD^{tree})
   image_id=$(docker inspect -f '{{.Image}}' "$container")
   image_revision=$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$container")
-  custody=${LAYERFS_ISSUE14_CUSTODY:-$repo/benchmark-results/fs-bench-pro/edit-engine-acceptance/issue14-terminal-r005-20260903}
-  [[ -f $custody/evidence.sha256 ]] || die "authoritative issue #14 custody is required"
+  if [[ -n ${LAYERFS_ISSUE14_CUSTODY:-} ]]; then
+    custody=$LAYERFS_ISSUE14_CUSTODY
+    custody_override=true
+  else
+    custody=$repo/benchmark-results/fs-bench-pro/edit-engine-acceptance/final-v012-issue14-$(git -C "$repo" rev-parse --short=8 HEAD)
+    custody_override=false
+  fi
+  [[ -f $custody/evidence.sha256 && -f $custody/custody.json && -f $custody/run-status.json && -f $custody/environment/commands.txt ]] || die "authoritative issue #14 custody is required"
+  custody=$(cd "$custody" && pwd -P)
+  (cd "$custody" && shasum -a 256 -c evidence.sha256 >/dev/null) || die "issue #14 custody seal"
+  grep -Eq '[ *](\./)?environment/commands\.txt$' "$custody/evidence.sha256" || die "issue #14 command evidence is not sealed"
+  python3 - "$custody/custody.json" "$custody/run-status.json" "$source_commit" "$source_tree" "$source_seal" "$product_seal" "$harness_seal" "$workload_sha" <<'PY' || die "issue #14 custody identity"
+import json,sys
+custody,status=json.load(open(sys.argv[1])),json.load(open(sys.argv[2]))
+commit,tree,source,product,harness,workload=sys.argv[3:]
+assert status['status']=='pass'
+assert custody['host_revision']==commit
+assert custody['source_tree']==tree
+assert custody['source_seal']==source
+assert custody['product_seal']==product
+assert custody['harness_seal']==harness
+assert custody['workload_sha256']==workload
+PY
   custody_sha=$(shasum -a 256 "$custody/evidence.sha256" | awk '{print $1}')
   [[ $(docker inspect -f '{{index .Config.Labels "dev.layerfs.source-seal"}}' "$container") == "$source_seal" ]] || die "container/source seal mismatch"
   prepared="$prepared_root/$source_seal"
-  if [[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/fixture-8m/payload.bin && -f $prepared/fixture-scale-1m/payload.bin && -f $prepared/fixture-scale-10m/payload.bin && -f $prepared/fixture-scale-100m/payload.bin && -f $prepared/issue14-r005-custody/evidence.sha256 ]] \
+  if [[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/fixture-8m/payload.bin && -f $prepared/fixture-scale-1m/payload.bin && -f $prepared/fixture-scale-10m/payload.bin && -f $prepared/fixture-scale-100m/payload.bin && -f $prepared/issue14-custody/evidence.sha256 ]] \
     && grep -Fx "source_seal=$source_seal" "$prepared/identity.txt" >/dev/null \
     && grep -Fx "product_seal=$product_seal" "$prepared/identity.txt" >/dev/null \
     && grep -Fx "harness_seal=$harness_seal" "$prepared/identity.txt" >/dev/null \
@@ -107,7 +128,9 @@ prepare_assets() {
     && grep -Fx "source_tree=$source_tree" "$prepared/identity.txt" >/dev/null \
     && grep -Fx "image_id=$image_id" "$prepared/identity.txt" >/dev/null \
     && grep -Fx "image_revision=$image_revision" "$prepared/identity.txt" >/dev/null \
-    && grep -Fx "issue14_evidence_sha256=$custody_sha" "$prepared/identity.txt" >/dev/null; then
+    && grep -Fx "issue14_evidence_sha256=$custody_sha" "$prepared/identity.txt" >/dev/null \
+    && grep -Fx "issue14_custody_path=$custody" "$prepared/identity.txt" >/dev/null \
+    && grep -Fx "issue14_custody_override=$custody_override" "$prepared/identity.txt" >/dev/null; then
     printf 'PASS prepared %s\n' "$prepared"
     return
   fi
@@ -142,14 +165,15 @@ PY
     printf 'workload_sha256=%s\n' "$workload_sha"
     printf 'image_id=%s\n' "$image_id"
     printf 'image_revision=%s\n' "$image_revision"
+    printf 'issue14_custody_path=%s\n' "$custody"
+    printf 'issue14_custody_override=%s\n' "$custody_override"
   } >"$stage/identity.txt"
   docker inspect "$container" >"$stage/container.json"
   docker image inspect "$(docker inspect -f '{{.Image}}' "$container")" >"$stage/image.json"
   docker version >"$stage/docker.txt"
   { uname -a; sw_vers 2>/dev/null || true; } >"$stage/host.txt"
-  mkdir "$stage/issue14-r005-custody"
-  cp "$custody/evidence.sha256" "$stage/issue14-r005-custody/evidence.sha256"
-  cp -R "$custody/environment" "$stage/issue14-r005-custody/environment"
+  mkdir "$stage/issue14-custody"
+  cp -R "$custody/." "$stage/issue14-custody/"
   printf 'issue14_evidence_sha256=%s\n' "$custody_sha" >>"$stage/identity.txt"
   mv "$stage" "$prepared"
   trap - EXIT
@@ -210,9 +234,24 @@ case "$mode" in
 esac
 
 for command in docker nc python3 shasum; do command -v "$command" >/dev/null || die "$command is required"; done
+if [[ $mode == admission ]]; then
+  git -C "$repo" diff-files --quiet || die "admission requires a clean tracked worktree"
+  git -C "$repo" diff-index --cached --quiet HEAD -- || die "admission requires an index equal to HEAD"
+  [[ $(git -C "$repo" write-tree) == $(git -C "$repo" rev-parse HEAD^{tree}) ]] || die "admission tree differs from HEAD"
+  [[ -z $(git -C "$repo" ls-files --others --exclude-standard -- Cargo.toml Cargo.lock crates tools benchmark/fs-bench-pro) ]] || die "admission has untracked image/product/harness inputs"
+  read -r image_revision image_tree image_dirty < <(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "org.opencontainers.image.source-tree"}} {{index .Config.Labels "dev.layerfs.source-dirty"}}' "$container")
+  [[ $image_revision == $(git -C "$repo" rev-parse HEAD) && $image_tree == $(git -C "$repo" rev-parse HEAD^{tree}) && $image_dirty == false ]] || die "admission candidate image is not clean HEAD"
+fi
 current_seal=$("$here/run-namespace.sh" --source-seal)
 prepared="$prepared_root/$current_seal"
 [[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/fixture-8m/payload.bin && -f $prepared/fixture-scale-1m/payload.bin && -f $prepared/fixture-scale-10m/payload.bin && -f $prepared/fixture-scale-100m/payload.bin ]] || die "run --prepare for this source/container identity first"
+grep -Fx "source_commit=$(git -C "$repo" rev-parse HEAD)" "$prepared/identity.txt" >/dev/null \
+  && grep -Fx "source_tree=$(git -C "$repo" rev-parse HEAD^{tree})" "$prepared/identity.txt" >/dev/null \
+  && grep -Fx "source_seal=$current_seal" "$prepared/identity.txt" >/dev/null \
+  && grep -Fx "product_seal=$("$here/run-namespace.sh" --product-seal)" "$prepared/identity.txt" >/dev/null \
+  && grep -Fx "workload_sha256=$(shasum -a 256 "$here/workload.rs" | awk '{print $1}')" "$prepared/identity.txt" >/dev/null \
+  && grep -Fx "image_id=$(docker inspect -f '{{.Image}}' "$container")" "$prepared/identity.txt" >/dev/null \
+  || die "prepared assets are not exact current custody"
 binary="$prepared/fs-benchmark-pro"
 oracle_workload="$prepared/fs-benchmark-workload"
 fixture_256="$prepared/fixture-256k"
@@ -283,7 +322,8 @@ cp "$prepared/host.txt" "$run_dir/environment/host.txt"
 cp "$prepared/container.json" "$run_dir/environment/prepared-container.json"
 cp "$prepared/image.json" "$run_dir/environment/image.json"
 cp "$prepared/static-edit-proof.json" "$run_dir/environment/static-edit-proof.json"
-cp -R "$prepared/issue14-r005-custody" "$run_dir/environment/issue14-r005-custody"
+cp -R "$prepared/issue14-custody" "$run_dir/environment/issue14-custody"
+grep '^issue14_' "$prepared/identity.txt" >"$run_dir/environment/issue14-custody.txt"
 if [[ $family_kind == count-changing && $source_arm == baseline-candidate ]]; then
   printf 'baseline_revision=%s\nbaseline_source_seal=%s\nbaseline_product_seal=%s\nbaseline_workload_sha256=%s\ncandidate_revision=%s\ncandidate_product_seal=%s\ncandidate_workload_sha256=%s\nbaseline_container_id=%s\ncandidate_container_id=%s\nbaseline_created=%s\ncandidate_created=%s\nmaximum_creation_skew_seconds=60\nproduct_source_diff=none\nattribution=portable-container-workload-implementation\n' \
     "$baseline_revision" "$baseline_source_seal" "$baseline_product_seal" "$baseline_workload" "$candidate_revision" "$candidate_product_seal" "$candidate_workload" "$baseline_container_id" "$candidate_container_id" "$baseline_created" "$candidate_created" >"$run_dir/environment/baseline-custody.txt"

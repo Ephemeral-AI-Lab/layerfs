@@ -13,3 +13,4 @@ layerfs-workspace = { path = "../layerfs-workspace" }
 
 [dev-dependencies]
 layerfs-layerstack-store = { path = "../layerfs-layerstack-store", features = ["test-instrumentation"] }
+libc = "0.2"

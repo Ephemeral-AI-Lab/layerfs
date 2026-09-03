@@ -81,6 +81,14 @@ elif [[ -n $baseline_run ]]; then
 fi
 
 for command in cargo docker nc python3 rustc sqlite3; do command -v "$command" >/dev/null || die "$command is required"; done
+if [[ $mode == admission ]]; then
+  git -C "$repo" diff-files --quiet || die "admission requires a clean tracked worktree"
+  git -C "$repo" diff-index --cached --quiet HEAD -- || die "admission requires an index equal to HEAD"
+  [[ $(git -C "$repo" write-tree) == $(git -C "$repo" rev-parse HEAD^{tree}) ]] || die "admission tree differs from HEAD"
+  [[ -z $(git -C "$repo" ls-files --others --exclude-standard -- Cargo.toml Cargo.lock crates tools benchmark/fs-bench-pro) ]] || die "admission has untracked image/product/harness inputs"
+  read -r image_revision image_tree image_dirty < <(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "org.opencontainers.image.source-tree"}} {{index .Config.Labels "dev.layerfs.source-dirty"}}' "$container")
+  [[ $image_revision == $(git -C "$repo" rev-parse HEAD) && $image_tree == $(git -C "$repo" rev-parse HEAD^{tree}) && $image_dirty == false ]] || die "admission candidate image is not clean HEAD"
+fi
 source_seal=$("$here/run-namespace.sh" --source-seal)
 product_seal=$("$here/run-namespace.sh" --product-seal)
 harness_seal=$("$here/run-namespace.sh" --harness-seal)

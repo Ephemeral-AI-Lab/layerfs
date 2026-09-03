@@ -13,6 +13,9 @@ benchmark reproduction, and design research—not production storage.
 - Workspaces are ephemeral. End never commits implicitly.
 - Managed FUSE requires a compatible Linux container runtime, `/dev/fuse`, and
   `CAP_SYS_ADMIN`; it is not a complete hostile-code security boundary.
+- A newly created FUSE file uses direct I/O until its create handle closes.
+  Same-handle and concurrent-handle I/O is coherent, but mmap on that create
+  handle returns `ENODEV`; close and reopen the file before mapping it.
 - The SDK, CLI, daemon, FUSE helper, and Store format must come from a
   compatible release identity.
 - Benchmark results are fixture- and host-specific evidence, not universal

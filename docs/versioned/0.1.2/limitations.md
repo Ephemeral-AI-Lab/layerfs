@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 limitations
 
-> **Status:** Released limitations for the `v0.1.2` Developer Preview.
+> **Status:** Draft limitations for the withdrawn `v0.1.2` release candidate.
 
 The [0.1.1 limitations](../0.1.1/limitations.md) remain in force: LayerFS is a
 Developer Preview, does not claim crash- or power-loss durability at every
@@ -14,6 +14,9 @@ Additional 0.1.2 qualifications:
   MacBook/Docker Desktop/Linux-FUSE environment, not universal guarantees;
 - owner-side range-edit batches must be non-empty and target one Workspace and
   one regular file; namespace and metadata changes remain filesystem operations;
+- a newly created FUSE file uses direct I/O until its create handle closes;
+  mmap on that handle returns `ENODEV`, while close/reopen restores the ordinary
+  retained-cache and read-only mmap behavior;
 - the retained SQLite Store misses the 600 MB primary footprint goal at
   661,061,632 bytes; authenticated physical packs are deferred to issue #18;
 - the metadata-cardinality verifier is an explicitly tolerated 63.659-second

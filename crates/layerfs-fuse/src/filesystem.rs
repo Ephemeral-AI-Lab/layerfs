@@ -534,6 +534,9 @@ impl Filesystem for LayerFs {
             Ok((self.attr(attr)?, handle))
         });
         match result {
+            // Created files bypass the kernel page cache so large sequential writes stay
+            // memory-bounded. These handles are coherent but not mmapable; a later open uses
+            // FOPEN_KEEP_CACHE and supports mmap after the create handle closes.
             Ok((attr, handle)) => reply.created(
                 &TTL,
                 &attr,
