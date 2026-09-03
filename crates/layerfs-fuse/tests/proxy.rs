@@ -40,7 +40,7 @@ impl FilesystemPort for Fixture {
         Ok(Attr {
             node,
             size: self.bytes.lock().unwrap().len() as u64,
-            kind: if node == NodeId(3) || node == NodeId(5) {
+            kind: if node == NodeId(1) || node == NodeId(3) || node == NodeId(5) {
                 Kind::Directory
             } else {
                 Kind::File
@@ -262,6 +262,82 @@ impl FilesystemPort for Fixture {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(())
     }
+}
+
+#[test]
+fn owner_edit_invalidates_warm_file_caches_without_remounting() {
+    let fixture = Arc::new(Fixture {
+        bytes: Mutex::new(vec![7; 128 * 1024]),
+        created: Mutex::new(Vec::new()),
+        links: Mutex::new(Vec::new()),
+        unlinks: Mutex::new(Vec::new()),
+        root_entries: 3,
+        lookups: std::sync::atomic::AtomicUsize::new(0),
+        readdirs: std::sync::atomic::AtomicUsize::new(0),
+        reservations: std::sync::atomic::AtomicUsize::new(0),
+        fsyncs: std::sync::atomic::AtomicUsize::new(0),
+        writes: std::sync::atomic::AtomicUsize::new(0),
+        renamed: std::sync::atomic::AtomicBool::new(false),
+        reject_mtimes: std::sync::atomic::AtomicBool::new(false),
+        reject_writes: std::sync::atomic::AtomicBool::new(false),
+    });
+    let host = ProxyHost::start(fixture.clone()).unwrap();
+    let client =
+        Arc::new(ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).unwrap());
+    let control = serve_remote_control(
+        ("127.0.0.1", host.port()),
+        host.capability(),
+        client.clone(),
+    )
+    .unwrap();
+    #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+    let mut mounted = if std::env::var_os("LAYERFS_LIVE_FUSE").is_some() {
+        let root = std::env::temp_dir().join(format!("layerfs-invalidate-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let mount = layerfs_fuse::mount_host(client.clone(), &root, 0, 0).unwrap();
+        client.set_notifier(mount.notifier().unwrap()).unwrap();
+        Some((root, mount))
+    } else {
+        None
+    };
+    assert!(host.invalidate_file(NodeId(2)).is_err(), "must be paused");
+    for (size, value) in [(256 * 1024, 9), (64 * 1024, 3), (64 * 1024, 5)] {
+        let previous = fixture.bytes.lock().unwrap().clone();
+        assert_eq!(client.attr(NodeId(2)).unwrap().size, previous.len() as u64);
+        assert_eq!(client.read(NodeId(2), 0, 4096).unwrap(), previous[..4096]);
+        assert_eq!(client.read(NodeId(2), 0, previous.len()).unwrap(), previous);
+        #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+        if let Some((root, _)) = &mounted {
+            assert_eq!(std::fs::read(root.join("file")).unwrap(), previous);
+        }
+        host.control("pause").unwrap();
+        assert!(host.invalidate_file(NodeId(0)).is_err());
+        let next = vec![value; size];
+        *fixture.bytes.lock().unwrap() = next.clone();
+        host.invalidate_file(NodeId(2)).unwrap();
+        host.control("resume").unwrap();
+        assert_eq!(client.attr(NodeId(2)).unwrap().size, size as u64);
+        assert_eq!(client.read(NodeId(2), 0, size).unwrap(), next);
+        #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+        if let Some((root, _)) = &mounted {
+            use std::os::unix::fs::MetadataExt;
+            let metadata = std::fs::metadata(root.join("file")).unwrap();
+            assert_eq!(metadata.ino(), 2);
+            assert_eq!(metadata.len(), size as u64);
+            assert_eq!(std::fs::read(root.join("file")).unwrap(), next);
+        }
+    }
+    std::thread::scope(|scope| {
+        let shutdown = scope.spawn(|| host.control("shutdown"));
+        control.wait_for_shutdown().unwrap();
+        #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+        if let Some((root, mount)) = mounted.as_mut() {
+            mount.unmount().unwrap();
+            std::fs::remove_dir(root).unwrap();
+        }
+        control.finish_shutdown(true).unwrap();
+        shutdown.join().unwrap().unwrap();
+    });
 }
 
 #[test]
