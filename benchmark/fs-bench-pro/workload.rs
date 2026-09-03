@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use std::fs::Metadata;
 use std::fs::{self, File, FileTimes, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     mpsc, Arc,
@@ -21,6 +21,10 @@ pub(crate) mod edit_same_count {
 #[allow(dead_code)]
 pub(crate) mod edit_count_changing {
     include!("families/edit_count_changing.rs");
+}
+#[allow(dead_code)]
+pub(crate) mod store_footprint {
+    include!("families/store_footprint.rs");
 }
 
 pub(crate) type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -670,6 +674,234 @@ fn hash_field(hash: &mut Sha256, bytes: &[u8]) {
     hash.update(bytes);
 }
 
+#[derive(Clone)]
+struct StoreFixtureRecord {
+    path: String,
+    size: u64,
+    mode: u32,
+    mtime_seconds: i64,
+    content_digest: [u8; 32],
+}
+
+fn store_tree_digest(records: &[StoreFixtureRecord]) -> String {
+    let mut hash = Sha256::new();
+    hash.update(b"layerfs/fs-bench-pro/store-footprint-tree/v1\0");
+    for record in records {
+        hash_field(&mut hash, record.path.as_bytes());
+        hash.update(&record.size.to_be_bytes());
+        hash.update(&record.mode.to_be_bytes());
+        hash.update(&record.mtime_seconds.to_be_bytes());
+        hash.update(&record.content_digest);
+    }
+    hex(&hash.finish())
+}
+
+fn store_metadata_seconds(kind: store_footprint::Kind, index: usize) -> i64 {
+    if kind == store_footprint::Kind::MetadataCardinality {
+        NAMESPACE_MTIME_SECONDS + index as i64 + 1
+    } else {
+        NAMESPACE_MTIME_SECONDS
+    }
+}
+
+fn set_store_file_metadata(path: &Path, seconds: i64) -> Result<()> {
+    use std::time::{Duration, UNIX_EPOCH};
+    let timestamp = UNIX_EPOCH + Duration::from_secs(u64::try_from(seconds)?);
+    fs::set_permissions(path, std::os::unix::fs::PermissionsExt::from_mode(NAMESPACE_FILE_MODE))?;
+    File::open(path)?.set_times(
+        FileTimes::new()
+            .set_accessed(timestamp)
+            .set_modified(timestamp),
+    )?;
+    Ok(())
+}
+
+fn update_store_edited_hash(
+    hash: &mut Sha256,
+    bytes: &[u8],
+    chunk_offset: u64,
+    edit_offset: u64,
+) -> Result<()> {
+    let chunk_end = chunk_offset + bytes.len() as u64;
+    let edit_end = edit_offset + NAMESPACE_EDIT_MARKER.len() as u64;
+    if chunk_end <= edit_offset || chunk_offset >= edit_end {
+        hash.update(bytes);
+        return Ok(());
+    }
+    let overlap_start = chunk_offset.max(edit_offset);
+    let overlap_end = chunk_end.min(edit_end);
+    let before = usize::try_from(overlap_start - chunk_offset)?;
+    let after = usize::try_from(overlap_end - chunk_offset)?;
+    let marker_start = usize::try_from(overlap_start - edit_offset)?;
+    let marker_end = usize::try_from(overlap_end - edit_offset)?;
+    hash.update(&bytes[..before]);
+    hash.update(&NAMESPACE_EDIT_MARKER[marker_start..marker_end]);
+    hash.update(&bytes[after..]);
+    Ok(())
+}
+
+fn create_store_footprint_fixture(root: &Path, control_id: &str, tier: u64) -> Result<()> {
+    let control = store_footprint::control(control_id)?;
+    if root.exists() || ![100, 1_000, 10_000, 100_000].contains(&tier) {
+        return Err("Store-footprint fixture arguments".into());
+    }
+    fs::create_dir(root)?;
+    let (scenario, files) = if control.kind == store_footprint::Kind::LargeObject {
+        let count = if tier == 100_000 { 100 } else { tier.min(100) };
+        let size = if tier == 100_000 { 5_000_000 } else { 1_000_000 };
+        let scenario = NamespaceScenario {
+            id: "store-footprint-large-object-500m",
+            alias: "store-footprint-large-object-500m",
+            display_name: "Store footprint large-object fixture",
+            regular_files: count,
+            data_directories: 1,
+            logical_bytes: count * size,
+            anchor_files: 0,
+            empty_files: 0,
+            tiny_files: 0,
+            small_files: 0,
+            medium_files: count,
+        };
+        let files = (0..count)
+            .map(|index| NamespaceFilePlan {
+                relative_path: format!("d0000/file-{index:05}.bin"),
+                class: NamespaceClass::Medium,
+                role: index,
+                relative_weight: 1,
+                size,
+            })
+            .collect();
+        (scenario, files)
+    } else {
+        let namespace_id = match tier {
+            100 => "namespace-100",
+            1_000 => "namespace-1000",
+            10_000 => "namespace-10000",
+            100_000 => "namespace-100000",
+            _ => unreachable!(),
+        };
+        let plan = namespace_plan(namespace_id)?;
+        (plan.scenario, plan.files)
+    };
+    for directory in 0..scenario.data_directories {
+        fs::create_dir(root.join(format!("d{directory:04}")))?;
+    }
+    let edit_path = files
+        .iter()
+        .find(|file| file.size > NAMESPACE_EDIT_MARKER.len() as u64)
+        .ok_or("Store-footprint edit target")?
+        .relative_path
+        .clone();
+    let edit_size = files
+        .iter()
+        .find(|file| file.relative_path == edit_path)
+        .ok_or("Store-footprint edit size")?
+        .size;
+    let edit_offset = namespace_edit_offset(edit_size)?;
+    let mut buffer = vec![0_u8; NAMESPACE_SCRATCH_BYTES];
+    let mut records = Vec::with_capacity(files.len());
+    let mut edited_digest = None;
+    for (index, file) in files.iter().enumerate() {
+        let path = root.join(&file.relative_path);
+        let mut output = File::create(&path)?;
+        let mut stream = NamespaceContentStream::new(scenario, file);
+        let mut digest = Sha256::new();
+        let mut edited = (file.relative_path == edit_path).then(Sha256::new);
+        let mut offset = 0_u64;
+        while offset < file.size {
+            let count = usize::try_from((file.size - offset).min(buffer.len() as u64))?;
+            stream.fill(&mut buffer[..count]);
+            output.write_all(&buffer[..count])?;
+            digest.update(&buffer[..count]);
+            if let Some(hash) = edited.as_mut() {
+                update_store_edited_hash(hash, &buffer[..count], offset, edit_offset)?;
+            }
+            offset += count as u64;
+        }
+        drop(output);
+        let mtime_seconds = store_metadata_seconds(control.kind, index);
+        set_store_file_metadata(&path, mtime_seconds)?;
+        let content_digest = digest.finish();
+        if let Some(hash) = edited {
+            edited_digest = Some(hash.finish());
+        }
+        records.push(StoreFixtureRecord {
+            path: file.relative_path.clone(),
+            size: file.size,
+            mode: NAMESPACE_FILE_MODE,
+            mtime_seconds,
+            content_digest,
+        });
+    }
+    for directory in 0..scenario.data_directories {
+        set_namespace_metadata(&root.join(format!("d{directory:04}")), true)?;
+    }
+    set_namespace_metadata(root, true)?;
+    let original = store_tree_digest(&records);
+    let target = records
+        .iter_mut()
+        .find(|record| record.path == edit_path)
+        .ok_or("Store-footprint edit record")?;
+    target.content_digest = edited_digest.ok_or("Store-footprint edited digest")?;
+    target.mtime_seconds = NAMESPACE_MTIME_SECONDS;
+    let edited = store_tree_digest(&records);
+    let logical_bytes: u64 = records.iter().map(|record| record.size).sum();
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"control_id\":\"{}\",\"tier\":{},\"reportable\":{},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"edit_path\":\"{}\",\"edit_size\":{},\"fixture_digest\":\"{}\",\"edited_fixture_digest\":\"{}\"}}",
+        store_footprint::FIXTURE_SCHEMA,
+        store_footprint::FAMILY_ID,
+        control.id,
+        tier,
+        tier == 100_000,
+        records.len(),
+        scenario.data_directories,
+        logical_bytes,
+        NAMESPACE_FILE_MODE,
+        NAMESPACE_DIRECTORY_MODE,
+        edit_path,
+        edit_size,
+        original,
+        edited,
+    );
+    Ok(())
+}
+
+fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
+    fn collect(root: &Path, path: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+        for entry in fs::read_dir(path)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                collect(root, &path, files)?;
+            } else if path.is_file() {
+                files.push(path.strip_prefix(root)?.to_owned());
+            }
+        }
+        Ok(())
+    }
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let mut paths = Vec::new();
+    collect(root, root, &mut paths)?;
+    paths.sort();
+    let mut records = Vec::with_capacity(paths.len());
+    for relative in paths {
+        let path = root.join(&relative);
+        let metadata = fs::metadata(&path)?;
+        let (_, digest) = digest(&path)?;
+        let bytes = (0..32)
+            .map(|index| u8::from_str_radix(&digest[index * 2..index * 2 + 2], 16))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        records.push(StoreFixtureRecord {
+            path: relative.to_string_lossy().into_owned(),
+            size: metadata.len(),
+            mode: metadata.permissions().mode() & 0o7777,
+            mtime_seconds: metadata.mtime(),
+            content_digest: bytes.try_into().map_err(|_| "Store digest")?,
+        });
+    }
+    let logical_bytes = records.iter().map(|record| record.size).sum();
+    Ok((records.len() as u64, logical_bytes, store_tree_digest(&records)))
+}
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("fs-benchmark-workload: {error}");
@@ -735,6 +967,32 @@ fn run() -> Result<()> {
             );
             Ok(())
         }
+        [command] if command == "store-footprint-list" => {
+            for control in store_footprint::CONTROLS {
+                println!("{}\t{}", control.id, control.display_name);
+            }
+            Ok(())
+        }
+        [command] if command == "store-footprint-self-check" => {
+            store_footprint::self_check()?;
+            println!("store-footprint-self-check=pass");
+            Ok(())
+        }
+        [command, case] if command == "store-footprint-resolve" => {
+            let control = store_footprint::control(case)?;
+            println!("{}\t{}", control.id, control.display_name);
+            Ok(())
+        }
+        [command, root, case, tier] if command == "store-footprint-fixture" => {
+            create_store_footprint_fixture(Path::new(root), case, tier.parse()?)
+        }
+        [command, root] if command == "store-footprint-digest" => {
+            let (files, logical_bytes, digest) = store_footprint_digest(Path::new(root))?;
+            println!("regular_files={files}");
+            println!("logical_bytes={logical_bytes}");
+            println!("tree_digest={digest}");
+            Ok(())
+        }
         [command] if command == "noop" => Ok(()),
         [command, path] if command == "digest" => print_digest(path),
         [command, path] if command == "read" => print_read(path),
@@ -790,7 +1048,7 @@ fn run() -> Result<()> {
             println!("{size}\t{digest}");
             Ok(())
         }
-        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | same-count-self-check | same-count-list | same-count-resolve CASE | same-count-control-resolve CASE | count-changing-self-check | count-changing-list | count-changing-resolve CASE | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | same-count-edit PATH CASE SEED | same-count-control-edit PATH CASE SEED | same-count-fragmented PATH COHORT COUNT SEED | count-changing-edit PATH CASE SEED | count-changing-proof PATH VERIFIER | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
+        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | same-count-self-check | same-count-list | same-count-resolve CASE | same-count-control-resolve CASE | count-changing-self-check | count-changing-list | count-changing-resolve CASE | store-footprint-self-check | store-footprint-list | store-footprint-resolve CASE | store-footprint-fixture ROOT CASE TIER | store-footprint-digest ROOT | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | same-count-edit PATH CASE SEED | same-count-control-edit PATH CASE SEED | same-count-fragmented PATH COHORT COUNT SEED | count-changing-edit PATH CASE SEED | count-changing-proof PATH VERIFIER | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
     }
 }
 
@@ -1427,6 +1685,7 @@ fn self_check() -> Result<()> {
     init_namespace::self_check()?;
     edit_same_count::self_check()?;
     edit_count_changing::self_check()?;
+    store_footprint::self_check()?;
     let root = std::env::temp_dir().join(format!(
         "fs-benchmark-pro-{}-{}",
         std::process::id(),

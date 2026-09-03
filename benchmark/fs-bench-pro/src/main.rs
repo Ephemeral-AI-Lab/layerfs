@@ -839,6 +839,37 @@ fn run() -> AnyResult<()> {
                 true,
             )
         }
+        [
+            command,
+            root,
+            fixture,
+            container,
+            control,
+            seed,
+            source,
+            expected_files,
+            expected_logical_bytes,
+            edit_path,
+            edit_size,
+            fixture_digest,
+            edited_digest,
+        ] if command == "store-footprint-performance" || command == "store-footprint-verify" => {
+            store_footprint_case(
+                Path::new(root),
+                Path::new(fixture),
+                ContainerId(container.to_string_lossy().into_owned()),
+                &control.to_string_lossy(),
+                seed.to_string_lossy().parse()?,
+                &source.to_string_lossy(),
+                expected_files.to_string_lossy().parse()?,
+                expected_logical_bytes.to_string_lossy().parse()?,
+                &edit_path.to_string_lossy(),
+                edit_size.to_string_lossy().parse()?,
+                &fixture_digest.to_string_lossy(),
+                &edited_digest.to_string_lossy(),
+                command == "store-footprint-verify",
+            )
+        }
         [command, root, fixture, oracle, container, source, seed]
             if command == "same-count-fragmentation-verify" =>
         {
@@ -892,6 +923,7 @@ fn self_check() -> AnyResult<()> {
     namespace_self_check()?;
     workload_source::edit_same_count::self_check()?;
     workload_source::edit_count_changing::self_check()?;
+    workload_source::store_footprint::self_check()?;
     println!("PASS fs-bench-pro one-Store lifecycle equations");
     Ok(())
 }
@@ -1498,6 +1530,21 @@ fn output_u64(output: &OutputPage, name: &str) -> AnyResult<u64> {
                 .collect::<Vec<_>>()
         })
         .find_map(|line| line.strip_prefix(&prefix)?.parse().ok())
+        .ok_or_else(|| format!("missing workload field: {name}").into())
+}
+
+fn output_string(output: &OutputPage, name: &str) -> AnyResult<String> {
+    let prefix = format!("{name}=");
+    output
+        .chunks
+        .iter()
+        .flat_map(|chunk| {
+            String::from_utf8_lossy(&chunk.bytes)
+                .lines()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .find_map(|line| line.strip_prefix(&prefix).map(str::to_owned))
         .ok_or_else(|| format!("missing workload field: {name}").into())
 }
 
@@ -3308,6 +3355,252 @@ fn independent_file_root(
     }
     let (root, _) = batch.finish()?;
     Ok(root)
+}
+
+fn store_owned_bytes(root: &Path) -> AnyResult<(u64, u64)> {
+    fn walk(path: &Path, files: &mut u64, bytes: &mut u64) -> AnyResult<()> {
+        for entry in std::fs::read_dir(path)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                walk(&path, files, bytes)?;
+            } else if path.is_file() {
+                *files = files.checked_add(1).ok_or("Store file count")?;
+                *bytes = bytes
+                    .checked_add(std::fs::metadata(path)?.len())
+                    .ok_or("Store durable bytes")?;
+            }
+        }
+        Ok(())
+    }
+    let (mut files, mut bytes) = (0, 0);
+    walk(root, &mut files, &mut bytes)?;
+    Ok((files, bytes))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn store_footprint_case(
+    root: &Path,
+    fixture: &Path,
+    container_id: ContainerId,
+    control_id: &str,
+    seed: u8,
+    source: &str,
+    expected_files: u64,
+    expected_logical_bytes: u64,
+    edit_path: &str,
+    edit_size: u64,
+    fixture_digest: &str,
+    edited_digest: &str,
+    verify: bool,
+) -> AnyResult<()> {
+    let control = workload_source::store_footprint::control(control_id)?;
+    if root.exists()
+        || !fixture.is_dir()
+        || !workload_source::store_footprint::SEEDS.contains(&seed)
+        || !matches!(source, "baseline" | "candidate")
+        || expected_files == 0
+        || expected_logical_bytes == 0
+        || edit_size <= workload_source::NAMESPACE_EDIT_MARKER.len() as u64
+        || edit_path.starts_with('/')
+        || edit_path.contains("..")
+        || !valid_digest(fixture_digest)
+        || !valid_digest(edited_digest)
+        || fixture_digest == edited_digest
+    {
+        return Err("Store-footprint arguments".into());
+    }
+    std::fs::create_dir(root)?;
+    let store_path = root.join("store.sqlite");
+    let process_before = process_resource_snapshot()?;
+    let container_before = container_cgroup_snapshot(&container_id)?;
+    let total_started = Instant::now();
+    let store = Arc::new(LayerStackStore::create(&store_path)?);
+    let client = Client::connect(store.clone())?;
+    let store_baseline_bytes = std::fs::metadata(&store_path)?.len();
+    let initialization_started = Instant::now();
+    let initialized = client.initialize_layerstack(
+        EntityName::new(format!("store-footprint-{source}-{seed}"))?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let initialization_ns = elapsed_ns(initialization_started);
+    let scans = store.take_layerstack_initialization_receipts();
+    let [scan] = scans.as_slice() else {
+        return Err("Store-footprint initialization receipt cardinality".into());
+    };
+    if scan.scanned_files != expected_files || scan.scanned_bytes != expected_logical_bytes {
+        return Err("Store-footprint fixture census".into());
+    }
+    let initialize_candidate = operation_candidate(
+        &client.monitor_snapshot()?,
+        OperationFamily::LayerStackInitialize,
+    )?;
+    let branch = client.fork_branch(
+        EntityName::new("main")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let workspace = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: WorkspacePlacement::Container {
+            container_id: container_id.clone(),
+            root: PathBuf::from(format!(
+                "/workspace/layerfs-store-footprint-{seed}-{}",
+                std::process::id()
+            )),
+        },
+        projection: Some(WorkspaceProjection::Fuse),
+    })?;
+    let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
+        .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    execute_workload(
+        &client,
+        workspace.id,
+        vec![
+            workload.clone(),
+            OsString::from("namespace-edit"),
+            OsString::from(edit_path),
+        ],
+    )?;
+    let commit_started = Instant::now();
+    let head = match client.commit_workspace_session(workspace.id)? {
+        WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
+        result => return Err(format!("Store-footprint Commit failed: {result:?}").into()),
+    };
+    visible_head(&client, branch, head)?;
+    let commit_ns = elapsed_ns(commit_started);
+    client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
+        return Err("Store-footprint cleanup".into());
+    }
+    let snapshot = client.monitor_snapshot()?;
+    let commit_candidate = operation_candidate(&snapshot, OperationFamily::WorkspaceCommit)?;
+    let commit_receipt = operation_workspace_commit(&snapshot)?;
+    drop(client);
+    drop(store);
+
+    let reopen_started = Instant::now();
+    let reopened_store = Arc::new(LayerStackStore::connect(&store_path)?);
+    let reopened = Client::connect(reopened_store.clone())?;
+    visible_head(&reopened, branch, head)?;
+    let pinned = reopened_store.pin_branch(branch)?;
+    let commit_id = head.ok_or("Store-footprint missing Commit")?;
+    if reopened_store
+        .commit(commit_id)?
+        .ok_or("Store-footprint Commit record")?
+        .root_id
+        != pinned.root
+    {
+        return Err("Store-footprint reopened root".into());
+    }
+    let canonical = reopened_store.canonical_storage()?;
+    let storage = reopened_store.storage_snapshot()?;
+    let reopen_ns = elapsed_ns(reopen_started);
+    let mut verification_ns = 0;
+    if verify {
+        let verification_started = Instant::now();
+        let reopened_workspace = reopened.create_workspace_session(CreateWorkspaceSession {
+            branch_id: branch,
+            placement: WorkspacePlacement::Container {
+                container_id: container_id.clone(),
+                root: PathBuf::from(format!(
+                    "/workspace/layerfs-store-footprint-verify-{seed}-{}",
+                    std::process::id()
+                )),
+            },
+            projection: Some(WorkspaceProjection::Fuse),
+        })?;
+        let output = execute_workload(
+            &reopened,
+            reopened_workspace.id,
+            vec![
+                workload,
+                OsString::from("store-footprint-digest"),
+                OsString::from("."),
+            ],
+        )?;
+        if output_u64(&output, "regular_files")? != expected_files
+            || output_u64(&output, "logical_bytes")? != expected_logical_bytes
+            || output_string(&output, "tree_digest")? != edited_digest
+        {
+            return Err("Store-footprint exact reopen digest".into());
+        }
+        reopened.end_workspace_session(reopened_workspace.id, EndWorkspaceMode::Clean)?;
+        verification_ns = elapsed_ns(verification_started);
+    }
+    if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
+        return Err("Store-footprint reopened cleanup".into());
+    }
+    drop(reopened);
+    drop(reopened_store);
+    let (durable_files, total_durable_store_bytes) = store_owned_bytes(root)?;
+    let sqlite_database_bytes = storage.database_bytes;
+    let other_durable_store_bytes = total_durable_store_bytes
+        .checked_sub(sqlite_database_bytes)
+        .ok_or("Store-footprint durable equation")?;
+    let process_after = process_resource_snapshot()?;
+    let container_after = container_cgroup_snapshot(&container_id)?;
+    if process_before.swaps != 0
+        || process_after.swaps != 0
+        || container_before.swap_current != 0
+        || container_after.swap_current != 0
+        || container_before.oom != container_after.oom
+        || container_before.oom_kill != container_after.oom_kill
+    {
+        return Err("Store-footprint swap or OOM".into());
+    }
+    let schema = if verify {
+        workload_source::store_footprint::VERIFICATION_SCHEMA
+    } else {
+        workload_source::store_footprint::PERFORMANCE_SCHEMA
+    };
+    println!(
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"control_id\":\"{}\",\"display_name\":\"{}\",\"mode\":\"{}\",\"source_arm\":\"{}\",\"seed\":{},\"fixture_digest\":\"{}\",\"edited_fixture_digest\":\"{}\",\"regular_files\":{},\"logical_bytes\":{},\"initialization_ns\":{},\"commit_ns\":{},\"reopen_ns\":{},\"verification_ns\":{},\"complete_ns\":{},\"store_baseline_bytes\":{},\"sqlite_database_bytes\":{},\"other_durable_store_bytes\":{},\"total_durable_store_bytes\":{},\"durable_store_files\":{},\"canonical_objects\":{},\"canonical_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"commit_candidate_objects\":{},\"commit_candidate_bytes\":{},\"commit_payload_bytes_read\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_peak_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"cleanup_status\":\"pass\",\"status\":\"pass\"}}",
+        schema,
+        workload_source::store_footprint::FAMILY_ID,
+        control.id,
+        control.display_name,
+        if verify { "verify" } else { "performance" },
+        source,
+        seed,
+        fixture_digest,
+        edited_digest,
+        expected_files,
+        expected_logical_bytes,
+        initialization_ns,
+        commit_ns,
+        reopen_ns,
+        verification_ns,
+        elapsed_ns(total_started),
+        store_baseline_bytes,
+        sqlite_database_bytes,
+        other_durable_store_bytes,
+        total_durable_store_bytes,
+        durable_files,
+        canonical.objects,
+        canonical.encoded_bytes,
+        initialize_candidate.candidate_objects,
+        initialize_candidate.candidate_bytes,
+        commit_candidate.candidate_objects,
+        commit_candidate.candidate_bytes,
+        commit_receipt.payload_bytes_read,
+        resource_delta(process_after.user_cpu_ns, process_before.user_cpu_ns, "Store user CPU")?,
+        resource_delta(
+            process_after.system_cpu_ns,
+            process_before.system_cpu_ns,
+            "Store system CPU",
+        )?,
+        resource_delta(process_after.disk_read_bytes, process_before.disk_read_bytes, "Store reads")?,
+        resource_delta(
+            process_after.disk_write_bytes,
+            process_before.disk_write_bytes,
+            "Store writes",
+        )?,
+        process_after.peak_resident_bytes,
+        process_after.physical_footprint_bytes,
+        container_after.memory_peak,
+    );
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
