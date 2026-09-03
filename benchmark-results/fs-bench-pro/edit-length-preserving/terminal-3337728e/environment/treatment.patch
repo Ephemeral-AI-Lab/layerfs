@@ -1,0 +1,681 @@
+diff --git a/crates/layerfs-fuse/src/bin/layerfs-fuse.rs b/crates/layerfs-fuse/src/bin/layerfs-fuse.rs
+index 4b9bf5fd..b1508890 100644
+--- a/crates/layerfs-fuse/src/bin/layerfs-fuse.rs
++++ b/crates/layerfs-fuse/src/bin/layerfs-fuse.rs
+@@ -47,7 +47,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
+     let endpoint = endpoint.to_str().ok_or("endpoint text")?;
+     let client = Arc::new(layerfs_fuse::ProxyClient::connect(endpoint, capability)?);
+     let control = layerfs_fuse::serve_remote_control(endpoint, capability, client.clone())?;
+-    let mut mount = layerfs_fuse::mount_host(client, &mountpoint, 0, 0)?;
++    let mut mount = layerfs_fuse::mount_host(client.clone(), &mountpoint, 0, 0)?;
++    client.set_notifier(mount.notifier()?)?;
+     println!("READY");
+     let mountpoint_text = mountpoint.to_string_lossy();
+     let mountinfo_text = std::fs::read_to_string("/proc/self/mountinfo")?;
+diff --git a/crates/layerfs-fuse/src/host_mount.rs b/crates/layerfs-fuse/src/host_mount.rs
+index c47c5f53..69ee80b9 100644
+--- a/crates/layerfs-fuse/src/host_mount.rs
++++ b/crates/layerfs-fuse/src/host_mount.rs
+@@ -8,6 +8,17 @@ pub struct HostMount {
+ }
+ 
+ impl HostMount {
++    pub fn notifier(&self) -> std::io::Result<fuser::Notifier> {
++        self.session
++            .as_ref()
++            .map(BackgroundSession::notifier)
++            .ok_or_else(|| std::io::Error::other("LayerFS mount ended"))
++    }
++
++    pub fn invalidate_file(&self, node: crate::NodeId) -> std::io::Result<()> {
++        self.notifier()?.inval_inode(fuser::INodeNo(node.0), 0, 0)
++    }
++
+     pub fn unmount(&mut self) -> std::io::Result<()> {
+         if let Some(session) = self.session.take() {
+             if session.umount_and_join().is_ok() {
+diff --git a/crates/layerfs-fuse/src/proxy_client.rs b/crates/layerfs-fuse/src/proxy_client.rs
+index 5257dec4..bab2c118 100644
+--- a/crates/layerfs-fuse/src/proxy_client.rs
++++ b/crates/layerfs-fuse/src/proxy_client.rs
+@@ -23,10 +23,13 @@ pub struct ProxyClient {
+     write_buffer: Mutex<Option<BufferedWrite>>,
+     reservation: Mutex<Reservation>,
+     gate: RwLock<()>,
++    callbacks: RwLock<()>,
+     paused: AtomicBool,
+     pending: AtomicU64,
+     metrics: AtomicFuseWriteMetrics,
+     read_metrics: AtomicFuseReadMetrics,
++    #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++    notifier: std::sync::OnceLock<fuser::Notifier>,
+ }
+ 
+ #[derive(Default)]
+@@ -103,10 +106,13 @@ impl ProxyClient {
+             write_buffer: Mutex::new(None),
+             reservation: Mutex::new(Reservation::default()),
+             gate: RwLock::new(()),
++            callbacks: RwLock::new(()),
+             paused: AtomicBool::new(false),
+             pending: AtomicU64::new(0),
+             metrics: AtomicFuseWriteMetrics::default(),
+             read_metrics: AtomicFuseReadMetrics::default(),
++            #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++            notifier: std::sync::OnceLock::new(),
+         };
+         Ok(client)
+     }
+@@ -116,6 +122,14 @@ impl ProxyClient {
+         self.exchange_at(index, request)
+     }
+ 
++    fn enter_callback(&self) -> PortResult<std::sync::RwLockReadGuard<'_, ()>> {
++        let guard = self.callbacks.read().map_err(|_| PortError::Io)?;
++        if self.paused.load(Ordering::Acquire) {
++            return Err(PortError::Busy);
++        }
++        Ok(guard)
++    }
++
+     fn exchange_at(&self, index: usize, request: Request) -> PortResult<Response> {
+         let _gate = self.gate.write().map_err(|_| PortError::Io)?;
+         if self.paused.load(Ordering::Acquire) {
+@@ -293,6 +307,8 @@ impl ProxyClient {
+ 
+     #[doc(hidden)]
+     pub fn pause(&self) -> PortResult<()> {
++        // Drain complete callbacks, including cache fills after transport replies.
++        let _callbacks = self.callbacks.write().map_err(|_| PortError::Io)?;
+         let _gate = self.gate.write().map_err(|_| PortError::Io)?;
+         self.flush_pending_locked()?;
+         self.barrier_locked()?;
+@@ -305,6 +321,36 @@ impl ProxyClient {
+         self.paused.store(false, Ordering::Release);
+     }
+ 
++    #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++    pub fn set_notifier(&self, notifier: fuser::Notifier) -> std::io::Result<()> {
++        self.notifier
++            .set(notifier)
++            .map_err(|_| std::io::Error::other("LayerFS notifier already set"))
++    }
++
++    fn invalidate_file(&self, node: NodeId) -> PortResult<()> {
++        let _callbacks = self.callbacks.write().map_err(|_| PortError::Io)?;
++        let _gate = self.gate.write().map_err(|_| PortError::Io)?;
++        if node.0 == 0 || !self.paused.load(Ordering::Acquire) {
++            return Err(PortError::Invalid);
++        }
++        self.cache
++            .lock()
++            .map_err(|_| PortError::Io)?
++            .attrs
++            .remove(&node);
++        self.invalidate_read_ahead(node)?;
++        // A mounted proxy must invalidate both kernel attributes and file pages.
++        // Unmounted protocol clients have no kernel cache to invalidate.
++        #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++        if let Some(notifier) = self.notifier.get() {
++            notifier
++                .inval_inode(fuser::INodeNo(node.0), 0, 0)
++                .map_err(|_| PortError::Io)?;
++        }
++        Ok(())
++    }
++
+     fn barrier_locked(&self) -> PortResult<()> {
+         self.synchronize_locked(None)
+     }
+@@ -350,6 +396,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn lookup(&self, parent: NodeId, name: &[u8]) -> PortResult<Attr> {
++        let _callback = self.enter_callback()?;
+         if let Some(cached) = self.cached_lookup(parent, name)? {
+             return cached;
+         }
+@@ -365,6 +412,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn attr(&self, node: NodeId) -> PortResult<Attr> {
++        let _callback = self.enter_callback()?;
+         if let Some(attr) = self
+             .cache
+             .lock()
+@@ -385,10 +433,12 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn readlink(&self, node: NodeId) -> PortResult<Vec<u8>> {
++        let _callback = self.enter_callback()?;
+         bytes(self.exchange_at(self.node_stream(node), Request::Readlink(node))?)
+     }
+ 
+     fn readdir(&self, node: NodeId) -> PortResult<Vec<(NodeId, Kind, Vec<u8>)>> {
++        let _callback = self.enter_callback()?;
+         self.barrier()?;
+         if let Some(entries) = self.cached_readdir(node)? {
+             return Ok(entries);
+@@ -403,6 +453,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn readdirplus(&self, node: NodeId) -> PortResult<Vec<(Attr, Vec<u8>)>> {
++        let _callback = self.enter_callback()?;
+         self.barrier()?;
+         if let Some(entries) = self.cached_readdirplus(node)? {
+             return Ok(entries);
+@@ -417,6 +468,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn create_file(&self, parent: NodeId, name: &[u8], mode: u32) -> PortResult<Attr> {
++        let _callback = self.enter_callback()?;
+         self.flush_unlink_for(parent, name)?;
+         let attr = attr(self.exchange(Request::CreateFile(parent, name.to_vec(), mode))?)?;
+         self.remember(parent, name, attr)?;
+@@ -424,6 +476,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn create_file_open(&self, parent: NodeId, name: &[u8], mode: u32) -> PortResult<Attr> {
++        let _callback = self.enter_callback()?;
+         self.flush_unlink_for(parent, name)?;
+         let reservable = self
+             .cache
+@@ -472,6 +525,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn mkdir(&self, parent: NodeId, name: &[u8], mode: u32) -> PortResult<Attr> {
++        let _callback = self.enter_callback()?;
+         self.flush_unlink_for(parent, name)?;
+         let reservable = self
+             .cache
+@@ -506,6 +560,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn symlink(&self, parent: NodeId, name: &[u8], target: Vec<u8>) -> PortResult<Attr> {
++        let _callback = self.enter_callback()?;
+         self.flush_unlink_for(parent, name)?;
+         let attr = attr(self.exchange(Request::Symlink(parent, name.to_vec(), target))?)?;
+         self.remember(parent, name, attr)?;
+@@ -513,6 +568,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn link(&self, node: NodeId, parent: NodeId, name: &[u8]) -> PortResult<Attr> {
++        let _callback = self.enter_callback()?;
+         self.flush_pending_create(node)?;
+         self.flush_unlink_for(parent, name)?;
+         let attr = attr(self.exchange(Request::Link(node, parent, name.to_vec()))?)?;
+@@ -521,6 +577,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn unlink(&self, parent: NodeId, name: &[u8], directory: bool) -> PortResult<()> {
++        let _callback = self.enter_callback()?;
+         self.flush_write()?;
+         let pending = self
+             .cache
+@@ -565,6 +622,7 @@ impl FilesystemPort for ProxyClient {
+         new_name: &[u8],
+         no_replace: bool,
+     ) -> PortResult<()> {
++        let _callback = self.enter_callback()?;
+         self.flush_write()?;
+         let moved = self
+             .cache
+@@ -642,6 +700,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn pin(&self, node: NodeId, truncate: bool, writable: bool) -> PortResult<()> {
++        let _callback = self.enter_callback()?;
+         self.flush_pending_create(node)?;
+         if !truncate && !writable {
+             return self.send_at(self.node_stream(node), Request::PinRead(node));
+@@ -651,6 +710,8 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn unpin(&self, node: NodeId, writable: bool) -> PortResult<()> {
++        // Releases remain permitted while paused so owner quiescence can drain handles.
++        let _callback = self.callbacks.read().map_err(|_| PortError::Io)?;
+         let _gate = self.gate.write().map_err(|_| PortError::Io)?;
+         self.flush_write_locked()?;
+         self.invalidate_read_ahead(node)?;
+@@ -698,6 +759,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn read(&self, node: NodeId, offset: u64, size: usize) -> PortResult<Vec<u8>> {
++        let _callback = self.enter_callback()?;
+         self.read_metrics.note_kernel_read(size as u64);
+         self.flush_pending_create(node)?;
+         self.flush_write_for(node)?;
+@@ -744,6 +806,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn write(&self, node: NodeId, offset: u64, value: &[u8]) -> PortResult<usize> {
++        let _callback = self.enter_callback()?;
+         self.metrics.note_kernel_write(value.len() as u64);
+         self.invalidate_read_ahead(node)?;
+         if is_zero(value) {
+@@ -800,6 +863,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn truncate(&self, node: NodeId, size: u64) -> PortResult<()> {
++        let _callback = self.enter_callback()?;
+         self.flush_write()?;
+         self.invalidate_read_ahead(node)?;
+         if size == 0 {
+@@ -829,6 +893,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn chmod(&self, node: NodeId, mode: u32) -> PortResult<()> {
++        let _callback = self.enter_callback()?;
+         self.flush_write()?;
+         {
+             let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
+@@ -855,6 +920,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn set_mtime(&self, node: NodeId, seconds: i64, nanos: u32) -> PortResult<()> {
++        let _callback = self.enter_callback()?;
+         self.flush_write()?;
+         {
+             let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
+@@ -886,6 +952,7 @@ impl FilesystemPort for ProxyClient {
+     }
+ 
+     fn fsync(&self, node: Option<NodeId>) -> PortResult<()> {
++        let _callback = self.enter_callback()?;
+         if let Some(node) = node {
+             self.flush_pending_create(node)?;
+         }
+@@ -1293,6 +1360,15 @@ pub fn serve_remote_control(
+                 metrics.write_to(&mut stream)?;
+                 continue;
+             }
++            if command == [b'i'] {
++                let mut node = [0; 8];
++                stream.read_exact(&mut node)?;
++                let accepted = client
++                    .invalidate_file(NodeId(u64::from_le_bytes(node)))
++                    .is_ok();
++                stream.write_all(&[u8::from(accepted)])?;
++                continue;
++            }
+             let accepted = u8::from(apply_control(&client, command[0]).is_ok());
+             stream.write_all(&[accepted])?;
+         }
+@@ -1349,6 +1425,73 @@ mod tests {
+     use std::net::{TcpListener, TcpStream};
+     use std::sync::Arc;
+ 
++    #[test]
++    fn metadata_cache_fill_is_inside_owner_pause_barrier() {
++        let (stream, mut server) = stream_pair();
++        let client = ProxyClient {
++            streams: vec![Mutex::new(stream)],
++            next: AtomicUsize::new(0),
++            cache: Mutex::new(Cache::default()),
++            write_buffer: Mutex::new(None),
++            reservation: Mutex::new(Reservation::default()),
++            gate: RwLock::new(()),
++            callbacks: RwLock::new(()),
++            paused: AtomicBool::new(false),
++            pending: AtomicU64::new(0),
++            metrics: AtomicFuseWriteMetrics::default(),
++            read_metrics: AtomicFuseReadMetrics::default(),
++            #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++            notifier: std::sync::OnceLock::new(),
++        };
++        let old = Attr {
++            node: NodeId(2),
++            size: 6,
++            kind: Kind::File,
++            mode: 0o600,
++            links: 1,
++            mtime_seconds: 0,
++            mtime_nanoseconds: 0,
++        };
++        std::thread::scope(|scope| {
++            let request = scope.spawn(|| client.attr(NodeId(2)));
++            assert!(matches!(
++                read_request(&mut server).unwrap(),
++                Request::Attr(NodeId(2))
++            ));
++            let cache = client.cache.lock().unwrap();
++            write_response(&mut server, &Response::Attr(old)).unwrap();
++            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
++            loop {
++                if client.gate.try_write().is_ok() {
++                    break;
++                }
++                assert!(
++                    std::time::Instant::now() < deadline,
++                    "response did not drain"
++                );
++                std::thread::yield_now();
++            }
++            // The transport has finished, but the callback cannot fill its cache yet.
++            assert!(client.callbacks.try_write().is_err());
++            drop(cache);
++            assert_eq!(request.join().unwrap().unwrap(), old);
++        });
++        client.pause().unwrap();
++        client.invalidate_file(NodeId(2)).unwrap();
++        assert!(client.cache.lock().unwrap().attrs.is_empty());
++        client.resume();
++        std::thread::scope(|scope| {
++            let request = scope.spawn(|| client.attr(NodeId(2)));
++            assert!(matches!(
++                read_request(&mut server).unwrap(),
++                Request::Attr(NodeId(2))
++            ));
++            let new = Attr { size: 9, ..old };
++            write_response(&mut server, &Response::Attr(new)).unwrap();
++            assert_eq!(request.join().unwrap().unwrap(), new);
++        });
++    }
++
+     #[test]
+     fn multi_stream_barrier_drains_every_stream_after_the_first_error() {
+         let (client_a, mut server_a) = stream_pair();
+@@ -1383,10 +1526,13 @@ mod tests {
+             write_buffer: Mutex::new(None),
+             reservation: Mutex::new(Reservation::default()),
+             gate: RwLock::new(()),
++            callbacks: RwLock::new(()),
+             paused: AtomicBool::new(false),
+             pending: AtomicU64::new(2),
+             metrics: AtomicFuseWriteMetrics::default(),
+             read_metrics: AtomicFuseReadMetrics::default(),
++            #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++            notifier: std::sync::OnceLock::new(),
+         };
+ 
+         assert_eq!(client.barrier_locked(), Err(PortError::NoSpace));
+@@ -1409,10 +1555,13 @@ mod tests {
+             })),
+             reservation: Mutex::new(Reservation::default()),
+             gate: RwLock::new(()),
++            callbacks: RwLock::new(()),
+             paused: AtomicBool::new(false),
+             pending: AtomicU64::new(0),
+             metrics: AtomicFuseWriteMetrics::default(),
+             read_metrics: AtomicFuseReadMetrics::default(),
++            #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++            notifier: std::sync::OnceLock::new(),
+         };
+ 
+         client.flush_write_for(NodeId(3)).unwrap();
+diff --git a/crates/layerfs-fuse/src/proxy_host.rs b/crates/layerfs-fuse/src/proxy_host.rs
+index ff024f3a..5e992bc6 100644
+--- a/crates/layerfs-fuse/src/proxy_host.rs
++++ b/crates/layerfs-fuse/src/proxy_host.rs
+@@ -173,6 +173,23 @@ impl ProxyHost {
+         }
+     }
+ 
++    pub fn invalidate_file(&self, node: crate::NodeId) -> PortResult<()> {
++        let mut slot = self.control_stream()?;
++        let stream = slot.as_mut().expect("control stream");
++        let mut frame = [b'i'; 9];
++        frame[1..].copy_from_slice(&node.0.to_le_bytes());
++        stream.write_all(&frame).map_err(|_| PortError::Io)?;
++        let mut accepted = [0];
++        stream
++            .read_exact(&mut accepted)
++            .map_err(|_| PortError::Io)?;
++        if accepted == [1] {
++            Ok(())
++        } else {
++            Err(PortError::Io)
++        }
++    }
++
+     pub fn take_write_metrics(&self) -> PortResult<crate::FuseWriteMetrics> {
+         let mut slot = self.control_stream()?;
+         let stream = slot.as_mut().expect("control stream");
+diff --git a/crates/layerfs-fuse/tests/proxy.rs b/crates/layerfs-fuse/tests/proxy.rs
+index 076ca2b8..238c104a 100644
+--- a/crates/layerfs-fuse/tests/proxy.rs
++++ b/crates/layerfs-fuse/tests/proxy.rs
+@@ -40,7 +40,7 @@ impl FilesystemPort for Fixture {
+         Ok(Attr {
+             node,
+             size: self.bytes.lock().unwrap().len() as u64,
+-            kind: if node == NodeId(3) || node == NodeId(5) {
++            kind: if node == NodeId(1) || node == NodeId(3) || node == NodeId(5) {
+                 Kind::Directory
+             } else {
+                 Kind::File
+@@ -264,6 +264,82 @@ impl FilesystemPort for Fixture {
+     }
+ }
+ 
++#[test]
++fn owner_edit_invalidates_warm_file_caches_without_remounting() {
++    let fixture = Arc::new(Fixture {
++        bytes: Mutex::new(vec![7; 128 * 1024]),
++        created: Mutex::new(Vec::new()),
++        links: Mutex::new(Vec::new()),
++        unlinks: Mutex::new(Vec::new()),
++        root_entries: 3,
++        lookups: std::sync::atomic::AtomicUsize::new(0),
++        readdirs: std::sync::atomic::AtomicUsize::new(0),
++        reservations: std::sync::atomic::AtomicUsize::new(0),
++        fsyncs: std::sync::atomic::AtomicUsize::new(0),
++        writes: std::sync::atomic::AtomicUsize::new(0),
++        renamed: std::sync::atomic::AtomicBool::new(false),
++        reject_mtimes: std::sync::atomic::AtomicBool::new(false),
++        reject_writes: std::sync::atomic::AtomicBool::new(false),
++    });
++    let host = ProxyHost::start(fixture.clone()).unwrap();
++    let client =
++        Arc::new(ProxyClient::connect(("127.0.0.1", host.port()), host.capability()).unwrap());
++    let control = serve_remote_control(
++        ("127.0.0.1", host.port()),
++        host.capability(),
++        client.clone(),
++    )
++    .unwrap();
++    #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++    let mut mounted = if std::env::var_os("LAYERFS_LIVE_FUSE").is_some() {
++        let root = std::env::temp_dir().join(format!("layerfs-invalidate-{}", std::process::id()));
++        std::fs::create_dir(&root).unwrap();
++        let mount = layerfs_fuse::mount_host(client.clone(), &root, 0, 0).unwrap();
++        client.set_notifier(mount.notifier().unwrap()).unwrap();
++        Some((root, mount))
++    } else {
++        None
++    };
++    assert!(host.invalidate_file(NodeId(2)).is_err(), "must be paused");
++    for (size, value) in [(256 * 1024, 9), (64 * 1024, 3), (64 * 1024, 5)] {
++        let previous = fixture.bytes.lock().unwrap().clone();
++        assert_eq!(client.attr(NodeId(2)).unwrap().size, previous.len() as u64);
++        assert_eq!(client.read(NodeId(2), 0, 4096).unwrap(), previous[..4096]);
++        assert_eq!(client.read(NodeId(2), 0, previous.len()).unwrap(), previous);
++        #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++        if let Some((root, _)) = &mounted {
++            assert_eq!(std::fs::read(root.join("file")).unwrap(), previous);
++        }
++        host.control("pause").unwrap();
++        assert!(host.invalidate_file(NodeId(0)).is_err());
++        let next = vec![value; size];
++        *fixture.bytes.lock().unwrap() = next.clone();
++        host.invalidate_file(NodeId(2)).unwrap();
++        host.control("resume").unwrap();
++        assert_eq!(client.attr(NodeId(2)).unwrap().size, size as u64);
++        assert_eq!(client.read(NodeId(2), 0, size).unwrap(), next);
++        #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++        if let Some((root, _)) = &mounted {
++            use std::os::unix::fs::MetadataExt;
++            let metadata = std::fs::metadata(root.join("file")).unwrap();
++            assert_eq!(metadata.ino(), 2);
++            assert_eq!(metadata.len(), size as u64);
++            assert_eq!(std::fs::read(root.join("file")).unwrap(), next);
++        }
++    }
++    std::thread::scope(|scope| {
++        let shutdown = scope.spawn(|| host.control("shutdown"));
++        control.wait_for_shutdown().unwrap();
++        #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
++        if let Some((root, mount)) = mounted.as_mut() {
++            mount.unmount().unwrap();
++            std::fs::remove_dir(root).unwrap();
++        }
++        control.finish_shutdown(true).unwrap();
++        shutdown.join().unwrap().unwrap();
++    });
++}
++
+ #[test]
+ fn capability_scopes_a_bounded_typed_proxy_session() {
+     let fixture = Arc::new(Fixture {
+diff --git a/crates/layerfs-workspace/src/docker.rs b/crates/layerfs-workspace/src/docker.rs
+index 7fc10997..b3d394a1 100644
+--- a/crates/layerfs-workspace/src/docker.rs
++++ b/crates/layerfs-workspace/src/docker.rs
+@@ -341,6 +341,12 @@ impl DockerProjection {
+         self.control("resume")
+     }
+ 
++    pub(crate) fn invalidate_file(&self, node: layerfs_fuse::NodeId) -> WorkspaceResult<()> {
++        self.proxy
++            .invalidate_file(node)
++            .map_err(|_| WorkspaceError::InvalidPlacement)
++    }
++
+     pub(crate) fn take_write_metrics(&self) -> WorkspaceResult<layerfs_fuse::FuseWriteMetrics> {
+         self.proxy
+             .take_write_metrics()
+diff --git a/crates/layerfs-workspace/src/lifecycle.rs b/crates/layerfs-workspace/src/lifecycle.rs
+index 37d4caf7..d01e8da7 100644
+--- a/crates/layerfs-workspace/src/lifecycle.rs
++++ b/crates/layerfs-workspace/src/lifecycle.rs
+@@ -670,9 +670,9 @@ impl Workspaces {
+                     .map(|edit| (edit.start, edit.delete_len, edit.replacement))
+                     .collect(),
+             );
+-            Ok((result, checkpoint))
++            Ok((result, checkpoint, node))
+         })();
+-        let (result, checkpoint) = match result {
++        let (result, checkpoint, node) = match result {
+             Ok(value) => value,
+             Err(error) => {
+                 crate::projection::resume(&worker)?;
+@@ -688,7 +688,7 @@ impl Workspaces {
+             crate::projection::resume(&worker)?;
+             return Err(error.into());
+         }
+-        match crate::projection::refresh(&worker, self.daemon_mount_owner()?) {
++        match crate::projection::refresh_file(&worker, node, self.daemon_mount_owner()?) {
+             Ok(()) => Ok(()),
+             Err(refresh_error) => {
+                 let restored = worker
+@@ -697,7 +697,8 @@ impl Workspaces {
+                     .map_err(|_| WorkspaceError::WorkspaceBusy)?
+                     .restore_edit(checkpoint);
+                 if restored.is_err()
+-                    || crate::projection::refresh(&worker, self.daemon_mount_owner()?).is_err()
++                    || crate::projection::refresh_file(&worker, node, self.daemon_mount_owner()?)
++                        .is_err()
+                 {
+                     if let Ok(mut workspace) = worker.workspace.lock() {
+                         workspace.presentation_failed = true;
+@@ -1034,6 +1035,61 @@ mod tests {
+         })
+     }
+ 
++    #[test]
++    #[cfg(all(target_os = "linux", feature = "host-fuse"))]
++    fn live_fuse_owner_edit_invalidates_warm_pages_and_rolls_back_resume_failure() {
++        if std::env::var_os("LAYERFS_LIVE_FUSE").is_none() {
++            return;
++        }
++        use std::os::unix::fs::MetadataExt;
++        let (root, workspaces, branch, store) = fixture("live-invalidation");
++        let session = workspaces
++            .create_workspace_session(CreateWorkspaceSession {
++                branch_id: branch,
++                placement: crate::WorkspacePlacement::Host {
++                    root: root.join("mount"),
++                },
++                projection: Some(WorkspaceProjection::Fuse),
++            })
++            .unwrap();
++        let file = root.join("mount/file");
++        let inode = std::fs::metadata(&file).unwrap().ino();
++        let branch_before = store.pin_branch(branch).unwrap().root;
++        assert_eq!(std::fs::read(&file).unwrap(), b"abcdef");
++        crate::projection::inject_resume_failure_once();
++        assert!(prepend(&workspaces, session.id).is_err());
++        assert_eq!(std::fs::read(&file).unwrap(), b"abcdef");
++        assert_eq!(store.pin_branch(branch).unwrap().root, branch_before);
++        assert!(
++            !workspaces
++                .worker(session.id)
++                .unwrap()
++                .workspace
++                .lock()
++                .unwrap()
++                .presentation_failed
++        );
++        prepend(&workspaces, session.id).unwrap();
++        assert_eq!(std::fs::read(&file).unwrap(), b"Pabcdef");
++        assert_eq!(std::fs::metadata(&file).unwrap().ino(), inode);
++        assert_eq!(std::fs::metadata(&file).unwrap().len(), 7);
++        workspaces
++            .edit_workspace_file_range(WorkspaceFileRangeEdit {
++                workspace_id: session.id,
++                path: "file".into(),
++                start: 1,
++                delete_len: 6,
++                replacement: crate::WorkspaceFileReplacement::Inline(b"Q".to_vec()),
++            })
++            .unwrap();
++        assert_eq!(std::fs::read(&file).unwrap(), b"PQ");
++        assert_eq!(std::fs::metadata(&file).unwrap().ino(), inode);
++        workspaces
++            .end_workspace_session(session.id, EndWorkspaceMode::Discard)
++            .unwrap();
++        std::fs::remove_dir_all(root).unwrap();
++    }
++
+     #[test]
+     fn failed_projection_refresh_restores_exact_state_and_retry_once() {
+         let (root, workspaces, branch, store) = fixture("refresh-rollback");
+diff --git a/crates/layerfs-workspace/src/projection.rs b/crates/layerfs-workspace/src/projection.rs
+index 5dcfbf41..a8c9c13b 100644
+--- a/crates/layerfs-workspace/src/projection.rs
++++ b/crates/layerfs-workspace/src/projection.rs
+@@ -389,6 +389,33 @@ fn discard_stage(stage: &Path) {
+     }
+ }
+ 
++pub(crate) fn refresh_file(
++    worker: &Arc<WorkspaceWorker>,
++    node: NodeId,
++    daemon: Option<&crate::daemon::DaemonOwner>,
++) -> WorkspaceResult<()> {
++    {
++        let handle = worker
++            .projection_handle
++            .lock()
++            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
++        match handle.as_ref() {
++            Some(ProjectionHandle::Materialized(_)) | None => {
++                drop(handle);
++                return refresh(worker, daemon);
++            }
++            Some(ProjectionHandle::Docker(projection)) => {
++                projection.invalidate_file(layerfs_fuse::NodeId(node.0))?;
++            }
++            #[cfg(all(target_os = "linux", feature = "host-fuse"))]
++            Some(ProjectionHandle::Fuse(mount)) => {
++                mount.invalidate_file(layerfs_fuse::NodeId(node.0))?;
++            }
++        }
++    }
++    resume(worker)
++}
++
+ pub(crate) fn refresh(
+     worker: &Arc<WorkspaceWorker>,
+     daemon: Option<&crate::daemon::DaemonOwner>,

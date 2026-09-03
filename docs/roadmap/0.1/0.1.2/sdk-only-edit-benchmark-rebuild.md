@@ -648,6 +648,26 @@ public_sdk_edit_call_count == 1
 
 ### File-size parity
 
+**Final user-approved interpretation, 2026-09-04:** the cross-size parity
+formula below remains binding for `edit_call_ns` only. Cross-size Commit and
+combined spreads are reported diagnostics, not admission blockers. Accepted
+absolute medians remain 20/20/30 ms (nominal 10/10/20). Describe size-stable
+localized edits with bounded Commit latency; do not claim size-independent
+Commit. This supersedes the older all-three-metrics requirement below, without
+changing matched-operation parity, numerical memory limits under the approved
+observation scopes, correctness, mutation semantics, or source integrity.
+Subsequent explicit user review accepts exactly these recorded discrepancies:
+length-changing delete-middle Edit cross-size spread 2.571958 ms;
+replace-shrink Edit cross-size spread 2.111083 ms; and delete versus truncate
+at 1 MiB Edit spread 2.484458 ms. Preserve their original 2 ms strict-rule
+failures as diagnostics, not nominal passes. No other Edit exception is
+authorized. Matched-operation Commit/combined spreads are also diagnostic,
+consistent with bounded Commit acceptance; matched-operation Edit remains
+binding except for the one reviewed delete/truncate case.
+Final classification records both the immutable collection policy/source and
+this explicitly approved acceptance policy. Original raw rows and prior
+classifications remain unchanged.
+
 For a fixed family, operation/outcome, and source arm, apply this formula
 independently to the medians of `edit_call_ns`, `commit_call_ns`, and
 `edit_commit_ns`. Let `m_N` be the chosen metric at tier `N` and
@@ -1170,6 +1190,20 @@ Before implementation or collection:
 ## Completion gates
 
 ### Documentation-only finalization bridge
+
+**Final approved-policy bridge:** the terminal producer remains pinned to
+`3337728e9846a200d7a5cc08d076de18f1d5436c` and its original contract. The final
+documentation commit records the explicitly approved parity interpretation
+above; its contract hash is separately pinned. A separately identified final
+consumer may recognize the producer's unavailable-attribution field alias and
+apply only those approved classification changes, without modifying raw rows,
+source proofs, or the frozen producer report. It must retain every original
+finding and fail on any other resource/correctness/identity failure. Product,
+compiled source, harness, lockfile, workload, preparation, and frozen report
+and custody helpers remain byte-identical. The performance-first amendment
+requires one full repository-gate sequence on the documentation-complete
+checkout, not the two sequences described historically below. A subsequent
+evidence-only commit may add gate/terminal artifacts and the selector JSON.
 
 Retain the exact measured candidate revision and its repository-gate receipts.
 After its family evidence passes, generated human reports and evidence may be

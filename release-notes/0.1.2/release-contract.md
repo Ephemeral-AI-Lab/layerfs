@@ -1,13 +1,15 @@
 # LayerFS 0.1.2 release contract
 
-> **Status:** Unreleased draft contract; no release candidate exists.
+> **Status:** Unreleased draft contract; SDK-only evidence is available, publication is not authorized.
 
 LayerFS 0.1.2 preserves the documented patch-level public API, CLI, daemon,
 canonical identity, and Store-format compatibility boundary. The universal
 regular-file edit engine is supporting implementation work.
 
-Publication additionally requires issue #20's three complete SDK-only edit
-families to pass every latency, parity, no-amplification, process/cgroup memory,
-verification, cleanup, and custody gate on the exact release source. A tag,
-GitHub Release, archive, or checksum manifest created before that proof is not
-a valid v0.1.2 release.
+Issue #20's three complete SDK-only families are evaluated under the explicitly
+approved latency/parity and ack-window-v1 observation policy in
+[benchmark results](benchmark-results.md). The [selector](sdk-edit-evidence.json)
+binds final admission to exact evidence and repository gates. Publication
+additionally requires parent #12's separate release-finalization decision and
+validation of the exact release source. No tag, Release, or asset is created
+or authorized by issue #20 completion.

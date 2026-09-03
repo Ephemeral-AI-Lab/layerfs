@@ -1,0 +1,1 @@
+{"schema":"fs-bench-pro-sdk-edit-self-check-v1","family_id":"edit_length_changing","registered_ids":32,"registry_manifest_sha256":"b6e8d0ab87a2ed72234623198994a460484bd950a04bb81a99a9aecda06c4390","combined_registry_sha256":"1773c7b82f739eaf1c2b8a2877f56baaa7e72b26ac8980802bdb82c80e270af6","rotations":[0,13,26,7,20],"elapsed_ns":742166,"container_started":false,"status":"pass"}

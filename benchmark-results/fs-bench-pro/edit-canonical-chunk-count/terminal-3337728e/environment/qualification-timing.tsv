@@ -1,0 +1,13 @@
+scenario_id	qualification_wall_ns	clone_wall_ns	clone_method	clone_store_sha256
+overwrite-fixed-64k-chunk-count-preserve-on-1mib-ops-1	20384959	8629583	apfs-clone	c765b055b8009913b98f296a3b42669819de22e9a6b5a9073400b33f9ddc035c
+overwrite-fixed-64k-chunk-count-preserve-on-10mib-ops-1	20180750	19187334	apfs-clone	89fafc4b35a4bf44904c8d5436039ee330020744bbe617c241ecc02fb34d9580
+overwrite-fixed-64k-chunk-count-preserve-on-100mib-ops-1	21709917	97563000	apfs-clone	39c69a88e97d1f32851bd709f8a75afe5095b62f6f7eba32d8c026f7b94c74f0
+overwrite-fixed-64k-chunk-count-preserve-on-500mib-ops-1	20213917	493120208	apfs-clone	44d85b4593e1b246b49e341681a6103402fda47cdf626ca9de114f67171eeb81
+overwrite-fixed-64k-chunk-count-increase-on-1mib-ops-1	20900666	9958333	apfs-clone	c765b055b8009913b98f296a3b42669819de22e9a6b5a9073400b33f9ddc035c
+overwrite-fixed-64k-chunk-count-increase-on-10mib-ops-1	21449167	17740875	apfs-clone	89fafc4b35a4bf44904c8d5436039ee330020744bbe617c241ecc02fb34d9580
+overwrite-fixed-64k-chunk-count-increase-on-100mib-ops-1	21386250	122049250	apfs-clone	39c69a88e97d1f32851bd709f8a75afe5095b62f6f7eba32d8c026f7b94c74f0
+overwrite-fixed-64k-chunk-count-increase-on-500mib-ops-1	19132375	464401958	apfs-clone	44d85b4593e1b246b49e341681a6103402fda47cdf626ca9de114f67171eeb81
+overwrite-fixed-64k-chunk-count-decrease-on-1mib-ops-1	21067583	8433417	apfs-clone	c765b055b8009913b98f296a3b42669819de22e9a6b5a9073400b33f9ddc035c
+overwrite-fixed-64k-chunk-count-decrease-on-10mib-ops-1	20928000	18703375	apfs-clone	89fafc4b35a4bf44904c8d5436039ee330020744bbe617c241ecc02fb34d9580
+overwrite-fixed-64k-chunk-count-decrease-on-100mib-ops-1	21320167	122571084	apfs-clone	39c69a88e97d1f32851bd709f8a75afe5095b62f6f7eba32d8c026f7b94c74f0
+overwrite-fixed-64k-chunk-count-decrease-on-500mib-ops-1	19998917	487885000	apfs-clone	44d85b4593e1b246b49e341681a6103402fda47cdf626ca9de114f67171eeb81

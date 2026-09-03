@@ -1,10 +1,10 @@
 # LayerFS 0.1.2
 
-> **Status:** Current planning checklist; no release candidate exists.
+> **Status:** SDK-only terminal evidence collected and verified; v0.1.2 remains unreleased.
 
 LayerFS 0.1.1 is the active released Developer Preview. LayerFS 0.1.2 is
-unreleased and publication-blocked by
-[issue #20](https://github.com/Ephemeral-AI-Lab/layerfs/issues/20). Parent issue
+unreleased. SDK-only evidence for
+[issue #20](https://github.com/Ephemeral-AI-Lab/layerfs/issues/20) is linked below. Parent issue
 [#12](https://github.com/Ephemeral-AI-Lab/layerfs/issues/12) remains open.
 
 ## Ordered work
@@ -17,7 +17,7 @@ unreleased and publication-blocked by
 | #15 prior count-changing POSIX family | closed; archival evidence only |
 | #16 Store-footprint evidence | retained supporting evidence |
 | #19 earlier rebuild draft | closed as superseded |
-| #20 SDK-only edit benchmark rebuild | open release blocker |
+| #20 SDK-only edit benchmark rebuild | 560 samples and 112 proofs; final admission recorded by evidence selector |
 
 ## Active edit registry
 
@@ -38,9 +38,16 @@ outside issue #20.
 
 The terminal directional campaign contains 280 baseline and 280 candidate
 performance rows in the frozen alternating order, plus 56 aggregate verifier
-receipts with 112 source-arm subproofs. Strict latency, parity,
-no-amplification, phase-local process/cgroup memory, verification, cleanup, and
-custody gates must all pass on one exact clean candidate.
+receipts with 112 passing source-arm subproofs. The measured candidate is
+`3337728e9846a200d7a5cc08d076de18f1d5436c`, with baseline
+`dc7aeff9a7e4f9e849a48022142f86801273f0bd`. Both use the identical harness.
+
+The [full timing and memory tables](../../../../benchmark-results/fs-bench-pro/sdk-edit-terminal/final-3337728e/report.md)
+retain nominal versus tolerance-only results, three approved Edit-parity
+exceptions, and all original strict findings. Accepted median ceilings are
+20/20/30 ms; nominal targets are 10/10/20 ms. Commit spreads are diagnostic,
+not proof of size-independent Commit. Memory uses approved `ack-window-v1`
+observations and native lifetime bounds, not exact-phase proof.
 
 ## Historical disposition
 
@@ -57,7 +64,7 @@ synthetic or extrapolated claim.
 ## Completion
 
 - [x] Benchmark policy and issue #20 specification frozen before code changes.
-- [ ] Three SDK-only family definitions and runners implement exactly 56 IDs.
-- [ ] 560 terminal performance rows and all 56 verifier receipts pass.
-- [ ] All repository and evidence-custody gates pass on the exact clean candidate.
-- [ ] Issue #20 is closed with exact evidence; parent #12 remains open.
+- [x] Three SDK-only family definitions and runners implement exactly 56 IDs.
+- [x] 560 terminal performance rows and all 56 verifier receipts pass the approved final policy.
+- Final repository-gate status and checked source bridge: [evidence selector](../../../../release-notes/0.1.2/sdk-edit-evidence.json).
+- Issue closure is recorded on GitHub after final verification and push; parent #12 stays open.
