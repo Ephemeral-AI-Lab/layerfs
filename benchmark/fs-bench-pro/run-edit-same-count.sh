@@ -84,20 +84,37 @@ if [[ ${1:-} == --self-check ]]; then
 fi
 
 prepare_assets() {
-  local container=$1 source_seal product_seal harness_seal prepared stage workload_sha custody
+  local container=$1 source_seal product_seal harness_seal prepared stage workload_sha custody custody_sha source_commit source_tree image_id image_revision cache_name
   source_seal=$("$here/run-namespace.sh" --source-seal)
   product_seal=$("$here/run-namespace.sh" --product-seal)
   harness_seal=$("$here/run-namespace.sh" --harness-seal)
   workload_sha=$(shasum -a 256 "$here/workload.rs" | awk '{print $1}')
+  source_commit=$(git -C "$repo" rev-parse HEAD)
+  source_tree=$(git -C "$repo" rev-parse HEAD^{tree})
+  image_id=$(docker inspect -f '{{.Image}}' "$container")
+  image_revision=$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$container")
+  custody=${LAYERFS_ISSUE14_CUSTODY:-$repo/benchmark-results/fs-bench-pro/edit-engine-acceptance/issue14-terminal-r005-20260903}
+  [[ -f $custody/evidence.sha256 ]] || die "authoritative issue #14 custody is required"
+  custody_sha=$(shasum -a 256 "$custody/evidence.sha256" | awk '{print $1}')
   [[ $(docker inspect -f '{{index .Config.Labels "dev.layerfs.source-seal"}}' "$container") == "$source_seal" ]] || die "container/source seal mismatch"
   prepared="$prepared_root/$source_seal"
   if [[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/fixture-8m/payload.bin && -f $prepared/fixture-scale-1m/payload.bin && -f $prepared/fixture-scale-10m/payload.bin && -f $prepared/fixture-scale-100m/payload.bin && -f $prepared/issue14-r005-custody/evidence.sha256 ]] \
     && grep -Fx "source_seal=$source_seal" "$prepared/identity.txt" >/dev/null \
     && grep -Fx "product_seal=$product_seal" "$prepared/identity.txt" >/dev/null \
     && grep -Fx "harness_seal=$harness_seal" "$prepared/identity.txt" >/dev/null \
-    && grep -Fx "workload_sha256=$workload_sha" "$prepared/identity.txt" >/dev/null; then
+    && grep -Fx "workload_sha256=$workload_sha" "$prepared/identity.txt" >/dev/null \
+    && grep -Fx "source_commit=$source_commit" "$prepared/identity.txt" >/dev/null \
+    && grep -Fx "source_tree=$source_tree" "$prepared/identity.txt" >/dev/null \
+    && grep -Fx "image_id=$image_id" "$prepared/identity.txt" >/dev/null \
+    && grep -Fx "image_revision=$image_revision" "$prepared/identity.txt" >/dev/null \
+    && grep -Fx "issue14_evidence_sha256=$custody_sha" "$prepared/identity.txt" >/dev/null; then
     printf 'PASS prepared %s\n' "$prepared"
     return
+  fi
+  if [[ -e $prepared ]]; then
+    cache_name=${prepared##*/}
+    [[ ${#cache_name} -eq 64 && $cache_name != *[!0-9a-f]* && $prepared == "$prepared_root/$cache_name" ]] || die "prepared cache path"
+    rm -rf -- "$prepared"
   fi
   mkdir -p "$prepared_root"
   stage=$(mktemp -d "$prepared_root/.prepare.XXXXXX")
@@ -117,25 +134,23 @@ for path,size in zip(sys.argv[1:],(8,1,10,100)):
 PY
   static_edit_proof >"$stage/static-edit-proof.json"
   {
-    printf 'source_commit=%s\n' "$(git -C "$repo" rev-parse HEAD)"
-    printf 'source_tree=%s\n' "$(git -C "$repo" rev-parse HEAD^{tree})"
+    printf 'source_commit=%s\n' "$source_commit"
+    printf 'source_tree=%s\n' "$source_tree"
     printf 'source_seal=%s\n' "$source_seal"
     printf 'product_seal=%s\n' "$product_seal"
     printf 'harness_seal=%s\n' "$harness_seal"
     printf 'workload_sha256=%s\n' "$workload_sha"
-    printf 'image_id=%s\n' "$(docker inspect -f '{{.Image}}' "$container")"
-    printf 'image_revision=%s\n' "$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$container")"
+    printf 'image_id=%s\n' "$image_id"
+    printf 'image_revision=%s\n' "$image_revision"
   } >"$stage/identity.txt"
   docker inspect "$container" >"$stage/container.json"
   docker image inspect "$(docker inspect -f '{{.Image}}' "$container")" >"$stage/image.json"
   docker version >"$stage/docker.txt"
   { uname -a; sw_vers 2>/dev/null || true; } >"$stage/host.txt"
-  custody="$repo/benchmark-results/fs-bench-pro/edit-engine-acceptance/issue14-terminal-r005-20260903"
-  [[ -f $custody/evidence.sha256 ]] || die "authoritative issue #14 r005 custody is required"
   mkdir "$stage/issue14-r005-custody"
   cp "$custody/evidence.sha256" "$stage/issue14-r005-custody/evidence.sha256"
   cp -R "$custody/environment" "$stage/issue14-r005-custody/environment"
-  printf 'issue14_r005_evidence_sha256=%s\n' "$(shasum -a 256 "$custody/evidence.sha256" | awk '{print $1}')" >>"$stage/identity.txt"
+  printf 'issue14_evidence_sha256=%s\n' "$custody_sha" >>"$stage/identity.txt"
   mv "$stage" "$prepared"
   trap - EXIT
   printf 'PASS prepared %s\n' "$prepared"
