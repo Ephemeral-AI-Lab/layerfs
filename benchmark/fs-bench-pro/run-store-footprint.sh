@@ -9,7 +9,7 @@ prepared_root=${LAYERFS_STORE_PREPARED_ROOT:-${TMPDIR:-/tmp}/layerfs-fs-bench-pr
 primary_control=store-footprint-unique-100000
 evidence_version=v3
 
-die() { printf 'fs-bench-pro Store footprint: %s\n' "$*" >&2; exit 2; }
+die() { failure_reason=$*; printf 'fs-bench-pro Store footprint: %s\n' "$*" >&2; exit 2; }
 
 self_check() {
   local scratch started elapsed
@@ -177,6 +177,7 @@ seal_failed_run() {
   [[ $status != 0 && ! -f $run_dir/evidence.sha256 ]] || exit "$status"
   set +e
   printf '%s\n' "${failure_reason:-unhandled runner failure}" >"$run_dir/environment/failure.txt"
+  printf '{"schema":"fs-bench-pro-store-failure-context-v1","case":"%s","seed":"%s","sample_mode":"%s","exit_status":"%s","timeout_seconds":"%s"}\n' "${failure_case:-not-started}" "${failure_seed:-not-started}" "${failure_mode:-not-started}" "${failure_status:-unknown}" "${failure_timeout:-unknown}" >"$run_dir/environment/failure-context.json"
   python3 - "$run_dir/run-status.json" "$evidence_version" "$mode" "$source_arm" "${failure_reason:-unhandled runner failure}" <<'PY'
 import json,sys
 json.dump({'schema':f'fs-bench-pro-store-footprint-status-{sys.argv[2]}','mode':sys.argv[3],'source_arm':sys.argv[4],'status':'hard-failure','admission_eligible':False,'reason':sys.argv[5]},open(sys.argv[1],'w'),sort_keys=True,separators=(',',':'));open(sys.argv[1],'a').write('\n')
@@ -235,9 +236,14 @@ PY
   ensure_daemon
   nonce=$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')
   if [[ $sample_mode == verify ]]; then timeout_seconds=60; elif [[ $mode == admission ]]; then timeout_seconds=30; else timeout_seconds=5; fi
+  failure_case=$control
+  failure_seed=$sample_seed
+  failure_mode=$sample_mode
+  failure_timeout=$timeout_seconds
   sample_started=$(python3 -c 'import time; print(time.monotonic_ns())')
   set +e
   /usr/bin/time -l -p perl -e 'alarm shift; exec @ARGV' "$timeout_seconds" env LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE="$nonce" \
+    LAYERFS_BENCH_INITIALIZATION_SEED_HEX="$fixture_digest" \
     LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload \
     LAYERFS_EXEC_TRANSPORT=daemon LAYERFS_FUSE_TRANSPORT=daemon \
     LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
@@ -246,6 +252,7 @@ PY
     "$control" "$sample_seed" "$source_arm" "$expected_files" "$expected_logical" "$edit_path" "$edit_size" \
     "$fixture_digest" "$edited_digest" >"$sample_dir/raw.jsonl" 2>"$sample_dir/supervisor.txt"
   status=$?
+  failure_status=$status
   set -e
   printf '%s\n' "$status" >"$sample_dir/exit-status.txt"
   [[ $status == 0 ]] || die "$sample_mode failed: $control seed $sample_seed"
@@ -310,9 +317,21 @@ PY
   cat "$sample_dir/result.json" >>"$raw_target"
 }
 
+precondition_fixture() {
+  local control=$1 fixture_dir manifest expected output
+  fixture_dir=$(fixture_for "$control")
+  manifest="$fixture_dir/manifest.json"
+  expected=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["fixture_digest"])' "$manifest")
+  mkdir -p "$run_dir/environment/preconditioning"
+  output="$run_dir/environment/preconditioning/$control.txt"
+  "$oracle_workload" store-footprint-digest "$fixture_dir/fixture" >"$output"
+  grep -Fx "tree_digest=$expected" "$output" >/dev/null || die "fixture preconditioning digest: $control"
+}
+
 if [[ $mode == performance || $mode == verify ]]; then
   run_sample "$selection" "$seed" "$mode"
 else
+  while IFS=$'\t' read -r control _; do precondition_fixture "$control"; done <"$mapfile"
   while IFS=$'\t' read -r control _; do for sample_seed in 1 2 3; do run_sample "$control" "$sample_seed" performance; done; done <"$mapfile"
   while IFS=$'\t' read -r control _; do run_sample "$control" 1 verify; done <"$mapfile"
 fi
@@ -390,7 +409,7 @@ if mode=='admission':
   summary.update({'status':('target-pass' if accepted_status in ('target-pass','local-step-exception') else 'tolerated-pass') if eligible else 'no-go','admission_eligible':eligible})
 else:
  summary['status']='performance-complete-verification-not-run' if mode=='performance' else 'target-pass'
- summary['admission_eligible']=mode=='verify'
+ summary['admission_eligible']=False
 (root/'performance/summary.json').write_text(json.dumps(performance_summary,sort_keys=True,separators=(',',':'))+'\n')
 (root/'verification/summary.json').write_text(json.dumps(verification_summary,sort_keys=True,separators=(',',':'))+'\n')
 (root/'summary.json').write_text(json.dumps(summary,sort_keys=True,separators=(',',':'))+'\n')

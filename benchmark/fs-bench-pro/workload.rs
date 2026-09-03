@@ -872,32 +872,46 @@ fn create_store_footprint_fixture(root: &Path, control_id: &str, tier: u64) -> R
 
 fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
-    fn file_record(root: &Path, path: &Path) -> Result<StoreFixtureRecord> {
+    fn file_record(root: &Path, path: &Path, buffer: &mut [u8]) -> Result<StoreFixtureRecord> {
         let relative = path.strip_prefix(root)?;
-        let metadata = fs::metadata(path)?;
-        let (_, digest) = digest(path)?;
-        let mut content_digest = [0_u8; 32];
-        for (index, byte) in content_digest.iter_mut().enumerate() {
-            *byte = u8::from_str_radix(&digest[index * 2..index * 2 + 2], 16)?;
+        let mut file = File::open(path)?;
+        let metadata = file.metadata()?;
+        let mut digest = Sha256::new();
+        let mut size = 0_u64;
+        loop {
+            let read = file.read(buffer)?;
+            if read == 0 {
+                break;
+            }
+            digest.update(&buffer[..read]);
+            size = size.checked_add(read as u64).ok_or("Store digest size")?;
+        }
+        if size != metadata.len() {
+            return Err("Store file changed during digest".into());
         }
         Ok(StoreFixtureRecord {
             path: relative.to_string_lossy().into_owned(),
             size: metadata.len(),
             mode: metadata.permissions().mode() & 0o7777,
             mtime_seconds: metadata.mtime(),
-            content_digest,
+            content_digest: digest.finish(),
         })
     }
-    fn collect_records(root: &Path, path: &Path) -> Result<Vec<StoreFixtureRecord>> {
+    fn collect_records(
+        root: &Path,
+        path: &Path,
+        buffer: &mut [u8],
+    ) -> Result<Vec<StoreFixtureRecord>> {
         let mut entries = fs::read_dir(path)?.collect::<std::io::Result<Vec<_>>>()?;
         entries.sort_unstable_by_key(|entry| entry.file_name());
         let mut output = Vec::with_capacity(entries.len());
         for entry in entries {
             let path = entry.path();
-            if path.is_dir() {
-                output.extend(collect_records(root, &path)?);
-            } else if path.is_file() {
-                output.push(file_record(root, &path)?);
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                output.extend(collect_records(root, &path, buffer)?);
+            } else if file_type.is_file() {
+                output.push(file_record(root, &path, buffer)?);
             }
         }
         Ok(output)
@@ -923,13 +937,14 @@ fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
     let mut entries = fs::read_dir(root)?.collect::<std::io::Result<Vec<_>>>()?;
     entries.sort_unstable_by_key(|entry| entry.file_name());
     let mut directories = Vec::new();
+    let mut root_buffer = vec![0_u8; NAMESPACE_SCRATCH_BYTES];
     for entry in entries {
-        if entry.path().is_dir() {
+        if entry.file_type()?.is_dir() {
             directories.push(entry.path());
         } else {
             append(
                 &mut hash,
-                vec![file_record(root, &entry.path())?],
+                vec![file_record(root, &entry.path(), &mut root_buffer)?],
                 &mut files,
                 &mut logical_bytes,
             )?;
@@ -939,6 +954,7 @@ fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
         .map(usize::from)
         .unwrap_or(1)
         .min(16);
+    let worker_buffer_bytes = (NAMESPACE_SCRATCH_BYTES / workers).max(4096);
     for chunk in directories.chunks(workers) {
         let (sender, receiver) = mpsc::sync_channel(chunk.len());
         let mut groups = vec![None; chunk.len()];
@@ -946,7 +962,9 @@ fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
             for (index, directory) in chunk.iter().enumerate() {
                 let sender = sender.clone();
                 scope.spawn(move || {
-                    let result = collect_records(root, directory).map_err(|error| error.to_string());
+                    let mut buffer = vec![0_u8; worker_buffer_bytes];
+                    let result = collect_records(root, directory, &mut buffer)
+                        .map_err(|error| error.to_string());
                     let _ = sender.send((index, result));
                 });
             }
@@ -1890,6 +1908,34 @@ fn self_check() -> Result<()> {
             || NAMESPACE_INIT_DIAGNOSTIC_PROFILE != "initialization-only-diagnostic-v1"
         {
             return Err("namespace-v2 evidence identity".into());
+        }
+        let store_digest_root = root.join("store-digest");
+        fs::create_dir_all(store_digest_root.join("d0000"))?;
+        fs::create_dir_all(store_digest_root.join("d0001"))?;
+        let store_files = [
+            ("d0000/a", b"first".as_slice()),
+            ("d0000/b", b"second".as_slice()),
+            ("d0001/a", b"third".as_slice()),
+        ];
+        let mut store_records = Vec::new();
+        for (path, bytes) in store_files {
+            let output = store_digest_root.join(path);
+            fs::write(&output, bytes)?;
+            set_store_file_metadata(&output, NAMESPACE_MTIME_SECONDS)?;
+            store_records.push(StoreFixtureRecord {
+                path: path.to_owned(),
+                size: bytes.len() as u64,
+                mode: NAMESPACE_FILE_MODE,
+                mtime_seconds: NAMESPACE_MTIME_SECONDS,
+                content_digest: Sha256::digest(bytes),
+            });
+        }
+        let (store_files, store_bytes, store_digest) = store_footprint_digest(&store_digest_root)?;
+        if store_files != 3
+            || store_bytes != 16
+            || store_digest != store_tree_digest(&store_records)
+        {
+            return Err("Store multi-directory digest merge".into());
         }
         #[cfg(test)]
         miniature_namespace_self_check(&root.join("namespace-v2"))?;

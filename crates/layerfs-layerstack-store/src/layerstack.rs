@@ -30,7 +30,7 @@ impl LayerStackStore {
         let mut initialization_diagnostic = InitializationDiagnostic::from_env();
         let mut cleanup_failed_empty_initialization = false;
         let layer_stack_id = LayerStackId::new();
-        let seed = *blake3::hash(layer_stack_id.as_slice()).as_bytes();
+        let seed = initialization_seed(&layer_stack_id, initialization_diagnostic.is_some())?;
         let (
             root_id,
             scanned_files,
@@ -571,6 +571,39 @@ struct InitializationDiagnostic {
     nonce: String,
     prepare_import_wall_ns: u64,
     fast: Option<FastInitializationDiagnostics>,
+}
+
+fn decode_initialization_seed(value: &str) -> Result<[u8; 32]> {
+    fn nibble(value: u8) -> Option<u8> {
+        match value {
+            b'0'..=b'9' => Some(value - b'0'),
+            b'a'..=b'f' => Some(value - b'a' + 10),
+            _ => None,
+        }
+    }
+    if value.len() != 64 {
+        return Err(StoreError::InvalidInput("benchmark initialization seed"));
+    }
+    let mut seed = [0_u8; 32];
+    for (output, pair) in seed.iter_mut().zip(value.as_bytes().chunks_exact(2)) {
+        *output = nibble(pair[0])
+            .zip(nibble(pair[1]))
+            .map(|(left, right)| left << 4 | right)
+            .ok_or(StoreError::InvalidInput("benchmark initialization seed"))?;
+    }
+    Ok(seed)
+}
+
+fn initialization_seed(layer_stack_id: &LayerStackId, diagnostic: bool) -> Result<[u8; 32]> {
+    let Some(value) = std::env::var_os("LAYERFS_BENCH_INITIALIZATION_SEED_HEX") else {
+        return Ok(*blake3::hash(layer_stack_id.as_slice()).as_bytes());
+    };
+    decode_initialization_seed(
+        value
+            .to_str()
+            .filter(|_| diagnostic)
+            .ok_or(StoreError::InvalidInput("benchmark initialization seed"))?,
+    )
 }
 
 impl std::io::Read for CountedSourceReader {
@@ -2149,6 +2182,16 @@ fn child(
 mod tests {
     use super::*;
     use std::os::unix::fs::{symlink, PermissionsExt};
+
+    #[test]
+    fn benchmark_initialization_seed_is_exact_lower_hex() {
+        assert_eq!(
+            decode_initialization_seed(&"01".repeat(32)).unwrap(),
+            [1; 32]
+        );
+        assert!(decode_initialization_seed(&"01".repeat(31)).is_err());
+        assert!(decode_initialization_seed(&"AA".repeat(32)).is_err());
+    }
 
     fn cached_directory_root(
         path: &std::path::Path,

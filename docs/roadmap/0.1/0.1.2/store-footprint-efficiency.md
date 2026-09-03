@@ -284,16 +284,25 @@ The runner freezes these additional envelopes before candidate collection:
 
 Baseline/candidate custody requires identical host, Docker, harness, workload,
 CDC, fixture, cache, Store-creation, SQLite schema/page-size, canonical object
-shape, and object/byte counts. Each fresh Store retains and authenticates its
-exact canonical root and object-set digest through reconnect. Raw cross-Store
-root equality is not a valid requirement because the public initialization path
-deliberately seeds inode identity from a fresh UUIDv7 LayerStackId; v3 therefore
-uses the exact semantic tree digest plus a tag/encoded-length/count object-shape
-digest for cross-arm equality. The only admitted product
+shape, and object/byte counts. Before each full arm, an untimed exact tree digest
+of every shared sealed fixture provides equal explicit source-cache
+preconditioning. Each fresh Store retains and authenticates its exact canonical
+root and object-set digest through reconnect. The ordinary public path seeds
+inode identity from a fresh UUIDv7 LayerStackId; Store-footprint evidence uses a
+diagnostic-only deterministic initialization seed equal to the fixture digest,
+making roots and object sets exactly replayable without changing ordinary
+product behavior. v3 also retains the semantic tree digest and the
+tag/encoded-length/count object-shape digest. The only admitted product
 diff is the measured bounded encoded-length ordering in object admission.
 Source-arm and seed labels never enter Store entity metadata. The exact verifier
-streams lexicographically ordered records one directory at a time instead of
-retaining all 100,000 paths and records.
+streams lexicographically ordered records in bounded waves of at most 16
+directories instead of retaining all 100,000 paths and records.
+
+A failed full admission can be replaced only after a source, harness, workload,
+or frozen-environment correction that directly addresses its retained failure,
+or after a prospectively defined invalid-host condition is independently
+proven. An unchanged rerun cannot supersede a valid failure. Every retry keeps
+the failed evidence immutable and first passes the affected selected case.
 
 ## Admission decisions
 
