@@ -3,9 +3,9 @@ use layerfs_layerstack_store::{
     LocalForkSource, ObjectBuffer,
 };
 use layerfs_workspace::{
-    inject_candidate_failure_once, CreateWorkspaceSession, EndWorkspaceMode, WorkspaceCommitResult,
-    WorkspaceFileRangeEdit, WorkspaceFileReplacement, WorkspacePlacement, WorkspaceProjection,
-    WorkspaceSession, Workspaces,
+    inject_candidate_failure_once, inject_projection_resume_failure_once, CreateWorkspaceSession,
+    EndWorkspaceMode, WorkspaceCommitResult, WorkspaceFileRangeEdit, WorkspaceFileReplacement,
+    WorkspacePlacement, WorkspaceProjection, WorkspaceSession, WorkspaceState, Workspaces,
 };
 use std::os::unix::fs::MetadataExt;
 
@@ -611,6 +611,61 @@ fn group_7_stale_head_and_posix_owner_composition_are_exact() {
     assert_eq!(std::fs::read(reopen.join("file")).unwrap(), b"ABXYcdeZ");
     workspaces
         .end_workspace_session(reopened.id, EndWorkspaceMode::Clean)
+        .unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn stale_head_with_resume_failure_requires_explicit_presentation_recovery() {
+    let (root, workspaces, branch, store) = fixture("stale-resume", b"abcdef");
+    let (stale, _) = open_session(&root, &workspaces, branch, "stale");
+    edit(
+        &workspaces,
+        &stale,
+        0,
+        0,
+        WorkspaceFileReplacement::Inline(b"S".to_vec()),
+    )
+    .unwrap();
+    let pinned = store.pin_branch(branch).unwrap();
+    let mut objects = ObjectBuffer::new(&pinned.reader).unwrap();
+    let changed = layerfs_content::filesystem::set_mtime(
+        &mut objects,
+        pinned.root,
+        &layerfs_content::CanonicalPath::new("file").unwrap(),
+        1,
+        0,
+    )
+    .unwrap();
+    let built = objects
+        .finish(changed.root(), changed.counters().rope.cdc_bytes_scanned)
+        .unwrap();
+    store
+        .commit_candidate(
+            &pinned.branch,
+            pinned.root,
+            pinned.branch.base_layer_id,
+            built,
+        )
+        .unwrap();
+    inject_projection_resume_failure_once();
+    assert!(matches!(
+        workspaces.commit_workspace_session(stale.id).unwrap(),
+        WorkspaceCommitResult::HeadMovedPresentationFailed { .. }
+    ));
+    assert_eq!(
+        workspaces.session(stale.id).unwrap().session.state,
+        WorkspaceState::BrokenPresentation
+    );
+    assert_eq!(
+        workspaces
+            .recover_workspace_presentation(stale.id)
+            .unwrap()
+            .state,
+        WorkspaceState::Active
+    );
+    workspaces
+        .end_workspace_session(stale.id, EndWorkspaceMode::Discard)
         .unwrap();
     std::fs::remove_dir_all(root).unwrap();
 }

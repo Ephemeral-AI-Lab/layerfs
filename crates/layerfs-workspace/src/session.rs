@@ -305,6 +305,11 @@ pub enum WorkspaceCommitResult {
     UpToDatePresentationFailed {
         head: Option<CommitId>,
     },
+    BusyPresentationFailed,
+    HeadMovedPresentationFailed {
+        expected: Option<CommitId>,
+        actual: Option<CommitId>,
+    },
     Busy,
     HeadMoved {
         expected: Option<CommitId>,
@@ -338,6 +343,10 @@ impl WorkspaceCommitResult {
                 commit_id,
             },
             Self::UpToDate { head } => Self::UpToDatePresentationFailed { head },
+            Self::Busy => Self::BusyPresentationFailed,
+            Self::HeadMoved { expected, actual } => {
+                Self::HeadMovedPresentationFailed { expected, actual }
+            }
             result => result,
         }
     }

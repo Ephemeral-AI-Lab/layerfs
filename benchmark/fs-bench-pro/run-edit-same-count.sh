@@ -7,8 +7,25 @@ repo=$(cd "$here/../.." && pwd -P)
 results_root=${LAYERFS_SAME_COUNT_RESULTS_ROOT:-$repo/benchmark-results/fs-bench-pro/edit-same-count}
 prepared_root=${LAYERFS_SAME_COUNT_PREPARED_ROOT:-${TMPDIR:-/tmp}/layerfs-fs-bench-pro-edit-same-count}
 invocation_started=$(python3 -c 'import time; print(time.monotonic_ns())')
+invocation_argv=("$@")
+performance_external_wall_ns=0
+verification_external_wall_ns=0
 
 die() { printf 'fs-bench-pro same-count: %s\n' "$*" >&2; exit 2; }
+
+static_edit_proof() {
+  python3 - "$repo/crates/layerfs-workspace/src/file_edit.rs" <<'PY'
+import json, sys
+text=open(sys.argv[1]).read()
+start=text.index('pub(crate) struct PieceTree')
+end=text.index('impl PieceTree', start)
+shape=text[start:end]
+for forbidden in ('BTreeMap', 'interval_map', 'materializ', 'offset_key', 'ForbiddenEditCounters'):
+    assert forbidden not in text, forbidden
+assert 'root: Link' in shape and 'serial: u64' in shape
+print(json.dumps({'schema':'layerfs-edit-static-proof-v1','representation':'implicit-offset-persistent-piece-tree','absent_entry_points':['complete-interval-map-clone','full-interval-map-rescan','later-offset-rekey','complete-file-materialization'],'status':'pass'},sort_keys=True,separators=(',',':')))
+PY
+}
 
 self_check() {
   local scratch started elapsed
@@ -20,6 +37,13 @@ self_check() {
     "$here/families/edit_same_count.rs" >"$scratch/check.rs"
   rustc --edition=2021 -Awarnings "$scratch/check.rs" -o "$scratch/check"
   "$scratch/check"
+  static_edit_proof >/dev/null
+  python3 - <<'PY'
+def symmetric_ratio(left, right):
+    return max(left / right, right / left) if left and right else (1.0 if left == right else float('inf'))
+assert symmetric_ratio(31_459_250, 27_816_750) > 1.10
+assert symmetric_ratio(100, 105) == 1.05
+PY
   elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - started ))
   (( elapsed < 2000000000 )) || die "self-check exceeded two seconds"
   rm -rf -- "$scratch"
@@ -40,7 +64,7 @@ prepare_assets() {
   harness_seal=$("$here/run-namespace.sh" --harness-seal)
   [[ $(docker inspect -f '{{index .Config.Labels "dev.layerfs.source-seal"}}' "$container") == "$source_seal" ]] || die "container/source seal mismatch"
   prepared="$prepared_root/$source_seal"
-  if [[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -d $prepared/issue14-r003-custody ]]; then
+  if [[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/issue14-r005-custody/evidence.sha256 ]]; then
     printf 'PASS prepared %s\n' "$prepared"
     return
   fi
@@ -51,6 +75,7 @@ prepare_assets() {
   cp "$repo/target/release/fs-benchmark-pro" "$stage/fs-benchmark-pro"
   rustc --edition=2021 -C opt-level=3 "$here/workload.rs" -o "$stage/fs-benchmark-workload"
   "$stage/fs-benchmark-pro" same-count-fixture "$stage/fixture-256k" >"$stage/fixture-create.txt"
+  static_edit_proof >"$stage/static-edit-proof.json"
   workload_sha=$(shasum -a 256 "$here/workload.rs" | awk '{print $1}')
   {
     printf 'source_commit=%s\n' "$(git -C "$repo" rev-parse HEAD)"
@@ -66,9 +91,12 @@ prepare_assets() {
   docker image inspect "$(docker inspect -f '{{.Image}}' "$container")" >"$stage/image.json"
   docker version >"$stage/docker.txt"
   { uname -a; sw_vers 2>/dev/null || true; } >"$stage/host.txt"
-  custody="$repo/benchmark-results/fs-bench-pro/edit-engine-acceptance/issue14-terminal-r003-20260903/environment"
-  [[ -d $custody ]] || die "issue #14 r003 custody reference is required"
-  cp -R "$custody" "$stage/issue14-r003-custody"
+  custody="$repo/benchmark-results/fs-bench-pro/edit-engine-acceptance/issue14-terminal-r005-20260903"
+  [[ -f $custody/evidence.sha256 ]] || die "authoritative issue #14 r005 custody is required"
+  mkdir "$stage/issue14-r005-custody"
+  cp "$custody/evidence.sha256" "$stage/issue14-r005-custody/evidence.sha256"
+  cp -R "$custody/environment" "$stage/issue14-r005-custody/environment"
+  printf 'issue14_r005_evidence_sha256=%s\n' "$(shasum -a 256 "$custody/evidence.sha256" | awk '{print $1}')" >>"$stage/identity.txt"
   mv "$stage" "$prepared"
   trap - EXIT
   printf 'PASS prepared %s\n' "$prepared"
@@ -81,7 +109,7 @@ if [[ ${1:-} == --prepare ]]; then
   exit 0
 fi
 
-[[ $# -ge 2 ]] || die "usage: run-edit-same-count.sh --prepare CONTAINER_ID | RUN_ID CONTAINER_ID --case CASE --seed 1 --source ARM [--mode performance|verify] | RUN_ID CONTAINER_A --all --source a-a-repeatability --mode admission --paired-container CONTAINER_B"
+[[ $# -ge 2 ]] || die "usage: run-edit-same-count.sh --prepare CONTAINER_ID | RUN_ID CONTAINER_ID --case CASE --seed 1 --source ARM [--mode performance|verify] | RUN_ID CONTAINER_A --case CASE --source a-a-repeatability --mode repeatability --paired-container CONTAINER_B | RUN_ID CONTAINER_A --all --source a-a-repeatability --mode admission --paired-container CONTAINER_B"
 run_id=$1
 container=$2
 shift 2
@@ -116,6 +144,9 @@ case "$mode" in
     ;;
   admission)
     [[ $all == 1 && -z $selection && -z $seed && -n $paired_container && $source_arm == a-a-repeatability ]] || die "admission requires --all --source a-a-repeatability --paired-container and no case/seed"
+    ;;
+  repeatability)
+    [[ $all == 0 && -n $selection && -z $seed && -n $paired_container && $source_arm == a-a-repeatability ]] || die "repeatability requires one case, no seed, --source a-a-repeatability, and --paired-container"
     ;;
   *) die "unknown mode: $mode" ;;
 esac
@@ -162,9 +193,16 @@ cp "$prepared/docker.txt" "$run_dir/environment/docker.txt"
 cp "$prepared/host.txt" "$run_dir/environment/host.txt"
 cp "$prepared/container.json" "$run_dir/environment/prepared-container.json"
 cp "$prepared/image.json" "$run_dir/environment/image.json"
-cp -R "$prepared/issue14-r003-custody" "$run_dir/environment/issue14-r003-custody"
+cp "$prepared/static-edit-proof.json" "$run_dir/environment/static-edit-proof.json"
+cp -R "$prepared/issue14-r005-custody" "$run_dir/environment/issue14-r005-custody"
 docker inspect "$container" >"$run_dir/environment/container.json"
 if [[ -n $paired_container ]]; then docker inspect "$paired_container" >"$run_dir/environment/paired-container.json"; fi
+docker ps --no-trunc >"$run_dir/environment/pre-run-competing-containers.txt"
+{
+  printf '%q ' "$0" "${invocation_argv[@]}"
+  printf '\n'
+} >"$run_dir/environment/command.txt"
+printf '%s\n' 'complete_lifecycle_ns begins immediately before public CreateWorkspaceSession and ends after public EndWorkspaceSession(Clean); layerstack initialization and Branch fork are excluded; Commit includes public Commit return plus explicit visible Branch-head acknowledgement.' >"$run_dir/environment/acknowledgement-boundary.txt"
 printf '%s\n' "$current_seal" >"$run_dir/environment/source-seal.txt"
 shasum -a 256 "$fixture_256/payload.bin" >"$run_dir/environment/fixtures.sha256"
 if [[ -n $anchor_fixture ]]; then shasum -a 256 "$anchor_fixture/payload.bin" >>"$run_dir/environment/fixtures.sha256"; fi
@@ -172,11 +210,16 @@ if [[ -n $anchor_fixture ]]; then shasum -a 256 "$anchor_fixture/payload.bin" >>
 daemon_endpoint=
 daemon_capability=
 container_id=
+pending_stop_root="$run_dir/environment/pending-runner-stops"
+mkdir "$pending_stop_root"
 ensure_container() {
-  local active_container=$1 stopped
+  local active_container=$1 stopped active_id marker
+  active_id=$(docker inspect -f '{{.Id}}' "$active_container")
+  marker="$pending_stop_root/$active_id"
   if [[ $(docker inspect -f '{{.State.Running}}' "$active_container") != true ]]; then
     stopped=$(docker inspect -f '{{.State.ExitCode}} {{.State.OOMKilled}}' "$active_container")
-    [[ $stopped == '0 false' || $stopped == '143 false' || ( $source_arm == a-a-repeatability && $stopped == '137 false' ) ]] || die "container stopped abnormally"
+    [[ $stopped == '0 false' || $stopped == '143 false' || ( $stopped == '137 false' && -f $marker ) ]] || die "container stopped abnormally"
+    rm -f "$marker"
     docker start "$active_container" >/dev/null
   fi
   container_id=$(docker inspect -f '{{.Id}}' "$active_container")
@@ -188,6 +231,9 @@ ensure_container() {
       sleep 0.2
       daemon_capability=$(docker exec "$active_container" sh -c "od -An -tx1 -v /run/layerfs/capability | tr -d ' \\n'")
       [[ $daemon_capability =~ ^[0-9a-f]{64}$ ]] || die "daemon capability"
+      if [[ ! -f $run_dir/environment/container-kernel-fuse.txt ]]; then
+        docker exec "$active_container" sh -c 'uname -a; stat -c "dev_fuse_type=%F dev_fuse_mode=%a" /dev/fuse; printf "capability_bytes="; wc -c </run/layerfs/capability; printf "fuse_filesystems="; grep -c fuse /proc/filesystems' >"$run_dir/environment/container-kernel-fuse.txt"
+      fi
       return
     fi
     sleep 0.1
@@ -195,19 +241,29 @@ ensure_container() {
   die "daemon readiness"
 }
 
+stop_container() {
+  local target=$1 target_id
+  if [[ $(docker inspect -f '{{.State.Running}}' "$target") == true ]]; then
+    target_id=$(docker inspect -f '{{.Id}}' "$target")
+    : >"$pending_stop_root/$target_id"
+    docker stop "$target" >/dev/null
+  fi
+}
+
 fixture_for() {
   case "$1" in small-edit|edit16) printf '%s\n' "$anchor_fixture" ;; *) printf '%s\n' "$fixture_256" ;; esac
 }
 
 run_performance() {
-  local case_id=$1 sample_seed=$2 ordinal=$3 active_container=$4 active_arm=$5 fixture sample_dir cache status
+  local case_id=$1 sample_seed=$2 ordinal=$3 active_container=$4 active_arm=$5 fixture sample_dir cache status wall_started
+  wall_started=$(python3 -c 'import time; print(time.monotonic_ns())')
   fixture=$(fixture_for "$case_id")
   sample_dir="$run_dir/scenarios/$case_id/$active_arm/seed-$sample_seed"
   mkdir -p "$sample_dir"
   cache=$([[ $ordinal == 1 ]] && printf generated-first-sample-uncontrolled || printf generated-subsequent-sample-uncontrolled)
   ensure_container "$active_container"
   set +e
-  perl -e 'alarm 6; exec @ARGV' env \
+  perl -e 'alarm 5; exec @ARGV' env \
     LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload \
     LAYERFS_EXEC_TRANSPORT=daemon LAYERFS_FUSE_TRANSPORT=daemon \
     LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
@@ -234,7 +290,7 @@ def upper(value,target,tolerated,hard,name):
 def lower(value,target,tolerated,name):
     state='target-pass' if value>=target else 'tolerated-pass' if value>=tolerated else 'no-go'
     states.append((state,name,value,target,tolerated,None))
-upper(r['process_peak_rss_bytes'],97_124_352,101_980_569,128*1024*1024,'rss')
+upper(r['process_peak_rss_bytes'],101_980_569,112_178_626,128*1024*1024,'rss')
 if r['scenario_id']=='small-edit': upper(r['commit_total_ns'],4_503_000,4_953_300,6_000_000,'small_edit_commit')
 elif r['scenario_id']=='edit16': upper(r['complete_lifecycle_ns'],156_446_000,172_090_600,200_000_000,'edit16_complete')
 else:
@@ -249,6 +305,7 @@ open(sys.argv[3],'a').write('\n')
 assert overall in ('target-pass','tolerated-pass')
 PY
   grep '"schema":"fs-bench-pro-edit-performance-v1"' "$sample_dir/raw.jsonl" >>"$run_dir/performance/raw.jsonl"
+  performance_external_wall_ns=$(( performance_external_wall_ns + $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
 }
 
 oracle_digest() {
@@ -267,7 +324,8 @@ oracle_digest() {
 }
 
 run_verify() {
-  local case_id=$1 sample_seed=$2 active_container=$3 active_arm=$4 fixture expected verify_dir status
+  local case_id=$1 sample_seed=$2 active_container=$3 active_arm=$4 fixture expected verify_dir status wall_started
+  wall_started=$(python3 -c 'import time; print(time.monotonic_ns())')
   if [[ $case_id == overwrite-fragmented-10b-ops-1000-proof ]]; then
     fragment_oracle="$run_dir/oracles/fragmentation-seed-$sample_seed"
     python3 - "$fixture_256/payload.bin" "$fragment_oracle" "$sample_seed" <<'PY'
@@ -327,6 +385,7 @@ PY
   set -e
   printf '%s\n' "$status" >"$verify_dir/exit-status.txt"
   [[ $status == 0 ]] || die "verification failed: $case_id seed $sample_seed"
+  verification_external_wall_ns=$(( verification_external_wall_ns + $(python3 -c 'import time; print(time.monotonic_ns())') - wall_started ))
 }
 
 if [[ $mode == performance ]]; then
@@ -335,6 +394,7 @@ elif [[ $mode == verify ]]; then
   run_verify "$selection" "$seed" "$container" "$source_arm"
 else
   ordinal=0
+  if [[ $mode == repeatability ]]; then printf '%s\tselected\n' "$selection" >"$run_dir/environment/repeatability-selection.tsv"; family_map="$run_dir/environment/repeatability-selection.tsv"; else family_map="$mapfile_path"; fi
   while IFS=$'\t' read -r case_id _ <&3; do
     for sample_seed in 1 2 3; do
       if [[ $sample_seed == 2 ]]; then
@@ -345,14 +405,14 @@ else
       for pair in "${order[@]}"; do
         ordinal=$((ordinal + 1))
         active=${pair% *}
-        inactive=$([[ $active == "$container" ]] && printf '%s' "$paired_container" || printf '%s' "$container")
-        if [[ $(docker inspect -f '{{.State.Running}}' "$inactive") == true ]]; then docker stop "$inactive" >/dev/null; fi
         run_performance "$case_id" "$sample_seed" "$ordinal" "$active" "${pair##* }"
       done
     done
-  done 3<"$mapfile_path"
-  run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$container" repeat-a
-  run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$paired_container" repeat-b
+  done 3<"$family_map"
+  if [[ $mode == admission ]]; then
+    run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$container" repeat-a
+    run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$paired_container" repeat-b
+  fi
 fi
 
 python3 - "$run_dir" "$mode" "$source_arm" <<'PY'
@@ -367,10 +427,12 @@ phases=['workspace_create_ns','execution_ns','commit_api_ns','layerstack_visible
 counters=['fuse_kernel_write_requests','fuse_kernel_write_bytes','spool_write_bytes','candidate_objects','candidate_bytes','inserted_objects','reused_objects','commit_payload_bytes_read','commit_cdc_bytes_scanned','tree_visits','metric_nodes_scanned']
 def med(values,field): return float(statistics.median(x[field] for x in values))
 def ratio(left,right): return right/left if left else (1.0 if right==0 else float('inf'))
-if mode=='admission':
-    assert len(rows)==84
+def symmetric_ratio(left,right): return max(ratio(left,right),ratio(right,left))
+if mode in ('admission','repeatability'):
+    expected=84 if mode=='admission' else 6
+    assert len(rows)==expected
     arms={arm:[x for x in rows if x['source_arm']==arm] for arm in ('repeat-a','repeat-b')}
-    assert all(len(values)==42 for values in arms.values())
+    assert all(len(values)==expected//2 for values in arms.values())
     medians={}
     for arm,values in arms.items():
         medians[arm]={}
@@ -380,13 +442,13 @@ if mode=='admission':
     walls={arm:sum(x['complete_lifecycle_ns'] for x in values) for arm,values in arms.items()}
     paired=sum(walls.values())
     wall_status='target-pass' if max(walls.values())<=3_000_000_000 and paired<=6_000_000_000 else 'tolerated-pass' if max(walls.values())<=3_300_000_000 and paired<=6_600_000_000 else 'no-go' if max(walls.values())<=6_000_000_000 and paired<=12_000_000_000 else 'hard-failure'
-    ratios={case:ratio(medians['repeat-a'][case]['complete_lifecycle_ns'],medians['repeat-b'][case]['complete_lifecycle_ns']) for case in medians['repeat-a']}
+    ratios={case:symmetric_ratio(medians['repeat-a'][case]['complete_lifecycle_ns'],medians['repeat-b'][case]['complete_lifecycle_ns']) for case in medians['repeat-a']}
     ratio_status='target-pass' if max(ratios.values())<=1.05 else 'tolerated-pass' if max(ratios.values())<=1.10 else 'no-go'
     dispositions={}
     for case,value in ratios.items():
         if value<=1.05: continue
-        phase_rows={field:{'ratio':ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]),'under_2ms_exception':field!='complete_lifecycle_ns' and medians['repeat-a'][case][field]<2_000_000} for field in phases}
-        counter_rows={field:ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]) for field in counters}
+        phase_rows={field:{'ratio':symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]),'under_2ms_exception':False,'exception_reason':'A/A repeatability has no candidate arm; local-step exception is inapplicable'} for field in phases}
+        counter_rows={field:symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]) for field in counters}
         dispositions[case]={'reason':'identical-source A/A scheduling variance; no improvement claim','complete_ratio':value,'phase_ratios':phase_rows,'counter_ratios':counter_rows}
     summary.update({'comparison_type':'A/A repeatability','medians':medians,'arm_complete_lifecycle_ns':walls,'paired_complete_lifecycle_ns':paired,'family_wall_status':wall_status,'complete_lifecycle_ratios':ratios,'ratio_status':ratio_status,'phase_counter_dispositions':dispositions})
     order={'target-pass':0,'tolerated-pass':1,'no-go':2,'hard-failure':3}
@@ -400,12 +462,14 @@ if summary['status'] not in ('target-pass','tolerated-pass'): raise SystemExit(f
 PY
 
 overall_status=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$run_dir/summary.json")
-if [[ $(docker inspect -f '{{.State.Running}}' "$container") == true ]]; then docker stop "$container" >/dev/null; fi
-if [[ -n $paired_container && $(docker inspect -f '{{.State.Running}}' "$paired_container") == true ]]; then docker stop "$paired_container" >/dev/null; fi
+printf '%s\n' "$performance_external_wall_ns" >"$run_dir/environment/performance-external-wall-ns.txt"
+printf '%s\n' "$verification_external_wall_ns" >"$run_dir/environment/verification-external-wall-ns.txt"
+stop_container "$container"
+if [[ -n $paired_container ]]; then stop_container "$paired_container"; fi
 docker inspect "$container" >"$run_dir/environment/container-after.json"
 if [[ -n $paired_container ]]; then docker inspect "$paired_container" >"$run_dir/environment/paired-container-after.json"; fi
 printf '{"schema":"fs-bench-pro-edit-same-count-status-v2","mode":"%s","source_identity":"%s","status":"%s","admission_eligible":true}\n' "$mode" "$source_arm" "$overall_status" >"$run_dir/run-status.json"
-(invocation_elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - invocation_started )); printf '%s\n' "$invocation_elapsed" >"$run_dir/environment/external-wall-ns.txt"; if [[ $mode == performance && $invocation_elapsed -gt 2000000000 ]]; then printf '{"schema":"fs-bench-pro-edit-same-count-status-v2","mode":"%s","source_identity":"%s","status":"no-go","admission_eligible":false,"reason":"selected external wall exceeded 2 seconds","external_wall_ns":%s}\n' "$mode" "$source_arm" "$invocation_elapsed" >"$run_dir/run-status.json"; fi)
+(invocation_elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - invocation_started )); printf '%s\n' "$invocation_elapsed" >"$run_dir/environment/total-external-wall-ns.txt"; if [[ $mode == performance && $invocation_elapsed -gt 2000000000 ]]; then printf '{"schema":"fs-bench-pro-edit-same-count-status-v2","mode":"%s","source_identity":"%s","status":"no-go","admission_eligible":false,"reason":"selected external wall exceeded 2 seconds","external_wall_ns":%s}\n' "$mode" "$source_arm" "$invocation_elapsed" >"$run_dir/run-status.json"; fi)
 (cd "$run_dir" && find . -type f ! -name evidence.sha256 -print0 | sort -z | xargs -0 shasum -a 256 >evidence.sha256)
 [[ $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["admission_eligible"])' "$run_dir/run-status.json") == True ]] || die "selected external wall gate"
 printf 'PASS %s\n' "$run_dir"

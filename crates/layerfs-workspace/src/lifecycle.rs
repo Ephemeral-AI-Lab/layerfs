@@ -427,7 +427,15 @@ impl Workspaces {
         let _quiesced = match quiesced {
             Ok(quiesced) => quiesced,
             Err(WorkspaceError::WorkspaceBusy) => {
-                crate::projection::resume(&worker)?;
+                if crate::projection::resume(&worker).is_err() {
+                    let _ = crate::projection::end(&worker);
+                    worker
+                        .workspace
+                        .lock()
+                        .map_err(|_| WorkspaceError::WorkspaceBusy)?
+                        .state = WorkspaceState::BrokenPresentation;
+                    return Ok(WorkspaceCommitResult::BusyPresentationFailed);
+                }
                 return Ok(WorkspaceCommitResult::Busy);
             }
             Err(error) => {
@@ -1046,6 +1054,35 @@ mod tests {
         assert!(worker.projection_handle.lock().unwrap().is_some());
         assert_eq!(std::fs::read(root.join("mount/file")).unwrap(), b"abcdef");
         worker.workspace.lock().unwrap().unpin(node).unwrap();
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn busy_commit_with_resume_failure_requires_explicit_presentation_recovery() {
+        let (root, workspaces, branch, _) = fixture("busy-resume");
+        let session = session(&root, &workspaces, branch);
+        let worker = workspaces.worker(session.id).unwrap();
+        worker.note_writer(true).unwrap();
+        crate::projection::inject_resume_failure_once();
+        assert_eq!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::BusyPresentationFailed
+        );
+        assert_eq!(
+            workspaces.session(session.id).unwrap().session.state,
+            WorkspaceState::BrokenPresentation
+        );
+        worker.note_writer(false).unwrap();
+        assert_eq!(
+            workspaces
+                .recover_workspace_presentation(session.id)
+                .unwrap()
+                .state,
+            WorkspaceState::Active
+        );
         workspaces
             .end_workspace_session(session.id, EndWorkspaceMode::Clean)
             .unwrap();

@@ -50,6 +50,12 @@ pub fn inject_projection_refresh_failure_once() {
 
 #[cfg(debug_assertions)]
 #[doc(hidden)]
+pub fn inject_projection_resume_failure_once() {
+    projection::inject_resume_failure_once();
+}
+
+#[cfg(debug_assertions)]
+#[doc(hidden)]
 pub fn inject_candidate_failure_once() {
     changes::inject_candidate_failure_once();
 }

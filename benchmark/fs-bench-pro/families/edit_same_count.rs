@@ -136,6 +136,22 @@ pub(crate) const SCENARIOS: [Scenario; 14] = [
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PairControl {
+    pub(crate) id: &'static str,
+    pub(crate) operations: usize,
+    pub(crate) position: Position,
+}
+
+pub(crate) const PAIR_CONTROLS: [PairControl; 6] = [
+    PairControl { id: "overwrite-middle-2k-ops-1", operations: 1, position: Position::Middle },
+    PairControl { id: "overwrite-middle-2k-ops-10", operations: 10, position: Position::Middle },
+    PairControl { id: "overwrite-middle-2k-ops-100", operations: 100, position: Position::Middle },
+    PairControl { id: "overwrite-tail-2k-ops-1", operations: 1, position: Position::Tail },
+    PairControl { id: "overwrite-tail-2k-ops-10", operations: 10, position: Position::Tail },
+    PairControl { id: "overwrite-tail-2k-ops-100", operations: 100, position: Position::Tail },
+];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Edit {
     pub(crate) offset: u64,
     pub(crate) len: usize,
@@ -191,6 +207,25 @@ pub(crate) fn scenario(id: &str) -> Result<Scenario, String> {
         .into_iter()
         .find(|scenario| scenario.id == id)
         .ok_or_else(|| format!("unknown same-count scenario: {id}"))
+}
+
+pub(crate) fn pair_control(id: &str) -> Result<PairControl, String> {
+    PAIR_CONTROLS
+        .into_iter()
+        .find(|control| control.id == id)
+        .ok_or_else(|| format!("unknown same-count pair control: {id}"))
+}
+
+pub(crate) fn pair_control_schedule(control: PairControl, seed: u8) -> Result<Vec<Edit>, String> {
+    if !SEEDS.contains(&seed) {
+        return Err("same-count pair-control identity".into());
+    }
+    let offset = match control.position {
+        Position::Middle => FIXTURE_BYTES / 2 - 1024,
+        Position::Tail => FIXTURE_BYTES - 2048,
+        _ => return Err("same-count pair-control position".into()),
+    };
+    Ok(vec![Edit { offset, len: 2048 }; control.operations])
 }
 
 pub(crate) fn schedule(scenario: Scenario, seed: u8) -> Result<Vec<Edit>, String> {
@@ -252,6 +287,16 @@ pub(crate) fn self_check() -> Result<(), String> {
             }
             if replacement_bytes(seed, 0, one[0]).len() != one[0].len {
                 return Err("same-count replacement length".into());
+            }
+        }
+    }
+    for seed in SEEDS {
+        for start in [0, 3] {
+            let one = pair_control_schedule(PAIR_CONTROLS[start], seed)?;
+            let ten = pair_control_schedule(PAIR_CONTROLS[start + 1], seed)?;
+            let hundred = pair_control_schedule(PAIR_CONTROLS[start + 2], seed)?;
+            if one != hundred[..1] || ten != hundred[..10] {
+                return Err("same-count pair-control prefix".into());
             }
         }
     }

@@ -129,10 +129,6 @@ pub struct WorkspaceCommitReceipt {
     pub edit_spool_superseded_bytes: u64,
     pub edit_tree_visits: u64,
     pub edit_metric_nodes_scanned: u64,
-    pub complete_interval_map_clones: u64,
-    pub full_interval_map_rescans: u64,
-    pub later_offset_rekeys: u64,
-    pub complete_file_materializations: u64,
 }
 
 impl WorkspaceCommitReceipt {
@@ -282,10 +278,6 @@ pub fn note_workspace_commit_edit_state(
     spool_live_bytes: u64,
     spool_superseded_bytes: u64,
     metric_nodes_scanned: u64,
-    complete_interval_map_clones: u64,
-    full_interval_map_rescans: u64,
-    later_offset_rekeys: u64,
-    complete_file_materializations: u64,
 ) {
     WORKSPACE_COMMIT.with(|current| {
         if let Some(receipt) = current.borrow_mut().as_mut() {
@@ -297,10 +289,6 @@ pub fn note_workspace_commit_edit_state(
             receipt.edit_spool_live_bytes = spool_live_bytes;
             receipt.edit_spool_superseded_bytes = spool_superseded_bytes;
             receipt.edit_metric_nodes_scanned = metric_nodes_scanned;
-            receipt.complete_interval_map_clones = complete_interval_map_clones;
-            receipt.full_interval_map_rescans = full_interval_map_rescans;
-            receipt.later_offset_rekeys = later_offset_rekeys;
-            receipt.complete_file_materializations = complete_file_materializations;
         }
     });
 }

@@ -131,23 +131,30 @@ Insert 4 KiB at the current midpoint. Pair with
 ### Middle deletion
 
 ```text
-delete-middle-4k-ops-1
-delete-middle-4k-ops-10
-delete-middle-4k-ops-100
+delete-middle-2k-ops-1
+delete-middle-2k-ops-10
+delete-middle-2k-ops-100
 ```
 
-Delete 4 KiB centered on the current midpoint. Pair with
-`overwrite-middle-4k-ops-N`.
+Delete 2 KiB centered on the current midpoint. Pair with the supplemental
+same-count control `overwrite-middle-2k-ops-N`.
 
 ### Tail truncation
 
 ```text
-truncate-tail-4k-ops-1
-truncate-tail-4k-ops-10
-truncate-tail-4k-ops-100
+truncate-tail-2k-ops-1
+truncate-tail-2k-ops-10
+truncate-tail-2k-ops-100
 ```
 
-Remove 4 KiB from the current tail. Pair with `overwrite-tail-4k-ops-N`.
+Remove 2 KiB from the current tail. Pair with the supplemental same-count
+control `overwrite-tail-2k-ops-N`.
+
+The 2 KiB destructive schedules are a prospective correction made before
+evidence collection: 100 exact 4 KiB removals cannot fit in the fixed 256 KiB
+fixture. Matching 2 KiB same-count controls hold fixture, seed, byte quantity,
+position, operation count, process/Commit topology, and environment constant;
+they are issue-3 controls rather than additional issue-2 timed family members.
 
 ### Sparse write past EOF
 

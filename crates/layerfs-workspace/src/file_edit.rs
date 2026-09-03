@@ -82,14 +82,6 @@ impl Piece {
 
 type Link = Option<Arc<PieceNode>>;
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) struct ForbiddenEditCounters {
-    pub(crate) complete_interval_map_clones: u64,
-    pub(crate) full_interval_map_rescans: u64,
-    pub(crate) later_offset_rekeys: u64,
-    pub(crate) complete_file_materializations: u64,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct PieceNode {
     piece: Piece,
@@ -154,7 +146,6 @@ impl PieceNode {
 pub(crate) struct PieceTree {
     root: Link,
     serial: u64,
-    forbidden: ForbiddenEditCounters,
 }
 
 impl PieceTree {
@@ -162,7 +153,6 @@ impl PieceTree {
         Self {
             root: None,
             serial: 0,
-            forbidden: ForbiddenEditCounters::default(),
         }
     }
 
@@ -202,10 +192,6 @@ impl PieceTree {
 
     pub(crate) fn spool_len(&self) -> u64 {
         link_spool_len(&self.root)
-    }
-
-    pub(crate) fn forbidden_counters(&self) -> ForbiddenEditCounters {
-        self.forbidden
     }
 
     pub(crate) fn logical_allocation_charge(&self) -> Result<u64> {
@@ -503,7 +489,6 @@ mod tests {
             tree = tree.replace(offset, 1, [Piece::Zero { len: 1 }]).unwrap();
         }
         assert_eq!(tree.count(), MAX_PIECES_PER_FILE);
-        assert_eq!(tree.forbidden_counters(), ForbiddenEditCounters::default());
         assert!(tree.logical_allocation_charge().unwrap() <= MAX_PIECE_ALLOCATION);
         assert!(depth(&tree.root) < 64, "depth={}", depth(&tree.root));
         for offset in [0, 4_096, 8_192] {

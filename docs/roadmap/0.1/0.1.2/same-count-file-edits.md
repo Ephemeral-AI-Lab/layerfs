@@ -1,10 +1,10 @@
 # Same-count file-edit performance family
 
-> **Status:** Implemented and accepted by the alternating A/A campaign
-> `issue13-terminal-aa-final-e8226e4c`: 14 timed performance IDs and one separate
-> verification group. The fixed environment is MacBook/Docker Desktop/managed
-> Linux container/real FUSE; environment and implementation route are not
-> scenario-name axes.
+> **Status:** Implemented; terminal evidence is being replaced after an audit
+> found label-dependent A/A classification in
+> `issue13-terminal-aa-final-e8226e4c`. That run is immutable diagnostic history
+> and release-ineligible. The family has 14 timed performance IDs and one
+> separate verification group.
 > Tracked by [GitHub issue #13](https://github.com/Ephemeral-AI-Lab/layerfs/issues/13).
 
 ## Question
@@ -157,8 +157,10 @@ Count-changing results retain `paired_same_count_control_id`:
 | Same-count control | Count-changing operations it controls |
 | --- | --- |
 | `overwrite-head-4k-ops-N` | `prepend-head-4k-ops-N` |
-| `overwrite-middle-4k-ops-N` | middle insert, delete, grow-replace, and shrink-replace rows |
-| `overwrite-tail-4k-ops-N` | append, truncate, and sparse write-past-EOF rows |
+| `overwrite-middle-4k-ops-N` | middle insert, grow-replace, and shrink-replace rows |
+| `overwrite-tail-4k-ops-N` | append and sparse write-past-EOF rows |
+| supplemental `overwrite-middle-2k-ops-N` | corrected 2 KiB middle deletion rows |
+| supplemental `overwrite-tail-2k-ops-N` | corrected 2 KiB tail truncation rows |
 
 The pair holds fixture, seed, operation count, supplied bytes where applicable,
 one-Commit topology, FUSE environment, timing, resource limits, and schema
@@ -183,9 +185,11 @@ cumulative comparisons/tree visits:
     value(1000) <= 18 * max(1, value(100))
 ```
 
-After the universal engine lands, require exactly zero complete interval-map
-clones, full interval-map rescans, later-offset rekeys, and complete-file
-materializations.
+The universal engine has no interval-map, later-offset-key, or complete-file
+materialization entry points. This is a static representation invariant of the
+implicit-offset persistent piece tree, covered by focused splice and bounded
+fragmentation tests; it is not reported as a zero-by-construction runtime
+counter.
 
 ## Performance receipts
 
@@ -223,8 +227,8 @@ host peak RSS               97,124,352 bytes
 
 Run three paired seed samples in alternating A/B, B/A, A/B order. When both
 arms have the same image/commit/product/harness/workload identity, report A/A
-repeatability and make no baseline/candidate improvement claim. For each new
-row:
+repeatability, classify it with label-invariant `max(A/B, B/A)`, and make no
+baseline/candidate improvement claim. For a directional candidate/baseline row:
 
 ```text
 median(candidate / unchanged baseline) <= 1.05
@@ -284,7 +288,7 @@ verifier invocation.
 - [x] New 1/10/100 schedules are exact prefixes and preserve 256 KiB length.
 - [x] Every performance row reports latency, operations/s, phase, I/O, object,
   CPU, memory, and cleanup receipts without verifier work in its timer.
-- [x] A/A repeatability, absolute anchor, family-wall, RSS, and zero-swap gates
-  pass.
-- [x] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
+- [ ] Symmetric A/A repeatability, absolute anchor, family-wall, RSS, and
+  zero-swap gates pass in replacement evidence.
+- [ ] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
   structural limits before publication.

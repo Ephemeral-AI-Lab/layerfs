@@ -206,8 +206,13 @@ impl Client {
                 WorkspaceCommitResult::UpToDatePresentationFailed { .. } => {
                     OperationOutcome::UpToDate
                 }
-                WorkspaceCommitResult::Busy => OperationOutcome::Busy,
-                WorkspaceCommitResult::HeadMoved { .. } => OperationOutcome::HeadMoved,
+                WorkspaceCommitResult::Busy | WorkspaceCommitResult::BusyPresentationFailed => {
+                    OperationOutcome::Busy
+                }
+                WorkspaceCommitResult::HeadMoved { .. }
+                | WorkspaceCommitResult::HeadMovedPresentationFailed { .. } => {
+                    OperationOutcome::HeadMoved
+                }
             },
         )
     }
@@ -232,6 +237,11 @@ impl Client {
         )
     }
 
+    /// Applies one public, prevalidated same-file edit batch with one projection refresh.
+    ///
+    /// The batch is failure-atomic: a rejected member leaves the file and presentation at
+    /// their pre-call state. This is the supported v0.1.2 high-throughput owner-side API;
+    /// callers that need one edit may use [`Self::edit_workspace_file_range`].
     pub fn edit_workspace_file_ranges(&self, edits: Vec<WorkspaceFileRangeEdit>) -> Result<()> {
         let workspace_id = edits
             .first()

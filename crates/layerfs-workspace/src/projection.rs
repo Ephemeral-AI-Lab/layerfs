@@ -260,6 +260,12 @@ pub(crate) fn record_read_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<(
 }
 
 pub(crate) fn resume(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
+    #[cfg(debug_assertions)]
+    if INJECT_RESUME_FAILURE.with(|inject| inject.replace(false)) {
+        return Err(WorkspaceError::Io(std::io::Error::other(
+            "injected projection resume failure",
+        )));
+    }
     let handle = worker
         .projection_handle
         .lock()
@@ -405,11 +411,17 @@ pub(crate) fn refresh(
 #[cfg(debug_assertions)]
 thread_local! {
     static INJECT_REFRESH_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static INJECT_RESUME_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 #[cfg(debug_assertions)]
 pub(crate) fn inject_refresh_failure_once() {
     INJECT_REFRESH_FAILURE.with(|inject| inject.set(true));
+}
+
+#[cfg(debug_assertions)]
+pub(crate) fn inject_resume_failure_once() {
+    INJECT_RESUME_FAILURE.with(|inject| inject.set(true));
 }
 
 struct FuseView(Weak<WorkspaceWorker>);
