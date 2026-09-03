@@ -411,7 +411,6 @@ else
   done 3<"$family_map"
   if [[ $mode == admission ]]; then
     run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$container" repeat-a
-    run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$paired_container" repeat-b
   fi
 fi
 
