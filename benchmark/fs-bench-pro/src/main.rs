@@ -5626,6 +5626,16 @@ fn process_rss_sample(
     })
 }
 
+fn record_rss_sample(samples: &mut Vec<(u64, u64)>, point: (u64, u64)) -> bool {
+    if samples.len() < samples.capacity() {
+        samples.push(point);
+        false
+    } else {
+        *samples.last_mut().expect("nonzero RSS sample capacity") = point;
+        true
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn sdk_edit_supervise(
     root: &Path,
@@ -5672,6 +5682,7 @@ fn sdk_edit_supervise(
     }
     let worker_started = Instant::now();
     let mut rss_samples = Vec::with_capacity(131_072);
+    let mut rss_sample_overflow = false;
     rss_samples.push((sdk_edit_clock_ns()?, process_current_rss(pid)?));
     input.write_all(b"GO\n")?;
     input.flush()?;
@@ -5703,14 +5714,12 @@ fn sdk_edit_supervise(
             return Err("SDK edit/Commit/End two-second watchdog".into());
         }
         let rss = process_current_rss(pid)?;
-        if rss_samples.len() == rss_samples.capacity() {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("SDK edit RSS sample capacity".into());
-        }
-        rss_samples.push((sdk_edit_clock_ns()?, rss));
+        rss_sample_overflow |= record_rss_sample(&mut rss_samples, (sdk_edit_clock_ns()?, rss));
     };
-    rss_samples.push((sdk_edit_clock_ns()?, process_current_rss(pid)?));
+    rss_sample_overflow |= record_rss_sample(
+        &mut rss_samples,
+        (sdk_edit_clock_ns()?, process_current_rss(pid)?),
+    );
     drop(input);
     let remaining = std::time::Duration::from_secs(10).saturating_sub(worker_started.elapsed());
     let result = receive.recv_timeout(remaining)??;
@@ -5728,7 +5737,7 @@ fn sdk_edit_supervise(
     let rss = process_rss_sample(&rss_samples, t0_unix_ns, t3_unix_ns)?;
     let coverage = rss.count >= 2 && rss.first_ns <= t0_unix_ns && rss.last_ns >= t3_unix_ns;
     json.push_str(&format!(
-        ",\"rss_incremental_upper_bound_bytes\":{}",
+        ",\"rss_sample_overflow\":{rss_sample_overflow},\"rss_incremental_upper_bound_bytes\":{}",
         lifetime_peak_rss.saturating_sub(rss.baseline)
     ));
     let resource_valid = coverage
@@ -6793,6 +6802,16 @@ fn elapsed_ns(start: Instant) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bounded_rss_observation_retains_first_and_latest_without_aborting() {
+        let mut samples = Vec::with_capacity(2);
+        assert!(!record_rss_sample(&mut samples, (1, 10)));
+        assert!(!record_rss_sample(&mut samples, (2, 20)));
+        assert!(record_rss_sample(&mut samples, (3, 15)));
+        assert_eq!(samples, [(1, 10), (3, 15)]);
+        assert_eq!(samples.capacity(), 2);
+    }
 
     #[test]
     fn sdk_edit_child_guard_reaps_on_early_return() {
