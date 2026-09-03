@@ -275,7 +275,7 @@ user_version=connection.execute('PRAGMA user_version').fetchone()[0]
 schema=connection.execute("SELECT type,name,tbl_name,coalesce(sql,'') FROM sqlite_master ORDER BY type,name").fetchall()
 schema_digest=hashlib.sha256(json.dumps([page_size,user_version,schema],separators=(',',':')).encode()).hexdigest()
 digest=hashlib.sha256(b'layerfs/fs-bench-pro/object-set/v1\0'); rows=bytes_=0
-for object_id,length in connection.execute('SELECT id,length(bytes) FROM objects ORDER BY id'):
+for object_id,length in connection.execute('SELECT object_id,length(bytes) FROM objects ORDER BY object_id'):
  digest.update(len(object_id).to_bytes(8,'big')); digest.update(object_id); digest.update(length.to_bytes(8,'big')); rows+=1; bytes_+=length
 connection.close()
 json.dump({'schema':'fs-bench-pro-store-object-set-v1','object_set_digest':digest.hexdigest(),'schema_digest':schema_digest,'page_size':page_size,'user_version':user_version,'canonical_objects':rows,'canonical_bytes':bytes_},open(out,'w'),sort_keys=True,separators=(',',':'));open(out,'a').write('\n')
