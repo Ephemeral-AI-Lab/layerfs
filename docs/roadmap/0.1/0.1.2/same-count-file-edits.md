@@ -1,10 +1,10 @@
 # Same-count file-edit performance family
 
-> **Status:** Implemented; terminal evidence is being replaced after an audit
-> found label-dependent A/A classification in
-> `issue13-terminal-aa-final-e8226e4c`. That run is immutable diagnostic history
-> and release-ineligible. The family has 14 timed performance IDs and one
-> separate verification group.
+> **Status:** Implemented and accepted by the symmetric alternating A/A campaign
+> `issue13-terminal-final2-bed5a590`. The earlier
+> `issue13-terminal-aa-final-e8226e4c` run is immutable diagnostic history and
+> release-ineligible because its A/A classifier was label-dependent. The family
+> has 14 timed performance IDs and one separate verification group.
 > Tracked by [GitHub issue #13](https://github.com/Ephemeral-AI-Lab/layerfs/issues/13).
 
 ## Question
@@ -288,7 +288,7 @@ verifier invocation.
 - [x] New 1/10/100 schedules are exact prefixes and preserve 256 KiB length.
 - [x] Every performance row reports latency, operations/s, phase, I/O, object,
   CPU, memory, and cleanup receipts without verifier work in its timer.
-- [ ] Symmetric A/A repeatability, absolute anchor, family-wall, RSS, and
+- [x] Symmetric A/A repeatability, absolute anchor, family-wall, RSS, and
   zero-swap gates pass in replacement evidence.
-- [ ] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
+- [x] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
   structural limits before publication.
