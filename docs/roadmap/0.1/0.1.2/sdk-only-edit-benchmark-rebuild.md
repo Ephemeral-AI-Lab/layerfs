@@ -614,7 +614,7 @@ mutation/lifecycle metric.
 ### Absolute candidate gates
 
 Every registered row contains one logical operation, one SDK call, and one edit
-member. It must satisfy all three hard median ceilings independently:
+member. Report all three nominal median targets independently:
 
 ```text
 edit_call_ns   <= 10 ms
@@ -622,8 +622,21 @@ commit_call_ns <= 10 ms
 edit_commit_ns <= 20 ms
 ```
 
-There is no tolerance band on these absolute ceilings. A row fails if any one
+The values above are nominal targets. Before further acceptance classification,
+the user approved an absolute +10 ms tolerance on 2026-09-04. Accepted median
+ceilings are therefore 20 ms Edit, 20 ms Commit, and 30 ms combined. The combined
+ceiling applies independently: it is not 40 ms. Reports must distinguish
+`nominal-pass` from `accepted-with-tolerance`; meeting only the accepted ceiling
+must not be described as meeting the nominal target. A row fails if any one
 metric exceeds its ceiling, even when the other two or their sum pass.
+
+This tolerance changes no size-parity or matched-operation rule, and no
+correctness, memory, sampling-coverage, no-amplification, preparation-cache,
+cleanup, or source-identity requirement. Prior selected diagnostics remain
+non-admission evidence; all three complete families must use the prospectively
+updated, identical harness and policy. Localized edits must remain independent
+of untouched file size; optimizing already-accepted millisecond values is not
+a prerequisite to proceeding with the complete matrix.
 
 Every sample additionally requires:
 
