@@ -341,12 +341,6 @@ impl DockerProjection {
         self.control("resume")
     }
 
-    pub(crate) fn invalidate_file(&self, node: layerfs_fuse::NodeId) -> WorkspaceResult<()> {
-        self.proxy
-            .invalidate_file(node)
-            .map_err(|_| WorkspaceError::InvalidPlacement)
-    }
-
     pub(crate) fn take_write_metrics(&self) -> WorkspaceResult<layerfs_fuse::FuseWriteMetrics> {
         self.proxy
             .take_write_metrics()
