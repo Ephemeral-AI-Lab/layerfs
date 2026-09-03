@@ -621,6 +621,7 @@ fn main() {
 }
 
 fn run() -> AnyResult<()> {
+    let _commit_diagnostics = layerfs_sdk::capture_workspace_commit_diagnostics()?;
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
     match args.as_slice() {
         [command] if command == "self-check" => self_check(),

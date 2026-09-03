@@ -240,9 +240,19 @@ thread_local! {
     static WORKSPACE_COMMIT: RefCell<Option<WorkspaceCommitReceipt>> = const { RefCell::new(None) };
     static WORKSPACE_COMMIT_DIAGNOSTIC: RefCell<Option<WorkspaceCommitDiagnostics>> = const { RefCell::new(None) };
     static WORKSPACE_COMMIT_DIAGNOSTICS: RefCell<Vec<WorkspaceCommitDiagnostics>> = const { RefCell::new(Vec::new()) };
+    static WORKSPACE_COMMIT_DIAGNOSTICS_ENABLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 pub struct WorkspaceCommitTimer(Instant);
+pub struct WorkspaceCommitDiagnosticsGuard;
+
+impl Drop for WorkspaceCommitDiagnosticsGuard {
+    fn drop(&mut self) {
+        WORKSPACE_COMMIT_DIAGNOSTICS_ENABLED.with(|enabled| enabled.set(false));
+        WORKSPACE_COMMIT_DIAGNOSTIC.with(|diagnostic| diagnostic.borrow_mut().take());
+        WORKSPACE_COMMIT_DIAGNOSTICS.with(|diagnostics| diagnostics.borrow_mut().clear());
+    }
+}
 
 impl Drop for WorkspaceCommitTimer {
     fn drop(&mut self) {
@@ -278,8 +288,10 @@ pub fn begin_workspace_commit(mode: CaptureMode) -> Result<WorkspaceCommitTimer>
             capture_mode: Some(mode),
             ..WorkspaceCommitReceipt::default()
         });
-        WORKSPACE_COMMIT_DIAGNOSTIC.with(|diagnostic| {
-            *diagnostic.borrow_mut() = Some(WorkspaceCommitDiagnostics::default());
+        WORKSPACE_COMMIT_DIAGNOSTICS_ENABLED.with(|enabled| {
+            WORKSPACE_COMMIT_DIAGNOSTIC.with(|diagnostic| {
+                *diagnostic.borrow_mut() = enabled.get().then(WorkspaceCommitDiagnostics::default);
+            });
         });
         Ok(WorkspaceCommitTimer(Instant::now()))
     })
@@ -355,6 +367,16 @@ pub(crate) fn note_workspace_commit_cdc(bytes: u64) {
 
 pub fn take_workspace_commit_diagnostics() -> Vec<WorkspaceCommitDiagnostics> {
     WORKSPACE_COMMIT_DIAGNOSTICS.with(|diagnostics| std::mem::take(&mut *diagnostics.borrow_mut()))
+}
+
+pub fn capture_workspace_commit_diagnostics() -> Result<WorkspaceCommitDiagnosticsGuard> {
+    WORKSPACE_COMMIT_DIAGNOSTICS_ENABLED.with(|enabled| {
+        if enabled.replace(true) {
+            return Err(StoreError::Integrity("nested Workspace Commit diagnostics"));
+        }
+        WORKSPACE_COMMIT_DIAGNOSTICS.with(|diagnostics| diagnostics.borrow_mut().clear());
+        Ok(WorkspaceCommitDiagnosticsGuard)
+    })
 }
 
 pub(crate) fn note_workspace_admission(
@@ -534,6 +556,12 @@ mod tests {
     fn edit_diagnostics_are_separate_from_the_legacy_commit_receipt() {
         take_storage_receipts();
         take_workspace_commit_diagnostics();
+        for _ in 0..100 {
+            drop(begin_workspace_commit(CaptureMode::Materialized).unwrap());
+        }
+        assert!(take_workspace_commit_diagnostics().is_empty());
+        take_storage_receipts();
+        let _diagnostics = capture_workspace_commit_diagnostics().unwrap();
         {
             let _timer = begin_workspace_commit(CaptureMode::Materialized).unwrap();
             note_workspace_commit_edit_state(2, 3, 4, 5, 6, 7, 8, 9, 10);

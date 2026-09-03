@@ -10,7 +10,9 @@ pub use query::{Query, QueryItem, QueryKind, QueryPage, WorkspaceQueryItem};
 pub use request::{DiffPage, OperationHandle};
 pub use result::{Result, SdkError};
 
-pub use layerfs_layerstack_store::take_workspace_commit_diagnostics;
+pub use layerfs_layerstack_store::{
+    capture_workspace_commit_diagnostics, take_workspace_commit_diagnostics,
+};
 pub use layerfs_layerstack_store::{
     AddLayerResult, BranchId, BranchRecord, BuildCounters, CandidateReceipt, CanonicalStorage,
     CommitId, CommitRecord, DiffAspects, DiffEntry, DiffRequest, EntityName, FuseWriteReceipt,
