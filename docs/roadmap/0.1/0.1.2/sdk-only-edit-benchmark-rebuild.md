@@ -889,6 +889,34 @@ failure semantics.
 
 ### Clock-domain and boundary implementation
 
+**Superseding user-approved observation policy, 2026-09-04:** the active profile
+is `ack-window-v1`. Exact host/VM phase attribution, the 400 microsecond offset
+cutoff, calibration retries, guaranteed interior witnesses, and one-millisecond
+memory-boundary/gap rules below are historical diagnostics, not admission gates.
+Do not run clock probes for this profile. SDK Edit/Commit timestamps remain in
+the same host clock with their unchanged timing equation.
+
+After setup, start the daemon sampler and receive its ready acknowledgment
+before T0. Request its final observation after T3 (after End in performance
+mode). Those causal acknowledgments bracket a broader observation window;
+report its actual native timestamps, duration, sample count and gaps. Exact
+cgroup T0–T3 attribution is `unavailable`. Name the category/total periodic
+maxima `sampled` window observations, not exact phase or continuous peaks.
+The daemon's native `memory.peak` is a whole-container lifetime upper bound;
+the worker's native RSS high-water value is a whole-worker bound. Neither is
+renamed an exact edit-phase peak. Report conservative incremental upper bounds
+using these lifetime peaks minus the respective observed starting baselines.
+
+Keep 128 MiB native peak ceilings, 32 MiB incremental upper-bound ceilings,
+16 MiB cross-size native-peak spreads, zero observed swap and zero OOM/OOM-kill
+events, and all no-copy/spool/route/correctness gates. The 8 MiB dirty/writeback
+ceiling applies to available sampled observations; continuous category peaks
+and transient swap between observations cannot be strictly proven and must be
+explicitly disclosed. Sampling gaps/precision are diagnostic, not another
+abort gate. Missing/unreadable observations are unavailable, never synthesized.
+Do not pool prior exact-phase attempts with this profile or relabel failures.
+All three fresh families must use the same prospectively frozen profile.
+
 Host T0/T1/T3/T4 and external RSS observations use the same native
 `CLOCK_MONOTONIC_RAW` domain. T2 reuses T1; no wall-clock query or resource RPC
 is inserted between T3 and End. The daemon sampler uses an `Instant`-relative
