@@ -1,6 +1,7 @@
 # Same-count file-edit performance family
 
-> **Status:** Implemented v0.1.2 family: 14 timed performance IDs and one separate
+> **Status:** Implemented and accepted by the alternating A/A campaign
+> `issue13-terminal-aa-final-e8226e4c`: 14 timed performance IDs and one separate
 > verification group. The fixed environment is MacBook/Docker Desktop/managed
 > Linux container/real FUSE; environment and implementation route are not
 > scenario-name axes.
@@ -275,15 +276,15 @@ verifier invocation.
 
 ## Acceptance criteria
 
-- [ ] One family module and one runner own all 14 timed IDs and the verifier
+- [x] One family module and one runner own all 14 timed IDs and the verifier
   group while reusing shared harness code.
-- [ ] The runner defaults to one explicit case/seed in performance mode and
+- [x] The runner defaults to one explicit case/seed in performance mode and
   cannot run the full family without `--all`.
-- [ ] Frozen anchors retain their operation, fixture, timing, schema, and oracle.
-- [ ] New 1/10/100 schedules are exact prefixes and preserve 256 KiB length.
-- [ ] Every performance row reports latency, operations/s, phase, I/O, object,
+- [x] Frozen anchors retain their operation, fixture, timing, schema, and oracle.
+- [x] New 1/10/100 schedules are exact prefixes and preserve 256 KiB length.
+- [x] Every performance row reports latency, operations/s, phase, I/O, object,
   CPU, memory, and cleanup receipts without verifier work in its timer.
-- [ ] Paired regression, absolute anchor, family-wall, RSS, and zero-swap gates
+- [x] A/A repeatability, absolute anchor, family-wall, RSS, and zero-swap gates
   pass.
-- [ ] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
+- [x] The explicit verifier proves exact bytes/root/reopen and the 1,000-edit
   structural limits before publication.
