@@ -595,7 +595,16 @@ fn decode_initialization_seed(value: &str) -> Result<[u8; 32]> {
 }
 
 fn initialization_seed(layer_stack_id: &LayerStackId, diagnostic: bool) -> Result<[u8; 32]> {
-    let Some(value) = std::env::var_os("LAYERFS_BENCH_INITIALIZATION_SEED_HEX") else {
+    let value = std::env::var_os("LAYERFS_BENCH_INITIALIZATION_SEED_HEX");
+    initialization_seed_with_override(layer_stack_id, diagnostic, value.as_deref())
+}
+
+fn initialization_seed_with_override(
+    layer_stack_id: &LayerStackId,
+    diagnostic: bool,
+    value: Option<&std::ffi::OsStr>,
+) -> Result<[u8; 32]> {
+    let Some(value) = value else {
         return Ok(*blake3::hash(layer_stack_id.as_slice()).as_bytes());
     };
     decode_initialization_seed(
@@ -2185,12 +2194,25 @@ mod tests {
 
     #[test]
     fn benchmark_initialization_seed_is_exact_lower_hex() {
+        let stack = LayerStackId::new();
+        let override_value = std::ffi::OsStr::new(
+            "0101010101010101010101010101010101010101010101010101010101010101",
+        );
         assert_eq!(
             decode_initialization_seed(&"01".repeat(32)).unwrap(),
             [1; 32]
         );
         assert!(decode_initialization_seed(&"01".repeat(31)).is_err());
         assert!(decode_initialization_seed(&"AA".repeat(32)).is_err());
+        assert_eq!(
+            initialization_seed_with_override(&stack, true, Some(override_value)).unwrap(),
+            [1; 32]
+        );
+        assert!(initialization_seed_with_override(&stack, false, Some(override_value)).is_err());
+        assert_eq!(
+            initialization_seed_with_override(&stack, false, None).unwrap(),
+            *blake3::hash(stack.as_slice()).as_bytes()
+        );
     }
 
     fn cached_directory_root(

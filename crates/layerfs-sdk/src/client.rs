@@ -13,8 +13,8 @@ use layerfs_monitor::{
 use layerfs_workspace::{
     ConflictCursor, ConflictId, ConflictPage, ContainerBinding, CreateWorkspaceSession,
     EndWorkspaceMode, ExecutionId, NonEmpty, OutputReader, ResolveChoice, ResolveResult,
-    WorkspaceCommitResult, WorkspaceEndResult, WorkspaceExecution, WorkspaceFileRangeEdit,
-    WorkspaceId, WorkspaceSession, Workspaces,
+    WorkspaceCommitResult, WorkspaceCommitStatus, WorkspaceEndResult, WorkspaceExecution,
+    WorkspaceFileRangeEdit, WorkspaceId, WorkspaceSession, Workspaces,
 };
 use std::ffi::OsString;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -193,26 +193,27 @@ impl Client {
         &self,
         workspace_id: WorkspaceId,
     ) -> Result<WorkspaceCommitResult> {
+        self.commit_workspace_session_with_status(workspace_id)
+            .map(|status| status.result)
+    }
+
+    pub fn commit_workspace_session_with_status(
+        &self,
+        workspace_id: WorkspaceId,
+    ) -> Result<WorkspaceCommitStatus> {
         let operation = workspace_operation(OperationFamily::WorkspaceCommit, workspace_id);
         self.observe(
             operation,
-            || self.0.workspaces.commit_workspace_session(workspace_id),
-            |result| match result {
+            || {
+                self.0
+                    .workspaces
+                    .commit_workspace_session_with_status(workspace_id)
+            },
+            |status| match status.result {
                 WorkspaceCommitResult::Created { .. } => OperationOutcome::Success,
                 WorkspaceCommitResult::UpToDate { .. } => OperationOutcome::UpToDate,
-                WorkspaceCommitResult::CreatedPresentationFailed { .. } => {
-                    OperationOutcome::Success
-                }
-                WorkspaceCommitResult::UpToDatePresentationFailed { .. } => {
-                    OperationOutcome::UpToDate
-                }
-                WorkspaceCommitResult::Busy | WorkspaceCommitResult::BusyPresentationFailed => {
-                    OperationOutcome::Busy
-                }
-                WorkspaceCommitResult::HeadMoved { .. }
-                | WorkspaceCommitResult::HeadMovedPresentationFailed { .. } => {
-                    OperationOutcome::HeadMoved
-                }
+                WorkspaceCommitResult::Busy => OperationOutcome::Busy,
+                WorkspaceCommitResult::HeadMoved { .. } => OperationOutcome::HeadMoved,
             },
         )
     }
@@ -228,13 +229,10 @@ impl Client {
     }
 
     pub fn edit_workspace_file_range(&self, edit: WorkspaceFileRangeEdit) -> Result<()> {
-        let operation =
-            workspace_operation(OperationFamily::WorkspaceFileRangeEdit, edit.workspace_id);
-        self.observe(
-            operation,
-            || self.0.workspaces.edit_workspace_file_range(edit),
-            |_| OperationOutcome::Success,
-        )
+        self.0
+            .workspaces
+            .edit_workspace_file_range(edit)
+            .map_err(Into::into)
     }
 
     /// Applies one public, prevalidated same-file edit batch with one projection refresh.
@@ -243,16 +241,13 @@ impl Client {
     /// their pre-call state. This is the supported v0.1.2 high-throughput owner-side API;
     /// callers that need one edit may use [`Self::edit_workspace_file_range`].
     pub fn edit_workspace_file_ranges(&self, edits: Vec<WorkspaceFileRangeEdit>) -> Result<()> {
-        let workspace_id = edits
-            .first()
-            .ok_or(SdkError::InvalidRequest("Workspace file range edits"))?
-            .workspace_id;
-        let operation = workspace_operation(OperationFamily::WorkspaceFileRangeEdit, workspace_id);
-        self.observe(
-            operation,
-            || self.0.workspaces.edit_workspace_file_ranges(edits),
-            |_| OperationOutcome::Success,
-        )
+        if edits.is_empty() {
+            return Err(SdkError::InvalidRequest("Workspace file range edits"));
+        }
+        self.0
+            .workspaces
+            .edit_workspace_file_ranges(edits)
+            .map_err(Into::into)
     }
 
     pub fn end_workspace_session(

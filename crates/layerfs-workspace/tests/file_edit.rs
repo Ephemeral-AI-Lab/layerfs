@@ -4,8 +4,9 @@ use layerfs_layerstack_store::{
 };
 use layerfs_workspace::{
     inject_candidate_failure_once, inject_projection_resume_failure_once, CreateWorkspaceSession,
-    EndWorkspaceMode, WorkspaceCommitResult, WorkspaceFileRangeEdit, WorkspaceFileReplacement,
-    WorkspacePlacement, WorkspaceProjection, WorkspaceSession, WorkspaceState, Workspaces,
+    EndWorkspaceMode, WorkspaceCommitResult, WorkspaceError, WorkspaceFileRangeEdit,
+    WorkspaceFileReplacement, WorkspacePlacement, WorkspaceProjection, WorkspaceSession,
+    WorkspaceState, Workspaces,
 };
 use std::os::unix::fs::MetadataExt;
 
@@ -650,12 +651,12 @@ fn stale_head_with_resume_failure_requires_explicit_presentation_recovery() {
         .unwrap();
     inject_projection_resume_failure_once();
     assert!(matches!(
-        workspaces.commit_workspace_session(stale.id).unwrap(),
-        WorkspaceCommitResult::HeadMovedPresentationFailed { .. }
+        workspaces.commit_workspace_session(stale.id),
+        Err(WorkspaceError::Io(_))
     ));
     assert_eq!(
         workspaces.session(stale.id).unwrap().session.state,
-        WorkspaceState::BrokenPresentation
+        WorkspaceState::Active
     );
     assert_eq!(
         workspaces

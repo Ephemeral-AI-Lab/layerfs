@@ -119,6 +119,10 @@ pub struct WorkspaceCommitReceipt {
     pub snapshot_database_rows: u64,
     pub snapshot_database_bytes: u64,
     pub payload_bytes_read: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct WorkspaceCommitDiagnostics {
     pub cdc_bytes_scanned: u64,
     pub edit_count: u64,
     pub edit_piece_count: u64,
@@ -234,6 +238,8 @@ thread_local! {
     static RECEIPTS: RefCell<Vec<StorageReceipt>> = const { RefCell::new(Vec::new()) };
     static LAYERSTACK_INITIALIZATIONS: RefCell<Vec<LayerStackInitializationReceipt>> = const { RefCell::new(Vec::new()) };
     static WORKSPACE_COMMIT: RefCell<Option<WorkspaceCommitReceipt>> = const { RefCell::new(None) };
+    static WORKSPACE_COMMIT_DIAGNOSTIC: RefCell<Option<WorkspaceCommitDiagnostics>> = const { RefCell::new(None) };
+    static WORKSPACE_COMMIT_DIAGNOSTICS: RefCell<Vec<WorkspaceCommitDiagnostics>> = const { RefCell::new(Vec::new()) };
 }
 
 pub struct WorkspaceCommitTimer(Instant);
@@ -251,6 +257,13 @@ impl Drop for WorkspaceCommitTimer {
                     .borrow_mut()
                     .push(StorageReceipt::WorkspaceCommit(receipt));
             });
+            WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+                if let Some(diagnostic) = current.borrow_mut().take() {
+                    WORKSPACE_COMMIT_DIAGNOSTICS.with(|diagnostics| {
+                        diagnostics.borrow_mut().push(diagnostic);
+                    });
+                }
+            });
         });
     }
 }
@@ -264,6 +277,9 @@ pub fn begin_workspace_commit(mode: CaptureMode) -> Result<WorkspaceCommitTimer>
         *current = Some(WorkspaceCommitReceipt {
             capture_mode: Some(mode),
             ..WorkspaceCommitReceipt::default()
+        });
+        WORKSPACE_COMMIT_DIAGNOSTIC.with(|diagnostic| {
+            *diagnostic.borrow_mut() = Some(WorkspaceCommitDiagnostics::default());
         });
         Ok(WorkspaceCommitTimer(Instant::now()))
     })
@@ -281,25 +297,25 @@ pub fn note_workspace_commit_edit_state(
     spool_superseded_bytes: u64,
     metric_nodes_scanned: u64,
 ) {
-    WORKSPACE_COMMIT.with(|current| {
-        if let Some(receipt) = current.borrow_mut().as_mut() {
-            receipt.edit_count = edit_count;
-            receipt.edit_piece_count = piece_count;
-            receipt.edit_piece_height = piece_height;
-            receipt.edit_piece_logical_charge = piece_logical_charge;
-            receipt.edit_spool_allocated_bytes = spool_allocated_bytes;
-            receipt.edit_spool_peak_bytes = spool_peak_bytes;
-            receipt.edit_spool_live_bytes = spool_live_bytes;
-            receipt.edit_spool_superseded_bytes = spool_superseded_bytes;
-            receipt.edit_metric_nodes_scanned = metric_nodes_scanned;
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.edit_count = edit_count;
+            diagnostic.edit_piece_count = piece_count;
+            diagnostic.edit_piece_height = piece_height;
+            diagnostic.edit_piece_logical_charge = piece_logical_charge;
+            diagnostic.edit_spool_allocated_bytes = spool_allocated_bytes;
+            diagnostic.edit_spool_peak_bytes = spool_peak_bytes;
+            diagnostic.edit_spool_live_bytes = spool_live_bytes;
+            diagnostic.edit_spool_superseded_bytes = spool_superseded_bytes;
+            diagnostic.edit_metric_nodes_scanned = metric_nodes_scanned;
         }
     });
 }
 
 pub fn note_workspace_commit_tree_visits(visits: u64) {
-    WORKSPACE_COMMIT.with(|current| {
-        if let Some(receipt) = current.borrow_mut().as_mut() {
-            receipt.edit_tree_visits = receipt.edit_tree_visits.saturating_add(visits);
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.edit_tree_visits = diagnostic.edit_tree_visits.saturating_add(visits);
         }
     });
 }
@@ -330,11 +346,15 @@ pub fn note_workspace_commit_phase(phase: WorkspaceCommitPhase, elapsed_ns: u64)
 }
 
 pub(crate) fn note_workspace_commit_cdc(bytes: u64) {
-    WORKSPACE_COMMIT.with(|current| {
-        if let Some(receipt) = current.borrow_mut().as_mut() {
-            receipt.cdc_bytes_scanned = bytes;
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.cdc_bytes_scanned = bytes;
         }
     });
+}
+
+pub fn take_workspace_commit_diagnostics() -> Vec<WorkspaceCommitDiagnostics> {
+    WORKSPACE_COMMIT_DIAGNOSTICS.with(|diagnostics| std::mem::take(&mut *diagnostics.borrow_mut()))
 }
 
 pub(crate) fn note_workspace_admission(
@@ -504,4 +524,46 @@ pub(crate) fn take_layerstack_initialization_receipts() -> Vec<LayerStackInitial
 
 fn elapsed_ns(started: Instant) -> u64 {
     started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn edit_diagnostics_are_separate_from_the_legacy_commit_receipt() {
+        take_storage_receipts();
+        take_workspace_commit_diagnostics();
+        {
+            let _timer = begin_workspace_commit(CaptureMode::Materialized).unwrap();
+            note_workspace_commit_edit_state(2, 3, 4, 5, 6, 7, 8, 9, 10);
+            note_workspace_commit_tree_visits(11);
+            note_workspace_commit_cdc(12);
+        }
+        let receipts = take_storage_receipts();
+        let [StorageReceipt::WorkspaceCommit(receipt)] = receipts.as_slice() else {
+            panic!("one legacy commit receipt")
+        };
+        assert_eq!(receipt.capture_mode, Some(CaptureMode::Materialized));
+        let diagnostics = take_workspace_commit_diagnostics();
+        let [diagnostic] = diagnostics.as_slice() else {
+            panic!("one edit diagnostic")
+        };
+        assert_eq!(
+            *diagnostic,
+            WorkspaceCommitDiagnostics {
+                cdc_bytes_scanned: 12,
+                edit_count: 2,
+                edit_piece_count: 3,
+                edit_piece_height: 4,
+                edit_piece_logical_charge: 5,
+                edit_spool_allocated_bytes: 6,
+                edit_spool_peak_bytes: 7,
+                edit_spool_live_bytes: 8,
+                edit_spool_superseded_bytes: 9,
+                edit_tree_visits: 11,
+                edit_metric_nodes_scanned: 10,
+            }
+        );
+    }
 }

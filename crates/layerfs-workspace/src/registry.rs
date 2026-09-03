@@ -230,7 +230,7 @@ fn record_summary(record: SessionRecord) -> WorkspaceResult<WorkspaceSummary> {
                     .lock()
                     .map_err(|_| WorkspaceError::WorkspaceBusy)?
                     .state,
-                crate::WorkspaceState::BrokenCleanup | crate::WorkspaceState::BrokenPresentation
+                crate::WorkspaceState::BrokenCleanup
             );
             let dirty = broken_cleanup || crate::projection::is_dirty(&worker)?;
             let workspace = worker

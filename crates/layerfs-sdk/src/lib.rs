@@ -10,14 +10,15 @@ pub use query::{Query, QueryItem, QueryKind, QueryPage, WorkspaceQueryItem};
 pub use request::{DiffPage, OperationHandle};
 pub use result::{Result, SdkError};
 
+pub use layerfs_layerstack_store::take_workspace_commit_diagnostics;
 pub use layerfs_layerstack_store::{
     AddLayerResult, BranchId, BranchRecord, BuildCounters, CandidateReceipt, CanonicalStorage,
     CommitId, CommitRecord, DiffAspects, DiffEntry, DiffRequest, EntityName, FuseWriteReceipt,
     InitializeLayerStackResult, LayerId, LayerRecord, LayerStackId, LayerStackInitialization,
     LayerStackInitializationReceipt, LayerStackRecord, LayerStackStore, LocalForkSource,
     NodeSummary, ObjectSource, ReconcileChoice, ReconcileConflict, ReconcileConflictKind,
-    StorageReceipt, StoreCounts, StoreError, WorkspaceCommitReceipt, WorkspaceLifecycleKind,
-    WorkspaceLifecycleReceipt,
+    StorageReceipt, StoreCounts, StoreError, WorkspaceCommitDiagnostics, WorkspaceCommitReceipt,
+    WorkspaceLifecycleKind, WorkspaceLifecycleReceipt,
 };
 pub use layerfs_monitor::{
     CandidateStats, CandidateTotals, DatabaseSnapshot, DedupAnalysis, MonitorError,
@@ -30,8 +31,8 @@ pub use layerfs_workspace::{
     ContainerStatus, CreateWorkspaceSession, CreatedContainer, DaemonTiming, EndWorkspaceMode,
     ExecutionEvent, ExecutionId, ExecutionReceipt, ExecutionSummary, ExecutionTransport, NonEmpty,
     OutputChunk, OutputPage, OutputReader, OutputStream, ResolveChoice, ResolveResult,
-    RunningContainer, WorkspaceCommitResult, WorkspaceConflict, WorkspaceDetail,
-    WorkspaceEndResult, WorkspaceError, WorkspaceExecution, WorkspaceFileRangeEdit,
-    WorkspaceFileReplacement, WorkspaceId, WorkspacePlacement, WorkspaceProjection, WorkspaceState,
-    WorkspaceSummary,
+    RunningContainer, WorkspaceCommitResult, WorkspaceCommitStatus, WorkspaceConflict,
+    WorkspaceDetail, WorkspaceEndResult, WorkspaceError, WorkspaceExecution,
+    WorkspaceFileRangeEdit, WorkspaceFileReplacement, WorkspaceId, WorkspacePlacement,
+    WorkspaceProjection, WorkspaceState, WorkspaceSummary,
 };

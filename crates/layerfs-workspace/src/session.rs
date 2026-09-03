@@ -298,18 +298,6 @@ pub enum WorkspaceCommitResult {
     UpToDate {
         head: Option<CommitId>,
     },
-    CreatedPresentationFailed {
-        previous_head: Option<CommitId>,
-        commit_id: CommitId,
-    },
-    UpToDatePresentationFailed {
-        head: Option<CommitId>,
-    },
-    BusyPresentationFailed,
-    HeadMovedPresentationFailed {
-        expected: Option<CommitId>,
-        actual: Option<CommitId>,
-    },
     Busy,
     HeadMoved {
         expected: Option<CommitId>,
@@ -332,24 +320,12 @@ impl WorkspaceCommitResult {
             },
         }
     }
+}
 
-    pub(crate) fn presentation_failed(self) -> Self {
-        match self {
-            Self::Created {
-                previous_head,
-                commit_id,
-            } => Self::CreatedPresentationFailed {
-                previous_head,
-                commit_id,
-            },
-            Self::UpToDate { head } => Self::UpToDatePresentationFailed { head },
-            Self::Busy => Self::BusyPresentationFailed,
-            Self::HeadMoved { expected, actual } => {
-                Self::HeadMovedPresentationFailed { expected, actual }
-            }
-            result => result,
-        }
-    }
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkspaceCommitStatus {
+    pub result: WorkspaceCommitResult,
+    pub presentation_failed: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

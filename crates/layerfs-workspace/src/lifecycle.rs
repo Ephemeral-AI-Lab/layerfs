@@ -1,8 +1,8 @@
 use crate::{
     worker::WorkspaceWorker, CreateWorkspaceSession, EndWorkspaceMode, Workspace,
-    WorkspaceCommitResult, WorkspaceDetail, WorkspaceDiff, WorkspaceEndResult, WorkspaceError,
-    WorkspaceFileRangeEdit, WorkspaceId, WorkspaceProjection, WorkspaceResult, WorkspaceSession,
-    WorkspaceSummary, Workspaces,
+    WorkspaceCommitResult, WorkspaceCommitStatus, WorkspaceDetail, WorkspaceDiff,
+    WorkspaceEndResult, WorkspaceError, WorkspaceFileRangeEdit, WorkspaceId, WorkspaceProjection,
+    WorkspaceResult, WorkspaceSession, WorkspaceSummary, Workspaces,
 };
 use layerfs_layerstack_store::{
     CommitOutcome, Result, StoreError as StorageError, WorkspaceCommitPhase,
@@ -22,7 +22,6 @@ pub enum WorkspaceState {
     Committed,
     Discarded,
     Ended,
-    BrokenPresentation,
     BrokenCleanup,
 }
 
@@ -394,13 +393,32 @@ impl Workspaces {
         &self,
         id: WorkspaceId,
     ) -> WorkspaceResult<WorkspaceCommitResult> {
+        self.commit_workspace_session_with_status(id)
+            .map(|status| status.result)
+    }
+
+    pub fn commit_workspace_session_with_status(
+        &self,
+        id: WorkspaceId,
+    ) -> WorkspaceResult<WorkspaceCommitStatus> {
         let worker = self.worker(id)?;
         let _timing = layerfs_layerstack_store::begin_workspace_commit(match worker.projection {
             WorkspaceProjection::Fuse => layerfs_layerstack_store::CaptureMode::Live,
             WorkspaceProjection::Materialize => layerfs_layerstack_store::CaptureMode::Materialized,
         })?;
         if worker.has_executions()? {
-            return Ok(WorkspaceCommitResult::Busy);
+            return Ok(WorkspaceCommitStatus {
+                result: WorkspaceCommitResult::Busy,
+                presentation_failed: false,
+            });
+        }
+        if worker
+            .workspace
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?
+            .presentation_failed
+        {
+            return Err(WorkspaceError::InvalidExecution);
         }
         let commit_read_before = worker
             .workspace
@@ -428,16 +446,19 @@ impl Workspaces {
         let _quiesced = match quiesced {
             Ok(quiesced) => quiesced,
             Err(WorkspaceError::WorkspaceBusy) => {
-                if crate::projection::resume(&worker).is_err() {
+                if let Err(error) = crate::projection::resume(&worker) {
                     let _ = crate::projection::end(&worker);
                     worker
                         .workspace
                         .lock()
                         .map_err(|_| WorkspaceError::WorkspaceBusy)?
-                        .state = WorkspaceState::BrokenPresentation;
-                    return Ok(WorkspaceCommitResult::BusyPresentationFailed);
+                        .presentation_failed = true;
+                    return Err(error);
                 }
-                return Ok(WorkspaceCommitResult::Busy);
+                return Ok(WorkspaceCommitStatus {
+                    result: WorkspaceCommitResult::Busy,
+                    presentation_failed: false,
+                });
             }
             Err(error) => {
                 crate::projection::resume(&worker)?;
@@ -509,21 +530,31 @@ impl Workspaces {
         };
         if let Err(error) = presentation {
             let _ = crate::projection::end(&worker);
+            worker
+                .workspace
+                .lock()
+                .map_err(|_| WorkspaceError::WorkspaceBusy)?
+                .presentation_failed = true;
             return match result {
-                Ok((result, _)) => {
-                    worker
-                        .workspace
-                        .lock()
-                        .map_err(|_| WorkspaceError::WorkspaceBusy)?
-                        .state = WorkspaceState::BrokenPresentation;
-                    Ok(result.presentation_failed())
+                Ok((result @ WorkspaceCommitResult::Created { .. }, _))
+                | Ok((result @ WorkspaceCommitResult::UpToDate { .. }, _)) => {
+                    Ok(WorkspaceCommitStatus {
+                        result,
+                        presentation_failed: true,
+                    })
                 }
-                Err(_) => Err(error),
+                _ => Err(error),
             };
         }
         match result {
-            Ok((result, _)) => Ok(result),
-            Err(WorkspaceError::WorkspaceBusy) => Ok(WorkspaceCommitResult::Busy),
+            Ok((result, _)) => Ok(WorkspaceCommitStatus {
+                result,
+                presentation_failed: false,
+            }),
+            Err(WorkspaceError::WorkspaceBusy) => Ok(WorkspaceCommitStatus {
+                result: WorkspaceCommitResult::Busy,
+                presentation_failed: false,
+            }),
             Err(error) => Err(error),
         }
     }
@@ -534,12 +565,11 @@ impl Workspaces {
     ) -> WorkspaceResult<WorkspaceSession> {
         let worker = self.worker(id)?;
         if worker.has_executions()?
-            || worker
+            || !worker
                 .workspace
                 .lock()
                 .map_err(|_| WorkspaceError::WorkspaceBusy)?
-                .state
-                != WorkspaceState::BrokenPresentation
+                .presentation_failed
         {
             return Err(WorkspaceError::InvalidExecution);
         }
@@ -555,7 +585,7 @@ impl Workspaces {
             .workspace
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?;
-        workspace.state = WorkspaceState::Active;
+        workspace.presentation_failed = false;
         Ok(session_locked(&worker, &workspace))
     }
 
@@ -640,7 +670,7 @@ impl Workspaces {
                     || crate::projection::refresh(&worker, self.daemon_mount_owner()?).is_err()
                 {
                     if let Ok(mut workspace) = worker.workspace.lock() {
-                        workspace.state = WorkspaceState::BrokenPresentation;
+                        workspace.presentation_failed = true;
                     }
                 }
                 Err(refresh_error)
@@ -657,13 +687,15 @@ impl Workspaces {
         if worker.has_executions()? {
             return Err(WorkspaceError::WorkspaceBusy);
         }
-        let state = worker
+        let workspace = worker
             .workspace
             .lock()
-            .map_err(|_| WorkspaceError::WorkspaceBusy)?
-            .state;
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        let state = workspace.state;
+        let presentation_failed = workspace.presentation_failed;
+        drop(workspace);
         if state == WorkspaceState::BrokenCleanup
-            || (state == WorkspaceState::BrokenPresentation && mode == EndWorkspaceMode::Clean)
+            || (presentation_failed && mode == EndWorkspaceMode::Clean)
         {
             return Err(WorkspaceError::InvalidPlacement);
         }
@@ -1068,14 +1100,11 @@ mod tests {
         let worker = workspaces.worker(session.id).unwrap();
         worker.note_writer(true).unwrap();
         crate::projection::inject_resume_failure_once();
-        assert_eq!(
-            workspaces.commit_workspace_session(session.id).unwrap(),
-            WorkspaceCommitResult::BusyPresentationFailed
-        );
-        assert_eq!(
-            workspaces.session(session.id).unwrap().session.state,
-            WorkspaceState::BrokenPresentation
-        );
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id),
+            Err(WorkspaceError::Io(_))
+        ));
+        assert!(worker.workspace.lock().unwrap().presentation_failed);
         worker.note_writer(false).unwrap();
         assert_eq!(
             workspaces

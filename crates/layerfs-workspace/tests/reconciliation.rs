@@ -128,10 +128,14 @@ fn published_commit_reports_projection_failure_and_recovers_without_recommit() {
     };
     std::fs::write(mount.join("a"), b"once").unwrap();
     inject_projection_refresh_failure_once();
-    let WorkspaceCommitResult::CreatedPresentationFailed {
+    let status = workspaces
+        .commit_workspace_session_with_status(workspace_id)
+        .unwrap();
+    assert!(status.presentation_failed);
+    let WorkspaceCommitResult::Created {
         previous_head: observed_previous,
         commit_id,
-    } = workspaces.commit_workspace_session(workspace_id).unwrap()
+    } = status.result
     else {
         panic!("published presentation failure")
     };
@@ -143,7 +147,7 @@ fn published_commit_reports_projection_failure_and_recovers_without_recommit() {
     assert_eq!(store.store_counts().unwrap().commits, commits_before + 1);
     assert_eq!(
         workspaces.session(workspace_id).unwrap().session.state,
-        WorkspaceState::BrokenPresentation
+        WorkspaceState::Active
     );
 
     let recovered = workspaces

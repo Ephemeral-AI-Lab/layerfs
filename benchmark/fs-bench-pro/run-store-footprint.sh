@@ -13,6 +13,14 @@ capture_failure() { failure_line=$1; failure_command=$2; }
 die() { failure_line=${failure_line:-${BASH_LINENO[0]:-unknown}}; failure_reason=$*; printf 'fs-bench-pro Store footprint: %s\n' "$*" >&2; exit 2; }
 trap 'capture_failure "$LINENO" "$BASH_COMMAND"' ERR
 
+write_failure_context() {
+  python3 - "$@" <<'PY'
+import json,sys
+path,case,seed,mode,status,timeout,line,shell_command,semantic_command,stderr=sys.argv[1:]
+json.dump({'schema':'fs-bench-pro-store-failure-context-v3','case':case,'seed':seed,'sample_mode':mode,'exit_status':status,'timeout_seconds':timeout,'line':line,'shell_command':shell_command,'semantic_command':semantic_command,'summary_stderr':stderr},open(path,'w'),sort_keys=True,separators=(',',':'));open(path,'a').write('\n')
+PY
+}
+
 self_check() {
   local scratch started elapsed
   started=$(python3 -c 'import time; print(time.monotonic_ns())')
@@ -23,6 +31,12 @@ self_check() {
     "$here/families/store_footprint.rs" >"$scratch/check.rs"
   rustc --edition=2021 -Awarnings "$scratch/check.rs" -o "$scratch/check"
   "$scratch/check"
+  write_failure_context "$scratch/failure.json" case 1 verify 23 90 250 \
+    'env KEY=value command --flag value' 'store-footprint-verify case' 'supervisor.txt'
+  python3 - "$scratch/failure.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1]));assert r['shell_command']=='env KEY=value command --flag value' and r['exit_status']=='23' and r['line']=='250'
+PY
   elapsed=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - started ))
   (( elapsed < 2000000000 )) || die "self-check exceeded two seconds"
   rm -rf -- "$scratch"
@@ -179,11 +193,11 @@ seal_failed_run() {
   [[ $status != 0 && ! -f $run_dir/evidence.sha256 ]] || exit "$status"
   set +e
   printf '%s\n' "${failure_reason:-unhandled runner failure}" >"$run_dir/environment/failure.txt"
-  python3 - "$run_dir/environment/failure-context.json" "${failure_case:-not-started}" "${failure_seed:-not-started}" "${failure_mode:-not-started}" "${failure_status:-unknown}" "${failure_timeout:-unknown}" "${failure_line:-unknown}" "${failure_command_safe:-not-started}" "${failure_stderr:-not-started}" <<'PY'
-import json,sys
-path,case,seed,mode,status,timeout,line,command,stderr=sys.argv[1:]
-json.dump({'schema':'fs-bench-pro-store-failure-context-v2','case':case,'seed':seed,'sample_mode':mode,'exit_status':status,'timeout_seconds':timeout,'line':line,'command':command,'summary_stderr':stderr},open(path,'w'),sort_keys=True,separators=(',',':'));open(path,'a').write('\n')
-PY
+  write_failure_context "$run_dir/environment/failure-context.json" \
+    "${failure_case:-not-started}" "${failure_seed:-not-started}" "${failure_mode:-not-started}" \
+    "${failure_status:-unknown}" "${failure_timeout:-unknown}" "${failure_line:-unknown}" \
+    "${failure_command_exact:-${failure_command:-unknown}}" "${failure_command_safe:-not-started}" \
+    "${failure_stderr:-not-started}"
   python3 - "$run_dir/run-status.json" "$evidence_version" "$mode" "$source_arm" "${failure_reason:-unhandled runner failure}" <<'PY'
 import json,sys
 json.dump({'schema':f'fs-bench-pro-store-footprint-status-{sys.argv[2]}','mode':sys.argv[3],'source_arm':sys.argv[4],'status':'hard-failure','admission_eligible':False,'reason':sys.argv[5]},open(sys.argv[1],'w'),sort_keys=True,separators=(',',':'));open(sys.argv[1],'a').write('\n')
@@ -228,6 +242,7 @@ verification_external_wall_ns=0
 
 run_sample() {
   local control=$1 sample_seed=$2 sample_mode=$3 fixture_dir manifest sample_dir status raw_target before_sha after_sha nonce control_manifest timeout_seconds sample_started sample_wall_ns
+  local -a sample_command
   fixture_dir=$(fixture_for "$control")
   manifest="$fixture_dir/manifest.json"
   control_manifest="$run_dir/controls/$control.json"
@@ -249,16 +264,21 @@ PY
   failure_command_safe="fs-benchmark-pro store-footprint-$sample_mode CONTROL=$control SEED=$sample_seed SOURCE=$source_arm TIER=$tier"
   failure_stderr="$sample_dir/supervisor.txt"
   sample_started=$(python3 -c 'import time; print(time.monotonic_ns())')
+  sample_command=(
+    /usr/bin/time -l -p perl -e 'alarm shift; exec @ARGV' "$timeout_seconds" env
+    LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE="$nonce"
+    LAYERFS_BENCH_INITIALIZATION_SEED_HEX="$fixture_digest"
+    LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload
+    LAYERFS_EXEC_TRANSPORT=daemon LAYERFS_FUSE_TRANSPORT=daemon
+    LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability"
+    LAYERFS_DAEMON_CONTAINER_ID="$container_id" LAYERFS_FUSE_HOST=host.docker.internal
+    "$binary" "store-footprint-$sample_mode" "$sample_dir/work" "$fixture_dir/fixture" "$container_id"
+    "$control" "$sample_seed" "$source_arm" "$expected_files" "$expected_logical" "$edit_path" "$edit_size"
+    "$fixture_digest" "$edited_digest"
+  )
+  printf -v failure_command_exact '%q ' "${sample_command[@]}"
   set +e
-  /usr/bin/time -l -p perl -e 'alarm shift; exec @ARGV' "$timeout_seconds" env LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE="$nonce" \
-    LAYERFS_BENCH_INITIALIZATION_SEED_HEX="$fixture_digest" \
-    LAYERFS_BENCH_WORKLOAD=/usr/local/bin/fs-benchmark-workload \
-    LAYERFS_EXEC_TRANSPORT=daemon LAYERFS_FUSE_TRANSPORT=daemon \
-    LAYERFS_DAEMON_TCP_ENDPOINT="$daemon_endpoint" LAYERFS_DAEMON_CAPABILITY="$daemon_capability" \
-    LAYERFS_DAEMON_CONTAINER_ID="$container_id" LAYERFS_FUSE_HOST=host.docker.internal \
-    "$binary" "store-footprint-$sample_mode" "$sample_dir/work" "$fixture_dir/fixture" "$container_id" \
-    "$control" "$sample_seed" "$source_arm" "$expected_files" "$expected_logical" "$edit_path" "$edit_size" \
-    "$fixture_digest" "$edited_digest" >"$sample_dir/raw.jsonl" 2>"$sample_dir/supervisor.txt"
+  "${sample_command[@]}" >"$sample_dir/raw.jsonl" 2>"$sample_dir/supervisor.txt"
   status=$?
   failure_status=$status
   set -e

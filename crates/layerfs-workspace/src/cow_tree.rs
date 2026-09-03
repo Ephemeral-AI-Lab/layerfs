@@ -118,6 +118,7 @@ pub struct Workspace {
     pub(crate) reserved: BTreeSet<NodeId>,
     pub(crate) next_node: u64,
     pub(crate) state: WorkspaceState,
+    pub(crate) presentation_failed: bool,
     pub(crate) resolution: Option<crate::reconcile::ResolutionState>,
 }
 
@@ -241,6 +242,7 @@ impl Workspace {
             reserved: BTreeSet::new(),
             next_node: 2,
             state: WorkspaceState::Active,
+            presentation_failed: false,
             resolution: None,
         })
     }

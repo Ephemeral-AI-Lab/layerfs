@@ -1332,7 +1332,63 @@ fn operation_workspace_create(
 
 fn operation_workspace_commit(
     snapshot: &layerfs_sdk::MonitorSnapshot,
-) -> AnyResult<layerfs_sdk::WorkspaceCommitReceipt> {
+) -> AnyResult<BenchmarkWorkspaceCommitReceipt> {
+    let mut commits = operation_workspace_commits(snapshot)?;
+    if commits.len() != 1 {
+        return Err("namespace Workspace Commit receipt cardinality".into());
+    }
+    Ok(commits.pop().expect("one commit receipt"))
+}
+
+#[derive(Clone, Copy)]
+struct BenchmarkWorkspaceCommitReceipt {
+    receipt: layerfs_sdk::WorkspaceCommitReceipt,
+    cdc_bytes_scanned: u64,
+    edit_count: u64,
+    edit_piece_count: u64,
+    edit_piece_height: u64,
+    edit_piece_logical_charge: u64,
+    edit_spool_allocated_bytes: u64,
+    edit_spool_peak_bytes: u64,
+    edit_spool_live_bytes: u64,
+    edit_spool_superseded_bytes: u64,
+    edit_tree_visits: u64,
+    edit_metric_nodes_scanned: u64,
+}
+
+impl std::ops::Deref for BenchmarkWorkspaceCommitReceipt {
+    type Target = layerfs_sdk::WorkspaceCommitReceipt;
+
+    fn deref(&self) -> &Self::Target {
+        &self.receipt
+    }
+}
+
+impl BenchmarkWorkspaceCommitReceipt {
+    fn new(
+        receipt: layerfs_sdk::WorkspaceCommitReceipt,
+        diagnostic: layerfs_sdk::WorkspaceCommitDiagnostics,
+    ) -> Self {
+        Self {
+            receipt,
+            cdc_bytes_scanned: diagnostic.cdc_bytes_scanned,
+            edit_count: diagnostic.edit_count,
+            edit_piece_count: diagnostic.edit_piece_count,
+            edit_piece_height: diagnostic.edit_piece_height,
+            edit_piece_logical_charge: diagnostic.edit_piece_logical_charge,
+            edit_spool_allocated_bytes: diagnostic.edit_spool_allocated_bytes,
+            edit_spool_peak_bytes: diagnostic.edit_spool_peak_bytes,
+            edit_spool_live_bytes: diagnostic.edit_spool_live_bytes,
+            edit_spool_superseded_bytes: diagnostic.edit_spool_superseded_bytes,
+            edit_tree_visits: diagnostic.edit_tree_visits,
+            edit_metric_nodes_scanned: diagnostic.edit_metric_nodes_scanned,
+        }
+    }
+}
+
+fn operation_workspace_commits(
+    snapshot: &layerfs_sdk::MonitorSnapshot,
+) -> AnyResult<Vec<BenchmarkWorkspaceCommitReceipt>> {
     let mut commits = snapshot.operations.iter().flat_map(|operation| {
         operation
             .storage
@@ -1342,11 +1398,16 @@ fn operation_workspace_commit(
                 _ => None,
             })
     });
-    let commit = commits.next().ok_or("namespace Workspace Commit receipt")?;
-    if commits.next().is_some() {
-        return Err("namespace Workspace Commit receipt cardinality".into());
+    let receipts = commits.by_ref().collect::<Vec<_>>();
+    let diagnostics = layerfs_sdk::take_workspace_commit_diagnostics();
+    if receipts.len() != diagnostics.len() {
+        return Err("Workspace Commit diagnostic cardinality".into());
     }
-    Ok(commit)
+    Ok(receipts
+        .into_iter()
+        .zip(diagnostics)
+        .map(|(receipt, diagnostic)| BenchmarkWorkspaceCommitReceipt::new(receipt, diagnostic))
+        .collect())
 }
 
 fn sum_metric(left: u64, right: u64, name: &'static str) -> AnyResult<u64> {
@@ -2840,16 +2901,7 @@ fn same_count_anchor_performance_case(
         return Err("same-count anchor resource or cleanup".into());
     }
     let snapshot = client.monitor_snapshot()?;
-    let commits = snapshot
-        .operations
-        .iter()
-        .filter(|operation| operation.operation.family == OperationFamily::WorkspaceCommit)
-        .flat_map(|operation| operation.storage.iter())
-        .filter_map(|receipt| match receipt {
-            StorageReceipt::WorkspaceCommit(receipt) => Some(*receipt),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
+    let commits = operation_workspace_commits(&snapshot)?;
     let fuses = snapshot
         .operations
         .iter()
@@ -3222,7 +3274,7 @@ fn same_count_fragmentation_verify(
                         && operation.operation.workspace_id == Some(workspace.id)
                 })
                 .ok_or("same-count fragmentation operation")?;
-            let receipt = operation
+            let base_receipt = operation
                 .storage
                 .iter()
                 .find_map(|receipt| match receipt {
@@ -3230,6 +3282,11 @@ fn same_count_fragmentation_verify(
                     _ => None,
                 })
                 .ok_or("same-count fragmentation receipt")?;
+            let diagnostics = layerfs_sdk::take_workspace_commit_diagnostics();
+            let [diagnostic] = diagnostics.as_slice() else {
+                return Err("same-count fragmentation diagnostic cardinality".into());
+            };
+            let receipt = BenchmarkWorkspaceCommitReceipt::new(base_receipt, *diagnostic);
             let reopened = client.create_workspace_session(CreateWorkspaceSession {
                 branch_id: branch,
                 placement: WorkspacePlacement::Container {

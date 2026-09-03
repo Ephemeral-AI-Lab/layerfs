@@ -36,10 +36,10 @@ pub use registry::Workspaces;
 pub use session::{
     ContainerId, CreateWorkspaceSession, DaemonTiming, EndWorkspaceMode, ExecutionEvent,
     ExecutionId, ExecutionReceipt, ExecutionSummary, ExecutionTransport, NonEmpty, OutputChunk,
-    OutputStream, WorkspaceCommitResult, WorkspaceDetail, WorkspaceDiff, WorkspaceEndResult,
-    WorkspaceError, WorkspaceExecution, WorkspaceFileRangeEdit, WorkspaceFileReplacement,
-    WorkspaceId, WorkspacePlacement, WorkspaceProjection, WorkspaceResult, WorkspaceSession,
-    WorkspaceSummary,
+    OutputStream, WorkspaceCommitResult, WorkspaceCommitStatus, WorkspaceDetail, WorkspaceDiff,
+    WorkspaceEndResult, WorkspaceError, WorkspaceExecution, WorkspaceFileRangeEdit,
+    WorkspaceFileReplacement, WorkspaceId, WorkspacePlacement, WorkspaceProjection,
+    WorkspaceResult, WorkspaceSession, WorkspaceSummary,
 };
 
 #[cfg(debug_assertions)]
