@@ -20,7 +20,7 @@ verification_failure=
 control_external_wall_ns=0
 count_changing_verifiers=(insert-middle-4k-on-8m-proof delete-middle-4k-on-8m-proof rewrite-full-grow-8m-to-12m-proof rewrite-full-shrink-8m-to-4m-proof)
 
-die() { printf 'fs-bench-pro %s: %s\n' "$family_kind" "$*" >&2; exit 2; }
+die() { failure_reason=$*; printf 'fs-bench-pro %s: %s\n' "$family_kind" "$failure_reason" >&2; exit 2; }
 
 static_edit_proof() {
   python3 - "$repo/crates/layerfs-workspace/src/file_edit.rs" <<'PY'
@@ -132,7 +132,7 @@ if [[ ${1:-} == --prepare ]]; then
   exit 0
 fi
 
-[[ $# -ge 2 ]] || die "usage: run-edit-same-count.sh --prepare CONTAINER_ID | RUN_ID CONTAINER_ID --case CASE --seed 1 --source ARM [--mode performance|verify] | RUN_ID CONTAINER_A --case CASE --source a-a-repeatability --mode repeatability --paired-container CONTAINER_B | RUN_ID CONTAINER_A --all --source a-a-repeatability --mode admission --paired-container CONTAINER_B"
+[[ $# -ge 2 ]] || die "usage: run-edit-same-count.sh --prepare CONTAINER_ID | RUN_ID CONTAINER_ID --case CASE --seed 1 --source ARM [--mode performance|verify] | RUN_ID CONTAINER_A --case CASE --source a-a-repeatability|baseline-candidate --mode repeatability --paired-container CONTAINER_B | RUN_ID CONTAINER_A --all --source a-a-repeatability|baseline-candidate --mode admission --paired-container CONTAINER_B"
 run_id=$1
 container=$2
 shift 2
@@ -169,7 +169,7 @@ case "$mode" in
     [[ $all == 1 && -z $selection && -z $seed && -n $paired_container && ( $source_arm == a-a-repeatability || ( $family_kind == count-changing && $source_arm == baseline-candidate ) ) ]] || die "admission requires --all, a supported paired source, --paired-container, and no case/seed"
     ;;
   repeatability)
-    [[ $all == 0 && -n $selection && -z $seed && -n $paired_container && $source_arm == a-a-repeatability ]] || die "repeatability requires one case, no seed, --source a-a-repeatability, and --paired-container"
+    [[ $all == 0 && -n $selection && -z $seed && -n $paired_container && ( $source_arm == a-a-repeatability || ( $family_kind == count-changing && $source_arm == baseline-candidate ) ) ]] || die "repeatability requires one case, no seed, a supported paired source, and --paired-container"
     ;;
   *) die "unknown mode: $mode" ;;
 esac
@@ -218,6 +218,19 @@ if [[ -n $paired_container ]]; then
   docker inspect "$paired_container" | python3 -c 'import json,sys; assert not any(x.get("Type") == "bind" for x in json.load(sys.stdin)[0].get("Mounts", []))' || die "paired product container has a bind mount"
   if [[ $source_arm == a-a-repeatability ]]; then [[ $(docker inspect -f '{{.Image}}' "$paired_container") == $(docker inspect -f '{{.Image}}' "$container") ]] || die "A/A repeatability requires identical image identity"; fi
 fi
+if [[ $family_kind == count-changing && $source_arm == baseline-candidate ]]; then
+  expected_baseline_revision=a7583306f9793bd17fdfa4ff7ada667606dfe4b3
+  expected_baseline_source_seal=9e46b9f7347d669993b68835bc150664ee11cf9d4f1efab9ec4d5f3545322cd0
+  expected_baseline_workload=ce1e14e7c3078190085311c9b6a558bba6caa86a4930a2e26095ddf2de220ffc
+  read -r baseline_revision baseline_source_seal baseline_workload < <(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "dev.layerfs.source-seal"}} {{index .Config.Labels "dev.layerfs.workload-source-sha256"}}' "$paired_container")
+  [[ $baseline_revision == "$expected_baseline_revision" && $baseline_source_seal == "$expected_baseline_source_seal" && $baseline_workload == "$expected_baseline_workload" ]] || die "count-changing baseline custody"
+  [[ $(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$container") == $(git -C "$repo" rev-parse HEAD) ]] || die "candidate revision custody"
+  [[ $(docker inspect -f '{{index .Config.Labels "dev.layerfs.workload-source-sha256"}}' "$container") == $(shasum -a 256 "$here/workload.rs" | awk '{print $1}') ]] || die "candidate workload custody"
+  git -C "$repo" diff --quiet "$expected_baseline_revision" HEAD -- \
+    crates/layerfs-content crates/layerfs-daemon crates/layerfs-layerstack-store \
+    crates/layerfs-sdk crates/layerfs-workspace crates/layerfs-fuse \
+    crates/layerfs-materialization crates/layerfs-monitor || die "baseline/candidate product sources differ"
+fi
 
 cp "$prepared/identity.txt" "$run_dir/environment/prepared-identity.txt"
 cp "$prepared/docker.txt" "$run_dir/environment/docker.txt"
@@ -226,6 +239,10 @@ cp "$prepared/container.json" "$run_dir/environment/prepared-container.json"
 cp "$prepared/image.json" "$run_dir/environment/image.json"
 cp "$prepared/static-edit-proof.json" "$run_dir/environment/static-edit-proof.json"
 cp -R "$prepared/issue14-r005-custody" "$run_dir/environment/issue14-r005-custody"
+if [[ $family_kind == count-changing && $source_arm == baseline-candidate ]]; then
+  printf 'baseline_revision=%s\nbaseline_source_seal=%s\nbaseline_workload_sha256=%s\nproduct_source_diff=none\nattribution=portable-container-workload-implementation\n' \
+    "$baseline_revision" "$baseline_source_seal" "$baseline_workload" >"$run_dir/environment/baseline-custody.txt"
+fi
 docker inspect "$container" >"$run_dir/environment/container.json"
 if [[ -n $paired_container ]]; then docker inspect "$paired_container" >"$run_dir/environment/paired-container.json"; fi
 docker ps --no-trunc >"$run_dir/environment/pre-run-competing-containers.txt"
@@ -243,11 +260,29 @@ if [[ -n $anchor_fixture ]]; then shasum -a 256 "$anchor_fixture/payload.bin" >>
 daemon_endpoint=
 daemon_capability=
 container_id=
+primary_container_id=$(docker inspect -f '{{.Id}}' "$container")
+primary_daemon_endpoint=
+primary_daemon_capability=
+paired_container_id=
+paired_daemon_endpoint=
+paired_daemon_capability=
+if [[ -n $paired_container ]]; then paired_container_id=$(docker inspect -f '{{.Id}}' "$paired_container"); fi
 pending_stop_root="$run_dir/environment/pending-runner-stops"
 mkdir "$pending_stop_root"
 ensure_container() {
   local active_container=$1 stopped active_id marker
-  active_id=$(docker inspect -f '{{.Id}}' "$active_container")
+  if [[ $active_container == "$container" && -n $primary_daemon_endpoint ]]; then
+    container_id=$primary_container_id
+    daemon_endpoint=$primary_daemon_endpoint
+    daemon_capability=$primary_daemon_capability
+    return
+  elif [[ -n $paired_container && $active_container == "$paired_container" && -n $paired_daemon_endpoint ]]; then
+    container_id=$paired_container_id
+    daemon_endpoint=$paired_daemon_endpoint
+    daemon_capability=$paired_daemon_capability
+    return
+  fi
+  if [[ $active_container == "$container" ]]; then active_id=$primary_container_id; else active_id=$paired_container_id; fi
   marker="$pending_stop_root/$active_id"
   if [[ $(docker inspect -f '{{.State.Running}}' "$active_container") != true ]]; then
     stopped=$(docker inspect -f '{{.State.ExitCode}} {{.State.OOMKilled}}' "$active_container")
@@ -261,9 +296,15 @@ ensure_container() {
     if [[ $daemon_endpoint =~ ^127\.0\.0\.1:[1-9][0-9]{0,4}$ ]] \
       && docker exec "$active_container" test -s /run/layerfs/capability 2>/dev/null \
       && nc -z "${daemon_endpoint%:*}" "${daemon_endpoint##*:}" 2>/dev/null; then
-      sleep 0.2
       daemon_capability=$(docker exec "$active_container" sh -c "od -An -tx1 -v /run/layerfs/capability | tr -d ' \\n'")
       [[ $daemon_capability =~ ^[0-9a-f]{64}$ ]] || die "daemon capability"
+      if [[ $active_container == "$container" ]]; then
+        primary_daemon_endpoint=$daemon_endpoint
+        primary_daemon_capability=$daemon_capability
+      else
+        paired_daemon_endpoint=$daemon_endpoint
+        paired_daemon_capability=$daemon_capability
+      fi
       if [[ ! -f $run_dir/environment/container-kernel-fuse.txt ]]; then
         docker exec "$active_container" sh -c 'uname -a; stat -c "dev_fuse_type=%F dev_fuse_mode=%a" /dev/fuse; printf "capability_bytes="; wc -c </run/layerfs/capability; printf "fuse_filesystems="; grep -c fuse /proc/filesystems' >"$run_dir/environment/container-kernel-fuse.txt"
       fi
@@ -282,6 +323,30 @@ stop_container() {
     docker stop "$target" >/dev/null
   fi
 }
+
+seal_failed_run() {
+  local status=$?
+  trap - EXIT
+  [[ $status != 0 && -d ${run_dir:-} && ! -f $run_dir/evidence.sha256 ]] || exit "$status"
+  set +e
+  printf '%s\n' "$performance_external_wall_ns" >"$run_dir/environment/performance-external-wall-ns.txt"
+  printf '%s\n' "$control_external_wall_ns" >"$run_dir/environment/control-external-wall-ns.txt"
+  printf '%s\n' "$verification_external_wall_ns" >"$run_dir/environment/verification-external-wall-ns.txt"
+  printf '%s\n' "$(( $(python3 -c 'import time; print(time.monotonic_ns())') - invocation_started ))" >"$run_dir/environment/total-external-wall-ns.txt"
+  printf '%s\n' "${failure_reason:-unhandled runner failure}" >"$run_dir/environment/failure.txt"
+  python3 - "$run_dir/run-status.json" "$family_kind" "$mode" "$source_arm" "${failure_reason:-unhandled runner failure}" <<'PY'
+import json,sys
+path,family,mode,source,reason=sys.argv[1:]
+open(path,'w').write(json.dumps({'schema':f'fs-bench-pro-edit-{family}-status-v2','mode':mode,'source_identity':source,'status':'hard-failure','admission_eligible':False,'reason':reason},sort_keys=True,separators=(',',':'))+'\n')
+PY
+  stop_container "$container"
+  if [[ -n $paired_container ]]; then stop_container "$paired_container"; fi
+  docker inspect "$container" >"$run_dir/environment/container-after.json" 2>/dev/null
+  if [[ -n $paired_container ]]; then docker inspect "$paired_container" >"$run_dir/environment/paired-container-after.json" 2>/dev/null; fi
+  (cd "$run_dir" && find . -type f ! -name evidence.sha256 -print0 | sort -z | xargs -0 shasum -a 256 >evidence.sha256)
+  exit "$status"
+}
+trap seal_failed_run EXIT
 
 fixture_for() {
   case "$1" in small-edit|edit16|prepend-temp-copy-rename) printf '%s\n' "$anchor_fixture" ;; *) printf '%s\n' "$fixture_256" ;; esac
@@ -307,7 +372,11 @@ run_performance() {
   status=$?
   set -e
   printf '%s\n' "$status" >"$sample_dir/exit-status.txt"
-  [[ $status == 0 ]] || die "performance failed: $case_id seed $sample_seed"
+  if [[ $status != 0 ]]; then
+    if [[ $active_container == "$container" ]]; then primary_daemon_endpoint=; else paired_daemon_endpoint=; fi
+    ensure_container "$active_container"
+    die "performance failed: $case_id seed $sample_seed"
+  fi
   python3 - "$sample_dir/raw.jsonl" "$case_id" "$sample_dir/classification.json" "$mode" "$family_kind" <<'PY'
 import json, sys
 rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith('{')]
@@ -384,7 +453,11 @@ run_control() {
   status=$?
   set -e
   printf '%s\n' "$status" >"$sample_dir/exit-status.txt"
-  [[ $status == 0 ]] || die "pair control failed: $control_id seed $sample_seed"
+  if [[ $status != 0 ]]; then
+    primary_daemon_endpoint=
+    ensure_container "$active_container"
+    die "pair control failed: $control_id seed $sample_seed"
+  fi
   python3 - "$sample_dir/raw.jsonl" "$control_id" <<'PY'
 import json,sys
 rows=[json.loads(x) for x in open(sys.argv[1]) if x.startswith('{')]
@@ -533,9 +606,9 @@ else
   while IFS=$'\t' read -r case_id _ <&3; do
     for sample_seed in 1 2 3; do
       if [[ $source_arm == baseline-candidate && $sample_seed == 2 ]]; then
-        order=("$paired_container baseline" "$container candidate")
-      elif [[ $source_arm == baseline-candidate ]]; then
         order=("$container candidate" "$paired_container baseline")
+      elif [[ $source_arm == baseline-candidate ]]; then
+        order=("$paired_container baseline" "$container candidate")
       elif [[ $sample_seed == 2 ]]; then
         order=("$paired_container repeat-b" "$container repeat-a")
       else
@@ -590,6 +663,7 @@ if family=='count-changing' and mode=='admission':
     summary.update({'pair_validation_status':'target-pass','pair_control_samples':len(controls),'pair_controls':validations})
 phases=['workspace_create_ns','execution_ns','commit_api_ns','layerstack_visible_ns','workspace_end_ns','complete_lifecycle_ns']
 counters=['fuse_kernel_write_requests','fuse_kernel_write_bytes','spool_write_bytes','candidate_objects','candidate_bytes','inserted_objects','reused_objects','commit_payload_bytes_read','commit_cdc_bytes_scanned','tree_visits','metric_nodes_scanned']
+if family=='count-changing': counters=['fuse_kernel_read_requests','fuse_kernel_read_bytes','read_ahead_hits','read_ahead_misses','read_ahead_fetches','read_ahead_requested_bytes','read_ahead_fetched_bytes','read_ahead_served_bytes','read_ahead_unused_bytes']+counters
 def med(values,field): return float(statistics.median(x[field] for x in values))
 def ratio(left,right): return right/left if left else (1.0 if right==0 else float('inf'))
 def symmetric_ratio(left,right): return max(ratio(left,right),ratio(right,left))
@@ -611,10 +685,14 @@ if mode in ('admission','repeatability'):
     if family=='same-count': arm_target,arm_tolerated,arm_hard,paired_target,paired_tolerated,paired_hard=3_000_000_000,3_300_000_000,6_000_000_000,6_000_000_000,6_600_000_000,12_000_000_000
     else: arm_target,arm_tolerated,arm_hard,paired_target,paired_tolerated,paired_hard=10_000_000_000,11_000_000_000,20_000_000_000,20_000_000_000,22_000_000_000,40_000_000_000
     wall_status='target-pass' if max(walls.values())<=arm_target and paired<=paired_target else 'tolerated-pass' if max(walls.values())<=arm_tolerated and paired<=paired_tolerated else 'no-go' if max(walls.values())<=arm_hard and paired<=paired_hard else 'hard-failure'
-    if source=='baseline-candidate':
-        ratios={case:ratio(medians['baseline'][case]['complete_lifecycle_ns'],medians['candidate'][case]['complete_lifecycle_ns']) for case in medians['baseline']}
-    else:
-        ratios={case:symmetric_ratio(medians['repeat-a'][case]['complete_lifecycle_ns'],medians['repeat-b'][case]['complete_lifecycle_ns']) for case in medians['repeat-a']}
+    def paired_ratio(case,field):
+        left={x['seed']:x[field] for x in arms[arm_names[0]] if x['scenario_id']==case}
+        right={x['seed']:x[field] for x in arms[arm_names[1]] if x['scenario_id']==case}
+        assert left.keys()==right.keys() and len(left)==3
+        values=[ratio(left[seed],right[seed]) for seed in sorted(left)]
+        if source!='baseline-candidate': values=[max(value,1/value) for value in values]
+        return float(statistics.median(values))
+    ratios={case:paired_ratio(case,'complete_lifecycle_ns') for case in medians[arm_names[0]]}
     ratio_status='target-pass' if max(ratios.values())<=1.05 else 'tolerated-pass' if max(ratios.values())<=1.10 else 'no-go'
     rank={'target-pass':0,'tolerated-pass':1,'no-go':2,'hard-failure':3}
     absolute=[]
@@ -653,12 +731,12 @@ if mode in ('admission','repeatability'):
     for case,value in ratios.items():
         if value<=1.05: continue
         if source=='baseline-candidate':
-            phase_rows={field:{'ratio':ratio(medians['baseline'][case][field],medians['candidate'][case][field]),'candidate_ns':medians['candidate'][case][field],'under_2ms_exception':field in ('workspace_create_ns','workspace_end_ns') and medians['candidate'][case][field]<2_000_000} for field in phases}
-            counter_rows={field:ratio(medians['baseline'][case][field],medians['candidate'][case][field]) for field in counters}
+            phase_rows={field:{'ratio':paired_ratio(case,field),'candidate_ns':medians['candidate'][case][field],'under_2ms_exception':field in ('workspace_create_ns','workspace_end_ns') and medians['candidate'][case][field]<2_000_000} for field in phases}
+            counter_rows={field:paired_ratio(case,field) for field in counters}
             reason='directional candidate/baseline comparison; retained phase and counter disposition'
         else:
-            phase_rows={field:{'ratio':symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]),'under_2ms_exception':False,'exception_reason':'A/A repeatability has no candidate arm; local-step exception is inapplicable'} for field in phases}
-            counter_rows={field:symmetric_ratio(medians['repeat-a'][case][field],medians['repeat-b'][case][field]) for field in counters}
+            phase_rows={field:{'ratio':paired_ratio(case,field),'under_2ms_exception':False,'exception_reason':'A/A repeatability has no candidate arm; local-step exception is inapplicable'} for field in phases}
+            counter_rows={field:paired_ratio(case,field) for field in counters}
             reason='identical-source A/A scheduling variance; no improvement claim'
         dispositions[case]={'reason':reason,'complete_ratio':value,'phase_ratios':phase_rows,'counter_ratios':counter_rows}
     summary.update({'comparison_type':'directional baseline/candidate' if source=='baseline-candidate' else 'A/A repeatability','medians':medians,'arm_complete_lifecycle_ns':walls,'paired_complete_lifecycle_ns':paired,'family_wall_status':wall_status,'complete_lifecycle_ratios':ratios,'ratio_status':ratio_status,'absolute_classification':absolute,'absolute_status':absolute_status,'phase_counter_dispositions':dispositions})
@@ -677,8 +755,12 @@ if [[ $admission_eligible == true && $mode == admission ]]; then
   if [[ $family_kind == same-count ]]; then
     run_verify overwrite-fragmented-10b-ops-1000-proof 1 "$container" repeat-a || true
   else
+    if [[ $source_arm == baseline-candidate ]]; then verify_arm=candidate; else verify_arm=repeat-a; fi
     verification_cases=(prepend-temp-copy-rename sparse-write-past-eof-gap-60k-payload-4k-ops-100 "${count_changing_verifiers[@]}")
-    for verifier in "${verification_cases[@]}"; do run_verify "$verifier" 1 "$container" repeat-a || break; done
+    for verifier in "${verification_cases[@]}"; do run_verify "$verifier" 1 "$container" "$verify_arm" || break; done
+    if [[ -z $verification_failure && $source_arm == baseline-candidate ]]; then
+      run_verify replace-middle-shrink-4k-to-2k-ops-10 1 "$paired_container" baseline || true
+    fi
   fi
 fi
 if [[ -n $verification_failure ]]; then

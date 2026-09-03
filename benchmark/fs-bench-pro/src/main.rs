@@ -1805,6 +1805,15 @@ fn same_count_performance_case(
 #[derive(Default)]
 struct EditFuseMetrics {
     max_write_bytes: u64,
+    kernel_read_requests: u64,
+    kernel_read_bytes: u64,
+    read_ahead_hits: u64,
+    read_ahead_misses: u64,
+    read_ahead_fetches: u64,
+    read_ahead_requested_bytes: u64,
+    read_ahead_fetched_bytes: u64,
+    read_ahead_served_bytes: u64,
+    read_ahead_unused_bytes: u64,
     kernel_write_requests: u64,
     kernel_write_bytes: u64,
     client_request_copy_bytes: u64,
@@ -1818,6 +1827,43 @@ struct EditFuseMetrics {
 
 fn edit_fuse_metrics(snapshot: &layerfs_sdk::MonitorSnapshot) -> EditFuseMetrics {
     let mut total = EditFuseMetrics::default();
+    for receipt in snapshot.operations.iter().flat_map(|operation| {
+        operation
+            .storage
+            .iter()
+            .filter_map(|receipt| match receipt {
+                StorageReceipt::WorkspaceRead(receipt) => Some(receipt),
+                _ => None,
+            })
+    }) {
+        total.kernel_read_requests = total
+            .kernel_read_requests
+            .saturating_add(receipt.kernel_read_requests);
+        total.kernel_read_bytes = total
+            .kernel_read_bytes
+            .saturating_add(receipt.kernel_read_bytes);
+        total.read_ahead_hits = total
+            .read_ahead_hits
+            .saturating_add(receipt.read_ahead_hits);
+        total.read_ahead_misses = total
+            .read_ahead_misses
+            .saturating_add(receipt.read_ahead_misses);
+        total.read_ahead_fetches = total
+            .read_ahead_fetches
+            .saturating_add(receipt.read_ahead_fetches);
+        total.read_ahead_requested_bytes = total
+            .read_ahead_requested_bytes
+            .saturating_add(receipt.read_ahead_requested_bytes);
+        total.read_ahead_fetched_bytes = total
+            .read_ahead_fetched_bytes
+            .saturating_add(receipt.read_ahead_fetched_bytes);
+        total.read_ahead_served_bytes = total
+            .read_ahead_served_bytes
+            .saturating_add(receipt.read_ahead_served_bytes);
+        total.read_ahead_unused_bytes = total
+            .read_ahead_unused_bytes
+            .saturating_add(receipt.read_ahead_unused_bytes);
+    }
     for receipt in snapshot.operations.iter().flat_map(|operation| {
         operation
             .storage
@@ -2025,6 +2071,11 @@ fn count_changing_performance_case(
         || commit.edit_metric_nodes_scanned == 0
         || commit.edit_spool_peak_bytes < commit.edit_spool_allocated_bytes
         || commit.edit_spool_peak_bytes > 128 * 1024 * 1024
+        || if scenario.kind.temp_copy() {
+            fuse.kernel_read_requests == 0 || fuse.kernel_read_bytes < read_payload
+        } else {
+            fuse.kernel_read_requests != 0 || fuse.kernel_read_bytes != 0
+        }
         || (scenario.kind == workload_source::edit_count_changing::Kind::Sparse
             && (fuse.spool_write_bytes > supplied
                 || commit.edit_spool_live_bytes > supplied
@@ -2047,7 +2098,7 @@ fn count_changing_performance_case(
     }
     let execution_ns = nanos(t1, t2);
     println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"paired_same_count_control_id\":\"{}\",\"pair_fixture_bytes\":{},\"pair_byte_quantity_match\":null,\"pair_byte_quantity_basis\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"{}\",\"position\":\"{}\",\"implementation\":\"{}\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"{}\",\"supplied_bytes\":{},\"inserted_bytes\":{},\"deleted_bytes\":{},\"overlapping_bytes\":{},\"superseded_bytes\":{},\"logical_zero_bytes\":{},\"copied_payload_bytes\":{},\"read_payload_bytes\":{},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"copied_payload_bytes_per_second\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"commit_total_ns\":{},\"commit_pause_fence_ns\":{},\"commit_quiesce_ns\":{},\"commit_capture_ns\":{},\"commit_candidate_plan_ns\":{},\"commit_dirty_compare_ns\":{},\"commit_content_ns\":{},\"commit_namespace_ns\":{},\"commit_candidate_finish_ns\":{},\"commit_local_admission_ns\":{},\"commit_object_admission_ns\":{},\"commit_publication_ns\":{},\"commit_rebase_ns\":{},\"commit_resume_ns\":{},\"commit_unattributed_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_context_switches\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_current_bytes\":{},\"container_memory_peak_bytes\":{},\"container_pids_current\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
+        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_name\":\"{}\",\"paired_same_count_control_id\":\"{}\",\"pair_fixture_bytes\":{},\"pair_byte_quantity_match\":null,\"pair_byte_quantity_basis\":\"{}\",\"mode\":\"performance\",\"source_arm\":\"{}\",\"seed\":{},\"execution_profile\":\"macbook-docker-desktop-linux-fuse-v1\",\"fixture_profile\":\"{}\",\"fixture_cache_profile\":\"{}\",\"operation\":\"{}\",\"position\":\"{}\",\"implementation\":\"{}\",\"operation_count\":{},\"attempted_operations\":{},\"completed_operations\":{},\"initial_file_bytes\":{},\"final_file_bytes\":{},\"initial_inode\":{},\"final_inode\":{},\"inode_behavior\":\"{}\",\"supplied_bytes\":{},\"inserted_bytes\":{},\"deleted_bytes\":{},\"overlapping_bytes\":{},\"superseded_bytes\":{},\"logical_zero_bytes\":{},\"copied_payload_bytes\":{},\"read_payload_bytes\":{},\"fuse_kernel_read_requests\":{},\"fuse_kernel_read_bytes\":{},\"read_ahead_hits\":{},\"read_ahead_misses\":{},\"read_ahead_fetches\":{},\"read_ahead_requested_bytes\":{},\"read_ahead_fetched_bytes\":{},\"read_ahead_served_bytes\":{},\"read_ahead_unused_bytes\":{},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"execution_ns\":{},\"inner_edit_ns\":{},\"commit_call_ns\":{},\"visibility_ack_ns\":{},\"commit_api_ns\":{},\"layerstack_visible_ns\":{},\"workspace_end_ns\":{},\"complete_lifecycle_ns\":{},\"operations_per_second\":{},\"supplied_bytes_per_second\":{},\"copied_payload_bytes_per_second\":{},\"fuse_max_write_bytes\":{},\"fuse_kernel_write_requests\":{},\"fuse_kernel_write_bytes\":{},\"fuse_client_request_copy_bytes\":{},\"fuse_frame_payload_copy_bytes\":{},\"fuse_client_frame_bytes\":{},\"fuse_host_frame_bytes\":{},\"fuse_host_decode_copy_bytes\":{},\"spool_write_bytes\":{},\"spool_write_open_count\":{},\"spool_allocated_bytes\":{},\"physical_spool_high_water_bytes\":{},\"spool_live_bytes\":{},\"spool_superseded_bytes\":{},\"piece_count\":{},\"piece_height\":{},\"piece_logical_charge_bytes\":{},\"tree_visits\":{},\"metric_nodes_scanned\":{},\"forbidden_path_runtime_counters\":\"not-applicable-no-entry-points\",\"forbidden_path_static_proof\":\"implicit-offset-persistent-piece-tree\",\"commit_total_ns\":{},\"commit_pause_fence_ns\":{},\"commit_quiesce_ns\":{},\"commit_capture_ns\":{},\"commit_candidate_plan_ns\":{},\"commit_dirty_compare_ns\":{},\"commit_content_ns\":{},\"commit_namespace_ns\":{},\"commit_candidate_finish_ns\":{},\"commit_local_admission_ns\":{},\"commit_object_admission_ns\":{},\"commit_publication_ns\":{},\"commit_rebase_ns\":{},\"commit_resume_ns\":{},\"commit_unattributed_ns\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes_total\":{},\"reused_objects\":{},\"reused_bytes\":{},\"admission_transactions\":{},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialization_candidate_objects\":{},\"initialization_candidate_bytes\":{},\"scanned_files\":{},\"scanned_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_cdc_bytes_scanned\":{},\"process_user_cpu_ns\":{},\"process_system_cpu_ns\":{},\"process_disk_read_bytes\":{},\"process_disk_write_bytes\":{},\"process_context_switches\":{},\"process_peak_rss_bytes\":{},\"process_physical_footprint_bytes\":{},\"container_memory_current_bytes\":{},\"container_memory_peak_bytes\":{},\"container_pids_current\":{},\"store_baseline_bytes\":{},\"store_database_bytes\":{},\"swap_bytes\":0,\"oom\":false,\"timeout\":false,\"verification_status\":\"not-run-performance-mode\",\"cleanup_status\":\"pass\"}}",
         workload_source::edit_count_changing::PERFORMANCE_SCHEMA,
         workload_source::edit_count_changing::FAMILY_ID,
         scenario.id,
@@ -2086,6 +2137,15 @@ fn count_changing_performance_case(
         logical_zero,
         copied_payload,
         read_payload,
+        fuse.kernel_read_requests,
+        fuse.kernel_read_bytes,
+        fuse.read_ahead_hits,
+        fuse.read_ahead_misses,
+        fuse.read_ahead_fetches,
+        fuse.read_ahead_requested_bytes,
+        fuse.read_ahead_fetched_bytes,
+        fuse.read_ahead_served_bytes,
+        fuse.read_ahead_unused_bytes,
         layerstack_init_ns,
         branch_fork_ns,
         nanos(t0, t1),
@@ -2251,6 +2311,7 @@ fn count_changing_anchor_performance_case(
         || container_after.swap_current != 0
         || container_before.oom != container_after.oom
         || container_before.oom_kill != container_after.oom_kill
+        || process_after.peak_resident_bytes > 128 * 1024 * 1024
         || container_after.memory_peak > 128 * 1024 * 1024
         || client.active_workspace_count()? != 0
         || client.active_execution_count()? != 0
@@ -2543,6 +2604,7 @@ fn count_changing_verify_case(
         || container_after.swap_current != 0
         || container_before.oom != container_after.oom
         || container_before.oom_kill != container_after.oom_kill
+        || process_after.peak_resident_bytes > 128 * 1024 * 1024
         || container_after.memory_peak > 128 * 1024 * 1024
         || client.active_workspace_count()? != 0
         || client.active_execution_count()? != 0

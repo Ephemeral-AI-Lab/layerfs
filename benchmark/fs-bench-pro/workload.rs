@@ -966,7 +966,9 @@ fn count_changing_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<(
                     .checked_add(copied)
                     .ok_or("count-changing copied payload")?;
                 read_payload = read_payload
-                    .checked_add(copied)
+                    .checked_add(copied.checked_add(edit.deleted as u64).ok_or(
+                        "count-changing operation read payload",
+                    )?)
                     .ok_or("count-changing read payload")?;
             }
             Kind::FrozenPrepend => return Err("frozen count-changing workload".into()),

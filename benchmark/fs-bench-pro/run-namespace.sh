@@ -49,7 +49,7 @@ if kind in {"source", "harness"}:
     ]
 digest = hashlib.sha256()
 for path in sorted(set(paths)):
-    if "target" in path.parts or "__pycache__" in path.parts:
+    if "target" in path.parts or "__pycache__" in path.parts or path.name == ".DS_Store":
         continue
     digest.update(str(path.relative_to(root)).encode())
     digest.update(b"\0")

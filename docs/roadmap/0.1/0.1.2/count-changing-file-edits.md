@@ -73,8 +73,9 @@ MacBook host with host-resident Store and Client
 Fixture generation, Store/Client/container preparation, source sealing, full
 verification, fresh reconnect, and report generation are outside timing. Cache
 policy, image digest, resource limits, and acknowledgement boundary are exact
-arm identities. Identical-source acceptance uses alternating A/A labels on one
-prepared daemon and makes no improvement claim.
+arm identities. Terminal acceptance uses distinct sealed baseline and candidate
+containers; identical-source diagnostics use alternating A/A labels on one
+prepared daemon and make no improvement claim.
 
 ## Frozen v0.1.0 anchor
 
@@ -258,6 +259,13 @@ Run three paired seed samples in alternating order. For each new row:
 median(candidate / unchanged baseline) <= 1.05
 ```
 
+The frozen baseline is source `a7583306`, workload SHA-256
+`ce1e14e7c3078190085311c9b6a558bba6caa86a4930a2e26095ddf2de220ffc`.
+Baseline and candidate retain identical LayerFS product sources; the comparison
+therefore attributes changes only to the portable container workload algorithm,
+not to the universal edit engine. Admission also runs one exact baseline
+byte/root/reopen proof beside the complete candidate verifier set.
+
 Any pair above `1.10` requires phase/counter disposition. Require at least a
 20-percent improvement only when baseline evidence proves a defect and the
 retained implementation claims to optimize it.
@@ -270,10 +278,13 @@ target <= 10 s
 hard   <= 20 s
 ```
 
-The paired A/A accounting budget is 20/40 seconds. The 256 KiB
+The paired baseline/candidate accounting budget is 20/40 seconds. The 256 KiB
 fixture keeps 100-operation temp-rewrite curves bounded while the frozen 32 MiB
 prepend retains the large-file control. Freeze final operation/s and payload-
 throughput floors after the unchanged implementation is measured.
+
+The family applies a 128 MiB physical-spool high-water ceiling, intentionally
+stricter than the universal engine's 1 GiB product safety ceiling.
 
 The unchanged-source pre-publication baselines showed that required
 per-operation fsync makes one shared copied-byte rate invalid. The prospective
