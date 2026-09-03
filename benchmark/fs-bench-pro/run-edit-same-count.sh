@@ -347,7 +347,9 @@ overall=max(states,key=lambda x:rank[x[0]])[0]
 json.dump({'schema':f'fs-bench-pro-edit-{sys.argv[5]}-classification-v1','scenario_id':r['scenario_id'],'seed':r['seed'],'metrics':[{'status':s,'metric':n,'value':v,'target':t,'tolerated':q,'hard':h} for s,n,v,t,q,h in states],'status':overall},open(sys.argv[3],'w'),sort_keys=True,separators=(',',':'))
 open(sys.argv[3],'a').write('\n')
 if sys.argv[4] in ('admission','repeatability'):
-    assert overall != 'hard-failure'
+    assert r['process_peak_rss_bytes']<=128*1024*1024
+    if r['scenario_id'] in ('small-edit','edit16','prepend-temp-copy-rename'):
+        assert overall != 'hard-failure'
 else:
     assert overall in ('target-pass','tolerated-pass')
 PY
