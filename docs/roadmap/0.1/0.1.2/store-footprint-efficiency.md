@@ -357,7 +357,8 @@ Mechanism decisions are final:
 - `WITHOUT ROWID`: **reject**; best is 638,238,720 bytes and all sizes are worse
   than rowid;
 - physical packing: **defer to #18**; the authenticated prototype is
-  561,727,326 bytes including pack, location index, manifest, and checksums;
+  a 562,513,789-byte conservative object-storage lower bound including pack,
+  location index, current non-object Store pages, manifest, and checksums;
 - structural compression: **defer behind #18**; the unique payload is
   intentionally incompressible and uncompressed packing already meets stretch.
 

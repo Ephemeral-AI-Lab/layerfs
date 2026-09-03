@@ -9,7 +9,9 @@ prepared_root=${LAYERFS_STORE_PREPARED_ROOT:-${TMPDIR:-/tmp}/layerfs-fs-bench-pr
 primary_control=store-footprint-unique-100000
 evidence_version=v4
 
-die() { failure_reason=$*; printf 'fs-bench-pro Store footprint: %s\n' "$*" >&2; exit 2; }
+capture_failure() { failure_line=$1; failure_command=$2; }
+die() { failure_line=${failure_line:-${BASH_LINENO[0]:-unknown}}; failure_reason=$*; printf 'fs-bench-pro Store footprint: %s\n' "$*" >&2; exit 2; }
+trap 'capture_failure "$LINENO" "$BASH_COMMAND"' ERR
 
 self_check() {
   local scratch started elapsed
@@ -177,7 +179,11 @@ seal_failed_run() {
   [[ $status != 0 && ! -f $run_dir/evidence.sha256 ]] || exit "$status"
   set +e
   printf '%s\n' "${failure_reason:-unhandled runner failure}" >"$run_dir/environment/failure.txt"
-  printf '{"schema":"fs-bench-pro-store-failure-context-v1","case":"%s","seed":"%s","sample_mode":"%s","exit_status":"%s","timeout_seconds":"%s"}\n' "${failure_case:-not-started}" "${failure_seed:-not-started}" "${failure_mode:-not-started}" "${failure_status:-unknown}" "${failure_timeout:-unknown}" >"$run_dir/environment/failure-context.json"
+  python3 - "$run_dir/environment/failure-context.json" "${failure_case:-not-started}" "${failure_seed:-not-started}" "${failure_mode:-not-started}" "${failure_status:-unknown}" "${failure_timeout:-unknown}" "${failure_line:-unknown}" "${failure_command_safe:-not-started}" "${failure_stderr:-not-started}" <<'PY'
+import json,sys
+path,case,seed,mode,status,timeout,line,command,stderr=sys.argv[1:]
+json.dump({'schema':'fs-bench-pro-store-failure-context-v2','case':case,'seed':seed,'sample_mode':mode,'exit_status':status,'timeout_seconds':timeout,'line':line,'command':command,'summary_stderr':stderr},open(path,'w'),sort_keys=True,separators=(',',':'));open(path,'a').write('\n')
+PY
   python3 - "$run_dir/run-status.json" "$evidence_version" "$mode" "$source_arm" "${failure_reason:-unhandled runner failure}" <<'PY'
 import json,sys
 json.dump({'schema':f'fs-bench-pro-store-footprint-status-{sys.argv[2]}','mode':sys.argv[3],'source_arm':sys.argv[4],'status':'hard-failure','admission_eligible':False,'reason':sys.argv[5]},open(sys.argv[1],'w'),sort_keys=True,separators=(',',':'));open(sys.argv[1],'a').write('\n')
@@ -240,6 +246,8 @@ PY
   failure_seed=$sample_seed
   failure_mode=$sample_mode
   failure_timeout=$timeout_seconds
+  failure_command_safe="fs-benchmark-pro store-footprint-$sample_mode CONTROL=$control SEED=$sample_seed SOURCE=$source_arm TIER=$tier"
+  failure_stderr="$sample_dir/supervisor.txt"
   sample_started=$(python3 -c 'import time; print(time.monotonic_ns())')
   set +e
   /usr/bin/time -l -p perl -e 'alarm shift; exec @ARGV' "$timeout_seconds" env LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE="$nonce" \

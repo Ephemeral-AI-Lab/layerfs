@@ -909,6 +909,7 @@ fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
             let path = entry.path();
             let file_type = entry.file_type()?;
             if file_type.is_dir() {
+                validate_namespace_metadata(&entry.metadata()?, true)?;
                 output.extend(collect_records(root, &path, buffer)?);
             } else if file_type.is_file() {
                 output.push(file_record(root, &path, buffer)?);
@@ -933,6 +934,7 @@ fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
     }
     let mut hash = Sha256::new();
     hash.update(b"layerfs/fs-bench-pro/store-footprint-tree/v1\0");
+    validate_namespace_metadata(&fs::metadata(root)?, true)?;
     let (mut files, mut logical_bytes) = (0, 0);
     let mut entries = fs::read_dir(root)?.collect::<std::io::Result<Vec<_>>>()?;
     entries.sort_unstable_by_key(|entry| entry.file_name());
@@ -1954,6 +1956,9 @@ fn self_check() -> Result<()> {
                 content_digest: Sha256::digest(bytes),
             });
         }
+        set_namespace_metadata(&store_digest_root.join("d0000"), true)?;
+        set_namespace_metadata(&store_digest_root.join("d0001"), true)?;
+        set_namespace_metadata(&store_digest_root, true)?;
         let (store_files, store_bytes, store_digest) = store_footprint_digest(&store_digest_root)?;
         if store_files != 3
             || store_bytes != 16
