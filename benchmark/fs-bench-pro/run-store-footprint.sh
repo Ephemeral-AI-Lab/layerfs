@@ -74,7 +74,7 @@ cdc_identity=$(git -C "$repo" rev-parse HEAD:crates/layerfs-content/src/file/cdc
 docker inspect "$container" | python3 -c 'import json,sys; assert not any(x.get("Type") == "bind" for x in json.load(sys.stdin)[0].get("Mounts", []))' || die "container has a bind mount"
 container_id=$(docker inspect -f '{{.Id}}' "$container")
 prepared="$prepared_root/$source_seal"
-fixture_cache="$prepared_root/fixtures-$workload_sha"
+fixture_cache="$prepared_root/fixtures-fs-bench-pro-store-footprint-fixture-v1"
 mkdir -p "$prepared_root"
 if [[ ! -x $prepared/fs-benchmark-pro || ! -x $prepared/fs-benchmark-workload ]]; then
   stage=$(mktemp -d "$prepared_root/.prepare.XXXXXX")
@@ -129,7 +129,7 @@ import json,platform,sys
 json.dump({'schema':'fs-bench-pro-host-v1','architecture':platform.machine(),'platform':platform.platform(),'raw':open(sys.argv[1]).read()},open(sys.argv[2],'w'),sort_keys=True,separators=(',',':'));open(sys.argv[2],'a').write('\n')
 PY
 printf '%s\n' 'Store is host-resident; FUSE projection and workload are in the managed Docker Desktop Linux container. Initialization, Commit, Branch visibility, End, reconnect, and root validation are measured; full tree digest is verify-only.' >"$run_dir/environment/acknowledgement-boundary.txt"
-printf 'sealed fixture cache keyed by workload SHA-256 %s and reused across product-only source arms; every sample uses a fresh Store, Branch, Workspace, and workload process\n' "$workload_sha" >"$run_dir/environment/cache-profile.txt"
+printf '%s\n' 'sealed fixture cache keyed by fs-bench-pro-store-footprint-fixture-v1 and reused across harness/product-only source arms; every sample uses a fresh Store, Branch, Workspace, and workload process' >"$run_dir/environment/cache-profile.txt"
 printf '%s\n' 'LayerStackStore::create(root/store.sqlite); host-resident regular file; SQLite schema v4; 64 KiB requested page size' >"$run_dir/environment/store-creation-profile.txt"
 "$oracle_workload" store-footprint-list >"$run_dir/controls/registry.tsv"
 

@@ -287,7 +287,7 @@ The runner freezes these additional envelopes before candidate collection:
 Baseline/candidate custody requires identical host, Docker, harness, workload,
 CDC, fixture, cache, Store-creation, SQLite schema/page-size, canonical object
 shape, and object/byte counts. Before each full arm, an untimed exact tree digest
-of every shared sealed fixture provides equal explicit source-cache
+of every shared fixture-schema-keyed sealed fixture provides equal explicit source-cache
 preconditioning. Each fresh Store retains and authenticates its exact canonical
 root and object-set digest through reconnect. The ordinary public path seeds
 inode identity from a fresh UUIDv7 LayerStackId; Store-footprint evidence uses a

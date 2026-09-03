@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    mpsc, Arc,
+    mpsc, Arc, Mutex,
 };
 
 #[allow(dead_code)]
@@ -955,45 +955,59 @@ fn store_footprint_digest(root: &Path) -> Result<(u64, u64, String)> {
         .unwrap_or(1)
         .min(16);
     let worker_buffer_bytes = (NAMESPACE_SCRATCH_BYTES / workers).max(4096);
-    for chunk in directories.chunks(workers.saturating_mul(4)) {
-        let (sender, receiver) = mpsc::sync_channel(chunk.len());
-        let mut groups = vec![None; chunk.len()];
-        let next = AtomicUsize::new(0);
-        std::thread::scope(|scope| -> Result<()> {
-            for _ in 0..workers.min(chunk.len()) {
-                let sender = sender.clone();
-                let next = &next;
-                scope.spawn(move || {
-                    let mut buffer = vec![0_u8; worker_buffer_bytes];
-                    loop {
-                        let index = next.fetch_add(1, Ordering::Relaxed);
-                        let Some(directory) = chunk.get(index) else {
-                            return;
-                        };
-                        let result = collect_records(root, directory, &mut buffer)
-                            .map_err(|error| error.to_string());
-                        if sender.send((index, result)).is_err() {
-                            return;
-                        }
-                    }
-                });
-            }
-            drop(sender);
-            for _ in chunk {
-                let (index, result) = receiver.recv()?;
-                groups[index] = Some(result.map_err(|error| -> Box<dyn Error> { error.into() })?);
-            }
-            Ok(())
-        })?;
-        for group in groups {
-            append(
-                &mut hash,
-                group.ok_or("Store digest worker result")?,
-                &mut files,
-                &mut logical_bytes,
-            )?;
-        }
+    let window = workers.saturating_mul(4).min(directories.len());
+    let (task_sender, task_receiver) = mpsc::sync_channel(window);
+    let task_receiver = Arc::new(Mutex::new(task_receiver));
+    let (sender, receiver) = mpsc::sync_channel(window);
+    for index in 0..window {
+        task_sender.send(index)?;
     }
+    std::thread::scope(|scope| -> Result<()> {
+        for _ in 0..workers.min(directories.len()) {
+            let task_receiver = Arc::clone(&task_receiver);
+            let sender = sender.clone();
+            let directories = &directories;
+            scope.spawn(move || {
+                let mut buffer = vec![0_u8; worker_buffer_bytes];
+                loop {
+                    let index = match task_receiver.lock().ok().and_then(|tasks| tasks.recv().ok()) {
+                        Some(index) => index,
+                        None => return,
+                    };
+                    let result = collect_records(root, &directories[index], &mut buffer)
+                        .map_err(|error| error.to_string());
+                    if sender.send((index, result)).is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+        drop(sender);
+        let mut sent = window;
+        let mut next = 0;
+        let mut pending = std::collections::BTreeMap::new();
+        while next < directories.len() {
+            let (index, result) = receiver.recv()?;
+            if pending.insert(index, result).is_some() {
+                return Err("duplicate Store digest worker result".into());
+            }
+            while let Some(result) = pending.remove(&next) {
+                append(
+                    &mut hash,
+                    result.map_err(|error| -> Box<dyn Error> { error.into() })?,
+                    &mut files,
+                    &mut logical_bytes,
+                )?;
+                next += 1;
+                if sent < directories.len() {
+                    task_sender.send(sent)?;
+                    sent += 1;
+                }
+            }
+        }
+        drop(task_sender);
+        Ok(())
+    })?;
     Ok((files, logical_bytes, hex(&hash.finish())))
 }
 
