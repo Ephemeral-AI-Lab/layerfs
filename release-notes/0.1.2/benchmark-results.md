@@ -19,7 +19,7 @@ for the selected raw performance/proof streams. Its own manifest describes the
 included subset; full local-run manifests also reference unbundled databases,
 binaries and environment logs.
 
-The [complete report](../../benchmark-results/fs-bench-pro/sdk-edit-terminal/final-3337728e/report.md)
+The [complete SDK report](sdk-edit-benchmark-results.md)
 contains both arms' per-operation/per-size timing and memory tables, five
 repetitions, medians, min–max ranges, units, nominal/tolerance classifications,
 and raw links. [Inputs](../../benchmark-results/fs-bench-pro/sdk-edit-terminal/final-3337728e/inputs.json)

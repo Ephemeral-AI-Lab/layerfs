@@ -14,6 +14,7 @@ records final repository-gate completion and the documentation-only source bridg
 Parent #12 separately owns the user-authorized release finalization.
 
 - [Benchmark results and acceptance scope](benchmark-results.md)
+- [Complete SDK edit timing and memory tables](sdk-edit-benchmark-results.md)
 - [Refreshed namespace and Store tables](supporting-benchmarks.md)
 - [Verification and final gate](verification.md)
 - [Release contract](release-contract.md)

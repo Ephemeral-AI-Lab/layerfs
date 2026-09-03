@@ -42,7 +42,7 @@ receipts with 112 passing source-arm subproofs. The measured candidate is
 `3337728e9846a200d7a5cc08d076de18f1d5436c`, with baseline
 `dc7aeff9a7e4f9e849a48022142f86801273f0bd`. Both use the identical harness.
 
-The [full timing and memory tables](../../../../benchmark-results/fs-bench-pro/sdk-edit-terminal/final-3337728e/report.md)
+The [full timing and memory tables](../../../../release-notes/0.1.2/sdk-edit-benchmark-results.md)
 retain nominal versus tolerance-only results, three approved Edit-parity
 exceptions, and all original strict findings. Accepted median ceilings are
 20/20/30 ms; nominal targets are 10/10/20 ms. Commit spreads are diagnostic,

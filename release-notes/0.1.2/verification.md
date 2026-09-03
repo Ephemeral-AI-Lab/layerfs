@@ -18,7 +18,7 @@
 | Publication | Authorized through #12 after exact-source final checks |
 
 The [evidence selector](sdk-edit-evidence.json) and
-[final report](../../benchmark-results/fs-bench-pro/sdk-edit-terminal/final-3337728e/report.md)
+[final report](sdk-edit-benchmark-results.md)
 are authoritative. A benchmark-only pass is not final admission: the consumer's
 --final --check requires all four repository commands to pass, intact evidence
 manifests, the approved contract hash, unchanged compiled sources, and a clean
