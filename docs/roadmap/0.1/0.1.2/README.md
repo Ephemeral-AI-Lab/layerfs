@@ -248,9 +248,11 @@ Provisional family budgets, to be frozen after unchanged-source measurement:
 | Count-changing scaling, 18 candidate samples | reported; no aggregate latency gate | unpaired | 40 s per sample |
 | **Primary edit total** | **13 / 26 s** | **26 / 52 s** | **60 s plus scaling proofs** |
 
-The universal implementation's conformance timeout is separately 30 seconds,
-so complete admission verification has a 90-second aggregate timeout. That is
-not a performance target and is never run implicitly during development.
+The primary universal-plus-edit verification retains its 90-second aggregate
+timeout. The 18 scaling proofs are additional; each has its own 40-second hard
+timeout and the scaling cohort has no aggregate latency target. None of these
+verification bounds is a performance target or runs implicitly during
+development.
 
 Focused owner-side 32 MiB prepend remains:
 
