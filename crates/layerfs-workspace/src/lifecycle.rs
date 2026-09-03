@@ -593,7 +593,10 @@ impl Workspaces {
         self.edit_workspace_file_ranges(vec![edit])
     }
 
-    pub fn start_workspace_resource_sample(&self, id: WorkspaceId) -> WorkspaceResult<(u64, u64)> {
+    pub fn start_workspace_resource_sample(
+        &self,
+        id: WorkspaceId,
+    ) -> WorkspaceResult<layerfs_daemon::ResourceSampleClock> {
         let worker = self.worker(id)?;
         let WorkspacePlacement::Container { container_id, .. } = &worker.request.placement else {
             return Err(WorkspaceError::InvalidPlacement);

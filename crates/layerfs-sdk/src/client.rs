@@ -253,7 +253,10 @@ impl Client {
             .map_err(Into::into)
     }
 
-    pub fn start_workspace_resource_sample(&self, workspace_id: WorkspaceId) -> Result<(u64, u64)> {
+    pub fn start_workspace_resource_sample(
+        &self,
+        workspace_id: WorkspaceId,
+    ) -> Result<crate::ResourceSampleClock> {
         self.0
             .workspaces
             .start_workspace_resource_sample(workspace_id)

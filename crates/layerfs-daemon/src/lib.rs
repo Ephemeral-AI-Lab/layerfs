@@ -69,6 +69,31 @@ mod client {
         mountinfo: Vec<u8>,
     }
 
+    pub struct ResourceSampleClock {
+        stream: Stream,
+    }
+
+    impl ResourceSampleClock {
+        pub fn probe(&mut self) -> io::Result<(u64, u64)> {
+            protocol::write_clock_probe(&mut self.stream)?;
+            let response = protocol::read_frame(&mut self.stream)?;
+            if response.kind == Kind::Error {
+                return Err(remote_error(&response.payload));
+            }
+            if response.kind != Kind::ResourceSampleStarted {
+                return Err(protocol::invalid("daemon resource clock response"));
+            }
+            Ok((
+                u64::from_be_bytes(
+                    response.payload[..8]
+                        .try_into()
+                        .expect("clock receive width"),
+                ),
+                u64::from_be_bytes(response.payload[8..].try_into().expect("clock send width")),
+            ))
+        }
+    }
+
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct MountExit;
 
@@ -223,7 +248,10 @@ mod client {
             })
         }
 
-        pub fn start_resource_sample(&self, workspace_id: [u8; 16]) -> io::Result<(u64, u64)> {
+        pub fn start_resource_sample(
+            &self,
+            workspace_id: [u8; 16],
+        ) -> io::Result<ResourceSampleClock> {
             let request = ResourceSampleRequest {
                 owner_id: self.owner_id,
                 workspace_id,
@@ -238,14 +266,7 @@ mod client {
             if response.kind != Kind::ResourceSampleStarted {
                 return Err(protocol::invalid("daemon did not start resource sample"));
             }
-            Ok((
-                u64::from_be_bytes(
-                    response.payload[..8]
-                        .try_into()
-                        .expect("clock receive width"),
-                ),
-                u64::from_be_bytes(response.payload[8..].try_into().expect("clock send width")),
-            ))
+            Ok(ResourceSampleClock { stream })
         }
 
         pub fn finish_resource_sample(
@@ -624,6 +645,34 @@ mod client {
         #[cfg(target_os = "linux")]
         use std::os::unix::fs::PermissionsExt;
 
+        #[test]
+        fn prepared_clock_stream_reuses_transport_and_rejects_non_clock_reply() {
+            let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+            let stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+            let (mut remote, _) = listener.accept().unwrap();
+            let server = std::thread::spawn(move || {
+                for sent in [10, 20] {
+                    assert_eq!(
+                        protocol::read_frame(&mut remote).unwrap().kind,
+                        Kind::ResourceSampleClock
+                    );
+                    protocol::write_clock_response(&mut remote, sent - 1, sent).unwrap();
+                }
+                assert_eq!(
+                    protocol::read_frame(&mut remote).unwrap().kind,
+                    Kind::ResourceSampleClock
+                );
+                protocol::write_frame(&mut remote, Kind::Started, &[]).unwrap();
+            });
+            let mut clock = ResourceSampleClock {
+                stream: Stream(Transport::Tcp(stream)),
+            };
+            assert_eq!(clock.probe().unwrap(), (9, 10));
+            assert_eq!(clock.probe().unwrap(), (19, 20));
+            assert!(clock.probe().is_err());
+            server.join().unwrap();
+        }
+
         #[cfg(target_os = "linux")]
         #[test]
         fn capability_requires_exact_private_file() {
@@ -745,4 +794,6 @@ mod client {
 }
 
 #[cfg(unix)]
-pub use client::{connect_tcp, prepare_owner, Event, Exec, Mount, MountExit, Owner, Stream};
+pub use client::{
+    connect_tcp, prepare_owner, Event, Exec, Mount, MountExit, Owner, ResourceSampleClock, Stream,
+};

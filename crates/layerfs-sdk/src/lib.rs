@@ -33,8 +33,8 @@ pub use layerfs_workspace::{
     ContainerResult, ContainerStatus, CreateWorkspaceSession, CreatedContainer, DaemonTiming,
     EndWorkspaceMode, ExecutionEvent, ExecutionId, ExecutionReceipt, ExecutionSummary,
     ExecutionTransport, NonEmpty, OutputChunk, OutputPage, OutputReader, OutputStream,
-    ResolveChoice, ResolveResult, RunningContainer, WorkspaceCommitResult, WorkspaceCommitStatus,
-    WorkspaceConflict, WorkspaceDetail, WorkspaceEndResult, WorkspaceError, WorkspaceExecution,
-    WorkspaceFileRangeEdit, WorkspaceFileReplacement, WorkspaceId, WorkspacePlacement,
-    WorkspaceProjection, WorkspaceState, WorkspaceSummary,
+    ResolveChoice, ResolveResult, ResourceSampleClock, RunningContainer, WorkspaceCommitResult,
+    WorkspaceCommitStatus, WorkspaceConflict, WorkspaceDetail, WorkspaceEndResult, WorkspaceError,
+    WorkspaceExecution, WorkspaceFileRangeEdit, WorkspaceFileReplacement, WorkspaceId,
+    WorkspacePlacement, WorkspaceProjection, WorkspaceState, WorkspaceSummary,
 };

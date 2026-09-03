@@ -559,6 +559,15 @@ mod linux {
         payload: Vec<u8>,
         shared: Arc<Shared>,
     ) {
+        if stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .is_err()
+            || stream
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .is_err()
+        {
+            return;
+        }
         let Ok(request) = ResourceSampleRequest::decode(&payload) else {
             send_error(&mut stream, RemoteError::InvalidRequest);
             return;
@@ -608,14 +617,40 @@ mod linux {
             true
         });
         if accepted {
-            let mut calibration = [0_u8; 16];
-            calibration[..8].copy_from_slice(&1_u64.to_be_bytes());
-            calibration[8..].copy_from_slice(
-                &elapsed_ns(calibration_started)
-                    .saturating_add(1)
-                    .to_be_bytes(),
-            );
-            let _ = protocol::write_frame(&mut stream, Kind::ResourceSampleStarted, &calibration);
+            if protocol::write_clock_response(
+                &mut stream,
+                1,
+                elapsed_ns(calibration_started).saturating_add(1),
+            )
+            .is_err()
+            {
+                return;
+            }
+            // The bound start stream supplies clock probes after all setup is complete.
+            // Disconnecting it does not disarm the independently owned sampler.
+            for _ in 0..5 {
+                let Ok(probe) = protocol::read_frame(&mut stream) else {
+                    return;
+                };
+                let received = elapsed_ns(calibration_started).saturating_add(1);
+                let valid = probe.kind == Kind::ResourceSampleClock
+                    && shared.state.lock().is_ok_and(|state| {
+                        state.owner_live
+                            && state.owner_id == request.owner_id
+                            && state
+                                .samples
+                                .get(&request.workspace_id)
+                                .is_some_and(|sample| sample.clock == calibration_started)
+                    });
+                if !valid {
+                    send_error(&mut stream, RemoteError::InvalidRequest);
+                    return;
+                }
+                let sent = elapsed_ns(calibration_started).saturating_add(1);
+                if protocol::write_clock_response(&mut stream, received, sent).is_err() {
+                    return;
+                }
+            }
         } else {
             send_error(&mut stream, RemoteError::InvalidRequest);
         }

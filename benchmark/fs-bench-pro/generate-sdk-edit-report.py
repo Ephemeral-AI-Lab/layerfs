@@ -11,6 +11,17 @@ from pathlib import Path
 MIB = 1024 * 1024
 SIZES = (1 * MIB, 10 * MIB, 100 * MIB, 500 * MIB)
 METRICS = ("edit_call_ns", "commit_call_ns", "edit_commit_ns")
+NOMINAL_NS = (10_000_000, 10_000_000, 20_000_000)
+ACCEPTED_NS = (20_000_000, 20_000_000, 30_000_000)
+
+
+def latency_status(values):
+    if any(values[field] > limit for field, limit in zip(METRICS, ACCEPTED_NS)):
+        return "fail"
+    if any(values[field] > limit for field, limit in zip(METRICS, NOMINAL_NS)):
+        return "accepted-with-tolerance"
+    return "nominal-pass"
+
 FROZEN_REGISTRIES = {
     "edit_length_preserving": ("daa3bcb8ba94da6dc28f7ca87dc2b27612c9988cf42fe5398cdddb3a5b386324", [0,5,10,3,8]),
     "edit_length_changing": ("b6e8d0ab87a2ed72234623198994a460484bd950a04bb81a99a9aecda06c4390", [0,13,26,7,20]),
@@ -143,6 +154,7 @@ def clock_validation(row, failures, row_id):
         lo0,hi0,lo3,hi3 = m0-uncertainty,m0+uncertainty,m3-uncertainty,m3+uncertainty
         first,last,witness = (row[key] for key in ("cgroup_first_sample_ns", "cgroup_last_sample_ns", "cgroup_interior_sample_ns"))
         add(failures, a <= d and b <= c and network >= 0 and 0 <= age <= 2_000_000_000 and offset_uncertainty <= 400_000, f"{row_id} clock calibration bounds")
+        add(failures, row.get("clock_sampler_start_ns",0)>0 and row.get("clock_probe_transport")=="prepared-authenticated-stream" and 1<=row.get("clock_calibration_attempts",0)<=5, f"{row_id} prepared clock probe custody")
         add(failures, row["clock_offset_ns"] == offset and row["clock_offset_uncertainty_ns"] == offset_uncertainty and row["clock_uncertainty_ns"] == uncertainty and row["clock_rate_allowance_ppm"] == 1000, f"{row_id} clock calibration formula")
         add(failures, [row[key] for key in ("cgroup_t0_ns","cgroup_t3_ns","cgroup_t0_lo_ns","cgroup_t0_hi_ns","cgroup_t3_lo_ns","cgroup_t3_hi_ns")] == [m0,m3,lo0,hi0,lo3,hi3], f"{row_id} mapped clock bounds")
         add(failures, first <= lo0 and hi0-first <= 1_000_000 and last >= hi3 and last-lo3 <= 1_000_000 and hi0 < witness < lo3, f"{row_id} uncertainty-bounded coverage")
@@ -281,9 +293,10 @@ def performance_validation(root, write_summary=True, selected=False):
     if selected:
         for row in rows:
             if row.get("source_arm") == "candidate":
-                for metric, ceiling in zip(METRICS, (10_000_000, 10_000_000, 20_000_000)):
+                for metric, ceiling in zip(METRICS, ACCEPTED_NS):
                     add(failures, row.get(metric, ceiling+1) <= ceiling, f"selected candidate {metric} no-go")
         summary = {"schema": "fs-bench-pro-sdk-edit-summary-v1", "family_id": family, "performance_rows": len(rows), "failures": failures, "status": "pass-selected-non-admission" if not failures else "no-go-selected-non-admission"}
+        summary["candidate_latency_status"] = {row["scenario_id"]:latency_status(row) for row in rows if row.get("source_arm")=="candidate"}
         if write_summary:
             (root / "performance/summary.json").write_text(json.dumps(summary,sort_keys=True,separators=(",", ":"))+"\n")
         return family, registry_by_id, rows, failures, summary
@@ -294,9 +307,8 @@ def performance_validation(root, write_summary=True, selected=False):
             add(failures, len(cell) == 5 and {row["repetition"] for row in cell} == {1, 2, 3, 4, 5}, f"{scenario_id} {arm} repetitions")
         candidate = by_cell[(scenario_id, "candidate")]
         if candidate:
-            add(failures, median(candidate, "edit_call_ns") <= 10_000_000, f"{scenario_id} candidate edit median")
-            add(failures, median(candidate, "commit_call_ns") <= 10_000_000, f"{scenario_id} candidate Commit median")
-            add(failures, median(candidate, "edit_commit_ns") <= 20_000_000, f"{scenario_id} candidate edit+Commit median")
+            for metric, ceiling in zip(METRICS, ACCEPTED_NS):
+                add(failures, median(candidate, metric) <= ceiling, f"{scenario_id} candidate {metric} accepted median")
 
     operation_rows = defaultdict(lambda: defaultdict(list))
     for row in rows:
@@ -356,9 +368,12 @@ def performance_validation(root, write_summary=True, selected=False):
             cell = by_cell[(scenario_id, arm)]
             if cell:
                 entry[arm] = {field: {"median": median(cell, field), "min": min(row[field] for row in cell), "max": max(row[field] for row in cell), "samples": len(cell)} for field in METRICS + ("rss_phase_peak_bytes", "rss_incremental_peak_bytes", "cgroup_phase_peak_bytes", "cgroup_phase_incremental_peak_bytes", "dirty_writeback_incremental_peak_bytes", "process_lifetime_peak_rss_bytes", "cgroup_lifetime_peak_bytes", "rss_sample_count", "cgroup_sample_count", "rss_maximum_sample_gap_ns", "cgroup_maximum_sample_gap_ns", "spool_write_bytes", "physical_spool_high_water_bytes", "commit_cdc_bytes_scanned", "candidate_bytes", "clock_uncertainty_ns", "clone_wall_ns", "container_start_ns")}
+        if "candidate" in entry:
+            entry["candidate_latency_status"] = latency_status({field:entry["candidate"][field]["median"] for field in METRICS})
         summaries.append(entry)
     status = "pass" if not failures else "fail"
     summary = {"schema": "fs-bench-pro-sdk-edit-summary-v1", "family_id": family, "performance_rows": len(rows), "scenarios": summaries, "size_parity": parity, "matched_operation_parity": cross, "paired_controls": paired, "failures": failures, "performance_status": status}
+    summary["latency_policy"] = {"nominal_ns":dict(zip(METRICS,NOMINAL_NS)),"accepted_ns":dict(zip(METRICS,ACCEPTED_NS)),"tolerance_authorized":"2026-09-04"}
     if write_summary:
         (root / "performance/summary.json").write_text(json.dumps(summary, sort_keys=True, separators=(",", ":")) + "\n")
     return family, registry_by_id, rows, failures, summary
@@ -486,6 +501,8 @@ def write_report(root, family, summary, receipts, failures):
                 continue
             cell = lambda name: f"{metrics[name]['median']/1e6:.3f} ({metrics[name]['min']/1e6:.3f}–{metrics[name]['max']/1e6:.3f})"
             lines.append(f"| `{item['operation_key']}` | {item['fixture_bytes']//MIB} MiB | {arm} | {metrics['edit_call_ns']['samples']} | {cell('edit_call_ns')} | {cell('commit_call_ns')} | {cell('edit_commit_ns')} |")
+    lines += ["", "Nominal targets are 10/10/20 ms; user-approved accepted ceilings are 20/20/30 ms for Edit/Commit/combined. Combined is independently capped at 30 ms. Parity and resource gates are unchanged.", "", "| Candidate scenario | Latency classification |", "| --- | --- |"]
+    lines += [f"| `{item['scenario_id']}` | {item.get('candidate_latency_status','missing')} |" for item in summary["scenarios"]]
     lines += ["", "## Memory", "", "| Operation | Size | Source | Process phase MiB median (min–max) | Process incremental MiB median (min–max) | Cgroup phase MiB median (min–max) | Cgroup incremental MiB median (min–max) | Dirty/writeback incremental MiB median (min–max) |", "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |"]
     for item in summary["scenarios"]:
         for arm in ("baseline", "candidate"):
@@ -520,7 +537,7 @@ def write_report(root, family, summary, receipts, failures):
     for path in sorted((root/"environment").glob("prepared-cache-*.json")):
         row=json.loads(path.read_text())
         lines.append(f"| {row['fixture']['fixture_bytes']//MIB} | {row['cache_disposition']} | {row['cache_build_ns']/1e6:.3f} | {row['cache_validation_ns']/1e6:.3f} | {row['cache_acquisition_ns']/1e6:.3f} | {row['key']} |")
-    lines += ["", "Qualification and clone setup are retained in [qualification timing](environment/qualification-timing.tsv); each raw row records its clone method/digest/wall and container-start wall. These are never part of edit or Commit latency.", "", f"Pre-run manifest SHA-256: {custody.sha(root/'environment/pre-run.sha256')}. The enclosing evidence manifest identity is shown by the cross-family report."]
+    lines += ["", "Qualification and clone setup are retained in [qualification timing](environment/qualification-timing.tsv); each raw row records its clone method/digest/wall, container-start wall, and clock_sampler_start_ns for authenticated connection and sampler warmup. These are never part of edit or Commit latency. Clock probes use the prepared authenticated stream; offset uncertainty, all accepted clock operands, and the five-probe bound remain independently checked.", "", f"Pre-run manifest SHA-256: {custody.sha(root/'environment/pre-run.sha256')}. The enclosing evidence manifest identity is shown by the cross-family report."]
     if failures:
         lines += ["", "## Failures", ""] + [f"- {failure}" for failure in failures]
     (root / "report.md").write_text("\n".join(lines) + "\n")
@@ -542,7 +559,8 @@ def self_check():
          "cgroup_first_sample_ns":m0-uncertainty-10,"cgroup_last_sample_ns":m3+uncertainty+10,
          "cgroup_interior_sample_ns":(m0+m3)//2,"cgroup_t0_worst_distance_ns":2*uncertainty+10,
          "cgroup_t3_worst_distance_ns":2*uncertainty+10,"host_clock_id":"host-clock-monotonic-raw",
-         "cgroup_clock_id":"daemon-sampler-monotonic","cgroup_peak_scope":"conservative-uncertainty-bounded-phase"}
+         "cgroup_clock_id":"daemon-sampler-monotonic","cgroup_peak_scope":"conservative-uncertainty-bounded-phase",
+         "clock_sampler_start_ns":1000,"clock_probe_transport":"prepared-authenticated-stream","clock_calibration_attempts":1}
     failures=[];clock_validation(row,failures,"synthetic-clock-check");assert not failures,failures
     invalid=dict(row,cgroup_first_sample_ns=m0-1)
     failures=[];clock_validation(invalid,failures,"wrong-side-boundary");assert failures
@@ -551,6 +569,10 @@ def self_check():
     assert envelope([1_000_000,3_000_000]) and not envelope([1_000_000,3_000_001])
     assert envelope([30_000_000,33_000_000]) and not envelope([30_000_000,33_000_001])
     assert sum((12,32,12))==56 and 10*sum((12,32,12))==560
+    assert latency_status(dict(zip(METRICS,NOMINAL_NS)))=="nominal-pass"
+    assert latency_status(dict(zip(METRICS,(20_000_000,10_000_000,30_000_000))))=="accepted-with-tolerance"
+    assert latency_status(dict(zip(METRICS,(20_000_000,10_000_001,30_000_001))))=="fail"
+    assert latency_status(dict(zip(METRICS,(20_000_001,0,20_000_001))))=="fail"
     print(json.dumps({"schema":"fs-bench-pro-sdk-edit-report-self-check-v1","status":"pass","synthetic_only":True}))
 
 

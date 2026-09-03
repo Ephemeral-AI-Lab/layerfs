@@ -34,6 +34,7 @@ pub enum Kind {
     ResourceSampleStarted = 13,
     ResourceSampleFinish = 14,
     ResourceSample = 15,
+    ResourceSampleClock = 16,
 }
 
 impl TryFrom<u8> for Kind {
@@ -56,6 +57,7 @@ impl TryFrom<u8> for Kind {
             13 => Ok(Self::ResourceSampleStarted),
             14 => Ok(Self::ResourceSampleFinish),
             15 => Ok(Self::ResourceSample),
+            16 => Ok(Self::ResourceSampleClock),
             _ => Err(invalid("unknown daemon frame kind")),
         }
     }
@@ -539,6 +541,19 @@ fn proof(
     *hasher.finalize().as_bytes()
 }
 
+pub fn write_clock_probe(mut writer: impl Write) -> io::Result<()> {
+    writer.write_all(&[0, 0, 0, 0, Kind::ResourceSampleClock as u8])
+}
+
+pub fn write_clock_response(mut writer: impl Write, received: u64, sent: u64) -> io::Result<()> {
+    let mut frame = [0_u8; 21];
+    frame[..4].copy_from_slice(&16_u32.to_be_bytes());
+    frame[4] = Kind::ResourceSampleStarted as u8;
+    frame[5..13].copy_from_slice(&received.to_be_bytes());
+    frame[13..].copy_from_slice(&sent.to_be_bytes());
+    writer.write_all(&frame)
+}
+
 pub fn write_frame(mut writer: impl Write, kind: Kind, payload: &[u8]) -> io::Result<()> {
     validate_frame(kind, payload.len())?;
     writer.write_all(&(payload.len() as u32).to_be_bytes())?;
@@ -572,7 +587,13 @@ fn validate_frame(kind: Kind, length: usize) -> io::Result<()> {
         return Err(invalid("daemon frame length"));
     }
     match kind {
-        Kind::Stop | Kind::Started | Kind::Close | Kind::WorkspaceClosed if length != 0 => {
+        Kind::Stop
+        | Kind::Started
+        | Kind::Close
+        | Kind::WorkspaceClosed
+        | Kind::ResourceSampleClock
+            if length != 0 =>
+        {
             Err(invalid("daemon empty frame payload"))
         }
         Kind::WorkspaceReady if length == 0 => Err(invalid("daemon WorkspaceReady payload")),
@@ -859,6 +880,37 @@ pub fn invalid(message: &'static str) -> io::Error {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn clock_probe_frames_are_single_write_and_exact() {
+        #[derive(Default)]
+        struct Sink(Vec<u8>, usize);
+        impl std::io::Write for Sink {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.extend_from_slice(bytes);
+                self.1 += 1;
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut sink = Sink::default();
+        super::write_clock_probe(&mut sink).unwrap();
+        assert_eq!(sink.1, 1);
+        assert_eq!(
+            super::read_frame(sink.0.as_slice()).unwrap().kind,
+            super::Kind::ResourceSampleClock
+        );
+        sink = Sink::default();
+        super::write_clock_response(&mut sink, 123, 456).unwrap();
+        assert_eq!(sink.1, 1);
+        let response = super::read_frame(sink.0.as_slice()).unwrap();
+        assert_eq!(response.kind, super::Kind::ResourceSampleStarted);
+        assert_eq!(&response.payload[..8], &123_u64.to_be_bytes());
+        assert_eq!(&response.payload[8..], &456_u64.to_be_bytes());
+        assert!(super::write_frame(Vec::new(), super::Kind::ResourceSampleClock, &[0]).is_err());
+    }
+
     use super::*;
     use std::io::Cursor as IoCursor;
 

@@ -5816,6 +5816,7 @@ struct SdkEditClockCalibration {
     offset_ns: i128,
     uncertainty_ns: u64,
     attempts: u64,
+    sampler_start_ns: u64,
 }
 
 impl SdkEditClockCalibration {
@@ -5852,6 +5853,7 @@ impl SdkEditClockCalibration {
             offset_ns,
             uncertainty_ns,
             attempts: 1,
+            sampler_start_ns: 0,
         })
     }
 
@@ -5887,7 +5889,7 @@ impl SdkEditClockCalibration {
             daemon_t0.saturating_add(uncertainty).saturating_sub(sample.first_sample_ns),
             sample.last_sample_ns.saturating_sub(daemon_t3.saturating_sub(uncertainty)),
             sample.interior_sample_ns,
-        )
+        ) + &format!(",\"clock_sampler_start_ns\":{},\"clock_probe_transport\":\"prepared-authenticated-stream\"", self.sampler_start_ns)
     }
 }
 
@@ -5895,20 +5897,31 @@ fn sdk_edit_start_resource_sample(
     client: &Client,
     workspace: WorkspaceId,
 ) -> AnyResult<SdkEditClockCalibration> {
+    let setup_started = Instant::now();
+    let mut clock = client.start_workspace_resource_sample(workspace)?;
+    let sampler_start_ns = elapsed_ns(setup_started);
     for attempt in 1..=5 {
         let host_send = sdk_edit_clock_ns()?;
-        let (daemon_receive, daemon_send) = client.start_workspace_resource_sample(workspace)?;
+        let (daemon_receive, daemon_send) = clock.probe()?;
         let host_receive = sdk_edit_clock_ns()?;
         match SdkEditClockCalibration::new(host_send, host_receive, daemon_receive, daemon_send) {
             Ok(mut calibration) => {
                 calibration.attempts = attempt;
+                calibration.sampler_start_ns = sampler_start_ns;
+                drop(clock);
                 std::thread::sleep(std::time::Duration::from_millis(2));
                 return Ok(calibration);
             }
             Err(error) => {
-                eprintln!("SDK edit calibration attempt {attempt} rejected: {error}");
-                client.finish_workspace_resource_sample(workspace, daemon_send, daemon_send, 0)?;
+                eprintln!("SDK edit calibration attempt {attempt} rejected: {error}; host_send={host_send} host_receive={host_receive} daemon_receive={daemon_receive} daemon_send={daemon_send}");
                 if attempt == 5 {
+                    drop(clock);
+                    client.finish_workspace_resource_sample(
+                        workspace,
+                        daemon_send,
+                        daemon_send,
+                        0,
+                    )?;
                     return Err(error);
                 }
             }

@@ -209,7 +209,7 @@ impl DaemonOwner {
     pub(crate) fn start_resource_sample(
         &self,
         workspace_id: WorkspaceId,
-    ) -> std::io::Result<(u64, u64)> {
+    ) -> std::io::Result<layerfs_daemon::ResourceSampleClock> {
         self.client.start_resource_sample(workspace_id.bytes())
     }
 
