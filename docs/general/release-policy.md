@@ -39,6 +39,12 @@ source seal, use public operations, keep comparison boundaries matched, retain
 every valid preregistered sample, and disclose setup excluded from timing.
 Exploratory measurements may guide engineering but are not release claims.
 
-The current evidence index is the
-[0.1.2 benchmark report](../../release-notes/0.1.2/benchmark-results.md);
-earlier release records remain immutable under `release-notes/`.
+All benchmark specifications, execution, evidence, and reporting must satisfy
+the [LayerFS benchmark rules](benchmark_rules.md). An authenticity, timing,
+family-completeness, memory-attribution, custody, or claim-mapping failure
+blocks publication independently of numerical performance.
+
+LayerFS 0.1.1 is the active released Developer Preview. The
+[0.1.2 benchmark report](../../release-notes/0.1.2/benchmark-results.md) is a
+prerelease blocker record until issue #20 completes; earlier release records
+remain immutable under `release-notes/`.

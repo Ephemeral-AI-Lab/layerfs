@@ -1,310 +1,63 @@
 # LayerFS 0.1.2
 
-> **Status:** Complete and released under annotated tag `v0.1.2`. The exact
-> 31-ID count-changing family and scaling verification pass at the final
-> measured candidate. Earlier campaigns remain immutable historical evidence;
-> the Store blocker is accepted and authenticated physical packs remain
-> deferred to open issue #18.
+> **Status:** Current planning checklist; no release candidate exists.
 
-## Release structure
+LayerFS 0.1.1 is the active released Developer Preview. LayerFS 0.1.2 is
+unreleased and publication-blocked by
+[issue #20](https://github.com/Ephemeral-AI-Lab/layerfs/issues/20). Parent issue
+[#12](https://github.com/Ephemeral-AI-Lab/layerfs/issues/12) remains open.
 
-v0.1.2 has five ordered sub-issues:
+## Ordered work
 
-0. [adapt `fs-bench-pro` to the family format](fs-bench-pro-format.md);
-1. [implement the universal Workspace regular-file edit engine](universal-file-edit-engine.md);
-2. [complete the same-count edit performance family](same-count-file-edits.md);
-3. [complete the count-changing edit performance family](count-changing-file-edits.md); and
-4. [complete total durable Store-footprint evidence](store-footprint-efficiency.md).
-
-The first item is shared implementation, not a benchmark family. The two edit
-families classify workloads by the semantic difference under test: file length
-is preserved or changed. Store footprint remains separately accounted evidence.
-The six new delete/shrink file-size scaling IDs remain in the count-changing
-family. Canonical CDC chunk cardinality is a different axis and is explicitly
-deferred beyond v0.1.2 rather than mixed into this expansion.
-
-## GitHub tracking
-
-| Order | Issue |
-| ---: | --- |
-| Parent | [#12 — v0.1.2 universal file editing and performance-family release](https://github.com/Ephemeral-AI-Lab/layerfs/issues/12) |
-| 0 | [#17 — adapt `fs-bench-pro` to family-local performance runners](https://github.com/Ephemeral-AI-Lab/layerfs/issues/17) |
-| 1 | [#14 — implement the universal Workspace regular-file edit engine](https://github.com/Ephemeral-AI-Lab/layerfs/issues/14) |
-| 2 | [#13 — build and optimize same-count file-edit performance](https://github.com/Ephemeral-AI-Lab/layerfs/issues/13) |
-| 3 | [#15 — build and optimize count-changing file-edit performance](https://github.com/Ephemeral-AI-Lab/layerfs/issues/15) |
-| 4 | [#16 — measure and optimize total durable Store footprint](https://github.com/Ephemeral-AI-Lab/layerfs/issues/16) |
-
-## Fixed performance environment
-
-All timed file-edit rows use one environment:
-
-```text
-MacBook host
--> host-resident LayerStackStore and public Client
--> Docker Desktop
--> managed Linux container
--> real LayerFS FUSE projection
--> one fresh workload process
--> explicit Commit and End
-```
-
-Environment is a campaign identity, not a scenario-name axis. There is no
-POSIX-versus-native, FUSE-versus-materialization, macOS-versus-Linux, or driver
-matrix in v0.1.2 performance results. Record exact host hardware/OS, Docker and
-engine versions, image digest, container kernel and limits, FUSE capabilities,
-Store placement, cache profile, fixture digest, source seal, schema, and
-acknowledgement boundary for every run.
-
-The edit engine is intentionally projection-independent. One untimed
-materialization/FUSE conformance group prevents driver coupling, but v0.1.2
-makes performance claims only for the fixed Docker/FUSE path.
-
-## Benchmark-family layout
-
-All code stays in the existing [`benchmark/fs-bench-pro`](../../../../benchmark/fs-bench-pro/)
-harness. The exact [v0.1.2 harness format](fs-bench-pro-format.md) gives each
-family one pure definition module and one runner:
-
-| Family | Definition | Runner |
-| --- | --- | --- |
-| `init_namespace` v0.1.1 | `families/init_namespace.rs` | `run-namespace.sh` |
-| Same-count edits | `families/edit_same_count.rs` | `run-edit-same-count.sh` |
-| Count-changing edits | `families/edit_count_changing.rs` | `run-edit-count-changing.sh` |
-| Store footprint | `families/store_footprint.rs` | `run-store-footprint.sh` |
-
-`run-namespace.sh` is an existing family runner and retains its exact v0.1.1
-operation/schema/evidence meaning; issue 0 only extracts its pure definitions
-and adds descriptive aliases such as `namespace-10000-files-300mb` while
-preserving the frozen `namespace-10000` raw ID.
-Shared lifecycle, Docker/FUSE setup, fixture generation, custody, receipt,
-verification, and reporting code remains shared. Do not create another
-benchmark crate or copy shared helpers into a family.
-
-Each runner requires `--case` unless `--all` is explicit and supports:
-
-```text
---mode performance   # default; selected case/seed only, no full verifier
---mode verify        # selected exact byte/root/reopen/resource verification
---mode admission     # explicit full family plus separate verification
-```
-
-This makes the development loop one selected performance case instead of the
-full benchmark suite. Performance mode still rejects process failure,
-incomplete operation count, wrong reported final length, timeout, OOM, swap, or
-cleanup failure. Full digest/root/reopen work belongs only to verification and
-never enters performance timing.
-
-## Performance inventory
-
-| Work item | Timed performance IDs | Separate verification/conformance | Development runner |
-| --- | ---: | ---: | --- |
-| Universal edit implementation | 0 registered family rows | 7 groups + focused owner-side checks | focused tests/cases |
-| Same-count family | 14 | 1 group | `run-edit-same-count.sh` |
-| Count-changing family | 31 (25 primary + 6 scaling) | 7 primary + 18 scaling = 25 receipts | `run-edit-count-changing.sh` |
-| Store footprint | 0 mutation rows | 3 controls x 3 fresh Stores per source/candidate | `run-store-footprint.sh` |
-| **Mutation total** | **45** | **7 universal + 1 same-count + 25 count-changing = 33 proof groups/receipts** | — |
-
-One complete candidate performance collection contains 135 samples:
-
-```text
-45 timed IDs * 3 seeds
-```
-
-The 25 primary count-changing IDs retain paired baseline/candidate execution;
-the 6 scaling IDs are an unpaired final-candidate supplement because their
-purpose is file-size modeling, not comparison with a 256 KiB control. Complete
-collection is admission work, not the normal development loop.
-
-Complete final performance admission executes 252 samples: 84 same-count A/A,
-150 primary count-changing baseline/candidate, and 18 scaling candidate
-samples. Verification walls and Store controls are reported separately.
-
-## Descriptive scenario naming
-
-New IDs use:
-
-```text
-<operation>-<position>-<size-or-delta>-ops-<count>
-```
-
-Examples:
-
-```text
-overwrite-head-4k-ops-100
-append-tail-4k-ops-100
-insert-middle-4k-ops-10
-truncate-tail-2k-ops-1
-sparse-write-past-eof-gap-60k-payload-4k-ops-100
-replace-middle-grow-2k-to-4k-ops-10
-```
-
-Do not put fixed environment or internal route names such as `posix`, `native`,
-`docker`, or `fuse` in a scenario ID. Frozen historical IDs retain their raw
-names and receive clearer report display names.
-
-## Paired family design
-
-The same-count family provides reusable controls:
-
-| Same-count control | Count-changing comparison |
+| Issue | Disposition |
 | --- | --- |
-| Head overwrite | Head prepend |
-| Middle overwrite | Middle insert/delete and grow/shrink replacement |
-| Tail overwrite | Tail append/truncate and sparse write-past-EOF |
+| #17 family-local harness format | complete supporting work |
+| #14 universal regular-file edit engine | complete supporting work |
+| #13 prior same-count POSIX family | closed; archival evidence only |
+| #15 prior count-changing POSIX family | closed; archival evidence only |
+| #16 Store-footprint evidence | retained supporting evidence |
+| #19 earlier rebuild draft | closed as superseded |
+| #20 SDK-only edit benchmark rebuild | open release blocker |
 
-Each count-changing receipt contains `paired_same_count_control_id`. A pair
-holds fixture, seed, positional intent, operation count, supplied bytes where
-possible, one-Commit topology, environment, cache, limits, timing, and schema
-constant. It deliberately varies deleted versus inserted length.
+## Active edit registry
 
-## v0.1.0 integration without rewriting history
+The binding specification is
+[SDK-only file-edit benchmark rebuild](sdk-only-edit-benchmark-rebuild.md).
 
-Migration means assigning frozen rows to their permanent family, not renaming
-or changing them:
+| Family | Definition | Runner | IDs |
+| --- | --- | --- | ---: |
+| `edit_length_preserving` | `families/edit_length_preserving.rs` | `run-edit-length-preserving.sh` | 12 |
+| `edit_length_changing` | `families/edit_length_changing.rs` | `run-edit-length-changing.sh` | 32 |
+| `edit_canonical_chunk_count` | `families/edit_canonical_chunk_count.rs` | `run-edit-canonical-chunk-count.sh` | 12 |
+| **Total** | — | — | **56** |
 
-| Frozen row | Permanent family |
-| --- | --- |
-| `small-edit` | v0.1.2 same-count anchor |
-| `edit16` | v0.1.2 same-count anchor |
-| `prepend-temp-copy-rename` | v0.1.2 count-changing anchor |
-| `cold-create-32m` | v0.1.3 payload create/read anchor |
-| `read-32m` | v0.1.3 payload create/read anchor |
+Every operation/outcome has exact 1/10/100/500 MiB siblings. Every registered
+row performs one logical edit, one `WorkspaceFileRangeEdit`, one singular public
+SDK call, one Commit, and one End. Batch and composite sparse performance are
+outside issue #20.
 
-v0.1.3 reruns both completed v0.1.2 edit families unchanged and adds no new
-head/middle/tail, append/prepend, insertion/deletion, truncate, sparse, or
-unequal-replacement members.
+The terminal directional campaign contains 280 baseline and 280 candidate
+performance rows in the frozen alternating order, plus 56 aggregate verifier
+receipts with 112 source-arm subproofs. Strict latency, parity,
+no-amplification, phase-local process/cgroup memory, verification, cleanup, and
+custody gates must all pass on one exact clean candidate.
 
-## Universal edit architecture
+## Historical disposition
 
-Use one internal range replacement:
+[Same-count edits](same-count-file-edits.md) and
+[count-changing edits](count-changing-file-edits.md) document the superseded
+POSIX/FUSE families. Their raw evidence is immutable but cannot serve as an
+active member, baseline, paired arm, or release claim.
 
-```text
-FileEdit(node, start, delete_len, replacement)
-Replacement = Inline | Zero | Spool
-```
+The universal engine and Store evidence remain supporting work. Completion of
+#20 makes #12 eligible for a later release-finalization step; it does not tag,
+publish, or close #12. Empirical edit claims stop at 500 MiB, with no 100 GiB
+synthetic or extrapolated claim.
 
-Ordinary FUSE write/truncate and optional owner-side
-`WorkspaceFileRangeEdit` lower into one balanced implicit piece tree. Commit
-emits maximal ascending replacement runs into the existing
-`FileMutationBatch`/structural splice and performs one inode upsert.
+## Completion
 
-There is no `copy_file_range`, OS-specific edit operation, second edit log,
-second canonical editor, CDC suffix-resynchronizer, borrowed-source mode,
-partial completion, or byte-copy fallback.
-
-## Performance versus verification
-
-The benchmark is for latency and throughput. Performance samples retain:
-
-- Create-through-End and phase walls;
-- operations completed and operations per second;
-- payload throughput where the workload copies or supplies meaningful bytes;
-- FUSE/spool traffic, piece/tree work, candidate/admission work;
-- CPU, RSS, cgroup peak, swap, timeout/OOM, and cleanup validity.
-
-Full byte hashing, canonical-root comparison, fresh reopen, adversarial
-boundaries, failure injection, and materialization equality are separate
-verifier work. They are not run in the default development mode and never
-contribute to a performance distribution. A result cannot be published as
-release evidence until its explicit verifier passes.
-
-## Baselines and provisional targets
-
-Retained v0.1.1 anchors:
-
-| Metric | Median / gate |
-| --- | ---: |
-| Workspace Create | 14.550 ms / <=20 ms |
-| `small-edit` Commit | 4.503 ms / <=6 ms |
-| `cold-create-32m` complete | 131.774 ms / <=150 ms |
-| `edit16` complete | 156.446 ms / <=200 ms |
-| `prepend-temp-copy-rename` complete | 223.763 ms / <=250 ms |
-| `read-32m` complete | 141.418 ms / <=150 ms |
-| registered total | 653.401 ms / <=700 ms |
-| inner write throughput | 505.6 MB/s / >=314.6 MB/s |
-| host peak RSS | 97.1 MB / <=128 MiB |
-
-For every new performance row, run three alternating seed pairs. When the two
-arms intentionally have identical commit/product/harness/workload identity,
-use one prepared daemon and alternate A/A labels; this removes daemon-instance
-state as an undeclared variable while every row still receives a fresh Store,
-Branch, Workspace, and workload process. Distinct baseline/candidate source
-identities require distinct sealed containers. Require:
-
-```text
-median(candidate / unchanged baseline) <= 1.05
-```
-
-Any pair above `1.10` requires phase/counter disposition. Require at least a
-20-percent improvement only when baseline evidence proves a defect and the
-retained implementation claims to optimize it.
-
-Provisional family budgets, to be frozen after unchanged-source measurement:
-
-| Family | One source arm | Paired baseline/candidate | Separate verifier timeout |
-| --- | ---: | ---: | ---: |
-| Same-count, 42 samples | 3 / 6 s target/hard | 6 / 12 s | 20 s |
-| Count-changing, 75 samples | 10 / 20 s | 20 / 40 s | 40 s |
-| Count-changing scaling, 18 candidate samples | reported; no aggregate latency gate | unpaired | 40 s per sample |
-| **Primary edit total** | **13 / 26 s** | **26 / 52 s** | **60 s plus scaling proofs** |
-
-The primary universal-plus-edit verification retains its 90-second aggregate
-timeout. The 18 scaling proofs are additional; each has its own 40-second hard
-timeout and the scaling cohort has no aggregate latency target. None of these
-verification bounds is a performance target or runs implicitly during
-development.
-
-Focused owner-side 32 MiB prepend remains:
-
-```text
-range edit + Commit/refresh target / hard  50 / 75 ms
-complete lifecycle target / hard          80 / 110 ms
-old payload/FUSE/spool transfer            0
-```
-
-## Issue structure
-
-Create one parent release issue with five ordered sub-issues:
-
-0. formalize `run-namespace.sh` as the v0.1.1 namespace family and adapt
-   `fs-bench-pro` to family definitions, selected-case performance, and separate
-   verify/admission modes;
-1. implement the universal Workspace regular-file edit engine;
-2. build, baseline, and optimize same-count file-edit performance;
-3. build, baseline, and optimize count-changing file-edit performance; and
-4. baseline and optimize total durable Store footprint.
-
-The implementation issue owns shared code and conformance. Each performance
-family issue owns its definition file, runner, frozen IDs, baseline, measured
-optimization disposition, candidate evidence, verifier, and publication. Do
-not split benchmark creation from optimization or create one issue per row.
-
-## Compatibility boundary
-
-Preserve the five-table Store schema, canonical encodings and identities, CDC
-profile, existing public SDK/CLI behavior, daemon/FUSE protocol, visibility and
-acknowledgement, ordinary metadata/namespace semantics, and existing resource
-ceilings. `WorkspaceFileRangeEdit` is additive and owner-side.
-
-## Acceptance criteria
-
-- [x] Issue 0 lands the shared benchmark format before the implementation and
-  family issues collect evidence.
-- [x] One shared implementation issue, two complete edit performance families,
-  and one Store-footprint family finish in v0.1.2.
-- [x] All benchmark files and runners live under `benchmark/fs-bench-pro` and
-  reuse shared harness helpers.
-- [x] Each family runner defaults to one explicit performance case/seed and
-  requires `--all` for full admission.
-- [x] Exactly 45 timed edit IDs (39 original plus 6 count-changing scaling
-  IDs), their separate verification/conformance proofs, and three Store
-  controls are frozen.
-- [x] Frozen v0.1.0 rows retain their identities and the later benchmark plan
-  inherits the two complete edit families without silently adding members.
-- [x] Performance timing contains no digest/root/reopen/failure/materialization
-  verifier work.
-- [x] One environment-independent edit engine serves ordinary write/truncate
-  and owner-side range editing with no fallback or alternate canonical path.
-- [x] Paired regression, frozen anchor, absolute mutation, scaling, RSS,
-  zero-swap, and cleanup gates pass.
-- [x] Explicit verification passes before evidence is published.
+- [x] Benchmark policy and issue #20 specification frozen before code changes.
+- [ ] Three SDK-only family definitions and runners implement exactly 56 IDs.
+- [ ] 560 terminal performance rows and all 56 verifier receipts pass.
+- [ ] All repository and evidence-custody gates pass on the exact clean candidate.
+- [ ] Issue #20 is closed with exact evidence; parent #12 remains open.

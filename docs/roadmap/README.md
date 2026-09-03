@@ -110,34 +110,19 @@ Universal Workspace file edit, broad refactors, and new projection types are def
 family are tracked in the [v0.1.2 plan](0.1/0.1.2/README.md); it requires no
 daemon or FUSE wire operation.
 
-## Released compatibility-preserving 0.1.2 work
+## Unreleased compatibility-preserving 0.1.2 work
 
-The [v0.1.2 plan](0.1/0.1.2/README.md) continues benchmark-driven optimization
-after the namespace lifecycle is understood. It first adapts
-[`fs-bench-pro`](0.1/0.1.2/fs-bench-pro-format.md) for one selected performance
-case and separate verifier modes, then implements the
-[universal edit engine](0.1/0.1.2/universal-file-edit-engine.md), completes the
-same-count and count-changing performance families, and measures
-[total durable Store footprint](0.1/0.1.2/store-footprint-efficiency.md).
+The [v0.1.2 plan](0.1/0.1.2/README.md) retains the completed family-format,
+universal-engine, and Store work as supporting evidence. Its prior POSIX/FUSE
+edit families are archival. Issue #20 now owns three complete SDK-only edit
+families across exact 1/10/100/500 MiB fixtures.
 
-- [x] Add the owner-side public SDK `WorkspaceFileRangeEdit` semantic and one common
-  internal edit engine for ordinary write/truncate, with bounded all-or-nothing
-  behavior and no alternate edit or copy fallback.
-- [x] Baseline both complete edit families before optimizing a shared
-  fragmented-write, sparse-growth, replacement, or planning defect.
-- [x] Time only the fixed MacBook/Docker/Linux-FUSE environment; keep owner-side
-  range editing as implementation acceptance rather than another family axis.
-- [x] Retain exact bytes, expression-appropriate canonical roots, fresh reopen
-  proof, and existing registered scenario meanings; do not require structural
-  splice and ordinary full-stream rewrite to share a root.
-- [x] Rerun every affected registered edit row after accepted optimizations.
-- [x] Measure the 500 MB unique-content control's logical, canonical, SQLite,
-  other durable, temporary, and physical-I/O bytes.
-- [x] Reach at most 600 MB total durable Store footprint through a compatible
-  mechanism, or retain the exact compatibility or physical lower bound.
-- [x] Count every pack, index, manifest, sidecar, journal, and checksum rather
-  than treating a smaller `store.sqlite` as a total Store win.
-- [x] Defer authenticated physical packs to open minor-release issue #18.
+- [x] Implement one shared failure-atomic regular-file edit engine.
+- [x] Retain the earlier POSIX/FUSE results as immutable historical evidence.
+- [ ] Admit all 56 singular SDK scenarios and 560 performance rows.
+- [ ] Pass all latency, parity, no-amplification, memory, verifier, cleanup, and
+  custody gates on one exact clean candidate.
+- [ ] Keep parent issue #12 open until the later release-finalization step.
 
 ## Draft compatibility-preserving 0.1.3 work
 

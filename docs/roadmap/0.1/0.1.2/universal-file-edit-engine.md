@@ -1,9 +1,8 @@
 # Universal Workspace regular-file edit engine
 
-> **Status:** Implemented and accepted in v0.1.2 by
-> `issue14-terminal-r005-20260903`. It is not a benchmark family. Performance
-> families exercise it through the fixed Docker/FUSE product path; focused
-> owner-side checks remain here.
+> **Status:** Implemented supporting work for unreleased LayerFS 0.1.2. It is
+> not a benchmark family. Issue #20 must still admit the three SDK-only edit
+> families before any v0.1.2 release candidate exists.
 > Earlier r002 and r003 directories are immutable diagnostic history,
 > superseded and ineligible for release acceptance or downstream custody.
 > Tracked by [GitHub issue #14](https://github.com/Ephemeral-AI-Lab/layerfs/issues/14).

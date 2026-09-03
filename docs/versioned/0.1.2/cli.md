@@ -1,6 +1,6 @@
 # LayerFS 0.1.2 CLI reference
 
-> **Status:** Released compatibility record for `v0.1.2`.
+> **Status:** Release candidate draft for LayerFS 0.1.2.
 
 The 0.1.2 release does not add or remove a documented CLI operation. Its
 command grammar, context ownership, typed identifiers, query paging behavior,

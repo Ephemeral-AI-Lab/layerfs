@@ -1,11 +1,11 @@
 # LayerFS 0.1.2 quickstart
 
-> **Status:** Released instructions for `v0.1.2`.
+> **Status:** Release candidate draft for LayerFS 0.1.2; no release tag exists.
 
-Build from the immutable release tag:
+Build from the current source checkout for prerelease evaluation:
 
 ```bash
-git clone --branch v0.1.2 --depth 1 https://github.com/Ephemeral-AI-Lab/layerfs.git
+git clone https://github.com/Ephemeral-AI-Lab/layerfs.git
 cd layerfs
 cargo build --release -p layerfs-cli
 export LAYERFS_BIN="$PWD/target/release/layerfs"

@@ -1,38 +1,22 @@
 # LayerFS 0.1.2 Developer Preview
 
-> **Status:** Released source-only Developer Preview under annotated tag
-> `v0.1.2`.
+> **Status:** Unreleased; publication blocked by issue #20. LayerFS 0.1.1 is
+> the active released Developer Preview.
 
-LayerFS 0.1.2 preserves the v0.1.1 storage, CLI, daemon, projection, and
-Workspace lifecycle contracts while adding failure-atomic regular-file range
-editing through one shared owner-side/FUSE piece engine.
+The first v0.1.2 publication was withdrawn because its edit benchmarks used
+the wrong POSIX/FUSE mutation surface and did not constitute terminal release
+admission. There is currently no `v0.1.2` tag or GitHub Release.
 
-## Release identity
+Issue [#20](https://github.com/Ephemeral-AI-Lab/layerfs/issues/20) rebuilds the
+edit evidence as three complete SDK-only 1/10/100/500 MiB families. Completing
+#20 does not publish v0.1.2 or close parent issue #12; release finalization is a
+later parent step.
 
-| Field | Value |
-| --- | --- |
-| Version | `0.1.2` |
-| Channel | Developer Preview |
-| Git tag | `v0.1.2` |
-| Git commit | The commit resolved by `v0.1.2^{commit}` |
-| Release date | 2026-09-03 |
-| Checksums | [Artifact manifest](artifacts.md) and release asset `SHA256SUMS` |
-| Verification | [Terminal release verification](verification.md) |
+## Prerelease documents
 
-## Compatibility
-
-The release retains the five-table Store schema, canonical encodings and
-identities, CDC profile, public SDK and CLI behavior, daemon/proxy/FUSE
-protocol, acknowledgement boundary, and explicit Workspace lifecycle.
-
-## Release documents
-
-- [Versioned manual](../../docs/versioned/0.1.2/README.md)
-- [Release contract](release-contract.md)
-- [Verification record](verification.md)
-- [Benchmark evidence](benchmark-results.md)
-- [Limitations](limitations.md)
-- [Artifact manifest](artifacts.md)
-- [GitHub Release notes](github-release.md)
-
-[LayerFS 0.1.1](../0.1.1/README.md) remains available as the previous release.
+- [Benchmark blocker record](benchmark-results.md)
+- [Verification checklist](verification.md)
+- [Draft release contract](release-contract.md)
+- [Current limitations](limitations.md)
+- [Artifact status](artifacts.md)
+- [Unpublished release-note draft](github-release.md)

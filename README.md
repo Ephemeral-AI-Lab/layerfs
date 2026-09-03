@@ -189,13 +189,13 @@ Start with the [documentation index](docs/README.md), or jump directly to a focu
 | Goal | Guide |
 | --- | --- |
 | Learn the concepts | [Core concepts](docs/general/concepts.md) |
-| Run the CLI and SDK | [Quickstart](docs/versioned/0.1.2/quickstart.md) |
-| Find a CLI command | [CLI reference](docs/versioned/0.1.2/cli.md) |
-| Integrate with Rust | [Rust SDK reference](docs/versioned/0.1.2/sdk.md) |
-| Configure container FUSE | [Container runtime](docs/versioned/0.1.2/container-runtime.md) |
-| Understand storage | [Storage format](docs/versioned/0.1.2/storage-format.md) |
-| Review performance evidence | [Benchmark results](release-notes/0.1.2/benchmark-results.md) |
-| Review the 0.1.2 release | [Release record](release-notes/0.1.2/README.md) |
+| Run the CLI and SDK | [Quickstart](docs/versioned/0.1.1/quickstart.md) |
+| Find a CLI command | [CLI reference](docs/versioned/0.1.1/cli.md) |
+| Integrate with Rust | [Rust SDK reference](docs/versioned/0.1.1/sdk.md) |
+| Configure container FUSE | [Container runtime](docs/versioned/0.1.1/container-runtime.md) |
+| Understand storage | [Storage format](docs/versioned/0.1.1/storage-format.md) |
+| Review released evidence | [0.1.1 release record](release-notes/0.1.1/README.md) |
+| Review 0.1.2 blocker work | [Unreleased 0.1.2 plan](docs/roadmap/0.1/0.1.2/README.md) |
 | Contribute changes | [0.1.x development guide](docs/roadmap/0.1/development.md) |
 
 The [first-principles learning site](https://learn.layerfs.ai/) is educational material and may describe future work. The versioned repository manual defines the current product contract.
@@ -206,7 +206,7 @@ The [first-principles learning site](https://learn.layerfs.ai/) is educational m
 | --- | --- | --- |
 | **0.1.0 Developer Preview** | One SQLite Store, immutable LayerStack history, Branches, Workspaces, public SDK/CLI, host materialization, container FUSE, monitoring, and benchmark evidence. | **Released** as source under `v0.1.0`. |
 | **0.1.1** | Measure and harden existing-directory initialization through localized Commit, with focused FUSE and Docker proof. | **Released** as source under `v0.1.1`; see the [release record](release-notes/0.1.1/README.md). |
-| **0.1.2** | Adapt `fs-bench-pro` for case-local iteration, implement one portable regular-file edit engine, complete descriptively named same-count and count-changing Docker/FUSE performance families, and measure Store footprint. | **Released** as source under `v0.1.2`; see the [release record](release-notes/0.1.2/README.md). |
+| **0.1.2** | Complete three SDK-only 1/10/100/500 MiB edit families on the universal regular-file edit engine. | **Unreleased**; blocked by [issue #20](https://github.com/Ephemeral-AI-Lab/layerfs/issues/20). |
 | **0.1.3** | Complete diverse, tiered filesystem-workload families against one genesis Layer and one Branch, then optimize measured bottlenecks. | **Draft**; see the [release README](docs/roadmap/0.1/0.1.3/README.md). |
 | **0.1.4** | Benchmark multi-Layer and multi-Branch Commit history, Fork, Add, Diff, conflict, and query scaling, then optimize measured bottlenecks. | **Draft**; see the [release README](docs/roadmap/0.1/0.1.4/README.md). |
 | **0.2.0** | Establish a portable projection foundation, including capability-detected reflink/clonefile paths and a future OverlayFS projection. | **Planned**; requires a new compatibility contract. |
