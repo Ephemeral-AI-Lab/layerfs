@@ -1,9 +1,11 @@
 # Count-changing file-edit performance family
 
-> **Status:** Proposed v0.1.2 family: 25 timed performance IDs and four
-> separate verification groups. The fixed environment is MacBook/Docker
-> Desktop/managed Linux container/real FUSE; environment and implementation
-> route are not scenario-name axes.
+> **Status:** Implemented and accepted by the fresh-container directional
+> campaign at `issue15-terminal-final-fresh-bb95b08c` plus the immutable
+> ratio/custody supplement at
+> `issue15-terminal-authoritative-supplement-d1a7389b`. The family contains 25
+> timed performance IDs and four large verification groups in the fixed
+> MacBook/Docker Desktop/managed Linux container/real-FUSE environment.
 > Tracked by [GitHub issue #15](https://github.com/Ephemeral-AI-Lab/layerfs/issues/15).
 
 ## Question
@@ -306,8 +308,8 @@ floors are therefore frozen by schedule and transformation:
 The selected pre-freeze baseline was 56.4 MiB/s for one fsynced 256 KiB rewrite;
 the first complete run later recorded 44.3-44.7 MiB/s and is correctly retained
 as a no-go rather than used to move the frozen threshold. Linux
-`copy_file_range` produced the same FUSE request count and no improvement, so
-portable streaming temp-copy remains authoritative.
+A selected Linux `copy_file_range` diagnostic produced the same FUSE request
+count and no improvement, so portable streaming temp-copy remains authoritative.
 
 Sparse growth allocates no live RAM or physical spool proportional to the zero
 gap. Complete-process RSS targets at most 105 percent of the retained
@@ -329,15 +331,15 @@ performance distribution. Its provisional admission timeout is 40 seconds.
 
 ## Acceptance criteria
 
-- [ ] One family module and one runner own all 25 timed IDs and four verifier
+- [x] One family module and one runner own all 25 timed IDs and four verifier
   groups while reusing shared harness code.
-- [ ] The runner defaults to one explicit case/seed in performance mode and
+- [x] The runner defaults to one explicit case/seed in performance mode and
   cannot run the full family without `--all`.
-- [ ] The frozen prepend retains operation, fixture, timing, schema, and oracle.
-- [ ] Every 1/10/100 curve is an exact prefix and declares its same-count control.
-- [ ] Every performance row reports latency, operations/s, phase, I/O, object,
+- [x] The frozen prepend retains operation, fixture, timing, schema, and oracle.
+- [x] Every 1/10/100 curve is an exact prefix and declares its same-count control.
+- [x] Every performance row reports latency, operations/s, phase, I/O, object,
   CPU, memory, and cleanup receipts without verifier work in its timer.
-- [ ] Sparse zero, pair, relative regression, anchor, family-wall, RSS, and
+- [x] Sparse zero, pair, relative regression, anchor, family-wall, RSS, and
   zero-swap gates pass.
-- [ ] Explicit verification proves exact bytes/length/root/inode/reopen and all
+- [x] Explicit verification proves exact bytes/length/root/inode/reopen and all
   four large/adversarial groups before publication.
