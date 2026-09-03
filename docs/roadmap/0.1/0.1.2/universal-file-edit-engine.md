@@ -1,6 +1,7 @@
 # Universal Workspace regular-file edit engine
 
-> **Status:** Implemented in v0.1.2. It is not a benchmark family. Performance
+> **Status:** Implementation complete; terminal verification is being repaired in
+> v0.1.2. It is not a benchmark family. Performance
 > families exercise it through the fixed Docker/FUSE product path; focused
 > owner-side checks remain here.
 > Tracked by [GitHub issue #14](https://github.com/Ephemeral-AI-Lab/layerfs/issues/14).
@@ -184,7 +185,9 @@ proportional to its canonical extent representation.
 - Owner-side Inline replacement at most 1 MiB per call.
 - At most 4,096 edits and 8,193 live pieces per file.
 - At most 8 MiB live Inline bytes per Workspace.
-- At most 2 MiB charged tree/edit allocation, measured from allocation capacity.
+- At most 2 MiB logical tree charge (`live pieces * PieceNode size`). This is a
+  deterministic admission charge, not allocator RSS or transient path-copy bytes;
+  those remain covered by process/cgroup memory measurements.
 - Existing 1 GiB physical spool ceiling, charged append-only until cleanup.
 - Explicit result-length, logical-zero, and predicted-zero-extent ceilings.
   The implemented ceilings are 1 TiB result length, 1 GiB logical zero, and
@@ -195,10 +198,11 @@ proportional to its canonical extent representation.
 - Owner-side focused checks target at most 112 MiB RSS; every mutation row has a
   128 MiB hard ceiling and zero swap.
 
-## Conformance groups
+## Required conformance coverage
 
-These are verifier/integration groups owned by the implementation issue, not
-timed benchmark-family IDs:
+These are coverage requirements owned by the implementation issue, not a claim
+that seven similarly named tests prove every item and not timed benchmark-family
+IDs:
 
 1. Range, piece, extent, EOF, no-op, repeated, descending, overlapping, and
    `UpToDate` normalization boundaries.
@@ -216,7 +220,7 @@ timed benchmark-family IDs:
 
 Verification is never included in a performance distribution. The development
 loop runs focused unit/integration tests and selected performance cases; the
-complete conformance set runs only in explicit verification/admission mode.
+complete coverage matrix runs only in explicit verification/admission mode.
 
 ## Focused owner-side performance checks
 
@@ -263,10 +267,13 @@ owner-side baseline; do not invent a pre-API latency.
   completion, or byte-copy fallback exists.
 - [x] Reachable spool slices are immutable and short/erroring appends restore
   the exact prior high-water/state.
-- [x] All seven conformance groups pass outside benchmark timing.
+- [ ] Every item in the seven-group coverage matrix passes outside benchmark
+  timing. The retained seven-test run is partial evidence only.
 - [x] FUSE is the only v0.1.2 timed projection; untimed materialization equality
   proves the engine is not driver-coupled.
-- [x] The focused owner-side prepend meets its latency, transfer, reuse, memory,
-  retry, and cleanup gates.
+- [ ] The focused owner-side prepend meets its latency and directly measured CDC,
+  old-payload-read, RSS, swap, OOM, and cleanup gates. FUSE/spool transfer,
+  payload-object retention, transient allocation, and candidate-phase claims
+  remain unproven until separately instrumented.
 - [ ] Every retained implementation optimization reruns both affected complete
   performance families.

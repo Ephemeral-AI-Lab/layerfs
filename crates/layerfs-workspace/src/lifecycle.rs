@@ -22,6 +22,7 @@ pub enum WorkspaceState {
     Committed,
     Discarded,
     Ended,
+    BrokenPresentation,
     BrokenCleanup,
 }
 
@@ -166,7 +167,7 @@ impl Workspace {
                         retained_inline_bytes =
                             retained_inline_bytes.saturating_add(pieces.inline_len());
                         retained_piece_allocation_bytes = retained_piece_allocation_bytes
-                            .saturating_add(pieces.allocation_bytes()?);
+                            .saturating_add(pieces.logical_allocation_charge()?);
                     }
                     nodes.insert(id, retained);
                 }
@@ -547,20 +548,53 @@ impl Workspaces {
                 .lock()
                 .map_err(|_| WorkspaceError::WorkspaceBusy)?;
             let node = lookup_path(&mut workspace, &path)?;
-            workspace.edit_many(
+            if workspace.nodes[&node].pins != 0 {
+                return Err(WorkspaceError::WorkspaceBusy);
+            }
+            let checkpoint = workspace.edit_checkpoint(node)?;
+            let result = workspace.edit_many(
                 node,
                 edits
                     .into_iter()
                     .map(|edit| (edit.start, edit.delete_len, edit.replacement))
                     .collect(),
-            )?;
-            Ok(())
+            );
+            Ok((result, checkpoint))
         })();
-        if result.is_err() {
+        let (result, checkpoint) = match result {
+            Ok(value) => value,
+            Err(error) => {
+                crate::projection::resume(&worker)?;
+                return Err(error);
+            }
+        };
+        if let Err(error) = result {
+            worker
+                .workspace
+                .lock()
+                .map_err(|_| WorkspaceError::WorkspaceBusy)?
+                .restore_edit(checkpoint)?;
             crate::projection::resume(&worker)?;
-            return result;
+            return Err(error.into());
         }
-        crate::projection::refresh(&worker, self.daemon_mount_owner()?)
+        match crate::projection::refresh(&worker, self.daemon_mount_owner()?) {
+            Ok(()) => Ok(()),
+            Err(refresh_error) => {
+                let restored = worker
+                    .workspace
+                    .lock()
+                    .map_err(|_| WorkspaceError::WorkspaceBusy)?
+                    .restore_edit(checkpoint);
+                if restored.is_err()
+                    || crate::projection::refresh(&worker, self.daemon_mount_owner()?).is_err()
+                {
+                    if let Ok(mut workspace) = worker.workspace.lock() {
+                        workspace.state = WorkspaceState::BrokenPresentation;
+                    }
+                }
+                Err(refresh_error)
+            }
+        }
     }
 
     pub fn end_workspace_session(
@@ -577,7 +611,9 @@ impl Workspaces {
             .lock()
             .map_err(|_| WorkspaceError::WorkspaceBusy)?
             .state;
-        if state == WorkspaceState::BrokenCleanup {
+        if state == WorkspaceState::BrokenCleanup
+            || (state == WorkspaceState::BrokenPresentation && mode == EndWorkspaceMode::Clean)
+        {
             return Err(WorkspaceError::InvalidPlacement);
         }
         crate::projection::pause(&worker)?;
@@ -813,4 +849,164 @@ fn summary(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<WorkspaceSummary> {
         state: workspace.state,
         dirty,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use layerfs_layerstack_store::{
+        EntityName, LayerStackInitialization, LayerStackStore, LocalForkSource,
+    };
+
+    fn fixture(
+        label: &str,
+    ) -> (
+        std::path::PathBuf,
+        Workspaces,
+        layerfs_layerstack_store::BranchId,
+        LayerStackStore,
+    ) {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-lifecycle-{label}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source = root.join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("file"), b"abcdef").unwrap();
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let layer = store
+            .initialize_layerstack(
+                EntityName::new("project").unwrap(),
+                LayerStackInitialization::Directory(source),
+            )
+            .unwrap()
+            .genesis_layer_id;
+        let branch = store
+            .fork_branch(
+                EntityName::new("main").unwrap(),
+                LocalForkSource::Layer { layer_id: layer },
+            )
+            .unwrap();
+        let workspaces = Workspaces::new(root.join("runtime"), store.clone()).unwrap();
+        (root, workspaces, branch, store)
+    }
+
+    fn session(
+        root: &std::path::Path,
+        workspaces: &Workspaces,
+        branch: layerfs_layerstack_store::BranchId,
+    ) -> WorkspaceSession {
+        workspaces
+            .create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: crate::WorkspacePlacement::Host {
+                    root: root.join("mount"),
+                },
+                projection: Some(WorkspaceProjection::Materialize),
+            })
+            .unwrap()
+    }
+
+    fn prepend(workspaces: &Workspaces, id: WorkspaceId) -> WorkspaceResult<()> {
+        workspaces.edit_workspace_file_range(WorkspaceFileRangeEdit {
+            workspace_id: id,
+            path: "file".into(),
+            start: 0,
+            delete_len: 0,
+            replacement: crate::WorkspaceFileReplacement::Inline(b"P".to_vec()),
+        })
+    }
+
+    #[test]
+    fn failed_projection_refresh_restores_exact_state_and_retry_once() {
+        let (root, workspaces, branch, store) = fixture("refresh-rollback");
+        let session = session(&root, &workspaces, branch);
+        let worker = workspaces.worker(session.id).unwrap();
+        let before = {
+            let workspace = worker.workspace.lock().unwrap();
+            (
+                workspace.nodes.clone(),
+                workspace.dirty.clone(),
+                workspace.mutation_generation,
+                workspace.mutation_paths.clone(),
+                workspace.spool_bytes,
+                workspace.inline_bytes,
+                workspace.piece_allocation_bytes,
+            )
+        };
+        let branch_before = store.pin_branch(branch).unwrap().root;
+        crate::projection::inject_refresh_failure_once();
+        assert!(prepend(&workspaces, session.id).is_err());
+        {
+            let workspace = worker.workspace.lock().unwrap();
+            assert_eq!(workspace.nodes, before.0);
+            assert_eq!(workspace.dirty, before.1);
+            assert_eq!(workspace.mutation_generation, before.2);
+            assert_eq!(workspace.mutation_paths, before.3);
+            assert_eq!(workspace.spool_bytes, before.4);
+            assert_eq!(workspace.inline_bytes, before.5);
+            assert_eq!(workspace.piece_allocation_bytes, before.6);
+        }
+        assert_eq!(std::fs::read(root.join("mount/file")).unwrap(), b"abcdef");
+        assert_eq!(store.pin_branch(branch).unwrap().root, branch_before);
+        assert!(worker.projection_handle.lock().unwrap().is_some());
+        prepend(&workspaces, session.id).unwrap();
+        assert_eq!(std::fs::read(root.join("mount/file")).unwrap(), b"Pabcdef");
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Discard)
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn pinned_target_rejects_owner_edit_without_state_change() {
+        let (root, workspaces, branch, store) = fixture("pinned-edit");
+        let session = session(&root, &workspaces, branch);
+        let worker = workspaces.worker(session.id).unwrap();
+        let node = {
+            let mut workspace = worker.workspace.lock().unwrap();
+            let node = lookup_path(&mut workspace, "file").unwrap();
+            workspace.pin(node, false).unwrap();
+            node
+        };
+        let before = {
+            let workspace = worker.workspace.lock().unwrap();
+            (
+                workspace.nodes.clone(),
+                workspace.dirty.clone(),
+                workspace.mutation_generation,
+                workspace.mutation_paths.clone(),
+                workspace.spool_bytes,
+                workspace.inline_bytes,
+                workspace.piece_allocation_bytes,
+                store.pin_branch(branch).unwrap().root,
+            )
+        };
+        assert!(matches!(
+            prepend(&workspaces, session.id),
+            Err(WorkspaceError::WorkspaceBusy)
+        ));
+        {
+            let workspace = worker.workspace.lock().unwrap();
+            assert_eq!(workspace.nodes, before.0);
+            assert_eq!(workspace.dirty, before.1);
+            assert_eq!(workspace.mutation_generation, before.2);
+            assert_eq!(workspace.mutation_paths, before.3);
+            assert_eq!(workspace.spool_bytes, before.4);
+            assert_eq!(workspace.inline_bytes, before.5);
+            assert_eq!(workspace.piece_allocation_bytes, before.6);
+        }
+        assert_eq!(store.pin_branch(branch).unwrap().root, before.7);
+        assert!(worker.projection_handle.lock().unwrap().is_some());
+        assert_eq!(std::fs::read(root.join("mount/file")).unwrap(), b"abcdef");
+        worker.workspace.lock().unwrap().unpin(node).unwrap();
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

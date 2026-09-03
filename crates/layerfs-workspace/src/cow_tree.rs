@@ -983,7 +983,7 @@ impl Workspace {
                     self.inline_bytes = self.inline_bytes.saturating_sub(pieces.inline_len());
                     self.piece_allocation_bytes = self
                         .piece_allocation_bytes
-                        .saturating_sub(pieces.allocation_bytes().unwrap_or(0));
+                        .saturating_sub(pieces.logical_allocation_charge().unwrap_or(0));
                     let _ = std::fs::remove_file(spool);
                 }
             }

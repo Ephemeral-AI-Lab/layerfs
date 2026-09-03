@@ -10,6 +10,18 @@ use std::os::unix::fs::{FileExt, MetadataExt};
 use std::path::Path;
 use std::sync::Arc;
 
+pub(crate) struct EditCheckpoint {
+    node: NodeId,
+    value: crate::cow_tree::Node,
+    dirty: bool,
+    spool_bytes: u64,
+    inline_bytes: u64,
+    piece_allocation_bytes: u64,
+    spool_write_metrics: crate::cow_tree::SpoolWriteMetrics,
+    mutation_generation: u64,
+    mutation_paths: std::collections::BTreeMap<String, u64>,
+}
+
 pub struct ReadPlan {
     reader: SnapshotReader,
     requested: u64,
@@ -53,6 +65,48 @@ impl ReadPlan {
 }
 
 impl Workspace {
+    pub(crate) fn edit_checkpoint(&self, node: NodeId) -> Result<EditCheckpoint> {
+        Ok(EditCheckpoint {
+            node,
+            value: self
+                .nodes
+                .get(&node)
+                .ok_or(StoreError::NotFound("node"))?
+                .clone(),
+            dirty: self.dirty.contains(&node),
+            spool_bytes: self.spool_bytes,
+            inline_bytes: self.inline_bytes,
+            piece_allocation_bytes: self.piece_allocation_bytes,
+            spool_write_metrics: self.spool_write_metrics,
+            mutation_generation: self.mutation_generation,
+            mutation_paths: self.mutation_paths.clone(),
+        })
+    }
+
+    pub(crate) fn restore_edit(&mut self, checkpoint: EditCheckpoint) -> Result<()> {
+        if matches!(checkpoint.value.data, Data::File(FileData::Base { .. })) {
+            self.open_spools.remove(&checkpoint.node);
+            if let Data::File(FileData::Edited { spool, .. }) = &self.nodes[&checkpoint.node].data {
+                if spool.exists() {
+                    std::fs::remove_file(spool)?;
+                }
+            }
+        }
+        self.nodes.insert(checkpoint.node, checkpoint.value);
+        if checkpoint.dirty {
+            self.dirty.insert(checkpoint.node);
+        } else {
+            self.dirty.remove(&checkpoint.node);
+        }
+        self.spool_bytes = checkpoint.spool_bytes;
+        self.inline_bytes = checkpoint.inline_bytes;
+        self.piece_allocation_bytes = checkpoint.piece_allocation_bytes;
+        self.spool_write_metrics = checkpoint.spool_write_metrics;
+        self.mutation_generation = checkpoint.mutation_generation;
+        self.mutation_paths = checkpoint.mutation_paths;
+        Ok(())
+    }
+
     pub fn read(&self, node: NodeId, offset: u64, size: usize) -> Result<Vec<u8>> {
         self.read_plan(node, offset, size)?.read()
     }
@@ -232,7 +286,7 @@ impl Workspace {
                     .filter(|value| *value <= MAX_INLINE_PER_WORKSPACE)
                     .ok_or(StoreError::InvalidInput("workspace inline limit"))?;
                 self.piece_allocation_bytes
-                    .checked_add(next.allocation_bytes()?)
+                    .checked_add(next.logical_allocation_charge()?)
                     .filter(|value| *value <= MAX_PIECE_ALLOCATION)
                     .ok_or(StoreError::InvalidInput("workspace piece allocation limit"))?;
             } else {
@@ -316,8 +370,8 @@ impl Workspace {
             .filter(|v| *v <= MAX_INLINE_PER_WORKSPACE)
             .ok_or(StoreError::InvalidInput("workspace inline limit"))?;
         self.piece_allocation_bytes
-            .checked_sub(old.allocation_bytes()?)
-            .and_then(|v| v.checked_add(next.allocation_bytes().ok()?))
+            .checked_sub(old.logical_allocation_charge()?)
+            .and_then(|v| v.checked_add(next.logical_allocation_charge().ok()?))
             .filter(|v| *v <= MAX_PIECE_ALLOCATION)
             .ok_or(StoreError::InvalidInput("workspace piece allocation limit"))?;
         Ok(())
@@ -335,8 +389,9 @@ impl Workspace {
         paths: Vec<String>,
     ) -> Result<()> {
         self.inline_bytes = self.inline_bytes - old.inline_len() + next.inline_len();
-        self.piece_allocation_bytes =
-            self.piece_allocation_bytes - old.allocation_bytes()? + next.allocation_bytes()?;
+        self.piece_allocation_bytes = self.piece_allocation_bytes
+            - old.logical_allocation_charge()?
+            + next.logical_allocation_charge()?;
         self.spool_bytes += appended;
         let Data::File(FileData::Edited {
             pieces,
@@ -469,7 +524,7 @@ impl Workspace {
             let pieces = PieceTree::base(root, len)?;
             let next_allocation = self
                 .piece_allocation_bytes
-                .checked_add(pieces.allocation_bytes()?)
+                .checked_add(pieces.logical_allocation_charge()?)
                 .filter(|v| *v <= MAX_PIECE_ALLOCATION)
                 .ok_or(StoreError::InvalidInput("workspace piece allocation limit"))?;
             let started = std::time::Instant::now();

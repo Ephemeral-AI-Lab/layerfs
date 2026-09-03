@@ -388,12 +388,28 @@ pub(crate) fn refresh(
     daemon: Option<&crate::daemon::DaemonOwner>,
 ) -> WorkspaceResult<()> {
     end(worker)?;
+    #[cfg(test)]
+    if INJECT_REFRESH_FAILURE.with(|inject| inject.replace(false)) {
+        return Err(WorkspaceError::Io(std::io::Error::other(
+            "injected projection refresh failure",
+        )));
+    }
     let handle = attach(worker, daemon)?;
     *worker
         .projection_handle
         .lock()
         .map_err(|_| WorkspaceError::WorkspaceBusy)? = Some(handle);
     Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    static INJECT_REFRESH_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+pub(crate) fn inject_refresh_failure_once() {
+    INJECT_REFRESH_FAILURE.with(|inject| inject.set(true));
 }
 
 struct FuseView(Weak<WorkspaceWorker>);

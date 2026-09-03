@@ -14,6 +14,79 @@ const EDIT_TARGET: &str = "data-0000/file-00000.bin";
 const EDIT_MARKER: &[u8; 10] = b"E000000001";
 
 #[test]
+fn owner_range_edit_rejects_live_fuse_read_and_write_handles_atomically() {
+    if std::env::var_os("LAYERFS_LIVE_FUSE").is_none() {
+        return;
+    }
+    let root = temp("owner-range-open-handles");
+    let fixture = root.join("fixture");
+    std::fs::create_dir(&fixture).unwrap();
+    std::fs::write(fixture.join("file"), b"abcdef").unwrap();
+    let store = Arc::new(LayerStackStore::create(root.join("store.sqlite")).unwrap());
+    let client = Client::connect(store.clone()).unwrap();
+    let layer = client
+        .initialize_layerstack(
+            EntityName::new("owner-range-handles").unwrap(),
+            LayerStackInitialization::Directory(fixture),
+        )
+        .unwrap()
+        .genesis_layer_id;
+    let branch = client
+        .fork_branch(
+            EntityName::new("main").unwrap(),
+            LocalForkSource::Layer { layer_id: layer },
+        )
+        .unwrap();
+    let mount = root.join("mount");
+    let session = client
+        .create_workspace_session(CreateWorkspaceSession {
+            branch_id: branch,
+            placement: WorkspacePlacement::Host {
+                root: mount.clone(),
+            },
+            projection: Some(WorkspaceProjection::Fuse),
+        })
+        .unwrap();
+    assert!(is_fuse_mount(&mount));
+    let before_root = store.pin_branch(branch).unwrap().root;
+    let edit = || WorkspaceFileRangeEdit {
+        workspace_id: session.id,
+        path: "file".into(),
+        start: 0,
+        delete_len: 0,
+        replacement: WorkspaceFileReplacement::Inline(b"P".to_vec()),
+    };
+    let read = std::fs::File::open(mount.join("file")).unwrap();
+    assert!(matches!(
+        client.edit_workspace_file_range(edit()),
+        Err(layerfs_sdk::SdkError::Workspace(
+            layerfs_sdk::WorkspaceError::WorkspaceBusy
+        ))
+    ));
+    drop(read);
+    let write = std::fs::OpenOptions::new()
+        .write(true)
+        .open(mount.join("file"))
+        .unwrap();
+    assert!(matches!(
+        client.edit_workspace_file_range(edit()),
+        Err(layerfs_sdk::SdkError::Workspace(
+            layerfs_sdk::WorkspaceError::WorkspaceBusy
+        ))
+    ));
+    drop(write);
+    assert_eq!(std::fs::read(mount.join("file")).unwrap(), b"abcdef");
+    assert_eq!(store.pin_branch(branch).unwrap().root, before_root);
+    assert!(is_fuse_mount(&mount));
+    client
+        .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+        .unwrap();
+    drop(client);
+    drop(store);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn owner_range_edits_have_materialization_and_real_fuse_root_equality() {
     if std::env::var_os("LAYERFS_LIVE_FUSE").is_none() {
         return;

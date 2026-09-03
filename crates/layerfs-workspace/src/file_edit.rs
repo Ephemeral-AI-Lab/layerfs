@@ -165,10 +165,10 @@ impl PieceTree {
         link_inline_len(&self.root)
     }
 
-    pub(crate) fn allocation_bytes(&self) -> Result<u64> {
+    pub(crate) fn logical_allocation_charge(&self) -> Result<u64> {
         (self.count() as u64)
             .checked_mul(std::mem::size_of::<PieceNode>() as u64)
-            .ok_or(StoreError::InvalidInput("piece allocation"))
+            .ok_or(StoreError::InvalidInput("piece allocation charge"))
     }
 
     pub(crate) fn replace(
@@ -199,7 +199,7 @@ impl PieceTree {
         next.root = merge(&merge(&left, &middle)?, &right)?;
         let predicted_zero_extents = link_zero_len(&next.root).div_ceil(8_192);
         if next.count() > MAX_PIECES_PER_FILE
-            || next.allocation_bytes()? > MAX_PIECE_ALLOCATION
+            || next.logical_allocation_charge()? > MAX_PIECE_ALLOCATION
             || next.len() > MAX_RESULT_BYTES
             || link_zero_len(&next.root) > MAX_LOGICAL_ZERO_BYTES
             || predicted_zero_extents > MAX_PREDICTED_ZERO_EXTENTS
@@ -216,23 +216,34 @@ impl PieceTree {
     }
 
     pub(crate) fn range(&self, start: u64, end: u64) -> Result<Vec<Piece>> {
+        self.range_inner(start, end).map(|(pieces, _)| pieces)
+    }
+
+    fn range_inner(&self, start: u64, end: u64) -> Result<(Vec<Piece>, usize)> {
         if start > end || end > self.len() {
             return Err(StoreError::InvalidInput("file range"));
         }
         let mut output = Vec::new();
-        visit(&self.root, &mut |piece, offset| {
-            let piece_end = offset + piece.len();
-            if piece_end > start && offset < end {
+        let mut visited = 0;
+        visit_range(
+            &self.root,
+            0,
+            start,
+            end,
+            &mut visited,
+            &mut |piece, offset| {
+                let piece_end = offset + piece.len();
                 let local_start = start.saturating_sub(offset);
                 let local_end = (end - offset).min(piece.len());
+                debug_assert!(piece_end > start && offset < end);
                 output.push(
                     piece
                         .slice(local_start, local_end - local_start)
                         .expect("validated piece overlap"),
                 );
-            }
-        });
-        Ok(output)
+            },
+        );
+        Ok((output, visited))
     }
 
     fn priority(&mut self) -> Result<u64> {
@@ -363,6 +374,34 @@ fn visit(root: &Link, visitor: &mut impl FnMut(&Piece, u64)) {
     inner(root, 0, visitor);
 }
 
+fn visit_range(
+    root: &Link,
+    base: u64,
+    start: u64,
+    end: u64,
+    visited: &mut usize,
+    visitor: &mut impl FnMut(&Piece, u64),
+) {
+    let Some(node) = root else { return };
+    if base >= end || base + node.len <= start {
+        return;
+    }
+    *visited += 1;
+    visit_range(&node.left, base, start, end, visited, visitor);
+    let offset = base + link_len(&node.left);
+    if offset < end && offset + node.piece.len() > start {
+        visitor(&node.piece, offset);
+    }
+    visit_range(
+        &node.right,
+        offset + node.piece.len(),
+        start,
+        end,
+        visited,
+        visitor,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -412,8 +451,13 @@ mod tests {
             tree = tree.replace(offset, 1, [Piece::Zero { len: 1 }]).unwrap();
         }
         assert_eq!(tree.count(), MAX_PIECES_PER_FILE);
-        assert!(tree.allocation_bytes().unwrap() <= MAX_PIECE_ALLOCATION);
+        assert!(tree.logical_allocation_charge().unwrap() <= MAX_PIECE_ALLOCATION);
         assert!(depth(&tree.root) < 64, "depth={}", depth(&tree.root));
+        for offset in [0, 4_096, 8_192] {
+            let (pieces, visited) = tree.range_inner(offset, offset + 1).unwrap();
+            assert_eq!(pieces.iter().map(Piece::len).sum::<u64>(), 1);
+            assert!(visited < 64, "offset={offset} visited={visited}");
+        }
     }
 
     #[test]
