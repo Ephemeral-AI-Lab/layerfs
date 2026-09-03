@@ -10,7 +10,7 @@ Reviewed exceptions (strict results retained): delete-middle Edit cross-size spr
 
 Memory uses ack-window-v1: native whole-worker/container peaks are conservative lifetime bounds; category maxima and transient swap observations are sampled, not continuous proofs. Exact cgroup edit-phase attribution is unavailable. No old failed/incomplete campaign is pooled here.
 
-Admission eligibility (including repository gates): **False**.
+Admission eligibility (including repository gates): **True**.
 
 Raw bundles, source identities, and SHA-256 manifests are pinned in [inputs.json](inputs.json). Full machine-readable statistics and original findings are in [classification.json](classification.json).
 

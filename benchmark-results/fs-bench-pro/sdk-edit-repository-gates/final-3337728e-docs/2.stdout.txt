@@ -1,0 +1,403 @@
+
+running 9 tests
+test tests::bounded_rss_observation_retains_first_and_latest_without_aborting ... ok
+test tests::namespace_family_registry_and_dispatch_are_exact ... ok
+test tests::sdk_edit_sampling_rejects_missing_boundaries_and_uncalibrated_clocks ... ok
+test tests::lifecycle_equations_and_median_are_exact ... ok
+test tests::same_count_family_registry_and_schedules_are_exact ... ok
+test tests::sdk_edit_child_guard_reaps_on_early_return ... ok
+test tests::sdk_edit_family_registries_are_exact ... ok
+test tests::count_changing_family_registry_and_schedules_are_exact ... ok
+test workload_source::tests::namespace_metadata_custody_is_exact ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.84s
+
+
+running 1 test
+test runtime::tests::bounded_protocol_round_trips_arguments ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test exact_replacement_grammar_parses_and_deleted_topology_is_rejected ... ok
+test one_store_context_and_query_execute_without_a_tui ... ok
+test standalone_cli_keeps_one_sdk_client_through_workspace_end ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+
+
+running 36 tests
+test file::cdc::tests::scanner_buffer_capacity_is_fixed ... ok
+test object::codec::tests::canonical_vectors_are_fixed ... ok
+test object::codec::tests::directory_names_use_the_canonical_name_bound ... ok
+test object::codec::tests::borrowed_bytes_encoding_matches_owned_canonical_identity ... ok
+test object::codec::tests::identity_authenticates_supplied_bytes_before_decoding ... ok
+test object::codec::tests::object_id_matches_hash_of_canonical_encoding ... ok
+test object::codec::tests::rejects_declared_fields_larger_than_remaining_payload ... ok
+test object::codec::tests::rejects_malformed_and_noncanonical_bytes ... ok
+test object::codec::tests::rejects_manually_unsorted_directory_wire_bytes ... ok
+test object::codec::tests::rejects_truncated_payloads_and_invalid_fields ... ok
+test object::codec::tests::shallow_authentication_defers_payload_rules_to_the_exact_role_decoder ... ok
+test object::codec::tests::round_trips_and_streams_each_object_kind ... ok
+test object::digest::tests::content_digest_writer_is_fragmentation_independent ... ok
+test object::digest::tests::object_domain_is_frozen_for_v2_and_differs_from_v1 ... ok
+test object::digest::tests::object_domain_is_not_unframed_hashing ... ok
+test object::id::tests::ids_are_fixed_and_text_round_trips ... ok
+test object::codec::tests::streaming_decode_handles_fragmented_and_short_reads ... ok
+test object::digest::tests::object_hash_is_fragmentation_independent ... ok
+test file::extent_codec::tests::single_allocation_chunk_encoding_is_byte_identical ... ok
+test object::references::tests::every_internal_magic_is_safe_as_user_file_prefix_and_transfer_leaf ... ok
+test tree::path::tests::accepts_root_and_canonical_paths ... ok
+test file::rope::build::tests::known_single_chunk_bytes_match_streaming_builder_exactly ... ok
+test tree::path::tests::orders_parents_and_components_by_bytes ... ok
+test tree::path::tests::rejects_invalid_paths ... ok
+test file::cdc::tests::callback_failure_is_propagated_exactly ... ok
+test tree::path::tests::enforces_path_bounds ... ok
+test file::cdc::tests::short_and_maximum_edges_are_bounded ... ok
+test file::cdc::tests::frozen_boundaries_are_deterministic ... ok
+test tree::directory::validate::tests::variable_width_directory_borrows_until_both_branches_are_filled ... ok
+test file::cdc::tests::fragmentation_does_not_change_boundaries ... ok
+test file::rope::edit::batch_tests::file_batch_streams_payload_while_deferring_only_structural_objects ... ok
+test tree::directory::validate::tests::directory_pages_resume_without_rescanning_or_skipping ... ok
+test tree::inode::table::tests::batch_lookup_matches_sequential_with_fewer_node_reads ... ok
+test filesystem::apply::tests::deferred_inode_batch_matches_sequential_roots_with_local_final_puts ... ok
+test file::rope::edit::batch_tests::file_batch_streams_large_replacement_below_structural_hard_bound ... ok
+test filesystem::apply::tests::deferred_directory_batch_matches_sequential_roots_with_local_final_puts ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.85s
+
+
+running 1 test
+test independent_actual_fixture_oracle_freezes_complete_v2_corpus ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.39s
+
+
+running 3 tests
+test profile_digest_is_literal_and_malformed_framing_is_rejected ... ok
+test literal_empty_leaf_and_file_state_are_exact ... ok
+test selected_nonempty_boundary_ids_are_literal ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 21 tests
+test fetched_identity_is_unconditional ... ok
+test missing_payload_batch_callback_is_rejected ... ok
+test extra_payload_batch_callback_is_rejected_without_panicking ... ok
+test full_empty_read_authenticates_and_binds_its_mapping_root ... ok
+test paired_diff_skips_equal_roots_and_length_mismatch_mappings ... ok
+test authenticated_child_summary_mismatch_and_underfull_nonroot_are_rejected ... ok
+test paired_diff_handles_unequal_height_and_partition_without_payload_reads ... ok
+test fetched_payload_above_frozen_ceiling_is_rejected ... ok
+test validation_binds_empty_state_and_visits_unread_children ... ok
+test payload_batches_continue_across_mapping_leaf_boundaries ... ok
+test deep_splice_rejoins_boundary_fragments_before_they_become_nonroots ... ok
+test extent_visitor_streams_the_mapping_without_fetching_payload_bytes ... ok
+test product_range_reader_uses_bounded_authenticated_payload_batches ... ok
+test replace_persists_no_new_unreachable_objects ... ok
+test mutation_batch_rejects_later_overlap_before_sealed_nodes_can_be_orphaned ... ok
+test frozen_three_mib_mapping_is_below_one_percent ... ok
+test streamed_build_and_ranges_match_vec_oracle ... ok
+test splices_match_vec_and_preserve_retained_root_without_suffix_payload_reads ... ok
+test large_replacement_persists_no_flushed_unreachable_prefix_nodes ... ok
+test mutation_batch_preserves_root_and_persists_only_final_extent_spines ... ok
+test two_thousand_randomized_splices_match_every_revision_and_retained_history ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 51.22s
+
+
+running 1 test
+test shifted_stream_retains_a_frozen_canonical_suffix_that_fixed_blocks_lose ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+
+running 12 tests
+test exact_reads_and_local_mutation_share_one_logical_owner ... ok
+test three_root_reconciliation_never_publishes_an_undercounted_parallel_hard_link ... ok
+test three_root_reconciliation_combines_content_and_metadata_on_one_inode ... ok
+test three_root_reconciliation_combines_disjoint_metadata_keys ... ok
+test path_diff_reuses_equal_persistent_objects_and_emits_incrementally ... ok
+test three_root_reconciliation_combines_disjoint_names_in_one_directory ... ok
+test three_root_reconciliation_streams_independent_inode_changes_and_reports_overlap ... ok
+test rename_keeps_old_roots_readable_and_handles_same_and_cross_directory_moves ... ok
+test path_diff_preserves_order_types_metadata_symlinks_directories_and_hard_links ... ok
+test typed_conflicts_report_canonical_paths_and_exact_choice_roots ... ok
+test inode_reconciliation_prunes_equal_persistent_subtrees ... ok
+test new_file_write_preserves_replacement_cdc_and_structural_counters ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.76s
+
+
+running 9 tests
+test portable_and_apple_metadata_are_exact_and_order_preserving ... ok
+test inode_decoder_rejects_size_count_and_level_before_entry_allocation ... ok
+test directory_inode_and_metadata_nodes_are_strict_and_ordered ... ok
+test exact_namespace_values_round_trip_and_reject_trailing_bytes ... ok
+test metadata_empty_root_is_canonical_and_one_child_root_is_not ... ok
+test metadata_child_ranges_must_not_overlap ... ok
+test persistent_metadata_tree_round_trips_multiple_levels ... ok
+test metadata_lookup_and_fixed_key_replacement_touch_only_one_cow_spine ... ok
+test metadata_builder_keeps_only_bounded_tail_summaries ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+
+running 18 tests
+test inode_branch_summary_and_occupancy_are_authoritative ... ok
+test repeated_child_levels_are_rejected_before_loading_grandchildren ... ok
+test directory_and_inode_child_ranges_must_not_overlap ... ok
+test directory_state_and_branch_summaries_are_authoritative ... ok
+test directory_diff_merges_unequal_canonical_heights_without_collecting_entries ... ok
+test inode_diff_merges_unequal_canonical_heights_without_collecting_entries ... ok
+test underfull_middle_inode_leaf_borrows_right_before_merging_left ... ok
+test variable_width_directory_borrows_until_both_leaves_are_filled ... ok
+test underfull_middle_directory_borrows_right_before_merging_left ... ok
+test directory_diff_streams_valid_unmatched_prefixes_tails_and_renames ... ok
+test level_two_ranges_use_true_leftmost_leaf_minimum ... ok
+test paired_persistent_diffs_prune_unchanged_directory_and_inode_subtrees ... ok
+test deterministic_mixed_directory_edits_preserve_periodic_roots ... ok
+test remove_and_rename_persist_only_reachable_directory_and_inode_nodes ... ok
+test inode_remove_merges_collapses_and_preserves_retained_root ... ok
+test remove_merge_root_collapse_and_rename_match_oracle ... ok
+test inode_table_scales_and_record_update_rewrites_only_its_spine ... ok
+test ten_thousand_names_path_copy_and_retained_roots_match_ordered_oracle ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.11s
+
+
+running 7 tests
+test protocol::tests::acknowledged_window_finish_accepts_only_the_exact_zero_sentinel ... ok
+test protocol::tests::clock_probe_frames_are_single_write_and_exact ... ok
+test client::tests::tcp_capability_is_exact_hex ... ok
+test protocol::tests::tcp_bound_proof_binds_challenge_owner_kind_and_payload ... ok
+test client::tests::prepared_clock_stream_reuses_transport_and_rejects_non_clock_reply ... ok
+test protocol::tests::fragmented_and_coalesced_frames_and_exec_bounds ... ok
+test client::tests::tcp_owner_and_bound_stream_authenticate ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+test protocol::tests::write_and_size_round_trip ... ok
+test proxy_host::tests::capabilities_use_os_entropy ... ok
+test proxy_client::tests::read_ordering_flushes_only_the_same_inode ... ok
+test proxy_client::tests::multi_stream_barrier_drains_every_stream_after_the_first_error ... ok
+test proxy_client::tests::metadata_cache_fill_is_inside_owner_pause_barrier ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+test connect_does_not_enumerate_or_reserve_a_hundred_thousand_entry_root ... ok
+test deferred_mutation_errors_surface_at_the_next_synchronization_point ... ok
+test owner_edit_invalidates_warm_file_caches_without_remounting ... ok
+test capability_scopes_a_bounded_typed_proxy_session ... ok
+test read_ahead_never_returns_short_before_source_eof ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+
+running 41 tests
+test ids::tests::ids_remain_typed_uuidv7_and_v2_domain_separated ... ok
+test layerstack::tests::benchmark_initialization_seed_is_exact_lower_hex ... ok
+test layerstack::tests::parallel_large_spill_matches_legacy_after_fresh_store_reopen ... ignored, large spill correctness gate
+test layerstack::tests::batched_directory_import_matches_legacy_canonical_root ... ok
+test layerstack::tests::empty_composite_admission_uses_no_object_point_selects ... ok
+test layerstack::tests::late_direct_initialization_failure_publishes_nothing ... ok
+test objects::tests::append_only_reversed_worker_completion_sorts_to_task_order ... ok
+test objects::tests::append_only_writer_rejects_and_counts_outer_gets ... ok
+test objects::tests::append_only_blocks_are_written_once_read_forward_and_unlinked ... ok
+test layerstack::tests::parallel_root_import_and_cross_directory_hard_link_match_legacy ... ok
+test layerstack::tests::composite_initialization_builds_the_final_root_without_worker_payload_reads ... ok
+test objects::tests::compact_inode_pair_sidecar_is_bounded_forward_only_and_unlinked ... ok
+test objects::tests::empty_append_only_segment_finishes_without_a_read_pass ... ok
+test layerstack::tests::compact_inode_cross_task_hard_link_falls_back_before_admission ... ok
+test objects::tests::memory_segment_moves_owned_canonical_bytes ... ok
+test objects::tests::parent_payload_copy_counter_has_a_positive_control ... ok
+test objects::tests::durable_batches_hash_unique_rows_once_and_move_on_last_use ... ok
+test layerstack::tests::native_metadata_cache_is_exact_canonical_and_bounded ... ok
+test objects::tests::direct_admission_is_independent_of_segment_order ... ok
+test objects::tests::buffered_append_reader_scales_raw_reads_with_bytes_not_tiny_frames ... ok
+test objects::tests::planned_admission_keeps_every_object_transaction_below_the_frozen_bounds ... ok
+test objects::tests::segment_admission_deduplicates_across_pending_segments ... ok
+test objects::tests::spilled_segment_streams_bounded_pages_once_and_unlinks ... ok
+test schema::tests::wal_store_is_rejected_without_mutation ... ok
+test statements::tests::exact_manifest_prepares_against_exact_v4_schema ... ok
+test statements::tests::point_name_and_keyset_queries_use_indexed_search_plans ... ok
+test telemetry::tests::edit_diagnostics_are_separate_from_the_legacy_commit_receipt ... ok
+test workspace::tests::snapshot_cache_reads_only_requested_authenticated_objects_and_reuses_them ... ok
+test layerstack::tests::append_only_zero_get_path_matches_every_canonical_object_class ... ok
+test layerstack::tests::compact_inode_mutable_records_are_bounded_by_one_task ... ok
+test objects::tests::segment_admission_deduplicates_after_a_batch_boundary ... ok
+test objects::tests::direct_admission_honors_every_frozen_count_boundary ... ok
+test objects::tests::prevalidated_transfer_seals_a_nonempty_spill_tail ... ok
+test objects::tests::finished_candidate_payload_spill_is_private_read_only_and_authenticated ... ok
+test objects::tests::resumable_transfer_keeps_a_spill_writable ... ok
+test layerstack::tests::batched_directory_import_retains_only_final_structure ... ok
+test layerstack::tests::over_task_block_limit_falls_back_before_admission_and_reuses_store ... ok
+test layerstack::tests::compact_inode_path_matches_canonical_roots_at_every_directory_tier ... ok
+test schema::tests::every_owned_connection_uses_the_frozen_runtime_pragmas ... ok
+test layerstack::tests::multi_batch_publication_failure_removes_admitted_objects ... ok
+test layerstack::tests::oversized_single_task_clears_direct_admission_and_falls_back ... ok
+
+test result: ok. 40 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 16.56s
+
+
+running 7 tests
+test entity_names_enforce_the_exact_boundary ... ok
+test directory_initialization_receipt_counts_scanned_files_and_bytes ... ok
+test exact_v4_schema_runtime_and_old_schema_rejection ... ok
+test one_store_initialize_fork_commit_add_and_dedup_are_atomic ... ok
+test concurrent_commit_has_one_cas_winner ... ok
+test visible_missing_and_same_length_corrupt_objects_are_integrity_errors ... ok
+test no_op_commit_writes_nothing_and_every_publication_statement_rolls_back ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test port_materializes_files_metadata_hardlinks_and_symlinks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test passive_snapshot_has_zero_sql_and_explicit_analysis_is_exact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test writable_workspace_lease_is_shared_and_released_on_end_and_client_drop ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 1 test
+test managed_container_lifecycle_and_disconnect_cleanup_are_exact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+test owner_range_edit_rejects_live_fuse_read_and_write_handles_atomically ... ok
+test namespace_10000_materialization_and_real_fuse_have_one_canonical_root ... ok
+test owner_range_edits_have_materialization_and_real_fuse_root_equality ... ok
+test created_fuse_files_are_coherent_and_mmap_after_reopen ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test typed_keyset_queries_page_every_local_record ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 1 test
+test public_sdk_runs_one_store_workspace_commit_and_add_lifecycle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 36 tests
+test daemon::tests::daemon_exec_selects_the_required_live_daemon_mount_by_default ... ok
+test container::tests::create_input_and_exact_identity_are_bounded ... ok
+test daemon::tests::tcp_daemon_container_id_is_exact_and_bounded ... ok
+test execution::tests::container_execution_starts_without_a_ready_handshake ... ok
+test file_edit::tests::logical_allocation_charge_accepts_exact_and_rejects_plus_one ... ok
+test file_edit::tests::logical_zero_ceiling_is_exact_without_physical_allocation ... ok
+test file_edit::tests::result_length_ceiling_accepts_exact_and_rejects_plus_one ... ok
+test file_edit::tests::implicit_piece_tree_splices_without_rekeying_later_pieces ... ok
+test changes::tests::clean_workspace_commit_is_immediately_up_to_date ... ok
+test cow_tree::tests::reserved_directory_consumes_the_exact_node_once ... ok
+test cow_tree::tests::spool_write_metrics_are_aggregate_and_reset ... ok
+test cow_tree::tests::resolution_fingerprint_ignores_unrelated_paths_and_tracks_affected_state ... ok
+test file_io::tests::discard_reclaims_one_live_base_inline_zero_spool_composition ... ok
+test changes::tests::fully_charged_new_file_reads_directly_from_retained_spool ... ok
+test cow_tree::tests::failed_spool_io_does_not_advance_the_overlay ... ok
+test file_io::tests::generation_overflow_rejects_without_logical_or_physical_change ... ok
+test limits::tests::spool_and_final_delta_limits_accept_exact_and_reject_plus_one ... ok
+test file_io::tests::short_spool_append_restores_high_water_and_piece_root ... ok
+test file_io::tests::workspace_inline_limit_accepts_eight_mib_and_rejects_the_next_byte ... ok
+test projection::tests::failed_cleanup_moves_the_projection_off_placement_and_retains_retry_path ... ok
+test output::tests::one_large_write_never_enters_the_live_tail_above_one_mib ... ok
+test reconcile::tests::only_intersecting_later_mutations_invalidate_a_resolution ... ok
+test registry::tests::retention_evicts_oldest_by_age_count_and_bytes ... ok
+test changes::tests::backward_write_invalidates_capture_and_uses_exact_fallback ... ok
+test projection::tests::failed_materialization_never_publishes_or_leaves_a_stage ... ok
+test projection::tests::failed_publish_removes_the_complete_stage ... ok
+test lifecycle::tests::pinned_target_rejects_owner_edit_without_state_change ... ok
+test lifecycle::tests::failed_projection_refresh_restores_exact_state_and_retry_once ... ok
+test file_edit::tests::maximum_fragmentation_remains_bounded_and_balanced ... ok
+test cow_tree::tests::rename_validates_every_noop_and_rejection_before_mutation ... ok
+test changes::tests::owner_prepend_scans_only_replacement_and_retains_every_base_payload ... ok
+test file_io::tests::edit_limit_and_sparse_physical_charge_are_exact ... ok
+test changes::tests::sequential_new_file_capture_is_canonical_and_commit_ready ... ok
+test changes::tests::existing_file_mutations_are_exact_and_bounded ... ok
+test lifecycle::tests::busy_commit_with_resume_failure_requires_explicit_presentation_recovery ... ok
+test lifecycle::tests::callback_and_execution_reject_owner_edit_without_state_change ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+
+
+running 11 tests
+test group_4_invalid_type_range_overflow_and_limits_are_atomic ... ok
+test group_5_commit_publication_is_exactly_once_and_retry_is_up_to_date ... ok
+test stale_head_with_resume_failure_requires_explicit_presentation_recovery ... ok
+test group_6_discard_mixed_inline_zero_and_spool_state_leaves_no_durable_change ... ok
+test group_3_hard_link_aliases_share_one_edited_inode ... ok
+test group_1_range_piece_eof_noop_and_repeated_boundaries ... ok
+test group_1_descending_overlapping_repeated_and_up_to_date_normalize_exactly ... ok
+test group_2_projection_refresh_commit_and_reopen_are_exact ... ok
+test group_3_rename_parent_replace_unlink_and_final_alias_reclamation_are_inode_exact ... ok
+test group_7_stale_head_and_posix_owner_composition_are_exact ... ok
+test group_5_candidate_admission_and_publication_failures_retry_once ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+
+running 2 tests
+test published_commit_reports_projection_failure_and_recovers_without_recommit ... ok
+test materialized_resolution_ignores_unrelated_edits_and_remains_writable_after_commit ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
