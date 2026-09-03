@@ -173,6 +173,23 @@ impl ProxyHost {
         }
     }
 
+    pub fn invalidate_file(&self, node: crate::NodeId) -> PortResult<()> {
+        let mut slot = self.control_stream()?;
+        let stream = slot.as_mut().expect("control stream");
+        let mut frame = [b'i'; 9];
+        frame[1..].copy_from_slice(&node.0.to_le_bytes());
+        stream.write_all(&frame).map_err(|_| PortError::Io)?;
+        let mut accepted = [0];
+        stream
+            .read_exact(&mut accepted)
+            .map_err(|_| PortError::Io)?;
+        if accepted == [1] {
+            Ok(())
+        } else {
+            Err(PortError::Io)
+        }
+    }
+
     pub fn take_write_metrics(&self) -> PortResult<crate::FuseWriteMetrics> {
         let mut slot = self.control_stream()?;
         let stream = slot.as_mut().expect("control stream");
