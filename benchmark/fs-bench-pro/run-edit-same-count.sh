@@ -268,7 +268,9 @@ paired_daemon_endpoint=
 paired_daemon_capability=
 if [[ -n $paired_container ]]; then paired_container_id=$(docker inspect -f '{{.Id}}' "$paired_container"); fi
 pending_stop_root="$run_dir/environment/pending-runner-stops"
+runner_stop_root="$prepared_root/runner-stops"
 mkdir "$pending_stop_root"
+mkdir -p "$runner_stop_root"
 ensure_container() {
   local active_container=$1 stopped active_id marker
   if [[ $active_container == "$container" && -n $primary_daemon_endpoint ]]; then
@@ -283,7 +285,7 @@ ensure_container() {
     return
   fi
   if [[ $active_container == "$container" ]]; then active_id=$primary_container_id; else active_id=$paired_container_id; fi
-  marker="$pending_stop_root/$active_id"
+  marker="$runner_stop_root/$active_id"
   if [[ $(docker inspect -f '{{.State.Running}}' "$active_container") != true ]]; then
     stopped=$(docker inspect -f '{{.State.ExitCode}} {{.State.OOMKilled}}' "$active_container")
     [[ $stopped == '0 false' || $stopped == '143 false' || ( $stopped == '137 false' && -f $marker ) ]] || die "container stopped abnormally"
@@ -320,6 +322,7 @@ stop_container() {
   if [[ $(docker inspect -f '{{.State.Running}}' "$target") == true ]]; then
     target_id=$(docker inspect -f '{{.Id}}' "$target")
     : >"$pending_stop_root/$target_id"
+    : >"$runner_stop_root/$target_id"
     docker stop "$target" >/dev/null
   fi
 }
