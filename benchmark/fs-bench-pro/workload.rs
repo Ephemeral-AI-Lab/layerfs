@@ -1006,23 +1006,6 @@ fn rewrite_file_range(
     deleted: u64,
     replacement: &[u8],
 ) -> Result<u64> {
-    #[cfg(target_os = "linux")]
-    {
-        let source = File::open(path)?;
-        let mut target = File::create(temporary)?;
-        copy_file_range_exact(&source, &target, 0, offset)?;
-        target.write_all(replacement)?;
-        let suffix_start = offset + deleted;
-        let suffix = source.metadata()?.len() - suffix_start;
-        copy_file_range_exact(&source, &target, suffix_start, suffix)?;
-        target.sync_all()?;
-        fs::rename(temporary, path)?;
-        return offset
-            .checked_add(suffix)
-            .ok_or_else(|| "count-changing copied bytes".into());
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
     let mut source = BufReader::with_capacity(1024 * 1024, File::open(path)?);
     let target = File::create(temporary)?;
     let mut output = BufWriter::with_capacity(1024 * 1024, target);
@@ -1039,49 +1022,6 @@ fn rewrite_file_range(
     prefix
         .checked_add(suffix)
         .ok_or_else(|| "count-changing copied bytes".into())
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn copy_file_range_exact(source: &File, target: &File, offset: u64, len: u64) -> Result<()> {
-    use std::os::fd::AsRawFd;
-
-    unsafe extern "C" {
-        fn copy_file_range(
-            input: i32,
-            input_offset: *mut i64,
-            output: i32,
-            output_offset: *mut i64,
-            len: usize,
-            flags: u32,
-        ) -> isize;
-    }
-    let mut input_offset = i64::try_from(offset)?;
-    let mut remaining = len;
-    while remaining != 0 {
-        let requested = usize::try_from(remaining.min(1024 * 1024))?;
-        // SAFETY: both descriptors remain open, offsets point to initialized i64 values, and
-        // the kernel writes at most `requested` bytes without retaining either pointer.
-        let copied = unsafe {
-            copy_file_range(
-                source.as_raw_fd(),
-                &mut input_offset,
-                target.as_raw_fd(),
-                std::ptr::null_mut(),
-                requested,
-                0,
-            )
-        };
-        if copied <= 0 {
-            return Err(if copied == 0 {
-                "short copy_file_range".into()
-            } else {
-                std::io::Error::last_os_error().into()
-            });
-        }
-        remaining -= u64::try_from(copied)?;
-    }
-    Ok(())
 }
 
 fn count_changing_proof(path: impl AsRef<Path>, verifier: &str) -> Result<()> {

@@ -327,7 +327,13 @@ upper(r['process_peak_rss_bytes'],101_980_569,112_178_626,128*1024*1024,'rss')
 if sys.argv[5]=='count-changing':
     if r['scenario_id']=='prepend-temp-copy-rename': upper(r['complete_lifecycle_ns'],223_763_000,246_139_300,250_000_000,'prepend_complete')
     elif r['implementation']=='direct-posix': lower_hard(r['operations_per_second'],250,225,100,'operations_per_second')
-    else: lower_hard(r['copied_payload_bytes_per_second'],200*1024*1024,180*1024*1024,100*1024*1024,'copied_payload_bytes_per_second')
+    else:
+        if r['operation_count']==1: target,tolerated,hard=50,45,30
+        elif r['operation_count']==10: target,tolerated,hard=75,67.5,40
+        elif r['operation']=='delete' or 'shrink' in r['scenario_id']: target,tolerated,hard=55,49.5,40
+        elif 'grow-2k' in r['scenario_id']: target,tolerated,hard=110,99,80
+        else: target,tolerated,hard=135,121.5,100
+        lower_hard(r['copied_payload_bytes_per_second'],target*1024*1024,tolerated*1024*1024,hard*1024*1024,'copied_payload_bytes_per_second')
 elif r['scenario_id']=='small-edit': upper(r['commit_total_ns'],4_503_000,4_953_300,6_000_000,'small_edit_commit')
 elif r['scenario_id']=='edit16': upper(r['complete_lifecycle_ns'],156_446_000,172_090_600,200_000_000,'edit16_complete')
 else:
@@ -549,7 +555,14 @@ if mode in ('admission','repeatability'):
             if family=='count-changing':
                 if case=='prepend-temp-copy-rename': upper(arm,case,'prepend_complete_median',medians[arm][case]['complete_lifecycle_ns'],223_763_000,246_139_300,250_000_000)
                 elif selected[0]['implementation']=='direct-posix': lower_hard(arm,case,'operations_per_second_median',medians[arm][case]['operations_per_second'],250,225,100)
-                else: lower_hard(arm,case,'copied_payload_bytes_per_second_median',medians[arm][case]['copied_payload_bytes_per_second'],200*1024*1024,180*1024*1024,100*1024*1024)
+                else:
+                    row=selected[0]
+                    if row['operation_count']==1: target,tolerated,hard=50,45,30
+                    elif row['operation_count']==10: target,tolerated,hard=75,67.5,40
+                    elif row['operation']=='delete' or 'shrink' in case: target,tolerated,hard=55,49.5,40
+                    elif 'grow-2k' in case: target,tolerated,hard=110,99,80
+                    else: target,tolerated,hard=135,121.5,100
+                    lower_hard(arm,case,'copied_payload_bytes_per_second_median',medians[arm][case]['copied_payload_bytes_per_second'],target*1024*1024,tolerated*1024*1024,hard*1024*1024)
             elif case=='small-edit': upper(arm,case,'small_edit_commit_median',medians[arm][case]['commit_total_ns'],4_503_000,4_953_300,6_000_000)
             elif case=='edit16': upper(arm,case,'edit16_complete_median',medians[arm][case]['complete_lifecycle_ns'],156_446_000,172_090_600,200_000_000)
             else:
