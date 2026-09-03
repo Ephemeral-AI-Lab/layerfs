@@ -52,6 +52,7 @@ selection=
 repetition=
 source_arm=
 all=0
+stage=all
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --all) (( all == 0 )) || die "duplicate --all"; all=1; shift ;;
@@ -59,9 +60,12 @@ while [[ $# -gt 0 ]]; do
     --repetition) [[ $# -ge 2 && -z $repetition ]] || die "duplicate/missing --repetition"; repetition=$2; shift 2 ;;
     --mode) [[ $# -ge 2 && -z $mode ]] || die "duplicate/missing --mode"; mode=$2; shift 2 ;;
     --source) [[ $# -ge 2 && -z $source_arm ]] || die "duplicate/missing --source"; source_arm=$2; shift 2 ;;
+    --stage) [[ $# -ge 2 && $stage == all ]] || die "duplicate/missing --stage"; stage=$2; shift 2 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
+[[ $stage =~ ^(all|performance|verification)$ ]] || die "unknown stage"
+[[ $stage == all || ( $mode == admission && $all == 1 ) ]] || die "stages require full admission mode"
 
 baseline_bin=${LAYERFS_SDK_EDIT_BASELINE_BIN:-}
 candidate_bin=${LAYERFS_SDK_EDIT_CANDIDATE_BIN:-$default_bin}
@@ -75,7 +79,17 @@ for command in docker python3 shasum; do command -v "$command" >/dev/null || die
 [[ -x $candidate_bin ]] || die "candidate binary is required"
 
 run_dir=$results_root/$run_id
-[[ ! -e $run_dir ]] || die "run directory already exists"
+if [[ $stage == verification ]]; then
+  [[ -d $run_dir && ! -e $run_dir/verification/subproofs.jsonl ]] || die "verification requires a saved, not-yet-verified collection"
+  python3 - "$here/sdk-edit-custody.py" "$run_dir" <<'PY'
+import json,runpy,sys
+helper=runpy.run_path(sys.argv[1]);root=helper['Path'](sys.argv[2]);helper['verify_manifest'](root)
+assert json.loads((root/'run-status.json').read_text())['status']=='performance-complete'
+helper['finalize'](root)
+PY
+else
+  [[ ! -e $run_dir ]] || die "run directory already exists"
+fi
 mkdir -p "$run_dir/environment" "$run_dir/performance" "$run_dir/verification" "$run_dir/scenarios"
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/layerfs-issue20-${family}.XXXXXX")
 active_container=
@@ -87,7 +101,7 @@ cleanup() {
     docker rm -f "$active_container" >/dev/null 2>&1 || true
   fi
   [[ $scratch == "${TMPDIR:-/tmp}/layerfs-issue20-${family}."* ]] && rm -rf -- "$scratch"
-  if (( status != 0 )) && [[ ! -e $run_dir/run-status.json ]]; then
+  if (( status != 0 )) && [[ $stage == verification || ! -e $run_dir/run-status.json ]]; then
     printf '{"schema":"fs-bench-pro-sdk-edit-status-v1","family_id":"%s","admission_eligible":false,"status":"fail-incomplete"}\n' "$family" >"$run_dir/run-status.json"
   fi
   if (( status != 0 )); then
@@ -97,6 +111,7 @@ cleanup() {
 }
 trap 'cleanup $?' EXIT
 
+if [[ $stage != verification ]]; then
 {
   printf '%q ' "$0"
   printf '%q ' "${invocation_argv[@]}"
@@ -190,6 +205,7 @@ with open(target,'w') as out:
             out.write(f"{ordinal}\t{repetition}\t{row['scenario_id']}\t{arms[0]}\t{arms[1]}\n")
 PY
 
+fi
 prepare_size() {
   local size=$1 prepared receipt=$run_dir/environment/prepared-cache-$1.json
   prepared=$(python3 "$here/sdk-edit-custody.py" prepare "$prepared_root" "$candidate_bin" "$size" "$receipt" "$candidate_build")
@@ -213,6 +229,7 @@ r=json.load(open(sys.argv[1]));print(r['clone_method'],r['clone_wall_ns'],r['clo
 PY
 )
 }
+if [[ $stage != verification ]]; then
 if [[ $mode == admission ]]; then
   fixture_sizes=(1048576 10485760 104857600 524288000)
 else
@@ -263,6 +280,25 @@ candidate_image=$(docker image inspect -f '{{.Id}}' "$candidate_image")
 source_identity_sha256=$(shasum -a 256 "$run_dir/environment/source-identity.json" | awk '{print $1}')
 (cd "$run_dir" && find environment -type f ! -name pre-run.sha256 -print0 | sort -z | xargs -0 shasum -a 256 >environment/pre-run.sha256)
 (cd "$run_dir" && shasum -a 256 -c environment/pre-run.sha256 >/dev/null)
+else
+  {
+    printf '%q ' "$0" "${invocation_argv[@]}"
+    printf '\n'
+  } >"$run_dir/verification/command.txt"
+  expected_ids=$(($(wc -l <"$run_dir/environment/scenario-registry.tsv") - 1))
+  for size in 1048576 10485760 104857600 524288000; do
+    prepared=$(python3 "$here/sdk-edit-custody.py" prepare "$prepared_root" "$candidate_bin" "$size" "$scratch/cache-$size.json" "$candidate_build")
+    expected=$(awk -F '\t' -v size="$size" '$1==size {print $3}' "$run_dir/environment/prepared-stores.tsv")
+    [[ $(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["store_sha256"])' "$scratch/cache-$size.json") == "$expected" ]] || die "prepared input changed"
+    ln -s "$prepared" "$scratch/prepared-$size"
+  done
+  timed_manifest_sha256=$(shasum -a 256 "$run_dir/environment/timed-call-graph-manifest.json" | awk '{print $1}')
+  route_manifest_sha256=$(shasum -a 256 "$run_dir/environment/operation-route-manifest.json" | awk '{print $1}')
+  qualification_sha256=$(shasum -a 256 "$run_dir/environment/qualification.tsv" | awk '{print $1}')
+  conformance_sha256=$(shasum -a 256 "$run_dir/environment/edit-conformance-manifest.json" | awk '{print $1}')
+  baseline_image=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["baseline"]["image_id"])' "$run_dir/environment/source-identity.json")
+  candidate_image=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["candidate"]["image_id"])' "$run_dir/environment/source-identity.json")
+fi
 
 container_serial=0
 performance_serial=0
@@ -408,12 +444,27 @@ if [[ $mode == verify ]]; then
   exit 0
 fi
 
-while IFS=$'\t' read -r _ repetition scenario first second; do
-  run_performance "$first" "$scenario" "$repetition"
-  run_performance "$second" "$scenario" "$repetition"
-done < <(tail -n +2 "$run_dir/environment/sample-order.tsv")
-
-python3 "$here/generate-sdk-edit-report.py" "$run_dir" --performance-only
+if [[ $stage != verification ]]; then
+  while IFS=$'\t' read -r _ repetition scenario first second; do
+    run_performance "$first" "$scenario" "$repetition"
+    run_performance "$second" "$scenario" "$repetition"
+  done < <(tail -n +2 "$run_dir/environment/sample-order.tsv")
+  performance_exit=0
+  python3 "$here/generate-sdk-edit-report.py" "$run_dir" --performance-only || performance_exit=$?
+  if [[ $stage == performance ]]; then
+    python3 "$here/sdk-edit-custody.py" finalize "$run_dir"
+    python3 - "$run_dir" "$family" "$performance_exit" <<'PY'
+import json,pathlib,sys
+root=pathlib.Path(sys.argv[1]);value={'schema':'fs-bench-pro-sdk-edit-status-v1','family_id':sys.argv[2],'status':'performance-complete','performance_status':'pass' if sys.argv[3]=='0' else 'fail','verification_status':'pending','admission_eligible':False}
+for path in (root/'run-status.json',root/'performance/stage-status.json'): path.write_text(json.dumps(value,sort_keys=True,separators=(',',':'))+'\n')
+PY
+    (cd "$run_dir" && find . -type f ! -path ./evidence.sha256 -print0 | sort -z | xargs -0 shasum -a 256 >evidence.sha256)
+    trap - EXIT
+    cleanup 0
+    printf 'PERFORMANCE COMPLETE %s %s (classification exit %s; verification pending)\n' "$family" "$run_dir" "$performance_exit"
+    exit "$performance_exit"
+  fi
+fi
 
 while IFS=$'\t' read -r _ scenario _; do
   [[ $scenario == scenario_id ]] && continue

@@ -72,14 +72,18 @@ def terminal(manifest_path, require_documentation=False):
     assert len(all_ids) == 56 and len(all_rows) == 560 and len({row["row_id"] for row in all_rows}) == 560
     assert {arm:sum(row["source_arm"]==arm for row in all_rows) for arm in ("baseline","candidate")} == {"baseline":280,"candidate":280}
     assert receipt_count == 56 and subproof_count == 112
+    if "repository_gates" not in manifest:
+        assert not require_documentation, "final repository and documentation gates required"
+        return families, common_source, common_environment, manifest
     gates_input = manifest["repository_gates"]
     gates_root = path_for(gates_input["path"])
     assert custody.sha(gates_root / "evidence.sha256") == gates_input["manifest_sha256"]
     custody.verify_manifest(gates_root)
     gates = json.loads((gates_root / "run-status.json").read_text())
     assert gates["schema"] == "fs-bench-pro-sdk-edit-repository-gates-v1" and gates["status"] == "pass"
-    assert gates["source"]["revision"] == common_source["candidate"]["revision"]
-    assert all(gates["source"][key] == common_source["candidate"][key] for key in ("tree","source_seal","product_seal","harness_seal"))
+    assert gates["measured_source"]["revision"] == common_source["candidate"]["revision"]
+    assert all(gates["measured_source"][key] == common_source["candidate"][key] for key in ("tree","source_seal","product_seal","harness_seal"))
+    assert gates["documentation_bridge"] == custody.documentation_bridge(common_source["candidate"]["revision"], gates["source"]["revision"])
     commands = json.loads((gates_root / "commands.json").read_text())
     assert [command["argv"] for command in commands] == REPOSITORY_COMMANDS and all(command["exit_code"]==0 for command in commands)
     if "documentation_gates" in manifest:
@@ -145,7 +149,7 @@ def render(families, source, environment):
               f"Candidate product seal: {source['candidate']['product_seal']}.",
               f"Common harness seal: {source['candidate']['harness_seal']}.",
               f"Host: {environment['cpu']} / {environment['os']}; Docker server {environment['docker_server_version']}.",
-              "", "All repository gates are sealed and tied to the exact measured candidate. Earlier POSIX/FUSE same-count/count-changing rows remain immutable archival evidence only; they are not members, baselines, comparators, or sources of these SDK claims.",
+              "", "Final admission requires the separately sealed documentation-complete repository gate, tied to the exact measured candidate through the unchanged-source bridge. This draft alone is not issue-closure evidence. Earlier POSIX/FUSE same-count/count-changing rows remain immutable archival evidence only; they are not members, baselines, comparators, or sources of these SDK claims.",
               "", "Universal edit-engine and Store-footprint history remains supporting context, not a substitute for this complete proof. v0.1.2 remains untagged/unpublished; #12 remains open for a later release-finalization decision."]
     draft = ["# LayerFS 0.1.2 — unpublished evidence draft", "",
              "SDK-only edit candidate evidence is recorded in [benchmark-results.md](benchmark-results.md); final issue closure also requires documentation-complete custody.",
