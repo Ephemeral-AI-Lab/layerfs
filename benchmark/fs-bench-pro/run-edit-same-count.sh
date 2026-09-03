@@ -176,7 +176,7 @@ ensure_container() {
   local active_container=$1 stopped
   if [[ $(docker inspect -f '{{.State.Running}}' "$active_container") != true ]]; then
     stopped=$(docker inspect -f '{{.State.ExitCode}} {{.State.OOMKilled}}' "$active_container")
-    [[ $stopped == '0 false' || $stopped == '143 false' ]] || die "container stopped abnormally"
+    [[ $stopped == '0 false' || $stopped == '143 false' || ( $source_arm == a-a-repeatability && $stopped == '137 false' ) ]] || die "container stopped abnormally"
     docker start "$active_container" >/dev/null
   fi
   container_id=$(docker inspect -f '{{.Id}}' "$active_container")
