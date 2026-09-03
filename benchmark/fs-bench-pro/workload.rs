@@ -1026,7 +1026,15 @@ fn rewrite_file_range(
         source.consume(consumed);
         remaining -= consumed as u64;
     }
-    let suffix = std::io::copy(&mut source, &mut output)?;
+    let buffered = {
+        let available = source.fill_buf()?;
+        output.write_all(available)?;
+        available.len()
+    };
+    source.consume(buffered);
+    let suffix = (buffered as u64)
+        .checked_add(std::io::copy(&mut source, &mut output)?)
+        .ok_or("count-changing suffix bytes")?;
     output.flush()?;
     output.into_inner()?.sync_all()?;
     fs::rename(temporary, path)?;
@@ -1459,6 +1467,18 @@ fn self_check() -> Result<()> {
         count_changing_edit(&count_changing, "append-tail-4k-ops-1", 1)?;
         if fs::metadata(&count_changing)?.len() != edit_count_changing::FIXTURE_BYTES + 4096 {
             return Err("count-changing workload length".into());
+        }
+        let count_delete = root.join("count-delete.bin");
+        let mut expected_delete = edit_count_changing::fixture_bytes();
+        let edit = edit_count_changing::schedule(
+            edit_count_changing::scenario("delete-middle-2k-ops-1")?,
+            1,
+        )?[0];
+        fs::write(&count_delete, &expected_delete)?;
+        count_changing_edit(&count_delete, "delete-middle-2k-ops-1", 1)?;
+        expected_delete.drain(edit.offset as usize..edit.offset as usize + edit.deleted);
+        if fs::read(&count_delete)? != expected_delete {
+            return Err("count-changing delete byte oracle".into());
         }
         let (size, actual) = digest(&payload)?;
         let mut expected_hash = Sha256::new();
