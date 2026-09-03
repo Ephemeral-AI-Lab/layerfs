@@ -22,10 +22,11 @@ benchmark reproduction, and design research—not production storage.
   latency or throughput guarantees.
 - Owner-side batched range edits must target one Workspace and one regular file.
 - The retained SQLite Store misses the 600 MB primary-control footprint goal at
-  661,061,632 bytes; physical packs are deferred to issue #18.
+  662,831,104 median bytes; physical packs are deferred to issue #18.
 - Terminal edit-family and Store-verification gates are workload-specific
-  evidence. The final count-changing A/A run is diagnostic/no-go and does not
-  replace the passing directional issue #15 evidence.
+  evidence. Same-count A/A is aggregate repeatability evidence, while the final
+  count-changing result is a directional baseline/candidate tolerated-pass and
+  makes no improvement claim for rows above the 1.05 target.
 
 See the [versioned limitations](../../docs/versioned/0.1.2/limitations.md)
 and [verification record](verification.md).

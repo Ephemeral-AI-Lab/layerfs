@@ -18,8 +18,9 @@ Additional 0.1.2 qualifications:
   mmap on that handle returns `ENODEV`, while close/reopen restores the ordinary
   retained-cache and read-only mmap behavior;
 - the retained SQLite Store misses the 600 MB primary footprint goal at
-  661,061,632 bytes; authenticated physical packs are deferred to issue #18;
-- the metadata-cardinality verifier is an explicitly tolerated 63.659-second
+  662,831,104 median bytes; authenticated physical packs are deferred to issue
+  #18;
+- the metadata-cardinality verifier is an explicitly tolerated 63.356-second
   result under the frozen 60/66-second policy; and
 - prebuilt executables, crates.io packages, and runtime images are not
   published for v0.1.2.

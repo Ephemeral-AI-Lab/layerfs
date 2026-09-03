@@ -1,24 +1,74 @@
 # LayerFS 0.1.2 verification
 
-> **Status:** Draft source verification record pending final-candidate rerun.
+> **Status:** Draft verification record. Exact-candidate benchmark evidence is
+> complete; final documentation, native CI, tag, archives, and GitHub Release
+> checks remain pending.
 
-The detailed pass/publication language below records the withdrawn campaign and
-is nonterminal until every table is regenerated against the exact candidate.
+## Exact measured identity
 
-## Release identity
+| Field | Value |
+| --- | --- |
+| Commit | `c6c14d5a5a740665f5efbce439493f681bd7dd95` |
+| Tree | `7c8b843c354fa49f4afa344d66c358a776bfd0d0` |
+| Source seal | `6b3c039e4237a8ab27eebc5ea4752bc8ad9f58039725ac9b2e3230119b171ec9` |
+| Product seal | `438253c10b6b33ae33e6b81113390f0d06d5b98fb2c0fc6c0e0438e0d483431f` |
+| Harness seal | `4c68f918828036082c7110e28bfb2a2e88983d46d404fc1de3899335ad15694c` |
+| Workload SHA-256 | `c07029d3bf95c187ded2899f3e6840449301a1495c8a51fc694fbbca63fbf6d9` |
+| Candidate image | Clean commit/tree/source labels; no bind mount |
+| Frozen count baseline | Same commit/tree/product; frozen workload and distinct source seal |
 
-| Field | Result |
-|---|---|
-| Git tag | Annotated `v0.1.2` |
-| Git commit/tree | The commit and tree resolved by `v0.1.2^{commit}` |
-| Workspace version | `0.1.2` for all eleven local packages |
-| Clean source proof | Clean tagged checkout and deterministic archives |
-| CI on exact commit | Required successful `ci` workflow check |
-| Source archive verification | Release asset `SHA256SUMS` |
+The measured commit is the final code/harness candidate. Release-only generated
+documentation and artifact metadata may advance the eventual tag commit without
+changing these seals; final native checks must run again on the tagged tree.
 
-## Mandatory terminal commands
+## Sealed benchmark and conformance evidence
 
-The release source must pass:
+| Evidence | Raw rows / receipts | Status | Manifest SHA-256 |
+| --- | ---: | --- | --- |
+| Universal edit-engine conformance | 36 Workspace + 11 file-edit + 2 reconciliation + seed/diagnostic/Clippy + 3 real-FUSE | pass | `deca3578ce3aabbad6ff61c41c5d42297e6d8f02fbd699a4b523194193b2aa4b` |
+| Owner-side timing supplement | 9 measurements | pass | `0494d0d9c33ea79e488b3078e18714e86b17995df27e5123c11ecc285861f9e3` |
+| Same-count | 84 performance + 6 proofs + 1 timing/status | target-pass | `07a17444ac938abbe27d3955fd6cb3eeca92f2a87ca10770a61777608e06cc05` |
+| Count-changing | 150 primary + 45 controls + 18 scaling + 7 primary verification + 18 scaling verification | tolerated-pass | `491da0d15babd56b38eef00e85f282f318e0f44a847ee5a0a7b289733d979e97` |
+| Store footprint | 9 performance + 3 verification | baseline complete; primary footprint no-go | `7907b11fa3db15cca13fda6a99a949c3ee0b984cb743270ba182cc0ef586271b` |
+
+The owner timing receipt includes nine exact command records, bundled fixtures,
+and a complete nested conformance bundle. Same-count and count-changing receipts
+also carry a self-verifying nested #14 custody directory. Every final top-level
+manifest and nested conformance manifest has been independently rehashed.
+
+The third real-FUSE proof covers the direct-I/O create policy: same-handle and
+concurrent-handle reads observe exact writes, close/reopen is exact, mmap on the
+still-open create handle returns `ENODEV`, and read-only mmap succeeds after an
+ordinary reopen.
+
+## Binding benchmark decisions
+
+- Same-count gates the symmetric aggregate identical-source A/A wall, not noisy
+  per-case A/A ratios. Its exact ratio is `1.004258171`, target-pass.
+- Count-changing gates every primary scenario directionally. Its worst
+  candidate/baseline ratio is `1.096620770`, tolerated but below the `1.10`
+  no-go boundary. Every absolute gate is target-pass.
+- Every candidate sample in the 256 KiB count-changing temp-copy cohort has a
+  batch-average mutation time below 10 ms/op. The admission gate is
+  `median(inner_edit_ns) <= operation_count * 10,000,000 ns`, with no tolerance
+  band; individual operations are not timed separately.
+- The scaling 100 MiB/10 MiB copied-rate ratios are `1.257938569` for delete
+  and `1.205767997` for shrink, both above the `0.90` floor. Scaling is
+  candidate-only and does not claim CDC/ObjectId generalization.
+- Store primary durable footprint is `662,831,104` median bytes, exactly
+  `62,831,104` above the `600,000,000`-byte goal. This remains an explicit
+  blocker; physical packs stay deferred to issue #18.
+- Store metadata verification takes `63.356` seconds in its verification phase,
+  tolerated by the 60/66-second phase policy. Its `69.756`-second external wall
+  is not compared with that phase gate.
+
+The complete tables, ranges, unit rules, timing boundaries, family walls, and
+historical no-go separation are generated in
+[benchmark-results.md](benchmark-results.md).
+
+## Final native and publication commands
+
+Before tagging, the final source must pass:
 
 ```bash
 cargo fmt --all -- --check
@@ -38,76 +88,19 @@ benchmark/fs-bench-pro/run-edit-same-count.sh --self-check
 benchmark/fs-bench-pro/run-edit-count-changing.sh --self-check
 benchmark/fs-bench-pro/run-store-footprint.sh --self-check
 
-cargo test -p layerfs-layerstack-store \
-  layerstack::tests::benchmark_initialization_seed_is_exact_lower_hex \
-  -- --exact --nocapture
+python3 release-notes/0.1.2/generate_benchmark_tables.py --check --verify-all
 git diff --check
 ```
 
-The diagnostic-seed test proves lowercase decoding and exact length, rejects
-uppercase/short input, rejects an override without the diagnostic gate, and
-retains ordinary LayerStackId-derived behavior when no override exists.
-
-Final issue #14 conformance additionally runs the 36-test Workspace unit suite,
-all 11 tests spanning its seven file-edit groups, both reconciliation tests,
-scoped warning-denying Clippy for Store/Workspace/SDK/harness, and both
-established real Linux FUSE tests. It verifies the compatibility repair:
-v0.1.1 `WorkspaceCommitResult`, `WorkspaceState`, `OperationFamily`, and
-`WorkspaceCommitReceipt` shapes remain exact, while edit diagnostics and
-detailed presentation status are additive types.
-
-Final conformance directory:
-`benchmark-results/fs-bench-pro/edit-engine-acceptance/final-v012-issue14-19af57ef`.
-Its manifest SHA-256 is
-`9e18afc5ccafba5434b10044b9dec0a79842b51234513ad9ef3f178e08564f4e`.
-The measured release-candidate identity is source seal
-`14842002c48af00e38061529d835b55c447c18cd46fbcefd7f5bbb34a88e703a`,
-product seal
-`7559be73d672b9922ad7913e70f8afe0cd21a06ca3f18a90215fc7be4adfd924`,
-harness seal
-`6bb76a1968f7c0217e10324f1285b951161be73547048c6ba08b8f1fe272e88d`,
-and workload SHA-256
-`a2b39fb7b4773c97423760e3d1daa538ea759af3c915decd7031c272cabcb62e`.
-The final custody bridge is
-`benchmark-results/fs-bench-pro/v012-release/final-custody-19af57ef`, manifest
-`516b436eca0b73f30bc3d15cfd6f93eb0308938ea4124be5582d04efb3c8473d`.
-
-## Retained benchmark proof
-
-The authoritative paths, formulas, counts, medians, and manifest hashes are in
-[benchmark-results.md](benchmark-results.md). The binding decisions are:
-
-- Same-count: 84 rows, seven separate fragmentation receipts, target-pass
-  symmetric aggregate identical-source A/A ratio `1.027103819`, exact anchor
-  custody, zero swap/OOM, and cleanup pass.
-- Count-changing: the 150-row directional issue #15 evidence plus 45 controls
-  and seven verifier receipts is authoritative. Maximum ratio-of-medians is
-  `1.0746733575`; all three results above `1.05` have complete dispositions.
-- Final count-changing A/A: all 150 performance rows are sealed, but the run is
-  diagnostic/no-go because five absolute throughput medians miss. It has no
-  verifier and never replaces issue #15.
-- Store: nine baseline performance Stores and three exact verifier Stores pass
-  custody/resource gates. The final metadata supplement separately verifies
-  content, file and directory metadata, roots, reconnect, census, and cleanup.
-- Store blocker: the owner accepts `661,061,632` bytes at the retained
-  ObjectId/SQLite layout as the exact patch-compatible result. The
-  `562,513,789`-byte physical-pack number is a conservative incompatible
-  object-storage lower bound deferred to open issue #18.
-
-Identical-source family repeatability gates the owner-approved symmetric
-aggregate arm wall only. Directional baseline/candidate comparison continues
-to gate every member. Performance and verification streams remain separate.
-
-## Acceptance record
+## Current acceptance record
 
 | Gate | Status |
-|---|---|
-| Public/API/Store compatibility | Pass; existing exhaustive public shapes and v0.1.x Store format retained |
-| Version and lockfile | Pass; every local package resolves to `0.1.2` |
-| Native workspace checks | Pass on the release source |
-| Linux FUSE/Docker checks | Pass on the final production seal |
-| Same-count family | Pass; accepted aggregate A/A rule and separate verifier |
-| Count-changing family | Pass; authoritative directional evidence; final A/A explicitly diagnostic/no-go |
-| Store footprint | Accepted exact blocker; complete census and final metadata verifier |
-| Documentation audit | Pass; active manual, roadmap, registry, limitations, and local links agree |
+| --- | --- |
+| Public/API/Store compatibility | Pass in exact-candidate conformance |
+| Direct-I/O create/reopen/mmap policy | Pass in real Linux FUSE |
+| Same-count family | Target-pass; exact nested custody |
+| Count-changing family | Tolerated-pass; all absolute/scaling/verifier gates pass |
+| Store footprint | Exact baseline complete; primary 600 MB goal remains no-go |
+| Benchmark table regeneration | Pass; independently recalculated from sealed raw data |
+| Final native/CI checks | Pending on the documentation-complete tree |
 | Artifacts/checksums | Pending; no GitHub Release or `v0.1.2` tag is published |

@@ -13,8 +13,9 @@ localized Commit planning. It does not alter reachable canonical bytes,
 identifiers, CDC, Store tables, required page size, or publication ordering. A
 released v0.1.x Store remains readable.
 
-The reportable 100,000-file unique-content control uses 661,061,632 durable
-bytes at the retained ObjectId/SQLite layout, above the 600,000,000-byte goal.
+The reportable 100,000-file unique-content control uses 662,831,104 median
+durable bytes at the retained ObjectId/SQLite layout, above the
+600,000,000-byte goal.
 The owner accepted that exact patch-compatible blocker. A reproducible physical
 pack experiment establishes only a conservative 562,513,789-byte object-storage
 lower bound; it is not a complete Store implementation and is deferred to
