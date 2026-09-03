@@ -131,7 +131,7 @@ in memory. The fixture file is created with directory mode `0750`, file mode
 `0640`, and mtime `1700000000`. These qualified values are frozen before
 performance collection:
 
-| Tier | Fixture SHA-256 | Canonical file root | Ordered chunk-map SHA-256 | `C0` |
+| Tier | Fixture SHA-256 | Canonical file root | Canonical mapping root | `C0` |
 | --- | --- | --- | --- | ---: |
 | 1 MiB | `d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc` | `8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078` | `dcea0efdabc05e8cc5634505601cf682ee362c7e16e6a6c228b4b699b16b3eea` | 54 |
 | 10 MiB | `29c89128c748e4404f31b0147d447bd524d7b75afc98d56ac4debac762ee4b79` | `dd79a6666e83927d787c8a7679b06f4c98ca5f80b6abd48d94b5e8f84aad1c85` | `85cc86ea39b444756034d586424a0575b325aabea5beaf7c249a20b4aadb1638` | 544 |
@@ -177,10 +177,10 @@ family-manifest SHA-256 values are:
 
 | Family | Definition manifest SHA-256 |
 | --- | --- |
-| `edit_length_preserving` | `f809969232c0a48f91ded2b48b0919c745ac17170d7ff375e18edcb6e5e8ab5d` |
-| `edit_length_changing` | `298dbe2d39b318c10cddb4f67097942235aa4faba9eb2929f07a47ca3d0a8762` |
-| `edit_canonical_chunk_count` | `e83ba1c930bcc1ddad7de2698ef3b78f68ce7fd97b36c085bebdef3c937da122` |
-| Combined ordered registry | `1802225a9ef5231e3d1245d85b8425b3532d20d0440f625d3aecf95d69968fde` |
+| `edit_length_preserving` | `daa3bcb8ba94da6dc28f7ca87dc2b27612c9988cf42fe5398cdddb3a5b386324` |
+| `edit_length_changing` | `b6e8d0ab87a2ed72234623198994a460484bd950a04bb81a99a9aecda06c4390` |
+| `edit_canonical_chunk_count` | `e76f9b08f7312abf0f30447765e9ff734cecd6c41210788bd4917286059158bf` |
+| Combined ordered registry | `1773c7b82f739eaf1c2b8a2877f56baaa7e72b26ac8980802bdb82c80e270af6` |
 
 The five performance repetitions use the same plan; repetition changes run
 order, not benchmark semantics. Baseline, candidate, and verifier consume the
@@ -197,7 +197,7 @@ The ordinary Inline payload seeds and SHA-256 values are:
 | `delete-middle-4k` | 14,631,710,363,380,426,233 | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
 | `append-tail-4k` | 10,524,769,729,031,953,950 | `50495bfeedccb8983ead82f1fc3a55b7a45bb5741ecc79970b8a846616f95d22` |
 | `prepend-head-4k` | 11,539,886,650,128,519,955 | `a675326972c1cb5168b42d324036fab260ccb91b9df982eaace85cd05682cbdb` |
-| `replace-grow-middle-2k-to-4k` | 6,297,716,278,452,503,078 | `5d682316189ab7e945b298632c929e67f90a2b1aa13987181aef3f501421d93e` |
+| `replace-grow-middle-2k-to-4k` | 6,297,716,278,452,303,078 | `5d682316189ab7e945b298632c929e67f90a2b1aa13987181aef3f501421d93e` |
 | `replace-shrink-middle-4k-to-2k` | 1,824,427,086,451,703,536 | `5e24d5a26d23669833f39b2c5b3c9f6a3620ba16d3505c710020d31704a8744b` |
 | `truncate-tail-4k` | 9,706,727,036,258,497,900 | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
 | `zero-extend-tail-4k` | 7,852,731,424,507,589,290 | `ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7` |
@@ -381,7 +381,7 @@ decrease: C1 < C0
 
 A sign-only result is insufficient. The exact qualified outcomes are:
 
-| Outcome | Tier | `(C0, C1, delta)` | Final file SHA-256 | Canonical file root | Ordered chunk-map SHA-256 |
+| Outcome | Tier | `(C0, C1, delta)` | Final file SHA-256 | Canonical file root | Canonical mapping root |
 | --- | --- | --- | --- | --- | --- |
 | preserve | 1 MiB | `(54, 54, 0)` | `a3374b0be7c654cf87f2b8d411d657e170c821837dcce8661759aa5fe1fc7070` | `644ab1b651adc897f95da15461e32e587565b7e2789b377524c8e88aaf03e4a6` | `4c3514314a7daf61074e6b3a3093fb3beb07699a296d87b30e5e7ec316dea714` |
 | preserve | 10 MiB | `(544, 544, 0)` | `231b62f873d1c1b498809d40bd92235a5cdf08150abaf802422e109fee490fcc` | `feef5c7528ffb92220caca77fdd89d2d1cce257e977cc204cef1e676ade6e493` | `d38ce6c671b657acee99b8a8848efd653a91dc5bc67005e6e38e9f2e42b96ec1` |
