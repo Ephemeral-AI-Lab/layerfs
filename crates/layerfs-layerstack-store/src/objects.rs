@@ -2807,7 +2807,12 @@ impl<'a> InitializationSegmentAdmission<'a> {
         }
         let capacity = self.batch.capacity();
         let mut batch = std::mem::take(&mut self.batch);
-        batch.sort_unstable_by(|left, right| left.id.as_bytes().cmp(right.id.as_bytes()));
+        batch.sort_unstable_by(|left, right| {
+            left.bytes
+                .len()
+                .cmp(&right.bytes.len())
+                .then_with(|| left.id.as_bytes().cmp(right.id.as_bytes()))
+        });
         let metrics = insert_initialization_segment_admission_batch(
             self.db,
             &batch,
