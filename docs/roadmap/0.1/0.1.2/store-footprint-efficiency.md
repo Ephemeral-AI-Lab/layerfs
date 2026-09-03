@@ -1,9 +1,9 @@
 # Store footprint efficiency
 
-> **Status:** Implemented and in baseline/candidate measurement: 3 controls,
-> each measured with 3 fresh Stores per unchanged baseline and retained
-> candidate. Interrupted or diagnostic evidence is not a frozen v0.1.2
-> baseline.
+> **Status:** Complete with the exact patch-compatible blocker retained. The
+> terminal v4 baseline is `issue16-baseline-terminal-v4-fabf5eb8`; disposable
+> layout/pack evidence is `issue16-layout-experiments-fabf5eb8`. Physical
+> packing is deferred to [issue #18](https://github.com/Ephemeral-AI-Lab/layerfs/issues/18).
 > Tracked by [GitHub issue #16](https://github.com/Ephemeral-AI-Lab/layerfs/issues/16).
 
 ## Problem statement
@@ -328,6 +328,44 @@ v0.1.2 may complete this workstream with a measured `defer` or `reject`. It
 must not invent a patch-compatible implementation merely to claim the 580 MB
 stretch target.
 
+## Terminal disposition
+
+The deterministic v4 baseline retains three fresh performance Stores per
+control and one separate exact verifier Store per control:
+
+| Control | Canonical bytes | Durable median | Verifier phase |
+| --- | ---: | ---: | ---: |
+| `store-footprint-unique-100000` | 542,909,962 | 661,061,632 | 43.182 s, target pass |
+| `store-footprint-metadata-cardinality-100000` | 579,605,932 | 734,003,200 | 64.372 s, tolerated pass |
+| `store-footprint-large-object-500m` | 501,649,815 | 596,377,600 | 4.103 s, target pass |
+
+All roots and object-set digests repeat exactly across the three Stores for
+each control. Aggregate verifier-process wall is 124.821 seconds. Every Store
+has one counted durable file, read-only `dbstat` custody, exact FUSE tree
+digest/reopen, zero swap/OOM, and deterministic cleanup.
+
+Mechanism decisions are final:
+
+- current/ObjectId bounded order: **retain**, but it misses the primary target
+  at 661,061,632 bytes;
+- generation order: **reject**; it saves zero bytes and regresses
+  initialization/complete about seven percent at 1,000 files;
+- encoded-length order: **reject**; it grows the 1,000-file Store 2.79 percent,
+  table slack 18.59 percent, and initialization 13.45 percent;
+- 4/8/16/32/64 KiB rowid layouts: **defer/reject**; best is the incompatible
+  4 KiB result at 604,913,664 bytes, still above admission;
+- `WITHOUT ROWID`: **reject**; best is 638,238,720 bytes and all sizes are worse
+  than rowid;
+- physical packing: **defer to #18**; the authenticated prototype is
+  561,727,326 bytes including pack, location index, manifest, and checksums;
+- structural compression: **defer behind #18**; the unique payload is
+  intentionally incompressible and uncompressed packing already meets stretch.
+
+No compatible mechanism in the required order reaches 600 MB. The only
+measured mechanism that does changes the physical Store format, which the
+patch boundary expressly forbids. ObjectId order therefore remains the v0.1.2
+product result, with the exact blocker and minor-release handoff retained.
+
 ## Files to read
 
 - [v0.1.2 scope](README.md)
@@ -347,32 +385,32 @@ stretch target.
 
 ## Acceptance criteria
 
-- [ ] The owning namespace fixture, digest, and metadata profiles are versioned
+- [x] The owning namespace fixture, digest, and metadata profiles are versioned
   and frozen before the v0.1.2 baseline.
-- [ ] Every comparison uses the same source, fixture, container, cache profile,
+- [x] Every comparison uses the same source, fixture, container, cache profile,
   Store creation path, sample count, and exact verification oracle.
-- [ ] Three fresh Stores are retained for every admitted control and candidate.
-- [ ] Reports distinguish logical, canonical, SQLite, other durable, total
+- [x] Three fresh Stores are retained for every admitted control and candidate.
+- [x] Reports distinguish logical, canonical, SQLite, other durable, total
   durable, temporary, and physical I/O bytes.
-- [ ] `dbstat` or equivalent raw evidence explains table, index, payload, and
+- [x] `dbstat` or equivalent raw evidence explains table, index, payload, and
   unused-page ownership.
-- [ ] Bounded admission-order candidates are tested before any Store-format
+- [x] Bounded admission-order candidates are tested before any Store-format
   prototype.
-- [ ] The selected patch-compatible result reaches at most 600 MB total durable
+- [x] The selected patch-compatible result reaches at most 600 MB total durable
   Store footprint, or the exact measured blocker is retained.
-- [ ] Preferred and stretch results count every durable Store-owned byte and do
+- [x] Preferred and stretch results count every durable Store-owned byte and do
   not rely on hidden files or background work.
-- [ ] Exact canonical bytes, ObjectIds, roots, collision behavior, Commit,
+- [x] Exact canonical bytes, ObjectIds, roots, collision behavior, Commit,
   materialization, FUSE, fresh reopen, and cleanup proofs pass.
-- [ ] Initialization, localized Commit, and exact reopen meet the `1.05x`
+- [x] Initialization, localized Commit, and exact reopen meet the `1.05x`
   target or explicitly disposed `1.10x` tolerated band; CPU, RSS, page cache,
   temporary bytes, and physical I/O satisfy the retained resource envelope.
-- [ ] No Store-footprint candidate alters the Store schema, required page size,
+- [x] No Store-footprint candidate alters the Store schema, required page size,
   canonical format, CDC profile, identity, public API, or daemon/proxy contract.
-- [ ] Every incompatible but evidence-backed mechanism receives a focused
+- [x] Every incompatible but evidence-backed mechanism receives a focused
   minor-release handoff with retained commands, identities, measurements, and
   acceptance criteria.
-- [ ] The final v0.1.2 report states accept, defer, or reject for bounded order,
+- [x] The final v0.1.2 report states accept, defer, or reject for bounded order,
   page-size layout, `WITHOUT ROWID`, physical packing, and structural
   compression independently.
 
