@@ -72,9 +72,14 @@ prepare_assets() {
   source_seal=$("$here/run-namespace.sh" --source-seal)
   product_seal=$("$here/run-namespace.sh" --product-seal)
   harness_seal=$("$here/run-namespace.sh" --harness-seal)
+  workload_sha=$(shasum -a 256 "$here/workload.rs" | awk '{print $1}')
   [[ $(docker inspect -f '{{index .Config.Labels "dev.layerfs.source-seal"}}' "$container") == "$source_seal" ]] || die "container/source seal mismatch"
   prepared="$prepared_root/$source_seal"
-  if [[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/fixture-8m/payload.bin && -f $prepared/issue14-r005-custody/evidence.sha256 ]]; then
+  if [[ -x $prepared/fs-benchmark-pro && -x $prepared/fs-benchmark-workload && -f $prepared/fixture-256k/payload.bin && -f $prepared/fixture-8m/payload.bin && -f $prepared/issue14-r005-custody/evidence.sha256 ]] \
+    && grep -Fx "source_seal=$source_seal" "$prepared/identity.txt" >/dev/null \
+    && grep -Fx "product_seal=$product_seal" "$prepared/identity.txt" >/dev/null \
+    && grep -Fx "harness_seal=$harness_seal" "$prepared/identity.txt" >/dev/null \
+    && grep -Fx "workload_sha256=$workload_sha" "$prepared/identity.txt" >/dev/null; then
     printf 'PASS prepared %s\n' "$prepared"
     return
   fi
@@ -93,7 +98,6 @@ with open(sys.argv[1],'wb') as output:
         output.write(bytes((((base+i)*29+(base+i)//7)%251) for i in range(64*1024)))
 PY
   static_edit_proof >"$stage/static-edit-proof.json"
-  workload_sha=$(shasum -a 256 "$here/workload.rs" | awk '{print $1}')
   {
     printf 'source_commit=%s\n' "$(git -C "$repo" rev-parse HEAD)"
     printf 'source_tree=%s\n' "$(git -C "$repo" rev-parse HEAD^{tree})"
