@@ -23,8 +23,8 @@ family, timed row, or proof row.
 
 - [v0.1.3 shared contract](README.md)
 - [Append-only benchmark contract](../benchmarking.md)
-- [Same-count file edits](same-count-file-edits.md)
-- [Count-changing file edits](count-changing-file-edits.md)
+- [Completed v0.1.2 same-count edits](../0.1.2/same-count-file-edits.md)
+- [Completed v0.1.2 count-changing edits](../0.1.2/count-changing-file-edits.md)
 - [Namespace mutation](namespace-mutation.md)
 - [Link/inode topology](link-inode-topology.md)
 - [`fs-bench-pro` harness](../../../../benchmark/fs-bench-pro/src/main.rs)
@@ -135,5 +135,5 @@ generation are excluded and reported separately.
   15/30-second family gates pass without dropping a valid sample.
 - [ ] Sync/barrier evidence remains passive and adds no family, timed case,
   proof case, or separate target.
-- [ ] No repeated Commit, Branch fan-out, conflict workflow, or SDK-operation
-  microbenchmark enters this family.
+- [ ] No repeated Commit, Branch fan-out, conflict workflow, or new
+  owner-side Workspace file-range-edit member enters this family.

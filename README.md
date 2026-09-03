@@ -203,7 +203,7 @@ The [first-principles learning site](https://learn.layerfs.ai/) is educational m
 | --- | --- | --- |
 | **0.1.0 Developer Preview** | One SQLite Store, immutable LayerStack history, Branches, Workspaces, public SDK/CLI, host materialization, container FUSE, monitoring, and benchmark evidence. | **Released** as source under `v0.1.0`. |
 | **0.1.1** | Measure and harden existing-directory initialization through localized Commit, with focused FUSE and Docker proof. | **Released** as source under `v0.1.1`; see the [release record](release-notes/0.1.1/README.md). |
-| **0.1.2** | Complete admitted prepend, range-copy, fragmented-write, sparse-growth, and mixed-edit optimization against the same FUSE/Docker path. | **Proposed**; see the [proposal set](docs/roadmap/0.1/0.1.2/README.md). |
+| **0.1.2** | Adapt `fs-bench-pro` for case-local iteration, implement one portable regular-file edit engine, complete descriptively named same-count and count-changing Docker/FUSE performance families, and measure Store footprint. | **Proposed**; see the [release plan](docs/roadmap/0.1/0.1.2/README.md). |
 | **0.1.3** | Complete diverse, tiered filesystem-workload families against one genesis Layer and one Branch, then optimize measured bottlenecks. | **Draft**; see the [release README](docs/roadmap/0.1/0.1.3/README.md). |
 | **0.1.4** | Benchmark multi-Layer and multi-Branch Commit history, Fork, Add, Diff, conflict, and query scaling, then optimize measured bottlenecks. | **Draft**; see the [release README](docs/roadmap/0.1/0.1.4/README.md). |
 | **0.2.0** | Establish a portable projection foundation, including capability-detected reflink/clonefile paths and a future OverlayFS projection. | **Planned**; requires a new compatibility contract. |

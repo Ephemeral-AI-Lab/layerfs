@@ -154,18 +154,24 @@ FUSE, followed by one managed Docker lifecycle and one attachment-failure
 cleanup proof. This establishes a documented subset rather than claiming
 universal POSIX compatibility.
 
-Patch-compatible large/mixed-edit and `copy_file_range` follow-up is tracked in
-the [0.1.2 proposals](0.1/0.1.2/README.md). Any item that requires an
-incompatible wire, public API, schema, canonical, or identity change moves to
-0.2.0 with the broader projection and platform work.
+Patch-compatible universal file-edit work is tracked in the
+[v0.1.2 plan](0.1/0.1.2/README.md). One common Workspace piece engine serves
+ordinary write/truncate and the additive owner-side SDK semantic without a new
+daemon or FUSE wire operation. Timed evidence remains one fixed
+MacBook/Docker/Linux-FUSE path; portability is an engine property protected by
+untimed projection conformance, not a v0.1.2 performance matrix.
 
-### 0.1.2: payload, mixed-edit, and Store-footprint optimization
+### 0.1.2: file-mutation and Store-footprint optimization
 
-After v0.1.1 completes namespace admission, v0.1.2 may accept measured prepend,
-range-copy, fragmented-write, sparse-growth, mixed-edit, and
-[Store-footprint](0.1/0.1.2/store-footprint-efficiency.md) work. Each item must
-use the same public SDK, real-FUSE, Docker, fresh-process, timing, integrity, and
-acknowledgement boundaries established by v0.1.0.
+After v0.1.1, v0.1.2 first adapts
+[`fs-bench-pro`](0.1/0.1.2/fs-bench-pro-format.md) for family-local definitions,
+selected-case performance, and separate verification. It then implements the
+[universal edit engine](0.1/0.1.2/universal-file-edit-engine.md), completes the
+same-count and count-changing performance families, and measures
+[Store footprint](0.1/0.1.2/store-footprint-efficiency.md). Timed workload rows
+retain the public SDK, real-FUSE, Docker, fresh-process, timing, resource, and
+acknowledgement boundaries established by v0.1.0. Scenario names describe the
+file transformation rather than the fixed environment or internal route.
 
 Keep the existing registered payload and namespace rows stable. Add a new row
 only when it answers a concrete product question, iterate LayerFS-only on the
@@ -177,9 +183,9 @@ for hidden packs, background compaction, CPU, RSS, page cache, or I/O.
 
 ### 0.1.3: single-history filesystem workload completion
 
-After v0.1.2 closes the known prepend, capture, and Store-footprint paths,
-v0.1.3 benchmarks the
-filesystem workload families in the smallest useful history topology: one
+After v0.1.2 closes three complete mutation families and the Store-footprint
+family, v0.1.3 benchmarks eight remaining filesystem workload families in the
+smallest useful history topology: one
 LayerStack, one genesis Layer, and one Branch. The topology is a control
 variable, not the benchmark subject. New scenarios run a deterministic
 filesystem workload through real FUSE, one final Commit or proved `UpToDate`,
@@ -448,22 +454,30 @@ logical states are complete while physical storage remains incremental.
 
 #### CDC
 
-- start from a safe prior anchor;
-- scan until a verified resynchronization point;
-- reuse the unchanged suffix;
+- retain the frozen full-stream chunking profile for imports and ordinary
+  rewrites;
+- measure resynchronization where the workload actually uses full-stream CDC;
+- keep structural splice identity separate from full-stream rewrite identity;
 - test insertion and deletion, not only fixed-size overwrite.
 
 #### COW and prepend
 
 Use a persistent rope/extent tree with subtree lengths so a prefix insertion
-becomes a splice and path copy rather than a rewrite of every later offset.
-The target for a small prepend to a large file is:
+becomes a structural splice and path copy rather than a rewrite of every later
+offset. Reuse the existing splice: chunk the replacement only, split/join the
+old extent rope, and do not invent a suffix-resynchronization pass. The target
+for a small native prepend to a large file is:
 
 ```text
-new payload       inserted bytes plus bounded resynchronization region
-reused payload    nearly all prior chunks
-new structure     bounded extent path, file manifest, directory path, root
+replacement CDC bytes    exactly the inserted bytes
+old payload reads         zero
+old payload identity      fully retained
+new structure             bounded extent path, file state, inode path, root
 ```
+
+An ordinary temp-copy prepend retains its own full-stream root oracle. Native
+splice and temp-copy must agree on bytes and digest, not necessarily on
+`FileStateRoot`.
 
 Every optimization must remain deterministic, authenticated, memory-bounded,
 transaction-bounded, and independent of hidden warm state.
@@ -565,8 +579,8 @@ The recommended order after the 0.1.0 freeze is:
 2. refactor Workspace/FUSE/Docker behind those tests;
 3. harden cleanup, cancellation, mount teardown, and lease release;
 4. keep the full suite below two minutes;
-5. optimize dirty planning, CDC resynchronization, persistent extent splice,
-   membership, and Commit transactions;
+5. optimize dirty planning, the existing structural extent splice, membership,
+   and Commit transactions;
 6. extend `fs-bench-pro` and retain current-source evidence;
 7. prototype the DSH plugin through the public SDK;
 8. add reflink/APFS acceleration;

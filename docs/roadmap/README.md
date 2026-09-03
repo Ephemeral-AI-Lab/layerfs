@@ -30,8 +30,8 @@ explicit-End architecture.
 - [x] Keep container and fixture preparation outside timed regions.
 - [x] Keep all benchmark iteration LayerFS-only.
 - [ ] Complete the namespace matrix in v0.1.1.
-- [ ] Complete admitted prepend, mixed-edit, and Store-footprint work in
-  v0.1.2.
+- [ ] Adapt `fs-bench-pro`, implement universal regular-file editing, and
+  complete the same-count, count-changing, and Store-footprint work in v0.1.2.
 - [ ] Complete single-history filesystem-workload coverage in v0.1.3.
 - [ ] Complete multi-Layer/multi-Branch history coverage in v0.1.4.
 - [ ] Carry the append-only registered matrix through 1.0.0.
@@ -105,24 +105,31 @@ bounds. The detailed and authoritative working list is the
 - [ ] Create the immutable 0.1.1 manual and release record only after a source
   candidate passes.
 
-Extent-aware `copy_file_range`, new wire operations, broad refactors, and new
-projection types are deferred from 0.1.1. Patch-compatible follow-up work is
-tracked in the [0.1.2 proposals](0.1/0.1.2/README.md); only incompatible work
-moves to 0.2.0.
+Universal Workspace file edit, broad refactors, and new projection types are deferred from
+0.1.1. The environment-independent owner-side SDK operation and its complete
+family are tracked in the [v0.1.2 plan](0.1/0.1.2/README.md); it requires no
+daemon or FUSE wire operation.
 
 ## Proposed compatibility-preserving 0.1.2 work
 
-The [0.1.2 proposal set](0.1/0.1.2/README.md) continues benchmark-driven
-optimization after the namespace lifecycle is understood. It owns three known
-families: prepend/range-copy, online Workspace capture, and
-[total durable Store-footprint efficiency](0.1/0.1.2/store-footprint-efficiency.md).
+The [v0.1.2 plan](0.1/0.1.2/README.md) continues benchmark-driven optimization
+after the namespace lifecycle is understood. It first adapts
+[`fs-bench-pro`](0.1/0.1.2/fs-bench-pro-format.md) for one selected performance
+case and separate verifier modes, then implements the
+[universal edit engine](0.1/0.1.2/universal-file-edit-engine.md), completes the
+same-count and count-changing performance families, and measures
+[total durable Store footprint](0.1/0.1.2/store-footprint-efficiency.md).
 
-- [ ] Admit prepend/range-copy work only from public-path transfer evidence.
-- [ ] Admit fragmented-write, sparse-growth, or mixed-edit work only from a
-  focused failing row.
-- [ ] Preserve the existing FUSE/Docker environment and 0.1.x contracts.
-- [ ] Retain exact bytes, canonical roots, fresh reopen proof, and existing
-  registered scenario meanings.
+- [ ] Add the owner-side public SDK `WorkspaceFileRangeEdit` semantic and one common
+  internal edit engine for ordinary write/truncate, with bounded all-or-nothing
+  behavior and no alternate edit or copy fallback.
+- [ ] Baseline both complete edit families before optimizing a shared
+  fragmented-write, sparse-growth, replacement, or planning defect.
+- [ ] Time only the fixed MacBook/Docker/Linux-FUSE environment; keep owner-side
+  range editing as implementation acceptance rather than another family axis.
+- [ ] Retain exact bytes, expression-appropriate canonical roots, fresh reopen
+  proof, and existing registered scenario meanings; do not require structural
+  splice and ordinary full-stream rewrite to share a root.
 - [ ] Rerun LayerFS-only payload and namespace matrices after every accepted
   optimization.
 - [ ] Measure the 500 MB unique-content control's logical, canonical, SQLite,
@@ -135,16 +142,17 @@ families: prepend/range-copy, online Workspace capture, and
 
 ## Draft compatibility-preserving 0.1.3 work
 
-The [0.1.3 README](0.1/0.1.3/README.md) indexes one document per filesystem
-workload family. The topology stays fixed at one LayerStack, one genesis Layer,
-and one Branch so the workloads—not Layer or Branch fan-out—own the
-measurement. New tiered rows use one final Commit; inherited frozen rows such
-as `edit16` retain their historical Commit sequence.
+The [0.1.3 README](0.1/0.1.3/README.md) owns eight remaining complete filesystem
+workload families. The topology stays fixed at one LayerStack, one genesis
+Layer, and one Branch so the workloads—not Layer or Branch fan-out—own the
+measurement. The three v0.1.2 mutation families are inherited and rerun without
+new members.
 
 - [ ] Freeze deterministic 1/10/100 load tiers, seed-bound schedules, exact
   oracles, and one shared result schema.
-- [ ] Cover payload, same-count and count-changing edits, range-copy, namespace
-  scale and mutation, file churn, directories, Git, links, and mixed workloads.
+- [ ] Cover payload, namespace scale and CAS/CDC behavior, file churn,
+  directories, Git, namespace mutation, links, and mixed workloads as eight
+  complete families.
 - [ ] Optimize only operations with a measured defect or material opportunity.
 - [ ] Rerun every registered v0.1.0-v0.1.2 scenario before release.
 - [ ] Leave repeated Commit history, Add, multi-Layer Diff, conflicts, and
@@ -276,8 +284,9 @@ release-defining main task alongside the portable projection foundation.
   retain and explain the old row and evidence.
 - [ ] Run every previously registered scenario for each later 0.1.x candidate.
 - [ ] Keep public SDK or CLI operations as the timed product boundary.
-- [ ] Keep fresh workload processes; do not introduce a persistent execution
-  shell for benchmark speed.
+- [ ] Keep fresh workload processes for ordinary filesystem rows; time an
+  explicitly declared owner-side SDK semantic directly and verify it through
+  the attached projection rather than inventing a process or syscall.
 - [ ] Keep environment and container preparation outside the timed region for
   every compared product.
 - [ ] Record source identity, runtime identity, cache policy, acknowledgement

@@ -239,7 +239,7 @@ Fixture custody proves:
 
 - unique `(device, inode)` for every regular file;
 - `st_nlink == 1` for every regular file;
-- no hard links, sparse holes, reflinks/clones, `copy_file_range`, compression,
+- no hard links, sparse holes, reflinks/clones, owner-side Workspace file-range edit, compression,
   shared backing file, or precomputed product ObjectId;
 - exact path, type, size, mode, mtime, SHA-256, logical bytes, bytes written,
   and physical allocation; and
@@ -479,7 +479,7 @@ Reject any result that obtains a favorable percentage or wall time by:
 
 - skipping a source read or CDC scan;
 - using sparse files, hard links, reflinks/clones, compression,
-  `copy_file_range`, repeated backing storage, or precomputed product roots;
+  owner-side Workspace file-range edit, repeated backing storage, or precomputed product roots;
 - moving product work into fixture preparation, cache warm-up, another phase,
   or a background task;
 - adding product workers, hidden Stores, sidecars, or durable formats;

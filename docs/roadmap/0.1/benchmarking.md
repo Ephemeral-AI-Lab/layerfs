@@ -15,7 +15,7 @@ The immutable reportable 0.1.0 result remains in the
 
 `fs-bench-pro` implements the registered 32 MiB payload campaign, but the
 public benchmark surface remains incomplete. It does not yet provide accepted
-release evidence for growing namespaces, the known prepend/capture paths,
+release evidence for growing namespaces, the known file-mutation paths,
 diverse tiered filesystem workloads in a single-history topology, or
 multi-Layer and multi-Branch history scaling. The earlier interrupted
 9,000-empty-file probe is not reproducible release evidence.
@@ -24,12 +24,15 @@ multi-Layer and multi-Branch history scaling. The earlier interrupted
 
 Grow one append-only LayerFS benchmark registry from v0.1.0 through v0.1.4
 while keeping the registered payload and namespace campaigns independently
-runnable. Each release adds one bounded family, freezes it, and reruns all
-earlier registered rows:
+runnable. Each release adds one or more bounded complete families, freezes each
+as an indivisible unit, and reruns all earlier registered rows:
 
 1. v0.1.1: initialization and namespace scaling;
-2. v0.1.2: prepend/range-copy and online Workspace capture;
-3. v0.1.3: filesystem workload and exact CAS/CDC deduplication cases on one
+2. v0.1.2: one `fs-bench-pro` family-format workstream, one universal edit
+   implementation, same-count and count-changing edit performance families,
+   and Store-footprint efficiency;
+3. v0.1.3: eight remaining filesystem workload and exact CAS/CDC
+   deduplication families on one
    genesis Layer and one Branch;
    and
 4. v0.1.4: multi-Layer and multi-Branch history.
@@ -47,7 +50,10 @@ earlier registered rows:
 - [The namespace-v2 specification](0.1.1/namespace-optimization-spec.md) for
   the proposed small-heavy fixture replacement and measured initialization /
   Workspace Create optimization gates.
-- [The v0.1.2 README](0.1.2/README.md) for prepend and capture ownership.
+- [The v0.1.2 README](0.1.2/README.md) for its ordered issue structure, two
+  complete edit performance families, and Store evidence.
+- [The v0.1.2 `fs-bench-pro` format](0.1.2/fs-bench-pro-format.md) for
+  family-local definitions/runners and separate performance/verification modes.
 - [The v0.1.3 README](0.1.3/README.md) and its linked family documents for the
   single-history workload and deduplication draft.
 - [The v0.1.4 README](0.1.4/README.md) for the multi-history operation draft.
@@ -70,8 +76,10 @@ earlier registered rows:
 - `run.sh` continues to own the implemented LayerFS payload campaign.
 - Every later release reruns all previously registered rows.
 - Once admitted, a scenario's ID, fixture, public operation sequence, timing
-  boundary, acknowledgement semantics, oracle, sample rules, and result schema
-  remain frozen through 1.0.0.
+  boundary, acknowledgement semantics, oracle, admitted evidence profile, and
+  result schema remain frozen through 1.0.0. A later explicitly versioned
+  campaign may collect a different repetition count, but it cannot replace or
+  pool with the earlier distribution.
 - A benchmark correction retains the old row and evidence and introduces a new
   scenario ID or schema version.
 - v0.1.3 family documents and the v0.1.4 README remain drafts until their
@@ -83,8 +91,8 @@ earlier registered rows:
 | --- | --- | --- |
 | v0.1.0 | Registered 32 MiB payload lifecycle | Frozen baseline |
 | v0.1.1 | Existing-directory initialization and namespace scale | Fix correctness/resource blockers and measured initialization or localized-Commit bottlenecks |
-| v0.1.2 | Prepend/range-copy and online Workspace capture | Optimize only retained public-path failures or material opportunities |
-| v0.1.3 | Diverse filesystem workloads; one genesis Layer and one Branch; no new history-depth axis | Use tiered seeded schedules; change code only where evidence warrants it |
+| v0.1.2 | `fs-bench-pro` family format; universal edit engine; same-count and count-changing edit performance; Store footprint | Keep development case-local, benchmark the fixed Docker/FUSE path, and optimize only retained family evidence |
+| v0.1.3 | Eight remaining diverse filesystem families; one genesis Layer and one Branch; no new history-depth axis | Use tiered seeded schedules; change code only where evidence warrants it |
 | v0.1.4 | Multi-Layer, multi-Branch, and Commit-history scaling | Optimize measured history, fan-out, publication, diff, query, or conflict bottlenecks |
 
 The accumulated v0.1.0-v0.1.4 registry is the proposed benchmark contract v1
@@ -316,16 +324,112 @@ four-by-four Cartesian matrix.
 The full release admission checklist is in
 [0.1.1/README.md](0.1.1/README.md).
 
+## Proposed v0.1.2 issue and family inventory
+
+v0.1.2 starts with one parent and five ordered sub-issues:
+
+0. adapt `fs-bench-pro` to one definition file/runner per family with selected-
+   case performance mode and separate verifier/admission modes;
+1. implement the projection-independent universal regular-file edit engine;
+2. complete same-count edit performance;
+3. complete count-changing edit performance; and
+4. complete Store-footprint evidence.
+
+All files remain under `benchmark/fs-bench-pro`. Timed edit rows use the fixed
+MacBook/Docker Desktop/managed Linux container/real-FUSE environment. The
+environment is recorded in campaign identity, not scenario names.
+
+The edit performance registry contains 39 timed IDs. Each source arm runs three
+seeds per ID, or 117 samples; a paired baseline/candidate admission contains 234
+executions. Twelve verification/conformance groups remain outside performance
+timing. Store controls remain outside `registered_total_ns` and edit-family
+walls.
+
+### Issue 0: `fs-bench-pro` family format
+
+Use the exact [v0.1.2 harness contract](0.1.2/fs-bench-pro-format.md):
+
+```text
+families/init_namespace.rs           + run-namespace.sh
+families/edit_same_count.rs      + run-edit-same-count.sh
+families/edit_count_changing.rs  + run-edit-count-changing.sh
+families/store_footprint.rs       + run-store-footprint.sh
+```
+
+The namespace pair is the already registered v0.1.1 `init_namespace` family.
+Issue 0 extracts its definitions and adds descriptive aliases such as
+`namespace-100-files-125mb` without changing its runner, frozen raw IDs,
+fixture, schema, timing, or evidence.
+
+The default `performance` mode runs one explicit case/seed and excludes full
+digest/root/reopen/failure/materialization verification. `verify` runs selected
+correctness/resource checks with no performance distribution. `admission`
+requires `--all` and runs the complete family plus separate verification.
+
+### Issue 1: universal edit implementation
+
+The [universal engine](0.1.2/universal-file-edit-engine.md) defines no registered
+performance family. It owns seven conformance groups and focused owner-side
+range-edit checks. Ordinary FUSE write/truncate and optional owner-side
+`WorkspaceFileRangeEdit` share one piece engine and the existing structural
+splice; no OS copy primitive, second edit log/editor, or fallback exists.
+
+### Issue 2: same-count performance family
+
+| Scenario IDs | Class | Status |
+| --- | --- | --- |
+| `small-edit`, `edit16` | Timed anchors | Registered; frozen |
+| `overwrite-head-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `overwrite-middle-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `overwrite-tail-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `overwrite-distributed-1b-to-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `overwrite-fragmented-10b-ops-1000-proof` | Verification | Separate from performance |
+
+This is 14 timed IDs and one verification group. The exact operation and pair
+contract is in [same-count-file-edits.md](0.1.2/same-count-file-edits.md).
+
+### Issue 3: count-changing performance family
+
+| Scenario IDs | Class | Status |
+| --- | --- | --- |
+| `prepend-temp-copy-rename` | Timed anchor | Registered; frozen |
+| `prepend-head-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `append-tail-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `insert-middle-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `delete-middle-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `truncate-tail-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `sparse-write-past-eof-gap-60k-payload-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `replace-middle-grow-2k-to-4k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `replace-middle-shrink-4k-to-2k-ops-{1,10,100}` | Timed curve | v0.1.2 admission |
+| `insert-middle-4k-on-8m-proof` | Verification | Separate from performance |
+| `delete-middle-4k-on-8m-proof` | Verification | Separate from performance |
+| `rewrite-full-grow-8m-to-12m-proof` | Verification | Separate from performance |
+| `rewrite-full-shrink-8m-to-4m-proof` | Verification | Separate from performance |
+
+This is 25 timed IDs and four verification groups. Every timed result names its
+same-count control. The exact operation contract is in
+[count-changing-file-edits.md](0.1.2/count-changing-file-edits.md).
+
+### Issue 4: Store-footprint efficiency
+
+| Control ID | Samples | Registry treatment |
+| --- | ---: | --- |
+| `store-footprint-unique-100000` | 3 fresh Stores per source/candidate | Storage evidence only |
+| `store-footprint-metadata-cardinality-100000` | 3 fresh Stores per source/candidate | Storage evidence only |
+| `store-footprint-large-object-500m` | 3 fresh Stores per source/candidate | Storage evidence only |
+
+The authoritative scope, environment, performance/verification separation,
+targets, and issue responsibilities are in [the v0.1.2 README](0.1.2/README.md).
+
 ## Planned later benchmark families
 
-- [v0.1.2](0.1.2/README.md) owns prepend/range-copy and online Workspace
-  capture. Initialization's directory scan remains a v0.1.1 measurement even
-  when the two paths share internals.
-- [v0.1.3](0.1.3/README.md) indexes one document per filesystem workload family
-  for one genesis Layer and one Branch. It owns deterministic tiered load,
-  positional randomness, same-count and count-changing work, exact CAS/CDC
-  deduplication, namespace mutations, links, and mixed workloads; it does not
-  own Add, multi-Layer Diff, conflicts, or repeated history scaling.
+- [v0.1.2](0.1.2/README.md) owns one benchmark-format workstream, one universal
+  edit implementation, the complete same-count and count-changing performance
+  families, and Store-footprint evidence.
+- [v0.1.3](0.1.3/README.md) owns eight remaining complete filesystem workload
+  families for one genesis Layer and one Branch. It reruns v0.1.2 families
+  unchanged and does not own Add, multi-Layer Diff, conflicts, or repeated
+  history scaling.
 - [v0.1.4](0.1.4/README.md) drafts multi-Layer and multi-Branch Commit history,
   Fork, Add, Diff, paged Query, conflict, resolution, head movement, historical
   reads, reopen, and storage-reuse coverage.

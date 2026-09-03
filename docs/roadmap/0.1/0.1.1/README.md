@@ -318,8 +318,7 @@ An incompatible change belongs in 0.2.0.
 
 ## Deferred to 0.1.2
 
-- [x] Prepend transfer optimization and extent-aware `copy_file_range`.
-- [x] Borrowed Workspace ranges.
+- [x] Universal Workspace regular-file edit engine and owner-side range semantic.
 - [x] Fragmented-write, sparse-growth, and broader mixed-edit resilience.
 
 Broad refactors, new incompatible adapter operations, other platforms,

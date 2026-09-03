@@ -99,7 +99,7 @@ and GitHub issue #6 define the execution request.
   another benchmark crate or add a dependency without measured necessity.
 - Keep the existing LayerFS payload campaign, scenario meanings, hard gates,
   `registered_total_ns`, and `run.sh` behavior unchanged.
-- Do not implement prepend, `copy_file_range`, borrowed ranges,
+- Do not implement universal Workspace regular-file editing,
   fragmented/sparse/mixed-edit work, or release publication. Those are outside
   issue #6.
 - Do not implement a production initialization or Commit fix before the

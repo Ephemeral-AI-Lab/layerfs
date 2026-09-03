@@ -1,7 +1,9 @@
 # Store footprint efficiency
 
-> **Status:** Proposed v0.1.2 measurement and admission workstream. Current
+> **Status:** Proposed v0.1.2 storage-evidence family: 3 controls, each measured
+> with 3 fresh Stores per unchanged baseline and retained candidate. Current
 > namespace evidence is provisional and is not a frozen v0.1.2 baseline.
+> Tracked by [GitHub issue #16](https://github.com/Ephemeral-AI-Lab/layerfs/issues/16).
 
 ## Problem statement
 
@@ -12,11 +14,11 @@ produced approximately:
 ```text
 500.0 MB logical file bytes
 542.9 MB unique canonical object bytes
-661.4 MB total SQLite Store growth
-422,000 object rows
+660,865,024 bytes total SQLite Store growth
+422,071 object rows
 ```
 
-That is approximately `1.086x` canonical amplification and `1.323x` durable
+That is approximately `1.086x` canonical amplification and `1.322x` durable
 Store amplification. An earlier fixture with generation-time metadata reached
 approximately 732.5 MB (`1.465x`), so fixture metadata cardinality materially
 changes the result. Neither sample is a v0.1.2 baseline: their fixture identity
@@ -51,13 +53,26 @@ Measure, explain, and minimize **total durable Store footprint** for the
 500,000,000-byte unique-content namespace control while preserving the released
 v0.1.x compatibility surface.
 
+Keep the family under the existing benchmark with one pure control-definition
+file and one runner:
+
+```text
+benchmark/fs-bench-pro/families/store_footprint.rs
+benchmark/fs-bench-pro/run-store-footprint.sh
+```
+
+The runner requires an explicit control unless `--all` is supplied. Its default
+development mode measures one selected control; exact reopen/census validation
+and full three-Store admission remain explicit modes defined by the
+[`fs-bench-pro` v0.1.2 format](fs-bench-pro-format.md).
+
 Use these decision targets:
 
 | Level | Total durable Store | Amplification | Meaning |
 | --- | ---: | ---: | --- |
 | v0.1.2 admission | at most 600 MB | at most `1.20x` | Patch-compatible layout or admission improvement worth retaining. |
-| Preferred | at most 560 MB | at most `1.12x` | Near the estimated canonical-preserving physical floor. |
-| Stretch | at most 550 MB | at most `1.10x` | Close-to-payload result with every persistent byte counted. |
+| Preferred | at most 590 MB | at most `1.18x` | Strong patch-compatible result above the preserved-schema lower marker. |
+| Stretch | at most 580 MB | at most `1.16x` | Near the preserved rowid-schema lower marker with every byte counted. |
 | Invalid target | exactly 500 MB | `1.00x` | Omits unavoidable canonical and index ownership for unique incompressible bytes. |
 
 The preferred and stretch targets do not authorize a Store-schema, page-size,
@@ -115,21 +130,22 @@ digest, mode, and mtime contract is versioned and frozen. Do not compare or
 pool historical rows that used different metadata semantics under the same
 profile name.
 
-The storage campaign needs three non-interchangeable controls:
+The storage family has three non-interchangeable controls:
 
-1. **Unique mixed-size control:** 100,000 files, 1,000 data directories,
+1. **`store-footprint-unique-100000`:** 100,000 files, 1,000 data directories,
    500,000,000 logical bytes, fully materialized path-derived content, and the
    frozen namespace metadata profile.
-2. **Metadata-cardinality control:** identical paths, sizes, and contents with
+2. **`store-footprint-metadata-cardinality-100000`:** identical paths, sizes, and contents with
    deterministic path-derived or bucketed mtimes. This prevents one uniform
    timestamp from becoming an unlabelled best-case dedup shortcut.
-3. **Large-object control:** the same logical byte budget concentrated into a
+3. **`store-footprint-large-object-500m`:** the same logical byte budget concentrated into a
    small file count. This separates SQLite BLOB/page layout from namespace row
    cardinality.
 
-The controls are storage diagnostics in the existing LayerFS benchmark
-environment. They do not enter `registered_total_ns`, replace the unique-content
-namespace performance row, or weaken exact FUSE reopen verification.
+The controls form one complete storage-evidence family in the existing LayerFS
+benchmark environment. They do not enter `registered_total_ns`, replace the
+unique-content namespace performance row, or weaken exact FUSE reopen
+verification.
 
 ## Required execution order
 
@@ -258,8 +274,12 @@ Classify each mechanism independently:
   mechanism purchases storage with unacceptable CPU, memory, I/O, latency, or
   correctness cost.
 
+The retained sample's canonical bytes, 32-byte ObjectIds, and measured primary-
+key index already total about 575.1 MB before row headers and B-tree slack.
+Targets below that marker are incompatible with the preserved rowid schema.
+
 v0.1.2 may complete this workstream with a measured `defer` or `reject`. It
-must not invent a patch-compatible implementation merely to claim the 550 MB
+must not invent a patch-compatible implementation merely to claim the 580 MB
 stretch target.
 
 ## Files to read
@@ -277,6 +297,7 @@ stretch target.
 - [Canonical object contract](../../../../crates/layerfs-content/src/object/canonical.rs)
 - [Object identity contract](../../../../crates/layerfs-content/src/object/id.rs)
 - [CDC profile](../../../../crates/layerfs-content/src/file/cdc/mod.rs)
+- [Retained terminal namespace report](../../../../benchmark-results/fs-bench-pro/namespace/v011-rc-terminal-all4-r001-20260903/report.md)
 
 ## Acceptance criteria
 
@@ -300,7 +321,7 @@ stretch target.
 - [ ] Initialization, localized Commit, and exact reopen regress no more than
   five percent; CPU, RSS, page cache, temporary bytes, and physical I/O satisfy
   the retained resource envelope.
-- [ ] No production v0.1.2 change alters the Store schema, required page size,
+- [ ] No Store-footprint candidate alters the Store schema, required page size,
   canonical format, CDC profile, identity, public API, or daemon/proxy contract.
 - [ ] Every incompatible but evidence-backed mechanism receives a focused
   minor-release handoff with retained commands, identities, measurements, and

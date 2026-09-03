@@ -121,5 +121,5 @@ separately.
 - [ ] Path throughput, fixed lifecycle, and 10/20-second family budgets pass
   without dropping a valid sample.
 - [ ] Sync/barrier remains passive evidence, not another scenario or family.
-- [ ] No repeated Commit, competing Branch, prepend, range-copy, or SDK-call
+- [ ] No repeated Commit, competing Branch, prepend, owner-side Workspace file-range edit, or SDK-call
   microbenchmark enters this family.

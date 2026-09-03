@@ -58,7 +58,7 @@ allowed.
 | --- | --- |
 | v0.1.0 | Frozen payload baseline: create, small edit, EDIT16, prepend, and read. |
 | v0.1.1 | Existing-directory initialization and namespace scaling through localized Commit and exact reopen. |
-| v0.1.2 | Prepend/range-copy, online Workspace capture, and total durable Store-footprint efficiency. |
+| v0.1.2 | Adapt `fs-bench-pro`, implement the universal edit engine, complete same-count and count-changing Docker/FUSE performance families, and measure total durable Store footprint. |
 | v0.1.3 | Diverse, tiered filesystem workloads plus exact CAS/CDC deduplication evidence against one genesis Layer and one Branch. |
 | v0.1.4 | Multi-Layer and multi-Branch Commit history, Fork, Add, Diff, conflict, and query scaling. |
 
@@ -75,8 +75,10 @@ sample rules, resource envelope, and result schema must not change in place.
 
 Each release adds its rows and reruns all earlier registered rows. If a harness
 defect requires a semantic correction, retain and deprecate the old row, add a
-new scenario ID or schema version, and run both once when practical. Freeze
-workloads and evidence—not one machine's observed latency as a universal value.
+new scenario ID or schema version, and run both once when practical. A later
+versioned campaign may change repetition count but cannot pool with or replace
+the earlier distribution. Freeze workloads and evidence—not one machine's
+observed latency as a universal value.
 
 ## Compatibility boundary
 

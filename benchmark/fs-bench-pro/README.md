@@ -17,6 +17,27 @@ sections 17–19.
 - The canonical scenario and status table is the
   [0.1.x benchmark matrix](../../docs/roadmap/0.1/benchmarking.md).
 
+## Proposed v0.1.2 family format
+
+The [v0.1.2 harness contract](../../docs/roadmap/0.1/0.1.2/fs-bench-pro-format.md)
+keeps all new work in this crate and proposes:
+
+```text
+families/init_namespace.rs           + run-namespace.sh
+families/edit_same_count.rs      + run-edit-same-count.sh
+families/edit_count_changing.rs  + run-edit-count-changing.sh
+families/store_footprint.rs       + run-store-footprint.sh
+```
+
+Each runner defaults to one explicit case/seed in performance-only mode. Full
+digest/root/reopen and adversarial proofs are separate `verify`/`admission`
+modes and never enter performance timing. `run-namespace.sh` is already the
+v0.1.1 `init_namespace` family runner; issue 0 only proposes extracting its pure
+definitions into `families/init_namespace.rs` and adding descriptive CLI/display
+aliases without renaming historical raw IDs. Other files above remain proposed
+until their v0.1.2 issues are implemented; existing `run.sh`,
+`run-namespace.sh`, and raw schemas keep their frozen meanings.
+
 The benchmark contract also carries the canonical **Problem statement**,
 **Goal**, **Files to read**, and **Acceptance criteria** for the v0.1.1
 namespace work; this README records harness usage and implementation status.

@@ -1025,5 +1025,5 @@ ceiling, persistent background service, larger cache as a latency fix, schema
 migration, canonical inlining, physical object packing, packed fixture,
 new FUSE/daemon/proxy request or response tag, materialization substitution,
 external namespace comparison, prepend,
-`copy_file_range`, borrowed ranges, sparse/mixed-edit work, release publication,
+universal Workspace regular-file editing, sparse/mixed-edit work, release publication,
 or silent reinterpretation of namespace-v1 evidence.
