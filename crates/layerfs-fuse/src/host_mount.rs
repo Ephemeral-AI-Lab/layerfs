@@ -8,6 +8,17 @@ pub struct HostMount {
 }
 
 impl HostMount {
+    pub fn notifier(&self) -> std::io::Result<fuser::Notifier> {
+        self.session
+            .as_ref()
+            .map(BackgroundSession::notifier)
+            .ok_or_else(|| std::io::Error::other("LayerFS mount ended"))
+    }
+
+    pub fn invalidate_file(&self, node: crate::NodeId) -> std::io::Result<()> {
+        self.notifier()?.inval_inode(fuser::INodeNo(node.0), 0, 0)
+    }
+
     pub fn unmount(&mut self) -> std::io::Result<()> {
         if let Some(session) = self.session.take() {
             if session.umount_and_join().is_ok() {

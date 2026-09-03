@@ -389,6 +389,33 @@ fn discard_stage(stage: &Path) {
     }
 }
 
+pub(crate) fn refresh_file(
+    worker: &Arc<WorkspaceWorker>,
+    node: NodeId,
+    daemon: Option<&crate::daemon::DaemonOwner>,
+) -> WorkspaceResult<()> {
+    {
+        let handle = worker
+            .projection_handle
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        match handle.as_ref() {
+            Some(ProjectionHandle::Materialized(_)) | None => {
+                drop(handle);
+                return refresh(worker, daemon);
+            }
+            Some(ProjectionHandle::Docker(projection)) => {
+                projection.invalidate_file(layerfs_fuse::NodeId(node.0))?;
+            }
+            #[cfg(all(target_os = "linux", feature = "host-fuse"))]
+            Some(ProjectionHandle::Fuse(mount)) => {
+                mount.invalidate_file(layerfs_fuse::NodeId(node.0))?;
+            }
+        }
+    }
+    resume(worker)
+}
+
 pub(crate) fn refresh(
     worker: &Arc<WorkspaceWorker>,
     daemon: Option<&crate::daemon::DaemonOwner>,
