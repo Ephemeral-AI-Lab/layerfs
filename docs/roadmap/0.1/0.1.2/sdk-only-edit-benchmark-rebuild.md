@@ -971,6 +971,25 @@ not an operation-latency or calibration failure. Do not overwrite or reuse it.
 
 ## Performance and verification separation
 
+**User-approved execution order, 2026-09-04:** collect performance for all three
+families first (`--stage performance`), review their complete elapsed-time
+tables, and only then run each saved family's `--stage verification`. The
+verification stage validates the sealed performance collection and its original
+preflight/qualification/identity, does not rerun performance or regenerate its
+oracle, and binds all original performance row IDs. Performance completion is
+not final admission; a numerical no-go is retained while independent final
+verification may still collect its proof. Do not run family A's full verifier
+before family B's performance. Qualification is input/oracle preparation, not
+the full byte/reopen/materialization verifier.
+
+After complete performance and verification, generate the unpublished draft
+tables, commit documentation/evidence, then run the complete repository gate
+once on that documentation-complete checkout, binding the measured candidate
+through the unchanged-source documentation bridge. This one final gate may
+serve both repository and documentation-gate selectors. Final terminal checking
+still requires that gate, all proofs, and the evidence-only final bridge. A
+draft table generated before this gate is not issue-closure evidence.
+
 Performance emits timings, counters, resource data, cleanup status, and:
 
 ```text
