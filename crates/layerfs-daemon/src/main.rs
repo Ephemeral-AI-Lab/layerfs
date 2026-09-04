@@ -13,6 +13,7 @@ mod linux {
     use nix::sys::signal::{killpg, Signal};
     use nix::sys::socket::{getsockopt, sockopt::PeerCredentials};
     use nix::sys::stat::{umask, Mode};
+    use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
     use nix::unistd::Pid;
     use std::collections::BTreeMap;
     use std::ffi::{OsStr, OsString};
@@ -267,6 +268,9 @@ mod linux {
     }
 
     pub fn run() -> io::Result<()> {
+        // PID 1 already adopts orphans; standalone daemons need the same owned
+        // descendant adoption so forced group cleanup can collect their statuses.
+        nix::sys::prctl::set_child_subreaper(true).map_err(io::Error::other)?;
         umask(Mode::from_bits_truncate(0o077));
         let tcp = std::env::var("LAYERFS_DAEMON_TCP_LISTEN").ok();
         prepare_runtime(tcp.is_none())?;
@@ -1173,14 +1177,16 @@ mod linux {
             Ok(reader) => reader,
             Err(_) => {
                 termination.terminate(pgid, 2);
-                let _ = child.wait();
+                let status = child.wait();
+                let _ = finish_terminated_group(pgid, &termination, status);
                 return;
             }
         };
         let writer = Arc::new(Mutex::new(stream));
         if write_locked(&writer, Kind::Started, &[]).is_err() {
             termination.terminate(pgid, 2);
-            let _ = child.wait();
+            let status = child.wait();
+            let _ = finish_terminated_group(pgid, &termination, status);
             return;
         }
         let stop_thread = watch_exec(reader, pgid, termination.clone());
@@ -1216,6 +1222,7 @@ mod linux {
         if let Some(thread) = stderr {
             let _ = thread.join();
         }
+        let status = finish_terminated_group(pgid, &termination, status);
         let drain_ns = elapsed_ns(drain_started);
         let reason = termination.reason.load(Ordering::Acquire);
         match (status, reason) {
@@ -1343,7 +1350,8 @@ mod linux {
         let pgid = child.id() as i32;
         let Some(stdout) = child.stdout.take() else {
             termination.terminate(pgid, 2);
-            let _ = child.wait();
+            let status = child.wait();
+            let _ = finish_terminated_group(pgid, &termination, status);
             let _ = cleanup_mount(&root, created_root);
             send_error(&mut stream, RemoteError::InfrastructureLost);
             return;
@@ -1353,7 +1361,8 @@ mod linux {
             Ok(reader) => reader,
             Err(_) => {
                 termination.terminate(pgid, 2);
-                let _ = child.wait();
+                let status = child.wait();
+                let _ = finish_terminated_group(pgid, &termination, status);
                 let _ = cleanup_mount(&root, created_root);
                 if let Some(stderr) = stderr {
                     let _ = stderr.join();
@@ -1400,6 +1409,9 @@ mod linux {
         let Some(mountinfo) = mountinfo else {
             termination.terminate(pgid, 2);
             wait_mount_exit(&receive, &mut status);
+            if let Some(direct_status) = status.take() {
+                let _ = finish_terminated_group(pgid, &termination, direct_status);
+            }
             terminate_workspace_execs(&shared, request.workspace_id);
             let _ = cleanup_mount(&root, created_root);
             termination.finished.store(true, Ordering::Release);
@@ -1432,6 +1444,9 @@ mod linux {
         if !ready || protocol::write_frame(&mut stream, Kind::WorkspaceReady, &mountinfo).is_err() {
             termination.terminate(pgid, 2);
             wait_mount_exit(&receive, &mut status);
+            if let Some(direct_status) = status.take() {
+                let _ = finish_terminated_group(pgid, &termination, direct_status);
+            }
             terminate_workspace_execs(&shared, request.workspace_id);
             let _ = cleanup_mount(&root, created_root);
             termination.finished.store(true, Ordering::Release);
@@ -1479,6 +1494,9 @@ mod linux {
         }
         terminate_workspace_execs(&shared, request.workspace_id);
         let cleanup = cleanup_mount(&root, created_root);
+        if let Some(direct_status) = status.take() {
+            status = Some(finish_terminated_group(pgid, &termination, direct_status));
+        }
         let status_success = status
             .as_ref()
             .is_some_and(|status| status.as_ref().is_ok_and(|status| status.success()));
@@ -1820,6 +1838,43 @@ mod linux {
         output
     }
 
+    fn finish_terminated_group(
+        pgid: i32,
+        termination: &Termination,
+        status: io::Result<std::process::ExitStatus>,
+    ) -> io::Result<std::process::ExitStatus> {
+        // The direct Child::wait must precede any group waitpid, preserving its
+        // exact exit receipt. Normal executions/clean mount End do no new wait.
+        if termination.reason.load(Ordering::Acquire) == 0 {
+            return status;
+        }
+        let status = status?;
+        if let Err(error) = reap_terminated_descendants(pgid) {
+            eprintln!("layerfs-daemon: descendant cleanup failed pgid={pgid} direct_status={status:?}: {error}");
+            return Err(error);
+        }
+        Ok(status)
+    }
+
+    fn reap_terminated_descendants(pgid: i32) -> io::Result<()> {
+        if pgid <= 0 { return Err(protocol::invalid("owned process group")); }
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            if Instant::now() >= deadline {
+                return Err(io::Error::new(io::ErrorKind::TimedOut,"owned process-group descendants did not drain"));
+            }
+            // Only this already-terminated owned group, never waitpid(-1).
+            match waitpid(Pid::from_raw(-pgid), Some(WaitPidFlag::WNOHANG)) {
+                Ok(WaitStatus::Exited(..) | WaitStatus::Signaled(..)) => continue,
+                Err(nix::errno::Errno::ECHILD) => return Ok(()),
+                Err(nix::errno::Errno::EINTR) => continue,
+                Err(error) => return Err(io::Error::other(error)),
+                Ok(_) => {}
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
     fn terminate_group(pgid: i32) {
         let pgid = Pid::from_raw(pgid);
         let _ = killpg(pgid, Signal::SIGTERM);
@@ -1881,6 +1936,51 @@ mod linux {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn forced_group_cleanup_reaps_descendants_without_stealing_status() {
+            const CHILD: &str = "LAYERFS_DAEMON_GROUP_REAP_TEST_CHILD";
+            if std::env::var_os(CHILD).is_none() {
+                let output = Command::new(std::env::current_exe().unwrap())
+                    .args(["linux::tests::forced_group_cleanup_reaps_descendants_without_stealing_status", "--exact", "--nocapture"])
+                    .env(CHILD,"1").output().unwrap();
+                print!("{}",String::from_utf8_lossy(&output.stdout));
+                assert!(output.status.success(),"{}",String::from_utf8_lossy(&output.stderr));
+                return;
+            }
+            // Isolate process-wide orphan adoption from concurrent unit tests.
+            nix::sys::prctl::set_child_subreaper(true).unwrap();
+            let mut unrelated = Command::new("/bin/sh").args(["-c","exit 23"])
+                .process_group(0).spawn().unwrap();
+            let unrelated_pid = Pid::from_raw(unrelated.id() as i32);
+            assert!(matches!(nix::sys::wait::waitid(nix::sys::wait::Id::Pid(unrelated_pid),
+                WaitPidFlag::WEXITED | WaitPidFlag::WNOWAIT).unwrap(),WaitStatus::Exited(pid,23) if pid==unrelated_pid));
+            // exec replaces the shell: the direct sleep never waits for its child.
+            let mut leader = Command::new("/bin/sh")
+                .args(["-c","sleep 30 & echo $!; exec sleep 30"])
+                .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null())
+                .process_group(0).spawn().unwrap();
+            let mut output = BufReader::new(leader.stdout.take().unwrap());
+            let mut child_pid = String::new();
+            output.read_line(&mut child_pid).unwrap();
+            let child_pid: u32 = child_pid.trim().parse().unwrap();
+            let pgid = leader.id() as i32;
+            let termination = Termination::new();
+            termination.terminate(pgid,1);
+            let direct = leader.wait().unwrap();
+            let direct_code = direct.code();
+            let direct_signal = direct.signal();
+            let adopted = fs::read_to_string(format!("/proc/{child_pid}/status")).unwrap();
+            assert!(adopted.lines().any(|line|line.starts_with("State:") && line.contains('Z')),
+                "fixture must expose the killed, unreaped descendant");
+            assert!(adopted.lines().any(|line|line==format!("PPid:\t{}",std::process::id())),
+                "descendant must be adopted by the isolated subreaper");
+            let retained = finish_terminated_group(pgid,&termination,Ok(direct)).unwrap();
+            assert_eq!(retained.code(),direct_code);
+            assert_eq!(retained.signal(),direct_signal);
+            assert!(!Path::new(&format!("/proc/{child_pid}")).exists(),"owned descendant was not reaped");
+            assert_eq!(unrelated.wait().unwrap().code(),Some(23),"another group's direct status was stolen");
+        }
 
         #[test]
         fn workspace_closed_waits_for_watcher_and_releases_mount_reservation() {
