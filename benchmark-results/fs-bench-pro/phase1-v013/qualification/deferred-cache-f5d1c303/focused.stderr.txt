@@ -1,0 +1,3 @@
+   Compiling layerfs-fuse v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+    Finished `release` profile [optimized] target(s) in 2.29s
+     Running unittests src/lib.rs (target/release/deps/layerfs_fuse-2f31300e58061e6d)

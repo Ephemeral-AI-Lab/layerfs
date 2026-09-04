@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "cargo",
+    "test",
+    "--locked",
+    "--release",
+    "-p",
+    "layerfs-fuse",
+    "--no-default-features",
+    "--lib",
+    "proxy_client::tests::deferred_write_error_invalidates_optimistic_observations",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "revision": "f5d1c3036eb501d415031fb3b4b625be423c346f",
+  "exit_code": 0,
+  "elapsed_ns": 4643161250
+}
