@@ -2,7 +2,7 @@
 """Exploratory container-only frontier A/B: create and delete, no Phase 1 lock."""
 import hashlib, json, pathlib, subprocess, tarfile, time, tomllib, uuid
 ROOT=pathlib.Path(__file__).resolve().parents[2]
-OUT=ROOT/'investigations/bulk-create/evidence/container-dense-delete-10-s1'
+OUT=ROOT/'investigations/bulk-create/evidence/container-dense-delete-10-s1-r2'
 BASE='sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e'
 PREPARED=ROOT/'investigations/bulk-create/evidence/colocated-r1/prepared'
 OUT.mkdir();commands=[];active=None
@@ -27,7 +27,7 @@ try:
     shutil.copytree(prior/'delete-prepared',OUT/'delete-prepared')
     run('archive',['git','archive','--format=tar','--output',OUT/'source.tar',source,'Cargo.toml','Cargo.lock','crates','tools','benchmark/fs-bench-pro'])
     start('build')
-    run('reuse-private-build',['docker','cp',str(OUT.parent/'container-frontier-10-s1-r2/failed-state')+'/.',active+':/data'])
+    run('reuse-private-build',['docker','cp',str(OUT.parent/'container-dense-delete-10-s1/failed-state')+'/.',active+':/data'])
     run('copy-new-source',['docker','cp',OUT/'source.tar',active+':/data/new-source.tar'])
     run('build',['docker','exec','-e','CARGO_HOME=/data/cargo','-e','CARGO_TARGET_DIR=/data/target','-e','CARGO_BUILD_JOBS=2',active,'sh','-c','tar -xf /data/new-source.tar -C /data/source && cd /data/source && cargo clean -p layerfs-workspace -p fs-benchmark-pro && cargo build --offline --locked --release -p fs-benchmark-pro'],1200)
     run('focused-regression',['docker','exec','-e','CARGO_HOME=/data/cargo','-e','CARGO_TARGET_DIR=/data/target','-e','CARGO_BUILD_JOBS=2','-e','LAYERFS_EXPERIMENT_DENSE_DELETE=1',active,'sh','-c','cd /data/source && cargo test --offline --locked -p layerfs-workspace --features test-instrumentation --lib dense_delete_preserves_aliases_open_unlinked_and_old_root'],1200)

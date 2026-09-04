@@ -397,12 +397,12 @@ impl Workspace {
                     let id = inode_table_lookup(&objects, self.base_inodes, inode,
                         &mut InodeTableCounters::default())?
                         .ok_or(StorageError::Integrity("survivor inode"))?;
-                    let mut record = objects.with_authenticated_canonical(id, decode_inode_record)?;
+                    let mut record = ObjectRead::with_authenticated_canonical(&objects, id, decode_inode_record)?;
                     let node = if inode == root_inode { Some(ROOT) }
                         else { self.canonical_nodes.get(&inode).copied() };
                     if let Some(node) = node {
                         let attr = self.attr(node)?;
-                        let metadata = portable_metadata(&objects, record.metadata_root, record.kind)?;
+                        let metadata = portable_metadata(&CoreReader(&self.reader), record.metadata_root, record.kind)?;
                         if metadata.permission_mode != attr.mode
                             || metadata.mtime_seconds != attr.mtime_seconds
                             || metadata.mtime_nanoseconds != attr.mtime_nanoseconds {
@@ -1362,7 +1362,7 @@ impl FrontierInodes {
             &mut InodeTableCounters::default(),
         )?
         .ok_or(StorageError::Integrity("frontier inode record"))?;
-        Ok(objects.with_authenticated_canonical(id, decode_inode_record)?)
+        Ok(ObjectRead::with_authenticated_canonical(objects, id, decode_inode_record)?)
     }
 
     fn set(
