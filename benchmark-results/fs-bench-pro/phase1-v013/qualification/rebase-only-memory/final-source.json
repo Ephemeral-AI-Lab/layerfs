@@ -1,0 +1,7 @@
+{
+  "schema_sha256": "827c18cc63eeb5c1df0decb9b2e35291c0de18e2222eed0f07c776382c0af950",
+  "tested_schema_sha256": "7ccdd69131129e5b9155972185803dc379d291ddb7e8b7fd62ef2f6b0f8a5511",
+  "post_test_delta": "Removed unnecessary mut qualifier on focused-test local connection only; runtime source unchanged. Passing regression not repeated.",
+  "lifecycle_restored_sha256": "91e65bf1ab13f452a15dab7e6934e1256a39f508a39efbc0b2a00c718ad0c2ac",
+  "lifecycle_matches_committed_head": true
+}

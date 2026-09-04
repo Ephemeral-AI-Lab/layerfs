@@ -1,0 +1,13 @@
+{
+  "base_commit": "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c",
+  "lifecycle_sha256": "ad69eaf027e3e2f0bbb133431d21a033346b88fafedad79fd2a75e3460026c5a",
+  "schema_sha256": "bf21e1b0f4d20f0752c3baa180e83b2cf842a0b0f4e97244d7fbf80c141b1daf",
+  "schema_delta": "none; committed base",
+  "source_store": "benchmark-results/fs-bench-pro/phase1-v013/scratch/workspace-dense-rewrite-500-s2-performance-d648880f3f73/store.sqlite",
+  "source_store_size": 1322319872,
+  "source_store_inode": 759782537,
+  "local_clone_inode": 759906240,
+  "clone_size": 1322319872,
+  "clone_policy": "APFS cp -c, distinct inode; local only; do not stage SQLite clone",
+  "original_failed_attempt": "workspace-dense-rewrite-500-s2-performance-d648880f3f73"
+}

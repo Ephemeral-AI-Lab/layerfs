@@ -14,7 +14,7 @@ pub const SQLITE_PAGE_CACHE_KIB: i64 = 32 * 1024;
 
 #[cfg(feature = "test-instrumentation")]
 thread_local! {
-    static SQL_TRACE: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
+    static SQL_TRACE: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 #[cfg(debug_assertions)]
@@ -25,23 +25,18 @@ thread_local! {
 #[cfg(feature = "test-instrumentation")]
 fn trace_sql(event: rusqlite::trace::TraceEvent<'_>) {
     if let rusqlite::trace::TraceEvent::Stmt(_, sql) = event {
-        SQL_TRACE.with(|trace| {
-            if let Some(history) = trace.borrow_mut().as_mut() {
-                history.push(sql.to_owned());
-            }
-        });
+        SQL_TRACE.with(|trace| trace.borrow_mut().push(sql.to_owned()));
     }
 }
 
 #[cfg(feature = "test-instrumentation")]
 pub fn reset_sql_trace() {
-    // Explicit test opt-in. Feature-enabled runtimes retain no SQL history by default.
-    SQL_TRACE.with(|trace| *trace.borrow_mut() = Some(Vec::new()));
+    SQL_TRACE.with(|trace| trace.borrow_mut().clear());
 }
 
 #[cfg(feature = "test-instrumentation")]
 pub fn sql_trace() -> Vec<String> {
-    SQL_TRACE.with(|trace| trace.borrow().clone().unwrap_or_default())
+    SQL_TRACE.with(|trace| trace.borrow().clone())
 }
 
 #[cfg(debug_assertions)]
@@ -380,53 +375,6 @@ pub(crate) fn appended(path: &Path, suffix: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[cfg(feature = "test-instrumentation")]
-    #[test]
-    fn sql_history_is_opt_in_and_reset_preserves_explicit_contract() {
-        assert!(SQL_TRACE.with(|trace| trace.borrow().is_none()));
-        let connection = Connection::open_in_memory().unwrap();
-        connection.trace_v2(
-            rusqlite::trace::TraceEventCodes::SQLITE_TRACE_STMT,
-            Some(trace_sql),
-        );
-        for value in 0..1000_i64 {
-            assert_eq!(
-                connection
-                    .query_row("SELECT ?1", [value], |row| row.get::<_, i64>(0))
-                    .unwrap(),
-                value
-            );
-        }
-        assert!(sql_trace().is_empty());
-        assert!(SQL_TRACE.with(|trace| trace.borrow().is_none()));
-        reset_sql_trace();
-        connection
-            .execute_batch("CREATE TABLE example(value INTEGER)")
-            .unwrap();
-        assert_eq!(sql_trace().len(), 1);
-        assert!(sql_trace()[0].contains("CREATE TABLE example"));
-        connection
-            .execute("INSERT INTO example VALUES (?1)", [7])
-            .unwrap();
-        assert_eq!(sql_trace().len(), 2); // Reading history does not consume it.
-        reset_sql_trace();
-        assert!(sql_trace().is_empty());
-        assert_eq!(
-            connection
-                .query_row("SELECT value FROM example", [], |row| row.get::<_, i64>(0))
-                .unwrap(),
-            7
-        );
-        assert_eq!(sql_trace().len(), 1);
-        SQL_TRACE.with(|trace| {
-            trace.borrow_mut().take();
-        });
-        connection
-            .execute("INSERT INTO example VALUES (?1)", [8])
-            .unwrap();
-        assert!(SQL_TRACE.with(|trace| trace.borrow().is_none()));
-    }
 
     #[test]
     fn every_owned_connection_uses_the_frozen_runtime_pragmas() {

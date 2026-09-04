@@ -1,0 +1,20 @@
+{
+  "source_sha256": "ad69eaf027e3e2f0bbb133431d21a033346b88fafedad79fd2a75e3460026c5a",
+  "schema_sha256": "7ccdd69131129e5b9155972185803dc379d291ddb7e8b7fd62ef2f6b0f8a5511",
+  "build_command": [
+    "cargo",
+    "test",
+    "--release",
+    "-p",
+    "layerfs-workspace",
+    "--no-default-features",
+    "--features",
+    "test-instrumentation",
+    "--lib",
+    "--no-run",
+    "--message-format=json"
+  ],
+  "runtime_deadline_seconds": 180,
+  "source_store": "workspace-dense-rewrite-500-s2-performance-d648880f3f73",
+  "memory_tools": "heap -s --noContent and vmmap -summary at after-load/after-rebase only"
+}

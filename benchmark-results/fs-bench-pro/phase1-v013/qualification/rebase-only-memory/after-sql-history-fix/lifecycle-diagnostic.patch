@@ -1,0 +1,177 @@
+diff --git a/crates/layerfs-workspace/src/lifecycle.rs b/crates/layerfs-workspace/src/lifecycle.rs
+index 8e9b4969..7fb521a4 100644
+--- a/crates/layerfs-workspace/src/lifecycle.rs
++++ b/crates/layerfs-workspace/src/lifecycle.rs
+@@ -149,6 +149,10 @@ impl Workspace {
+         let mut retained_spool_bytes = 0_u64;
+         let mut retained_inline_bytes = 0_u64;
+         let mut retained_piece_allocation_bytes = 0_u64;
++        #[cfg(all(test, target_os = "macos"))]
++        let mut diagnostic_nodes = 0_usize;
++        #[cfg(all(test, target_os = "macos"))]
++        rebase_memory_checkpoint("rebase-start", self.nodes.len(), 0, committed.nodes.len())?;
+         // Keep the original Workspace intact until every fallible validation
+         // succeeds, without cloning its entire node/path/spool graph up front.
+         for (&id, old) in &self.nodes {
+@@ -242,7 +246,26 @@ impl Workspace {
+                 obsolete_spools.push((id, spool.clone()));
+             }
+             nodes.insert(id, rebased);
++            #[cfg(all(test, target_os = "macos"))]
++            {
++                diagnostic_nodes += 1;
++                if diagnostic_nodes % 10000 == 0 {
++                    rebase_memory_checkpoint(
++                        "rebase-progress",
++                        self.nodes.len(),
++                        nodes.len(),
++                        committed.nodes.len(),
++                    )?;
++                }
++            }
+         }
++        #[cfg(all(test, target_os = "macos"))]
++        rebase_memory_checkpoint(
++            "rebase-validated",
++            self.nodes.len(),
++            nodes.len(),
++            committed.nodes.len(),
++        )?;
+         self.open_spools
+             .retain(|node, _| retained_spool_nodes.contains(node));
+         for (node, spool) in obsolete_spools {
+@@ -1025,6 +1048,63 @@ fn summary(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<WorkspaceSummary> {
+     })
+ }
+ 
++#[cfg(all(test, target_os = "macos"))]
++fn rebase_memory_checkpoint(
++    phase: &str,
++    old_nodes: usize,
++    new_nodes: usize,
++    staged_nodes: usize,
++) -> Result<()> {
++    let Ok(root) = std::env::var("LAYERFS_REBASE_DIAGNOSTIC_ROOT") else {
++        return Ok(());
++    };
++    let output = std::process::Command::new("/bin/ps")
++        .args(["-p", &std::process::id().to_string(), "-o", "rss="])
++        .output()?;
++    if !output.status.success() {
++        return Err(StorageError::Integrity("diagnostic ps failed"));
++    }
++    let rss = String::from_utf8_lossy(&output.stdout)
++        .trim()
++        .parse::<u64>()
++        .map_err(|_| StorageError::Integrity("diagnostic RSS"))?
++        * 1024;
++    static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
++    let elapsed = START.get_or_init(Instant::now).elapsed().as_nanos();
++    use std::io::Write;
++    let mut file = std::fs::OpenOptions::new()
++        .create(true)
++        .append(true)
++        .open(std::path::Path::new(&root).join("memory.jsonl"))?;
++    writeln!(file, "{{\"phase\":\"{phase}\",\"pid\":{},\"elapsed_ns\":{elapsed},\"old_nodes\":{old_nodes},\"new_nodes\":{new_nodes},\"staged_nodes\":{staged_nodes},\"rss_bytes\":{rss}}}", std::process::id())?;
++    file.flush()?;
++    if matches!(phase, "after-load" | "after-rebase") {
++        for (tool, args) in [
++            ("vmmap", vec!["-summary"]),
++            ("heap", vec!["-s", "--noContent"]),
++        ] {
++            let output = std::process::Command::new(format!("/usr/bin/{tool}"))
++                .args(args)
++                .arg(std::process::id().to_string())
++                .output()?;
++            std::fs::write(
++                std::path::Path::new(&root).join(format!("{phase}-{tool}.txt")),
++                &output.stdout,
++            )?;
++            std::fs::write(
++                std::path::Path::new(&root).join(format!("{phase}-{tool}.stderr.txt")),
++                &output.stderr,
++            )?;
++            if !output.status.success() {
++                return Err(StorageError::Integrity(
++                    "diagnostic native memory tool failed",
++                ));
++            }
++        }
++    }
++    Ok(())
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -1095,6 +1175,70 @@ mod tests {
+         })
+     }
+ 
++    #[cfg(target_os = "macos")]
++    #[test]
++    #[ignore = "Explicit retained-Store diagnostic; no workload or preparation"]
++    fn diagnose_rebase_retained_committed_store() {
++        let root = std::path::PathBuf::from(
++            std::env::var("LAYERFS_REBASE_DIAGNOSTIC_ROOT").expect("diagnostic root"),
++        );
++        rebase_memory_checkpoint("before-open", 0, 0, 0).unwrap();
++        let store = LayerStackStore::connect(root.join("store.sqlite")).unwrap();
++        let branch = std::fs::read_to_string(root.join("branch-id"))
++            .unwrap()
++            .trim()
++            .parse()
++            .unwrap();
++        let mut workspace = Workspace::open(store.clone(), branch, root.join("spool")).unwrap();
++        rebase_memory_checkpoint("after-open", workspace.nodes.len(), 0, 0).unwrap();
++        let wide = workspace.lookup(crate::ROOT, b"wide").unwrap().node;
++        let regular = workspace.lookup(crate::ROOT, b"regular").unwrap().node;
++        let mut spine = workspace.lookup(crate::ROOT, b"spine").unwrap().node;
++        for depth in 1..=128 {
++            spine = workspace
++                .lookup(spine, format!("d{depth:03}").as_bytes())
++                .unwrap()
++                .node;
++        }
++        let mut loaded = 0;
++        for shard in 0..500 {
++            for ordinal in 0..64 {
++                workspace
++                    .lookup(wide, format!("s{shard:03}-f{ordinal:03}.dat").as_bytes())
++                    .unwrap();
++                loaded += 1;
++            }
++            let directory = workspace
++                .lookup(regular, format!("s{shard:03}").as_bytes())
++                .unwrap()
++                .node;
++            for ordinal in 64..199 {
++                workspace
++                    .lookup(directory, format!("f{ordinal:03}.dat").as_bytes())
++                    .unwrap();
++                loaded += 1;
++            }
++            workspace
++                .lookup(spine, format!("s{shard:03}.dat").as_bytes())
++                .unwrap();
++            loaded += 1;
++            if loaded % 10000 == 0 {
++                rebase_memory_checkpoint("load-progress", workspace.nodes.len(), 0, 0).unwrap();
++            }
++        }
++        assert_eq!(loaded, 100000);
++        rebase_memory_checkpoint("after-load", workspace.nodes.len(), 0, 0).unwrap();
++        workspace
++            .rebase_committed(CommitOutcome::UpToDate {
++                root_id: workspace.base_root,
++            })
++            .unwrap();
++        rebase_memory_checkpoint("after-rebase", workspace.nodes.len(), 0, 0).unwrap();
++        drop(workspace);
++        drop(store);
++        rebase_memory_checkpoint("after-drop", 0, 0, 0).unwrap();
++    }
++
+     #[test]
+     fn rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools() {
+         let (root, workspaces, branch, store) = fixture("streamed-rebase");

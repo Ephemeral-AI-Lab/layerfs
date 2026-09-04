@@ -385,7 +385,7 @@ mod tests {
     #[test]
     fn sql_history_is_opt_in_and_reset_preserves_explicit_contract() {
         assert!(SQL_TRACE.with(|trace| trace.borrow().is_none()));
-        let connection = Connection::open_in_memory().unwrap();
+        let mut connection = Connection::open_in_memory().unwrap();
         connection.trace_v2(
             rusqlite::trace::TraceEventCodes::SQLITE_TRACE_STMT,
             Some(trace_sql),

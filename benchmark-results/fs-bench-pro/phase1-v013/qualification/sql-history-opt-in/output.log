@@ -1,0 +1,20 @@
+   Compiling layerfs-layerstack-store v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-layerstack-store)
+warning: variable does not need to be mutable
+   --> crates/layerfs-layerstack-store/src/schema.rs:388:13
+    |
+388 |         let mut connection = Connection::open_in_memory().unwrap();
+    |             ----^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `layerfs-layerstack-store` (lib test) generated 1 warning (run `cargo fix --lib -p layerfs-layerstack-store --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.88s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_layerstack_store-33cdb00beeff0085)
+
+running 1 test
+test schema::tests::sql_history_is_opt_in_and_reset_preserves_explicit_contract ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.01s
+
