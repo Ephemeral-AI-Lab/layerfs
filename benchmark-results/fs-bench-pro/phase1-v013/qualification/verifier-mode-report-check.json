@@ -1,0 +1,10 @@
+{
+  "status": "pass",
+  "generator_sha256": "cdedd8b5100f9e0c1aa0b4c0bd2f36dc656aa3e75584b8b45ea0d2dd41b829be",
+  "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/tiny-bulk-delete-500-s1-verify-4ed93a7acfd4",
+  "checks": [
+    "actual verify-mode receipt accepted with its declared verifier flag",
+    "same receipt rejected in performance mode"
+  ],
+  "product_reruns": 0
+}

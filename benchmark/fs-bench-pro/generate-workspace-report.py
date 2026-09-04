@@ -306,7 +306,7 @@ def validate_resources(directory, outcome, case, records, successful, issues, vi
         operations = operation_rows(records, issues)
         required_scope = sum(number(row.get("elapsed_ns"), "phase elapsed_ns") for row in records if row["kind"] == "phase")
         required_scope += sum(row["service_ns"] + row["queue_ns"] for row in operations if row.get("outcome") == "failed" or row.get("family") == "workspace.end")
-        failed_exec_ns = failed_execution(records, case, issues)
+        failed_exec_ns = failed_execution(records, case, issues, outcome["mode"] == "verify")
         if failed_exec_ns is not None:
             required_scope += failed_exec_ns
         require(required_scope > 0, "failed attempt lacks observed reached-call duration", issues)
@@ -406,7 +406,7 @@ def expected_calls(case):
     return {"workspace.create": 1, "workspace.exec": execs, "workspace.output": execs, "workspace.file_range_edit": edits, "workspace.commit": steps, "workspace.end": 1, "query": 1}
 
 
-def validate_timing(records, case, issues):
+def validate_timing(records, case, issues, verification=False):
     for row in records:
         if row["kind"] != "phase":
             continue
@@ -449,7 +449,7 @@ def validate_timing(records, case, issues):
                 require(workload.get(key) == wanted, f"case work cardinality {key}: expected {wanted}, observed {workload.get(key)}", issues)
             if not case["family_id"].startswith("dedup_"):
                 require(workload.get("workload_status") == "pass" and workload.get("scenario_id") == case["scenario_id"], "ordinary workload identity/status mismatch", issues)
-                require(all(workload.get(key) == 0 for key in ("benchmark_verifier_count", "benchmark_reopen_count", "benchmark_injection_count")), "ordinary workload performance purity mismatch", issues)
+                require(workload.get("benchmark_verifier_count") == int(verification) and all(workload.get(key) == 0 for key in ("benchmark_reopen_count", "benchmark_injection_count")), "ordinary workload mode/purity mismatch", issues)
             execution = row.get("execution_receipt", "")
             require(all(text in execution for text in ("transport: Daemon", "docker_engine_calls: 0", "exit_code: Some(0)", "daemon_timing: Some(")), "Exec did not authenticate daemon route/success", issues)
             # DaemonTiming repeats field names; outer receipt values precede it.
@@ -477,7 +477,7 @@ def validate_timing(records, case, issues):
             require(value["max_transaction_objects"] < (8192 if case["input_mode"] == "directory" else 128) and value["max_transaction_bytes"] < 4 * 1024 ** 2, "candidate transaction bound", issues)
 
 
-def failed_execution(records, case, issues):
+def failed_execution(records, case, issues, verification=False):
     errors = [row.get("original_error", "") for row in records if row["kind"] == "recovery" and "ExecutionReceipt {" in row.get("original_error", "")]
     if not errors:
         return None
@@ -498,7 +498,7 @@ def failed_execution(records, case, issues):
     stderr = output.decode("utf-8")
     partial = receipt("\n".join(line.removeprefix("partial_") for line in stderr.splitlines() if line.startswith("partial_")))
     require(partial.get("scenario_id") == case["scenario_id"], "failed workload identity missing", issues)
-    require(all(partial.get(key) == 0 for key in ("benchmark_verifier_count", "benchmark_reopen_count", "benchmark_injection_count")), "failed workload purity counters missing/nonzero", issues)
+    require(partial.get("benchmark_verifier_count") == int(verification and not case["family_id"].startswith("dedup_")) and all(partial.get(key) == 0 for key in ("benchmark_reopen_count", "benchmark_injection_count")), "failed workload mode/purity counters missing or incorrect", issues)
     if case["family_id"].startswith("dedup_"):
         phase = partial.get("failure_phase")
         require(phase in {"file-open", "file-chmod", "file-write", "file-metadata", "file-sync", "directory-metadata", "directory-open", "directory-sync"} and isinstance(partial.get("failure_path"), str), "dedup partial failure boundary missing", issues)
@@ -608,7 +608,7 @@ def validate_verification(case, records, issues, require_complete=True):
     if family == "workspace_reliability":
         allowed.add("workspace.stop")
     require(all(row.get("family") in allowed for row in operations), "unapproved verifier public operation route", issues)
-    validate_timing(records, case, issues)
+    validate_timing(records, case, issues, verification=True)
     if family != "workspace_reliability":
         require(not any(row["kind"] in {"fault-reachability", "transaction-fault-reachability", "proof-start"} for row in records), "ordinary verification used unapproved fault route", issues)
     if not require_complete:
