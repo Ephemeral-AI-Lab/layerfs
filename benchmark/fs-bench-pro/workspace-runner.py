@@ -581,6 +581,7 @@ def main():
                 if action in {"reuse-recorded-outcome","retained-failure-needs-investigation"}:
                     print(json.dumps({"action":action,"case":case["scenario_id"],"seed":seed,"evidence":previous["evidence_path"]}),flush=True)
                     failures |= not successful(previous)
+                    if failures:break
                     continue
                 if previous:
                     change={"slot":key,"previous_evidence":previous["evidence_path"],"reason":args.invalidate_reason,"at_unix_ns":time.time_ns()}
@@ -590,7 +591,7 @@ def main():
                 ledger[key]=result;atomic_json(ledger_path,ledger)
                 print(json.dumps(result,sort_keys=True),flush=True)
                 failures |= not successful(result)
-                if result.get("interrupted"):break
+                if failures or result.get("interrupted"):break
             invocation["status"]="failed-outcomes" if failures else "pass"
     print(json.dumps({"invocation_receipt":str(invocation_path),"invocation_wall_ns":invocation["invocation_wall_ns"],"status":invocation["status"]}),flush=True)
     return 1 if failures else 0

@@ -23,8 +23,6 @@ pub(crate) const INITIALIZATION_SLAB_OBJECTS: usize = 512;
 pub(crate) const INITIALIZATION_SLAB_QUEUE_SLOTS: usize = 4;
 pub(crate) const INITIALIZATION_TASK_STRUCTURAL_BYTES: usize = 256 * 1024;
 const CANDIDATE_MEMORY_BYTES: usize = 8 * 1024 * 1024;
-// ponytail: about one million candidate IDs covers the 100k-file tier; move to
-// an on-disk hash index only when a larger measured campaign exceeds this bound.
 const CANDIDATE_INDEX_BYTES: usize = 64 * 1024 * 1024;
 const CANDIDATE_SPILL_BUFFER_BYTES: usize = 1024 * 1024;
 
@@ -765,6 +763,15 @@ struct SpillObjects {
     end: u64,
     index: Option<BTreeMap<ObjectId, (u64, u64)>>,
     index_bytes: usize,
+    disk_index: Option<Box<SpillDiskIndex>>,
+    #[cfg(test)]
+    index_limit: usize,
+}
+
+struct SpillDiskIndex {
+    // Drop the connection before its owned temporary path.
+    connection: Mutex<Connection>,
+    _path: TempPath,
 }
 
 impl Drop for SpillObjects {
@@ -2028,6 +2035,9 @@ impl DeferredObjectStore {
             end: 0,
             index: Some(BTreeMap::new()),
             index_bytes: 0,
+            disk_index: None,
+            #[cfg(test)]
+            index_limit: CANDIDATE_INDEX_BYTES,
         };
         for id in order {
             spill.put(
@@ -2094,14 +2104,32 @@ impl SpillObjects {
             .end
             .checked_add(row_len as u64)
             .ok_or(StoreError::Integrity("candidate object length"))?;
+        #[cfg(not(test))]
+        let index_limit = CANDIDATE_INDEX_BYTES;
+        #[cfg(test)]
+        let index_limit = self.index_limit;
         if let Some(index) = &mut self.index {
-            if self.index_bytes.saturating_add(64) > CANDIDATE_INDEX_BYTES {
+            if self.index_bytes.saturating_add(64) > index_limit {
+                // Release the entire memory index before allocating the bounded
+                // SQLite page cache. Backfill the flushed spill exactly once.
                 self.index = None;
                 self.index_bytes = 0;
+                self.flush()?;
+                let mut reader = self
+                    .reader
+                    .lock()
+                    .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
+                self.disk_index =
+                    Some(Box::new(SpillDiskIndex::from_spill(&mut reader, self.end)?));
             } else {
                 index.insert(id, (start + 40, canonical.len() as u64));
                 self.index_bytes += 64;
             }
+        } else {
+            self.disk_index
+                .as_ref()
+                .ok_or(StoreError::Integrity("candidate spill index unavailable"))?
+                .insert(id, start + 40, canonical.len() as u64)?;
         }
         if self.pending.len() >= CANDIDATE_SPILL_BUFFER_BYTES {
             self.flush()?;
@@ -2171,88 +2199,139 @@ impl SpillObjects {
         })
     }
 
+    fn location(&self, id: ObjectId) -> Result<Option<(u64, u64)>> {
+        if let Some(index) = &self.index {
+            return Ok(index.get(&id).copied());
+        }
+        self.disk_index
+            .as_ref()
+            .ok_or(StoreError::Integrity("candidate spill index unavailable"))?
+            .location(id)
+    }
+
     fn get(&self, id: ObjectId) -> Result<Option<Vec<u8>>> {
         if let Some((offset, length)) = self.pending_index.get(&id) {
             return Ok(Some(self.pending[*offset..*offset + *length].to_vec()));
         }
+        let Some((offset, length)) = self.location(id)? else {
+            return Ok(None);
+        };
         let mut file = self
             .reader
             .lock()
             .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
-        if let Some(index) = &self.index {
-            let Some((offset, length)) = index.get(&id) else {
-                return Ok(None);
-            };
-            file.seek(SeekFrom::Start(*offset))?;
-            let mut bytes = vec![
-                0;
-                usize::try_from(*length).map_err(|_| StoreError::Integrity(
-                    "candidate object length"
-                ))?
-            ];
-            file.read_exact(&mut bytes)?;
-            return Ok(Some(bytes));
-        }
-        file.seek(SeekFrom::Start(0))?;
-        loop {
-            let mut object_id = [0; 32];
-            match file.read_exact(&mut object_id) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
-                Err(error) => return Err(error.into()),
-            }
-            let mut length = [0; 8];
-            file.read_exact(&mut length)?;
-            let length = u64::from_le_bytes(length);
-            if object_id == *id.as_bytes() {
-                let mut bytes = vec![
-                    0;
-                    usize::try_from(length).map_err(|_| StoreError::Integrity(
-                        "candidate object length"
-                    ))?
-                ];
-                file.read_exact(&mut bytes)?;
-                return Ok(Some(bytes));
-            }
-            file.seek(SeekFrom::Current(
-                i64::try_from(length)
-                    .map_err(|_| StoreError::Integrity("candidate object length"))?,
-            ))?;
-        }
+        file.seek(SeekFrom::Start(offset))?;
+        let mut bytes = vec![
+            0;
+            usize::try_from(length)
+                .map_err(|_| StoreError::Integrity("candidate object length"))?
+        ];
+        file.read_exact(&mut bytes)?;
+        Ok(Some(bytes))
     }
 
     fn encoded_length(&self, id: ObjectId) -> Result<u64> {
-        if let Some(index) = &self.index {
-            return index
-                .get(&id)
-                .map(|(_, length)| *length)
-                .ok_or(StoreError::MissingObject(id));
-        }
-        let mut file = self
-            .reader
-            .lock()
-            .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
+        self.location(id)?
+            .map(|(_, length)| length)
+            .ok_or(StoreError::MissingObject(id))
+    }
+}
+
+impl SpillDiskIndex {
+    fn from_spill(file: &mut std::fs::File, end: u64) -> Result<Self> {
+        let (temporary, path) = temporary_file("candidate-index")?;
+        let path = TempPath(path);
+        drop(temporary);
+        let mut connection = Connection::open(&path.0)?;
+        // Derived, private scratch state: no persistent Store policy changes.
+        // Disk spilling and bounded transactions avoid retaining the index in RAM.
+        connection.execute_batch(
+            "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;
+            PRAGMA temp_store=FILE; PRAGMA cache_size=-4096; PRAGMA cache_spill=ON;
+            PRAGMA mmap_size=0; PRAGMA locking_mode=EXCLUSIVE;
+            CREATE TABLE offsets (id BLOB PRIMARY KEY CHECK(length(id)=32),
+                offset INTEGER NOT NULL CHECK(offset>=0),
+                length INTEGER NOT NULL CHECK(length>=0)) WITHOUT ROWID;",
+        )?;
         file.seek(SeekFrom::Start(0))?;
-        loop {
-            let mut object_id = [0; 32];
-            match file.read_exact(&mut object_id) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    return Err(StoreError::MissingObject(id));
+        let mut offset = 0_u64;
+        while offset < end {
+            let transaction = connection.transaction()?;
+            {
+                let mut insert =
+                    transaction.prepare_cached("INSERT INTO offsets VALUES (?1,?2,?3)")?;
+                for _ in 0..INITIALIZATION_ADMISSION_BATCH_COUNT {
+                    if offset == end {
+                        break;
+                    }
+                    let mut id = [0; 32];
+                    let mut length = [0; 8];
+                    file.read_exact(&mut id)?;
+                    file.read_exact(&mut length)?;
+                    let length = u64::from_le_bytes(length);
+                    let payload = offset
+                        .checked_add(40)
+                        .ok_or(StoreError::Integrity("candidate index offset"))?;
+                    offset = payload
+                        .checked_add(length)
+                        .filter(|offset| *offset <= end)
+                        .ok_or(StoreError::Integrity("candidate index frame bounds"))?;
+                    insert.execute(rusqlite::params![
+                        id.as_slice(),
+                        i64::try_from(payload)
+                            .map_err(|_| StoreError::Integrity("candidate index offset"))?,
+                        i64::try_from(length)
+                            .map_err(|_| StoreError::Integrity("candidate object length"))?
+                    ])?;
+                    file.seek(SeekFrom::Start(offset))?;
                 }
-                Err(error) => return Err(error.into()),
             }
-            let mut length = [0; 8];
-            file.read_exact(&mut length)?;
-            let length = u64::from_le_bytes(length);
-            if object_id == *id.as_bytes() {
-                return Ok(length);
-            }
-            file.seek(SeekFrom::Current(
-                i64::try_from(length)
-                    .map_err(|_| StoreError::Integrity("candidate object length"))?,
-            ))?;
+            transaction.commit()?;
         }
+        Ok(Self {
+            connection: Mutex::new(connection),
+            _path: path,
+        })
+    }
+
+    fn insert(&self, id: ObjectId, offset: u64, length: u64) -> Result<()> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StoreError::Integrity("candidate index lock"))?;
+        connection
+            .prepare_cached("INSERT INTO offsets VALUES (?1,?2,?3)")?
+            .execute(rusqlite::params![
+                id.as_bytes().as_slice(),
+                i64::try_from(offset)
+                    .map_err(|_| StoreError::Integrity("candidate index offset"))?,
+                i64::try_from(length)
+                    .map_err(|_| StoreError::Integrity("candidate object length"))?
+            ])?;
+        Ok(())
+    }
+
+    fn location(&self, id: ObjectId) -> Result<Option<(u64, u64)>> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StoreError::Integrity("candidate index lock"))?;
+        let location: Option<(i64, i64)> = connection
+            .prepare_cached("SELECT offset,length FROM offsets WHERE id=?1")?
+            .query_row([id.as_bytes().as_slice()], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .optional()?;
+        location
+            .map(|(offset, length)| {
+                Ok((
+                    u64::try_from(offset)
+                        .map_err(|_| StoreError::Integrity("candidate index offset"))?,
+                    u64::try_from(length)
+                        .map_err(|_| StoreError::Integrity("candidate object length"))?,
+                ))
+            })
+            .transpose()
     }
 }
 
@@ -3478,6 +3557,110 @@ mod tests {
         assert_eq!(segment.raw_read_bytes(), second_block.end);
         assert!(segment.raw_reads() < 2);
         assert!(segment.consumed());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spill_index_overflow_preserves_lookup_dedup_and_cleanup_without_scans() {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(CANDIDATE_INDEX_BYTES, 64 * 1024 * 1024);
+        let canonical = [b"first".as_slice(), b"second", b"third", b"fourth"]
+            .map(|bytes| layerfs_content::encode_bytes_object(bytes).unwrap());
+        let ids = canonical.each_ref().map(|bytes| ObjectId::for_bytes(bytes));
+        let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
+        for index in 0..2 {
+            objects.put(ids[index], &canonical[index]).unwrap();
+        }
+        objects.spill().unwrap();
+        let DeferredObjects::Spill(spill) = &mut objects.storage else {
+            panic!("forced spill");
+        };
+        assert_eq!(spill.index.as_ref().unwrap().len(), 2);
+        assert!(spill.disk_index.is_none());
+        spill.index_limit = 2 * 64; // Test-only transition; production remains64MiB.
+        objects.put(ids[2], &canonical[2]).unwrap();
+        let DeferredObjects::Spill(spill) = &objects.storage else {
+            panic!("forced spill");
+        };
+        assert!(spill.index.is_none());
+        assert_eq!(spill.index_bytes, 0);
+        assert!(spill.pending.is_empty());
+        let disk = spill.disk_index.as_ref().unwrap();
+        let index_path = disk._path.0.clone();
+        let payload_path = spill.path.clone();
+        assert_eq!(
+            std::fs::metadata(&index_path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        {
+            let connection = disk.connection.lock().unwrap();
+            let rows: i64 = connection
+                .query_row("SELECT count(*) FROM offsets", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(rows, 3);
+            let cache: i64 = connection
+                .pragma_query_value(None, "cache_size", |row| row.get(0))
+                .unwrap();
+            let mmap: i64 = connection
+                .pragma_query_value(None, "mmap_size", |row| row.get(0))
+                .unwrap();
+            let spill: i64 = connection
+                .pragma_query_value(None, "cache_spill", |row| row.get(0))
+                .unwrap();
+            let temp: i64 = connection
+                .pragma_query_value(None, "temp_store", |row| row.get(0))
+                .unwrap();
+            assert_eq!((cache, mmap, temp), (-4096, 0, 1));
+            assert!(spill > 0);
+        }
+        spill
+            .reader
+            .lock()
+            .unwrap()
+            .seek(SeekFrom::Start(0))
+            .unwrap();
+        let missing = ObjectId::for_bytes(b"not-present");
+        assert_eq!(objects.get(missing).unwrap(), None);
+        assert_eq!(
+            objects.encoded_length(ids[1]).unwrap(),
+            canonical[1].len() as u64
+        );
+        assert!(
+            matches!(objects.encoded_length(missing), Err(StoreError::MissingObject(id)) if id == missing)
+        );
+        // Missing-ID and length queries must not touch/scan the payload spool.
+        assert_eq!(spill.reader.lock().unwrap().stream_position().unwrap(), 0);
+        for index in 0..3 {
+            assert_eq!(
+                objects.get(ids[index]).unwrap(),
+                Some(canonical[index].clone())
+            );
+        }
+        objects.put(ids[3], &canonical[3]).unwrap();
+        assert_eq!(objects.get(ids[3]).unwrap(), Some(canonical[3].clone()));
+        assert_eq!(
+            objects.encoded_length(ids[3]).unwrap(),
+            canonical[3].len() as u64
+        );
+        let count = objects.len();
+        let written = objects.first_store_write_bytes;
+        objects.put(ids[0], &canonical[0]).unwrap();
+        assert_eq!(
+            (objects.len(), objects.first_store_write_bytes),
+            (count, written)
+        );
+        assert!(matches!(
+            objects.put_owned(ids[0], canonical[1].clone()),
+            Err(StoreError::Integrity("candidate object collision"))
+        ));
+        let objects = objects.all_reachable().unwrap();
+        assert!(!payload_path.exists());
+        assert_eq!(objects.get(ids[3]).unwrap(), Some(canonical[3].clone()));
+        drop(objects);
+        assert!(!index_path.exists());
+        for suffix in ["-journal", "-wal", "-shm"] {
+            assert!(!PathBuf::from(format!("{}{suffix}", index_path.display())).exists());
+        }
     }
 
     #[cfg(unix)]

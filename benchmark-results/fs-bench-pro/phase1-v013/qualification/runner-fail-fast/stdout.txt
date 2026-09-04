@@ -1,0 +1,36 @@
+{
+  "status": "pass",
+  "checks": [
+    {
+      "failure": "preparation-fail",
+      "executed_seeds": [
+        2
+      ],
+      "retained_seeds": [
+        1,
+        2
+      ],
+      "later_seed_executed": false
+    },
+    {
+      "failure": "product-fail",
+      "executed_seeds": [
+        2
+      ],
+      "retained_seeds": [
+        1,
+        2
+      ],
+      "later_seed_executed": false
+    },
+    {
+      "failure": "retained-fail",
+      "executed_seeds": [],
+      "retained_seeds": [
+        1,
+        2
+      ],
+      "later_seed_executed": false
+    }
+  ]
+}

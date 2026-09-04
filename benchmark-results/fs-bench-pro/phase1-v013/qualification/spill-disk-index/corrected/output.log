@@ -1,0 +1,9 @@
+   Compiling layerfs-layerstack-store v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-layerstack-store)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.06s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_layerstack_store-06cf7196ab507abd)
+
+running 1 test
+test objects::tests::spill_index_overflow_preserves_lookup_dedup_and_cleanup_without_scans ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.01s
+

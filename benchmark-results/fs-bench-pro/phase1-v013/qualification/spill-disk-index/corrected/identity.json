@@ -1,0 +1,14 @@
+{
+  "source_sha256": "4b07eb03a2e6ddfe926a2c5fa621db462c659ff1ee164e41ec3b90cb871df9c8",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-layerstack-store",
+    "--lib",
+    "objects::tests::spill_index_overflow_preserves_lookup_dedup_and_cleanup_without_scans",
+    "--",
+    "--exact",
+    "--nocapture"
+  ]
+}
