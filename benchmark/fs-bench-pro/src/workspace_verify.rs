@@ -206,6 +206,7 @@ pub(crate) fn verify_root(
     let mut extents = BTreeMap::new();
     let mut file_roots = BTreeMap::new();
     let mut custody_paths = 0;
+    let mut validated_metadata = BTreeSet::new();
     let mut comparison_scratch = vec![0; common::SCRATCH_BYTES];
     while let Some((path,id)) = pending.pop() {
         if !found.insert(path.clone()) {
@@ -223,8 +224,16 @@ pub(crate) fn verify_root(
         if !namespace_inodes.insert(id) && resolved.record.kind != inode::InodeKind::RegularFile {
             return Err("canonical namespace repeats a non-regular inode".into());
         }
-        directory::validate_inode_record_metadata(&reader, resolved.record, path == ".")?;
-        verify_metadata(&reader, resolved.record.metadata_root, entry)?;
+        // Record/root rules and the independent expected binding remain per-path.
+        // Reuse only successful validation of the identical immutable metadata.
+        resolved.record.validate(path == ".")?;
+        let metadata_key = (resolved.record.metadata_root, resolved.record.kind as u8,
+            entry.mode, entry.mtime_seconds, entry.mtime_nanoseconds);
+        if !validated_metadata.contains(&metadata_key) {
+            directory::validate_inode_record_metadata(&reader, resolved.record, path == ".")?;
+            verify_metadata(&reader, resolved.record.metadata_root, entry)?;
+            validated_metadata.insert(metadata_key);
+        }
         match &entry.kind {
             EntryKind::Directory => {
                 if resolved.record.kind != inode::InodeKind::Directory {
@@ -886,12 +895,23 @@ pub(crate) fn fast_qualification(root: &Path) -> AnyResult<Receipt> {
     let pinned = store.pin_branch(branch)?;
     let full = verify_root(&pinned.reader,pinned.root,&entries)
         .map_err(|error| format!("fast qualification exhaustive positive: {error}"))?;
+    // Root and the empty directory deliberately share metadata. Reject a later
+    // path's different expectation even after the root has warmed the memo.
+    let reader = CoreReader(&pinned.reader);
+    let root_record = layerfs_content::filesystem::resolve(&reader,pinned.root,&CanonicalPath::root(),&mut Default::default())?.record;
+    let empty_record = layerfs_content::filesystem::resolve(&reader,pinned.root,&CanonicalPath::new("empty")?,&mut Default::default())?.record;
+    if root_record.metadata_root != empty_record.metadata_root { return Err("qualification requires shared directory metadata".into()); }
+    let mut wrong_metadata = entries.clone();
+    wrong_metadata.iter_mut().find(|entry|entry.path=="empty").ok_or("qualification empty directory")?.mode ^= 1;
+    let metadata_rejection = verify_root(&pinned.reader,pinned.root,&wrong_metadata).err()
+        .ok_or("exhaustive verifier reused shared metadata despite different expected mode")?;
     let certificate = FastCertificate { binding:"ab".repeat(32), root:pinned.root, file_roots:full.file_roots };
     let delta_for = |oracle: &[Entry]| common::FastDelta {
         changed_paths:oracle.iter().map(|e|e.path.clone()).collect(), absent_paths:BTreeSet::new(), witness_paths:BTreeSet::new(),
     };
     let mut receipt = verify_fast_root(&pinned.reader,pinned.root,&entries,&delta_for(&entries),&certificate)
         .map_err(|error| format!("fast qualification canonical positive: {error}"))?;
+    receipt.insert("exhaustive_shared_metadata_expected_rejection".into(),metadata_rejection.to_string());
     let mut rejections = 0;
     let mut reject = |name: &str, oracle: &[Entry]| -> AnyResult<()> {
         let error = verify_fast_root(&pinned.reader,pinned.root,oracle,&delta_for(oracle),&certificate).err().ok_or_else(||format!("fast canonical accepted {name}"))?;

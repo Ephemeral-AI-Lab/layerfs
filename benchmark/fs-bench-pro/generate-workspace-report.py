@@ -1772,7 +1772,8 @@ def full_verifier_source_proof(old_revision, new_revision):
     old_pairs = runner.fast_verifier_source_proof(old_revision)
     new_pairs = runner.fast_verifier_source_proof(new_revision)
     path = "benchmark/fs-bench-pro/src/workspace_verify.rs"
-    if old_pairs[path]["new_sha256"] != runner.HISTORICAL_FULL_VERIFIER_SHA256 or new_pairs[path]["new_sha256"] != runner.FAST_VERIFIER_HASHES["src/workspace_verify.rs"]:
+    expected_new = runner.HISTORICAL_FULL_VERIFIER_HASHES.get(new_revision, runner.FAST_VERIFIER_HASHES["src/workspace_verify.rs"])
+    if old_pairs[path]["new_sha256"] != runner.HISTORICAL_FULL_VERIFIER_SHA256 or new_pairs[path]["new_sha256"] != expected_new:
         raise ValueError("full verifier source pair differs")
     changed = set(subprocess.check_output(["git", "diff", "--name-only", old_revision, new_revision, "--", "benchmark/fs-bench-pro"], cwd=HERE.parents[1], text=True).splitlines())
     if path not in changed or changed - {path, "benchmark/fs-bench-pro/workspace-runner.py", "benchmark/fs-bench-pro/generate-workspace-report.py"}:
@@ -1784,11 +1785,11 @@ def full_verifier_source_proof(old_revision, new_revision):
         contracts[name] = hashlib.sha256(values[0]).hexdigest()
     return {"old_revision": old_revision, "new_revision": new_revision,
         "old_verifier_sha256": runner.HISTORICAL_FULL_VERIFIER_SHA256,
-        "new_verifier_sha256": runner.FAST_VERIFIER_HASHES["src/workspace_verify.rs"],
+        "new_verifier_sha256": expected_new,
         "unchanged_product_tree_sha256": hashlib.sha256(json.dumps(old_tree, sort_keys=True).encode()).hexdigest(),
         "unchanged_normative_contract_sha256": contracts,
         "fast_profile_source_proof": fast_profile_source_proof(new_revision),
-        "scope": "Only exhaustive verifier namespace lookup changes: authenticated inode index replaces repeated root resolution. Every full byte/metadata/alias/typed-census check remains required. Historical7948 product timings stay at their original source/environment; no successor timing or fast-to-full assurance claim."}
+        "scope": ("Only exhaustive verifier namespace lookup changes: authenticated inode index replaces repeated root resolution. Every full byte/metadata/alias/typed-census check remains required. Historical7948 product timings stay at their original source/environment; no successor timing or fast-to-full assurance claim." if new_revision in runner.HISTORICAL_FULL_VERIFIER_HASHES else "Exhaustive verifier reuses authenticated inode records and successful validation of identical immutable metadata. Every per-path inode/root/expected-metadata binding, full body, extent, alias and typed-census check remains required. Historical7948 product timings retain their actual source/environment; no fast-to-full or successor timing claim.")}
 
 
 def configured_full_verifier_bridge(config, primary):
@@ -1840,6 +1841,10 @@ def family_builds(campaign, assets, primary, registry):
         if build["revision"] == runner.HISTORICAL_FULL_VERIFIER_REVISION and primary["revision"] != build["revision"]:
             if full_verifier_bridge is None or parts[0] != "slot" or parts[-1] not in {"performance", "fast-verify"}:
                 raise ValueError("historical7948 evidence requires exact slot and full-verifier source bridge")
+        if build["revision"] in runner.HISTORICAL_FULL_VERIFIER_HASHES and build["revision"] not in {runner.HISTORICAL_FULL_VERIFIER_REVISION, primary["revision"]}:
+            if full_verifier_bridge is None or parts[0] != "slot" or parts[-1] != "verify":
+                raise ValueError("historical full-verifier evidence requires an exact completed verify slot")
+            full_verifier_source_proof(runner.HISTORICAL_FULL_VERIFIER_REVISION, build["revision"])
         if build["revision"] == runner.FAST_VERIFIER_SOURCE and primary["revision"] != build["revision"]:
             if parts[0] != "slot" or parts[-1] != "verify":raise ValueError("old full verifier reuse requires exact completed full-proof slot")
             fast_profile_source_proof(primary["revision"])
