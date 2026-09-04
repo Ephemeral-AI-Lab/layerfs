@@ -1076,6 +1076,17 @@ fn main() {
 
 fn run() -> Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args.first().is_some_and(|arg| arg == "workspace-verify-fast") {
+        let [_, id, seed, step, binding] = args.as_slice() else { return Err("workspace-verify-fast CASE SEED STEP CERT_BINDING".into()); };
+        let case = workspace_registry::cases().into_iter().find(|case| &case.id == id).ok_or("unknown fast verifier case")?;
+        let seed = seed.parse::<u8>()?;
+        let step = step.parse::<usize>()?;
+        let entries = ordinary_workloads::expected(&case, seed, step)?;
+        let delta = ordinary_workloads::fast_delta_for_entries(&case, seed, step, &entries)?;
+        let receipt = workspace_common::verify_native_fast(Path::new("."), &entries, &delta, binding)?;
+        for (key, value) in receipt { println!("{key}={value}"); }
+        return Ok(());
+    }
     if args.first().is_some_and(|arg| arg.starts_with("workspace-")) {
         return workspace_registry::dispatch(&args);
     }

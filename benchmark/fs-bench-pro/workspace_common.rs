@@ -770,19 +770,29 @@ pub(crate) fn native_paths(root: &Path) -> Result<Vec<String>> {
     Ok(paths)
 }
 
-pub(crate) fn verify_native(root: &Path, entries: &[Entry]) -> Result<Receipt> {
-    let logical = validate_entries(entries)?;
-    let expected = entries
-        .iter()
-        .map(|entry| (entry.path.clone(), entry))
-        .collect::<BTreeMap<_, _>>();
-    if native_paths(root)? != expected.keys().cloned().collect::<Vec<_>>() {
-        return Err("complete native path-set mismatch".into());
+// Verification-only observations: preserve one lstat result for every path.
+fn native_metadata(root: &Path) -> Result<BTreeMap<String, fs::Metadata>> {
+    let mut found = BTreeMap::from([(".".to_owned(), fs::symlink_metadata(root)?)]);
+    let mut pending = vec![root.to_owned()];
+    while let Some(directory) = pending.pop() {
+        for item in fs::read_dir(directory)? {
+            let item = item?;
+            let path = item.path();
+            let relative = path.strip_prefix(root)?.to_str().ok_or("non-UTF8 fixture path")?.to_owned();
+            validate_path(&relative)?;
+            let metadata = fs::symlink_metadata(&path)?;
+            if metadata.is_dir() { pending.push(path); }
+            if found.insert(relative, metadata).is_some() { return Err("duplicate native path".into()); }
+        }
     }
+    Ok(found)
+}
+
+fn verify_native_observed(root: &Path, expected: &BTreeMap<String, &Entry>, observations: &BTreeMap<String, fs::Metadata>) -> Result<(usize, usize)> {
     let mut inode_classes = BTreeMap::new();
     let mut class_inodes = BTreeMap::new();
     let mut reference_counts = BTreeMap::<&str, u64>::new();
-    for entry in entries {
+    for entry in expected.values() {
         let class = match &entry.kind {
             EntryKind::File(_) => entry.path.as_str(),
             EntryKind::Hardlink(target) => target.as_str(),
@@ -794,9 +804,9 @@ pub(crate) fn verify_native(root: &Path, entries: &[Entry]) -> Result<Receipt> {
     let mut wanted = vec![0; SCRATCH_BYTES];
     let mut files = 0;
     let mut custody_paths = 0;
-    for (relative, entry) in &expected {
+    for (relative, metadata) in observations {
+        let entry = expected.get(relative).ok_or("unexpected native observation")?;
         let path = root.join(relative);
-        let metadata = fs::symlink_metadata(&path)?;
         if metadata.mode() & 0o7777 != entry.mode
             || metadata.mtime() != entry.mtime_seconds
             || metadata.mtime_nsec() != i64::from(entry.mtime_nanoseconds)
@@ -880,6 +890,171 @@ pub(crate) fn verify_native(root: &Path, entries: &[Entry]) -> Result<Receipt> {
         }
         files += 1;
     }
+    Ok((files, custody_paths))
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct FastDelta {
+    pub changed_paths: BTreeSet<String>,
+    pub absent_paths: BTreeSet<String>,
+    pub witness_paths: BTreeSet<String>,
+}
+
+pub(crate) fn fast_selected_paths(entries: &[Entry], delta: &FastDelta) -> Result<BTreeSet<String>> {
+    let expected = entries.iter().map(|entry| (entry.path.as_str(), entry)).collect::<BTreeMap<_, _>>();
+    let mut selected = delta.changed_paths.union(&delta.witness_paths).cloned().collect::<BTreeSet<_>>();
+    selected.insert(".".into());
+    for path in selected.clone() {
+        if let Some(Entry { kind: EntryKind::Hardlink(target), .. }) = expected.get(path.as_str()).copied() {
+            selected.insert(target.clone());
+        }
+    }
+    for entry in entries {
+        if let EntryKind::Hardlink(target) = &entry.kind {
+            if selected.contains(target) { selected.insert(entry.path.clone()); }
+        }
+    }
+    for path in selected.clone() {
+        validate_path(&path)?;
+        for (index, _) in path.match_indices('/') { selected.insert(path[..index].to_owned()); }
+    }
+    if selected.iter().any(|path| !expected.contains_key(path.as_str())) { return Err("fast verifier selected an absent path".into()); }
+    if delta.absent_paths.iter().any(|path| expected.contains_key(path.as_str())) { return Err("fast absence declaration exists in oracle".into()); }
+    Ok(selected)
+}
+
+/// Full namespace/type census, then independently selected body/metadata checks.
+/// An authenticated base certificate is required from the host; this is not full verification.
+pub(crate) fn verify_native_fast(root: &Path, entries: &[Entry], delta: &FastDelta, certificate_binding: &str) -> Result<Receipt> {
+    if certificate_binding.len() != 64 || !certificate_binding.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
+        return Err("fast verification requires the host's qualified certificate binding".into());
+    }
+    let logical = validate_entries(entries)?;
+    let expected = entries.iter().map(|entry| (entry.path.clone(), entry)).collect::<BTreeMap<_, _>>();
+    let selected = fast_selected_paths(entries, delta)?;
+    let mut found = BTreeMap::from([(".".to_owned(), fs::symlink_metadata(root)?.file_type())]);
+    let mut pending = vec![root.to_owned()];
+    while let Some(directory) = pending.pop() {
+        for item in fs::read_dir(directory)? {
+            let item = item?;
+            let path = item.path();
+            let relative = path.strip_prefix(root)?.to_str().ok_or("non-UTF8 fixture path")?.to_owned();
+            validate_path(&relative)?;
+            let kind = item.file_type()?;
+            if kind.is_dir() { pending.push(path); }
+            if found.insert(relative, kind).is_some() { return Err("duplicate fast native path".into()); }
+        }
+    }
+    if found.keys().ne(expected.keys()) { return Err("complete fast native path-set mismatch".into()); }
+    for (path, kind) in &found {
+        let matches = match &expected[path].kind {
+            EntryKind::Directory => kind.is_dir(),
+            EntryKind::File(_) | EntryKind::Hardlink(_) => kind.is_file(),
+            EntryKind::Symlink(_) => kind.is_symlink(),
+        };
+        if !matches { return Err(format!("fast native namespace type mismatch: {path}").into()); }
+    }
+    for path in &delta.absent_paths {
+        validate_path(path)?;
+        match fs::symlink_metadata(root.join(path)) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+            Err(error) => return Err(error.into()),
+            Ok(_) => return Err(format!("fast native required absence: {path}").into()),
+        }
+    }
+    let mut observations = BTreeMap::new();
+    let mut selected_entries = Vec::new();
+    for path in &selected {
+        observations.insert(path.clone(), fs::symlink_metadata(root.join(path))?);
+        selected_entries.push((*expected[path]).clone());
+        if matches!(&expected[path].kind, EntryKind::File(Content::Digest { .. })) { return Err("fast expected bytes must be independently generated".into()); }
+    }
+    let (files, custody) = verify_native_observed(root, &expected, &observations)?;
+    if custody != 0 { return Err("fast verification cannot downgrade to persistence custody".into()); }
+    let regular_paths = entries.iter().filter(|entry| matches!(&entry.kind, EntryKind::File(_) | EntryKind::Hardlink(_))).count();
+    let checked_bytes = selected_entries.iter().map(|entry| match &entry.kind {
+        EntryKind::File(content) => content.len(),
+        EntryKind::Hardlink(target) => match &expected[target].kind { EntryKind::File(content) => content.len(), _ => 0 },
+        _ => 0,
+    }).sum::<u64>();
+    Ok(BTreeMap::from([
+        ("verification_status".into(), "fast_iteration_verified".into()),
+        ("fully_verified".into(), "false".into()),
+        ("certificate_binding".into(), certificate_binding.into()),
+        ("fast_witness_profile".into(), "native-fast-witness-v1:first-middle-last-seeded-per-namespace-length-depth-class".into()),
+        ("native_namespace_paths_verified".into(), entries.len().to_string()),
+        ("native_namespace_types_verified".into(), entries.len().to_string()),
+        ("native_namespace_type_source".into(), "DirEntry::file_type;platform-metadata-fallback-permitted;skipped-counts-describe-unperformed-checks-not-syscalls".into()),
+        ("changed_paths_declared".into(), delta.changed_paths.len().to_string()),
+        ("absent_paths_verified".into(), delta.absent_paths.len().to_string()),
+        ("witness_paths_declared".into(), delta.witness_paths.len().to_string()),
+        ("selected_metadata_paths_verified".into(), selected.len().to_string()),
+        ("selected_regular_paths_verified".into(), files.to_string()),
+        ("selected_regular_bytes_verified".into(), checked_bytes.to_string()),
+        ("skipped_untouched_regular_bodies".into(), (regular_paths - files).to_string()),
+        ("skipped_untouched_metadata_paths".into(), (entries.len() - selected.len()).to_string()),
+        ("logical_bytes".into(), logical.to_string()),
+        ("selected_independent_oracle_identity".into(), sdk_edit_common::sha256_hex(manifest(&selected_entries)?.as_bytes())),
+        ("oracle_scope".into(), "independent-delta-and-witnesses;complete-native-namespace;certified-unchanged-content-roots-checked-by-host".into()),
+    ]))
+}
+
+/// One small aggregate qualification, called only by the explicit host command.
+pub(crate) fn fast_qualification(root: &Path) -> Result<Receipt> {
+    let entries = vec![Entry::directory("."), Entry::file("changed.dat", Content::Literal(vec![1,2,3,4])),
+        Entry::hardlink("alias.dat", "changed.dat"), Entry::file("witness.dat", Content::Literal(vec![5,6,7])),
+        Entry::file("untouched.dat", Content::Literal(vec![8,9]))];
+    let delta = FastDelta { changed_paths: BTreeSet::from(["changed.dat".into()]),
+        absent_paths: BTreeSet::from(["gone.dat".into()]), witness_paths: BTreeSet::from(["witness.dat".into()]) };
+    let binding = "a".repeat(64);
+    let mut receipt = Receipt::new();
+    for mutation in ["baseline", "wrong-bytes", "extra-path", "missing-path", "required-absence", "alias-mode", "alias-split", "witness-bytes", "missing-certificate"] {
+        let directory = root.join(mutation);
+        create_fixture(&directory, &entries)?;
+        match mutation {
+            "wrong-bytes" => { fs::write(directory.join("changed.dat"), [9,2,3,4])?; set_metadata(&directory.join("changed.dat"), &entries[1])?; },
+            "extra-path" => fs::write(directory.join("extra.dat"), [0])?,
+            "missing-path" => fs::remove_file(directory.join("witness.dat"))?,
+            "required-absence" => fs::write(directory.join("gone.dat"), [0])?,
+            "alias-mode" => fs::set_permissions(directory.join("alias.dat"), fs::Permissions::from_mode(0o600))?,
+            "alias-split" => { fs::remove_file(directory.join("alias.dat"))?; fs::write(directory.join("alias.dat"), [1,2,3,4])?; set_metadata(&directory.join("alias.dat"), &entries[2])?; set_metadata(&directory, &entries[0])?; },
+            "witness-bytes" => { fs::write(directory.join("witness.dat"), [9,6,7])?; set_metadata(&directory.join("witness.dat"), &entries[3])?; },
+            _ => (),
+        }
+        let result = verify_native_fast(&directory, &entries, &delta, if mutation == "missing-certificate" { "" } else { &binding });
+        if mutation == "baseline" {
+            let observed = result?;
+            if observed.get("verification_status").map(String::as_str) != Some("fast_iteration_verified")
+                || observed.get("fully_verified").map(String::as_str) != Some("false")
+                || observed.get("skipped_untouched_regular_bodies").map(String::as_str) != Some("1") {
+                return Err("fast native scope receipt mislabeled".into());
+            }
+            verify_native(&directory, &entries)?;
+            receipt.insert("fast_native_positive_scope".into(), "pass".into());
+        } else {
+            let error = result.err().ok_or("fast native accepted negative fixture")?.to_string();
+            let expected = match mutation {
+                "wrong-bytes" | "witness-bytes" => "native content mismatch",
+                "alias-mode" => "native metadata mismatch",
+                "alias-split" => "native hard-link count mismatch",
+                "missing-certificate" => "qualified certificate binding",
+                _ => "complete fast native path-set mismatch",
+            };
+            if !error.contains(expected) { return Err(format!("fast native rejected {mutation} for unexpected reason: {error}").into()); }
+            receipt.insert(format!("fast_native_rejection_{mutation}"), error);
+        }
+    }
+    receipt.insert("fast_native_qualification_status".into(), "pass".into());
+    receipt.insert("fast_native_negative_cases".into(), "8".into());
+    Ok(receipt)
+}
+
+pub(crate) fn verify_native(root: &Path, entries: &[Entry]) -> Result<Receipt> {
+    let logical = validate_entries(entries)?;
+    let expected = entries.iter().map(|entry| (entry.path.clone(), entry)).collect::<BTreeMap<_, _>>();
+    let observations = native_metadata(root)?;
+    if observations.keys().ne(expected.keys()) { return Err("complete native path-set mismatch".into()); }
+    let (files, custody_paths) = verify_native_observed(root, &expected, &observations)?;
     Ok(BTreeMap::from([
         ("verification_status".into(), "pass".into()),
         ("verified_paths".into(), entries.len().to_string()),

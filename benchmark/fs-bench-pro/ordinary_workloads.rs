@@ -1994,3 +1994,58 @@ mod tests {
         Ok(())
     }
 }
+
+// BEGIN NATIVE FAST VERIFICATION V1
+/// Independent fast-verification scope; no product dirty sets or receipts are inputs.
+pub(crate) fn fast_delta(case: &Case, seed: u8, step: usize) -> Result<common::FastDelta> {
+    fast_delta_for_entries(case, seed, step, &expected(case, seed, step)?)
+}
+
+pub(crate) fn fast_changed_paths(case: &Case, seed: u8, step: usize) -> Result<BTreeSet<String>> {
+    Ok(fast_delta(case, seed, step)?.changed_paths)
+}
+
+pub(crate) fn fast_delta_for_entries(case: &Case, seed: u8, step: usize, entries: &[Entry]) -> Result<common::FastDelta> {
+    seed_label(seed)?;
+    if case.family != "tiny_file_churn" || !matches!(case.kind, "tiny-create" | "tiny-stat" | "tiny-unlink") || step > 1 || !common::TIERS.contains(&case.tier) {
+        return Err("fast native verification supports only the declared tiny selected cases".into());
+    }
+    let mut delta = common::FastDelta::default();
+    if step == 1 {
+        for (path, _) in tiny_targets(seed)?.into_iter().take(case.tier) {
+            match case.kind {
+                "tiny-create" => { delta.changed_paths.insert(path.clone()); },
+                "tiny-unlink" => { delta.absent_paths.insert(path.clone()); },
+                "tiny-stat" => { delta.witness_paths.insert(path.clone()); },
+                _ => unreachable!(),
+            }
+            if case.kind != "tiny-stat" {
+                delta.changed_paths.insert(".".into());
+                for (index, _) in path.match_indices('/') { delta.changed_paths.insert(path[..index].to_owned()); }
+            }
+        }
+    }
+    // First/middle/last/seeded witnesses in each namespace/length/depth class.
+    // This spans wide and128-deep paths and every independent source-size class.
+    let mut classes = BTreeMap::<(String, u64, usize), Vec<&Entry>>::new();
+    for entry in entries {
+        let EntryKind::File(content) = &entry.kind else { continue };
+        if delta.changed_paths.contains(&entry.path) { continue; }
+        let domain = entry.path.split('/').next().ok_or("witness domain")?.to_owned();
+        let depth = entry.path.bytes().filter(|byte| *byte == b'/').count();
+        classes.entry((domain, content.len(), depth)).or_default().push(entry);
+    }
+    for ((domain, len, depth), mut candidates) in classes {
+        candidates.sort_by(|a, b| a.path.cmp(&b.path));
+        let ranked = common::frame_seed(&["native-fast-witness-v1", case.family, case.kind, &domain], &[seed as u64, len, depth as u64]) as usize % candidates.len();
+        for index in [0, candidates.len()/2, candidates.len()-1, ranked] {
+            delta.witness_paths.insert(candidates[index].path.clone());
+        }
+    }
+    // Explicit ancestors are part of the public shared scope, not inferred from product state.
+    for path in delta.witness_paths.clone() {
+        delta.witness_paths.insert(".".into());
+        for (index, _) in path.match_indices('/') { delta.witness_paths.insert(path[..index].to_owned()); }
+    }
+    Ok(delta)
+}

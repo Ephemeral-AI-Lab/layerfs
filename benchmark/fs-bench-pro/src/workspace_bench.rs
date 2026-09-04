@@ -802,7 +802,11 @@ fn run_case(
     mode: &str,
     container: ContainerId,
 ) -> AnyResult<()> {
-    let verification = mode == "verify";
+    let fast = mode == "fast-verify";
+    let verification = mode == "verify" || fast;
+    if fast && !matches!(case.kind, "tiny-create" | "tiny-stat" | "tiny-unlink") {
+        return Err("fast-verify-v1 supports tiny-create/stat/unlink only".into());
+    }
     if !verification && mode != "performance" {
         return Err("invalid phase1 mode".into());
     }
@@ -830,6 +834,7 @@ fn run_case(
     let branch;
     let mut history = Vec::new();
     let mut genesis_root = None;
+    let mut fast_certificate = None;
     let orchestration_start = Instant::now();
     let mut pure_call_sum_ns = 0u64;
     let mut product_budget = ProductBudget::new(!verification);
@@ -922,6 +927,11 @@ fn run_case(
             .trim()
             .parse()?;
         genesis_root = Some(store.pin_branch(branch)?.root);
+        if fast {
+            fast_certificate = Some(super::workspace_verify::FastCertificate::load(
+                seed, genesis_root.ok_or("fast pristine input root")?, &registry::fixture(case, seed)?,
+            )?);
+        }
         let request = CreateWorkspaceSession {
             branch_id: branch,
             placement: case_placement(&Some(container.clone()), root, seed as usize, &case.id),
@@ -1055,7 +1065,7 @@ fn run_case(
                         OsString::from(&case.id),
                         OsString::from(seed.to_string()),
                         OsString::from(step.to_string()),
-                        OsString::from(mode),
+                        OsString::from(if fast { "verify" } else { mode }),
                     ];
                     product_budget.begin("exec")?;
                     let start = product_budget.start_clock("exec")?;
@@ -1232,7 +1242,28 @@ fn run_case(
         )?;
         let client = Client::connect(reopened.clone())?;
         let mut verifier_operation = 0;
-        if case.family != "dedup_branch_history" {
+        if fast {
+            let certificate = fast_certificate.as_ref().ok_or("missing fast input certificate")?;
+            let expected = registry::expected(case, seed, registry::steps(case))?;
+            let delta = workload_source::ordinary_workloads::fast_delta_for_entries(case, seed, registry::steps(case), &expected)?;
+            let pinned = reopened.pin_branch(branch)?;
+            let receipt = super::workspace_verify::verify_fast_root(&pinned.reader, pinned.root, &expected, &delta, certificate)?;
+            emit("fast-canonical-verification", &[("receipt", quote(&format!("{receipt:?}")))]);
+            let session = client.create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: case_placement(&Some(container.clone()), root, seed as usize, &format!("{}-fast-reopen",case.id)),
+                projection: Some(WorkspaceProjection::Fuse),
+            })?;
+            let output = execute(&client,session.id,vec![
+                "/usr/local/bin/fs-benchmark-workload".into(), "workspace-verify-fast".into(),
+                case.id.clone().into(), seed.to_string().into(), registry::steps(case).to_string().into(),
+                certificate.binding.clone().into(),
+            ])?;
+            emit("fast-native-verification", &[("receipt",quote(&output_text(&output)?))]);
+            client.end_workspace_session(session.id,EndWorkspaceMode::Clean)?;
+            observed(&client,&mut verifier_operation)?;
+        }
+        if !fast && case.family != "dedup_branch_history" {
             let mut expected = registry::expected(case, seed, registry::steps(case))?;
             if case.kind == "git-tool" {
                 let manifest = std::fs::read_to_string(
@@ -1510,13 +1541,13 @@ fn run_case(
         }
         drop(client);
         drop(reopened);
-        emit("verification-complete", &[("status", quote("pass"))]);
+        if !fast { emit("verification-complete", &[("status", quote("pass"))]); }
     }
     spool_observation("final-client-drop-cleanup")?;
     emit(
-        "sample-complete",
+        if fast { "fast-verification-complete" } else { "sample-complete" },
         &[
-            ("status", quote("pass")),
+            ("status", quote(if fast { "fast_iteration_verified" } else { "pass" })),
             ("host_orchestration_ns", host_orchestration_ns.to_string()),
             ("orchestration_scope", quote(ORCHESTRATION_SCOPE)),
             ("pure_call_sum_ns", pure_call_sum_ns.to_string()),
@@ -1548,6 +1579,11 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         .map(|s| s.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     match args.as_slice() {
+        [command, root] if command == "workspace-qualify-fast" => {
+            let receipt = super::workspace_verify::fast_qualification(Path::new(root))?;
+            emit("fast-verifier-qualification", &[("status",quote("pass")),("receipt",quote(&format!("{receipt:?}")))]);
+            Ok(())
+        }
         [command, root] if command == "workspace-qualify-digests" => {
             let receipt = super::workspace_verify::digest_qualification(Path::new(root))?;
             emit(

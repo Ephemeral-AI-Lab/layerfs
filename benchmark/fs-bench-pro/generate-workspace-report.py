@@ -28,7 +28,8 @@ FAMILY_COUNTS = dict(zip(("payload_create_read", "tiny_file_churn", "directory_c
 CLEAN = {"workspace-clean-commit", "payload-random-read", "tiny-stat", "directory-metadata-scan", "directory-content-scan"}
 FUSE_CALLBACKS = "lookup getattr setattr readlink mknod mkdir unlink rmdir symlink rename link open read write flush release fsync opendir readdir readdirplus releasedir fsyncdir statfs access create".split()
 IDENTITY_FIELDS = {"product_identity": "product_seal", "harness_identity": "harness_seal", "source_revision": "revision", "image_id": "image_id", "contract_commit": "phase1_contract_commit"}
-VERIFY_KINDS = {"canonical-verification", "native-verification", "verification-complete", "dedup-verification", "capped-verification", "history-transcript", "history-accounting", "git-semantic-verification", "git-precommit-custody", "git-reopen-custody", "proof-start", "fault-reachability", "transaction-fault-reachability"}
+FAST_KINDS = {"fast-canonical-verification", "fast-native-verification", "fast-verification-complete"}
+VERIFY_KINDS = FAST_KINDS | {"canonical-verification", "native-verification", "verification-complete", "dedup-verification", "capped-verification", "history-transcript", "history-accounting", "git-semantic-verification", "git-precommit-custody", "git-reopen-custody", "proof-start", "fault-reachability", "transaction-fault-reachability"}
 
 
 def unique_object(pairs):
@@ -194,7 +195,7 @@ def reduce_counter(target, key, value, maximum=False):
 def metrics(records):
     result = {}
     for row in records:
-        if row["kind"] == "sample-complete":
+        if row["kind"] in {"sample-complete", "fast-verification-complete"}:
             for key in ("host_orchestration_ns", "pure_call_sum_ns", "orchestration_unattributed_ns", "created_commit_count"):
                 if key in row:
                     result[key] = number(row[key], key)
@@ -439,7 +440,7 @@ def validate_resources(directory, outcome, case, records, successful, issues, vi
         violations.append("worker exceeded frozen case deadline")
     require(outcome["command_wall_ns"] >= outcome["preparation_ns"] + duration, "command wall hides preparation or worker time", issues)
     require(outcome.get("command_wall_scope") == "one sample preparation/runtime/product/cleanup; CLI validation is in invocation receipt", "sample command wall scope missing", issues)
-    complete = [row for row in records if row["kind"] == "sample-complete"]
+    complete = [row for row in records if row["kind"] in {"sample-complete", "fast-verification-complete"}]
     required_scope = number(complete[0].get("host_orchestration_ns"), "host_orchestration_ns") if len(complete) == 1 else duration
     recovered = [row for row in records if row["kind"] == "recovery"]
     if not successful and recovered:
@@ -450,12 +451,12 @@ def validate_resources(directory, outcome, case, records, successful, issues, vi
         operations = operation_rows(records, issues)
         required_scope = sum(number(row.get("elapsed_ns"), "phase elapsed_ns") for row in records if row["kind"] == "phase")
         required_scope += sum(row["service_ns"] + row["queue_ns"] for row in operations if row.get("outcome") == "failed" or row.get("family") == "workspace.end")
-        failed_exec_ns = failed_execution(records, case, issues, outcome["mode"] == "verify")
+        failed_exec_ns = failed_execution(records, case, issues, outcome["mode"] in {"verify", "fast-verify"})
         if failed_exec_ns is not None:
             required_scope += failed_exec_ns
         require(required_scope > 0, "failed attempt lacks observed reached-call duration", issues)
     windows = [row for row in records if row["kind"] == "runtime-observation-window"]
-    if outcome["mode"] == "verify":
+    if outcome["mode"] in {"verify", "fast-verify"}:
         require(len(windows) == 1, "verification lacks complete runtime observation window", issues)
     if windows:
         require(len(windows) == 1, "duplicate runtime observation window", issues)
@@ -1080,7 +1081,49 @@ def validate_preparation_selection(directory, acquired, build, case, issues):
         require(selection.get("source_compatibility") is None, "unexpected preparation compatibility exception", issues)
 
 
+def validate_fast_receipts(directory, outcome, records, successful, issues):
+    require(not any(row["kind"] in {"sample-complete", "verification-complete", "canonical-verification", "native-verification"} for row in records), "fast profile must not emit exhaustive/full completion", issues)
+    groups = {kind: [row for row in records if row["kind"] == kind] for kind in FAST_KINDS}
+    if not successful:return
+    require(all(len(value) == 1 for value in groups.values()), "fast profile lacks unique canonical/native/completion receipts", issues)
+    if not all(len(value) == 1 for value in groups.values()):return
+    folder = directory / "verifier-exchange/fast-certificate"
+    certificate = read(folder / "certificate.json")
+    binding = custody.sha(folder / "certificate.json")
+    projection = custody.sha(folder / "certificate.tsv")
+    require(binding == outcome.get("verification_certificate_identity") and projection == outcome.get("verification_certificate_projection_identity"), "fast certificate JSON/projection seal differs", issues)
+    require(certificate.get("schema") == "fast-verification-certificate-v1" and certificate.get("profile") == runner.FAST_PROFILE and certificate.get("assurance") == "fully_verified", "fast certificate is not a full reference proof", issues)
+    require(certificate.get("seed") == outcome.get("seed") and certificate.get("input_plan_sha256") == outcome.get("input_identity") and certificate.get("product_seal") == outcome.get("product_identity"), "fast certificate input/seed/product assumptions differ", issues)
+    source = Path(certificate["source_attempt"]);custody.verify_manifest(source)
+    require(custody.sha(source / "evidence.sha256") == certificate["source_manifest_sha256"], "full certificate source seal changed", issues)
+    for name, expected in certificate["artifact_sha256"].items():
+        require(custody.sha(folder / name) == expected, "fast certificate copied artifact differs: " + name, issues)
+    canonical = receipt(groups["fast-canonical-verification"][0]["receipt"])
+    native = receipt(groups["fast-native-verification"][0]["receipt"])
+    completion = groups["fast-verification-complete"][0]
+    require(completion.get("status") == "fast_iteration_verified" and outcome.get("assurance_status") == "fast_iteration_verified", "fast assurance label is invalid", issues)
+    for value in (canonical, native):
+        require(value.get("verification_status") == "fast_iteration_verified" and value.get("fully_verified") in {False, "false"} and value.get("certificate_binding") == binding, "fast receipt scope/certificate differs", issues)
+    require(canonical.get("full_canonical_census_performed") in {False, "false"}, "fast profile claims full canonical census", issues)
+    for key in ("authenticated_namespace_paths", "authenticated_global_inodes", "actual_read_regular_paths", "actual_read_logical_bytes", "skipped_current_store_regular_paths", "skipped_current_store_logical_bytes"):
+        number(int(canonical[key]), key)
+    for key in ("native_namespace_paths_verified", "native_namespace_types_verified", "changed_paths_declared", "absent_paths_verified", "witness_paths_declared", "selected_metadata_paths_verified", "selected_regular_paths_verified", "selected_regular_bytes_verified", "skipped_untouched_regular_bodies", "skipped_untouched_metadata_paths"):
+        number(int(native[key]), key)
+    require(int(canonical["authenticated_namespace_paths"]) == int(native["native_namespace_paths_verified"]), "fast current namespace coverage differs", issues)
+    require(canonical.get("certificate_root") == certificate["root"] and digest(canonical.get("canonical_root")), "fast canonical root binding missing", issues)
+    require(bool(native.get("fast_witness_profile")) and bool(native.get("oracle_scope")), "fast skipped/witness scope missing", issues)
+    require(read(directory / "verification/fast-verification/receipts.json") == [row for row in records if row["kind"] in FAST_KINDS], "fast retained receipts differ from raw", issues)
+
+
+def validate_fast_attempt(outcome, classification, case, build):
+    return _validate_attempt(outcome, classification, case, build, fast=True)
+
+
 def validate_attempt(outcome, classification, case, build):
+    return _validate_attempt(outcome, classification, case, build, fast=False)
+
+
+def _validate_attempt(outcome, classification, case, build, fast=False):
     issues, violations = [], []
     records, observed, resource, details, packages = [], {}, {}, {}, []
     directory = Path(outcome.get("evidence_path", ""))
@@ -1097,7 +1140,7 @@ def validate_attempt(outcome, classification, case, build):
         require(outcome.get("source_arm") in {"baseline", "corrected"} and outcome.get("admission_eligible") is False, "invalid Phase 1 arm/admission scope", issues)
         for key in ("scenario_id", "family_id", "proof_only", "inherited"):
             require(outcome.get(key) == case.get(key, False), f"slot identity mismatch: {key}", issues)
-        require(outcome.get("mode") in {"performance", "verify"}, "unknown evidence mode", issues)
+        require(outcome.get("mode") in ({"fast-verify"} if fast else {"performance", "verify"}), "unknown evidence mode", issues)
         if outcome.get("coverage_status") != "executed":
             require(outcome.get("product_status") == "not-run", "unexecuted slot contradicts declared product outcome", issues)
             require(outcome.get("supervisor_cleanup_status") == "pass", "unexecuted attempt cleanup was not recovered", issues)
@@ -1105,7 +1148,7 @@ def validate_attempt(outcome, classification, case, build):
             observed = {key: number(outcome[key], key) for key in ("preparation_ns", "command_wall_ns", "cleanup_ns", "runtime_preparation_ns") if key in outcome}
             details = {"metrics": observed, "steps": [], "verification": [], "scope": "preparation/interruption only; no product latency or success claim"}
             return {"issues": sorted(set(issues)), "violations": [], "metrics": observed, "resource_observations": {}, "observations": details, "canonical_packages": [],
-                    "product_status": derived_product_status(outcome, []), "verification_pass": False}
+                    "product_status": derived_product_status(outcome, []), "verification_pass": False, "fast_iteration_pass": False}
         records = raw(directory / "raw.jsonl")
         require(not any(row.get("kind") == "product-budget-observation-error" for row in records), "mandatory product-budget observer failed", issues)
         if case["family_id"] != "workspace_reliability":
@@ -1163,6 +1206,8 @@ def validate_attempt(outcome, classification, case, build):
         resource = validate_resources(directory, outcome, case, records, successful, issues, violations)
         if outcome["mode"] == "performance":
             validate_performance(case, outcome, records, issues, violations, successful)
+        elif fast:
+            validate_fast_receipts(directory, outcome, records, successful, issues)
         else:
             validate_verification(case, records, issues, successful)
         if outcome["mode"] == "verify":
@@ -1180,7 +1225,8 @@ def validate_attempt(outcome, classification, case, build):
     except (OSError, ValueError, KeyError, TypeError, IndexError, AssertionError, EOFError) as error:
         issues.append(f"invalid/missing evidence: {type(error).__name__}: {error}")
     return {"issues": sorted(set(issues)), "violations": sorted(set(violations)), "metrics": observed, "resource_observations": resource, "observations": details, "canonical_packages": packages,
-            "product_status": derived_product_status(outcome, violations), "verification_pass": successful and outcome.get("mode") == "verify" and not issues and not violations}
+            "product_status": derived_product_status(outcome, violations), "verification_pass": successful and not fast and outcome.get("mode") == "verify" and not issues and not violations,
+            "fast_iteration_pass": successful and fast and not issues and not violations}
 
 
 def registry_cases(rows):
@@ -1274,11 +1320,39 @@ def sampler_source_parts(source):
     return source[:start] + b"    /* source-bound sampler body excluded */" + source[end:], body
 
 
+def fast_definition_parts(filename, source):
+    if filename.endswith("workspace_common.rs"):return source[:source.index(b"pub(crate) fn decode_manifest(")]
+    if filename.endswith("ordinary_workloads.rs"):return source.split(b"// BEGIN NATIVE FAST VERIFICATION V1", 1)[0].rstrip()
+    if filename.endswith("/workload.rs"):return source[source.index(b"pub(crate) struct Sha256"):]
+    raise ValueError("fast profile partial source path is not approved")
+
+
+@lru_cache(maxsize=None)
+def fast_profile_source_proof(revision):
+    baseline = runner.FAST_VERIFIER_SOURCE
+    if product_tree(baseline) != product_tree(revision):raise ValueError("fast profile changes product source/build inputs")
+    pairs = runner.fast_verifier_source_proof(revision)
+    changed = set(subprocess.check_output(["git", "diff", "--name-only", baseline, revision, "--", "benchmark/fs-bench-pro"], cwd=HERE.parents[1], text=True).splitlines())
+    if changed - set(pairs) - {"benchmark/fs-bench-pro/workspace-runner.py", "benchmark/fs-bench-pro/generate-workspace-report.py"}:raise ValueError("fast profile includes unreviewed benchmark source")
+    path = "docs/roadmap/0.1/0.1.3/verification-profiles.md"
+    expected = subprocess.check_output(["git", "show", "3eaddf47:" + path], cwd=HERE.parents[1])
+    actual = subprocess.check_output(["git", "show", revision + ":" + path], cwd=HERE.parents[1])
+    if actual != expected:raise ValueError("fast profile changes authorized assurance contract")
+    return {"baseline_revision": baseline, "source_pairs": pairs, "profile_contract_sha256": hashlib.sha256(actual).hexdigest(),
+        "scope": "Exact separate fast-verification additions and canonical scratch-allocation reuse. Existing full checks and fixed input/oracles remain; old evidence retains actual source, environment and assurance. No cost equivalence or full-gate credit for fast results."}
+
+
 def validate_bridge_path(filename, expected, revisions):
     sources = {revision: subprocess.check_output(["git", "show", f"{revision}:{filename}"], cwd=HERE.parents[1]) for revision in revisions}
     if isinstance(expected, str):
         if not digest(expected) or any(hashlib.sha256(source).hexdigest() != expected for source in sources.values()):
             raise ValueError("verification bridge source path hash mismatch")
+        return
+    if isinstance(expected, dict) and expected.get("comparison") == "fast-verifier-definition-v1":
+        if set(expected) != {"comparison", "sha256", "source_sha256"} or set(expected["source_sha256"]) != set(revisions):raise ValueError("invalid fast definition bridge")
+        for revision, source in sources.items():
+            if hashlib.sha256(source).hexdigest() != expected["source_sha256"][revision] or hashlib.sha256(fast_definition_parts(filename, source)).hexdigest() != expected["sha256"]:raise ValueError("fast definition source binding differs")
+            if revision not in {CLEAN_PRE_BUDGET_REVISION, runner.FAST_VERIFIER_SOURCE}:fast_profile_source_proof(revision)
         return
     if filename != "benchmark/fs-bench-pro/workspace_registry.rs" or not isinstance(expected, dict) or set(expected) != {"comparison", "sha256", "function_sha256"} or expected.get("comparison") != "exclude-sample_resources-body-v1" or not digest(expected.get("sha256")) or not isinstance(expected.get("function_sha256"), dict) or set(expected["function_sha256"]) != set(revisions):
         raise ValueError("unapproved partial source bridge")
@@ -1660,6 +1734,12 @@ def runtime_budget_source_proof(old_revision, new_revision):
     old_tree, new_tree = product_tree(old_revision), product_tree(new_revision)
     if old_tree != new_tree:
         raise ValueError("runtime budget bridge changed product source/build inputs")
+    if new_revision != runner.FAST_VERIFIER_SOURCE:
+        host = subprocess.check_output(["git", "show", new_revision + ":benchmark/fs-bench-pro/src/workspace_bench.rs"], cwd=HERE.parents[1])
+        if hashlib.sha256(host).hexdigest() == runner.FAST_VERIFIER_HASHES["src/workspace_bench.rs"]:
+            return {"prior_runtime_budget_proof": runtime_budget_source_proof(old_revision, runner.FAST_VERIFIER_SOURCE),
+                "fast_verification_source_proof": fast_profile_source_proof(new_revision),
+                "scope": "Only completed clean6c <=15s performance; original source/environment cost. Separate exact verifier-only implementation; no full-to-fast assurance conversion."}
     changed = set(subprocess.check_output(["git", "diff", "--name-only", old_revision, new_revision, "--", "benchmark/fs-bench-pro"], cwd=HERE.parents[1], text=True).splitlines())
     if not {"benchmark/fs-bench-pro/src/workspace_bench.rs", "benchmark/fs-bench-pro/src/sdk_file_edit.rs", "benchmark/fs-bench-pro/workspace-runner.py"}.issubset(changed) or changed - BUDGET_HARNESS_PATHS:
         raise ValueError("runtime budget bridge changed unreviewed harness dependencies")
@@ -1717,6 +1797,9 @@ def family_builds(campaign, assets, primary, registry):
         if build["revision"] == CLEAN_PRE_BUDGET_REVISION and primary["revision"] != CLEAN_PRE_BUDGET_REVISION:
             if runtime_budget_bridge is None or selector.split(":")[-1] != "performance" or parts[0] != "slot":
                 raise ValueError("old clean6c runtime-budget reuse requires exact completed performance-slot selector and source proof")
+        if build["revision"] == runner.FAST_VERIFIER_SOURCE and primary["revision"] != build["revision"]:
+            if parts[0] != "slot" or parts[-1] != "verify":raise ValueError("old full verifier reuse requires exact completed full-proof slot")
+            fast_profile_source_proof(primary["revision"])
         if build.get("product_baseline") != primary.get("product_baseline"):
             raise ValueError("scoped mapping changed the pinned release baseline")
         if build["product_seal"] != primary["product_seal"]:
@@ -1902,10 +1985,10 @@ def generate(campaign, assets):
     suppressions = suppression_ledger["cases"]
     required, suppressed_slots = phase1_scope(registry, suppressions)
     required_keys = {(case["scenario_id"], seed, mode) for case, seed, mode in required}
-    current = [row for row in ledger.values() if row.get("scenario_id") not in suppressions and all(row.get(key) == selected_build(selected_builds, row, row.get("mode"))[value] for key, value in IDENTITY_FIELDS.items())]
+    current = [row for row in ledger.values() if row.get("mode") != "fast-verify" and row.get("scenario_id") not in suppressions and all(row.get(key) == selected_build(selected_builds, row, row.get("mode"))[value] for key, value in IDENTITY_FIELDS.items())]
     by_slot, global_issues, evidence_paths = {}, [], set()
     for family in {case["family_id"] for case in registry}:
-        environments = {row.get("environment_identity") for row in current if row.get("family_id") == family}
+        environments = {row.get("environment_identity") for row in current if row.get("family_id") == family and row.get("mode") == "performance"}
         if len(environments) > 1:
             global_issues.append(f"multiple runtime environment identities cannot be pooled within {family}")
     invocations = []
@@ -1927,7 +2010,9 @@ def generate(campaign, assets):
             else:
                 number(value.get("invocation_wall_ns"), "invocation_wall_ns")
                 require(value["invocation_wall_ns"] >= value["source_validation_ns"] + value["registry_query_ns"], "CLI invocation hides validation/query work", global_issues)
-                require(value.get("status") in {"pass", "failed-outcomes", "completed_with_suppressions", "suppressed_phase1_time_budget"}, "CLI invocation has not completed", global_issues)
+                require(value.get("status") in {"pass", "failed-outcomes", "completed_with_suppressions", "suppressed_phase1_time_budget", "interrupted"}, "CLI invocation has not completed", global_issues)
+                if value.get("status") == "interrupted":
+                    require(str(value.get("error", "")).startswith("KeyboardInterrupt:"), "interrupted invocation lacks explicit user-stop reason", global_issues)
             require(isinstance(value.get("planned_slots"), list), "CLI invocation lacks selected slot inventory", global_issues)
         except (ValueError, TypeError) as error:
             global_issues.append(f"invalid invocation receipt {path.name}: {error}")
@@ -1983,7 +2068,7 @@ def generate(campaign, assets):
             require(type(value["metrics"].get("pure_call_sum_ns")) is int and value["metrics"]["pure_call_sum_ns"] <= 15_000_000_000,
                     "active performance exceeds15s or lacks the exact cumulative product-time receipt; durable suppression required", value["issues"])
         checked[key] = value
-        row = {"case": key[0], "family_id": case["family_id"], "seed": seed, "mode": mode, "inherited": case.get("inherited", False),
+        row = {"case": key[0], "family_id": case["family_id"], "seed": seed, "mode": mode, "assurance_status": "fully_verified" if value["verification_pass"] else "not_verified", "inherited": case.get("inherited", False),
                "source_identity": {key: outcome.get(key) for key in IDENTITY_FIELDS}, "source_arm": outcome.get("source_arm"), "raw_product_status": outcome.get("product_status"), "coverage_status": outcome.get("coverage_status"), "product_status": value["product_status"], "evidence_status": "REVISE" if value["issues"] else "PASS",
                "issues": value["issues"], "violations": value["violations"], "evidence": outcome["evidence_path"], "metrics": value["metrics"], "resource_observations": value["resource_observations"], "observations": value["observations"], "canonical_packages": value["canonical_packages"],
                "verification_summary": verification_summary(value["observations"], value["canonical_packages"]), "environment_identity": outcome.get("environment_identity"), "input_identity": outcome.get("input_identity"), "invalidation_context": invalidation, "product_source_compatibility": product_bridge, "product_predicate_scope": predicate_scope,
@@ -2070,7 +2155,19 @@ def generate(campaign, assets):
             arm["invalidated_observations"] += bool(value.get("invalidation_context"))
             arm["raw_pass" if value.get("product_status") == "pass" else "raw_fail"] += 1
             arm["evidence"].append(value["evidence_path"])
+    fast_results = []
+    for outcome in ledger.values():
+        if outcome.get("mode") != "fast-verify":continue
+        case = next((item for item in registry if item["scenario_id"] == outcome.get("scenario_id")), None)
+        selected = selected_build(selected_builds, outcome, "fast-verify") if case else None
+        if selected is None or any(outcome.get(key) != selected[value] for key, value in IDENTITY_FIELDS.items()):continue
+        value = validate_fast_attempt(outcome, classifications.get(Path(outcome["evidence_path"]).name, {}), case, selected)
+        fast_results.append({"case": outcome["scenario_id"], "seed": outcome["seed"], "mode": "fast-verify", "evidence": outcome["evidence_path"],
+            "source_identity": source_identity(outcome), "environment_identity": outcome.get("environment_identity"),
+            "assurance_status": "fast_iteration_verified" if value["fast_iteration_pass"] else "not_verified", "counts_toward_full_phase1_gate": False,
+            "certificate_identity": outcome.get("verification_certificate_identity"), **value})
     summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "scoped_builds": build_provenance, "verification_compatibility": compatibility, "product_compatibility": list(product_compatibility.values()), "runtime_budget_compatibility": next((item["runtime_budget_compatibility"] for item in build_provenance.values() if item.get("runtime_budget_compatibility")), None), "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
+               "fast_iteration_results": fast_results, "fast_profile_scope": "Separate development assurance; no exhaustive Phase1 coverage or performance claim. Full verify never falls back to fast.",
                "runtime_suppressions": suppression_ledger, "suppressed_slots": suppressed_slots, "family_scope": family_scope,
                "suppressed_original_outcomes": [value for value in retained_outcomes if value["phase1_scope_status"] == "suppressed_phase1_time_budget"],
                "retained_source_arms": list(arms.values()), "retained_invalidations": invalidations, "eligible_distributions": eligible_distributions, "step_evidence_path": "step-evidence.json", "counts": counts, "phase1_evidence_status": "PASS" if not missing and not invalid and not global_issues else "REVISE", "product_status": "FAIL" if failures else "NOT_ESTABLISHED" if missing or invalid or global_issues else "PASS",
@@ -2089,6 +2186,8 @@ def generate(campaign, assets):
     custody.write_json(results / "report-inputs.json", inputs)
     lines = ["# LayerFS v0.1.3 Phase 1 initial baseline", "", f"Evidence: **{summary['phase1_evidence_status']}**. Product: **{summary['product_status']}**. Phase 1 terminal gate: **{summary['phase1_terminal_status']}**.", "", f"Sealed source: `{build['revision']}`. Report generator: `{summary['report_generator_sha256']}`.", "", "| Coverage | Count |", "| --- | ---: |"]
     lines += [f"| {key} | {value} |" for key, value in counts.items()]
+    lines += ["", "## Fast iteration profile", "", "Fast results remain separate from fully verified evidence and never fill required Phase1 slots.", ""]
+    lines += [f"- `{item['case']}` seed {item['seed']}: {item['assurance_status']}; full gate contribution: none; evidence `{item['evidence']}`." for item in fast_results]
     lines += ["", "## Phase1 runtime scope suppressions", "", "The original inventory remains visible. Suppressed exact IDs and their associated verification are outside active Phase1 coverage; suppression is neither PASS nor FAIL nor unimplemented work. Their raw historical outcomes are preserved. All active correctness/resource/cleanup gates still apply. Git remains wired with all four execution subsets suppressed.", "", "| Case | Phase1 scope | Reason |", "| --- | --- | --- |"]
     lines += [f"| `{case}` | suppressed_phase1_time_budget | {decision.get('reason', decision.get('trigger', 'persistent15s product-time scope decision'))} |" for case, decision in sorted(suppressions.items())]
     lines += ["", "## Retained original and corrected source arms", "", "Raw outcomes keep their actual producing identities and pass/fail statuses. Every unrequested SQL-history performance recording is diagnostic-only: source labelling does not repair its contaminated timers or memory observations.", "", "| Arm | Source / identity group | Image | Raw performance outcomes | Raw pass | Raw fail | Invalidated observations | SQL history scope |", "| --- | --- | --- | ---: | ---: | ---: | ---: | --- |"]
@@ -2117,6 +2216,15 @@ def generate(campaign, assets):
     (results / "initial-results.md").write_text("\n".join(lines))
     custody.seal(results)
     return summary
+
+
+def fast_profile_self_check():
+    runner.fast_profile_self_check()
+    issues = []
+    validate_fast_receipts(Path("unused"), {}, [{"kind": "sample-complete", "status": "pass"}], True, issues)
+    assert "fast profile must not emit exhaustive/full completion" in issues
+    assert "fast profile lacks unique canonical/native/completion receipts" in issues
+    print("fast_profile_no_placeholder_or_full_gate_credit_self_check=pass")
 
 
 def canonical_receipt_self_check():

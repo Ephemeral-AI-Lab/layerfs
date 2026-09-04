@@ -60,6 +60,7 @@ pub(crate) struct SnapshotEvidence {
     pub extents: BTreeMap<String, Vec<Extent>>,
     pub file_roots: BTreeMap<String, ObjectId>,
     pub canonical_objects: BTreeMap<ObjectId, CanonicalObject>,
+    independent_manifest: String,
 }
 
 pub(crate) fn verify(
@@ -118,7 +119,7 @@ pub(crate) fn persist_snapshot(
         },
     );
     write_gzip(&manifest_path, |writer| {
-        writer.write_all(common::manifest(entries)?.as_bytes())?;
+        writer.write_all(result.independent_manifest.as_bytes())?;
         Ok(())
     })?;
     result
@@ -163,6 +164,7 @@ pub(crate) fn verify_root(
     let mut extents = BTreeMap::new();
     let mut file_roots = BTreeMap::new();
     let mut custody_paths = 0;
+    let mut comparison_scratch = vec![0; common::SCRATCH_BYTES];
     while let Some(path) = pending.pop() {
         if !found.insert(path.clone()) {
             return Err("canonical path repeated".into());
@@ -262,7 +264,7 @@ pub(crate) fn verify_root(
                 let mut sink = CompareSink {
                     expected: content,
                     offset: 0,
-                    scratch: vec![0; common::SCRATCH_BYTES],
+                    scratch: &mut comparison_scratch,
                     custody_hash: matches!(content, Content::Digest { .. })
                         .then(workload_source::Sha256::new),
                 };
@@ -359,22 +361,24 @@ pub(crate) fn verify_root(
         }
         .into(),
     );
+    let independent_manifest = common::manifest(entries)?;
     receipt.insert(
         "oracle_identity".into(),
-        workload_source::sdk_edit_common::sha256_hex(common::manifest(entries)?.as_bytes()),
+        workload_source::sdk_edit_common::sha256_hex(independent_manifest.as_bytes()),
     );
     Ok(SnapshotEvidence {
         receipt,
         extents,
         file_roots,
         canonical_objects,
+        independent_manifest,
     })
 }
 
 struct CompareSink<'a> {
     expected: &'a Content,
     offset: u64,
-    scratch: Vec<u8>,
+    scratch: &'a mut [u8],
     custody_hash: Option<workload_source::Sha256>,
 }
 impl Write for CompareSink<'_> {
@@ -494,15 +498,21 @@ pub(crate) fn typed_census(
     let mut pending = vec![(root, Role::Namespace, Origin::Structure)];
     let mut visits = BTreeSet::new();
     let mut seen = BTreeMap::<ObjectId, CanonicalObject>::new();
-    while let Some((id, role, origin)) = pending.pop() {
-        if !visits.insert((id, role, origin)) {
-            continue;
+    while !pending.is_empty() {
+        // Existing ObjectSource batching; bounded even for a malformed maximum-size
+        // object (16 * MAX_OBJECT_BYTES). Every object is still authenticated.
+        let mut batch = Vec::with_capacity(16);
+        while batch.len() < 16 {
+            let Some(item) = pending.pop() else { break };
+            if visits.insert(item) { batch.push(item); }
         }
-        let objects = source.read_authenticated_objects(&[id])?;
-        if objects.len() != 1 || objects[0].id != id {
-            return Err("canonical authenticated batch identity".into());
-        }
-        let bytes = &objects[0].bytes;
+        if batch.is_empty() { continue }
+        let ids = batch.iter().map(|item| item.0).collect::<Vec<_>>();
+        let objects = source.read_authenticated_objects(&ids)?;
+        if objects.len() != batch.len() { return Err("canonical authenticated batch cardinality".into()); }
+        for ((id, role, origin), object) in batch.into_iter().zip(objects) {
+        if object.id != id { return Err("canonical authenticated batch identity".into()); }
+        let bytes = &object.bytes;
         layerfs_content::authenticate_identity(bytes, id)?;
         let observed = CanonicalObject {
             role,
@@ -610,6 +620,7 @@ pub(crate) fn typed_census(
             }
         }
     }
+    }
     let mut totals = BTreeMap::<Role, (u64, u64)>::new();
     let mut canonical_bytes = 0u64;
     for object in seen.values() {
@@ -632,6 +643,303 @@ pub(crate) fn typed_census(
     receipt.insert("canonical_unique_bytes".into(), canonical_bytes.to_string());
     receipt.insert("canonical_role_status".into(), "pass".into());
     Ok((receipt, seen))
+}
+
+/// Certificate references a fully verified pristine input, not reads in this run.
+pub(crate) struct FastCertificate {
+    pub binding: String,
+    root: ObjectId,
+    file_roots: BTreeMap<String, ObjectId>,
+}
+fn read_gzip_text(path: &Path) -> AnyResult<String> {
+    let output = Command::new("/usr/bin/gzip").args(["-dc"]).arg(path).output()?;
+    if !output.status.success() { return Err("fast certificate gzip failed".into()); }
+    Ok(String::from_utf8(output.stdout)?)
+}
+fn hex_digest(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+fn require_bound_bytes(bytes: &[u8], expected: &str, scope: &str) -> AnyResult<()> {
+    if !hex_digest(expected) || workload_source::sdk_edit_common::sha256_hex(bytes) != expected {
+        return Err(format!("fast certificate {scope} hash mismatch").into());
+    }
+    Ok(())
+}
+fn require_bound_file(path: &Path, expected: &str, scope: &str) -> AnyResult<Vec<u8>> {
+    let bytes = std::fs::read(path)?;
+    require_bound_bytes(&bytes,expected,scope)?;
+    Ok(bytes)
+}
+impl FastCertificate {
+    fn require_pristine_root(&self, root: ObjectId) -> AnyResult<()> {
+        if self.root != root { return Err("fast certificate pristine root mismatch".into()); }
+        Ok(())
+    }
+    pub(crate) fn load(seed: u8, pristine_root: ObjectId, fixture: &[Entry]) -> AnyResult<Self> {
+        let projection = require_bound_file(
+            Path::new(&std::env::var("LAYERFS_V013_FAST_CERTIFICATE")?),
+            &std::env::var("LAYERFS_V013_FAST_CERTIFICATE_SHA256")?, "TSV projection",
+        )?;
+        let text = String::from_utf8(projection)?;
+        let mut fields = BTreeMap::new();
+        for line in text.lines() {
+            let (key, value) = line.split_once('\t').ok_or("fast certificate TSV columns")?;
+            if value.is_empty() || fields.insert(key, value).is_some() { return Err("fast certificate duplicate/empty field".into()); }
+        }
+        let get = |key| fields.get(key).copied().ok_or("missing fast certificate field");
+        if get("profile")? != "fast-verify-v1" || get("seed")?.parse::<u8>()? != seed
+            || get("input_plan_sha256")? != std::env::var("LAYERFS_V013_FAST_INPUT_PLAN_SHA256")? {
+            return Err("fast certificate profile/seed/input mismatch".into());
+        }
+        let binding = get("certificate_sha256")?.to_owned();
+        if !hex_digest(&binding) || workload_source::sdk_edit_common::sha256_hex(
+            &std::fs::read(get("certificate_json")?)?) != binding {
+            return Err("fast certificate binding mismatch".into());
+        }
+        for key in ["source_attempt", "source_revision", "product_seal", "certificate_manifest_sha256"] { get(key)?; }
+        let root = get("root")?.parse()?;
+        if root != pristine_root { return Err("fast certificate pristine root mismatch".into()); }
+        require_bound_file(Path::new(get("certificate_manifest")?), get("certificate_manifest_file_sha256")?, "compressed manifest")?;
+        require_bound_file(Path::new(get("certificate_file_roots")?), get("certificate_file_roots_sha256")?, "compressed file roots")?;
+        let manifest = read_gzip_text(Path::new(get("certificate_manifest")?))?;
+        if workload_source::sdk_edit_common::sha256_hex(manifest.as_bytes()) != get("oracle_identity")? {
+            return Err("fast certificate independent manifest identity".into());
+        }
+        let certified = common::decode_manifest(&manifest)?;
+        let expected = fixture.iter().map(|e| (e.path.as_str(), e)).collect::<BTreeMap<_, _>>();
+        if certified.len() != expected.len() { return Err("fast certificate input membership".into()); }
+        for entry in &certified {
+            let wanted = expected.get(entry.path.as_str()).ok_or("fast certificate extra input path")?;
+            let kinds_match = match (&entry.kind, &wanted.kind) {
+                (EntryKind::File(a), EntryKind::File(b)) => a.len() == b.len(),
+                (EntryKind::Directory, EntryKind::Directory) => true,
+                (EntryKind::Symlink(a), EntryKind::Symlink(b)) | (EntryKind::Hardlink(a), EntryKind::Hardlink(b)) => a == b,
+                _ => false,
+            };
+            if !kinds_match || (entry.mode,entry.mtime_seconds,entry.mtime_nanoseconds)
+                != (wanted.mode,wanted.mtime_seconds,wanted.mtime_nanoseconds) {
+                return Err("fast certificate independent input descriptor mismatch".into());
+            }
+        }
+        let roots = read_gzip_text(Path::new(get("certificate_file_roots")?))?;
+        let mut lines = roots.lines();
+        if lines.next() != Some("path\tcontent_root") { return Err("fast certificate file-root header".into()); }
+        let mut file_roots = BTreeMap::new();
+        for line in lines {
+            let (path, root) = line.split_once('\t').ok_or("fast certificate file-root columns")?;
+            if file_roots.insert(path.to_owned(), root.parse()?).is_some() { return Err("fast certificate duplicate file root".into()); }
+        }
+        let regular = fixture.iter().filter(|e| matches!(e.kind,EntryKind::File(_)|EntryKind::Hardlink(_)))
+            .map(|e| e.path.clone()).collect::<BTreeSet<_>>();
+        if regular != file_roots.keys().cloned().collect() { return Err("fast certificate regular membership".into()); }
+        let certificate = Self { binding, root, file_roots };
+        certificate.require_pristine_root(pristine_root)?;
+        Ok(certificate)
+    }
+}
+
+/// Full current namespace/global inode authentication, selected current bytes,
+/// and explicitly certificate-bound unchanged content references. Not a full proof.
+pub(crate) fn verify_fast_root(
+    source: &dyn ObjectSource,
+    root: ObjectId,
+    entries: &[Entry],
+    delta: &common::FastDelta,
+    certificate: &FastCertificate,
+) -> AnyResult<Receipt> {
+    if !hex_digest(&certificate.binding) { return Err("fast certificate binding format".into()); }
+    if entries.iter().any(|e| matches!(e.kind,EntryKind::File(Content::Digest {..}))) {
+        return Err("fast expected bytes require independent source".into());
+    }
+    common::validate_entries(entries)?;
+    let reader = CoreReader(source);
+    let namespace = layerfs_content::filesystem::namespace(&reader, root)?;
+    let mut records = BTreeMap::new();
+    inode::visit_inode_table_entries(&reader, inode::InodeTableRoot(namespace.inode_table_root),
+        &mut Default::default(), |page| {
+            for batch in page.chunks(16) {
+                let ids = batch.iter().map(|(_,id)| *id).collect::<Vec<_>>();
+                let mut slot = 0;
+                reader.get_authenticated_batch(&ids, |id, bytes| {
+                    if batch.get(slot).map(|pair| pair.1) != Some(id) { return Err(layerfs_content::CoreError::IdentityMismatch); }
+                    let inode_id = batch[slot].0;
+                    slot += 1;
+                    let record = inode::codec::decode_inode_record(bytes)?;
+                    if records.insert(inode_id, record).is_some() { return Err(layerfs_content::CoreError::InvalidRecord("duplicate global inode")); }
+                    Ok(())
+                })?;
+                if slot != batch.len() { return Err(layerfs_content::CoreError::InvalidRecord("global inode batch cardinality")); }
+            }
+            Ok(())
+        })?;
+    let expected_by_path = entries.iter().map(|entry| (entry.path.as_str(), entry)).collect::<BTreeMap<_,_>>();
+    let selected = common::fast_selected_paths(entries,delta)?;
+    let mut reference_counts = BTreeMap::<&str,u64>::new();
+    for entry in entries {
+        let class = match &entry.kind { EntryKind::File(_) => entry.path.as_str(), EntryKind::Hardlink(target) => target, _ => continue };
+        *reference_counts.entry(class).or_default() += 1;
+    }
+    let mut pending = vec![(".".to_owned(), namespace.root_directory_inode)];
+    let mut found = BTreeSet::new();
+    let mut visited_inodes = BTreeSet::new();
+    let mut inode_classes = BTreeMap::new();
+    let mut class_inodes = BTreeMap::new();
+    let mut validated_metadata = BTreeSet::new();
+    let mut scratch = vec![0; common::SCRATCH_BYTES];
+    let mut actual_paths = 0u64;
+    let mut actual_bytes = 0u64;
+    let mut skipped_paths = 0u64;
+    let mut skipped_bytes = 0u64;
+    while let Some((path, id)) = pending.pop() {
+        if !found.insert(path.clone()) { return Err("fast namespace duplicate path".into()); }
+        let expected = expected_by_path.get(path.as_str()).ok_or("fast namespace extra path")?;
+        let record = *records.get(&id).ok_or("fast namespace missing global inode")?;
+        record.validate(path == ".")?;
+        if !visited_inodes.insert(id) && record.kind != inode::InodeKind::RegularFile {
+            return Err("fast namespace repeats a non-regular inode".into());
+        }
+        let metadata_key = (record.metadata_root, record.kind as u8, expected.mode, expected.mtime_seconds, expected.mtime_nanoseconds);
+        if validated_metadata.insert(metadata_key) {
+            directory::validate_inode_record_metadata(&reader,record,path == ".")?;
+            verify_metadata(&reader, record.metadata_root, expected)?;
+        }
+        match &expected.kind {
+            EntryKind::Directory => {
+                if record.kind != inode::InodeKind::Directory { return Err("fast directory type".into()); }
+                directory::visit_directory_entries(&reader, directory::DirectoryStateRoot(record.content_root), &mut Default::default(), |page| {
+                    for (name, inode) in page {
+                        pending.push((if path == "." {name.as_str().to_owned()} else {format!("{path}/{}",name.as_str())}, *inode));
+                    }
+                    Ok(())
+                })?;
+            }
+            EntryKind::Symlink(target) => {
+                if record.kind != inode::InodeKind::Symlink || reader.with_authenticated_canonical(record.content_root,
+                    directory::codec::decode_symlink)?.target != target.as_bytes() { return Err("fast symlink target/type".into()); }
+            }
+            EntryKind::File(_) | EntryKind::Hardlink(_) => {
+                let (content, class) = match &expected.kind {
+                    EntryKind::File(content) => (content, path.as_str()),
+                    EntryKind::Hardlink(target) => match &expected_by_path.get(target.as_str()).ok_or("fast alias target")?.kind {
+                        EntryKind::File(content) => (content, target.as_str()), _ => return Err("fast alias content".into()),
+                    }, _ => unreachable!(),
+                };
+                if record.kind != inode::InodeKind::RegularFile || record.namespace_ref_count != reference_counts[class]
+                    || inode_classes.insert(id,class.to_owned()).is_some_and(|old| old != class)
+                    || class_inodes.insert(class.to_owned(),id).is_some_and(|old| old != id) {
+                    return Err("fast regular type/alias/reference count".into());
+                }
+                if !delta.changed_paths.contains(&path) && certificate.file_roots.get(&path) != Some(&record.content_root) {
+                    return Err("fast unchanged content reference differs from certificate".into());
+                }
+                if selected.contains(&path) {
+                    let file_root = rope::FileStateRoot(record.content_root);
+                    rope::validate_file(&reader,file_root)?;
+                    let state = rope::state(&reader,file_root,&mut Default::default())?;
+                    if state.logical_len != content.len() { return Err("fast changed/witness length".into()); }
+                    let mut sink = CompareSink { expected:content, offset:0, scratch:&mut scratch, custody_hash:None };
+                    rope::read_all(&reader,file_root,&mut sink)?;
+                    if sink.offset != content.len() { return Err("fast changed/witness short read".into()); }
+                    actual_paths += 1; actual_bytes += content.len();
+                } else { skipped_paths += 1; skipped_bytes += content.len(); }
+            }
+        }
+    }
+    if found.iter().map(String::as_str).collect::<BTreeSet<_>>() != expected_by_path.keys().copied().collect()
+        || delta.absent_paths.iter().any(|path| found.contains(path)) {
+        return Err("fast exact namespace membership/absence".into());
+    }
+    if visited_inodes != records.keys().copied().collect() { return Err("fast unreachable/missing global inode".into()); }
+    Ok(Receipt::from([
+        ("verification_status".into(),"fast_iteration_verified".into()),
+        ("verification_profile".into(),"fast-verify-v1".into()),
+        ("fully_verified".into(),"false".into()),
+        ("full_canonical_census_performed".into(),"false".into()),
+        ("certificate_binding".into(),certificate.binding.clone()),
+        ("certificate_root".into(),certificate.root.to_string()),
+        ("canonical_root".into(),root.to_string()),
+        ("authenticated_namespace_paths".into(),found.len().to_string()),
+        ("authenticated_global_inodes".into(),records.len().to_string()),
+        ("actual_read_regular_paths".into(),actual_paths.to_string()),
+        ("actual_read_logical_bytes".into(),actual_bytes.to_string()),
+        ("skipped_current_store_regular_paths".into(),skipped_paths.to_string()),
+        ("skipped_current_store_logical_bytes".into(),skipped_bytes.to_string()),
+        ("scope".into(),"full current namespace/global inode/metadata/aliases; selected changed+witness bytes; unchanged file-state/extent/payload subgraph references certified, those current subgraph bytes not read".into()),
+    ]))
+}
+
+/// One small aggregate verifier check; caller schedules it separately from samples.
+pub(crate) fn fast_qualification(root: &Path) -> AnyResult<Receipt> {
+    if root.exists() { return Err("fast qualification output already exists".into()); }
+    std::fs::create_dir_all(root)?;
+    let fixture = root.join("input");
+    let entries = common::native_qualification_entries();
+    common::create_fixture(&fixture,&entries)?;
+    let store = Arc::new(LayerStackStore::create(root.join("store.sqlite"))?);
+    let client = Client::connect(store.clone())?;
+    let initialized = client.initialize_layerstack(EntityName::new("fast-qualification")?,LayerStackInitialization::Directory(fixture))?;
+    let branch = client.fork_branch(EntityName::new("main")?, LocalForkSource::Layer { layer_id: initialized.genesis_layer_id })?;
+    drop(client);
+    let pinned = store.pin_branch(branch)?;
+    let full = verify_root(&pinned.reader,pinned.root,&entries)?;
+    let certificate = FastCertificate { binding:"ab".repeat(32), root:pinned.root, file_roots:full.file_roots };
+    let delta_for = |oracle: &[Entry]| common::FastDelta {
+        changed_paths:oracle.iter().map(|e|e.path.clone()).collect(), absent_paths:BTreeSet::new(), witness_paths:BTreeSet::new(),
+    };
+    let mut receipt = verify_fast_root(&pinned.reader,pinned.root,&entries,&delta_for(&entries),&certificate)?;
+    let mut rejections = 0;
+    let mut reject = |name: &str, oracle: &[Entry]| -> AnyResult<()> {
+        let error = verify_fast_root(&pinned.reader,pinned.root,oracle,&delta_for(oracle),&certificate).err().ok_or_else(||format!("fast canonical accepted {name}"))?;
+        receipt.insert(format!("rejected_{name}"),error.to_string()); rejections += 1; Ok(())
+    };
+    let mut wrong = entries.clone();
+    let file = wrong.iter_mut().find(|e|e.path=="payload").ok_or("qualification payload")?;
+    let EntryKind::File(content) = &file.kind else { return Err("qualification file kind".into()) };
+    file.kind = EntryKind::File(content.xor(17,1,1)?);
+    reject("changed_bytes",&wrong)?;
+    let mut extra = entries.clone(); extra.push(Entry::directory("extra")); reject("missing_namespace",&extra)?;
+    let missing = entries.iter().filter(|e|e.path!="empty").cloned().collect::<Vec<_>>(); reject("extra_namespace",&missing)?;
+    let mut wrong = entries.clone(); wrong[0].mode ^= 1; reject("metadata",&wrong)?;
+    let mut wrong = entries.clone();
+    let content = match &entries[2].kind { EntryKind::File(c)=>c.clone(),_=>return Err("qualification content".into()) };
+    wrong.iter_mut().find(|e|e.path=="alias").ok_or("qualification alias")?.kind=EntryKind::File(content);
+    reject("alias_class",&wrong)?;
+    drop(reject);
+    let wrong_root = "11".repeat(32).parse()?;
+    if certificate.require_pristine_root(wrong_root).is_ok() { return Err("fast certificate accepted wrong pristine root".into()); }
+    rejections += 1;
+    let reference_delta = common::FastDelta { changed_paths:BTreeSet::new(), absent_paths:BTreeSet::new(), witness_paths:BTreeSet::new() };
+    verify_fast_root(&pinned.reader,pinned.root,&entries,&reference_delta,&certificate)?;
+    let mut wrong_certificate = FastCertificate { binding:certificate.binding.clone(),root:certificate.root,file_roots:certificate.file_roots.clone() };
+    wrong_certificate.file_roots.insert("payload".into(),wrong_root);
+    if verify_fast_root(&pinned.reader,pinned.root,&entries,&reference_delta,&wrong_certificate).is_ok() {
+        return Err("fast verifier accepted wrong certified content root".into());
+    }
+    rejections += 1;
+    let projection = b"profile\tfast-verify-v1\nroot\tqualified-root\n";
+    let projection_hash = workload_source::sdk_edit_common::sha256_hex(projection);
+    require_bound_bytes(projection,&projection_hash,"TSV projection")?;
+    if require_bound_bytes(b"profile\tfast-verify-v1\nroot\tdrifted-root\n",&projection_hash,"TSV projection").is_ok() {
+        return Err("fast certificate accepted modified TSV projection".into());
+    }
+    rejections += 1;
+    let artifact = root.join("bound-artifact-negative.bin");
+    let artifact_bytes = b"compressed artifact bytes";
+    let artifact_hash = workload_source::sdk_edit_common::sha256_hex(artifact_bytes);
+    std::fs::write(&artifact,artifact_bytes)?;
+    require_bound_file(&artifact,&artifact_hash,"compressed file roots")?;
+    std::fs::write(&artifact,b"modified compressed artifact bytes")?;
+    if require_bound_file(&artifact,&artifact_hash,"compressed file roots").is_ok() {
+        return Err("fast certificate accepted modified bound artifact".into());
+    }
+    rejections += 1;
+    receipt.insert("canonical_negative_checks".into(),rejections.to_string());
+    receipt.insert("qualification_status".into(),"pass".into());
+    let native = common::fast_qualification(&root.join("native"))?;
+    for (key,value) in native {receipt.insert(format!("native_{key}"),value);}
+    let mut output=std::fs::File::create(root.join("qualification-receipt.txt"))?;
+    for (key,value) in &receipt {writeln!(output,"{key}={value}")?;}
+    Ok(receipt)
 }
 
 /// One tiny, explicitly selected native/Store verifier qualification.
