@@ -15,8 +15,8 @@ pools old rows.
 | v0.1.0 | Frozen 32 MiB payload lifecycle |
 | v0.1.1 | Previous released Developer Preview; namespace admission history |
 | v0.1.2 | SDK edit rebuild completed; five-family release evidence recorded |
-| v0.1.3 | Draft single-history workload families |
-| v0.1.4 | Draft multi-Layer and multi-Branch history families |
+| v0.1.3 | Twelve planned families: eleven performance families and Workspace reliability; single-Branch retained-history dedup included |
+| v0.1.4 | Multi-Layer/multi-Branch extension, sharing, publication and query scaling |
 
 ## Active v0.1.2 edit admission
 
@@ -69,3 +69,18 @@ timing, oracle, or schema identity. For v0.1.2, the user explicitly excluded
 the obsolete temp-copy payload campaign from the release decision: its retained
 diagnostic is not an SDK edit result. Namespace and Store were refreshed;
 see [release refresh](0.1.2/release-refresh.md).
+
+
+## v0.1.3 execution contract
+
+The [v0.1.3 index](0.1.3/README.md) maps each family to one canonical document.
+Its [testing rules](0.1.3/testing-rules.md) define existing-infrastructure reuse,
+lazy compatible input preparation, selected-case iteration, separate performance
+and verification, explicit extended qualification, and transient workload caps.
+
+The current cap is 500 MiB per workload file and strictly less than 1 GiB total
+logical workload content. Five inherited 500 MiB growth rows exceed the result
+cap and require explicitly versioned capped-result replacements; their old
+identities/results are retained, not silently resized or claimed as rerun.
+Bounded single-Branch history now belongs to v0.1.3 dedup qualification;
+multi-Branch and broader history/query scaling remain v0.1.4.

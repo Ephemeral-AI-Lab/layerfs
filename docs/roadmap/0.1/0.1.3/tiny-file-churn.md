@@ -1,170 +1,107 @@
-# Tiny-file churn
+# Tiny-file operations and bulk tree churn
 
-## Status
+> **Status:** Current v0.1.3 planning specification; no release candidate or
+> measured result is implied.
 
-Draft family 5 contract: 9 timed scenarios and 0 proof-only scenarios. None of
-the IDs are registered benchmark evidence.
+Family ID: `tiny_file_churn`. This v0.1.3 implementation contract contains
+**20 new timed cases and no standalone proofs**. The family adapters are not
+implemented yet.
 
-## Problem statement
+## Purpose and boundary
 
-The frozen benchmark has one 1,000-file shell workload, but it combines fixture
-creation with some operations and does not measure LayerFS publication or fresh
-reopen. LayerFS therefore lacks a small, nested-prefix curve for creating,
-stating, and unlinking diverse tiny files through the complete product path.
+Separate individual file-operation cost from bulk creation and deletion of a
+complete tree. Existing namespace initialization imports prepared trees; these
+cases create and remove files through the live Workspace filesystem.
 
-## Goal
+Follow the [shared testing rules](testing-rules.md) for deterministic seeds,
+fixture custody and reuse, sample isolation, timing, independent manifests,
+size accounting, and resource gates. Each sample uses the public Workspace
+Create/managed execution/Commit/End lifecycle through real FUSE, followed by
+separate fresh-Store and fresh-mount verification. One workload process performs
+all scheduled operations before one Commit attempt.
 
-Measure create, `lstat`, and unlink at 1, 10, and 100 affected paths before one
-Commit, with exact filesystem, canonical-root, resource, and cleanup oracles.
+## Case expansion
 
-## Files to read
+Expand `N` over exactly `1, 10, 100, 500`; each table row defines four distinct
+scenario IDs. No size × operation-count matrix is added.
 
-- [v0.1.3 scope](README.md)
-- [Append-only benchmark contract](../benchmarking.md)
-- [`fs-bench-pro` harness](../../../../benchmark/fs-bench-pro/src/main.rs)
-- [Frozen upstream tiny-file meanings](../../../../benchmark/fs-bench/fs-bench.sh)
-- [FUSE filesystem](../../../../crates/layerfs-fuse/src/filesystem.rs)
-- [Workspace capture](../../../../crates/layerfs-workspace/src/capture.rs)
-- [Workspace Commit planning](../../../../crates/layerfs-workspace/src/changes.rs)
+| Scenario IDs | Affected files | Measured operation | Expected Commit |
+| --- | ---: | --- | --- |
+| `tiny-create-{N}` | N | Create and write scheduled absent files | `Created` |
+| `tiny-stat-{N}` | N | `lstat` scheduled existing files without payload reads | `UpToDate` |
+| `tiny-unlink-{N}` | N | Unlink scheduled existing files | `Created` |
+| `tiny-bulk-create-{N}` | 200 × N | Create N complete shared-profile shards, including directories and all file bytes | `Created` |
+| `tiny-bulk-delete-{N}` | 200 × N | Unlink every file in N prepared shards, then remove emptied shard directories | `Created` |
 
-## Fixed one-genesis-Layer/one-Branch lifecycle boundary
-
-Each scenario sample uses a fresh Store, Client, fixture, and candidate runtime:
-
-```text
-fixture -> one genesis Layer -> one Branch -> one real-FUSE Workspace
-        -> N operations in one fresh process -> one Commit -> End
-        -> fresh Store reconnect and exact verification
-```
-
-The `stat` rows require an `UpToDate` Commit; create and unlink require one
-`Created` Commit. No Commit is promoted to a Layer. No row adds a Layer, forks a
-second Branch, or performs a second Commit. Repeated-Commit history belongs to
-v0.1.4.
-
-Fixture generation, Store/Client/container preparation, source sealing, and
-report writing stay outside the complete scenario wall and are recorded
-separately.
-
-## Exact scenario table
-
-| Scenario ID | Timed workload before the one Commit | Genesis state | Expected outcome |
-| --- | --- | --- | --- |
-| `tiny-create-1` | Create the first 1 scheduled path and its bytes | Target absent | `Created`; 1 added path |
-| `tiny-create-10` | Create the first 10 scheduled paths and their bytes | Targets absent | `Created`; 10 added paths |
-| `tiny-create-100` | Create the first 100 scheduled paths and their bytes | Targets absent | `Created`; 100 added paths |
-| `tiny-stat-1` | `lstat` the first 1 scheduled path | All targets present | `UpToDate`; root unchanged |
-| `tiny-stat-10` | `lstat` the first 10 scheduled paths | All targets present | `UpToDate`; root unchanged |
-| `tiny-stat-100` | `lstat` the first 100 scheduled paths | All targets present | `UpToDate`; root unchanged |
-| `tiny-unlink-1` | Unlink the first 1 scheduled path | All targets present | `Created`; 1 removed path |
-| `tiny-unlink-10` | Unlink the first 10 scheduled paths | All targets present | `Created`; 10 removed paths |
-| `tiny-unlink-100` | Unlink the first 100 scheduled paths | All targets present | `Created`; 100 removed paths |
-
-`lstat` means metadata lookup without opening or reading file contents. Fixture
-setup is never hidden inside a `stat` or unlink workload.
-
-## Tier and load rule
-
-The primary load unit is one affected path. With `a = 10`, the tiers are
-`1`, `a = 10`, and `a^2 = 100` operations. For a given seed, the 1-path
-schedule is a prefix of the 10-path schedule, which is a prefix of the 100-path
-schedule. All operations happen before the single Commit.
-
-Candidate evidence has exactly three fresh timed samples per scenario, one per
-fixed seed. There are no warm samples and no proof-only rows.
-
-Tiny-file sizes repeat this exact ten-entry cycle by scheduled item ordinal:
+Small-operation cases use the fixed 500-shard shared workspace as untouched
+background and a separate 500-target schedule. Parents are prepared before
+measurement. Create targets start absent; stat/unlink targets start present.
+Small target sizes repeat by scheduled ordinal:
 
 ```text
-0, 1, 7, 31, 127, 511, 1,024, 2,500, 4,096, 8,192 bytes
+0, 1, 7, 31, 127, 511, 1024, 2500, 4096, 8192 bytes
 ```
 
-Paths are spread across ten deterministic top-level prefixes. Create bytes are
-unique per path; identical contents must not turn this into a dedup-only case.
+Use the shared domain-separated schedule with domain `tiny-file-churn`, and
+nested prefixes of its 500 ranked target indices. Paths are
+`tiny/p{ordinal mod 10}/f{index:03}.dat`. Derive content with the existing bounded
+generator and a path-specific seed; freeze every expected digest. Longer files
+must not accidentally repeat a common payload. Empty files and the finite
+one-byte value space are intentional exceptions to content uniqueness.
 
-## Deterministic seeds and random schedule
+Bulk cases use the
+[shared workspace fixture](testing-rules.md#shared-workspace-fixture): each
+shard has 200 files and exactly 1 MiB of payload. The tiers therefore affect
+200/2,000/20,000/100,000 files and 1/10/100/500 MiB. One separate immutable
+1 MiB witness shard remains outside the mutation target in all bulk cases.
+Create starts with all target shards absent; delete starts with them present.
+Use the same seed-bound path/content prefixes in both curves. Record actual
+file, directory, and syscall counts instead of labelling a shard as one syscall.
 
-The three UTF-8 seed labels are exactly:
+Small rows peak below 500 MiB + 500 × 8,192 bytes. Bulk rows peak at 501 MiB.
+No regular file exceeds 48 KiB in the bulk profile or 8 KiB among small targets.
+Every intermediate state must satisfy the shared strictly-under-1-GiB rule;
+no scratch copy or deleted-but-still-open payload is excluded from accounting.
 
-```text
-layerfs-v0.1.3-seed-1
-layerfs-v0.1.3-seed-2
-layerfs-v0.1.3-seed-3
-```
+## Timing and verification
 
-For each seed, rank master item indices `0..99` by the bytewise digest:
+Measured work includes every create/write/close, `lstat`, unlink, and `rmdir`
+required by the selected row, followed by the declared ordinary sync. Per-file
+sync is not added unless the operation contract requires it. Record workload,
+sync, Workspace Create, Commit, visibility, End, and complete lifecycle walls
+separately. Target-tree creation may never be cached outside a measured bulk
+create. Prepared delete/stat input Stores may use sealed cache reuse and a
+fresh independent writable sample.
 
-```text
-SHA256(seed_label || 0x00 || "tiny-file-churn" || 0x00 || index_le_u64)
-```
+Record affected files and directories, bytes, achieved path/payload rates,
+FUSE operation counts, logical I/O, Store growth, candidate/inserted/reused
+objects, CPU, memory, swap/OOM, and cleanup under the shared schema.
 
-Break a digest tie by numerical index. The ranked list is the random schedule,
-and each tier takes its first `N` items. Scheduled ordinal `j` and master index
-`i` map to `tiny/p{j mod 10}/f{i:03}.dat`.
+Separate verification compares the entire reopened namespace to an independent
+expected manifest, including every untouched background and witness path.
+Creation adds exactly the planned paths/bytes; deletion removes every planned
+path and no others. Verify modes, declared mtimes, file lengths, content hashes,
+canonical root, Branch head, and exact Commit outcome. `lstat` responses must
+match the expected metadata; stat cases preserve the full manifest and root,
+produce `UpToDate`, and cause no payload or durable Store-state growth.
+Intermediate observations verify completed creation/deletion and planned byte
+bounds, so a later operation cannot hide an earlier missing mutation.
 
-File content concatenates the counter stream
-`SHA256(seed_label || 0x00 || "tiny-file-bytes" || 0x00 || i_le_u64 ||
-block_index_le_u64)` and truncates it to the scheduled size. Record the schedule
-and fixture digest; do not use wall time, host randomness, directory
-enumeration order, or an unrecorded seed.
+## Execution and completion
 
-## Required metrics and oracles
+Three fresh performance samples per new ID produce **60 timed executions**;
+every ID also receives separate independent verification. Reuse the existing
+benchmark binary, workload helper, runner/custody/sample-clone machinery, and
+report schema adapters. Introduce no second benchmark framework.
 
-Record per sample:
+Prospective selection is one case and one seed; it is not implemented CLI
+syntax. Begin with `tiny-create-1`, `tiny-stat-1`, or `tiny-unlink-1` for the
+changed operation, then its focused verifier. An ordinary selected run has a
+provisional 1–5-second target. The 100,000-file tiers, whole-family runs, and
+complete manifests use the longer lane with baseline-derived budgets. Fast
+preparation never skips measured filesystem work.
 
-- scenario ID, seed, scheduled paths, size vector, logical bytes, and fixture
-  digest;
-- Workspace create, inner workload, Commit API, required visibility, End,
-  reopen verification, and complete scenario wall;
-- user/system CPU, peak RSS, swaps, Store growth, candidate/inserted/reused
-  objects and bytes, transaction maxima, and cleanup state;
-- FUSE `create`, `write`, `fsync`, `lookup`/`getattr`, `unlink`, and transferred
-  byte counts; and
-- affected paths per second and payload bytes per second where applicable.
-
-The oracle verifies the exact path set, size and SHA-256 of every affected
-file, unchanged bytes and metadata on unaffected files, expected Commit
-outcome, Branch head, canonical root, fresh-reopen root, and absence of leaked
-mounts, processes, containers, spools, or leases. `stat` must cause zero
-filesystem, Branch-head, and Store-growth changes.
-
-## Target and hard family time budget
-
-The planning model is:
-
-```text
-0.5 s fixed lifecycle
-+ payload bytes / 100 MiB/s
-+ affected paths / 10,000 paths/s
-+ same-count edits / 100 edits/s
-+ count-changing edits / 50 edits/s
-```
-
-The fixed lifecycle is Workspace Create + Commit/`UpToDate` + End + fresh
-reopen/verification, excluding workload terms. The family wall is the sum of
-complete scenario walls for all 9 rows and all 3 seeds: 27 executions.
-
-- Target family wall: **10 seconds**.
-- Hard family wall: **20 seconds**.
-
-Crossing the target requires a phase-backed disposition. Crossing the hard
-budget, swapping, or violating a resource/correctness oracle blocks admission.
-
-## Acceptance criteria
-
-- [ ] All 9 exact IDs run with three fresh seed-bound samples and no hidden
-  fixture work.
-- [ ] The 1/10/100 schedules are nested prefixes and all operations precede one
-  Commit.
-- [ ] The exact diverse size cycle and unique deterministic bytes are used.
-- [ ] Create adds, `stat` preserves, and unlink removes exactly the scheduled
-  paths after fresh reopen.
-- [ ] `stat` returns `UpToDate` with an unchanged canonical root and zero Store
-  growth.
-- [ ] Path and payload rates, lifecycle phases, FUSE operations, object reuse,
-  resource peaks, and cleanup are retained for every sample.
-- [ ] Applicable payload and path floors are at least 100 MiB/s and 10,000
-  paths/s, and the fixed lifecycle component is at most 500 ms.
-- [ ] Family wall meets the 10-second target and never exceeds 20 seconds.
-- [ ] No correctness, swap, resource-bound, or cleanup failure occurs.
-- [ ] Existing registered scenarios keep their IDs and meanings unchanged.
+Completion requires all 20 case identities and seed samples, exact full-tree
+and transient-size proofs, no resource/cleanup failure, and retained evidence.
+Bulk create/delete are distinct from directory-only construction and from
+prepared-tree import; their timings must remain separately attributable.

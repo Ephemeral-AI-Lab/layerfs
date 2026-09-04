@@ -8,9 +8,9 @@
 
 ## Problem statement
 
-The v0.1.3 single-history matrix can measure fixed filesystem-workload costs, but it
-cannot show how those costs change as immutable Layers, Branches, Commits,
-queries, diffs, conflicts, and retained history accumulate. LayerFS claims that
+The v0.1.3 matrix covers filesystem workloads and bounded retained-history
+storage growth on one Branch. v0.1.4 extends that evidence to multiple Layers
+and Branches, broader history queries, diffs, conflicts, and publication. LayerFS claims that
 Fork is zero-copy, history is immutable, and new states are incremental
 physically; those claims need one bounded multi-history benchmark matrix before
 1.0.0.
@@ -26,13 +26,21 @@ bottleneck while preserving the scenario meanings frozen in v0.1.0-v0.1.3.
 
 - [0.1.x roadmap](../README.md)
 - [Append-only benchmark contract](../benchmarking.md)
-- [v0.1.3 single-history draft](../0.1.3/README.md)
+- [v0.1.3 Workspace and single-Branch deduplication plan](../0.1.3/README.md)
 - [Public operation families](../../../../crates/layerfs-monitor/src/operation.rs)
 - [Public SDK client](../../../../crates/layerfs-sdk/src/client.rs)
 - [LayerStack Store lifecycle](../../../../crates/layerfs-layerstack-store/src/layerstack.rs)
 - [Workspace reconciliation](../../../../crates/layerfs-workspace/src/reconcile.rs)
 - [`fs-bench-pro` harness](../../../../benchmark/fs-bench-pro/src/main.rs)
 - [Store and Branch evaluator](../../../../tools/layerfs-eval/src/main.rs)
+
+## Inherited single-Branch coverage
+
+Reuse the v0.1.3 [single-Branch history family](../0.1.3/dedup-branch-history.md)
+and [testing rules](../0.1.3/testing-rules.md). Do not recreate its localized,
+hot-set, recurring-content, metadata-only, or unique-rewrite storage trajectories
+under new identities. The families below add multi-Branch/multi-Layer semantics
+or query/scaling questions absent from that inherited storage family.
 
 ## Scale profiles
 

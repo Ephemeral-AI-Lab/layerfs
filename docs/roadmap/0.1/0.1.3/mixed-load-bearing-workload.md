@@ -1,139 +1,120 @@
-# Mixed load-bearing workload
+# Dependent agent work episodes
 
-## Status
+> **Status:** v0.1.3 implementation plan; no measurements or passing claim.
+> **Family ID:** `mixed_load_bearing`. Four timed cases; no separate proofs.
+> [Shared testing rules](testing-rules.md) own seeds, preparation, custody,
+> common lifecycle, timing, limits, and verification admission.
 
-Draft v0.1.3 family contract: 3 timed cases and 3 proof-only cases.
+## Question and membership
 
-## Problem statement
+Can a complete agent workflow read, modify, reorganize, and publish a Workspace
+while unrelated content remains exact? Every tier executes complete dependent
+episodes. This replaces raw-operation prefixes, whose tier 1 was only a read
+and whose cancelling mutations could disappear from a final-state-only oracle.
 
-Single-operation families isolate regressions but do not prove that ordinary
-reads, same-count writes, length changes, namespace edits, links, metadata,
-sync, Commit, and reopen compose in one Workspace. The release needs one mixed
-semantic stream without turning sync or metadata correctness into invented
-latency families.
+| Scenario ID | Complete episodes | Managed workload executions | Final LayerFS Commits |
+| --- | ---: | ---: | ---: |
+| `agent-episodes-1` | 1 | 1 | 1 |
+| `agent-episodes-10` | 10 | 1 | 1 |
+| `agent-episodes-100` | 100 | 1 | 1 |
+| `agent-episodes-500` | 500 | 1 | 1 |
 
-## Goal
+These are the only four members: **12 performance samples**, three per case,
+with separate verification. Repeated public Exec, metadata, symlink errors,
+and failure containment belong to
+[Workspace reliability](workspace-reliability.md), with no duplicate proof rows
+or latency distributions here.
 
-Measure deterministic nested prefixes of 1, 10, and 100 mixed semantic
-operations before one Commit. Add one proof each for chmod, mtime, and xattr
-semantics. Record ordinary sync/barrier behavior passively; it is not another
-family, timed row, or proof row.
+## Bounded fixture
 
-## Files to read
+Prepare one fixed 64 MiB background using the shared tree generator, including
+wide, deep, and regular placements. Freeze 500 independently named episode cells
+outside `background/`. Each initially contains an 8 KiB source, an 8 KiB edit
+target and a hard-link alias to it, and an 8 KiB replacement target. Counting
+the alias twice, these cells contribute 16,384,000 bytes. N selects prefixes
+of one deterministic 500-cell schedule; unused cells remain in the oracle.
 
-- [v0.1.3 shared contract](README.md)
-- [Append-only benchmark contract](../benchmarking.md)
-- [Completed v0.1.2 same-count edits](../0.1.2/same-count-file-edits.md)
-- [Completed v0.1.2 count-changing edits](../0.1.2/count-changing-file-edits.md)
-- [Namespace mutation](namespace-mutation.md)
-- [Link/inode topology](link-inode-topology.md)
-- [`fs-bench-pro` harness](../../../../benchmark/fs-bench-pro/src/main.rs)
-- [FUSE filesystem adapter](../../../../crates/layerfs-fuse/src/filesystem.rs)
+Each episode may retain one 8 KiB output and one relative symlink whose target
+is at most 256 bytes. It may temporarily hold one 8 KiB replacement file, one
+4 KiB scratch file, and a 16-byte append visible through both hard-link names.
+Only one episode runs at a time. A conservative whole-workload peak is:
 
-## Fixed topology and lifecycle boundary
+```text
+64 MiB background
++ 500 * 32 KiB initial cell path bytes
++ 500 * (8 KiB output + 256 symlink target bytes)
++ 8 KiB replacement temp + 4 KiB scratch + 32 alias append bytes
+= 87,729,184 bytes < 128 MiB < 1 GiB
+```
 
-Each timed sample uses one LayerStack, one genesis Layer, one Branch, and one
-fresh real-FUSE Workspace. One fresh process runs the scheduled prefix and its
-ordinary final sync before one Commit. End, fresh Store reconnect, and exact
-verification follow. Proof cases use the same topology but receive one
-execution each and no latency distribution. No Commit becomes a Layer and no
-case performs a second Commit.
+Background files are at most 48 KiB; episode files at most 8 KiB + 16 bytes.
+The bound includes temporary coexistence and alias path lengths, including files
+removed before Commit. Receipts and expected copies stay outside the workload
+with separately reported storage.
 
-## Timed scenarios
+## One dependent episode
 
-| Scenario ID | Scheduled semantic operations | Required outcome |
-| --- | ---: | --- |
-| `mixed-load-bearing-1` | 1 | First nested read operation yields `UpToDate` and verifies exactly |
-| `mixed-load-bearing-10` | 10 | One complete semantic cycle yields `Created` and reopens exactly |
-| `mixed-load-bearing-100` | 100 | Ten semantic cycles yield `Created` and reopen exactly |
+One ordinary filesystem process performs these stages for each selected cell:
 
-## Proof-only scenarios
+1. Read the 8 KiB source and derive deterministic replacement bytes and an
+   output token from its content and the frozen episode identity.
+2. Overwrite a 4 KiB range of the edit target. Read through its hard-link alias
+   and use the observed bytes to derive the next output; do not substitute
+   expected bytes without reading the filesystem.
+3. Append 16 bytes, read the appended region through the alias, then truncate
+   back to 8 KiB. This pair has an intermediate observation despite cancelling
+   in the final length.
+4. Move the cell directory to a prepared sibling destination, then read the
+   edited target through its new path. The alias relation must survive.
+5. Write and sync an 8 KiB temporary file, close it, rename it over the
+   replacement target, and read the permanent name.
+6. Create a relative symlink to the replacement and read through it. Create,
+   read, and remove a 4 KiB scratch file.
+7. Retain one 8 KiB output derived from the earlier observations. Normalize only
+   declared changed-path metadata, complete the declared synchronization, and
+   proceed to the next cell.
 
-| Scenario ID | Operation | Required proof |
-| --- | --- | --- |
-| `mixed-metadata-chmod-proof` | `chmod` a prepared file to `0640` | Mode is exact before Commit and after fresh reopen |
-| `mixed-metadata-mtime-proof` | Set mtime to `1700000013.123456789` | Seconds and nanoseconds are exact before Commit and after fresh reopen |
-| `mixed-metadata-xattr-proof` | Set `user.layerfs-v013=mixed-proof` | Value round-trips, or the documented stable unsupported result leaves no mutation |
+Freeze names, offsets, bytes, metadata, operation order, and receipt shape
+before admission. No per-episode Commit, remount, additional Exec, SDK edit, or
+Git command belongs here. Reads that feed later operations stay in performance;
+full hashes, manifests, and additional probes are verification-only.
 
-The xattr proof must record the exact syscall result and capability. It may
-accept `EOPNOTSUPP` only when that is the documented v0.1.x behavior; the
-benchmark must not add a benchmark-only xattr API or silently report an
-unsupported operation as a successful round trip.
+After N episodes, the single managed execution exits with all handles closed.
+One unpromoted Commit must return `Created`, followed by End and separately
+collected fresh reconnect verification. Dedicated families diagnose component
+costs; this family measures their dependence and composition.
 
-## Tier/load rule and deterministic schedule
+## Independent oracle and observations
 
-The primary load unit is one scheduled semantic operation and `a = 10`, giving
-nested 1/10/100 prefixes. Every ten-operation cycle uses a new fixture cell:
+Construct the expected manifest and retained output bytes from the input
+fixture and specified transformations, not candidate-produced roots or reported
+success. In verification mode observe each stage's reads, append visibility,
+lengths, aliases, directory bindings, replacement bytes, symlink targets, and
+scratch existence before removal. Preserve these intermediate receipts so
+skipped append/truncate and create/remove pairs cannot pass via final equality.
 
-| Slot | Semantic operation | Declared load term |
-| ---: | --- | --- |
-| 0 | Read a deterministic 1 MiB range | 1 MiB payload |
-| 1 | Overwrite 10 bytes without changing file length | 1 same-count edit |
-| 2 | Append 10 bytes | 1 count-changing edit |
-| 3 | Truncate those 10 bytes | 1 count-changing edit |
-| 4 | Create one 2,500-byte regular file | 1 affected path + payload |
-| 5 | Move and rename that file to a sibling directory | 2 affected path bindings |
-| 6 | Unlink the moved file | 1 affected path |
-| 7 | Create a hard link to a prepared source | 1 affected path |
-| 8 | Create a relative symlink to another prepared source | 1 affected path |
-| 9 | `stat` and read the symlink target | 2 path observations |
+After fresh reopen compare every path, including all background and unselected
+cells: bytes, link classes/counts, symlink targets, modes, timestamps, head, and
+qualified canonical root. Check the transient bound at mutation boundaries
+and require complete mount/process/spool/reader/Workspace/lease cleanup.
 
-The process performs its ordinary final sync after the selected prefix and
-before returning. Sync count, duration, bytes, and error are passive fields on
-the timed case. They create no schedule unit or registry entry.
+## Metrics, budgets, and grounding
 
-### Frozen seeds and nested prefixes
+Report episodes, per-class operations and bytes, complete workload and
+Create/Commit/End walls, SDK/Exec counts, FUSE operations, candidate and
+inserted/reused objects, transaction maxima, RSS, spool/Store growth, sync errors,
+and cleanup. Sync success remains passive timing evidence; reliability
+explicitly tests its error propagation.
 
-Use the three seed labels frozen in the shared contract. A
-`v0.1.3/mixed-load-bearing` SHA-256 counter stream chooses independent fixture
-cells, read ranges, overwrite offsets, payload bytes, and names. Operation type
-is fixed by ordinal modulo 10, so the load-term counts remain identical across
-seeds.
+The selected-case 1–5 second goal after cached preparation is provisional.
+Freeze qualified per-case and verification walls, including 500 episodes. A
+complete family campaign or extended reliability run is not a few seconds.
+Keep each episode complete at every tier.
 
-For each seed, the 1-operation and 10-operation schedules are exact prefixes
-of the 100-operation schedule. Freeze the initial fixture, scheduled-operation
-receipt, metadata values, and expected-final manifest digest before candidate
-collection.
-
-## Required metrics and oracles
-
-Record complete workflow and workload time, per-operation-class time and
-count, payload bytes, affected paths, same-count and count-changing edits, CPU,
-peak RSS, swaps, FUSE operation and byte counts, passive sync/barrier evidence,
-candidate/inserted/reused objects and bytes, transaction maxima, Store growth,
-and cleanup state.
-
-Verification must replay the deterministic oracle and prove exact reads,
-writes, lengths, created/deleted/moved paths, link topology, symlink targets,
-metadata proof outcomes, Branch head, canonical root, fresh-reopen digest, and
-absence of leaked mounts, processes, output readers, spools, Workspaces, or
-leases.
-
-## Expected-rate assumptions and family budget
-
-Apply every shared floor represented by the stream: at least 100 MiB/s payload,
-10,000 affected paths/s, 100 same-count edits/s, and 50 count-changing edits/s.
-The fixed Create + Commit/acknowledgement + End + fresh-reopen/verification
-component is at most 500 ms after subtracting those terms.
-
-The complete family campaign—three fresh samples for each timed case plus one
-execution of each metadata proof—targets 15 seconds and has a hard ceiling of
-30 seconds. Fixture and environment preparation, sealing, and report
-generation are excluded and reported separately.
-
-## Acceptance criteria
-
-- [ ] Exactly the three timed and three proof-only scenario IDs above are
-  registered by this family.
-- [ ] All three seeds use exact nested 1/10/100 prefixes of the declared
-  semantic stream.
-- [ ] One Commit publishes every selected prefix and fresh reopen matches the
-  frozen semantic receipt, manifest digest, and canonical root.
-- [ ] Chmod and mtime round-trip exactly; xattr records either an exact round
-  trip or the documented stable unsupported result without mutation.
-- [ ] Payload, path, same-count-edit, count-changing-edit, fixed-lifecycle, and
-  15/30-second family gates pass without dropping a valid sample.
-- [ ] Sync/barrier evidence remains passive and adds no family, timed case,
-  proof case, or separate target.
-- [ ] No repeated Commit, Branch fan-out, conflict workflow, or new
-  owner-side Workspace file-range-edit member enters this family.
+Relevant sources are [`cow_tree.rs`](../../../../crates/layerfs-workspace/src/cow_tree.rs)
+for links/rename/unlink, [`file_io.rs`](../../../../crates/layerfs-workspace/src/file_io.rs)
+for ordinary writes/truncate, [`filesystem.rs`](../../../../crates/layerfs-fuse/src/filesystem.rs)
+for FUSE operations, and [`execution.rs`](../../../../crates/layerfs-workspace/src/execution.rs)
+for managed execution. Existing SDK alias and mixed-edit checks in
+[Workspace tests](../../../../crates/layerfs-workspace/tests/file_edit.rs)
+remain regression coverage; they do not replace this ordinary-tool route.

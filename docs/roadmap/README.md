@@ -32,7 +32,7 @@ explicit-End architecture.
 - [x] Complete the namespace matrix in v0.1.1.
 - [x] Adapt `fs-bench-pro`, implement universal regular-file editing, and
   complete the same-count, count-changing, and Store-footprint work in v0.1.2.
-- [ ] Complete single-history filesystem-workload coverage in v0.1.3.
+- [ ] Complete Workspace, single-Branch dedup history, and reliability coverage in v0.1.3.
 - [ ] Complete multi-Layer/multi-Branch history coverage in v0.1.4.
 - [ ] Carry the append-only registered matrix through 1.0.0.
 
@@ -126,21 +126,26 @@ families across exact 1/10/100/500 MiB fixtures.
 
 ## Draft compatibility-preserving 0.1.3 work
 
-The [0.1.3 README](0.1/0.1.3/README.md) owns eight remaining complete filesystem
-workload families. The topology stays fixed at one LayerStack, one genesis
-Layer, and one Branch so the workloads—not Layer or Branch fan-out—own the
-measurement. The two v0.1.2 edit families are inherited and rerun without
-new members.
+The [0.1.3 README](0.1/0.1.3/README.md) owns twelve families: eleven
+performance families and one Workspace reliability family. One canonical
+specification per family follows the [testing rules](0.1/0.1.3/testing-rules.md).
+The topology stays at one Branch, including bounded repeated-Commit storage
+trajectories; multi-Branch and broader history-query scaling stay in v0.1.4.
 
-- [ ] Freeze deterministic 1/10/100 load tiers, seed-bound schedules, exact
-  oracles, and one shared result schema.
-- [ ] Cover payload, namespace scale and CAS/CDC behavior, file churn,
-  directories, Git, namespace mutation, links, and mixed workloads as eight
-  complete families.
-- [ ] Optimize only operations with a measured defect or material opportunity.
-- [ ] Rerun every registered v0.1.0-v0.1.2 scenario before release.
-- [ ] Leave repeated Commit history, Add, multi-Layer Diff, conflicts, and
-  Branch fan-out to v0.1.4.
+- [ ] Freeze 1/10/100/500 tier units, exact schedules and oracles, bounded
+  transient workload sizes, and family-specific result/claim identities.
+- [ ] Cover whole-Workspace reads and mutations, bulk churn, Git, agent episodes,
+  four CAS/CDC/storage-reuse families, and targeted reliability/endurance proofs.
+- [ ] Reuse the existing binary, runners, custody, compatible prepared inputs,
+  independent samples and report pipeline; iterate one selected case at a time.
+- [ ] Separate short development runs, complete performance, verification and
+  explicitly selected extended qualification; optimize preparation wall too.
+- [ ] Preserve inherited evidence and explicitly version the five cap-driven
+  500 MiB growth replacements instead of silently changing frozen scenarios.
+- [ ] Optimize only measured root causes; complete affected regression and
+  release qualification after the candidate is ready.
+- [ ] Leave multi-Branch sharing, Add, multi-Layer Diff, conflicts, and fan-out
+  to v0.1.4; do not imply unsupported crash/power-loss durability.
 
 ## Draft compatibility-preserving 0.1.4 work
 

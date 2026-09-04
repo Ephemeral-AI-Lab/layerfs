@@ -1,160 +1,101 @@
-# Payload create and read
+# Payload creation and random reads
 
-## Status
+> **Status:** Current v0.1.3 planning specification; no release candidate or
+> measured result is implied.
 
-Draft v0.1.3 family contract: 8 timed scenarios and 0 proof-only scenarios.
-The two existing IDs retain their registered meanings; the six new IDs are not
-registered.
+Family ID: `payload_create_read`. This v0.1.3 implementation contract contains
+**8 new timed cases, 2 inherited timed anchors, and no standalone proofs**.
+New cases are specified here; their runner adapters are not implemented yet.
 
-## Problem statement
+## Purpose and boundary
 
-The registered payload campaign proves one 32 MiB cold create and one 32 MiB
-sequential read. It does not show whether create cost scales with payload size
-or whether repeated random reads remain bounded without changing filesystem
-state.
+Measure ordinary filesystem payload creation and bounded random reads through
+real FUSE. These cases complement the inherited singular SDK edits. Whole-tree
+reads belong to [directory construction and traversal](directory-construction-traversal.md).
 
-## Goal
+Use the [shared testing rules](testing-rules.md) for seeds, sample isolation,
+source seals, preparation reuse, resource limits, timing fields, and verification.
+Each new sample has one Store, genesis Layer, Branch, Workspace, fresh workload
+process, final Commit attempt, and clean End. Use public
+`Client::create_workspace_session`, managed Workspace execution,
+`Client::commit_workspace_session`, and `Client::end_workspace_session`.
 
-Keep `cold-create-32m` and `read-32m` byte-for-byte and boundary-for-boundary
-unchanged, then add three nested create sizes and three nested random-read
-loads. The family must distinguish sequential payload throughput from fixed
-Workspace lifecycle cost.
+## Cases and fixtures
 
-## Files to read
+In the following table, expand `N` over exactly `1, 10, 100, 500`. Braces denote
+scenario-ID expansion, not implemented command-line syntax.
 
-- [Append-only benchmark contract](../benchmarking.md)
-- [v0.1.3 parent plan](README.md)
-- [`fs-bench-pro` campaign](../../../../benchmark/fs-bench-pro/src/main.rs)
-- [Shared workload helper](../../../../benchmark/fs-bench-pro/workload.rs)
-- [LayerFS-only runner](../../../../benchmark/fs-bench-pro/run.sh)
-- [Released v0.1.0 benchmark evidence](../../../../release-notes/0.1.0/benchmark-results.md)
+| Scenario IDs | Cases | Initial state and measured work | Commit outcome |
+| --- | ---: | --- | --- |
+| `payload-create-{N}m` | 4 | Empty genesis; create one exact N MiB file through ordinary writes, then `sync_all` | `Created` |
+| `payload-random-read-{N}` | 4 | Prepared 500 MiB file; execute the first N deterministic 4 KiB reads | `UpToDate` |
+| `cold-create-32m` | 1 inherited | Released empty-Branch 32 MiB creation lifecycle | Frozen outcome |
+| `read-32m` | 1 inherited | Released complete 32 MiB sequential-read lifecycle | Frozen outcome |
 
-## Fixed topology and lifecycle boundary
+Reuse exact sizes, payload bytes, SHA-256 values, canonical roots, and bounded
+`fixture_block` generation from
+[`sdk_edit_common.rs`](../../../../benchmark/fs-bench-pro/families/sdk_edit_common.rs).
+The 1/10/100 MiB payloads remain exact prefixes of the existing 500 MiB payload.
+Prepared source bytes may be reused; each measured create must write every
+result byte into its fresh empty Workspace. Never substitute a prepared
+result Store or move creation into setup.
 
-- Each row owns a fresh Store, SDK `Client`, LayerStack, genesis Layer, Branch,
-  real-FUSE Workspace, process, and evidence directory.
-- Fixture generation, Store/Client/container preparation, source sealing, and
-  report writing are excluded and recorded separately.
-- Create rows start with an empty genesis Layer. Their complete timed boundary
-  is Workspace Create, fresh-process file creation and `sync_all`, Commit and
-  Store visibility, then clean End.
-- Read rows start from a Branch whose payload is prepared before the timer.
-  Their complete timed boundary is Workspace Create, fresh-process reads,
-  `UpToDate` Commit and visibility, then clean End.
-- Fresh Store reconnect, exact filesystem verification, and cleanup are
-  mandatory after each row. Their wall cost participates in the family budget
-  but does not change the frozen `complete_lifecycle_ns` field.
-- All filesystem operations use the production real-FUSE path. No materialized
-  projection is a timed substitute.
-
-## Timed scenarios
-
-| Scenario ID | Status | Load | Exact timed operation | Required oracle |
-| --- | --- | --- | --- | --- |
-| `cold-create-32m` | Registered; frozen | Existing 32 MiB fixture | Existing empty-Branch create lifecycle, unchanged | Existing final size, digest, Commit, visibility, and reopen proof |
-| `read-32m` | Registered; frozen | Existing 32 MiB file | Existing complete sequential-read lifecycle, unchanged | Exactly 32 MiB read; root and payload unchanged after reopen |
-| `payload-create-1m` | Draft | First 1 MiB of the new 100 MiB fixture | Create one file, sync, Commit, visibility, End | Exact 1 MiB size, digest, canonical root, and reopen result |
-| `payload-create-10m` | Draft | First 10 MiB of the same fixture | Same create lifecycle | Exact 10 MiB size, digest, canonical root, and reopen result |
-| `payload-create-100m` | Draft | Complete 100 MiB fixture | Same create lifecycle | Exact 100 MiB size, digest, canonical root, and reopen result |
-| `payload-random-read-1` | Draft | First 1 deterministic 4 KiB request | Read requests in one fresh process; no mutation | Transcript digest matches; Commit is `UpToDate`; root unchanged |
-| `payload-random-read-10` | Draft | First 10 requests from the same schedule | Same random-read lifecycle | Same oracle for all 10 completed requests |
-| `payload-random-read-100` | Draft | First 100 requests from the same schedule | Same random-read lifecycle | Same oracle for all 100 completed requests |
-
-## Proof-only scenarios
-
-| Count | Scenario IDs |
-| ---: | --- |
-| 0 | None; all required proofs are attached to the eight timed rows. |
-
-## Tier/load rule and deterministic schedule
-
-The shared multiplier is `a = 10`, applied to this family's declared load
-unit:
-
-- create load unit: 1 MiB, producing 1, 10, and 100 MiB;
-- random-read load unit: one 4 KiB request, producing 1, 10, and 100 requests.
-
-The new 1 MiB and 10 MiB fixtures are byte prefixes of the new 100 MiB fixture.
-The lower random-read tiers are request prefixes of the 100-request schedule.
-The existing 32 MiB rows are frozen anchors, not resized members of the new
-tier schedule.
-
-Candidate evidence uses exactly these three UTF-8 seed labels, one fresh family
-sample per seed:
+For each shared seed, derive one 500-request schedule using:
 
 ```text
-layerfs-v0.1.3-seed-1
-layerfs-v0.1.3-seed-2
-layerfs-v0.1.3-seed-3
+h = SHA256(seed_label || 0x00 || "payload-random-read" || 0x00 || index_le_u64)
+offset = little_endian_u64(h[0..8]) mod (524288000 - 4096 + 1)
 ```
 
-New fixture blocks and request positions come from a domain-separated SHA-256
-counter stream:
+Requests use ordinary offset reads and preserve the listed order. The four
+read cases use schedule prefixes against the same payload. The largest case
+requests 2,048,000 bytes; it is a random-access measurement, not a full-file
+throughput claim. The independent transcript digest covers each offset,
+returned length, and returned bytes.
 
-```text
-SHA256(seed_label || 0x00 || domain || 0x00 || index_le_u64)
-```
+A workload contains at most one regular file of 524,288,000 bytes. Neither
+curve creates a second payload copy in the tested namespace. Source caches
+remain outside that namespace and have the separately reported preparation
+budget in the shared rules. The inherited anchors retain their IDs, fixtures,
+seeds, sample counts, timing fields, and verification meanings unchanged.
 
-The create fixture concatenates digest blocks and truncates at 100 MiB. For
-random reads, interpret the first eight digest bytes as little-endian `u64` and
-reduce modulo `100 MiB - 4096 + 1`; the request is exactly 4 KiB. The transcript
-oracle hashes each little-endian offset followed by its returned bytes, in
-request order. Existing frozen rows do not consume this new seed stream.
+## Timing and evidence
 
-## Required metrics and oracles
+For new cases, measure Workspace Create, inner workload, ordinary sync where
+applicable, Commit return, required visibility, End, and complete lifecycle
+separately. Payload reads and writes occur inside the workload timer. Fixture
+construction, Store preparation, source sealing, and independent verification
+have separate walls and never enter operation latency distributions.
 
-Record per row:
+Record requested/completed bytes and requests, create throughput, random-read
+transcript identity, FUSE calls and transferred bytes, CPU, memory, swap/OOM,
+Store/object changes, and cleanup using the shared schema. Report read-only
+Store growth separately from writes; reads must not create payload objects or
+change the committed root merely because bytes were read.
 
-- complete wall and Workspace Create, execution, Commit, visibility, End, and
-  reconnect/verification wall;
-- inner workload wall, bytes requested/completed, and sequential MiB/s where
-  applicable;
-- random request count, size, ordered-offset digest, and transcript digest;
-- process user/system CPU, peak RSS, cgroup peak, swap, and FUSE operation and
-  transferred-byte counts;
-- candidate, inserted, and reused objects/bytes, transaction maxima, Store
-  semantic/allocation growth, Commit result, and canonical root;
-- exact size and SHA-256 before and after fresh Store reconnect; and
-- mount, process, output-reader, spool, Workspace, and lease cleanup state.
+The separate verifier reconnects to the Store and mounts a fresh FUSE Workspace.
+It compares the complete path/type/size/mode/mtime/content manifest with the
+independent expected manifest, authenticates content and canonical roots,
+checks exact Branch head and Commit outcome, and proves cleanup. Random reads
+also match the byte oracle at every scheduled offset. Creation must preserve
+its exact payload after reconnect; read-only cases preserve the genesis state.
 
-Missing metrics are evidence errors, not zeros. A read row must create no new
-payload state solely because bytes were read.
+## Execution and completion
 
-## Expected-rate assumptions and family budget
+There are three fresh performance samples per new case, one per shared seed:
+**24 new timed executions**, with separate verification of every case. Inherited
+anchors follow their own frozen sampling and are accounted once.
 
-The planning model for a complete scenario wall is:
+Reuse the existing benchmark binary, workload helper, runner selection,
+custody/sample-clone mechanism, and reports. Extend only their family adapters.
+The prospective development selector is one scenario and one seed, followed
+by its focused verification; this selector is a requirement, not an available
+command. Reuse validated inputs and prepared read Stores, never mutable sample
+outputs. Start with `payload-create-1m` or `payload-random-read-1`.
 
-```text
-0.5 s
-+ sequential_payload_MiB / 100
-+ paths / 10,000
-+ same_count_edits / 100
-+ count_changing_edits / 50
-```
-
-The 0.5 s fixed component covers Create, Commit/`UpToDate`, End, fresh reopen,
-verification, and cleanup, excluding workload terms. Sequential create/read
-throughput is expected to be at least 100 MiB/s; namespace capacity is expected
-to be at least 10,000 paths/s. The edit-rate terms are not governing loads for
-this family.
-
-One candidate campaign is three fresh samples of every timed row, one per seed.
-The family wall is the sum of those 24 complete scenario walls. It excludes
-fixture and environment preparation but includes mandatory reopen verification.
-
-- Target family wall: **20 seconds**.
-- Hard family wall: **40 seconds**.
-
-## Acceptance criteria
-
-- [ ] Run exactly the 8 timed IDs and no proof-only IDs.
-- [ ] Preserve both existing scenario meanings and result fields.
-- [ ] Prove 1/10/100 MiB create fixtures are nested deterministic prefixes.
-- [ ] Prove random-read 1/10/100 loads are nested prefixes of one exact
-  seed-bound request schedule.
-- [ ] Use real FUSE, a fresh process, and fresh Store/Workspace state per row.
-- [ ] Verify exact bytes, root, Commit outcome, fresh reopen, and cleanup.
-- [ ] Retain all three candidate samples and every required metric.
-- [ ] Meet the 20 s target and never exceed the 40 s hard family wall.
-- [ ] Register new IDs only after source, fixture, seed, runner, schema, and
-  evidence identities are frozen together.
+The selected ordinary development target is provisionally 1–5 seconds where
+baseline evidence supports it. Larger payloads, complete families, and full
+verifiers use the longer lane with baseline-derived budgets. Completion requires
+all eight cases, their independent proofs, exact size bounds, resource/cleanup
+gates, and retained raw samples. No additional payload-size × request-count
+matrix is introduced.

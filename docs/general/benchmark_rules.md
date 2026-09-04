@@ -70,10 +70,10 @@ contract. A semantic operation MUST NOT be replaced by a shell reconstruction,
 temporary-file algorithm, direct Store mutation, test hook, internal helper,
 or environment-specific shortcut.
 
-### LayerFS file-edit invariant
+### LayerFS SDK file-edit invariant
 
-All active LayerFS file-edit performance and verification mutations MUST enter
-through one of:
+All active LayerFS **SDK file-edit claims**, in performance and verification,
+MUST perform their measured edit through one of:
 
 ```text
 Client::edit_workspace_file_range
@@ -88,7 +88,16 @@ to prove visibility, but edit-caused FUSE writes MUST be zero.
 
 Historical results from a different operation surface remain archival evidence
 only. They MUST NOT be registered in an active SDK edit family, paired with an
-SDK result, admitted, or used in an SDK performance headline.
+SDK result, admitted as SDK evidence, or used in an SDK performance headline.
+
+Separately registered filesystem, tool, and Workspace workflow families MUST
+exercise their declared ordinary POSIX/FUSE operations through public execution.
+An editor save may genuinely write a temporary file and rename it; an import
+must genuinely initialize from source files. These are different claims from
+SDK range-edit latency. Their operation, timing, counters and schemas MUST name
+the actual surface. Do not rewrite a tool's mutations as SDK edits, compare
+unlike routes as paired arms, or weaken inherited SDK-only checks. A new
+filesystem family does not revive archival temp-copy rows as SDK evidence.
 
 Each row MUST report the observed public-call count and every forbidden or
 fallback route count. An undeclared route, a nonzero forbidden/fallback count,
@@ -171,9 +180,12 @@ names it:
 - report generation.
 
 Cheap validation MAY run immediately after timing and MUST still invalidate an
-incorrect result. Performance mode MUST NOT execute verification work. A
-performance receipt MUST prove that verifier, digest, oracle, reopen,
-materialization, and failure-injection counts are zero.
+incorrect result. Performance mode MUST NOT execute added benchmark verification
+work. A performance receipt MUST prove that benchmark verifier/digest/oracle,
+reopen, materialization, and failure-injection counts are zero. Hashing intrinsic
+to the declared operation, such as CAS identity/authentication or Git object
+construction, remains measured product/tool work. Do not disable that hashing
+or misclassify it as forbidden benchmark verification.
 
 Complete-lifecycle metrics MUST include all named lifecycle phases. Ordered
 timestamps and the sum of attributed/unattributed phases MUST balance against
@@ -237,6 +249,28 @@ scope and MUST NOT be attributed to mutation.
 
 A verifier failure preserves otherwise valid performance samples but makes
 overall admission fail.
+
+### Avoid repeated preparation
+
+Resolve the requested case, tier, seed and source arm before preparation. A
+selected run MUST NOT prepare all families or all four tiers. Reuse compatible
+compiled binaries, workload helpers, runtime images, fixture bytes and pristine
+Store entries; rebuild or regenerate only artifacts affected by the change.
+Prepare larger fixtures lazily when the selected workload actually requires them.
+
+Static oracle/manifest preparation MAY be cached by complete input and oracle
+identity. Actual-output verification MUST still execute for each required
+verification case. Reference shared controls and sealed workload rows from
+multiple reports instead of collecting duplicate evidence. A report-only
+change consumes existing raw evidence and MUST NOT trigger another product run.
+
+Record first-use and cache-hit command wall, build/image reuse, cache hit/miss,
+generation, qualification, clone validation and preparation resource peaks.
+Optimizing preparation MUST NOT skip the measured initialization, file creation,
+CDC scan or history construction. No post-operation Store or live Workspace may
+be supplied from a cache. Keep preparation/verification concurrency bounded and
+out of the measured product's resource window.
+
 
 ## 7. Define coherent and complete families
 
@@ -629,6 +663,27 @@ Do not run the complete performance family or verifier suite on every edit.
 Run full admission once the selected cases, size slope, operation parity, and
 resource counters are green. A small optimization on a shared path still
 requires one final run of every affected family member.
+
+The selected loop SHOULD pair its performance case with the smallest relevant
+correctness regression, not a full-tree verifier on every edit. Measure actual
+command wall, including per-run cached acquisition, validation, cloning,
+required runtime readiness, receipts and cleanup; report first-use build/setup
+separately. A millisecond product operation MUST NOT be advertised as a
+millisecond complete test.
+
+Family specifications MUST distinguish ordinary selected runs, full performance
+collection, independent verification and expensive/extended qualification.
+Ordinary warm-prepared development should aim for a few seconds. Large-history,
+resource-boundary, and sustained-endurance cases may take longer and MUST be
+explicitly selectable. No default invocation may launch the whole release or
+an endurance run. A complete release MUST still run every required extended
+member; an ordinary-lane pass is not complete admission.
+
+Freeze independent preparation, selected-case, performance and verification
+budgets with their applicability and source. Numerical limits that need an
+untouched baseline must be fixed before candidate optimization or collection.
+Do not shorten a workload, hide preparation, raise a timeout after a valid miss,
+or omit a correctness check merely to label a family fast.
 
 Self-checks MUST be fast and product-free. They MUST validate unique IDs,
 family cardinality, fixture/schedule/seed algebra, operation surface, timing

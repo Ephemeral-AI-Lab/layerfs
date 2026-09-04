@@ -378,7 +378,7 @@ updated exact numbers above.
 - [0.1.x roadmap](../README.md)
 - [0.1.x benchmark contract](../benchmarking.md)
 - [v0.1.1 namespace optimization specification](../0.1.1/namespace-optimization-spec.md)
-- [v0.1.3 namespace and deduplication contract](../0.1.3/namespace-initialization-scale.md)
+- [v0.1.3 namespace and deduplication contract](../0.1.3/dedup-cross-file.md)
 - [`fs-bench-pro` namespace runner](../../../../benchmark/fs-bench-pro/run-namespace.sh)
 - [`fs-bench-pro` namespace harness](../../../../benchmark/fs-bench-pro/src/main.rs)
 - [Store schema](../../../../crates/layerfs-layerstack-store/src/schema.rs)

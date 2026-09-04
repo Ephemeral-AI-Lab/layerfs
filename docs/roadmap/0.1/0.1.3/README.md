@@ -1,168 +1,183 @@
 # LayerFS 0.1.3
 
-> **Status:** Draft filesystem-workload benchmark release; no new scenario is
-> registered until its complete family source, fixture, runner, and evidence
-> identities are frozen together.
->
-> **Compatibility:** Preserve the released 0.1.x contract and rerun every
-> completed v0.1.0-v0.1.2 family without adding members to it.
-
-## Problem statement
-
-v0.1.2 owns and completes the same-count and count-changing file-edit
-performance families after implementing one shared edit engine. v0.1.3 must not
-continue those families. It
-instead completes the remaining payload, namespace, CAS/CDC, tiny-file,
-directory, tool, link, and composed filesystem workloads at the simplest
-LayerFS history topology.
-
-The fixed topology separates filesystem-workload cost from repeated Commit
-history and Branch fan-out, which remain owned by v0.1.4.
+> **Status:** Current planning checklist; no release candidate exists.
+> Twelve canonical family specifications: eleven performance families and
+> one proof-only Workspace reliability family. Workload adapters are not yet
+> implemented. Freeze source, fixture, oracle, runner and evidence identities
+> before admission; no numbers below are measured performance results.
 
 ## Goal
 
-Complete 42 timed and 5 proof-only v0.1.3 cases across exactly 8 indivisible
-families. Every new operation curve executes nested prefixes of 1, 10, and 100
-scheduled operations before one Commit unless its family declares a frozen
-load-unit exception.
+Prove bounded, reliable whole-Workspace behavior and useful CAS/CDC storage
+reuse through the existing public SDK, managed daemon, real FUSE and one Store.
+Cover small and dense changes, bulk churn, complete reads, real agent tools,
+repeated execution, failure handling and storage growth over time.
 
-The accumulated workload registry through v0.1.3 contains:
+Use one Branch in each measured trajectory. Bounded retained-Commit history
+is included for deduplication
+and essential session correctness; multi-Branch sharing, fan-out, Add/promotion,
+conflicts and broader history-query scaling remain [v0.1.4](../0.1.4/README.md).
+The released crash/power-loss durability limitation remains explicit.
 
-```text
-39 timed v0.1.2 edit-family cases
-+ 42 timed v0.1.3 family cases
-= 81 timed cases
+## Delivery stages and issue structure
 
-12 v0.1.2 verifier/conformance groups
-+ 5 v0.1.3 family proofs
-= 17 proof-only cases
-```
+Use the [Phase 1 agent handoff prompt](phase-1-handoff.md) to coordinate execution
+of all Stage 1 issues with performance-first collection and limited verification.
 
-With the 12 frozen `fs-bench` controls, the complete release knows 110 workload
-definitions. The separately accounted v0.1.2 Store-footprint controls do not
-enter these counts or `registered_total_ns`.
+Central roadmap: [#21](https://github.com/Ephemeral-AI-Lab/layerfs/issues/21).
+Its fourteen sub-issues are shared infrastructure
+[#22](https://github.com/Ephemeral-AI-Lab/layerfs/issues/22), one issue for each of the twelve families,
+and consolidated initial results [#35](https://github.com/Ephemeral-AI-Lab/layerfs/issues/35). Scenario IDs stay inside their family issue; do not
+create 130 individual benchmark issues.
 
-## Files to read
+**Stage 1:** commit/freeze specifications, build on the existing infrastructure,
+qualify fixtures and oracles, then execute and record each family's initial
+performance and correctness outcomes. Product optimization is deferred. The
+infrastructure issue comes first; family implementation can then proceed
+independently, while resource-sensitive timing remains isolated.
 
-- [0.1.x roadmap](../README.md)
-- [Append-only benchmark contract](../benchmarking.md)
-- [v0.1.1 scope](../0.1.1/README.md)
-- [v0.1.2 release scope](../0.1.2/README.md)
-- [v0.1.2 `fs-bench-pro` family format](../0.1.2/fs-bench-pro-format.md)
-- [v0.1.2 same-count family](../0.1.2/same-count-file-edits.md)
-- [v0.1.2 count-changing family](../0.1.2/count-changing-file-edits.md)
-- [v0.1.2 universal edit implementation](../0.1.2/universal-file-edit-engine.md)
-- [`fs-bench-pro` harness](../../../../benchmark/fs-bench-pro/src/main.rs)
-- [Benchmark workload helper](../../../../benchmark/fs-bench-pro/workload.rs)
+**Stage 2:** review the consolidated evidence, choose actual shared root causes,
+and create focused product correctness/performance/storage improvements.
+Re-measure identical scenarios against the retained baseline. Release
+qualification and publication follow; Stage 1 completion does not close the
+central release issue or establish a passing release candidate.
 
-## Scope and exclusions
+See [Stage 1 completion rules](testing-rules.md#stage-1-build-and-collect-the-initial-baseline).
+Valid slow results and product failures are findings to retain. Unimplemented
+cases, missing observability and unexecuted slots keep the owning build issue
+open. The family release gates remain unchanged even when its initial-baseline
+issue is complete.
 
-Each new case uses one Store and Client, one LayerStack and genesis Layer, one
-Branch, one real-FUSE Workspace when a filesystem is projected, one fresh
-workload process, one final unpromoted Commit, End, fresh reconnect, and exact
-verification. Fixture, Store, Client, container, source sealing, and report
-preparation remain outside timed regions.
+## One file per family
 
-v0.1.3 introduces no new same-count, prepend, append, truncate, middle
-insert/delete, sparse-growth, unequal-replacement, or count-changing-family
-members. It reruns those
-complete v0.1.2 families unchanged in a separate inherited regression lane.
+These twelve files are authoritative for family membership. The
+[testing rules](testing-rules.md) own common infrastructure, preparation, tiers,
+seeds, size bounds, timing, verification and fast-iteration requirements.
 
-Inherited rows retain their exact lifecycle. They do not authorize new Commit
-depth, multiple Branches, Branch fan-out, competing publication, conflict
-resolution, or history-sensitive pagination. v0.1.4 owns those shapes.
+| # | Family specification | Family ID | New timed cases | Standalone proof recipes | Stage 1 issue |
+| ---: | --- | --- | ---: | ---: | --- |
+| 1 | [Payload creation and random reads](payload-create-read.md) | `payload_create_read` | 8 | 0 | [#23](https://github.com/Ephemeral-AI-Lab/layerfs/issues/23) |
+| 2 | [Tiny-file operations and bulk churn](tiny-file-churn.md) | `tiny_file_churn` | 20 | 0 | [#24](https://github.com/Ephemeral-AI-Lab/layerfs/issues/24) |
+| 3 | [Directory construction and whole-Workspace reads](directory-construction-traversal.md) | `directory_construction_traversal` | 12 | 0 | [#25](https://github.com/Ephemeral-AI-Lab/layerfs/issues/25) |
+| 4 | [Git workflow](git-tool-workflow.md) | `git_tool_workflow` | 4 | 0 | [#26](https://github.com/Ephemeral-AI-Lab/layerfs/issues/26) |
+| 5 | [Populated subtree mutation](namespace-mutation.md) | `namespace_mutation` | 4 | 0 | [#27](https://github.com/Ephemeral-AI-Lab/layerfs/issues/27) |
+| 6 | [Workspace change locality](workspace-change-locality.md) | `workspace_change_locality` | 16 | 0 | [#28](https://github.com/Ephemeral-AI-Lab/layerfs/issues/28) |
+| 7 | [Complete agent work episodes](mixed-load-bearing-workload.md) | `mixed_load_bearing` | 4 | 0 | [#29](https://github.com/Ephemeral-AI-Lab/layerfs/issues/29) |
+| 8 | [Cross-file CAS deduplication](dedup-cross-file.md) | `dedup_cross_file` | 10 | 0 | [#30](https://github.com/Ephemeral-AI-Lab/layerfs/issues/30) |
+| 9 | [CDC locality and resynchronization](dedup-cdc-locality.md) | `dedup_cdc_locality` | 20 | 1 | [#31](https://github.com/Ephemeral-AI-Lab/layerfs/issues/31) |
+| 10 | [Incremental Workspace content reuse](dedup-workspace-reuse.md) | `dedup_workspace_reuse` | 12 | 0 | [#32](https://github.com/Ephemeral-AI-Lab/layerfs/issues/32) |
+| 11 | [Single-Branch history storage growth](dedup-branch-history.md) | `dedup_branch_history` | 20 | 0 | [#33](https://github.com/Ephemeral-AI-Lab/layerfs/issues/33) |
+| 12 | [Workspace reliability and session endurance](workspace-reliability.md) | `workspace_reliability` | 0 | 12 | [#34](https://github.com/Ephemeral-AI-Lab/layerfs/issues/34) |
+| **Total** | **12 families** | **11 performance + 1 proof-only** | **130** | **13** | — |
 
-The v0.1.3 CAS/CDC rows measure exact sharing and resynchronization. They do not
-replace or satisfy the unique-content namespace throughput or v0.1.2 durable
-Store-footprint gates. Fixtures must not use owner-side Workspace file-range edit, reflink, clone,
-shared backing storage, or precomputed product roots to manufacture reuse.
+Each new timed ID has three prescribed samples: **390 initial-baseline sample
+slots** in Stage 1, with a matching candidate campaign when optimizing later.
+Exact verification is separate and required for every distinct admitted
+fixture/schedule variant. The reliability family expands its twelve recipes
+into 28 named subcases; the CDC proof contains its own declared boundary
+cohorts. Proof recipes are not multiplied by four sizes, and their count is not
+the count of assertions, seeds, fault points or all verification executions.
 
-## v0.1.3-owned family totals and budgets
+Cross-file CAS uses one common one-file anchor for three profiles, avoiding
+three identical executions. Other performance curves use four explicit tiers.
+The previous 48/56/72-case discussion totals are superseded by this complete
+membership. The [earlier coverage review](coverage-review.md) is historical
+rationale and cannot override these specifications.
 
-| # | Complete family contract | Timed | Proof | Target | Hard |
-| ---: | --- | ---: | ---: | ---: | ---: |
-| 1 | [Payload create and read](payload-create-read.md) | 8 | 0 | 20 s | 40 s |
-| 2 | [Namespace initialization, scale, and CAS/CDC deduplication](namespace-initialization-scale.md) | 7 | 2 | 55 s | 90 s |
-| 3 | [Tiny-file churn](tiny-file-churn.md) | 9 | 0 | 10 s | 20 s |
-| 4 | [Directory construction and traversal](directory-construction-traversal.md) | 6 | 0 | 10 s | 20 s |
-| 5 | [Git and tool workflow](git-tool-workflow.md) | 3 | 0 | 15 s | 30 s |
-| 6 | [Namespace mutation](namespace-mutation.md) | 3 | 0 | 10 s | 20 s |
-| 7 | [Link/inode topology](link-inode-topology.md) | 3 | 0 | 8 s | 15 s |
-| 8 | [Mixed load-bearing workload](mixed-load-bearing-workload.md) | 3 | 3 | 15 s | 30 s |
-| **v0.1.3 total** | **8 families** | **42** | **5** | **143 s** | **265 s** |
+## Inherited coverage
 
-The target and hard columns cover three fresh samples per timed case plus one
-execution of each proof. Preparation and reporting remain outside family
-budgets. Each inherited v0.1.2 source arm retains the provisional 13/26-second
-edit-family target/hard budget; complete paired collection uses 26/52-second
-accounting. Its separate verification/conformance timeout is 90 seconds. Do not
-combine verification walls with performance distributions or publish one mixed
-accumulated latency budget.
+| Released family | Frozen cases / controls | v0.1.3 disposition |
+| --- | ---: | --- |
+| `edit_length_preserving` | 12 | Retain singular SDK operation/fixture semantics |
+| `edit_length_changing` | 32 | Retain originals as history; version five capped-result replacements for future capped runs |
+| `edit_canonical_chunk_count` | 12 | Retain canonical outcome and SDK route semantics |
+| `init_namespace` | 4 | Retain released 100/1,000/10,000/100,000-file profiles |
+| `store_footprint` | 3 | Retain unique-content, metadata-cardinality and large-object controls |
+| **Released total** | **63** | **Account separately from 130 new timed cases** |
 
-## Shared load, seeds, and lifecycle timing
+Two older 32 MiB create/read anchors appear in the payload document and retain
+their own lifecycle, repetition and verification identities; they are not new
+cases. Other historical rows follow the
+[0.1.x benchmark contract](../benchmarking.md). The superseded POSIX/temp-copy
+edit families remain archival, not active SDK admission. Never count inherited
+namespace controls twice because several deduplication analyses reference them.
 
-The geometric multiplier is `a = 10`. A new v0.1.3 operation family uses one
-scheduled operation as its load unit and freezes nested prefixes of 1, 10, and
-100 operations. Payload create and namespace initialization retain their
-declared exceptions.
+The five inherited 500 MiB growth inputs would exceed the file cap after editing.
+The [testing rules](testing-rules.md#inherited-evidence-and-release-scope) specify
+new capped-result definitions, with shorter deterministic inputs prepared
+outside timing. Do not run oversized originals under this cap, rewrite old raw
+evidence, claim unchanged complete-family admission, or pool unlike definitions.
 
-Use exactly these labels for new v0.1.3 randomized schedules:
+## Shared load and preparation
 
-```text
-layerfs-v0.1.3-seed-1
-layerfs-v0.1.3-seed-2
-layerfs-v0.1.3-seed-3
-```
+Use `[1, 10, 100, 500]` and the existing binary units. Each workload file is at
+most **500 MiB**; total logical workload content is strictly below **1 GiB**
+at every initial, intermediate and final state. Temporary files, Git objects,
+sparse logical lengths, and conservative hard-link alias lengths count. Physical
+Store/spool/cache/harness disk budgets are separate and explicitly reported.
 
-The v0.1.2 mutation families retain their own frozen v0.1.2 seed labels and are
-not regenerated under v0.1.3 identities.
+The [shared tree](testing-rules.md#shared-workspace-fixture) uses 200 files per
+1 MiB shard, reaching 100,000 files and 500 MiB. Its fixed wide directory and
+128-component spine exercise paging and depth without a Cartesian shape matrix.
+Payload cases reuse released flat-file fixtures; history uses one small fixed
+tree so 500 retained Commits still fit the represented-history bound.
 
-Every timed case reports workload and complete workflow walls. The fixed
-lifecycle component is at most 500 ms after excluding applicable workload
-terms:
+Reuse `fs-bench-pro`, the shared workload helper, existing runner/custody/report
+machinery, qualified generators and immutable prepared inputs. New family
+adapters may extend shared helpers where necessary; they must not duplicate
+the framework. Prepare only the requested case/tier's dependencies and acquire
+each compatible master once. Every sample receives an independent writable
+copy or clone. Measured creation/import/history still performs every operation.
 
-```text
-0.5 s
-+ payload_bytes / 100 MiB/s
-+ affected_paths / 10,000 paths/s
-+ same_count_edits / 100 edits/s
-+ count_changing_edits / 50 edits/s
-```
+## Fast iteration and qualification
 
-## Issue structure
+An ordinary selected warm-prepared run aims for **1–5 seconds**, subject to the
+untouched baseline. This is a development objective, not a promise that every
+500-tier case, full family or exhaustive proof completes in a few seconds.
+Report command wall and preparation/cache costs alongside inner product times.
 
-Keep issue count demand-driven:
+1. Product-free identity, schedule and byte-bound self-check.
+2. One selected case, seed and arm plus the focused regression check.
+3. Inspect counters/phases, fix the shared cause, and rerun the selected case.
+4. Expand to relevant siblings only when needed to resolve remaining risk.
+5. Collect complete affected-family performance when the candidate is ready.
+6. Run independent verification and required extended qualification before
+   release; retain every valid slow result and failure.
 
-1. Create one parent v0.1.3 roadmap issue.
-2. Create one shared harness/registry issue.
-3. Create a family issue only when one of the eight complete families is
-   scheduled.
-4. Create focused implementation issues only after the baseline proves
-   independent root causes.
-5. Create one verification/publication issue last.
+History, heavy fault-boundary and sustained-session cases are explicitly
+selectable extended work. No default invokes the whole release or endurance.
+Required extended cases cannot be omitted from full qualification. Performance
+never runs added benchmark manifests, verification hashes, object census,
+reopen or injection. Intrinsic CAS/Git hashing remains measured product work.
+A report-only edit regenerates reports from raw evidence rather than rerunning
+product operations. Preparation and verification do not run concurrently with
+latency measurement unless an explicitly frozen resource profile permits it.
 
-No v0.1.3 issue may reopen a completed v0.1.2 family or add a member to it.
+Correctness and resource bounds precede measurement. Numerical targets and
+separate preparation/selected/performance/verifier deadlines that need a
+baseline must be frozen before candidate optimization or sampling. Do not
+inflate timeouts or silently shorten workloads after observing a failure.
 
-## Acceptance criteria
+## Registration and completion
 
-- [ ] Exactly 8 v0.1.3-owned families contain 42 timed and 5 proof-only cases.
-- [ ] The inherited v0.1.2 lane remains exactly 39 timed cases across two
-  complete edit performance families plus 12 separate verifier/conformance
-  groups.
-- [ ] The accumulated workload campaign contains 81 timed and 17 proof-only
-  cases, plus 12 separate frozen controls.
-- [ ] Every new 1/10/100 schedule is a seed-bound nested prefix.
-- [ ] Candidate evidence contains exactly three fresh timed samples per new case
-  and one execution per new proof; every valid result is retained.
-- [ ] Each applicable payload, path, same-count-edit, count-changing-edit, fixed
-  lifecycle, family, and complete-campaign gate passes.
-- [ ] Every new case uses public filesystem behavior, real FUSE where projected,
-  one final Commit, exact oracles, fresh reopen, and deterministic cleanup.
-- [ ] Deduplication rows retain exact chunk transcripts and distinguish
-  within-import duplicate, preexisting reuse, and borrowed-by-result identity
-  without using owner-side Workspace file-range edit during fixture construction.
-- [ ] Baselines run before optimization and only measured shared root causes
-  receive implementation changes.
-- [ ] No change alters the five-table Store schema, canonical identities, CDC
-  profile, public semantics, daemon compatibility, or resource bounds.
-- [ ] New Commit-depth and Branch-fan-out work remains assigned to v0.1.4.
+Each family's implementation issue must bind its complete definition, exact
+fixtures/oracles, source/build identities, public route, timings, samples,
+resource caps and budgets under the
+[general benchmark rules](../../../general/benchmark_rules.md). This planning
+index records planning and issue ownership; issue creation does not register
+scenarios, run benchmarks or establish a passing release gate.
+
+- [ ] One canonical specification per family; obsolete namespace-dedup and
+  link-timing drafts replaced, with links and counts consistent.
+- [ ] Reuse existing infrastructure and lazy compatible preparation; include
+  cache invalidation, interruption/corruption and sample-isolation checks.
+- [ ] Qualify unique scenario IDs, complete membership, nested schedules and
+  every intermediate workload byte bound before admission.
+- [ ] Verify all unchanged paths and required intermediate observations with
+  independent oracles; preserve authentic SDK versus POSIX/tool routes.
+- [ ] Record all 390 initial-baseline sample outcomes and required proof variants/subcases,
+  with separate performance, correctness, resource, cleanup and custody status.
+- [ ] Run capped inherited replacements and applicable regressions with explicit
+  identity; retain all prior evidence without silent relabeling.
+- [ ] Demonstrate complete required ordinary and extended coverage, with no
+  unexplained regression or unsupported storage/durability claim.

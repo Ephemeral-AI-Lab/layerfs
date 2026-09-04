@@ -1,125 +1,95 @@
-# Namespace mutation
+# Populated subtree mutation
 
-## Status
+> **Status:** v0.1.3 implementation plan; no measurements or passing claim.
+> **Family ID:** `namespace_mutation`. Four timed cases; no separate proofs.
+> [Shared testing rules](testing-rules.md) own infrastructure, seeds, custody,
+> timing, verification, size limits, and campaign admission.
 
-Draft v0.1.3 family contract: 3 timed cases and 0 proof-only cases.
+## Question and scope
 
-## Problem statement
+What does moving or deleting a large populated subtree cost when a substantial
+untouched Workspace must survive exactly? Scale affected subtree size while
+holding the background fixed. A directory rename remains one namespace syscall
+even when it relocates 100,000 files; do not call that 100,000 rename operations.
 
-Namespace initialization and tiny-file churn do not prove that one Workspace
-can publish a mixed structural edit frontier without rebuilding unrelated
-namespace state. Rename, cross-directory move, subtree creation, and subtree
-deletion also exercise different path-count and ancestor-rewrite outcomes.
+This replaces the earlier four small independent mutation mixtures. Creation
+belongs to the tiny-file and directory families; single-file moves belong to
+[Workspace change locality](workspace-change-locality.md). Link lifetime and
+invalid mutations belong to [Workspace reliability](workspace-reliability.md).
 
-## Goal
+## Fixture and exact membership
 
-Measure deterministic nested prefixes of 1, 10, and 100 mixed namespace
-mutations before one Commit. The stream must contain count-neutral, growing,
-and shrinking outcomes and reopen to the exact path tree.
+Use a fixed untouched `background/` of 100,000 independently generated files,
+each 2,500 bytes: exactly 250,000,000 logical bytes. Each of `source/tree-a/`
+and `source/tree-b/` contains N shards, each with 200 independently generated
+1 KiB files. Prepare empty `destination/` before timing. Freeze directory names,
+placement, metadata, and whole-tree manifests; N uses nested shard prefixes.
 
-## Files to read
+| Scenario ID | N | Files in each affected tree | Initial regular files | Peak logical file bytes |
+| --- | ---: | ---: | ---: | ---: |
+| `namespace-subtree-relocate-delete-1` | 1 | 200 | 100,400 | 250,409,600 |
+| `namespace-subtree-relocate-delete-10` | 10 | 2,000 | 104,000 | 254,096,000 |
+| `namespace-subtree-relocate-delete-100` | 100 | 20,000 | 140,000 | 290,960,000 |
+| `namespace-subtree-relocate-delete-500` | 500 | 100,000 | 300,000 | 454,800,000 |
 
-- [v0.1.3 shared contract](README.md)
-- [Append-only benchmark contract](../benchmarking.md)
-- [Namespace initialization, scale, and CAS/CDC deduplication](namespace-initialization-scale.md)
-- [Tiny-file churn](tiny-file-churn.md)
-- [`fs-bench-pro` harness](../../../../benchmark/fs-bench-pro/src/main.rs)
-- [Workspace change planner](../../../../crates/layerfs-workspace/src/changes.rs)
+The primary unit is **affected subtree shards**, not operation count. These are
+the only four members. All files are at most 2,500 bytes; the initial state is
+the peak, strictly below 1 GiB. The bound includes both affected trees, including
+the one subsequently deleted. No temporary copied tree is permitted.
 
-## Fixed topology and lifecycle boundary
+## Measured operation
 
-Each timed sample starts from one LayerStack, one genesis Layer, one Branch,
-and a fresh real-FUSE Workspace. One fresh process applies the scheduled
-prefix, syncs its ordinary filesystem work, exits, and is followed by one
-Commit, End, fresh Store reconnect, and exact Branch verification. The Commit
-is not promoted into another Layer. Repeated Commit history belongs to v0.1.4.
+One real-FUSE Workspace and one fresh managed workload execution perform:
 
-## Timed scenarios
+1. Rename `source/tree-a` to `destination/moved-a`, changing parent and basename
+   with one native directory rename. Do not copy or traverse A in the workload.
+2. Remove all files and directories under `source/tree-b` using a frozen
+   deterministic postorder traversal and ordinary unlink/rmdir calls.
+3. Complete the declared synchronization and exit before one LayerFS Commit.
 
-| Scenario ID | Scheduled mutations | Required outcome |
-| --- | ---: | --- |
-| `namespace-mutation-1` | 1 | First nested mutation publishes exactly |
-| `namespace-mutation-10` | 10 | First full mixed cycle publishes exactly |
-| `namespace-mutation-100` | 100 | Ten mixed cycles publish exactly with unrelated subtrees reused |
+Record move and delete phase walls separately, then Commit and End separately.
+Use one Branch and one final unpromoted Commit. The expected outcome is
+`Created`; fresh reconnect and full verification are outside performance.
+Any metadata normalization needed for the oracle is a declared operation in
+the workload phase; it may touch only the declared affected paths.
 
-## Proof-only scenarios
+## Independent verification
 
-There are no proof-only cases in this family.
+Derive the final manifest by renaming every A path, removing every B path, and
+retaining every other path from the frozen input manifest. Compare the full
+reopened Workspace: paths/types, bytes, lengths, modes, normalized timestamps,
+and directory structure. Check the moved tree immediately after rename in
+verification mode. Verify absence of both old tree bindings and all deleted
+descendants, and exact equality of every background file.
 
-## Tier/load rule and deterministic schedule
+Final regular-file count is `100000 + 200*N`; final logical bytes are
+`250000000 + 204800*N`. Derive directory counts from the frozen manifests.
+Check published head and canonical root against independently qualified
+expectations. Report payload object reuse and unchanged subtree identities;
+zero inserted payload is the expected result of namespace-only work, not a
+claim of zero metadata work. Require complete runtime cleanup.
 
-The primary load unit is one scheduled semantic namespace mutation and
-`a = 10`, giving nested 1/10/100 prefixes. A semantic subtree create or delete
-may issue multiple ordinary filesystem calls; report both scheduled mutations
-and affected paths rather than pretending they are the same count.
+## Measurements, budgets, and grounding
 
-Every ten-operation cycle uses ten independent fixture cells and this fixed
-operation sequence:
+Report actual rename/unlink/rmdir counts, affected/untouched paths, payload
+reads/writes, metadata/object reads, candidate and inserted/reused objects/bytes,
+transaction maxima, RSS, spool/Store growth, and all phase walls. Moving A and
+deleting B have different scaling behavior and remain separately attributed.
 
-| Slot | Mutation | Count outcome |
-| ---: | --- | --- |
-| 0 | Rename a regular file within its directory | neutral |
-| 1 | Move a regular file to a sibling directory | neutral |
-| 2 | Create a subtree containing 10 regular files | grow by 11 paths |
-| 3 | Delete a prepared subtree containing 10 regular files | shrink by 11 paths |
-| 4 | Rename a directory containing one marker file | neutral |
-| 5 | Move a directory containing one marker file to a sibling parent | neutral |
-| 6 | Create a second 10-file subtree | grow by 11 paths |
-| 7 | Delete a second prepared 10-file subtree | shrink by 11 paths |
-| 8 | Rename a second regular file | neutral |
-| 9 | Move a second regular file to a sibling directory | neutral |
+The selected-case 1–5 second goal after cached preparation is provisional.
+Large deletion and full verification can exceed it; qualify and freeze each
+phase's target/hard wall before admission. The complete family contains
+**12 performance samples**, three per case, plus separate verification.
 
-The 10-operation cycle has zero net path-count change while still containing
-grow and shrink operations. The 100-operation tier repeats the cycle on new
-cells, never on paths mutated by an earlier cycle.
+- [`changes.rs`](../../../../crates/layerfs-workspace/src/changes.rs):
+  `try_build_localized_candidate`, `base_manifest`, and `final_manifest`
+  expose the risk of whole-tree work for directory mutations.
+- [`cow_tree.rs`](../../../../crates/layerfs-workspace/src/cow_tree.rs):
+  `rename`, `unlink`, and `replace_path_prefix` own live namespace semantics.
+- [Existing mutation tests](../../../../crates/layerfs-workspace/tests/file_edit.rs):
+  `group_3_rename_parent_replace_unlink_and_final_alias_reclamation_are_inode_exact`
+  retains basic correctness without another timed micro-family.
 
-### Frozen seeds and nested prefixes
-
-Use the three seed labels frozen in the shared contract. A
-`v0.1.3/namespace-mutation` SHA-256 counter stream selects a permutation of 100
-prepared cells; operation type remains fixed by ordinal modulo 10. Names,
-marker bytes, modes, and mtimes derive from the seed label, cell, and ordinal.
-
-For each seed, the 1-operation case is the first element of the 10-operation
-case and the 10-operation case is the first ten elements of the 100-operation
-case. Freeze the initial and expected-final manifest digests before candidate
-collection.
-
-## Required metrics and oracles
-
-Record complete workflow and workload time, CPU, peak RSS, swaps, scheduled
-mutation count, actual filesystem calls, affected paths, neutral/grow/shrink
-counts, path count before and after, candidate/inserted/reused objects and
-bytes, transaction maxima, Store growth, sync evidence, and cleanup state.
-
-Verification must prove exact path names and parents, file bytes, modes, mtimes,
-path count, canonical root, Branch head, fresh-reopen digest, absence of every
-deleted subtree, presence of every created subtree, and no leaked mount,
-process, spool, Workspace, or lease.
-
-## Expected-rate assumptions and family budget
-
-Applicable work must sustain at least 10,000 affected paths/s. The fixed
-Create + Commit/acknowledgement + End + fresh-reopen/verification component is
-at most 500 ms after subtracting the path term.
-
-The complete family campaign—three fresh samples for each timed case—targets
-10 seconds and has a hard ceiling of 20 seconds. Fixture and environment
-preparation, sealing, and report generation are excluded and reported
-separately.
-
-## Acceptance criteria
-
-- [ ] Exactly the three timed scenario IDs above are registered; no proof or
-  control row is added by this family.
-- [ ] All three seeds use exact nested 1/10/100 prefixes of the same stream.
-- [ ] The stream covers rename, move, subtree create, and subtree delete and
-  records neutral, grow, and shrink results separately.
-- [ ] One Commit publishes the whole prefix and the fresh reopen matches the
-  frozen final manifest and canonical root.
-- [ ] Unrelated cells and persistent subtrees are reused rather than rebuilt.
-- [ ] Path throughput, fixed lifecycle, and 10/20-second family budgets pass
-  without dropping a valid sample.
-- [ ] Sync/barrier remains passive evidence, not another scenario or family.
-- [ ] No repeated Commit, competing Branch, prepend, owner-side Workspace file-range edit, or SDK-call
-  microbenchmark enters this family.
+Completion requires all four members, exact full-tree proofs and transient
+bounds, unchanged background, cleanup, complete source/fixture/oracle identities,
+and qualified pre-admission budgets.
