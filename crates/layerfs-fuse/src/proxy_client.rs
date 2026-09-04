@@ -729,7 +729,9 @@ impl FilesystemPort for ProxyClient {
         let _callback = self.enter_callback()?;
         self.flush_pending_create(node)?;
         if !truncate && !writable {
-            return self.send_at(self.node_stream(node), Request::PinRead(node));
+            // Open may expose a handle only after the backend retained the inode.
+            // A cached kernel inode can already have been replaced or unlinked.
+            return unit(self.exchange_at(self.node_stream(node), Request::Pin(node, false, false))?);
         }
         self.invalidate_read_ahead(node)?;
         unit(self.exchange(Request::Pin(node, truncate, writable))?)
@@ -1598,6 +1600,46 @@ mod tests {
             write_response(&mut server, &Response::Attr(new)).unwrap();
             assert_eq!(request.join().unwrap().unwrap(), new);
         });
+    }
+
+    #[test]
+    fn readonly_pin_waits_for_ack_and_rejects_replaced_inode() {
+        for missing in [false, true] {
+            let (stream, mut server) = stream_pair();
+            server.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+            let (requested, request_seen) = std::sync::mpsc::channel();
+            let (acknowledge, ack_allowed) = std::sync::mpsc::channel();
+            let host = std::thread::spawn(move || {
+                assert!(matches!(read_request(&mut server).unwrap(), Request::Pin(NodeId(2), false, false)));
+                requested.send(()).unwrap();
+                ack_allowed.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+                // A replaced cached inode must fail at Open; otherwise pin success
+                // means the backend has retained it before the handle is exposed.
+                write_response(&mut server, &if missing {Response::Error(PortError::NotFound)} else {Response::Unit}).unwrap();
+            });
+            let client = Arc::new(ProxyClient {
+                streams: vec![Mutex::new(stream)], next: AtomicUsize::new(0),
+                cache: Mutex::new(Cache::default()), write_buffer: Mutex::new(None),
+                reservation: Mutex::new(Reservation::default()), gate: RwLock::new(()),
+                callbacks: RwLock::new(()), paused: AtomicBool::new(false), pending: AtomicU64::new(0),
+                metrics: AtomicFuseWriteMetrics::default(), read_metrics: AtomicFuseReadMetrics::default(),
+                #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+                notifier: std::sync::OnceLock::new(),
+            });
+            client.cache.lock().unwrap().read_ahead.insert(NodeId(2), ReadAhead {offset:0,bytes:vec![7;4],served:0});
+            let (returned, result) = std::sync::mpsc::channel();
+            let caller = { let client = client.clone(); std::thread::spawn(move || {
+                returned.send(client.pin(NodeId(2), false, false)).unwrap();
+            }) };
+            request_seen.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+            assert!(matches!(result.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty)), "read Open completed before pin acknowledgement");
+            acknowledge.send(()).unwrap();
+            assert_eq!(result.recv_timeout(std::time::Duration::from_secs(2)).unwrap(),
+                if missing {Err(PortError::NotFound)} else {Ok(())});
+            assert_eq!(client.pending.load(Ordering::Acquire), 0);
+            assert!(client.cache.lock().unwrap().read_ahead.contains_key(&NodeId(2)));
+            caller.join().unwrap(); host.join().unwrap();
+        }
     }
 
     #[test]
