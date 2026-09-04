@@ -1,3 +1,4 @@
+pub mod batch;
 pub mod directory;
 pub mod inode;
 pub mod metadata;

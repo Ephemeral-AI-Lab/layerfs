@@ -198,7 +198,7 @@ fn validate_metadata<S: ObjectRead>(store: &S, root: ObjectId, kind: InodeKind) 
     .validate(kind)
 }
 
-pub(super) fn nearest_half(widths: Vec<usize>) -> usize {
+pub(crate) fn nearest_half(widths: Vec<usize>) -> usize {
     let total: usize = widths.iter().sum();
     let mut prefix = 0;
     let mut best = 1;
