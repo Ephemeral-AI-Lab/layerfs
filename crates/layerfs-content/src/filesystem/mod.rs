@@ -15,7 +15,7 @@ pub use apply::{
 };
 pub use change::{
     allocated_inode, apply_changes, build_portable_metadata, set_mode, set_mtime, write_file,
-    AppliedRoot, ApplyCounters, ContentChange,
+    AppliedRoot, ApplyCounters, ContentChange, PortableMetadataCache,
 };
 pub use diff::{diff_roots, DiffAspects, DiffEntry, NodeSummary};
 pub use read::{list, read_range, readlink, stat, stream, ListPage, Stat};

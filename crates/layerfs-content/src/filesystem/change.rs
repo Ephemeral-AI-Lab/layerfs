@@ -276,6 +276,57 @@ pub(super) fn metadata<S: ObjectStore>(
     build_portable_metadata(store, kind, mode, 0, 0)
 }
 
+/// Eight exact metadata results owned by one construction attempt.
+///
+/// The cache must not outlive the private output store that receives misses.
+const PORTABLE_METADATA_CACHE_CAPACITY: usize = 8;
+
+pub struct PortableMetadataCache {
+    entries: [Option<(InodeKind, PortableMetadataV1, ObjectId)>; PORTABLE_METADATA_CACHE_CAPACITY],
+    next: usize,
+}
+
+impl Default for PortableMetadataCache {
+    fn default() -> Self {
+        Self {
+            entries: [None; Self::CAPACITY],
+            next: 0,
+        }
+    }
+}
+
+impl PortableMetadataCache {
+    pub const CAPACITY: usize = PORTABLE_METADATA_CACHE_CAPACITY;
+
+    pub fn len(&self) -> usize {
+        self.entries.iter().flatten().count()
+    }
+
+    /// Returns the canonical metadata root and whether it was reused.
+    pub fn get_or_build<S: ObjectStore>(
+        &mut self,
+        store: &mut S,
+        kind: InodeKind,
+        mode: u32,
+        mtime_seconds: i64,
+        mtime_nanoseconds: u32,
+    ) -> CoreResult<(ObjectId, bool)> {
+        let portable = portable_metadata(kind, mode, mtime_seconds, mtime_nanoseconds);
+        if let Some((_, _, root)) = self
+            .entries
+            .iter()
+            .flatten()
+            .find(|(cached_kind, cached, _)| *cached_kind == kind && *cached == portable)
+        {
+            return Ok((*root, true));
+        }
+        let root = build_portable_metadata_value(store, kind, portable)?;
+        self.entries[self.next] = Some((kind, portable, root));
+        self.next = (self.next + 1) % Self::CAPACITY;
+        Ok((root, false))
+    }
+}
+
 #[doc(hidden)]
 pub fn build_portable_metadata<S: ObjectStore>(
     store: &mut S,
@@ -284,7 +335,20 @@ pub fn build_portable_metadata<S: ObjectStore>(
     mtime_seconds: i64,
     mtime_nanoseconds: u32,
 ) -> CoreResult<ObjectId> {
-    let portable = PortableMetadataV1 {
+    build_portable_metadata_value(
+        store,
+        kind,
+        portable_metadata(kind, mode, mtime_seconds, mtime_nanoseconds),
+    )
+}
+
+fn portable_metadata(
+    kind: InodeKind,
+    mode: u32,
+    mtime_seconds: i64,
+    mtime_nanoseconds: u32,
+) -> PortableMetadataV1 {
+    PortableMetadataV1 {
         permission_mode: mode
             & if kind == InodeKind::Directory {
                 0o1777
@@ -293,7 +357,14 @@ pub fn build_portable_metadata<S: ObjectStore>(
             },
         mtime_seconds,
         mtime_nanoseconds,
-    };
+    }
+}
+
+fn build_portable_metadata_value<S: ObjectStore>(
+    store: &mut S,
+    kind: InodeKind,
+    portable: PortableMetadataV1,
+) -> CoreResult<ObjectId> {
     let mode_bytes = portable.mode_bytes(kind)?;
     let mtime_bytes = portable.mtime_bytes()?;
     let (mode, _) = build_bytes(store, &mode_bytes)?;
@@ -332,4 +403,66 @@ fn allocated_inode_text(seed: [u8; 32], path: &str) -> InodeId {
     bytes.extend_from_slice(&seed);
     bytes.extend_from_slice(path.as_bytes());
     InodeId::allocate(ObjectId::for_bytes(&bytes).to_bytes(), 0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[derive(Default)]
+    struct MemoryStore {
+        objects: BTreeMap<ObjectId, Vec<u8>>,
+        puts: usize,
+    }
+
+    impl ObjectStore for MemoryStore {
+        fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+            self.objects
+                .get(&id)
+                .cloned()
+                .ok_or(CoreError::PathNotFound)
+        }
+
+        fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+            let id = ObjectId::for_bytes(canonical);
+            self.objects.insert(id, canonical.to_vec());
+            self.puts += 1;
+            Ok(id)
+        }
+    }
+
+    #[test]
+    fn portable_metadata_cache_is_exact_normalized_and_bounded() {
+        let mut store = MemoryStore::default();
+        let mut cache = PortableMetadataCache::default();
+        let (first, hit) = cache
+            .get_or_build(&mut store, InodeKind::RegularFile, 0o100644, 1, 0)
+            .unwrap();
+        assert!(!hit);
+        let puts = store.puts;
+        assert_eq!(
+            cache
+                .get_or_build(&mut store, InodeKind::RegularFile, 0o644, 1, 0)
+                .unwrap(),
+            (first, true)
+        );
+        assert_eq!(store.puts, puts);
+
+        for seconds in 2..=9 {
+            assert!(
+                !cache
+                    .get_or_build(&mut store, InodeKind::RegularFile, 0o644, seconds, 0)
+                    .unwrap()
+                    .1
+            );
+        }
+        assert_eq!(cache.len(), PortableMetadataCache::CAPACITY);
+        assert!(
+            !cache
+                .get_or_build(&mut store, InodeKind::RegularFile, 0o644, 1, 0)
+                .unwrap()
+                .1
+        );
+    }
 }

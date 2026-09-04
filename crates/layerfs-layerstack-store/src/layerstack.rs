@@ -5,7 +5,7 @@ use crate::objects::{
     InitializationDirectAdmissionWriter, InitializationObjectSlab, InitializationSegmentAdmission,
     InitializationSlabQueueMetrics, InitializationSlabWriter, InitializationSlabWriterMetrics,
     InitializationSqlPhase, InitializationTaskObjectBuffer, ObjectBuffer,
-    INITIALIZATION_SLAB_QUEUE_SLOTS,
+    INITIALIZATION_SLAB_OBJECTS, INITIALIZATION_SLAB_QUEUE_SLOTS,
 };
 #[cfg(test)]
 use crate::objects::{
@@ -838,10 +838,9 @@ struct PreparedDirectory {
     imported: ImportedTree,
 }
 
+#[cfg(test)]
 struct PreparedCompactDirectory {
     index: usize,
-    name: layerfs_content::CanonicalName,
-    inode: layerfs_content::tree::inode::InodeId,
     imported: CompactImportedTree,
 }
 
@@ -867,10 +866,19 @@ struct PreparedAppendOnlyWorker {
 
 struct PreparedDirectWorker {
     index: usize,
-    directories: Vec<PreparedCompactDirectory>,
+    tasks: Vec<PreparedDirectTask>,
     pair_blocks: Vec<crate::objects::CompactInodePairBlock>,
     pairs: crate::objects::CompactInodePairSegment,
     slab: InitializationSlabWriterMetrics,
+}
+
+struct PreparedDirectTask {
+    index: usize,
+    children: Vec<(
+        layerfs_content::CanonicalName,
+        layerfs_content::tree::inode::InodeId,
+    )>,
+    imported: CompactImportedTree,
 }
 
 #[cfg(test)]
@@ -890,6 +898,19 @@ struct RootDirectoryTask {
     name: layerfs_content::CanonicalName,
     logical: layerfs_content::CanonicalPath,
     native: std::path::PathBuf,
+}
+
+enum DirectInitializationTask {
+    Directory(RootDirectoryTask),
+    File(RootDirectoryTask),
+    FlatFiles { start: usize, end: usize },
+}
+
+struct FlatRootDirectory {
+    name: layerfs_content::CanonicalName,
+    logical: layerfs_content::CanonicalPath,
+    native: std::path::PathBuf,
+    files: Vec<layerfs_content::CanonicalName>,
 }
 
 fn direct_initialize_root_directories(
@@ -922,30 +943,101 @@ fn direct_initialize_root_directories_inner(
     if entries.is_empty() {
         return Ok(None);
     }
-    let mut tasks = Vec::with_capacity(entries.len());
+    let mut root_tasks = Vec::with_capacity(entries.len());
     for entry in entries {
-        if !entry.file_type()?.is_dir() {
+        let file_type = entry.file_type()?;
+        if !file_type.is_dir() && !file_type.is_file() {
             return Ok(None);
         }
         let name = layerfs_content::CanonicalName::from_bytes(entry.file_name().as_bytes())?;
-        tasks.push(RootDirectoryTask {
+        let task = RootDirectoryTask {
             logical: child(&layerfs_content::CanonicalPath::root(), &name)?,
             name,
             native: entry.path(),
-        });
+        };
+        root_tasks.push((task, file_type.is_dir()));
     }
+    let mut flat = None;
+    let tasks = if root_tasks.len() == 1 && root_tasks[0].1 {
+        let (directory, _) = root_tasks.pop().expect("one root task");
+        let mut files = Vec::new();
+        let mut flat_files = true;
+        for entry in std::fs::read_dir(&directory.native)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                flat_files = false;
+                break;
+            }
+            files.push(layerfs_content::CanonicalName::from_bytes(
+                entry.file_name().as_bytes(),
+            )?);
+        }
+        if flat_files && files.len() > 1 {
+            files.sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
+            let tasks = files
+                .chunks(INITIALIZATION_SLAB_OBJECTS)
+                .enumerate()
+                .map(|(index, chunk)| DirectInitializationTask::FlatFiles {
+                    start: index * INITIALIZATION_SLAB_OBJECTS,
+                    end: index * INITIALIZATION_SLAB_OBJECTS + chunk.len(),
+                })
+                .collect::<Vec<_>>();
+            flat = Some(FlatRootDirectory {
+                name: directory.name,
+                logical: directory.logical,
+                native: directory.native,
+                files,
+            });
+            tasks
+        } else {
+            vec![DirectInitializationTask::Directory(directory)]
+        }
+    } else {
+        root_tasks
+            .into_iter()
+            .map(|(task, directory)| {
+                if directory {
+                    DirectInitializationTask::Directory(task)
+                } else {
+                    DirectInitializationTask::File(task)
+                }
+            })
+            .collect()
+    };
     if tasks.len() > INITIALIZATION_TASK_BLOCK_LIMIT {
         return Ok(None);
     }
-    let task_state_bytes = (tasks.capacity() * std::mem::size_of::<RootDirectoryTask>()) as u64
+    let task_state_bytes = (tasks.capacity() * std::mem::size_of::<DirectInitializationTask>())
+        as u64
         + tasks
             .iter()
             .map(|task| {
+                let (DirectInitializationTask::Directory(task)
+                | DirectInitializationTask::File(task)) = task
+                else {
+                    return 0;
+                };
                 task.name.owned_capacity_bytes() as u64
                     + task.logical.owned_capacity_bytes() as u64
                     + task.native.as_os_str().as_bytes().len() as u64
             })
-            .sum::<u64>();
+            .sum::<u64>()
+        + flat
+            .as_ref()
+            .map(|flat| {
+                flat.name.owned_capacity_bytes() as u64
+                    + flat.logical.owned_capacity_bytes() as u64
+                    + flat.native.as_os_str().as_bytes().len() as u64
+                    + (flat.files.capacity()
+                        * std::mem::size_of::<layerfs_content::CanonicalName>())
+                        as u64
+                    + flat
+                        .files
+                        .iter()
+                        .map(|name| name.owned_capacity_bytes() as u64)
+                        .sum::<u64>()
+            })
+            .unwrap_or(0);
     let workers = std::thread::available_parallelism()
         .map(std::num::NonZeroUsize::get)
         .unwrap_or(1)
@@ -970,6 +1062,7 @@ fn direct_initialize_root_directories_inner(
                     let active_producers = &active_producers;
                     let active_producer_peak = &active_producer_peak;
                     let tasks = &tasks;
+                    let flat = &flat;
                     let sender = sender.clone();
                     let queue = queue.clone();
                     scope.spawn(move || {
@@ -979,9 +1072,11 @@ fn direct_initialize_root_directories_inner(
                             .fetch_max(active, std::sync::atomic::Ordering::Relaxed);
                         let producer_started = std::time::Instant::now();
                         let result = (|| {
-                            let mut directories = Vec::new();
+                            let mut prepared_tasks = Vec::new();
                             let mut pair_blocks = Vec::new();
                             let mut objects = InitializationSlabWriter::new(sender, queue);
+                            let mut metadata_cache =
+                                layerfs_content::filesystem::PortableMetadataCache::default();
                             let mut pairs =
                                 crate::objects::CompactInodePairWriter::new(pair_pending_bytes)?;
                             let mut structural_peak_bytes = 0_u64;
@@ -995,22 +1090,52 @@ fn direct_initialize_root_directories_inner(
                                 };
                                 let pair_checkpoint = pairs.checkpoint();
                                 let mut structure = InitializationTaskObjectBuffer::new();
-                                let mut import =
-                                    NativeImport::new_split(seed, &mut objects, &mut structure);
-                                let inode =
-                                    match import.directory(&task.native, &task.logical, false) {
-                                        Ok(inode) => inode,
-                                        Err(StoreError::Core(
-                                            layerfs_content::CoreError::ObjectLimitExceeded,
-                                        )) => {
-                                            fallback
-                                                .store(true, std::sync::atomic::Ordering::Release);
-                                            break;
+                                let mut import = NativeImport::new_split_with_cache(
+                                    seed,
+                                    &mut objects,
+                                    &mut structure,
+                                    metadata_cache,
+                                );
+                                let children = match task {
+                                    DirectInitializationTask::Directory(task) => import
+                                        .directory(&task.native, &task.logical, false)
+                                        .map(|inode| vec![(task.name.clone(), inode)]),
+                                    DirectInitializationTask::File(task) => import
+                                        .regular_file(&task.native, &task.logical)
+                                        .map(|inode| vec![(task.name.clone(), inode)]),
+                                    DirectInitializationTask::FlatFiles { start, end } => {
+                                        let flat = flat.as_ref().ok_or(StoreError::Integrity(
+                                            "flat initialization plan",
+                                        ))?;
+                                        let mut children = Vec::with_capacity(end - start);
+                                        for name in &flat.files[*start..*end] {
+                                            let logical = child(&flat.logical, name)?;
+                                            let native = flat
+                                                .native
+                                                .join(std::ffi::OsStr::from_bytes(name.as_bytes()));
+                                            children.push((
+                                                name.clone(),
+                                                import.regular_file(&native, &logical)?,
+                                            ));
                                         }
-                                        Err(error) => return Err(error),
-                                    };
-                                let imported = match import.finish_compact(&mut pairs) {
-                                    Ok(imported) => imported,
+                                        Ok(children)
+                                    }
+                                };
+                                let children = match children {
+                                    Ok(children) => children,
+                                    Err(StoreError::Core(
+                                        layerfs_content::CoreError::ObjectLimitExceeded,
+                                    )) => {
+                                        fallback.store(true, std::sync::atomic::Ordering::Release);
+                                        break;
+                                    }
+                                    Err(error) => return Err(error),
+                                };
+                                let imported = match import.finish_compact_with_cache(&mut pairs) {
+                                    Ok((imported, cache)) => {
+                                        metadata_cache = cache;
+                                        imported
+                                    }
                                     Err(StoreError::Core(
                                         layerfs_content::CoreError::ObjectLimitExceeded,
                                     )) => {
@@ -1032,10 +1157,9 @@ fn direct_initialize_root_directories_inner(
                                     worker_index,
                                     pair_checkpoint,
                                 )?);
-                                directories.push(PreparedCompactDirectory {
+                                prepared_tasks.push(PreparedDirectTask {
                                     index,
-                                    name: task.name.clone(),
-                                    inode,
+                                    children,
                                     imported,
                                 });
                             }
@@ -1051,18 +1175,18 @@ fn direct_initialize_root_directories_inner(
                                 .as_nanos()
                                 .min(u128::from(u64::MAX))
                                 as u64;
-                            slab.producer_tasks = directories.len() as u64;
-                            slab.producer_files = directories
+                            slab.producer_tasks = prepared_tasks.len() as u64;
+                            slab.producer_files = prepared_tasks
                                 .iter()
-                                .map(|directory| directory.imported.scanned_files)
+                                .map(|task| task.imported.scanned_files)
                                 .sum();
-                            slab.producer_bytes = directories
+                            slab.producer_bytes = prepared_tasks
                                 .iter()
-                                .map(|directory| directory.imported.scanned_bytes)
+                                .map(|task| task.imported.scanned_bytes)
                                 .sum();
                             Ok::<_, StoreError>((
                                 worker_index,
-                                directories,
+                                prepared_tasks,
                                 pair_blocks,
                                 pairs,
                                 slab,
@@ -1101,10 +1225,10 @@ fn direct_initialize_root_directories_inner(
             let mut worker_error = None;
             for handle in handles {
                 match handle.join() {
-                    Ok(Ok((index, directories, pair_blocks, pairs, slab))) => {
+                    Ok(Ok((index, tasks, pair_blocks, pairs, slab))) => {
                         output.push(PreparedDirectWorker {
                             index,
-                            directories,
+                            tasks,
                             pair_blocks,
                             pairs: pairs.seal()?,
                             slab,
@@ -1134,14 +1258,22 @@ fn direct_initialize_root_directories_inner(
         + prepared
             .iter()
             .map(|worker| {
-                (worker.directories.capacity() * std::mem::size_of::<PreparedCompactDirectory>())
-                    as u64
+                (worker.tasks.capacity() * std::mem::size_of::<PreparedDirectTask>()) as u64
                     + worker
-                        .directories
+                        .tasks
                         .iter()
-                        .map(|directory| {
-                            directory.name.owned_capacity_bytes() as u64
-                                + (directory.imported.hard_links.capacity()
+                        .map(|task| {
+                            (task.children.capacity()
+                                * std::mem::size_of::<(
+                                    layerfs_content::CanonicalName,
+                                    layerfs_content::tree::inode::InodeId,
+                                )>()) as u64
+                                + task
+                                    .children
+                                    .iter()
+                                    .map(|(name, _)| name.owned_capacity_bytes() as u64)
+                                    .sum::<u64>()
+                                + (task.imported.hard_links.capacity()
                                     * std::mem::size_of::<(u64, u64)>())
                                     as u64
                         })
@@ -1151,7 +1283,7 @@ fn direct_initialize_root_directories_inner(
                         as u64
             })
             .sum::<u64>()
-        + (tasks.len() * std::mem::size_of::<PreparedCompactDirectory>()) as u64
+        + (tasks.len() * std::mem::size_of::<PreparedDirectTask>()) as u64
         + (tasks.len() * std::mem::size_of::<crate::objects::CompactInodePairBlock>()) as u64
         + (prepared.len() * std::mem::size_of::<crate::objects::CompactInodePairSegment>()) as u64;
 
@@ -1164,8 +1296,8 @@ fn direct_initialize_root_directories_inner(
     let mut identities = std::collections::HashSet::new();
     if prepared
         .iter()
-        .flat_map(|worker| worker.directories.iter())
-        .flat_map(|directory| directory.imported.hard_links.iter())
+        .flat_map(|worker| worker.tasks.iter())
+        .flat_map(|task| task.imported.hard_links.iter())
         .any(|identity| !identities.insert(*identity))
     {
         drop(admission);
@@ -1173,7 +1305,7 @@ fn direct_initialize_root_directories_inner(
         return Ok(None);
     }
 
-    let mut directories = Vec::with_capacity(tasks.len());
+    let mut prepared_tasks = Vec::with_capacity(tasks.len());
     let mut pair_blocks = Vec::with_capacity(tasks.len());
     let mut pairs = Vec::with_capacity(prepared.len());
     let mut producers = Vec::with_capacity(prepared.len());
@@ -1183,7 +1315,7 @@ fn direct_initialize_root_directories_inner(
             index: worker.index,
             metrics: worker.slab,
         });
-        directories.extend(worker.directories);
+        prepared_tasks.extend(worker.tasks);
         pair_blocks.extend(worker.pair_blocks);
         pairs.push(worker.pairs);
         slab.handoffs = slab.handoffs.saturating_add(worker.slab.handoffs);
@@ -1210,21 +1342,22 @@ fn direct_initialize_root_directories_inner(
             .saturating_add(worker.slab.structural_peak_bytes);
     }
     producers.sort_by_key(|producer| producer.index);
-    directories.sort_by_key(|directory| directory.index);
+    prepared_tasks.sort_by_key(|task| task.index);
     pair_blocks.sort_by_key(|block| block.task_ordinal);
-    if directories.len() != tasks.len()
+    if prepared_tasks.len() != tasks.len()
         || pair_blocks.len() != tasks.len()
-        || directories
+        || prepared_tasks
             .iter()
             .zip(&pair_blocks)
-            .any(|(directory, block)| directory.index != block.task_ordinal)
+            .any(|(task, block)| task.index != block.task_ordinal)
     {
         return Err(StoreError::Integrity("direct initialization task order"));
     }
 
     admission.prepare_final_phase()?;
     let final_started = std::time::Instant::now();
-    let mut children = Vec::with_capacity(directories.len());
+    let mut root_children = Vec::new();
+    let mut flat_children = Vec::new();
     let mut scanned_files = 0_u64;
     let mut scanned_bytes = 0_u64;
     let mut source = SourceImportMetrics {
@@ -1232,32 +1365,89 @@ fn direct_initialize_root_directories_inner(
         read_dir_calls: 1,
         ..SourceImportMetrics::default()
     };
-    for directory in directories {
-        children.push((directory.name, directory.inode));
+    for task in prepared_tasks {
+        if flat.is_some() {
+            flat_children.extend(task.children);
+        } else {
+            root_children.extend(task.children);
+        }
         scanned_files = scanned_files
-            .checked_add(directory.imported.scanned_files)
+            .checked_add(task.imported.scanned_files)
             .ok_or(StoreError::Integrity("Layer initialization scan counter"))?;
         scanned_bytes = scanned_bytes
-            .checked_add(directory.imported.scanned_bytes)
+            .checked_add(task.imported.scanned_bytes)
             .ok_or(StoreError::Integrity("Layer initialization scan counter"))?;
-        source.merge(directory.imported.source);
+        source.merge(task.imported.source);
     }
-    let parent_final_state_peak_bytes = (children.capacity()
+    if flat.is_some() {
+        source.symlink_metadata_calls += 1;
+        source.read_dir_calls += 1;
+        root_children.reserve(1);
+    }
+    let parent_final_state_peak_bytes = (root_children.capacity()
         * std::mem::size_of::<(
             layerfs_content::CanonicalName,
             layerfs_content::tree::inode::InodeId,
         )>()) as u64
-        + children
+        + root_children
+            .iter()
+            .map(|(name, _)| name.owned_capacity_bytes() as u64)
+            .sum::<u64>()
+        + (flat_children.capacity()
+            * std::mem::size_of::<(
+                layerfs_content::CanonicalName,
+                layerfs_content::tree::inode::InodeId,
+            )>()) as u64
+        + flat_children
             .iter()
             .map(|(name, _)| name.owned_capacity_bytes() as u64)
             .sum::<u64>();
     let mut final_objects = InitializationDirectAdmissionWriter::new(&mut admission);
     final_objects.note_transient_owned_bytes(parent_final_state_peak_bytes)?;
-    let content =
-        match layerfs_content::filesystem::build_initial_directory(&mut final_objects, children) {
+    let mut parent_pairs = Vec::new();
+    if let Some(flat) = flat {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let flat_metadata = std::fs::symlink_metadata(&flat.native)?;
+        let flat_content = match layerfs_content::filesystem::build_initial_directory(
+            &mut final_objects,
+            flat_children,
+        ) {
             Ok(content) => content,
             Err(error) => return Err(final_objects.error(error)),
         };
+        let flat_metadata_root = match layerfs_content::filesystem::build_portable_metadata(
+            &mut final_objects,
+            layerfs_content::tree::inode::InodeKind::Directory,
+            flat_metadata.permissions().mode(),
+            flat_metadata.mtime(),
+            flat_metadata.mtime_nsec() as u32,
+        ) {
+            Ok(root) => root,
+            Err(error) => return Err(final_objects.error(error)),
+        };
+        let flat_inode = layerfs_content::filesystem::allocated_inode(seed, &flat.logical);
+        let flat_record =
+            match final_objects.put_owned(layerfs_content::tree::inode::codec::encode_inode_record(
+                layerfs_content::tree::inode::InodeRecordV1 {
+                    kind: layerfs_content::tree::inode::InodeKind::Directory,
+                    namespace_ref_count: 1,
+                    content_root: flat_content.0,
+                    metadata_root: flat_metadata_root,
+                },
+            )?) {
+                Ok(record) => record,
+                Err(error) => return Err(final_objects.error(error)),
+            };
+        parent_pairs.push((flat_inode, flat_record));
+        root_children.push((flat.name, flat_inode));
+    }
+    let content = match layerfs_content::filesystem::build_initial_directory(
+        &mut final_objects,
+        root_children,
+    ) {
+        Ok(content) => content,
+        Err(error) => return Err(final_objects.error(error)),
+    };
     final_objects.note_transient_owned_bytes(0)?;
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     let metadata_root = match layerfs_content::filesystem::build_portable_metadata(
@@ -1288,7 +1478,9 @@ fn direct_initialize_root_directories_inner(
         match layerfs_content::tree::inode::build_initial_inode_table_from_pairs(
             &mut final_objects,
             root_inode,
-            std::iter::once(Ok((root_inode, root_record))).chain(&mut pair_stream),
+            std::iter::once(Ok((root_inode, root_record)))
+                .chain(parent_pairs.into_iter().map(Ok))
+                .chain(&mut pair_stream),
         ) {
             Ok(table) => table,
             Err(error) => return Err(final_objects.error(error)),
@@ -1423,7 +1615,7 @@ fn prepare_append_only_root_directories(
                         let checkpoint = segment.checkpoint();
                         let pair_checkpoint = pairs.checkpoint();
                         let mut import = NativeImport::new(seed, &mut segment);
-                        let inode = import.directory(&task.native, &task.logical, false)?;
+                        import.directory(&task.native, &task.logical, false)?;
                         let imported = import.finish_compact(&mut pairs)?;
                         blocks.push(segment.block_since(index, worker_index, checkpoint)?);
                         pair_blocks.push(pairs.block_since(
@@ -1433,8 +1625,6 @@ fn prepare_append_only_root_directories(
                         )?);
                         directories.push(PreparedCompactDirectory {
                             index,
-                            name: task.name.clone(),
-                            inode,
                             imported,
                         });
                     }
@@ -1542,7 +1732,7 @@ fn prepare_parallel_root_directories(
     let workers = std::thread::available_parallelism()
         .map(std::num::NonZeroUsize::get)
         .unwrap_or(1)
-        .min(16)
+        .min(8)
         .min(tasks.len());
     if workers < 2 {
         return Ok(None);
@@ -1683,17 +1873,8 @@ struct NativeImport<'objects, 'structure, S: ObjectStore, T: ObjectStore> {
     scanned_files: u64,
     scanned_bytes: u64,
     source: SourceImportMetrics,
-    metadata_cache: Vec<(
-        layerfs_content::tree::inode::InodeKind,
-        u32,
-        i64,
-        u32,
-        layerfs_content::ObjectId,
-    )>,
-    metadata_cache_next: usize,
+    metadata_cache: layerfs_content::filesystem::PortableMetadataCache,
 }
-
-const NATIVE_METADATA_CACHE_ENTRIES: usize = 8;
 
 impl<'objects, S: ObjectStore> NativeImport<'objects, 'objects, S, S> {
     fn new(seed: [u8; 32], objects: &'objects mut S) -> Self {
@@ -1706,8 +1887,7 @@ impl<'objects, S: ObjectStore> NativeImport<'objects, 'objects, S, S> {
             scanned_files: 0,
             scanned_bytes: 0,
             source: SourceImportMetrics::default(),
-            metadata_cache: Vec::with_capacity(NATIVE_METADATA_CACHE_ENTRIES),
-            metadata_cache_next: 0,
+            metadata_cache: Default::default(),
         }
     }
 }
@@ -1715,7 +1895,12 @@ impl<'objects, S: ObjectStore> NativeImport<'objects, 'objects, S, S> {
 impl<'objects, 'structure, S: ObjectStore, T: ObjectStore>
     NativeImport<'objects, 'structure, S, T>
 {
-    fn new_split(seed: [u8; 32], objects: &'objects mut S, structure: &'structure mut T) -> Self {
+    fn new_split_with_cache(
+        seed: [u8; 32],
+        objects: &'objects mut S,
+        structure: &'structure mut T,
+        metadata_cache: layerfs_content::filesystem::PortableMetadataCache,
+    ) -> Self {
         Self {
             seed,
             objects,
@@ -1725,8 +1910,7 @@ impl<'objects, 'structure, S: ObjectStore, T: ObjectStore>
             scanned_files: 0,
             scanned_bytes: 0,
             source: SourceImportMetrics::default(),
-            metadata_cache: Vec::with_capacity(NATIVE_METADATA_CACHE_ENTRIES),
-            metadata_cache_next: 0,
+            metadata_cache,
         }
     }
 
@@ -1737,40 +1921,17 @@ impl<'objects, 'structure, S: ObjectStore, T: ObjectStore>
         mtime_seconds: i64,
         mtime_nanoseconds: u32,
     ) -> Result<layerfs_content::ObjectId> {
-        let normalized_mode = mode
-            & if kind == layerfs_content::tree::inode::InodeKind::Directory {
-                0o1777
-            } else {
-                0o777
-            };
-        if let Some((_, _, _, _, root)) = self.metadata_cache.iter().find(|entry| {
-            (entry.0, entry.1, entry.2, entry.3)
-                == (kind, normalized_mode, mtime_seconds, mtime_nanoseconds)
-        }) {
-            self.source.metadata_cache_hits += 1;
-            return Ok(*root);
-        }
-        self.source.metadata_cache_misses += 1;
-        let root = layerfs_content::filesystem::build_portable_metadata(
+        let (root, hit) = self.metadata_cache.get_or_build(
             self.objects,
             kind,
-            normalized_mode,
+            mode,
             mtime_seconds,
             mtime_nanoseconds,
         )?;
-        let entry = (
-            kind,
-            normalized_mode,
-            mtime_seconds,
-            mtime_nanoseconds,
-            root,
-        );
-        if self.metadata_cache.len() < NATIVE_METADATA_CACHE_ENTRIES {
-            self.metadata_cache.push(entry);
+        if hit {
+            self.source.metadata_cache_hits += 1;
         } else {
-            self.metadata_cache[self.metadata_cache_next] = entry;
-            self.metadata_cache_next =
-                (self.metadata_cache_next + 1) % NATIVE_METADATA_CACHE_ENTRIES;
+            self.source.metadata_cache_misses += 1;
         }
         self.source.metadata_cache_peak_entries = self
             .source
@@ -1817,10 +1978,21 @@ impl<'objects, 'structure, S: ObjectStore, T: ObjectStore>
         })
     }
 
+    #[cfg(test)]
     fn finish_compact(
-        mut self,
+        self,
         pairs: &mut crate::objects::CompactInodePairWriter,
     ) -> Result<CompactImportedTree> {
+        Ok(self.finish_compact_with_cache(pairs)?.0)
+    }
+
+    fn finish_compact_with_cache(
+        mut self,
+        pairs: &mut crate::objects::CompactInodePairWriter,
+    ) -> Result<(
+        CompactImportedTree,
+        layerfs_content::filesystem::PortableMetadataCache,
+    )> {
         #[cfg(test)]
         let record_len = self.records.len();
         #[cfg(test)]
@@ -1835,16 +2007,102 @@ impl<'objects, 'structure, S: ObjectStore, T: ObjectStore>
             };
             pairs.push(inode, record)?;
         }
-        Ok(CompactImportedTree {
-            hard_links: self.hard_links.into_keys().collect(),
-            scanned_files: self.scanned_files,
-            scanned_bytes: self.scanned_bytes,
-            source: self.source,
-            #[cfg(test)]
-            record_len,
-            #[cfg(test)]
-            record_capacity,
-        })
+        Ok((
+            CompactImportedTree {
+                hard_links: self.hard_links.into_keys().collect(),
+                scanned_files: self.scanned_files,
+                scanned_bytes: self.scanned_bytes,
+                source: self.source,
+                #[cfg(test)]
+                record_len,
+                #[cfg(test)]
+                record_capacity,
+            },
+            self.metadata_cache,
+        ))
+    }
+
+    fn regular_file(
+        &mut self,
+        native: &std::path::Path,
+        logical: &layerfs_content::CanonicalPath,
+    ) -> Result<layerfs_content::tree::inode::InodeId> {
+        use layerfs_content::filesystem;
+        use layerfs_content::tree::inode::{InodeKind, InodeRecordV1};
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+        self.source.symlink_metadata_calls += 1;
+        let metadata = std::fs::symlink_metadata(native)?;
+        if !metadata.file_type().is_file() {
+            return Err(StoreError::InvalidInput(
+                "Layer initialization regular file",
+            ));
+        }
+        let native_key = (metadata.dev(), metadata.ino());
+        if metadata.nlink() > 1 {
+            if let Some((linked_inode, record_index)) = self.hard_links.get(&native_key).copied() {
+                let (_, record) = self
+                    .records
+                    .get_mut(record_index)
+                    .and_then(Option::as_mut)
+                    .ok_or(StoreError::Integrity("Layer initialization hard link"))?;
+                record.namespace_ref_count =
+                    record
+                        .namespace_ref_count
+                        .checked_add(1)
+                        .ok_or(StoreError::Integrity(
+                            "Layer initialization hard link count",
+                        ))?;
+                return Ok(linked_inode);
+            }
+        }
+
+        let inode = filesystem::allocated_inode(self.seed, logical);
+        let record_index = self.reserve();
+        self.source.file_open_calls += 1;
+        let mut source = CountedSourceReader {
+            file: std::fs::File::open(native)?,
+            calls: 0,
+            bytes: 0,
+        };
+        let (content, counters) = layerfs_content::file::rope::build(self.objects, &mut source)?;
+        self.source.file_read_calls = self.source.file_read_calls.saturating_add(source.calls);
+        self.source.file_read_bytes = self.source.file_read_bytes.saturating_add(source.bytes);
+        self.source.streaming_files += 1;
+        self.source.cdc_scratch_peak_bytes = self
+            .source
+            .cdc_scratch_peak_bytes
+            .max((layerfs_content::file::cdc::MAXIMUM_CHUNK_BYTES * 2) as u64);
+        self.scanned_files = self
+            .scanned_files
+            .checked_add(1)
+            .ok_or(StoreError::Integrity("Layer initialization scan counter"))?;
+        self.scanned_bytes = self
+            .scanned_bytes
+            .checked_add(counters.cdc_bytes_scanned)
+            .ok_or(StoreError::Integrity("Layer initialization scan counter"))?;
+        let metadata_root = self.portable_metadata(
+            InodeKind::RegularFile,
+            metadata.permissions().mode(),
+            metadata.mtime(),
+            metadata.mtime_nsec() as u32,
+        )?;
+        self.set_record(
+            record_index,
+            (
+                inode,
+                InodeRecordV1 {
+                    kind: InodeKind::RegularFile,
+                    namespace_ref_count: 1,
+                    content_root: content.0,
+                    metadata_root,
+                },
+            ),
+        )?;
+        if metadata.nlink() > 1 {
+            self.hard_links.insert(native_key, (inode, record_index));
+        }
+        Ok(inode)
     }
 
     fn directory(
@@ -2909,8 +3167,8 @@ mod tests {
     }
 
     #[test]
-    fn oversized_single_task_clears_direct_admission_and_falls_back() {
-        let root = temporary("oversized-direct-task");
+    fn single_large_directory_splits_bounded_tasks_with_exact_canonical_output() {
+        let root = temporary("split-flat-directory");
         let source = root.join("source");
         let subtree = source.join("subtree");
         std::fs::create_dir_all(&subtree).unwrap();
@@ -2919,8 +3177,62 @@ mod tests {
         }
         let store_path = root.join("store.sqlite");
         let store = LayerStackStore::create(&store_path).unwrap();
+        let direct = direct_initialize_root_directories(&store.db, &source, [29; 32])
+            .unwrap()
+            .unwrap();
+        assert_eq!(direct.scanned_files, 4_000);
+        assert!(direct.diagnostics.worker_count <= 8);
+        assert_eq!(
+            direct
+                .diagnostics
+                .producers
+                .iter()
+                .map(|producer| producer.metrics.producer_tasks)
+                .sum::<u64>(),
+            4_000_u64.div_ceil(INITIALIZATION_SLAB_OBJECTS as u64)
+        );
+        let (expected, files, _) = legacy_directory_root(&source, [29; 32]).unwrap();
+        assert_eq!(files, 4_000);
+        assert_direct_objects(&store, &direct, &expected);
+
+        drop(expected);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn mixed_root_files_and_directories_use_direct_canonical_path() {
+        let root = temporary("mixed-root-direct");
+        let source = root.join("source");
+        let directory = source.join("directory");
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(source.join("root-file"), b"root").unwrap();
+        std::fs::write(directory.join("nested-file"), b"nested").unwrap();
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let direct = direct_initialize_root_directories(&store.db, &source, [31; 32])
+            .unwrap()
+            .unwrap();
+        assert_eq!((direct.scanned_files, direct.scanned_bytes), (2, 10));
+        let (expected, files, bytes) = legacy_directory_root(&source, [31; 32]).unwrap();
+        assert_eq!((files, bytes), (2, 10));
+        assert_direct_objects(&store, &direct, &expected);
+
+        drop(expected);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn mixed_root_hard_link_falls_back_before_publication() {
+        let root = temporary("mixed-root-hard-link");
+        let source = root.join("source");
+        let directory = source.join("directory");
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(source.join("root-file"), b"linked").unwrap();
+        std::fs::hard_link(source.join("root-file"), directory.join("alias")).unwrap();
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
         assert!(
-            direct_initialize_root_directories(&store.db, &source, [29; 32])
+            direct_initialize_root_directories(&store.db, &source, [33; 32])
                 .unwrap()
                 .is_none()
         );
@@ -2928,7 +3240,7 @@ mod tests {
 
         let initialized = store
             .initialize_layerstack(
-                EntityName::new("oversized").unwrap(),
+                EntityName::new("hard-link-fallback").unwrap(),
                 LayerStackInitialization::Directory(source.clone()),
             )
             .unwrap();
@@ -2939,12 +3251,35 @@ mod tests {
             .unwrap();
         let layer = store.layer(stack.head_layer_id).unwrap().unwrap();
         let (expected, files, _) = directory_root(&source, seed).unwrap();
-        assert_eq!(files, 4_000);
+        assert_eq!(files, 1);
         assert_eq!(layer.root_id, expected.root_id);
 
         drop(expected);
         drop(store);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn assert_direct_objects(
+        store: &LayerStackStore,
+        direct: &FinishedAppendOnlyInitialization,
+        expected: &BuiltRoot,
+    ) {
+        assert_eq!(direct.root_id, expected.root_id);
+        let mut ids = expected.objects.ids_in_order(usize::MAX).unwrap().unwrap();
+        ids.sort_unstable();
+        ids.dedup();
+        for id in ids {
+            let actual = direct
+                .final_batch
+                .iter()
+                .find(|object| object.id == id)
+                .map(|object| object.bytes.clone())
+                .unwrap_or_else(|| crate::ObjectSource::read_object(store, id).unwrap());
+            assert_eq!(
+                actual,
+                crate::ObjectSource::read_object(&expected.objects, id).unwrap()
+            );
+        }
     }
 
     fn temporary(label: &str) -> std::path::PathBuf {
