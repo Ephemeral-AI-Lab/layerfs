@@ -27,6 +27,7 @@ pub const ROOT: NodeId = NodeId(1);
 
 pub(crate) struct WorkspaceSnapshot {
     pub(crate) store: LayerStackStore,
+    pub(crate) workspace_id: [u8; 16],
     pub(crate) branch_id: BranchId,
     pub(crate) expected_head: Option<CommitId>,
     pub(crate) expected_base: LayerId,
@@ -152,6 +153,7 @@ impl PhysicalSpoolMetrics {
 
 pub struct Workspace {
     pub(crate) store: LayerStackStore,
+    pub(crate) workspace_id: [u8; 16],
     pub(crate) reader: SnapshotReader,
     pub(crate) branch_id: BranchId,
     pub(crate) expected_head: Option<CommitId>,
@@ -179,6 +181,9 @@ pub struct Workspace {
     pub(crate) state: WorkspaceState,
     pub(crate) presentation_failed: bool,
     pub(crate) resolution: Option<crate::reconcile::ResolutionState>,
+    pub(crate) pending_stage: Option<layerfs_content::ObjectId>,
+    pub(crate) pending_publication:
+        Option<(layerfs_layerstack_store::CommitOutcome, LayerId, bool)>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -211,6 +216,7 @@ impl Workspace {
         Self::from_snapshot(
             WorkspaceSnapshot {
                 store,
+                workspace_id: crate::WorkspaceId::new().bytes(),
                 branch_id,
                 expected_head: pinned.branch.head_commit_id,
                 expected_base: pinned.branch.base_layer_id,
@@ -223,9 +229,13 @@ impl Workspace {
     }
 
     pub(crate) fn clean_copy(&self, spool: impl AsRef<Path>) -> Result<Self> {
+        if self.pending_stage.is_some() || self.pending_publication.is_some() {
+            return Err(StorageError::InvalidInput("workspace completion pending"));
+        }
         Self::from_snapshot(
             WorkspaceSnapshot {
                 store: self.store.clone(),
+                workspace_id: self.workspace_id,
                 branch_id: self.branch_id,
                 expected_head: self.expected_head,
                 expected_base: self.expected_base,
@@ -244,6 +254,7 @@ impl Workspace {
     ) -> Result<Self> {
         let WorkspaceSnapshot {
             store,
+            workspace_id,
             branch_id,
             expected_head,
             expected_base,
@@ -277,6 +288,7 @@ impl Workspace {
         };
         Ok(Self {
             store,
+            workspace_id,
             reader,
             branch_id,
             expected_head,
@@ -304,6 +316,8 @@ impl Workspace {
             state: WorkspaceState::Active,
             presentation_failed: false,
             resolution: None,
+            pending_stage: None,
+            pending_publication: None,
         })
     }
 
@@ -406,6 +420,9 @@ impl Workspace {
     }
 
     pub(crate) fn note_mutation(&mut self, paths: impl IntoIterator<Item = String>) -> Result<()> {
+        if self.pending_stage.is_some() {
+            return Err(StorageError::InvalidInput("workspace stage pending"));
+        }
         self.mutation_generation = self
             .mutation_generation
             .checked_add(1)

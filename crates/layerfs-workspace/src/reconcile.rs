@@ -218,6 +218,7 @@ impl Workspace {
         let mut workspace = Self::from_snapshot(
             WorkspaceSnapshot {
                 store,
+                workspace_id: id.bytes(),
                 branch_id: prepared.branch_id,
                 expected_head: Some(prepared.expected_head),
                 expected_base: prepared.old_base_layer_id,
@@ -241,7 +242,6 @@ impl Workspaces {
         if let Some(existing) = self.existing_reconciliation(branch_id, current_layer_id)? {
             return Ok(existing);
         }
-        let lease = self.acquire_lease(branch_id)?;
         let prepared = self
             .store
             .prepare_reconciliation(branch_id, current_layer_id)?;
@@ -264,7 +264,6 @@ impl Workspaces {
             WorkspaceProjection::Materialize,
             identity,
             workspace,
-            lease,
         ));
         let handle = crate::projection::attach(&worker, None)?;
         *worker

@@ -8,7 +8,6 @@ pub(crate) struct WorkspaceWorker {
     pub(crate) identity: WorkspaceIdentity,
     pub(crate) workspace: Arc<Mutex<Workspace>>,
     pub(crate) projection_handle: Mutex<Option<crate::projection::ProjectionHandle>>,
-    pub(crate) lease: Mutex<Option<layerfs_layerstack_store::WorkspaceLease>>,
     admission: Mutex<Admission>,
     drained: Condvar,
 }
@@ -35,7 +34,6 @@ impl WorkspaceWorker {
         projection: WorkspaceProjection,
         identity: WorkspaceIdentity,
         workspace: Workspace,
-        lease: layerfs_layerstack_store::WorkspaceLease,
     ) -> Self {
         Self {
             id,
@@ -44,7 +42,6 @@ impl WorkspaceWorker {
             identity,
             workspace: Arc::new(Mutex::new(workspace)),
             projection_handle: Mutex::new(None),
-            lease: Mutex::new(Some(lease)),
             admission: Mutex::new(Admission {
                 accepting: true,
                 ..Admission::default()

@@ -53,8 +53,8 @@ pub struct Workspaces {
 impl Drop for Workspaces {
     fn drop(&mut self) {
         // Keep each worker and the daemon owner alive until the existing End path
-        // acknowledges projection cleanup and removes its state before releasing
-        // the branch lease. Socket disconnect alone does not retire a mount.
+        // acknowledges projection cleanup and removes its state. Socket disconnect
+        // alone does not retire a mount.
         let active = match self.sessions.lock() {
             Ok(sessions) => sessions.iter().filter_map(|(id, record)| {
                 matches!(record, SessionRecord::Active(_)).then_some(*id)
@@ -169,15 +169,6 @@ impl Workspaces {
             layer_stack_name: stack.name,
             branch_name: branch.name,
         })
-    }
-
-    pub(crate) fn acquire_lease(
-        &self,
-        branch_id: BranchId,
-    ) -> WorkspaceResult<layerfs_layerstack_store::WorkspaceLease> {
-        self.store
-            .acquire_workspace_lease(branch_id)?
-            .ok_or(WorkspaceError::WorkspaceBusy)
     }
 
     pub(crate) fn prune_retained(&self) -> WorkspaceResult<()> {

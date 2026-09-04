@@ -1,14 +1,24 @@
 use crate::cow_tree::{portable_metadata, Attr, Data, FileData, Kind, NodeId, Workspace, ROOT};
-use layerfs_content::file::rope::{self, FileMutationBatch, FileStateRoot, RopeCounters};
-use layerfs_content::filesystem::{self, ContentChange, InodeMutation, LogicalCounters};
+use layerfs_content::file::rope::{
+    self, FileMutationBatch, FileStateRoot, ObjectStore, RopeCounters,
+};
+use layerfs_content::filesystem::{
+    self, ContentChange, InodeMutation, LogicalCounters, PortableMetadataCache,
+};
 use layerfs_content::object::access::ObjectRead;
 use layerfs_content::object::{ContentDigestWriter, ObjectId};
 use layerfs_content::tree::directory::{
     directory_lookup, directory_page_after, empty_directory, DirectoryStateRoot, NamespaceCounters,
 };
-use layerfs_content::tree::inode::codec::decode_inode_record;
+use layerfs_content::tree::directory::codec::encode_namespace_root;
+use layerfs_content::tree::inode::codec::{decode_inode_record, encode_inode_record};
 use layerfs_content::tree::inode::{inode_table_lookup, InodeTableCounters};
-use layerfs_content::tree::inode::{InodeId, InodeKind, InodeRecordV1};
+use layerfs_content::tree::inode::{InodeId, InodeKind, InodeRecordV1, InodeTableRoot};
+use layerfs_content::tree::batch::{
+    directory_apply_sorted_with_budget, inode_table_apply_sorted_with_budget,
+    SORTED_TREE_UPDATE_SCRATCH_BYTES,
+};
+use layerfs_content::tree::NamespaceRootV1;
 use layerfs_content::{CanonicalName, CanonicalPath};
 use layerfs_layerstack_store::{
     BuiltRoot, CoreReader, ObjectBuffer, Result, StoreError as StorageError, WorkspaceCommitPhase,
@@ -360,6 +370,13 @@ impl Workspace {
         let started = Instant::now();
         self.policy.check_final_delta(4096)?;
         let batch_size = (self.policy.max_final_delta_memory_bytes / 4096).min(128) as usize;
+        let tree_scratch = usize::try_from(
+            self.policy
+                .max_final_delta_memory_bytes
+                .saturating_sub(4096),
+        )
+        .unwrap_or(usize::MAX)
+        .min(SORTED_TREE_UPDATE_SCRATCH_BYTES);
         let captured = self.take_capture();
         if let Some(captured) = &captured {
             layerfs_layerstack_store::note_workspace_capture(1, captured.len);
@@ -377,7 +394,8 @@ impl Workspace {
             ),
             None => (ObjectBuffer::new(&self.reader)?, None),
         };
-        let mut inodes = FrontierInodes::new(self.base_root, batch_size);
+        let mut inodes = FrontierInodes::new(self.base_root, batch_size, tree_scratch);
+        let mut metadata_cache = PortableMetadataCache::default();
         let mut cdc_bytes_scanned = 0_u64;
         note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
         let started = Instant::now();
@@ -403,8 +421,7 @@ impl Workspace {
                         Some(base) => base,
                         None => empty_directory(&mut objects)?,
                     };
-                    let mut changes = Vec::with_capacity(batch_size);
-                    for (name, desired) in &directory.changes {
+                    for desired in directory.changes.values() {
                         layerfs_layerstack_store::note_workspace_namespace_visits(
                             0,
                             u64::from(desired.is_some()),
@@ -412,25 +429,14 @@ impl Workspace {
                             0,
                             0,
                         );
-                        changes.push((
-                            CanonicalName::from_bytes(name)?,
-                            desired
-                                .map(|child| self.frontier_inode(child))
-                                .transpose()?,
-                        ));
-                        if changes.len() == batch_size {
-                            content = filesystem::apply_directory_changes(
-                                &mut objects,
-                                content,
-                                changes.drain(..),
-                            )?
-                            .0;
-                        }
                     }
-                    if !changes.is_empty() {
-                        content =
-                            filesystem::apply_directory_changes(&mut objects, content, changes)?.0;
-                    }
+                    content = self.apply_frontier_directory(
+                        &mut objects,
+                        content,
+                        &directory.changes,
+                        batch_size,
+                        tree_scratch,
+                    )?;
                     content.0
                 }
                 Data::Symlink(target) => match before {
@@ -505,13 +511,13 @@ impl Workspace {
             }) {
                 before.unwrap().metadata_root
             } else {
-                filesystem::build_portable_metadata(
+                metadata_cache.get_or_build(
                     &mut objects,
                     inode_kind,
                     attr.mode,
                     attr.mtime_seconds,
                     attr.mtime_nanoseconds,
-                )?
+                )?.0
             };
             let record = InodeRecordV1 {
                 kind: inode_kind,
@@ -587,6 +593,71 @@ impl Workspace {
         let built = objects.finish(inodes.root, cdc_bytes_scanned);
         note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
         built
+    }
+
+    fn apply_frontier_directory(
+        &self,
+        objects: &mut ObjectBuffer<'_>,
+        root: DirectoryStateRoot,
+        changes: &BTreeMap<Vec<u8>, Option<NodeId>>,
+        batch_size: usize,
+        scratch_limit: usize,
+    ) -> Result<DirectoryStateRoot> {
+        let mut source_error = None;
+        let deltas = changes.iter().map(|(name, desired)| {
+            let result: Result<_> = (|| {
+                Ok((
+                    CanonicalName::from_bytes(name)?,
+                    desired
+                        .map(|child| self.frontier_inode(child))
+                        .transpose()?,
+                ))
+            })();
+            match result {
+                Ok(delta) => Ok(delta),
+                Err(error) => {
+                    source_error = Some(error);
+                    Err(layerfs_content::CoreError::InvalidRecord(
+                        "Workspace directory delta",
+                    ))
+                }
+            }
+        });
+        let sorted = directory_apply_sorted_with_budget(objects, root, deltas, scratch_limit);
+        if let Some(error) = source_error {
+            return Err(error);
+        }
+        match sorted {
+            Ok((root, _)) => Ok(root),
+            Err(
+                layerfs_content::CoreError::ObjectLimitExceeded
+                | layerfs_content::CoreError::Unsupported,
+            ) => {
+                let mut root = root;
+                let mut batch = Vec::with_capacity(batch_size);
+                for (name, desired) in changes {
+                    batch.push((
+                        CanonicalName::from_bytes(name)?,
+                        desired
+                            .map(|child| self.frontier_inode(child))
+                            .transpose()?,
+                    ));
+                    if batch.len() == batch_size {
+                        root = filesystem::apply_directory_changes(
+                            objects,
+                            root,
+                            batch.drain(..),
+                        )?
+                        .0;
+                    }
+                }
+                if !batch.is_empty() {
+                    root = filesystem::apply_directory_changes(objects, root, batch)?.0;
+                }
+                Ok(root)
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 
     fn frontier_inode(&self, node: NodeId) -> Result<InodeId> {
@@ -701,6 +772,7 @@ impl Workspace {
         let started = Instant::now();
         let mut objects = ObjectBuffer::new(&self.reader)?;
         let mut mutations = Vec::new();
+        let mut metadata_cache = PortableMetadataCache::default();
         let mut cdc_bytes_scanned = 0_u64;
         for (node, attr, base) in entries {
             let mut record = base.record;
@@ -727,13 +799,13 @@ impl Workspace {
                 || base.mtime_seconds != attr.mtime_seconds
                 || base.mtime_nanoseconds != attr.mtime_nanoseconds
             {
-                record.metadata_root = filesystem::build_portable_metadata(
+                record.metadata_root = metadata_cache.get_or_build(
                     &mut objects,
                     record.kind,
                     attr.mode,
                     attr.mtime_seconds,
                     attr.mtime_nanoseconds,
-                )?;
+                )?.0;
             }
             if record != base.record {
                 mutations.push(InodeMutation::Upsert {
@@ -748,7 +820,14 @@ impl Workspace {
         let root = if mutations.is_empty() {
             self.base_root
         } else {
-            filesystem::apply_inode_mutations(&mut objects, self.base_root, mutations)?.root()
+            apply_sorted_inode_mutations(
+                &mut objects,
+                self.base_root,
+                mutations,
+                usize::try_from(self.policy.max_final_delta_memory_bytes)
+                    .unwrap_or(usize::MAX)
+                    .min(SORTED_TREE_UPDATE_SCRATCH_BYTES),
+            )?
         };
         note_commit_phase(WorkspaceCommitPhase::Namespace, started);
         let started = Instant::now();
@@ -1200,14 +1279,16 @@ struct FrontierInodes {
     root: ObjectId,
     pending: BTreeMap<InodeId, Option<InodeRecordV1>>,
     batch_size: usize,
+    scratch_limit: usize,
 }
 
 impl FrontierInodes {
-    fn new(root: ObjectId, batch_size: usize) -> Self {
+    fn new(root: ObjectId, batch_size: usize, scratch_limit: usize) -> Self {
         Self {
             root,
             pending: BTreeMap::new(),
             batch_size,
+            scratch_limit,
         }
     }
 
@@ -1223,7 +1304,11 @@ impl FrontierInodes {
             &mut InodeTableCounters::default(),
         )?
         .ok_or(StorageError::Integrity("frontier inode record"))?;
-        Ok(objects.with_authenticated_canonical(id, decode_inode_record)?)
+        Ok(ObjectStore::with_authenticated_canonical(
+            objects,
+            id,
+            decode_inode_record,
+        )?)
     }
 
     fn set(
@@ -1241,7 +1326,7 @@ impl FrontierInodes {
 
     fn flush(&mut self, objects: &mut ObjectBuffer<'_>) -> Result<()> {
         if !self.pending.is_empty() {
-            self.root = filesystem::apply_inode_mutations(
+            self.root = apply_sorted_inode_mutations(
                 objects,
                 self.root,
                 std::mem::take(&mut self.pending)
@@ -1249,9 +1334,10 @@ impl FrontierInodes {
                     .map(|(inode, record)| match record {
                         Some(record) => InodeMutation::Upsert { inode, record },
                         None => InodeMutation::Remove { inode },
-                    }),
-            )?
-            .root();
+                    })
+                    .collect(),
+                self.scratch_limit,
+            )?;
         }
         Ok(())
     }
@@ -1539,6 +1625,51 @@ fn join(parent: &CanonicalPath, name: &str) -> Result<CanonicalPath> {
 
 fn depth(path: &str) -> usize {
     path.bytes().filter(|byte| *byte == b'/').count()
+}
+
+fn apply_sorted_inode_mutations(
+    objects: &mut ObjectBuffer<'_>,
+    root: ObjectId,
+    mutations: Vec<InodeMutation>,
+    scratch_limit: usize,
+) -> Result<ObjectId> {
+    let namespace = filesystem::namespace(objects, root)?;
+    let table = InodeTableRoot(namespace.inode_table_root);
+    let mut deltas = Vec::with_capacity(mutations.len());
+    for mutation in &mutations {
+        let (inode, record) = match *mutation {
+            InodeMutation::Upsert { inode, record } => (
+                inode,
+                Some(objects.put_owned(encode_inode_record(record)?)?),
+            ),
+            InodeMutation::Remove { inode } => (inode, None),
+        };
+        deltas.push((inode, record));
+    }
+    deltas.sort_unstable_by_key(|(inode, _)| *inode);
+    let sorted = inode_table_apply_sorted_with_budget(
+        objects,
+        table,
+        deltas.into_iter().map(Ok),
+        scratch_limit,
+    );
+    match sorted {
+        Ok((next, _)) => {
+            if next == table {
+                Ok(root)
+            } else {
+                Ok(objects.put_owned(encode_namespace_root(NamespaceRootV1 {
+                    inode_table_root: next.0,
+                    ..namespace
+                })?)?)
+            }
+        }
+        Err(
+            layerfs_content::CoreError::ObjectLimitExceeded
+            | layerfs_content::CoreError::Unsupported,
+        ) => Ok(filesystem::apply_inode_mutations(objects, root, mutations)?.root()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 impl Drop for Workspace {
