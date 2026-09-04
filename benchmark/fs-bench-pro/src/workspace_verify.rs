@@ -136,6 +136,47 @@ pub(crate) fn persist_snapshot(
     Ok(())
 }
 
+/// Read the complete authenticated global inode index once per immutable proof.
+/// Directory entries already carry inode IDs, so callers need not resolve each
+/// path from the root again. This does not certify or skip any file content.
+struct AuthenticatedNamespaceIndex {
+    root_inode: inode::InodeId,
+    records: BTreeMap<inode::InodeId, inode::InodeRecordV1>,
+}
+impl AuthenticatedNamespaceIndex {
+    fn load(source: &dyn ObjectSource, root: ObjectId) -> AnyResult<Self> {
+        let reader = CoreReader(source);
+        let namespace = layerfs_content::filesystem::namespace(&reader, root)?;
+        let mut records = BTreeMap::new();
+        let index = inode::inode_table_entries(&reader, inode::InodeTableRoot(namespace.inode_table_root), &mut Default::default())?;
+        for batch in index.chunks(16) {
+            let ids = batch.iter().map(|(_,id)| *id).collect::<Vec<_>>();
+            // ObjectRead::get_authenticated_batch passes decoded byte-object payloads;
+            // inode codecs require the complete canonical envelope. Keep that envelope.
+            let objects = source.read_authenticated_objects(&ids)?;
+            if objects.len() != batch.len() { return Err("canonical global inode batch cardinality".into()); }
+            for ((inode_id,expected_id),object) in batch.iter().zip(objects) {
+                if object.id != *expected_id { return Err("canonical global inode batch identity".into()); }
+                layerfs_content::authenticate_identity(&object.bytes,object.id)?;
+                let record = inode::codec::decode_inode_record(&object.bytes)?;
+                if records.insert(*inode_id,record).is_some() { return Err("canonical duplicate global inode".into()); }
+            }
+        }
+        drop(index);
+        Ok(Self {root_inode:namespace.root_directory_inode,records})
+    }
+    fn resolve_inode(&self, id: inode::InodeId) -> AnyResult<layerfs_content::filesystem::Resolved> {
+        let record = *self.records.get(&id).ok_or("namespace references missing global inode")?;
+        Ok(layerfs_content::filesystem::Resolved {inode:id,record})
+    }
+    fn require_complete_membership(&self, reached: &BTreeSet<inode::InodeId>) -> AnyResult<()> {
+        if self.records.keys().copied().ne(reached.iter().copied()) {
+            return Err("canonical inode table has missing or unreachable entries".into());
+        }
+        Ok(())
+    }
+}
+
 pub(crate) fn verify_root(
     source: &dyn ObjectSource,
     root: ObjectId,
@@ -143,6 +184,7 @@ pub(crate) fn verify_root(
 ) -> AnyResult<SnapshotEvidence> {
     let logical = common::validate_entries(entries)?;
     let reader = CoreReader(source);
+    let namespace = AuthenticatedNamespaceIndex::load(source,root)?;
     let expected = entries
         .iter()
         .map(|entry| (entry.path.as_str(), entry))
@@ -157,7 +199,7 @@ pub(crate) fn verify_root(
         *reference_counts.entry(class).or_default() += 1;
     }
     let mut found = BTreeSet::new();
-    let mut pending = vec![".".to_owned()];
+    let mut pending = vec![(".".to_owned(),namespace.root_inode)];
     let mut inode_classes = BTreeMap::new();
     let mut class_inodes = BTreeMap::new();
     let mut namespace_inodes = BTreeSet::new();
@@ -165,25 +207,22 @@ pub(crate) fn verify_root(
     let mut file_roots = BTreeMap::new();
     let mut custody_paths = 0;
     let mut comparison_scratch = vec![0; common::SCRATCH_BYTES];
-    while let Some(path) = pending.pop() {
+    while let Some((path,id)) = pending.pop() {
         if !found.insert(path.clone()) {
             return Err("canonical path repeated".into());
         }
         let entry = expected
             .get(path.as_str())
             .ok_or_else(|| format!("extra canonical path: {path}"))?;
-        let canonical = if path == "." {
+        let _canonical = if path == "." {
             CanonicalPath::root()
         } else {
             CanonicalPath::new(&path)?
         };
-        let resolved = layerfs_content::filesystem::resolve(
-            &reader,
-            root,
-            &canonical,
-            &mut Default::default(),
-        )?;
-        namespace_inodes.insert(resolved.inode);
+        let resolved = namespace.resolve_inode(id)?;
+        if !namespace_inodes.insert(id) && resolved.record.kind != inode::InodeKind::RegularFile {
+            return Err("canonical namespace repeats a non-regular inode".into());
+        }
         directory::validate_inode_record_metadata(&reader, resolved.record, path == ".")?;
         verify_metadata(&reader, resolved.record.metadata_root, entry)?;
         match &entry.kind {
@@ -193,21 +232,21 @@ pub(crate) fn verify_root(
                 }
                 let mut after = None;
                 loop {
-                    let (page, _) = layerfs_content::filesystem::list(
+                    let page = directory::directory_page_after(
                         &reader,
-                        root,
-                        &canonical,
+                        directory::DirectoryStateRoot(resolved.record.content_root),
                         after.as_ref(),
                         127,
                         8192,
+                        &mut Default::default(),
                     )?;
-                    for (name, _) in &page.entries {
+                    for (name, child_inode) in &page.entries {
                         let child = if path == "." {
                             name.as_str().to_owned()
                         } else {
                             format!("{path}/{}", name.as_str())
                         };
-                        pending.push(child);
+                        pending.push((child,*child_inode));
                     }
                     match page.continuation {
                         Some(next) => {
@@ -222,8 +261,8 @@ pub(crate) fn verify_root(
             }
             EntryKind::Symlink(target) => {
                 if resolved.record.kind != inode::InodeKind::Symlink
-                    || layerfs_content::filesystem::readlink(&reader, root, &canonical)?.0
-                        != target.as_bytes()
+                    || reader.with_authenticated_canonical(resolved.record.content_root,
+                        directory::codec::decode_symlink)?.target != target.as_bytes()
                 {
                     return Err(format!("canonical symlink target/type: {path}").into());
                 }
@@ -318,26 +357,8 @@ pub(crate) fn verify_root(
     {
         return Err("complete canonical path-set mismatch".into());
     }
-    let namespace = layerfs_content::filesystem::namespace(&reader, root)?;
-    let mut table_inodes = BTreeSet::new();
-    inode::visit_inode_table_entries(
-        &reader,
-        inode::InodeTableRoot(namespace.inode_table_root),
-        &mut Default::default(),
-        |page| {
-            for (id, _) in page {
-                if !table_inodes.insert(*id) {
-                    return Err(layerfs_content::CoreError::InvalidRecord(
-                        "duplicate inode table entry",
-                    ));
-                }
-            }
-            Ok(())
-        },
-    )?;
-    if table_inodes != namespace_inodes {
-        return Err("canonical inode table has missing or unreachable entries".into());
-    }
+    namespace.require_complete_membership(&namespace_inodes)?;
+    drop(namespace);
     let (mut receipt, canonical_objects) = typed_census(source, root)?;
     receipt.insert("verification_status".into(), "pass".into());
     receipt.insert("canonical_root".into(), root.to_string());
@@ -753,23 +774,7 @@ pub(crate) fn verify_fast_root(
     }
     common::validate_entries(entries)?;
     let reader = CoreReader(source);
-    let namespace = layerfs_content::filesystem::namespace(&reader, root)?;
-    let mut records = BTreeMap::new();
-    let index = inode::inode_table_entries(&reader, inode::InodeTableRoot(namespace.inode_table_root), &mut Default::default())?;
-    for batch in index.chunks(16) {
-        let ids = batch.iter().map(|(_,id)| *id).collect::<Vec<_>>();
-        // ObjectRead::get_authenticated_batch passes decoded byte-object payloads;
-        // inode codecs require the complete canonical envelope. Keep that envelope.
-        let objects = source.read_authenticated_objects(&ids)?;
-        if objects.len() != batch.len() { return Err("fast global inode batch cardinality".into()); }
-        for ((inode_id,expected_id),object) in batch.iter().zip(objects) {
-            if object.id != *expected_id { return Err("fast global inode batch identity".into()); }
-            layerfs_content::authenticate_identity(&object.bytes,object.id)?;
-            let record = inode::codec::decode_inode_record(&object.bytes)?;
-            if records.insert(*inode_id,record).is_some() { return Err("fast duplicate global inode".into()); }
-        }
-    }
-    drop(index);
+    let namespace = AuthenticatedNamespaceIndex::load(source,root)?;
     let expected_by_path = entries.iter().map(|entry| (entry.path.as_str(), entry)).collect::<BTreeMap<_,_>>();
     let selected = common::fast_selected_paths(entries,delta)?;
     let mut reference_counts = BTreeMap::<&str,u64>::new();
@@ -777,7 +782,7 @@ pub(crate) fn verify_fast_root(
         let class = match &entry.kind { EntryKind::File(_) => entry.path.as_str(), EntryKind::Hardlink(target) => target, _ => continue };
         *reference_counts.entry(class).or_default() += 1;
     }
-    let mut pending = vec![(".".to_owned(), namespace.root_directory_inode)];
+    let mut pending = vec![(".".to_owned(), namespace.root_inode)];
     let mut found = BTreeSet::new();
     let mut visited_inodes = BTreeSet::new();
     let mut inode_classes = BTreeMap::new();
@@ -791,7 +796,7 @@ pub(crate) fn verify_fast_root(
     while let Some((path, id)) = pending.pop() {
         if !found.insert(path.clone()) { return Err("fast namespace duplicate path".into()); }
         let expected = expected_by_path.get(path.as_str()).ok_or("fast namespace extra path")?;
-        let record = *records.get(&id).ok_or("fast namespace missing global inode")?;
+        let record = namespace.resolve_inode(id)?.record;
         record.validate(path == ".")?;
         if !visited_inodes.insert(id) && record.kind != inode::InodeKind::RegularFile {
             return Err("fast namespace repeats a non-regular inode".into());
@@ -847,7 +852,7 @@ pub(crate) fn verify_fast_root(
         || delta.absent_paths.iter().any(|path| found.contains(path)) {
         return Err("fast exact namespace membership/absence".into());
     }
-    if visited_inodes != records.keys().copied().collect() { return Err("fast unreachable/missing global inode".into()); }
+    namespace.require_complete_membership(&visited_inodes)?;
     Ok(Receipt::from([
         ("verification_status".into(),"fast_iteration_verified".into()),
         ("verification_profile".into(),"fast-verify-v1".into()),
@@ -857,7 +862,7 @@ pub(crate) fn verify_fast_root(
         ("certificate_root".into(),certificate.root.to_string()),
         ("canonical_root".into(),root.to_string()),
         ("authenticated_namespace_paths".into(),found.len().to_string()),
-        ("authenticated_global_inodes".into(),records.len().to_string()),
+        ("authenticated_global_inodes".into(),namespace.records.len().to_string()),
         ("actual_read_regular_paths".into(),actual_paths.to_string()),
         ("actual_read_logical_bytes".into(),actual_bytes.to_string()),
         ("skipped_current_store_regular_paths".into(),skipped_paths.to_string()),

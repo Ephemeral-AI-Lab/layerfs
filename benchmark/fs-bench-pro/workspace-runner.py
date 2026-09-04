@@ -326,16 +326,22 @@ PREPARATION_TIMED_HOST_PAIR = ("0a0df8c560928ac916aae8ce984b683f65085c344cd832fc
 FAST_VERIFIER_SOURCE = "f5f8a69859bd9c0a2e7dc7780de55578fb05eec3"
 FAST_VERIFIER_HASHES = {
     "src/workspace_bench.rs": "4a8a57746d028a3ec0b9cfdd12cacabe26705744bfa60c025bf6e73ffd89646b",
-    "src/workspace_verify.rs": "c0bdb1d9e2faef6efe7f542f2a7a1cd35fe1c1ba1c21991c16ec22f34b9bd4e4",
+    "src/workspace_verify.rs": "346bcc35e0db2df1975193563aaa46669daddd4da882f9bca360776b2322b320",
     "workspace_common.rs": "434a48b380ffdd457e8faa02fd7afa2c20bd0ee83545793022b75d698d1bd85c",
     "ordinary_workloads.rs": "92a1e08a3ede32ef016f8cb3985e3744839a97d604041f666c7db32d5424e4df",
     "workload.rs": "50f1ddc77b11909f27cf6ee7fe8e3c6f93d969d095ee6d9e11b5dfe0c0d21635",
 }
 
 
+HISTORICAL_FULL_VERIFIER_REVISION = "7948df2de269e5ffd47a232ffd8091ff83f8869f"
+HISTORICAL_FULL_VERIFIER_SHA256 = "c0bdb1d9e2faef6efe7f542f2a7a1cd35fe1c1ba1c21991c16ec22f34b9bd4e4"
+
+
 def fast_verifier_source_proof(revision):
     pairs = {}
     for relative, expected in FAST_VERIFIER_HASHES.items():
+        if revision == HISTORICAL_FULL_VERIFIER_REVISION and relative == "src/workspace_verify.rs":
+            expected = HISTORICAL_FULL_VERIFIER_SHA256
         path = "benchmark/fs-bench-pro/" + relative
         old, new = [subprocess.check_output(["git", "show", f"{rev}:{path}"], cwd=REPO) for rev in (FAST_VERIFIER_SOURCE, revision)]
         if hashlib.sha256(new).hexdigest() != expected:raise ValueError("unreviewed fast verifier source: " + path)

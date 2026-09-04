@@ -1763,6 +1763,43 @@ def configured_runtime_budget_bridge(config, primary):
     return bridge
 
 
+def full_verifier_source_proof(old_revision, new_revision):
+    """One exact exhaustive-traversal repair; historical timing identity stays intact."""
+    if old_revision != runner.HISTORICAL_FULL_VERIFIER_REVISION or new_revision == old_revision:
+        raise ValueError("full verifier bridge must start at exact7948 VM8 source")
+    old_tree, new_tree = product_tree(old_revision), product_tree(new_revision)
+    if old_tree != new_tree:raise ValueError("full verifier bridge changed product/build inputs")
+    old_pairs = runner.fast_verifier_source_proof(old_revision)
+    new_pairs = runner.fast_verifier_source_proof(new_revision)
+    path = "benchmark/fs-bench-pro/src/workspace_verify.rs"
+    if old_pairs[path]["new_sha256"] != runner.HISTORICAL_FULL_VERIFIER_SHA256 or new_pairs[path]["new_sha256"] != runner.FAST_VERIFIER_HASHES["src/workspace_verify.rs"]:
+        raise ValueError("full verifier source pair differs")
+    changed = set(subprocess.check_output(["git", "diff", "--name-only", old_revision, new_revision, "--", "benchmark/fs-bench-pro"], cwd=HERE.parents[1], text=True).splitlines())
+    if path not in changed or changed - {path, "benchmark/fs-bench-pro/workspace-runner.py", "benchmark/fs-bench-pro/generate-workspace-report.py"}:
+        raise ValueError("full verifier repair changed a fixture/workload/host dependency")
+    contracts = {}
+    for name in sorted(NORMATIVE_CONTRACT_FILES):
+        values = [subprocess.check_output(["git", "show", revision + ":" + name], cwd=HERE.parents[1]) for revision in (old_revision, new_revision)]
+        if values[0] != values[1]:raise ValueError("full verifier bridge changed frozen contract: " + name)
+        contracts[name] = hashlib.sha256(values[0]).hexdigest()
+    return {"old_revision": old_revision, "new_revision": new_revision,
+        "old_verifier_sha256": runner.HISTORICAL_FULL_VERIFIER_SHA256,
+        "new_verifier_sha256": runner.FAST_VERIFIER_HASHES["src/workspace_verify.rs"],
+        "unchanged_product_tree_sha256": hashlib.sha256(json.dumps(old_tree, sort_keys=True).encode()).hexdigest(),
+        "unchanged_normative_contract_sha256": contracts,
+        "fast_profile_source_proof": fast_profile_source_proof(new_revision),
+        "scope": "Only exhaustive verifier namespace lookup changes: authenticated inode index replaces repeated root resolution. Every full byte/metadata/alias/typed-census check remains required. Historical7948 product timings stay at their original source/environment; no successor timing or fast-to-full assurance claim."}
+
+
+def configured_full_verifier_bridge(config, primary):
+    bridge = config.get("full_verifier_compatibility")
+    if bridge is None:return None
+    if not isinstance(bridge, dict) or set(bridge) != {"old_revision", "new_revision", "source_proof", "reviewed_impact"} or bridge["new_revision"] != primary["revision"] or not isinstance(bridge["reviewed_impact"], str) or len(bridge["reviewed_impact"].strip()) < 80:
+        raise ValueError("invalid exact full-verifier compatibility record")
+    if bridge["source_proof"] != full_verifier_source_proof(bridge["old_revision"], bridge["new_revision"]):raise ValueError("full verifier source proof differs from committed bytes")
+    return bridge
+
+
 def family_builds(campaign, assets, primary, registry):
     families = {row["family_id"] for row in registry}
     cases = {row["scenario_id"]: row for row in registry}
@@ -1771,19 +1808,22 @@ def family_builds(campaign, assets, primary, registry):
     if not path.exists():
         return selected, provenance, bridges
     config = read(path)
-    if set(config) - {"schema", "selections", "verification_compatibility", "product_compatibility", "runtime_budget_compatibility"} or config.get("schema") != "fs-bench-pro-scoped-builds-v1" or not isinstance(config.get("selections"), dict):
+    if set(config) - {"schema", "selections", "verification_compatibility", "product_compatibility", "runtime_budget_compatibility", "full_verifier_compatibility"} or config.get("schema") != "fs-bench-pro-scoped-builds-v1" or not isinstance(config.get("selections"), dict):
         raise ValueError("invalid explicit scoped build mapping")
     product_bridges = configured_product_bridges(config, primary, cases)
     runtime_budget_bridge = configured_runtime_budget_bridge(config, primary)
+    full_verifier_bridge = configured_full_verifier_bridge(config, primary)
     loaded = {assets.resolve(): (primary, registry)}
     for selector, choice in config["selections"].items():
         parts = selector.split(":")
         valid = len(parts) in {2, 3} and parts[0] == "family" and parts[1] in families and (len(parts) == 2 or parts[2] in {"performance", "verify"})
         valid |= len(parts) == 3 and parts[0] == "case" and parts[1] in cases and parts[2] in {"performance", "verify"}
-        if len(parts) == 4 and parts[0] == "slot" and parts[1] in cases and parts[2].isdecimal() and parts[3] in {"performance", "verify"}:
+        if len(parts) == 4 and parts[0] == "slot" and parts[1] in cases and parts[2].isdecimal() and parts[3] in {"performance", "verify", "fast-verify"}:
             selected_case, seed, mode = cases[parts[1]], int(parts[2]), parts[3]
             allowed = [1] if selected_case.get("proof_only") or selected_case.get("inherited") and mode == "verify" else range(1, 6) if selected_case.get("inherited") else range(1, 4)
             valid = str(seed) == parts[2] and seed in allowed and not (selected_case.get("proof_only") and mode != "verify")
+            if mode == "fast-verify":
+                valid = valid and not selected_case.get("inherited") and selected_case.get("input_mode") == "store" and not selected_case["family_id"].startswith("dedup_")
         if not valid or not isinstance(choice, dict) or set(choice) != {"assets", "reason", "build_manifest_sha256"}:
             raise ValueError("unknown selector or malformed scoped build provenance")
         if not isinstance(choice["reason"], str) or len(choice["reason"].strip()) < 16 or not digest(choice["build_manifest_sha256"]):
@@ -1797,6 +1837,9 @@ def family_builds(campaign, assets, primary, registry):
         if build["revision"] == CLEAN_PRE_BUDGET_REVISION and primary["revision"] != CLEAN_PRE_BUDGET_REVISION:
             if runtime_budget_bridge is None or selector.split(":")[-1] != "performance" or parts[0] != "slot":
                 raise ValueError("old clean6c runtime-budget reuse requires exact completed performance-slot selector and source proof")
+        if build["revision"] == runner.HISTORICAL_FULL_VERIFIER_REVISION and primary["revision"] != build["revision"]:
+            if full_verifier_bridge is None or parts[0] != "slot" or parts[-1] not in {"performance", "fast-verify"}:
+                raise ValueError("historical7948 evidence requires exact slot and full-verifier source bridge")
         if build["revision"] == runner.FAST_VERIFIER_SOURCE and primary["revision"] != build["revision"]:
             if parts[0] != "slot" or parts[-1] != "verify":raise ValueError("old full verifier reuse requires exact completed full-proof slot")
             fast_profile_source_proof(primary["revision"])
@@ -1821,6 +1864,7 @@ def family_builds(campaign, assets, primary, registry):
             raise ValueError("scoped build changed frozen registry descriptors")
         selected[selector] = build
         provenance[selector] = {**choice, "assets": str(location), "source": build,
+            "full_verifier_compatibility": full_verifier_bridge if build["revision"] == runner.HISTORICAL_FULL_VERIFIER_REVISION and primary["revision"] != build["revision"] else None,
             "runtime_budget_compatibility": runtime_budget_bridge if build["revision"] == CLEAN_PRE_BUDGET_REVISION and primary["revision"] != CLEAN_PRE_BUDGET_REVISION else None,
             "product_compatibility": [item for item in product_bridges if item["old_revision"] == build["revision"]] if build["product_seal"] != primary["product_seal"] else []}
     if any("rebase_lifetime_source" in bridge["source_proof"] for bridge in product_bridges):
@@ -2168,6 +2212,7 @@ def generate(campaign, assets):
             "certificate_identity": outcome.get("verification_certificate_identity"), **value})
     summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "scoped_builds": build_provenance, "verification_compatibility": compatibility, "product_compatibility": list(product_compatibility.values()), "runtime_budget_compatibility": next((item["runtime_budget_compatibility"] for item in build_provenance.values() if item.get("runtime_budget_compatibility")), None), "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
                "fast_iteration_results": fast_results, "fast_profile_scope": "Separate development assurance; no exhaustive Phase1 coverage or performance claim. Full verify never falls back to fast.",
+               "full_verifier_compatibility": next((item["full_verifier_compatibility"] for item in build_provenance.values() if item.get("full_verifier_compatibility")), None),
                "runtime_suppressions": suppression_ledger, "suppressed_slots": suppressed_slots, "family_scope": family_scope,
                "suppressed_original_outcomes": [value for value in retained_outcomes if value["phase1_scope_status"] == "suppressed_phase1_time_budget"],
                "retained_source_arms": list(arms.values()), "retained_invalidations": invalidations, "eligible_distributions": eligible_distributions, "step_evidence_path": "step-evidence.json", "counts": counts, "phase1_evidence_status": "PASS" if not missing and not invalid and not global_issues else "REVISE", "product_status": "FAIL" if failures else "NOT_ESTABLISHED" if missing or invalid or global_issues else "PASS",
