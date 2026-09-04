@@ -35,27 +35,61 @@
         "tiny-stat-100",
         "tiny-stat-500"
       ],
-      "kind": "proxy-unlink-no-call-v1",
-      "new_product_seal": "4637a27f57351decbee4f800ba97f63d743fb03c7c5b91bad56550eadb310170",
-      "new_revision": "3422433020a678a77f88e8a110492ca293c05e30",
+      "kind": "unlink-and-empty-generation-predicate-v1",
+      "new_product_seal": "733b90b4dcf879abefed090cdfd2802d05d925d2f8805e4352bc294b4110a1c6",
+      "new_revision": "e7840da1da81404ff228be734a91783cebb946ca",
       "old_product_seal": "e24867af45d83c455dbfac530d43140fec7cdc40d3eae9ff70a30883d239125a",
       "old_revision": "fbf32e84662d00993c033515e113437965395494",
       "required_zero_counters": [
         "callback_unlink",
         "callback_rmdir"
       ],
-      "reviewed_impact": "Coordinator-reviewed narrow product repair: only ProxyClient::unlink now publishes an uncached-parent deletion before acknowledging success. Object layouts, configuration, all other product/Cargo bytes and all code outside that exact method are unchanged; cfg(test)-only module differences are separately hashed. Only the explicitly listed frozen no-unlink operations may retain old evidence, and every retained attempt must prove complete zero callback_unlink and callback_rmdir observations. Tiny unlink/bulk-delete, all Git and the old bulk-delete proof are excluded and require corrected-source execution.",
+      "reviewed_impact": "Coordinator-reviewed exact product-state bridge: the only runtime changes are the uncached-parent unlink publication method and the explicit nonempty-to-empty edit-generation retirement predicate. Complete zero unlink/rmdir callbacks and zero destructive native workload counters are required for every retained attempt. The unchanged exclusive-create/positive-monotone-write or read/stat/traversal/mkdir definitions cannot trigger retirement; layouts, admission limits and all other product bytes are unchanged. These timings measure only their original producing sources. The added predicate instruction cost on creation paths is unmeasured by retained timings; no current-binary timing equality is asserted. Deleting, Git, truncating, dense replacement and sustained workloads are excluded.",
       "source_proof": {
         "cfg_test_module_sha256": {
-          "3422433020a678a77f88e8a110492ca293c05e30": "af1348928f85898a3425392474e4f89f8083884fde9b38b18419423963aba8a2",
+          "e7840da1da81404ff228be734a91783cebb946ca": "af1348928f85898a3425392474e4f89f8083884fde9b38b18419423963aba8a2",
           "fbf32e84662d00993c033515e113437965395494": "3e2ce3305677d21f2610efaf3c020a423c04d461bb5ed85c4c258059752e78fb"
         },
-        "changed_path": "crates/layerfs-fuse/src/proxy_client.rs",
+        "changed_runtime_paths": [
+          "crates/layerfs-fuse/src/proxy_client.rs",
+          "crates/layerfs-workspace/src/file_io.rs"
+        ],
+        "install_edit_file_sha256": {
+          "e7840da1da81404ff228be734a91783cebb946ca": "eb744b70a156dedfa050a0ae0ed42aa2ddcb5ef6f90437ee2f15329909abe2e3",
+          "fbf32e84662d00993c033515e113437965395494": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281"
+        },
+        "install_edit_transform": "exact-prefix-predicate-and-conditional-edit-counter-v1",
+        "integration_test_only": {
+          "path": "crates/layerfs-workspace/tests/file_edit.rs",
+          "sha256": {
+            "e7840da1da81404ff228be734a91783cebb946ca": "3c537b2a748475e86181f9268b6fdbd3080076e85905666d77b927ae116afdae",
+            "fbf32e84662d00993c033515e113437965395494": "3be583a592141d8b01054d6fa7e7d8e159d5bd80b6754223462e25e42ad5c565"
+          }
+        },
+        "new_guard_instruction_cost": "not-measured-by-retained-timings",
         "normalized_proxy_sha256": "be79d14a042d172502041dd5fa6dc152ee6a94453b1e8cc1555dc6e45fde8758",
-        "unchanged_product_tree_sha256": "e7429a816400343d4d28c77c8e63cdbe1550a4e283b615021df90b5635020e5e",
+        "performance_claim_scope": "original-producing-source-only",
+        "restored_installer_file_sha256": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
+        "unchanged_product_tree_sha256": "ebdcddeaf853a4f255216192f449f778d58739d13da3c3d42cd8abf0675a36e2",
         "unlink_body_sha256": {
-          "3422433020a678a77f88e8a110492ca293c05e30": "5b1abfc4532e0a45d195f30138248a0fb91cd4e379fd39b769250fbc00a730ae",
+          "e7840da1da81404ff228be734a91783cebb946ca": "5b1abfc4532e0a45d195f30138248a0fb91cd4e379fd39b769250fbc00a730ae",
           "fbf32e84662d00993c033515e113437965395494": "75ce985451c13f7ded3dd59388fc540924200497ff7046ac6023d45df711e6b9"
+        },
+        "workload_predicate_source": {
+          "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+          "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+          "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+          "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+          "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+          "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+          "benchmark/fs-bench-pro/workspace_registry.rs": {
+            "comparison": "exclude-sample_resources-body-v1",
+            "function_sha256": {
+              "e7840da1da81404ff228be734a91783cebb946ca": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+              "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
+            },
+            "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
+          }
         }
       }
     },
@@ -63,27 +97,54 @@
       "case_ids": [
         "tiny-stat-1"
       ],
-      "kind": "proxy-unlink-no-call-v1",
-      "new_product_seal": "4637a27f57351decbee4f800ba97f63d743fb03c7c5b91bad56550eadb310170",
-      "new_revision": "3422433020a678a77f88e8a110492ca293c05e30",
+      "kind": "unlink-and-empty-generation-predicate-v1",
+      "new_product_seal": "733b90b4dcf879abefed090cdfd2802d05d925d2f8805e4352bc294b4110a1c6",
+      "new_revision": "e7840da1da81404ff228be734a91783cebb946ca",
       "old_product_seal": "e24867af45d83c455dbfac530d43140fec7cdc40d3eae9ff70a30883d239125a",
       "old_revision": "b8c2ad4bf4fa0415fd49d57abea15729b33a4284",
       "required_zero_counters": [
         "callback_unlink",
         "callback_rmdir"
       ],
-      "reviewed_impact": "Coordinator-reviewed narrow product repair: only ProxyClient::unlink now publishes an uncached-parent deletion before acknowledging success. Object layouts, configuration, all other product/Cargo bytes and all code outside that exact method are unchanged; cfg(test)-only module differences are separately hashed. Only the explicitly listed frozen no-unlink operations may retain old evidence, and every retained attempt must prove complete zero callback_unlink and callback_rmdir observations. Tiny unlink/bulk-delete, all Git and the old bulk-delete proof are excluded and require corrected-source execution.",
+      "reviewed_impact": "Coordinator-reviewed exact product-state bridge: the only runtime changes are the uncached-parent unlink publication method and the explicit nonempty-to-empty edit-generation retirement predicate. Complete zero unlink/rmdir callbacks and zero destructive native workload counters are required for every retained attempt. The unchanged exclusive-create/positive-monotone-write or read/stat/traversal/mkdir definitions cannot trigger retirement; layouts, admission limits and all other product bytes are unchanged. These timings measure only their original producing sources. The added predicate instruction cost on creation paths is unmeasured by retained timings; no current-binary timing equality is asserted. Deleting, Git, truncating, dense replacement and sustained workloads are excluded.",
       "source_proof": {
         "cfg_test_module_sha256": {
-          "3422433020a678a77f88e8a110492ca293c05e30": "af1348928f85898a3425392474e4f89f8083884fde9b38b18419423963aba8a2",
-          "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "3e2ce3305677d21f2610efaf3c020a423c04d461bb5ed85c4c258059752e78fb"
+          "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "3e2ce3305677d21f2610efaf3c020a423c04d461bb5ed85c4c258059752e78fb",
+          "e7840da1da81404ff228be734a91783cebb946ca": "af1348928f85898a3425392474e4f89f8083884fde9b38b18419423963aba8a2"
         },
-        "changed_path": "crates/layerfs-fuse/src/proxy_client.rs",
+        "changed_runtime_paths": [
+          "crates/layerfs-fuse/src/proxy_client.rs",
+          "crates/layerfs-workspace/src/file_io.rs"
+        ],
+        "install_edit_file_sha256": {
+          "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
+          "e7840da1da81404ff228be734a91783cebb946ca": "eb744b70a156dedfa050a0ae0ed42aa2ddcb5ef6f90437ee2f15329909abe2e3"
+        },
+        "install_edit_transform": "exact-prefix-predicate-and-conditional-edit-counter-v1",
+        "integration_test_only": {
+          "path": "crates/layerfs-workspace/tests/file_edit.rs",
+          "sha256": {
+            "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "3be583a592141d8b01054d6fa7e7d8e159d5bd80b6754223462e25e42ad5c565",
+            "e7840da1da81404ff228be734a91783cebb946ca": "3c537b2a748475e86181f9268b6fdbd3080076e85905666d77b927ae116afdae"
+          }
+        },
+        "new_guard_instruction_cost": "not-measured-by-retained-timings",
         "normalized_proxy_sha256": "be79d14a042d172502041dd5fa6dc152ee6a94453b1e8cc1555dc6e45fde8758",
-        "unchanged_product_tree_sha256": "e7429a816400343d4d28c77c8e63cdbe1550a4e283b615021df90b5635020e5e",
+        "performance_claim_scope": "original-producing-source-only",
+        "restored_installer_file_sha256": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
+        "unchanged_product_tree_sha256": "ebdcddeaf853a4f255216192f449f778d58739d13da3c3d42cd8abf0675a36e2",
         "unlink_body_sha256": {
-          "3422433020a678a77f88e8a110492ca293c05e30": "5b1abfc4532e0a45d195f30138248a0fb91cd4e379fd39b769250fbc00a730ae",
-          "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "75ce985451c13f7ded3dd59388fc540924200497ff7046ac6023d45df711e6b9"
+          "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "75ce985451c13f7ded3dd59388fc540924200497ff7046ac6023d45df711e6b9",
+          "e7840da1da81404ff228be734a91783cebb946ca": "5b1abfc4532e0a45d195f30138248a0fb91cd4e379fd39b769250fbc00a730ae"
+        },
+        "workload_predicate_source": {
+          "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+          "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+          "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+          "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+          "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+          "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+          "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
         }
       }
     }
@@ -93,89 +154,89 @@
     "case:tiny-bulk-create-100:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-bulk-create-10:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-bulk-create-1:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-bulk-create-500:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-create-100:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-create-10:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-create-1:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-create-500:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-stat-100:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-stat-10:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-stat-1:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "case:tiny-stat-500:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain this completed tiny create/stat/bulk-create case under the exact unlink-only no-call product bridge. Tiny unlink and bulk-delete cases are deliberately absent and use new default assets."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "family:directory_construction_traversal:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain completed no-unlink performance only under the explicit method-only product bridge; every retained attempt must have complete zero callback_unlink and callback_rmdir observations."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "family:payload_create_read:performance": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain completed no-unlink performance only under the explicit method-only product bridge; every retained attempt must have complete zero callback_unlink and callback_rmdir observations."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "slot:payload-create-1m:1:verify": {
       "assets": "assets-fbf32e84",
       "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
-      "reason": "Retain only this already-passing no-unlink independent verification slot, with its full original identity and complete zero unlink/rmdir observations. The older bulk-delete proof is not retained for the new product."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     },
     "slot:tiny-stat-1:1:performance": {
       "assets": "assets-b8c2ad4b",
       "build_manifest_sha256": "2ae27960652337d2c77326e6df792491a75c8aeb1c39607e2cf47ffa96b750f4",
-      "reason": "Retain the valid atomic-sampler replacement of this exact slot, requiring zero unlink/rmdir callbacks and the method-only product bridge. Its earlier partial-row observation remains invalidated."
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
     }
   },
   "verification_compatibility": [
     {
       "family_id": "payload_create_read",
       "performance_revision": "fbf32e84662d00993c033515e113437965395494",
-      "reviewed_impact": "Coordinator-reviewed source bridge for old no-unlink performance and new independent verification. Timed family operations, fixture generators and expected-state models are unchanged. Registry differences are limited to the explicitly hashed atomic resource-sampler body when applicable. The separate exact product bridge proves only ProxyClient::unlink changed, requires complete zero unlink/rmdir observations per retained attempt, and excludes all deleting/Git cases. New verifier/history accounting and sustained-only helper repairs do not change these ordinary workload definitions. Producing identities remain separate.",
+      "reviewed_impact": "Coordinator-reviewed exact product-state bridge: the only runtime changes are the uncached-parent unlink publication method and the explicit nonempty-to-empty edit-generation retirement predicate. Complete zero unlink/rmdir callbacks and zero destructive native workload counters are required for every retained attempt. The unchanged exclusive-create/positive-monotone-write or read/stat/traversal/mkdir definitions cannot trigger retirement; layouts, admission limits and all other product bytes are unchanged. These timings measure only their original producing sources. The added predicate instruction cost on creation paths is unmeasured by retained timings; no current-binary timing equality is asserted. Deleting, Git, truncating, dense replacement and sustained workloads are excluded. Independently verified source-state compatibility preserves actual old proof identity and does not substitute verification from the workload output.",
       "unchanged_paths": {
         "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
         "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
@@ -184,18 +245,18 @@
         "benchmark/fs-bench-pro/workspace_registry.rs": {
           "comparison": "exclude-sample_resources-body-v1",
           "function_sha256": {
-            "3422433020a678a77f88e8a110492ca293c05e30": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+            "e7840da1da81404ff228be734a91783cebb946ca": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
             "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
           },
           "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
         }
       },
-      "verification_revision": "3422433020a678a77f88e8a110492ca293c05e30"
+      "verification_revision": "e7840da1da81404ff228be734a91783cebb946ca"
     },
     {
       "family_id": "tiny_file_churn",
       "performance_revision": "fbf32e84662d00993c033515e113437965395494",
-      "reviewed_impact": "Coordinator-reviewed source bridge for old no-unlink performance and new independent verification. Timed family operations, fixture generators and expected-state models are unchanged. Registry differences are limited to the explicitly hashed atomic resource-sampler body when applicable. The separate exact product bridge proves only ProxyClient::unlink changed, requires complete zero unlink/rmdir observations per retained attempt, and excludes all deleting/Git cases. New verifier/history accounting and sustained-only helper repairs do not change these ordinary workload definitions. Producing identities remain separate.",
+      "reviewed_impact": "Coordinator-reviewed exact product-state bridge: the only runtime changes are the uncached-parent unlink publication method and the explicit nonempty-to-empty edit-generation retirement predicate. Complete zero unlink/rmdir callbacks and zero destructive native workload counters are required for every retained attempt. The unchanged exclusive-create/positive-monotone-write or read/stat/traversal/mkdir definitions cannot trigger retirement; layouts, admission limits and all other product bytes are unchanged. These timings measure only their original producing sources. The added predicate instruction cost on creation paths is unmeasured by retained timings; no current-binary timing equality is asserted. Deleting, Git, truncating, dense replacement and sustained workloads are excluded. Independently verified source-state compatibility preserves actual old proof identity and does not substitute verification from the workload output.",
       "unchanged_paths": {
         "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
         "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
@@ -204,18 +265,18 @@
         "benchmark/fs-bench-pro/workspace_registry.rs": {
           "comparison": "exclude-sample_resources-body-v1",
           "function_sha256": {
-            "3422433020a678a77f88e8a110492ca293c05e30": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+            "e7840da1da81404ff228be734a91783cebb946ca": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
             "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
           },
           "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
         }
       },
-      "verification_revision": "3422433020a678a77f88e8a110492ca293c05e30"
+      "verification_revision": "e7840da1da81404ff228be734a91783cebb946ca"
     },
     {
       "family_id": "directory_construction_traversal",
       "performance_revision": "fbf32e84662d00993c033515e113437965395494",
-      "reviewed_impact": "Coordinator-reviewed source bridge for old no-unlink performance and new independent verification. Timed family operations, fixture generators and expected-state models are unchanged. Registry differences are limited to the explicitly hashed atomic resource-sampler body when applicable. The separate exact product bridge proves only ProxyClient::unlink changed, requires complete zero unlink/rmdir observations per retained attempt, and excludes all deleting/Git cases. New verifier/history accounting and sustained-only helper repairs do not change these ordinary workload definitions. Producing identities remain separate.",
+      "reviewed_impact": "Coordinator-reviewed exact product-state bridge: the only runtime changes are the uncached-parent unlink publication method and the explicit nonempty-to-empty edit-generation retirement predicate. Complete zero unlink/rmdir callbacks and zero destructive native workload counters are required for every retained attempt. The unchanged exclusive-create/positive-monotone-write or read/stat/traversal/mkdir definitions cannot trigger retirement; layouts, admission limits and all other product bytes are unchanged. These timings measure only their original producing sources. The added predicate instruction cost on creation paths is unmeasured by retained timings; no current-binary timing equality is asserted. Deleting, Git, truncating, dense replacement and sustained workloads are excluded. Independently verified source-state compatibility preserves actual old proof identity and does not substitute verification from the workload output.",
       "unchanged_paths": {
         "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
         "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
@@ -224,18 +285,18 @@
         "benchmark/fs-bench-pro/workspace_registry.rs": {
           "comparison": "exclude-sample_resources-body-v1",
           "function_sha256": {
-            "3422433020a678a77f88e8a110492ca293c05e30": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+            "e7840da1da81404ff228be734a91783cebb946ca": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
             "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
           },
           "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
         }
       },
-      "verification_revision": "3422433020a678a77f88e8a110492ca293c05e30"
+      "verification_revision": "e7840da1da81404ff228be734a91783cebb946ca"
     },
     {
       "family_id": "tiny_file_churn",
       "performance_revision": "b8c2ad4bf4fa0415fd49d57abea15729b33a4284",
-      "reviewed_impact": "Coordinator-reviewed source bridge for old no-unlink performance and new independent verification. Timed family operations, fixture generators and expected-state models are unchanged. Registry differences are limited to the explicitly hashed atomic resource-sampler body when applicable. The separate exact product bridge proves only ProxyClient::unlink changed, requires complete zero unlink/rmdir observations per retained attempt, and excludes all deleting/Git cases. New verifier/history accounting and sustained-only helper repairs do not change these ordinary workload definitions. Producing identities remain separate.",
+      "reviewed_impact": "Coordinator-reviewed exact product-state bridge: the only runtime changes are the uncached-parent unlink publication method and the explicit nonempty-to-empty edit-generation retirement predicate. Complete zero unlink/rmdir callbacks and zero destructive native workload counters are required for every retained attempt. The unchanged exclusive-create/positive-monotone-write or read/stat/traversal/mkdir definitions cannot trigger retirement; layouts, admission limits and all other product bytes are unchanged. These timings measure only their original producing sources. The added predicate instruction cost on creation paths is unmeasured by retained timings; no current-binary timing equality is asserted. Deleting, Git, truncating, dense replacement and sustained workloads are excluded. Independently verified source-state compatibility preserves actual old proof identity and does not substitute verification from the workload output.",
       "unchanged_paths": {
         "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
         "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
@@ -243,7 +304,7 @@
         "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
         "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
       },
-      "verification_revision": "3422433020a678a77f88e8a110492ca293c05e30"
+      "verification_revision": "e7840da1da81404ff228be734a91783cebb946ca"
     }
   ]
 }

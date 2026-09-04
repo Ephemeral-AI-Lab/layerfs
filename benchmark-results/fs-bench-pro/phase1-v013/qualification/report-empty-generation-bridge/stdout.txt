@@ -1,0 +1,166 @@
+{
+  "status": "pass",
+  "actual_representative_attempts": [
+    {
+      "attempt": "directory-construct-1-s2-performance-f3b526776b62",
+      "scope": {
+        "state_compatibility": "installer-not-called",
+        "timing_claim": "original producing source only",
+        "current_guard_instruction_cost": "changed installer not called"
+      }
+    },
+    {
+      "attempt": "directory-content-scan-1-s2-performance-4f21dcde750e",
+      "scope": {
+        "state_compatibility": "installer-not-called",
+        "timing_claim": "original producing source only",
+        "current_guard_instruction_cost": "changed installer not called"
+      }
+    },
+    {
+      "attempt": "directory-metadata-scan-1-s2-performance-a2ce386f5e5d",
+      "scope": {
+        "state_compatibility": "installer-not-called",
+        "timing_claim": "original producing source only",
+        "current_guard_instruction_cost": "changed installer not called"
+      }
+    },
+    {
+      "attempt": "payload-create-1m-s2-performance-ea48f9e005ef",
+      "scope": {
+        "state_compatibility": "empty-retirement-predicate-false",
+        "timing_claim": "original producing source only",
+        "current_guard_instruction_cost": "unmeasured"
+      }
+    },
+    {
+      "attempt": "payload-random-read-1-s2-performance-9500d171657b",
+      "scope": {
+        "state_compatibility": "installer-not-called",
+        "timing_claim": "original producing source only",
+        "current_guard_instruction_cost": "changed installer not called"
+      }
+    },
+    {
+      "attempt": "tiny-bulk-create-1-s2-performance-e465631f52f2",
+      "scope": {
+        "state_compatibility": "empty-retirement-predicate-false",
+        "timing_claim": "original producing source only",
+        "current_guard_instruction_cost": "unmeasured"
+      }
+    },
+    {
+      "attempt": "tiny-create-1-s2-performance-b3a7902546c6",
+      "scope": {
+        "state_compatibility": "empty-retirement-predicate-false",
+        "timing_claim": "original producing source only",
+        "current_guard_instruction_cost": "unmeasured"
+      }
+    },
+    {
+      "attempt": "tiny-stat-1-s2-performance-6def60a05d9f",
+      "scope": {
+        "state_compatibility": "installer-not-called",
+        "timing_claim": "original producing source only",
+        "current_guard_instruction_cost": "changed installer not called"
+      }
+    },
+    {
+      "attempt": "payload-create-1m-s1-verify-09ef8212a24f",
+      "scope": {
+        "state_compatibility": "empty-retirement-predicate-false",
+        "timing_claim": "original producing source only",
+        "current_guard_instruction_cost": "unmeasured"
+      }
+    }
+  ],
+  "source_proofs": {
+    "fbf32e84662d00993c033515e113437965395494": {
+      "changed_runtime_paths": [
+        "crates/layerfs-fuse/src/proxy_client.rs",
+        "crates/layerfs-workspace/src/file_io.rs"
+      ],
+      "unchanged_product_tree_sha256": "ebdcddeaf853a4f255216192f449f778d58739d13da3c3d42cd8abf0675a36e2",
+      "normalized_proxy_sha256": "be79d14a042d172502041dd5fa6dc152ee6a94453b1e8cc1555dc6e45fde8758",
+      "unlink_body_sha256": {
+        "fbf32e84662d00993c033515e113437965395494": "75ce985451c13f7ded3dd59388fc540924200497ff7046ac6023d45df711e6b9",
+        "101626e773c2045875ec49fe48ac5416e4844feb": "5b1abfc4532e0a45d195f30138248a0fb91cd4e379fd39b769250fbc00a730ae"
+      },
+      "cfg_test_module_sha256": {
+        "fbf32e84662d00993c033515e113437965395494": "3e2ce3305677d21f2610efaf3c020a423c04d461bb5ed85c4c258059752e78fb",
+        "101626e773c2045875ec49fe48ac5416e4844feb": "af1348928f85898a3425392474e4f89f8083884fde9b38b18419423963aba8a2"
+      },
+      "install_edit_transform": "exact-prefix-predicate-and-conditional-edit-counter-v1",
+      "install_edit_file_sha256": {
+        "fbf32e84662d00993c033515e113437965395494": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
+        "101626e773c2045875ec49fe48ac5416e4844feb": "eb744b70a156dedfa050a0ae0ed42aa2ddcb5ef6f90437ee2f15329909abe2e3"
+      },
+      "restored_installer_file_sha256": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
+      "integration_test_only": {
+        "path": "crates/layerfs-workspace/tests/file_edit.rs",
+        "sha256": {
+          "fbf32e84662d00993c033515e113437965395494": "3be583a592141d8b01054d6fa7e7d8e159d5bd80b6754223462e25e42ad5c565",
+          "101626e773c2045875ec49fe48ac5416e4844feb": "3c537b2a748475e86181f9268b6fdbd3080076e85905666d77b927ae116afdae"
+        }
+      },
+      "workload_predicate_source": {
+        "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+        "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+        "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": {
+          "comparison": "exclude-sample_resources-body-v1",
+          "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f",
+          "function_sha256": {
+            "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2",
+            "101626e773c2045875ec49fe48ac5416e4844feb": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f"
+          }
+        }
+      },
+      "performance_claim_scope": "original-producing-source-only",
+      "new_guard_instruction_cost": "not-measured-by-retained-timings"
+    },
+    "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": {
+      "changed_runtime_paths": [
+        "crates/layerfs-fuse/src/proxy_client.rs",
+        "crates/layerfs-workspace/src/file_io.rs"
+      ],
+      "unchanged_product_tree_sha256": "ebdcddeaf853a4f255216192f449f778d58739d13da3c3d42cd8abf0675a36e2",
+      "normalized_proxy_sha256": "be79d14a042d172502041dd5fa6dc152ee6a94453b1e8cc1555dc6e45fde8758",
+      "unlink_body_sha256": {
+        "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "75ce985451c13f7ded3dd59388fc540924200497ff7046ac6023d45df711e6b9",
+        "101626e773c2045875ec49fe48ac5416e4844feb": "5b1abfc4532e0a45d195f30138248a0fb91cd4e379fd39b769250fbc00a730ae"
+      },
+      "cfg_test_module_sha256": {
+        "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "3e2ce3305677d21f2610efaf3c020a423c04d461bb5ed85c4c258059752e78fb",
+        "101626e773c2045875ec49fe48ac5416e4844feb": "af1348928f85898a3425392474e4f89f8083884fde9b38b18419423963aba8a2"
+      },
+      "install_edit_transform": "exact-prefix-predicate-and-conditional-edit-counter-v1",
+      "install_edit_file_sha256": {
+        "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
+        "101626e773c2045875ec49fe48ac5416e4844feb": "eb744b70a156dedfa050a0ae0ed42aa2ddcb5ef6f90437ee2f15329909abe2e3"
+      },
+      "restored_installer_file_sha256": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
+      "integration_test_only": {
+        "path": "crates/layerfs-workspace/tests/file_edit.rs",
+        "sha256": {
+          "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "3be583a592141d8b01054d6fa7e7d8e159d5bd80b6754223462e25e42ad5c565",
+          "101626e773c2045875ec49fe48ac5416e4844feb": "3c537b2a748475e86181f9268b6fdbd3080076e85905666d77b927ae116afdae"
+        }
+      },
+      "workload_predicate_source": {
+        "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+        "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+        "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+      },
+      "performance_claim_scope": "original-producing-source-only",
+      "new_guard_instruction_cost": "not-measured-by-retained-timings"
+    }
+  }
+}

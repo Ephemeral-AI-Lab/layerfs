@@ -1275,15 +1275,102 @@ def unlink_source_proof(old_revision, new_revision):
             "unlink_body_sha256": methods, "cfg_test_module_sha256": tests}
 
 
+EMPTY_GENERATION_BRIDGE_KIND = "unlink-and-empty-generation-predicate-v1"
+INSTALL_EDIT_PATH = "crates/layerfs-workspace/src/file_io.rs"
+INSTALL_EDIT_TEST_PATH = "crates/layerfs-workspace/tests/file_edit.rs"
+CREATION_OPERATIONS = {"payload-create", "tiny-create", "tiny-bulk-create"}
+READONLY_OPERATIONS = {"payload-random-read", "tiny-stat", "directory-metadata-scan", "directory-content-scan"}
+EMPTY_GENERATION_ZERO_WORK = ("workload_ftruncate_call_count", "workload_unlink_call_count", "workload_rmdir_call_count", "workload_rename_call_count", "editor_save_count", "inplace_edit_count", "git_process_count")
+EMPTY_GENERATION_PREFIX = b"""        // A successful explicit empty state retires the prior logical edit
+        // generation. Keep spool history for in-flight reads; only subsequent
+        // mutations receive a fresh edit budget, after existing admission checks.
+        let emptied = old.len() != 0 && next.len() == 0;
+"""
+
+
+def empty_generation_source_proof(old_revision, new_revision):
+    revisions = (old_revision, new_revision)
+    trees = {revision: product_tree(revision) for revision in revisions}
+    modes = {}
+    for path in (UNLINK_SOURCE_PATH, INSTALL_EDIT_PATH, INSTALL_EDIT_TEST_PATH):
+        modes[path] = [trees[revision].pop(path).split()[:2] for revision in revisions]
+    if any(pair[0] != pair[1] for pair in modes.values()) or trees[old_revision] != trees[new_revision]:
+        raise ValueError("empty-generation bridge changed another product/layout/limit/build input")
+    files = {revision: {path: subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=HERE.parents[1])
+             for path in (UNLINK_SOURCE_PATH, INSTALL_EDIT_PATH, INSTALL_EDIT_TEST_PATH)} for revision in revisions}
+    old_io, new_io = files[old_revision][INSTALL_EDIT_PATH], files[new_revision][INSTALL_EDIT_PATH]
+    old_assignment = b"        *current_edits = edits;"
+    new_assignment = b"        *current_edits = if emptied { 0 } else { edits };"
+    # Unlike the uncalled unlink body, the installer may run. Therefore permit
+    # only this exact two-part transformation, never arbitrary method changes.
+    if new_io.count(EMPTY_GENERATION_PREFIX) != 1 or new_io.count(new_assignment) != 1 or old_io.count(old_assignment) != 1:
+        raise ValueError("unknown empty-generation retirement implementation")
+    restored = new_io.replace(EMPTY_GENERATION_PREFIX, b"", 1).replace(new_assignment, old_assignment, 1)
+    if restored != old_io:
+        raise ValueError("installer false-predicate path or other file bytes changed")
+    proxy = {revision: unlink_source_parts(files[revision][UNLINK_SOURCE_PATH]) for revision in revisions}
+    if proxy[old_revision][0] != proxy[new_revision][0]:
+        raise ValueError("proxy changed outside the exact unlink/test bodies")
+    workload_paths = set().union(*(bridge_dependency_paths(family) for family in ("payload_create_read", "tiny_file_churn", "directory_construction_traversal")))
+    workload = {}
+    for path in sorted(workload_paths):
+        values = {revision: subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=HERE.parents[1]) for revision in revisions}
+        if values[old_revision] == values[new_revision]:
+            workload[path] = hashlib.sha256(values[old_revision]).hexdigest()
+        elif path == "benchmark/fs-bench-pro/workspace_registry.rs":
+            parts = {revision: sampler_source_parts(value) for revision, value in values.items()}
+            if parts[old_revision][0] != parts[new_revision][0]:
+                raise ValueError("workload dispatch changed outside observer sampler")
+            workload[path] = {"comparison": "exclude-sample_resources-body-v1", "sha256": hashlib.sha256(parts[old_revision][0]).hexdigest(),
+                              "function_sha256": {revision: hashlib.sha256(part[1]).hexdigest() for revision, part in parts.items()}}
+        else:
+            raise ValueError("creation/read-only fixture or operation predicate source changed")
+    return {"changed_runtime_paths": [UNLINK_SOURCE_PATH, INSTALL_EDIT_PATH],
+            "unchanged_product_tree_sha256": hashlib.sha256(json.dumps(trees[old_revision], sort_keys=True).encode()).hexdigest(),
+            "normalized_proxy_sha256": hashlib.sha256(proxy[old_revision][0]).hexdigest(),
+            "unlink_body_sha256": {revision: hashlib.sha256(parts[1]).hexdigest() for revision, parts in proxy.items()},
+            "cfg_test_module_sha256": {revision: hashlib.sha256(parts[2]).hexdigest() for revision, parts in proxy.items()},
+            "install_edit_transform": "exact-prefix-predicate-and-conditional-edit-counter-v1",
+            "install_edit_file_sha256": {revision: hashlib.sha256(files[revision][INSTALL_EDIT_PATH]).hexdigest() for revision in revisions},
+            "restored_installer_file_sha256": hashlib.sha256(restored).hexdigest(),
+            "integration_test_only": {"path": INSTALL_EDIT_TEST_PATH, "sha256": {revision: hashlib.sha256(files[revision][INSTALL_EDIT_TEST_PATH]).hexdigest() for revision in revisions}},
+            "workload_predicate_source": workload,
+            "performance_claim_scope": "original-producing-source-only",
+            "new_guard_instruction_cost": "not-measured-by-retained-timings"}
+
+
+def validate_empty_generation_records(records, case, issues):
+    validate_no_unlink_records(records, issues)
+    operation = case.get("operation")
+    require(operation in NO_UNLINK_OPERATIONS, "operation has no approved no-empty-transition predicate", issues)
+    operations = [row.get("receipt", {}) for row in records if row["kind"] == "operation"]
+    require(not any(row.get("family") == "workspace.file_range_edit" for row in operations), "retained attempt used owner-side range edits", issues)
+    workloads = [receipt(row["workload_receipt"]) for row in records if row["kind"] == "phase" and row.get("phase") == "exec"]
+    require(len(workloads) == 1, "predicate bridge needs one complete ordinary workload receipt", issues)
+    for workload in workloads:
+        require(workload.get("scenario_id") == case["scenario_id"] and workload.get("workload_status") == "pass", "predicate bridge workload identity/status mismatch", issues)
+        require(all(workload.get(key) == 0 for key in EMPTY_GENERATION_ZERO_WORK), "retained attempt shrank/replaced/deleted files or lacks required operation counters", issues)
+        if operation in READONLY_OPERATIONS or operation == "directory-construct":
+            require(all(workload.get(key) == 0 for key in ("completed_write_bytes", "completed_file_write_count", "workload_pwrite_call_count")), "no-installer operation performed file writes", issues)
+        elif operation in CREATION_OPERATIONS:
+            # Exact source proof pins create_new=true and positive monotone
+            # pwrite lengths. Empty created files remain old.len()==0.
+            expected_files = 1 if operation == "payload-create" else case["tier"] if operation == "tiny-create" else 200 * case["tier"]
+            require(workload.get("completed_file_write_count") == expected_files, "exclusive-creation file count differs from frozen case", issues)
+    return {"state_compatibility": "empty-retirement-predicate-false" if operation in CREATION_OPERATIONS else "installer-not-called",
+            "timing_claim": "original producing source only", "current_guard_instruction_cost": "unmeasured" if operation in CREATION_OPERATIONS else "changed installer not called"}
+
+
 def configured_product_bridges(config, primary, cases):
     approved = []
     fields = {"kind", "old_revision", "new_revision", "old_product_seal", "new_product_seal", "case_ids", "source_proof", "required_zero_counters", "reviewed_impact"}
     for bridge in config.get("product_compatibility", []):
-        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] != UNLINK_BRIDGE_KIND or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
+        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
             raise ValueError("invalid exact unlink product bridge identity")
         if bridge["required_zero_counters"] != ["callback_unlink", "callback_rmdir"] or not isinstance(bridge["case_ids"], list) or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases or cases[case]["operation"] not in NO_UNLINK_OPERATIONS for case in bridge["case_ids"]) or not isinstance(bridge["reviewed_impact"], str) or len(bridge["reviewed_impact"].strip()) < 80:
             raise ValueError("product bridge lacks explicit no-unlink case/observation scope")
-        if bridge["source_proof"] != unlink_source_proof(bridge["old_revision"], bridge["new_revision"]):
+        prove = empty_generation_source_proof if bridge["kind"] == EMPTY_GENERATION_BRIDGE_KIND else unlink_source_proof
+        if bridge["source_proof"] != prove(bridge["old_revision"], bridge["new_revision"]):
             raise ValueError("product bridge source proof differs from committed bytes")
         if any(other["old_revision"] == bridge["old_revision"] for other in approved):
             raise ValueError("duplicate product bridge source")
@@ -1506,9 +1593,14 @@ def generate(campaign, assets):
         selected_source = selected_build(selected_builds, case, mode, seed)
         product_bridge = matching_product_bridge(list(product_compatibility.values()), selected_source, build, case["scenario_id"])
         value = validate_attempt(outcome, classification, case, selected_source)
+        predicate_scope = None
         if product_bridge:
             try:
-                validate_no_unlink_records(raw(Path(outcome["evidence_path"]) / "raw.jsonl"), value["issues"])
+                retained_records = raw(Path(outcome["evidence_path"]) / "raw.jsonl")
+                if product_bridge["kind"] == EMPTY_GENERATION_BRIDGE_KIND:
+                    predicate_scope = validate_empty_generation_records(retained_records, case, value["issues"])
+                else:
+                    validate_no_unlink_records(retained_records, value["issues"])
             except (OSError, ValueError, TypeError, KeyError) as error:
                 value["issues"].append(f"product bridge observation invalid: {error}")
             if value["issues"]:
@@ -1521,7 +1613,8 @@ def generate(campaign, assets):
         row = {"case": key[0], "family_id": case["family_id"], "seed": seed, "mode": mode, "inherited": case.get("inherited", False),
                "source_identity": {key: outcome.get(key) for key in IDENTITY_FIELDS}, "source_arm": outcome.get("source_arm"), "raw_product_status": outcome.get("product_status"), "coverage_status": outcome.get("coverage_status"), "product_status": value["product_status"], "evidence_status": "REVISE" if value["issues"] else "PASS",
                "issues": value["issues"], "violations": value["violations"], "evidence": outcome["evidence_path"], "metrics": value["metrics"], "resource_observations": value["resource_observations"], "observations": value["observations"], "canonical_packages": value["canonical_packages"],
-               "verification_summary": verification_summary(value["observations"], value["canonical_packages"]), "environment_identity": outcome.get("environment_identity"), "input_identity": outcome.get("input_identity"), "invalidation_context": invalidation, "product_source_compatibility": product_bridge}
+               "verification_summary": verification_summary(value["observations"], value["canonical_packages"]), "environment_identity": outcome.get("environment_identity"), "input_identity": outcome.get("input_identity"), "invalidation_context": invalidation, "product_source_compatibility": product_bridge, "product_predicate_scope": predicate_scope,
+               "measured_current_product_binary": outcome.get("product_identity") == build["product_seal"] and outcome.get("source_revision") == build["revision"]}
         rows.append(row)
         if value["issues"]:
             invalid.append(row)
@@ -1596,7 +1689,7 @@ def generate(campaign, assets):
     lines += [f"| {key} | {value} |" for key, value in counts.items()]
     lines += ["", "## Retained original and corrected source arms", "", "Raw outcomes below are preserved with their producing identities; they are not all eligible current-candidate performance evidence.", "", "| Arm | Source / identity group | Image | Raw performance outcomes | Raw pass | Raw fail | Invalidated observations |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"]
     lines += [f"| {arm['source_arm']} | `{arm['source_revision']}` / `{arm['source_group'][:16]}` | `{arm['image_id']}` | {arm['raw_performance_outcomes']} | {arm['raw_pass']} | {arm['raw_fail']} | {arm['invalidated_observations']} |" for arm in arms.values()]
-    lines += ["", "## Eligible source-bound distributions", "", "Only complete, authentic, source/input/environment-matched independently verified samples are eligible. Every source group is separate. CPU/I/O use observed boundary differences; transaction and memory/spool high-water values take maxima; Store growth uses signed endpoint differences. Verification-derived sharing/storage values are labelled verified and retain their independent producing evidence.", "", "| Arm / source group | Case | Metric | n | Median | Min | Max |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"]
+    lines += ["", "## Eligible source-bound distributions", "", "Only complete, authentic, source/input/environment-matched independently verified samples are eligible. Every source group is separate. Retained original-source timings do not measure a later candidate binary or its added guard instruction cost; predicate bridges establish unchanged state and retain the actual producing identity. CPU/I/O use observed boundary differences; transaction and memory/spool high-water values take maxima; Store growth uses signed endpoint differences. Verification-derived sharing/storage values are labelled verified and retain their independent producing evidence.", "", "| Arm / source group | Case | Metric | n | Median | Min | Max |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"]
     for item in eligible_distributions:
         identity = item["source_identity"]
         lines.append(f"| {identity['source_arm']} / `{item['source_group'][:16]}` | {item['case']} | {item['metric']} | {item['n']} | {item['median']} | {item['min']} | {item['max']} |")
