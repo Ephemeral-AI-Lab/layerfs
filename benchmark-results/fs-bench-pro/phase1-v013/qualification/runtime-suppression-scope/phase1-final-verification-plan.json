@@ -78,8 +78,12 @@
       "build_manifest_sha256": "534441a9ae201d685d71e0233c26e389fa354a716c74f2aebd3016bd53400da7"
     },
     "clean_default": {
-      "path": "{clean_runtime_assets}",
-      "status": "resolve from qualified sealed future build; do not use any listed historical asset as runtime for newwork"
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-f5f8a698",
+      "revision": "f5f8a69859bd9c0a2e7dc7780de55578fb05eec3",
+      "product_seal": "b4d6d673d12bfff244bdd1da7f9f1099bd9747197f43cfdd0a40b39350362c85",
+      "image_id": "sha256:5fe4a386bb02018caa0141621195ada5a579341011460bfd169d731f46c14c43",
+      "build_manifest_sha256": "fa4267f772e8a498fe07c20c0e94a1eb7540524ede1c0347a71f8c6b2c07ef04",
+      "status": "qualified sealed runtime supplied explicitly to driver"
     }
   },
   "runners": {
@@ -12778,5 +12782,21 @@
     "active_performance_slots": 373,
     "evidence": "results/review.json matching supplied build revision",
     "requirement": "Every active performance row evidence_status=PASS and product_status=pass; no global issues. Missing independent verification is expected before this driver."
+  },
+  "bound_runtime_assets": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-f5f8a698",
+    "revision": "f5f8a69859bd9c0a2e7dc7780de55578fb05eec3",
+    "product_seal": "b4d6d673d12bfff244bdd1da7f9f1099bd9747197f43cfdd0a40b39350362c85",
+    "image_id": "sha256:5fe4a386bb02018caa0141621195ada5a579341011460bfd169d731f46c14c43",
+    "build_manifest_sha256": "fa4267f772e8a498fe07c20c0e94a1eb7540524ede1c0347a71f8c6b2c07ef04",
+    "status": "qualified sealed runtime supplied explicitly to driver"
+  },
+  "evidence_source_mapping": {
+    "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/evidence-builds.json",
+    "sha256": "9cb06bbc09ed3987c73237543688426cd2a132831a5cbae32ec89b53323d2c78",
+    "performance_exact_slot_selections": 373,
+    "retained_independent_proof_selections": 2,
+    "runtime_default_revision": "f5f8a69859bd9c0a2e7dc7780de55578fb05eec3",
+    "scope": "No active performance recollection; exact clean6c completed<=15s outcomes retain original producing source.380 new independent verifiers use supplied f5f8 assets."
   }
 }
