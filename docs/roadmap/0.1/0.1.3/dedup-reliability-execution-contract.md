@@ -252,7 +252,7 @@ and whole-tree reopen/cleanup from the canonical specification.
 | Subcase suffix (prefix `workspace-`) | Frozen additional sequence and outcome |
 | --- | --- |
 | `invalid-sdk-edit-proof` | Write work/a/prior.dat=D(prior,4096) by completed Exec, then singular SDK edit sentinel 1 with start=32769, delete=1, Inline [1]. Require SdkError::Workspace(WorkspaceError::Storage(StoreError::InvalidInput("file range"))) with unchanged state; publish prior work once. |
-| `invalid-namespace-proof` | With prior.dat dirty, rename work/dir into work/dir/child/nested, then replace directory work/b with prior.dat. Require EINVAL for each from current storage-port mapping; preserve complete pre-call state. Publish prior work. |
+| `invalid-namespace-proof` | With prior.dat dirty, rename work/dir into work/dir/child/nested, then replace directory work/b with prior.dat. Require syscall EINVAL for descendant move and EISDIR for file-over-directory; preserve complete pre-call state. Publish prior work. |
 | `lease-lifecycle-proof` | Same Store owner, two Clients; second writable Create is WorkspaceBusy. End first; recreate at same placement. Drop owning Client; second Client can reuse lease/placement. Check sentinels after both release paths. |
 | `open-writer-busy-proof` | Managed helper opens/writes work/a/writer.dat then finishes its managed execution only after arranging a qualified independently held real-FUSE writable descriptor. Attempt Commit with that descriptor pinned: Busy. Close descriptor, normalize scheduled metadata and publish exact bytes. Descriptor lifetime and execution lifetime are independently observed; a live Exec cannot stand in for this proof. |
 | `live-execution-busy-proof` | One Exec writes/closes prefix.dat then signals an external barrier and remains active. Commit is Busy. Release barrier, join receipt, normalize metadata and publish once. |
@@ -313,7 +313,12 @@ fixture past the 16 MiB dirty allowance or lower production thresholds.
 
 The existing `ResourcePolicy` limit maps `workspace spool limit` to
 PortError::NoSpace and FUSE ENOSPC. `rename type` and `rename descendant`
-map to PortError::Invalid/EINVAL. The FUSE adapter maps generic I/O to EIO,
+map to PortError::Invalid/EINVAL at the adapter. Linux VFS can reject the
+file-over-directory syscall before dispatch with EISDIR; the proof requires
+that syscall-specific outcome, as documented by
+[Linux rename(2)](https://www.man7.org/linux/man-pages/man2/rename.2.html).
+This error-oracle correction was frozen before any Phase 1 product collection;
+the earlier adapter-only assumption is retained in commit de27a847. The FUSE adapter maps generic I/O to EIO,
 name existence to EEXIST and missing paths to ENOENT. Symlink loop detection
 is Linux pathname traversal's ELOOP. Xattrs have no LayerFS callback override;
 the locked fuser default is ENOSYS. Record and verify the actual Linux
