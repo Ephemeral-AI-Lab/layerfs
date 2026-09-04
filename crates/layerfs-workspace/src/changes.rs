@@ -1,7 +1,7 @@
 use crate::cow_tree::{portable_metadata, Attr, Data, FileData, Kind, NodeId, Workspace, ROOT};
 use layerfs_content::file::rope::{self, FileMutationBatch, FileStateRoot, RopeCounters};
 use layerfs_content::filesystem::{self, ContentChange, InodeMutation, LogicalCounters};
-use layerfs_content::object::access::ObjectRead;
+use layerfs_content::object::access::{ObjectRead, ObjectStore};
 use layerfs_content::object::{ContentDigestWriter, ObjectId};
 use layerfs_content::tree::directory::{
     directory_lookup, directory_page_after, empty_directory, DirectoryStateRoot, NamespaceCounters,
@@ -41,6 +41,11 @@ impl Workspace {
             return Err(StorageError::Integrity(
                 "injected Workspace candidate failure",
             ));
+        }
+        if std::env::var("LAYERFS_EXPERIMENT_DENSE_DELETE").as_deref() == Ok("1") {
+            if let Some(candidate) = self.build_dense_delete_candidate()? {
+                return Ok(candidate);
+            }
         }
         if let Some(candidate) = self.build_localized_candidate()? {
             return Ok(candidate);
@@ -351,6 +356,115 @@ impl Workspace {
         let built = objects.finish(root, cdc_bytes_scanned);
         note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
         built
+    }
+
+    // Experimental dense deletion: bounded survivor walk; sparse/mixed edits retain
+    // the frontier path. No deleted subtree is imported or admitted speculatively.
+    fn build_dense_delete_candidate(&mut self) -> Result<Option<BuiltRoot>> {
+        if self.mutation_paths.len() < 512 || self.nodes.values().any(|node| {
+            !node.paths.is_empty() && (node.canonical.is_none()
+                || matches!(node.data, Data::File(FileData::Edited { .. }))
+                || matches!(&node.data, Data::Directory(dir) if dir.changes.values().any(Option::is_some)))
+        }) {
+            return Ok(None);
+        }
+        let limit = (self.mutation_paths.len() / 4).min(4096);
+        self.invalidate_capture();
+        let started = Instant::now();
+        let mut objects = ObjectBuffer::new(&self.reader)?;
+        let namespace = filesystem::namespace(&objects, self.base_root)?;
+        let root_inode = namespace.root_directory_inode;
+        let mut records = BTreeMap::<InodeId, InodeRecordV1>::new();
+        let mut directories = Vec::new();
+        let mut next = Some(root_inode);
+        let mut edges = 0_u64;
+        loop {
+            if let Some(inode) = next.take() {
+                if let Some(record) = records.get_mut(&inode) {
+                    if record.kind == InodeKind::Directory {
+                        return Err(StorageError::Integrity("repeated survivor directory"));
+                    }
+                    record.namespace_ref_count = record.namespace_ref_count.checked_add(1)
+                        .ok_or(StorageError::Integrity("survivor reference overflow"))?;
+                } else {
+                    // Reserve maps, DFS cursors, final pairs and the small insert tree
+                    // conservatively before growth. Fall back without publishing on a miss.
+                    if records.len() == limit
+                        || (records.len() + directories.len() + 129) as u64 * 1024
+                            > self.policy.max_final_delta_memory_bytes {
+                        return Ok(None);
+                    }
+                    let id = inode_table_lookup(&objects, self.base_inodes, inode,
+                        &mut InodeTableCounters::default())?
+                        .ok_or(StorageError::Integrity("survivor inode"))?;
+                    let mut record = objects.with_authenticated_canonical(id, decode_inode_record)?;
+                    let node = if inode == root_inode { Some(ROOT) }
+                        else { self.canonical_nodes.get(&inode).copied() };
+                    if let Some(node) = node {
+                        let attr = self.attr(node)?;
+                        let metadata = portable_metadata(&objects, record.metadata_root, record.kind)?;
+                        if metadata.permission_mode != attr.mode
+                            || metadata.mtime_seconds != attr.mtime_seconds
+                            || metadata.mtime_nanoseconds != attr.mtime_nanoseconds {
+                            record.metadata_root = filesystem::build_portable_metadata(
+                                &mut objects, record.kind, attr.mode,
+                                attr.mtime_seconds, attr.mtime_nanoseconds)?;
+                        }
+                        if let Data::Directory(dir) = &self.nodes[&node].data {
+                            let mut root = DirectoryStateRoot(record.content_root);
+                            let mut changes = Vec::with_capacity(128);
+                            for (name, desired) in &dir.changes {
+                                if desired.is_some() { return Ok(None); }
+                                changes.push((CanonicalName::from_bytes(name)?, None));
+                                if changes.len() == 128 {
+                                    root = filesystem::apply_directory_changes(
+                                        &mut objects, root, changes.drain(..))?.0;
+                                }
+                            }
+                            if !changes.is_empty() {
+                                root = filesystem::apply_directory_changes(&mut objects, root, changes)?.0;
+                            }
+                            record.content_root = root.0;
+                        }
+                    }
+                    record.namespace_ref_count = u64::from(inode != root_inode);
+                    if record.kind == InodeKind::Directory {
+                        directories.push((DirectoryStateRoot(record.content_root), None));
+                    }
+                    records.insert(inode, record);
+                }
+            }
+            let Some((root, after)) = directories.last_mut() else { break };
+            let page = directory_page_after(&objects, *root, after.as_ref(), 1, 4096,
+                &mut NamespaceCounters::default())?;
+            if let Some((name, child)) = page.entries.into_iter().next() {
+                *after = Some(name);
+                next = Some(child);
+                edges += 1;
+            } else {
+                directories.pop();
+            }
+        }
+        let survivor_count = records.len();
+        let root_record = records.remove(&root_inode)
+            .ok_or(StorageError::Integrity("survivor root"))?;
+        let mut pairs = Vec::with_capacity(survivor_count);
+        for (inode, record) in std::iter::once((root_inode, root_record)).chain(records) {
+            pairs.push((inode, objects.put_owned(
+                layerfs_content::tree::inode::codec::encode_inode_record(record)?)?));
+        }
+        let (table, _, capacity) = layerfs_content::tree::inode::build_initial_inode_table_from_pairs(
+            &mut objects, root_inode, pairs.into_iter().map(Ok))?;
+        self.policy.check_final_delta(survivor_count as u64 * 1024 + capacity)?;
+        let root = objects.put_owned(layerfs_content::tree::directory::codec::encode_namespace_root(
+            layerfs_content::tree::NamespaceRootV1 { inode_table_root: table.0, ..namespace })?)?;
+        eprintln!("experiment_dense_delete survivors={} edges={} insert_capacity_bytes={}",
+            survivor_count, edges, capacity);
+        note_commit_phase(WorkspaceCommitPhase::Namespace, started);
+        let started = Instant::now();
+        let built = objects.finish(root, 0)?;
+        note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
+        Ok(Some(built))
     }
 
     // Directory overlays already are the final binding delta. Applying their inode
@@ -1609,6 +1723,52 @@ mod tests {
             .unwrap();
         let workspace = Workspace::open(store, branch, root.join("spool")).unwrap();
         (root, workspace)
+    }
+
+    #[test]
+    fn dense_delete_preserves_aliases_open_unlinked_and_old_root() {
+        assert_eq!(std::env::var("LAYERFS_EXPERIMENT_DENSE_DELETE").as_deref(), Ok("1"));
+        let (root, mut workspace) = empty_workspace("dense-delete");
+        let gone = workspace.mkdir(ROOT, b"gone", 0o750).unwrap().node;
+        for index in 0..600 {
+            workspace.create_file(gone, format!("f{index:04}").as_bytes(), 0o640).unwrap();
+        }
+        let keep = workspace.create_file(ROOT, b"keep", 0o640).unwrap().node;
+        workspace.write(keep, 0, b"sentinel").unwrap();
+        workspace.link(keep, ROOT, b"keep2").unwrap();
+        workspace.link(keep, gone, b"alias").unwrap();
+        let open = workspace.create_file(ROOT, b"open", 0o640).unwrap().node;
+        workspace.write(open, 0, b"open").unwrap();
+        workspace.commit().unwrap();
+        let old_root = workspace.base_root;
+        let gone = workspace.lookup(ROOT, b"gone").unwrap().node;
+        let open = workspace.lookup(ROOT, b"open").unwrap().node;
+        workspace.pin(open, false).unwrap();
+        workspace.unlink(ROOT, b"open", false).unwrap();
+        for index in 0..600 {
+            workspace.unlink(gone, format!("f{index:04}").as_bytes(), false).unwrap();
+        }
+        workspace.unlink(gone, b"alias", false).unwrap();
+        workspace.unlink(ROOT, b"gone", true).unwrap();
+        assert!(workspace.build_dense_delete_candidate().unwrap().is_some());
+        workspace.commit().unwrap();
+        let a = workspace.lookup(ROOT, b"keep").unwrap();
+        let b = workspace.lookup(ROOT, b"keep2").unwrap();
+        assert_eq!((a.node, a.links), (b.node, 2));
+        assert_eq!(workspace.read(a.node, 0, 8).unwrap(), b"sentinel");
+        assert_eq!(workspace.read(open, 0, 4).unwrap(), b"open");
+        workspace.unpin(open).unwrap();
+        assert!(workspace.attr(open).is_err());
+        assert!(workspace.lookup(ROOT, b"gone").is_err());
+        let reader = workspace.store.snapshot_reader(old_root);
+        assert!(filesystem::resolve(&CoreReader(&reader), old_root,
+            &CanonicalPath::new("gone/f0000").unwrap(), &mut LogicalCounters::default()).is_ok());
+        let mut bytes = Vec::new();
+        filesystem::stream(&CoreReader(&reader), old_root, &CanonicalPath::new("open").unwrap(),
+            &mut bytes).unwrap();
+        assert_eq!(bytes, b"open");
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
