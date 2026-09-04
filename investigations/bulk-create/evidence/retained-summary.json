@@ -1,0 +1,140 @@
+{
+  "starting_commit": "7a6e119acba8e5a7ecd22d96c24a42a4413b10af",
+  "corrected_product_source": "fbf32e84662d00993c033515e113437965395494",
+  "later_branch_commit": "b8c2ad4bf4fa0415fd49d57abea15729b33a4284",
+  "ledger_sha256": "fa64e5b9f6c79e443028b59eeec95de97b52199f4f0d9d5f4c11819bf3945b46",
+  "samples": [
+    {
+      "seed": 1,
+      "source": "fbf32e84662d00993c033515e113437965395494",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/tiny-bulk-create-500-s1-performance-668133342791",
+      "raw_sha256": "3c3b939f2757a93f19c5f423140a5e357d6b75c195b57fd6cb0433b2fd1dd596",
+      "phases": {
+        "create": 10112292,
+        "exec": 94711658000,
+        "commit": 93181066292,
+        "visibility": 213709,
+        "end": 169233333
+      },
+      "lifecycle_ns": 188072283626,
+      "metrics": {
+        "spool_write_ns": 13248853498,
+        "spool_write_open_count": 100000,
+        "content_ns": 20780046500,
+        "namespace_ns": 10860266875,
+        "in_place_rebase_ns": 47342532375,
+        "admission_transactions": 3234,
+        "candidate_objects": 411614,
+        "candidate_bytes": 566843638,
+        "snapshot_database_calls": 703315,
+        "metadata_normalization_ns": 64141298947,
+        "root_sync_ns": 590050792
+      },
+      "outer": {
+        "external_process_wall_ns": 188942401333,
+        "runtime_preparation_ns": 421798875,
+        "preparation_ns": 523049458,
+        "product_status": "pass",
+        "harness_status": "pending-validation",
+        "cleanup_status": null,
+        "input_identity": "b792c818d27b61bd872e68350f88116fdc53df169f2981e27d365a6114554b30"
+      }
+    },
+    {
+      "seed": 2,
+      "source": "fbf32e84662d00993c033515e113437965395494",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/tiny-bulk-create-500-s2-performance-dd56a8b819b1",
+      "raw_sha256": "b977d2545ee57e375809bcb27a45ac776e14e500df9ba5e8492c3ab13b56ab11",
+      "phases": {
+        "create": 11996375,
+        "exec": 97224205125,
+        "commit": 89345287375,
+        "visibility": 241709,
+        "end": 142928417
+      },
+      "lifecycle_ns": 186724659001,
+      "metrics": {
+        "spool_write_ns": 12663327758,
+        "spool_write_open_count": 100000,
+        "content_ns": 21552049750,
+        "namespace_ns": 10922416333,
+        "in_place_rebase_ns": 43608684083,
+        "admission_transactions": 3234,
+        "candidate_objects": 411560,
+        "candidate_bytes": 566840015,
+        "snapshot_database_calls": 703315,
+        "metadata_normalization_ns": 67099702363,
+        "root_sync_ns": 631722917
+      },
+      "outer": {
+        "external_process_wall_ns": 187615033666,
+        "runtime_preparation_ns": 424464875,
+        "preparation_ns": 512879958,
+        "product_status": "pass",
+        "harness_status": "pending-validation",
+        "cleanup_status": null,
+        "input_identity": "d1dccf7829ac95307fca610135c2b305cf550d6a9e5f6f06039f689f3884b3e1"
+      }
+    },
+    {
+      "seed": 3,
+      "source": "fbf32e84662d00993c033515e113437965395494",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/tiny-bulk-create-500-s3-performance-b59e39bbb7fe",
+      "raw_sha256": "6d3a271185b2e27266a533746f30a53ce4ace84b42e077f8b423e478c78e154c",
+      "phases": {
+        "create": 8731208,
+        "exec": 95259854875,
+        "commit": 95493083375,
+        "visibility": 489333,
+        "end": 160476166
+      },
+      "lifecycle_ns": 190922634957,
+      "metrics": {
+        "spool_write_ns": 13171703521,
+        "spool_write_open_count": 100000,
+        "content_ns": 20584660667,
+        "namespace_ns": 11606930917,
+        "in_place_rebase_ns": 44215020417,
+        "admission_transactions": 3234,
+        "candidate_objects": 411662,
+        "candidate_bytes": 566848352,
+        "snapshot_database_calls": 703315,
+        "metadata_normalization_ns": 65043902863,
+        "root_sync_ns": 491788875
+      },
+      "outer": {
+        "external_process_wall_ns": 191745336541,
+        "runtime_preparation_ns": 388390209,
+        "preparation_ns": 483670333,
+        "product_status": "pass",
+        "harness_status": "pending-validation",
+        "cleanup_status": null,
+        "input_identity": "6bca5a09716d254b395e05011e8065caef802530134ad4b90640f9899958a777"
+      }
+    }
+  ],
+  "phase_medians_ns": {
+    "create": 10112292,
+    "exec": 95259854875,
+    "commit": 93181066292,
+    "visibility": 241709,
+    "end": 160476166
+  },
+  "lifecycle_median_ns": 188072283626,
+  "metric_medians": {
+    "spool_write_ns": 13171703521,
+    "spool_write_open_count": 100000,
+    "content_ns": 20780046500,
+    "namespace_ns": 10922416333,
+    "in_place_rebase_ns": 44215020417,
+    "admission_transactions": 3234,
+    "candidate_objects": 411614,
+    "candidate_bytes": 566843638,
+    "snapshot_database_calls": 703315,
+    "metadata_normalization_ns": 65043902863,
+    "root_sync_ns": 590050792
+  },
+  "historical_source_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/namespace/issue11-v3-terminal-all4-composite-r003-20260903/scenarios/namespace-100000/sample-003/result.json",
+  "historical_sha256": "19057e71b0f290e840b380fd1a768c6e3f6cf06b834885b7adabca059e613c3c",
+  "starting_notes_sha256": "099b89431bf793613d0a2bbec3405d3af35a4069ec628959887509548e40ce3d"
+}

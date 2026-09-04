@@ -1,0 +1,4 @@
+# Rebuildable executables and qualified native input remain local to the worktree.
+evidence/*/native-fixture
+evidence/*/segments
+evidence/*/fixture/

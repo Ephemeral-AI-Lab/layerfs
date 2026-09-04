@@ -1,0 +1,10 @@
+focused_check=pass
+plan_ns=190303541
+generate_and_stage_ns=833903291
+files=100000
+bytes=524288000
+segments=126
+allocated_bytes=524288000
+independent_regenerate_compare_ns=316481500
+cleanup_ns=571631250
+status=pass

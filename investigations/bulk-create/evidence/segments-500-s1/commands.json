@@ -1,0 +1,36 @@
+[
+  {
+    "label": "source",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "elapsed_ns": 9416041,
+    "exit_code": 0
+  },
+  {
+    "label": "build",
+    "argv": [
+      "rustc",
+      "--edition=2021",
+      "-O",
+      "investigations/bulk-create/segments.rs",
+      "-o",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/segments-500-s1/segments"
+    ],
+    "elapsed_ns": 1321816708,
+    "exit_code": 0
+  },
+  {
+    "label": "performance",
+    "argv": [
+      "/usr/bin/time",
+      "-l",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/segments-500-s1/segments",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/segments-500-s1/scratch"
+    ],
+    "elapsed_ns": 2103601666,
+    "exit_code": 0
+  }
+]

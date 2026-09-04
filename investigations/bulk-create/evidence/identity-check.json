@@ -1,0 +1,11 @@
+{
+  "workload_binary_sha256": "2aef10316bcc83888139bfcb844535c02a88ff42395b45fef6b9280cb61cc759",
+  "qualified_witness_manifest_sha256": "403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80",
+  "witness_reference": "../layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/tiny-bulk-create-500-s1-performance-668133342791/preparation/master-input-manifest.tsv",
+  "status": "pass",
+  "scopes": [
+    "sealed helper equals corrected binary",
+    "generated witness manifest equals qualified input",
+    "owned runtime containers and segment scratch absent"
+  ]
+}

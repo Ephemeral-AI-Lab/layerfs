@@ -1,0 +1,196 @@
+[
+  {
+    "label": "source",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "elapsed_ns": 9849333,
+    "exit_code": 0
+  },
+  {
+    "label": "reused-preparation",
+    "argv": [
+      "shasum",
+      "-a",
+      "256",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/native-500-s1/prepare.stdout"
+    ],
+    "elapsed_ns": 75392208,
+    "exit_code": 0
+  },
+  {
+    "label": "create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-feasibility-7f1763dee4ed",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--mount",
+      "type=volume,destination=/native",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 191781458,
+    "exit_code": 0
+  },
+  {
+    "label": "environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-feasibility-7f1763dee4ed"
+    ],
+    "elapsed_ns": 22716500,
+    "exit_code": 0
+  },
+  {
+    "label": "copy",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/native-500-s1/fixture/.",
+      "layerfs-feasibility-7f1763dee4ed:/native"
+    ],
+    "elapsed_ns": 85780625,
+    "exit_code": 0
+  },
+  {
+    "label": "prepare-root",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-feasibility-7f1763dee4ed",
+      "sh",
+      "-c",
+      "chmod 0750 /native && touch -d @1700000000 /native"
+    ],
+    "elapsed_ns": 89605542,
+    "exit_code": 0
+  },
+  {
+    "label": "helper-identity",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-feasibility-7f1763dee4ed",
+      "sha256sum",
+      "/usr/local/bin/fs-benchmark-workload"
+    ],
+    "elapsed_ns": 76194250,
+    "exit_code": 0
+  },
+  {
+    "label": "qualify",
+    "argv": [
+      "docker",
+      "exec",
+      "-w",
+      "/native",
+      "layerfs-feasibility-7f1763dee4ed",
+      "fs-benchmark-workload",
+      "workspace-verify-tree",
+      "tiny-bulk-create-500",
+      "1",
+      "0"
+    ],
+    "elapsed_ns": 66140542,
+    "exit_code": 0
+  },
+  {
+    "label": "before",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-feasibility-7f1763dee4ed",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current; stat -f -c %T /native"
+    ],
+    "elapsed_ns": 54674375,
+    "exit_code": 0
+  },
+  {
+    "label": "performance",
+    "argv": [
+      "docker",
+      "exec",
+      "-w",
+      "/native",
+      "layerfs-feasibility-7f1763dee4ed",
+      "fs-benchmark-workload",
+      "workspace-apply",
+      "tiny-bulk-create-500",
+      "1",
+      "0",
+      "performance"
+    ],
+    "elapsed_ns": 2631917208,
+    "exit_code": 0
+  },
+  {
+    "label": "after",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-feasibility-7f1763dee4ed",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current; stat -f -c %T /native"
+    ],
+    "elapsed_ns": 56642792,
+    "exit_code": 0
+  },
+  {
+    "label": "verify",
+    "argv": [
+      "docker",
+      "exec",
+      "-w",
+      "/native",
+      "layerfs-feasibility-7f1763dee4ed",
+      "fs-benchmark-workload",
+      "workspace-verify-tree",
+      "tiny-bulk-create-500",
+      "1",
+      "1"
+    ],
+    "elapsed_ns": 5638904625,
+    "exit_code": 0
+  },
+  {
+    "label": "cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-feasibility-7f1763dee4ed"
+    ],
+    "elapsed_ns": 2332928375,
+    "exit_code": 0
+  },
+  {
+    "label": "remaining",
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "name=layerfs-feasibility-7f1763dee4ed"
+    ],
+    "elapsed_ns": 29794708,
+    "exit_code": 0
+  }
+]

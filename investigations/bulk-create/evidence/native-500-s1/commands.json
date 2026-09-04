@@ -1,0 +1,133 @@
+[
+  {
+    "label": "source",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "elapsed_ns": 9676542,
+    "exit_code": 0
+  },
+  {
+    "label": "build-fixture-helper",
+    "argv": [
+      "rustc",
+      "--edition=2021",
+      "-O",
+      "investigations/bulk-create/native_fixture.rs",
+      "-o",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/native-500-s1/native-fixture"
+    ],
+    "elapsed_ns": 2315802084,
+    "exit_code": 0
+  },
+  {
+    "label": "prepare",
+    "argv": [
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/native-500-s1/native-fixture",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/native-500-s1/fixture"
+    ],
+    "elapsed_ns": 3251477750,
+    "exit_code": 0
+  },
+  {
+    "label": "create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-feasibility-14137a97f43a",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--mount",
+      "type=volume,destination=/native",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 206281542,
+    "exit_code": 0
+  },
+  {
+    "label": "environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-feasibility-14137a97f43a"
+    ],
+    "elapsed_ns": 23434792,
+    "exit_code": 0
+  },
+  {
+    "label": "copy",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/native-500-s1/fixture/.",
+      "layerfs-feasibility-14137a97f43a:/native"
+    ],
+    "elapsed_ns": 81609916,
+    "exit_code": 0
+  },
+  {
+    "label": "helper-identity",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-feasibility-14137a97f43a",
+      "sha256sum",
+      "/usr/local/bin/fs-benchmark-workload"
+    ],
+    "elapsed_ns": 57599709,
+    "exit_code": 0
+  },
+  {
+    "label": "qualify",
+    "argv": [
+      "docker",
+      "exec",
+      "-w",
+      "/native",
+      "layerfs-feasibility-14137a97f43a",
+      "fs-benchmark-workload",
+      "workspace-verify-tree",
+      "tiny-bulk-create-500",
+      "1",
+      "0"
+    ],
+    "elapsed_ns": 55988917,
+    "exit_code": 1
+  },
+  {
+    "label": "cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-feasibility-14137a97f43a"
+    ],
+    "elapsed_ns": 265293208,
+    "exit_code": 0
+  },
+  {
+    "label": "remaining",
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "name=layerfs-feasibility-14137a97f43a"
+    ],
+    "elapsed_ns": 24747709,
+    "exit_code": 0
+  }
+]
