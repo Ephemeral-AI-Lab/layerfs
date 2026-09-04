@@ -381,6 +381,16 @@ impl ProxyClient {
         }
         if first_error.is_none() {
             self.pending.store(0, Ordering::Release);
+        } else if let Ok(mut cache) = self.cache.lock() {
+            // A deferred failure has no reliable inode attribution. Previously
+            // acknowledged optimistic sizes/names/reads must be fetched again.
+            // The caller already holds gate; do not recurse through invalidate_file.
+            // Keep pending mutations and the original error/fence semantics intact.
+            cache.attrs.clear();
+            cache.directories.clear();
+            for (_, read) in std::mem::take(&mut cache.read_ahead) {
+                self.read_metrics.note_unused(read.bytes.len().saturating_sub(read.served) as u64);
+            }
         }
         first_error.map_or(Ok(()), Err)
     }
@@ -1588,6 +1598,55 @@ mod tests {
             write_response(&mut server, &Response::Attr(new)).unwrap();
             assert_eq!(request.join().unwrap().unwrap(), new);
         });
+    }
+
+    #[test]
+    fn deferred_write_error_invalidates_optimistic_observations() {
+        for failure in [PortError::Io, PortError::NoSpace] {
+            let (stream, mut server) = stream_pair();
+            server.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+            let original = Attr {node:NodeId(2),size:0,kind:Kind::File,mode:0o640,
+                links:1,mtime_seconds:0,mtime_nanoseconds:0};
+            let host = std::thread::spawn(move || {
+                assert!(matches!(read_request(&mut server).unwrap(),Request::Attr(NodeId(2))));
+                write_response(&mut server,&Response::Attr(original)).unwrap();
+                assert!(matches!(read_request(&mut server).unwrap(),Request::Write(NodeId(2),0,bytes) if bytes==vec![7;4096]));
+                // Backend rejects the append and keeps its original zero length.
+                assert!(matches!(read_request(&mut server).unwrap(),Request::Fsync(Some(NodeId(2)))));
+                write_response(&mut server,&Response::Error(failure)).unwrap();
+                assert!(matches!(read_request(&mut server).unwrap(),Request::Attr(NodeId(2))));
+                write_response(&mut server,&Response::Attr(original)).unwrap();
+                assert!(matches!(read_request(&mut server).unwrap(),Request::Fence));
+                write_response(&mut server,&Response::Unit).unwrap();
+            });
+            let client = ProxyClient {
+                streams:vec![Mutex::new(stream)],next:AtomicUsize::new(0),
+                cache:Mutex::new(Cache::default()),write_buffer:Mutex::new(None),
+                reservation:Mutex::new(Reservation::default()),gate:RwLock::new(()),
+                callbacks:RwLock::new(()),paused:AtomicBool::new(false),pending:AtomicU64::new(0),
+                metrics:AtomicFuseWriteMetrics::default(),read_metrics:AtomicFuseReadMetrics::default(),
+                #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+                notifier:std::sync::OnceLock::new(),
+            };
+            assert_eq!(client.attr(NodeId(2)).unwrap(),original);
+            client.remember_directory(NodeId(1),&[(NodeId(2),Kind::File,b"file".to_vec())]).unwrap();
+            client.cache.lock().unwrap().read_ahead.insert(NodeId(3),ReadAhead {offset:0,bytes:vec![1,2,3],served:0});
+            assert_eq!(client.write(NodeId(2),0,&[7;4096]).unwrap(),4096);
+            assert_eq!(client.attr(NodeId(2)).unwrap().size,4096);
+            assert_eq!(client.fsync(Some(NodeId(2))),Err(failure));
+            assert_eq!(client.pending.load(Ordering::Acquire),1);
+            {
+                let cache=client.cache.lock().unwrap();
+                assert!(cache.attrs.is_empty());
+                assert!(cache.directories.is_empty());
+                assert!(cache.read_ahead.is_empty());
+            }
+            assert_eq!(client.attr(NodeId(2)).unwrap(),original);
+            client.barrier().unwrap();
+            assert_eq!(client.pending.load(Ordering::Acquire),0);
+            drop(client);
+            host.join().unwrap();
+        }
     }
 
     #[test]
