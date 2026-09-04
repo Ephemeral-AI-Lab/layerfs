@@ -1,0 +1,11 @@
+{
+  "exit_code": 0,
+  "wall_ns": 289399541,
+  "recorded_at_utc": "2026-09-04T05:08:41.280447+00:00",
+  "source_after": {
+    "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+    "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68"
+  },
+  "source_unchanged": true,
+  "scope": "One selected stdlib helper test; no live proof, product API call or performance measurement"
+}

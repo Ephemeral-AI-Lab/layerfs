@@ -1,0 +1,97 @@
+{
+  "schema": "fs-bench-pro-scoped-builds-v1",
+  "selections": {
+    "family:directory_construction_traversal:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain completed source-bound performance with unchanged product, timed family operations and independent fixture/expected definitions; source bridge permits only the separately reviewed sampler-body observation change."
+    },
+    "family:payload_create_read:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain completed source-bound performance with unchanged product, timed family operations and independent fixture/expected definitions; source bridge permits only the separately reviewed sampler-body observation change."
+    },
+    "family:tiny_file_churn:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain completed source-bound performance with unchanged product, timed family operations and independent fixture/expected definitions; source bridge permits only the separately reviewed sampler-body observation change."
+    },
+    "slot:payload-create-1m:1:verify": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this already-passing independent verification slot under its original sealed source and image; do not rerun or relabel the proof."
+    },
+    "slot:tiny-bulk-delete-500:1:verify": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this already-passing independent verification slot under its original sealed source and image; do not rerun or relabel the proof."
+    },
+    "slot:tiny-stat-1:1:performance": {
+      "assets": "assets-b8c2ad4b",
+      "build_manifest_sha256": "2ae27960652337d2c77326e6df792491a75c8aeb1c39607e2cf47ffa96b750f4",
+      "reason": "Recollect only this slot after its original fbf observation ended with an incomplete cgroup sample row; original raw product pass remains retained with invalidated observation evidence."
+    }
+  },
+  "verification_compatibility": [
+    {
+      "family_id": "payload_create_read",
+      "performance_revision": "fbf32e84662d00993c033515e113437965395494",
+      "reviewed_impact": "Coordinator-reviewed observer/verifier-only bridge: product seal and all normative contracts match; timed family operations, generators, fixture declarations and independent expected-state definitions are unchanged. The only excluded registry function body is sample_resources, now emitting each cgroup row atomically. Its exact old/new bodies are separately hashed; the signature and all surrounding registry source match. New host verification retains complete history genesis and canonical usage/union accounting. Each execution keeps its actual source/image identity; the one old incomplete observation is explicitly invalidated, not rescued by this bridge.",
+      "unchanged_paths": {
+        "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": {
+          "comparison": "exclude-sample_resources-body-v1",
+          "function_sha256": {
+            "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+            "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
+          },
+          "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
+        }
+      },
+      "verification_revision": "b8c2ad4bf4fa0415fd49d57abea15729b33a4284"
+    },
+    {
+      "family_id": "tiny_file_churn",
+      "performance_revision": "fbf32e84662d00993c033515e113437965395494",
+      "reviewed_impact": "Coordinator-reviewed observer/verifier-only bridge: product seal and all normative contracts match; timed family operations, generators, fixture declarations and independent expected-state definitions are unchanged. The only excluded registry function body is sample_resources, now emitting each cgroup row atomically. Its exact old/new bodies are separately hashed; the signature and all surrounding registry source match. New host verification retains complete history genesis and canonical usage/union accounting. Each execution keeps its actual source/image identity; the one old incomplete observation is explicitly invalidated, not rescued by this bridge.",
+      "unchanged_paths": {
+        "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": {
+          "comparison": "exclude-sample_resources-body-v1",
+          "function_sha256": {
+            "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+            "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
+          },
+          "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
+        }
+      },
+      "verification_revision": "b8c2ad4bf4fa0415fd49d57abea15729b33a4284"
+    },
+    {
+      "family_id": "directory_construction_traversal",
+      "performance_revision": "fbf32e84662d00993c033515e113437965395494",
+      "reviewed_impact": "Coordinator-reviewed observer/verifier-only bridge: product seal and all normative contracts match; timed family operations, generators, fixture declarations and independent expected-state definitions are unchanged. The only excluded registry function body is sample_resources, now emitting each cgroup row atomically. Its exact old/new bodies are separately hashed; the signature and all surrounding registry source match. New host verification retains complete history genesis and canonical usage/union accounting. Each execution keeps its actual source/image identity; the one old incomplete observation is explicitly invalidated, not rescued by this bridge.",
+      "unchanged_paths": {
+        "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": {
+          "comparison": "exclude-sample_resources-body-v1",
+          "function_sha256": {
+            "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+            "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
+          },
+          "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
+        }
+      },
+      "verification_revision": "b8c2ad4bf4fa0415fd49d57abea15729b33a4284"
+    }
+  ]
+}

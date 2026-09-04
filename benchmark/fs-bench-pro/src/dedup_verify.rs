@@ -1,7 +1,7 @@
 //! Verification-only independent CDC and flat extent oracle. Never called by performance.
 use layerfs_content::ObjectId;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -898,6 +898,7 @@ pub(crate) fn verify_transcripts(
 #[derive(Default)]
 pub(crate) struct HistoryAccounting {
     payloads: BTreeMap<ObjectId, u64>,
+    canonical_objects: BTreeMap<ObjectId, super::workspace_verify::CanonicalObject>,
     recurring_roots: BTreeMap<usize, ObjectId>,
     snapshots: usize,
 }
@@ -908,6 +909,7 @@ impl HistoryAccounting {
         case: &super::workload_source::workspace_common::Case,
         step: usize,
         actual: &super::workspace_verify::SnapshotEvidence,
+        canonical_rows: &mut dyn Write,
     ) -> Result<super::workload_source::workspace_common::Receipt> {
         use super::workload_source::{dedup_workloads, workspace_common::Receipt};
         if case.family != "dedup_branch_history" || step != self.snapshots || step > case.tier {
@@ -930,6 +932,16 @@ impl HistoryAccounting {
         }
         if logical != 1_048_576 {
             return Err("history state is not one MiB".into());
+        }
+        if actual
+            .canonical_objects
+            .iter()
+            .filter(|(_, object)| object.regular_payload())
+            .map(|(id, _)| *id)
+            .collect::<BTreeSet<_>>()
+            != current.keys().copied().collect()
+        {
+            return Err("typed regular payload union differs from verified extents".into());
         }
         let new_bytes: u64 = current
             .iter()
@@ -964,9 +976,125 @@ impl HistoryAccounting {
                 return Err("retained payload identity length changed".into());
             }
         }
+        let canonical_root = actual
+            .receipt
+            .get("canonical_root")
+            .ok_or("history canonical root")?;
+        let mut new_canonical_objects = 0u64;
+        let mut new_canonical_bytes = 0u64;
+        for (id, object) in &actual.canonical_objects {
+            let changed;
+            let retained = match self.canonical_objects.entry(*id) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    new_canonical_objects += 1;
+                    new_canonical_bytes = new_canonical_bytes
+                        .checked_add(object.canonical_bytes)
+                        .ok_or("new canonical bytes overflow")?;
+                    changed = true;
+                    entry.insert(*object)
+                }
+                std::collections::btree_map::Entry::Occupied(entry) => {
+                    let retained = entry.into_mut();
+                    if retained.role != object.role
+                        || retained.canonical_bytes != object.canonical_bytes
+                    {
+                        return Err("retained canonical identity role/length changed".into());
+                    }
+                    let merged_regular = retained.regular_file || object.regular_file;
+                    let merged_metadata = retained.metadata_value || object.metadata_value;
+                    changed = merged_regular != retained.regular_file
+                        || merged_metadata != retained.metadata_value;
+                    retained.regular_file = merged_regular;
+                    retained.metadata_value = merged_metadata;
+                    retained
+                }
+            };
+            if changed {
+                writeln!(
+                    canonical_rows,
+                    "{step}\t{canonical_root}\t{id}\t{:?}\t{}\t{}\t{}",
+                    retained.role,
+                    retained.canonical_bytes,
+                    u8::from(retained.regular_file),
+                    u8::from(retained.metadata_value)
+                )?;
+            }
+        }
+        canonical_rows.flush()?;
         self.snapshots += 1;
         let mut receipt = Receipt::new();
+        receipt.insert("canonical_root".into(), canonical_root.clone());
+        receipt.insert("canonical_union_status".into(), "pass".into());
+        receipt.insert(
+            "canonical_union_encoding".into(),
+            "first-seen-or-usage-expansion-tsv-gzip-v1".into(),
+        );
+        receipt.insert("canonical_usage_scope".into(), "regular_payload=Chunk+regular_file; non_payload=complement; metadata_value may overlap either".into());
+        let mut role_totals = BTreeMap::new();
+        let mut totals = [0u64; 8];
+        for object in self.canonical_objects.values() {
+            let role = role_totals.entry(object.role).or_insert((0u64, 0u64));
+            role.0 += 1;
+            role.1 = role
+                .1
+                .checked_add(object.canonical_bytes)
+                .ok_or("retained role bytes overflow")?;
+            for (index, included) in [
+                true,
+                object.regular_payload(),
+                !object.regular_payload(),
+                object.metadata_value,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                if included {
+                    totals[index * 2] += 1;
+                    totals[index * 2 + 1] = totals[index * 2 + 1]
+                        .checked_add(object.canonical_bytes)
+                        .ok_or("retained canonical bytes overflow")?;
+                }
+            }
+        }
+        for (index, prefix) in [
+            "retained_canonical",
+            "retained_regular_payload_canonical",
+            "retained_non_payload_canonical",
+            "retained_metadata_value_canonical",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            receipt.insert(format!("{prefix}_objects"), totals[index * 2].to_string());
+            receipt.insert(format!("{prefix}_bytes"), totals[index * 2 + 1].to_string());
+        }
+        for (role, (objects, bytes)) in role_totals {
+            receipt.insert(
+                format!("retained_canonical_{role:?}_objects"),
+                objects.to_string(),
+            );
+            receipt.insert(
+                format!("retained_canonical_{role:?}_bytes"),
+                bytes.to_string(),
+            );
+        }
+        let current_canonical_bytes =
+            actual
+                .canonical_objects
+                .values()
+                .try_fold(0u64, |total, object| {
+                    total
+                        .checked_add(object.canonical_bytes)
+                        .ok_or("current canonical bytes overflow")
+                })?;
         for (key, value) in [
+            ("step_new_canonical_objects", new_canonical_objects),
+            ("step_new_canonical_bytes", new_canonical_bytes),
+            (
+                "current_canonical_objects",
+                actual.canonical_objects.len() as u64,
+            ),
+            ("current_canonical_bytes", current_canonical_bytes),
             ("retained_snapshot_count", self.snapshots as u64),
             ("created_commit_count", step as u64),
             (

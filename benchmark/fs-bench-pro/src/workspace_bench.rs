@@ -1176,100 +1176,158 @@ fn run_case(
             observed(&client, &mut verifier_operation)?;
             let mut accounting = super::dedup_verify::HistoryAccounting::default();
             let genesis_root = genesis_root.ok_or("missing history genesis root")?;
-            let genesis = super::workspace_verify::verify_root(
+            let genesis_entries = registry::fixture(case, seed)?;
+            let mut genesis = super::workspace_verify::verify_root(
                 &reopened.snapshot_reader(genesis_root),
                 genesis_root,
-                &registry::fixture(case, seed)?,
+                &genesis_entries,
+            )?;
+            super::workspace_verify::persist_snapshot(
+                &genesis_entries,
+                &mut genesis,
+                &root.join("history-0"),
             )?;
             emit(
-                "history-accounting",
+                "history-canonical",
                 &[
                     ("step", "0".into()),
-                    (
-                        "receipt",
-                        quote(&format!("{:?}", accounting.observe(case, 0, &genesis)?)),
-                    ),
+                    ("root", quote(&genesis_root.to_string())),
+                    ("receipt", quote(&format!("{:?}", genesis.receipt))),
                 ],
             );
-            let base_layer = records[&history[0]].base_layer_id;
-            let base_branch = client.fork_branch(
-                EntityName::new("verify-genesis")?,
-                LocalForkSource::Layer {
-                    layer_id: base_layer,
+            let genesis_transcript =
+                super::dedup_verify::verify_transcripts(case, seed, 0, &genesis)?;
+            emit(
+                "history-transcript",
+                &[
+                    ("step", "0".into()),
+                    ("receipt", quote(&format!("{genesis_transcript:?}"))),
+                ],
+            );
+            super::workspace_verify::write_gzip(
+                &root.join("history-0/canonical-verification/history-canonical-union.tsv.gz"),
+                |canonical_rows| {
+                    writeln!(canonical_rows, "step\troot\tobject_id\trole\tcanonical_bytes\tregular_file\tmetadata_value")?;
+                    emit(
+                        "history-accounting",
+                        &[
+                            ("step", "0".into()),
+                            (
+                                "receipt",
+                                quote(&format!(
+                                    "{:?}",
+                                    accounting.observe(case, 0, &genesis, canonical_rows)?
+                                )),
+                            ),
+                        ],
+                    );
+                    let base_layer = records[&history[0]].base_layer_id;
+                    let base_branch = client.fork_branch(
+                        EntityName::new("verify-genesis")?,
+                        LocalForkSource::Layer {
+                            layer_id: base_layer,
+                        },
+                    )?;
+                    let base_session = client.create_workspace_session(CreateWorkspaceSession {
+                        branch_id: base_branch,
+                        placement: case_placement(
+                            &Some(container.clone()),
+                            root,
+                            seed as usize,
+                            "history-genesis",
+                        ),
+                        projection: Some(WorkspaceProjection::Fuse),
+                    })?;
+                    native_verify(&client, base_session.id, case, seed, 0)?;
+                    client.end_workspace_session(base_session.id, EndWorkspaceMode::Clean)?;
+                    observed(&client, &mut verifier_operation)?;
+                    for (offset, commit_id) in history.iter().enumerate() {
+                        let step = offset + 1;
+                        let record = &records[commit_id];
+                        let expected_parent = if offset == 0 {
+                            None
+                        } else {
+                            Some(history[offset - 1])
+                        };
+                        if record.parent_commit_id != expected_parent {
+                            return Err("history parent topology".into());
+                        }
+                        let fork = client.fork_branch(
+                            EntityName::new(format!("verify-history-{step}"))?,
+                            LocalForkSource::Branch {
+                                branch_id: branch,
+                                commit_id: *commit_id,
+                            },
+                        )?;
+                        let expected = registry::expected(case, seed, step)?;
+                        let snapshot = super::workspace_verify::verify(
+                            &reopened,
+                            fork,
+                            &expected,
+                            &root.join(format!("history-{step}")),
+                        )?;
+                        emit(
+                            "history-canonical",
+                            &[
+                                ("step", step.to_string()),
+                                (
+                                    "root",
+                                    quote(
+                                        snapshot
+                                            .receipt
+                                            .get("canonical_root")
+                                            .ok_or("historical canonical root")?,
+                                    ),
+                                ),
+                                ("receipt", quote(&format!("{:?}", snapshot.receipt))),
+                            ],
+                        );
+                        let transcript =
+                            super::dedup_verify::verify_transcripts(case, seed, step, &snapshot)?;
+                        emit(
+                            "history-transcript",
+                            &[
+                                ("step", step.to_string()),
+                                ("receipt", quote(&format!("{transcript:?}"))),
+                            ],
+                        );
+                        emit(
+                            "history-accounting",
+                            &[
+                                ("step", step.to_string()),
+                                ("commit_id", quote(&commit_id.to_string())),
+                                (
+                                    "receipt",
+                                    quote(&format!(
+                                        "{:?}",
+                                        accounting.observe(
+                                            case,
+                                            step,
+                                            &snapshot,
+                                            canonical_rows
+                                        )?
+                                    )),
+                                ),
+                            ],
+                        );
+                        let historical =
+                            client.create_workspace_session(CreateWorkspaceSession {
+                                branch_id: fork,
+                                placement: case_placement(
+                                    &Some(container.clone()),
+                                    root,
+                                    seed as usize,
+                                    &format!("{}-history-{step}", case.id),
+                                ),
+                                projection: Some(WorkspaceProjection::Fuse),
+                            })?;
+                        native_verify(&client, historical.id, case, seed, step)?;
+                        client.end_workspace_session(historical.id, EndWorkspaceMode::Clean)?;
+                        observed(&client, &mut verifier_operation)?;
+                    }
+                    Ok(())
                 },
             )?;
-            let base_session = client.create_workspace_session(CreateWorkspaceSession {
-                branch_id: base_branch,
-                placement: case_placement(
-                    &Some(container.clone()),
-                    root,
-                    seed as usize,
-                    "history-genesis",
-                ),
-                projection: Some(WorkspaceProjection::Fuse),
-            })?;
-            native_verify(&client, base_session.id, case, seed, 0)?;
-            client.end_workspace_session(base_session.id, EndWorkspaceMode::Clean)?;
-            observed(&client, &mut verifier_operation)?;
-            for (offset, commit_id) in history.iter().enumerate() {
-                let step = offset + 1;
-                let record = &records[commit_id];
-                let expected_parent = if offset == 0 {
-                    None
-                } else {
-                    Some(history[offset - 1])
-                };
-                if record.parent_commit_id != expected_parent {
-                    return Err("history parent topology".into());
-                }
-                let fork = client.fork_branch(
-                    EntityName::new(format!("verify-history-{step}"))?,
-                    LocalForkSource::Branch {
-                        branch_id: branch,
-                        commit_id: *commit_id,
-                    },
-                )?;
-                let expected = registry::expected(case, seed, step)?;
-                let snapshot = super::workspace_verify::verify(
-                    &reopened,
-                    fork,
-                    &expected,
-                    &root.join(format!("history-{step}")),
-                )?;
-                let transcript =
-                    super::dedup_verify::verify_transcripts(case, seed, step, &snapshot)?;
-                emit(
-                    "history-transcript",
-                    &[
-                        ("step", step.to_string()),
-                        ("receipt", quote(&format!("{transcript:?}"))),
-                    ],
-                );
-                emit(
-                    "history-accounting",
-                    &[
-                        ("step", step.to_string()),
-                        ("commit_id", quote(&commit_id.to_string())),
-                        (
-                            "receipt",
-                            quote(&format!("{:?}", accounting.observe(case, step, &snapshot)?)),
-                        ),
-                    ],
-                );
-                let historical = client.create_workspace_session(CreateWorkspaceSession {
-                    branch_id: fork,
-                    placement: case_placement(
-                        &Some(container.clone()),
-                        root,
-                        seed as usize,
-                        &format!("{}-history-{step}", case.id),
-                    ),
-                    projection: Some(WorkspaceProjection::Fuse),
-                })?;
-                native_verify(&client, historical.id, case, seed, step)?;
-                client.end_workspace_session(historical.id, EndWorkspaceMode::Clean)?;
-                observed(&client, &mut verifier_operation)?;
-            }
         }
         observed(&client, &mut verifier_operation)?;
         if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {

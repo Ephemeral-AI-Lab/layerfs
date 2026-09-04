@@ -587,14 +587,16 @@ impl FilesystemPort for ProxyClient {
     fn unlink(&self, parent: NodeId, name: &[u8], directory: bool) -> PortResult<()> {
         let _callback = self.enter_callback()?;
         self.flush_write()?;
-        let pending = self
-            .cache
-            .lock()
-            .map_err(|_| PortError::Io)?
-            .directories
-            .get(&parent)
-            .and_then(|directory| directory.entries.get(name))
-            .map(|(node, _)| *node);
+        let (parent_cached, pending) = {
+            let cache = self.cache.lock().map_err(|_| PortError::Io)?;
+            let parent_directory = cache.directories.get(&parent);
+            (
+                parent_directory.is_some(),
+                parent_directory
+                    .and_then(|directory| directory.entries.get(name))
+                    .map(|(node, _)| *node),
+            )
+        };
         if let Some(node) = pending {
             self.flush_pending_create(node)?;
         }
@@ -603,6 +605,12 @@ impl FilesystemPort for ProxyClient {
             unit(self.exchange(Request::Unlink(parent, name.to_vec(), true))?)?;
         } else {
             self.queue_unlink(parent, name)?;
+            // Without a complete directory cache, a subsequent lookup reaches
+            // the host. Publish this deletion before acknowledging it so that
+            // the old binding cannot reappear until a later unrelated barrier.
+            if !parent_cached {
+                self.barrier()?;
+            }
         }
         let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
         let removed = cache
@@ -1432,6 +1440,88 @@ mod tests {
     use crate::protocol::{read_request, write_response};
     use std::net::{TcpListener, TcpStream};
     use std::sync::Arc;
+
+    #[test]
+    fn acknowledged_unlink_is_absent_with_and_without_parent_cache() {
+        for parent_cached in [false, true] {
+            let (stream, mut server) = stream_pair();
+            server
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
+            let original = Attr {
+                node: NodeId(2),
+                size: 6,
+                kind: Kind::File,
+                mode: 0o600,
+                links: 1,
+                mtime_seconds: 0,
+                mtime_nanoseconds: 0,
+            };
+            let host = std::thread::spawn(move || {
+                let mut exists = true;
+                let mut removed = false;
+                while let Ok(request) = read_request(&mut server) {
+                    match request {
+                        Request::Lookup(NodeId(1), name) if name == b"deleted" => {
+                            write_response(
+                                &mut server,
+                                &if exists {
+                                    Response::Attr(original)
+                                } else {
+                                    Response::Error(PortError::NotFound)
+                                },
+                            )
+                            .unwrap();
+                        }
+                        Request::UnlinkBatch(entries) => {
+                            assert_eq!(entries, vec![(NodeId(1), b"deleted".to_vec())]);
+                            exists = false;
+                            removed = true;
+                        }
+                        Request::Fence => write_response(&mut server, &Response::Unit).unwrap(),
+                        _ => panic!("unexpected unlink visibility request"),
+                    }
+                }
+                removed
+            });
+            let client = ProxyClient {
+                streams: vec![Mutex::new(stream)],
+                next: AtomicUsize::new(0),
+                cache: Mutex::new(Cache::default()),
+                write_buffer: Mutex::new(None),
+                reservation: Mutex::new(Reservation::default()),
+                gate: RwLock::new(()),
+                callbacks: RwLock::new(()),
+                paused: AtomicBool::new(false),
+                pending: AtomicU64::new(0),
+                metrics: AtomicFuseWriteMetrics::default(),
+                read_metrics: AtomicFuseReadMetrics::default(),
+                #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+                notifier: std::sync::OnceLock::new(),
+            };
+            assert_eq!(client.lookup(NodeId(1), b"deleted").unwrap(), original);
+            if parent_cached {
+                client
+                    .remember_directory(
+                        NodeId(1),
+                        &[(original.node, Kind::File, b"deleted".to_vec())],
+                    )
+                    .unwrap();
+            }
+            client.unlink(NodeId(1), b"deleted", false).unwrap();
+            let lookup_after_ack = client.lookup(NodeId(1), b"deleted");
+            let queued = client.cache.lock().unwrap().pending_unlinks.len();
+            drop(client);
+            let host_removed = host.join().unwrap();
+            assert_eq!(
+                lookup_after_ack,
+                Err(PortError::NotFound),
+                "parent_cached={parent_cached}"
+            );
+            assert_eq!(host_removed, !parent_cached);
+            assert_eq!(queued, usize::from(parent_cached));
+        }
+    }
 
     #[test]
     fn metadata_cache_fill_is_inside_owner_pause_barrier() {

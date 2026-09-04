@@ -12,7 +12,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 use std::process::Stdio;
 
-fn write_gzip(path: &Path, write: impl FnOnce(&mut dyn Write) -> AnyResult<()>) -> AnyResult<()> {
+pub(crate) fn write_gzip(
+    path: &Path,
+    write: impl FnOnce(&mut dyn Write) -> AnyResult<()>,
+) -> AnyResult<()> {
     let output = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -56,6 +59,7 @@ pub(crate) struct SnapshotEvidence {
     pub receipt: Receipt,
     pub extents: BTreeMap<String, Vec<Extent>>,
     pub file_roots: BTreeMap<String, ObjectId>,
+    pub canonical_objects: BTreeMap<ObjectId, CanonicalObject>,
 }
 
 pub(crate) fn verify(
@@ -66,6 +70,15 @@ pub(crate) fn verify(
 ) -> AnyResult<SnapshotEvidence> {
     let pinned = store.pin_branch(branch)?;
     let mut result = verify_root(&pinned.reader, pinned.root, entries)?;
+    persist_snapshot(entries, &mut result, evidence)?;
+    Ok(result)
+}
+
+pub(crate) fn persist_snapshot(
+    entries: &[Entry],
+    result: &mut SnapshotEvidence,
+    evidence: &Path,
+) -> AnyResult<()> {
     let evidence = evidence.join("canonical-verification");
     if evidence.exists() {
         return Err("canonical verifier evidence already exists".into());
@@ -119,7 +132,7 @@ pub(crate) fn verify(
     for (key, value) in &result.receipt {
         writeln!(receipt, "{key}={value}")?;
     }
-    Ok(result)
+    Ok(())
 }
 
 pub(crate) fn verify_root(
@@ -323,7 +336,7 @@ pub(crate) fn verify_root(
     if table_inodes != namespace_inodes {
         return Err("canonical inode table has missing or unreachable entries".into());
     }
-    let mut receipt = typed_census(source, root)?;
+    let (mut receipt, canonical_objects) = typed_census(source, root)?;
     receipt.insert("verification_status".into(), "pass".into());
     receipt.insert("canonical_root".into(), root.to_string());
     receipt.insert("verified_paths".into(), entries.len().to_string());
@@ -354,6 +367,7 @@ pub(crate) fn verify_root(
         receipt,
         extents,
         file_roots,
+        canonical_objects,
     })
 }
 
@@ -440,7 +454,7 @@ fn verify_metadata(reader: &CoreReader<'_>, root: ObjectId, expected: &Entry) ->
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-enum Role {
+pub(crate) enum Role {
     Namespace,
     InodeTable,
     InodeRecord,
@@ -453,15 +467,35 @@ enum Role {
     Symlink,
 }
 
-pub(crate) fn typed_census(source: &dyn ObjectSource, root: ObjectId) -> AnyResult<Receipt> {
-    let mut pending = vec![(root, Role::Namespace)];
-    let mut seen = BTreeMap::new();
-    let mut totals = BTreeMap::<Role, (u64, u64)>::new();
-    while let Some((id, role)) = pending.pop() {
-        if let Some(previous) = seen.insert(id, role) {
-            if previous != role {
-                return Err("canonical object referenced with incompatible roles".into());
-            }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct CanonicalObject {
+    pub role: Role,
+    pub canonical_bytes: u64,
+    pub regular_file: bool,
+    pub metadata_value: bool,
+}
+impl CanonicalObject {
+    pub(crate) fn regular_payload(&self) -> bool {
+        self.role == Role::Chunk && self.regular_file
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+enum Origin {
+    Structure,
+    RegularFile,
+    MetadataValue,
+}
+
+pub(crate) fn typed_census(
+    source: &dyn ObjectSource,
+    root: ObjectId,
+) -> AnyResult<(Receipt, BTreeMap<ObjectId, CanonicalObject>)> {
+    let mut pending = vec![(root, Role::Namespace, Origin::Structure)];
+    let mut visits = BTreeSet::new();
+    let mut seen = BTreeMap::<ObjectId, CanonicalObject>::new();
+    while let Some((id, role, origin)) = pending.pop() {
+        if !visits.insert((id, role, origin)) {
             continue;
         }
         let objects = source.read_authenticated_objects(&[id])?;
@@ -470,37 +504,59 @@ pub(crate) fn typed_census(source: &dyn ObjectSource, root: ObjectId) -> AnyResu
         }
         let bytes = &objects[0].bytes;
         layerfs_content::authenticate_identity(bytes, id)?;
-        let total = totals.entry(role).or_default();
-        total.0 += 1;
-        total.1 += bytes.len() as u64;
+        let observed = CanonicalObject {
+            role,
+            canonical_bytes: bytes.len() as u64,
+            regular_file: origin == Origin::RegularFile,
+            metadata_value: origin == Origin::MetadataValue,
+        };
+        match seen.entry(id) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(observed);
+            }
+            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                let previous = entry.get_mut();
+                if previous.role != role || previous.canonical_bytes != observed.canonical_bytes {
+                    return Err(
+                        "canonical object referenced with incompatible roles/lengths".into(),
+                    );
+                }
+                previous.regular_file |= observed.regular_file;
+                previous.metadata_value |= observed.metadata_value;
+            }
+        }
         match role {
             Role::Namespace => pending.push((
                 directory::codec::decode_namespace_root(bytes)?.inode_table_root,
                 Role::InodeTable,
+                Origin::Structure,
             )),
             Role::InodeTable => match inode::codec::decode_inode_table_node(bytes)? {
-                inode::codec::InodeTableNodeV1::Leaf(entries) => {
-                    pending.extend(entries.into_iter().map(|(_, id)| (id, Role::InodeRecord)))
-                }
-                inode::codec::InodeTableNodeV1::Branch { children, .. } => {
-                    pending.extend(children.into_iter().map(|(_, id)| (id, Role::InodeTable)))
-                }
+                inode::codec::InodeTableNodeV1::Leaf(entries) => pending.extend(
+                    entries
+                        .into_iter()
+                        .map(|(_, id)| (id, Role::InodeRecord, Origin::Structure)),
+                ),
+                inode::codec::InodeTableNodeV1::Branch { children, .. } => pending.extend(
+                    children
+                        .into_iter()
+                        .map(|(_, id)| (id, Role::InodeTable, Origin::Structure)),
+                ),
             },
             Role::InodeRecord => {
                 let record = inode::codec::decode_inode_record(bytes)?;
-                pending.push((record.metadata_root, Role::Metadata));
-                pending.push((
-                    record.content_root,
-                    match record.kind {
-                        inode::InodeKind::RegularFile => Role::FileState,
-                        inode::InodeKind::Directory => Role::DirectoryState,
-                        inode::InodeKind::Symlink => Role::Symlink,
-                    },
-                ));
+                pending.push((record.metadata_root, Role::Metadata, Origin::Structure));
+                let (content_role, content_origin) = match record.kind {
+                    inode::InodeKind::RegularFile => (Role::FileState, Origin::RegularFile),
+                    inode::InodeKind::Directory => (Role::DirectoryState, Origin::Structure),
+                    inode::InodeKind::Symlink => (Role::Symlink, Origin::Structure),
+                };
+                pending.push((record.content_root, content_role, content_origin));
             }
             Role::DirectoryState => pending.push((
                 directory::codec::decode_directory_state(bytes)?.mapping_root,
                 Role::DirectoryNode,
+                Origin::Structure,
             )),
             Role::DirectoryNode => {
                 if let directory::codec::DirectoryNodeV1::Branch { children, .. } =
@@ -509,34 +565,41 @@ pub(crate) fn typed_census(source: &dyn ObjectSource, root: ObjectId) -> AnyResu
                     pending.extend(
                         children
                             .into_iter()
-                            .map(|(_, id)| (id, Role::DirectoryNode)),
+                            .map(|(_, id)| (id, Role::DirectoryNode, Origin::Structure)),
                     );
                 }
             }
             Role::Metadata => match metadata::codec::decode_metadata_node(bytes)? {
-                metadata::codec::MetadataNodeV1::Leaf { entries, .. } => pending.extend(
-                    entries
-                        .into_iter()
-                        .map(|entry| (entry.value_file_root, Role::FileState)),
-                ),
-                metadata::codec::MetadataNodeV1::Branch { children, .. } => {
-                    pending.extend(children.into_iter().map(|(_, id)| (id, Role::Metadata)))
+                metadata::codec::MetadataNodeV1::Leaf { entries, .. } => {
+                    pending.extend(entries.into_iter().map(|entry| {
+                        (
+                            entry.value_file_root,
+                            Role::FileState,
+                            Origin::MetadataValue,
+                        )
+                    }))
                 }
+                metadata::codec::MetadataNodeV1::Branch { children, .. } => pending.extend(
+                    children
+                        .into_iter()
+                        .map(|(_, id)| (id, Role::Metadata, Origin::Structure)),
+                ),
             },
             Role::FileState => pending.push((
                 extent_codec::decode_file_state(bytes)?.mapping_root,
                 Role::FileNode,
+                origin,
             )),
             Role::FileNode => match extent_codec::decode_node(bytes)? {
                 ExtentNodeV3::Leaf { extents, .. } => pending.extend(
                     extents
                         .into_iter()
-                        .map(|extent| (extent.payload_object_id, Role::Chunk)),
+                        .map(|extent| (extent.payload_object_id, Role::Chunk, origin)),
                 ),
                 ExtentNodeV3::Branch { children, .. } => pending.extend(
                     children
                         .into_iter()
-                        .map(|child| (child.child_object_id, Role::FileNode)),
+                        .map(|child| (child.child_object_id, Role::FileNode, origin)),
                 ),
             },
             Role::Chunk => {
@@ -547,14 +610,28 @@ pub(crate) fn typed_census(source: &dyn ObjectSource, root: ObjectId) -> AnyResu
             }
         }
     }
+    let mut totals = BTreeMap::<Role, (u64, u64)>::new();
+    let mut canonical_bytes = 0u64;
+    for object in seen.values() {
+        let total = totals.entry(object.role).or_default();
+        total.0 = total.0.checked_add(1).ok_or("canonical count overflow")?;
+        total.1 = total
+            .1
+            .checked_add(object.canonical_bytes)
+            .ok_or("canonical role bytes overflow")?;
+        canonical_bytes = canonical_bytes
+            .checked_add(object.canonical_bytes)
+            .ok_or("canonical bytes overflow")?;
+    }
     let mut receipt = Receipt::new();
     for (role, (count, bytes)) in totals {
         receipt.insert(format!("canonical_{role:?}_objects"), count.to_string());
         receipt.insert(format!("canonical_{role:?}_bytes"), bytes.to_string());
     }
     receipt.insert("canonical_unique_objects".into(), seen.len().to_string());
+    receipt.insert("canonical_unique_bytes".into(), canonical_bytes.to_string());
     receipt.insert("canonical_role_status".into(), "pass".into());
-    Ok(receipt)
+    Ok((receipt, seen))
 }
 
 /// One tiny, explicitly selected native/Store verifier qualification.

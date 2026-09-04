@@ -1,11 +1,12 @@
 # Shared infrastructure qualification for issue #22
 
 This is the proposed shared-infrastructure closure evidence for
-[#22](https://github.com/Ephemeral-AI-Lab/layerfs/issues/22), using two immutable
-selected qualification anchors. It is not completion of any full family,
+[#22](https://github.com/Ephemeral-AI-Lab/layerfs/issues/22), using immutable selected qualification anchors and their narrowly scoped
+corrected-source follow-ups. It is not completion of any full family,
 independent final verification campaign, #35, or `PHASE1_TERMINAL_PASS`.
 The coordinator publishes the selected evidence and resolves the report/recovery
-audit gates before closing #22. Acceptance remains pending those corrections. Issue #21
+audit gates before closing #22. Those corrections are now qualified as recorded
+below. Publication and issue closure remain coordinator actions. Issue #21
 remains open; subsequent family outcomes retain their actual statuses.
 
 ## Frozen source and scope
@@ -107,7 +108,7 @@ Evidence:
 | Cache hit/miss, invalidation, interruption/corruption, concurrent publication and sample isolation | **Met.** [Cache check output](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/cache-check.stdout.txt) records the existing shared-publisher regression set plus cross-family reuse, directory clone isolation and directory metadata corruption checks. Actual miss/hit anchors bind the same master to independent clones. |
 | First-use and warm-prepared walls separately measured; budgets explicit | **Met.** Exact table and immutable invocation/sample receipts above; build/setup costs remain separate. The execution contract fixes resource and phase ceilings; the aspirational first-CLI miss remains visible. |
 | Registry, counts, byte envelopes, routes, timing purity and cleanup checks | **Met for shared infrastructure.** [Static registry](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/static-registry.jsonl), [static additions](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/static-additions.jsonl), selected runtime receipts and fail-closed report validation. The additions receipt binds [its binary/source](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/static-additions-source.json); its binary SHA equals the final selected binary. The family definition and common fixture/verifier files are unchanged between that source and `4c207c70`. |
-| No product performance/storage optimization or cached measured state | **Met.** Source scope is the frozen baseline plus passive telemetry/verifier seams; measured creation still writes its bytes. Actual output states are not published into prepared caches. |
+| No optional optimization or cached measured state | **Met under the completion amendment.** Original anchors are the frozen instrumented baseline. Required functional repairs now have a separately labeled corrected source; optional performance/storage optimization remains Phase 2. Measured creation still writes its bytes and output states never enter prepared caches. |
 
 Additional retained qualifications are scoped narrowly:
 
@@ -168,3 +169,98 @@ streams, mutable progress/results, workload payloads, SQLite Stores, executables
 and unrelated user files. Full local manifests may reference retained binaries
 or prepared Stores not copied into Git; the publication is an evidence index
 with authenticated identities, not a self-contained Store/cache archive.
+
+## Audit closure and corrected-source qualification
+
+The [functional-repair amendment](failure-repair-amendment.md) changes terminal
+completion policy. Shared harness audit corrections and the first required
+product repairs are committed at
+[`fbf32e84`](https://github.com/Ephemeral-AI-Lab/layerfs/commit/fbf32e84662d00993c033515e113437965395494).
+The [sealed corrected build](../../../../benchmark-results/fs-bench-pro/phase1-v013/assets-fbf32e84/evidence/build.json)
+uses host binary `00767269960707775f7ff9b3549568c234ab2b89359b682707a9874b1f8259e5`,
+product seal `e24867af45d83c455dbfac530d43140fec7cdc40d3eae9ff70a30883d239125a`,
+and image `sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e`.
+Its build retained unchanged dependencies, selectively invalidated three changed
+Cargo packages, built the host in 14.323245625 seconds and the image in
+28.041642208 seconds. The earlier failed registry TLS attempt is preserved.
+
+The corrected
+[payload-create-1m seed 1 package](../../../../benchmark-results/fs-bench-pro/phase1-v013/attempts/payload-create-1m-s1-performance-f285d157909c/outcome.json)
+records a cache-hit sample wall of 864327375 ns, including actual preparation,
+product work and cleanup. It belongs to the complete 24-slot payload performance
+invocation of 49978744542 ns; the per-sample wall is not mislabeled as a standalone
+CLI invocation. All 24 corrected payload outcomes passed execution and evidence
+validation. Matching late verification remains required for those performance
+claims.
+
+The corrected selected tiny-create-1, bulk-create-100 and bulk-delete-500 seed-1
+performance outcomes also passed. One justified focused
+[bulk-delete-500 independent proof](../../../../benchmark-results/fs-bench-pro/phase1-v013/attempts/tiny-bulk-delete-500-s1-verify-4ed93a7acfd4/outcome.json)
+passed canonical state, full expected final-tree bytes/metadata, reopened FUSE
+state and cleanup. Its full runtime observation window and lossless compressed
+canonical evidence passed validation. The proof is reused in the later complete
+campaign. Report-only verifier-mode correction `8b9557db` revalidated the same
+raw proof and retained the original erroneous review; no product rerun occurred.
+
+Runner interruption/orphan recovery, failed-outcome reached-phase validation,
+mode-specific purity, physical allocation observations, source-cache
+compatibility and compressed artifact readback now have focused qualification.
+The report explicitly refuses terminal pass for unresolved required product
+failures. This satisfies issue #22's shared implementation/qualification
+criteria. It does **not** complete the remaining family campaigns or #35.
+All original baseline failures retain their source and FAIL status, and #21
+remains open for later phases and release qualification.
+
+## Atomic sampler integration and scoped evidence retention
+
+The observer/verifier update at
+[`b8c2ad4b`](https://github.com/Ephemeral-AI-Lab/layerfs/commit/b8c2ad4bf4fa0415fd49d57abea15729b33a4284)
+qualifies complete-row cgroup sampling and retained history accounting. Its
+[sealed build](../../../../benchmark-results/fs-bench-pro/phase1-v013/assets-b8c2ad4b/evidence/build.json)
+has host SHA-256 `2cc488da2e6b0d677038a150117956b7893050fccc79aab7c25d07a8c6145fb3`
+and image `sha256:d7cfd5b1b29a61e724d05f2e80f368b8aa5ba08133b0c516bd5c40b6cfdd8d3b`.
+The corrected product seal remains
+`e24867af45d83c455dbfac530d43140fec7cdc40d3eae9ff70a30883d239125a`;
+the daemon and FUSE executable hashes are identical to the `fbf32e84` build.
+Host and workload-helper identities remain distinct because their harness code changed.
+
+The old `tiny-stat-1`, seed 1, performance
+[attempt `2babc4ee0210`](../../../../benchmark-results/fs-bench-pro/phase1-v013/attempts/tiny-stat-1-s1-performance-2babc4ee0210/outcome.json)
+completed the product operation but ended its cgroup stream with a partial row.
+That mandatory observation is invalid. Its raw product PASS, original partial
+artifact and explicit [invalidation record](../../../../benchmark-results/fs-bench-pro/phase1-v013/invalidations.jsonl)
+remain preserved. The sampler now assembles every field and the newline before
+one unbuffered blocking-pipe write, checks the 4096-byte atomic bound, and keeps
+the same field order and 10 ms cadence. Read, formatting, size and write errors
+propagate; a truncated row is never silently removed to manufacture a pass.
+
+Only that invalid slot was recollected. The b8
+[replacement attempt `f95ef696b6f6`](../../../../benchmark-results/fs-bench-pro/phase1-v013/attempts/tiny-stat-1-s1-performance-f95ef696b6f6/outcome.json)
+and [live validation](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/atomic-sampler-live-validation.json)
+passed with `issues=[]`, `violations=[]`, 10 cgroup observations, a 12553250 ns
+maximum observed gap, zero swap/OOM, and successful owned cleanup. The required
+dispatch observation window was 101583541 ns. Sample command wall was
+2220685750 ns; inner workload was 2393542 ns. The report's causal sampling rule
+passed; this is not a continuous per-category peak measurement or a full-family proof.
+
+The [scoped build-selection ledger](../../../../benchmark-results/fs-bench-pro/phase1-v013/evidence-builds.json)
+retains already-completed fbf performance for payload, tiny-file churn and
+directory traversal, with the one b8 slot override above. It also retains the
+passing `payload-create-1m:1:verify` and `tiny-bulk-delete-500:1:verify` slots
+under their original source/image identities. The
+[qualified compatibility bridge](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/report-slot-sampler-bridge/result.json)
+requires unchanged product, normative contracts, timed family operations,
+generators and independent expected-state definitions. Only the separately
+hashed `sample_resources` body is excluded from the registry comparison;
+its signature and all surrounding bytes must match. This is an explicit,
+source-bound retention decision, not blanket equivalence between builds.
+
+The [sampler integration note](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/atomic-resource-sampler/integration.md)
+records exact selected identities, binary comparisons, observation values,
+platform contract, model results and the ledger snapshot hash. Publication is
+limited to selected immutable qualification packages, identities, validation,
+bridge and original failure receipts. Live campaign streams, mutable results,
+Stores/caches, binaries, workload payloads and unrelated user content stay out
+of this shared closeout package. Issue #22 can close after that evidence is
+published; remaining child-family verification, #35 and `PHASE1_TERMINAL_PASS`
+are separate obligations, and #21 stays open.
