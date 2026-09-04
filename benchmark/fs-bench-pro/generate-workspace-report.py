@@ -241,6 +241,8 @@ def observation_data(records, outcome, acquired, clone):
                 point["store"] = {key: row[key] for key in STORE_GAUGES}
         elif kind == "host-resources":
             host.append(row)
+        elif kind == "resource-failure":
+            reduce_counter(result, "host_watchdog.observed_rss_bytes.max", number(row.get("host_rss_bytes"), "watchdog host_rss_bytes"), True)
         elif kind == "host-rss-samples":
             for key in ("baseline_bytes", "sampled_peak_bytes", "final_bytes", "maximum_gap_ns", "sample_count"):
                 result["host_sampler." + key] = row[key]
@@ -411,6 +413,18 @@ def validate_environment(directory, outcome, build, issues, violations):
     return before.get("Id")
 
 
+def host_rss_termination(records, outcome):
+    events = [row for row in records if row["kind"] == "resource-failure"]
+    if not events:
+        return None
+    if len(events) != 1 or set(events[0]) != {"kind", "host_rss_bytes"}:
+        raise ValueError("malformed or duplicate host RSS termination")
+    rss = number(events[0]["host_rss_bytes"], "watchdog host_rss_bytes")
+    if rss <= 2 * GIB or outcome.get("exit_code") != 125 or outcome.get("product_status") != "fail":
+        raise ValueError("host RSS termination threshold/exit/outcome mismatch")
+    return rss
+
+
 def validate_resources(directory, outcome, case, records, successful, issues, violations):
     duration = number(outcome.get("external_process_wall_ns"), "external_process_wall_ns")
     require(outcome.get("hard_deadline_seconds") == runner.deadline(case, outcome["mode"]), "case deadline differs from frozen policy", issues)
@@ -458,6 +472,11 @@ def validate_resources(directory, outcome, case, records, successful, issues, vi
         observations["coverage_scope"] = "sampler-ready-before-worker through recovery Client lifetime; reached public-call lower bound; full failed orchestration wall unavailable"
         observations["orchestration_wall_available"] = False
     violations.extend(cgroup_failures)
+    watchdog_rss = host_rss_termination(records, outcome)
+    if watchdog_rss is not None:
+        violations.append("host RSS exceeds frozen 2 GiB; watchdog terminated process")
+        observations["host_watchdog_rss_bytes"] = watchdog_rss
+        observations["host_watchdog_precision"] = "observed threshold-crossing sample; final sampler summary unavailable after process exit"
     host = [row for row in records if row["kind"] == "host-resources"]
     require(bool(host), "missing native host resource observation", issues)
     for row in host:
@@ -699,7 +718,7 @@ def validate_performance(case, outcome, records, issues, violations, require_com
     else:
         require(bool(ops), "failed attempt lacks authentic public operation receipts", issues)
         require(all(key in expected and count <= expected[key] for key, count in actual.items()), "failed attempt used extra/unapproved public operations", issues)
-        require(any(row.get("outcome") == "failed" for row in ops) or outcome.get("timeout") or any(row["kind"] == "recovery" for row in records), "failed performance has no reached failure boundary", issues)
+        require(any(row.get("outcome") == "failed" for row in ops) or outcome.get("timeout") or any(row["kind"] == "recovery" for row in records) or host_rss_termination(records, outcome) is not None, "failed performance has no reached failure boundary", issues)
         if actual["workspace.commit"]:
             require(succeeded["workspace.create"] == 1 and succeeded["workspace.exec"] == succeeded["workspace.output"] and succeeded["workspace.exec"] + succeeded["workspace.file_range_edit"] >= actual["workspace.commit"] - (1 if case["operation"] in CLEAN else 0), "failed Commit lacks prerequisite public work", issues)
     for operation in ops:
@@ -1361,15 +1380,112 @@ def validate_empty_generation_records(records, case, issues):
             "timing_claim": "original producing source only", "current_guard_instruction_cost": "unmeasured" if operation in CREATION_OPERATIONS else "changed installer not called"}
 
 
+SPILL_INDEX_BRIDGE_KIND = "derived-spill-index-source-baseline-v1"
+SPILL_INDEX_PARENT = "e7840da1da81404ff228be734a91783cebb946ca"
+SPILL_INDEX_PATH = "crates/layerfs-layerstack-store/src/objects.rs"
+SPILL_INDEX_SOURCE_HASHES = ("1e88000d97560d5d9d8afdaaf379144cfd859133897650f357c8299a19b3aa32",
+                             "4b07eb03a2e6ddfe926a2c5fa621db462c659ff1ee164e41ec3b90cb871df9c8")
+SPILL_INDEX_EXTRA_CASES = ({f"{operation}-{tier}" for operation in ("tiny-unlink", "tiny-bulk-delete", "git-tool") for tier in (1,10,100,500)}
+                          | {f"namespace-subtree-relocate-delete-{tier}" for tier in (1,10,100)}
+                          | {"workspace-sustained-600s-proof"})
+
+
+def spill_index_source_proof(old_revision, new_revision):
+    # This is an exact reviewed source pair, not permission for arbitrary index
+    # rewrites. Earlier repairs compose only through their existing strict proof.
+    revisions = (SPILL_INDEX_PARENT, new_revision)
+    trees = {revision: product_tree(revision) for revision in revisions}
+    modes = [trees[revision].pop(SPILL_INDEX_PATH).split()[:2] for revision in revisions]
+    if modes[0] != modes[1] or trees[revisions[0]] != trees[revisions[1]]:
+        raise ValueError("spill-index bridge changed another product/build input")
+    hashes = tuple(hashlib.sha256(subprocess.check_output(["git", "show", f"{revision}:{SPILL_INDEX_PATH}"], cwd=HERE.parents[1])).hexdigest() for revision in revisions)
+    if hashes != SPILL_INDEX_SOURCE_HASHES:
+        raise ValueError("unreviewed spill-index source pair")
+    prior = None if old_revision == SPILL_INDEX_PARENT else empty_generation_source_proof(old_revision, SPILL_INDEX_PARENT)
+    families = ("payload_create_read", "tiny_file_churn", "directory_construction_traversal", "git_tool_workflow", "namespace_mutation", "workspace_reliability")
+    unchanged = {}
+    for path in sorted(set().union(*(bridge_dependency_paths(family) for family in families))):
+        values = [subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=HERE.parents[1]) for revision in revisions]
+        if values[0] != values[1]:
+            raise ValueError("spill-index bridge changed a retained fixture/workload/oracle definition")
+        unchanged[path] = hashlib.sha256(values[0]).hexdigest()
+    return {"changed_path": SPILL_INDEX_PATH, "reviewed_source_sha256": dict(zip(revisions, hashes)),
+            "unchanged_product_tree_sha256": hashlib.sha256(json.dumps(trees[revisions[0]], sort_keys=True).encode()).hexdigest(),
+            "unchanged_workload_paths": unchanged, "prior_predicate_proof": prior,
+            "state_compatibility": "derived-offset-index-preserves-canonical-byte-and-collision-results",
+            "qualification_test": "objects::tests::spill_index_overflow_preserves_lookup_dedup_and_cleanup_without_scans",
+            "performance_claim_scope": "original-producing-source-only",
+            "new_index_resource_and_instruction_cost": "not-measured-by-retained-observations"}
+
+
+def validate_spill_index_records(records, case, bridge, issues):
+    prior = bridge["source_proof"]["prior_predicate_proof"]
+    scope = validate_empty_generation_records(records, case, issues) if prior is not None else None
+    require(case["operation"] in NO_UNLINK_OPERATIONS or case["scenario_id"] in SPILL_INDEX_EXTRA_CASES,
+            "case outside the explicit reviewed spill-index baseline scope", issues)
+    return {"state_compatibility": "derived-index-logical-results-compatible", "prior_predicate_scope": scope,
+            "timing_claim": "original producing source only", "current_index_resource_and_instruction_cost": "unmeasured"}
+
+
+CONTENT_FRONTIER_BRIDGE_KIND = "bounded-content-frontier-source-baseline-v1"
+CONTENT_FRONTIER_PARENT = "a40b17e05486e5b747b689e7710475d739556a69"
+CONTENT_FRONTIER_PATH = "crates/layerfs-workspace/src/changes.rs"
+CONTENT_FRONTIER_SOURCE_HASHES = ("65d3914cda565ee333832b6da83c1246a0d59dc24ac06e5f859672d4a8378563",
+                                  "ea0e3a21653baaaecf35a5d9bfa59da2f33485a003b0a026936fba3f203c08a7")
+CONTENT_FRONTIER_EXTRA_CASES = ({f"{operation}-{tier}" for operation in ("workspace-clean-commit", "workspace-fixed-move", "workspace-distributed-sdk-edit") for tier in (1,10,100,500)}
+                              | {"workspace-dense-rewrite-1", "workspace-dense-rewrite-10", "namespace-subtree-relocate-delete-500"})
+
+
+def content_frontier_source_proof(old_revision, new_revision):
+    revisions = (CONTENT_FRONTIER_PARENT, new_revision)
+    trees = {revision: product_tree(revision) for revision in revisions}
+    modes = [trees[revision].pop(CONTENT_FRONTIER_PATH).split()[:2] for revision in revisions]
+    if modes[0] != modes[1] or trees[revisions[0]] != trees[revisions[1]]:
+        raise ValueError("content-frontier bridge changed another product/build input")
+    hashes = tuple(hashlib.sha256(subprocess.check_output(["git", "show", f"{revision}:{CONTENT_FRONTIER_PATH}"], cwd=HERE.parents[1])).hexdigest() for revision in revisions)
+    if hashes != CONTENT_FRONTIER_SOURCE_HASHES:
+        raise ValueError("unreviewed content-frontier source pair")
+    prior = None if old_revision == CONTENT_FRONTIER_PARENT else spill_index_source_proof(old_revision, CONTENT_FRONTIER_PARENT)
+    families = ("payload_create_read", "tiny_file_churn", "directory_construction_traversal", "git_tool_workflow", "namespace_mutation", "workspace_change_locality", "workspace_reliability")
+    unchanged = {}
+    for path in sorted(set().union(*(bridge_dependency_paths(family) for family in families))):
+        values = [subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=HERE.parents[1]) for revision in revisions]
+        if values[0] != values[1]:
+            raise ValueError("content-frontier bridge changed a retained fixture/workload/oracle definition")
+        unchanged[path] = hashlib.sha256(values[0]).hexdigest()
+    return {"changed_path": CONTENT_FRONTIER_PATH, "reviewed_source_sha256": dict(zip(revisions, hashes)),
+            "unchanged_product_tree_sha256": hashlib.sha256(json.dumps(trees[revisions[0]], sort_keys=True).encode()).hexdigest(),
+            "unchanged_workload_paths": unchanged, "prior_spill_index_proof": prior,
+            "state_compatibility": "structural-frontier-clean-or-fitting-content-plan-results-preserved",
+            "qualification_test": "changes::tests::dense_existing_file_delta_uses_bounded_frontier_and_preserves_aliases",
+            "performance_claim_scope": "original-producing-source-only",
+            "new_planner_instruction_cost": "not-measured-by-retained-observations"}
+
+
+def validate_content_frontier_records(records, case, bridge, issues):
+    prior = bridge["source_proof"]["prior_spill_index_proof"]
+    scope = validate_spill_index_records(records, case, {"source_proof": prior}, issues) if prior is not None else None
+    require(case["operation"] in NO_UNLINK_OPERATIONS or case["scenario_id"] in SPILL_INDEX_EXTRA_CASES | CONTENT_FRONTIER_EXTRA_CASES,
+            "case outside the explicit fitting/structural content-frontier baseline scope", issues)
+    return {"state_compatibility": "clean-structural-or-fitting-content-results-compatible", "prior_spill_index_scope": scope,
+            "timing_claim": "original producing source only", "current_planner_instruction_cost": "unmeasured"}
+
+
 def configured_product_bridges(config, primary, cases):
     approved = []
     fields = {"kind", "old_revision", "new_revision", "old_product_seal", "new_product_seal", "case_ids", "source_proof", "required_zero_counters", "reviewed_impact"}
     for bridge in config.get("product_compatibility", []):
-        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
+        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
             raise ValueError("invalid exact unlink product bridge identity")
-        if bridge["required_zero_counters"] != ["callback_unlink", "callback_rmdir"] or not isinstance(bridge["case_ids"], list) or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases or cases[case]["operation"] not in NO_UNLINK_OPERATIONS for case in bridge["case_ids"]) or not isinstance(bridge["reviewed_impact"], str) or len(bridge["reviewed_impact"].strip()) < 80:
-            raise ValueError("product bridge lacks explicit no-unlink case/observation scope")
-        prove = empty_generation_source_proof if bridge["kind"] == EMPTY_GENERATION_BRIDGE_KIND else unlink_source_proof
+        spill = bridge["kind"] == SPILL_INDEX_BRIDGE_KIND
+        frontier = bridge["kind"] == CONTENT_FRONTIER_BRIDGE_KIND
+        direct_spill = (spill or frontier) and bridge["old_revision"] == SPILL_INDEX_PARENT
+        direct_frontier = frontier and bridge["old_revision"] == CONTENT_FRONTIER_PARENT
+        counters = [] if direct_spill or direct_frontier else ["callback_unlink", "callback_rmdir"]
+        allowed = lambda case: case in cases and (cases[case]["operation"] in NO_UNLINK_OPERATIONS or direct_spill and case in SPILL_INDEX_EXTRA_CASES or direct_frontier and case in CONTENT_FRONTIER_EXTRA_CASES)
+        if bridge["required_zero_counters"] != counters or not isinstance(bridge["case_ids"], list) or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(not allowed(case) for case in bridge["case_ids"]) or not isinstance(bridge["reviewed_impact"], str) or len(bridge["reviewed_impact"].strip()) < 80:
+            raise ValueError("product bridge lacks explicit reviewed case/observation scope")
+        prove = content_frontier_source_proof if frontier else spill_index_source_proof if spill else empty_generation_source_proof if bridge["kind"] == EMPTY_GENERATION_BRIDGE_KIND else unlink_source_proof
         if bridge["source_proof"] != prove(bridge["old_revision"], bridge["new_revision"]):
             raise ValueError("product bridge source proof differs from committed bytes")
         if any(other["old_revision"] == bridge["old_revision"] for other in approved):
@@ -1597,7 +1713,11 @@ def generate(campaign, assets):
         if product_bridge:
             try:
                 retained_records = raw(Path(outcome["evidence_path"]) / "raw.jsonl")
-                if product_bridge["kind"] == EMPTY_GENERATION_BRIDGE_KIND:
+                if product_bridge["kind"] == CONTENT_FRONTIER_BRIDGE_KIND:
+                    predicate_scope = validate_content_frontier_records(retained_records, case, product_bridge, value["issues"])
+                elif product_bridge["kind"] == SPILL_INDEX_BRIDGE_KIND:
+                    predicate_scope = validate_spill_index_records(retained_records, case, product_bridge, value["issues"])
+                elif product_bridge["kind"] == EMPTY_GENERATION_BRIDGE_KIND:
                     predicate_scope = validate_empty_generation_records(retained_records, case, value["issues"])
                 else:
                     validate_no_unlink_records(retained_records, value["issues"])
