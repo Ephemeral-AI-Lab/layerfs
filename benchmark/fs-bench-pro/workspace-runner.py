@@ -352,6 +352,25 @@ HISTORICAL_FULL_VERIFIER_HASHES = {
 }
 
 
+
+CDC_DELETE_RECIPE_PATH = "benchmark/fs-bench-pro/dedup_workloads.rs"
+CDC_DELETE_RECIPE_PAIR = ("601c1b6a8438f6cf99b0625f333a1d6ce63f076d217044b1d85ad6ad5e1c39d5", "835136b702ae101efb4101a22ea9ecedf2055a9a6773c03884ce3a59bf785472")
+
+
+def cdc_delete_recipe_parts(source):
+    digest = hashlib.sha256(source).hexdigest()
+    if digest == CDC_DELETE_RECIPE_PAIR[0]:return source
+    if digest != CDC_DELETE_RECIPE_PAIR[1]:raise ValueError("unreviewed deletion recipe source")
+    old = subprocess.check_output(["git","show","e0922904e2bb607a138157755dab9613b441d5b9:"+CDC_DELETE_RECIPE_PATH],cwd=REPO)
+    begin,end = b"pub(crate) fn offset(",b"\npub(crate) fn variant("
+    left,right = source.index(begin),source.index(end)
+    old_left,old_right = old.index(begin),old.index(end)
+    test = source.index(b"\n#[cfg(test)]\n#[test]\nfn cdc_delete_offsets_preserve_all_but_the_frozen_collision()")
+    normalized = source[:left]+old[old_left:old_right]+source[right:test]
+    if normalized != old:raise ValueError("deletion recipe changed outside exact offset function/appended test")
+    return normalized
+
+
 def fast_verifier_source_proof(revision):
     pairs = {}
     host = subprocess.check_output(["git", "show", f"{revision}:benchmark/fs-bench-pro/src/workspace_bench.rs"], cwd=REPO)
@@ -363,6 +382,11 @@ def fast_verifier_source_proof(revision):
         old, new = [subprocess.check_output(["git", "show", f"{rev}:{path}"], cwd=REPO) for rev in (FAST_VERIFIER_SOURCE, revision)]
         if hashlib.sha256(new).hexdigest() != expected:raise ValueError("unreviewed fast verifier source: " + path)
         pairs[path] = {"old_sha256": hashlib.sha256(old).hexdigest(), "new_sha256": expected}
+    if v2:
+        recipe = subprocess.check_output(["git","show",f"{revision}:{CDC_DELETE_RECIPE_PATH}"],cwd=REPO)
+        if hashlib.sha256(recipe).hexdigest() == CDC_DELETE_RECIPE_PAIR[1]:
+            cdc_delete_recipe_parts(recipe)
+            pairs[CDC_DELETE_RECIPE_PATH] = {"old_sha256":CDC_DELETE_RECIPE_PAIR[0],"new_sha256":CDC_DELETE_RECIPE_PAIR[1]}
     return pairs
 
 
@@ -478,6 +502,10 @@ def certificate_source_bindings(source_revision, runtime_revision, families):
         elif name.endswith("workspace_registry.rs"):
             # Only profile dispatch was added; cases/fixtures/expected recipes precede it.
             values = [value[:value.index(b"pub(crate) fn dispatch(")] for value in values]
+        elif name == CDC_DELETE_RECIPE_PATH and values[0] != values[1] and "dedup_cdc_locality" not in families:
+            # The exact changed branch is deletion-only CDC; these reference families
+            # retain every recipe. CDC imports use explicit current-content checking.
+            values = [cdc_delete_recipe_parts(value) for value in values]
         if values[0] != values[1]:raise ValueError("fixture/oracle source assumptions changed: " + name)
         bindings[name] = hashlib.sha256(values[0]).hexdigest()
     return bindings
