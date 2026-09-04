@@ -66,7 +66,12 @@ impl LayerStackStore {
                     let prepare_started = initialization_diagnostic
                         .as_ref()
                         .map(|_| std::time::Instant::now());
-                    let prepared = direct_initialize_root_directories(&self.db, &path, seed)?;
+                    let prepared = direct_initialize_root_directories_diagnostic(
+                        &self.db,
+                        &path,
+                        seed,
+                        initialization_diagnostic.as_mut().map(|d| &mut d.fallback),
+                    )?;
                     if let (Some(diagnostic), Some(started)) =
                         (initialization_diagnostic.as_mut(), prepare_started)
                     {
@@ -85,10 +90,17 @@ impl LayerStackStore {
                             Some(finished.diagnostics),
                         ),
                         None => {
-                            let (built, scanned_files, scanned_bytes) =
-                                directory_root(&path, seed)?;
+                            let (built, scanned_files, scanned_bytes) = fallback_directory_root(
+                                &path,
+                                seed,
+                                initialization_diagnostic.as_mut(),
+                            )?;
                             let (final_batch, receipt, statement_number) =
-                                plan_single_initialization(&self.db, &built.objects)?;
+                                fallback_plan_single_initialization(
+                                    &self.db,
+                                    &built.objects,
+                                    initialization_diagnostic.as_mut(),
+                                )?;
                             (
                                 built.root_id,
                                 scanned_files,
@@ -102,9 +114,17 @@ impl LayerStackStore {
                         }
                     }
                 } else {
-                    let (built, scanned_files, scanned_bytes) = directory_root(&path, seed)?;
+                    if let Some(diagnostic) = initialization_diagnostic.as_mut() {
+                        diagnostic.fallback.reason = "nonempty_store";
+                    }
+                    let (built, scanned_files, scanned_bytes) =
+                        fallback_directory_root(&path, seed, initialization_diagnostic.as_mut())?;
                     let (final_batch, receipt, statement_number) =
-                        plan_single_initialization(&self.db, &built.objects)?;
+                        fallback_plan_single_initialization(
+                            &self.db,
+                            &built.objects,
+                            initialization_diagnostic.as_mut(),
+                        )?;
                     (
                         built.root_id,
                         scanned_files,
@@ -410,9 +430,23 @@ fn plan_single_initialization(
     ))
 }
 
+#[cfg(test)]
 fn directory_root(path: &std::path::Path, seed: [u8; 32]) -> Result<(BuiltRoot, u64, u64)> {
-    match prepare_parallel_root_directories(path, seed)? {
-        Some(prepared) => finish_parallel_candidate(prepared, seed),
+    directory_root_diagnostic(path, seed, None)
+}
+
+fn directory_root_diagnostic(
+    path: &std::path::Path,
+    seed: [u8; 32],
+    mut diagnostic: Option<&mut FallbackInitializationDiagnostics>,
+) -> Result<(BuiltRoot, u64, u64)> {
+    match prepare_parallel_root_directories(path, seed, diagnostic.as_deref_mut())? {
+        Some(prepared) => {
+            if let Some(d) = diagnostic {
+                d.legacy_parallel_used = true;
+            }
+            finish_parallel_candidate(prepared, seed)
+        }
         None => serial_directory_root(path, seed),
     }
 }
@@ -573,6 +607,103 @@ struct InitializationDiagnostic {
     nonce: String,
     prepare_import_wall_ns: u64,
     fast: Option<FastInitializationDiagnostics>,
+    fallback: FallbackInitializationDiagnostics,
+}
+
+// Fixed-size diagnostic retention: rejected attempts must not masquerade as fast-path
+// success. Producer task/file counters cover completed tasks; object/CPU/wall counters
+// also include work on the rejected task. No namespace or object payload is retained.
+#[derive(Clone, Copy)]
+struct LegacyProducerDiagnostic {
+    wall_ns: u64,
+    cpu_ns: Option<u64>,
+    tasks: u64,
+    files: u64,
+    bytes: u64,
+}
+
+struct FallbackInitializationDiagnostics {
+    reason: &'static str,
+    worker_count: usize,
+    pipeline_wall_ns: Option<u64>,
+    pipeline_cpu_ns: Option<u64>,
+    consumer_idle_ns: u64,
+    active_producers_after: u64,
+    producers: [Option<InitializationSlabWriterMetrics>; 8],
+    legacy_producers: [Option<LegacyProducerDiagnostic>; 16],
+    legacy_parallel_used: bool,
+    construction_wall_ns: Option<u64>,
+    construction_cpu_ns: Option<u64>,
+    admission_wall_ns: Option<u64>,
+    admission_cpu_ns: Option<u64>,
+}
+
+impl Default for FallbackInitializationDiagnostics {
+    fn default() -> Self {
+        Self {
+            reason: "not_attempted",
+            worker_count: 0,
+            pipeline_wall_ns: None,
+            pipeline_cpu_ns: None,
+            consumer_idle_ns: 0,
+            active_producers_after: 0,
+            producers: [None; 8],
+            legacy_producers: [None; 16],
+            legacy_parallel_used: false,
+            construction_wall_ns: None,
+            construction_cpu_ns: None,
+            admission_wall_ns: None,
+            admission_cpu_ns: None,
+        }
+    }
+}
+
+fn diagnostic_ns(value: Option<u64>) -> String {
+    value.map_or_else(|| "unavailable".into(), |n| n.to_string())
+}
+
+fn fallback_directory_root(
+    path: &std::path::Path,
+    seed: [u8; 32],
+    mut diagnostic: Option<&mut InitializationDiagnostic>,
+) -> Result<(BuiltRoot, u64, u64)> {
+    let started = diagnostic.as_ref().map(|_| std::time::Instant::now());
+    let cpu = diagnostic
+        .as_ref()
+        .and_then(|_| crate::construction::workspace_process_cpu_ns());
+    let result = directory_root_diagnostic(
+        path,
+        seed,
+        diagnostic.as_deref_mut().map(|d| &mut d.fallback),
+    );
+    if let (Some(diagnostic), Some(started)) = (diagnostic, started) {
+        diagnostic.fallback.construction_wall_ns =
+            Some(started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64);
+        diagnostic.fallback.construction_cpu_ns = cpu
+            .zip(crate::construction::workspace_process_cpu_ns())
+            .and_then(|(a, b)| b.checked_sub(a));
+    }
+    result
+}
+
+fn fallback_plan_single_initialization(
+    db: &crate::schema::StoreDb,
+    objects: &DeferredObjectStore,
+    diagnostic: Option<&mut InitializationDiagnostic>,
+) -> Result<(Vec<crate::CanonicalObject>, crate::CandidateReceipt, u64)> {
+    let started = diagnostic.as_ref().map(|_| std::time::Instant::now());
+    let cpu = diagnostic
+        .as_ref()
+        .and_then(|_| crate::construction::workspace_process_cpu_ns());
+    let result = plan_single_initialization(db, objects);
+    if let (Some(diagnostic), Some(started)) = (diagnostic, started) {
+        diagnostic.fallback.admission_wall_ns =
+            Some(started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64);
+        diagnostic.fallback.admission_cpu_ns = cpu
+            .zip(crate::construction::workspace_process_cpu_ns())
+            .and_then(|(a, b)| b.checked_sub(a));
+    }
+    result
 }
 
 fn decode_initialization_seed(value: &str) -> Result<[u8; 32]> {
@@ -636,11 +767,56 @@ impl InitializationDiagnostic {
             nonce,
             prepare_import_wall_ns: 0,
             fast: None,
+            fallback: FallbackInitializationDiagnostics::default(),
         })
     }
 
     fn emit(self) {
         let fast_path = u8::from(self.fast.is_some());
+        if fast_path == 0 {
+            let d = &self.fallback;
+            eprintln!(
+                "layerfs-initialization-fallback-v1 nonce={} reason={} attempt_workers={} attempt_pipeline_wall_ns={} attempt_pipeline_process_cpu_ns={} attempt_consumer_idle_ns={} attempt_active_producers_after={} directory_root_wall_ns={} directory_root_process_cpu_ns={} plan_single_admission_wall_ns={} plan_single_admission_process_cpu_ns={} legacy_parallel_used={} legacy_workers={}",
+                self.nonce,
+                d.reason,
+                d.worker_count,
+                diagnostic_ns(d.pipeline_wall_ns),
+                diagnostic_ns(d.pipeline_cpu_ns),
+                d.consumer_idle_ns,
+                d.active_producers_after,
+                diagnostic_ns(d.construction_wall_ns),
+                diagnostic_ns(d.construction_cpu_ns),
+                diagnostic_ns(d.admission_wall_ns),
+                diagnostic_ns(d.admission_cpu_ns),
+                u8::from(d.legacy_parallel_used),
+                d.legacy_producers.iter().filter(|m| m.is_some()).count()
+            );
+            for (index, metrics) in d.legacy_producers.iter().enumerate() {
+                if let Some(m) = metrics {
+                    eprintln!("layerfs-initialization-legacy-producer-v1 nonce={} producer={} wall_ns={} cpu_ns={} tasks={} files={} bytes={}",
+                        self.nonce, index, m.wall_ns, diagnostic_ns(m.cpu_ns), m.tasks, m.files, m.bytes);
+                }
+            }
+            for (index, metrics) in d.producers.iter().enumerate() {
+                if let Some(m) = metrics {
+                    eprintln!(
+                        "layerfs-initialization-rejected-producer-v1 nonce={} producer={} wall_ns={} cpu_ns={} blocked_ns={} completed_tasks={} completed_files={} completed_bytes={} objects={} object_bytes={} slab_handoffs={} completion_offset_ns={}",
+                        self.nonce,
+                        index,
+                        m.producer_wall_ns,
+                        diagnostic_ns(m.producer_cpu_ns),
+                        m.blocked_ns,
+                        m.producer_tasks,
+                        m.producer_files,
+                        m.producer_bytes,
+                        m.objects,
+                        m.payload_bytes,
+                        m.handoffs,
+                        m.producer_completion_offset_ns
+                    );
+                }
+            }
+        }
         let parent_merge_bytes = if fast_path == 1 { "0" } else { "na" };
         let fast = self.fast.unwrap_or_default();
         let admission = fast.admission;
@@ -755,7 +931,8 @@ impl InitializationDiagnostic {
             fast.consumer_idle_ns,
             fast.last_slab_receive_offset_ns,
             fast.pipeline_wall_ns,
-            fast.pipeline_cpu_ns.map_or_else(|| "unavailable".into(), |n| n.to_string()),
+            fast.pipeline_cpu_ns
+                .map_or_else(|| "unavailable".into(), |n| n.to_string()),
             fast.active_thread_peak,
             fast.active_producers_after,
             fast.task_state_bytes,
@@ -799,7 +976,8 @@ impl InitializationDiagnostic {
             admission.sql_begin_ns,
             admission.sql_commit_ns,
             fast.final_root_inode_table_wall_ns,
-            fast.final_root_inode_table_cpu_ns.map_or_else(|| "unavailable".into(), |n| n.to_string()),
+            fast.final_root_inode_table_cpu_ns
+                .map_or_else(|| "unavailable".into(), |n| n.to_string()),
             fast.insert_node_peak_len,
             fast.insert_node_peak_capacity,
         );
@@ -830,7 +1008,10 @@ impl InitializationDiagnostic {
                 producer.metrics.producer_files,
                 producer.metrics.producer_bytes,
                 producer.metrics.producer_completion_offset_ns,
-                producer.metrics.producer_cpu_ns.map_or_else(|| "unavailable".into(), |n| n.to_string()),
+                producer
+                    .metrics
+                    .producer_cpu_ns
+                    .map_or_else(|| "unavailable".into(), |n| n.to_string()),
             );
         }
     }
@@ -851,6 +1032,7 @@ struct PreparedCompactDirectory {
 }
 
 struct PreparedWorker {
+    diagnostic: Option<LegacyProducerDiagnostic>,
     directories: Vec<PreparedDirectory>,
     objects: DeferredObjectStore,
 }
@@ -897,12 +1079,22 @@ struct RootDirectoryTask {
     native: std::path::PathBuf,
 }
 
+#[cfg(test)]
 fn direct_initialize_root_directories(
     db: &crate::schema::StoreDb,
     native: &std::path::Path,
     seed: [u8; 32],
 ) -> Result<Option<FinishedAppendOnlyInitialization>> {
-    let result = direct_initialize_root_directories_inner(db, native, seed);
+    direct_initialize_root_directories_diagnostic(db, native, seed, None)
+}
+
+fn direct_initialize_root_directories_diagnostic(
+    db: &crate::schema::StoreDb,
+    native: &std::path::Path,
+    seed: [u8; 32],
+    diagnostic: Option<&mut FallbackInitializationDiagnostics>,
+) -> Result<Option<FinishedAppendOnlyInitialization>> {
+    let result = direct_initialize_root_directories_inner(db, native, seed, diagnostic);
     if result.is_err() {
         db.clear_failed_direct_initialization()?;
     }
@@ -913,6 +1105,7 @@ fn direct_initialize_root_directories_inner(
     db: &crate::schema::StoreDb,
     native: &std::path::Path,
     seed: [u8; 32],
+    mut diagnostic: Option<&mut FallbackInitializationDiagnostics>,
 ) -> Result<Option<FinishedAppendOnlyInitialization>> {
     use std::os::unix::ffi::OsStrExt;
 
@@ -925,11 +1118,17 @@ fn direct_initialize_root_directories_inner(
             .cmp(right.file_name().as_bytes())
     });
     if entries.is_empty() {
+        if let Some(d) = diagnostic.as_deref_mut() {
+            d.reason = "empty_root";
+        }
         return Ok(None);
     }
     let mut tasks = Vec::with_capacity(entries.len());
     for entry in entries {
         if !entry.file_type()?.is_dir() {
+            if let Some(d) = diagnostic.as_deref_mut() {
+                d.reason = "root_entry_not_directory";
+            }
             return Ok(None);
         }
         let name = layerfs_content::CanonicalName::from_bytes(entry.file_name().as_bytes())?;
@@ -940,6 +1139,9 @@ fn direct_initialize_root_directories_inner(
         });
     }
     if tasks.len() > INITIALIZATION_TASK_BLOCK_LIMIT {
+        if let Some(d) = diagnostic.as_deref_mut() {
+            d.reason = "root_task_limit";
+        }
         return Ok(None);
     }
     let task_state_bytes = (tasks.capacity() * std::mem::size_of::<RootDirectoryTask>()) as u64
@@ -962,6 +1164,7 @@ fn direct_initialize_root_directories_inner(
     let pair_pending_bytes = INITIALIZATION_PAIR_PENDING_BYTES.div_ceil(workers).max(64);
     let next = std::sync::atomic::AtomicUsize::new(0);
     let fallback = std::sync::atomic::AtomicBool::new(false);
+    let rejection = std::sync::atomic::AtomicU8::new(0);
     let active_producers = std::sync::atomic::AtomicU64::new(0);
     let active_producer_peak = std::sync::atomic::AtomicU64::new(0);
     let mut admission = InitializationSegmentAdmission::new(db)?;
@@ -973,6 +1176,7 @@ fn direct_initialize_root_directories_inner(
                 .map(|worker_index| {
                     let next = &next;
                     let fallback = &fallback;
+                    let rejection = &rejection;
                     let active_producers = &active_producers;
                     let active_producer_peak = &active_producer_peak;
                     let tasks = &tasks;
@@ -1010,6 +1214,12 @@ fn direct_initialize_root_directories_inner(
                                         Err(StoreError::Core(
                                             layerfs_content::CoreError::ObjectLimitExceeded,
                                         )) => {
+                                            let _ = rejection.compare_exchange(
+                                                0,
+                                                1,
+                                                std::sync::atomic::Ordering::Relaxed,
+                                                std::sync::atomic::Ordering::Relaxed,
+                                            );
                                             fallback
                                                 .store(true, std::sync::atomic::Ordering::Release);
                                             break;
@@ -1021,6 +1231,12 @@ fn direct_initialize_root_directories_inner(
                                     Err(StoreError::Core(
                                         layerfs_content::CoreError::ObjectLimitExceeded,
                                     )) => {
+                                        let _ = rejection.compare_exchange(
+                                            0,
+                                            2,
+                                            std::sync::atomic::Ordering::Relaxed,
+                                            std::sync::atomic::Ordering::Relaxed,
+                                        );
                                         fallback.store(true, std::sync::atomic::Ordering::Release);
                                         break;
                                     }
@@ -1032,6 +1248,12 @@ fn direct_initialize_root_directories_inner(
                                     objects.note_hash_invocations(structure.hash_invocations());
                                     structure.move_into(&mut objects)?;
                                 } else {
+                                    let _ = rejection.compare_exchange(
+                                        0,
+                                        3,
+                                        std::sync::atomic::Ordering::Relaxed,
+                                        std::sync::atomic::Ordering::Relaxed,
+                                    );
                                     fallback.store(true, std::sync::atomic::Ordering::Release);
                                 }
                                 pair_blocks.push(pairs.block_since(
@@ -1168,7 +1390,25 @@ fn direct_initialize_root_directories_inner(
         + (tasks.len() * std::mem::size_of::<crate::objects::CompactInodePairBlock>()) as u64
         + (prepared.len() * std::mem::size_of::<crate::objects::CompactInodePairSegment>()) as u64;
 
+    if let Some(d) = diagnostic.as_deref_mut() {
+        d.worker_count = workers;
+        d.pipeline_wall_ns = Some(pipeline_wall_ns);
+        d.pipeline_cpu_ns = pipeline_cpu_ns;
+        d.consumer_idle_ns = consumer_idle_ns;
+        d.active_producers_after = active_producers.load(std::sync::atomic::Ordering::Acquire);
+        for worker in &prepared {
+            d.producers[worker.index] = Some(worker.slab);
+        }
+    }
     if fallback.load(std::sync::atomic::Ordering::Acquire) {
+        if let Some(d) = diagnostic.as_deref_mut() {
+            d.reason = match rejection.load(std::sync::atomic::Ordering::Relaxed) {
+                1 => "task_directory_object_limit",
+                2 => "task_finish_object_limit",
+                3 => "task_hard_links",
+                _ => "unavailable",
+            };
+        }
         drop(admission);
         db.clear_failed_direct_initialization()?;
         return Ok(None);
@@ -1181,6 +1421,9 @@ fn direct_initialize_root_directories_inner(
         .flat_map(|directory| directory.imported.hard_links.iter())
         .any(|identity| !identities.insert(*identity))
     {
+        if let Some(d) = diagnostic.as_deref_mut() {
+            d.reason = "cross_task_hard_link";
+        }
         drop(admission);
         db.clear_failed_direct_initialization()?;
         return Ok(None);
@@ -1533,6 +1776,7 @@ fn prepare_append_only_root_directories(
 fn prepare_parallel_root_directories(
     native: &std::path::Path,
     seed: [u8; 32],
+    diagnostic: Option<&mut FallbackInitializationDiagnostics>,
 ) -> Result<Option<PreparedParallelRoot>> {
     use std::os::unix::ffi::OsStrExt;
 
@@ -1566,6 +1810,7 @@ fn prepare_parallel_root_directories(
     if workers < 2 {
         return Ok(None);
     }
+    let diagnostic_enabled = diagnostic.is_some();
     let next = std::sync::atomic::AtomicUsize::new(0);
     let prepared = std::thread::scope(|scope| -> Result<Vec<PreparedWorker>> {
         let handles = (0..workers)
@@ -1573,6 +1818,10 @@ fn prepare_parallel_root_directories(
                 let next = &next;
                 let tasks = &tasks;
                 scope.spawn(move || {
+                    let started = diagnostic_enabled.then(std::time::Instant::now);
+                    let cpu = diagnostic_enabled
+                        .then(crate::construction::thread_cpu)
+                        .flatten();
                     let mut directories = Vec::new();
                     let mut local = ObjectBuffer::empty_all_reachable()?;
                     loop {
@@ -1589,9 +1838,22 @@ fn prepare_parallel_root_directories(
                             imported: import.finish()?,
                         });
                     }
+                    let objects = local.into_prevalidated()?;
+                    // Include private sealing in producer occupancy; payload remains in the
+                    // existing PreparedWorker, with only fixed scalar diagnostics added.
+                    let diagnostic = started.map(|started| LegacyProducerDiagnostic {
+                        wall_ns: started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
+                        cpu_ns: cpu
+                            .zip(crate::construction::thread_cpu())
+                            .and_then(|(a, b)| b.checked_sub(a)),
+                        tasks: directories.len() as u64,
+                        files: directories.iter().map(|d| d.imported.scanned_files).sum(),
+                        bytes: directories.iter().map(|d| d.imported.scanned_bytes).sum(),
+                    });
                     Ok::<_, StoreError>(PreparedWorker {
+                        diagnostic,
                         directories,
-                        objects: local.into_prevalidated()?,
+                        objects,
                     })
                 })
             })
@@ -1606,6 +1868,12 @@ fn prepare_parallel_root_directories(
         }
         Ok(output)
     })?;
+
+    if let Some(diagnostic) = diagnostic {
+        for (index, worker) in prepared.iter().enumerate() {
+            diagnostic.legacy_producers[index] = worker.diagnostic;
+        }
+    }
 
     let mut identities = std::collections::HashSet::new();
     if prepared

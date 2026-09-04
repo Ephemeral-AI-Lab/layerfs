@@ -681,10 +681,8 @@ fn run_case(
 ) -> AnyResult<()> {
     // Diagnostic harness placement; the same public SDK/FUSE calls and product engine.
     let placement_container = if container.0 == "diagnostic-host-fuse" {
-        if !cfg!(target_os = "linux")
-            || !matches!(case.kind, "tiny-bulk-create" | "tiny-bulk-delete")
-        {
-            return Err("colocated diagnostic requires Linux bulk mutation".into());
+        if !cfg!(target_os = "linux") {
+            return Err("colocated diagnostic requires Linux".into());
         }
         colocated_profile()?;
         None
@@ -1482,10 +1480,8 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         }
         [command, root, id, seed] if command == "workspace-colocated-verify-existing" => {
             let case = registry::resolve(id)?;
-            if !cfg!(target_os = "linux")
-                || !matches!(case.kind, "tiny-bulk-create" | "tiny-bulk-delete")
-            {
-                return Err("colocated diagnostic requires Linux bulk mutation".into());
+            if !cfg!(target_os = "linux") {
+                return Err("colocated diagnostic requires Linux".into());
             }
             let root = Path::new(root);
             let seed = seed.parse()?;
@@ -1493,7 +1489,8 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
                 .trim()
                 .parse()?;
             let store = Arc::new(LayerStackStore::connect(root.join("store.sqlite"))?);
-            let expected = registry::expected(&case, seed, 1)?;
+            let step = registry::steps(&case);
+            let expected = registry::expected(&case, seed, step)?;
             let verified = super::workspace_verify::verify(&store, branch, &expected, root)?;
             emit(
                 "canonical-verification",
@@ -1507,7 +1504,7 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
                 },
                 projection: Some(WorkspaceProjection::Fuse),
             })?;
-            let verified = native_verify(&client, session.id, &case, seed, 1);
+            let verified = native_verify(&client, session.id, &case, seed, step);
             let ended = client.end_workspace_session(session.id, EndWorkspaceMode::Clean);
             verified?;
             ended?;

@@ -1,0 +1,19 @@
+{
+  "source": "8165519b337bc5eaa3e28d9ae0842fc9d2f5272e",
+  "command": [
+    "cargo",
+    "test",
+    "--offline",
+    "--locked",
+    "-p",
+    "layerfs-layerstack-store",
+    "--lib",
+    "oversized_single_task_clears_direct_admission_and_falls_back"
+  ],
+  "elapsed_ns": 21300744834,
+  "exit_code": 0,
+  "working_source_unchanged_during_command": true,
+  "source_manifest_sha256": "9c566190a2f4bd1ce1878548b3e118a2fef6248ee39fd47fdddfc50a10342b15",
+  "stdout_sha256": "4a81ac654e84f05c0f331f2d4bb560140f597c0015ad5f4bc0bb246709bed172",
+  "stderr_sha256": "0775e3f69369753682b0cd0a523e350a19f0a400f8d6eba503f07d815c6316f3"
+}
