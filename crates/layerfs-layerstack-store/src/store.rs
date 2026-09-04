@@ -24,6 +24,11 @@ impl LayerStackStore {
     }
 
     #[doc(hidden)]
+    pub fn retry_candidate_cleanup(&self) -> Result<()> {
+        self.db.retry_candidate_cleanup()
+    }
+
+    #[doc(hidden)]
     pub fn data_version(&self) -> Result<u64> {
         self.db.data_version()
     }

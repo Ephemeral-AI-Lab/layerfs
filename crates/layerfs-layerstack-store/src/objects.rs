@@ -15,9 +15,9 @@ use std::time::Instant;
 
 pub const OBJECT_PAGE_COUNT: usize = 128;
 pub const OBJECT_PAGE_BYTES: usize = 4 * 1024 * 1024;
-pub const ADMISSION_BATCH_COUNT: usize = OBJECT_PAGE_COUNT - 1;
+pub const ADMISSION_BATCH_COUNT: usize = 8191;
 pub const ADMISSION_BATCH_BYTES: usize = OBJECT_PAGE_BYTES - 1;
-pub(crate) const INITIALIZATION_ADMISSION_BATCH_COUNT: usize = 8191;
+pub(crate) const INITIALIZATION_ADMISSION_BATCH_COUNT: usize = ADMISSION_BATCH_COUNT;
 pub(crate) const INITIALIZATION_SLAB_BYTES: usize = 256 * 1024;
 pub(crate) const INITIALIZATION_SLAB_OBJECTS: usize = 512;
 pub(crate) const INITIALIZATION_SLAB_QUEUE_SLOTS: usize = 4;
@@ -776,7 +776,9 @@ struct SpillDiskIndex {
 
 impl Drop for SpillObjects {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
+        if !self.path.as_os_str().is_empty() {
+            let _ = std::fs::remove_file(&self.path);
+        }
     }
 }
 
@@ -789,7 +791,9 @@ struct TempPath(PathBuf);
 
 impl Drop for TempPath {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        if !self.0.as_os_str().is_empty() {
+            let _ = std::fs::remove_file(&self.0);
+        }
     }
 }
 
@@ -1402,8 +1406,9 @@ impl IdOrder {
                     visitor(*id)?;
                 }
             }
-            Self::Spill { path, .. } => {
-                let mut file = std::fs::File::open(&path.0)?;
+            Self::Spill { file, .. } => {
+                let mut file = file.try_clone()?;
+                file.seek(SeekFrom::Start(0))?;
                 let mut bytes = [0; 32];
                 loop {
                     match file.read_exact(&mut bytes) {
@@ -1585,6 +1590,8 @@ pub(crate) struct PlannedAdmission {
     pub begin_ns: u64,
     pub insert_ns: u64,
     pub commit_ns: u64,
+    pub payload_moved_bytes: u64,
+    pub pending_owned_peak_bytes: u64,
 }
 
 struct AdmissionBatchMetrics {
@@ -1765,6 +1772,45 @@ impl DeferredObjectStore {
                 order.visit(|id| visitor(id, rows.get(&id).ok_or(StoreError::MissingObject(id))?))
             }
             DeferredObjects::Spill(spill) => spill.visit_ordered(order, visitor),
+        }
+    }
+
+    pub(crate) fn cleanup(mut self, db: &crate::schema::StoreDb) -> Result<()> {
+        let [objects, index, order] = self.take_cleanup_paths();
+        db.cleanup_candidate_paths([objects, index, order, None, None])
+    }
+
+    fn take_cleanup_paths(&mut self) -> [Option<PathBuf>; 3] {
+        let (objects, index) = match &mut self.storage {
+            DeferredObjects::Memory { .. } => (None, None),
+            DeferredObjects::Spill(spill) => (
+                (!spill.path.as_os_str().is_empty()).then(|| std::mem::take(&mut spill.path)),
+                spill
+                    .disk_index
+                    .as_mut()
+                    .map(|index| std::mem::take(&mut index._path.0)),
+            ),
+        };
+        let order = match &mut self.reachable {
+            IdOrder::Memory(_) => None,
+            IdOrder::Spill { path, .. } => Some(std::mem::take(&mut path.0)),
+        };
+        [objects, index, order]
+    }
+
+    fn consume_prevalidated_order(
+        mut self,
+        order: &IdOrder,
+        visitor: &mut dyn FnMut(CanonicalObject) -> Result<()>,
+    ) -> Result<()> {
+        match &mut self.storage {
+            DeferredObjects::Memory { rows, .. } => order.visit(|id| {
+                visitor(CanonicalObject {
+                    id,
+                    bytes: rows.remove(&id).ok_or(StoreError::MissingObject(id))?,
+                })
+            }),
+            DeferredObjects::Spill(spill) => spill.visit_ordered_owned(order, visitor),
         }
     }
 
@@ -2065,7 +2111,10 @@ impl SpillObjects {
         self.flush()?;
         self.writer = None;
         #[cfg(unix)]
-        std::fs::remove_file(&self.path)?;
+        {
+            std::fs::remove_file(&self.path)?;
+            self.path.clear();
+        }
         Ok(())
     }
 
@@ -2165,6 +2214,27 @@ impl SpillObjects {
         order: &IdOrder,
         visitor: &mut dyn FnMut(ObjectId, &[u8]) -> Result<()>,
     ) -> Result<()> {
+        self.visit_ordered_buffers(order, &mut |id, bytes| visitor(id, bytes))
+    }
+
+    fn visit_ordered_owned(
+        &self,
+        order: &IdOrder,
+        visitor: &mut dyn FnMut(CanonicalObject) -> Result<()>,
+    ) -> Result<()> {
+        self.visit_ordered_buffers(order, &mut |id, bytes| {
+            visitor(CanonicalObject {
+                id,
+                bytes: std::mem::take(bytes),
+            })
+        })
+    }
+
+    fn visit_ordered_buffers(
+        &self,
+        order: &IdOrder,
+        visitor: &mut dyn FnMut(ObjectId, &mut Vec<u8>) -> Result<()>,
+    ) -> Result<()> {
         let mut file = self
             .reader
             .lock()
@@ -2190,7 +2260,7 @@ impl SpillObjects {
                 }
                 canonical.resize(length, 0);
                 file.read_exact(&mut canonical)?;
-                return visitor(expected, &canonical);
+                return visitor(expected, &mut canonical);
             }
             file.seek(SeekFrom::Current(
                 i64::try_from(length)
@@ -2937,19 +3007,53 @@ impl<'a> InitializationSegmentAdmission<'a> {
 
 pub(crate) fn admit_planned_objects(
     db: &crate::schema::StoreDb,
-    objects: &DeferredObjectStore,
-    plan: &CandidatePlan,
+    mut objects: DeferredObjectStore,
+    plan: &mut CandidatePlan,
     statement_number: &mut u64,
 ) -> Result<PlannedAdmission> {
-    admit_planned_objects_with_limits(
+    // Normal candidates always have membership-checked insertion order. Move payloads
+    // into the carried admission batch; consumed private state is dropped in Commit.
+    if plan.all_missing {
+        return Err(StoreError::Integrity("unchecked Workspace admission plan"));
+    }
+    // Unlink while the private readers are still owned, before any object admission.
+    // A failed unlink is retained by Store and blocks the next operation / End.
+    let [objects_path, index_path, order_path] = objects.take_cleanup_paths();
+    let missing_path = match &mut plan.missing.storage {
+        SeenStorage::Memory(_) => None,
+        SeenStorage::Spill { path, .. } => Some(std::mem::take(&mut path.0)),
+    };
+    let missing_order_path = match &mut plan.missing_order {
+        IdOrder::Memory(_) => None,
+        IdOrder::Spill { path, .. } => Some(std::mem::take(&mut path.0)),
+    };
+    db.cleanup_candidate_paths([
+        objects_path,
+        index_path,
+        order_path,
+        missing_path,
+        missing_order_path,
+    ])?;
+    let spilled = matches!(&objects.storage, DeferredObjects::Spill(_));
+    let admission = admit_object_stream(
         db,
-        objects,
         plan,
         statement_number,
         ADMISSION_BATCH_COUNT,
         ADMISSION_BATCH_BYTES,
         false,
-    )
+        |visitor| objects.consume_prevalidated_order(&plan.missing_order, visitor),
+    )?;
+    crate::telemetry::note_workspace_admission_buffers(
+        admission.payload_moved_bytes,
+        if spilled {
+            admission.payload_moved_bytes
+        } else {
+            0
+        },
+        admission.pending_owned_peak_bytes,
+    );
+    Ok(admission)
 }
 
 pub(crate) fn admit_initialization_objects(
@@ -2958,28 +3062,40 @@ pub(crate) fn admit_initialization_objects(
     plan: &CandidatePlan,
     statement_number: &mut u64,
 ) -> Result<PlannedAdmission> {
-    admit_planned_objects_with_limits(
+    let order = if plan.all_missing {
+        &objects.reachable
+    } else {
+        &plan.missing_order
+    };
+    admit_object_stream(
         db,
-        objects,
         plan,
         statement_number,
         INITIALIZATION_ADMISSION_BATCH_COUNT,
         ADMISSION_BATCH_BYTES,
         true,
+        |visitor| {
+            objects.visit_prevalidated_order(order, &mut |id, bytes| {
+                visitor(CanonicalObject {
+                    id,
+                    bytes: bytes.to_vec(),
+                })
+            })
+        },
     )
 }
 
-fn admit_planned_objects_with_limits(
+fn admit_object_stream(
     db: &crate::schema::StoreDb,
-    objects: &DeferredObjectStore,
     plan: &CandidatePlan,
     statement_number: &mut u64,
     batch_count: usize,
     batch_bytes_limit: usize,
     bulk_insert: bool,
+    visit: impl FnOnce(&mut dyn FnMut(CanonicalObject) -> Result<()>) -> Result<()>,
 ) -> Result<PlannedAdmission> {
     let mut batch = Vec::with_capacity(batch_count);
-    let mut batch_bytes = 0_usize;
+    let mut batch_capacity_bytes = 0_usize;
     let mut admission = PlannedAdmission {
         final_batch: Vec::new(),
         batch_inserted_objects: 0,
@@ -2990,19 +3106,23 @@ fn admit_planned_objects_with_limits(
         begin_ns: 0,
         insert_ns: 0,
         commit_ns: 0,
+        payload_moved_bytes: 0,
+        pending_owned_peak_bytes: (batch.capacity() * std::mem::size_of::<CanonicalObject>())
+            as u64,
     };
-    let order = if plan.all_missing {
-        &objects.reachable
-    } else {
-        &plan.missing_order
-    };
-    objects.visit_prevalidated_order(order, &mut |id, bytes| {
-        if bytes.len() > batch_bytes_limit {
+    visit(&mut |object| {
+        let bytes = &object.bytes;
+        admission.pending_owned_peak_bytes = admission.pending_owned_peak_bytes.max(
+            (batch.capacity() * std::mem::size_of::<CanonicalObject>()) as u64
+                + batch_capacity_bytes as u64
+                + object.bytes.capacity() as u64,
+        );
+        if bytes.capacity() > batch_bytes_limit {
             return Err(StoreError::Integrity("canonical object admission size"));
         }
         if !batch.is_empty()
             && (batch.len() == batch_count
-                || batch_bytes.saturating_add(bytes.len()) > batch_bytes_limit)
+                || batch_capacity_bytes.saturating_add(bytes.capacity()) > batch_bytes_limit)
         {
             let metrics = insert_admission_batch(db, &batch, statement_number, bulk_insert)?;
             admission.batch_inserted_objects = admission
@@ -3021,13 +3141,13 @@ fn admit_planned_objects_with_limits(
             admission.insert_ns = admission.insert_ns.saturating_add(metrics.insert.insert_ns);
             admission.commit_ns = admission.commit_ns.saturating_add(metrics.commit_ns);
             batch.clear();
-            batch_bytes = 0;
+            batch_capacity_bytes = 0;
         }
-        batch_bytes = batch_bytes.saturating_add(bytes.len());
-        batch.push(CanonicalObject {
-            id,
-            bytes: bytes.to_vec(),
-        });
+        batch_capacity_bytes += object.bytes.capacity();
+        admission.payload_moved_bytes = admission
+            .payload_moved_bytes
+            .saturating_add(bytes.len() as u64);
+        batch.push(object);
         Ok(())
     })?;
     admission.final_batch = batch;
@@ -3937,6 +4057,39 @@ mod tests {
     }
 
     #[test]
+    fn final_candidate_consumption_moves_memory_and_reads_owned_spill() {
+        for spill in [false, true] {
+            let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
+            let canonical = layerfs_content::encode_bytes_object(b"owned final candidate").unwrap();
+            let id = ObjectId::for_bytes(&canonical);
+            let pointer = canonical.as_ptr();
+            objects.put_owned(id, canonical).unwrap();
+            if spill {
+                objects.spill().unwrap();
+                objects = objects.all_reachable().unwrap();
+            }
+            for path in objects.take_cleanup_paths().into_iter().flatten() {
+                std::fs::remove_file(path).unwrap();
+            }
+            let mut order = IdOrder::empty();
+            order.push(id).unwrap();
+            let mut consumed = 0;
+            objects
+                .consume_prevalidated_order(&order, &mut |object| {
+                    assert_eq!(object.id, id);
+                    assert_eq!(ObjectId::for_bytes(&object.bytes), id);
+                    if !spill {
+                        assert_eq!(object.bytes.as_ptr(), pointer);
+                    }
+                    consumed += 1;
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(consumed, 1);
+        }
+    }
+
+    #[test]
     fn planned_admission_keeps_every_object_transaction_below_the_frozen_bounds() {
         let root = std::env::temp_dir().join(format!(
             "layerfs-bounded-admission-{}-{}",
@@ -3990,12 +4143,28 @@ mod tests {
             300
         );
 
+        let object_count = 2 * ADMISSION_BATCH_COUNT + 46;
+        for index in 300_u64..object_count as u64 {
+            let canonical = layerfs_content::encode_bytes_object(&index.to_le_bytes()).unwrap();
+            objects
+                .put(ObjectId::for_bytes(&canonical), &canonical)
+                .unwrap();
+        }
+        let mut plan = db.plan_candidate(&objects).unwrap();
+        assert!(!plan.all_missing);
         let mut statement_number = 0;
-        let admission = admit_planned_objects(&db, &objects, &plan, &mut statement_number).unwrap();
+        let admission =
+            admit_planned_objects(&db, objects, &mut plan, &mut statement_number).unwrap();
         assert_eq!(admission.transactions, 2);
-        assert_eq!(admission.batch_inserted_objects, 254);
+        assert_eq!(
+            admission.batch_inserted_objects,
+            (2 * ADMISSION_BATCH_COUNT) as u64
+        );
         assert_eq!(admission.final_batch.len(), 46);
-        assert_eq!(admission.max_transaction_objects, 127);
+        assert_eq!(
+            admission.max_transaction_objects,
+            ADMISSION_BATCH_COUNT as u64
+        );
         assert!(admission.max_transaction_bytes < OBJECT_PAGE_BYTES as u64);
         {
             let mut connection = db.writer().unwrap();
@@ -4008,7 +4177,14 @@ mod tests {
             assert_eq!(final_metrics.objects, 46);
             transaction.commit().unwrap();
         }
-        assert_eq!(db.plan_candidate(&objects).unwrap().reused_objects, 300);
+        assert_eq!(
+            db.reader()
+                .unwrap()
+                .query_row("SELECT COUNT(*) FROM objects", [], |row| row
+                    .get::<_, i64>(0))
+                .unwrap(),
+            object_count as i64
+        );
         let existing = admission.final_batch[0].clone();
         let mut forged = DeferredObjectStore::new_all_reachable().unwrap();
         let forged_bytes = layerfs_content::encode_bytes_object(&u64::MAX.to_le_bytes()).unwrap();

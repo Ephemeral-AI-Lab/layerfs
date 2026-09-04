@@ -2,6 +2,7 @@
 
 mod capture;
 mod changes;
+mod commit_spool;
 mod container;
 mod daemon;
 mod docker;
@@ -10,6 +11,7 @@ mod execution;
 mod file_edit;
 mod file_io;
 mod lifecycle;
+mod references;
 
 mod cow_tree;
 mod limits;

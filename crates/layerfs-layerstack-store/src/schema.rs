@@ -14,7 +14,7 @@ pub const SQLITE_PAGE_CACHE_KIB: i64 = 32 * 1024;
 
 #[cfg(feature = "test-instrumentation")]
 thread_local! {
-    static SQL_TRACE: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    static SQL_TRACE: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(debug_assertions)]
@@ -25,18 +25,23 @@ thread_local! {
 #[cfg(feature = "test-instrumentation")]
 fn trace_sql(event: rusqlite::trace::TraceEvent<'_>) {
     if let rusqlite::trace::TraceEvent::Stmt(_, sql) = event {
-        SQL_TRACE.with(|trace| trace.borrow_mut().push(sql.to_owned()));
+        SQL_TRACE.with(|trace| {
+            if let Some(trace) = trace.borrow_mut().as_mut() {
+                trace.push(sql.to_owned());
+            }
+        });
     }
 }
 
 #[cfg(feature = "test-instrumentation")]
 pub fn reset_sql_trace() {
-    SQL_TRACE.with(|trace| trace.borrow_mut().clear());
+    // Explicit tracing request; ordinary instrumented runs retain no SQL strings.
+    SQL_TRACE.with(|trace| *trace.borrow_mut() = Some(Vec::new()));
 }
 
 #[cfg(feature = "test-instrumentation")]
 pub fn sql_trace() -> Vec<String> {
-    SQL_TRACE.with(|trace| trace.borrow().clone())
+    SQL_TRACE.with(|trace| trace.borrow().as_ref().cloned().unwrap_or_default())
 }
 
 #[cfg(debug_assertions)]
@@ -64,6 +69,7 @@ struct StoreInner {
     connection: Mutex<Connection>,
     gate: TicketGate,
     leases: Mutex<BTreeSet<BranchId>>,
+    candidate_cleanup: Mutex<[Option<PathBuf>; 5]>,
     path: PathBuf,
 }
 
@@ -201,6 +207,7 @@ impl StoreDb {
             connection: Mutex::new(connection),
             gate: TicketGate::default(),
             leases: Mutex::new(BTreeSet::new()),
+            candidate_cleanup: Mutex::new(std::array::from_fn(|_| None)),
             path,
         }));
         if let Some(created) = &mut created {
@@ -214,7 +221,47 @@ impl StoreDb {
     }
 
     pub fn enter_operation(&self) -> Result<OperationPermit<'_>> {
-        self.0.gate.enter()
+        let permit = self.0.gate.enter()?;
+        self.retry_candidate_cleanup()?;
+        Ok(permit)
+    }
+
+    pub(crate) fn cleanup_candidate_paths(&self, paths: [Option<PathBuf>; 5]) -> Result<()> {
+        let mut pending = self
+            .0
+            .candidate_cleanup
+            .lock()
+            .map_err(|_| StoreError::Integrity("candidate cleanup ownership"))?;
+        // The operation gate drained the previous candidate before this one began.
+        debug_assert!(pending.iter().all(Option::is_none));
+        *pending = paths;
+        Self::drain_candidate_cleanup(&mut pending)
+    }
+
+    pub(crate) fn retry_candidate_cleanup(&self) -> Result<()> {
+        let mut pending = self
+            .0
+            .candidate_cleanup
+            .lock()
+            .map_err(|_| StoreError::Integrity("candidate cleanup ownership"))?;
+        Self::drain_candidate_cleanup(&mut pending)
+    }
+
+    fn drain_candidate_cleanup(pending: &mut [Option<PathBuf>; 5]) -> Result<()> {
+        let mut failure = None;
+        for owned in pending {
+            let Some(path) = owned else { continue };
+            match std::fs::remove_file(&path) {
+                Ok(()) => *owned = None,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => *owned = None,
+                Err(error) => {
+                    if failure.is_none() {
+                        failure = Some(error);
+                    }
+                }
+            }
+        }
+        failure.map_or(Ok(()), |error| Err(error.into()))
     }
 
     pub fn acquire_workspace_lease(&self, branch_id: BranchId) -> Result<Option<BranchLease>> {
@@ -375,6 +422,45 @@ pub(crate) fn appended(path: &Path, suffix: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn candidate_cleanup_failure_retains_paths_and_blocks_next_operation_until_retry() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-cleanup-retry-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let db = StoreDb::create(root.join("store.sqlite")).unwrap();
+        let candidate = root.join("candidate");
+        // A directory deterministically fails remove_file even under root in Docker.
+        std::fs::create_dir(&candidate).unwrap();
+        assert!(db
+            .cleanup_candidate_paths([Some(candidate.clone()), None, None, None, None])
+            .is_err());
+        assert!(db.enter_operation().is_err());
+        assert_eq!(
+            db.0.candidate_cleanup.lock().unwrap()[0].as_ref(),
+            Some(&candidate)
+        );
+        std::fs::remove_dir(&candidate).unwrap();
+        std::fs::write(&candidate, b"recovered private artifact").unwrap();
+        db.retry_candidate_cleanup().unwrap();
+        assert!(!candidate.exists());
+        assert!(db
+            .0
+            .candidate_cleanup
+            .lock()
+            .unwrap()
+            .iter()
+            .all(Option::is_none));
+        drop(db.enter_operation().unwrap());
+        drop(db);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn every_owned_connection_uses_the_frozen_runtime_pragmas() {

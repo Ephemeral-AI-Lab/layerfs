@@ -250,7 +250,8 @@ impl Workspace {
         }
         self.policy.check(
             self.spool_bytes
-                .checked_add(appended)
+                .checked_add(self.references.bytes())
+                .and_then(|n| n.checked_add(appended))
                 .ok_or(StoreError::InvalidInput("workspace spool limit"))?,
         )?;
         self.check_piece_resources(&old, &next)?;
@@ -586,6 +587,7 @@ impl Workspace {
             edits: 0,
         });
         let value = Node {
+            commit_dirty: true,
             canonical: None,
             paths: [path].into(),
             mode,

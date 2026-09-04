@@ -168,6 +168,18 @@ impl LayerStackStore {
         working: BuiltRoot,
         choices: &[layerfs_content::filesystem::ReconcileChoice],
     ) -> Result<CommitOutcome> {
+        self.commit_reconciliation_checked(prepared, working, choices, |_, _, _| Ok(()))
+    }
+
+    /// Inspect the actual selected candidate before any publication. The reader
+    /// includes the working and selected private objects for authenticated diff.
+    pub fn commit_reconciliation_checked(
+        &self,
+        prepared: &PreparedReconciliation,
+        working: BuiltRoot,
+        choices: &[layerfs_content::filesystem::ReconcileChoice],
+        inspect: impl FnOnce(&SnapshotReader, ObjectId, ObjectId) -> Result<()>,
+    ) -> Result<CommitOutcome> {
         let branch = self
             .branch(prepared.branch_id)?
             .ok_or(StoreError::NotFound("Branch"))?;
@@ -196,6 +208,16 @@ impl LayerStackStore {
             &prepared.conflicts,
             choices,
         )?;
+        let selected_root = selected.root_id;
+        let selected_counters = selected.counters;
+        let selected = Arc::new(Mutex::new(selected.objects));
+        let mut selected_reader = reader.clone();
+        selected_reader.root = selected_root;
+        selected_reader.overlays.insert(0, selected.clone());
+        inspect(&selected_reader, working_root, selected_root)?;
+        let selected = selected
+            .lock()
+            .map_err(|_| StoreError::Integrity("reconciliation candidate"))?;
         let working = working
             .lock()
             .map_err(|_| StoreError::Integrity("reconciliation candidate"))?;
@@ -203,18 +225,15 @@ impl LayerStackStore {
             .objects
             .lock()
             .map_err(|_| StoreError::Integrity("reconciliation candidate"))?;
-        let objects = combine_candidates(
-            selected.root_id,
-            &[&working, &prepared_objects, &selected.objects],
-        )?;
+        let objects = combine_candidates(selected_root, &[&working, &prepared_objects, &selected])?;
         self.commit_candidate(
             &branch,
             prepared.branch_root,
             prepared.current_layer_id,
             BuiltRoot {
-                root_id: selected.root_id,
+                root_id: selected_root,
                 objects,
-                counters: selected.counters,
+                counters: selected_counters,
             },
         )
     }
@@ -231,6 +250,19 @@ impl LayerStackStore {
         crate::schema::verification_candidate(expected.id, built.counters.spill_count);
         crate::telemetry::note_workspace_commit_cdc(built.counters.cdc_bytes_scanned);
         if built.root_id == expected_root && new_base_layer_id == expected.base_layer_id {
+            let pinned = self.pin_branch(expected.id)?;
+            if pinned.branch.head_commit_id != expected.head_commit_id
+                || pinned.branch.base_layer_id != expected.base_layer_id
+            {
+                return Err(StoreError::CommitHeadMoved {
+                    expected: expected.head_commit_id,
+                    actual: pinned.branch.head_commit_id,
+                });
+            }
+            if pinned.root != expected_root {
+                return Err(StoreError::Integrity("Workspace expected root"));
+            }
+            built.objects.cleanup(&self.db)?;
             return Ok(CommitOutcome::UpToDate {
                 root_id: expected_root,
             });
@@ -248,7 +280,7 @@ impl LayerStackStore {
             base_layer_id: new_base_layer_id,
         };
         let started = Instant::now();
-        let plan = self.db.plan_candidate(&built.objects)?;
+        let mut plan = self.db.plan_candidate(&built.objects)?;
         crate::telemetry::note_workspace_commit_phase(
             crate::WorkspaceCommitPhase::LocalAdmission,
             elapsed_ns(started),
@@ -256,7 +288,7 @@ impl LayerStackStore {
         let started = Instant::now();
         let mut statement_number = 0;
         let admission =
-            admit_planned_objects(&self.db, &built.objects, &plan, &mut statement_number)?;
+            admit_planned_objects(&self.db, built.objects, &mut plan, &mut statement_number)?;
         crate::telemetry::note_workspace_admission(
             admission.transactions,
             admission.max_transaction_objects,
@@ -335,22 +367,7 @@ impl LayerStackStore {
                 actual,
             });
         }
-        let metadata_ns = elapsed_ns(metadata_started);
-        let commit_started = Instant::now();
-        transaction.commit()?;
-        let commit_ns = elapsed_ns(commit_started);
-        crate::telemetry::note_workspace_publication(
-            begin_ns,
-            insert_metrics.payload_ns,
-            insert_metrics.insert_ns,
-            metadata_ns,
-            commit_ns,
-        );
-        crate::telemetry::note_workspace_commit_phase(
-            crate::WorkspaceCommitPhase::Publication,
-            elapsed_ns(started),
-        );
-        crate::telemetry::record_candidate(crate::CandidateReceipt {
+        let receipt = crate::CandidateReceipt {
             candidate_objects: plan.candidate_objects,
             candidate_bytes: plan.candidate_bytes,
             inserted_objects: plan.inserted_objects,
@@ -366,7 +383,24 @@ impl LayerStackStore {
             admission_transactions: admission.transactions,
             max_transaction_objects: admission.max_transaction_objects,
             max_transaction_bytes: admission.max_transaction_bytes,
-        })?;
+        };
+        receipt.validate()?;
+        let metadata_ns = elapsed_ns(metadata_started);
+        let commit_started = Instant::now();
+        transaction.commit()?;
+        let commit_ns = elapsed_ns(commit_started);
+        crate::telemetry::note_workspace_publication(
+            begin_ns,
+            insert_metrics.payload_ns,
+            insert_metrics.insert_ns,
+            metadata_ns,
+            commit_ns,
+        );
+        crate::telemetry::note_workspace_commit_phase(
+            crate::WorkspaceCommitPhase::Publication,
+            elapsed_ns(started),
+        );
+        crate::telemetry::record_candidate(receipt);
         Ok(CommitOutcome::Committed {
             commit_id: commit.id,
             root_id: commit.root_id,

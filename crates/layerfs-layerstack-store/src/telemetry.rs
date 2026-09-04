@@ -36,7 +36,7 @@ pub struct LayerStackInitializationReceipt {
 }
 
 impl CandidateReceipt {
-    fn validate(self) -> Result<()> {
+    pub(crate) fn validate(self) -> Result<()> {
         self.validate_with_max_objects(crate::objects::ADMISSION_BATCH_COUNT as u64)
     }
 
@@ -106,6 +106,25 @@ pub struct WorkspaceCommitReceipt {
     pub object_admission_begin_ns: u64,
     pub object_admission_insert_ns: u64,
     pub object_admission_commit_ns: u64,
+    pub admission_payload_moved_bytes: u64,
+    pub admission_payload_copy_bytes: u64,
+    pub admission_spill_payload_read_bytes: u64,
+    pub admission_pending_owned_peak_bytes: u64,
+    pub reference_events: u64,
+    pub reference_bytes: u64,
+    pub reference_buffer_capacity: u64,
+    pub reference_bookkeeping_ns: u64,
+    pub generic_tree_reads: u64,
+    pub generic_tree_emissions: u64,
+    pub generic_tree_reused_children: u64,
+    pub generic_tree_peak_bytes: u64,
+    pub sort_sequential_read_calls: u64,
+    pub sort_sequential_read_bytes: u64,
+    pub sort_positional_read_calls: u64,
+    pub sort_positional_read_bytes: u64,
+    pub sort_write_calls: u64,
+    pub sort_write_bytes: u64,
+    pub sort_merge_passes: u64,
     pub publication_ns: u64,
     pub publication_begin_ns: u64,
     pub publication_payload_ns: u64,
@@ -146,6 +165,12 @@ pub struct WorkspaceCommitDiagnostics {
     pub namespace_dirty_nodes_visited: u64,
     pub namespace_clean_nodes_visited: u64,
     pub namespace_candidate_probe_nodes: u64,
+    pub handoff_records: u64,
+    pub handoff_spill_bytes: u64,
+    pub handoff_buffer_capacity: u64,
+    pub handoff_inode_pages_read: u64,
+    pub handoff_binding_checks: u64,
+    pub handoff_prepare_ns: u64,
 }
 
 impl WorkspaceCommitReceipt {
@@ -387,6 +412,31 @@ pub fn note_workspace_namespace_visits(
     });
 }
 
+pub fn note_workspace_handoff(
+    records: u64,
+    bytes: u64,
+    capacity: u64,
+    inode_pages: u64,
+    binding_checks: u64,
+    prepare_ns: u64,
+) {
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.handoff_records = diagnostic.handoff_records.saturating_add(records);
+            diagnostic.handoff_spill_bytes = diagnostic.handoff_spill_bytes.saturating_add(bytes);
+            diagnostic.handoff_buffer_capacity = diagnostic.handoff_buffer_capacity.max(capacity);
+            diagnostic.handoff_inode_pages_read = diagnostic
+                .handoff_inode_pages_read
+                .saturating_add(inode_pages);
+            diagnostic.handoff_binding_checks = diagnostic
+                .handoff_binding_checks
+                .saturating_add(binding_checks);
+            diagnostic.handoff_prepare_ns =
+                diagnostic.handoff_prepare_ns.saturating_add(prepare_ns);
+        }
+    });
+}
+
 pub fn note_workspace_commit_tree_visits(visits: u64) {
     WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
         if let Some(diagnostic) = current.borrow_mut().as_mut() {
@@ -458,6 +508,63 @@ pub(crate) fn note_workspace_admission(
             receipt.object_admission_begin_ns = begin_ns;
             receipt.object_admission_insert_ns = insert_ns;
             receipt.object_admission_commit_ns = commit_ns;
+        }
+    });
+}
+
+pub(crate) fn note_workspace_admission_buffers(moved: u64, spill_read: u64, peak: u64) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.admission_payload_moved_bytes = moved;
+            receipt.admission_payload_copy_bytes = 0;
+            receipt.admission_spill_payload_read_bytes = spill_read;
+            receipt.admission_pending_owned_peak_bytes = peak;
+        }
+    });
+}
+
+pub fn note_workspace_generic_commit(
+    ref_events: u64,
+    ref_bytes: u64,
+    ref_buffer: u64,
+    ref_bookkeeping_ns: u64,
+    tree_reads: u64,
+    tree_emissions: u64,
+    tree_reuse: u64,
+    tree_peak: u64,
+) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.reference_events = ref_events;
+            receipt.reference_bytes = ref_bytes;
+            receipt.reference_buffer_capacity = ref_buffer;
+            receipt.reference_bookkeeping_ns = ref_bookkeeping_ns;
+            receipt.generic_tree_reads = tree_reads;
+            receipt.generic_tree_emissions = tree_emissions;
+            receipt.generic_tree_reused_children = tree_reuse;
+            receipt.generic_tree_peak_bytes = tree_peak;
+        }
+    });
+}
+
+pub fn note_workspace_commit_sort(
+    sequential_read_calls: u64,
+    sequential_read_bytes: u64,
+    positional_read_calls: u64,
+    positional_read_bytes: u64,
+    write_calls: u64,
+    write_bytes: u64,
+    merge_passes: u64,
+) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.sort_sequential_read_calls = sequential_read_calls;
+            receipt.sort_sequential_read_bytes = sequential_read_bytes;
+            receipt.sort_positional_read_calls = positional_read_calls;
+            receipt.sort_positional_read_bytes = positional_read_bytes;
+            receipt.sort_write_calls = write_calls;
+            receipt.sort_write_bytes = write_bytes;
+            receipt.sort_merge_passes = merge_passes;
         }
     });
 }
@@ -556,14 +663,12 @@ pub fn note_workspace_create_snapshot(
     })
 }
 
-pub(crate) fn record_candidate(receipt: CandidateReceipt) -> Result<()> {
-    receipt.validate()?;
+pub(crate) fn record_candidate(receipt: CandidateReceipt) {
     RECEIPTS.with(|receipts| {
         receipts
             .borrow_mut()
             .push(StorageReceipt::Candidate(receipt));
     });
-    Ok(())
 }
 
 pub(crate) fn record_initialization_candidate(receipt: CandidateReceipt) -> Result<()> {
@@ -664,6 +769,7 @@ mod tests {
                 namespace_dirty_nodes_visited: 15,
                 namespace_clean_nodes_visited: 16,
                 namespace_candidate_probe_nodes: 17,
+                ..WorkspaceCommitDiagnostics::default()
             }
         );
     }

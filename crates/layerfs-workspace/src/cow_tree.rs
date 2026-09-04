@@ -82,6 +82,7 @@ pub(crate) struct DirectoryData {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Node {
+    pub(crate) commit_dirty: bool,
     pub canonical: Option<InodeId>,
     pub paths: BTreeSet<String>,
     pub mode: u32,
@@ -167,17 +168,20 @@ pub struct Workspace {
     pub(crate) spool_write_metrics: SpoolWriteMetrics,
     pub(crate) capture: crate::capture::CaptureState,
     pub(crate) open_spools: HashMap<NodeId, std::fs::File>,
+    pub(crate) references: crate::references::References,
     pub(crate) mutation_generation: u64,
     pub(crate) mutation_paths: BTreeMap<String, u64>,
     pub(crate) policy: ResourcePolicy,
     pub(crate) nodes: HashMap<NodeId, Node>,
     pub(crate) canonical_nodes: HashMap<InodeId, NodeId>,
-    directory_parents: HashMap<NodeId, NodeId>,
+    pub(crate) directory_parents: HashMap<NodeId, NodeId>,
     pub(crate) dirty: BTreeSet<NodeId>,
     pub(crate) reserved: BTreeSet<NodeId>,
     pub(crate) next_node: u64,
     pub(crate) state: WorkspaceState,
     pub(crate) presentation_failed: bool,
+    pub(crate) commit_handoff: Option<crate::lifecycle::CommitHandoff>,
+    pub(crate) pending_publication: Option<(layerfs_layerstack_store::CommitOutcome, bool)>,
     pub(crate) resolution: Option<crate::reconcile::ResolutionState>,
 }
 
@@ -263,6 +267,7 @@ impl Workspace {
         let spool = spool.to_owned();
         std::fs::create_dir_all(&spool)?;
         let root = Node {
+            commit_dirty: false,
             canonical: Some(resolved.inode),
             paths: BTreeSet::from([String::new()]),
             mode: portable.permission_mode,
@@ -292,6 +297,7 @@ impl Workspace {
             spool_write_metrics: SpoolWriteMetrics::default(),
             capture: crate::capture::CaptureState::default(),
             open_spools: HashMap::new(),
+            references: crate::references::References::default(),
             mutation_generation: 0,
             mutation_paths: BTreeMap::new(),
             policy,
@@ -303,6 +309,8 @@ impl Workspace {
             next_node: 2,
             state: WorkspaceState::Active,
             presentation_failed: false,
+            pending_publication: None,
+            commit_handoff: None,
             resolution: None,
         })
     }
@@ -399,6 +407,7 @@ impl Workspace {
             return Err(StorageError::Integrity("reserved node"));
         }
         let path = self.child_path(parent, name)?;
+        self.prepare_name(parent, name)?;
         self.new_spool_node_reserved(node, mode & 0o777, path.clone())?;
         self.insert_name(parent, name, node)?;
         self.note_mutation([path])?;
@@ -496,13 +505,15 @@ impl Workspace {
             ),
         };
         let node = self.allocate(Node {
+            commit_dirty: false,
             canonical: Some(inode),
             paths: BTreeSet::from([path]),
             mode: portable.permission_mode,
             links: if record.kind == InodeKind::Directory {
                 2
             } else {
-                record.namespace_ref_count as u32
+                u32::try_from(record.namespace_ref_count)
+                    .map_err(|_| StorageError::Integrity("namespace reference count"))?
             },
             pins: 0,
             mtime_seconds: portable.mtime_seconds,
@@ -656,6 +667,10 @@ impl Workspace {
     }
 
     pub(crate) fn directory_mut(&mut self, node: NodeId) -> Result<&mut DirectoryData> {
+        self.nodes
+            .get_mut(&node)
+            .ok_or(StorageError::NotFound("node"))?
+            .commit_dirty = true;
         match &mut self
             .nodes
             .get_mut(&node)
@@ -709,7 +724,7 @@ impl Workspace {
 }
 
 pub(crate) fn portable_metadata(
-    store: &CoreReader<'_>,
+    store: &impl ObjectRead,
     root: layerfs_content::ObjectId,
     kind: InodeKind,
 ) -> Result<PortableMetadataV1> {
@@ -770,6 +785,7 @@ impl Workspace {
     pub fn create_file(&mut self, parent: NodeId, name: &[u8], mode: u32) -> Result<Attr> {
         self.ensure_active()?;
         let path = self.child_path(parent, name)?;
+        self.prepare_name(parent, name)?;
         let node = self.new_spool_node(mode & 0o777, path.clone())?;
         self.insert_name(parent, name, node)?;
         self.note_mutation([path])?;
@@ -779,6 +795,7 @@ impl Workspace {
     pub fn mkdir(&mut self, parent: NodeId, name: &[u8], mode: u32) -> Result<Attr> {
         self.ensure_active()?;
         let path = self.child_path(parent, name)?;
+        self.prepare_name(parent, name)?;
         let node = self.allocate(new_directory(path.clone(), mode));
         self.insert_name(parent, name, node)?;
         self.note_mutation([path])?;
@@ -794,6 +811,7 @@ impl Workspace {
     ) -> Result<Attr> {
         self.ensure_active()?;
         let path = self.child_path(parent, name)?;
+        self.prepare_name(parent, name)?;
         if !self.reserved.remove(&node) {
             return Err(StorageError::Integrity("reserved node"));
         }
@@ -809,7 +827,9 @@ impl Workspace {
             return Err(StorageError::InvalidInput("symlink"));
         }
         let path = self.child_path(parent, name)?;
+        self.prepare_name(parent, name)?;
         let node = self.allocate(Node {
+            commit_dirty: true,
             canonical: None,
             paths: BTreeSet::from([path.clone()]),
             mode: 0o777,
@@ -836,6 +856,11 @@ impl Workspace {
             return Err(StorageError::InvalidInput("directory link"));
         }
         let target = self.child_path(parent, name)?;
+        self.prepare_name(parent, name)?;
+        self.nodes[&node]
+            .links
+            .checked_add(1)
+            .ok_or(StorageError::Integrity("namespace reference overflow"))?;
         self.insert_name(parent, name, node)?;
         let value = self.nodes.get_mut(&node).unwrap();
         value.links += 1;
@@ -847,6 +872,9 @@ impl Workspace {
 
     pub fn unlink(&mut self, parent: NodeId, name: &[u8], directory: bool) -> Result<()> {
         self.ensure_active()?;
+        self.mutation_generation
+            .checked_add(1)
+            .ok_or(StorageError::Integrity("Workspace mutation generation"))?;
         let node = self.lookup_node(parent, name)?;
         let (is_directory, mut paths) = {
             let value = self.nodes.get(&node).unwrap();
@@ -863,6 +891,8 @@ impl Workspace {
         }
         let path = self.child_path(parent, name)?;
         paths.push(path.clone());
+        self.reserve_reference()?;
+        self.note_reference(node, -1);
         self.directory_mut(parent)?
             .changes
             .insert(name.to_vec(), None);
@@ -919,6 +949,9 @@ impl Workspace {
                 return Err(StorageError::InvalidInput("directory not empty"));
             }
         }
+        self.mutation_generation
+            .checked_add(1 + u64::from(existing.is_some()))
+            .ok_or(StorageError::Integrity("Workspace mutation generation"))?;
         if existing.is_some() {
             self.unlink(target_parent, target, source_directory)?;
         }
@@ -973,6 +1006,7 @@ impl Workspace {
             .nodes
             .get_mut(&node)
             .ok_or(StorageError::NotFound("node"))?;
+        value.commit_dirty = true;
         value.mode = mode & 0o1777;
         let paths = value.paths.iter().cloned().collect::<Vec<_>>();
         self.note_mutation(paths)?;
@@ -988,11 +1022,24 @@ impl Workspace {
             .nodes
             .get_mut(&node)
             .ok_or(StorageError::NotFound("node"))?;
+        value.commit_dirty = true;
         value.mtime_seconds = seconds;
         value.mtime_nanoseconds = nanos;
         let paths = value.paths.iter().cloned().collect::<Vec<_>>();
         self.note_mutation(paths)?;
         Ok(())
+    }
+
+    fn prepare_name(&mut self, parent: NodeId, name: &[u8]) -> Result<()> {
+        match self.lookup_node(parent, name) {
+            Ok(_) => return Err(StorageError::InvalidInput("name exists")),
+            Err(StorageError::NotFound(_)) => {}
+            Err(error) => return Err(error),
+        }
+        self.mutation_generation
+            .checked_add(1)
+            .ok_or(StorageError::Integrity("Workspace mutation generation"))?;
+        self.reserve_reference()
     }
 
     fn insert_name(&mut self, parent: NodeId, name: &[u8], node: NodeId) -> Result<()> {
@@ -1001,6 +1048,8 @@ impl Workspace {
             Err(StorageError::NotFound(_)) => {}
             Err(error) => return Err(error),
         }
+        self.reserve_reference()?;
+        self.note_reference(node, 1);
         self.directory_mut(parent)?
             .changes
             .insert(name.to_vec(), Some(node));
@@ -1028,11 +1077,11 @@ impl Workspace {
     }
 
     fn reclaim(&mut self, node: NodeId) {
-        if self
-            .nodes
-            .get(&node)
-            .is_some_and(|value| value.paths.is_empty() && value.pins == 0)
-        {
+        if self.nodes.get(&node).is_some_and(|value| {
+            value.paths.is_empty()
+                && value.pins == 0
+                && (value.links == 0 || matches!(value.data, Data::Directory(_)))
+        }) {
             self.dirty.remove(&node);
             self.directory_parents.remove(&node);
             if let Some(value) = self.nodes.remove(&node) {
@@ -1061,6 +1110,7 @@ impl Workspace {
 
 fn new_directory(path: String, mode: u32) -> Node {
     Node {
+        commit_dirty: true,
         canonical: None,
         paths: BTreeSet::from([path]),
         mode: mode & 0o1777,
