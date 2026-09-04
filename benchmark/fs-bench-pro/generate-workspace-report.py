@@ -28,7 +28,7 @@ FAMILY_COUNTS = dict(zip(("payload_create_read", "tiny_file_churn", "directory_c
 CLEAN = {"workspace-clean-commit", "payload-random-read", "tiny-stat", "directory-metadata-scan", "directory-content-scan"}
 FUSE_CALLBACKS = "lookup getattr setattr readlink mknod mkdir unlink rmdir symlink rename link open read write flush release fsync opendir readdir readdirplus releasedir fsyncdir statfs access create".split()
 IDENTITY_FIELDS = {"product_identity": "product_seal", "harness_identity": "harness_seal", "source_revision": "revision", "image_id": "image_id", "contract_commit": "phase1_contract_commit"}
-FAST_KINDS = {"fast-canonical-verification", "fast-native-verification", "fast-verification-complete"}
+FAST_KINDS = {"fast-canonical-verification", "fast-native-verification", "fast-verification-complete", "fast-dedup-verification", "fast-history-complete"}
 VERIFY_KINDS = FAST_KINDS | {"canonical-verification", "native-verification", "verification-complete", "dedup-verification", "capped-verification", "history-transcript", "history-accounting", "git-semantic-verification", "git-precommit-custody", "git-reopen-custody", "proof-start", "fault-reachability", "transaction-fault-reachability"}
 
 
@@ -254,7 +254,7 @@ def observation_data(records, outcome, acquired, clone):
             for key in ("logical_bytes", "allocated_bytes", "peak_bytes", "file_count", "observation_count"):
                 if type(row.get(key)) is int:
                     reduce_counter(result, prefix + ".max_" + key, row[key], True)
-        elif kind in {"canonical-verification", "history-canonical", "history-accounting", "history-transcript", "dedup-verification", "capped-verification"}:
+        elif kind in {"canonical-verification", "history-canonical", "history-accounting", "history-transcript", "dedup-verification", "capped-verification", "fast-canonical-verification", "fast-native-verification", "fast-dedup-verification"}:
             verification.append({**row, "receipt": receipt(row["receipt"])})
         if kind in {"operation", "commit-diagnostics"} and current_step:
             point = steps.setdefault(current_step, {"step": current_step, "timings": {}, "diagnostics": {}})
@@ -408,7 +408,7 @@ def validate_environment(directory, outcome, build, issues, violations):
     for mount in before.get("Mounts", []):
         destination = mount.get("Destination")
         allowed = destination == "/qualified/git-reference" and mount.get("RW") is False and outcome["family_id"] == "git_tool_workflow"
-        allowed |= destination == "/verification" and outcome["mode"] == "verify" and outcome["family_id"] == "git_tool_workflow"
+        allowed |= destination == "/verification" and (outcome["mode"] == "fast-verify" or outcome["mode"] == "verify" and outcome["family_id"] == "git_tool_workflow")
         require(allowed, f"unapproved runtime mount: {destination}", issues)
     if after.get("State", {}).get("OOMKilled") or outcome.get("container_oom_killed"):
         violations.append("runtime container was OOM-killed")
@@ -1081,9 +1081,111 @@ def validate_preparation_selection(directory, acquired, build, case, issues):
         require(selection.get("source_compatibility") is None, "unexpected preparation compatibility exception", issues)
 
 
-def validate_fast_receipts(directory, outcome, records, successful, issues):
+def validate_fast_receipts(directory, outcome, records, successful, issues, case=None):
+    if outcome.get("verification_profile") != "fast-verify-v2":
+        return validate_fast_receipts_v1(directory, outcome, records, successful, issues)
+    require(not any(row["kind"] in {"sample-complete", "verification-complete", "canonical-verification", "native-verification"} for row in records), "fast profile must not claim exhaustive/full completion", issues)
+    if not successful:return
+    if case is None:raise ValueError("fast-v2 case definition missing")
+    history = case["family_id"] == "dedup_branch_history"
+    dedup = case["family_id"].startswith("dedup_")
+    expected_steps = list(range(case["tier"] + 1)) if history else [1]
+    groups = {kind:[row for row in records if row["kind"] == kind] for kind in FAST_KINDS}
+    for kind in ("fast-canonical-verification", "fast-native-verification"):
+        require([row.get("step") for row in groups[kind]] == expected_steps, "fast profile snapshot coverage/order differs: " + kind, issues)
+    require([row.get("step") for row in groups["fast-dedup-verification"]] == (expected_steps if dedup else []), "fast dedup transcript coverage/order differs", issues)
+    require(len(groups["fast-verification-complete"]) == 1, "fast completion missing/duplicated", issues)
+    if len(groups["fast-verification-complete"]) != 1:return
+    completion = groups["fast-verification-complete"][0]
+    require(completion.get("status") == "fast_iteration_verified" and outcome.get("assurance_status") == "fast_iteration_verified", "fast assurance label invalid", issues)
+    if history:
+        values = groups["fast-history-complete"]
+        require(len(values) == 1 and values[0].get("snapshot_count") == case["tier"] + 1 and values[0].get("commit_count") == case["tier"] and values[0].get("topology_status") == "pass" and values[0].get("exhaustive_object_union_status") == "deferred_phase2", "fast history topology/snapshot/deferral scope missing", issues)
+    else:require(not groups["fast-history-complete"], "nonhistory fast profile emitted history scope", issues)
+    folder = directory / "verifier-exchange/fast-certificate"
+    certificate = None
+    assurance = outcome.get("reference_assurance")
+    binding = outcome.get("verification_certificate_identity")
+    if assurance == "independent_current_content":
+        expected = hashlib.sha256(f"fast-independent-current-content-v2\n{outcome['scenario_id']}\n{outcome['seed']}\n{outcome['input_identity']}\n{outcome['input_recipe_identity']}\n".encode()).hexdigest()
+        require(binding == expected and digest(outcome.get("input_recipe_identity")) and not folder.exists(), "no-reuse binding is not independent current content", issues)
+    else:
+        certificate = read(folder / "certificate.json")
+        require(custody.sha(folder / "certificate.json") == binding and custody.sha(folder / "certificate.tsv") == outcome.get("verification_certificate_projection_identity"), "fast certificate/projection seal differs", issues)
+        require(certificate.get("schema") == "fast-verification-certificate-v2" and certificate.get("profile") == "fast-verify-v2", "unqualified fast certificate schema", issues)
+        assurance = certificate.get("reference_assurance")
+        require(assurance in {"fully_verified", "canonical_input_qualified", "qualified_content_components"}, "unqualified reference assurance", issues)
+        require(certificate.get("seed") == outcome["seed"] and certificate.get("input_plan_sha256") == outcome["input_identity"], "fast reference seed/input differs", issues)
+        source = Path(certificate["source_attempt"]);custody.verify_manifest(source)
+        require(custody.sha(source / "evidence.sha256") == certificate["source_manifest_sha256"], "reference source seal changed", issues)
+        if certificate.get("assurance") == "canonical_input_qualified":
+            qualification = read(source / "input-qualification.json")
+            require(qualification.get("status") == "canonical_input_qualified" and qualification.get("fully_verified") is False and qualification.get("root") == certificate["root"] and certificate.get("reference_native_readback") is False, "canonical-only qualification relabeled or root changed", issues)
+        else:
+            row,_ = runner.qualified_full_row(source, directory.parents[1])
+            require(row.get("verification_pass") is True and row.get("evidence_status") == "PASS" and not row.get("issues") and not row.get("violations") and certificate.get("reference_native_readback") is True, "reference lacks qualified full proof", issues)
+            original = read(source / "outcome.json")
+            require(original.get("source_revision") == certificate.get("source_revision") and original.get("product_identity") == certificate.get("product_seal") and original.get("seed") == certificate.get("source_seed"), "reference producing identity changed", issues)
+            canonical_reference = receipt((source / "verification/canonical-verification/canonical-receipt.txt").read_text())
+            require(canonical_reference.get("verification_status") == "pass" and canonical_reference.get("canonical_role_status") == "pass" and canonical_reference.get("canonical_root") == certificate.get("root"), "reference root/canonical qualification differs", issues)
+            if assurance != "qualified_content_components":require(canonical_reference.get("oracle_identity") == certificate.get("oracle_identity"), "whole-input reference oracle differs", issues)
+        for name, expected in certificate["artifact_sha256"].items():
+            require(custody.sha(folder / name) == expected, "copied/projected certificate artifact differs: " + name, issues)
+        if assurance == "qualified_content_components":
+            for name, source_path in certificate["source_artifacts"].items():require(custody.sha(Path(source_path)) == certificate["source_artifact_sha256"][name], "component original source artifact changed", issues)
+            def table(path, header):
+                with gzip.open(path, "rt") if str(path).endswith(".gz") else open(path) as stream:
+                    rows = stream.read().splitlines()
+                require(bool(rows) and rows[0] == header, "component table header differs", issues)
+                result = {}
+                for line in rows[1:]:
+                    key,value = line.split("\t",1)
+                    if key in result:raise ValueError("component table duplicate path")
+                    result[key] = value
+                return result
+            source_recipes = table(folder / "source-content-recipes.tsv", "path\tcontent_recipe_sha256")
+            target_recipes = table(folder / "target-content-recipes.tsv", "path\tcontent_recipe_sha256")
+            mappings = table(folder / "component-mapping.tsv", "target_path\tsource_path\tcontent_recipe_sha256")
+            roots = table(folder / "file-roots.tsv.gz", "path\tcontent_root")
+            original_roots = table(Path(certificate["source_artifacts"]["file-roots.tsv.gz"]), "path\tcontent_root")
+            require(set(mappings) == set(roots) and len(mappings) == certificate.get("component_count"), "component coverage membership differs", issues)
+            for target, value in mappings.items():
+                original, recipe = value.split("\t")
+                require(digest(recipe) and target_recipes.get(target) == recipe and source_recipes.get(original) == recipe and roots[target] == original_roots.get(original), "component recipe/root mapping is not independently equal", issues)
+            projected = gzip.decompress((folder / "independent-manifest.tsv.gz").read_bytes()).decode().splitlines()
+            original_metadata = (directory / "preparation/master-input-manifest.tsv").read_text().splitlines()
+            require(projected[0] == original_metadata[0] == "workspace-independent-manifest-v1" and set(projected[1:]).issubset(set(original_metadata[1:])), "component metadata is not the independent target fixture", issues)
+    require(digest(binding), "fast reference binding missing", issues)
+    for canonical_event,native_event in zip(groups["fast-canonical-verification"],groups["fast-native-verification"]):
+        canonical,native = receipt(canonical_event["receipt"]),receipt(native_event["receipt"])
+        step = canonical_event["step"]
+        for value in (canonical,native):require(value.get("verification_status") == "fast_iteration_verified" and value.get("fully_verified") in {False,"false"} and value.get("certificate_binding") == binding, "fast receipt scope/binding differs", issues)
+        require(canonical.get("verification_profile") == "fast-verify-v2" and canonical.get("reference_assurance") == assurance and canonical.get("full_canonical_census_performed") in {False,"false"}, "fast reference/census scope differs", issues)
+        for key in ("authenticated_namespace_paths","authenticated_global_inodes","actual_read_regular_paths","actual_read_logical_bytes","skipped_current_store_regular_paths","skipped_current_store_logical_bytes"):
+            number(int(canonical[key]),key)
+        for key in ("native_namespace_paths_verified","native_namespace_types_verified","changed_paths_declared","absent_paths_verified","witness_paths_declared","selected_metadata_paths_verified","selected_regular_paths_verified","selected_regular_bytes_verified","skipped_untouched_regular_bodies","skipped_untouched_metadata_paths","uncertified_regular_paths_checked"):
+            number(int(native[key]),key)
+        require(int(canonical["authenticated_namespace_paths"]) == int(native["native_namespace_paths_verified"]) == int(native["native_namespace_types_verified"]), "fast complete namespace coverage differs", issues)
+        require(digest(canonical.get("canonical_root")) and bool(native.get("fast_witness_profile")) and bool(native.get("oracle_scope")), "fast root/witness/oracle scope missing", issues)
+        covered = directory / f"verifier-exchange/fast-covered-{step}.tsv"
+        require(custody.sha(covered) == native_event.get("coverage_sha256"), "native certified coverage projection differs", issues)
+        covered_paths = covered.read_text().splitlines()
+        require(len(covered_paths) == len(set(covered_paths)), "native certified coverage duplicate", issues)
+        require(int(canonical.get("covered_regular_paths", -1)) == len(covered_paths) and int(canonical["skipped_current_store_regular_paths"]) <= len(covered_paths) and int(native["skipped_untouched_regular_bodies"]) <= len(covered_paths), "fast skipped body count exceeds certified coverage", issues)
+        require(canonical.get("has_reused_reference") in ({True,"true"} if int(canonical["skipped_current_store_regular_paths"]) else {False,"false"}), "fast reuse flag contradicts actual skip count", issues)
+        if assurance == "independent_current_content":
+            require(not covered_paths and int(canonical["skipped_current_store_regular_paths"]) == 0 and int(canonical["skipped_current_store_logical_bytes"]) == 0 and int(native["skipped_untouched_regular_bodies"]) == 0 and canonical.get("reference_root_scope") == "none", "no-reuse skipped uncertified content", issues)
+        elif assurance == "qualified_content_components":
+            require(canonical.get("source_certificate_root") == certificate["root"] and not canonical.get("certificate_root"), "component source root relabeled pristine input", issues)
+        else:require(canonical.get("certificate_root") == certificate["root"], "whole input certificate root differs", issues)
+    for event in groups["fast-dedup-verification"]:
+        require(receipt(event["receipt"]).get("dedup_transcript_status") == "pass" and bool(event.get("assurance")), "fast dedup transcript/assurance missing", issues)
+    require(read(directory / "verification/fast-verification/receipts.json") == [row for row in records if row["kind"] in FAST_KINDS], "retained fast receipts differ from raw", issues)
+
+
+def validate_fast_receipts_v1(directory, outcome, records, successful, issues):
     require(not any(row["kind"] in {"sample-complete", "verification-complete", "canonical-verification", "native-verification"} for row in records), "fast profile must not emit exhaustive/full completion", issues)
-    groups = {kind: [row for row in records if row["kind"] == kind] for kind in FAST_KINDS}
+    groups = {kind: [row for row in records if row["kind"] == kind] for kind in ("fast-canonical-verification", "fast-native-verification", "fast-verification-complete")}
     if not successful:return
     require(all(len(value) == 1 for value in groups.values()), "fast profile lacks unique canonical/native/completion receipts", issues)
     if not all(len(value) == 1 for value in groups.values()):return
@@ -1207,7 +1309,7 @@ def _validate_attempt(outcome, classification, case, build, fast=False):
         if outcome["mode"] == "performance":
             validate_performance(case, outcome, records, issues, violations, successful)
         elif fast:
-            validate_fast_receipts(directory, outcome, records, successful, issues)
+            validate_fast_receipts(directory, outcome, records, successful, issues, case)
         else:
             validate_verification(case, records, issues, successful)
         if outcome["mode"] == "verify":
@@ -1286,6 +1388,14 @@ def runtime_scope_contract_pair(filename):
                  for revision in (CLEAN_PRE_BUDGET_REVISION, RUNTIME_SCOPE_POLICY_REVISION))
 
 
+@lru_cache(maxsize=None)
+def fast_acceptance_contract_pair(filename):
+    if filename != "docs/roadmap/0.1/0.1.3/phase-1-handoff.md":return set()
+    revisions = (CLEAN_PRE_BUDGET_REVISION, RUNTIME_SCOPE_POLICY_REVISION, FAST_ACCEPTANCE_REVISION)
+    hashes = [hashlib.sha256(subprocess.check_output(["git", "show", revision + ":" + filename], cwd=HERE.parents[1])).hexdigest() for revision in revisions]
+    return {(hashes[0], hashes[2]), (hashes[1], hashes[2])}
+
+
 def bridge_dependency_paths(family):
     base = "benchmark/fs-bench-pro/"
     paths = {base + "workspace_common.rs", base + "workload.rs", base + "workspace_registry.rs", base + f"families/{family}.rs"}
@@ -1324,6 +1434,7 @@ def fast_definition_parts(filename, source):
     if filename.endswith("workspace_common.rs"):return source[:source.index(b"pub(crate) fn decode_manifest(")]
     if filename.endswith("ordinary_workloads.rs"):return source.split(b"// BEGIN NATIVE FAST VERIFICATION V1", 1)[0].rstrip()
     if filename.endswith("/workload.rs"):return source[source.index(b"pub(crate) struct Sha256"):]
+    if filename.endswith("workspace_registry.rs"):return source[:source.index(b"pub(crate) fn dispatch(")]
     raise ValueError("fast profile partial source path is not approved")
 
 
@@ -1337,9 +1448,10 @@ def fast_profile_source_proof(revision):
     path = "docs/roadmap/0.1/0.1.3/verification-profiles.md"
     expected = subprocess.check_output(["git", "show", "3eaddf47:" + path], cwd=HERE.parents[1])
     actual = subprocess.check_output(["git", "show", revision + ":" + path], cwd=HERE.parents[1])
-    if actual != expected:raise ValueError("fast profile changes authorized assurance contract")
+    amended = subprocess.check_output(["git", "show", "308ea7030d255720ba78fa88affd188724f108e5:" + path], cwd=HERE.parents[1])
+    if actual not in (expected, amended):raise ValueError("fast profile changes authorized assurance contract")
     return {"baseline_revision": baseline, "source_pairs": pairs, "profile_contract_sha256": hashlib.sha256(actual).hexdigest(),
-        "scope": "Exact separate fast-verification additions and canonical scratch-allocation reuse. Existing full checks and fixed input/oracles remain; old evidence retains actual source, environment and assurance. No cost equivalence or full-gate credit for fast results."}
+        "scope": "Exact separate fast-verification additions and canonical scratch-allocation reuse. Existing full checks and fixed input/oracles remain; old evidence retains actual source, environment and assurance. No cost equivalence or fully-verified label for fast results; authorized qualified fast checks may satisfy routine Phase 1 acceptance."}
 
 
 def validate_bridge_path(filename, expected, revisions):
@@ -1419,9 +1531,87 @@ DEFERRED_SYNC_PAIR = ("5e136f4ba3e7d9ea2c84778440753aa952b02259d643b7179fb2e697e
 DEFERRED_SYNC_SAFE_PROOFS = {"lease-lifecycle", "invalid-sdk-edit", "invalid-namespace", "candidate-failure-retry", "admission-batch-failure-retry", "final-publication-failure-retry", "published-presentation-failure", "dirty-end-discard", "dirty-net-zero", "open-writer-busy", "live-execution-busy", "sustained-600s"}
 
 
+GROUP_REAPER_BRIDGE_KIND = "daemon-normal-termination-v1"
+GROUP_REAPER_PARENT = "f5d1c3036eb501d415031fb3b4b625be423c346f"
+GROUP_REAPER_PATH = "crates/layerfs-daemon/src/main.rs"
+GROUP_REAPER_PAIR = ("cc610c00efa1a19f484781f1ab775e6fcd35de7192ba869b420ba335c0c26d3f", "a980404a7c1b4ea2c18c79aad015983571649c68ed1fe41729e9a81b8b9e455d")
+GROUP_REAPER_SAFE_PROOFS = DEFERRED_SYNC_SAFE_PROOFS | {"short-spool-write", "deferred-nospace"}
+
+
+READONLY_PIN_BRIDGE_KIND = "proxy-readonly-pin-source-scope-v1"
+READONLY_PIN_PARENT = "78d0f46d90744bbce729909cdf57f6eafe2eb9e6"
+READONLY_PIN_PAIR = (DEFERRED_SYNC_PAIR[1], "dcd70b533e264c20c2c123aeae737b831a0f72348d3c5063344f1cbbb5dd3de5")
+READONLY_PIN_AFFECTED_CASES = {f"{prefix}-{tier}" for prefix,tiers in (
+    ("payload-random-read", (1,10,100,500)), ("directory-content-scan", (1,10,100)),
+    ("agent-episodes", (1,10,100,500)), ("dedup-history-metadata", (1,10,100,500))) for tier in tiers}
+
+
+@lru_cache(maxsize=None)
+def readonly_pin_source_proof(old_revision, new_revision):
+    if old_revision != READONLY_PIN_PARENT:raise ValueError("readonly pin bridge must start at exact78")
+    path = UNLINK_SOURCE_PATH
+    trees = [product_tree(revision) for revision in (old_revision,new_revision)]
+    if trees[0].pop(path).split()[:2] != trees[1].pop(path).split()[:2] or trees[0] != trees[1]:raise ValueError("readonly pin repair changed another product/build input")
+    values = [subprocess.check_output(["git","show",revision+":"+path],cwd=HERE.parents[1]) for revision in (old_revision,new_revision)]
+    hashes = tuple(hashlib.sha256(value).hexdigest() for value in values)
+    if hashes != READONLY_PIN_PAIR:raise ValueError("unreviewed readonly pin source hashes")
+    old = b"            return self.send_at(self.node_stream(node), Request::PinRead(node));\n"
+    new = b"            // Open may expose a handle only after the backend retained the inode.\n            // A cached kernel inode can already have been replaced or unlinked.\n            return unit(self.exchange_at(self.node_stream(node), Request::Pin(node, false, false))?);\n"
+    data = values[1]
+    if data.count(new) != 1 or values[0].count(old) != 1:raise ValueError("readonly pin exact runtime fragment differs")
+    data = data.replace(new,old,1)
+    start = data.index(b"    #[test]\n    fn readonly_pin_waits_for_ack_and_rejects_replaced_inode()")
+    end = data.index(b"    #[test]\n    fn deferred_write_error_invalidates_optimistic_observations()",start)
+    if b"#[cfg(test)]\nmod tests {" not in data[:start] or data[:start]+data[end:] != values[0]:raise ValueError("readonly pin changed outside exact runtime fragment/test")
+    return {"source_path":path,"old_sha256":hashes[0],"new_sha256":hashes[1],"unchanged_product_tree_sha256":hashlib.sha256(json.dumps(trees[0],sort_keys=True).encode()).hexdigest(),
+        "affected_performance_case_ids":sorted(READONLY_PIN_AFFECTED_CASES),"scope":"Exactly synchronous acknowledgement for readonly regular-file Open. The 45 affected timing slots must execute repaired product; other 328 retain original producing source costs only. Independently passing full correctness can retain its own source/assurance. No equivalence claim for new Pin latency, daemon startup, or observer cost."}
+
+
+def validate_readonly_pin_records(records, case, outcome, issues):
+    require(outcome.get("product_status") == "pass", "failed readonly pin evidence cannot be retained as a correct result", issues)
+    if outcome["mode"] == "performance":require(case["scenario_id"] not in READONLY_PIN_AFFECTED_CASES, "readonly Open timing must execute repaired synchronous Pin", issues)
+    else:require(outcome.get("assurance_status") in {"fully_verified","fast_iteration_verified"}, "retained logical proof lacks its actual assurance", issues)
+    return {"predicate":"no changed readonly regular-file Open in retained performance; independent logical correctness only for retained verification", "actual_source_revision":outcome["source_revision"],"timing_claim":"Original producing source; changed Pin latency is not inferred"}
+
+
+@lru_cache(maxsize=None)
+def group_reaper_source_proof(old_revision, new_revision):
+    if old_revision != GROUP_REAPER_PARENT:raise ValueError("group-reaper bridge must start at exact f5d1")
+    if product_tree(READONLY_PIN_PARENT)[UNLINK_SOURCE_PATH] != product_tree(new_revision)[UNLINK_SOURCE_PATH]:
+        return {"prior_group_reaper_source_proof":group_reaper_source_proof(old_revision,READONLY_PIN_PARENT),"readonly_pin_source_proof":readonly_pin_source_proof(READONLY_PIN_PARENT,new_revision),"scope":"Exact normal-termination chain plus readonly Pin repair; preserve source-specific costs and exclude affected readonly timing slots."}
+    trees = [product_tree(revision) for revision in (old_revision, new_revision)]
+    if trees[0].pop(GROUP_REAPER_PATH).split()[:2] != trees[1].pop(GROUP_REAPER_PATH).split()[:2] or trees[0] != trees[1]:raise ValueError("group-reaper repair changed another product/build input")
+    data = [subprocess.check_output(["git", "show", revision + ":" + GROUP_REAPER_PATH], cwd=HERE.parents[1]) for revision in (old_revision, new_revision)]
+    hashes = tuple(hashlib.sha256(value).hexdigest() for value in data)
+    if hashes != GROUP_REAPER_PAIR:raise ValueError("unreviewed daemon reaper implementation")
+    layouts = [value[value.index(b"    struct Termination {"):value.index(b"    struct ResourceSampler {")] for value in data]
+    if layouts[0] != layouts[1]:raise ValueError("termination layout changed")
+    guard = data[1][data[1].index(b"    fn finish_terminated_group("):data[1].index(b"    fn reap_terminated_descendants(")]
+    if b"if termination.reason.load(Ordering::Acquire) == 0 {\n            return status;" not in guard:raise ValueError("normal termination lacks immediate no-reap return")
+    startup = data[1][data[1].index(b"    pub fn run() -> io::Result<()> {"):data[1].index(b"        umask(Mode::from_bits_truncate(0o077));")]
+    if b"set_child_subreaper(true)" not in startup:raise ValueError("subreaper setup is not before listeners/workloads")
+    return {"source_path": GROUP_REAPER_PATH, "old_sha256": hashes[0], "new_sha256": hashes[1], "unchanged_termination_layout_sha256": hashlib.sha256(layouts[0]).hexdigest(), "normal_no_reap_guard_sha256": hashlib.sha256(guard).hexdigest(), "startup_fragment_sha256": hashlib.sha256(startup).hexdigest(),
+        "scope": "Owned-PGID reaping only after direct Child wait and nonzero existing termination reason. Retained cases must have normal non-stopped execution and successful mount End. Old timings/resources keep original source; new startup prctl and normal guard cost are not measured or claimed equal by old samples."}
+
+
+def source_stage(proof, key):
+    return isinstance(proof, dict) and (key in proof or any(source_stage(value, key) for value in proof.values() if isinstance(value, dict)))
+
+
+def validate_group_reaper_records(records, case, issues):
+    operation = case.get("operation")
+    require(operation not in {"workload-cancel", "dirty-runtime-disconnect"}, "forced termination proof must execute repaired daemon", issues)
+    if case.get("family_id") == "workspace_reliability":require(operation in GROUP_REAPER_SAFE_PROOFS, "unreviewed historical daemon termination recipe", issues)
+    require(not any(row.get("family") == "workspace.stop" for row in operation_rows(records, issues)), "retained sample requested forced termination", issues)
+    require(not any("stopped: true" in str(row.get("details", "")) or "RemoteError::OutputFailed" in str(row.get("details", "")) for row in records), "retained sample has forced/output-failure termination", issues)
+    return {"predicate": "normal termination at reaper guard; no forced-group wait", "basis": "Qualified successful non-stopped execution and acknowledged mount End, with exact reviewed caller error sites", "cost_limit": "Original source only; startup prctl and normal guard overhead not measured by retained observations"}
+
+
 @lru_cache(maxsize=None)
 def deferred_sync_source_proof(old_revision, new_revision):
     if old_revision != DEFERRED_SYNC_PARENT:raise ValueError("deferred-sync source pair must start at exact03")
+    if product_tree(GROUP_REAPER_PARENT)[GROUP_REAPER_PATH] != product_tree(new_revision)[GROUP_REAPER_PATH]:
+        return {"prior_deferred_sync_source_proof": deferred_sync_source_proof(old_revision, GROUP_REAPER_PARENT), "group_reaper_source_proof": group_reaper_source_proof(GROUP_REAPER_PARENT, new_revision), "scope": "Exact cache-error and daemon-reaping chain; apply both respective unreached-branch predicates and keep old source costs distinct."}
     path = "crates/layerfs-fuse/src/proxy_client.rs"
     trees = [product_tree(revision) for revision in (old_revision, new_revision)]
     if trees[0].pop(path).split()[:2] != trees[1].pop(path).split()[:2] or trees[0] != trees[1]:raise ValueError("deferred-sync repair changed another product/build input")
@@ -1769,8 +1959,18 @@ def configured_product_bridges(config, primary, cases):
     approved = []
     fields = {"kind", "old_revision", "new_revision", "old_product_seal", "new_product_seal", "case_ids", "source_proof", "required_zero_counters", "reviewed_impact"}
     for bridge in config.get("product_compatibility", []):
-        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND, RETAINED_PROOF_KIND, OWNER_DROP_BRIDGE_KIND, DEFERRED_SYNC_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
+        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND, RETAINED_PROOF_KIND, OWNER_DROP_BRIDGE_KIND, DEFERRED_SYNC_BRIDGE_KIND, GROUP_REAPER_BRIDGE_KIND, READONLY_PIN_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
             raise ValueError("invalid exact unlink product bridge identity")
+        if bridge["kind"] == READONLY_PIN_BRIDGE_KIND:
+            if bridge["required_zero_counters"] != [] or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases for case in bridge["case_ids"]) or len(bridge["reviewed_impact"].strip()) < 80:raise ValueError("readonly pin bridge lacks exact reviewed cases")
+            if bridge["source_proof"] != readonly_pin_source_proof(bridge["old_revision"],bridge["new_revision"]):raise ValueError("readonly pin source proof differs")
+            if any(item["old_revision"] == bridge["old_revision"] for item in approved):raise ValueError("duplicate readonly pin source bridge")
+            approved.append(bridge);continue
+        if bridge["kind"] == GROUP_REAPER_BRIDGE_KIND:
+            if bridge["required_zero_counters"] != [] or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases or cases[case].get("operation") in {"workload-cancel", "dirty-runtime-disconnect"} or (cases[case].get("family_id") == "workspace_reliability" and cases[case].get("operation") not in GROUP_REAPER_SAFE_PROOFS) for case in bridge["case_ids"]) or len(bridge["reviewed_impact"].strip()) < 80:raise ValueError("group reaper bridge lacks qualified normal cases")
+            if bridge["source_proof"] != group_reaper_source_proof(bridge["old_revision"], bridge["new_revision"]):raise ValueError("group reaper source proof differs")
+            if any(item["old_revision"] == bridge["old_revision"] for item in approved):raise ValueError("duplicate group reaper bridge")
+            approved.append(bridge);continue
         if bridge["kind"] == DEFERRED_SYNC_BRIDGE_KIND:
             if bridge["required_zero_counters"] != [] or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases or cases[case].get("operation") in {"short-spool-write", "deferred-nospace"} or (cases[case].get("family_id") == "workspace_reliability" and cases[case].get("operation") not in DEFERRED_SYNC_SAFE_PROOFS) for case in bridge["case_ids"]) or len(bridge["reviewed_impact"].strip()) < 80:
                 raise ValueError("deferred-sync bridge lacks exact unaffected cases")
@@ -1880,17 +2080,20 @@ def full_verifier_source_proof(old_revision, new_revision):
     old_pairs = runner.fast_verifier_source_proof(old_revision)
     new_pairs = runner.fast_verifier_source_proof(new_revision)
     path = "benchmark/fs-bench-pro/src/workspace_verify.rs"
-    expected_new = runner.HISTORICAL_FULL_VERIFIER_HASHES.get(new_revision, runner.FAST_VERIFIER_HASHES["src/workspace_verify.rs"])
+    v2 = new_pairs.get("benchmark/fs-bench-pro/src/workspace_bench.rs", {}).get("new_sha256") == runner.FAST_V2_HASHES["src/workspace_bench.rs"]
+    expected_new = runner.FAST_V2_HASHES["src/workspace_verify.rs"] if v2 else runner.HISTORICAL_FULL_VERIFIER_HASHES.get(new_revision, runner.FAST_VERIFIER_HASHES["src/workspace_verify.rs"])
     if old_pairs[path]["new_sha256"] != runner.HISTORICAL_FULL_VERIFIER_SHA256 or new_pairs[path]["new_sha256"] != expected_new:
         raise ValueError("full verifier source pair differs")
     changed = set(subprocess.check_output(["git", "diff", "--name-only", old_revision, new_revision, "--", "benchmark/fs-bench-pro"], cwd=HERE.parents[1], text=True).splitlines())
-    if path not in changed or changed - {path, "benchmark/fs-bench-pro/workspace-runner.py", "benchmark/fs-bench-pro/generate-workspace-report.py"}:
+    allowed = set(new_pairs) if v2 else {path}
+    if path not in changed or changed - allowed - {"benchmark/fs-bench-pro/workspace-runner.py", "benchmark/fs-bench-pro/generate-workspace-report.py"}:
         raise ValueError("full verifier repair changed a fixture/workload/host dependency")
     contracts = {}
     for name in sorted(NORMATIVE_CONTRACT_FILES):
         values = [subprocess.check_output(["git", "show", revision + ":" + name], cwd=HERE.parents[1]) for revision in (old_revision, new_revision)]
-        if values[0] != values[1]:raise ValueError("full verifier bridge changed frozen contract: " + name)
-        contracts[name] = hashlib.sha256(values[0]).hexdigest()
+        hashes = tuple(hashlib.sha256(value).hexdigest() for value in values)
+        if values[0] != values[1] and hashes not in fast_acceptance_contract_pair(name):raise ValueError("full verifier bridge changed frozen contract: " + name)
+        contracts[name] = hashes[0] if hashes[0] == hashes[1] else {"old_sha256": hashes[0], "new_sha256": hashes[1], "scope": "exact user fast-acceptance notice only; fixture/error/resource definitions unchanged"}
     return {"old_revision": old_revision, "new_revision": new_revision,
         "old_verifier_sha256": runner.HISTORICAL_FULL_VERIFIER_SHA256,
         "new_verifier_sha256": expected_new,
@@ -1932,7 +2135,7 @@ def family_builds(campaign, assets, primary, registry):
             allowed = [1] if selected_case.get("proof_only") or selected_case.get("inherited") and mode == "verify" else range(1, 6) if selected_case.get("inherited") else range(1, 4)
             valid = str(seed) == parts[2] and seed in allowed and not (selected_case.get("proof_only") and mode != "verify")
             if mode == "fast-verify":
-                valid = valid and not selected_case.get("inherited") and selected_case.get("input_mode") == "store" and not selected_case["family_id"].startswith("dedup_")
+                valid = valid and not selected_case.get("inherited") and not selected_case.get("proof_only") and selected_case.get("operation") != "git-tool"
         if not valid or not isinstance(choice, dict) or set(choice) != {"assets", "reason", "build_manifest_sha256"}:
             raise ValueError("unknown selector or malformed scoped build provenance")
         if not isinstance(choice["reason"], str) or len(choice["reason"].strip()) < 16 or not digest(choice["build_manifest_sha256"]):
@@ -1970,7 +2173,7 @@ def family_builds(campaign, assets, primary, registry):
         # Every explicitly normative file must exist and remain byte-identical.
         for filename in NORMATIVE_CONTRACT_FILES:
             old_hash, new_hash = build["phase1_contract_files"].get(filename), primary["phase1_contract_files"].get(filename)
-            if old_hash is None or new_hash is None or old_hash != new_hash and (old_hash, new_hash) != runtime_scope_contract_pair(filename):
+            if old_hash is None or new_hash is None or old_hash != new_hash and (old_hash, new_hash) != runtime_scope_contract_pair(filename) and (old_hash, new_hash) not in fast_acceptance_contract_pair(filename):
                 raise ValueError(f"scoped mapping changed existing frozen contract beyond exact user scope amendment: {filename}")
         family = parts[1] if parts[0] == "family" else cases[parts[1]]["family_id"]
         if [row for row in registry if row["family_id"] == family] != [row for row in candidate_registry if row["family_id"] == family]:
@@ -2121,12 +2324,35 @@ def phase1_scope(registry, suppressions):
     return active, suppressed
 
 
+FAST_ACCEPTANCE_REVISION = "308ea7030d255720ba78fa88affd188724f108e5"
+FAST_REFERENCE_REVISION = "873a280b53cb6b3b9c8e491bb29454e81b44eaa1"
+
+
+def fast_acceptance_policy():
+    files = {}
+    for name, revision in (("phase-1-fast-verification-amendment.md", FAST_ACCEPTANCE_REVISION), ("phase-1-fast-reference-qualification.md", FAST_REFERENCE_REVISION)):
+        path = "docs/roadmap/0.1/0.1.3/" + name
+        data = subprocess.check_output(["git", "show", revision + ":" + path], cwd=HERE.parents[1])
+        if (HERE.parents[1] / path).read_bytes() != data:raise ValueError("fast acceptance contract differs from explicit user amendment")
+        files[path] = {"revision": revision, "sha256": hashlib.sha256(data).hexdigest()}
+    return {"routine": "qualified fast or compatible completed full", "targeted": "original exact proof gates unchanged", "full_routine_remainder": "deferred to Phase2; never labelled passing", "files": files}
+
+
+def verification_accepted(case, value):
+    return bool(value.get("verification_pass") or not case.get("proof_only") and value.get("fast_iteration_pass"))
+
+
+def acceptance_slot(outcome):
+    return (outcome.get("scenario_id"), outcome.get("seed"), "verify" if outcome.get("mode") == "fast-verify" else outcome.get("mode"))
+
+
 def terminal_status(missing, invalid, issues, failures):
     return "NO_GO" if missing or invalid or issues or failures else "PHASE1_TERMINAL_PASS"
 
 
 def generate(campaign, assets):
     build, registry = qualified_build(assets)
+    acceptance_policy = fast_acceptance_policy()
     new, proofs, inherited = registry_cases(registry)
     selected_builds, build_provenance, compatibility = family_builds(campaign, assets, build, registry)
     product_compatibility = {item["old_revision"]: item for selection in build_provenance.values() for item in selection.get("product_compatibility", [])}
@@ -2142,7 +2368,7 @@ def generate(campaign, assets):
     suppressions = suppression_ledger["cases"]
     required, suppressed_slots = phase1_scope(registry, suppressions)
     required_keys = {(case["scenario_id"], seed, mode) for case, seed, mode in required}
-    current = [row for row in ledger.values() if row.get("mode") != "fast-verify" and row.get("scenario_id") not in suppressions and all(row.get(key) == selected_build(selected_builds, row, row.get("mode"))[value] for key, value in IDENTITY_FIELDS.items())]
+    current = [row for row in ledger.values() if row.get("scenario_id") not in suppressions and all(row.get(key) == selected_build(selected_builds, row, row.get("mode"))[value] for key, value in IDENTITY_FIELDS.items())]
     by_slot, global_issues, evidence_paths = {}, [], set()
     for family in {case["family_id"] for case in registry}:
         environments = {row.get("environment_identity") for row in current if row.get("family_id") == family and row.get("mode") == "performance"}
@@ -2156,7 +2382,7 @@ def generate(campaign, assets):
         if not any(value.get("source_revision") == chosen["revision"] and value.get("image_id") == chosen["image_id"] for chosen in selected_builds.values()):
             continue
         planned_rows = value.get("planned_slots")
-        planned = {(value.get("source_revision"), value.get("image_id"), *slot) for slot in planned_rows if isinstance(slot, list) and len(slot) == 3 and isinstance(slot[0], str) and type(slot[1]) is int and isinstance(slot[2], str) and slot[2] in {"performance", "verify"}} if isinstance(planned_rows, list) else set()
+        planned = {(value.get("source_revision"), value.get("image_id"), *slot) for slot in planned_rows if isinstance(slot, list) and len(slot) == 3 and isinstance(slot[0], str) and type(slot[1]) is int and isinstance(slot[2], str) and slot[2] in {"performance", "verify", "fast-verify"}} if isinstance(planned_rows, list) else set()
         if not planned & selected_invocation_slots:
             continue
         try:
@@ -2179,25 +2405,31 @@ def generate(campaign, assets):
         global_issues.append("no retained CLI invocation wall receipts")
     if selected_invocation_slots - covered_invocation_slots:
         global_issues.append("selected outcomes lack matching CLI invocation slot receipts")
+    actual_slots = set()
+    case_by_id = {case["scenario_id"]: case for case in registry}
     for outcome in current:
-        key = (outcome.get("scenario_id"), outcome.get("seed"), outcome.get("mode"))
-        if key not in required_keys or key in by_slot or outcome.get("evidence_path") in evidence_paths:
-            global_issues.append(f"duplicate, extra, or reused slot/evidence: {key}")
-        else:
+        key = acceptance_slot(outcome)
+        actual = (outcome.get("scenario_id"), outcome.get("seed"), outcome.get("mode"))
+        if key not in required_keys or actual in actual_slots or outcome.get("evidence_path") in evidence_paths or (outcome.get("mode") == "fast-verify" and case_by_id.get(key[0], {}).get("proof_only")):
+            global_issues.append(f"duplicate, extra, or reused slot/evidence: {actual}")
+            continue
+        actual_slots.add(actual);evidence_paths.add(outcome.get("evidence_path"))
+        previous = by_slot.get(key)
+        # A reached full failure cannot be hidden behind weaker fast coverage.
+        if previous is None or (outcome.get("mode") == "verify" and outcome.get("coverage_status") == "executed") or (previous.get("coverage_status") != "executed" and outcome.get("mode") == "fast-verify"):
             by_slot[key] = outcome
-            evidence_paths.add(outcome.get("evidence_path"))
     missing, rows, invalid, failures = [], [], [], []
-    checked = {}
+    checked, checked_by_evidence = {}, {}
     for case, seed, mode in required:
         key = (case["scenario_id"], seed, mode)
         outcome = by_slot.get(key)
         if outcome is None:
-            missing.append({"case": key[0], "seed": seed, "mode": mode})
+            missing.append({"case": key[0], "seed": seed, "mode": "fast-verify" if mode == "verify" and not case.get("proof_only") else mode, "requirement": "routine fast or compatible full" if mode == "verify" and not case.get("proof_only") else "original targeted/performance gate"})
             continue
         classification = classifications.get(Path(outcome["evidence_path"]).name, {})
-        selected_source = selected_build(selected_builds, case, mode, seed)
+        selected_source = selected_build(selected_builds, case, outcome["mode"], seed)
         product_bridge = matching_product_bridge(list(product_compatibility.values()), selected_source, build, case["scenario_id"])
-        value = validate_attempt(outcome, classification, case, selected_source)
+        value = (validate_fast_attempt if outcome["mode"] == "fast-verify" else validate_attempt)(outcome, classification, case, selected_source)
         predicate_scope = None
         if product_bridge:
             try:
@@ -2205,6 +2437,10 @@ def generate(campaign, assets):
                 if product_bridge["kind"] == OWNER_DROP_BRIDGE_KIND:
                     predicate_scope = validate_owner_drop_records(retained_records, case, value["issues"])
                     if "deferred_sync_source_proof" in product_bridge["source_proof"]:predicate_scope["deferred_sync"] = validate_deferred_sync_records(retained_records, case, value["issues"])
+                elif product_bridge["kind"] == READONLY_PIN_BRIDGE_KIND:
+                    predicate_scope = validate_readonly_pin_records(retained_records,case,outcome,value["issues"])
+                elif product_bridge["kind"] == GROUP_REAPER_BRIDGE_KIND:
+                    predicate_scope = validate_group_reaper_records(retained_records, case, value["issues"])
                 elif product_bridge["kind"] == DEFERRED_SYNC_BRIDGE_KIND:
                     predicate_scope = validate_deferred_sync_records(retained_records, case, value["issues"])
                 elif product_bridge["kind"] == RETAINED_PROOF_KIND:
@@ -2221,6 +2457,10 @@ def generate(campaign, assets):
                     predicate_scope = validate_empty_generation_records(retained_records, case, value["issues"])
                 else:
                     validate_no_unlink_records(retained_records, value["issues"])
+                if source_stage(product_bridge["source_proof"], "readonly_pin_source_proof"):
+                    predicate_scope = {**(predicate_scope or {}), "readonly_pin":validate_readonly_pin_records(retained_records,case,outcome,value["issues"])}
+                if source_stage(product_bridge["source_proof"], "group_reaper_source_proof"):
+                    predicate_scope = {**(predicate_scope or {}), "group_reaper": validate_group_reaper_records(retained_records, case, value["issues"])}
             except (OSError, ValueError, TypeError, KeyError) as error:
                 value["issues"].append(f"product bridge observation invalid: {error}")
             if value["issues"]:
@@ -2232,8 +2472,10 @@ def generate(campaign, assets):
         if mode == "performance" and value["product_status"] == "pass":
             require(type(value["metrics"].get("pure_call_sum_ns")) is int and value["metrics"]["pure_call_sum_ns"] <= 15_000_000_000,
                     "active performance exceeds15s or lacks the exact cumulative product-time receipt; durable suppression required", value["issues"])
-        checked[key] = value
-        row = {"case": key[0], "family_id": case["family_id"], "seed": seed, "mode": mode, "assurance_status": "fully_verified" if value["verification_pass"] else "not_verified", "inherited": case.get("inherited", False),
+        if value["issues"] or value["violations"]:
+            value["verification_pass"] = False;value["fast_iteration_pass"] = False
+        checked[key] = value;checked_by_evidence[outcome["evidence_path"]] = value
+        row = {"case": key[0], "family_id": case["family_id"], "seed": seed, "mode": outcome["mode"], "required_mode": mode, "phase1_verification_accepted": verification_accepted(case, value), "assurance_status": "fully_verified" if value["verification_pass"] else "fast_iteration_verified" if value["fast_iteration_pass"] else "not_verified", "inherited": case.get("inherited", False),
                "source_identity": {key: outcome.get(key) for key in IDENTITY_FIELDS}, "source_arm": outcome.get("source_arm"), "raw_product_status": outcome.get("product_status"), "coverage_status": outcome.get("coverage_status"), "product_status": value["product_status"], "evidence_status": "REVISE" if value["issues"] else "PASS",
                "issues": value["issues"], "violations": value["violations"], "evidence": outcome["evidence_path"], "metrics": value["metrics"], "resource_observations": value["resource_observations"], "observations": value["observations"], "canonical_packages": value["canonical_packages"],
                "verification_summary": verification_summary(value["observations"], value["canonical_packages"]), "environment_identity": outcome.get("environment_identity"), "input_identity": outcome.get("input_identity"), "invalidation_context": invalidation, "product_source_compatibility": product_bridge, "product_predicate_scope": predicate_scope,
@@ -2249,18 +2491,18 @@ def generate(campaign, assets):
         case = next(case for case in registry if case["scenario_id"] == row["case"])
         proof_key = (row["case"], 1 if case.get("inherited") else row["seed"], "verify")
         proof = checked.get(proof_key, {})
-        outcome = by_slot[(row["case"], row["seed"], row["mode"])]
+        outcome = by_slot[(row["case"], row["seed"], row["required_mode"])]
         proof_outcome = by_slot.get(proof_key, {})
         same_source = all(proof_outcome.get(key) == outcome.get(key) for key in IDENTITY_FIELDS)
         bridge = next((item for item in compatibility if item["family_id"] == case["family_id"] and item["performance_revision"] == outcome.get("source_revision") and item["verification_revision"] == proof_outcome.get("source_revision")), None)
         row["verification_source_compatibility"] = "identical sealed source" if same_source else bridge
-        eligible = (same_source or bridge is not None) and not global_issues and row["mode"] == "performance" and row["evidence_status"] == "PASS" and row["product_status"] == "pass" and proof.get("verification_pass") and proof_outcome.get("input_identity") == outcome.get("input_identity") and proof_outcome.get("environment_identity") == outcome.get("environment_identity")
+        eligible = (same_source or bridge is not None) and not global_issues and row["mode"] == "performance" and row["evidence_status"] == "PASS" and row["product_status"] == "pass" and verification_accepted(case, proof) and proof_outcome.get("input_identity") == outcome.get("input_identity") and proof_outcome.get("environment_identity") == outcome.get("environment_identity")
         row["performance_claim_eligible"] = bool(eligible)
         if eligible:
             source_id, identity = source_group(outcome)
             distribution_sources[source_id] = identity
             proof_details = verification_summary(proof["observations"], proof["canonical_packages"])
-            row["matched_verification"] = {"evidence": proof_outcome["evidence_path"], "source_identity": source_identity(proof_outcome), **proof_details}
+            row["matched_verification"] = {"evidence": proof_outcome["evidence_path"], "source_identity": source_identity(proof_outcome), "assurance_status": "fully_verified" if proof.get("verification_pass") else "fast_iteration_verified", "mode": proof_outcome["mode"], **proof_details}
             for metric, value in {**row["metrics"], **proof_details["final_metrics"]}.items():
                 distributions[(source_id, row["case"])][metric].append(value)
             verified_steps = {point["step"]: point for point in proof_details["steps"]}
@@ -2326,25 +2568,39 @@ def generate(campaign, assets):
         case = next((item for item in registry if item["scenario_id"] == outcome.get("scenario_id")), None)
         selected = selected_build(selected_builds, outcome, "fast-verify") if case else None
         if selected is None or any(outcome.get(key) != selected[value] for key, value in IDENTITY_FIELDS.items()):continue
-        value = validate_fast_attempt(outcome, classifications.get(Path(outcome["evidence_path"]).name, {}), case, selected)
-        if selected["product_seal"] != build["product_seal"]:
+        cached = outcome["evidence_path"] in checked_by_evidence
+        value = checked_by_evidence.get(outcome["evidence_path"]) or validate_fast_attempt(outcome, classifications.get(Path(outcome["evidence_path"]).name, {}), case, selected)
+        if not cached and selected["product_seal"] != build["product_seal"]:
             bridge = matching_product_bridge(list(product_compatibility.values()), selected, build, case["scenario_id"])
             if bridge["kind"] != OWNER_DROP_BRIDGE_KIND:raise ValueError("unqualified fast demonstration product bridge")
             fast_records = raw(Path(outcome["evidence_path"]) / "raw.jsonl")
             validate_owner_drop_records(fast_records, case, value["issues"])
             if "deferred_sync_source_proof" in bridge["source_proof"]:validate_deferred_sync_records(fast_records, case, value["issues"])
+            if source_stage(bridge["source_proof"], "group_reaper_source_proof"):validate_group_reaper_records(fast_records, case, value["issues"])
+            if source_stage(bridge["source_proof"], "readonly_pin_source_proof"):validate_readonly_pin_records(fast_records,case,outcome,value["issues"])
             value["fast_iteration_pass"] = value["fast_iteration_pass"] and not value["issues"]
         fast_results.append({"case": outcome["scenario_id"], "seed": outcome["seed"], "mode": "fast-verify", "evidence": outcome["evidence_path"],
             "source_identity": source_identity(outcome), "environment_identity": outcome.get("environment_identity"),
-            "assurance_status": "fast_iteration_verified" if value["fast_iteration_pass"] else "not_verified", "counts_toward_full_phase1_gate": False,
+            "assurance_status": "fast_iteration_verified" if value["fast_iteration_pass"] else "not_verified", "counts_toward_full_phase1_gate": False, "counts_toward_routine_phase1_acceptance": bool(not case.get("proof_only") and value["fast_iteration_pass"] and (by_slot.get(acceptance_slot(outcome), {}).get("mode") == "fast-verify" or checked.get(acceptance_slot(outcome), {}).get("verification_pass"))),
             "certificate_identity": outcome.get("verification_certificate_identity"), **value})
+    routine = {(case["scenario_id"], seed) for case, seed, mode in required if mode == "verify" and not case.get("proof_only")}
+    targeted = {(case["scenario_id"], seed) for case, seed, mode in required if mode == "verify" and case.get("proof_only")}
+    full = {(row["case"], row["seed"]) for row in rows if row["assurance_status"] == "fully_verified"}
+    fast = {(row["case"], row["seed"]) for row in rows if row["assurance_status"] == "fast_iteration_verified" and row["phase1_verification_accepted"]}
+    deferred_full = [{"case": case, "seed": seed, "mode": "verify", "status": "deferred_phase2", "phase1_requirement": "qualified fast verification still required unless already accepted"} for case, seed in sorted(routine - full)]
+    unresolved_fast = [row for row in fast_results if not row.get("fast_iteration_pass")]
+    if unresolved_fast:global_issues.append("selected fast verification has unresolved failed/invalid outcomes")
+    counts.update(routine_verification_required=len(routine), routine_completed_full=len(routine & full), routine_accepted_fast=len(routine & fast),
+        routine_verification_accepted=len(routine & (full | fast)), routine_acceptance_missing=len(routine - full - fast),
+        routine_exhaustive_deferred_phase2=len(deferred_full), targeted_verification_required=len(targeted), targeted_completed=len(targeted & full), targeted_remaining=len(targeted - full),
+        unresolved_fast_results=len(unresolved_fast))
     summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "scoped_builds": build_provenance, "verification_compatibility": compatibility, "product_compatibility": list(product_compatibility.values()), "runtime_budget_compatibility": next((item["runtime_budget_compatibility"] for item in build_provenance.values() if item.get("runtime_budget_compatibility")), None), "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
-               "fast_iteration_results": fast_results, "fast_profile_scope": "Separate development assurance; no exhaustive Phase1 coverage or performance claim. Full verify never falls back to fast.",
+               "fast_iteration_results": fast_results, "fast_profile_scope": "Qualified fast verification suffices for routine Phase1 acceptance under the explicit user amendment; assurance remains fast_iteration_verified, never fully_verified. Targeted gates remain unchanged.", "verification_acceptance_policy": acceptance_policy, "exhaustive_deferred_phase2": deferred_full,
                "full_verifier_compatibility": next((item["full_verifier_compatibility"] for item in build_provenance.values() if item.get("full_verifier_compatibility")), None),
                "runtime_suppressions": suppression_ledger, "suppressed_slots": suppressed_slots, "family_scope": family_scope,
                "suppressed_original_outcomes": [value for value in retained_outcomes if value["phase1_scope_status"] == "suppressed_phase1_time_budget"],
                "retained_source_arms": list(arms.values()), "retained_invalidations": invalidations, "eligible_distributions": eligible_distributions, "step_evidence_path": "step-evidence.json", "counts": counts, "phase1_evidence_status": "PASS" if not missing and not invalid and not global_issues else "REVISE", "product_status": "FAIL" if failures else "NOT_ESTABLISHED" if missing or invalid or global_issues else "PASS",
-               "phase1_terminal_status": terminal_status(missing, invalid, global_issues, failures), "completion_policy": "phase-1-runtime-suppressions-2026-09-04; all remaining active failure-repair gates unchanged", "scope_amendment_revision": RUNTIME_SCOPE_POLICY_REVISION, "global_issues": global_issues, "missing": missing, "invalid": invalid, "product_findings": failures, "retained_failure_history": retained, "invocations": invocations, "rows": rows}
+               "phase1_terminal_status": terminal_status(missing, invalid, global_issues, failures), "completion_policy": "phase-1-fast-verification-amendment-2026-09-04; routine fast accepted, full remainder deferredPhase2; original targeted/resource/cleanup/failure-repair gates unchanged", "scope_amendment_revision": RUNTIME_SCOPE_POLICY_REVISION, "global_issues": global_issues, "missing": missing, "invalid": invalid, "product_findings": failures, "retained_failure_history": retained, "invocations": invocations, "rows": rows}
     results = campaign / "results"
     results.mkdir(exist_ok=True)
     custody.write_json(results / "review.json", summary)
@@ -2355,12 +2611,13 @@ def generate(campaign, assets):
               "runtime_suppressions_sha256": custody.sha(campaign / "phase1-runtime-suppressions.json") if (campaign / "phase1-runtime-suppressions.json").exists() else None,
               "invalidations_sha256": custody.sha(campaign / "invalidations.jsonl") if (campaign / "invalidations.jsonl").exists() else None,
               "classifications_sha256": custody.sha(campaign / "classifications.json") if (campaign / "classifications.json").exists() else None,
-              "generator_sha256": summary["report_generator_sha256"], "policy_helper_sha256": custody.sha(HERE / "workspace-runner.py"), "custody_helper_sha256": custody.sha(HERE / "sdk-edit-custody.py"), "attempt_manifests": {path: custody.sha(Path(path) / "evidence.sha256") if (Path(path) / "evidence.sha256").is_file() else None for path in sorted(evidence_paths)}}
+              "fast_acceptance_policy": acceptance_policy, "generator_sha256": summary["report_generator_sha256"], "policy_helper_sha256": custody.sha(HERE / "workspace-runner.py"), "custody_helper_sha256": custody.sha(HERE / "sdk-edit-custody.py"), "attempt_manifests": {path: custody.sha(Path(path) / "evidence.sha256") if (Path(path) / "evidence.sha256").is_file() else None for path in sorted(evidence_paths)}}
     custody.write_json(results / "report-inputs.json", inputs)
     lines = ["# LayerFS v0.1.3 Phase 1 initial baseline", "", f"Evidence: **{summary['phase1_evidence_status']}**. Product: **{summary['product_status']}**. Phase 1 terminal gate: **{summary['phase1_terminal_status']}**.", "", f"Sealed source: `{build['revision']}`. Report generator: `{summary['report_generator_sha256']}`.", "", "| Coverage | Count |", "| --- | ---: |"]
     lines += [f"| {key} | {value} |" for key, value in counts.items()]
-    lines += ["", "## Fast iteration profile", "", "Fast results remain separate from fully verified evidence and never fill required Phase1 slots.", ""]
-    lines += [f"- `{item['case']}` seed {item['seed']}: {item['assurance_status']}; full gate contribution: none; evidence `{item['evidence']}`." for item in fast_results]
+    lines += ["", "## Fast iteration profile", "", "Qualified fast results satisfy routine Phase1 acceptance while retaining their fast_iteration_verified label. Missing routine full coverage is deferred to Phase2; targeted proof gates and actual failures remain blocking.", ""]
+    lines += [f"- `{item['case']}` seed {item['seed']}: {item['assurance_status']}; routine acceptance: {item['counts_toward_routine_phase1_acceptance']}; exhaustive credit: none; evidence `{item['evidence']}`." for item in fast_results]
+    lines += ["", f"Routine full checks deferred to Phase2: {len(deferred_full)}. Routine acceptance missing: {counts['routine_acceptance_missing']}; targeted proofs remaining: {counts['targeted_remaining']}."]
     lines += ["", "## Phase1 runtime scope suppressions", "", "The original inventory remains visible. Suppressed exact IDs and their associated verification are outside active Phase1 coverage; suppression is neither PASS nor FAIL nor unimplemented work. Their raw historical outcomes are preserved. All active correctness/resource/cleanup gates still apply. Git remains wired with all four execution subsets suppressed.", "", "| Case | Phase1 scope | Reason |", "| --- | --- | --- |"]
     lines += [f"| `{case}` | suppressed_phase1_time_budget | {decision.get('reason', decision.get('trigger', 'persistent15s product-time scope decision'))} |" for case, decision in sorted(suppressions.items())]
     lines += ["", "## Retained original and corrected source arms", "", "Raw outcomes keep their actual producing identities and pass/fail statuses. Every unrequested SQL-history performance recording is diagnostic-only: source labelling does not repair its contaminated timers or memory observations.", "", "| Arm | Source / identity group | Image | Raw performance outcomes | Raw pass | Raw fail | Invalidated observations | SQL history scope |", "| --- | --- | --- | ---: | ---: | ---: | ---: | --- |"]
