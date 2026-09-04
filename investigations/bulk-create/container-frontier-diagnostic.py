@@ -2,7 +2,7 @@
 """Exploratory container-only frontier A/B: create and delete, no Phase 1 lock."""
 import hashlib, json, pathlib, subprocess, tarfile, time, tomllib, uuid
 ROOT=pathlib.Path(__file__).resolve().parents[2]
-OUT=ROOT/'investigations/bulk-create/evidence/container-frontier-10-s1'
+OUT=ROOT/'investigations/bulk-create/evidence/container-frontier-10-s1-r2'
 BASE='sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e'
 PREPARED=ROOT/'investigations/bulk-create/evidence/colocated-r1/prepared'
 OUT.mkdir();commands=[];active=None
@@ -24,33 +24,15 @@ try:
     source=run('source',['git','rev-parse','HEAD'])
     run('source-diff',['git','diff','5a5db40d',source,'--','crates','benchmark/fs-bench-pro'])
     assert not subprocess.check_output(['git','diff','--','crates','benchmark/fs-bench-pro'],cwd=ROOT)
-    run('archive',['git','archive','--format=tar','--output',OUT/'source.tar',source,'Cargo.toml','Cargo.lock','crates','tools','benchmark/fs-bench-pro'])
+    # Reuse our own retained build; product/harness source is unchanged.
+    binary_source=run('binary-source',['git','rev-parse','21c29290'])
+    assert not subprocess.check_output(['git','diff',binary_source,source,'--','crates','benchmark/fs-bench-pro'],cwd=ROOT)
     run('concurrent-containers',['docker','ps','--format','{{.Names}}\t{{.Status}}'])
-    # Copy immutable, checksum-verified pinned crates into a private Cargo cache.
-    registry=pathlib.Path.home()/'.cargo/registry'
-    dependency_records=[]
-    with tarfile.open(OUT/'dependencies.tar','w') as archive:
-        indexes=set()
-        for package in tomllib.loads((ROOT/'Cargo.lock').read_text())['package']:
-            if not package.get('source','').startswith('registry+'): continue
-            name=package['name'];version=package['version']
-            cached=next((registry/'cache').glob('*/'+name+'-'+version+'.crate'))
-            assert hashlib.sha256(cached.read_bytes()).hexdigest()==package['checksum']
-            archive.add(cached,arcname='cargo/registry/cache/'+cached.parent.name+'/'+cached.name)
-            key=('1/'+name if len(name)==1 else '2/'+name if len(name)==2 else '3/'+name[0]+'/'+name if len(name)==3 else name[:2]+'/'+name[2:4]+'/'+name)
-            index=registry/'index'/cached.parent.name
-            archive.add(index/'.cache'/key,arcname='cargo/registry/index/'+index.name+'/.cache/'+key)
-            if index not in indexes:
-                archive.add(index/'config.json',arcname='cargo/registry/index/'+index.name+'/config.json');indexes.add(index)
-            dependency_records.append(dict(name=name,version=version,sha256=package['checksum']))
-    (OUT/'dependencies.json').write_text(json.dumps(dependency_records,indent=2)+'\n')
     start('build')
-    run('build-dependencies-copy',['docker','cp',OUT/'dependencies.tar',active+':/data/dependencies.tar'])
-    run('build-source-copy',['docker','cp',OUT/'source.tar',active+':/data/source.tar'])
-    run('build',['docker','exec','-e','CARGO_HOME=/data/cargo','-e','CARGO_TARGET_DIR=/data/target','-e','CARGO_BUILD_JOBS=2',active,'sh','-c','mkdir /data/source && tar -xf /data/source.tar -C /data/source && tar -xf /data/dependencies.tar -C /data && cd /data/source && cargo build --offline --locked --release -p fs-benchmark-pro'],1200)
+    run('reuse-private-build',['docker','cp',str(OUT.parent/'container-frontier-10-s1/failed-state')+'/.',active+':/data'])
     run('binary-copy',['docker','cp',active+':/data/target/release/fs-benchmark-pro',OUT/'fs-benchmark-pro'])
     run('build-toolchain',['docker','exec',active,'rustc','-Vv'])
-    run('focused-regression',['docker','exec','-e','CARGO_HOME=/data/cargo','-e','CARGO_TARGET_DIR=/data/target','-e','CARGO_BUILD_JOBS=2','-e','LAYERFS_EXPERIMENT_FRONTIER_BATCH=2048',active,'sh','-c','cd /data/source && cargo test --offline --locked --release -p layerfs-workspace --test file_edit group_3_rename_parent_replace_unlink_and_final_alias_reclamation_are_inode_exact -- --exact'],1200)
+    run('focused-regression',['docker','exec','-e','CARGO_HOME=/data/cargo','-e','CARGO_TARGET_DIR=/data/target','-e','CARGO_BUILD_JOBS=2','-e','LAYERFS_EXPERIMENT_FRONTIER_BATCH=2048',active,'sh','-c','cd /data/source && cargo test --offline --locked --release -p layerfs-workspace --features test-instrumentation --test file_edit group_3_rename_parent_replace_unlink_and_final_alias_reclamation_are_inode_exact -- --exact'],1200)
     run('prepare-delete',['docker','exec',active,'/data/target/release/fs-benchmark-pro','workspace-prepare','/data/delete-prepared','tiny-bulk-delete-10','1'])
     run('copy-delete-prepared',['docker','cp',active+':/data/delete-prepared',OUT/'delete-prepared'])
     run('copy-delete-manifest',['docker','cp',active+':/data/input-manifest.tsv',OUT/'delete-input-manifest.tsv'])
