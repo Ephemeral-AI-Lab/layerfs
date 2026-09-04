@@ -606,6 +606,32 @@ def validate_timing(records, case, issues, verification=False):
             require(value["max_transaction_objects"] < (8192 if case["input_mode"] == "directory" else 128) and value["max_transaction_bytes"] < 4 * 1024 ** 2, "candidate transaction bound", issues)
 
 
+def failed_git_command(stderr, partial, case, issues):
+    errors = re.findall(r"^fs-benchmark-workload: git (\[[^\n]*\]): (.+)$", stderr, re.M)
+    if not errors:
+        return False
+    require(case.get("operation") == "git-tool" and len(errors) == 1, "unexpected Git subprocess failure source", issues)
+    commands = [
+        ("git_first_status", ["status", "--porcelain=v1", "-z"]),
+        ("git_diff", ["diff", "--no-ext-diff", "--binary", "--"]),
+        ("git_add", ["add", "-A", "--"]),
+        ("git_cached_check", ["diff", "--cached", "--check"]),
+        ("git_commit", ["commit", "--no-gpg-sign", "--no-verify", "-m", "layerfs v0.1.3 tool workflow"]),
+        ("git_final_status", ["status", "--porcelain=v1", "-z"]),
+    ]
+    attempted = number(partial.get("git_process_count"), "partial git_process_count")
+    require(1 <= attempted <= len(commands), "Git subprocess attempt count outside frozen sequence", issues)
+    if 1 <= attempted <= len(commands):
+        require(decode(errors[0][0]) == commands[attempted - 1][1], "failed Git command differs from reached sequence", issues)
+        for index, (name, _) in enumerate(commands):
+            if index < attempted - 1:
+                number(partial.get(name + "_ns"), "completed " + name)
+            else:
+                require(name + "_ns" not in partial, "Git failure claims later/completed subprocess timing", issues)
+    require(partial.get("completed_target_count") == case.get("tier"), "Git failed before completing declared native mutations", issues)
+    return True
+
+
 def failed_execution(records, case, issues, verification=False):
     errors = [row.get("original_error", "") for row in records if row["kind"] == "recovery" and "ExecutionReceipt {" in row.get("original_error", "")]
     if not errors:
@@ -639,7 +665,8 @@ def failed_execution(records, case, issues, verification=False):
         completed = number(partial.get("completed_syscall_count"), "partial completed_syscall_count")
         interrupted = number(partial.get("interrupted_syscall_count"), "partial interrupted_syscall_count")
         iterator_failure = bool(re.search(r"^fs-benchmark-workload: readdir .+: .+$", stderr, re.M))
-        require(attempted == completed + interrupted + (0 if iterator_failure else 1), "partial workload counted-call equation", issues)
+        git_failure = failed_git_command(stderr, partial, case, issues)
+        require(attempted == completed + interrupted + (0 if iterator_failure or git_failure else 1), "partial workload counted-call equation", issues)
         if iterator_failure:
             reads = debug_structs(records, "WorkspaceReadReceipt")
             require(sum(fields.get("callback_readdir", 0) + fields.get("callback_readdirplus", 0) for fields, _ in reads) > 0, "iterator failure lacks actual FUSE directory observations", issues)
@@ -984,6 +1011,14 @@ def validate_git_custody(precommit, reopened, records, successful, issues):
         require(precommit.is_file() and reopened.is_file() and precommit.read_bytes() == reopened.read_bytes() and precommit.stat().st_size > 0, "Git pre-Commit/reopen full persistence manifests differ", issues)
 
 
+def derived_product_status(outcome, violations):
+    if outcome.get("coverage_status") != "executed":
+        return "not-run" if outcome.get("product_status") == "not-run" else "not-established"
+    if outcome.get("product_status") == "pass":
+        return "fail" if violations else "pass"
+    return "fail" if outcome.get("product_status") == "fail" else "not-established"
+
+
 def validate_attempt(outcome, classification, case, build):
     issues, violations = [], []
     records, observed, resource, details, packages = [], {}, {}, {}, []
@@ -1000,6 +1035,14 @@ def validate_attempt(outcome, classification, case, build):
         for key in ("scenario_id", "family_id", "proof_only", "inherited"):
             require(outcome.get(key) == case.get(key, False), f"slot identity mismatch: {key}", issues)
         require(outcome.get("mode") in {"performance", "verify"}, "unknown evidence mode", issues)
+        if outcome.get("coverage_status") != "executed":
+            require(outcome.get("product_status") == "not-run", "unexecuted slot contradicts declared product outcome", issues)
+            require(outcome.get("supervisor_cleanup_status") == "pass", "unexecuted attempt cleanup was not recovered", issues)
+            issues.append("interrupted before sample execution" if outcome.get("interrupted") else "sample has not executed")
+            observed = {key: number(outcome[key], key) for key in ("preparation_ns", "command_wall_ns", "cleanup_ns", "runtime_preparation_ns") if key in outcome}
+            details = {"metrics": observed, "steps": [], "verification": [], "scope": "preparation/interruption only; no product latency or success claim"}
+            return {"issues": sorted(set(issues)), "violations": [], "metrics": observed, "resource_observations": {}, "observations": details, "canonical_packages": [],
+                    "product_status": derived_product_status(outcome, []), "verification_pass": False}
         records = raw(directory / "raw.jsonl")
         if case["family_id"] != "workspace_reliability":
             starts = [row for row in records if row["kind"] == "sample-start"]
@@ -1072,7 +1115,7 @@ def validate_attempt(outcome, classification, case, build):
     except (OSError, ValueError, KeyError, TypeError, IndexError, AssertionError, EOFError) as error:
         issues.append(f"invalid/missing evidence: {type(error).__name__}: {error}")
     return {"issues": sorted(set(issues)), "violations": sorted(set(violations)), "metrics": observed, "resource_observations": resource, "observations": details, "canonical_packages": packages,
-            "product_status": "pass" if successful and not violations else "fail", "verification_pass": successful and outcome.get("mode") == "verify" and not issues and not violations}
+            "product_status": derived_product_status(outcome, violations), "verification_pass": successful and outcome.get("mode") == "verify" and not issues and not violations}
 
 
 def registry_cases(rows):
@@ -1169,6 +1212,100 @@ def validate_bridge_path(filename, expected, revisions):
             raise ValueError("sampler-only source bridge hash mismatch")
 
 
+UNLINK_BRIDGE_KIND = "proxy-unlink-no-call-v1"
+UNLINK_SOURCE_PATH = "crates/layerfs-fuse/src/proxy_client.rs"
+NO_UNLINK_OPERATIONS = {"payload-create", "payload-random-read", "tiny-create", "tiny-stat", "tiny-bulk-create", "directory-construct", "directory-metadata-scan", "directory-content-scan"}
+
+
+def exclude_known_body(source, signature, closing, marker, indentation):
+    matches = [match.start() for match in re.finditer(rb"(?m)^" + re.escape(signature), source)]
+    if len(matches) != 1:
+        raise ValueError("product bridge requires the exact known source signature")
+    start = matches[0] + len(signature)
+    end = source.find(closing, start)
+    if end < 0:
+        raise ValueError("product bridge function/module boundary missing")
+    body = source[start:end]
+    if any(line and not line.startswith(indentation) for line in body.splitlines()):
+        raise ValueError("product bridge encountered an unfamiliar source layout")
+    return source[:start] + marker + source[end:], body
+
+
+def unlink_source_parts(source):
+    normalized, body = exclude_known_body(source,
+        b"    fn unlink(&self, parent: NodeId, name: &[u8], directory: bool) -> PortResult<()> {\n",
+        b"\n    }\n", b"        /* exact unlink body excluded */", b"        ")
+    normalized, tests = exclude_known_body(normalized, b"#[cfg(test)]\nmod tests {\n",
+        b"\n}\n", b"    /* cfg(test)-only module excluded */", b"    ")
+    return normalized, body, tests
+
+
+def product_tree(revision):
+    entries = {}
+    data = subprocess.check_output(["git", "ls-tree", "-rz", revision], cwd=HERE.parents[1])
+    for record in data.split(b"\0"):
+        if not record:
+            continue
+        metadata, path = record.split(b"\t", 1)
+        name = path.decode()
+        if name.startswith(custody.PRODUCT) or name in {"Cargo.toml", "Cargo.lock"} or name.startswith(".cargo/"):
+            entries[name] = metadata.decode()
+    if UNLINK_SOURCE_PATH not in entries:
+        raise ValueError("product bridge proxy source missing")
+    return entries
+
+
+def unlink_source_proof(old_revision, new_revision):
+    revisions = (old_revision, new_revision)
+    trees = {revision: product_tree(revision) for revision in revisions}
+    proxy_modes = [trees[revision].pop(UNLINK_SOURCE_PATH).split()[:2] for revision in revisions]
+    if proxy_modes[0] != proxy_modes[1] or trees[old_revision] != trees[new_revision]:
+        raise ValueError("unlink-only bridge changed another product/build input")
+    normalized, methods, tests = {}, {}, {}
+    for revision in revisions:
+        source = subprocess.check_output(["git", "show", f"{revision}:{UNLINK_SOURCE_PATH}"], cwd=HERE.parents[1])
+        remaining, method, test_module = unlink_source_parts(source)
+        normalized[revision] = hashlib.sha256(remaining).hexdigest()
+        methods[revision] = hashlib.sha256(method).hexdigest()
+        tests[revision] = hashlib.sha256(test_module).hexdigest()
+    if normalized[old_revision] != normalized[new_revision] or methods[old_revision] == methods[new_revision]:
+        raise ValueError("product bridge is not exactly the reviewed unlink method change")
+    return {"changed_path": UNLINK_SOURCE_PATH, "normalized_proxy_sha256": normalized[old_revision],
+            "unchanged_product_tree_sha256": hashlib.sha256(json.dumps(trees[old_revision], sort_keys=True).encode()).hexdigest(),
+            "unlink_body_sha256": methods, "cfg_test_module_sha256": tests}
+
+
+def configured_product_bridges(config, primary, cases):
+    approved = []
+    fields = {"kind", "old_revision", "new_revision", "old_product_seal", "new_product_seal", "case_ids", "source_proof", "required_zero_counters", "reviewed_impact"}
+    for bridge in config.get("product_compatibility", []):
+        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] != UNLINK_BRIDGE_KIND or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
+            raise ValueError("invalid exact unlink product bridge identity")
+        if bridge["required_zero_counters"] != ["callback_unlink", "callback_rmdir"] or not isinstance(bridge["case_ids"], list) or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases or cases[case]["operation"] not in NO_UNLINK_OPERATIONS for case in bridge["case_ids"]) or not isinstance(bridge["reviewed_impact"], str) or len(bridge["reviewed_impact"].strip()) < 80:
+            raise ValueError("product bridge lacks explicit no-unlink case/observation scope")
+        if bridge["source_proof"] != unlink_source_proof(bridge["old_revision"], bridge["new_revision"]):
+            raise ValueError("product bridge source proof differs from committed bytes")
+        if any(other["old_revision"] == bridge["old_revision"] for other in approved):
+            raise ValueError("duplicate product bridge source")
+        approved.append(bridge)
+    return approved
+
+
+def matching_product_bridge(bridges, build, primary, case_id):
+    if build["product_seal"] == primary["product_seal"]:
+        return None
+    matches = [item for item in bridges if item["old_revision"] == build["revision"] and item["old_product_seal"] == build["product_seal"] and item["new_revision"] == primary["revision"] and case_id in item["case_ids"]]
+    if len(matches) != 1:
+        raise ValueError("selected old product has no exact no-unlink case bridge")
+    return matches[0]
+
+
+def validate_no_unlink_records(records, issues):
+    reads = debug_structs(records, "WorkspaceReadReceipt")
+    require(bool(reads), "retained product bridge lacks complete FUSE observations", issues)
+    require(all(fields.get("callback_unlink") == 0 and fields.get("callback_rmdir") == 0 for fields, _ in reads), "retained attempt reached or failed to observe the changed unlink/rmdir path", issues)
+
+
 def family_builds(campaign, assets, primary, registry):
     families = {row["family_id"] for row in registry}
     cases = {row["scenario_id"]: row for row in registry}
@@ -1177,8 +1314,9 @@ def family_builds(campaign, assets, primary, registry):
     if not path.exists():
         return selected, provenance, bridges
     config = read(path)
-    if set(config) - {"schema", "selections", "verification_compatibility"} or config.get("schema") != "fs-bench-pro-scoped-builds-v1" or not isinstance(config.get("selections"), dict):
+    if set(config) - {"schema", "selections", "verification_compatibility", "product_compatibility"} or config.get("schema") != "fs-bench-pro-scoped-builds-v1" or not isinstance(config.get("selections"), dict):
         raise ValueError("invalid explicit scoped build mapping")
+    product_bridges = configured_product_bridges(config, primary, cases)
     loaded = {assets.resolve(): (primary, registry)}
     for selector, choice in config["selections"].items():
         parts = selector.split(":")
@@ -1198,8 +1336,14 @@ def family_builds(campaign, assets, primary, registry):
         if location not in loaded:
             loaded[location] = qualified_build(location)
         build, candidate_registry = loaded[location]
-        if any(build.get(key) != primary.get(key) for key in ("product_baseline", "product_seal")):
-            raise ValueError("scoped harness mapping cannot change instrumented product baseline")
+        if build.get("product_baseline") != primary.get("product_baseline"):
+            raise ValueError("scoped mapping changed the pinned release baseline")
+        if build["product_seal"] != primary["product_seal"]:
+            if build.get("build_configuration", {}).get("profile") != "release" or primary.get("build_configuration", {}).get("profile") != "release":
+                raise ValueError("cfg(test)-excluded product bridge requires release assets")
+            selected_cases = [case for case in registry if case["family_id"] == parts[1]] if parts[0] == "family" else [cases[parts[1]]]
+            for selected_case in selected_cases:
+                matching_product_bridge(product_bridges, build, primary, selected_case["scenario_id"])
         # Qualification/results/finding narratives can evolve independently.
         # Every explicitly normative file must exist and remain byte-identical.
         for filename in NORMATIVE_CONTRACT_FILES:
@@ -1209,7 +1353,8 @@ def family_builds(campaign, assets, primary, registry):
         if [row for row in registry if row["family_id"] == family] != [row for row in candidate_registry if row["family_id"] == family]:
             raise ValueError("scoped build changed frozen registry descriptors")
         selected[selector] = build
-        provenance[selector] = {**choice, "assets": str(location), "source": build}
+        provenance[selector] = {**choice, "assets": str(location), "source": build,
+            "product_compatibility": [item for item in product_bridges if item["old_revision"] == build["revision"]] if build["product_seal"] != primary["product_seal"] else []}
     sources = {build["revision"]: build for build in selected.values()}
     for bridge in config.get("verification_compatibility", []):
         fields = {"family_id", "performance_revision", "verification_revision", "reviewed_impact", "unchanged_paths"}
@@ -1303,6 +1448,7 @@ def generate(campaign, assets):
     build, registry = qualified_build(assets)
     new, proofs, inherited = registry_cases(registry)
     selected_builds, build_provenance, compatibility = family_builds(campaign, assets, build, registry)
+    product_compatibility = {item["old_revision"]: item for selection in build_provenance.values() for item in selection.get("product_compatibility", [])}
     ledger = read(campaign / "slots.json") if (campaign / "slots.json").exists() else {}
     classifications = read(campaign / "classifications.json") if (campaign / "classifications.json").exists() else {}
     invalidations = [decode(line) for line in (campaign / "invalidations.jsonl").read_text().splitlines() if line] if (campaign / "invalidations.jsonl").exists() else []
@@ -1357,7 +1503,16 @@ def generate(campaign, assets):
             missing.append({"case": key[0], "seed": seed, "mode": mode})
             continue
         classification = classifications.get(Path(outcome["evidence_path"]).name, {})
-        value = validate_attempt(outcome, classification, case, selected_build(selected_builds, case, mode, seed))
+        selected_source = selected_build(selected_builds, case, mode, seed)
+        product_bridge = matching_product_bridge(list(product_compatibility.values()), selected_source, build, case["scenario_id"])
+        value = validate_attempt(outcome, classification, case, selected_source)
+        if product_bridge:
+            try:
+                validate_no_unlink_records(raw(Path(outcome["evidence_path"]) / "raw.jsonl"), value["issues"])
+            except (OSError, ValueError, TypeError, KeyError) as error:
+                value["issues"].append(f"product bridge observation invalid: {error}")
+            if value["issues"]:
+                value["verification_pass"] = False
         invalidation = invalidated.get(str(Path(outcome["evidence_path"]).resolve()), [])
         if invalidation:
             value["issues"].append("selected observation was explicitly invalidated")
@@ -1366,11 +1521,11 @@ def generate(campaign, assets):
         row = {"case": key[0], "family_id": case["family_id"], "seed": seed, "mode": mode, "inherited": case.get("inherited", False),
                "source_identity": {key: outcome.get(key) for key in IDENTITY_FIELDS}, "source_arm": outcome.get("source_arm"), "raw_product_status": outcome.get("product_status"), "coverage_status": outcome.get("coverage_status"), "product_status": value["product_status"], "evidence_status": "REVISE" if value["issues"] else "PASS",
                "issues": value["issues"], "violations": value["violations"], "evidence": outcome["evidence_path"], "metrics": value["metrics"], "resource_observations": value["resource_observations"], "observations": value["observations"], "canonical_packages": value["canonical_packages"],
-               "verification_summary": verification_summary(value["observations"], value["canonical_packages"]), "environment_identity": outcome.get("environment_identity"), "input_identity": outcome.get("input_identity"), "invalidation_context": invalidation}
+               "verification_summary": verification_summary(value["observations"], value["canonical_packages"]), "environment_identity": outcome.get("environment_identity"), "input_identity": outcome.get("input_identity"), "invalidation_context": invalidation, "product_source_compatibility": product_bridge}
         rows.append(row)
         if value["issues"]:
             invalid.append(row)
-        if value["product_status"] != "pass":
+        if value["product_status"] == "fail":
             failures.append({**row, "classification": classification})
     distributions = defaultdict(lambda: defaultdict(list))
     distribution_sources, step_evidence = {}, []
@@ -1405,7 +1560,8 @@ def generate(campaign, assets):
               "planned_reliability_subcases": 28, "executed_reliability_subcases": sum(row["coverage_status"] == "executed" and row["family_id"] == "workspace_reliability" for row in rows),
               "planned_capped_performance_slots": 25, "executed_capped_performance_slots": sum(row["coverage_status"] == "executed" and row["inherited"] and row["mode"] == "performance" for row in rows),
               "planned_capped_verifiers": 5, "executed_capped_verifiers": sum(row["coverage_status"] == "executed" and row["inherited"] and row["mode"] == "verify" for row in rows),
-              "missing_slots": len(missing), "invalid_slots": len(invalid), "product_failed_outcomes": len(failures)}
+              "missing_slots": len(missing), "invalid_slots": len(invalid), "unexecuted_slots": sum(row["coverage_status"] != "executed" for row in rows),
+              "unknown_product_outcomes": sum(row["product_status"] == "not-established" for row in rows), "product_failed_outcomes": len(failures)}
     retained, retained_outcomes = [], []
     for path in sorted((campaign / "attempts").glob("*/outcome.json")):
         value = read(path)
@@ -1422,7 +1578,7 @@ def generate(campaign, assets):
             arm["invalidated_observations"] += bool(value.get("invalidation_context"))
             arm["raw_pass" if value.get("product_status") == "pass" else "raw_fail"] += 1
             arm["evidence"].append(value["evidence_path"])
-    summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "scoped_builds": build_provenance, "verification_compatibility": compatibility, "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
+    summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "scoped_builds": build_provenance, "verification_compatibility": compatibility, "product_compatibility": list(product_compatibility.values()), "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
                "retained_source_arms": list(arms.values()), "retained_invalidations": invalidations, "eligible_distributions": eligible_distributions, "step_evidence_path": "step-evidence.json", "counts": counts, "phase1_evidence_status": "PASS" if not missing and not invalid and not global_issues else "REVISE", "product_status": "FAIL" if failures else "NOT_ESTABLISHED" if missing or invalid or global_issues else "PASS",
                "phase1_terminal_status": terminal_status(missing, invalid, global_issues, failures), "completion_policy": "failure-repair-amendment-2026-09-04", "global_issues": global_issues, "missing": missing, "invalid": invalid, "product_findings": failures, "retained_failure_history": retained, "invocations": invocations, "rows": rows}
     results = campaign / "results"
