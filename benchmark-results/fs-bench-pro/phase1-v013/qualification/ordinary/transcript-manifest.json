@@ -1,0 +1,9 @@
+{
+  "qualification-transcripts.json": "2a789b60f215eeda8755a7f685ab933a47144be40208e7242b592ad4d1e3e1cb",
+  "static-check-harness.rs": "8e87385dba61a192badebde71304c2f4ff35ccf26fd6fe9e3deb9ed5e47f6fee",
+  "native-git-check-1.tool-transcript.txt": "7c2a29ef4e3eac01c2664636427b1a98dd4e64d02281df2fcf75f2ebcf9b0b01",
+  "native-git-check-2.log": "3db258c63fa0ad7cce0fafd52a161a1f0e78e0252e1079bd53011ed88d0d9b5a",
+  "static-check.tool-transcript.txt": "2fba070280d07095c84611de96a94dcae8b9bdef4a4ef709c434dd22cbcdfb60",
+  "native-payload-episode-check-1.tool-transcript.txt": "5399d55e36f30eb9c911c3e0da107d8c6aeffd785c3ea22835535e7cd598b10d",
+  "native-payload-episode-check-2.log": "7a48caac54a929a0fd5d0eb042219203aee5920779cec18f16e2a01c299885d0"
+}

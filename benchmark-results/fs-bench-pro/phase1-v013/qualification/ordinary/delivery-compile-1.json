@@ -1,0 +1,31 @@
+{
+  "kind": "delivery-compile-only",
+  "captured_at": "2026-09-04T00:55:52.010133+00:00",
+  "source_commit": "de27a847489ffec56429673d712503ae8ea7e8ec",
+  "dirty_task_files": true,
+  "command": "rustc --edition 2021 -Awarnings /tmp/layerfs-ordinary-static-check.rs -o /tmp/layerfs-ordinary-delivery-compile",
+  "exit_code": 0,
+  "test_execution": false,
+  "source_files_sha256": {
+    "benchmark/fs-bench-pro/ordinary_workloads.rs": "1ed5e442431ee620bac04884362ee74c1bbe5ba78203be883e3553b77e601bdf",
+    "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+    "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+    "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+    "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+    "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+    "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+    "benchmark/fs-bench-pro/families/mixed_load_bearing.rs": "9a339f6867ccf1c748a9a61d8a41c588b2c4f87f04580c90235fa87cb9c5c819",
+    "benchmark/fs-bench-pro/run-payload-create-read.sh": "8b8167a93b5f5b2ae28e4659d34c331229e8f90237860a19a62262af9594d5cf",
+    "benchmark/fs-bench-pro/run-tiny-file-churn.sh": "2ec5e3480866630a3253237385631b0308eb81247b6c03cfdedccd89e895e882",
+    "benchmark/fs-bench-pro/run-directory-construction-traversal.sh": "ce9a61367c3c3a2fc2492e31891022873d0ac488c118e355ce270cf278003ad9",
+    "benchmark/fs-bench-pro/run-git-tool-workflow.sh": "703c78c21d2a53fa961fc3f8bcea24657048f8ebc8cc1f130ba55fc8c66ef825",
+    "benchmark/fs-bench-pro/run-namespace-mutation.sh": "ab727360666aa31fd5150ded3c752f655dbfe4c7b1fd80f224640d1b028f2b4a",
+    "benchmark/fs-bench-pro/run-workspace-change-locality.sh": "b11d0a31ddc1c24e7dd489a61838f7b12f37d62840083e9b539ff916d5fd61dc",
+    "benchmark/fs-bench-pro/run-mixed-load-bearing.sh": "31bb257354147c69ba203cd186aa3831f68fb37bdbc1151644c39086d8647b31",
+    "benchmark/fs-bench-pro/workspace_common.rs": "807ab9923307807caff7c4a3595062006711064b582a0dfe212a0b2d5ebfb579",
+    "benchmark/fs-bench-pro/families/sdk_edit_common.rs": "72a2d6150797c4c88c4ee51e84cfc0dfa033331dff2a1453583e3115b09906a4",
+    "/tmp/layerfs-ordinary-static-check.rs": "8e87385dba61a192badebde71304c2f4ff35ccf26fd6fe9e3deb9ed5e47f6fee"
+  },
+  "binary_sha256": "06cfcf44faac07c0cb37dff9b9e3ff2645172521fc4c851eb0c64dfdca80282d",
+  "changes_since_native_tests": "Explicit Git allocation cap enforcement; source file is formatted. Passing diagnostic test transcripts are not promoted to exact-current-source test results."
+}

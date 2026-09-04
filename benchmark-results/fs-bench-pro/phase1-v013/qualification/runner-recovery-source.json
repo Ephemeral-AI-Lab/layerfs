@@ -1,0 +1,7 @@
+{
+  "source": "benchmark/fs-bench-pro/workspace-runner.py",
+  "sha256": "fafd924f36cb6a4bfde294ea72eba3ab35c9938abe5deea5edef6abf21c77e24",
+  "command": "python3 benchmark/fs-bench-pro/workspace-runner.py --recovery-self-check",
+  "status": "pass",
+  "scope": "sealed-orphan recovery, incomplete retention, interrupted invocation finalization, real competing flock rejection before invocation creation"
+}

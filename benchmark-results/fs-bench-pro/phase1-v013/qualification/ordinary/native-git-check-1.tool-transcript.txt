@@ -1,0 +1,43 @@
+
+running 1 test
+
+running 1 test
+test ordinary_workloads::tests::native_git_reference_checks_workflow ... partial_attempted_syscall_count=8
+partial_benchmark_injection_count=0
+partial_benchmark_reopen_count=0
+partial_benchmark_verifier_count=1
+partial_completed_file_write_count=1
+partial_completed_read_bytes=2500
+partial_completed_syscall_count=8
+partial_completed_write_bytes=2500
+partial_file_sync_ns=20697541
+FAILED
+
+failures:
+
+failures:
+    ordinary_workloads::tests::native_git_reference_checks_workflow
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 22.63s
+
+partial_metadata_normalization_count=1
+partial_scenario_id=git-tool-1
+partial_seed=1
+partial_workload_close_call_count=2
+partial_workload_fsync_call_count=1
+partial_workload_ns=21149125
+partial_workload_open_call_count=2
+partial_workload_plan_ns=8823208
+partial_workload_pread_call_count=2
+partial_workload_pwrite_call_count=1
+Error: "intermediate oracle mismatch: Git temporary save"
+Error: "native Git child failed"
+test ordinary_workloads::tests::native_git_reference_checks_workflow ... FAILED
+
+failures:
+
+failures:
+    ordinary_workloads::tests::native_git_reference_checks_workflow
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.71s
+

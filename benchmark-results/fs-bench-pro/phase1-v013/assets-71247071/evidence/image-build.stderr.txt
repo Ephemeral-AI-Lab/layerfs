@@ -1,0 +1,104 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.layerfs
+#1 transferring dockerfile: 3.68kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.7
+#2 DONE 2.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#3 resolve docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#4 DONE 2.2s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 2B done
+#5 DONE 0.0s
+
+#6 [stage-1 1/7] FROM docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#6 resolve docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 0.0s done
+#6 CACHED
+
+#7 [internal] load build context
+#7 transferring context: 3.40MB 0.1s done
+#7 DONE 0.1s
+
+#8 [stage-1 2/7] RUN mkdir -p /run/layerfs /workspace /var/tmp/layerfs-owned  && chmod 0700 /run/layerfs
+#8 DONE 0.2s
+
+#9 [build  2/10] WORKDIR /src
+#9 CACHED
+
+#10 [build  3/10] COPY Cargo.toml Cargo.lock ./
+#10 DONE 0.0s
+
+#11 [build  4/10] COPY crates ./crates
+#11 DONE 0.0s
+
+#12 [build  5/10] COPY tools ./tools
+#12 DONE 0.0s
+
+#13 [build  6/10] COPY benchmark/fs-bench-pro ./benchmark/fs-bench-pro
+#13 DONE 0.0s
+
+#14 [build  7/10] COPY benchmark/fs-bench-pro/workload.rs /workload/workload.rs
+#14 DONE 0.0s
+
+#15 [build  8/10] COPY benchmark/fs-bench-pro/families /workload/families
+#15 DONE 0.0s
+
+#16 [build  9/10] COPY benchmark/fs-bench-pro/*.rs /workload/
+#16 DONE 0.0s
+
+#17 [build 10/10] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     test "${#LAYERFS_SOURCE_COMMIT}" -eq 40  && test "${#LAYERFS_SOURCE_TREE}" -eq 40  && test "${#LAYERFS_SOURCE_SEAL}" -eq 64  && test "${#LAYERFS_PRODUCT_SEAL}" -eq 64  && test "${#WORKLOAD_SOURCE_SHA256}" -eq 64  && echo "$WORKLOAD_SOURCE_SHA256  /workload/workload.rs" | sha256sum -c -  && case "$LAYERFS_SOURCE_DIRTY" in true|false) ;; *) exit 1 ;; esac  && case "$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE$LAYERFS_SOURCE_SEAL" in *[!0-9a-f]*) exit 1 ;; esac  && case "$TARGETARCH" in       arm64) target=aarch64-unknown-linux-gnu ;;       amd64) target=x86_64-unknown-linux-gnu ;;       *) exit 1 ;;     esac  && rustup target add "$target"  && rustc --edition=2021 -C opt-level=3 -C strip=symbols       --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload  && cargo build --locked --release --target "$target" -p layerfs-daemon  && cargo build --locked --release --target "$target" -p layerfs-fuse --no-default-features --features proxy  && cp "target/$target/release/layerfs-daemon" /layerfs-daemon  && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
+#17 0.083 /workload/workload.rs: OK
+#17 0.181 info: component 'rust-std' for target 'aarch64-unknown-linux-gnu' is up to date
+#17 1.071 error[E0308]: arguments to this function are incorrect
+#17 1.071    --> ./reliability_workloads.rs:533:20
+#17 1.071     |
+#17 1.071 533 |                 if setxattr(p.as_ptr(), n.as_ptr(), v.as_ptr().cast(), v.len(), 0) == 0 {
+#17 1.071     |                    ^^^^^^^^
+#17 1.071     |
+#17 1.071 note: expected `*const i8`, found `*const u8`
+#17 1.071    --> ./reliability_workloads.rs:533:29
+#17 1.071     |
+#17 1.071 533 |                 if setxattr(p.as_ptr(), n.as_ptr(), v.as_ptr().cast(), v.len(), 0) == 0 {
+#17 1.071     |                             ^^^^^^^^^^
+#17 1.071     = note: expected raw pointer `*const i8`
+#17 1.071                found raw pointer `*const u8`
+#17 1.071 note: expected `*const i8`, found `*const u8`
+#17 1.071    --> ./reliability_workloads.rs:533:41
+#17 1.071     |
+#17 1.071 533 |                 if setxattr(p.as_ptr(), n.as_ptr(), v.as_ptr().cast(), v.len(), 0) == 0 {
+#17 1.071     |                                         ^^^^^^^^^^
+#17 1.071     = note: expected raw pointer `*const i8`
+#17 1.071                found raw pointer `*const u8`
+#17 1.071 note: function defined here
+#17 1.071    --> ./reliability_workloads.rs:522:24
+#17 1.071     |
+#17 1.071 522 |                     fn setxattr(
+#17 1.071     |                        ^^^^^^^^
+#17 1.071 
+#17 1.904 error: aborting due to 1 previous error
+#17 1.904 
+#17 1.904 For more information about this error, try `rustc --explain E0308`.
+#17 ERROR: process "/bin/sh -c test \"${#LAYERFS_SOURCE_COMMIT}\" -eq 40  && test \"${#LAYERFS_SOURCE_TREE}\" -eq 40  && test \"${#LAYERFS_SOURCE_SEAL}\" -eq 64  && test \"${#LAYERFS_PRODUCT_SEAL}\" -eq 64  && test \"${#WORKLOAD_SOURCE_SHA256}\" -eq 64  && echo \"$WORKLOAD_SOURCE_SHA256  /workload/workload.rs\" | sha256sum -c -  && case \"$LAYERFS_SOURCE_DIRTY\" in true|false) ;; *) exit 1 ;; esac  && case \"$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE$LAYERFS_SOURCE_SEAL\" in *[!0-9a-f]*) exit 1 ;; esac  && case \"$TARGETARCH\" in       arm64) target=aarch64-unknown-linux-gnu ;;       amd64) target=x86_64-unknown-linux-gnu ;;       *) exit 1 ;;     esac  && rustup target add \"$target\"  && rustc --edition=2021 -C opt-level=3 -C strip=symbols       --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload  && cargo build --locked --release --target \"$target\" -p layerfs-daemon  && cargo build --locked --release --target \"$target\" -p layerfs-fuse --no-default-features --features proxy  && cp \"target/$target/release/layerfs-daemon\" /layerfs-daemon  && cp \"target/$target/release/layerfs-fuse\" /layerfs-fuse" did not complete successfully: exit code: 1
+------
+ > [build 10/10] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     test "${#LAYERFS_SOURCE_COMMIT}" -eq 40  && test "${#LAYERFS_SOURCE_TREE}" -eq 40  && test "${#LAYERFS_SOURCE_SEAL}" -eq 64  && test "${#LAYERFS_PRODUCT_SEAL}" -eq 64  && test "${#WORKLOAD_SOURCE_SHA256}" -eq 64  && echo "$WORKLOAD_SOURCE_SHA256  /workload/workload.rs" | sha256sum -c -  && case "$LAYERFS_SOURCE_DIRTY" in true|false) ;; *) exit 1 ;; esac  && case "$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE$LAYERFS_SOURCE_SEAL" in *[!0-9a-f]*) exit 1 ;; esac  && case "$TARGETARCH" in       arm64) target=aarch64-unknown-linux-gnu ;;       amd64) target=x86_64-unknown-linux-gnu ;;       *) exit 1 ;;     esac  && rustup target add "$target"  && rustc --edition=2021 -C opt-level=3 -C strip=symbols       --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload  && cargo build --locked --release --target "$target" -p layerfs-daemon  && cargo build --locked --release --target "$target" -p layerfs-fuse --no-default-features --features proxy  && cp "target/$target/release/layerfs-daemon" /layerfs-daemon  && cp "target/$target/release/layerfs-fuse" /layerfs-fuse:
+1.071                found raw pointer `*const u8`
+1.071 note: function defined here
+1.071    --> ./reliability_workloads.rs:522:24
+1.071     |
+1.071 522 |                     fn setxattr(
+1.071     |                        ^^^^^^^^
+1.071 
+1.904 error: aborting due to 1 previous error
+1.904 
+1.904 For more information about this error, try `rustc --explain E0308`.
+------
+ERROR: failed to build: failed to solve: process "/bin/sh -c test \"${#LAYERFS_SOURCE_COMMIT}\" -eq 40  && test \"${#LAYERFS_SOURCE_TREE}\" -eq 40  && test \"${#LAYERFS_SOURCE_SEAL}\" -eq 64  && test \"${#LAYERFS_PRODUCT_SEAL}\" -eq 64  && test \"${#WORKLOAD_SOURCE_SHA256}\" -eq 64  && echo \"$WORKLOAD_SOURCE_SHA256  /workload/workload.rs\" | sha256sum -c -  && case \"$LAYERFS_SOURCE_DIRTY\" in true|false) ;; *) exit 1 ;; esac  && case \"$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE$LAYERFS_SOURCE_SEAL\" in *[!0-9a-f]*) exit 1 ;; esac  && case \"$TARGETARCH\" in       arm64) target=aarch64-unknown-linux-gnu ;;       amd64) target=x86_64-unknown-linux-gnu ;;       *) exit 1 ;;     esac  && rustup target add \"$target\"  && rustc --edition=2021 -C opt-level=3 -C strip=symbols       --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload  && cargo build --locked --release --target \"$target\" -p layerfs-daemon  && cargo build --locked --release --target \"$target\" -p layerfs-fuse --no-default-features --features proxy  && cp \"target/$target/release/layerfs-daemon\" /layerfs-daemon  && cp \"target/$target/release/layerfs-fuse\" /layerfs-fuse" did not complete successfully: exit code: 1
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/yx770swhihn2ulj61cwsypzuy

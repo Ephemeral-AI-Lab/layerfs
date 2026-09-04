@@ -1,0 +1,9 @@
+/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-sdk-cache-check-7i6ci67g/cache/41f8d3d4284c5dc6e852d4106674d53d9d40ac661b2e585f911f535ee81b8249/store
+/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-sdk-cache-check-7i6ci67g/cache/41f8d3d4284c5dc6e852d4106674d53d9d40ac661b2e585f911f535ee81b8249/store
+/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-sdk-cache-check-7i6ci67g/cache/41f8d3d4284c5dc6e852d4106674d53d9d40ac661b2e585f911f535ee81b8249/store
+{"schema": "fs-bench-pro-sdk-edit-cache-self-check-v1", "status": "pass", "checks": ["concurrent-single-publication", "cache-hit", "independent-clones", "sample-master-isolation", "next-sample-pristine", "interrupted-staging-ignored", "metadata-invalidation", "source-invalidation", "corrupt-quarantine", "missing-rebuild", "failed-preparation-exit-and-logs-retained"]}
+/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-workspace-cache-check-9e45ijv7/cache/ee98e6fdfef0c45b42ea38ca478ce358d1ecc2faca21c7a02518802e3304a378/store
+/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-workspace-cache-check-9e45ijv7/cache/ee98e6fdfef0c45b42ea38ca478ce358d1ecc2faca21c7a02518802e3304a378/store
+/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-workspace-cache-check-9e45ijv7/cache/2b454790dc487826405441b05acfad81cb122da2c6f2ece057ea8296ea77473b/store
+/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-workspace-cache-check-9e45ijv7/cache/2b454790dc487826405441b05acfad81cb122da2c6f2ece057ea8296ea77473b/store
+{"schema": "fs-bench-pro-workspace-cache-self-check-v1", "status": "pass", "checks": ["shared-publisher-regressions", "cross-family-reuse", "directory-clone-isolation", "directory-metadata-corruption"]}
