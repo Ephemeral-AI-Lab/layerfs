@@ -1,3 +1,5 @@
+> **Superseded: Phase 1 verification has been withdrawn by the user.** See [closure decision](phase-1-verification-withdrawal.md) and [final performance report](phase-1-final-results.md). Earlier instructions and pending verification queues below are historical.
+
 # Phase 1 execution handoff
 
 > **Latest verification acceptance, 2026-09-04:** Apply the explicit

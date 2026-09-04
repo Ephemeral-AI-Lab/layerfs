@@ -1,3 +1,5 @@
+> **Superseded: Phase 1 verification has been withdrawn by the user.** See [closure decision](phase-1-verification-withdrawal.md) and [final performance report](phase-1-final-results.md). Earlier instructions and pending verification queues below are historical.
+
 # Phase 1 functional repair implementation
 
 The [completion amendment](failure-repair-amendment.md) requires these repairs
@@ -45,64 +47,63 @@ Qualification evidence is under
 `proxy-directory-fragments-recheck` and `host-cache-provenance`.
 
 
-## Current checkpoint: 2026-09-04, read-only pin repair runtime-confirmed
+## Current checkpoint: 2026-09-05, targeted gates complete; routine fast collection active
 
-Phase 1 is **not terminally complete**. The latest candidate is
-`30d13deeec72b46ff7bc411f1ec08a46990541e1`, incorporating the read-only pin repair
-`957b40c7b59fb932ad1e0198b68c515f20168d01` and the expanded qualified fast verifier.
-Its sealed build and aggregate fast-verifier qualification passed. The real contention proof
-passed in `workspace-shared-path-contention-proof-s1-verify-278b3a754568`; independent
-report validation qualified all six new proofs with zero issues or violations. Original failures,
-invalidated timings and earlier source identities remain preserved.
+Phase 1 is **not terminally complete**. All **370 active performance samples**
+and **29 targeted proofs** are independently qualified. Routine coverage has
+48 retained full proofs and 103 qualified fast proofs at this checkpoint;
+remaining history and other routine fast checks are still executing.
 
-| Evidence category | Current disposition | Required next evidence |
-| --- | --- | --- |
-| Performance | 373 eligible slots had passed before the pin repair. Exactly 328 timings are retained under the reviewed operation-path/source predicate; 42 replacement samples passed; directory-content-scan-100 seed1 hit the15-second budget and seeds2/3 were suppressed. Active performance scope is370. | Independently validate42 new samples and the separate retained budget failure; historical45 timings remain original-source only. Preserve the old 45 observations as original-source evidence. |
-| Routine verification | 48 full proofs are retained: 43 new-family and five inherited capped cases. The remaining302 active routine slots may use the authorized qualified fast profile. | Qualify the expanded implementation and collect those302 fast proofs with independent changed-content/metadata/alias checks, authenticated references where reused, and explicit skipped-read scope. Fast results remain `fully_verified=false`. |
-| Targeted verification | 20 targeted proofs are qualified, including five source-78 recoveries and repaired contention on30d13dee. | Complete the nine remaining targeted cases; the six new independently validated receipts are sealed in `qualification/78-additional-reliability-checkpoint/`. The CDC boundary and reliability suite retain their targeted gates. |
+| Evidence category | Current disposition |
+| --- | --- |
+| Performance | 306 observations retain source `7948df2d`, 30 retain `30d13dee`, 33 use `e0922904`, and the corrected CDC deletion seed uses `e24a3b34`. Exact source/input compatibility preserves unaffected timings; no old result is relabeled as a new-binary measurement. |
+| Reliability and CDC boundaries | All 28 reliability subcases plus the separate CDC boundary aggregate are qualified. The original 600.003326232-second active proof and its 123983 cycles retain their original source and VM4 environment and were not rerun. |
+| Routine verification | 350 active slots require accepted correctness evidence: 48 retained full proofs plus 302 fast slots. Fast assurance is `fast_iteration_verified`, never `fully_verified`. All 302 unrun exhaustive counterparts remain explicit Phase 2 work. |
+| Suppression | 15 exact case IDs remain disabled, with definitions preserved for Phase 2. The new directory-content-scan-100 seed-1 attempt failed at 15.000758416 seconds; its other two seeds were not run. This is not a passing result. |
+| Issue disposition | Children #22, #23, #26, #29, #30, #31 and #34 are closed with published evidence. Remaining children and central #21 are open. |
 
-The [runtime suppression policy](phase-1-runtime-suppressions.md) keeps15 disabled
-case definitions for Phase 2. The [fast-verification amendment](phase-1-fast-verification-amendment.md)
-and [reference assurance contract](phase-1-fast-reference-qualification.md) authorize
-routine fast acceptance; they do not turn a preparation seal into verified input,
-waive targeted error/resource/cleanup checks, or authorize relabeling skipped reads
-as exhaustive verification. The retained 600-second sustained proof is reused once.
+The [fast-verification amendment](phase-1-fast-verification-amendment.md) and
+[reference assurance contract](phase-1-fast-reference-qualification.md) govern
+routine acceptance. They do not waive expected errors, resource limits, cleanup,
+authentic input identities, or the independent checks for content and metadata
+covered by the selected profile.
 
-The five qualified source-78 passes are workload cancellation
-(`c7a34133754e`), dirty runtime disconnection (`2e969fd5d84f`), corrupt descendant
-(`3c8a1f12c1e2`), missing descendant (`fbe2a2784bad`), and parallel read/write
-(`2f940d084aa8`). Their attempt directories under
-`benchmark-results/fs-bench-pro/phase1-v013/attempts/` retain the original
-raw outcomes and successful supervisor cleanup receipts; the separate qualified checkpoint supplies independent validation.
+Recent repairs are confirmed, rather than still under investigation:
 
-Two recent shared functional findings explain the current work:
+- **Cancellation/disconnection cleanup:** source `78d0f46d` reaps only owned,
+  forcibly terminated process groups after collecting the direct child's exact
+  status. The focused Linux check and real cancellation/disconnection proofs
+  passed. The original zombie-child failure remains preserved.
+- **Read-only Open acknowledgement:** source `957b40c7` waits for the backend Pin
+  response. The focused acknowledgement/NotFound test and real contention proof
+  `278b3a754568` passed. Exactly 45 affected timing slots were revisited: 42 passed,
+  one triggered the existing suppression policy, and two were consequently not run.
+- **Replacement Rename attributes:** source `e0922904` invalidates the overwritten
+  inode's cached attributes and preserves cached same-inode no-op names. The
+  focused check and real hardlink proof `9c319a18a1b8` passed; the original
+  `af050e843eb8` failure remains intact. All 33 affected timings were recollected
+  and independently qualified, retaining the other 337 observations.
+- **CDC deletion fixture collision:** the [recorded fixture correction](findings/cdc-delete-offset-collision.md)
+  changes only deletion tier 500, seed 3: ordinal 471 moves from offset 359004 to
+  359005. The uniqueness gate is unchanged. The 1500-offset check and the selected
+  performance/fast pair passed on `e24a3b34`. Its old timing remains historical
+  and recipe-invalid; the original `bf6d01cc7939` fast failure remains failed.
 
-- **Canceled descendants were dead but unreaped.** The original cancellation
-  failure `workspace-workload-cancel-proof-s1-verify-b46498591d62` and the retained
-  diagnostic `qualification/cancel-child-diagnostic-f5d1/process-observations.json`
-  show the child becoming a zombie, adopted by daemon PID 1, and remaining past
-  the unchanged ten-second disappearance gate. Repair
-  `78d0f46d90744bbce729909cdf57f6eafe2eb9e6` reaps only the owned forcibly terminated
-  process group after collecting its direct child's exact status. Its isolated
-  Linux regression passed (`qualification/group-reap-78d0f46d/focused.json`). The
-  corrected cancellation and disconnection runs are among the independently qualified passes above. Normal successful execution does
-  not enter the new forced-group reap loop.
-- **Read-only Open acknowledged an unretained inode.** The source-78 contention
-  attempt `workspace-shared-path-contention-proof-s1-verify-56ec99b0b027` failed with
-  ENOENT after successful Open. A concurrent replacement could remove the inode
-  before the one-way read pin was processed, while Open had already succeeded.
-  Repair `957b40c7b59fb932ad1e0198b68c515f20168d01` waits for the existing backend
-  `Pin(node, false, false)` response before exposing the handle, preserving
-  read-ahead and the other branches. The focused acknowledgement/NotFound test
-  passed (`qualification/readonly-pin-focused/result.json`). Real contention
-  recovery passed and was independently qualified; the 45 affected timing slots are being recollected;
-  the change is not claimed to have equal instruction cost.
+Independent receipts are in `qualification/78-additional-reliability-checkpoint`,
+`30d-additional-targeted-checkpoint`, `hardlink-final-checkpoint`,
+`readonly-pin-performance-checkpoint`, `rename-cache-performance-checkpoint`,
+`cdc-delete-collision-final-checkpoint`, `mixed-final-checkpoint`,
+`cdc-family-final-checkpoint`, and `cross-family-final-checkpoint`, relative to
+`benchmark-results/fs-bench-pro/phase1-v013/`. Source selection is sealed in
+`qualification/fast-source-binding/1788538675483490000/receipt.json`.
 
-All `qualification/` and `attempts/` paths above are relative to
-`benchmark-results/fs-bench-pro/phase1-v013/`. Issues #34 and #21 remain open.
-The following sections preserve earlier source-specific checkpoints, including
-now-superseded counts and next actions; they are historical records, not the current
-campaign disposition.
+Prepared-cache capacity stops remain unexecuted attempts. Explicit maintenance
+archived custody/build metadata and removed only completed disposable masters;
+future reference inputs and failed diagnostic state were preserved. The 24-GiB
+cap was not raised.
+
+The sections below retain earlier checkpoints and their then-current counts as
+historical records. They do not supersede this current disposition.
 
 ## Historical checkpoint: 2026-09-04, d1325d7f dense-content recovery
 

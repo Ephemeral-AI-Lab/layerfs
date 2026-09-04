@@ -1,0 +1,8 @@
+{
+  "action": "controlled interruption of an incomplete routine fast verifier",
+  "runner_pid": 98338,
+  "attempt": "dedup-history-hotset-500-s1-fast-verify-091142b9adb5",
+  "reason": "Confirmed exponential independent-oracle recipe validation/hash traversal (two cloned prior subtrees per fixed-region overwrite); preserve completed snapshot prefix and repair verifier-only construction before retry. Original600s targeted proof is already qualified and unaffected.",
+  "gate_policy": "No snapshot, oracle, fixture, byte, resource or deadline gate changed; this attempt is not passing verification",
+  "at_unix_ns": 1788539634968834000
+}
