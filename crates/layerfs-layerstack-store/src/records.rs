@@ -114,6 +114,13 @@ pub struct BranchRecord {
     pub head_commit_id: Option<CommitId>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct WorkspaceStage {
+    pub workspace_id: [u8; 16],
+    pub branch_id: BranchId,
+    pub root_id: ObjectId,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LayerStackInitialization {
     Empty,
@@ -366,6 +373,29 @@ pub(crate) fn decode_commit(row: &rusqlite::Row<'_>) -> rusqlite::Result<CommitR
         base_layer_id: decode_sql(
             LayerId::from_slice(&row.get::<_, Vec<u8>>(3)?),
             3,
+            rusqlite::types::Type::Blob,
+        )?,
+    })
+}
+
+pub(crate) fn decode_workspace_stage(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceStage> {
+    let workspace = row.get::<_, Vec<u8>>(0)?;
+    Ok(WorkspaceStage {
+        workspace_id: decode_sql(
+            workspace
+                .try_into()
+                .map_err(|_| StoreError::Integrity("Workspace ID length")),
+            0,
+            rusqlite::types::Type::Blob,
+        )?,
+        branch_id: decode_sql(
+            BranchId::from_slice(&row.get::<_, Vec<u8>>(1)?),
+            1,
+            rusqlite::types::Type::Blob,
+        )?,
+        root_id: decode_sql(
+            decode_object_id(row.get(2)?),
+            2,
             rusqlite::types::Type::Blob,
         )?,
     })

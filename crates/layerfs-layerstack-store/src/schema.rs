@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 pub const APPLICATION_ID: i64 = 0x4c46_534c;
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 5;
+const PREVIOUS_SCHEMA_VERSION: i64 = 4;
 pub const SQLITE_PAGE_SIZE_BYTES: i64 = 64 * 1024;
 pub const SQLITE_PAGE_CACHE_KIB: i64 = 32 * 1024;
 
@@ -180,9 +181,9 @@ impl StoreDb {
             path: path.clone(),
             remove: true,
         });
-        if mode == OpenMode::Connect {
-            preflight_connect(&path)?;
-        }
+        let existing_version = (mode == OpenMode::Connect)
+            .then(|| preflight_connect(&path))
+            .transpose()?;
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX;
         let mut connection = Connection::open_with_flags(&path, flags)?;
         if mode == OpenMode::Create {
@@ -190,11 +191,14 @@ impl StoreDb {
         }
         configure_connection(&connection)?;
         if mode == OpenMode::Create {
-            connection.execute_batch(statements::schema::V4)?;
+            connection.execute_batch(statements::schema::V5)?;
         }
-        verify_schema(&connection)?;
-        prepare_manifest(&connection)?;
         acquire_exclusive_lock(&mut connection)?;
+        if existing_version == Some(PREVIOUS_SCHEMA_VERSION) {
+            migrate_v4_to_v5(&mut connection)?;
+        }
+        verify_schema(&connection, SCHEMA_VERSION)?;
+        prepare_manifest(&connection)?;
         #[cfg(feature = "test-instrumentation")]
         {
             connection.trace_v2(
@@ -258,7 +262,7 @@ impl StoreDb {
     }
 }
 
-fn preflight_connect(path: &Path) -> Result<()> {
+fn preflight_connect(path: &Path) -> Result<i64> {
     let mut header = [0; 20];
     let mut file = std::fs::File::open(path)?;
     if file.metadata()?.len() < header.len() as u64 {
@@ -276,7 +280,12 @@ fn preflight_connect(path: &Path) -> Result<()> {
     if journal.eq_ignore_ascii_case("wal") {
         return Err(StoreError::WrongStoreSchema);
     }
-    verify_schema(&connection)
+    let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if !matches!(version, PREVIOUS_SCHEMA_VERSION | SCHEMA_VERSION) {
+        return Err(StoreError::WrongStoreSchema);
+    }
+    verify_schema(&connection, version)?;
+    Ok(version)
 }
 
 fn configure_connection(connection: &Connection) -> Result<()> {
@@ -311,19 +320,19 @@ fn acquire_exclusive_lock(connection: &mut Connection) -> Result<()> {
     Ok(())
 }
 
-fn verify_schema(connection: &Connection) -> Result<()> {
+fn verify_schema(connection: &Connection, version: i64) -> Result<()> {
     let application_id: i64 =
         connection.pragma_query_value(None, "application_id", |row| row.get(0))?;
     let user_version: i64 =
         connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
     let page_size: i64 = connection.pragma_query_value(None, "page_size", |row| row.get(0))?;
     if application_id != APPLICATION_ID
-        || user_version != SCHEMA_VERSION
+        || user_version != version
         || page_size != SQLITE_PAGE_SIZE_BYTES
     {
         return Err(StoreError::WrongStoreSchema);
     }
-    if schema_objects(connection)? != expected_schema_objects()? {
+    if schema_objects(connection)? != expected_schema_objects(version)? {
         return Err(StoreError::WrongStoreSchema);
     }
     let mut foreign_keys = connection.prepare(statements::schema::FOREIGN_KEY_CHECK)?;
@@ -334,7 +343,13 @@ fn verify_schema(connection: &Connection) -> Result<()> {
 }
 
 fn prepare_manifest(connection: &Connection) -> Result<()> {
-    for (_, sql) in statements::ALL.iter().skip(1) {
+    for (name, sql) in statements::ALL {
+        if matches!(
+            *name,
+            "schema/v4.sql" | "schema/v5.sql" | "schema/migrate_v4_to_v5.sql"
+        ) {
+            continue;
+        }
         connection.prepare(sql)?;
     }
     Ok(())
@@ -351,10 +366,21 @@ fn schema_objects(connection: &Connection) -> Result<Vec<SchemaObject>> {
         .collect::<rusqlite::Result<_>>()?)
 }
 
-fn expected_schema_objects() -> Result<Vec<SchemaObject>> {
+fn expected_schema_objects(version: i64) -> Result<Vec<SchemaObject>> {
     let expected = Connection::open_in_memory()?;
-    expected.execute_batch(statements::schema::V4)?;
+    expected.execute_batch(match version {
+        PREVIOUS_SCHEMA_VERSION => statements::schema::V4,
+        SCHEMA_VERSION => statements::schema::V5,
+        _ => return Err(StoreError::WrongStoreSchema),
+    })?;
     schema_objects(&expected)
+}
+
+fn migrate_v4_to_v5(connection: &mut Connection) -> Result<()> {
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    transaction.execute_batch(statements::schema::MIGRATE_V4_TO_V5)?;
+    transaction.commit()?;
+    verify_schema(connection, SCHEMA_VERSION)
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]

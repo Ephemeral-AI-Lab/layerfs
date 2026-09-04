@@ -8,6 +8,7 @@ mod objects;
 mod query;
 mod records;
 mod schema;
+mod staging;
 mod statements;
 mod store;
 mod telemetry;
@@ -25,7 +26,7 @@ pub use records::{
     AddLayerResult, BranchRecord, BranchRecordPage, CanonicalStorage, CommitRecord,
     CommitRecordPage, DiffRequest, EntityName, InitializeLayerStackResult, LayerRecord,
     LayerRecordPage, LayerStackInitialization, LayerStackRecord, LayerStackRecordPage,
-    LocalForkSource, Page, StoreCounts, StoreStorageSnapshot, WorkspaceReadReceipt,
+    LocalForkSource, Page, StoreCounts, StoreStorageSnapshot, WorkspaceReadReceipt, WorkspaceStage,
 };
 pub use store::LayerStackStore;
 pub use telemetry::{

@@ -1,5 +1,7 @@
 pub const ALL: &[(&str, &str)] = &[
     ("schema/v4.sql", schema::V4),
+    ("schema/v5.sql", schema::V5),
+    ("schema/migrate_v4_to_v5.sql", schema::MIGRATE_V4_TO_V5),
     ("schema/schema_objects.sql", schema::SCHEMA_OBJECTS),
     ("schema/table_columns.sql", schema::TABLE_COLUMNS),
     ("schema/foreign_key_check.sql", schema::FOREIGN_KEY_CHECK),
@@ -39,6 +41,9 @@ pub const ALL: &[(&str, &str)] = &[
     ("workspace/insert_commit.sql", workspace::INSERT_COMMIT),
     ("workspace/advance_branch.sql", workspace::ADVANCE_BRANCH),
     ("workspace/current_branch.sql", workspace::CURRENT_BRANCH),
+    ("workspace/insert_stage.sql", workspace::INSERT_STAGE),
+    ("workspace/get_stage.sql", workspace::GET_STAGE),
+    ("workspace/delete_stage.sql", workspace::DELETE_STAGE),
     ("query/store_counts.sql", query::STORE_COUNTS),
     ("query/canonical_storage.sql", query::CANONICAL_STORAGE),
     ("query/layer_roots_page.sql", query::LAYER_ROOTS_PAGE),
@@ -48,6 +53,8 @@ pub const ALL: &[(&str, &str)] = &[
 
 pub mod schema {
     pub const V4: &str = include_str!("../sql/schema/v4.sql");
+    pub const V5: &str = include_str!("../sql/schema/v5.sql");
+    pub const MIGRATE_V4_TO_V5: &str = include_str!("../sql/schema/migrate_v4_to_v5.sql");
     pub const SCHEMA_OBJECTS: &str = include_str!("../sql/schema/schema_objects.sql");
     pub const TABLE_COLUMNS: &str = include_str!("../sql/schema/table_columns.sql");
     pub const FOREIGN_KEY_CHECK: &str = include_str!("../sql/schema/foreign_key_check.sql");
@@ -94,6 +101,9 @@ pub mod workspace {
     pub const INSERT_COMMIT: &str = include_str!("../sql/workspace/insert_commit.sql");
     pub const ADVANCE_BRANCH: &str = include_str!("../sql/workspace/advance_branch.sql");
     pub const CURRENT_BRANCH: &str = include_str!("../sql/workspace/current_branch.sql");
+    pub const INSERT_STAGE: &str = include_str!("../sql/workspace/insert_stage.sql");
+    pub const GET_STAGE: &str = include_str!("../sql/workspace/get_stage.sql");
+    pub const DELETE_STAGE: &str = include_str!("../sql/workspace/delete_stage.sql");
 }
 
 pub mod query {
@@ -111,7 +121,7 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     #[test]
-    fn exact_manifest_prepares_against_exact_v4_schema() {
+    fn exact_manifest_prepares_against_exact_v5_schema() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("sql");
         let mut files = Vec::new();
         collect_sql(&root, &root, &mut files);
@@ -122,13 +132,13 @@ mod tests {
             .collect::<Vec<_>>();
         registered.sort();
         assert_eq!(files, registered);
-        assert_eq!(ALL.len(), 39);
+        assert_eq!(ALL.len(), 44);
 
         let connection = Connection::open_in_memory().unwrap();
         connection
             .pragma_update(None, "foreign_keys", true)
             .unwrap();
-        connection.execute_batch(schema::V4).unwrap();
+        connection.execute_batch(schema::V5).unwrap();
 
         let expected_parameters = BTreeMap::from([
             ("schema/schema_objects.sql", 0),
@@ -164,6 +174,9 @@ mod tests {
             ("workspace/insert_commit.sql", 4),
             ("workspace/advance_branch.sql", 5),
             ("workspace/current_branch.sql", 1),
+            ("workspace/insert_stage.sql", 3),
+            ("workspace/get_stage.sql", 1),
+            ("workspace/delete_stage.sql", 3),
             ("query/store_counts.sql", 0),
             ("query/canonical_storage.sql", 0),
             ("query/layer_roots_page.sql", 2),
@@ -171,7 +184,12 @@ mod tests {
             ("query/branch_roots_page.sql", 2),
         ]);
 
-        for (name, sql) in ALL.iter().skip(1) {
+        for (name, sql) in ALL.iter().filter(|(name, _)| {
+            !matches!(
+                *name,
+                "schema/v4.sql" | "schema/v5.sql" | "schema/migrate_v4_to_v5.sql"
+            )
+        }) {
             assert!(sql.starts_with("-- family:"), "missing header: {name}");
             assert!(sql.contains("\n-- name:"), "missing name header: {name}");
             assert!(
@@ -196,7 +214,7 @@ mod tests {
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
         assert_eq!(application_id, 0x4c46_534c);
-        assert_eq!(user_version, 4);
+        assert_eq!(user_version, 5);
 
         let tables = connection
             .prepare(
@@ -223,9 +241,10 @@ mod tests {
                 ("layer_stacks".to_owned(), 3, 1, 1),
                 ("layers".to_owned(), 6, 1, 1),
                 ("objects".to_owned(), 2, 0, 1),
+                ("workspace_stages".to_owned(), 3, 1, 1),
             ]
         );
-        assert_eq!(tables.iter().map(|table| table.1).sum::<i64>(), 20);
+        assert_eq!(tables.iter().map(|table| table.1).sum::<i64>(), 23);
 
         let indexes = connection
             .prepare(

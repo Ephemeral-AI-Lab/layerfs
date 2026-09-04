@@ -36,7 +36,7 @@ pub struct LayerStackInitializationReceipt {
 }
 
 impl CandidateReceipt {
-    fn validate(self) -> Result<()> {
+    pub(crate) fn validate(self) -> Result<()> {
         self.validate_with_max_objects(crate::objects::ADMISSION_BATCH_COUNT as u64)
     }
 
@@ -558,12 +558,16 @@ pub fn note_workspace_create_snapshot(
 
 pub(crate) fn record_candidate(receipt: CandidateReceipt) -> Result<()> {
     receipt.validate()?;
+    record_validated_candidate(receipt);
+    Ok(())
+}
+
+pub(crate) fn record_validated_candidate(receipt: CandidateReceipt) {
     RECEIPTS.with(|receipts| {
         receipts
             .borrow_mut()
             .push(StorageReceipt::Candidate(receipt));
     });
-    Ok(())
 }
 
 pub(crate) fn record_initialization_candidate(receipt: CandidateReceipt) -> Result<()> {

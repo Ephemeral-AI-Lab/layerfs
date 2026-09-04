@@ -1,11 +1,12 @@
 use crate::objects::{
-    admit_planned_objects, apply_reconcile_choices, combine_candidates, insert_object_batch,
-    reconcile_candidate, BuildCounters, BuiltRoot, CanonicalObject, DeferredObjectStore,
-    ObjectSource,
+    admit_checked_objects, admit_planned_objects, apply_reconcile_choices, combine_candidates,
+    insert_object_batch, reconcile_candidate, BuildCounters, BuiltRoot, CanonicalObject,
+    DeferredObjectStore, ObjectSource,
 };
 use crate::records::{
     decode_branch, decode_commit, decode_layer_stack_at, decode_object_id, optional_id,
 };
+use crate::staging::{delete_workspace_stage, workspace_stage_from_connection};
 use crate::{
     BranchId, BranchRecord, CommitId, CommitRecord, LayerId, LayerStackStore, Result, StoreError,
     WorkspaceReadReceipt,
@@ -219,6 +220,59 @@ impl LayerStackStore {
         )
     }
 
+    pub fn commit_workspace_reconciliation(
+        &self,
+        workspace_id: [u8; 16],
+        prepared: &PreparedReconciliation,
+        working: BuiltRoot,
+        choices: &[layerfs_content::filesystem::ReconcileChoice],
+    ) -> Result<CommitOutcome> {
+        let mut expected = self
+            .branch(prepared.branch_id)?
+            .ok_or(StoreError::NotFound("Branch"))?;
+        expected.head_commit_id = Some(prepared.expected_head);
+        expected.base_layer_id = prepared.old_base_layer_id;
+        let working_root = working.root_id;
+        let working = Arc::new(Mutex::new(working.objects));
+        let reader = SnapshotReader {
+            db: self.db.clone(),
+            root: working_root,
+            overlays: vec![working.clone(), prepared.objects.clone()],
+            read_metrics: Arc::new(Mutex::new(WorkspaceReadReceipt::default())),
+            cache: Arc::new(Mutex::new(SnapshotCache::default())),
+        };
+        let selected = apply_reconcile_choices(
+            &reader,
+            working_root,
+            prepared.branch_root,
+            prepared.layer_root,
+            &prepared.conflicts,
+            choices,
+        )?;
+        let working = working
+            .lock()
+            .map_err(|_| StoreError::Integrity("reconciliation candidate"))?;
+        let prepared_objects = prepared
+            .objects
+            .lock()
+            .map_err(|_| StoreError::Integrity("reconciliation candidate"))?;
+        let objects = combine_candidates(
+            selected.root_id,
+            &[&working, &prepared_objects, &selected.objects],
+        )?;
+        self.commit_workspace_candidate(
+            workspace_id,
+            &expected,
+            prepared.branch_root,
+            prepared.current_layer_id,
+            BuiltRoot {
+                root_id: selected.root_id,
+                objects,
+                counters: selected.counters,
+            },
+        )
+    }
+
     pub fn commit_candidate(
         &self,
         expected: &BranchRecord,
@@ -380,6 +434,184 @@ impl LayerStackStore {
         })
     }
 
+    pub fn commit_workspace_candidate(
+        &self,
+        workspace_id: [u8; 16],
+        expected: &BranchRecord,
+        expected_root: ObjectId,
+        new_base_layer_id: LayerId,
+        built: BuiltRoot,
+    ) -> Result<CommitOutcome> {
+        let _operation = self.db.enter_operation()?;
+        #[cfg(feature = "test-instrumentation")]
+        crate::schema::verification_candidate(expected.id, built.counters.spill_count);
+        crate::telemetry::note_workspace_commit_cdc(built.counters.cdc_bytes_scanned);
+
+        let up_to_date =
+            built.root_id == expected_root && new_base_layer_id == expected.base_layer_id;
+        if !up_to_date {
+            let new_base = self
+                .layer(new_base_layer_id)?
+                .ok_or(StoreError::NotFound("base Layer"))?;
+            if new_base.layer_stack_id != expected.layer_stack_id {
+                return Err(StoreError::Integrity("Branch LayerStack ownership"));
+            }
+        }
+
+        let started = Instant::now();
+        let mut statement_number = 0;
+        let admission = if up_to_date {
+            Default::default()
+        } else {
+            admit_checked_objects(&self.db, &built.objects, &mut statement_number)?
+        };
+        crate::telemetry::note_workspace_admission(
+            admission.transactions,
+            admission.max_transaction_objects,
+            admission.max_transaction_bytes,
+            admission.begin_ns,
+            admission.insert_ns,
+            admission.commit_ns,
+        );
+        crate::telemetry::note_workspace_commit_phase(
+            crate::WorkspaceCommitPhase::ObjectAdmission,
+            elapsed_ns(started),
+        );
+
+        let candidate_receipt = (!up_to_date).then_some(crate::CandidateReceipt {
+            candidate_objects: admission.candidate_objects,
+            candidate_bytes: admission.candidate_bytes,
+            inserted_objects: admission.inserted_objects,
+            inserted_bytes: admission.inserted_bytes,
+            reused_objects: admission.reused_objects,
+            reused_bytes: admission.reused_bytes,
+            batch_inserted_objects: admission.inserted_objects,
+            batch_inserted_bytes: admission.inserted_bytes,
+            final_inserted_objects: 0,
+            final_inserted_bytes: 0,
+            preexisting_reused_objects: admission.reused_objects,
+            preexisting_reused_bytes: admission.reused_bytes,
+            admission_transactions: admission.transactions,
+            max_transaction_objects: admission.max_transaction_objects,
+            max_transaction_bytes: admission.max_transaction_bytes,
+        });
+        if let Some(receipt) = candidate_receipt {
+            receipt.validate()?;
+        }
+
+        let stage = self.stage_workspace_root(workspace_id, expected.id, built.root_id)?;
+        let publication_started = Instant::now();
+        let begin_started = Instant::now();
+        let mut connection = self.db.writer()?;
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let begin_ns = elapsed_ns(begin_started);
+        let actual_stage = workspace_stage_from_connection(&transaction, workspace_id)?
+            .ok_or(StoreError::Integrity("Workspace stage missing"))?;
+        if actual_stage != stage {
+            return Err(StoreError::Integrity("Workspace stage changed"));
+        }
+        let (current, current_root) =
+            workspace_snapshot_from_connection(&transaction, expected.id)?;
+        if current.head_commit_id != expected.head_commit_id
+            || current.base_layer_id != expected.base_layer_id
+        {
+            return Err(StoreError::CommitHeadMoved {
+                expected: expected.head_commit_id,
+                actual: current.head_commit_id,
+            });
+        }
+        if current.layer_stack_id != expected.layer_stack_id || current_root != expected_root {
+            return Err(StoreError::Integrity("Workspace publication source"));
+        }
+
+        let metadata_started = Instant::now();
+        let outcome = if up_to_date {
+            delete_workspace_stage(&transaction, stage)?;
+            statement_number += 1;
+            crate::schema::fail_transaction_statement(statement_number)?;
+            CommitOutcome::UpToDate {
+                root_id: expected_root,
+            }
+        } else {
+            let commit = CommitRecord {
+                id: CommitId::derive(built.root_id, expected.head_commit_id, new_base_layer_id),
+                root_id: built.root_id,
+                parent_commit_id: expected.head_commit_id,
+                base_layer_id: new_base_layer_id,
+            };
+            statement_number += 1;
+            crate::schema::fail_transaction_statement(statement_number)?;
+            if transaction.execute(
+                crate::statements::workspace::INSERT_COMMIT,
+                rusqlite::params![
+                    commit.id.as_slice(),
+                    commit.root_id.as_bytes().as_slice(),
+                    commit.parent_commit_id.map(|id| id.to_bytes().to_vec()),
+                    commit.base_layer_id.as_slice(),
+                ],
+            )? == 0
+            {
+                let existing = transaction
+                    .query_row(
+                        crate::statements::branch::GET_COMMIT,
+                        [commit.id.as_slice()],
+                        decode_commit,
+                    )
+                    .optional()?
+                    .ok_or(StoreError::Integrity("Commit conflict"))?;
+                if existing != commit {
+                    return Err(StoreError::Integrity("Commit collision"));
+                }
+            }
+            statement_number += 1;
+            crate::schema::fail_transaction_statement(statement_number)?;
+            #[cfg(feature = "test-instrumentation")]
+            crate::schema::verification_store_checkpoint(
+                crate::schema::VerificationStoreFault::FinalPublication,
+            )?;
+            if transaction.execute(
+                crate::statements::workspace::ADVANCE_BRANCH,
+                rusqlite::params![
+                    expected.id.as_slice(),
+                    commit.id.as_slice(),
+                    expected.head_commit_id.map(|id| id.to_bytes().to_vec()),
+                    new_base_layer_id.as_slice(),
+                    expected.base_layer_id.as_slice(),
+                ],
+            )? != 1
+            {
+                return Err(StoreError::Integrity("conditional Branch publication"));
+            }
+            delete_workspace_stage(&transaction, stage)?;
+            statement_number += 1;
+            crate::schema::fail_transaction_statement(statement_number)?;
+            CommitOutcome::Committed {
+                commit_id: commit.id,
+                root_id: commit.root_id,
+                counters: built.counters,
+                candidate_objects: admission.candidate_objects,
+                candidate_bytes: admission.candidate_bytes,
+                inserted_objects: admission.inserted_objects,
+                inserted_bytes: admission.inserted_bytes,
+                reused_objects: admission.reused_objects,
+                reused_bytes: admission.reused_bytes,
+            }
+        };
+        let metadata_ns = elapsed_ns(metadata_started);
+        let commit_started = Instant::now();
+        transaction.commit()?;
+        let commit_ns = elapsed_ns(commit_started);
+        crate::telemetry::note_workspace_publication(begin_ns, 0, 0, metadata_ns, commit_ns);
+        crate::telemetry::note_workspace_commit_phase(
+            crate::WorkspaceCommitPhase::Publication,
+            elapsed_ns(publication_started),
+        );
+        if let Some(receipt) = candidate_receipt {
+            crate::telemetry::record_validated_candidate(receipt);
+        }
+        Ok(outcome)
+    }
+
     fn load_workspace_snapshot(
         &self,
         branch_id: BranchId,
@@ -403,6 +635,21 @@ impl LayerStackStore {
                 Ok((branch?, layer_stack?, decode_object_id(root?)?))
             })
     }
+}
+
+fn workspace_snapshot_from_connection(
+    connection: &rusqlite::Connection,
+    branch_id: BranchId,
+) -> Result<(BranchRecord, ObjectId)> {
+    connection
+        .query_row(
+            crate::statements::workspace::LOAD_SNAPSHOT,
+            [branch_id.as_slice()],
+            |row| Ok((decode_branch(row), row.get::<_, Vec<u8>>(8))),
+        )
+        .optional()?
+        .ok_or(StoreError::NotFound("Branch"))
+        .and_then(|(branch, root)| Ok((branch?, decode_object_id(root?)?)))
 }
 
 impl SnapshotReader {

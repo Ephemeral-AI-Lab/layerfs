@@ -6,7 +6,7 @@ use layerfs_layerstack_store::{
 use std::collections::BTreeSet;
 
 #[test]
-fn exact_v4_schema_runtime_and_old_schema_rejection() {
+fn exact_v5_schema_runtime_and_old_schema_rejection() {
     let root = temp("schema");
     let path = root.join("store.sqlite");
     let store = LayerStackStore::create(&path).unwrap();
@@ -16,7 +16,7 @@ fn exact_v4_schema_runtime_and_old_schema_rejection() {
         rusqlite::Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
             .unwrap();
     assert_eq!(pragma(&connection, "application_id"), 0x4c46_534c);
-    assert_eq!(pragma(&connection, "user_version"), 4);
+    assert_eq!(pragma(&connection, "user_version"), 5);
     assert_eq!(pragma(&connection, "page_size"), 65_536);
 
     let tables = connection
@@ -44,9 +44,10 @@ fn exact_v4_schema_runtime_and_old_schema_rejection() {
             ("layer_stacks".to_owned(), 3, 1, 1),
             ("layers".to_owned(), 6, 1, 1),
             ("objects".to_owned(), 2, 0, 1),
+            ("workspace_stages".to_owned(), 3, 1, 1),
         ]
     );
-    assert_eq!(tables.iter().map(|table| table.1).sum::<i64>(), 20);
+    assert_eq!(tables.iter().map(|table| table.1).sum::<i64>(), 23);
     let indexes = connection
         .prepare(
             "SELECT name FROM sqlite_schema \
