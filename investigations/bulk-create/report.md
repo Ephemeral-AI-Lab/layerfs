@@ -574,3 +574,31 @@ missing; a large unexplained shared-work gap still requires investigation even
 if the broad Commit target passes. The handoff authorizes isolated implementation
 when executed, with no merge, publication, release changes or Phase 2 work.
 No performance measurements were run as part of this specification update.
+
+
+## 10. Full v0.1.1 roadmap and architectural expectation review
+
+The primary agent and three read-only subagents reviewed all seven v0.1.1 roadmap
+documents (4,925 lines), plus the independent implementation's current data flow.
+[Architecture reassessment](architecture-reassessment.md) records lessons,
+rejected approaches, source references, algorithmic reductions, CPU/memory bounds
+and time-budget assumptions. [Document hashes](evidence/architecture-review-sources.json)
+identify the reviewed documentation; timings remain bound to their original
+sources, not evolving implementation files.
+
+The recommendation is a persistent bounded pool and one compact final-object
+descriptor/preflight pipeline, preserving complete preflight before persistent
+writes. Planning expectation: approximately 7.5–10 seconds create Commit on two
+CPUs and a 9–10 CPU-second target, versus the retained 10.70 seconds / 11.41 CPU-
+seconds. The 6.5–9-second eight-CPU band is conditional, not measured. Deeper
+final-subgraph/pipeline redesign has lower-confidence 5–8-second two-CPU /
+4–7-second eight-CPU budgets only after reachability and failure equivalence are
+proved. None demonstrates 2.766-second parity or changes existing acceptance
+requirements. Keep the generic tree/ledger and preserve subsecond delete rather
+than replacing already-small structural stages.
+
+The full roadmap changed the reviewers' priorities: removing the old ~1.294-GB
+intermediate payload traffic was more important than deleting the small compact
+pair stream, and empty-Store direct admission's handled-failure cleanup cannot
+justify moving Workspace preflight failures after writes. No recommendation was
+sent to or implemented in the running task during this review.

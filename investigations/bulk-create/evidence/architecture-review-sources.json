@@ -1,0 +1,43 @@
+{
+  "reviewed_source_head": "8165519b337bc5eaa3e28d9ae0842fc9d2f5272e",
+  "measurement_source": "939f05feb5a58bd23720f329767dcb05585d1e81",
+  "historical_source": "retained historical-100k-result.json; see its embedded source/seal identity",
+  "scope": "read-only architecture review; no new performance measurements",
+  "documents": [
+    {
+      "path": "docs/roadmap/0.1/0.1.1/README.md",
+      "lines": 342,
+      "sha256": "9f94a25993d8873672a609127fd0c1044a942be6fb8c160335a4f28909b5572a"
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.1/architecture_shift.md",
+      "lines": 1366,
+      "sha256": "9fbc662342839d3b40e8e3bbcf910bc93b9aa219804aa3c5bf1ad54f0e42cff1"
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.1/baseline-2026-09-02.md",
+      "lines": 477,
+      "sha256": "8b08fe7d8777694c25e745f2949cd78657764c32ffb2481f2c71608c391a29c1"
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.1/handoff-prompt.md",
+      "lines": 365,
+      "sha256": "58d279d819e2eab11c2731f6238df7a106753553347d53a6d06fbfe63a511861"
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.1/namespace-optimization-spec.md",
+      "lines": 1029,
+      "sha256": "00a8945e7930a5a95e123a91fd81db62dc650a797eae5a42aec34bb623fca20b"
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.1/namespace-v2-handoff-prompt.md",
+      "lines": 609,
+      "sha256": "9da45a57c565f62be1a3b8be1aa44e2905ed9381e9ad12aa42407f43a9a175de"
+    },
+    {
+      "path": "docs/roadmap/0.1/0.1.1/release-blog-draft.md",
+      "lines": 737,
+      "sha256": "2b3f8dd60abec9f5436be54df78db58c01ac8abc7d036528b0bd6e79452dd258"
+    }
+  ]
+}
