@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Exploratory container-only A/B: independent storage/cache, no Phase 1 lock."""
-import hashlib, json, pathlib, subprocess, time, uuid
+import hashlib, json, pathlib, subprocess, tarfile, time, tomllib, uuid
 ROOT=pathlib.Path(__file__).resolve().parents[2]
-OUT=ROOT/'investigations/bulk-create/evidence/container-metadata-10-s1'
+OUT=ROOT/'investigations/bulk-create/evidence/container-metadata-10-s1-r2'
 BASE='sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e'
 PREPARED=ROOT/'investigations/bulk-create/evidence/colocated-r1/prepared'
 OUT.mkdir();commands=[];active=None
@@ -26,9 +26,28 @@ try:
     assert not subprocess.check_output(['git','diff','--','crates','benchmark/fs-bench-pro'],cwd=ROOT)
     run('archive',['git','archive','--format=tar','--output',OUT/'source.tar',source,'Cargo.toml','Cargo.lock','crates','tools','benchmark/fs-bench-pro'])
     run('concurrent-containers',['docker','ps','--format','{{.Names}}\t{{.Status}}'])
+    # Copy immutable, checksum-verified pinned crates into a private Cargo cache.
+    registry=pathlib.Path.home()/'.cargo/registry'
+    dependency_records=[]
+    with tarfile.open(OUT/'dependencies.tar','w') as archive:
+        indexes=set()
+        for package in tomllib.loads((ROOT/'Cargo.lock').read_text())['package']:
+            if not package.get('source','').startswith('registry+'): continue
+            name=package['name'];version=package['version']
+            cached=next((registry/'cache').glob('*/'+name+'-'+version+'.crate'))
+            assert hashlib.sha256(cached.read_bytes()).hexdigest()==package['checksum']
+            archive.add(cached,arcname='cargo/registry/cache/'+cached.parent.name+'/'+cached.name)
+            key=('1/'+name if len(name)==1 else '2/'+name if len(name)==2 else '3/'+name[0]+'/'+name if len(name)==3 else name[:2]+'/'+name[2:4]+'/'+name)
+            index=registry/'index'/cached.parent.name
+            archive.add(index/'.cache'/key,arcname='cargo/registry/index/'+index.name+'/.cache/'+key)
+            if index not in indexes:
+                archive.add(index/'config.json',arcname='cargo/registry/index/'+index.name+'/config.json');indexes.add(index)
+            dependency_records.append(dict(name=name,version=version,sha256=package['checksum']))
+    (OUT/'dependencies.json').write_text(json.dumps(dependency_records,indent=2)+'\n')
     start('build')
+    run('build-dependencies-copy',['docker','cp',OUT/'dependencies.tar',active+':/data/dependencies.tar'])
     run('build-source-copy',['docker','cp',OUT/'source.tar',active+':/data/source.tar'])
-    run('build',['docker','exec','-e','CARGO_HOME=/data/cargo','-e','CARGO_TARGET_DIR=/data/target','-e','CARGO_BUILD_JOBS=2',active,'sh','-c','mkdir /data/source && tar -xf /data/source.tar -C /data/source && cd /data/source && cargo build --locked --release -p fs-benchmark-pro'],1200)
+    run('build',['docker','exec','-e','CARGO_HOME=/data/cargo','-e','CARGO_TARGET_DIR=/data/target','-e','CARGO_BUILD_JOBS=2',active,'sh','-c','mkdir /data/source && tar -xf /data/source.tar -C /data/source && tar -xf /data/dependencies.tar -C /data && cd /data/source && cargo build --offline --locked --release -p fs-benchmark-pro'],1200)
     run('binary-copy',['docker','cp',active+':/data/target/release/fs-benchmark-pro',OUT/'fs-benchmark-pro'])
     run('build-toolchain',['docker','exec',active,'rustc','-Vv'])
     run('build-cleanup',['docker','rm','-fv',active]);active=None
@@ -51,5 +70,5 @@ finally:
         run('failed-environment',['docker','inspect',active])
         try: run('failed-state-copy',['docker','cp',active+':/data',OUT/'failed-state'])
         finally: run('failed-cleanup',['docker','rm','-fv',active])
-    files=[p for p in sorted(OUT.rglob('*')) if p.is_file() and 'failed-state' not in p.parts and p.name not in ['evidence.sha256','source.tar','fs-benchmark-pro']]
+    files=[p for p in sorted(OUT.rglob('*')) if p.is_file() and 'failed-state' not in p.parts and p.name not in ['evidence.sha256','source.tar','dependencies.tar','fs-benchmark-pro']]
     (OUT/'evidence.sha256').write_text('\n'.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+str(p.relative_to(OUT)) for p in files)+'\n')
