@@ -1,0 +1,8 @@
+   Compiling layerfs-content v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.47s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_content-0bd826673ea002f5)
+
+thread 'tree::batch::tests::directory_attempt_distinguishes_scratch_disk_and_store_limits_and_keeps_history' (230386695) panicked at crates/layerfs-content/src/tree/batch.rs:1926:9:
+TreeBatchAttempt { result: Err(ObjectLimitExceeded), counters: TreeBatchCounters { nodes_read: 2, nodes_created: 0, nodes_reused: 0, delta_keys: 57, peak_scratch_bytes: 15816, spill_write_bytes: 8092, spill_read_bytes: 0, peak_spill_bytes: 8092 }, budget_denied: true }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: test failed, to rerun pass `-p layerfs-content --lib`

@@ -536,6 +536,7 @@ struct FastInitializationDiagnostics {
     pair_io: crate::objects::InitializationSegmentIoMetrics,
     admission: crate::objects::InitializationAdmissionDiagnostics,
     final_root_inode_table_wall_ns: u64,
+    final_root_inode_table_cpu_ns: Option<u64>,
     insert_node_peak_len: u64,
     insert_node_peak_capacity: u64,
     slab: InitializationSlabWriterMetrics,
@@ -544,6 +545,7 @@ struct FastInitializationDiagnostics {
     consumer_idle_ns: u64,
     last_slab_receive_offset_ns: u64,
     pipeline_wall_ns: u64,
+    pipeline_cpu_ns: Option<u64>,
     active_thread_peak: u64,
     active_producers_after: u64,
     task_state_bytes: u64,
@@ -705,7 +707,7 @@ impl InitializationDiagnostic {
             pipeline_peak.max(completed_peak).max(final_peak)
         };
         eprintln!(
-            "layerfs-initialization-diagnostic-v3 nonce={} fast_path={} worker_count={} prepare_import_wall_ns={} source_file_open_calls={} source_file_read_calls={} source_file_read_bytes={} source_symlink_metadata_calls={} source_read_dir_calls={} single_chunk_files={} streaming_files={} cdc_scratch_peak_bytes={} metadata_cache_hits={} metadata_cache_misses={} metadata_cache_peak_entries={} explicit_buffer_peak_bytes={} explicit_slab_payload_limit_bytes={} explicit_slab_object_limit={} explicit_canonical_object_header_bytes={} explicit_pair_pending_limit_bytes={} canonical_frame_count={} canonical_payload_bytes={} canonical_payload_capacity_bytes={} canonical_payload_capacity_slack_bytes={} canonical_encode_calls={} canonical_hash_calls={} canonical_framing_bytes={} object_segment_write_calls={} object_segment_write_bytes={} object_segment_raw_read_calls={} object_segment_raw_read_bytes={} object_segment_passes={} slab_handoffs={} slab_sent_objects={} slab_sent_bytes={} slab_send_blocked_ns={} slab_partial_peak_objects={} slab_partial_peak_payload_bytes={} slab_queue_peak={} slab_queue_peak_bytes={} slab_consumer_idle_ns={} last_slab_receive_offset_ns={} direct_pipeline_wall_ns={} import_pipeline_thread_peak={} active_producers_after={} task_state_bytes={} completed_result_peak_bytes={} parent_final_state_peak_bytes={} candidate_copy_bytes={} structural_peak_bytes={} parent_payload_copy_bytes={} pair_segment_write_calls={} pair_segment_write_bytes={} pair_segment_raw_read_calls={} pair_segment_raw_read_bytes={} pair_segment_passes={} parent_merge_bytes={} pending_duplicate_objects={} pending_duplicate_bytes={} cross_batch_skipped_objects={} cross_batch_skipped_bytes={} collision_checks={} admission_batch_peak_objects={} admission_batch_peak_payload_bytes={} admission_batch_peak_vec_capacity={} pending_index_peak_entries={} pending_index_peak_bytes={} final_batch_peak_payload_bytes={} final_batch_peak_vec_capacity={} final_pending_index_peak_bytes={} final_simultaneous_owned_peak_bytes={} sql_batch_count={} sql_row_count_shape_count={} sql_submitted_rows={} sql_returned_ids={} sql_skipped_ids={} sql_string_build_ns={} sql_prepare_ns={} sql_bind_step_returning_ns={} conflict_read_calls={} conflict_read_rows={} conflict_read_bytes={} conflict_read_ns={} sql_begin_ns={} sql_commit_ns={} final_root_inode_table_wall_ns={} insert_node_peak_len={} insert_node_peak_capacity={}",
+            "layerfs-initialization-diagnostic-v3 nonce={} fast_path={} worker_count={} prepare_import_wall_ns={} source_file_open_calls={} source_file_read_calls={} source_file_read_bytes={} source_symlink_metadata_calls={} source_read_dir_calls={} single_chunk_files={} streaming_files={} cdc_scratch_peak_bytes={} metadata_cache_hits={} metadata_cache_misses={} metadata_cache_peak_entries={} explicit_buffer_peak_bytes={} explicit_slab_payload_limit_bytes={} explicit_slab_object_limit={} explicit_canonical_object_header_bytes={} explicit_pair_pending_limit_bytes={} canonical_frame_count={} canonical_payload_bytes={} canonical_payload_capacity_bytes={} canonical_payload_capacity_slack_bytes={} canonical_encode_calls={} canonical_hash_calls={} canonical_framing_bytes={} object_segment_write_calls={} object_segment_write_bytes={} object_segment_raw_read_calls={} object_segment_raw_read_bytes={} object_segment_passes={} slab_handoffs={} slab_sent_objects={} slab_sent_bytes={} slab_send_blocked_ns={} slab_partial_peak_objects={} slab_partial_peak_payload_bytes={} slab_queue_peak={} slab_queue_peak_bytes={} slab_consumer_idle_ns={} last_slab_receive_offset_ns={} direct_pipeline_wall_ns={} direct_pipeline_process_cpu_ns={} import_pipeline_thread_peak={} active_producers_after={} task_state_bytes={} completed_result_peak_bytes={} parent_final_state_peak_bytes={} candidate_copy_bytes={} structural_peak_bytes={} parent_payload_copy_bytes={} pair_segment_write_calls={} pair_segment_write_bytes={} pair_segment_raw_read_calls={} pair_segment_raw_read_bytes={} pair_segment_passes={} parent_merge_bytes={} pending_duplicate_objects={} pending_duplicate_bytes={} cross_batch_skipped_objects={} cross_batch_skipped_bytes={} collision_checks={} admission_batch_peak_objects={} admission_batch_peak_payload_bytes={} admission_batch_peak_vec_capacity={} pending_index_peak_entries={} pending_index_peak_bytes={} final_batch_peak_payload_bytes={} final_batch_peak_vec_capacity={} final_pending_index_peak_bytes={} final_simultaneous_owned_peak_bytes={} sql_batch_count={} sql_row_count_shape_count={} sql_submitted_rows={} sql_returned_ids={} sql_skipped_ids={} sql_string_build_ns={} sql_prepare_ns={} sql_bind_step_returning_ns={} conflict_read_calls={} conflict_read_rows={} conflict_read_bytes={} conflict_read_ns={} sql_begin_ns={} sql_commit_ns={} final_root_inode_table_wall_ns={} final_root_inode_table_process_cpu_ns={} insert_node_peak_len={} insert_node_peak_capacity={}",
             self.nonce,
             fast_path,
             fast.worker_count,
@@ -753,6 +755,7 @@ impl InitializationDiagnostic {
             fast.consumer_idle_ns,
             fast.last_slab_receive_offset_ns,
             fast.pipeline_wall_ns,
+            fast.pipeline_cpu_ns.map_or_else(|| "unavailable".into(), |n| n.to_string()),
             fast.active_thread_peak,
             fast.active_producers_after,
             fast.task_state_bytes,
@@ -796,6 +799,7 @@ impl InitializationDiagnostic {
             admission.sql_begin_ns,
             admission.sql_commit_ns,
             fast.final_root_inode_table_wall_ns,
+            fast.final_root_inode_table_cpu_ns.map_or_else(|| "unavailable".into(), |n| n.to_string()),
             fast.insert_node_peak_len,
             fast.insert_node_peak_capacity,
         );
@@ -961,6 +965,7 @@ fn direct_initialize_root_directories_inner(
     let active_producers = std::sync::atomic::AtomicU64::new(0);
     let active_producer_peak = std::sync::atomic::AtomicU64::new(0);
     let mut admission = InitializationSegmentAdmission::new(db)?;
+    let pipeline_cpu_started = crate::construction::workspace_process_cpu_ns();
     let pipeline_started = std::time::Instant::now();
     let (prepared, consumer_idle_ns, last_slab_receive_offset_ns) =
         std::thread::scope(|scope| -> Result<(Vec<PreparedDirectWorker>, u64, u64)> {
@@ -1129,6 +1134,9 @@ fn direct_initialize_root_directories_inner(
             }
             Ok((output, consumer_idle_ns, last_slab_receive_offset_ns))
         })?;
+    let pipeline_cpu_ns = pipeline_cpu_started
+        .zip(crate::construction::workspace_process_cpu_ns())
+        .and_then(|(start, end)| end.checked_sub(start));
     let pipeline_wall_ns = pipeline_started
         .elapsed()
         .as_nanos()
@@ -1228,6 +1236,7 @@ fn direct_initialize_root_directories_inner(
     }
 
     admission.prepare_final_phase()?;
+    let final_cpu_started = crate::construction::workspace_process_cpu_ns();
     let final_started = std::time::Instant::now();
     let mut children = Vec::with_capacity(directories.len());
     let mut scanned_files = 0_u64;
@@ -1326,6 +1335,9 @@ fn direct_initialize_root_directories_inner(
         .saturating_add(final_objects.metrics.candidate_copy_bytes);
     slab.parent_payload_copy_bytes = parent_payload_copies.bytes();
     drop(final_objects);
+    let final_root_inode_table_cpu_ns = final_cpu_started
+        .zip(crate::construction::workspace_process_cpu_ns())
+        .and_then(|(start, end)| end.checked_sub(start));
     let final_root_inode_table_wall_ns =
         final_started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
     let queue_peak = queue.peak();
@@ -1349,6 +1361,7 @@ fn direct_initialize_root_directories_inner(
             pair_io,
             admission: admission.diagnostics,
             final_root_inode_table_wall_ns,
+            final_root_inode_table_cpu_ns,
             insert_node_peak_len,
             insert_node_peak_capacity,
             slab,
@@ -1357,6 +1370,7 @@ fn direct_initialize_root_directories_inner(
             consumer_idle_ns,
             last_slab_receive_offset_ns,
             pipeline_wall_ns,
+            pipeline_cpu_ns,
             active_thread_peak: active_producer_peak
                 .load(std::sync::atomic::Ordering::Relaxed)
                 .saturating_add(1),

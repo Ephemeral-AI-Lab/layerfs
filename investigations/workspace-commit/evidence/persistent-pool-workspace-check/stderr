@@ -1,0 +1,149 @@
+   Compiling layerfs-content v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-content)
+   Compiling layerfs-materialization v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-materialization)
+   Compiling layerfs-fuse v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-fuse)
+   Compiling layerfs-layerstack-store v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-layerstack-store)
+warning: method `push` is never used
+    --> crates/layerfs-layerstack-store/src/objects.rs:1530:8
+     |
+1525 | impl IdOrder {
+     | ------------ method in this implementation
+...
+1530 |     fn push(&mut self, id: ObjectId) -> Result<()> {
+     |        ^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling layerfs-workspace v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-workspace)
+warning: unused import: `FileMutationBatch`
+ --> crates/layerfs-workspace/src/changes.rs:2:41
+  |
+2 | use layerfs_content::file::rope::{self, FileMutationBatch, FileStateRoot, RopeCounters};
+  |                                         ^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `LogicalCounters`
+ --> crates/layerfs-workspace/src/changes.rs:3:41
+  |
+3 | use layerfs_content::filesystem::{self, LogicalCounters};
+  |                                         ^^^^^^^^^^^^^^^
+
+warning: unused import: `inode_table_lookup`
+  --> crates/layerfs-workspace/src/changes.rs:10:36
+   |
+10 | use layerfs_content::tree::inode::{inode_table_lookup, InodeTableCounters};
+   |                                    ^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `BTreeMap` and `BTreeSet`
+  --> crates/layerfs-workspace/src/changes.rs:16:24
+   |
+16 | use std::collections::{BTreeMap, BTreeSet};
+   |                        ^^^^^^^^  ^^^^^^^^
+
+warning: unused import: `std::fs::File`
+  --> crates/layerfs-workspace/src/changes.rs:17:5
+   |
+17 | use std::fs::File;
+   |     ^^^^^^^^^^^^^
+
+warning: unused import: `Read`
+  --> crates/layerfs-workspace/src/changes.rs:18:15
+   |
+18 | use std::io::{Read, Write};
+   |               ^^^^
+
+warning: `layerfs-layerstack-store` (lib) generated 1 warning
+warning: method `base_record` is never used
+    --> crates/layerfs-workspace/src/changes.rs:1516:8
+     |
+  75 | impl Workspace {
+     | -------------- method in this implementation
+...
+1516 |     fn base_record(&self, inode: InodeId) -> Result<InodeRecordV1> {
+     |        ^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `join` is never used
+    --> crates/layerfs-workspace/src/changes.rs:1924:4
+     |
+1924 | fn join(parent: &CanonicalPath, name: &str) -> Result<CanonicalPath> {
+     |    ^^^^
+
+warning: constant `IO_SCRATCH_BYTES` is never used
+  --> crates/layerfs-workspace/src/commit_file.rs:20:18
+   |
+20 | pub(crate) const IO_SCRATCH_BYTES: usize = 2 * IO_BYTES;
+   |                  ^^^^^^^^^^^^^^^^
+
+warning: method `len` is never used
+  --> crates/layerfs-workspace/src/commit_file.rs:93:19
+   |
+47 | impl FrozenFile {
+   | --------------- method in this implementation
+...
+93 |     pub(crate) fn len(&self) -> u64 {
+   |                   ^^^
+
+warning: fields `record`, `mode`, `mtime_seconds`, and `mtime_nanoseconds` are never read
+  --> crates/layerfs-workspace/src/changes.rs:25:5
+   |
+24 | struct BaseEntry {
+   |        --------- fields in this struct
+25 |     record: InodeRecordV1,
+   |     ^^^^^^
+26 |     mode: u32,
+   |     ^^^^
+27 |     mtime_seconds: i64,
+   |     ^^^^^^^^^^^^^
+28 |     mtime_nanoseconds: u32,
+   |     ^^^^^^^^^^^^^^^^^
+   |
+   = note: `BaseEntry` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `file_matches`, `base_record`, `file_may_differ`, `incremental_file_supported`, `mutate_existing_file`, and `workspace_range_matches_base` are never used
+    --> crates/layerfs-workspace/src/changes.rs:1404:8
+     |
+  75 | impl Workspace {
+     | -------------- methods in this implementation
+...
+1404 |     fn file_matches(&self, node: NodeId, base: ObjectId) -> Result<bool> {
+     |        ^^^^^^^^^^^^
+...
+1516 |     fn base_record(&self, inode: InodeId) -> Result<InodeRecordV1> {
+     |        ^^^^^^^^^^^
+...
+1564 |     fn file_may_differ(&self, node: NodeId, base: ObjectId) -> Result<bool> {
+     |        ^^^^^^^^^^^^^^^
+...
+1584 |     fn incremental_file_supported(&self, node: NodeId, base: ObjectId) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1595 |     fn mutate_existing_file(
+     |        ^^^^^^^^^^^^^^^^^^^^
+...
+1693 |     fn workspace_range_matches_base(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `WorkspaceRangeReader` is never constructed
+    --> crates/layerfs-workspace/src/changes.rs:1805:8
+     |
+1805 | struct WorkspaceRangeReader<'a> {
+     |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `new` is never used
+    --> crates/layerfs-workspace/src/changes.rs:1814:8
+     |
+1813 | impl<'a> WorkspaceRangeReader<'a> {
+     | --------------------------------- associated function in this implementation
+1814 |     fn new(workspace: &'a Workspace, node: NodeId, offset: u64, len: u64) -> Result<Self> {
+     |        ^^^
+
+warning: `layerfs-workspace` (lib) generated 10 warnings (run `cargo fix --lib -p layerfs-workspace` to apply 5 suggestions)
+warning: `layerfs-workspace` (lib test) generated 6 warnings (2 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.11s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-9f098567b60eadc8)
+     Running tests/file_edit.rs (target/debug/deps/file_edit-72da02e47864b988)
+     Running tests/reconciliation.rs (target/debug/deps/reconciliation-1b5c7de603c407fd)
+   Doc-tests layerfs_workspace

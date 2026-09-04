@@ -1,0 +1,18 @@
+
+running 1 test
+test tree::batch::tests::directory_attempt_distinguishes_scratch_disk_and_store_limits_and_keeps_history ... FAILED
+
+failures:
+
+---- tree::batch::tests::directory_attempt_distinguishes_scratch_disk_and_store_limits_and_keeps_history stdout ----
+
+thread 'tree::batch::tests::directory_attempt_distinguishes_scratch_disk_and_store_limits_and_keeps_history' (230382095) panicked at crates/layerfs-content/src/tree/batch.rs:1902:9:
+disk quota is not tree scratch pressure
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tree::batch::tests::directory_attempt_distinguishes_scratch_disk_and_store_limits_and_keeps_history
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 53 filtered out; finished in 0.00s
+

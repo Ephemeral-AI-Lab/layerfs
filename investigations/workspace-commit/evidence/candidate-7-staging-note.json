@@ -1,0 +1,6 @@
+{
+  "source_before": "939f05feb5a58bd23720f329767dcb05585d1e81",
+  "failure": "git add used nonexistent tree/directory.rs; staging and commit did not happen",
+  "unused_archive_sha256": "e33ec0a0ee350bf59b361582fd72fb08a69f505e0243c859f0301744cdc38493",
+  "resolution": "Use actual directory/mod.rs, require every command to succeed, replace unused archive before build"
+}

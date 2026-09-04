@@ -101,10 +101,14 @@ pub struct WorkspaceCommitReceipt {
     pub captured_files: u64,
     pub captured_bytes: u64,
     pub candidate_plan_ns: u64,
+    pub candidate_plan_cpu_ns: Option<u64>,
     pub dirty_compare_ns: u64,
     pub content_ns: u64,
+    pub content_cpu_ns: Option<u64>,
     pub namespace_ns: u64,
+    pub namespace_cpu_ns: Option<u64>,
     pub candidate_finish_ns: u64,
+    pub candidate_finish_cpu_ns: Option<u64>,
     pub local_admission_ns: u64,
     pub object_admission_ns: u64,
     pub object_admission_transactions: u64,
@@ -320,7 +324,31 @@ pub enum StorageReceipt {
     WorkspaceRead(WorkspaceReadReceipt),
 }
 
+#[derive(Clone, Copy, Default)]
+struct PhaseCpuSpans {
+    wall: [u32; 4],
+    cpu: [u32; 4],
+}
+fn phase_cpu_index(phase: WorkspaceCommitPhase) -> Option<usize> {
+    match phase {
+        WorkspaceCommitPhase::CandidatePlan => Some(0),
+        WorkspaceCommitPhase::Content => Some(1),
+        WorkspaceCommitPhase::Namespace => Some(2),
+        WorkspaceCommitPhase::CandidateFinish => Some(3),
+        _ => None,
+    }
+}
+fn phase_cpu_target(receipt: &mut WorkspaceCommitReceipt, index: usize) -> &mut Option<u64> {
+    match index {
+        0 => &mut receipt.candidate_plan_cpu_ns,
+        1 => &mut receipt.content_cpu_ns,
+        2 => &mut receipt.namespace_cpu_ns,
+        _ => &mut receipt.candidate_finish_cpu_ns,
+    }
+}
+
 thread_local! {
+    static PHASE_CPU_SPANS: std::cell::Cell<PhaseCpuSpans> = const { std::cell::Cell::new(PhaseCpuSpans { wall: [0;4], cpu: [0;4] }) };
     static RECEIPTS: RefCell<Vec<StorageReceipt>> = const { RefCell::new(Vec::new()) };
     static LAYERSTACK_INITIALIZATIONS: RefCell<Vec<LayerStackInitializationReceipt>> = const { RefCell::new(Vec::new()) };
     static WORKSPACE_COMMIT: RefCell<Option<WorkspaceCommitReceipt>> = const { RefCell::new(None) };
@@ -352,6 +380,14 @@ impl Drop for WorkspaceCommitTimer {
             let Some(mut receipt) = current.borrow_mut().take() else {
                 return;
             };
+            PHASE_CPU_SPANS.with(|state| {
+                let spans = state.get();
+                for index in 0..4 {
+                    if spans.wall[index] != spans.cpu[index] {
+                        *phase_cpu_target(&mut receipt, index) = None;
+                    }
+                }
+            });
             receipt.total_ns = elapsed_ns(self.0);
             receipt.unattributed_ns = receipt.total_ns.saturating_sub(receipt.attributed_ns());
             RECEIPTS.with(|receipts| {
@@ -376,6 +412,7 @@ pub fn begin_workspace_commit(mode: CaptureMode) -> Result<WorkspaceCommitTimer>
         if current.is_some() {
             return Err(StoreError::Integrity("nested Workspace Commit timing"));
         }
+        PHASE_CPU_SPANS.with(|state| state.set(PhaseCpuSpans::default()));
         *current = Some(WorkspaceCommitReceipt {
             capture_mode: Some(mode),
             ..WorkspaceCommitReceipt::default()
@@ -530,12 +567,46 @@ pub fn note_workspace_commit_tree_visits(visits: u64) {
     });
 }
 
+/// Pair with each existing wall-phase observation. Unsupported clocks, failed
+/// samples or incomplete CPU coverage of repeated phase spans remain None.
+#[doc(hidden)]
+pub fn note_workspace_commit_phase_cpu(phase: WorkspaceCommitPhase, elapsed: Option<u64>) {
+    let Some(index) = phase_cpu_index(phase) else {
+        return;
+    };
+    WORKSPACE_COMMIT.with(|current| {
+        let mut current = current.borrow_mut();
+        let Some(receipt) = current.as_mut() else {
+            return;
+        };
+        PHASE_CPU_SPANS.with(|state| {
+            let mut spans = state.get();
+            let first = spans.cpu[index] == 0;
+            spans.cpu[index] += 1;
+            state.set(spans);
+            let target = phase_cpu_target(receipt, index);
+            *target = if first {
+                elapsed
+            } else {
+                target.zip(elapsed).and_then(|(a, b)| a.checked_add(b))
+            };
+        });
+    });
+}
+
 pub fn note_workspace_commit_phase(phase: WorkspaceCommitPhase, elapsed_ns: u64) {
     WORKSPACE_COMMIT.with(|current| {
         let mut current = current.borrow_mut();
         let Some(receipt) = current.as_mut() else {
             return;
         };
+        if let Some(index) = phase_cpu_index(phase) {
+            PHASE_CPU_SPANS.with(|state| {
+                let mut spans = state.get();
+                spans.wall[index] += 1;
+                state.set(spans);
+            });
+        }
         let target = match phase {
             WorkspaceCommitPhase::PauseFence => &mut receipt.pause_fence_ns,
             WorkspaceCommitPhase::Quiesce => &mut receipt.quiesce_ns,
@@ -895,6 +966,33 @@ fn elapsed_ns(started: Instant) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn phase_cpu_requires_complete_pairs_and_preserves_unavailable_spans() {
+        take_storage_receipts();
+        {
+            let _timer = begin_workspace_commit(CaptureMode::Materialized).unwrap();
+            note_workspace_commit_phase(WorkspaceCommitPhase::Content, 10);
+            note_workspace_commit_phase_cpu(WorkspaceCommitPhase::Content, Some(20));
+            note_workspace_commit_phase(WorkspaceCommitPhase::Content, 10);
+            note_workspace_commit_phase_cpu(WorkspaceCommitPhase::Content, Some(30));
+            note_workspace_commit_phase(WorkspaceCommitPhase::Namespace, 10);
+            note_workspace_commit_phase_cpu(WorkspaceCommitPhase::Namespace, Some(5));
+            note_workspace_commit_phase(WorkspaceCommitPhase::Namespace, 10); // missing CPU span
+            note_workspace_commit_phase(WorkspaceCommitPhase::CandidateFinish, 10);
+            note_workspace_commit_phase_cpu(WorkspaceCommitPhase::CandidateFinish, None);
+            note_workspace_commit_phase(WorkspaceCommitPhase::CandidateFinish, 10);
+            note_workspace_commit_phase_cpu(WorkspaceCommitPhase::CandidateFinish, Some(7));
+        }
+        let receipts = take_storage_receipts();
+        let [StorageReceipt::WorkspaceCommit(receipt)] = receipts.as_slice() else {
+            panic!("commit receipt")
+        };
+        assert_eq!(receipt.content_cpu_ns, Some(50));
+        assert_eq!(receipt.namespace_cpu_ns, None);
+        assert_eq!(receipt.candidate_finish_cpu_ns, None);
+        assert_eq!(receipt.candidate_plan_cpu_ns, None);
+    }
 
     #[test]
     fn edit_diagnostics_are_separate_from_the_legacy_commit_receipt() {

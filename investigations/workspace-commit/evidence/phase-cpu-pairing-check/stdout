@@ -1,0 +1,6 @@
+
+running 1 test
+test telemetry::tests::phase_cpu_requires_complete_pairs_and_preserves_unavailable_spans ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 0.00s
+

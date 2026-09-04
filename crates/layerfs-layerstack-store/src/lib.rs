@@ -77,3 +77,8 @@ pub use construction::{
 pub use telemetry::note_workspace_content_preparation;
 
 pub use telemetry::note_workspace_reference_base_hints;
+
+#[doc(hidden)]
+pub use construction::workspace_process_cpu_ns;
+#[doc(hidden)]
+pub use telemetry::note_workspace_commit_phase_cpu;

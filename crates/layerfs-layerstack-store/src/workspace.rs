@@ -243,6 +243,7 @@ impl LayerStackStore {
             read_metrics: Arc::new(Mutex::new(WorkspaceReadReceipt::default())),
             cache: Arc::new(Mutex::new(SnapshotCache::default())),
         };
+        let selected_cpu_started = crate::workspace_process_cpu_ns();
         let selected_started = Instant::now();
         layerfs_content::filesystem::delta_spool::reset_metrics();
         let selected = apply_reconcile_choices_bounded(
@@ -257,6 +258,12 @@ impl LayerStackStore {
         crate::telemetry::note_workspace_commit_phase(
             crate::WorkspaceCommitPhase::Namespace,
             elapsed_ns(selected_started),
+        );
+        crate::note_workspace_commit_phase_cpu(
+            crate::WorkspaceCommitPhase::Namespace,
+            selected_cpu_started
+                .zip(crate::workspace_process_cpu_ns())
+                .and_then(|(start, end)| end.checked_sub(start)),
         );
         if let Some(metrics) = layerfs_content::filesystem::delta_spool::take_metrics() {
             crate::telemetry::note_workspace_commit_sort(
@@ -277,11 +284,18 @@ impl LayerStackStore {
         let mut selected_reader = reader.clone();
         selected_reader.root = selected_root;
         selected_reader.overlays.insert(0, selected.clone());
+        let inspect_cpu_started = crate::workspace_process_cpu_ns();
         let inspect_started = Instant::now();
         let inspected = inspect(&selected_reader, working_root, selected_root);
         crate::telemetry::note_workspace_commit_phase(
             crate::WorkspaceCommitPhase::CandidateFinish,
             elapsed_ns(inspect_started),
+        );
+        crate::note_workspace_commit_phase_cpu(
+            crate::WorkspaceCommitPhase::CandidateFinish,
+            inspect_cpu_started
+                .zip(crate::workspace_process_cpu_ns())
+                .and_then(|(start, end)| end.checked_sub(start)),
         );
         inspected?;
         let selected = selected

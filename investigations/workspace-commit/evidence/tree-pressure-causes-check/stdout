@@ -1,0 +1,10 @@
+
+running 1 test
+memory-first short-key attempt: TreeBatchAttempt { result: Err(ObjectLimitExceeded), counters: TreeBatchCounters { nodes_read: 2, nodes_created: 0, nodes_reused: 0, delta_keys: 170, peak_scratch_bytes: 15308, spill_write_bytes: 0, spill_read_bytes: 0, peak_spill_bytes: 0 }, budget_denied: true }
+disk-first long-key attempt: TreeBatchAttempt { result: Err(ObjectLimitExceeded), counters: TreeBatchCounters { nodes_read: 2, nodes_created: 0, nodes_reused: 0, delta_keys: 29, peak_scratch_bytes: 12741, spill_write_bytes: 0, spill_read_bytes: 0, peak_spill_bytes: 0 }, budget_denied: false }
+memory-after-spill attempt: TreeBatchAttempt { result: Err(ObjectLimitExceeded), counters: TreeBatchCounters { nodes_read: 2, nodes_created: 0, nodes_reused: 0, delta_keys: 57, peak_scratch_bytes: 15816, spill_write_bytes: 8092, spill_read_bytes: 0, peak_spill_bytes: 8092 }, budget_denied: true }
+Store-after-emission attempt: TreeBatchAttempt { result: Err(ObjectLimitExceeded), counters: TreeBatchCounters { nodes_read: 2, nodes_created: 1, nodes_reused: 0, delta_keys: 71, peak_scratch_bytes: 27465, spill_write_bytes: 0, spill_read_bytes: 0, peak_spill_bytes: 0 }, budget_denied: false }
+test tree::batch::tests::directory_attempt_distinguishes_scratch_disk_and_store_limits_and_keeps_history ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 53 filtered out; finished in 0.02s
+

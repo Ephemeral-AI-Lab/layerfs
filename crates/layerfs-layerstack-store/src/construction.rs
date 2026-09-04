@@ -542,6 +542,23 @@ pub(crate) fn thread_cpu() -> Option<u64> {
     None
 }
 
+/// CPU consumed by all threads in this process, including construction workers.
+/// This excludes separate daemon/benchmark sampler processes.
+#[doc(hidden)]
+#[cfg(target_os = "linux")]
+pub fn workspace_process_cpu_ns() -> Option<u64> {
+    let value = rustix::time::clock_gettime(rustix::time::ClockId::ProcessCPUTime);
+    u64::try_from(value.tv_sec)
+        .ok()?
+        .checked_mul(1_000_000_000)?
+        .checked_add(u64::try_from(value.tv_nsec).ok()?)
+}
+#[doc(hidden)]
+#[cfg(not(target_os = "linux"))]
+pub fn workspace_process_cpu_ns() -> Option<u64> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

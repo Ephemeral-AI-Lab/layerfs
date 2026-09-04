@@ -57,8 +57,7 @@ struct ContentResult {
 struct ContentPool {
     pool: layerfs_layerstack_store::PrivateContentPool<ContentTask, ContentResult>,
     reserved: u64,
-    scratch: u64,
-    private_budget: usize,
+    file_share: u64,
 }
 fn compile_content_task(
     task: ContentTask,
@@ -102,7 +101,7 @@ impl Workspace {
     // edges directly preserves untouched subtrees, including a renamed directory,
     // without building either complete namespace manifest.
     fn build_frontier_candidate(&mut self) -> Result<BuiltRoot> {
-        let started = Instant::now();
+        let started = CommitPhaseStart::new();
         let mut handoff = self.begin_handoff()?;
         let memory = self
             .policy
@@ -152,19 +151,10 @@ impl Workspace {
         let mut cdc_bytes_scanned = 0_u64;
         let mut content_pool: Option<ContentPool> = None;
         note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
-        let started = Instant::now();
+        let started = CommitPhaseStart::new();
         while let Some(identity) = nodes.next()? {
             let node = NodeId(u64::from_be_bytes(identity[33..].try_into().unwrap()));
             let value = &self.nodes[&node];
-            if matches!(value.data, Data::Directory(_)) {
-                self.drain_content_pool(
-                    &mut content_pool,
-                    &mut objects,
-                    &mut pairs,
-                    &mut handoff,
-                    &mut cdc_bytes_scanned,
-                )?;
-            }
             layerfs_layerstack_store::note_workspace_namespace_visits(0, 0, 0, 0, 1);
             let key = &identity[..33];
             let mut change = 0i64;
@@ -274,50 +264,62 @@ impl Workspace {
             };
             let content_root = match &value.data {
                 Data::Directory(directory) => {
-                    let mut content = match directory.base {
+                    let content = match directory.base {
                         Some(base) => base,
                         None => empty_directory(&mut objects)?,
                     };
-                    let changes = directory.changes.iter().map(|(name, desired)| {
-                        Ok((
-                            CanonicalName::from_bytes(name)?,
-                            desired
-                                .map(|child| self.frontier_inode(child))
-                                .transpose()
-                                .map_err(|_| {
-                                    layerfs_content::CoreError::InvalidRecord(
-                                        "Workspace binding identity",
-                                    )
-                                })?,
-                        ))
-                    });
-                    let reserve = self.references.capacity()
-                        + pairs.capacity()
-                        + (metadata_cache.capacity() * 64) as u64;
-                    let budget = memory
-                        .checked_sub(reserve)
-                        .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?;
-                    let (next, stats) =
-                        layerfs_content::tree::directory::directory_apply_sorted_with_spill(
-                            &mut objects,
-                            content,
-                            changes,
-                            budget as usize,
-                            &self.spool,
-                            disk / 4,
-                        )?;
-                    tree_counts.spill_write_bytes += stats.spill_write_bytes;
-                    tree_counts.spill_read_bytes += stats.spill_read_bytes;
-                    tree_counts.peak_spill_bytes =
-                        tree_counts.peak_spill_bytes.max(stats.peak_spill_bytes);
-                    tree_counts.nodes_read += stats.nodes_read;
-                    tree_counts.nodes_created += stats.nodes_created;
-                    tree_counts.nodes_reused += stats.nodes_reused;
-                    tree_counts.peak_scratch_bytes = tree_counts
-                        .peak_scratch_bytes
-                        .max(stats.peak_scratch_bytes + reserve as usize);
-                    content = next;
-                    content.0
+                    loop {
+                        let reserve = content_pool.as_ref().map_or(0, |pool| pool.reserved)
+                            + self.references.capacity()
+                            + pairs.capacity()
+                            + (metadata_cache.capacity() * 64) as u64;
+                        let budget = memory
+                            .checked_sub(reserve)
+                            .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?;
+                        let changes = directory.changes.iter().map(|(name, desired)| {
+                            Ok((
+                                CanonicalName::from_bytes(name)?,
+                                desired
+                                    .map(|child| self.frontier_inode(child))
+                                    .transpose()
+                                    .map_err(|_| {
+                                        layerfs_content::CoreError::InvalidRecord(
+                                            "Workspace binding identity",
+                                        )
+                                    })?,
+                            ))
+                        });
+                        let attempt = layerfs_content::tree::directory::directory_apply_sorted_with_spill_attempt(
+                            &mut objects, content, changes, budget as usize, &self.spool, disk / 4);
+                        // Include partial work before a pressure retry. Failed
+                        // local buffers/spills have already dropped on return.
+                        let stats = attempt.counters;
+                        tree_counts.spill_write_bytes += stats.spill_write_bytes;
+                        tree_counts.spill_read_bytes += stats.spill_read_bytes;
+                        tree_counts.peak_spill_bytes =
+                            tree_counts.peak_spill_bytes.max(stats.peak_spill_bytes);
+                        tree_counts.nodes_read += stats.nodes_read;
+                        tree_counts.nodes_created += stats.nodes_created;
+                        tree_counts.nodes_reused += stats.nodes_reused;
+                        tree_counts.peak_scratch_bytes = tree_counts
+                            .peak_scratch_bytes
+                            .max(stats.peak_scratch_bytes + reserve as usize);
+                        match attempt.result {
+                            Ok(next) => break next.0,
+                            Err(_) if attempt.budget_denied && content_pool.is_some() => {
+                                // Retry exactly this writer/root/input once,
+                                // after releasing actual producer reservations.
+                                self.drain_content_pool(
+                                    &mut content_pool,
+                                    &mut objects,
+                                    &mut pairs,
+                                    &mut handoff,
+                                    &mut cdc_bytes_scanned,
+                                )?;
+                            }
+                            Err(error) => return Err(error.into()),
+                        }
+                    }
                 }
                 Data::Symlink(target) => match before {
                     Some(record) => record.content_root,
@@ -363,10 +365,11 @@ impl Workspace {
                         before.map(|record| FileStateRoot(record.content_root)),
                     )?;
                     let scratch = frozen.scratch_bytes()?;
-                    if content_pool
-                        .as_ref()
-                        .is_some_and(|pool| scratch > pool.scratch)
-                    {
+                    if content_pool.as_ref().is_some_and(|pool| {
+                        pool.file_share
+                            .checked_sub(scratch)
+                            .is_none_or(|private| private < 1024)
+                    }) {
                         self.drain_content_pool(
                             &mut content_pool,
                             &mut objects,
@@ -392,7 +395,12 @@ impl Workspace {
                         let mut task = ContentTask {
                             header,
                             file: frozen,
-                            private_budget: pool.private_budget,
+                            private_budget: pool
+                                .file_share
+                                .checked_sub(scratch)
+                                .filter(|private| *private >= 1024)
+                                .ok_or(StorageError::Integrity("content task reservation"))?
+                                as usize,
                         };
                         loop {
                             match pool.pool.try_submit(task)? {
@@ -463,7 +471,7 @@ impl Workspace {
         )?;
         nodes.remove()?;
         note_commit_phase(WorkspaceCommitPhase::Content, started);
-        let started = Instant::now();
+        let started = CommitPhaseStart::new();
         // Reclaimed and unmaterialized existing inodes use authenticated base
         // counts plus the same net binding input. No deleted-subtree walk.
         references.rewind()?;
@@ -609,7 +617,7 @@ impl Workspace {
         };
         pairs.remove()?;
         note_commit_phase(WorkspaceCommitPhase::Namespace, started);
-        let started = Instant::now();
+        let started = CommitPhaseStart::new();
         layerfs_layerstack_store::note_workspace_generic_commit(
             self.references.events,
             self.references.bytes(),
@@ -693,8 +701,7 @@ impl Workspace {
             return Ok(Some(ContentPool {
                 pool,
                 reserved,
-                scratch,
-                private_budget,
+                file_share: file_per_worker,
             }));
         }
         Ok(None)
@@ -1743,11 +1750,28 @@ fn push_inode(
     pairs.push(pair)
 }
 
-fn note_commit_phase(phase: WorkspaceCommitPhase, started: Instant) {
+struct CommitPhaseStart {
+    wall: Instant,
+    cpu: Option<u64>,
+}
+impl CommitPhaseStart {
+    fn new() -> Self {
+        Self {
+            wall: Instant::now(),
+            cpu: layerfs_layerstack_store::workspace_process_cpu_ns(),
+        }
+    }
+}
+fn note_commit_phase(phase: WorkspaceCommitPhase, started: CommitPhaseStart) {
+    let cpu = started
+        .cpu
+        .zip(layerfs_layerstack_store::workspace_process_cpu_ns())
+        .and_then(|(start, end)| end.checked_sub(start));
     layerfs_layerstack_store::note_workspace_commit_phase(
         phase,
-        started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
+        started.wall.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64,
     );
+    layerfs_layerstack_store::note_workspace_commit_phase_cpu(phase, cpu);
 }
 
 fn frame(output: &mut impl Write, value: &[u8]) -> Result<()> {
@@ -1939,6 +1963,50 @@ mod tests {
             .unwrap();
         let workspace = Workspace::open(store, branch, root.join("spool")).unwrap();
         (root, workspace)
+    }
+
+    #[test]
+    fn content_pool_survives_directory_and_larger_scratch_tasks() {
+        let (root, mut workspace) = empty_workspace("pool-survives-tree");
+        let first = workspace.create_file(ROOT, b"first", 0o640).unwrap().node;
+        workspace.write(first, 0, b"a").unwrap();
+        workspace.write(first, 0, b"b").unwrap(); // invalidate the unrelated live-capture shortcut
+        let directory = workspace.mkdir(ROOT, b"middle", 0o755).unwrap().node;
+        workspace.create_file(directory, b"empty", 0o640).unwrap(); // streaming scratch exceeds the first small task
+        let last = workspace
+            .create_file(directory, b"last", 0o640)
+            .unwrap()
+            .node;
+        workspace.write(last, 0, b"last").unwrap();
+        layerfs_layerstack_store::take_storage_receipts();
+        let timer = layerfs_layerstack_store::begin_workspace_commit(
+            layerfs_layerstack_store::CaptureMode::Live,
+        )
+        .unwrap();
+        workspace.commit().unwrap();
+        drop(timer);
+        let receipt = layerfs_layerstack_store::take_storage_receipts()
+            .into_iter()
+            .find_map(|receipt| match receipt {
+                layerfs_layerstack_store::StorageReceipt::WorkspaceCommit(value) => Some(value),
+                _ => None,
+            })
+            .unwrap();
+        let pool = receipt.content_pool;
+        if std::thread::available_parallelism().is_ok_and(|cpus| cpus.get() >= 2) {
+            assert_eq!(
+                pool.pools, 1,
+                "ordinary directory stages and affordable scratch changes must retain the pool"
+            );
+            assert_eq!(pool.submitted, 3);
+            assert_eq!(pool.results_received, 3);
+            assert_eq!(pool.workers_started, pool.workers_joined);
+        }
+        assert_eq!(workspace.read(first, 0, 8).unwrap(), b"b");
+        assert_eq!(workspace.read(last, 0, 8).unwrap(), b"last");
+        workspace.end_clean().unwrap();
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

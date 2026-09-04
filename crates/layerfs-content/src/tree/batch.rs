@@ -34,10 +34,26 @@ pub struct TreeBatchCounters {
     pub peak_spill_bytes: u64,
 }
 
+/// One private construction attempt, including work completed before failure.
+/// `budget_denied` identifies only the configured tree scratch ledger, never a
+/// disk quota, allocator, input-format or underlying Store error. All local
+/// page and spill owners have dropped before this value is returned.
+#[derive(Debug)]
+pub struct TreeBatchAttempt<T> {
+    pub result: CoreResult<T>,
+    pub counters: TreeBatchCounters,
+    pub budget_denied: bool,
+}
+
 struct Budget {
     used: Cell<usize>,
     peak: Cell<usize>,
     limit: usize,
+    // Invariant: every reserve/grow denial propagates immediately with `?`.
+    // Resource-pressure spilling checks remaining capacity before reservation;
+    // it does not catch a denied lease and continue. Keep that invariant when
+    // adding recovery, or replace this marker with an internal typed result.
+    denied: Cell<bool>,
 }
 impl Default for Budget {
     fn default() -> Self {
@@ -45,6 +61,7 @@ impl Default for Budget {
             used: Cell::new(0),
             peak: Cell::new(0),
             limit: SORTED_TREE_UPDATE_SCRATCH_BYTES,
+            denied: Cell::new(false),
         }
     }
 }
@@ -60,6 +77,7 @@ impl Budget {
             .checked_add(bytes)
             .ok_or(CoreError::LengthOverflow)?;
         if next > self.limit {
+            self.denied.set(true);
             return Err(CoreError::ObjectLimitExceeded);
         }
         self.used.set(next);
@@ -79,6 +97,7 @@ impl Lease {
             .checked_add(bytes)
             .ok_or(CoreError::LengthOverflow)?;
         if next > self.budget.limit {
+            self.budget.denied.set(true);
             return Err(CoreError::ObjectLimitExceeded);
         }
         self.budget.used.set(next);
@@ -1381,9 +1400,34 @@ fn apply_budgeted<S: ObjectStore, F: Format>(
     expected: Option<(u8, u64)>,
     spill_options: Option<(&Path, u64)>,
 ) -> CoreResult<(ObjectId, TreeBatchCounters)> {
-    let mut deltas = Deltas::new(source)?;
+    let attempt =
+        apply_budgeted_attempt::<S, F>(store, root, source, scratch_limit, expected, spill_options);
+    attempt.result.map(|root| (root, attempt.counters))
+}
+fn apply_budgeted_attempt<S: ObjectStore, F: Format>(
+    store: &mut S,
+    root: ObjectId,
+    source: impl Iterator<Item = CoreResult<(F::Key, Option<ObjectId>)>>,
+    scratch_limit: usize,
+    expected: Option<(u8, u64)>,
+    spill_options: Option<(&Path, u64)>,
+) -> TreeBatchAttempt<ObjectId> {
+    let mut deltas = match Deltas::new(source) {
+        Ok(deltas) => deltas,
+        Err(error) => {
+            return TreeBatchAttempt {
+                result: Err(error),
+                counters: TreeBatchCounters::default(),
+                budget_denied: false,
+            }
+        }
+    };
     if deltas.next.is_none() {
-        return Ok((root, TreeBatchCounters::default()));
+        return TreeBatchAttempt {
+            result: Ok(root),
+            counters: TreeBatchCounters::default(),
+            budget_denied: false,
+        };
     }
     let mut engine = Engine::<S, F> {
         store,
@@ -1396,81 +1440,102 @@ fn apply_budgeted<S: ObjectStore, F: Format>(
         spill_options,
         spills: None,
     };
-    let read = engine.read(root, true)?;
-    if expected.is_some_and(|value| value != (read.wire.level, read.wire.count)) {
-        return Err(CoreError::InvalidRecord("batched tree root summary"));
-    }
-    let level = read.wire.level;
-    let mut first = None;
-    let _frontier = engine
-        .budget
-        .reserve(32 * std::mem::size_of::<Option<Box<Page<F::Key>>>>())?;
-    let mut levels: Vec<Option<Box<Page<F::Key>>>> = (0..32).map(|_| None).collect();
-    engine.edit(root, read, None, &mut deltas, &mut |engine, node| {
-        if first.is_none() && levels.iter().all(Option::is_none) {
-            let mut node = node;
-            if engine.spill_options.is_some()
-                && Engine::<S, F>::filled(&node)
-                && engine.budget.limit.saturating_sub(engine.budget.used.get()) < 2 * 8192
-            {
-                if let Some(page) = &mut node.pending {
-                    engine.spill_page(page)?;
+    let result = (|| -> CoreResult<ObjectId> {
+        let read = engine.read(root, true)?;
+        if expected.is_some_and(|value| value != (read.wire.level, read.wire.count)) {
+            return Err(CoreError::InvalidRecord("batched tree root summary"));
+        }
+        let level = read.wire.level;
+        let mut first = None;
+        let _frontier = engine
+            .budget
+            .reserve(32 * std::mem::size_of::<Option<Box<Page<F::Key>>>>())?;
+        let mut levels: Vec<Option<Box<Page<F::Key>>>> = (0..32).map(|_| None).collect();
+        engine.edit(root, read, None, &mut deltas, &mut |engine, node| {
+            if first.is_none() && levels.iter().all(Option::is_none) {
+                let mut node = node;
+                if engine.spill_options.is_some()
+                    && Engine::<S, F>::filled(&node)
+                    && engine.budget.limit.saturating_sub(engine.budget.used.get()) < 2 * 8192
+                {
+                    if let Some(page) = &mut node.pending {
+                        engine.spill_page(page)?;
+                    }
+                }
+                first = Some(node);
+                return Ok(());
+            }
+            if let Some(prior) = first.take() {
+                append_root(engine, &mut levels, prior)?;
+            }
+            append_root(engine, &mut levels, node)
+        })?;
+        let mut root_node = if let Some(first) = first {
+            first
+        } else {
+            let mut last = None;
+            for index in usize::from(level) + 1..32 {
+                if let Some(page) = levels[index].take() {
+                    let node = engine.node(*page)?;
+                    if levels[index + 1..].iter().all(Option::is_none) {
+                        last = Some(node);
+                        break;
+                    }
+                    append_root(&mut engine, &mut levels, node)?;
                 }
             }
-            first = Some(node);
-            return Ok(());
-        }
-        if let Some(prior) = first.take() {
-            append_root(engine, &mut levels, prior)?;
-        }
-        append_root(engine, &mut levels, node)
-    })?;
-    let mut root_node = if let Some(first) = first {
-        first
-    } else {
-        let mut last = None;
-        for index in usize::from(level) + 1..32 {
-            if let Some(page) = levels[index].take() {
-                let node = engine.node(*page)?;
-                if levels[index + 1..].iter().all(Option::is_none) {
-                    last = Some(node);
-                    break;
+            match last {
+                Some(node) => node,
+                None if F::empty_allowed() => {
+                    let mut page = engine.page(0)?;
+                    page.origin = Some(root);
+                    engine.node(page)?
                 }
-                append_root(&mut engine, &mut levels, node)?;
+                None => return Err(CoreError::InvalidRecord("empty inode table")),
             }
-        }
-        match last {
-            Some(node) => node,
-            None if F::empty_allowed() => {
-                let mut page = engine.page(0)?;
-                page.origin = Some(root);
-                engine.node(page)?
-            }
-            None => return Err(CoreError::InvalidRecord("empty inode table")),
-        }
-    };
-    while root_node.level > 0 && root_node.items == 1 {
-        let page = engine.materialize(root_node)?;
-        root_node = {
-            let level = page.level - 1;
-            Engine::<S, F>::child(page.into_entries().next().unwrap(), level)
         };
-    }
-    let root = engine
-        .persist(root_node)?
-        .id
-        .ok_or(CoreError::IdentityMismatch)?;
+        while root_node.level > 0 && root_node.items == 1 {
+            let page = engine.materialize(root_node)?;
+            root_node = {
+                let level = page.level - 1;
+                Engine::<S, F>::child(page.into_entries().next().unwrap(), level)
+            };
+        }
+        let root = engine
+            .persist(root_node)?
+            .id
+            .ok_or(CoreError::IdentityMismatch)?;
+        Ok(root)
+    })();
+    drop(deltas);
+    // The closure has released its frontier, nodes and private runs on
+    // every return path. The retained engine owns only counters and the pool's
+    // accounting state, so failed-attempt work remains observable.
     engine.counters.peak_scratch_bytes = engine.budget.peak.get();
     if let Some(pool) = &engine.spills {
         engine.counters.spill_write_bytes = pool.written.get();
         engine.counters.spill_read_bytes = pool.read.get();
         engine.counters.peak_spill_bytes = pool.peak.get();
-        if pool.used.get() != 0 {
-            return Err(CoreError::InvalidRecord("unconsumed private tree pages"));
-        }
     }
-    Ok((root, engine.counters))
+    let budget_denied =
+        engine.budget.denied.get() && matches!(&result, Err(CoreError::ObjectLimitExceeded));
+    let result = if result.is_ok()
+        && engine
+            .spills
+            .as_ref()
+            .is_some_and(|pool| pool.used.get() != 0)
+    {
+        Err(CoreError::InvalidRecord("unconsumed private tree pages"))
+    } else {
+        result
+    };
+    TreeBatchAttempt {
+        result,
+        counters: engine.counters,
+        budget_denied,
+    }
 }
+
 fn append_root<S: ObjectStore, F: Format>(
     engine: &mut Engine<'_, S, F>,
     levels: &mut [Option<Box<Page<F::Key>>>],
@@ -1683,6 +1748,56 @@ pub fn directory_apply_sorted_with_spill<S: ObjectStore>(
 ) -> CoreResult<(super::directory::DirectoryStateRoot, TreeBatchCounters)> {
     directory_apply_sorted_inner(store, root, deltas, scratch_limit, Some((dir, disk_limit)))
 }
+/// Private directory attempt exposing precise scratch-pressure failure and all
+/// completed tree work. A caller may release other reserved owners and retry
+/// the same sorted overlay; emitted objects remain in its private ObjectStore.
+pub fn directory_apply_sorted_with_spill_attempt<S: ObjectStore>(
+    store: &mut S,
+    root: super::directory::DirectoryStateRoot,
+    deltas: impl Iterator<Item = CoreResult<(CanonicalName, Option<InodeId>)>>,
+    scratch_limit: usize,
+    dir: &Path,
+    disk_limit: u64,
+) -> TreeBatchAttempt<super::directory::DirectoryStateRoot> {
+    use super::directory::codec::{decode_directory_state, encode_directory_state};
+    let mut counters = TreeBatchCounters::default();
+    let mut budget_denied = false;
+    let result = (|| {
+        let mut state = store.with_authenticated_canonical(root.0, decode_directory_state)?;
+        counters.nodes_read += 1;
+        let attempt = apply_budgeted_attempt::<S, Directory>(
+            store,
+            state.mapping_root,
+            deltas.map(|v| v.map(|(k, v)| (k, v.map(|v| ObjectId::from_digest(v.0))))),
+            scratch_limit,
+            Some((state.tree_level, state.entry_count)),
+            Some((dir, disk_limit)),
+        );
+        counters = TreeBatchCounters {
+            nodes_read: counters.nodes_read + attempt.counters.nodes_read,
+            ..attempt.counters
+        };
+        budget_denied = attempt.budget_denied;
+        let mapping = attempt.result?;
+        if mapping == state.mapping_root {
+            return Ok(root);
+        }
+        let wire = store.with_authenticated_canonical(mapping, Directory::decode)?;
+        counters.nodes_read += 1;
+        state.mapping_root = mapping;
+        state.entry_count = wire.count;
+        state.tree_level = wire.level;
+        Ok(super::directory::DirectoryStateRoot(
+            store.put_owned(encode_directory_state(state)?)?,
+        ))
+    })();
+    TreeBatchAttempt {
+        result,
+        counters,
+        budget_denied,
+    }
+}
+
 fn directory_apply_sorted_inner<S: ObjectStore>(
     store: &mut S,
     root: super::directory::DirectoryStateRoot,
@@ -1791,6 +1906,197 @@ mod tests {
     }
     fn value(index: usize) -> ObjectId {
         ObjectId::for_bytes(&(index as u64).to_le_bytes())
+    }
+
+    #[test]
+    fn directory_attempt_distinguishes_scratch_disk_and_store_limits_and_keeps_history() {
+        let mut store = MemoryStore::default();
+        let empty = empty_directory(&mut store).unwrap();
+        let dir = std::env::temp_dir().join(format!("layerfs-tree-attempt-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let changes = || (0..600).map(|i| Ok((name(i), Some(inode(i)))));
+        struct Observed<'a> {
+            store: &'a mut MemoryStore,
+            reads: std::cell::RefCell<Vec<ObjectId>>,
+        }
+        impl ObjectStore for Observed<'_> {
+            fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+                self.reads.borrow_mut().push(id);
+                ObjectStore::get(self.store, id)
+            }
+            fn put(&mut self, bytes: &[u8]) -> CoreResult<ObjectId> {
+                self.store.put(bytes)
+            }
+        }
+        let mapping =
+            super::super::directory::codec::decode_directory_state(&store.objects[&empty.0])
+                .unwrap()
+                .mapping_root;
+        let (memory, reads) = {
+            let mut observed = Observed {
+                store: &mut store,
+                reads: std::cell::RefCell::new(Vec::new()),
+            };
+            let attempt = directory_apply_sorted_with_spill_attempt(
+                &mut observed,
+                empty,
+                changes(),
+                0,
+                &dir,
+                1024 * 1024,
+            );
+            (attempt, observed.reads.into_inner())
+        };
+        assert!(matches!(memory.result, Err(CoreError::ObjectLimitExceeded)));
+        assert!(memory.budget_denied);
+        assert_eq!(
+            reads,
+            [empty.0, mapping],
+            "state and authenticated mapping are read before decode ownership is denied"
+        );
+        assert_eq!(
+            memory.counters.nodes_read,
+            reads.len() as u64,
+            "failed attempt retains every independently observed read"
+        );
+        // Short keys fill the leaf with many owned pairs. Their split segment
+        // reservation reaches memory pressure before any spill quota check.
+        let crowded = directory_apply_sorted_with_spill_attempt(
+            &mut store,
+            empty,
+            changes(),
+            16 * 1024 - 256,
+            &dir,
+            128,
+        );
+        assert!(
+            matches!(crowded.result, Err(CoreError::ObjectLimitExceeded)) && crowded.budget_denied,
+            "{crowded:?}"
+        );
+        assert!(crowded.counters.delta_keys > 0);
+        println!("memory-first short-key attempt: {crowded:?}");
+        // Maximal valid names fill the same canonical page with fewer pairs,
+        // crossing the spill boundary before its unchanged scratch allowance.
+        let long_changes = || {
+            (0..600).map(|i| {
+                Ok((
+                    CanonicalName::new(&format!("entry-{i:08}-{}", "x".repeat(240)))?,
+                    Some(inode(i)),
+                ))
+            })
+        };
+        let disk = directory_apply_sorted_with_spill_attempt(
+            &mut store,
+            empty,
+            long_changes(),
+            16 * 1024 - 256,
+            &dir,
+            128,
+        );
+        println!("disk-first long-key attempt: {disk:?}");
+        assert!(
+            matches!(disk.result, Err(CoreError::ObjectLimitExceeded)),
+            "{disk:?}"
+        );
+        assert!(
+            !disk.budget_denied,
+            "disk quota is not tree scratch pressure: {disk:?}"
+        );
+        assert!(disk.counters.delta_keys > 0 && disk.counters.nodes_read > 0);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+        struct FailAfter<'a> {
+            store: &'a mut MemoryStore,
+            remaining: usize,
+        }
+        impl ObjectStore for FailAfter<'_> {
+            fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+                ObjectStore::get(self.store, id)
+            }
+            fn put(&mut self, bytes: &[u8]) -> CoreResult<ObjectId> {
+                if self.remaining == 0 {
+                    return Err(CoreError::ObjectLimitExceeded);
+                }
+                self.remaining -= 1;
+                self.store.put(bytes)
+            }
+        }
+        let puts_before = store.puts;
+        let after_spill = directory_apply_sorted_with_spill_attempt(
+            &mut FailAfter {
+                store: &mut store,
+                remaining: 1,
+            },
+            empty,
+            long_changes(),
+            16 * 1024 - 256,
+            &dir,
+            1024 * 1024,
+        );
+        println!("memory-after-spill attempt: {after_spill:?}");
+        assert!(
+            matches!(after_spill.result, Err(CoreError::ObjectLimitExceeded))
+                && after_spill.budget_denied,
+            "{after_spill:?}"
+        );
+        assert_eq!(
+            store.puts, puts_before,
+            "live sibling ownership denies memory before the first Store write"
+        );
+        assert_eq!(after_spill.counters.nodes_created, 0);
+        assert!(after_spill.counters.spill_write_bytes > 0);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+        // Use the already successful normal tree allowance to reach the Store
+        // boundary. Memory-after-spill remains covered independently above.
+        let failed = directory_apply_sorted_with_spill_attempt(
+            &mut FailAfter {
+                store: &mut store,
+                remaining: 1,
+            },
+            empty,
+            long_changes(),
+            SORTED_TREE_UPDATE_SCRATCH_BYTES,
+            &dir,
+            1024 * 1024,
+        );
+        println!("Store-after-emission attempt: {failed:?}");
+        assert!(matches!(failed.result, Err(CoreError::ObjectLimitExceeded)));
+        assert!(!failed.budget_denied, "{failed:?}");
+        assert_eq!(
+            store.puts,
+            puts_before + 1,
+            "independent successful-write count crosses the intended Store boundary"
+        );
+        assert_eq!(
+            failed.counters.nodes_created, 1,
+            "emissions before failure remain counted"
+        );
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+        let retry = directory_apply_sorted_with_spill_attempt(
+            &mut store,
+            empty,
+            long_changes(),
+            SORTED_TREE_UPDATE_SCRATCH_BYTES,
+            &dir,
+            1024 * 1024,
+        );
+        assert!(!retry.budget_denied);
+        assert_eq!(
+            directory_entries(
+                &store,
+                retry.result.unwrap(),
+                &mut NamespaceCounters::default()
+            )
+            .unwrap()
+            .len(),
+            600
+        );
+        assert!(
+            directory_entries(&store, empty, &mut NamespaceCounters::default())
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+        std::fs::remove_dir(dir).unwrap();
     }
 
     #[test]
@@ -1912,7 +2218,8 @@ mod tests {
             decode_inode_table_node(&store.get(source).unwrap()).unwrap()
         {
             expected_reuse += children.len() as u64 - 1;
-            let index = children.partition_point(|(key, _)| *key < inode(9000))
+            let index = children
+                .partition_point(|(key, _)| *key < inode(9000))
                 .min(children.len() - 1);
             source = children[index].1;
         }
