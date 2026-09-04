@@ -328,3 +328,47 @@ conditions, with every material residual explained.
 No proposal was sent to or installed into the independently running implementation
 task during this review. These recommendations are available for the user's
 implementation decision; they do not supersede current source-bound results.
+
+## Follow-up: preflight is an architectural choice, not an immutable-root theorem
+
+Further independent admission/resource review found a more ambitious route worth
+specifying: an operation-owned admission epoch under the existing shared Store
+ticket gate and SQLite exclusive connection. Stream bounded final-object slabs,
+journal exactly the IDs whose INSERT created new rows, and conditionally publish
+only after all required checks. On handled prepublication failure, rollback could
+remove only this operation's never-published inserts, never any preexisting object.
+This would permit construction/admission overlap without relying on an empty Store.
+
+It is not implemented or implicitly approved. It restores logical row inventory,
+not necessarily Store file length, freelist or physical-write observations. Journal
+append must precede committing each insert batch; append failure rolls back that
+SQL transaction. Rollback failure needs retained ownership and must block later
+publication until recovery. Uncertain publication must be resolved before undo;
+after publication, undo authority is permanently disabled. Crash durability is
+not added by an in-memory cleanup owner. Exact duplicate accounting and final-only
+emission across pruning/retries/reconciliation remain mandatory. An owned-ID journal
+is about 13.2 MB of private disk for 412k new IDs, plus framing, and uses bounded
+buffers rather than a RAM set. Independent connections and all publication paths
+must be verified to obey the gate/exclusive-ownership assumption.
+
+Normal filesystem deletion would still never delete historical CAS chunks.
+Physically removing exclusively owned unpublished inserts is a distinct proposed
+rollback operation; the user's restriction and existing failure observability
+must be explicitly reconciled in the design before implementation. The current
+private-file cleanup queue does not already provide this behavior.
+
+This is a genuine alternative to the conservative descriptor-only plan, and it
+is much closer to the v0.1.1 direct-pipeline improvement. It does not prove 2.766
+seconds: current admission 2.413 s plus postpublication install/cleanup 1.277 s still
+sum to 3.690 s even if all construction is hidden. Those costs are changeable, not
+fundamental lower bounds. Matching the initializer would require reducing the
+writer path and final tail as well as removing staging and serial preflight.
+The earlier planning ranges must not be read as proof that a more complete
+redesign cannot approach initialization on matched resources.
+
+First proof: nonempty Store with duplicates and retained roots; journal-append
+failure; late collision/head failure; rollback failure and gated retry;
+publication success followed by cleanup failure; exact old-row retention and
+correct new-row inventory. Only after the failure footprint is reviewed should
+a matched larger-CPU performance experiment test removal of full-payload staging.
+No such experiment or semantic change was performed in this review.
