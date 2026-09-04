@@ -304,6 +304,7 @@ fn serve(
             Ok(measured) => {
                 if is_read {
                     read_metrics.note_host_response(
+                        measured.frame_count,
                         measured.frame_bytes,
                         measured.logical_bytes,
                         measured.payload_copy_bytes,

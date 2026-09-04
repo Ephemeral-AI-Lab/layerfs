@@ -1,5 +1,7 @@
 # Root fsyncdir exposes the baseline aggregate piece-allocation limit
 
+> **Updated completion policy:** These are retained original baseline failures. The [failure-repair amendment](../failure-repair-amendment.md) now requires their repair in Phase 1. See [functional repair status](../functional-repair-status.md) for the corrected implementation and pending runtime qualification. Historical outcomes below remain failed.
+
 Status: **reproduced product resource/capacity finding; product FAIL**. Three
 performance attempts of `tiny-bulk-create-100` reached the required native root
 fence and returned EINVAL. No Commit, successful publication, or independent

@@ -200,7 +200,7 @@ def sample(case, seed, args, assets, campaign, acquisitions):
                "seed": seed, "seed_label": f"repetition-{seed}" if case.get("inherited") else f"layerfs-v0.1.3-seed-{seed}",
                "proof_only": bool(case.get("proof_only")), "inherited": bool(case.get("inherited")), "mode": args.mode,
                "source_revision": assets["revision"], "product_identity": assets["product_seal"], "harness_identity": assets["harness_seal"],
-               "contract_commit": assets["phase1_contract_commit"], "image_id": assets["image_id"], "source_arm": "baseline", "admission_eligible": False,
+               "contract_commit": assets["phase1_contract_commit"], "image_id": assets["image_id"], "source_arm": args.source_arm, "admission_eligible": False,
                "environment_identity": assets["environment_identity"], "report_generator_identity": assets["report_generator_sha256"],
                "mutable_diagnostic_path": str(mutable), "coverage_status": "unexecuted", "harness_status": "in-progress", "product_status": "not-run", "evidence_path": str(attempt),
                "invalidation_reason": args.invalidate_reason}
@@ -444,6 +444,7 @@ def main():
     invocation_started=time.monotonic_ns()
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--family");p.add_argument("--case")
+    p.add_argument("--source-arm", choices=("baseline", "corrected"), default="baseline")
     repeat=p.add_mutually_exclusive_group();repeat.add_argument("--seed",type=int,choices=(1,2,3));repeat.add_argument("--repetition",type=int,choices=(1,2,3,4,5))
     p.add_argument("--mode",choices=("performance","verify"),default="performance")
     p.add_argument("--all",action="store_true");p.add_argument("--extended",action="store_true")
@@ -491,13 +492,15 @@ def main():
                 record.update(status="interrupted-unmeasured-wall", recovery_reason="exclusive campaign lock acquired after prior coordinator ended")
                 atomic_json(prior,record)
         invocation_path=invocations/(uuid.uuid4().hex+".json")
-        invocation={"source_revision":assets["revision"],"image_id":assets["image_id"],"source_validation_ns":validation_ns,"registry_query_ns":registry_ns,"planned_slots":[[case["scenario_id"],seed,args.mode] for case,seed in planned],"status":"running","invocation_wall_ns":None}
+        invocation={"source_arm":args.source_arm,"source_revision":assets["revision"],"image_id":assets["image_id"],"source_validation_ns":validation_ns,"registry_query_ns":registry_ns,"planned_slots":[[case["scenario_id"],seed,args.mode] for case,seed in planned],"status":"running","invocation_wall_ns":None}
         with invocation_receipt(invocation_path,invocation,invocation_started):
             ledger_path=campaign/"slots.json";ledger=read_json(ledger_path) if ledger_path.exists() else {};acquisitions={}
             if reconcile_attempts(campaign,ledger):atomic_json(ledger_path,ledger)
             for case,seed in planned:
                 key=slot_key({"harness_identity":assets["harness_seal"],"product_identity":assets["product_seal"],"image_id":assets["image_id"],"environment_identity":assets["environment_identity"],"scenario_id":case["scenario_id"],"seed":seed,"mode":args.mode})
                 previous=ledger.get(key)
+                if previous and previous.get("source_arm") != args.source_arm:
+                    raise ValueError("retained outcome belongs to a different named source arm")
                 action=ledger_action(previous,args.invalidate_reason)
                 if action in {"reuse-recorded-outcome","retained-failure-needs-investigation"}:
                     print(json.dumps({"action":action,"case":case["scenario_id"],"seed":seed,"evidence":previous["evidence_path"]}),flush=True)

@@ -1,5 +1,7 @@
 # Structural namespace Commit exceeds the baseline final-delta limit
 
+> **Updated completion policy:** These are retained original baseline failures. The [failure-repair amendment](../failure-repair-amendment.md) now requires their repair in Phase 1. See [functional repair status](../functional-repair-status.md) for the corrected implementation and pending runtime qualification. Historical outcomes below remain failed.
+
 Status: **reproduced product resource/capacity finding; product FAIL**. Phase 1
 performance collection has reached the required ordinary workload and observed
 a failed Commit. This is not a harness failure, passing publication, or a

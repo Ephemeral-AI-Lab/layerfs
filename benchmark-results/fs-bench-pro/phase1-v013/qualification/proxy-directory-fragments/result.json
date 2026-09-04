@@ -1,0 +1,12 @@
+{
+  "exit_code": 101,
+  "command_wall_ns": 1190386041,
+  "source_stable": true,
+  "source_after": {
+    "crates/layerfs-fuse/src/protocol.rs": "56b39ad235a03cf494de9a1d7023261545b6693f45efbbbc329adf7e7ff402f8",
+    "crates/layerfs-fuse/src/proxy_client.rs": "525a3da6b0a9c2ae17bf561207113b053852e7434011d5fbd1737a1b75ebd23a",
+    "crates/layerfs-fuse/src/proxy_host.rs": "73692ffae8df958cb7bf9ccaf3cff3224e190697dacddba3046f70dff531499e",
+    "crates/layerfs-fuse/src/write_metrics.rs": "ba6fae55f91a782026fcb7e591dd6a0afe746b2a06c239a362a96742bb6575da"
+  },
+  "scope": "one focused directory protocol codec regression; no benchmark or full suite"
+}

@@ -1,0 +1,41 @@
+   Compiling layerfs-fuse v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+error[E0308]: mismatched types
+   --> crates/layerfs-fuse/src/protocol.rs:425:19
+    |
+425 |           return Ok((
+    |  ________________--_^
+    | |                |
+    | |                arguments to this enum variant are incorrect
+426 | |             Request::Write(node, offset, payload),
+427 | |             RequestReadMeasurement {
+428 | |                 frame_bytes: (length as u64).saturating_add(4),
+...   |
+434 | |             None,
+435 | |         ));
+    | |_________^ expected a tuple with 2 elements, found one with 3 elements
+    |
+    = note: expected tuple `(protocol::Request, RequestReadMeasurement)`
+               found tuple `(protocol::Request, RequestReadMeasurement, Option<_>)`
+help: the type constructed contains `(protocol::Request, RequestReadMeasurement, Option<_>)` due to the type of the argument passed
+   --> crates/layerfs-fuse/src/protocol.rs:425:16
+    |
+425 |            return Ok((
+    |   ________________^  -
+    |  |___________________|
+426 | ||             Request::Write(node, offset, payload),
+427 | ||             RequestReadMeasurement {
+428 | ||                 frame_bytes: (length as u64).saturating_add(4),
+...   ||
+434 | ||             None,
+435 | ||         ));
+    | ||_________-^
+    | |__________|
+    |            this argument influences the type of `Ok`
+note: tuple variant defined here
+   --> /Users/yifanxu/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/result.rs:561:5
+    |
+561 |     Ok(#[stable(feature = "rust1", since = "1.0.0")] T),
+    |     ^^
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `layerfs-fuse` (lib test) due to 1 previous error

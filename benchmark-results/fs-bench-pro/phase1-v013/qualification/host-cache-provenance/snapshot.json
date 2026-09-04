@@ -1,0 +1,11 @@
+{
+  "depfile_sha256": "567539cbe90cd6ffffc9d5b9a2ebaad8a17464035936520d0203ae0e57a289a5",
+  "fingerprint_files": [
+    "bin-fs-benchmark-pro",
+    "bin-fs-benchmark-pro.json",
+    "bin-fs-benchmark-pro",
+    "bin-fs-benchmark-pro.json"
+  ],
+  "retained_host_binary_sha256": "3bc327d5ac14be15b2c585b055f0f148fbad9ecc111592e219a5fb6c560e9adc",
+  "finding": "Cached host depfile binds source712;176/177 inputs byte-match4c;sole difference Linux-cfg excluded. f518 has changed target-relevant inputs and requires selective package invalidation."
+}

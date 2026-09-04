@@ -1,5 +1,7 @@
 # Wide-directory enumeration exceeds the baseline proxy response limit
 
+> **Updated completion policy:** These are retained original baseline failures. The [failure-repair amendment](../failure-repair-amendment.md) now requires their repair in Phase 1. See [functional repair status](../functional-repair-status.md) for the corrected implementation and pending runtime qualification. Historical outcomes below remain failed.
+
 Status: **reproduced product resource/capacity finding; product FAIL**. All
 three frozen `tiny-bulk-delete-500` performance attempts fail during native
 `readdir bulk/wide`, after 68,000 acknowledged unlinks. The workload does not

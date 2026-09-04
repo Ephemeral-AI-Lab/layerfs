@@ -1,0 +1,6 @@
+
+running 1 test
+test protocol::tests::directory_fragments_preserve_complete_entries_and_reject_invalid_streams ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.10s
+

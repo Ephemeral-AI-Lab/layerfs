@@ -6,6 +6,8 @@ import json
 import os
 import platform
 import signal
+import shlex
+import tomllib
 import stat
 import shutil
 import subprocess
@@ -565,6 +567,63 @@ def build_configuration():
             "profile":"release","locked":True,"target_directory":"repository-target"}
 
 
+def host_cache_inputs(depfile, checkout, repository):
+    """Cargo depfiles can still point at an older worktree through target links."""
+    depfile, checkout, repository = map(Path, (depfile, checkout, repository))
+    result = {"status": "no-cached-depfile", "inputs": [], "changed_packages": []}
+    if not depfile.exists():
+        return result
+    first = depfile.read_text().splitlines()[0]
+    dependencies = shlex.split(first.split(": ", 1)[1])
+    changed = set()
+    for name in dependencies:
+        source = Path(name).resolve()
+        try:
+            relative = source.relative_to(repository.resolve())
+        except ValueError:
+            continue  # Registry/toolchain inputs remain Cargo's responsibility.
+        if len(relative.parts) > 2 and relative.parts[0] == "target" and relative.parts[1].startswith("phase1-source-"):
+            relative = Path(*relative.parts[2:])
+        if relative.parts[:2] == ("benchmark", "fs-bench-pro"):
+            package = "fs-benchmark-pro"
+        elif len(relative.parts) > 2 and relative.parts[0] == "crates":
+            manifest = checkout / "crates" / relative.parts[1] / "Cargo.toml"
+            package = tomllib.loads(manifest.read_text())["package"]["name"]
+        else:
+            continue
+        expected = checkout / relative
+        old_hash = sha(source) if source.is_file() else None
+        new_hash = sha(expected) if expected.is_file() else None
+        result["inputs"].append({"path":str(relative), "cached_source":str(source), "cached_sha256":old_hash, "requested_sha256":new_hash, "package":package})
+        if old_hash is None or new_hash is None or old_hash != new_hash:
+            changed.add(package)
+    if not result["inputs"]:
+        raise ValueError("cached host depfile has no attributable project inputs")
+    result.update(status="invalidate-changed-packages" if changed else "content-compatible", changed_packages=sorted(changed))
+    return result
+
+
+def host_cache_self_check():
+    with tempfile.TemporaryDirectory(prefix="layerfs-host-cache-check-") as temporary:
+        root = Path(temporary)
+        old = root / "target/phase1-source-old"
+        new = root / "target/phase1-source-new"
+        names = ["benchmark/fs-bench-pro/src/main.rs", "crates/example/src/lib.rs"]
+        for checkout in (old, new):
+            for name in names:
+                path = checkout / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_text("same source")
+            (checkout / "crates/example/Cargo.toml").write_text('[package]\nname="example-package"\n')
+        depfile = root / "host.d"
+        depfile.write_text("binary: " + " ".join(str(old / name) for name in names) + "\n")
+        assert host_cache_inputs(depfile, new, root)["status"] == "content-compatible"
+        (new / names[0]).write_text("changed host")
+        assert host_cache_inputs(depfile, new, root)["changed_packages"] == ["fs-benchmark-pro"]
+        (new / names[1]).write_text("changed product")
+        assert host_cache_inputs(depfile, new, root)["changed_packages"] == ["example-package", "fs-benchmark-pro"]
+        assert all((old / name).read_text() == "same source" for name in names)
+    print("host_cache_source_comparison_self_check=pass")
+
+
 def build(destination, image_tag, workspace=False):
     revision = require_clean()
     identity = workspace_identity(revision) if workspace else source_identity(revision)
@@ -586,6 +645,15 @@ def build(destination, image_tag, workspace=False):
             seal(evidence)
             raise SystemExit(result.returncode)
 
+    common_git = Path(output("git", "rev-parse", "--git-common-dir"))
+    repository = (REPO / common_git).resolve().parent
+    cache_inputs = host_cache_inputs(REPO / "target" / configuration["target"] / "release/fs-benchmark-pro.d", REPO, repository)
+    write_json(evidence / "host-cache-inputs.json", cache_inputs)
+    if cache_inputs["changed_packages"]:
+        clean = ["cargo", "clean", "--release", "--target", configuration["target"], "--target-dir", str(REPO / "target")]
+        for package in cache_inputs["changed_packages"]:
+            clean += ["-p", package]
+        run("invalidate-changed-host-packages", clean)
     run("host-build", ["cargo", "build", "--locked", "--release", "--target", configuration["target"], "--target-dir", str(REPO / "target"), "-p", "fs-benchmark-pro"])
     for test in (() if workspace else ("group_4_invalid_type_range_overflow_and_limits_are_atomic",
                  "group_5_commit_publication_is_exactly_once_and_retry_is_up_to_date")):
@@ -773,7 +841,9 @@ def repository_gates(destination, measured_revision=None):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 4 and sys.argv[1] == "build":
+    if len(sys.argv) == 2 and sys.argv[1] == "workspace-host-cache-self-check":
+        host_cache_self_check()
+    elif len(sys.argv) == 4 and sys.argv[1] == "build":
         build(sys.argv[2], sys.argv[3])
     elif len(sys.argv) == 4 and sys.argv[1] == "build-workspace":
         build(sys.argv[2], sys.argv[3], workspace=True)

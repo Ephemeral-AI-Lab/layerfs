@@ -1,5 +1,7 @@
 # Phase 1 audit corrections and evidence reuse
 
+> **Subsequent amendment:** Required product repairs supersede the nine-slot-only recollection plan below. See [functional repair status](functional-repair-status.md): all 84 original runtime rows remain baselines and need corrected-candidate collection because the combined repairs alter their paths or memory layout.
+
 This records harness corrections before expanding beyond the first two performance
 families. It does not declare Phase 1 complete. Product optimization remains in
 Phase 2; all actual failures remain retained.

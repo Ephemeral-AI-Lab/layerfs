@@ -147,6 +147,7 @@ impl ProxyClient {
             read_response_measured(&mut *stream).map_err(|_| PortError::Io)?;
         if is_read {
             self.read_metrics.note_client_response(
+                measured.frame_count,
                 measured.frame_bytes,
                 measured.payload_copy_bytes,
                 measured.socket_ns,

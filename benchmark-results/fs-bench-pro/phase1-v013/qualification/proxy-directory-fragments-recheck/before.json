@@ -1,0 +1,21 @@
+{
+  "source_revision": "4516b4b9326aae13e43153380a378f2209d23cb2",
+  "source_files": {
+    "crates/layerfs-fuse/src/protocol.rs": "96847ede4fd34450618232e0a9047abb73014f4803e9e5f49fda5acdefc8ecb1",
+    "crates/layerfs-fuse/src/proxy_client.rs": "525a3da6b0a9c2ae17bf561207113b053852e7434011d5fbd1737a1b75ebd23a",
+    "crates/layerfs-fuse/src/proxy_host.rs": "73692ffae8df958cb7bf9ccaf3cff3224e190697dacddba3046f70dff531499e",
+    "crates/layerfs-fuse/src/write_metrics.rs": "ba6fae55f91a782026fcb7e591dd6a0afe746b2a06c239a362a96742bb6575da"
+  },
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "layerfs-fuse",
+    "--lib",
+    "protocol::tests::directory_fragments_preserve_complete_entries_and_reject_invalid_streams",
+    "--",
+    "--exact"
+  ],
+  "recheck_reason": "Remove unintended third tuple element in Request::Write decode; original focused compile failed before running tests."
+}

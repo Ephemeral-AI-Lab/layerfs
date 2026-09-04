@@ -1,0 +1,7 @@
+{
+  "actual_test_exit_code": 0,
+  "qualification_status": "source-edited-during-check; not admitted as exact-source evidence",
+  "source_before": "9ed0e0fb44724106800a8a27b696e585a6ec3274b424779222b0ed855c341130",
+  "source_after": "65d3914cda565ee333832b6da83c1246a0d59dc24ac06e5f859672d4a8378563",
+  "reason": "Agent appended long-path assertion during coordinator check; preserve observed test pass but rerun this one changed regression against stable final source."
+}

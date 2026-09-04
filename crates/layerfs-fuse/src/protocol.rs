@@ -139,6 +139,7 @@ pub(crate) struct RequestReadMeasurement {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ResponseWriteMeasurement {
+    pub(crate) frame_count: u64,
     pub(crate) frame_bytes: u64,
     pub(crate) logical_bytes: u64,
     pub(crate) payload_copy_bytes: u64,
@@ -148,6 +149,7 @@ pub(crate) struct ResponseWriteMeasurement {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct ResponseReadMeasurement {
+    pub(crate) frame_count: u64,
     pub(crate) frame_bytes: u64,
     pub(crate) logical_bytes: u64,
     pub(crate) payload_copy_bytes: u64,
@@ -588,6 +590,7 @@ pub(crate) fn write_response_measured(
         output.write_all(value)?;
         output.flush()?;
         return Ok(ResponseWriteMeasurement {
+            frame_count: 1,
             frame_bytes: (header.len() as u64).saturating_add(value.len() as u64),
             logical_bytes: value.len() as u64,
             payload_copy_bytes: 0,
@@ -607,16 +610,17 @@ pub(crate) fn write_response_measured(
             put_bytes(&mut bytes, value)?;
         }
         Response::Entries(entries) => {
-            if entries.len() > MAX_ENTRIES {
-                return Err(invalid("entry count"));
-            }
-            bytes.push(2);
-            bytes.extend_from_slice(&(entries.len() as u32).to_be_bytes());
-            for (node, kind, name) in entries {
-                put_node(&mut bytes, *node);
-                put_kind(&mut bytes, *kind);
-                put_bytes(&mut bytes, name)?;
-            }
+            return write_directory_response(
+                output,
+                entries,
+                2,
+                |entry| 13 + entry.2.len(),
+                |bytes, (node, kind, name)| {
+                    put_node(bytes, *node);
+                    put_kind(bytes, *kind);
+                    put_bytes(bytes, name)
+                },
+            );
         }
         Response::Size(value) => {
             bytes.push(3);
@@ -632,15 +636,16 @@ pub(crate) fn write_response_measured(
             put_node(&mut bytes, *node);
         }
         Response::EntriesPlus(entries) => {
-            if entries.len() > MAX_ENTRIES {
-                return Err(invalid("entry count"));
-            }
-            bytes.push(7);
-            bytes.extend_from_slice(&(entries.len() as u32).to_be_bytes());
-            for (attr, name) in entries {
-                put_attr(&mut bytes, *attr);
-                put_bytes(&mut bytes, name)?;
-            }
+            return write_directory_response(
+                output,
+                entries,
+                7,
+                |entry| 41 + entry.1.len(),
+                |bytes, (attr, name)| {
+                    put_attr(bytes, *attr);
+                    put_bytes(bytes, name)
+                },
+            );
         }
     }
     let encode_ns = elapsed_ns(started);
@@ -648,7 +653,70 @@ pub(crate) fn write_response_measured(
     let started = std::time::Instant::now();
     write_frame(output, &bytes)?;
     Ok(ResponseWriteMeasurement {
+        frame_count: 1,
         frame_bytes,
+        logical_bytes: 0,
+        payload_copy_bytes: 0,
+        encode_ns,
+        socket_ns: elapsed_ns(started),
+    })
+}
+
+// A directory remains one stable port/cache result. Split only its transport:
+// tags 8/9 carry indexed Entries/EntriesPlus fragments and an explicit more bit.
+// Legacy single-frame responses keep tags 2/7 and their exact representation.
+// Both the existing per-frame entry limit and total encoded byte bound remain.
+fn write_directory_response<T>(
+    output: &mut impl Write,
+    entries: &[T],
+    final_tag: u8,
+    entry_size: impl Fn(&T) -> usize,
+    encode: impl Fn(&mut Vec<u8>, &T) -> std::io::Result<()>,
+) -> std::io::Result<ResponseWriteMeasurement> {
+    let started = std::time::Instant::now();
+    let count = entries.len().div_ceil(MAX_ENTRIES).max(1);
+    let encoded_bytes = entries.iter().try_fold(
+        count
+            .checked_mul(if count == 1 { 9 } else { 14 })
+            .ok_or_else(|| invalid("directory length"))?,
+        |total, entry| {
+            total
+                .checked_add(entry_size(entry))
+                .filter(|total| *total <= MAX_FRAME + 4)
+                .ok_or_else(|| invalid("directory length"))
+        },
+    )?;
+    let mut bodies = Vec::with_capacity(encoded_bytes - count * 4);
+    let mut frames = Vec::with_capacity(count);
+    for index in 0..count {
+        let start = bodies.len();
+        let continued = index + 1 < count;
+        bodies.push(if count == 1 {
+            final_tag
+        } else if final_tag == 2 {
+            8
+        } else {
+            9
+        });
+        if count > 1 {
+            bodies.extend_from_slice(&(index as u32).to_be_bytes());
+            put_bool(&mut bodies, continued);
+        }
+        let entries = &entries[index * MAX_ENTRIES..entries.len().min((index + 1) * MAX_ENTRIES)];
+        bodies.extend_from_slice(&(entries.len() as u32).to_be_bytes());
+        for entry in entries {
+            encode(&mut bodies, entry)?;
+        }
+        frames.push(start..bodies.len());
+    }
+    let encode_ns = elapsed_ns(started);
+    let started = std::time::Instant::now();
+    for frame in frames {
+        write_frame(output, &bodies[frame])?;
+    }
+    Ok(ResponseWriteMeasurement {
+        frame_count: count as u64,
+        frame_bytes: encoded_bytes as u64,
         logical_bytes: 0,
         payload_copy_bytes: 0,
         encode_ns,
@@ -664,11 +732,51 @@ pub(crate) fn read_response(input: &mut impl Read) -> std::io::Result<Response> 
 pub(crate) fn read_response_measured(
     input: &mut impl Read,
 ) -> std::io::Result<(Response, ResponseReadMeasurement)> {
+    let (mut response, mut measured, fragment) = read_response_frame(input, MAX_FRAME + 4)?;
+    if fragment.is_some_and(|(index, _)| index != 0) {
+        return Err(invalid("directory fragment order"));
+    }
+    let mut continued = fragment.is_some_and(|(_, more)| more);
+    while continued {
+        let remaining = (MAX_FRAME + 4)
+            .checked_sub(measured.frame_bytes as usize)
+            .ok_or_else(|| invalid("directory length"))?;
+        let (next, part, fragment) = read_response_frame(input, remaining)?;
+        let Some((index, more)) = fragment else {
+            return Err(invalid("missing directory fragment"));
+        };
+        if u64::from(index) != measured.frame_count {
+            return Err(invalid("directory fragment order"));
+        }
+        let appended = std::time::Instant::now();
+        match (&mut response, next) {
+            (Response::Entries(entries), Response::Entries(mut next)) => entries.append(&mut next),
+            (Response::EntriesPlus(entries), Response::EntriesPlus(mut next)) => {
+                entries.append(&mut next)
+            }
+            _ => return Err(invalid("directory continuation type")),
+        }
+        measured.frame_count += part.frame_count;
+        measured.frame_bytes += part.frame_bytes;
+        measured.socket_ns = measured.socket_ns.saturating_add(part.socket_ns);
+        measured.decode_ns = measured
+            .decode_ns
+            .saturating_add(part.decode_ns)
+            .saturating_add(elapsed_ns(appended));
+        continued = more;
+    }
+    Ok((response, measured))
+}
+
+fn read_response_frame(
+    input: &mut impl Read,
+    remaining: usize,
+) -> std::io::Result<(Response, ResponseReadMeasurement, Option<(u32, bool)>)> {
     let started = std::time::Instant::now();
     let mut length = [0; 4];
     input.read_exact(&mut length)?;
     let length = u32::from_be_bytes(length) as usize;
-    if length == 0 || length > MAX_FRAME {
+    if length == 0 || length > MAX_FRAME || length.saturating_add(4) > remaining {
         return Err(invalid("frame length"));
     }
     let mut tag = [0];
@@ -696,12 +804,14 @@ pub(crate) fn read_response_measured(
         return Ok((
             Response::Bytes(payload),
             ResponseReadMeasurement {
+                frame_count: 1,
                 frame_bytes,
                 logical_bytes: payload_len as u64,
                 payload_copy_bytes: 0,
                 socket_ns,
                 decode_ns,
             },
+            None,
         ));
     }
     let mut bytes = vec![0; length];
@@ -711,12 +821,19 @@ pub(crate) fn read_response_measured(
     socket_ns = socket_ns.saturating_add(elapsed_ns(started));
     let started = std::time::Instant::now();
     let mut input = Input::new(&bytes);
-    let response = match input.u8()? {
+    let tag = input.u8()?;
+    let fragment = if matches!(tag, 8 | 9) {
+        Some((input.u32()?, input.boolean()?))
+    } else {
+        None
+    };
+    let continued = fragment.is_some_and(|(_, more)| more);
+    let response = match tag {
         0 => Response::Attr(input.attr()?),
         1 => Response::Bytes(input.bytes()?.to_vec()),
-        2 => {
+        2 | 8 => {
             let count = input.u32()? as usize;
-            if count > MAX_ENTRIES {
+            if count > MAX_ENTRIES || (continued && count != MAX_ENTRIES) {
                 return Err(invalid("entry count"));
             }
             let mut entries = Vec::with_capacity(count);
@@ -729,9 +846,9 @@ pub(crate) fn read_response_measured(
         4 => Response::Unit,
         5 => Response::Error(port_error(input.u8()?)?),
         6 => Response::Node(input.node()?),
-        7 => {
+        7 | 9 => {
             let count = input.u32()? as usize;
-            if count > MAX_ENTRIES {
+            if count > MAX_ENTRIES || (continued && count != MAX_ENTRIES) {
                 return Err(invalid("entry count"));
             }
             let mut entries = Vec::with_capacity(count);
@@ -747,12 +864,14 @@ pub(crate) fn read_response_measured(
     Ok((
         response,
         ResponseReadMeasurement {
+            frame_count: 1,
             frame_bytes,
             logical_bytes: 0,
             payload_copy_bytes: 0,
             socket_ns,
             decode_ns,
         },
+        fragment,
     ))
 }
 
@@ -930,6 +1049,117 @@ fn invalid(_: impl std::fmt::Debug) -> std::io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn directory_fragments_preserve_complete_entries_and_reject_invalid_streams() {
+        // The frozen wide directory has32,000 ordinary children plus dot entries.
+        let entries: Vec<_> = (0..32_002)
+            .map(|index| {
+                (
+                    NodeId(index),
+                    Kind::File,
+                    format!("f{index:05}").into_bytes(),
+                )
+            })
+            .collect();
+        let plus: Vec<_> = entries
+            .iter()
+            .map(|(node, _, name)| {
+                (
+                    Attr {
+                        node: *node,
+                        size: node.0,
+                        kind: Kind::File,
+                        mode: 0o644,
+                        links: 1,
+                        mtime_seconds: 7,
+                        mtime_nanoseconds: 11,
+                    },
+                    name.clone(),
+                )
+            })
+            .collect();
+        let mut ordinary = Vec::new();
+        let written =
+            write_response_measured(&mut ordinary, &Response::Entries(entries.clone())).unwrap();
+        let (decoded, measured) = read_response_measured(&mut ordinary.as_slice()).unwrap();
+        let Response::Entries(decoded) = decoded else {
+            panic!("entries")
+        };
+        assert_eq!(decoded, entries);
+        assert_eq!(written.frame_count, 2);
+        assert_eq!(measured.frame_count, 2);
+        assert_eq!(written.frame_bytes, ordinary.len() as u64);
+        assert_eq!(measured.frame_bytes, written.frame_bytes);
+        let split = u32::from_be_bytes(ordinary[..4].try_into().unwrap()) as usize + 4;
+        assert_eq!(ordinary[4], 8);
+        assert_eq!(ordinary[9], 1);
+        assert_eq!(
+            u32::from_be_bytes(ordinary[10..14].try_into().unwrap()) as usize,
+            MAX_ENTRIES
+        );
+        assert_eq!(ordinary[split + 9], 0);
+
+        let mut extended = Vec::new();
+        write_response(&mut extended, &Response::EntriesPlus(plus.clone())).unwrap();
+        let Response::EntriesPlus(decoded) = read_response(&mut extended.as_slice()).unwrap()
+        else {
+            panic!("entries plus")
+        };
+        assert_eq!(decoded, plus);
+        let plus_split = u32::from_be_bytes(extended[..4].try_into().unwrap()) as usize + 4;
+
+        // Legacy small directories remain byte-compatible and single-frame.
+        let mut small = Vec::new();
+        assert_eq!(
+            write_response_measured(&mut small, &Response::Entries(entries[..1].to_vec()))
+                .unwrap()
+                .frame_count,
+            1
+        );
+        assert_eq!(small[4], 2);
+        assert_eq!(
+            read_response_measured(&mut small.as_slice())
+                .unwrap()
+                .1
+                .frame_count,
+            1
+        );
+
+        for length in [split, ordinary.len() - 1] {
+            assert!(read_response(&mut &ordinary[..length]).is_err());
+        }
+        let mut reordered = ordinary[split..].to_vec();
+        reordered.extend_from_slice(&ordinary[..split]);
+        assert!(read_response(&mut reordered.as_slice()).is_err());
+        let mut duplicated = ordinary.clone();
+        duplicated[split + 5..split + 9].copy_from_slice(&0_u32.to_be_bytes());
+        assert!(read_response(&mut duplicated.as_slice()).is_err());
+        let mut inconsistent = ordinary[..split].to_vec();
+        inconsistent.extend_from_slice(&extended[plus_split..]);
+        assert!(read_response(&mut inconsistent.as_slice()).is_err());
+        let mut oversized_count = ordinary.clone();
+        oversized_count[10..14].copy_from_slice(&((MAX_ENTRIES + 1) as u32).to_be_bytes());
+        assert!(read_response(&mut oversized_count.as_slice()).is_err());
+        let mut oversized_total = ordinary[..split].to_vec();
+        oversized_total.extend_from_slice(&(MAX_FRAME as u32).to_be_bytes());
+        assert_eq!(
+            read_response(&mut oversized_total.as_slice())
+                .err()
+                .unwrap()
+                .kind(),
+            std::io::ErrorKind::InvalidData
+        );
+        let mut output = Vec::new();
+        assert!(
+            write_response(
+                &mut output,
+                &Response::Entries(vec![(NodeId(1), Kind::File, vec![0; MAX_FRAME])])
+            )
+            .is_err()
+        );
+        assert!(output.is_empty());
+    }
 
     #[test]
     fn write_and_size_round_trip() {

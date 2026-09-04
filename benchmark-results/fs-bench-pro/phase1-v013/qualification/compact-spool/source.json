@@ -1,0 +1,14 @@
+{
+  "schema": "retrospective-qualification-source-v1",
+  "recorded_at_utc": "2026-09-04T03:30:23.564379+00:00",
+  "head_at_recording": "4516b4b9326aae13e43153380a378f2209d23cb2",
+  "pre_run_source_seal_available": false,
+  "source_identity_scope": "The hash is captured now, after the recorded test passed. The owning agent made no edit to file_edit.rs between that passing test and this capture; root froze the product source before requesting these artifacts. No historical pre-run hash or dependency-wide source seal was collected or is implied.",
+  "files": {
+    "crates/layerfs-workspace/src/file_edit.rs": "52d4fd2741995fb19bfa1f293cdca793fcf585e888c4d1cb2cf786806f48d7f4",
+    "layout.rs": "8a8111996ae8b9e5b81a9f4eef9badd76590545f685f7a31460af878bb22debc",
+    "crates/layerfs-workspace/src/cow_tree.rs": "c3057df81b13cfb739822187ed783dc87e307d6ea61c4faea1bb25d74bd6475c"
+  },
+  "working_tree_at_recording": "file_edit.rs is modified relative to HEAD; cow_tree.rs has no working-tree modification. Snapshot copy file_edit.tested-source.rs preserves the owned source associated with the test by agent continuity.",
+  "coverage": "Only the single new compact-spool unit test was run. No full suite, benchmark,100000-file Workspace execution, or mandatory final verification was run by this qualification."
+}

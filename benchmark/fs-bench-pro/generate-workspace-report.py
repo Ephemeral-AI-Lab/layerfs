@@ -762,7 +762,7 @@ def validate_attempt(outcome, classification, case, build):
         require(outcome.get("schema") == "fs-bench-pro-v013-sample-v1" and outcome.get("coverage_status") == "executed", "slot has no executed result", issues)
         for key, value in IDENTITY_FIELDS.items():
             require(outcome.get(key) == build[value], f"source identity mismatch: {key}", issues)
-        require(outcome.get("source_arm") == "baseline" and outcome.get("admission_eligible") is False, "invalid Phase 1 arm/admission scope", issues)
+        require(outcome.get("source_arm") in {"baseline", "corrected"} and outcome.get("admission_eligible") is False, "invalid Phase 1 arm/admission scope", issues)
         for key in ("scenario_id", "family_id", "proof_only", "inherited"):
             require(outcome.get(key) == case.get(key, False), f"slot identity mismatch: {key}", issues)
         require(outcome.get("mode") in {"performance", "verify"}, "unknown evidence mode", issues)
@@ -926,6 +926,10 @@ def family_builds(campaign, assets, primary, registry):
     return selected, provenance, bridges
 
 
+def terminal_status(missing, invalid, issues, failures):
+    return "NO_GO" if missing or invalid or issues or failures else "PHASE1_TERMINAL_PASS"
+
+
 def generate(campaign, assets):
     build, registry = qualified_build(assets)
     new, proofs, inherited = registry_cases(registry)
@@ -981,7 +985,7 @@ def generate(campaign, assets):
         value = validate_attempt(outcome, classification, case, selected_build(selected_builds, case, mode))
         checked[key] = value
         row = {"case": key[0], "family_id": case["family_id"], "seed": seed, "mode": mode, "inherited": case.get("inherited", False),
-               "source_identity": {key: outcome.get(key) for key in IDENTITY_FIELDS}, "raw_product_status": outcome.get("product_status"), "coverage_status": outcome.get("coverage_status"), "product_status": value["product_status"], "evidence_status": "REVISE" if value["issues"] else "PASS",
+               "source_identity": {key: outcome.get(key) for key in IDENTITY_FIELDS}, "source_arm": outcome.get("source_arm"), "raw_product_status": outcome.get("product_status"), "coverage_status": outcome.get("coverage_status"), "product_status": value["product_status"], "evidence_status": "REVISE" if value["issues"] else "PASS",
                "issues": value["issues"], "violations": value["violations"], "evidence": outcome["evidence_path"], "metrics": value["metrics"], "resource_observations": value["resource_observations"]}
         rows.append(row)
         if value["issues"]:
@@ -1016,9 +1020,17 @@ def generate(campaign, assets):
         value = read(path)
         if value.get("product_status") != "pass" or value.get("harness_status") == "fail":
             retained.append({key: value.get(key) for key in ("scenario_id", "seed", "mode", "source_revision", "product_status", "harness_status", "error", "evidence_path")})
+    arms = {}
+    for value in ledger.values():
+        key = (value.get("source_arm"), value.get("source_revision"))
+        arm = arms.setdefault(key, {"source_arm": key[0], "source_revision": key[1], "product_identity": value.get("product_identity"), "image_id": value.get("image_id"), "raw_performance_outcomes": 0, "raw_pass": 0, "raw_fail": 0, "evidence": []})
+        if value.get("mode") == "performance" and value.get("coverage_status") == "executed":
+            arm["raw_performance_outcomes"] += 1
+            arm["raw_pass" if value.get("product_status") == "pass" else "raw_fail"] += 1
+            arm["evidence"].append(value["evidence_path"])
     summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "scoped_builds": build_provenance, "verification_compatibility": compatibility, "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
-               "counts": counts, "phase1_evidence_status": "PASS" if not missing and not invalid and not global_issues else "REVISE", "product_status": "FAIL" if failures else "NOT_ESTABLISHED" if missing or invalid or global_issues else "PASS",
-               "global_issues": global_issues, "missing": missing, "invalid": invalid, "product_findings": failures, "retained_failure_history": retained, "invocations": invocations, "rows": rows}
+               "retained_source_arms": list(arms.values()), "counts": counts, "phase1_evidence_status": "PASS" if not missing and not invalid and not global_issues else "REVISE", "product_status": "FAIL" if failures else "NOT_ESTABLISHED" if missing or invalid or global_issues else "PASS",
+               "phase1_terminal_status": terminal_status(missing, invalid, global_issues, failures), "completion_policy": "failure-repair-amendment-2026-09-04", "global_issues": global_issues, "missing": missing, "invalid": invalid, "product_findings": failures, "retained_failure_history": retained, "invocations": invocations, "rows": rows}
     results = campaign / "results"
     results.mkdir(exist_ok=True)
     custody.write_json(results / "review.json", summary)
@@ -1027,8 +1039,10 @@ def generate(campaign, assets):
               "classifications_sha256": custody.sha(campaign / "classifications.json") if (campaign / "classifications.json").exists() else None,
               "generator_sha256": summary["report_generator_sha256"], "policy_helper_sha256": custody.sha(HERE / "workspace-runner.py"), "custody_helper_sha256": custody.sha(HERE / "sdk-edit-custody.py"), "attempt_manifests": {path: custody.sha(Path(path) / "evidence.sha256") if (Path(path) / "evidence.sha256").is_file() else None for path in sorted(evidence_paths)}}
     custody.write_json(results / "report-inputs.json", inputs)
-    lines = ["# LayerFS v0.1.3 Phase 1 initial baseline", "", f"Evidence: **{summary['phase1_evidence_status']}**. Product: **{summary['product_status']}**.", "", f"Sealed source: `{build['revision']}`. Report generator: `{summary['report_generator_sha256']}`.", "", "| Coverage | Count |", "| --- | ---: |"]
+    lines = ["# LayerFS v0.1.3 Phase 1 initial baseline", "", f"Evidence: **{summary['phase1_evidence_status']}**. Product: **{summary['product_status']}**. Phase 1 terminal gate: **{summary['phase1_terminal_status']}**.", "", f"Sealed source: `{build['revision']}`. Report generator: `{summary['report_generator_sha256']}`.", "", "| Coverage | Count |", "| --- | ---: |"]
     lines += [f"| {key} | {value} |" for key, value in counts.items()]
+    lines += ["", "## Retained original and corrected source arms", "", "Raw outcomes below are preserved with their producing identities; they are not all eligible current-candidate performance evidence.", "", "| Arm | Source | Raw performance outcomes | Raw pass | Raw fail |", "| --- | --- | ---: | ---: | ---: |"]
+    lines += [f"| {arm['source_arm']} | `{arm['source_revision']}` | {arm['raw_performance_outcomes']} | {arm['raw_pass']} | {arm['raw_fail']} |" for arm in arms.values()]
     lines += ["", "## Eligible initial distributions", "", "Only complete, authentic, source/input-matched independently verified samples are eligible. Pending or failed verification excludes performance claims without deleting raw timing evidence.", "", "| Case | Metric | n | Median | Min | Max |", "| --- | --- | ---: | ---: | ---: | ---: |"]
     for case, values in sorted(distributions.items()):
         for metric, values in sorted(values.items()):
@@ -1039,7 +1053,7 @@ def generate(campaign, assets):
     lines += [f"- **REVISE** — {issue}." for issue in global_issues]
     if missing:
         lines.append(f"- {len(missing)} required slots remain missing; review.json contains exact IDs.")
-    lines += ["", "## Scope", "", "This is initial benchmark evidence, not release admission. Product failures remain failed Phase 2 dependencies. Prior failures remain in retained_failure_history. Report regeneration does not rerun product work. No cold-cache, optimization or crash/power-loss guarantee is claimed. Issue #21 remains open.", ""]
+    lines += ["", "## Scope", "", "This is initial benchmark evidence, not release admission. Required product failures block Phase 1 completion and require repair. Original baselines remain failed in retained_failure_history; corrected candidate outcomes keep separate source identities. Report regeneration does not rerun product work. No cold-cache, optimization or crash/power-loss guarantee is claimed. Issue #21 remains open.", ""]
     (results / "initial-results.md").write_text("\n".join(lines))
     custody.seal(results)
     return summary

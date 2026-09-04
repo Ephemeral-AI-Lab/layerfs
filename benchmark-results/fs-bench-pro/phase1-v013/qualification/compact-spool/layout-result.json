@@ -1,0 +1,12 @@
+{
+  "schema": "retrospective-layout-probe-v1",
+  "original_source_path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-layout-impact-x_ei_wax/layout.rs",
+  "source_sha256": "8a8111996ae8b9e5b81a9f4eef9badd76590545f685f7a31460af878bb22debc",
+  "source_copy": "layout.rs",
+  "executed_command": "rustc --edition 2021 /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-layout-impact-x_ei_wax/layout.rs -o /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-layout-impact-x_ei_wax/layout && /var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-layout-impact-x_ei_wax/layout",
+  "tool_chunk_id": "953581",
+  "exit_code": 0,
+  "scope": "Standalone std::mem::size_of/align_of probe; no product calls, benchmarks, or Cargo build. Data/FileData/DirectoryData/Node definitions were extracted verbatim from cow_tree.rs except replacing the PieceTree type path. Source-backed wrapper types use their actual32-byte identity representation. Arc<()> substitutes the same pointer representation of Arc<PieceNode>. The after model adds the actual contiguous_spool_len u64 field.",
+  "output": "before PieceTree size=16 align=8\nbefore FileData size=104 align=8\nbefore Data size=104 align=8\nbefore Node size=192 align=8\nafter PieceTree size=24 align=8\nafter FileData size=112 align=8\nafter Data size=112 align=8\nafter Node size=200 align=8\n",
+  "result_limit": "This directly observes the standalone Rust model layout on the current host. It is not instrumentation of a historical or candidate product binary and does not measure performance."
+}

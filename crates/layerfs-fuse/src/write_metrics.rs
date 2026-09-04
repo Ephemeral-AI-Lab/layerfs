@@ -633,13 +633,15 @@ impl AtomicFuseReadMetrics {
 
     pub(crate) fn note_host_response(
         &self,
+        frame_count: u64,
         frame_bytes: u64,
         _logical_bytes: u64,
         payload_copy_bytes: u64,
         encode_ns: u64,
         socket_ns: u64,
     ) {
-        self.host_response_frames.fetch_add(1, Ordering::Relaxed);
+        self.host_response_frames
+            .fetch_add(frame_count, Ordering::Relaxed);
         self.host_response_bytes
             .fetch_add(frame_bytes, Ordering::Relaxed);
         self.host_response_copy_bytes
@@ -651,12 +653,14 @@ impl AtomicFuseReadMetrics {
 
     pub(crate) fn note_client_response(
         &self,
+        frame_count: u64,
         frame_bytes: u64,
         payload_copy_bytes: u64,
         socket_ns: u64,
         decode_ns: u64,
     ) {
-        self.client_response_frames.fetch_add(1, Ordering::Relaxed);
+        self.client_response_frames
+            .fetch_add(frame_count, Ordering::Relaxed);
         self.client_response_bytes
             .fetch_add(frame_bytes, Ordering::Relaxed);
         self.client_socket_read_ns
