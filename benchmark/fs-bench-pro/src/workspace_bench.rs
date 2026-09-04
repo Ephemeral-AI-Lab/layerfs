@@ -156,6 +156,88 @@ pub(crate) fn emit(kind: &str, fields: &[(&str, String)]) {
     output.flush().expect("flush benchmark evidence");
 }
 
+fn runtime_observation_window(
+    case: &str,
+    mode: &str,
+    run: impl FnOnce() -> AnyResult<()>,
+) -> AnyResult<()> {
+    let started = Instant::now();
+    let outcome = run();
+    emit("runtime-observation-window", &[
+        ("scenario_id", quote(case)),
+        ("mode", quote(mode)),
+        ("elapsed_ns", elapsed_ns(started).to_string()),
+        ("scope", quote("selected-run dispatch through all reached product, verification and recovery work and local Client/Store drops; excludes process-wide daemon-owner teardown and supervisor cleanup")),
+        ("start_event", quote("selected-run-dispatch")),
+        ("end_event", quote("selected-run-return-before-process-owner-drain")),
+        ("status", quote(if outcome.is_ok() { "success" } else { "error" })),
+    ]);
+    outcome
+}
+
+fn physical_spool_state(client: &Client, id: WorkspaceId, phase: &str) -> AnyResult<()> {
+    // The instrumented getter copies maintained counters. It performs no
+    // correctness oracle, namespace scan, payload read or failure injection.
+    let state = match client.verification_workspace_state(id) {
+        Ok(state) => state,
+        Err(error) => {
+            emit(
+                "workspace-physical-spool-error",
+                &[
+                    ("phase", quote(phase)),
+                    ("error", quote(&error.to_string())),
+                ],
+            );
+            return Err(error.into());
+        }
+    };
+    emit(
+        "workspace-physical-spool",
+        &[
+            ("phase", quote(phase)),
+            (
+                "allocated_bytes",
+                state
+                    .physical_spool_allocated_bytes
+                    .map_or("null".into(), |n| n.to_string()),
+            ),
+            (
+                "peak_bytes",
+                state
+                    .physical_spool_peak_bytes
+                    .map_or("null".into(), |n| n.to_string()),
+            ),
+            (
+                "observation_errors",
+                state.physical_spool_observation_errors.to_string(),
+            ),
+            (
+                "observation_count",
+                state.physical_spool_observation_count.to_string(),
+            ),
+            ("precision", quote("mutation-event-aggregate-allocation")),
+            ("method", quote("verification_workspace_state")),
+            (
+                "scope",
+                quote("passive counters before failure recovery; no independent verification"),
+            ),
+        ],
+    );
+    let current = state
+        .physical_spool_allocated_bytes
+        .ok_or("physical spool current allocation unavailable")?;
+    let peak = state
+        .physical_spool_peak_bytes
+        .ok_or("physical spool peak allocation unavailable")?;
+    if state.physical_spool_observation_errors != 0
+        || current > peak
+        || peak > 2 * 1024 * 1024 * 1024
+    {
+        return Err("physical spool observation/resource gate".into());
+    }
+    Ok(())
+}
+
 fn entry_info(entries: &[Entry]) -> AnyResult<(u64, usize, String)> {
     let mut bytes = 0_u64;
     let mut files = 0;
@@ -934,6 +1016,7 @@ fn run_case(
             let _ = observed(&client, &mut last_operation);
             let _ = store_metrics(&store, "failure", history.len());
             let _ = spool_observation("failure-before-discard");
+            let physical = physical_spool_state(&client, session.id, "failure-before-discard");
             let recovery = client.end_workspace_session(session.id, EndWorkspaceMode::Discard);
             emit(
                 "recovery",
@@ -944,6 +1027,15 @@ fn run_case(
             );
             let _ = observed(&client, &mut last_operation);
             let _ = spool_observation("failure-after-discard-cleanup");
+            if let Err(observation_error) = physical {
+                emit(
+                    "required-observation-failure",
+                    &[
+                        ("observation", quote("physical-spool-before-discard")),
+                        ("error", quote(&observation_error.to_string())),
+                    ],
+                );
+            }
             return Err(error);
         }
     }
@@ -1235,12 +1327,14 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
             Ok(())
         }
         [command, root, prepared, id, container] if command == "workspace-reliability-run" => {
-            super::workspace_reliability::run(
-                Path::new(root),
-                Path::new(prepared),
-                id,
-                ContainerId(container.clone()),
-            )
+            runtime_observation_window(id, "verify", || {
+                super::workspace_reliability::run(
+                    Path::new(root),
+                    Path::new(prepared),
+                    id,
+                    ContainerId(container.clone()),
+                )
+            })
         }
         [command, root] if command == "workspace-qualify-verifiers" => {
             let receipt = super::workspace_verify::qualification(Path::new(root))?;
@@ -1325,33 +1419,35 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         }
         [command, root, input, id, seed, mode, container] if command == "workspace-run" => {
             let case = registry::resolve(id)?;
-            if case.family == "workspace_reliability" {
-                if mode != "verify" || seed != "1" {
-                    return Err("reliability requires verify mode and fixed seed1".into());
+            runtime_observation_window(id, mode, || {
+                if case.family == "workspace_reliability" {
+                    if mode != "verify" || seed != "1" {
+                        return Err("reliability requires verify mode and fixed seed1".into());
+                    }
+                    resource_receipt("before-proof", process_resource_snapshot()?);
+                    let _sampler = HostSampler::start()?;
+                    let outcome = super::workspace_reliability::run(
+                        Path::new(root),
+                        Path::new(input).parent().ok_or("prepared directory")?,
+                        id,
+                        ContainerId(container.clone()),
+                    );
+                    resource_receipt("after-proof", process_resource_snapshot()?);
+                    outcome
+                } else {
+                    if case.kind == "boundaries" && (mode != "verify" || seed != "1") {
+                        return Err("CDC proof requires verify and aggregate seed1 selector".into());
+                    }
+                    run_case(
+                        Path::new(root),
+                        Path::new(input),
+                        &case,
+                        seed.parse()?,
+                        mode,
+                        ContainerId(container.clone()),
+                    )
                 }
-                resource_receipt("before-proof", process_resource_snapshot()?);
-                let _sampler = HostSampler::start()?;
-                let outcome = super::workspace_reliability::run(
-                    Path::new(root),
-                    Path::new(input).parent().ok_or("prepared directory")?,
-                    id,
-                    ContainerId(container.clone()),
-                );
-                resource_receipt("after-proof", process_resource_snapshot()?);
-                outcome
-            } else {
-                if case.kind == "boundaries" && (mode != "verify" || seed != "1") {
-                    return Err("CDC proof requires verify and aggregate seed1 selector".into());
-                }
-                run_case(
-                    Path::new(root),
-                    Path::new(input),
-                    &case,
-                    seed.parse()?,
-                    mode,
-                    ContainerId(container.clone()),
-                )
-            }
+            })
         }
         _ => Err("invalid phase1 host arguments".into()),
     }

@@ -248,6 +248,18 @@ pub(crate) fn sdk_edits(case: &Case, seed: u8, step: usize) -> Result<Vec<SdkEdi
     Ok(vec![super::dedup_branch_history::edit(case, seed, step)?])
 }
 
+struct AcknowledgedWrite<'a, W>(&'a mut W, &'a mut u64);
+impl<W: std::io::Write> std::io::Write for AcknowledgedWrite<'_, W> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        let count = self.0.write(bytes)?;
+        *self.1 += count as u64;
+        Ok(count)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.flush()
+    }
+}
+
 pub(crate) fn apply(
     case: &Case,
     seed: u8,
@@ -284,7 +296,7 @@ pub(crate) fn apply(
             let entries = super::dedup_branch_history::expected(case, seed, step + 1)?;
             let dirs = entries
                 .iter()
-                .filter(|e| matches!(e.kind, EntryKind::Directory))
+                .filter(|e| case.kind == "unrelated" && matches!(e.kind, EntryKind::Directory))
                 .cloned()
                 .collect::<Vec<_>>();
             let files = entries
@@ -308,50 +320,84 @@ pub(crate) fn apply(
     let started = Instant::now();
     let mut sync_ns = 0u128;
     let mut writes = 0u64;
+    let mut attempted = 0u64;
     let mut completed = 0u64;
+    let mut sync_attempts = 0u64;
     let mut syncs = 0u64;
-    for entry in &files {
-        if case.kind == "metadata" {
-            common::set_metadata(Path::new(&entry.path), entry)?;
-            let file = File::open(&entry.path)?;
-            let sync = Instant::now();
-            file.sync_all()?;
-            sync_ns += sync.elapsed().as_nanos();
-            syncs += 1;
-        } else {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create_new(create)
-                .truncate(!create)
-                .open(&entry.path)?;
-            let EntryKind::File(content) = &entry.kind else {
-                return Err("native dedup file kind".into());
-            };
-            content.write_to(&mut file)?;
-            writes = writes
-                .checked_add(content.len())
-                .ok_or("write count overflow")?;
-            common::set_metadata(Path::new(&entry.path), entry)?;
-            let sync = Instant::now();
-            file.sync_all()?;
-            sync_ns += sync.elapsed().as_nanos();
-            syncs += 1;
+    let mut directory_attempts = 0u64;
+    let mut directory_completed = 0u64;
+    let mut phase = "file-open";
+    let mut path_index = 0;
+    let result = (|| -> Result<()> {
+        for (index, entry) in files.iter().enumerate() {
+            path_index = index;
+            attempted += 1;
+            phase = "file-open";
+            if case.kind == "metadata" {
+                use std::os::unix::fs::PermissionsExt;
+                phase = "file-chmod";
+                std::fs::set_permissions(&entry.path, std::fs::Permissions::from_mode(entry.mode))?;
+                phase = "file-open";
+                let file = File::open(&entry.path)?;
+                phase = "file-sync";
+                sync_attempts += 1;
+                let sync = Instant::now();
+                let result = file.sync_all();
+                sync_ns += sync.elapsed().as_nanos();
+                result?;
+                syncs += 1;
+            } else {
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .create_new(create)
+                    .truncate(!create)
+                    .open(&entry.path)?;
+                let EntryKind::File(content) = &entry.kind else {
+                    return Err("native dedup file kind".into());
+                };
+                phase = "file-write";
+                content.write_to(&mut AcknowledgedWrite(&mut file, &mut writes))?;
+                phase = "file-metadata";
+                common::set_metadata(Path::new(&entry.path), entry)?;
+                phase = "file-sync";
+                sync_attempts += 1;
+                let sync = Instant::now();
+                let result = file.sync_all();
+                sync_ns += sync.elapsed().as_nanos();
+                result?;
+                syncs += 1;
+            }
+            completed += 1;
         }
-        completed += 1;
-    }
-    for entry in directories {
-        common::set_metadata(Path::new(&entry.path), &entry)?;
-        let file = File::open(&entry.path)?;
-        let sync = Instant::now();
-        file.sync_all()?;
-        sync_ns += sync.elapsed().as_nanos();
-        syncs += 1;
-    }
+        for (index, entry) in directories.iter().enumerate() {
+            path_index = index;
+            directory_attempts += 1;
+            phase = "directory-metadata";
+            common::set_metadata(Path::new(&entry.path), entry)?;
+            phase = "directory-open";
+            let file = File::open(&entry.path)?;
+            phase = "directory-sync";
+            sync_attempts += 1;
+            let sync = Instant::now();
+            let result = file.sync_all();
+            sync_ns += sync.elapsed().as_nanos();
+            result?;
+            syncs += 1;
+            directory_completed += 1;
+        }
+        Ok(())
+    })();
+    let inner_workload_ns = started.elapsed().as_nanos();
     let mut receipt = Receipt::new();
+    receipt.insert("scenario_id".into(), case.id.clone());
     for (key, value) in [
-        ("inner_workload_ns", started.elapsed().as_nanos()),
+        ("seed", seed as u128),
+        ("benchmark_injection_count", 0),
+        ("benchmark_reopen_count", 0),
+        ("benchmark_verifier_count", 0),
+        ("inner_workload_ns", inner_workload_ns),
         ("sync_ns", sync_ns),
-        ("attempted_operations", files.len() as u128),
+        ("attempted_operations", attempted as u128),
         ("completed_operations", completed as u128),
         ("successful_write_bytes", writes as u128),
         (
@@ -362,9 +408,33 @@ pub(crate) fn apply(
                 completed as u128
             },
         ),
+        ("attempted_sync_count", sync_attempts as u128),
         ("sync_count", syncs as u128),
+        (
+            "attempted_directory_operation_count",
+            directory_attempts as u128,
+        ),
+        (
+            "completed_directory_operation_count",
+            directory_completed as u128,
+        ),
     ] {
         receipt.insert(key.into(), value.to_string());
+    }
+    if let Err(error) = result {
+        for (key, value) in &receipt {
+            eprintln!("partial_{key}={value}");
+        }
+        let entries = if phase.starts_with("directory-") {
+            &directories
+        } else {
+            &files
+        };
+        eprintln!("partial_failure_phase={phase}");
+        if let Some(entry) = entries.get(path_index) {
+            eprintln!("partial_failure_path={}", entry.path);
+        }
+        return Err(error);
     }
     Ok(receipt)
 }
@@ -396,4 +466,29 @@ pub(crate) fn self_check() -> Result<()> {
         return Err("invalid seed accepted".into());
     }
     Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn acknowledged_bytes_survive_a_later_write_failure() {
+    use std::io::{self, Write};
+    struct Short(usize);
+    impl Write for Short {
+        fn write(&mut self, input: &[u8]) -> io::Result<usize> {
+            if self.0 == 2 {
+                return Err(io::Error::other("injected later write failure"));
+            }
+            self.0 += 1;
+            Ok(input.len().min(3))
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut target = Short(0);
+    let mut acknowledged = 0;
+    assert!(AcknowledgedWrite(&mut target, &mut acknowledged)
+        .write_all(b"abcdefgh")
+        .is_err());
+    assert_eq!(acknowledged, 6);
 }

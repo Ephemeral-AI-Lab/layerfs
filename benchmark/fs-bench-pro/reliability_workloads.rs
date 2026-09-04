@@ -17,7 +17,7 @@ fn file(path: &str, content: &Content, exclusive: bool) -> Result<u64> {
     out.sync_all()?;
     Ok(content.len())
 }
-fn normalize(entries: &[Entry]) -> Result<()> {
+fn normalize(entries: &[Entry], times_only: bool) -> Result<()> {
     let mut entries = entries.iter().collect::<Vec<_>>();
     entries.sort_by(|a, b| {
         b.path
@@ -30,7 +30,15 @@ fn normalize(entries: &[Entry]) -> Result<()> {
         if entry.path.starts_with("sentinels/") || entry.path == "links/alias.dat" {
             continue;
         }
-        common::set_metadata(Path::new(&entry.path), entry)?;
+        if times_only {
+            common::set_mtime_nofollow(
+                Path::new(&entry.path),
+                entry.mtime_seconds,
+                entry.mtime_nanoseconds,
+            )?;
+        } else {
+            common::set_metadata(Path::new(&entry.path), entry)?;
+        }
         if !matches!(entry.kind, EntryKind::Symlink(_)) {
             File::open(&entry.path)?.sync_all()?;
         }
@@ -39,7 +47,7 @@ fn normalize(entries: &[Entry]) -> Result<()> {
 }
 fn checkpoint(case: &super::workspace_common::Case, state: &str) -> Result<()> {
     let expected = family::expected(case, state, 1)?;
-    normalize(&expected)?;
+    normalize(&expected, false)?;
     if let Some(entry) = expected.iter().find(|e| {
         e.path
             == if case.kind == "dirty-net-zero" {
@@ -52,6 +60,46 @@ fn checkpoint(case: &super::workspace_common::Case, state: &str) -> Result<()> {
     }
     let receipt = common::verify_native(Path::new("."), &expected)?;
     println!("checkpoint_{state}={receipt:?}");
+    Ok(())
+}
+fn require_handle_bytes(handle: &mut (impl Read + Seek), expected: &[u8]) -> Result<usize> {
+    handle.seek(SeekFrom::Start(0))?;
+    let mut actual = Vec::with_capacity(expected.len() + 1);
+    handle
+        .take(expected.len() as u64 + 1)
+        .read_to_end(&mut actual)?;
+    if actual != expected {
+        return Err("open-unlinked descriptor content differs from independent oracle".into());
+    }
+    Ok(actual.len())
+}
+fn require_modes(paths: &[&str], expected: u32) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    for path in paths {
+        let actual = fs::metadata(path)?.permissions().mode() & 0o7777;
+        if actual != expected {
+            return Err(
+                format!("mode at {path}: expected {expected:o}, observed {actual:o}").into(),
+            );
+        }
+    }
+    println!("observed_modes_{expected:o}={paths:?}");
+    Ok(())
+}
+fn require_mtimes(paths: &[&str], seconds: i64, nanoseconds: i64) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    for path in paths {
+        let metadata = fs::metadata(path)?;
+        if (metadata.mtime(), metadata.mtime_nsec()) != (seconds, nanoseconds) {
+            return Err(format!(
+                "mtime at {path}: expected {seconds}.{nanoseconds:09}, observed {}.{:09}",
+                metadata.mtime(),
+                metadata.mtime_nsec()
+            )
+            .into());
+        }
+    }
+    println!("observed_mtime={seconds}.{nanoseconds:09} paths={paths:?}");
     Ok(())
 }
 fn wait(path: &Path, exists: bool) -> Result<()> {
@@ -240,7 +288,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
                 .open("work/a/writer.dat")?;
             family::data(case, "writer", 4096)?.write_to(&mut f)?;
             f.sync_all()?;
-            normalize(&family::expected(case, "done", 1)?)?;
+            normalize(&family::expected(case, "done", 1)?, false)?;
             File::create(&ready)?;
             wait(&release, true)?;
             drop(f);
@@ -254,7 +302,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
             let _ = fs::remove_file(&ready);
             let _ = fs::remove_file(&release);
             writes += write_tag(case, "work/prefix.dat", "prefix", 4096, true)?;
-            normalize(&family::expected(case, "done", 1)?)?;
+            normalize(&family::expected(case, "done", 1)?, false)?;
             if action == "hold-cancel" || action == "hold-disconnect" {
                 let child = std::process::Command::new("/bin/sh")
                     .arg("-c")
@@ -450,7 +498,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
             operations = 7;
         }
         "open-handles" => {
-            write_tag(case, "work/a/held.dat", "held", 4096, true)?;
+            writes += write_tag(case, "work/a/held.dat", "held", 4096, true)?;
             let mut held = OpenOptions::new()
                 .read(true)
                 .write(true)
@@ -460,14 +508,21 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
             if Path::new("work/a/held.dat").exists() || Path::new("work/a/moved.dat").exists() {
                 return Err("open unlinked name still exists".into());
             }
+            let mut expected = Vec::new();
+            family::data(case, "held", 4096)?.write_to(&mut expected)?;
+            let read_bytes = require_handle_bytes(&mut held, &expected)?;
+            println!("open_unlinked_before_write_bytes={read_bytes}");
+            expected[0] ^= 1;
             held.seek(SeekFrom::Start(0))?;
-            let mut b = [0u8; 1];
-            held.read_exact(&mut b)?;
-            held.seek(SeekFrom::Start(0))?;
-            held.write_all(&[b[0] ^ 1])?;
-            write_tag(case, "work/a/target.dat", "old", 4096, true)?;
+            held.write_all(&expected[..1])?;
+            writes += 1;
+            held.sync_all()?;
+            let read_bytes = require_handle_bytes(&mut held, &expected)?;
+            println!("open_unlinked_after_write_bytes={read_bytes}");
+            drop(held);
+            writes += write_tag(case, "work/a/target.dat", "old", 4096, true)?;
             let mut old = File::open("work/a/target.dat")?;
-            write_tag(case, "work/a/new.dat", "new", 4096, true)?;
+            writes += write_tag(case, "work/a/new.dat", "new", 4096, true)?;
             fs::rename("work/a/new.dat", "work/a/target.dat")?;
             let mut check = Vec::new();
             old.read_to_end(&mut check)?;
@@ -482,37 +537,39 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
                 return Err("new open did not observe replacement inode".into());
             }
             operations = 8;
-            writes = 8193;
         }
         "chmod" => {
             fs::set_permissions(
                 "sentinels/f0000.dat",
                 std::os::unix::fs::PermissionsExt::from_mode(0o600),
             )?;
+            require_modes(&["sentinels/f0000.dat", "links/alias.dat"], 0o600)?;
             fs::set_permissions(
                 "sentinels/f0000.dat",
                 std::os::unix::fs::PermissionsExt::from_mode(0o640),
             )?;
+            require_modes(&["sentinels/f0000.dat", "links/alias.dat"], 0o640)?;
             fs::set_permissions(
                 "sentinels/f0001.dat",
                 std::os::unix::fs::PermissionsExt::from_mode(0o600),
             )?;
+            require_modes(&["sentinels/f0001.dat"], 0o600)?;
             fs::set_permissions(
                 "work/a",
                 std::os::unix::fs::PermissionsExt::from_mode(0o700),
             )?;
+            require_modes(&["work/a"], 0o700)?;
             operations = 4;
         }
         "mtime" => {
-            for p in ["sentinels/f0000.dat", "work/a"] {
-                let mut e = Entry::file(p, Content::Literal(vec![]));
-                if p == "work/a" {
-                    e = Entry::directory(p);
-                }
-                e.mtime_seconds = 1700000013;
-                e.mtime_nanoseconds = 123456789;
-                common::set_metadata(Path::new(p), &e)?;
-            }
+            common::set_mtime_nofollow(Path::new("sentinels/f0000.dat"), 1700000013, 123456789)?;
+            require_mtimes(
+                &["sentinels/f0000.dat", "links/alias.dat"],
+                1700000013,
+                123456789,
+            )?;
+            common::set_mtime_nofollow(Path::new("work/a"), 1700000013, 123456789)?;
+            require_mtimes(&["work/a"], 1700000013, 123456789)?;
             operations = 2;
         }
         "xattr" => {
@@ -660,6 +717,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
             | "hold-cancel"
             | "hold-disconnect"
             | "xattr"
+            | "mtime"
             | "read-corrupt"
             | "fail-write"
     ) {
@@ -671,7 +729,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
             "done"
         };
         let expected = family::expected(case, state, final_ordinal)?;
-        normalize(&expected)?;
+        normalize(&expected, action == "chmod")?;
         if matches!(case.kind, "hardlink-alias" | "dirty-net-zero") {
             let target = if case.kind == "hardlink-alias" {
                 "sentinels/f0000.dat"
@@ -717,4 +775,17 @@ pub(crate) fn dispatch(args: &[String]) -> Result<()> {
     let receipt = operations(&case, action, ordinal.parse()?)?;
     emit(receipt);
     Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn open_handle_oracle_rejects_wrong_or_extra_bytes() {
+    use std::io::Cursor;
+    assert_eq!(
+        require_handle_bytes(&mut Cursor::new(b"abcd"), b"abcd").unwrap(),
+        4
+    );
+    assert!(require_handle_bytes(&mut Cursor::new(b"abcd"), b"abxd").is_err());
+    assert!(require_handle_bytes(&mut Cursor::new(b"abcde"), b"abcd").is_err());
+    assert!(require_handle_bytes(&mut Cursor::new(b"abc"), b"abcd").is_err());
 }

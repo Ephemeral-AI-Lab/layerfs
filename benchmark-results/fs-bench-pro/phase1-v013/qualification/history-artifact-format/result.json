@@ -1,0 +1,38 @@
+{
+  "status": "pass",
+  "scope": "Lightweight synthetic TSV serialization/codec model only; no LayerFS invocation, build, fixture preparation or benchmark. Does not claim final500-history campaign size fits the unchanged cap.",
+  "command": [
+    "/usr/bin/gzip",
+    "-n",
+    "-6",
+    "-c"
+  ],
+  "gzip_binary_sha256": "7bd218bc6b12fced475163901547a796736f72f99533cbec60eea150ed21afa3",
+  "source_sha256": "60c3c3d59dc3c3510e1007044f584fb589d15e181644b6e865b60324a1a4a188",
+  "artifacts": [
+    {
+      "name": "independent-manifest.tsv.gz",
+      "uncompressed_bytes": 22867,
+      "compressed_bytes": 8667,
+      "uncompressed_sha256": "077b342e22bdc7a2e666775a51f79dee925909ea83bbf233bf9595ce9bb37187",
+      "compressed_sha256": "d0be75f3f195210e39f6605ec768fb48429b36ad73c6b3cf03dd4cebb3f77f63",
+      "roundtrip": "pass"
+    },
+    {
+      "name": "file-roots.tsv.gz",
+      "uncompressed_bytes": 17418,
+      "compressed_bytes": 8498,
+      "uncompressed_sha256": "ecc12836e9833615a0799a8ef879165b03ec8d75537c45b782e2200a52c35cd9",
+      "compressed_sha256": "464d67e13f742af7eb3395d5abfb886a2882d56a6f3923ad40439273c24c1e61",
+      "roundtrip": "pass"
+    },
+    {
+      "name": "payload-extents.tsv.gz",
+      "uncompressed_bytes": 59468,
+      "compressed_bytes": 25744,
+      "uncompressed_sha256": "dbd3063124ec3f0c33b9ec56eb6fc44dc3285801b0822486527394f2aee83e45",
+      "compressed_sha256": "c258165da2d3ac44083210beffe0754610c04e026fc15808197adea7ae6519e3",
+      "roundtrip": "pass"
+    }
+  ]
+}

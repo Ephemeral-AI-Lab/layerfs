@@ -10,6 +10,39 @@ use layerfs_content::{CanonicalPath, ObjectId};
 use layerfs_layerstack_store::{CoreReader, ObjectSource};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
+use std::process::Stdio;
+
+fn write_gzip(path: &Path, write: impl FnOnce(&mut dyn Write) -> AnyResult<()>) -> AnyResult<()> {
+    let output = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
+    let mut child = Command::new("/usr/bin/gzip")
+        .args(["-n", "-6", "-c"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::from(output))
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let written = {
+        let mut input = std::io::BufWriter::new(child.stdin.take().ok_or("gzip input pipe")?);
+        write(&mut input).and_then(|()| {
+            input.flush()?;
+            Ok(())
+        })
+    };
+    if written.is_err() {
+        let _ = child.kill();
+    }
+    let finished = child.wait_with_output()?;
+    if !finished.stderr.is_empty() {
+        std::fs::write(path.with_extension("gz.stderr.txt"), &finished.stderr)?;
+    }
+    written?;
+    if !finished.status.success() {
+        return Err(format!("canonical artifact gzip failed: {}", finished.status).into());
+    }
+    Ok(())
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct Extent {
@@ -32,44 +65,56 @@ pub(crate) fn verify(
     evidence: &Path,
 ) -> AnyResult<SnapshotEvidence> {
     let pinned = store.pin_branch(branch)?;
-    let result = verify_root(&pinned.reader, pinned.root, entries)?;
+    let mut result = verify_root(&pinned.reader, pinned.root, entries)?;
     let evidence = evidence.join("canonical-verification");
     if evidence.exists() {
         return Err("canonical verifier evidence already exists".into());
     }
     std::fs::create_dir_all(&evidence)?;
-    let mut rows = std::fs::File::create(evidence.join("payload-extents.tsv"))?;
-    writeln!(
-        rows,
-        "path\tordinal\tpayload_id\tsource_offset\tlogical_length\tpayload_length"
-    )?;
-    for (path, extents) in &result.extents {
-        for (index, extent) in extents.iter().enumerate() {
-            writeln!(
-                rows,
-                "{path}\t{index}\t{}\t{}\t{}\t{}",
-                extent.id, extent.source_offset, extent.len, extent.payload_len
-            )?;
+    write_gzip(&evidence.join("payload-extents.tsv.gz"), |rows| {
+        writeln!(
+            rows,
+            "path\tordinal\tpayload_id\tsource_offset\tlogical_length\tpayload_length"
+        )?;
+        for (path, extents) in &result.extents {
+            for (index, extent) in extents.iter().enumerate() {
+                writeln!(
+                    rows,
+                    "{path}\t{index}\t{}\t{}\t{}\t{}",
+                    extent.id, extent.source_offset, extent.len, extent.payload_len
+                )?;
+            }
         }
-    }
-    let mut roots = std::fs::File::create(evidence.join("file-roots.tsv"))?;
-    writeln!(roots, "path\tcontent_root")?;
-    for (path, root) in &result.file_roots {
-        writeln!(roots, "{path}\t{root}")?;
-    }
-    std::fs::write(
-        evidence.join(
-            if entries
-                .iter()
-                .any(|entry| matches!(entry.kind, EntryKind::File(Content::Digest { .. })))
-            {
-                "persistence-bound-manifest.tsv"
-            } else {
-                "independent-manifest.tsv"
-            },
-        ),
-        common::manifest(entries)?,
-    )?;
+        Ok(())
+    })?;
+    write_gzip(&evidence.join("file-roots.tsv.gz"), |roots| {
+        writeln!(roots, "path\tcontent_root")?;
+        for (path, root) in &result.file_roots {
+            writeln!(roots, "{path}\t{root}")?;
+        }
+        Ok(())
+    })?;
+    let manifest_path = evidence.join(
+        if entries
+            .iter()
+            .any(|entry| matches!(entry.kind, EntryKind::File(Content::Digest { .. })))
+        {
+            "persistence-bound-manifest.tsv.gz"
+        } else {
+            "independent-manifest.tsv.gz"
+        },
+    );
+    write_gzip(&manifest_path, |writer| {
+        writer.write_all(common::manifest(entries)?.as_bytes())?;
+        Ok(())
+    })?;
+    result
+        .receipt
+        .insert("artifact_encoding".into(), "gzip-v1".into());
+    result.receipt.insert(
+        "artifact_compressor".into(),
+        "/usr/bin/gzip -n -6 -c".into(),
+    );
     let mut receipt = std::fs::File::create(evidence.join("canonical-receipt.txt"))?;
     for (key, value) in &result.receipt {
         writeln!(receipt, "{key}={value}")?;

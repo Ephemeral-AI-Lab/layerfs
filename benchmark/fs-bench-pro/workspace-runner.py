@@ -330,6 +330,52 @@ def ledger_action(previous, reason):
     return "reuse-recorded-outcome" if successful(previous) else "retained-failure-needs-investigation"
 
 
+def slot_key(row):
+    return ":".join(str(row[key]) for key in ("harness_identity", "product_identity", "image_id", "environment_identity", "scenario_id", "seed", "mode"))
+
+
+def reconcile_attempts(campaign, ledger):
+    """Recover sealed outcomes, never infer success from partial output."""
+    known = {row["evidence_path"] for row in ledger.values()}
+    invalidations = campaign / "invalidations.jsonl"
+    if invalidations.exists():
+        known.update(json.loads(line)["previous_evidence"] for line in invalidations.read_text().splitlines() if line)
+    recovered, incomplete = [], []
+    for attempt in sorted((campaign / "attempts").glob("*")):
+        if not attempt.is_dir() or str(attempt) in known:
+            continue
+        try:
+            row = read_json(attempt / "outcome.json")
+            custody.verify_manifest(attempt)
+            if row.get("evidence_path") != str(attempt):
+                raise ValueError("orphan path binding mismatch")
+            key = slot_key(row)
+        except (OSError, ValueError, KeyError, AssertionError) as error:
+            incomplete.append({"evidence_path": str(attempt), "status": "interrupted-or-invalid; never reused", "reason": str(error)})
+            continue
+        if key in ledger:
+            raise ValueError(f"multiple sealed attempts for slot {key}; explicit investigation required")
+        ledger[key] = row
+        recovered.append(str(attempt))
+    if recovered or incomplete:
+        path = campaign / "recovery"; path.mkdir(exist_ok=True)
+        atomic_json(path / (uuid.uuid4().hex + ".json"), {"recovered_sealed_attempts": recovered, "retained_incomplete_attempts": incomplete})
+    return recovered
+
+
+@contextlib.contextmanager
+def invocation_receipt(path, value, started):
+    atomic_json(path, value)
+    try:
+        yield value
+    except BaseException as error:
+        value.update(status="interrupted" if isinstance(error, KeyboardInterrupt) else "failed-invocation", error=f"{type(error).__name__}: {error}")
+        raise
+    finally:
+        value["invocation_wall_ns"] = time.monotonic_ns() - started
+        atomic_json(path, value)
+
+
 def schedule(case, args):
     if case.get("proof_only"):
         if args.mode != "verify": return ()
@@ -366,6 +412,34 @@ def self_check():
     print("runner_self_check=pass")
 
 
+def recovery_self_check():
+    from unittest.mock import patch
+    with tempfile.TemporaryDirectory(prefix="layerfs-runner-recovery-") as directory:
+        root=Path(directory).resolve();attempt=root/"attempts"/"sealed";attempt.mkdir(parents=True)
+        row=dict(zip(("harness_identity","product_identity","image_id","environment_identity","scenario_id","seed","mode"), ("h","p","i","e","case",1,"performance")), evidence_path=str(attempt), coverage_status="executed", product_status="fail")
+        custody.write_json(attempt/"outcome.json",row);custody.seal(attempt)
+        partial=root/"attempts"/"partial";partial.mkdir();(partial/"raw.jsonl").write_text('{"kind":"sample-start"}\n')
+        ledger={};assert reconcile_attempts(root,ledger)==[str(attempt)]
+        assert ledger[slot_key(row)]==row and ledger_action(row,None)=="retained-failure-needs-investigation"
+        assert reconcile_attempts(root,ledger)==[] and partial.exists()
+        receipt=root/"invocation.json";value={"status":"running"}
+        try:
+            with invocation_receipt(receipt,value,time.monotonic_ns()):raise KeyboardInterrupt()
+        except KeyboardInterrupt:pass
+        assert read_json(receipt)["status"]=="interrupted" and value["invocation_wall_ns"]>=0
+        campaign=root/"locked";campaign.mkdir()
+        registry={"scenario_id":"case","family_id":"family","tier":1,"operation":"op"}
+        with (campaign/"measurement.lock").open("a") as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            argv=["runner","--assets",str(root),"--output",str(campaign),"--case","case","--seed","1"]
+            with patch.object(sys,"argv",argv), patch(__name__+".source_validation",return_value={}), patch(__name__+".command",return_value=json.dumps(registry)):
+                try:main()
+                except BlockingIOError:pass
+                else:raise AssertionError("competing measurement acquired lock")
+            assert not (campaign/"invocations").exists()
+    print("runner_recovery_self_check=pass")
+
+
 def main():
     invocation_started=time.monotonic_ns()
     p=argparse.ArgumentParser(description=__doc__)
@@ -374,10 +448,11 @@ def main():
     p.add_argument("--mode",choices=("performance","verify"),default="performance")
     p.add_argument("--all",action="store_true");p.add_argument("--extended",action="store_true")
     p.add_argument("--invalidate-reason",help="Explicitly recollect selected prior slots, preserving their raw outcomes and reason")
-    p.add_argument("--self-check",action="store_true");p.add_argument("--build")
+    p.add_argument("--self-check",action="store_true");p.add_argument("--recovery-self-check",action="store_true");p.add_argument("--build")
     p.add_argument("--assets",default=os.environ.get("LAYERFS_V013_ASSETS"))
     p.add_argument("--output",default=str(REPO / "benchmark-results/fs-bench-pro/phase1-v013"));p.add_argument("--cache",default=str(REPO / "target/phase1-prepared"))
     args=p.parse_args()
+    if args.recovery_self_check: recovery_self_check();return 0
     if args.self_check: self_check();return 0
     if args.build: build_assets(args);return 0
     if not args.assets:p.error("--assets must select a sealed build")
@@ -404,36 +479,46 @@ def main():
         planned=[(selected[index],rep) for rep,order in enumerate(rotations,1) for index in order]
     if any(seed is None for _,seed in planned):p.error("selected row requires its matching seed or repetition selector")
     campaign=Path(args.output).resolve();campaign.mkdir(parents=True,exist_ok=True)
-    invocations=campaign/"invocations";invocations.mkdir(exist_ok=True)
-    invocation_path=invocations/(uuid.uuid4().hex+".json")
-    invocation={"source_revision":assets["revision"],"image_id":assets["image_id"],"source_validation_ns":validation_ns,"registry_query_ns":registry_ns,"planned_slots":[[case["scenario_id"],seed,args.mode] for case,seed in planned],"status":"running","invocation_wall_ns":None}
-    atomic_json(invocation_path,invocation)
     failures=False
     with (campaign/"measurement.lock").open("a") as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        ledger_path=campaign/"slots.json";ledger=read_json(ledger_path) if ledger_path.exists() else {};acquisitions={}
-        for case,seed in planned:
-            key=f"{assets['harness_seal']}:{assets['product_seal']}:{assets['image_id']}:{assets['environment_identity']}:{case['scenario_id']}:{seed}:{args.mode}"
-            previous=ledger.get(key)
-            action=ledger_action(previous,args.invalidate_reason)
-            if action in {"reuse-recorded-outcome","retained-failure-needs-investigation"}:
-                print(json.dumps({"action":action,"case":case["scenario_id"],"seed":seed,"evidence":previous["evidence_path"]}),flush=True)
-                failures |= not successful(previous)
-                continue
-            if previous:
-                change={"slot":key,"previous_evidence":previous["evidence_path"],"reason":args.invalidate_reason,"at_unix_ns":time.time_ns()}
-                with (campaign/"invalidations.jsonl").open("a") as stream:stream.write(json.dumps(change,sort_keys=True)+"\n")
-            result=sample(case,seed,args,assets,campaign,acquisitions)
-            if previous:result["previous_evidence_path"]=previous["evidence_path"]
-            ledger[key]=result;atomic_json(ledger_path,ledger)
-            print(json.dumps(result,sort_keys=True),flush=True)
-            failures |= not successful(result)
-            if result.get("interrupted"):break
-    invocation.update(status="failed-outcomes" if failures else "pass",invocation_wall_ns=time.monotonic_ns()-invocation_started)
-    atomic_json(invocation_path,invocation)
+        invocations=campaign/"invocations";invocations.mkdir(exist_ok=True)
+        # Exclusive ownership proves previous running records have no current
+        # coordinator. Do not invent command duration after a hard interruption.
+        for prior in invocations.glob("*.json"):
+            record=read_json(prior)
+            if record.get("status")=="running":
+                record.update(status="interrupted-unmeasured-wall", recovery_reason="exclusive campaign lock acquired after prior coordinator ended")
+                atomic_json(prior,record)
+        invocation_path=invocations/(uuid.uuid4().hex+".json")
+        invocation={"source_revision":assets["revision"],"image_id":assets["image_id"],"source_validation_ns":validation_ns,"registry_query_ns":registry_ns,"planned_slots":[[case["scenario_id"],seed,args.mode] for case,seed in planned],"status":"running","invocation_wall_ns":None}
+        with invocation_receipt(invocation_path,invocation,invocation_started):
+            ledger_path=campaign/"slots.json";ledger=read_json(ledger_path) if ledger_path.exists() else {};acquisitions={}
+            if reconcile_attempts(campaign,ledger):atomic_json(ledger_path,ledger)
+            for case,seed in planned:
+                key=slot_key({"harness_identity":assets["harness_seal"],"product_identity":assets["product_seal"],"image_id":assets["image_id"],"environment_identity":assets["environment_identity"],"scenario_id":case["scenario_id"],"seed":seed,"mode":args.mode})
+                previous=ledger.get(key)
+                action=ledger_action(previous,args.invalidate_reason)
+                if action in {"reuse-recorded-outcome","retained-failure-needs-investigation"}:
+                    print(json.dumps({"action":action,"case":case["scenario_id"],"seed":seed,"evidence":previous["evidence_path"]}),flush=True)
+                    failures |= not successful(previous)
+                    continue
+                if previous:
+                    change={"slot":key,"previous_evidence":previous["evidence_path"],"reason":args.invalidate_reason,"at_unix_ns":time.time_ns()}
+                    with (campaign/"invalidations.jsonl").open("a") as stream:stream.write(json.dumps(change,sort_keys=True)+"\n")
+                result=sample(case,seed,args,assets,campaign,acquisitions)
+                if previous:result["previous_evidence_path"]=previous["evidence_path"]
+                ledger[key]=result;atomic_json(ledger_path,ledger)
+                print(json.dumps(result,sort_keys=True),flush=True)
+                failures |= not successful(result)
+                if result.get("interrupted"):break
+            invocation["status"]="failed-outcomes" if failures else "pass"
     print(json.dumps({"invocation_receipt":str(invocation_path),"invocation_wall_ns":invocation["invocation_wall_ns"],"status":invocation["status"]}),flush=True)
     return 1 if failures else 0
 
 
 if __name__ == "__main__":
+    def terminate(signum, frame):
+        raise KeyboardInterrupt(f"received signal {signum}")
+    signal.signal(signal.SIGTERM, terminate)
     sys.exit(main())

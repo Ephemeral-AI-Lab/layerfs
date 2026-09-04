@@ -3,33 +3,22 @@
 FROM rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 AS build
 
 ARG TARGETARCH
-ARG LAYERFS_SOURCE_COMMIT
-ARG LAYERFS_SOURCE_TREE
-ARG LAYERFS_SOURCE_DIRTY
-ARG LAYERFS_SOURCE_SEAL
-ARG LAYERFS_PRODUCT_SEAL
-ARG WORKLOAD_SOURCE_SHA256
 
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY tools ./tools
-COPY benchmark/fs-bench-pro ./benchmark/fs-bench-pro
+COPY benchmark/fs-bench-pro/Cargo.toml ./benchmark/fs-bench-pro/Cargo.toml
+COPY benchmark/fs-bench-pro/src ./benchmark/fs-bench-pro/src
+COPY benchmark/fs-bench-pro/*.rs ./benchmark/fs-bench-pro/
+COPY benchmark/fs-bench-pro/families ./benchmark/fs-bench-pro/families
 COPY benchmark/fs-bench-pro/workload.rs /workload/workload.rs
 COPY benchmark/fs-bench-pro/families /workload/families
 COPY benchmark/fs-bench-pro/*.rs /workload/
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    test "${#LAYERFS_SOURCE_COMMIT}" -eq 40 \
- && test "${#LAYERFS_SOURCE_TREE}" -eq 40 \
- && test "${#LAYERFS_SOURCE_SEAL}" -eq 64 \
- && test "${#LAYERFS_PRODUCT_SEAL}" -eq 64 \
- && test "${#WORKLOAD_SOURCE_SHA256}" -eq 64 \
- && echo "$WORKLOAD_SOURCE_SHA256  /workload/workload.rs" | sha256sum -c - \
- && case "$LAYERFS_SOURCE_DIRTY" in true|false) ;; *) exit 1 ;; esac \
- && case "$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE$LAYERFS_SOURCE_SEAL" in *[!0-9a-f]*) exit 1 ;; esac \
- && case "$TARGETARCH" in \
+    case "$TARGETARCH" in \
       arm64) target=aarch64-unknown-linux-gnu ;; \
       amd64) target=x86_64-unknown-linux-gnu ;; \
       *) exit 1 ;; \
@@ -42,14 +31,25 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
  && cp "target/$target/release/layerfs-daemon" /layerfs-daemon \
  && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
 
-FROM rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
-
 ARG LAYERFS_SOURCE_COMMIT
 ARG LAYERFS_SOURCE_TREE
 ARG LAYERFS_SOURCE_DIRTY
 ARG LAYERFS_SOURCE_SEAL
 ARG LAYERFS_PRODUCT_SEAL
 ARG WORKLOAD_SOURCE_SHA256
+
+RUN test "${#LAYERFS_SOURCE_COMMIT}" -eq 40 \
+ && test "${#LAYERFS_SOURCE_TREE}" -eq 40 \
+ && test "${#LAYERFS_SOURCE_SEAL}" -eq 64 \
+ && test "${#LAYERFS_PRODUCT_SEAL}" -eq 64 \
+ && test "${#WORKLOAD_SOURCE_SHA256}" -eq 64 \
+ && echo "$WORKLOAD_SOURCE_SHA256  /workload/workload.rs" | sha256sum -c - \
+ && case "$LAYERFS_SOURCE_DIRTY" in true|false) ;; *) exit 1 ;; esac \
+ && case "$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE$LAYERFS_SOURCE_SEAL" in *[!0-9a-f]*) exit 1 ;; esac
+
+
+FROM rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+
 
 RUN mkdir -p /run/layerfs /workspace /var/tmp/layerfs-owned \
  && chmod 0700 /run/layerfs
@@ -62,6 +62,13 @@ RUN chmod 0555 /usr/local/bin/fs-benchmark-workload /usr/local/bin/layerfs-daemo
                   /usr/local/bin/layerfs-fuse /usr/local/bin/layerfs-daemon-entrypoint \
  && /usr/local/bin/fs-benchmark-workload self-check \
  && test -x /usr/local/bin/layerfs-daemon
+
+ARG LAYERFS_SOURCE_COMMIT
+ARG LAYERFS_SOURCE_TREE
+ARG LAYERFS_SOURCE_DIRTY
+ARG LAYERFS_SOURCE_SEAL
+ARG LAYERFS_PRODUCT_SEAL
+ARG WORKLOAD_SOURCE_SHA256
 
 LABEL org.opencontainers.image.source="https://github.com/Ephemeral-AI-Lab/layerfs" \
       org.opencontainers.image.revision="$LAYERFS_SOURCE_COMMIT" \

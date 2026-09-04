@@ -1,0 +1,170 @@
+# Shared infrastructure qualification for issue #22
+
+This is the proposed shared-infrastructure closure evidence for
+[#22](https://github.com/Ephemeral-AI-Lab/layerfs/issues/22), using two immutable
+selected qualification anchors. It is not completion of any full family,
+independent final verification campaign, #35, or `PHASE1_TERMINAL_PASS`.
+The coordinator publishes the selected evidence and resolves the report/recovery
+audit gates before closing #22. Acceptance remains pending those corrections. Issue #21
+remains open; subsequent family outcomes retain their actual statuses.
+
+## Frozen source and scope
+
+The original product baseline is
+[`1e81e9b8`](https://github.com/Ephemeral-AI-Lab/layerfs/tree/1e81e9b8cf871324341c221a51b0a0239c580da9).
+The specifications were published before implementation at
+[`de27a847`](https://github.com/Ephemeral-AI-Lab/layerfs/tree/de27a847489ffec56429673d712503ae8ea7e8ec/docs/roadmap/0.1/0.1.3),
+with the separately frozen capped replacements at
+[`8913cf8d`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/8913cf8d/docs/roadmap/0.1/0.1.3/capped-inherited-replacements.md)
+and final shared execution supplement at
+[`837da2f6`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/837da2f6b6167b225958bb421572e23a38b94e50/docs/roadmap/0.1/0.1.3/execution-contract.md).
+The [published issue update](https://github.com/Ephemeral-AI-Lab/layerfs/issues/22#issuecomment-5533915339)
+records the initial freeze and unchanged Phase 1 boundary.
+
+Both selected anchors use the same
+[`4c207c70` implementation](https://github.com/Ephemeral-AI-Lab/layerfs/tree/4c207c70f3282c316d5ab18d832504085835eda3/benchmark/fs-bench-pro)
+and [sealed build](../../../../benchmark-results/fs-bench-pro/phase1-v013/assets-4c207c70/evidence/build.json):
+
+| Identity | Value |
+| --- | --- |
+| Host binary SHA-256 | `3bc327d5ac14be15b2c585b055f0f148fbad9ecc111592e219a5fb6c560e9adc` |
+| Instrumented product seal | `810655a13d8621b2e04efeda5747e54929e4d4717e8d5d82dcddcf75f905b727` |
+| Measured harness seal | `1fe49d740cc23421b8c8a1ae5e56cc7c2ace2ab0a5b03dc950ae47ae5f9489a9` |
+| Runtime image | `sha256:781f4513dcba84f51bb5b7fda4704e7e5dfe52c8aabf777b310778afba41935f` |
+| Runtime environment identity | `c4b2ab833a6ee08b4263044053eeb97124b44442ac009aca0d9c1e5635afb460` |
+
+This is an explicitly instrumented baseline, not the released binary relabeled.
+The changes add passive observations and disabled-by-default verifier fault
+activation; they do not optimize measured product algorithms or storage.
+The original SDK definition modules and singular timed SDK helper retain their
+released meanings. The new families use the existing binary, workload helper,
+Store, authenticated daemon/FUSE route, custody/cache implementation and thin
+runners. The [reuse map](infrastructure-reuse.md) identifies those components.
+
+## First acquisition and cache-hit selected command
+
+These are the first two prescribed seeds of `payload-create-1m`, each run once.
+Both begin from the same qualified **empty** input Store; the 1 MiB payload is
+created inside the measured real-FUSE workload. Input reuse does not substitute
+for measured creation. Their raw product outcomes and current evidence
+validation pass. Matching independent family verification is still required
+before they support an eligible performance claim.
+
+| Metric, exact nanoseconds | Seed 1: first acquisition | Seed 2: cache hit |
+| --- | ---: | ---: |
+| Full CLI invocation wall | 5021133250 | 1148118917 |
+| CLI source validation | 3822177042 | 315576750 |
+| CLI registry query | 236450000 | 6472833 |
+| Sample command wall, preparation through cleanup | 945600083 | 811800000 |
+| Sample preparation, including runtime readiness | 502346791 | 430890000 |
+| Cache acquisition | 39801916 | 6033208 |
+| Cache generation/build | 20068416 | 0 |
+| Cache validation | 15564500 | 2733667 |
+| Independent Store clone | 7238125 | 6738541 |
+| Runtime preparation | 371242833 | 341735458 |
+| Supervised worker wall | 158863958 | 112033917 |
+| Host orchestration envelope | 86102625 | 57185958 |
+| Sum of pure named public-call intervals | 29780042 | 30083334 |
+| Inner ordinary workload | 8167250 | 6507833 |
+| Sample cleanup | 283533500 | 268051333 |
+
+Cache and runtime rows are components of preparation, not additional elapsed
+intervals to add again. Likewise pure calls are inside host orchestration, which
+is inside worker/sample/CLI wall. The first CLI command took **5.021133250 s**,
+slightly above the aspirational 1–5-second warm development goal. The cache-hit
+CLI took **1.148118917 s**; its sample alone took **0.811800000 s**. Neither
+number is reported as the duration of a whole family or an exhaustive verifier.
+
+The [build command receipt](../../../../benchmark-results/fs-bench-pro/phase1-v013/assets-4c207c70/evidence/commands.json)
+separately records 0.103128667 s for the reusable host-build command,
+43.638556125 s for image build, and 0.449223333 s for image binary identity
+capture. Those commands used existing compiler/Docker caches and are excluded
+from the selected CLI walls; they are not a clean-from-source build benchmark.
+
+Both samples cloned 917504 bytes using APFS copy-on-write, rejected hard links,
+and verified the clone against pristine Store SHA-256
+`fac603c4bf03c288b8c60e63624ade3f311480359fc78d75e960491e5005714f`.
+They share cache key
+`8c33ebab4ccbbd973f3145fbd001acc1f90aabf244775c244d40272e0ed0f737`.
+No live Workspace, reader cache or post-operation Store was reused.
+
+Evidence:
+
+- [Seed 1 outcome](../../../../benchmark-results/fs-bench-pro/phase1-v013/attempts/payload-create-1m-s1-performance-5a93ab533372/outcome.json), [raw receipts](../../../../benchmark-results/fs-bench-pro/phase1-v013/attempts/payload-create-1m-s1-performance-5a93ab533372/raw.jsonl), [CLI invocation](../../../../benchmark-results/fs-bench-pro/phase1-v013/invocations/bff411fad5c4455cb782db533100be8a.json).
+- [Seed 2 outcome](../../../../benchmark-results/fs-bench-pro/phase1-v013/attempts/payload-create-1m-s2-performance-7352299acb92/outcome.json), [raw receipts](../../../../benchmark-results/fs-bench-pro/phase1-v013/attempts/payload-create-1m-s2-performance-7352299acb92/raw.jsonl), [CLI invocation](../../../../benchmark-results/fs-bench-pro/phase1-v013/invocations/093fee02cfaf4f5593fdb0138f4011e8.json).
+- Each attempt retains its source/environment, input/master manifest, independent
+  clone receipt, container observations, compressed cgroup samples, stderr and
+  complete evidence manifest. The two attempt-manifest hashes are respectively
+  `f44bf07db49b39c728cdb71c276b78fad09e6418fa8c4d9fe4b50e050afc9304`
+  and `8d8663cdf8f9368bacdb6dc9ae3b3484cda4d0c2cf5fdca190c9bffa6782a143`.
+
+## Qualification and acceptance checklist
+
+| #22 acceptance criterion | Evidence and precise disposition |
+| --- | --- |
+| Committed specifications and baseline available to family owners | **Met.** Exact source links above; all twelve family specifications and common rules precede implementation. |
+| Existing SDK semantics retained; one selected case without all-tier preparation | **Met.** Released definitions/helper preserved; selected anchors perform one Create, public Exec, Commit, query and End, with one ordinary 1 MiB creation and no performance verifier, reopen or injection. Only the compatible empty input Store was acquired. |
+| Cache hit/miss, invalidation, interruption/corruption, concurrent publication and sample isolation | **Met.** [Cache check output](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/cache-check.stdout.txt) records the existing shared-publisher regression set plus cross-family reuse, directory clone isolation and directory metadata corruption checks. Actual miss/hit anchors bind the same master to independent clones. |
+| First-use and warm-prepared walls separately measured; budgets explicit | **Met.** Exact table and immutable invocation/sample receipts above; build/setup costs remain separate. The execution contract fixes resource and phase ceilings; the aspirational first-CLI miss remains visible. |
+| Registry, counts, byte envelopes, routes, timing purity and cleanup checks | **Met for shared infrastructure.** [Static registry](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/static-registry.jsonl), [static additions](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/static-additions.jsonl), selected runtime receipts and fail-closed report validation. The additions receipt binds [its binary/source](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/static-additions-source.json); its binary SHA equals the final selected binary. The family definition and common fixture/verifier files are unchanged between that source and `4c207c70`. |
+| No product performance/storage optimization or cached measured state | **Met.** Source scope is the frozen baseline plus passive telemetry/verifier seams; measured creation still writes its bytes. Actual output states are not published into prepared caches. |
+
+Additional retained qualifications are scoped narrowly:
+
+- [Native/canonical verifier qualification](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/verifier-route-1.jsonl)
+  checks a 4099-byte file, hard-link alias, symlink and empty directory. It
+  rejects extra paths, changed bytes, broken aliasing, changed symlink target,
+  nanosecond timestamp mismatch and mode mismatch.
+- [Digest-custody qualification](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/digest-route-1.jsonl)
+  checks verification-only descriptors, strict manifest parsing and native/
+  canonical digest mismatches. It does not turn candidate bytes into independent
+  semantic expectations. Early verifier runs remain diagnostic receipts with
+  their original context, not relabeled final-source family proofs.
+- [Physical spool regression](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/physical-spool/result.json)
+  records one passing source-stable test of actual native allocation across
+  failed short append, reclaim and discard. The corresponding before/source
+  receipt and manifest are retained. Actual selected Commit diagnostics also
+  report `Some` physical allocation/peak values with zero observation errors.
+- [Workspace and Store fault-controller qualification](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/fault-controllers/context.json)
+  records one passing test per controller and unchanged controller sources.
+  These qualify disabled feature-gated controllers, not execution of the 28
+  reliability subcases or any live fault benchmark.
+- [Capped input identities](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/capped-inputs/identity-receipt.json)
+  bind the two bounded prefixes, the existing full-size checkpoint and the five
+  versioned plans. Their 25 samples/five verifiers remain a separate campaign.
+
+The selected observations are causal samples, not exact continuous per-phase
+memory/category peaks. Seed 1 retained 12 cgroup observations over 120840875 ns
+with an 11144125 ns maximum observed gap, bracketing its 86102625 ns host
+orchestration scope. Host observer drain and supervisor polling are separate.
+Both samples have zero swap/OOM, matching resource caps, real FUSE counters,
+normal daemon exit 0 at worker process termination after Client cleanup, and
+zero owned files at final cleanup. The process-scoped daemon owner survives
+individual Client drops and supports subsequent reopened Clients.
+Physical spool peaks are mutation-boundary native allocations, not inferred
+from logical spool length or sampled boundary maxima.
+
+## Preserved failures and publication boundary
+
+The failed [`71247071` Linux image build](../../../../benchmark-results/fs-bench-pro/phase1-v013/assets-71247071/evidence/image-build.stderr.txt)
+remains a failed harness-build attempt. Its retained command returned exit 1;
+the Linux xattr ABI declaration was corrected before selected collection.
+The early [native Git oracle failure](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/ordinary/native-git-check-1.tool-transcript.txt)
+also remains failed. Its [qualification history](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/ordinary/qualification-transcripts.json)
+records the XOR descriptor defect, focused corrections/rechecks and missing
+historical pre-run source seals. Those diagnostic passes are not promoted to
+exact-source admission evidence.
+
+The [initial selected review](../../../../benchmark-results/fs-bench-pro/phase1-v013/qualification/selected-review-initial.json)
+retains erroneous derived failures for Docker's `CAP_SYS_ADMIN` spelling,
+normal daemon shutdown and an incorrectly extended cgroup window. Correcting
+that report consumed the same raw evidence and did not rerun or alter the
+product samples. Subsequent report versions record their own generator hash.
+
+The task-scoped publication list selects the two complete small attempt
+packages, their invocation receipts, sealed build metadata, qualification
+text/source receipts and original failure logs. It excludes live campaign
+streams, mutable progress/results, workload payloads, SQLite Stores, executables
+and unrelated user files. Full local manifests may reference retained binaries
+or prepared Stores not copied into Git; the publication is an evidence index
+with authenticated identities, not a self-contained Store/cache archive.

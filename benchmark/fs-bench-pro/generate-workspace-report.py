@@ -297,7 +297,37 @@ def validate_resources(directory, outcome, case, records, successful, issues, vi
     require(outcome.get("command_wall_scope") == "one sample preparation/runtime/product/cleanup; CLI validation is in invocation receipt", "sample command wall scope missing", issues)
     complete = [row for row in records if row["kind"] == "sample-complete"]
     required_scope = number(complete[0].get("host_orchestration_ns"), "host_orchestration_ns") if len(complete) == 1 else duration
+    recovered = [row for row in records if row["kind"] == "recovery"]
+    if not successful and recovered:
+        cleanup = [row for row in records if row["kind"] == "workspace-spool-observation" and row.get("phase") == "failure-after-discard-cleanup"]
+        require(len(recovered) == 1 and recovered[0].get("status", "").startswith("Ok("), "failed attempt recovery did not succeed", issues)
+        require(len(cleanup) == 1 and all(cleanup[0].get(key) == 0 for key in ("logical_bytes", "allocated_bytes", "file_count")), "failed attempt recovery cleanup not observed", issues)
+        require(any(row["kind"] == "host-resources" and row.get("phase") == "final" for row in records) and any(row["kind"] == "host-rss-samples" for row in records), "failed attempt final observer boundary missing", issues)
+        operations = operation_rows(records, issues)
+        required_scope = sum(number(row.get("elapsed_ns"), "phase elapsed_ns") for row in records if row["kind"] == "phase")
+        required_scope += sum(row["service_ns"] + row["queue_ns"] for row in operations if row.get("outcome") == "failed" or row.get("family") == "workspace.end")
+        failed_exec_ns = failed_execution(records, case, issues)
+        if failed_exec_ns is not None:
+            required_scope += failed_exec_ns
+        require(required_scope > 0, "failed attempt lacks observed reached-call duration", issues)
+    windows = [row for row in records if row["kind"] == "runtime-observation-window"]
+    if outcome["mode"] == "verify":
+        require(len(windows) == 1, "verification lacks complete runtime observation window", issues)
+    if windows:
+        require(len(windows) == 1, "duplicate runtime observation window", issues)
+        window = windows[0]
+        require(window.get("scenario_id") == case["scenario_id"] and window.get("mode") == outcome["mode"] and window.get("start_event") == "selected-run-dispatch" and window.get("end_event") == "selected-run-return-before-process-owner-drain", "runtime window identity/boundaries mismatch", issues)
+        require(window.get("status") == ("success" if successful else "error"), "runtime observation status contradicts outcome", issues)
+        elapsed = number(window.get("elapsed_ns"), "runtime observation elapsed_ns")
+        require(0 < elapsed <= duration and (not complete or elapsed >= complete[0]["host_orchestration_ns"]), "runtime observation window does not encompass reached work", issues)
+        required_scope = elapsed
     observations, cgroup_failures = cgroup_observations(directory / "cgroup-samples.tsv.gz", required_scope)
+    if windows:
+        observations["coverage_scope"] = windows[0].get("scope")
+        observations["runtime_observation_window_ns"] = required_scope
+    elif not successful and recovered:
+        observations["coverage_scope"] = "sampler-ready-before-worker through recovery Client lifetime; reached public-call lower bound; full failed orchestration wall unavailable"
+        observations["orchestration_wall_available"] = False
     violations.extend(cgroup_failures)
     host = [row for row in records if row["kind"] == "host-resources"]
     require(bool(host), "missing native host resource observation", issues)
@@ -318,7 +348,7 @@ def validate_resources(directory, outcome, case, records, successful, issues, vi
         require(row["sample_count"] > 0 and row["nominal_interval_ns"] == 10_000_000, "invalid native sampling profile", issues)
         if row["sampled_peak_bytes"] > 2 * GIB:
             violations.append("sampled host RSS exceeds frozen 2 GiB")
-    require(not any(row["kind"] in {"host-rss-failure", "host-resource-failure", "monitor-observation-failure", "spool-observation-failure"} for row in records), "mandatory native/workspace observer failed", issues)
+    require(not any(row["kind"] in {"host-rss-failure", "host-resource-failure", "monitor-observation-failure", "spool-observation-failure", "required-observation-failure", "workspace-physical-spool-error"} for row in records), "mandatory native/workspace observer failed", issues)
     stores = [row for row in records if row["kind"] == "store-observation"]
     if successful and not case.get("proof_only"):
         require(len(stores) >= 2, "missing before/after physical Store observations", issues)
@@ -339,6 +369,8 @@ def validate_resources(directory, outcome, case, records, successful, issues, vi
         if max(row["logical_bytes"], row["allocated_bytes"]) > 2 * GIB:
             violations.append("Workspace spool boundary exceeds frozen 2 GiB")
     physical = [row for row in records if row["kind"] == "workspace-physical-spool"]
+    if not successful and recovered and any(row.get("receipt", {}).get("family") == "workspace.exec" for row in records if row["kind"] == "operation") and case["operation"] not in CLEAN:
+        require(bool(physical) or any(row["kind"] == "commit-diagnostics" for row in records), "failed workload lacks required event-observed physical spool high-water", issues)
     if successful and case["family_id"] == "workspace_reliability" and case["operation"] not in {"corrupt-descendant", "missing-descendant"}:
         require(bool(physical), "missing proof physical spool event observations", issues)
     for row in physical:
@@ -445,55 +477,115 @@ def validate_timing(records, case, issues):
             require(value["max_transaction_objects"] < (8192 if case["input_mode"] == "directory" else 128) and value["max_transaction_bytes"] < 4 * 1024 ** 2, "candidate transaction bound", issues)
 
 
-def validate_performance(case, outcome, records, issues, violations):
+def failed_execution(records, case, issues):
+    errors = [row.get("original_error", "") for row in records if row["kind"] == "recovery" and "ExecutionReceipt {" in row.get("original_error", "")]
+    if not errors:
+        return None
+    require(len(errors) == 1, "duplicate failed execution receipt", issues)
+    text = errors[0]
+    require("fresh-process execution failed:" in text and all(token in text for token in ("transport: Daemon", "docker_engine_calls: 0", "daemon_timing: Some(", "truncated: false", "exited: true")), "failed Exec lacks authentic complete daemon output", issues)
+    outer = text.partition("ExecutionReceipt {")[2].partition("daemon_timing:")[0]
+    fields = debug_numbers(outer)
+    phases = ("spawn_ns", "supervisor_queue_ns", "runtime_ns", "drain_ns", "terminal_publication_ns", "unattributed_ns")
+    require(all(key in fields for key in (*phases, "elapsed_ns", "total_wall_ns")), "failed Exec timing observation missing", issues)
+    if all(key in fields for key in (*phases, "elapsed_ns", "total_wall_ns")):
+        require(fields["elapsed_ns"] == fields["total_wall_ns"] == sum(fields[key] for key in phases), "failed Exec timing equation", issues)
+    exit_code = re.search(r"exit_code: Some\(([0-9]+)\)", outer)
+    require(exit_code is not None and int(exit_code[1]) != 0, "failed Exec lacks actual nonzero exit", issues)
+    output = bytearray()
+    for block in re.findall(r"OutputChunk \{[^{}]*stream: Stderr,[^{}]*bytes: \[([0-9, ]*)\]", text):
+        output.extend(int(value.strip()) for value in block.split(",") if value.strip())
+    stderr = output.decode("utf-8")
+    partial = receipt("\n".join(line.removeprefix("partial_") for line in stderr.splitlines() if line.startswith("partial_")))
+    require(partial.get("scenario_id") == case["scenario_id"], "failed workload identity missing", issues)
+    require(all(partial.get(key) == 0 for key in ("benchmark_verifier_count", "benchmark_reopen_count", "benchmark_injection_count")), "failed workload purity counters missing/nonzero", issues)
+    if case["family_id"].startswith("dedup_"):
+        phase = partial.get("failure_phase")
+        require(phase in {"file-open", "file-chmod", "file-write", "file-metadata", "file-sync", "directory-metadata", "directory-open", "directory-sync"} and isinstance(partial.get("failure_path"), str), "dedup partial failure boundary missing", issues)
+        for attempted_key, completed_key, failed in (("attempted_operations", "completed_operations", str(phase).startswith("file-")), ("attempted_directory_operation_count", "completed_directory_operation_count", str(phase).startswith("directory-")), ("attempted_sync_count", "sync_count", str(phase).endswith("-sync"))):
+            require(number(partial.get(attempted_key), attempted_key) == number(partial.get(completed_key), completed_key) + int(failed), "dedup partial completed/failed operation equation", issues)
+        inner = number(partial.get("inner_workload_ns"), "partial inner_workload_ns")
+    else:
+        attempted = number(partial.get("attempted_syscall_count"), "partial attempted_syscall_count")
+        completed = number(partial.get("completed_syscall_count"), "partial completed_syscall_count")
+        interrupted = number(partial.get("interrupted_syscall_count"), "partial interrupted_syscall_count")
+        iterator_failure = bool(re.search(r"^fs-benchmark-workload: readdir .+: .+$", stderr, re.M))
+        require(attempted == completed + interrupted + (0 if iterator_failure else 1), "partial workload counted-call equation", issues)
+        if iterator_failure:
+            reads = debug_structs(records, "WorkspaceReadReceipt")
+            require(sum(fields.get("callback_readdir", 0) + fields.get("callback_readdirplus", 0) for fields, _ in reads) > 0, "iterator failure lacks actual FUSE directory observations", issues)
+        inner = number(partial.get("workload_ns"), "partial workload_ns")
+    require(inner <= fields.get("elapsed_ns", 0), "partial workload exceeds failed Exec", issues)
+    return fields.get("elapsed_ns")
+
+
+def validate_performance(case, outcome, records, issues, violations, require_complete=True):
     require(not any(row["kind"] in VERIFY_KINDS for row in records), "verification/fault activity contaminated performance", issues)
     complete = [row for row in records if row["kind"] == "sample-complete"]
-    require(len(complete) == 1 and complete[0].get("status") == "pass", "missing/duplicate successful performance completion", issues)
-    if len(complete) != 1:
-        return
-    final = complete[0]
-    for key in ("benchmark_verifier_count", "benchmark_reopen_count", "benchmark_injection_count"):
-        require(type(final.get(key)) is int and final[key] == 0, f"missing/nonzero performance purity counter {key}", issues)
-    duration = number(final.get("host_orchestration_ns"), "host_orchestration_ns")
-    require(isinstance(final.get("orchestration_scope"), str) and bool(final["orchestration_scope"]), "missing host orchestration scope", issues)
-    require(duration <= outcome["external_process_wall_ns"], "product lifecycle exceeds supervised worker", issues)
+    if require_complete:
+        require(len(complete) == 1 and complete[0].get("status") == "pass", "missing/duplicate successful performance completion", issues)
+    else:
+        require(not complete, "failed performance contains successful completion", issues)
+    final = complete[0] if len(complete) == 1 else {}
+    if final:
+        for key in ("benchmark_verifier_count", "benchmark_reopen_count", "benchmark_injection_count"):
+            require(type(final.get(key)) is int and final[key] == 0, f"missing/nonzero performance purity counter {key}", issues)
+        duration = number(final.get("host_orchestration_ns"), "host_orchestration_ns")
+        require(isinstance(final.get("orchestration_scope"), str) and bool(final["orchestration_scope"]), "missing host orchestration scope", issues)
+        require(duration <= outcome["external_process_wall_ns"], "product lifecycle exceeds supervised worker", issues)
     ops = operation_rows(records, issues)
     actual = Counter(row.get("family") for row in ops)
     expected = Counter({key: value for key, value in expected_calls(case).items() if value})
-    require(actual == expected, f"public operation counts: expected {dict(expected)}, observed {dict(actual)}", issues)
+    succeeded = Counter(row.get("family") for row in ops if row.get("outcome") in {"success", "up_to_date"})
+    failed_exec_ns = failed_execution(records, case, issues) if not require_complete else None
+    if require_complete:
+        require(actual == expected, f"public operation counts: expected {dict(expected)}, observed {dict(actual)}", issues)
+    else:
+        require(bool(ops), "failed attempt lacks authentic public operation receipts", issues)
+        require(all(key in expected and count <= expected[key] for key, count in actual.items()), "failed attempt used extra/unapproved public operations", issues)
+        require(any(row.get("outcome") == "failed" for row in ops) or outcome.get("timeout") or any(row["kind"] == "recovery" for row in records), "failed performance has no reached failure boundary", issues)
+        if actual["workspace.commit"]:
+            require(succeeded["workspace.create"] == 1 and succeeded["workspace.exec"] == succeeded["workspace.output"] and succeeded["workspace.exec"] + succeeded["workspace.file_range_edit"] >= actual["workspace.commit"] - (1 if case["operation"] in CLEAN else 0), "failed Commit lacks prerequisite public work", issues)
     for operation in ops:
         wanted = "up_to_date" if operation.get("family") == "workspace.commit" and case["operation"] in CLEAN else "success"
-        require(operation.get("outcome") == wanted, "public operation outcome differs from case contract", issues)
+        require(operation.get("outcome") in ({wanted} if require_complete else {wanted, "failed"}), "public operation outcome differs from case contract", issues)
     phases = Counter(row.get("phase") for row in records if row["kind"] == "phase")
-    wanted = {"initialize": 1} if case["input_mode"] == "directory" else {"create": 1, "end": 1, "visibility": 1, "commit": expected["workspace.commit"], "exec": expected["workspace.exec"], "sdk-edit": expected["workspace.file_range_edit"]}
-    require(phases == Counter({key: value for key, value in wanted.items() if value}), "missing/extra product phase boundaries", issues)
-    sums = sum(row["elapsed_ns"] for row in records if row["kind"] == "phase")
-    require(sums <= duration, "phase sum exceeds product lifecycle", issues)
-    require(number(final.get("pure_call_sum_ns"), "pure_call_sum_ns") == sums and sums + number(final.get("orchestration_unattributed_ns"), "orchestration_unattributed_ns") == duration, "host orchestration/pure-call timing equation", issues)
+    if require_complete:
+        wanted = {"initialize": 1} if case["input_mode"] == "directory" else {"create": 1, "end": 1, "visibility": 1, "commit": expected["workspace.commit"], "exec": expected["workspace.exec"], "sdk-edit": expected["workspace.file_range_edit"]}
+    else:
+        # Recovery End is separately timed by its authentic operation receipt.
+        recovery = any(row["kind"] == "recovery" for row in records)
+        wanted = {"initialize": succeeded["layerstack.initialize"]} if case["input_mode"] == "directory" else {"create": succeeded["workspace.create"], "end": max(0, succeeded["workspace.end"] - int(recovery)), "visibility": succeeded["query"], "commit": succeeded["workspace.commit"], "exec": max(0, min(succeeded["workspace.exec"], succeeded["workspace.output"]) - int(failed_exec_ns is not None)), "sdk-edit": succeeded["workspace.file_range_edit"]}
+    require(phases == Counter({key: value for key, value in wanted.items() if value}), "missing/extra reached product phase boundaries", issues)
+    sums = sum(number(row.get("elapsed_ns"), "phase elapsed_ns") for row in records if row["kind"] == "phase")
+    if final:
+        require(sums <= duration, "phase sum exceeds product lifecycle", issues)
+        require(number(final.get("pure_call_sum_ns"), "pure_call_sum_ns") == sums and sums + number(final.get("orchestration_unattributed_ns"), "orchestration_unattributed_ns") == duration, "host orchestration/pure-call timing equation", issues)
     if case.get("inherited") and sum(row["elapsed_ns"] for row in records if row["kind"] == "phase" and row.get("phase") in {"sdk-edit", "commit", "end"}) > 2_000_000_000:
         violations.append("capped edit/Commit/End exceeds inherited 2-second gate")
     validate_timing(records, case, issues)
-    if case["input_mode"] == "directory" or case["operation"] not in CLEAN:
+    if succeeded["layerstack.initialize"] or (succeeded["workspace.commit"] and case["operation"] not in CLEAN):
         require(bool(debug_structs(records, "CandidateReceipt")), "missing candidate insert/reuse observations", issues)
     if case["input_mode"] == "directory":
         scans = [row for row in records if row["kind"] == "initialization-scan"]
-        require(len(scans) == 1, "missing public initialization scan receipt", issues)
+        require(len(scans) == succeeded["layerstack.initialize"], "missing reached public initialization scan receipt", issues)
         return
-    require(final.get("created_commit_count") == (0 if case["operation"] in CLEAN else expected["workspace.commit"]), "Created/UpToDate trajectory count", issues)
-    require(len(debug_structs(records, "WorkspaceCommitReceipt")) == expected["workspace.commit"], "missing incremental Commit phase receipts", issues)
-    require(len(debug_structs(records, "WorkspaceLifecycleReceipt")) == 2, "missing real-FUSE attach/end observations", issues)
+    if final:
+        require(final.get("created_commit_count") == (0 if case["operation"] in CLEAN else expected["workspace.commit"]), "Created/UpToDate trajectory count", issues)
+    require(len(debug_structs(records, "WorkspaceCommitReceipt")) == actual["workspace.commit"], "missing incremental Commit phase receipts", issues)
+    require(len(debug_structs(records, "WorkspaceLifecycleReceipt")) == succeeded["workspace.create"] + succeeded["workspace.end"], "missing reached real-FUSE attach/end observations", issues)
     reads = debug_structs(records, "WorkspaceReadReceipt")
-    if expected["workspace.exec"]:
+    if succeeded["workspace.output"]:
         require(bool(reads), "missing actual FUSE callback observations", issues)
         for fields, _ in reads:
             mandatory = ["callback_" + name for name in FUSE_CALLBACKS] + ["directory_entries_returned", "directory_nonzero_offset_requests", "kernel_read_bytes"]
             require(all(key in fields for key in mandatory), "incomplete FUSE operation/page metrics", issues)
         require(sum(fields.get("callback_" + name, 0) for fields, _ in reads for name in FUSE_CALLBACKS) > 0, "ordinary workload has no actual kernel callbacks", issues)
-    if case["operation"] in {"directory-content-scan", "directory-metadata-scan"}:
+    if succeeded["workspace.output"] and case["operation"] in {"directory-content-scan", "directory-metadata-scan"}:
         require(sum(fields.get("callback_readdir", 0) + fields.get("callback_readdirplus", 0) for fields, _ in reads) > 0, "full-tree scan has no FUSE directory pages", issues)
-    if expected["workspace.commit"]:
+    if actual["workspace.commit"]:
         diagnostics = [row for row in records if row["kind"] == "commit-diagnostics"]
-        require(len(diagnostics) == expected["workspace.commit"], "missing incremental Commit work diagnostics", issues)
+        require(len(diagnostics) == actual["workspace.commit"], "missing incremental Commit work diagnostics", issues)
         for row in diagnostics:
             fields = debug_numbers(row.get("details", ""))
             require(all(key in fields for key in ("cdc_bytes_scanned", "edit_spool_peak_bytes", "namespace_base_paths_visited", "namespace_final_paths_visited", "namespace_dirty_nodes_visited", "namespace_clean_nodes_visited", "namespace_candidate_probe_nodes")), "missing Commit locality/spool work fields", issues)
@@ -509,11 +601,26 @@ def validate_performance(case, outcome, records, issues, violations):
                 require(fields.get("cdc_bytes_scanned") == 0, "clean Commit performed CDC payload work", issues)
 
 
-def validate_verification(case, records, issues):
+def validate_verification(case, records, issues, require_complete=True):
     family, operation = case["family_id"], case["operation"]
     operations = operation_rows(records, issues)
-    forbidden = {"workspace.shell", "layerstack.add", "dedup.analyze"}
-    require(not any(row.get("family") in forbidden for row in operations), "unapproved verifier public operation route", issues)
+    allowed = {"layerstack.initialize", "branch.fork", "workspace.create", "workspace.exec", "workspace.output", "workspace.file_range_edit", "workspace.commit", "workspace.end", "query"}
+    if family == "workspace_reliability":
+        allowed.add("workspace.stop")
+    require(all(row.get("family") in allowed for row in operations), "unapproved verifier public operation route", issues)
+    validate_timing(records, case, issues)
+    if family != "workspace_reliability":
+        require(not any(row["kind"] in {"fault-reachability", "transaction-fault-reachability", "proof-start"} for row in records), "ordinary verification used unapproved fault route", issues)
+    if not require_complete:
+        require(bool(operations), "failed verification lacks authentic public operation receipts", issues)
+        for row in records:
+            if row["kind"] in {"native-verification", "git-semantic-verification", "canonical-verification", "dedup-verification", "capped-verification", "history-transcript", "history-accounting"}:
+                value = receipt(row.get("receipt"))
+                require(bool(value), "empty reached verification receipt", issues)
+                # Failed verifier statuses remain actual failure evidence, never passing proofs.
+                require(any(key.endswith("status") or key == "retained_snapshot_count" for key in value), "reached verification receipt lacks result", issues)
+        require(not any(row["kind"] in {"verification-complete", "proof-complete"} and row.get("status") == "pass" for row in records), "failed verification contradicts passing completion", issues)
+        return
     if family == "workspace_reliability":
         starts = [row for row in records if row["kind"] == "proof-start"]
         ends = [row for row in records if row["kind"] == "proof-complete"]
@@ -612,6 +719,37 @@ def validate_classification(directory, outcome, classification, issues):
         require(bool(signature) and signature in evidence, "linked reproduction does not exhibit classified failure", issues)
 
 
+def validate_canonical_artifacts(directory, issues):
+    for marker in directory.rglob("canonical-receipt.txt"):
+        value = receipt(marker.read_text())
+        compressed = value.get("artifact_encoding") == "gzip-v1"
+        require(value.get("artifact_encoding") in {None, "gzip-v1"}, "unknown canonical artifact encoding", issues)
+        if compressed:
+            require(value.get("artifact_compressor") == "/usr/bin/gzip -n -6 -c", "canonical artifact compressor identity missing", issues)
+        suffix = ".gz" if compressed else ""
+        folder = marker.parent
+        tables = [("payload-extents.tsv", "path\tordinal\tpayload_id\tsource_offset\tlogical_length\tpayload_length", 6), ("file-roots.tsv", "path\tcontent_root", 2)]
+        manifests = [folder / (name + suffix) for name in ("independent-manifest.tsv", "persistence-bound-manifest.tsv") if (folder / (name + suffix)).is_file()]
+        require(len(manifests) == 1, "canonical artifact lacks exactly one expectation manifest", issues)
+        tables += [(path.name.removesuffix(suffix) if suffix else path.name, "workspace-independent-manifest-v1", 7) for path in manifests]
+        for filename, header, columns in tables:
+            path = folder / (filename + suffix)
+            with (gzip.open(path, "rt") if compressed else path.open()) as stream:
+                require(stream.readline().rstrip("\n") == header, "canonical artifact header mismatch", issues)
+                for line in stream:
+                    require(len(line.rstrip("\n").split("\t")) == columns, "canonical artifact row schema mismatch", issues)
+
+
+def validate_git_custody(precommit, reopened, records, successful, issues):
+    kinds = Counter(row["kind"] for row in records)
+    need_pre = successful or kinds["git-precommit-custody"] or kinds["git-reopen-custody"] or kinds["canonical-verification"]
+    need_reopen = successful or kinds["git-reopen-custody"]
+    if need_pre:
+        require(precommit.is_file() and precommit.stat().st_size > 0, "reached Git pre-Commit custody missing", issues)
+    if need_reopen:
+        require(precommit.is_file() and reopened.is_file() and precommit.read_bytes() == reopened.read_bytes() and precommit.stat().st_size > 0, "Git pre-Commit/reopen full persistence manifests differ", issues)
+
+
 def validate_attempt(outcome, classification, case, build):
     issues, violations = [], []
     records, observed, resource = [], {}, {}
@@ -674,18 +812,19 @@ def validate_attempt(outcome, classification, case, build):
             if outcome["mode"] == "verify":
                 precommit = directory / "verifier-exchange/precommit.tsv"
                 reopened = directory / "verifier-exchange/reopened.tsv"
-                require(precommit.read_bytes() == reopened.read_bytes() and precommit.stat().st_size > 0, "Git pre-Commit/reopen full persistence manifests differ", issues)
+                validate_git_custody(precommit, reopened, records, successful, issues)
         require(outcome.get("supervisor_cleanup_status") == "pass", "owned supervisor runtime not recovered", issues)
         require(outcome.get("harness_status") != "fail" and not outcome.get("observer_errors"), "harness/resource observer failed", issues)
         if successful:
             require(outcome.get("exit_code") == 0 and outcome.get("timeout") is False and outcome.get("supervisor_failure") is None, "declared success contradicts worker outcome", issues)
             require(outcome.get("mutable_sample_cleanup_status") == "pass", "successful sample mutable state not cleaned", issues)
         resource = validate_resources(directory, outcome, case, records, successful, issues, violations)
-        if successful:
-            if outcome["mode"] == "performance":
-                validate_performance(case, outcome, records, issues, violations)
-            else:
-                validate_verification(case, records, issues)
+        if outcome["mode"] == "performance":
+            validate_performance(case, outcome, records, issues, violations, successful)
+        else:
+            validate_verification(case, records, issues, successful)
+        if outcome["mode"] == "verify":
+            validate_canonical_artifacts(directory, issues)
         observed = metrics(records)
         if not successful or violations:
             validate_classification(directory, outcome, classification, issues)
@@ -713,7 +852,7 @@ def registry_cases(rows):
     return new, proofs, inherited
 
 
-def generate(campaign, assets):
+def qualified_build(assets):
     custody.verify_manifest(assets / "evidence")
     build = read(assets / "evidence/build.json")
     if build.get("schema") != "fs-bench-pro-workspace-build-v1" or build.get("status") != "pass":
@@ -721,28 +860,102 @@ def generate(campaign, assets):
     if custody.sha(assets / "fs-benchmark-pro") != build["binary_sha256"]:
         raise ValueError("registry executable differs from sealed binary")
     registry = [decode(line) for line in subprocess.check_output([str(assets / "fs-benchmark-pro"), "workspace-registry"], text=True).splitlines()]
+    registry_cases(registry)
+    return build, registry
+
+
+def selected_build(builds, case, mode):
+    return next(builds[key] for key in (f"case:{case['scenario_id']}:{mode}", f"family:{case['family_id']}:{mode}", f"family:{case['family_id']}", "default") if key in builds)
+
+
+def family_builds(campaign, assets, primary, registry):
+    families = {row["family_id"] for row in registry}
+    cases = {row["scenario_id"]: row for row in registry}
+    selected, provenance, bridges = {"default": primary}, {}, []
+    path = campaign / "evidence-builds.json"
+    if not path.exists():
+        return selected, provenance, bridges
+    config = read(path)
+    if set(config) - {"schema", "selections", "verification_compatibility"} or config.get("schema") != "fs-bench-pro-scoped-builds-v1" or not isinstance(config.get("selections"), dict):
+        raise ValueError("invalid explicit scoped build mapping")
+    loaded = {assets.resolve(): (primary, registry)}
+    for selector, choice in config["selections"].items():
+        parts = selector.split(":")
+        valid = len(parts) in {2, 3} and parts[0] == "family" and parts[1] in families
+        valid |= len(parts) == 3 and parts[0] == "case" and parts[1] in cases
+        valid &= len(parts) == 2 or parts[2] in {"performance", "verify"}
+        if not valid or not isinstance(choice, dict) or set(choice) != {"assets", "reason", "build_manifest_sha256"}:
+            raise ValueError("unknown selector or malformed scoped build provenance")
+        if not isinstance(choice["reason"], str) or len(choice["reason"].strip()) < 16 or not digest(choice["build_manifest_sha256"]):
+            raise ValueError("scoped build lacks meaningful impact reason/seal")
+        location = (campaign / choice["assets"]).resolve()
+        if custody.sha(location / "evidence/evidence.sha256") != choice["build_manifest_sha256"]:
+            raise ValueError("scoped build manifest binding mismatch")
+        if location not in loaded:
+            loaded[location] = qualified_build(location)
+        build, candidate_registry = loaded[location]
+        if any(build.get(key) != primary.get(key) for key in ("product_baseline", "product_seal")):
+            raise ValueError("scoped harness mapping cannot change instrumented product baseline")
+        # Added qualification reports may change the aggregate contract identity;
+        # every common normative file remains byte-identical.
+        for filename in set(primary["phase1_contract_files"]) & set(build["phase1_contract_files"]):
+            if build["phase1_contract_files"][filename] != primary["phase1_contract_files"][filename]:
+                raise ValueError(f"scoped mapping changed existing frozen contract: {filename}")
+        family = parts[1] if parts[0] == "family" else cases[parts[1]]["family_id"]
+        if [row for row in registry if row["family_id"] == family] != [row for row in candidate_registry if row["family_id"] == family]:
+            raise ValueError("scoped build changed frozen registry descriptors")
+        selected[selector] = build
+        provenance[selector] = {**choice, "assets": str(location), "source": build}
+    sources = {build["revision"]: build for build in selected.values()}
+    for bridge in config.get("verification_compatibility", []):
+        fields = {"family_id", "performance_revision", "verification_revision", "reviewed_impact", "unchanged_paths"}
+        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["family_id"] not in {"payload_create_read", "tiny_file_churn"} or len(bridge["reviewed_impact"].strip()) < 80:
+            raise ValueError("unqualified verification source bridge")
+        revisions = [bridge["performance_revision"], bridge["verification_revision"]]
+        if revisions[0] == revisions[1] or any(revision not in sources for revision in revisions):
+            raise ValueError("verification bridge must name two selected sealed sources")
+        required = {"benchmark/fs-bench-pro/workspace_common.rs", "benchmark/fs-bench-pro/ordinary_workloads.rs", f"benchmark/fs-bench-pro/families/{bridge['family_id']}.rs"}
+        if set(bridge["unchanged_paths"]) != required:
+            raise ValueError("verification bridge omitted fixed input/workload/oracle definitions")
+        for filename, expected in bridge["unchanged_paths"].items():
+            if not digest(expected) or any(hashlib.sha256(subprocess.check_output(["git", "show", f"{revision}:{filename}"], cwd=HERE.parents[1])).hexdigest() != expected for revision in revisions):
+                raise ValueError("verification bridge source path hash mismatch")
+        if any(all(old.get(key) == bridge[key] for key in ("family_id", "performance_revision", "verification_revision")) for old in bridges):
+            raise ValueError("duplicate verification compatibility bridge")
+        bridges.append(bridge)
+    return selected, provenance, bridges
+
+
+def generate(campaign, assets):
+    build, registry = qualified_build(assets)
     new, proofs, inherited = registry_cases(registry)
+    selected_builds, build_provenance, compatibility = family_builds(campaign, assets, build, registry)
     ledger = read(campaign / "slots.json") if (campaign / "slots.json").exists() else {}
     classifications = read(campaign / "classifications.json") if (campaign / "classifications.json").exists() else {}
     required = [(case, seed, mode) for case in new for mode in ("performance", "verify") for seed in (1, 2, 3)]
     required += [(case, 1, "verify") for case in proofs]
     required += [(case, rep, "performance") for case in inherited for rep in range(1, 6)] + [(case, 1, "verify") for case in inherited]
     required_keys = {(case["scenario_id"], seed, mode) for case, seed, mode in required}
-    current = [row for row in ledger.values() if all(row.get(key) == build[value] for key, value in IDENTITY_FIELDS.items())]
+    current = [row for row in ledger.values() if all(row.get(key) == selected_build(selected_builds, row, row.get("mode"))[value] for key, value in IDENTITY_FIELDS.items())]
     by_slot, global_issues, evidence_paths = {}, [], set()
-    environments = {row.get("environment_identity") for row in current}
-    if len(environments) > 1:
-        global_issues.append("multiple runtime environment identities cannot be pooled")
+    for family in {case["family_id"] for case in registry}:
+        environments = {row.get("environment_identity") for row in current if row.get("family_id") == family}
+        if len(environments) > 1:
+            global_issues.append(f"multiple runtime environment identities cannot be pooled within {family}")
     invocations = []
     for path in sorted((campaign / "invocations").glob("*.json")):
         value = read(path)
-        if value.get("source_revision") != build["revision"] or value.get("image_id") != build["image_id"]:
+        if not any(value.get("source_revision") == chosen["revision"] and value.get("image_id") == chosen["image_id"] for chosen in selected_builds.values()):
             continue
         try:
-            for key in ("source_validation_ns", "registry_query_ns", "invocation_wall_ns"):
+            for key in ("source_validation_ns", "registry_query_ns"):
                 number(value.get(key), key)
-            require(value["invocation_wall_ns"] >= value["source_validation_ns"] + value["registry_query_ns"], "CLI invocation hides validation/query work", global_issues)
-            require(value.get("status") in {"pass", "failed-outcomes"}, "CLI invocation has not completed", global_issues)
+            if value.get("status") == "interrupted-unmeasured-wall":
+                require(value.get("invocation_wall_ns") is None and value.get("recovery_reason") == "exclusive campaign lock acquired after prior coordinator ended", "interrupted CLI lacks explicit lock/recovery custody", global_issues)
+            else:
+                number(value.get("invocation_wall_ns"), "invocation_wall_ns")
+                require(value["invocation_wall_ns"] >= value["source_validation_ns"] + value["registry_query_ns"], "CLI invocation hides validation/query work", global_issues)
+                require(value.get("status") in {"pass", "failed-outcomes"}, "CLI invocation has not completed", global_issues)
             require(isinstance(value.get("planned_slots"), list), "CLI invocation lacks selected slot inventory", global_issues)
         except (ValueError, TypeError) as error:
             global_issues.append(f"invalid invocation receipt {path.name}: {error}")
@@ -765,10 +978,10 @@ def generate(campaign, assets):
             missing.append({"case": key[0], "seed": seed, "mode": mode})
             continue
         classification = classifications.get(Path(outcome["evidence_path"]).name, {})
-        value = validate_attempt(outcome, classification, case, build)
+        value = validate_attempt(outcome, classification, case, selected_build(selected_builds, case, mode))
         checked[key] = value
         row = {"case": key[0], "family_id": case["family_id"], "seed": seed, "mode": mode, "inherited": case.get("inherited", False),
-               "raw_product_status": outcome.get("product_status"), "coverage_status": outcome.get("coverage_status"), "product_status": value["product_status"], "evidence_status": "REVISE" if value["issues"] else "PASS",
+               "source_identity": {key: outcome.get(key) for key in IDENTITY_FIELDS}, "raw_product_status": outcome.get("product_status"), "coverage_status": outcome.get("coverage_status"), "product_status": value["product_status"], "evidence_status": "REVISE" if value["issues"] else "PASS",
                "issues": value["issues"], "violations": value["violations"], "evidence": outcome["evidence_path"], "metrics": value["metrics"], "resource_observations": value["resource_observations"]}
         rows.append(row)
         if value["issues"]:
@@ -782,7 +995,10 @@ def generate(campaign, assets):
         proof = checked.get(proof_key, {})
         outcome = by_slot[(row["case"], row["seed"], row["mode"])]
         proof_outcome = by_slot.get(proof_key, {})
-        eligible = not global_issues and row["mode"] == "performance" and row["evidence_status"] == "PASS" and row["product_status"] == "pass" and proof.get("verification_pass") and proof_outcome.get("input_identity") == outcome.get("input_identity") and proof_outcome.get("environment_identity") == outcome.get("environment_identity")
+        same_source = all(proof_outcome.get(key) == outcome.get(key) for key in IDENTITY_FIELDS)
+        bridge = next((item for item in compatibility if item["family_id"] == case["family_id"] and item["performance_revision"] == outcome.get("source_revision") and item["verification_revision"] == proof_outcome.get("source_revision")), None)
+        row["verification_source_compatibility"] = "identical sealed source" if same_source else bridge
+        eligible = (same_source or bridge is not None) and not global_issues and row["mode"] == "performance" and row["evidence_status"] == "PASS" and row["product_status"] == "pass" and proof.get("verification_pass") and proof_outcome.get("input_identity") == outcome.get("input_identity") and proof_outcome.get("environment_identity") == outcome.get("environment_identity")
         row["performance_claim_eligible"] = bool(eligible)
         if eligible:
             for metric, value in row["metrics"].items():
@@ -800,13 +1016,14 @@ def generate(campaign, assets):
         value = read(path)
         if value.get("product_status") != "pass" or value.get("harness_status") == "fail":
             retained.append({key: value.get(key) for key in ("scenario_id", "seed", "mode", "source_revision", "product_status", "harness_status", "error", "evidence_path")})
-    summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
+    summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "scoped_builds": build_provenance, "verification_compatibility": compatibility, "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
                "counts": counts, "phase1_evidence_status": "PASS" if not missing and not invalid and not global_issues else "REVISE", "product_status": "FAIL" if failures else "NOT_ESTABLISHED" if missing or invalid or global_issues else "PASS",
                "global_issues": global_issues, "missing": missing, "invalid": invalid, "product_findings": failures, "retained_failure_history": retained, "invocations": invocations, "rows": rows}
     results = campaign / "results"
     results.mkdir(exist_ok=True)
     custody.write_json(results / "review.json", summary)
     inputs = {"build_manifest_sha256": custody.sha(assets / "evidence/evidence.sha256"), "ledger_sha256": custody.sha(campaign / "slots.json") if (campaign / "slots.json").exists() else None,
+              "family_build_mapping_sha256": custody.sha(campaign / "evidence-builds.json") if (campaign / "evidence-builds.json").exists() else None,
               "classifications_sha256": custody.sha(campaign / "classifications.json") if (campaign / "classifications.json").exists() else None,
               "generator_sha256": summary["report_generator_sha256"], "policy_helper_sha256": custody.sha(HERE / "workspace-runner.py"), "custody_helper_sha256": custody.sha(HERE / "sdk-edit-custody.py"), "attempt_manifests": {path: custody.sha(Path(path) / "evidence.sha256") if (Path(path) / "evidence.sha256").is_file() else None for path in sorted(evidence_paths)}}
     custody.write_json(results / "report-inputs.json", inputs)
@@ -826,6 +1043,41 @@ def generate(campaign, assets):
     (results / "initial-results.md").write_text("\n".join(lines))
     custody.seal(results)
     return summary
+
+
+def failure_self_check():
+    case = {"scenario_id": "payload-create-1m", "family_id": "payload_create_read", "operation": "payload-create", "tier": 1, "input_mode": "store"}
+    builds = {"default": "new", "family:payload_create_read:performance": "old", "case:payload-create-1m:performance": "override"}
+    assert selected_build(builds, case, "performance") == "override"
+    assert selected_build(builds, case, "verify") == "new"
+    del builds["case:payload-create-1m:performance"]
+    assert selected_build(builds, case, "performance") == "old"
+    issues = []
+    validate_performance(case, {"external_process_wall_ns": 1}, [{"kind": "native-verification"}], issues, [], False)
+    assert "verification/fault activity contaminated performance" in issues
+    assert "failed attempt lacks authentic public operation receipts" in issues
+    with tempfile.TemporaryDirectory(prefix="phase1-failed-report-check-") as temporary:
+        root = Path(temporary)
+        issues = []
+        validate_git_custody(root / "precommit.tsv", root / "reopened.tsv", [{"kind": "sample-start"}], False, issues)
+        assert not issues, "early Git failure incorrectly requires future custody"
+        validate_git_custody(root / "precommit.tsv", root / "reopened.tsv", [{"kind": "git-precommit-custody"}], False, issues)
+        assert issues, "reached Git custody accepted without its file"
+        (root / "canonical-receipt.txt").write_text("artifact_encoding=gzip-v1\nartifact_compressor=/usr/bin/gzip -n -6 -c\n")
+        tables = {"payload-extents.tsv.gz": "path\tordinal\tpayload_id\tsource_offset\tlogical_length\tpayload_length\n", "file-roots.tsv.gz": "path\tcontent_root\n", "independent-manifest.tsv.gz": "workspace-independent-manifest-v1\n.\tdirectory\t0\t755\t0\t0\t-\n"}
+        for name, text in tables.items():
+            with gzip.open(root / name, "wt") as stream:
+                stream.write(text)
+        issues = []
+        validate_canonical_artifacts(root, issues)
+        assert not issues
+        (root / "file-roots.tsv.gz").write_bytes(b"malformed gzip")
+        try:
+            validate_canonical_artifacts(root, [])
+            raise AssertionError("malformed canonical gzip accepted")
+        except OSError:
+            pass
+    print("failed_phase_and_git_custody_self_check=pass")
 
 
 def self_check():
@@ -870,7 +1122,11 @@ def main():
     parser.add_argument("campaign", type=Path, nargs="?")
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--self-check", action="store_true")
+    parser.add_argument("--failure-self-check", action="store_true")
     args = parser.parse_args()
+    if args.failure_self_check:
+        failure_self_check()
+        return 0
     if args.self_check:
         self_check()
         return 0

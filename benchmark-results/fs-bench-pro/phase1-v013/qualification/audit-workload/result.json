@@ -1,0 +1,9 @@
+{
+  "status": "pass",
+  "source_unchanged": true,
+  "binary_sha256": "a87bb44394333839cf5c9574a411f1281351bea4af8917d45d31de9e867230af",
+  "checks": [
+    "dedup_workloads::acknowledged_bytes_survive_a_later_write_failure",
+    "reliability_workloads::open_handle_oracle_rejects_wrong_or_extra_bytes"
+  ]
+}
