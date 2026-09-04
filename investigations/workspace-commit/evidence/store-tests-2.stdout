@@ -1,0 +1,36 @@
+
+running 19 tests
+test objects::tests::parent_payload_copy_counter_has_a_positive_control ... ok
+test objects::tests::memory_segment_moves_owned_canonical_bytes ... ok
+test objects::tests::empty_append_only_segment_finishes_without_a_read_pass ... ok
+test objects::tests::append_only_writer_rejects_and_counts_outer_gets ... ok
+test objects::tests::final_candidate_consumption_moves_memory_and_reads_owned_spill ... FAILED
+test objects::tests::append_only_reversed_worker_completion_sorts_to_task_order ... ok
+test objects::tests::compact_inode_pair_sidecar_is_bounded_forward_only_and_unlinked ... ok
+test objects::tests::append_only_blocks_are_written_once_read_forward_and_unlinked ... ok
+test objects::tests::spilled_segment_streams_bounded_pages_once_and_unlinks ... ok
+test objects::tests::spill_index_overflow_preserves_lookup_dedup_and_cleanup_without_scans ... ok
+test objects::tests::segment_admission_deduplicates_across_pending_segments ... ok
+test objects::tests::direct_admission_is_independent_of_segment_order ... ok
+test objects::tests::buffered_append_reader_scales_raw_reads_with_bytes_not_tiny_frames ... ok
+test objects::tests::segment_admission_deduplicates_after_a_batch_boundary ... ok
+test objects::tests::direct_admission_honors_every_frozen_count_boundary ... ok
+test objects::tests::planned_admission_keeps_every_object_transaction_below_the_frozen_bounds ... ok
+test objects::tests::resumable_transfer_keeps_a_spill_writable ... ok
+test objects::tests::finished_candidate_payload_spill_is_private_read_only_and_authenticated ... ok
+test objects::tests::prevalidated_transfer_seals_a_nonempty_spill_tail ... ok
+
+failures:
+
+---- objects::tests::final_candidate_consumption_moves_memory_and_reads_owned_spill stdout ----
+
+thread 'objects::tests::final_candidate_consumption_moves_memory_and_reads_owned_spill' (229932198) panicked at crates/layerfs-layerstack-store/src/objects.rs:4069:44:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    objects::tests::final_candidate_consumption_moves_memory_and_reads_owned_spill
+
+test result: FAILED. 18 passed; 1 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.35s
+

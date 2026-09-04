@@ -1,0 +1,76 @@
+   Compiling layerfs-layerstack-store v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-layerstack-store)
+   Compiling layerfs-materialization v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-materialization)
+   Compiling layerfs-fuse v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-fuse)
+   Compiling layerfs-workspace v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-workspace)
+warning: unused import: `InodeMutation`
+ --> crates/layerfs-workspace/src/changes.rs:3:56
+  |
+3 | use layerfs_content::filesystem::{self, ContentChange, InodeMutation, LogicalCounters};
+  |                                                        ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `DirectoryStateRoot`, `NamespaceCounters`, `directory_lookup`, and `directory_page_after`
+ --> crates/layerfs-workspace/src/changes.rs:7:5
+  |
+7 |     directory_lookup, directory_page_after, empty_directory, DirectoryStateRoot, NamespaceCounters,
+  |     ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^                   ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: fields `inode`, `mode`, `mtime_seconds`, and `mtime_nanoseconds` are never read
+  --> crates/layerfs-workspace/src/changes.rs:24:5
+   |
+23 | struct BaseEntry {
+   |        --------- fields in this struct
+24 |     inode: InodeId,
+   |     ^^^^^
+25 |     record: InodeRecordV1,
+26 |     mode: u32,
+   |     ^^^^
+27 |     mtime_seconds: i64,
+   |     ^^^^^^^^^^^^^
+28 |     mtime_nanoseconds: u32,
+   |     ^^^^^^^^^^^^^^^^^
+   |
+   = note: `BaseEntry` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `apply_one` is never used
+   --> crates/layerfs-workspace/src/changes.rs:812:4
+    |
+812 | fn apply_one(
+    |    ^^^^^^^^^
+
+warning: function `set_metadata` is never used
+   --> crates/layerfs-workspace/src/changes.rs:826:4
+    |
+826 | fn set_metadata(
+    |    ^^^^^^^^^^^^
+
+warning: function `groups_by_inode` is never used
+   --> crates/layerfs-workspace/src/changes.rs:844:4
+    |
+844 | fn groups_by_inode(base: &BTreeMap<String, BaseEntry>) -> BTreeMap<InodeId, Vec<String>> {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `groups_by_node` is never used
+   --> crates/layerfs-workspace/src/changes.rs:854:4
+    |
+854 | fn groups_by_node(final_view: &BTreeMap<String, FinalEntry>) -> BTreeMap<NodeId, Vec<String>> {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `kind` is never used
+   --> crates/layerfs-workspace/src/changes.rs:864:4
+    |
+864 | fn kind(kind: InodeKind) -> Kind {
+    |    ^^^^
+
+warning: function `depth` is never used
+   --> crates/layerfs-workspace/src/changes.rs:881:4
+    |
+881 | fn depth(path: &str) -> usize {
+    |    ^^^^^
+
+warning: `layerfs-workspace` (lib test) generated 9 warnings (run `cargo fix --lib -p layerfs-workspace --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.32s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-9f098567b60eadc8)
+error: test failed, to rerun pass `-p layerfs-workspace --lib`

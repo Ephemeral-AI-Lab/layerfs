@@ -1,0 +1,46 @@
+
+running 6 tests
+test tree::batch::tests::sorted_tiny_inode_update_uses_actual_capacity ... ok
+test tree::batch::tests::sorted_updates_validate_input_and_reserve_before_allocation ... ok
+test tree::batch::tests::sorted_variable_names_balance_across_parent_boundaries ... ok
+test tree::batch::tests::sorted_inode_dense_delete_preserves_sparse_historical_records ... ok
+test tree::batch::tests::sorted_directory_dense_mixed_sparse_and_empty ... ok
+test tree::batch::tests::sorted_mixed_boundaries_emit_only_final_reachable_pages ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 36 filtered out; finished in 0.50s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s
+

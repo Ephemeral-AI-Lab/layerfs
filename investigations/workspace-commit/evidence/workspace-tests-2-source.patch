@@ -1,0 +1,2506 @@
+diff --git a/benchmark/fs-bench-pro/src/workspace_bench.rs b/benchmark/fs-bench-pro/src/workspace_bench.rs
+index 1a9636f2..da3e0b09 100644
+--- a/benchmark/fs-bench-pro/src/workspace_bench.rs
++++ b/benchmark/fs-bench-pro/src/workspace_bench.rs
+@@ -654,6 +654,21 @@ fn run_case(
+     mode: &str,
+     container: ContainerId,
+ ) -> AnyResult<()> {
++    // Diagnostic harness placement; the same public SDK/FUSE calls and product engine.
++    let placement_container = if container.0 == "diagnostic-host-fuse" {
++        if !cfg!(target_os = "linux")
++            || !matches!(case.kind, "tiny-bulk-create" | "tiny-bulk-delete")
++        {
++            return Err("colocated diagnostic requires Linux bulk mutation".into());
++        }
++        emit(
++            "diagnostic-profile",
++            &[("profile", quote("linux-colocated-host-fuse-2cpu-2g"))],
++        );
++        None
++    } else {
++        Some(container.clone())
++    };
+     let verification = mode == "verify";
+     if !verification && mode != "performance" {
+         return Err("invalid phase1 mode".into());
+@@ -771,7 +786,7 @@ fn run_case(
+         genesis_root = Some(store.pin_branch(branch)?.root);
+         let request = CreateWorkspaceSession {
+             branch_id: branch,
+-            placement: case_placement(&Some(container.clone()), root, seed as usize, &case.id),
++            placement: case_placement(&placement_container, root, seed as usize, &case.id),
+             projection: Some(WorkspaceProjection::Fuse),
+         };
+         let create_start = Instant::now();
+@@ -1101,7 +1116,7 @@ fn run_case(
+             let session = client.create_workspace_session(CreateWorkspaceSession {
+                 branch_id: branch,
+                 placement: case_placement(
+-                    &Some(container.clone()),
++                    &placement_container,
+                     root,
+                     seed as usize,
+                     &format!("{}-reopen", case.id),
+@@ -1231,7 +1246,7 @@ fn run_case(
+                     let base_session = client.create_workspace_session(CreateWorkspaceSession {
+                         branch_id: base_branch,
+                         placement: case_placement(
+-                            &Some(container.clone()),
++                            &placement_container,
+                             root,
+                             seed as usize,
+                             "history-genesis",
+@@ -1314,7 +1329,7 @@ fn run_case(
+                             client.create_workspace_session(CreateWorkspaceSession {
+                                 branch_id: fork,
+                                 placement: case_placement(
+-                                    &Some(container.clone()),
++                                    &placement_container,
+                                     root,
+                                     seed as usize,
+                                     &format!("{}-history-{step}", case.id),
+@@ -1367,12 +1382,115 @@ fn run_case(
+     Ok(())
+ }
+ 
++// Exact ordinary-workload source is qualified separately by the sealed helper.
++// This adapter changes only the expected scan receipt, retaining the public SDK initializer.
++fn colocated_initialize(root: &Path, fixture: &Path, case: &Case, seed: u8) -> AnyResult<()> {
++    if !cfg!(target_os = "linux") || case.kind != "tiny-bulk-create" || !(1..=3).contains(&seed) {
++        return Err(
++            "matched initialization requires Linux create input and prescribed seed".into(),
++        );
++    }
++    let (bytes, files, plan) = entry_info(&registry::expected(case, seed, 1)?)?;
++    std::fs::create_dir(root)?;
++    let store = Arc::new(LayerStackStore::create(root.join("store.sqlite"))?);
++    let client = Client::connect(store.clone())?;
++    let before = process_resource_snapshot()?;
++    let started = Instant::now();
++    let initialized = client.initialize_layerstack(
++        EntityName::new("matched-ordinary-initialization")?,
++        LayerStackInitialization::Directory(fixture.to_owned()),
++    )?;
++    let initialization_ns = elapsed_ns(started);
++    let after = process_resource_snapshot()?;
++    let scans = store.take_layerstack_initialization_receipts();
++    let [scan] = scans.as_slice() else {
++        return Err("matched initialization receipt cardinality".into());
++    };
++    if scan.scanned_files != files as u64 || scan.scanned_bytes != bytes {
++        return Err("matched initialization scan differs from prescribed tree".into());
++    }
++    emit(
++        "matched-initialization",
++        &[
++            ("scenario_id", quote(&case.id)),
++            ("seed", seed.to_string()),
++            ("initialization_ns", initialization_ns.to_string()),
++            ("regular_files", files.to_string()),
++            ("logical_bytes", bytes.to_string()),
++            ("input_plan_sha256", quote(&plan)),
++            ("verification", quote("separate-required")),
++        ],
++    );
++    resource_receipt("initialization-before", before);
++    resource_receipt("initialization-after", after);
++    let mut operation = 0;
++    observed(&client, &mut operation)?;
++    store_metrics(&store, "initialization-after", 0)?;
++    // Fork outside the initialization interval for the existing independent verifier.
++    let branch = client.fork_branch(
++        EntityName::new("main")?,
++        LocalForkSource::Layer {
++            layer_id: initialized.genesis_layer_id,
++        },
++    )?;
++    std::fs::write(root.join("branch-id"), branch.to_string())?;
++    if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
++        return Err("matched initialization retained runtime".into());
++    }
++    Ok(())
++}
++
+ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
+     let args = args
+         .iter()
+         .map(|s| s.to_string_lossy().into_owned())
+         .collect::<Vec<_>>();
+     match args.as_slice() {
++        [command, root, fixture, id, seed] if command == "workspace-colocated-initialize" => {
++            colocated_initialize(
++                Path::new(root),
++                Path::new(fixture),
++                &registry::resolve(id)?,
++                seed.parse()?,
++            )
++        }
++        [command, root, id, seed] if command == "workspace-colocated-verify-existing" => {
++            let case = registry::resolve(id)?;
++            if !cfg!(target_os = "linux")
++                || !matches!(case.kind, "tiny-bulk-create" | "tiny-bulk-delete")
++            {
++                return Err("colocated diagnostic requires Linux bulk mutation".into());
++            }
++            let root = Path::new(root);
++            let seed = seed.parse()?;
++            let branch = std::fs::read_to_string(root.join("branch-id"))?
++                .trim()
++                .parse()?;
++            let store = Arc::new(LayerStackStore::connect(root.join("store.sqlite"))?);
++            let expected = registry::expected(&case, seed, 1)?;
++            let verified = super::workspace_verify::verify(&store, branch, &expected, root)?;
++            emit(
++                "canonical-verification",
++                &[("receipt", quote(&format!("{:?}", verified.receipt)))],
++            );
++            let client = Client::connect(store.clone())?;
++            let session = client.create_workspace_session(CreateWorkspaceSession {
++                branch_id: branch,
++                placement: WorkspacePlacement::Host {
++                    root: root.join("reopen-mount"),
++                },
++                projection: Some(WorkspaceProjection::Fuse),
++            })?;
++            let verified = native_verify(&client, session.id, &case, seed, 1);
++            let ended = client.end_workspace_session(session.id, EndWorkspaceMode::Clean);
++            verified?;
++            ended?;
++            if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
++                return Err("colocated verifier retained owned runtime".into());
++            }
++            emit("verification-complete", &[("status", quote("pass"))]);
++            Ok(())
++        }
+         [command, root] if command == "workspace-qualify-digests" => {
+             let receipt = super::workspace_verify::digest_qualification(Path::new(root))?;
+             emit(
+diff --git a/crates/layerfs-content/src/tree/directory/mod.rs b/crates/layerfs-content/src/tree/directory/mod.rs
+index 7397546b..ae9095c9 100644
+--- a/crates/layerfs-content/src/tree/directory/mod.rs
++++ b/crates/layerfs-content/src/tree/directory/mod.rs
+@@ -19,3 +19,6 @@ pub use read::{
+     visit_directory_entries,
+ };
+ pub use validate::{validate_inode_record, validate_inode_record_metadata};
++
++pub(crate) use validate::nearest_half;
++pub use super::batch::directory_apply_sorted;
+diff --git a/crates/layerfs-content/src/tree/directory/validate.rs b/crates/layerfs-content/src/tree/directory/validate.rs
+index 3d5099fb..b9f6f23a 100644
+--- a/crates/layerfs-content/src/tree/directory/validate.rs
++++ b/crates/layerfs-content/src/tree/directory/validate.rs
+@@ -198,7 +198,7 @@ fn validate_metadata<S: ObjectRead>(store: &S, root: ObjectId, kind: InodeKind)
+     .validate(kind)
+ }
+ 
+-pub(super) fn nearest_half(widths: Vec<usize>) -> usize {
++pub(crate) fn nearest_half(widths: Vec<usize>) -> usize {
+     let total: usize = widths.iter().sum();
+     let mut prefix = 0;
+     let mut best = 1;
+diff --git a/crates/layerfs-content/src/tree/inode/mod.rs b/crates/layerfs-content/src/tree/inode/mod.rs
+index 58cf6728..20124ffe 100644
+--- a/crates/layerfs-content/src/tree/inode/mod.rs
++++ b/crates/layerfs-content/src/tree/inode/mod.rs
+@@ -5,3 +5,5 @@ mod table;
+ 
+ pub use record::*;
+ pub use table::*;
++
++pub use super::batch::inode_table_apply_sorted;
+diff --git a/crates/layerfs-content/src/tree/mod.rs b/crates/layerfs-content/src/tree/mod.rs
+index 91d0fe56..5215bc48 100644
+--- a/crates/layerfs-content/src/tree/mod.rs
++++ b/crates/layerfs-content/src/tree/mod.rs
+@@ -1,3 +1,4 @@
++pub mod batch;
+ pub mod directory;
+ pub mod inode;
+ pub mod metadata;
+diff --git a/crates/layerfs-layerstack-store/src/lib.rs b/crates/layerfs-layerstack-store/src/lib.rs
+index 7d6e02e8..d5c27244 100644
+--- a/crates/layerfs-layerstack-store/src/lib.rs
++++ b/crates/layerfs-layerstack-store/src/lib.rs
+@@ -32,7 +32,7 @@ pub use telemetry::{
+     begin_workspace_commit, capture_workspace_commit_diagnostics, note_workspace_capture,
+     note_workspace_commit_edit_state, note_workspace_commit_phase, note_workspace_commit_reads,
+     note_workspace_commit_tree_visits, note_workspace_create_snapshot,
+-    note_workspace_namespace_visits, note_workspace_physical_spool, record_fuse_write,
++    note_workspace_handoff, note_workspace_namespace_visits, note_workspace_physical_spool, record_fuse_write,
+     record_workspace_lifecycle, record_workspace_read, take_storage_receipts,
+     take_workspace_commit_diagnostics, CandidateReceipt, CaptureMode, FuseWriteReceipt,
+     LayerStackInitializationReceipt, StorageReceipt, WorkspaceCommitDiagnostics,
+diff --git a/crates/layerfs-layerstack-store/src/objects.rs b/crates/layerfs-layerstack-store/src/objects.rs
+index f0a8ee80..bb7a14bf 100644
+--- a/crates/layerfs-layerstack-store/src/objects.rs
++++ b/crates/layerfs-layerstack-store/src/objects.rs
+@@ -15,9 +15,9 @@ use std::time::Instant;
+ 
+ pub const OBJECT_PAGE_COUNT: usize = 128;
+ pub const OBJECT_PAGE_BYTES: usize = 4 * 1024 * 1024;
+-pub const ADMISSION_BATCH_COUNT: usize = OBJECT_PAGE_COUNT - 1;
++pub const ADMISSION_BATCH_COUNT: usize = 8191;
+ pub const ADMISSION_BATCH_BYTES: usize = OBJECT_PAGE_BYTES - 1;
+-pub(crate) const INITIALIZATION_ADMISSION_BATCH_COUNT: usize = 8191;
++pub(crate) const INITIALIZATION_ADMISSION_BATCH_COUNT: usize = ADMISSION_BATCH_COUNT;
+ pub(crate) const INITIALIZATION_SLAB_BYTES: usize = 256 * 1024;
+ pub(crate) const INITIALIZATION_SLAB_OBJECTS: usize = 512;
+ pub(crate) const INITIALIZATION_SLAB_QUEUE_SLOTS: usize = 4;
+@@ -1585,6 +1585,8 @@ pub(crate) struct PlannedAdmission {
+     pub begin_ns: u64,
+     pub insert_ns: u64,
+     pub commit_ns: u64,
++    pub payload_moved_bytes: u64,
++    pub pending_owned_peak_bytes: u64,
+ }
+ 
+ struct AdmissionBatchMetrics {
+@@ -1768,6 +1770,22 @@ impl DeferredObjectStore {
+         }
+     }
+ 
++    fn consume_prevalidated_order(
++        mut self,
++        order: &IdOrder,
++        visitor: &mut dyn FnMut(CanonicalObject) -> Result<()>,
++    ) -> Result<()> {
++        match &mut self.storage {
++            DeferredObjects::Memory { rows, .. } => order.visit(|id| {
++                visitor(CanonicalObject {
++                    id,
++                    bytes: rows.remove(&id).ok_or(StoreError::MissingObject(id))?,
++                })
++            }),
++            DeferredObjects::Spill(spill) => spill.visit_ordered_owned(order, visitor),
++        }
++    }
++
+     #[cfg(test)]
+     fn consume_prevalidated_pages(
+         mut self,
+@@ -2164,6 +2182,27 @@ impl SpillObjects {
+         &self,
+         order: &IdOrder,
+         visitor: &mut dyn FnMut(ObjectId, &[u8]) -> Result<()>,
++    ) -> Result<()> {
++        self.visit_ordered_buffers(order, &mut |id, bytes| visitor(id, bytes))
++    }
++
++    fn visit_ordered_owned(
++        &self,
++        order: &IdOrder,
++        visitor: &mut dyn FnMut(CanonicalObject) -> Result<()>,
++    ) -> Result<()> {
++        self.visit_ordered_buffers(order, &mut |id, bytes| {
++            visitor(CanonicalObject {
++                id,
++                bytes: std::mem::take(bytes),
++            })
++        })
++    }
++
++    fn visit_ordered_buffers(
++        &self,
++        order: &IdOrder,
++        visitor: &mut dyn FnMut(ObjectId, &mut Vec<u8>) -> Result<()>,
+     ) -> Result<()> {
+         let mut file = self
+             .reader
+@@ -2190,7 +2229,7 @@ impl SpillObjects {
+                 }
+                 canonical.resize(length, 0);
+                 file.read_exact(&mut canonical)?;
+-                return visitor(expected, &canonical);
++                return visitor(expected, &mut canonical);
+             }
+             file.seek(SeekFrom::Current(
+                 i64::try_from(length)
+@@ -2937,19 +2976,35 @@ impl<'a> InitializationSegmentAdmission<'a> {
+ 
+ pub(crate) fn admit_planned_objects(
+     db: &crate::schema::StoreDb,
+-    objects: &DeferredObjectStore,
++    objects: DeferredObjectStore,
+     plan: &CandidatePlan,
+     statement_number: &mut u64,
+ ) -> Result<PlannedAdmission> {
+-    admit_planned_objects_with_limits(
++    // Normal candidates always have membership-checked insertion order. Move payloads
++    // into the carried admission batch; consumed private state is dropped in Commit.
++    if plan.all_missing {
++        return Err(StoreError::Integrity("unchecked Workspace admission plan"));
++    }
++    let spilled = matches!(&objects.storage, DeferredObjects::Spill(_));
++    let admission = admit_object_stream(
+         db,
+-        objects,
+         plan,
+         statement_number,
+         ADMISSION_BATCH_COUNT,
+         ADMISSION_BATCH_BYTES,
+         false,
+-    )
++        |visitor| objects.consume_prevalidated_order(&plan.missing_order, visitor),
++    )?;
++    crate::telemetry::note_workspace_admission_buffers(
++        admission.payload_moved_bytes,
++        if spilled {
++            admission.payload_moved_bytes
++        } else {
++            0
++        },
++        admission.pending_owned_peak_bytes,
++    );
++    Ok(admission)
+ }
+ 
+ pub(crate) fn admit_initialization_objects(
+@@ -2958,28 +3013,40 @@ pub(crate) fn admit_initialization_objects(
+     plan: &CandidatePlan,
+     statement_number: &mut u64,
+ ) -> Result<PlannedAdmission> {
+-    admit_planned_objects_with_limits(
++    let order = if plan.all_missing {
++        &objects.reachable
++    } else {
++        &plan.missing_order
++    };
++    admit_object_stream(
+         db,
+-        objects,
+         plan,
+         statement_number,
+         INITIALIZATION_ADMISSION_BATCH_COUNT,
+         ADMISSION_BATCH_BYTES,
+         true,
++        |visitor| {
++            objects.visit_prevalidated_order(order, &mut |id, bytes| {
++                visitor(CanonicalObject {
++                    id,
++                    bytes: bytes.to_vec(),
++                })
++            })
++        },
+     )
+ }
+ 
+-fn admit_planned_objects_with_limits(
++fn admit_object_stream(
+     db: &crate::schema::StoreDb,
+-    objects: &DeferredObjectStore,
+     plan: &CandidatePlan,
+     statement_number: &mut u64,
+     batch_count: usize,
+     batch_bytes_limit: usize,
+     bulk_insert: bool,
++    visit: impl FnOnce(&mut dyn FnMut(CanonicalObject) -> Result<()>) -> Result<()>,
+ ) -> Result<PlannedAdmission> {
+     let mut batch = Vec::with_capacity(batch_count);
+-    let mut batch_bytes = 0_usize;
++    let mut batch_capacity_bytes = 0_usize;
+     let mut admission = PlannedAdmission {
+         final_batch: Vec::new(),
+         batch_inserted_objects: 0,
+@@ -2990,19 +3057,23 @@ fn admit_planned_objects_with_limits(
+         begin_ns: 0,
+         insert_ns: 0,
+         commit_ns: 0,
++        payload_moved_bytes: 0,
++        pending_owned_peak_bytes: (batch.capacity() * std::mem::size_of::<CanonicalObject>())
++            as u64,
+     };
+-    let order = if plan.all_missing {
+-        &objects.reachable
+-    } else {
+-        &plan.missing_order
+-    };
+-    objects.visit_prevalidated_order(order, &mut |id, bytes| {
+-        if bytes.len() > batch_bytes_limit {
++    visit(&mut |object| {
++        let bytes = &object.bytes;
++        admission.pending_owned_peak_bytes = admission.pending_owned_peak_bytes.max(
++            (batch.capacity() * std::mem::size_of::<CanonicalObject>()) as u64
++                + batch_capacity_bytes as u64
++                + object.bytes.capacity() as u64,
++        );
++        if bytes.capacity() > batch_bytes_limit {
+             return Err(StoreError::Integrity("canonical object admission size"));
+         }
+         if !batch.is_empty()
+             && (batch.len() == batch_count
+-                || batch_bytes.saturating_add(bytes.len()) > batch_bytes_limit)
++                || batch_capacity_bytes.saturating_add(bytes.capacity()) > batch_bytes_limit)
+         {
+             let metrics = insert_admission_batch(db, &batch, statement_number, bulk_insert)?;
+             admission.batch_inserted_objects = admission
+@@ -3021,13 +3092,13 @@ fn admit_planned_objects_with_limits(
+             admission.insert_ns = admission.insert_ns.saturating_add(metrics.insert.insert_ns);
+             admission.commit_ns = admission.commit_ns.saturating_add(metrics.commit_ns);
+             batch.clear();
+-            batch_bytes = 0;
++            batch_capacity_bytes = 0;
+         }
+-        batch_bytes = batch_bytes.saturating_add(bytes.len());
+-        batch.push(CanonicalObject {
+-            id,
+-            bytes: bytes.to_vec(),
+-        });
++        batch_capacity_bytes += object.bytes.capacity();
++        admission.payload_moved_bytes = admission
++            .payload_moved_bytes
++            .saturating_add(bytes.len() as u64);
++        batch.push(object);
+         Ok(())
+     })?;
+     admission.final_batch = batch;
+@@ -3936,6 +4007,36 @@ mod tests {
+         std::fs::remove_dir_all(root).unwrap();
+     }
+ 
++    #[test]
++    fn final_candidate_consumption_moves_memory_and_reads_owned_spill() {
++        for spill in [false, true] {
++            let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
++            let canonical = layerfs_content::encode_bytes_object(b"owned final candidate").unwrap();
++            let id = ObjectId::for_bytes(&canonical);
++            let pointer = canonical.as_ptr();
++            objects.put_owned(id, canonical).unwrap();
++            if spill {
++                objects.spill().unwrap();
++                objects = objects.all_reachable().unwrap();
++            }
++            let mut order = IdOrder::empty();
++            order.push(id).unwrap();
++            let mut consumed = 0;
++            objects
++                .consume_prevalidated_order(&order, &mut |object| {
++                    assert_eq!(object.id, id);
++                    assert_eq!(ObjectId::for_bytes(&object.bytes), id);
++                    if !spill {
++                        assert_eq!(object.bytes.as_ptr(), pointer);
++                    }
++                    consumed += 1;
++                    Ok(())
++                })
++                .unwrap();
++            assert_eq!(consumed, 1);
++        }
++    }
++
+     #[test]
+     fn planned_admission_keeps_every_object_transaction_below_the_frozen_bounds() {
+         let root = std::env::temp_dir().join(format!(
+@@ -3990,12 +4091,27 @@ mod tests {
+             300
+         );
+ 
++        let object_count = 2 * ADMISSION_BATCH_COUNT + 46;
++        for index in 300_u64..object_count as u64 {
++            let canonical = layerfs_content::encode_bytes_object(&index.to_le_bytes()).unwrap();
++            objects
++                .put(ObjectId::for_bytes(&canonical), &canonical)
++                .unwrap();
++        }
++        let plan = db.plan_candidate(&objects).unwrap();
++        assert!(!plan.all_missing);
+         let mut statement_number = 0;
+-        let admission = admit_planned_objects(&db, &objects, &plan, &mut statement_number).unwrap();
++        let admission = admit_planned_objects(&db, objects, &plan, &mut statement_number).unwrap();
+         assert_eq!(admission.transactions, 2);
+-        assert_eq!(admission.batch_inserted_objects, 254);
++        assert_eq!(
++            admission.batch_inserted_objects,
++            (2 * ADMISSION_BATCH_COUNT) as u64
++        );
+         assert_eq!(admission.final_batch.len(), 46);
+-        assert_eq!(admission.max_transaction_objects, 127);
++        assert_eq!(
++            admission.max_transaction_objects,
++            ADMISSION_BATCH_COUNT as u64
++        );
+         assert!(admission.max_transaction_bytes < OBJECT_PAGE_BYTES as u64);
+         {
+             let mut connection = db.writer().unwrap();
+@@ -4008,7 +4124,14 @@ mod tests {
+             assert_eq!(final_metrics.objects, 46);
+             transaction.commit().unwrap();
+         }
+-        assert_eq!(db.plan_candidate(&objects).unwrap().reused_objects, 300);
++        assert_eq!(
++            db.reader()
++                .unwrap()
++                .query_row("SELECT COUNT(*) FROM objects", [], |row| row
++                    .get::<_, usize>(0))
++                .unwrap(),
++            object_count
++        );
+         let existing = admission.final_batch[0].clone();
+         let mut forged = DeferredObjectStore::new_all_reachable().unwrap();
+         let forged_bytes = layerfs_content::encode_bytes_object(&u64::MAX.to_le_bytes()).unwrap();
+diff --git a/crates/layerfs-layerstack-store/src/schema.rs b/crates/layerfs-layerstack-store/src/schema.rs
+index df57ef0f..9b5e0fd1 100644
+--- a/crates/layerfs-layerstack-store/src/schema.rs
++++ b/crates/layerfs-layerstack-store/src/schema.rs
+@@ -14,7 +14,7 @@ pub const SQLITE_PAGE_CACHE_KIB: i64 = 32 * 1024;
+ 
+ #[cfg(feature = "test-instrumentation")]
+ thread_local! {
+-    static SQL_TRACE: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
++    static SQL_TRACE: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
+ }
+ 
+ #[cfg(debug_assertions)]
+@@ -25,18 +25,23 @@ thread_local! {
+ #[cfg(feature = "test-instrumentation")]
+ fn trace_sql(event: rusqlite::trace::TraceEvent<'_>) {
+     if let rusqlite::trace::TraceEvent::Stmt(_, sql) = event {
+-        SQL_TRACE.with(|trace| trace.borrow_mut().push(sql.to_owned()));
++        SQL_TRACE.with(|trace| {
++            if let Some(trace) = trace.borrow_mut().as_mut() {
++                trace.push(sql.to_owned());
++            }
++        });
+     }
+ }
+ 
+ #[cfg(feature = "test-instrumentation")]
+ pub fn reset_sql_trace() {
+-    SQL_TRACE.with(|trace| trace.borrow_mut().clear());
++    // Explicit tracing request; ordinary instrumented runs retain no SQL strings.
++    SQL_TRACE.with(|trace| *trace.borrow_mut() = Some(Vec::new()));
+ }
+ 
+ #[cfg(feature = "test-instrumentation")]
+ pub fn sql_trace() -> Vec<String> {
+-    SQL_TRACE.with(|trace| trace.borrow().clone())
++    SQL_TRACE.with(|trace| trace.borrow().as_ref().cloned().unwrap_or_default())
+ }
+ 
+ #[cfg(debug_assertions)]
+diff --git a/crates/layerfs-layerstack-store/src/telemetry.rs b/crates/layerfs-layerstack-store/src/telemetry.rs
+index 85e8ca7f..f7168a13 100644
+--- a/crates/layerfs-layerstack-store/src/telemetry.rs
++++ b/crates/layerfs-layerstack-store/src/telemetry.rs
+@@ -36,7 +36,7 @@ pub struct LayerStackInitializationReceipt {
+ }
+ 
+ impl CandidateReceipt {
+-    fn validate(self) -> Result<()> {
++    pub(crate) fn validate(self) -> Result<()> {
+         self.validate_with_max_objects(crate::objects::ADMISSION_BATCH_COUNT as u64)
+     }
+ 
+@@ -106,6 +106,10 @@ pub struct WorkspaceCommitReceipt {
+     pub object_admission_begin_ns: u64,
+     pub object_admission_insert_ns: u64,
+     pub object_admission_commit_ns: u64,
++    pub admission_payload_moved_bytes: u64,
++    pub admission_payload_copy_bytes: u64,
++    pub admission_spill_payload_read_bytes: u64,
++    pub admission_pending_owned_peak_bytes: u64,
+     pub publication_ns: u64,
+     pub publication_begin_ns: u64,
+     pub publication_payload_ns: u64,
+@@ -146,6 +150,12 @@ pub struct WorkspaceCommitDiagnostics {
+     pub namespace_dirty_nodes_visited: u64,
+     pub namespace_clean_nodes_visited: u64,
+     pub namespace_candidate_probe_nodes: u64,
++    pub handoff_records: u64,
++    pub handoff_spill_bytes: u64,
++    pub handoff_buffer_capacity: u64,
++    pub handoff_inode_pages_read: u64,
++    pub handoff_binding_checks: u64,
++    pub handoff_prepare_ns: u64,
+ }
+ 
+ impl WorkspaceCommitReceipt {
+@@ -387,6 +397,31 @@ pub fn note_workspace_namespace_visits(
+     });
+ }
+ 
++pub fn note_workspace_handoff(
++    records: u64,
++    bytes: u64,
++    capacity: u64,
++    inode_pages: u64,
++    binding_checks: u64,
++    prepare_ns: u64,
++) {
++    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
++        if let Some(diagnostic) = current.borrow_mut().as_mut() {
++            diagnostic.handoff_records = diagnostic.handoff_records.saturating_add(records);
++            diagnostic.handoff_spill_bytes = diagnostic.handoff_spill_bytes.saturating_add(bytes);
++            diagnostic.handoff_buffer_capacity = diagnostic.handoff_buffer_capacity.max(capacity);
++            diagnostic.handoff_inode_pages_read = diagnostic
++                .handoff_inode_pages_read
++                .saturating_add(inode_pages);
++            diagnostic.handoff_binding_checks = diagnostic
++                .handoff_binding_checks
++                .saturating_add(binding_checks);
++            diagnostic.handoff_prepare_ns =
++                diagnostic.handoff_prepare_ns.saturating_add(prepare_ns);
++        }
++    });
++}
++
+ pub fn note_workspace_commit_tree_visits(visits: u64) {
+     WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+         if let Some(diagnostic) = current.borrow_mut().as_mut() {
+@@ -462,6 +497,17 @@ pub(crate) fn note_workspace_admission(
+     });
+ }
+ 
++pub(crate) fn note_workspace_admission_buffers(moved: u64, spill_read: u64, peak: u64) {
++    WORKSPACE_COMMIT.with(|current| {
++        if let Some(receipt) = current.borrow_mut().as_mut() {
++            receipt.admission_payload_moved_bytes = moved;
++            receipt.admission_payload_copy_bytes = 0;
++            receipt.admission_spill_payload_read_bytes = spill_read;
++            receipt.admission_pending_owned_peak_bytes = peak;
++        }
++    });
++}
++
+ pub fn note_workspace_commit_reads(
+     before: WorkspaceReadReceipt,
+     after: WorkspaceReadReceipt,
+@@ -556,14 +602,12 @@ pub fn note_workspace_create_snapshot(
+     })
+ }
+ 
+-pub(crate) fn record_candidate(receipt: CandidateReceipt) -> Result<()> {
+-    receipt.validate()?;
++pub(crate) fn record_candidate(receipt: CandidateReceipt) {
+     RECEIPTS.with(|receipts| {
+         receipts
+             .borrow_mut()
+             .push(StorageReceipt::Candidate(receipt));
+     });
+-    Ok(())
+ }
+ 
+ pub(crate) fn record_initialization_candidate(receipt: CandidateReceipt) -> Result<()> {
+diff --git a/crates/layerfs-layerstack-store/src/workspace.rs b/crates/layerfs-layerstack-store/src/workspace.rs
+index c460587c..cf4827f6 100644
+--- a/crates/layerfs-layerstack-store/src/workspace.rs
++++ b/crates/layerfs-layerstack-store/src/workspace.rs
+@@ -167,6 +167,18 @@ impl LayerStackStore {
+         prepared: &PreparedReconciliation,
+         working: BuiltRoot,
+         choices: &[layerfs_content::filesystem::ReconcileChoice],
++    ) -> Result<CommitOutcome> {
++        self.commit_reconciliation_checked(prepared, working, choices, |_, _, _| Ok(()))
++    }
++
++    /// Inspect the actual selected candidate before any publication. The reader
++    /// includes the working and selected private objects for authenticated diff.
++    pub fn commit_reconciliation_checked(
++        &self,
++        prepared: &PreparedReconciliation,
++        working: BuiltRoot,
++        choices: &[layerfs_content::filesystem::ReconcileChoice],
++        inspect: impl FnOnce(&SnapshotReader, ObjectId, ObjectId) -> Result<()>,
+     ) -> Result<CommitOutcome> {
+         let branch = self
+             .branch(prepared.branch_id)?
+@@ -196,6 +208,14 @@ impl LayerStackStore {
+             &prepared.conflicts,
+             choices,
+         )?;
++        let selected_root = selected.root_id;
++        let selected_counters = selected.counters;
++        let selected = Arc::new(Mutex::new(selected.objects));
++        let mut selected_reader = reader.clone();
++        selected_reader.root = selected_root;
++        selected_reader.overlays.insert(0, selected.clone());
++        inspect(&selected_reader, working_root, selected_root)?;
++        let selected = selected.lock().map_err(|_| StoreError::Integrity("reconciliation candidate"))?;
+         let working = working
+             .lock()
+             .map_err(|_| StoreError::Integrity("reconciliation candidate"))?;
+@@ -204,17 +224,17 @@ impl LayerStackStore {
+             .lock()
+             .map_err(|_| StoreError::Integrity("reconciliation candidate"))?;
+         let objects = combine_candidates(
+-            selected.root_id,
+-            &[&working, &prepared_objects, &selected.objects],
++            selected_root,
++            &[&working, &prepared_objects, &selected],
+         )?;
+         self.commit_candidate(
+             &branch,
+             prepared.branch_root,
+             prepared.current_layer_id,
+             BuiltRoot {
+-                root_id: selected.root_id,
++                root_id: selected_root,
+                 objects,
+-                counters: selected.counters,
++                counters: selected_counters,
+             },
+         )
+     }
+@@ -256,7 +276,7 @@ impl LayerStackStore {
+         let started = Instant::now();
+         let mut statement_number = 0;
+         let admission =
+-            admit_planned_objects(&self.db, &built.objects, &plan, &mut statement_number)?;
++            admit_planned_objects(&self.db, built.objects, &plan, &mut statement_number)?;
+         crate::telemetry::note_workspace_admission(
+             admission.transactions,
+             admission.max_transaction_objects,
+@@ -335,22 +355,7 @@ impl LayerStackStore {
+                 actual,
+             });
+         }
+-        let metadata_ns = elapsed_ns(metadata_started);
+-        let commit_started = Instant::now();
+-        transaction.commit()?;
+-        let commit_ns = elapsed_ns(commit_started);
+-        crate::telemetry::note_workspace_publication(
+-            begin_ns,
+-            insert_metrics.payload_ns,
+-            insert_metrics.insert_ns,
+-            metadata_ns,
+-            commit_ns,
+-        );
+-        crate::telemetry::note_workspace_commit_phase(
+-            crate::WorkspaceCommitPhase::Publication,
+-            elapsed_ns(started),
+-        );
+-        crate::telemetry::record_candidate(crate::CandidateReceipt {
++        let receipt = crate::CandidateReceipt {
+             candidate_objects: plan.candidate_objects,
+             candidate_bytes: plan.candidate_bytes,
+             inserted_objects: plan.inserted_objects,
+@@ -366,7 +371,24 @@ impl LayerStackStore {
+             admission_transactions: admission.transactions,
+             max_transaction_objects: admission.max_transaction_objects,
+             max_transaction_bytes: admission.max_transaction_bytes,
+-        })?;
++        };
++        receipt.validate()?;
++        let metadata_ns = elapsed_ns(metadata_started);
++        let commit_started = Instant::now();
++        transaction.commit()?;
++        let commit_ns = elapsed_ns(commit_started);
++        crate::telemetry::note_workspace_publication(
++            begin_ns,
++            insert_metrics.payload_ns,
++            insert_metrics.insert_ns,
++            metadata_ns,
++            commit_ns,
++        );
++        crate::telemetry::note_workspace_commit_phase(
++            crate::WorkspaceCommitPhase::Publication,
++            elapsed_ns(started),
++        );
++        crate::telemetry::record_candidate(receipt);
+         Ok(CommitOutcome::Committed {
+             commit_id: commit.id,
+             root_id: commit.root_id,
+diff --git a/crates/layerfs-workspace/src/changes.rs b/crates/layerfs-workspace/src/changes.rs
+index cca2e97e..62387069 100644
+--- a/crates/layerfs-workspace/src/changes.rs
++++ b/crates/layerfs-workspace/src/changes.rs
+@@ -1,7 +1,7 @@
+ use crate::cow_tree::{portable_metadata, Attr, Data, FileData, Kind, NodeId, Workspace, ROOT};
+ use layerfs_content::file::rope::{self, FileMutationBatch, FileStateRoot, RopeCounters};
+ use layerfs_content::filesystem::{self, ContentChange, InodeMutation, LogicalCounters};
+-use layerfs_content::object::access::ObjectRead;
++use layerfs_content::object::access::{ObjectRead, ObjectStore};
+ use layerfs_content::object::{ContentDigestWriter, ObjectId};
+ use layerfs_content::tree::directory::{
+     directory_lookup, directory_page_after, empty_directory, DirectoryStateRoot, NamespaceCounters,
+@@ -42,315 +42,8 @@ impl Workspace {
+                 "injected Workspace candidate failure",
+             ));
+         }
+-        if let Some(candidate) = self.build_localized_candidate()? {
+-            return Ok(candidate);
+-        }
+-        let captured = self.take_capture();
+-        if let Some(captured) = &captured {
+-            layerfs_layerstack_store::note_workspace_capture(1, captured.len);
+-        }
+-        let started = Instant::now();
+-        let base = self.base_manifest()?;
+-        let final_view = self.final_manifest(manifest_charge(&base))?;
+-        let base_groups = groups_by_inode(&base);
+-        let final_groups = groups_by_node(&final_view);
+-        let mut recreate = BTreeSet::new();
+-        let mut rewrite = BTreeSet::new();
+-        let mut renames = BTreeMap::new();
+-        note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
+-
+-        let started = Instant::now();
+-        for (node, paths) in &final_groups {
+-            let entry = final_view
+-                .get(&paths[0])
+-                .ok_or(StorageError::Integrity("final manifest"))?;
+-            if let Some(inode) = self.nodes.get(node).and_then(|node| node.canonical) {
+-                if let Some(before_paths) = base_groups.get(&inode) {
+-                    let removed = before_paths
+-                        .iter()
+-                        .filter(|path| !paths.contains(path))
+-                        .collect::<Vec<_>>();
+-                    let added = paths
+-                        .iter()
+-                        .filter(|path| !before_paths.contains(path))
+-                        .collect::<Vec<_>>();
+-                    if before_paths.len() == paths.len() && removed.len() == 1 && added.len() == 1 {
+-                        let before = base
+-                            .get(removed[0])
+-                            .ok_or(StorageError::Integrity("rename source"))?;
+-                        let content_matches = match entry.attr.kind {
+-                            Kind::File => {
+-                                !self.file_may_differ(entry.node, before.record.content_root)?
+-                            }
+-                            Kind::Symlink => {
+-                                self.readlink(entry.node)?
+-                                    == self.base_symlink(before.record.content_root)?
+-                            }
+-                            Kind::Directory => false,
+-                        };
+-                        if kind(before.record.kind) == entry.attr.kind
+-                            && before.mode == entry.attr.mode
+-                            && before.mtime_seconds == entry.attr.mtime_seconds
+-                            && before.mtime_nanoseconds == entry.attr.mtime_nanoseconds
+-                            && content_matches
+-                        {
+-                            renames.insert(*node, (removed[0].clone(), added[0].clone()));
+-                            continue;
+-                        }
+-                    }
+-                }
+-            }
+-            let exact_base = paths
+-                .first()
+-                .and_then(|path| base.get(path))
+-                .filter(|first| {
+-                    paths.iter().all(|path| {
+-                        base.get(path).is_some_and(|candidate| {
+-                            candidate.inode == first.inode
+-                                && kind(candidate.record.kind) == entry.attr.kind
+-                        })
+-                    })
+-                })
+-                .filter(|first| {
+-                    self.nodes.get(node).and_then(|node| node.canonical) == Some(first.inode)
+-                })
+-                .filter(|first| base_groups.get(&first.inode) == Some(paths));
+-            let Some(base_entry) = exact_base else {
+-                recreate.insert(*node);
+-                continue;
+-            };
+-            match entry.attr.kind {
+-                Kind::File
+-                    if self.file_may_differ(entry.node, base_entry.record.content_root)? =>
+-                {
+-                    rewrite.insert(*node);
+-                }
+-                Kind::Symlink
+-                    if self.readlink(entry.node)?
+-                        != self.base_symlink(base_entry.record.content_root)? =>
+-                {
+-                    recreate.insert(*node);
+-                }
+-                _ => {}
+-            }
+-        }
+-        note_commit_phase(WorkspaceCommitPhase::DirtyCompare, started);
+-
+-        let started = Instant::now();
+-        let seed = *filesystem::namespace(&CoreReader(&self.reader), self.base_root)?
+-            .root_directory_inode
+-            .as_bytes();
+-        let (mut objects, captured) = match captured {
+-            Some(crate::capture::CapturedFile {
+-                node,
+-                len,
+-                root,
+-                counters,
+-                objects,
+-            }) => (
+-                ObjectBuffer::resume_prevalidated(&self.reader, objects),
+-                Some((node, len, root, counters)),
+-            ),
+-            None => (ObjectBuffer::new(&self.reader)?, None),
+-        };
+-        let mut root = self.base_root;
+-        let mut cdc_bytes_scanned = 0_u64;
+-        let renamed_sources = renames
+-            .values()
+-            .map(|(source, _)| source.as_str())
+-            .collect::<BTreeSet<_>>();
+-        let mut removals = base
+-            .iter()
+-            .filter_map(|(path, before)| match final_view.get(path) {
+-                None if !renamed_sources.contains(path.as_str()) => Some(path.clone()),
+-                None => None,
+-                Some(after)
+-                    if kind(before.record.kind) != after.attr.kind
+-                        || recreate.contains(&after.node)
+-                        || (renames.contains_key(&after.node)
+-                            && self.nodes[&after.node].canonical != Some(before.inode)) =>
+-                {
+-                    Some(path.clone())
+-                }
+-                _ => None,
+-            })
+-            .collect::<Vec<_>>();
+-        removals
+-            .sort_by(|left, right| depth(right).cmp(&depth(left)).then_with(|| right.cmp(left)));
+-        for path in removals {
+-            root = apply_one(
+-                &mut objects,
+-                root,
+-                ContentChange::Remove { path },
+-                seed,
+-                &mut cdc_bytes_scanned,
+-            )?;
+-        }
+-
+-        for (source, target) in renames.values() {
+-            let source = CanonicalPath::new(source)?;
+-            let target = CanonicalPath::new(target)?;
+-            let mut counters = LogicalCounters::default();
+-            let (source_parent, _) =
+-                filesystem::resolve_parent(&objects, root, &source, &mut counters)?;
+-            let (target_parent, _) =
+-                filesystem::resolve_parent(&objects, root, &target, &mut counters)?;
+-            root = filesystem::rename(
+-                &mut objects,
+-                root,
+-                &source,
+-                &target,
+-                source_parent.record.metadata_root,
+-                target_parent.record.metadata_root,
+-            )?
+-            .root();
+-        }
+-
+-        let mut directories = final_view
+-            .iter()
+-            .filter(|(path, entry)| {
+-                entry.attr.kind == Kind::Directory
+-                    && !base
+-                        .get(*path)
+-                        .is_some_and(|before| kind(before.record.kind) == Kind::Directory)
+-            })
+-            .map(|(path, entry)| (path.clone(), *entry))
+-            .collect::<Vec<_>>();
+-        directories.sort_by(|left, right| {
+-            depth(&left.0)
+-                .cmp(&depth(&right.0))
+-                .then_with(|| left.0.cmp(&right.0))
+-        });
+-        for (path, entry) in directories {
+-            root = apply_one(
+-                &mut objects,
+-                root,
+-                ContentChange::Mkdir {
+-                    path: path.clone(),
+-                    mode: entry.attr.mode,
+-                },
+-                seed,
+-                &mut cdc_bytes_scanned,
+-            )?;
+-            root = set_metadata(&mut objects, root, &path, entry.attr)?;
+-        }
+-        note_commit_phase(WorkspaceCommitPhase::Namespace, started);
+-
+-        let groups = final_groups
+-            .iter()
+-            .map(|(node, paths)| (paths[0].clone(), (*node, paths)))
+-            .collect::<BTreeMap<_, _>>();
+-        for (representative, (node, paths)) in groups {
+-            let entry = *final_view
+-                .get(&representative)
+-                .ok_or(StorageError::Integrity("final manifest"))?;
+-            if recreate.contains(&node) {
+-                let started = Instant::now();
+-                root = self.create_group(
+-                    &mut objects,
+-                    root,
+-                    &representative,
+-                    paths,
+-                    entry,
+-                    captured,
+-                    seed,
+-                    &mut cdc_bytes_scanned,
+-                )?;
+-                note_commit_phase(WorkspaceCommitPhase::Content, started);
+-            } else {
+-                if rewrite.contains(&node) {
+-                    let before = base
+-                        .get(&representative)
+-                        .ok_or(StorageError::Integrity("base hard-link group"))?;
+-                    let started = Instant::now();
+-                    match self.mutate_existing_file(&mut objects, node, *before)? {
+-                        Some((content, counters)) => {
+-                            cdc_bytes_scanned = cdc_bytes_scanned
+-                                .checked_add(counters.cdc_bytes_scanned)
+-                                .ok_or(StorageError::Integrity("CDC counter"))?;
+-                            root = filesystem::apply_inode_mutations(
+-                                &mut objects,
+-                                root,
+-                                [InodeMutation::Upsert {
+-                                    inode: before.inode,
+-                                    record: InodeRecordV1 {
+-                                        content_root: content.0,
+-                                        ..before.record
+-                                    },
+-                                }],
+-                            )?
+-                            .root();
+-                        }
+-                        None if self
+-                            .incremental_file_supported(node, before.record.content_root) => {}
+-                        None => {
+-                            let candidate = filesystem::write_file(
+-                                &mut objects,
+-                                root,
+-                                &CanonicalPath::new(&representative)?,
+-                                WorkspaceFileReader::new(self, node)?,
+-                                entry.attr.mode,
+-                                seed,
+-                            )?;
+-                            cdc_bytes_scanned = cdc_bytes_scanned
+-                                .checked_add(candidate.counters().rope.cdc_bytes_scanned)
+-                                .ok_or(StorageError::Integrity("CDC counter"))?;
+-                            root = candidate.root();
+-                        }
+-                    }
+-                    note_commit_phase(WorkspaceCommitPhase::Content, started);
+-                }
+-                let before_path = renames
+-                    .get(&node)
+-                    .map_or(representative.as_str(), |(source, _)| source.as_str());
+-                let before = base
+-                    .get(before_path)
+-                    .ok_or(StorageError::Integrity("base hard-link group"))?;
+-                if before.mode != entry.attr.mode
+-                    || before.mtime_seconds != entry.attr.mtime_seconds
+-                    || before.mtime_nanoseconds != entry.attr.mtime_nanoseconds
+-                {
+-                    let started = Instant::now();
+-                    root = set_metadata(&mut objects, root, &representative, entry.attr)?;
+-                    note_commit_phase(WorkspaceCommitPhase::Namespace, started);
+-                }
+-            }
+-        }
+-
+-        let started = Instant::now();
+-        let base_root = filesystem::resolve(
+-            &CoreReader(&self.reader),
+-            self.base_root,
+-            &CanonicalPath::root(),
+-            &mut LogicalCounters::default(),
+-        )?;
+-        let base_root_metadata = portable_metadata(
+-            &CoreReader(&self.reader),
+-            base_root.record.metadata_root,
+-            base_root.record.kind,
+-        )?;
+-        let final_root = self.attr(ROOT)?;
+-        if base_root_metadata.permission_mode != final_root.mode
+-            || base_root_metadata.mtime_seconds != final_root.mtime_seconds
+-            || base_root_metadata.mtime_nanoseconds != final_root.mtime_nanoseconds
+-        {
+-            let path = CanonicalPath::root();
+-            root = filesystem::set_mode(&mut objects, root, &path, final_root.mode)?.root();
+-            root = filesystem::set_mtime(
+-                &mut objects,
+-                root,
+-                &path,
+-                final_root.mtime_seconds,
+-                final_root.mtime_nanoseconds,
+-            )?
+-            .root();
+-        }
+-        note_commit_phase(WorkspaceCommitPhase::Namespace, started);
+-
+-        let started = Instant::now();
+-        let built = objects.finish(root, cdc_bytes_scanned);
+-        note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
+-        built
++        self.commit_handoff = None;
++        self.build_frontier_candidate()
+     }
+ 
+     // Directory overlays already are the final binding delta. Applying their inode
+@@ -358,8 +51,13 @@ impl Workspace {
+     // without building either complete namespace manifest.
+     fn build_frontier_candidate(&mut self) -> Result<BuiltRoot> {
+         let started = Instant::now();
+-        self.policy.check_final_delta(4096)?;
+-        let batch_size = (self.policy.max_final_delta_memory_bytes / 4096).min(128) as usize;
++        let memory = self.policy.max_final_delta_memory_bytes;
++        self.policy.check_final_delta(crate::references::MEMORY + crate::commit_spool::SORT_BYTES + layerfs_content::tree::batch::SORTED_TREE_UPDATE_SCRATCH_BYTES as u64)?;
++        let disk = self.policy.max_spool_bytes.checked_sub(self.spool_bytes)
++            .and_then(|n| n.checked_sub(self.references.bytes()))
++            .ok_or(StorageError::InvalidInput("workspace spool limit"))?;
++        let mut references = self.references.sorted(&self.spool, disk / 2, memory / 8)?;
++        let mut pairs = crate::commit_spool::Sorter::<65>::new(&self.spool, disk / 2, memory / 8)?;
+         let captured = self.take_capture();
+         if let Some(captured) = &captured {
+             layerfs_layerstack_store::note_workspace_capture(1, captured.len);
+@@ -377,20 +75,17 @@ impl Workspace {
+             ),
+             None => (ObjectBuffer::new(&self.reader)?, None),
+         };
+-        let mut inodes = FrontierInodes::new(self.base_root, batch_size);
++        let mut metadata_cache = Vec::with_capacity(8);
+         let mut cdc_bytes_scanned = 0_u64;
+         note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
+         let started = Instant::now();
+         for (&node, value) in &self.nodes {
+             layerfs_layerstack_store::note_workspace_namespace_visits(0, 0, 0, 0, 1);
+-            if value.paths.is_empty() {
+-                continue;
+-            }
++            let change = reference_delta(&references, crate::references::key(value.canonical, node))?;
++            let before = value.canonical.map(|inode| self.base_record(inode)).transpose()?;
++            let count = final_count(before.map_or(0, |record| record.namespace_ref_count), change)?;
++            if count == 0 && node != ROOT { continue; }
+             let inode = self.frontier_inode(node)?;
+-            let before = match value.canonical {
+-                Some(_) => Some(inodes.record(&objects, inode)?),
+-                None => None,
+-            };
+             let attr = self.attr(node)?;
+             let inode_kind = match attr.kind {
+                 Kind::File => InodeKind::RegularFile,
+@@ -403,34 +98,10 @@ impl Workspace {
+                         Some(base) => base,
+                         None => empty_directory(&mut objects)?,
+                     };
+-                    let mut changes = Vec::with_capacity(batch_size);
+-                    for (name, desired) in &directory.changes {
+-                        layerfs_layerstack_store::note_workspace_namespace_visits(
+-                            0,
+-                            u64::from(desired.is_some()),
+-                            0,
+-                            0,
+-                            0,
+-                        );
+-                        changes.push((
+-                            CanonicalName::from_bytes(name)?,
+-                            desired
+-                                .map(|child| self.frontier_inode(child))
+-                                .transpose()?,
+-                        ));
+-                        if changes.len() == batch_size {
+-                            content = filesystem::apply_directory_changes(
+-                                &mut objects,
+-                                content,
+-                                changes.drain(..),
+-                            )?
+-                            .0;
+-                        }
+-                    }
+-                    if !changes.is_empty() {
+-                        content =
+-                            filesystem::apply_directory_changes(&mut objects, content, changes)?.0;
+-                    }
++                    let changes = directory.changes.iter().map(|(name, desired)| {
++                        Ok((CanonicalName::from_bytes(name)?, desired.map(|child| self.frontier_inode(child)).transpose().map_err(|_| layerfs_content::CoreError::InvalidRecord("Workspace binding identity"))?))
++                    });
++                    content = layerfs_content::tree::directory::directory_apply_sorted(&mut objects, content, changes)?.0;
+                     content.0
+                 }
+                 Data::Symlink(target) => match before {
+@@ -505,19 +176,20 @@ impl Workspace {
+             }) {
+                 before.unwrap().metadata_root
+             } else {
+-                filesystem::build_portable_metadata(
+-                    &mut objects,
+-                    inode_kind,
+-                    attr.mode,
+-                    attr.mtime_seconds,
+-                    attr.mtime_nanoseconds,
+-                )?
++                let key = (inode_kind, attr.mode, attr.mtime_seconds, attr.mtime_nanoseconds);
++                if let Some((_, root)) = metadata_cache.iter().find(|(stored, _)| *stored == key) { *root }
++                else {
++                    let root = filesystem::build_portable_metadata(&mut objects, inode_kind, attr.mode, attr.mtime_seconds, attr.mtime_nanoseconds)?;
++                    if metadata_cache.len() == 8 { metadata_cache.remove(0); }
++                    metadata_cache.push((key, root));
++                    root
++                }
+             };
+             let record = InodeRecordV1 {
+                 kind: inode_kind,
+                 content_root,
+                 metadata_root,
+-                namespace_ref_count: before.map_or(0, |record| record.namespace_ref_count),
++                namespace_ref_count: count,
+             };
+             layerfs_layerstack_store::note_workspace_namespace_visits(
+                 0,
+@@ -527,229 +199,50 @@ impl Workspace {
+                 0,
+             );
+             if before != Some(record) {
+-                inodes.set(&mut objects, inode, Some(record))?;
++                push_inode(&mut pairs, &mut objects, inode, Some(record))?;
+             }
+         }
+         note_commit_phase(WorkspaceCommitPhase::Content, started);
+         let started = Instant::now();
+-        // Add all final edges before releasing old ones. A move therefore never
+-        // destroys the moved inode, and aliases outside the overlay retain their
+-        // original references even when they were never materialized in Workspace.
+-        for additions in [true, false] {
+-            for value in self.nodes.values().filter(|value| !value.paths.is_empty()) {
+-                let Data::Directory(directory) = &value.data else {
+-                    continue;
+-                };
+-                for (name, desired) in &directory.changes {
+-                    let name = CanonicalName::from_bytes(name)?;
+-                    let before = match directory.base {
+-                        Some(base) => directory_lookup(
+-                            &CoreReader(&self.reader),
+-                            base,
+-                            &name,
+-                            &mut NamespaceCounters::default(),
+-                        )?,
+-                        None => None,
+-                    };
+-                    let after = desired.map(|node| self.frontier_inode(node)).transpose()?;
+-                    layerfs_layerstack_store::note_workspace_namespace_visits(
+-                        u64::from(before.is_some()),
+-                        u64::from(after.is_some()),
+-                        0,
+-                        0,
+-                        0,
+-                    );
+-                    if before == after {
+-                        continue;
+-                    }
+-                    if additions {
+-                        if let Some(inode) = after {
+-                            let mut record = inodes.record(&objects, inode)?;
+-                            record.namespace_ref_count = record
+-                                .namespace_ref_count
+-                                .checked_add(1)
+-                                .ok_or(StorageError::Integrity("namespace reference overflow"))?;
+-                            inodes.set(&mut objects, inode, Some(record))?;
+-                        }
+-                    } else if let Some(inode) = before {
+-                        inodes.release(
+-                            &mut objects,
+-                            inode,
+-                            self.policy.max_final_delta_memory_bytes,
+-                        )?;
+-                    }
+-                }
+-            }
+-        }
+-        inodes.flush(&mut objects)?;
+-        note_commit_phase(WorkspaceCommitPhase::Namespace, started);
+-        let started = Instant::now();
+-        let built = objects.finish(inodes.root, cdc_bytes_scanned);
+-        note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
+-        built
+-    }
+-
+-    fn frontier_inode(&self, node: NodeId) -> Result<InodeId> {
+-        let value = self
+-            .nodes
+-            .get(&node)
+-            .ok_or(StorageError::Integrity("frontier node"))?;
+-        if let Some(inode) = value.canonical {
+-            return Ok(inode);
+-        }
+-        let path = value
+-            .paths
+-            .first()
+-            .ok_or(StorageError::Integrity("frontier path"))?;
+-        let batch_allowance = (self.policy.max_final_delta_memory_bytes / 4096).min(128) * 1024;
+-        self.policy
+-            .check_final_delta(batch_allowance.saturating_add(path_charge(path)))?;
+-        layerfs_layerstack_store::note_workspace_namespace_visits(0, 1, 0, 0, 0);
+-        // Bind new identity to this base snapshot: replacing one alias must not
+-        // accidentally reuse the still-live inode originally allocated at its path.
+-        Ok(filesystem::allocated_inode(
+-            self.base_root.to_bytes(),
+-            &CanonicalPath::new(path)?,
+-        ))
+-    }
+-
+-    fn build_localized_candidate(&mut self) -> Result<Option<BuiltRoot>> {
+-        let started = Instant::now();
+-        if self.nodes.values().inspect(|_| layerfs_layerstack_store::note_workspace_namespace_visits(0, 0, 0, 0, 1)).any(|node| {
+-            matches!(&node.data, Data::Directory(directory) if !directory.changes.is_empty())
+-        }) {
+-            return self.build_frontier_candidate().map(Some);
+-        }
+-        let mut changed = BTreeSet::new();
+-        for path in self.mutation_paths.keys() {
+-            let Some(node) = self
+-                .nodes
+-                .iter()
+-                .inspect(|_| {
+-                    layerfs_layerstack_store::note_workspace_namespace_visits(0, 0, 0, 0, 1)
+-                })
+-                .find_map(|(node, value)| value.paths.contains(path).then_some(*node))
+-            else {
+-                return Ok(None);
+-            };
+-            if self.nodes[&node].canonical.is_none() {
+-                return Ok(None);
+-            }
+-            changed.insert(node);
+-        }
+-        if changed.is_empty() || self.dirty.iter().any(|node| !changed.contains(node)) {
+-            return Ok(None);
+-        }
+-        let charge = self
+-            .mutation_paths
+-            .keys()
+-            .map(|path| path_charge(path))
+-            .sum();
+-        self.policy.check_final_delta(charge)?;
+-        note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
+-
+-        let captured = self.take_capture();
+-        if let Some(captured) = &captured {
+-            layerfs_layerstack_store::note_workspace_capture(1, captured.len);
+-        }
+-        let started = Instant::now();
+-        let reader = CoreReader(&self.reader);
+-        let mut entries = Vec::with_capacity(changed.len());
+-        for node in changed {
+-            layerfs_layerstack_store::note_workspace_namespace_visits(
+-                0,
+-                0,
+-                u64::from(self.dirty.contains(&node)),
+-                u64::from(!self.dirty.contains(&node)),
+-                0,
+-            );
+-            let inode = self.nodes[&node]
+-                .canonical
+-                .ok_or(StorageError::Integrity("localized inode"))?;
+-            let record_id = inode_table_lookup(
+-                &reader,
+-                self.base_inodes,
+-                inode,
+-                &mut InodeTableCounters::default(),
+-            )?
+-            .ok_or(StorageError::Integrity("localized inode record"))?;
+-            let record = reader.with_authenticated_canonical(record_id, decode_inode_record)?;
+-            let metadata = portable_metadata(&reader, record.metadata_root, record.kind)?;
+-            let attr = self.attr(node)?;
+-            if kind(record.kind) != attr.kind {
+-                return Err(StorageError::Integrity("localized inode kind"));
+-            }
+-            entries.push((
+-                node,
+-                attr,
+-                BaseEntry {
+-                    inode,
+-                    record,
+-                    mode: metadata.permission_mode,
+-                    mtime_seconds: metadata.mtime_seconds,
+-                    mtime_nanoseconds: metadata.mtime_nanoseconds,
+-                },
+-            ));
+-        }
+-        note_commit_phase(WorkspaceCommitPhase::DirtyCompare, started);
+-
+-        let started = Instant::now();
+-        let mut objects = ObjectBuffer::new(&self.reader)?;
+-        let mut mutations = Vec::new();
+-        let mut cdc_bytes_scanned = 0_u64;
+-        for (node, attr, base) in entries {
+-            let mut record = base.record;
+-            if attr.kind == Kind::File && self.file_may_differ(node, record.content_root)? {
+-                match self.mutate_existing_file(&mut objects, node, base)? {
+-                    Some((content, counters)) => {
+-                        record.content_root = content.0;
+-                        cdc_bytes_scanned = cdc_bytes_scanned
+-                            .checked_add(counters.cdc_bytes_scanned)
+-                            .ok_or(StorageError::Integrity("CDC counter"))?;
+-                    }
+-                    None if self.incremental_file_supported(node, record.content_root) => {}
+-                    None => {
+-                        let (content, counters) =
+-                            rope::build(&mut objects, WorkspaceFileReader::new(self, node)?)?;
+-                        record.content_root = content.0;
+-                        cdc_bytes_scanned = cdc_bytes_scanned
+-                            .checked_add(counters.cdc_bytes_scanned)
+-                            .ok_or(StorageError::Integrity("CDC counter"))?;
+-                    }
+-                }
+-            }
+-            if base.mode != attr.mode
+-                || base.mtime_seconds != attr.mtime_seconds
+-                || base.mtime_nanoseconds != attr.mtime_nanoseconds
+-            {
+-                record.metadata_root = filesystem::build_portable_metadata(
+-                    &mut objects,
+-                    record.kind,
+-                    attr.mode,
+-                    attr.mtime_seconds,
+-                    attr.mtime_nanoseconds,
+-                )?;
+-            }
+-            if record != base.record {
+-                mutations.push(InodeMutation::Upsert {
+-                    inode: base.inode,
+-                    record,
+-                });
++        // Reclaimed and unmaterialized existing inodes use authenticated base
++        // counts plus the same net binding input. No deleted-subtree walk.
++        references.rewind()?;
++        let mut current = references.next()?;
++        while let Some(record) = current.take() {
++            let key = <[u8;33]>::try_from(&record[..33]).unwrap();
++            let mut change = crate::references::delta(&record);
++            loop {
++                current = references.next()?;
++                if let Some(next) = current.filter(|next| next[..33] == key) {
++                    change = change.checked_add(crate::references::delta(&next)).ok_or(StorageError::Integrity("namespace reference overflow"))?;
++                } else { break; }
+             }
++            if key[0] != 0 || change == 0 { continue; }
++            let inode = InodeId::from_slice(&key[1..])?;
++            let before = self.base_record(inode)?;
++            let count = final_count(before.namespace_ref_count, change)?;
++            // Live nodes were finalized above; zero-reference pinned nodes and
++            // reclaimed nodes still require removal from the new table.
++            if count != 0 && self.canonical_nodes.contains_key(&inode) { continue; }
++            push_inode(&mut pairs, &mut objects, inode, (count != 0).then_some(InodeRecordV1 { namespace_ref_count: count, ..before }))?;
+         }
+-        note_commit_phase(WorkspaceCommitPhase::Content, started);
+-
+-        let started = Instant::now();
+-        let root = if mutations.is_empty() {
+-            self.base_root
+-        } else {
+-            filesystem::apply_inode_mutations(&mut objects, self.base_root, mutations)?.root()
+-        };
++        references.remove()?;
++        let mut pairs = pairs.finish()?;
++        let input = std::iter::from_fn(|| match pairs.next() {
++            Ok(Some(record)) => Some(Ok((InodeId::from_slice(&record[..32]).unwrap(), (record[32] != 0).then(|| ObjectId::from_bytes(&record[33..]).unwrap())))),
++            Ok(None) => None,
++            Err(_) => Some(Err(layerfs_content::CoreError::InvalidRecord("Workspace inode spool"))),
++        });
++        let namespace = filesystem::namespace(&objects, self.base_root)?;
++        let (table, _) = layerfs_content::tree::inode::inode_table_apply_sorted(&mut objects, self.base_inodes, input)?;
++        let root = objects.put_owned(layerfs_content::tree::directory::codec::encode_namespace_root(layerfs_content::tree::NamespaceRootV1 { inode_table_root: table.0, ..namespace })?)?;
++        pairs.remove()?;
+         note_commit_phase(WorkspaceCommitPhase::Namespace, started);
+         let started = Instant::now();
++        self.commit_handoff = Some(self.prepare_handoff(&objects, root)?);
+         let built = objects.finish(root, cdc_bytes_scanned);
+         note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
+-        built.map(Some)
++        built
+     }
+ 
+     pub(crate) fn resolution_fingerprint(
+@@ -803,94 +296,6 @@ impl Workspace {
+         Ok(digest.finish())
+     }
+ 
+-    #[allow(clippy::too_many_arguments)]
+-    fn create_group(
+-        &self,
+-        objects: &mut ObjectBuffer<'_>,
+-        mut root: ObjectId,
+-        representative: &str,
+-        paths: &[String],
+-        entry: FinalEntry,
+-        captured: Option<(NodeId, u64, FileStateRoot, RopeCounters)>,
+-        seed: [u8; 32],
+-        cdc_bytes_scanned: &mut u64,
+-    ) -> Result<ObjectId> {
+-        match entry.attr.kind {
+-            Kind::File => {
+-                let path = CanonicalPath::new(representative)?;
+-                if let Some((_, _, content, counters)) = captured
+-                    .filter(|(node, len, _, _)| *node == entry.node && *len == entry.attr.size)
+-                {
+-                    root = filesystem::write_file(
+-                        objects,
+-                        root,
+-                        &path,
+-                        std::io::empty(),
+-                        entry.attr.mode,
+-                        seed,
+-                    )?
+-                    .root();
+-                    let resolved =
+-                        filesystem::resolve(objects, root, &path, &mut LogicalCounters::default())?;
+-                    root = filesystem::apply_inode_mutations(
+-                        objects,
+-                        root,
+-                        [InodeMutation::Upsert {
+-                            inode: resolved.inode,
+-                            record: InodeRecordV1 {
+-                                content_root: content.0,
+-                                ..resolved.record
+-                            },
+-                        }],
+-                    )?
+-                    .root();
+-                    *cdc_bytes_scanned = cdc_bytes_scanned
+-                        .checked_add(counters.cdc_bytes_scanned)
+-                        .ok_or(StorageError::Integrity("CDC counter"))?;
+-                } else {
+-                    let candidate = filesystem::write_file(
+-                        objects,
+-                        root,
+-                        &path,
+-                        WorkspaceFileReader::new(self, entry.node)?,
+-                        entry.attr.mode,
+-                        seed,
+-                    )?;
+-                    *cdc_bytes_scanned = cdc_bytes_scanned
+-                        .checked_add(candidate.counters().rope.cdc_bytes_scanned)
+-                        .ok_or(StorageError::Integrity("CDC counter"))?;
+-                    root = candidate.root();
+-                }
+-            }
+-            Kind::Symlink => {
+-                root = apply_one(
+-                    objects,
+-                    root,
+-                    ContentChange::Symlink {
+-                        path: representative.to_owned(),
+-                        target: self.readlink(entry.node)?,
+-                    },
+-                    seed,
+-                    cdc_bytes_scanned,
+-                )?;
+-            }
+-            Kind::Directory => return Err(StorageError::Integrity("directory hard link")),
+-        }
+-        for path in &paths[1..] {
+-            root = apply_one(
+-                objects,
+-                root,
+-                ContentChange::HardLink {
+-                    source: representative.to_owned(),
+-                    target: path.clone(),
+-                },
+-                seed,
+-                cdc_bytes_scanned,
+-            )?;
+-        }
+-        set_metadata(objects, root, representative, entry.attr)
+-    }
+-
+     fn base_manifest(&self) -> Result<BTreeMap<String, BaseEntry>> {
+         let reader = CoreReader(&self.reader);
+         let mut output = BTreeMap::new();
+@@ -984,6 +389,70 @@ impl Workspace {
+         Ok(output)
+     }
+ 
++    fn file_matches(&self, node: NodeId, base: ObjectId) -> Result<bool> {
++        match &self
++            .nodes
++            .get(&node)
++            .ok_or(StorageError::NotFound("node"))?
++            .data
++        {
++            Data::File(FileData::Base { root, .. }) if root.0 == base => return Ok(true),
++            Data::File(FileData::Edited {
++                base: Some((root, base_len)),
++                pieces,
++                ..
++            }) if root.0 == base
++                && pieces.len() == *base_len
++                && matches!(pieces.pieces().as_slice(), [crate::file_edit::Piece::Base { root: piece_root, offset: 0, len }] if *piece_root == *root && *len == *base_len) =>
++            {
++                return Ok(true)
++            }
++            Data::File(_) => {}
++            _ => return Err(StorageError::InvalidInput("file")),
++        }
++        let mut final_digest = ContentDigestWriter::new();
++        let mut input = WorkspaceFileReader::new(self, node)?;
++        std::io::copy(&mut input, &mut final_digest)?;
++        let mut base_digest = ContentDigestWriter::new();
++        rope::read_all(
++            &CoreReader(&self.reader),
++            FileStateRoot(base),
++            &mut base_digest,
++        )?;
++        Ok(final_digest.finish() == base_digest.finish())
++    }
++
++    fn base_record(&self, inode: InodeId) -> Result<InodeRecordV1> {
++        let core = CoreReader(&self.reader);
++        let id = inode_table_lookup(&core, self.base_inodes, inode, &mut InodeTableCounters::default())?
++            .ok_or(StorageError::Integrity("Workspace base inode"))?;
++        Ok(core.with_authenticated_canonical(id, decode_inode_record)?)
++    }
++
++    pub(crate) fn frontier_inode(&self, node: NodeId) -> Result<InodeId> {
++        let value = self
++            .nodes
++            .get(&node)
++            .ok_or(StorageError::Integrity("frontier node"))?;
++        if let Some(inode) = value.canonical {
++            return Ok(inode);
++        }
++        let path = value
++            .paths
++            .first()
++            .ok_or(StorageError::Integrity("frontier path"))?;
++        let batch_allowance = (self.policy.max_final_delta_memory_bytes / 4096).min(128) * 1024;
++        self.policy
++            .check_final_delta(batch_allowance.saturating_add(path_charge(path)))?;
++        layerfs_layerstack_store::note_workspace_namespace_visits(0, 1, 0, 0, 0);
++        // Bind new identity to this base snapshot: replacing one alias must not
++        // accidentally reuse the still-live inode originally allocated at its path.
++        Ok(filesystem::allocated_inode(
++            self.base_root.to_bytes(),
++            &CanonicalPath::new(path)?,
++        ))
++    }
++
+     fn file_may_differ(&self, node: NodeId, base: ObjectId) -> Result<bool> {
+         match &self
+             .nodes
+@@ -1136,47 +605,7 @@ impl Workspace {
+         Ok(true)
+     }
+ 
+-    fn file_matches(&self, node: NodeId, base: ObjectId) -> Result<bool> {
+-        match &self
+-            .nodes
+-            .get(&node)
+-            .ok_or(StorageError::NotFound("node"))?
+-            .data
+-        {
+-            Data::File(FileData::Base { root, .. }) if root.0 == base => return Ok(true),
+-            Data::File(FileData::Edited {
+-                base: Some((root, base_len)),
+-                pieces,
+-                ..
+-            }) if root.0 == base
+-                && pieces.len() == *base_len
+-                && matches!(pieces.pieces().as_slice(), [crate::file_edit::Piece::Base { root: piece_root, offset: 0, len }] if *piece_root == *root && *len == *base_len) =>
+-            {
+-                return Ok(true)
+-            }
+-            Data::File(_) => {}
+-            _ => return Err(StorageError::InvalidInput("file")),
+-        }
+-        let mut final_digest = ContentDigestWriter::new();
+-        let mut input = WorkspaceFileReader::new(self, node)?;
+-        std::io::copy(&mut input, &mut final_digest)?;
+-        let mut base_digest = ContentDigestWriter::new();
+-        rope::read_all(
+-            &CoreReader(&self.reader),
+-            FileStateRoot(base),
+-            &mut base_digest,
+-        )?;
+-        Ok(final_digest.finish() == base_digest.finish())
+-    }
+ 
+-    fn base_symlink(&self, root: ObjectId) -> Result<Vec<u8>> {
+-        Ok(CoreReader(&self.reader)
+-            .with_authenticated_canonical(
+-                root,
+-                layerfs_content::tree::directory::codec::decode_symlink,
+-            )?
+-            .target)
+-    }
+ }
+ 
+ #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+@@ -1189,118 +618,35 @@ pub(crate) fn inject_candidate_failure_once() {
+     INJECT_CANDIDATE_FAILURE.with(|inject| inject.set(true));
+ }
+ 
+-// Only this bounded candidate batch is owned by the planner; overlay maps stay
+-// borrowed. The content layer separately bounds its deferred canonical pages.
+-struct FrontierInodes {
+-    root: ObjectId,
+-    pending: BTreeMap<InodeId, Option<InodeRecordV1>>,
+-    batch_size: usize,
++fn final_count(base: u64, change: i64) -> Result<u64> {
++    base.checked_add_signed(change).ok_or(StorageError::Integrity("namespace reference overflow"))
+ }
+ 
+-impl FrontierInodes {
+-    fn new(root: ObjectId, batch_size: usize) -> Self {
+-        Self {
+-            root,
+-            pending: BTreeMap::new(),
+-            batch_size,
+-        }
+-    }
+-
+-    fn record(&self, objects: &ObjectBuffer<'_>, inode: InodeId) -> Result<InodeRecordV1> {
+-        if let Some(record) = self.pending.get(&inode) {
+-            return record.ok_or(StorageError::Integrity("released frontier inode"));
+-        }
+-        let namespace = filesystem::namespace(objects, self.root)?;
+-        let id = inode_table_lookup(
+-            objects,
+-            layerfs_content::tree::inode::InodeTableRoot(namespace.inode_table_root),
+-            inode,
+-            &mut InodeTableCounters::default(),
+-        )?
+-        .ok_or(StorageError::Integrity("frontier inode record"))?;
+-        Ok(objects.with_authenticated_canonical(id, decode_inode_record)?)
+-    }
+-
+-    fn set(
+-        &mut self,
+-        objects: &mut ObjectBuffer<'_>,
+-        inode: InodeId,
+-        record: Option<InodeRecordV1>,
+-    ) -> Result<()> {
+-        self.pending.insert(inode, record);
+-        if self.pending.len() >= self.batch_size {
+-            self.flush(objects)?;
+-        }
+-        Ok(())
++fn reference_delta(run: &crate::commit_spool::Run<41>, key: [u8;33]) -> Result<i64> {
++    let (mut low, mut high) = (0, run.count);
++    while low < high {
++        let mid = low + (high - low) / 2;
++        if run.at(mid)?[..33] < key[..] { low = mid + 1; } else { high = mid; }
+     }
+-
+-    fn flush(&mut self, objects: &mut ObjectBuffer<'_>) -> Result<()> {
+-        if !self.pending.is_empty() {
+-            self.root = filesystem::apply_inode_mutations(
+-                objects,
+-                self.root,
+-                std::mem::take(&mut self.pending)
+-                    .into_iter()
+-                    .map(|(inode, record)| match record {
+-                        Some(record) => InodeMutation::Upsert { inode, record },
+-                        None => InodeMutation::Remove { inode },
+-                    }),
+-            )?
+-            .root();
+-        }
+-        Ok(())
++    let mut delta = 0i64;
++    while low < run.count {
++        let record = run.at(low)?;
++        if record[..33] != key { break; }
++        delta = delta.checked_add(crate::references::delta(&record)).ok_or(StorageError::Integrity("namespace reference overflow"))?;
++        low += 1;
+     }
++    Ok(delta)
++}
+ 
+-    fn release(
+-        &mut self,
+-        objects: &mut ObjectBuffer<'_>,
+-        inode: InodeId,
+-        budget: u64,
+-    ) -> Result<()> {
+-        // A cursor per deleted-directory ancestor, never a whole deleted subtree.
+-        let mut directories = Vec::new();
+-        let mut next = Some(inode);
+-        loop {
+-            if let Some(inode) = next.take() {
+-                let mut record = self.record(objects, inode)?;
+-                record.namespace_ref_count = record
+-                    .namespace_ref_count
+-                    .checked_sub(1)
+-                    .ok_or(StorageError::Integrity("namespace reference underflow"))?;
+-                if record.namespace_ref_count != 0 {
+-                    self.set(objects, inode, Some(record))?;
+-                } else {
+-                    self.set(objects, inode, None)?;
+-                    if record.kind == InodeKind::Directory {
+-                        // Includes batch storage and the next bounded directory page.
+-                        if (self.batch_size as u64 + directories.len() as u64 + 2) * 1024 > budget {
+-                            return Err(StorageError::InvalidInput("workspace final-delta limit"));
+-                        }
+-                        directories.push((DirectoryStateRoot(record.content_root), None));
+-                    }
+-                }
+-            }
+-            let Some((root, after)) = directories.last_mut() else {
+-                break;
+-            };
+-            let page = directory_page_after(
+-                objects,
+-                *root,
+-                after.as_ref(),
+-                1,
+-                4096,
+-                &mut NamespaceCounters::default(),
+-            )?;
+-            if let Some((name, child)) = page.entries.into_iter().next() {
+-                *after = Some(name);
+-                next = Some(child);
+-                layerfs_layerstack_store::note_workspace_namespace_visits(1, 0, 0, 0, 0);
+-            } else {
+-                directories.pop();
+-            }
+-        }
+-        Ok(())
++fn push_inode(pairs: &mut crate::commit_spool::Sorter<65>, objects: &mut ObjectBuffer<'_>, inode: InodeId, record: Option<InodeRecordV1>) -> Result<()> {
++    let mut pair = [0;65];
++    pair[..32].copy_from_slice(inode.as_bytes());
++    if let Some(record) = record {
++        pair[32] = 1;
++        let id = objects.put_owned(layerfs_content::tree::inode::codec::encode_inode_record(record)?)?;
++        pair[33..].copy_from_slice(id.as_bytes());
+     }
++    pairs.push(pair)
+ }
+ 
+ fn note_commit_phase(phase: WorkspaceCommitPhase, started: Instant) {
+diff --git a/crates/layerfs-workspace/src/cow_tree.rs b/crates/layerfs-workspace/src/cow_tree.rs
+index 52c71911..1a228717 100644
+--- a/crates/layerfs-workspace/src/cow_tree.rs
++++ b/crates/layerfs-workspace/src/cow_tree.rs
+@@ -167,6 +167,7 @@ pub struct Workspace {
+     pub(crate) spool_write_metrics: SpoolWriteMetrics,
+     pub(crate) capture: crate::capture::CaptureState,
+     pub(crate) open_spools: HashMap<NodeId, std::fs::File>,
++    pub(crate) references: crate::references::References,
+     pub(crate) mutation_generation: u64,
+     pub(crate) mutation_paths: BTreeMap<String, u64>,
+     pub(crate) policy: ResourcePolicy,
+@@ -178,6 +179,8 @@ pub struct Workspace {
+     pub(crate) next_node: u64,
+     pub(crate) state: WorkspaceState,
+     pub(crate) presentation_failed: bool,
++    pub(crate) commit_handoff: Option<crate::lifecycle::CommitHandoff>,
++    pub(crate) pending_publication: Option<(layerfs_layerstack_store::CommitOutcome, bool)>,
+     pub(crate) resolution: Option<crate::reconcile::ResolutionState>,
+ }
+ 
+@@ -292,6 +295,7 @@ impl Workspace {
+             spool_write_metrics: SpoolWriteMetrics::default(),
+             capture: crate::capture::CaptureState::default(),
+             open_spools: HashMap::new(),
++            references: crate::references::References::default(),
+             mutation_generation: 0,
+             mutation_paths: BTreeMap::new(),
+             policy,
+@@ -303,6 +307,8 @@ impl Workspace {
+             next_node: 2,
+             state: WorkspaceState::Active,
+             presentation_failed: false,
++            pending_publication: None,
++            commit_handoff: None,
+             resolution: None,
+         })
+     }
+@@ -709,7 +715,7 @@ impl Workspace {
+ }
+ 
+ pub(crate) fn portable_metadata(
+-    store: &CoreReader<'_>,
++    store: &impl ObjectRead,
+     root: layerfs_content::ObjectId,
+     kind: InodeKind,
+ ) -> Result<PortableMetadataV1> {
+@@ -863,6 +869,8 @@ impl Workspace {
+         }
+         let path = self.child_path(parent, name)?;
+         paths.push(path.clone());
++        self.reserve_reference()?;
++        self.note_reference(node, -1);
+         self.directory_mut(parent)?
+             .changes
+             .insert(name.to_vec(), None);
+@@ -1001,6 +1009,8 @@ impl Workspace {
+             Err(StorageError::NotFound(_)) => {}
+             Err(error) => return Err(error),
+         }
++        self.reserve_reference()?;
++        self.note_reference(node, 1);
+         self.directory_mut(parent)?
+             .changes
+             .insert(name.to_vec(), Some(node));
+diff --git a/crates/layerfs-workspace/src/file_io.rs b/crates/layerfs-workspace/src/file_io.rs
+index c270db99..d31174bc 100644
+--- a/crates/layerfs-workspace/src/file_io.rs
++++ b/crates/layerfs-workspace/src/file_io.rs
+@@ -250,7 +250,8 @@ impl Workspace {
+         }
+         self.policy.check(
+             self.spool_bytes
+-                .checked_add(appended)
++                .checked_add(self.references.bytes())
++                .and_then(|n| n.checked_add(appended))
+                 .ok_or(StoreError::InvalidInput("workspace spool limit"))?,
+         )?;
+         self.check_piece_resources(&old, &next)?;
+diff --git a/crates/layerfs-workspace/src/lib.rs b/crates/layerfs-workspace/src/lib.rs
+index d303f9cf..b67de072 100644
+--- a/crates/layerfs-workspace/src/lib.rs
++++ b/crates/layerfs-workspace/src/lib.rs
+@@ -2,6 +2,8 @@
+ 
+ mod capture;
+ mod changes;
++mod commit_spool;
++mod references;
+ mod container;
+ mod daemon;
+ mod docker;
+diff --git a/crates/layerfs-workspace/src/lifecycle.rs b/crates/layerfs-workspace/src/lifecycle.rs
+index 833b6fac..e88c2db1 100644
+--- a/crates/layerfs-workspace/src/lifecycle.rs
++++ b/crates/layerfs-workspace/src/lifecycle.rs
+@@ -8,12 +8,17 @@ use layerfs_layerstack_store::{
+     CommitOutcome, Result, StoreError as StorageError, WorkspaceCommitPhase,
+ };
+ use std::sync::Arc;
++use std::io::{Read, Seek, SeekFrom, Write};
++use layerfs_content::object::access::ObjectRead;
++use layerfs_content::tree::inode::{InodeId, InodeKind, InodeTableRoot, InodeTableCounters};
++use crate::cow_tree::{Data, DirectoryData, FileData, Kind, NodeId};
+ use std::time::{Instant, SystemTime};
+ 
+ #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+ pub(crate) enum CommitTransition {
+     Rebased,
+     RebasedRefresh,
++    InstallationFailed,
+ }
+ 
+ #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+@@ -25,8 +30,27 @@ pub enum WorkspaceState {
+     BrokenCleanup,
+ }
+ 
++// Fixed records are held by one anonymous private file. The file is unlinked
++// before writing, so failed construction drops its descriptor without leaving a
++// scratch path; its full length is reserved against Workspace spool capacity.
++const HANDOFF_RECORD_BYTES: u64 = 104;
++pub(crate) struct CommitHandoff {
++    file: std::fs::File,
++    generation: u64,
++    base_root: layerfs_content::ObjectId,
++    root: layerfs_content::ObjectId,
++    inodes: InodeTableRoot,
++    records: u64,
++    removed: Option<RemovedBindings>,
++    selected: bool,
++}
++
+ impl Workspace {
+     pub(crate) fn commit(&mut self) -> Result<(CommitOutcome, CommitTransition)> {
++        if let Some((outcome, refresh)) = self.pending_publication {
++            let transition = self.transition_committed(outcome, refresh)?;
++            return Ok((outcome, transition));
++        }
+         self.ensure_active()?;
+         if let Some(mut resolution) = self.resolution.take() {
+             resolution.invalidate_if_mutated(self)?;
+@@ -44,9 +68,15 @@ impl Workspace {
+                     return Err(error);
+                 }
+             };
+-            let outcome =
+-                self.store
+-                    .commit_reconciliation(&resolution.prepared, candidate, &choices);
++            self.commit_handoff = None;
++            let outcome = self.store.clone().commit_reconciliation_checked(
++                &resolution.prepared, candidate, &choices,
++                |reader, working_root, final_root| {
++                    let objects = layerfs_layerstack_store::CoreReader(reader);
++                    self.commit_handoff = Some(self.prepare_selected_handoff(&objects, working_root, final_root)?);
++                    Ok(())
++                },
++            );
+             if outcome.is_err() {
+                 self.resolution = Some(resolution);
+             }
+@@ -94,17 +124,25 @@ impl Workspace {
+         outcome: CommitOutcome,
+         refresh: bool,
+     ) -> Result<CommitTransition> {
++        // Publication already succeeded. Keep its identity until installation and
++        // cleanup finish; recovery must never construct a second logical Commit.
++        self.pending_publication = Some((outcome, refresh));
+         let started = Instant::now();
+-        let rebased = if refresh {
+-            self.reload_committed(outcome)
+-        } else {
+-            self.rebase_committed(outcome)
+-        };
++        #[cfg(test)]
++        if INJECT_INSTALL_FAILURE.with(|inject| inject.replace(false)) {
++            self.presentation_failed = true;
++            return Ok(CommitTransition::InstallationFailed);
++        }
++        let rebased = self.rebase_committed(outcome);
+         layerfs_layerstack_store::note_workspace_commit_phase(
+             WorkspaceCommitPhase::InPlaceRebase,
+             elapsed_ns(started),
+         );
+-        rebased?;
++        if rebased.is_err() {
++            self.presentation_failed = true;
++            return Ok(CommitTransition::InstallationFailed);
++        }
++        self.pending_publication = None;
+         Ok(if refresh {
+             CommitTransition::RebasedRefresh
+         } else {
+@@ -112,171 +150,212 @@ impl Workspace {
+         })
+     }
+ 
++    pub(crate) fn prepare_handoff<S: ObjectRead>(
++        &self,
++        objects: &S,
++        root: layerfs_content::ObjectId,
++    ) -> Result<CommitHandoff> {
++        self.prepare_identity_handoff(objects, root, None)
++    }
++
++    fn prepare_identity_handoff<S: ObjectRead>(
++        &self, objects: &S, root: layerfs_content::ObjectId, removed: Option<RemovedBindings>,
++    ) -> Result<CommitHandoff> {
++        let selected = removed.is_some();
++        let started = Instant::now();
++        let mut inode_counters = InodeTableCounters::default();
++        let mut binding_checks = 0;
++        use layerfs_content::tree::inode::{inode_table_lookup_many, codec::decode_inode_record};
++        use layerfs_content::tree::directory::{directory_lookup, DirectoryStateRoot, NamespaceCounters};
++        let records = self.nodes.values().filter(|node| selected || !node.paths.is_empty() || node.links != 0).count() as u64;
++        let bytes = records.checked_mul(HANDOFF_RECORD_BYTES).ok_or(StorageError::Integrity("handoff size"))?;
++        self.policy.check(self.spool_bytes.checked_add(self.references.bytes()).and_then(|n| n.checked_add(bytes)).and_then(|n| n.checked_add(removed.as_ref().map_or(0, |removed| removed.bytes))).ok_or(StorageError::Integrity("handoff spool"))?)?;
++        // A 128-key authenticated tree lookup includes decoded page buffers.
++        // Reserve together with the caller's reference-delta buffer, never a
++        // separate full final-delta allowance for each component.
++        self.policy.check_final_delta(1024 * 1024)?;
++        let path = self.spool.join("commit-handoff");
++        let file = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(&path)?;
++        std::fs::remove_file(&path)?;
++        let mut file = std::io::BufWriter::with_capacity(64 * 1024, file);
++        let namespace = layerfs_content::filesystem::namespace(objects, root)?;
++        let inodes = InodeTableRoot(namespace.inode_table_root);
++        let mut batch = Vec::with_capacity(128);
++        let mut live = self.nodes.iter().filter(|(_, node)| selected || !node.paths.is_empty() || node.links != 0);
++        loop {
++            batch.clear();
++            for _ in 0..128 {
++                let Some((&node, _)) = live.next() else { break; };
++                let inode = if self.nodes[&node].canonical.is_none() && self.nodes[&node].paths.is_empty() { None } else { Some(self.frontier_inode(node)?) };
++                batch.push((node, inode));
++            }
++            if batch.is_empty() { break; }
++            let keys = batch.iter().map(|(_, inode)| inode.unwrap_or(namespace.root_directory_inode)).collect::<Vec<_>>();
++            let ids = inode_table_lookup_many(objects, inodes, &keys, &mut inode_counters)?;
++            for ((node, inode), record_id) in batch.iter().copied().zip(ids) {
++                let record_id = record_id.filter(|_| inode.is_some());
++                if record_id.is_none() && selected {
++                    let mut bytes = [0_u8; HANDOFF_RECORD_BYTES as usize];
++                    bytes[..8].copy_from_slice(&node.0.to_be_bytes());
++                    file.write_all(&bytes)?;
++                    continue;
++                }
++                let inode = inode.ok_or(StorageError::Integrity("handoff final inode"))?;
++                let record_id = record_id.ok_or(StorageError::Integrity("handoff final inode"))?;
++                let record = objects.with_authenticated_canonical(record_id, decode_inode_record)?;
++                record.validate(node == crate::ROOT)?;
++                let old = &self.nodes[&node];
++                let attr = self.attr(node)?;
++                let metadata = crate::cow_tree::portable_metadata(objects, record.metadata_root, record.kind)?;
++                let (kind, len) = match record.kind {
++                    InodeKind::RegularFile => (Kind::File, layerfs_content::file::rope::state(
++                        objects, layerfs_content::file::rope::FileStateRoot(record.content_root),
++                        &mut layerfs_content::file::rope::RopeCounters::default(),
++                    )?.logical_len),
++                    InodeKind::Directory => (Kind::Directory, 0),
++                    InodeKind::Symlink => {
++                        let target = objects.with_authenticated_canonical(record.content_root, layerfs_content::tree::directory::codec::decode_symlink)?.target;
++                        if !selected && !matches!(&old.data, Data::Symlink(previous) if *previous == target) {
++                            return Err(StorageError::Integrity("handoff symlink content"));
++                        }
++                        (Kind::Symlink, target.len() as u64)
++                    }
++                };
++                let links = if kind == Kind::Directory { 2 } else {
++                    u32::try_from(record.namespace_ref_count).map_err(|_| StorageError::Integrity("handoff links"))?
++                };
++                if kind != attr.kind || (!selected && (len != attr.size || links != attr.links
++                    || metadata.permission_mode != attr.mode
++                    || metadata.mtime_seconds != attr.mtime_seconds
++                    || metadata.mtime_nanoseconds != attr.mtime_nanoseconds)) {
++                    return Err(StorageError::Integrity("committed Workspace presentation"));
++                }
++                // Identity membership follows authenticated surviving base
++                // bindings plus the common writer's exact final overlays. Check
++                // the changed edges against that final directory here; paths and
++                // aliases retained by Workspace need no root-to-leaf discovery.
++                if let Data::Directory(directory) = &old.data {
++                    if !selected {
++                    for (name, desired) in &directory.changes {
++                        binding_checks += 1;
++                        let actual = directory_lookup(objects, DirectoryStateRoot(record.content_root),
++                            &layerfs_content::CanonicalName::from_bytes(name)?, &mut NamespaceCounters::default())?;
++                        if actual != desired.map(|child| self.frontier_inode(child)).transpose()? {
++                            return Err(StorageError::Integrity("handoff final binding"));
++                        }
++                    }
++                    }
++                }
++                file.write_all(&node.0.to_be_bytes())?;
++                file.write_all(inode.as_bytes())?;
++                file.write_all(record.content_root.as_bytes())?;
++                file.write_all(&len.to_be_bytes())?;
++                file.write_all(&metadata.permission_mode.to_be_bytes())?;
++                file.write_all(&links.to_be_bytes())?;
++                file.write_all(&metadata.mtime_seconds.to_be_bytes())?;
++                file.write_all(&metadata.mtime_nanoseconds.to_be_bytes())?;
++                file.write_all(&[record.kind as u8, 0, 0, 0])?;
++            }
++        }
++        if file.stream_position()? != bytes { return Err(StorageError::Integrity("handoff length")); }
++        file.seek(SeekFrom::Start(0))?;
++        let file = file.into_inner().map_err(|error| error.into_error())?;
++        layerfs_layerstack_store::note_workspace_handoff(records, bytes, 64 * 1024 + (128 * (40 + 32 + 33)), inode_counters.nodes_read, binding_checks, elapsed_ns(started));
++        Ok(CommitHandoff { file, generation: self.mutation_generation, base_root: self.base_root, root, inodes, records, removed, selected })
++    }
++
+     fn rebase_committed(&mut self, outcome: CommitOutcome) -> Result<()> {
+         let expected_head = match outcome {
+             CommitOutcome::Committed { commit_id, .. } => Some(commit_id),
+             CommitOutcome::UpToDate { .. } => self.expected_head,
+         };
++        let expected_root = match outcome {
++            CommitOutcome::Committed { root_id, .. } | CommitOutcome::UpToDate { root_id } => root_id,
++        };
+         let pinned = self.store.pin_branch(self.branch_id)?;
+-        if pinned.branch.head_commit_id != expected_head {
++        if pinned.branch.head_commit_id != expected_head || pinned.root != expected_root {
+             return Err(StorageError::Integrity("committed Workspace head"));
+         }
+-        static REBASE_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+-        let rebase_spool = self
+-            .spool
+-            .parent()
+-            .ok_or(StorageError::InvalidInput("Workspace spool"))?
+-            .join(format!(
+-                "rebase-spool-{}",
+-                REBASE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+-            ));
+-        let mut committed = Self::from_snapshot(
+-            crate::cow_tree::WorkspaceSnapshot {
+-                store: self.store.clone(),
+-                branch_id: self.branch_id,
+-                expected_head,
+-                expected_base: pinned.branch.base_layer_id,
+-                root: pinned.root,
+-                reader: pinned.reader.with_read_metrics_from(&self.reader),
+-            },
+-            &rebase_spool,
+-            self.policy,
+-        )?;
+-        let current = self
+-            .nodes
+-            .iter()
+-            .map(|(id, node)| (*id, node.clone()))
+-            .collect::<Vec<_>>();
+-        let mut nodes = std::collections::HashMap::new();
+-        let mut canonical_nodes = std::collections::HashMap::new();
+-        let mut obsolete_spools = Vec::new();
+-        let mut retained_spool_nodes = std::collections::BTreeSet::new();
+-        let mut retained_spool_bytes = 0_u64;
+-        let mut retained_inline_bytes = 0_u64;
+-        let mut retained_piece_allocation_bytes = 0_u64;
+-        for (id, old) in current {
+-            if old.paths.is_empty() {
+-                if old.pins != 0 {
+-                    let mut retained = old;
+-                    retained.canonical = None;
+-                    if let crate::cow_tree::Data::File(crate::cow_tree::FileData::Edited {
+-                        spool_high_water,
+-                        pieces,
+-                        ..
+-                    }) = &retained.data
+-                    {
+-                        if !self.open_spools.contains_key(&id) {
+-                            return Err(StorageError::Integrity("spool descriptor"));
+-                        }
+-                        retained_spool_nodes.insert(id);
+-                        retained_spool_bytes =
+-                            retained_spool_bytes.saturating_add(*spool_high_water);
+-                        retained_inline_bytes =
+-                            retained_inline_bytes.saturating_add(pieces.inline_len());
+-                        retained_piece_allocation_bytes = retained_piece_allocation_bytes
+-                            .saturating_add(pieces.logical_allocation_charge()?);
+-                    }
+-                    nodes.insert(id, retained);
+-                }
++        let handoff = self.commit_handoff.as_mut().ok_or(StorageError::Integrity("missing Commit handoff"))?;
++        if handoff.generation != self.mutation_generation || handoff.base_root != self.base_root || handoff.root != pinned.root {
++            return Err(StorageError::Integrity("Commit handoff identity"));
++        }
++        handoff.file.seek(SeekFrom::Start(0))?;
++        for _ in 0..handoff.records {
++            let mut bytes = [0; HANDOFF_RECORD_BYTES as usize];
++            handoff.file.read_exact(&mut bytes)?;
++            let node = NodeId(u64::from_be_bytes(bytes[..8].try_into().unwrap()));
++            if bytes[100] == 0 {
++                let old = self.nodes.get_mut(&node).ok_or(StorageError::Integrity("handoff Workspace node"))?;
++                old.paths.clear(); old.links = 0;
++                if let Some(inode) = old.canonical.take() { self.canonical_nodes.remove(&inode); }
+                 continue;
+             }
+-            let fresh_id = if id == crate::ROOT {
+-                crate::ROOT
+-            } else {
+-                lookup_path(&mut committed, old.paths.first().expect("nonempty paths"))?
+-            };
+-            for path in old.paths.iter().skip(1) {
+-                if lookup_path(&mut committed, path)? != fresh_id {
+-                    return Err(StorageError::Integrity("committed hard-link identity"));
+-                }
+-            }
+-            let old_attr = self.attr(id)?;
+-            let fresh_attr = committed.attr(fresh_id)?;
+-            if old_attr.kind != fresh_attr.kind
+-                || old_attr.size != fresh_attr.size
+-                || old_attr.mode != fresh_attr.mode
+-                || old_attr.links != fresh_attr.links
+-                || old_attr.mtime_seconds != fresh_attr.mtime_seconds
+-                || old_attr.mtime_nanoseconds != fresh_attr.mtime_nanoseconds
+-            {
+-                return Err(StorageError::Integrity("committed Workspace presentation"));
+-            }
+-            let mut rebased = committed
+-                .nodes
+-                .get(&fresh_id)
+-                .ok_or(StorageError::Integrity("committed Workspace node"))?
+-                .clone();
+-            rebased.paths = old.paths;
+-            rebased.pins = old.pins;
+-            if let Some(inode) = rebased.canonical {
+-                if canonical_nodes.insert(inode, id).is_some() {
+-                    return Err(StorageError::Integrity("committed Workspace inode"));
+-                }
++            let inode = InodeId::from_slice(&bytes[8..40])?;
++            let content = layerfs_content::ObjectId::from_bytes(&bytes[40..72])?;
++            let len = u64::from_be_bytes(bytes[72..80].try_into().unwrap());
++            let old = self.nodes.get_mut(&node).ok_or(StorageError::Integrity("handoff Workspace node"))?;
++            if let Some(removed) = &mut handoff.removed {
++                let mut failure = None;
++                old.paths.retain(|path| match removed.contains_ancestor(path) {
++                    Ok(remove) => !remove,
++                    Err(error) => { failure = Some(error); true }
++                });
++                if let Some(error) = failure { return Err(error); }
+             }
+-            if let crate::cow_tree::Data::File(crate::cow_tree::FileData::Edited {
+-                spool, ..
+-            }) = old.data
+-            {
+-                if !self.open_spools.contains_key(&id) {
+-                    return Err(StorageError::Integrity("spool descriptor"));
+-                }
+-                obsolete_spools.push((id, spool));
++            old.mode = u32::from_be_bytes(bytes[80..84].try_into().unwrap());
++            old.links = u32::from_be_bytes(bytes[84..88].try_into().unwrap());
++            old.mtime_seconds = i64::from_be_bytes(bytes[88..96].try_into().unwrap());
++            old.mtime_nanoseconds = u32::from_be_bytes(bytes[96..100].try_into().unwrap());
++            old.data = match &old.data {
++                Data::File(_) => Data::File(FileData::Base { root: layerfs_content::file::rope::FileStateRoot(content), len }),
++                Data::Directory(_) => Data::Directory(DirectoryData { base: Some(layerfs_content::tree::directory::DirectoryStateRoot(content)), changes: Default::default() }),
++                Data::Symlink(target) => Data::Symlink(if handoff.selected {
++                    layerfs_layerstack_store::CoreReader(&pinned.reader).with_authenticated_canonical(content, layerfs_content::tree::directory::codec::decode_symlink)?.target
++                } else { target.clone() }),
++            };
++            old.canonical = Some(inode);
++            self.canonical_nodes.insert(inode, node);
++        }
++        // Retain open-unlinked backing; drop only reachability from the new
++        // snapshot. Descriptors for obsolete linked spools stay owned until all
++        // cleanup succeeds, so a partial cleanup failure can be retried safely.
++        for (&node, value) in &self.nodes {
++            if !matches!(value.data, Data::File(FileData::Edited { .. })) && self.open_spools.contains_key(&node) {
++                self.remove_spool_if_exists(node, &self.spool.join(node.0.to_string()))?;
+             }
+-            nodes.insert(id, rebased);
+         }
+-        self.open_spools
+-            .retain(|node, _| retained_spool_nodes.contains(node));
+-        for (node, spool) in obsolete_spools {
+-            self.remove_spool_if_exists(node, &spool)?;
++        self.open_spools.retain(|node, _| matches!(self.nodes.get(node).map(|node| &node.data), Some(Data::File(FileData::Edited { .. }))));
++        let mut retained_spool = 0_u64;
++        let mut retained_inline = 0_u64;
++        let mut retained_pieces = 0_u64;
++        for value in self.nodes.values_mut().filter(|node| node.paths.is_empty() && node.links == 0) {
++            if let Some(inode) = value.canonical.take() { self.canonical_nodes.remove(&inode); }
++            if let Data::File(FileData::Edited { spool_high_water, pieces, .. }) = &value.data {
++                retained_spool += spool_high_water;
++                retained_inline += pieces.inline_len();
++                retained_pieces += pieces.logical_allocation_charge()?;
++            }
+         }
+-        self.reader = committed.reader.clone();
++        self.references.clear()?;
++        if let Some(removed) = self.commit_handoff.as_mut().unwrap().removed.take() { removed.index.remove()?; }
++        let inodes = self.commit_handoff.as_ref().unwrap().inodes;
++        self.reader = pinned.reader.with_read_metrics_from(&self.reader);
+         self.expected_head = expected_head;
+-        self.expected_base = committed.expected_base;
+-        self.base_root = committed.base_root;
+-        self.base_inodes = committed.base_inodes;
+-        self.nodes = nodes;
+-        self.canonical_nodes = canonical_nodes;
+-        self.spool_bytes = retained_spool_bytes;
+-        self.spool_bytes_peak = retained_spool_bytes;
+-        self.inline_bytes = retained_inline_bytes;
+-        self.piece_allocation_bytes = retained_piece_allocation_bytes;
++        self.expected_base = pinned.branch.base_layer_id;
++        self.base_root = pinned.root;
++        self.base_inodes = inodes;
++        self.spool_bytes = retained_spool;
++        self.spool_bytes_peak = retained_spool;
++        self.inline_bytes = retained_inline;
++        self.piece_allocation_bytes = retained_pieces;
+         self.mutation_generation = 0;
+         self.mutation_paths.clear();
+         self.dirty.clear();
+         self.capture = crate::capture::CaptureState::default();
+         self.resolution = None;
+         self.state = WorkspaceState::Active;
+-        let _ = std::fs::remove_dir_all(rebase_spool);
+-        Ok(())
+-    }
+-
+-    fn reload_committed(&mut self, outcome: CommitOutcome) -> Result<()> {
+-        let expected_head = match outcome {
+-            CommitOutcome::Committed { commit_id, .. } => Some(commit_id),
+-            CommitOutcome::UpToDate { .. } => self.expected_head,
+-        };
+-        let pinned = self.store.pin_branch(self.branch_id)?;
+-        if pinned.branch.head_commit_id != expected_head {
+-            return Err(StorageError::Integrity("committed Workspace head"));
+-        }
+-        let metrics = self.reader.clone();
+-        let spool = self.spool.clone();
+-        self.clear_spool()?;
+-        let mut committed = Self::from_snapshot(
+-            crate::cow_tree::WorkspaceSnapshot {
+-                store: self.store.clone(),
+-                branch_id: self.branch_id,
+-                expected_head,
+-                expected_base: pinned.branch.base_layer_id,
+-                root: pinned.root,
+-                reader: pinned.reader.with_read_metrics_from(&metrics),
+-            },
+-            &spool,
+-            self.policy,
+-        )?;
+-        committed.state = WorkspaceState::Active;
+-        committed.physical_spool = std::mem::take(&mut self.physical_spool);
+-        *self = committed;
++        self.commit_handoff = None;
+         Ok(())
+     }
+ 
+@@ -286,18 +365,22 @@ impl Workspace {
+             return Err(StorageError::InvalidInput("workspace committed"));
+         }
+         self.clear_spool()?;
++        self.references.clear()?;
++        self.commit_handoff = None;
+         self.state = WorkspaceState::Discarded;
+         Ok(())
+     }
+ 
+     pub(crate) fn end_clean(&mut self) -> Result<()> {
+         self.clear_spool()?;
++        self.references.clear()?;
++        self.commit_handoff = None;
+         self.state = WorkspaceState::Ended;
+         Ok(())
+     }
+ 
+     pub(crate) fn ensure_active(&self) -> Result<()> {
+-        if self.state == WorkspaceState::Active {
++        if self.state == WorkspaceState::Active && self.pending_publication.is_none() {
+             Ok(())
+         } else {
+             Err(StorageError::InvalidInput("workspace inactive"))
+@@ -549,6 +632,7 @@ impl Workspaces {
+                     );
+                     resumed
+                 }
++                CommitTransition::InstallationFailed => Err(WorkspaceError::InvalidExecution),
+                 CommitTransition::RebasedRefresh => {
+                     let started = Instant::now();
+                     let refreshed = crate::projection::refresh(&worker, self.daemon_mount_owner()?);
+@@ -617,6 +701,14 @@ impl Workspaces {
+         crate::projection::pause(&worker)?;
+         let _quiesced = worker.quiesce()?;
+         crate::projection::end(&worker)?;
++        {
++            let mut workspace = worker.workspace.lock().map_err(|_| WorkspaceError::WorkspaceBusy)?;
++            if let Some((outcome, refresh)) = workspace.pending_publication {
++                if workspace.transition_committed(outcome, refresh)? == CommitTransition::InstallationFailed {
++                    return Err(WorkspaceError::InvalidExecution);
++                }
++            }
++        }
+         let handle = crate::projection::attach(&worker, self.daemon_mount_owner()?)?;
+         *worker
+             .projection_handle
+@@ -1006,6 +1098,11 @@ fn summary(worker: &Arc<WorkspaceWorker>) -> WorkspaceResult<WorkspaceSummary> {
+     })
+ }
+ 
++#[cfg(test)]
++thread_local! {
++    static INJECT_INSTALL_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -1076,6 +1173,32 @@ mod tests {
+         })
+     }
+ 
++    #[test]
++    fn published_commit_survives_install_failure_and_recovery_does_not_republish() {
++        let (root, workspaces, branch, store) = fixture("published-install-failure");
++        let session = session(&root, &workspaces, branch);
++        prepend(&workspaces, session.id).unwrap();
++        let before = store.branch(branch).unwrap().unwrap().head_commit_id;
++        INJECT_INSTALL_FAILURE.with(|inject| inject.set(true));
++        let status = workspaces.commit_workspace_session_with_status(session.id).unwrap();
++        let WorkspaceCommitResult::Created { commit_id, .. } = status.result else {
++            panic!("published Commit must be returned");
++        };
++        assert!(status.presentation_failed);
++        assert_ne!(Some(commit_id), before);
++        assert_eq!(store.branch(branch).unwrap().unwrap().head_commit_id, Some(commit_id));
++        assert!(workspaces.commit_workspace_session(session.id).is_err());
++        workspaces.recover_workspace_presentation(session.id).unwrap();
++        assert_eq!(std::fs::read(root.join("mount/file")).unwrap(), b"Pabcdef");
++        assert!(matches!(
++            workspaces.commit_workspace_session(session.id).unwrap(),
++            WorkspaceCommitResult::UpToDate { .. }
++        ));
++        assert_eq!(store.branch(branch).unwrap().unwrap().head_commit_id, Some(commit_id));
++        workspaces.end_workspace_session(session.id, EndWorkspaceMode::Clean).unwrap();
++        std::fs::remove_dir_all(root).unwrap();
++    }
++
+     #[test]
+     #[cfg(all(target_os = "linux", feature = "host-fuse"))]
+     fn live_fuse_owner_edit_invalidates_warm_pages_and_rolls_back_resume_failure() {

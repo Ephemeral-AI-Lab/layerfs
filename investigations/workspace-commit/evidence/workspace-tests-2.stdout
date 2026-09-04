@@ -1,0 +1,82 @@
+
+running 41 tests
+test container::tests::create_input_and_exact_identity_are_bounded ... ok
+test daemon::tests::daemon_exec_selects_the_required_live_daemon_mount_by_default ... ok
+test daemon::tests::tcp_daemon_container_id_is_exact_and_bounded ... ok
+test execution::tests::container_execution_starts_without_a_ready_handshake ... ok
+test commit_spool::tests::bounded_sort_merges_multiple_levels_and_cleans_all_runs ... ok
+test file_edit::tests::implicit_piece_tree_splices_without_rekeying_later_pieces ... ok
+test file_edit::tests::logical_allocation_charge_accepts_exact_and_rejects_plus_one ... ok
+test file_edit::tests::logical_zero_ceiling_is_exact_without_physical_allocation ... ok
+test changes::tests::clean_workspace_commit_is_immediately_up_to_date ... ok
+test cow_tree::tests::reserved_directory_consumes_the_exact_node_once ... ok
+test file_edit::tests::result_length_ceiling_accepts_exact_and_rejects_plus_one ... ok
+test cow_tree::tests::spool_write_metrics_are_aggregate_and_reset ... ok
+test cow_tree::tests::resolution_fingerprint_ignores_unrelated_paths_and_tracks_affected_state ... ok
+test changes::tests::fully_charged_new_file_reads_directly_from_retained_spool ... ok
+test cow_tree::tests::failed_spool_io_does_not_advance_the_overlay ... ok
+test changes::tests::backward_write_invalidates_capture_and_uses_exact_fallback ... FAILED
+test file_io::tests::discard_reclaims_one_live_base_inline_zero_spool_composition ... ok
+test file_io::tests::generation_overflow_rejects_without_logical_or_physical_change ... ok
+test file_io::tests::physical_spool_peak_survives_short_append_reclaim_and_discard ... FAILED
+test file_io::tests::short_spool_append_restores_high_water_and_piece_root ... ok
+test file_io::tests::workspace_inline_limit_accepts_eight_mib_and_rejects_the_next_byte ... ok
+test limits::tests::spool_and_final_delta_limits_accept_exact_and_reject_plus_one ... ok
+test output::tests::one_large_write_never_enters_the_live_tail_above_one_mib ... ok
+test cow_tree::tests::rename_validates_every_noop_and_rejection_before_mutation ... ok
+test projection::tests::failed_cleanup_moves_the_projection_off_placement_and_retains_retry_path ... ok
+test lifecycle::tests::pinned_target_rejects_owner_edit_without_state_change ... ok
+test reconcile::tests::only_intersecting_later_mutations_invalidate_a_resolution ... ok
+test registry::tests::retention_evicts_oldest_by_age_count_and_bytes ... ok
+test file_edit::tests::contiguous_spool_records_fit_workspace_budget_and_preserve_edit_limits ... ok
+test projection::tests::failed_materialization_never_publishes_or_leaves_a_stage ... ok
+test lifecycle::tests::failed_projection_refresh_restores_exact_state_and_retry_once ... ok
+test projection::tests::failed_publish_removes_the_complete_stage ... ok
+test lifecycle::tests::published_commit_survives_install_failure_and_recovery_does_not_republish ... ok
+test changes::tests::existing_file_mutations_are_exact_and_bounded ... FAILED
+test changes::tests::owner_prepend_scans_only_replacement_and_retains_every_base_payload ... ok
+test file_edit::tests::maximum_fragmentation_remains_bounded_and_balanced ... ok
+test file_io::tests::edit_limit_and_sparse_physical_charge_are_exact ... ok
+test changes::tests::structural_frontier_keeps_unrelated_namespace_out_of_budget ... FAILED
+test changes::tests::sequential_new_file_capture_is_canonical_and_commit_ready ... FAILED
+test lifecycle::tests::callback_and_execution_reject_owner_edit_without_state_change ... ok
+test lifecycle::tests::busy_commit_with_resume_failure_requires_explicit_presentation_recovery ... ok
+
+failures:
+
+---- changes::tests::backward_write_invalidates_capture_and_uses_exact_fallback stdout ----
+
+thread 'changes::tests::backward_write_invalidates_capture_and_uses_exact_fallback' (229906410) panicked at crates/layerfs-workspace/src/changes.rs:1210:49:
+called `Result::unwrap()` on an `Err` value: Integrity("handoff final binding")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- file_io::tests::physical_spool_peak_survives_short_append_reclaim_and_discard stdout ----
+
+thread 'file_io::tests::physical_spool_peak_survives_short_append_reclaim_and_discard' (229906441) panicked at crates/layerfs-workspace/src/file_io.rs:973:28:
+called `Result::unwrap()` on an `Err` value: Integrity("handoff final binding")
+
+---- changes::tests::existing_file_mutations_are_exact_and_bounded stdout ----
+
+thread 'changes::tests::existing_file_mutations_are_exact_and_bounded' (229906412) panicked at crates/layerfs-workspace/src/changes.rs:1317:53:
+called `Result::unwrap()` on an `Err` value: InvalidInput("workspace final-delta limit")
+
+---- changes::tests::structural_frontier_keeps_unrelated_namespace_out_of_budget stdout ----
+
+thread 'changes::tests::structural_frontier_keeps_unrelated_namespace_out_of_budget' (229906416) panicked at crates/layerfs-workspace/src/changes.rs:1017:28:
+called `Result::unwrap()` on an `Err` value: InvalidInput("workspace final-delta limit")
+
+---- changes::tests::sequential_new_file_capture_is_canonical_and_commit_ready stdout ----
+
+thread 'changes::tests::sequential_new_file_capture_is_canonical_and_commit_ready' (229906415) panicked at crates/layerfs-workspace/src/changes.rs:1164:49:
+called `Result::unwrap()` on an `Err` value: Integrity("handoff final binding")
+
+
+failures:
+    changes::tests::backward_write_invalidates_capture_and_uses_exact_fallback
+    changes::tests::existing_file_mutations_are_exact_and_bounded
+    changes::tests::sequential_new_file_capture_is_canonical_and_commit_ready
+    changes::tests::structural_frontier_keeps_unrelated_namespace_out_of_budget
+    file_io::tests::physical_spool_peak_survives_short_append_reclaim_and_discard
+
+test result: FAILED. 36 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.07s
+

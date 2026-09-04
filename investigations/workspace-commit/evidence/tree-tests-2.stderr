@@ -1,0 +1,10 @@
+   Compiling layerfs-content v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.90s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_content-0bd826673ea002f5)
+     Running tests/canonical_v2_fixture_oracle.rs (target/debug/deps/canonical_v2_fixture_oracle-0c3edbc6b5043686)
+     Running tests/extent_codec.rs (target/debug/deps/extent_codec-3e55b9406f3e7116)
+     Running tests/extent_model.rs (target/debug/deps/extent_model-368d46bc222fcd62)
+     Running tests/fastcdc_shifted_stream.rs (target/debug/deps/fastcdc_shifted_stream-8dc4fe13bd2106eb)
+     Running tests/logical.rs (target/debug/deps/logical-d73ae02e3d55dfe8)
+     Running tests/namespace_codec.rs (target/debug/deps/namespace_codec-6776de912bd6eff2)
+     Running tests/namespace_model.rs (target/debug/deps/namespace_model-bcc33196cf23c7c0)

@@ -654,6 +654,21 @@ fn run_case(
     mode: &str,
     container: ContainerId,
 ) -> AnyResult<()> {
+    // Diagnostic harness placement; the same public SDK/FUSE calls and product engine.
+    let placement_container = if container.0 == "diagnostic-host-fuse" {
+        if !cfg!(target_os = "linux")
+            || !matches!(case.kind, "tiny-bulk-create" | "tiny-bulk-delete")
+        {
+            return Err("colocated diagnostic requires Linux bulk mutation".into());
+        }
+        emit(
+            "diagnostic-profile",
+            &[("profile", quote("linux-colocated-host-fuse-2cpu-2g"))],
+        );
+        None
+    } else {
+        Some(container.clone())
+    };
     let verification = mode == "verify";
     if !verification && mode != "performance" {
         return Err("invalid phase1 mode".into());
@@ -771,7 +786,7 @@ fn run_case(
         genesis_root = Some(store.pin_branch(branch)?.root);
         let request = CreateWorkspaceSession {
             branch_id: branch,
-            placement: case_placement(&Some(container.clone()), root, seed as usize, &case.id),
+            placement: case_placement(&placement_container, root, seed as usize, &case.id),
             projection: Some(WorkspaceProjection::Fuse),
         };
         let create_start = Instant::now();
@@ -1101,7 +1116,7 @@ fn run_case(
             let session = client.create_workspace_session(CreateWorkspaceSession {
                 branch_id: branch,
                 placement: case_placement(
-                    &Some(container.clone()),
+                    &placement_container,
                     root,
                     seed as usize,
                     &format!("{}-reopen", case.id),
@@ -1231,7 +1246,7 @@ fn run_case(
                     let base_session = client.create_workspace_session(CreateWorkspaceSession {
                         branch_id: base_branch,
                         placement: case_placement(
-                            &Some(container.clone()),
+                            &placement_container,
                             root,
                             seed as usize,
                             "history-genesis",
@@ -1314,7 +1329,7 @@ fn run_case(
                             client.create_workspace_session(CreateWorkspaceSession {
                                 branch_id: fork,
                                 placement: case_placement(
-                                    &Some(container.clone()),
+                                    &placement_container,
                                     root,
                                     seed as usize,
                                     &format!("{}-history-{step}", case.id),
@@ -1367,12 +1382,115 @@ fn run_case(
     Ok(())
 }
 
+// Exact ordinary-workload source is qualified separately by the sealed helper.
+// This adapter changes only the expected scan receipt, retaining the public SDK initializer.
+fn colocated_initialize(root: &Path, fixture: &Path, case: &Case, seed: u8) -> AnyResult<()> {
+    if !cfg!(target_os = "linux") || case.kind != "tiny-bulk-create" || !(1..=3).contains(&seed) {
+        return Err(
+            "matched initialization requires Linux create input and prescribed seed".into(),
+        );
+    }
+    let (bytes, files, plan) = entry_info(&registry::expected(case, seed, 1)?)?;
+    std::fs::create_dir(root)?;
+    let store = Arc::new(LayerStackStore::create(root.join("store.sqlite"))?);
+    let client = Client::connect(store.clone())?;
+    let before = process_resource_snapshot()?;
+    let started = Instant::now();
+    let initialized = client.initialize_layerstack(
+        EntityName::new("matched-ordinary-initialization")?,
+        LayerStackInitialization::Directory(fixture.to_owned()),
+    )?;
+    let initialization_ns = elapsed_ns(started);
+    let after = process_resource_snapshot()?;
+    let scans = store.take_layerstack_initialization_receipts();
+    let [scan] = scans.as_slice() else {
+        return Err("matched initialization receipt cardinality".into());
+    };
+    if scan.scanned_files != files as u64 || scan.scanned_bytes != bytes {
+        return Err("matched initialization scan differs from prescribed tree".into());
+    }
+    emit(
+        "matched-initialization",
+        &[
+            ("scenario_id", quote(&case.id)),
+            ("seed", seed.to_string()),
+            ("initialization_ns", initialization_ns.to_string()),
+            ("regular_files", files.to_string()),
+            ("logical_bytes", bytes.to_string()),
+            ("input_plan_sha256", quote(&plan)),
+            ("verification", quote("separate-required")),
+        ],
+    );
+    resource_receipt("initialization-before", before);
+    resource_receipt("initialization-after", after);
+    let mut operation = 0;
+    observed(&client, &mut operation)?;
+    store_metrics(&store, "initialization-after", 0)?;
+    // Fork outside the initialization interval for the existing independent verifier.
+    let branch = client.fork_branch(
+        EntityName::new("main")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    std::fs::write(root.join("branch-id"), branch.to_string())?;
+    if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
+        return Err("matched initialization retained runtime".into());
+    }
+    Ok(())
+}
+
 pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
     let args = args
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     match args.as_slice() {
+        [command, root, fixture, id, seed] if command == "workspace-colocated-initialize" => {
+            colocated_initialize(
+                Path::new(root),
+                Path::new(fixture),
+                &registry::resolve(id)?,
+                seed.parse()?,
+            )
+        }
+        [command, root, id, seed] if command == "workspace-colocated-verify-existing" => {
+            let case = registry::resolve(id)?;
+            if !cfg!(target_os = "linux")
+                || !matches!(case.kind, "tiny-bulk-create" | "tiny-bulk-delete")
+            {
+                return Err("colocated diagnostic requires Linux bulk mutation".into());
+            }
+            let root = Path::new(root);
+            let seed = seed.parse()?;
+            let branch = std::fs::read_to_string(root.join("branch-id"))?
+                .trim()
+                .parse()?;
+            let store = Arc::new(LayerStackStore::connect(root.join("store.sqlite"))?);
+            let expected = registry::expected(&case, seed, 1)?;
+            let verified = super::workspace_verify::verify(&store, branch, &expected, root)?;
+            emit(
+                "canonical-verification",
+                &[("receipt", quote(&format!("{:?}", verified.receipt)))],
+            );
+            let client = Client::connect(store.clone())?;
+            let session = client.create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: WorkspacePlacement::Host {
+                    root: root.join("reopen-mount"),
+                },
+                projection: Some(WorkspaceProjection::Fuse),
+            })?;
+            let verified = native_verify(&client, session.id, &case, seed, 1);
+            let ended = client.end_workspace_session(session.id, EndWorkspaceMode::Clean);
+            verified?;
+            ended?;
+            if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
+                return Err("colocated verifier retained owned runtime".into());
+            }
+            emit("verification-complete", &[("status", quote("pass"))]);
+            Ok(())
+        }
         [command, root] if command == "workspace-qualify-digests" => {
             let receipt = super::workspace_verify::digest_qualification(Path::new(root))?;
             emit(

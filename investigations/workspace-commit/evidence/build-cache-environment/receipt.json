@@ -1,0 +1,15 @@
+{
+  "source": "a40b17e05486e5b747b689e7710475d739556a69",
+  "command": [
+    "docker",
+    "exec",
+    "layerfs-commit-engine-build-0904",
+    "sh",
+    "-c",
+    "ls /data; rustc --version; cargo --version; cat /sys/fs/cgroup/cpu.max /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.swap.max /sys/fs/cgroup/pids.max"
+  ],
+  "elapsed_ns": 98486166,
+  "exit_code": 0,
+  "stdout_sha256": "323d2ea0b303cbbbe78021b0637da1c81bc8e906b4f0bb17612899b85aca354b",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

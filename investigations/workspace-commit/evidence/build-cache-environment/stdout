@@ -1,0 +1,12 @@
+cargo
+dependencies.tar
+new-source.tar
+source
+source.tar
+target
+rustc 1.85.1 (4eb161250 2025-03-15)
+cargo 1.85.1 (d73d2caf9 2024-12-31)
+200000 100000
+2147483648
+0
+256

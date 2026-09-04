@@ -1,0 +1,43 @@
+
+running 3 tests
+test tree::batch::tests::sorted_updates_validate_input_and_reserve_before_allocation ... ok
+test tree::batch::tests::sorted_inode_dense_delete_preserves_sparse_historical_records ... ok
+test tree::batch::tests::sorted_directory_dense_mixed_sparse_and_empty ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 36 filtered out; finished in 0.39s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s
+

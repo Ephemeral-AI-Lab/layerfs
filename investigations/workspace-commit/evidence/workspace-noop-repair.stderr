@@ -1,0 +1,76 @@
+   Compiling layerfs-layerstack-store v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-layerstack-store)
+   Compiling layerfs-workspace v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-workspace)
+error[E0425]: cannot find type `DirectoryStateRoot` in this scope
+   --> crates/layerfs-workspace/src/changes.rs:309:78
+    |
+309 |     fn fingerprint_directory(&self, node: FingerprintNode) -> Result<(Option<DirectoryStateRoot>, Option<NodeId>)> {
+    |                                                                              ^^^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: you might be missing a type parameter
+    |
+ 34 | impl<DirectoryStateRoot> Workspace {
+    |     ++++++++++++++++++++
+
+error[E0433]: cannot find type `NamespaceCounters` in this scope
+   --> crates/layerfs-workspace/src/changes.rs:287:120
+    |
+287 | ...ame::from_bytes(component)?, &mut NamespaceCounters::default())?
+    |                                      ^^^^^^^^^^^^^^^^^ use of undeclared type `NamespaceCounters`
+
+error[E0425]: cannot find function `directory_lookup` in this scope
+   --> crates/layerfs-workspace/src/changes.rs:287:25
+    |
+287 | ...   directory_lookup(&CoreReader(&self.reader), base, &CanonicalName::from_bytes(component)?, &mut NamespaceCounters::default())?
+    |       ^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function, tuple struct or tuple variant `DirectoryStateRoot` in this scope
+   --> crates/layerfs-workspace/src/changes.rs:318:26
+    |
+318 |                 Ok((Some(DirectoryStateRoot(record.content_root)), None))
+    |                          ^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0433]: cannot find type `NamespaceCounters` in this scope
+   --> crates/layerfs-workspace/src/changes.rs:337:121
+    |
+337 | ...ase_after.as_ref(), 1, 4096, &mut NamespaceCounters::default())?;
+    |                                      ^^^^^^^^^^^^^^^^^ use of undeclared type `NamespaceCounters`
+
+error[E0425]: cannot find function `directory_page_after` in this scope
+   --> crates/layerfs-workspace/src/changes.rs:337:32
+    |
+337 | ...   let page = directory_page_after(&CoreReader(&self.reader), base, base_after.as_ref(), 1, 4096, &mut NamespaceCounters::defaul...
+    |                  ^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0599]: no method named `base_symlink` found for reference `&cow_tree::Workspace` in the current scope
+   --> crates/layerfs-workspace/src/changes.rs:367:48
+    |
+367 |                     InodeKind::Symlink => self.base_symlink(record.content_root)?.len() as u64,
+    |                                                ^^^^^^^^^^^^
+    |
+help: there is a method `symlink` with a similar name, but with different arguments
+   --> crates/layerfs-workspace/src/cow_tree.rs:820:5
+    |
+820 |     pub fn symlink(&mut self, parent: NodeId, name: &[u8], target: Vec<u8>) -> Result<Attr> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0425]: cannot find function `kind` in this scope
+   --> crates/layerfs-workspace/src/changes.rs:369:48
+    |
+369 |                 (Attr { node: NodeId(0), kind: kind(record.kind), size, mode: portable.permission_mode,
+    |                                                ^^^^ not found in this scope
+
+error[E0599]: no method named `base_symlink` found for reference `&cow_tree::Workspace` in the current scope
+   --> crates/layerfs-workspace/src/changes.rs:394:54
+    |
+394 |                 Kind::Symlink => frame(digest, &self.base_symlink(record.content_root)?)?, Kind::Directory => {}
+    |                                                      ^^^^^^^^^^^^
+    |
+help: there is a method `symlink` with a similar name, but with different arguments
+   --> crates/layerfs-workspace/src/cow_tree.rs:820:5
+    |
+820 |     pub fn symlink(&mut self, parent: NodeId, name: &[u8], target: Vec<u8>) -> Result<Attr> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Some errors have detailed explanations: E0425, E0433, E0599.
+For more information about an error, try `rustc --explain E0425`.
+error: could not compile `layerfs-workspace` (lib test) due to 9 previous errors
