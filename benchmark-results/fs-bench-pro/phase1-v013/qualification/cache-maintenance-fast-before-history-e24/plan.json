@@ -1,0 +1,863 @@
+{
+  "schema": "phase1-fast-completed-before-history-cache-maintenance-v1",
+  "status": "reviewable-plan-only-not-applied",
+  "recorded_at_utc": "2026-09-04T16:18:44.147673+00:00",
+  "cache_cap_bytes": 25769803776,
+  "protected_input_plan_sha256": [
+    "04fd4c5be30ae9562e43e117099a8e02b8e51ba0a1fbc945dd317ccd4a082d25",
+    "0bdb20e6562bbfb6dc50ddc673c837714490bc3e9f601cb1e483c904f298b309",
+    "10fe96cbbe56565309d7c3f8a4dd207c61ff881ac56b44319f1bfe49ca63c1a2",
+    "16d26d7f88255d555a9b6a0d53fd1844bf864090ba8e66445483e901041f46bd",
+    "1f8d2445d08ddb43c0f0d8bc93b6d6e2e075829dec02e880879ae402197958c8",
+    "23f7947e8a0907747acbbe276b9b8af5cb0cc06eca389961626fbe893cd4b568",
+    "24981240cf5e60b2660bf7e22071f96d2ad67bb18c364be16e89d82e4833c384",
+    "25bfcc028a32424c6765dfd295bd0b713a665bc325526d2b6699639b68a7ae08",
+    "2631585128eb9356150d0075a426c5cdcdb8e22ab7a6ffdd04070f91a9a4b7d8",
+    "276b52bc4e86ee7724cefc1f6bcba4ca2fa18edcc664e962740f9b6ab4defa3b",
+    "3daab35f01007b47cc566eb323f002e381e3e96e9c320d6c3938cc731eee2aea",
+    "4b8de156f78b0f8203f8c6c4032dc2114f6257485ec3fecc05bf4606abdbc61e",
+    "5def3c03ff59aacfb996f8cabf5e9f038710a0ff102e9dda18044a399b550d0c",
+    "600ad63f2b691e5e68b9a3bc5f661e6b66d7153c0fb404bb0b3b32868696566b",
+    "6bca5a09716d254b395e05011e8065caef802530134ad4b90640f9899958a777",
+    "70e709cf0435535b33e5d6a1e7e68e3f8c2abf98e29e917614b323ef55254502",
+    "7449ac81e2bd1c1e01d9f27fc79a1ff045af31975ee0ededa6a5a79bda67e722",
+    "7828e104c74a74bd9293d0f508d9970ffecf169eae97e898c7925538c72ab552",
+    "7b884154c170ab69bb0ce6d549c119a815c3befbe0a2ca0c2fddb28772d7f7da",
+    "7c82f307f22cfd84ad4bc69eb21cea57519b4cd17d84eb86aa657eccd6cbf3a4",
+    "8726dcb0d91eeef916156d8ede57cd3b52dfb38fd40ad24156b1821eeb54f804",
+    "8b15537300606846986399999fbdd3cb142d54bcd78f6a5e5d58c0c558529930",
+    "8c039552e74d19cb4c3d2fcb91388a21fd7eee5472ee0253354c7bbaec1c5ffb",
+    "95b7260f0eb864dafb86b00b27b79231db81545e181ce3ba8e350c73bdd1a99c",
+    "9795b03abe2eb1c9880229b9a91d8c794a274e044dd3f9f3e6b883407371f7e7",
+    "a57da73ba31be523283e22318cd3bcd9cbc192fc00a8bcb8f2b07b9176767669",
+    "a6005ce3f2134af2173f42b421a19c184734052081b1e34af582d6c8bb2b4ce5",
+    "b6ff99279134954b001533cc8d536a512800bc32098ee95af8c501224b2be127",
+    "b792c818d27b61bd872e68350f88116fdc53df169f2981e27d365a6114554b30",
+    "ba4a33218500f4adab75680edbace9833791efaa9a2d3de7b6a3b63debe3d359",
+    "c1be357d86f1bd31c4cb436719571a517bb1ef3853e882e0c022b95d0c959a94",
+    "c348efc292d1f3b96ca56fed623eb3323a939b393482d466aeadf98c991bfac4",
+    "cb025279645501313bb5cf195882cdb899d7a5446de1a286ef3a94c12c563a83",
+    "cb5bc33ba677b6a3623cf4d43d4249d2e3c0b79df5cc9dc50029d02531d52c0e",
+    "cce07fb69b20d07014d04432ec81ba9ee71af53c446aca93d8c4e39bf28f375f",
+    "cfccd4e76438d56583dbf5b855c839cc4989b08910df345632568ff1a11684cb",
+    "d1dccf7829ac95307fca610135c2b305cf550d6a9e5f6f06039f689f3884b3e1",
+    "d850effe257e55e45910772e66440a617057fca91f896689f6ef3b486163a8eb",
+    "d99b3a7187dcbe8ed22331b2e4ff5198d2cda5dc973b2f47b6b4350148251d2b",
+    "e45abbe442b6337d084bb1fbfff179eac57056a4466e56d83ad0b9a1ecea080a",
+    "e9042968ab81c3f9bea7e57f9300fb56495059d0d4d30a62ff97143b3a92ca4f",
+    "ea6e22876a29eca3e1993d5fb506c4deedcb7d7bbaa870a1bfe5cf720158fa74",
+    "eb7bba03a42ab03cbafc8daf02f7b43daf58cd34d28e4a2f8c4fd792ba7e1a31",
+    "ebe7f02ba454d6de54fc1b385e7b8cb3ec401cf235ce8d9d0ac87cbd3035300d",
+    "f191ada4d4c73bc87d2a8f7311f820950c2652ead275a540f37240294e34c32f",
+    "f6ebda5842419f3ff6720a2df1e828d520b7031ceadc6dfc7a0a384d47834340"
+  ],
+  "protected_failed_cache_keys": [
+    "f85c57cea22b04203e873cdaac536a8c6ca99096c8ebb1698e7e61dccc56bebc"
+  ],
+  "future_ordinal_scope": "99..102 plus103..305 and allsix canonical reference bases",
+  "completed_slot_count": 98,
+  "candidate_count": 40,
+  "recorded_reclaim_allocated_bytes": 6699155456,
+  "candidates": [
+    {
+      "key": "0b2ad8c752069fad3692779ecfbea343580343ff7778b2af2727d014e4beb0aa",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/0b2ad8c752069fad3692779ecfbea343580343ff7778b2af2727d014e4beb0aa",
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "1e9d529ed2b185b2c431e256c194ba612a8e0567106eda085d23a05f5b4d0de7",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "completed_case": "dedup-cdc-overwrite-100",
+      "completed_seed": 2,
+      "completed_ordinal": 56,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-100-s2-fast-verify-8e036b51c722",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "0e2425c47b53c37ee890686e70ac9a6f7b5ec48ab02dfdc098cae8f0642e8ba7",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/0e2425c47b53c37ee890686e70ac9a6f7b5ec48ab02dfdc098cae8f0642e8ba7",
+      "fixture": {
+        "fixture_bytes": 106315776,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "4dd103c1c40a9aa36ee165a3fe56fa1ba9e6e6c53095db04f6dc4ef2e3e9f2d7",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106450944,
+        "logical_bytes": 106421771
+      },
+      "completed_case": "dedup-cdc-insert-100",
+      "completed_seed": 1,
+      "completed_ordinal": 43,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-100-s1-fast-verify-af14549447a5",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "0edd3233bc56f09de805ce2c5c72f442d107554639a50a257ec28cf965dc560e",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/0edd3233bc56f09de805ce2c5c72f442d107554639a50a257ec28cf965dc560e",
+      "fixture": {
+        "fixture_bytes": 11534336,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "d944cff5ebfabd6b3e03ea4ec42cc4913a95e5ff5f37805dd631c2c2aaba0202",
+        "regular_files": 11
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 11661312,
+        "logical_bytes": 11630069
+      },
+      "completed_case": "dedup-cdc-scattered-10",
+      "completed_seed": 3,
+      "completed_ordinal": 66,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-10-s3-fast-verify-86715053c21f",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "17bc978f73d48d57ede3154bd2bc8f3118c7491a1ca51435a7df091101476eca",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/17bc978f73d48d57ede3154bd2bc8f3118c7491a1ca51435a7df091101476eca",
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "772e9a9068ac376311faa2e528e598f71ce9096896ac24e2a2e5c918d386a6f6",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "completed_case": "dedup-cdc-scattered-100",
+      "completed_seed": 2,
+      "completed_ordinal": 68,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-100-s2-fast-verify-9557261a2dc2",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "18fb49a286a2a5d5628bcaf8c71d0d9faa96f60f4d8b3937e28d74229c1d399e",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/18fb49a286a2a5d5628bcaf8c71d0d9faa96f60f4d8b3937e28d74229c1d399e",
+      "fixture": {
+        "fixture_bytes": 2097152,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "7d2b730798904240db13b025f0973d48b45c114198d150890dfd64935f24b7b3",
+        "regular_files": 2
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 2224128,
+        "logical_bytes": 2191857
+      },
+      "completed_case": "dedup-cdc-scattered-1",
+      "completed_seed": 2,
+      "completed_ordinal": 62,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-1-s2-fast-verify-679e845d2d38",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "19a8ba0423092d1be9e9419b81ad335036fded7950bc08f648480f326668ce87",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/19a8ba0423092d1be9e9419b81ad335036fded7950bc08f648480f326668ce87",
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "00b0e949c879aa2c9fc3675008ca2b1de93d141a59acd38a4aec4d4c10c10902",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "completed_case": "dedup-cdc-overwrite-500",
+      "completed_seed": 3,
+      "completed_ordinal": 60,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-500-s3-fast-verify-7404efb9aeb2",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "1cad1f318a805249ff83f3a8861614f48ff2be6f0d648ee8c289e50cec2dbe3b",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/1cad1f318a805249ff83f3a8861614f48ff2be6f0d648ee8c289e50cec2dbe3b",
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "4164bf306973f924806a7299714341b774901b4b029e156d3db62645c43863be",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "completed_case": "dedup-cdc-overwrite-500",
+      "completed_seed": 1,
+      "completed_ordinal": 58,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-500-s1-fast-verify-d1346f8a60a3",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "243fadd04174242a96a7c46f1c38e1ef0ecfa218fff74fc7deb6d3474cfd48a7",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/243fadd04174242a96a7c46f1c38e1ef0ecfa218fff74fc7deb6d3474cfd48a7",
+      "fixture": {
+        "fixture_bytes": 527384576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "cdad37e8ae64b4e4890f70b36c830fcef0ad0ea8bdcfac574f5d1fc724833762",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 527564800,
+        "logical_bytes": 527536171
+      },
+      "completed_case": "dedup-cdc-insert-500",
+      "completed_seed": 1,
+      "completed_ordinal": 46,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-500-s1-fast-verify-9e9125a97446",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "24a22b2ec0952efacd09ec50edfb1644ea0fd44f165aa726b0fe3812159de763",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/24a22b2ec0952efacd09ec50edfb1644ea0fd44f165aa726b0fe3812159de763",
+      "fixture": {
+        "fixture_bytes": 106315776,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "4ed1e1e540db8c690033bd2b30e577ddfd6f10ed5d7c976f1f2f27a8aef984c0",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106450944,
+        "logical_bytes": 106421771
+      },
+      "completed_case": "dedup-cdc-insert-100",
+      "completed_seed": 2,
+      "completed_ordinal": 44,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-100-s2-fast-verify-9f2e968affe7",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "2d0926289cc49591ceaea3dce2783a6ec1720e0e448260e74340d97f75087815",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/2d0926289cc49591ceaea3dce2783a6ec1720e0e448260e74340d97f75087815",
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "803607a0381a495902afacab5ac97af0ef27781844f1d7cb84e606e91e5ca72b",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "completed_case": "dedup-cdc-scattered-500",
+      "completed_seed": 1,
+      "completed_ordinal": 70,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-500-s1-fast-verify-4ac095930d9d",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "30a7b6f861d2f19c684ad54a4d07426c546a72a5a81d0b18c9b27d9420b5a84b",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/30a7b6f861d2f19c684ad54a4d07426c546a72a5a81d0b18c9b27d9420b5a84b",
+      "fixture": {
+        "fixture_bytes": 11534336,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "7d636c4fc1c223c4eaf388ad9dea5b7abd1283ab738cd96f8e811e3117c16d0a",
+        "regular_files": 11
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 11661312,
+        "logical_bytes": 11630069
+      },
+      "completed_case": "dedup-cdc-overwrite-10",
+      "completed_seed": 1,
+      "completed_ordinal": 52,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-10-s1-fast-verify-92098cf65273",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "32d5a64ddfc8718f7f6923bef1853ba97baab87bd2c361360c8fe633239387f5",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/32d5a64ddfc8718f7f6923bef1853ba97baab87bd2c361360c8fe633239387f5",
+      "fixture": {
+        "fixture_bytes": 2101248,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "d7cc8f7bad3cd3cf9829a974c32756f301228ec65e87cc203278aac4bfd56b6a",
+        "regular_files": 2
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 2228224,
+        "logical_bytes": 2195953
+      },
+      "completed_case": "dedup-cdc-insert-1",
+      "completed_seed": 1,
+      "completed_ordinal": 37,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-1-s1-fast-verify-ebb850cc061e",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "3f86c568637af50a58329a1831ad9c7f805afb90f8ca4dfbb988af0d5db3bc24",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/3f86c568637af50a58329a1831ad9c7f805afb90f8ca4dfbb988af0d5db3bc24",
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "fe0309f416088c82aa89e6b55c11fa8d453d41407f87ca06d3059ae97edcfe7a",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "completed_case": "dedup-cdc-overwrite-500",
+      "completed_seed": 2,
+      "completed_ordinal": 59,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-500-s2-fast-verify-26d1774d2ce1",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "3ff66ffce0a72898ac33ba4e5fc4a7db9d6810db5b2e97504cb6d196decf850e",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/3ff66ffce0a72898ac33ba4e5fc4a7db9d6810db5b2e97504cb6d196decf850e",
+      "fixture": {
+        "fixture_bytes": 2097152,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "af46673c9e64ca2e422360feb9888799012d847f477c3340243934f0ed0cb620",
+        "regular_files": 2
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 2224128,
+        "logical_bytes": 2191857
+      },
+      "completed_case": "dedup-cdc-overwrite-1",
+      "completed_seed": 2,
+      "completed_ordinal": 50,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-1-s2-fast-verify-0ca82862fe70",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "44f188f85ca50d2b8e4b6004fc014739f2f61678e4e9ea5eb52c2196772022c9",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/44f188f85ca50d2b8e4b6004fc014739f2f61678e4e9ea5eb52c2196772022c9",
+      "fixture": {
+        "fixture_bytes": 527384576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "806f1cd0b21131f2e6203b69c6f90c6f511f88307832a543fab2d8945f77fe49",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 527564800,
+        "logical_bytes": 527536171
+      },
+      "completed_case": "dedup-cdc-insert-500",
+      "completed_seed": 3,
+      "completed_ordinal": 48,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-500-s3-fast-verify-75ce7558e593",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "46e6cfc829f0d9c9102acb4a5416622df10f2f94aeb6332347288192f3a2bd62",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/46e6cfc829f0d9c9102acb4a5416622df10f2f94aeb6332347288192f3a2bd62",
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "149d5998f054bcf874e2e946376eae2ef12f5964e27abb1fd429267be1e6947c",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "completed_case": "dedup-cdc-scattered-500",
+      "completed_seed": 2,
+      "completed_ordinal": 71,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-500-s2-fast-verify-546a29801c1e",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "4b887122080c0ae102c14f69278052ed4a0278dbfcc1c1d3a4c1c7fc2fb7d2b1",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/4b887122080c0ae102c14f69278052ed4a0278dbfcc1c1d3a4c1c7fc2fb7d2b1",
+      "fixture": {
+        "fixture_bytes": 11534336,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "eed62460670bfe7515e518c16371b36993b67da33944e87c09325a57117ebea3",
+        "regular_files": 11
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 11661312,
+        "logical_bytes": 11630069
+      },
+      "completed_case": "dedup-cdc-scattered-10",
+      "completed_seed": 1,
+      "completed_ordinal": 64,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-10-s1-fast-verify-d1647c898834",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "55d7c22246582893e7a8d590b7c203abc4df72a3baa5d69cb8a6a68355444f0a",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/55d7c22246582893e7a8d590b7c203abc4df72a3baa5d69cb8a6a68355444f0a",
+      "fixture": {
+        "fixture_bytes": 83492864,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "store",
+        "input_plan_sha256": "db3d8bcbb773abb3fbc94e779c4702bacc7cc3eee9749fc7e0e32aa76cbd7c4c",
+        "regular_files": 14800
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 119685120,
+        "logical_bytes": 103658354
+      },
+      "completed_case": "agent-episodes-500",
+      "completed_seed": 3,
+      "completed_ordinal": 12,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/agent-episodes-500-s3-fast-verify-b8176d2d9bf7",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "645378b3001a2046384e7b22405e8cb72a461041159d088f3f9fe0d7f8c69feb",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/645378b3001a2046384e7b22405e8cb72a461041159d088f3f9fe0d7f8c69feb",
+      "fixture": {
+        "fixture_bytes": 2097152,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "e7bf542fdc127a40a56f468031488bd15b36bb57b60ab6790906cb4ac928453e",
+        "regular_files": 2
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 2224128,
+        "logical_bytes": 2191857
+      },
+      "completed_case": "dedup-cdc-overwrite-1",
+      "completed_seed": 1,
+      "completed_ordinal": 49,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-1-s1-fast-verify-15bcf4e63c75",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "6f82873e2c1aa7092eadd9d1e7173a098111f31ce87a7968bd4d09bde64385b1",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/6f82873e2c1aa7092eadd9d1e7173a098111f31ce87a7968bd4d09bde64385b1",
+      "fixture": {
+        "fixture_bytes": 83492864,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "store",
+        "input_plan_sha256": "2118f1dcb8af11ed596cf238c9835b17627ee8e36fcdf11ff9895861825bb514",
+        "regular_files": 14800
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 119750656,
+        "logical_bytes": 103592818
+      },
+      "completed_case": "agent-episodes-500",
+      "completed_seed": 2,
+      "completed_ordinal": 11,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/agent-episodes-500-s2-fast-verify-76bb31c24768",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "78f9e771ccb4f17d1264e2e76038d20a05c0297fe52eac93290677fed8a7bb25",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/78f9e771ccb4f17d1264e2e76038d20a05c0297fe52eac93290677fed8a7bb25",
+      "fixture": {
+        "fixture_bytes": 11534336,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "ec558c631b9edbb3064f8078e32f1852ce66e1d4796a61b74fe9303d1d933a30",
+        "regular_files": 11
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 11661312,
+        "logical_bytes": 11630069
+      },
+      "completed_case": "dedup-cdc-overwrite-10",
+      "completed_seed": 3,
+      "completed_ordinal": 54,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-10-s3-fast-verify-07ad20ba789d",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "7d11c446168e68282de9161233c9ed9b8f0886e18c185ebecd61a5e5f748b788",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/7d11c446168e68282de9161233c9ed9b8f0886e18c185ebecd61a5e5f748b788",
+      "fixture": {
+        "fixture_bytes": 2097152,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "3577dd3c51b9b6cf964209177e76eed8944f7c3abe819f710417515a388677d9",
+        "regular_files": 2
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 2224128,
+        "logical_bytes": 2191857
+      },
+      "completed_case": "dedup-cdc-scattered-1",
+      "completed_seed": 3,
+      "completed_ordinal": 63,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-1-s3-fast-verify-d5aaf0d995e9",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "7db5d88d65ed79a51bcc9600758a33c0dd3643a30aab1e557993a57aa63b1e42",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/7db5d88d65ed79a51bcc9600758a33c0dd3643a30aab1e557993a57aa63b1e42",
+      "fixture": {
+        "fixture_bytes": 11534336,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "ab47550d1d32388b8d4d8066744ec0d50465d0e1ed35edd7566dd2ff509bf3aa",
+        "regular_files": 11
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 11661312,
+        "logical_bytes": 11630069
+      },
+      "completed_case": "dedup-cdc-scattered-10",
+      "completed_seed": 2,
+      "completed_ordinal": 65,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-10-s2-fast-verify-bd248dba7c9a",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "9366dd4a0a6996139ef78e9f94b5134acc05b227b9555d6e1862f5f4b86680d1",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/9366dd4a0a6996139ef78e9f94b5134acc05b227b9555d6e1862f5f4b86680d1",
+      "fixture": {
+        "fixture_bytes": 11575296,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "3d489fb618107a9c028621f42b9f983ea93e9d1e94b6008385d593c5d1218d23",
+        "regular_files": 11
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 11702272,
+        "logical_bytes": 11671029
+      },
+      "completed_case": "dedup-cdc-insert-10",
+      "completed_seed": 3,
+      "completed_ordinal": 42,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-10-s3-fast-verify-93be337d2e5e",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "9685cba39b67450b058cf73198555a6a0fef68b138659eacb4ee1485abda5197",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/9685cba39b67450b058cf73198555a6a0fef68b138659eacb4ee1485abda5197",
+      "fixture": {
+        "fixture_bytes": 2101248,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "a1cb303685236c1e18ae3f18b16ec047d24bb0bfcbdd745c850b9b70e78c1abd",
+        "regular_files": 2
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 2228224,
+        "logical_bytes": 2195953
+      },
+      "completed_case": "dedup-cdc-insert-1",
+      "completed_seed": 2,
+      "completed_ordinal": 38,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-1-s2-fast-verify-a87aefd748f0",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "99e718d51c35cde54f971f3fee3bcf7c29a688b89575d3e7c34ef10111aba694",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/99e718d51c35cde54f971f3fee3bcf7c29a688b89575d3e7c34ef10111aba694",
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "e01b0995ea66019a1985488f4403cb9f44f1f03b65bce0380e4576db35df35b9",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "completed_case": "dedup-cdc-scattered-100",
+      "completed_seed": 1,
+      "completed_ordinal": 67,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-100-s1-fast-verify-1907a3c9540c",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "9f0bcb1e1482635c6fcdeb3bdaf4e80d0f15b89f417144faef456b79adce416b",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/9f0bcb1e1482635c6fcdeb3bdaf4e80d0f15b89f417144faef456b79adce416b",
+      "fixture": {
+        "fixture_bytes": 83492864,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "store",
+        "input_plan_sha256": "d800c8ac6e2557eac8f51f884b0c6e36bd3fa7d24581f52c6e7ca8c86b3b50f0",
+        "regular_files": 14800
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 119750656,
+        "logical_bytes": 103592818
+      },
+      "completed_case": "agent-episodes-500",
+      "completed_seed": 1,
+      "completed_ordinal": 10,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/agent-episodes-500-s1-fast-verify-81196828aea7",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "a285086300cd59ace1808b5b7b831b45b5af6158a803e2cd640f3aaa64e2d77e",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/a285086300cd59ace1808b5b7b831b45b5af6158a803e2cd640f3aaa64e2d77e",
+      "fixture": {
+        "fixture_bytes": 11534336,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "694ce9d67e8df0a22f69311151cebea0af5c712b2359e93d1ba54456e9466120",
+        "regular_files": 11
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 11661312,
+        "logical_bytes": 11630069
+      },
+      "completed_case": "dedup-cdc-overwrite-10",
+      "completed_seed": 2,
+      "completed_ordinal": 53,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-10-s2-fast-verify-8b100f78336d",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "a560d55c29d2e775060b323f4c5d2a8890d0033d9bf645139cf69ca54c0c1a9a",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/a560d55c29d2e775060b323f4c5d2a8890d0033d9bf645139cf69ca54c0c1a9a",
+      "fixture": {
+        "fixture_bytes": 2101248,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "cf49a164c1901de938965cbd064847ff45814a4577c2a8b111aba905e6eb81bb",
+        "regular_files": 2
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 2228224,
+        "logical_bytes": 2195953
+      },
+      "completed_case": "dedup-cdc-insert-1",
+      "completed_seed": 3,
+      "completed_ordinal": 39,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-1-s3-fast-verify-be4193a1f659",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "a9791ac7c3201eac7a9a65ab688bc77006e1a741866a2e454d4de2fad8b11567",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/a9791ac7c3201eac7a9a65ab688bc77006e1a741866a2e454d4de2fad8b11567",
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "49e7399cf8c43060d1e9d091b87e9cf75f58250b6f764c9595a7483cd12469af",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "completed_case": "dedup-cdc-scattered-100",
+      "completed_seed": 3,
+      "completed_ordinal": 69,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-100-s3-fast-verify-8dbab8ceb40d",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "b59c78c6825db854060663f70a78f2a9d40c5c41a01e294b36bc4a86abc3b268",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/b59c78c6825db854060663f70a78f2a9d40c5c41a01e294b36bc4a86abc3b268",
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "0b2e51914a0dbf3c4fab7ee89e248c4e81b5a81863f4b63874549203a4c70d37",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "completed_case": "dedup-cdc-scattered-500",
+      "completed_seed": 3,
+      "completed_ordinal": 72,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-500-s3-fast-verify-b4b0027983ae",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "b8cf6a9e01fefdb207e2a9152faa5555f681d16c963c22793c04c3aee30469e2",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/b8cf6a9e01fefdb207e2a9152faa5555f681d16c963c22793c04c3aee30469e2",
+      "fixture": {
+        "fixture_bytes": 2097152,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "0289625ee306be1989b519f099fb5be11049a7779de67b5bd189146c267131cb",
+        "regular_files": 2
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 2224128,
+        "logical_bytes": 2191857
+      },
+      "completed_case": "dedup-cdc-overwrite-1",
+      "completed_seed": 3,
+      "completed_ordinal": 51,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-1-s3-fast-verify-56b831b634f1",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "be80b4cd438def73f68e3c3b52cfa3be15234307111160f22668b8a99e625c12",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/be80b4cd438def73f68e3c3b52cfa3be15234307111160f22668b8a99e625c12",
+      "fixture": {
+        "fixture_bytes": 11575296,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "f86a342028ab7b561bc6ec3d0e95aad2a77059739da2179d9fff79a5a4171b31",
+        "regular_files": 11
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 11702272,
+        "logical_bytes": 11671029
+      },
+      "completed_case": "dedup-cdc-insert-10",
+      "completed_seed": 2,
+      "completed_ordinal": 41,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-10-s2-fast-verify-367e3772de38",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "c11662d802fe1c5a0b291ddcf0879bab85e28c6c6078bd860501b4c7df19f35f",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/c11662d802fe1c5a0b291ddcf0879bab85e28c6c6078bd860501b4c7df19f35f",
+      "fixture": {
+        "fixture_bytes": 523288576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "29a94581378e59218e01df37b5705f1ce5b601c307af0f9e37b6781836b0c682",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 523468800,
+        "logical_bytes": 523442069
+      },
+      "completed_case": "dedup-cdc-delete-500",
+      "completed_seed": 3,
+      "completed_ordinal": 36,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-500-s3-fast-verify-481af736189e",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "c66526afef94ef08519023687a4de554b958d620c271a29888eccd82a617d503",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/c66526afef94ef08519023687a4de554b958d620c271a29888eccd82a617d503",
+      "fixture": {
+        "fixture_bytes": 2097152,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "5cef131cf21a22019da2dd5c8073294f00db160b74014bfd4419963ef219f550",
+        "regular_files": 2
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 2224128,
+        "logical_bytes": 2191857
+      },
+      "completed_case": "dedup-cdc-scattered-1",
+      "completed_seed": 1,
+      "completed_ordinal": 61,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-scattered-1-s1-fast-verify-5097b93e329e",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "d172fe59d9b91d547da3444c3c02189d8f2d933172dd7c095f71d4027032810b",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/d172fe59d9b91d547da3444c3c02189d8f2d933172dd7c095f71d4027032810b",
+      "fixture": {
+        "fixture_bytes": 527384576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "6819578f963c38be08547dd71f452dea2447290190796ca4e98ef0607181fd44",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 527564800,
+        "logical_bytes": 527536171
+      },
+      "completed_case": "dedup-cdc-insert-500",
+      "completed_seed": 2,
+      "completed_ordinal": 47,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-500-s2-fast-verify-04371006cbe7",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "dd084bdf6f95dc1f8e4f57095515f7ddaa0e52dddbd2d8b4ac274c4014728c5c",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/dd084bdf6f95dc1f8e4f57095515f7ddaa0e52dddbd2d8b4ac274c4014728c5c",
+      "fixture": {
+        "fixture_bytes": 106315776,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "adf18f0bfddfd32add01ff68408e52985d4ef3e178ecc3161217f375fc52c1e5",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106450944,
+        "logical_bytes": 106421771
+      },
+      "completed_case": "dedup-cdc-insert-100",
+      "completed_seed": 3,
+      "completed_ordinal": 45,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-100-s3-fast-verify-dc9792e8a29b",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "e41d4ced39fd014bfd1f38d48ac30e7b51c3d18fcc1e20d80f0010283c250dc2",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/e41d4ced39fd014bfd1f38d48ac30e7b51c3d18fcc1e20d80f0010283c250dc2",
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "4f7adf62110edfb79d0612a2dc56aac8dfbf3396689d73631f9a67a06dcc9204",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "completed_case": "dedup-cdc-overwrite-100",
+      "completed_seed": 1,
+      "completed_ordinal": 55,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-100-s1-fast-verify-eee3d565e5aa",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "eec7e3cce684199bfe96bfc3b81dfd42246952e1b9d1f6b22a06d2ed9ed3f70b",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/eec7e3cce684199bfe96bfc3b81dfd42246952e1b9d1f6b22a06d2ed9ed3f70b",
+      "fixture": {
+        "fixture_bytes": 11575296,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "e18ed291a84cc2cbcbab62464fc8216f21d6d7e9434a291ad226ab53e58e1a53",
+        "regular_files": 11
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 11702272,
+        "logical_bytes": 11671029
+      },
+      "completed_case": "dedup-cdc-insert-10",
+      "completed_seed": 1,
+      "completed_ordinal": 40,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-insert-10-s1-fast-verify-a921aee793f1",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    },
+    {
+      "key": "fcb8be25ccbdef4693b5bdf8690c1b6ce30324fc8cc4cefd397ebdfe936fa81c",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/fcb8be25ccbdef4693b5bdf8690c1b6ce30324fc8cc4cefd397ebdfe936fa81c",
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "a9d5cdd19d1357a797749a5cb0fb777a1c7355301d50f41639412934881c1354",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "completed_case": "dedup-cdc-overwrite-100",
+      "completed_seed": 3,
+      "completed_ordinal": 57,
+      "completed_evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-overwrite-100-s3-fast-verify-6cce6fce7d03",
+      "disposition": "Completed selected fast input beforeordinal99; no remaining99..305 input or six canonical reference base uses this exact input plan. Existing applier archives custody/build metadata; all outcomes and failed original delete500seed3 master remain."
+    }
+  ]
+}

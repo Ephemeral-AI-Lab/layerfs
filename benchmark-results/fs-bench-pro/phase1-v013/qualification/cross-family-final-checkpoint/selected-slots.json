@@ -1,0 +1,26 @@
+[
+  {
+    "case": "dedup-cross-file-unique-100",
+    "seed": 3,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-unique-100-s3-fast-verify-f41a527c31b5"
+  },
+  {
+    "case": "dedup-cross-file-unique-500",
+    "seed": 1,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-unique-500-s1-fast-verify-5b2950ca4b3b"
+  },
+  {
+    "case": "dedup-cross-file-unique-500",
+    "seed": 2,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-unique-500-s2-fast-verify-8f185353d1c8"
+  },
+  {
+    "case": "dedup-cross-file-unique-500",
+    "seed": 3,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-unique-500-s3-fast-verify-7f4c4126bc1f"
+  }
+]

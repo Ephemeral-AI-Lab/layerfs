@@ -1,0 +1,5 @@
+workspace-independent-manifest-v1
+.	directory	0	750	1700000000	0	-
+reference.dat	file	1048576	640	1700000000	0	e6d56b8eaf29317b1b29ce063cdf39d50c7eadb64ab90218d480dadfcdd30c27
+variants	directory	0	750	1700000000	0	-
+variants/v0000.dat	file	1048576	640	1700000000	0	c4edcbeadf552eb5c091d92e7b94b2beaeeac3c89e33f73d74dfeb33bd61abe6
