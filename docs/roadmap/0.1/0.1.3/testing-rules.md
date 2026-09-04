@@ -1,5 +1,10 @@
 # v0.1.3 benchmark testing rules
 
+> **Latest Phase 1 scope:** The [15-second suppression policy](phase-1-runtime-suppressions.md)
+> supersedes the original full-inventory execution requirement. Keep suppressed
+> combinations explicit; all remaining active cases require valid results and
+> independent verification.
+
 > **Completion policy updated 2026-09-04:** Apply the
 > [failure-repair amendment](failure-repair-amendment.md). Required functional,
 > correctness, resource and cleanup failures must be repaired in Phase 1; it

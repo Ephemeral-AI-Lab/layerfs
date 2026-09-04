@@ -1,5 +1,11 @@
 # LayerFS 0.1.3
 
+> **Phase 1 scope updated 2026-09-04:** Apply the
+> [15-second runtime suppression policy](phase-1-runtime-suppressions.md).
+> Fourteen specified case/subset combinations are suppressed; any further
+> performance sample exceeding 15 seconds permanently suppresses its combination
+> for Phase 1. Suppression is reported separately from passing coverage.
+
 > **Completion policy updated 2026-09-04:** The user requires functional failures
 > to be fixed in Phase 1. The [failure-repair amendment](failure-repair-amendment.md)
 > supersedes earlier completion/deferral wording here and in linked contracts;

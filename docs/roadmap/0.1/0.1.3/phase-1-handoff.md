@@ -1,5 +1,10 @@
 # Phase 1 execution handoff
 
+> **Latest Phase 1 scope:** Enforce the [15-second suppression policy](phase-1-runtime-suppressions.md)
+> before scheduling work. Its permanent Phase 1 exclusions supersede the
+> original full-inventory completion language below; never count a suppression
+> as a passing benchmark.
+
 > **Completion policy updated 2026-09-04:** Apply the
 > [failure-repair amendment](failure-repair-amendment.md). Required functional,
 > correctness, resource and cleanup failures must be repaired in Phase 1; it
