@@ -520,8 +520,8 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
             unsafe {
                 unsafe extern "C" {
                     fn setxattr(
-                        path: *const i8,
-                        name: *const i8,
+                        path: *const std::ffi::c_char,
+                        name: *const std::ffi::c_char,
                         value: *const std::ffi::c_void,
                         size: usize,
                         flags: i32,
