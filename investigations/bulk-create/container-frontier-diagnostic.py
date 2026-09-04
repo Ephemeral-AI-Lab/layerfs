@@ -2,7 +2,7 @@
 """Exploratory container-only frontier A/B: create and delete, no Phase 1 lock."""
 import hashlib, json, pathlib, subprocess, tarfile, time, tomllib, uuid
 ROOT=pathlib.Path(__file__).resolve().parents[2]
-OUT=ROOT/'investigations/bulk-create/evidence/container-frontier-10-s1-r3'
+OUT=ROOT/'investigations/bulk-create/evidence/container-frontier-10-s1-r4'
 BASE='sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e'
 PREPARED=ROOT/'investigations/bulk-create/evidence/colocated-r1/prepared'
 OUT.mkdir();commands=[];active=None
@@ -22,23 +22,16 @@ def start(label):
     run(label+'-environment',['docker','inspect',active])
 try:
     source=run('source',['git','rev-parse','HEAD'])
-    run('source-diff',['git','diff','5a5db40d',source,'--','crates','benchmark/fs-bench-pro'])
-    assert not subprocess.check_output(['git','diff','--','crates','benchmark/fs-bench-pro'],cwd=ROOT)
-    # Reuse our own retained build; product/harness source is unchanged.
+    prior=OUT.parent/'container-frontier-10-s1-r3'
     binary_source=run('binary-source',['git','rev-parse','21c29290'])
     assert not subprocess.check_output(['git','diff',binary_source,source,'--','crates','benchmark/fs-bench-pro'],cwd=ROOT)
-    run('concurrent-containers',['docker','ps','--format','{{.Names}}\t{{.Status}}'])
-    start('build')
-    run('reuse-private-build',['docker','cp',str(OUT.parent/'container-frontier-10-s1-r2/failed-state')+'/.',active+':/data'])
-    run('binary-copy',['docker','cp',active+':/data/target/release/fs-benchmark-pro',OUT/'fs-benchmark-pro'])
-    run('build-toolchain',['docker','exec',active,'rustc','-Vv'])
-    run('focused-regression',['docker','exec','-e','CARGO_HOME=/data/cargo','-e','CARGO_TARGET_DIR=/data/target','-e','CARGO_BUILD_JOBS=2','-e','LAYERFS_EXPERIMENT_FRONTIER_BATCH=2048',active,'sh','-c','cd /data/source && cargo test --offline --locked -p layerfs-workspace --features test-instrumentation --test file_edit group_3_rename_parent_replace_unlink_and_final_alias_reclamation_are_inode_exact -- --exact'],1200)
-    run('prepare-delete',['docker','exec',active,'/data/target/release/fs-benchmark-pro','workspace-prepare','/data/delete-prepared','tiny-bulk-delete-10','1'])
-    run('copy-delete-prepared',['docker','cp',active+':/data/delete-prepared',OUT/'delete-prepared'])
-    run('copy-delete-manifest',['docker','cp',active+':/data/input-manifest.tsv',OUT/'delete-input-manifest.tsv'])
-    run('build-cleanup',['docker','rm','-fv',active]);active=None
-    (OUT/'input-identity.json').write_text(json.dumps(dict(prepared_source=str(PREPARED),store_sha256=hashlib.sha256((PREPARED/'store.sqlite').read_bytes()).hexdigest(),branch=(PREPARED/'branch-id').read_text(),benchmark_sha256=hashlib.sha256((OUT/'fs-benchmark-pro').read_bytes()).hexdigest()),indent=2)+'\n')
-    for kind in ['create','delete']:
+    import shutil
+    shutil.copyfile(prior/'fs-benchmark-pro',OUT/'fs-benchmark-pro')
+    shutil.copytree(prior/'delete-prepared',OUT/'delete-prepared')
+    fixture=json.loads((prior/'prepare-delete.stdout').read_text())
+    (OUT/'delete-prepared/branch-id').write_text(fixture['branch_id']+'\n')
+    (OUT/'input-identity.json').write_text(json.dumps(dict(source=str(prior),fixture=fixture,store_sha256=hashlib.sha256((OUT/'delete-prepared/store.sqlite').read_bytes()).hexdigest(),benchmark_sha256=hashlib.sha256((OUT/'fs-benchmark-pro').read_bytes()).hexdigest()),indent=2)+'\n')
+    for kind in ['delete']:
       for treatment,batch in [('control','128'),('batched','2048')]:
         arm=kind+'-'+treatment
         prepared=PREPARED if kind=='create' else OUT/'delete-prepared'
