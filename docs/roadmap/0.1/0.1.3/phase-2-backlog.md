@@ -4,7 +4,7 @@ This is the proposed backlog for #35, not a Phase 1 terminal or release decision
 The [runtime suppression amendment](phase-1-runtime-suppressions.md) disables
 scheduling, not implementation: retain all fourteen scenario definitions, their
 fixtures, public operation routes, oracles and historical outcomes. Any later
-budget-triggered exclusions in the [persistent suppression ledger](../../../../../benchmark-results/fs-bench-pro/phase1-v013/phase1-runtime-suppressions.json)
+budget-triggered exclusions in the [persistent suppression ledger](../../../../benchmark-results/fs-bench-pro/phase1-v013/phase1-runtime-suppressions.json)
 join this backlog. Faster code or a new source must not silently re-enable them
 in Phase 1. Phase 2 execution needs an explicit scope and measurement contract.
 
@@ -19,7 +19,7 @@ passes contained SQL-history allocations inside timed operations and are
 both dense500 RSS failures and all other failed or interrupted attempts.
 
 The table reads completed `sample_complete.pure_call_sum_ns` from the
-[source-bound slot ledger](../../../../../benchmark-results/fs-bench-pro/phase1-v013/slots.json).
+[source-bound slot ledger](../../../../benchmark-results/fs-bench-pro/phase1-v013/slots.json).
 Values are three-seed medians in seconds, except the explicitly single-sample
 namespace row. Each listed attempt is a clean-source anchor; its `raw.jsonl`,
 `outcome.json`, command, environment and hash manifest live under
