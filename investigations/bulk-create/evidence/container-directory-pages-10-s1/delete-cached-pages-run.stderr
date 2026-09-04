@@ -1,0 +1,3 @@
+experiment_dense_delete survivors=335 edges=334 insert_capacity_bytes=41216
+experiment_directory_pages enabled=true requests=303 loads=286 loaded_entries=4856 hits=17
+experiment_directory_pages enabled=true requests=277 loads=136 loaded_entries=606 hits=141

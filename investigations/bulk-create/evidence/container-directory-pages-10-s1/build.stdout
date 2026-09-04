@@ -1,0 +1,8 @@
+investigations/bulk-create/sync-source.py
+crates/layerfs-layerstack-store/src/schema.rs
+crates/layerfs-fuse/src/adapter.rs
+crates/layerfs-fuse/src/port.rs
+crates/layerfs-fuse/src/filesystem.rs
+crates/layerfs-workspace/src/projection.rs
+crates/layerfs-workspace/src/changes.rs
+crates/layerfs-workspace/src/cow_tree.rs

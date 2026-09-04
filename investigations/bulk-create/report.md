@@ -9,7 +9,10 @@ a conditional research target requiring much cheaper live operations, bounded
 staging/compilation, and checked final-state admission/refresh. Three seconds is
 **unsupported and substantially higher risk**, not proven impossible. The latest
 colocated candidate takes **107.908 s**. Dense-delete Commit can already be cheap:
-**0.05565 s at 100k**, while its complete POSIX Exec still takes **69.761 s**.
+**0.05565 s at 100k** in the original survivor experiment. A subsequent bounded
+directory-page cache candidate reduces the observed delete lifecycle to
+**30.168 s** (Exec **30.128 s**, Commit **0.03323 s**); see section 6. This still
+misses the target, and is not a controlled 69.93→30.17 cache-only speedup.
 
 The useful v0.1.1 lesson is to construct the final reachable state once. This
 investigation applies that lesson in two different ways: final reference counts
@@ -398,3 +401,81 @@ evidence directory. Scripts refuse existing output directories; new work must
 use a new attempt identity. No production integration is recommended solely from
 favorable timing: preserve these prototypes for review and test the live-operation
 gate next.
+
+
+## 6. Follow-up: live deletion and repeated FUSE directory pages
+
+The Exec timer covers the public SDK `Client::exec_workspace_session`, waiting
+for the sealed workload process to finish against the real LayerFS FUSE mount.
+See [SDK caller](../../benchmark/fs-bench-pro/src/main.rs#L6515) and
+[recursive POSIX deletion](../../benchmark/fs-bench-pro/ordinary_workloads.rs#L708).
+The SDK launches/waits once; the workload's lstat/readdir/unlink/rmdir operations
+then enter FUSE and the Workspace. Thus the slow timer is mostly filesystem work,
+not SDK process-launch overhead. In this diagnostic, both owner and workload are
+colocated in Linux; there is no macOS proxy TCP round trip per operation.
+
+**Hypothesis:** the existing FUSE callbacks request a complete directory vector
+on every kernel page, then skip to the supplied offset. The prescribed wide
+directory contains 32,000 files at the 500-MiB tier. Repeated reconstruction and
+dropping of whole listings makes work grow with directory size times page count.
+Prediction: caching a completed listing across pages reduces Workspace listing
+loads and rebuilt entry counts without changing syscalls or final contents.
+
+Prototype source **`22b31552`** adds a cache per listing form in the existing FUSE
+adapter. It holds at most one plain and one plus listing, capped at 4 MiB each
+including vector/name capacities; oversized lists use the original fallback.
+Offset zero reloads; releasedir frees the matching cache. The Host port supplies
+a checked active-Workspace incarnation and mutation-generation token. Any
+mutation or Workspace replacement invalidates reuse, including replacement with
+the same immutable root but different materialized NodeIds. Unsupported ports
+return no token and retain uncached behavior. No new worker, SDK bulk operation,
+physical chunk deletion or resource-limit increase is involved.
+
+[Small A/B evidence](evidence/container-directory-pages-10-s1/), 2,000 files,
+seed 1, one run per arm using the same binary with the SQL-trace repair and dense
+survivor construction enabled in both:
+
+| Observation | Cache off | Cache on |
+|---|---:|---:|
+| Complete Exec | 0.338795 s | 0.327619 s |
+| Complete lifecycle call sum | 0.357143 s | 0.348764 s |
+| FUSE directory requests | 303 | 303 |
+| Full listing loads | 303 | 286 |
+| Entries rebuilt | 10,720 | 4,856 |
+| Cache hits | 0 | 17 |
+
+Both canonical and fresh-FUSE verification passed. The focused retained-root,
+hard-link and open-unlinked regression also passed. The small timing difference
+is not a significant speedup claim; counters establish that work was removed.
+Its wide directory has only 640 entries, so one scaling run was warranted.
+
+[100k scale evidence](evidence/container-directory-pages-500-s1/), binary
+`22b31552`, runner **`b616ab3f`**, reused qualified seed-1 input:
+Create **0.001684 s**, Exec **30.128114 s**, Commit **0.033233 s**, query
+**0.000047 s**, End **0.004652 s**; complete call sum **30.167729 s**.
+The 2,088 FUSE directory requests needed 1,266 full listing loads, rebuilt 203,796
+entries and hit the cache **822 times**. Product process CPU was **21.81 s** and
+peak RSS **99,721,216 B**. Whole-container peak, including separate verification,
+was **159,010,816 B**; CPU delta about **26.216 s**, no OOM, swap or throttling.
+
+The sealed workload completed all 100,000 unlinks and 633 directory removals.
+Canonical and fresh-FUSE verification passed the surviving witness. The
+verify-mode dispatch window was **31.168936 s**, versus **30.167729 s** product
+calls; verification/observations outside the calls are not part of the lifecycle.
+SQLite grew by the same 64 KiB and its freelist remained zero. Owned container,
+volume and workers were removed. Preparation and outer teardown are recorded in
+`commands.json`, separately from the product call sum.
+
+**Decision:** keep this bounded page-reuse prototype for review, but do not claim
+a 5-second lifecycle or production readiness. The earlier 69.93-second sample
+predates opt-in SQL tracing as well as this cache; changing instrumentation and
+shared-machine conditions prevents attributing the full difference to caching.
+The same-binary small A/B and the scale counters support the mechanism. The
+remaining 30 seconds and 21.81 process CPU-seconds demand further live-operation
+work reduction. The next diagnostic should attribute immutable directory-binding
+lookup, inode materialization and metadata decoding during lstat/unlink; a
+bounded binding cache should only be added if those counters justify it.
+Before production integration, add targeted mutation-during-enumeration,
+rewind/reopen, cache-eviction and same-root Workspace-replacement regressions.
+The current checks establish prescribed-workload correctness, not exhaustive
+concurrent directory-stream semantics.

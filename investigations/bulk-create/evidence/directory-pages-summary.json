@@ -1,0 +1,198 @@
+{
+  "container-directory-pages-10-s1": {
+    "delete-cached-pages-run.stdout": {
+      "phases_ns": {
+        "create": 1216542,
+        "exec": 327618667,
+        "commit": 18998333,
+        "visibility": 35500,
+        "end": 895333
+      },
+      "lifecycle_ns": 348764375,
+      "diagnostics": "experiment_dense_delete survivors=335 edges=334 insert_capacity_bytes=41216\nexperiment_directory_pages enabled=true requests=303 loads=286 loaded_entries=4856 hits=17\nexperiment_directory_pages enabled=true requests=277 loads=136 loaded_entries=606 hits=141\n",
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"1053216\", \"canonical_Chunk_objects\": \"220\", \"canonical_DirectoryNode_bytes\": \"19759\", \"canonical_DirectoryNode_objects\": \"135\", \"canonical_DirectoryState_bytes\": \"13230\", \"canonical_DirectoryState_objects\": \"135\", \"canonical_FileNode_bytes\": \"17732\", \"canonical_FileNode_objects\": \"203\", \"canonical_FileState_bytes\": \"21518\", \"canonical_FileState_objects\": \"203\", \"canonical_InodeRecord_bytes\": \"32830\", \"canonical_InodeRecord_objects\": \"335\", \"canonical_InodeTable_bytes\": \"22024\", \"canonical_InodeTable_objects\": \"6\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"c7ad220ede36af6e2c1d50185a353e1f2e91912d219d48dcddf9aa6479fecde7\", \"canonical_unique_objects\": \"1240\", \"independent_content_paths\": \"200\", \"logical_bytes\": \"1048576\", \"oracle_identity\": \"403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"335\", \"verified_regular_paths\": \"200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=200\nlogical_bytes=1048576\noracle_identity=403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=335\nverified_regular_paths=200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3874816,
+          "peak_resident_bytes": 11317248,
+          "physical_footprint_bytes": 3874816,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 220000000,
+          "system_cpu_ns": 30000000,
+          "resident_bytes": 25059328,
+          "peak_resident_bytes": 24735744,
+          "physical_footprint_bytes": 25059328,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 4096,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 680000000,
+          "system_cpu_ns": 40000000,
+          "resident_bytes": 44171264,
+          "peak_resident_bytes": 43872256,
+          "physical_footprint_bytes": 44171264,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 49152,
+          "swaps": 0
+        }
+      ]
+    },
+    "delete-control-run.stdout": {
+      "phases_ns": {
+        "create": 1090125,
+        "exec": 338795416,
+        "commit": 16616791,
+        "visibility": 38583,
+        "end": 602292
+      },
+      "lifecycle_ns": 357143207,
+      "diagnostics": "experiment_dense_delete survivors=335 edges=334 insert_capacity_bytes=41216\nexperiment_directory_pages enabled=false requests=303 loads=303 loaded_entries=10720 hits=0\nexperiment_directory_pages enabled=false requests=277 loads=277 loaded_entries=2025 hits=0\n",
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"1053216\", \"canonical_Chunk_objects\": \"220\", \"canonical_DirectoryNode_bytes\": \"19759\", \"canonical_DirectoryNode_objects\": \"135\", \"canonical_DirectoryState_bytes\": \"13230\", \"canonical_DirectoryState_objects\": \"135\", \"canonical_FileNode_bytes\": \"17732\", \"canonical_FileNode_objects\": \"203\", \"canonical_FileState_bytes\": \"21518\", \"canonical_FileState_objects\": \"203\", \"canonical_InodeRecord_bytes\": \"32830\", \"canonical_InodeRecord_objects\": \"335\", \"canonical_InodeTable_bytes\": \"22024\", \"canonical_InodeTable_objects\": \"6\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"c7ad220ede36af6e2c1d50185a353e1f2e91912d219d48dcddf9aa6479fecde7\", \"canonical_unique_objects\": \"1240\", \"independent_content_paths\": \"200\", \"logical_bytes\": \"1048576\", \"oracle_identity\": \"403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"335\", \"verified_regular_paths\": \"200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=200\nlogical_bytes=1048576\noracle_identity=403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=335\nverified_regular_paths=200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 11173888,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 220000000,
+          "system_cpu_ns": 40000000,
+          "resident_bytes": 24989696,
+          "peak_resident_bytes": 24674304,
+          "physical_footprint_bytes": 24989696,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 4096,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 700000000,
+          "system_cpu_ns": 50000000,
+          "resident_bytes": 44089344,
+          "peak_resident_bytes": 43810816,
+          "physical_footprint_bytes": 44089344,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 49152,
+          "swaps": 0
+        }
+      ]
+    }
+  },
+  "container-directory-pages-500-s1": {
+    "run.stdout": {
+      "phases_ns": {
+        "create": 1683500,
+        "exec": 30128113764,
+        "commit": 33232750,
+        "visibility": 47333,
+        "end": 4652000
+      },
+      "lifecycle_ns": 30167729347,
+      "diagnostics": "experiment_dense_delete survivors=335 edges=334 insert_capacity_bytes=41216\nexperiment_directory_pages enabled=true requests=2088 loads=1266 loaded_entries=203796 hits=822\nexperiment_directory_pages enabled=true requests=277 loads=136 loaded_entries=606 hits=141\n",
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"1053216\", \"canonical_Chunk_objects\": \"220\", \"canonical_DirectoryNode_bytes\": \"19759\", \"canonical_DirectoryNode_objects\": \"135\", \"canonical_DirectoryState_bytes\": \"13230\", \"canonical_DirectoryState_objects\": \"135\", \"canonical_FileNode_bytes\": \"17732\", \"canonical_FileNode_objects\": \"203\", \"canonical_FileState_bytes\": \"21518\", \"canonical_FileState_objects\": \"203\", \"canonical_InodeRecord_bytes\": \"32830\", \"canonical_InodeRecord_objects\": \"335\", \"canonical_InodeTable_bytes\": \"22024\", \"canonical_InodeTable_objects\": \"6\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"b243c9242dc775e3fd04cdd0fad0c3523bf834ab1217566c8a904b17243b9caf\", \"canonical_unique_objects\": \"1240\", \"independent_content_paths\": \"200\", \"logical_bytes\": \"1048576\", \"oracle_identity\": \"403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"335\", \"verified_regular_paths\": \"200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=200\nlogical_bytes=1048576\noracle_identity=403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=335\nverified_regular_paths=200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 11317248,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 19370000000,
+          "system_cpu_ns": 2440000000,
+          "resident_bytes": 62771200,
+          "peak_resident_bytes": 99721216,
+          "physical_footprint_bytes": 62771200,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 397312,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 20060000000,
+          "system_cpu_ns": 2470000000,
+          "resident_bytes": 121077760,
+          "peak_resident_bytes": 120913920,
+          "physical_footprint_bytes": 121077760,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 442368,
+          "swaps": 0
+        }
+      ]
+    }
+  }
+}

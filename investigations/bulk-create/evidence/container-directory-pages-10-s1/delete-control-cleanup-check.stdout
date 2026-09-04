@@ -1,0 +1,27 @@
+204 123 0:68 / / rw,relatime - overlay overlay rw,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/77378/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76825/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76824/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76823/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76822/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76821/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76820/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57052/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57051/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57050/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57049/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57048/fs,upperdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/77379/fs,workdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/77379/work
+206 204 0:89 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+207 204 0:90 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+208 207 0:91 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=5,mode=620,ptmxmode=666
+209 204 0:92 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs ro
+210 209 0:39 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw
+211 207 0:87 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw
+212 207 0:93 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=65536k
+213 204 254:1 /docker/volumes/d91b69b7c70bc7431562dd798b87ef0252258907a151fdcd8d7dccdbdaf07fdb/_data /data rw,relatime master:1 - ext4 /dev/vda1 rw,discard
+214 204 254:1 /docker/containers/25d775c28444742fa27fb047bf4caef376fcaadd029bc20426ba82a20490003f/resolv.conf /etc/resolv.conf rw,relatime - ext4 /dev/vda1 rw,discard
+215 204 254:1 /docker/containers/25d775c28444742fa27fb047bf4caef376fcaadd029bc20426ba82a20490003f/hostname /etc/hostname rw,relatime - ext4 /dev/vda1 rw,discard
+216 204 254:1 /docker/containers/25d775c28444742fa27fb047bf4caef376fcaadd029bc20426ba82a20490003f/hosts /etc/hosts rw,relatime - ext4 /dev/vda1 rw,discard
+124 206 0:89 /bus /proc/bus ro,nosuid,nodev,noexec,relatime - proc proc rw
+125 206 0:89 /fs /proc/fs ro,nosuid,nodev,noexec,relatime - proc proc rw
+126 206 0:89 /irq /proc/irq ro,nosuid,nodev,noexec,relatime - proc proc rw
+127 206 0:89 /sys /proc/sys ro,nosuid,nodev,noexec,relatime - proc proc rw
+128 206 0:89 /sysrq-trigger /proc/sysrq-trigger ro,nosuid,nodev,noexec,relatime - proc proc rw
+129 206 0:90 /null /proc/interrupts rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+130 206 0:90 /null /proc/kcore rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+131 206 0:90 /null /proc/keys rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+132 206 0:94 / /proc/scsi ro,relatime - tmpfs tmpfs ro
+133 206 0:90 /null /proc/timer_list rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+134 209 0:95 / /sys/firmware ro,relatime - tmpfs tmpfs ro
+  PID COMMAND
+    1 sleep
+   51 sh
+   59 ps
