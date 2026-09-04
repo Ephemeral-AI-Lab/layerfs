@@ -1096,6 +1096,36 @@ mod tests {
     }
 
     #[test]
+    fn owner_drop_discards_active_projection_before_releasing_lease() {
+        let (root, first, branch, store) = fixture("owner-drop-lease");
+        let second = Workspaces::new(root.join("second-runtime"), store.clone()).unwrap();
+        let request = CreateWorkspaceSession {
+            branch_id: branch,
+            placement: crate::WorkspacePlacement::Host { root: root.join("mount") },
+            projection: Some(WorkspaceProjection::Materialize),
+        };
+        let created = first.create_workspace_session(request.clone()).unwrap();
+        assert!(matches!(second.create_workspace_session(request.clone()), Err(WorkspaceError::WorkspaceBusy)));
+        let before_root = store.pin_branch(branch).unwrap().root;
+        let before_commits = store.store_counts().unwrap().commits;
+        prepend(&first,created.id).unwrap();
+        let state = first.runtime_root.join("workspaces").join(created.id.to_string());
+        // Projection diagnostics belong to this exact state directory, not spool/.
+        std::fs::write(state.join("mountinfo.txt"), b"owned projection diagnostic").unwrap();
+        assert!(root.join("mount").exists());
+        drop(first);
+        assert!(!root.join("mount").exists());
+        assert!(!state.exists());
+        assert_eq!(store.pin_branch(branch).unwrap().root,before_root);
+        assert_eq!(store.store_counts().unwrap().commits,before_commits);
+        let reacquired = second.create_workspace_session(request).unwrap();
+        assert_eq!(std::fs::read(root.join("mount/file")).unwrap(),b"abcdef");
+        second.end_workspace_session(reacquired.id,EndWorkspaceMode::Clean).unwrap();
+        drop(second);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools() {
         let (root, workspaces, branch, store) = fixture("streamed-rebase");
         drop(workspaces);

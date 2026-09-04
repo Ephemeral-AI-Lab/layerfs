@@ -50,6 +50,30 @@ pub struct Workspaces {
     pub(crate) daemon: Option<crate::daemon::DaemonOwner>,
 }
 
+impl Drop for Workspaces {
+    fn drop(&mut self) {
+        // Keep each worker and the daemon owner alive until the existing End path
+        // acknowledges projection cleanup and removes its state before releasing
+        // the branch lease. Socket disconnect alone does not retire a mount.
+        let active = match self.sessions.lock() {
+            Ok(sessions) => sessions.iter().filter_map(|(id, record)| {
+                matches!(record, SessionRecord::Active(_)).then_some(*id)
+            }).collect::<Vec<_>>(),
+            Err(error) => {
+                eprintln!("layerfs-workspace: owner-drop session registry: {error}");
+                return;
+            }
+        };
+        for id in active {
+            if let Err(error) = self.end_workspace_session(id, crate::EndWorkspaceMode::Discard) {
+                // Drop cannot return an error. Preserve the diagnostic and leave
+                // unsuccessful state cleanup to the existing projection fallback.
+                eprintln!("layerfs-workspace: owner-drop cleanup {id}: {error}");
+            }
+        }
+    }
+}
+
 impl Workspaces {
     pub fn new(runtime_root: impl AsRef<Path>, store: LayerStackStore) -> WorkspaceResult<Self> {
         Self::with_daemon(runtime_root, store, crate::daemon::configure()?)
