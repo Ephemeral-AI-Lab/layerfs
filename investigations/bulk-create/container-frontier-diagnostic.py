@@ -2,7 +2,7 @@
 """Exploratory container-only frontier A/B: create and delete, no Phase 1 lock."""
 import hashlib, json, pathlib, subprocess, tarfile, time, tomllib, uuid
 ROOT=pathlib.Path(__file__).resolve().parents[2]
-OUT=ROOT/'investigations/bulk-create/evidence/container-frontier-10-s1-r4'
+OUT=ROOT/'investigations/bulk-create/evidence/container-frontier-10-s1-r5'
 BASE='sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e'
 PREPARED=ROOT/'investigations/bulk-create/evidence/colocated-r1/prepared'
 OUT.mkdir();commands=[];active=None
@@ -26,7 +26,8 @@ try:
     binary_source=run('binary-source',['git','rev-parse','21c29290'])
     assert not subprocess.check_output(['git','diff',binary_source,source,'--','crates','benchmark/fs-bench-pro'],cwd=ROOT)
     import shutil
-    shutil.copyfile(prior/'fs-benchmark-pro',OUT/'fs-benchmark-pro')
+    shutil.copy2(prior/'fs-benchmark-pro',OUT/'fs-benchmark-pro')
+    assert (OUT/'fs-benchmark-pro').stat().st_mode & 0o111
     shutil.copytree(prior/'delete-prepared',OUT/'delete-prepared')
     fixture=json.loads((prior/'prepare-delete.stdout').read_text())
     (OUT/'delete-prepared/branch-id').write_text(fixture['branch_id']+'\n')
