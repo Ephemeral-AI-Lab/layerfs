@@ -1,0 +1,24 @@
+diff --git a/crates/layerfs-workspace/src/file_io.rs b/crates/layerfs-workspace/src/file_io.rs
+index f57b1fd0..c270db99 100644
+--- a/crates/layerfs-workspace/src/file_io.rs
++++ b/crates/layerfs-workspace/src/file_io.rs
+@@ -473,6 +473,10 @@ impl Workspace {
+         generation: u64,
+         paths: Vec<String>,
+     ) -> Result<()> {
++        // A successful explicit empty state retires the prior logical edit
++        // generation. Keep spool history for in-flight reads; only subsequent
++        // mutations receive a fresh edit budget, after existing admission checks.
++        let emptied = old.len() != 0 && next.len() == 0;
+         self.inline_bytes = self.inline_bytes - old.inline_len() + next.inline_len();
+         self.piece_allocation_bytes = self.piece_allocation_bytes
+             - old.logical_allocation_charge()?
+@@ -489,7 +493,7 @@ impl Workspace {
+             return Err(StoreError::Integrity("edited file"));
+         };
+         *pieces = next;
+-        *current_edits = edits;
++        *current_edits = if emptied { 0 } else { edits };
+         *spool_high_water = high_water;
+         self.dirty.insert(node);
+         self.mutation_generation = generation;

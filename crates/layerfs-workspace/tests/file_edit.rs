@@ -98,6 +98,109 @@ fn edit(
 }
 
 #[test]
+fn whole_file_empty_generation_reclaims_edit_budget() {
+    let (root, workspaces, branch, store) = fixture("empty-generation", b"");
+    let (session, mount) = open_session(&root, &workspaces, branch, "mount");
+    let mut applied = 0usize;
+    let mut expected = vec![0; 64];
+    let result = (|| -> Result<(), String> {
+        edit(
+            &workspaces,
+            &session,
+            0,
+            0,
+            WorkspaceFileReplacement::Inline(expected.clone()),
+        )
+        .map_err(|error| format!("initial write: {error:?}"))?;
+        applied += 1;
+        // Same state transitions as O_TRUNC followed by a 64-byte write,
+        // through the public owner API and real presentation refresh.
+        for cycle in 1..=2048 {
+            edit(
+                &workspaces,
+                &session,
+                0,
+                64,
+                WorkspaceFileReplacement::Inline(Vec::new()),
+            )
+            .map_err(|error| format!("cycle={cycle} truncate applied={applied}: {error:?}"))?;
+            applied += 1;
+            expected = vec![cycle as u8; 64];
+            edit(
+                &workspaces,
+                &session,
+                0,
+                0,
+                WorkspaceFileReplacement::Inline(expected.clone()),
+            )
+            .map_err(|error| {
+                format!(
+                    "cycle={cycle} write applied={applied} live_len={}: {error:?}",
+                    std::fs::metadata(mount.join("file")).unwrap().len()
+                )
+            })?;
+            applied += 1;
+        }
+        assert_eq!(std::fs::read(mount.join("file")).unwrap(), expected);
+        // The new nonempty generation still accepts exactly 4096 edits.
+        // Its final fill above is edit one; these fill the remaining budget.
+        for ordinal in 1..4096 {
+            expected = vec![ordinal as u8; 64];
+            edit(
+                &workspaces,
+                &session,
+                0,
+                64,
+                WorkspaceFileReplacement::Inline(expected.clone()),
+            )
+            .map_err(|error| format!("nonempty edit={ordinal}: {error:?}"))?;
+        }
+        let error = edit(
+            &workspaces,
+            &session,
+            0,
+            64,
+            WorkspaceFileReplacement::Inline(vec![7; 64]),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            WorkspaceError::Storage(layerfs_layerstack_store::StoreError::InvalidInput(
+                "workspace edit limit"
+            ))
+        ));
+        assert_eq!(std::fs::read(mount.join("file")).unwrap(), expected);
+        Ok(())
+    })();
+    if result.is_ok() {
+        assert!(matches!(
+            workspaces.commit_workspace_session(session.id).unwrap(),
+            WorkspaceCommitResult::Created { .. }
+        ));
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Clean)
+            .unwrap();
+        let (reopened, reopened_mount) = open_session(&root, &workspaces, branch, "reopened");
+        assert_eq!(
+            std::fs::read(reopened_mount.join("file")).unwrap(),
+            expected
+        );
+        workspaces
+            .end_workspace_session(reopened.id, EndWorkspaceMode::Clean)
+            .unwrap();
+    } else {
+        eprintln!("empty-generation regression: {:?}", result);
+        workspaces
+            .end_workspace_session(session.id, EndWorkspaceMode::Discard)
+            .unwrap();
+    }
+    drop(workspaces);
+    drop(store);
+    std::fs::remove_dir_all(root).unwrap();
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
 fn group_1_range_piece_eof_noop_and_repeated_boundaries() {
     let (root, workspaces, branch, _) = fixture("ranges", b"abcdef");
     let (session, mount) = open_session(&root, &workspaces, branch, "mount");

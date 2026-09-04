@@ -1,0 +1,11 @@
+
+running 1 test
+test whole_file_empty_generation_reclaims_edit_budget ... FAILED
+
+failures:
+
+failures:
+    whole_file_empty_generation_reclaims_edit_budget
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 11 filtered out; finished in 4.15s
+
