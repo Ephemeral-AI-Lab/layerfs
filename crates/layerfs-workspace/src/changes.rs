@@ -1754,6 +1754,13 @@ mod tests {
         workspace.commit().unwrap();
         assert_eq!(workspace.lookup(ROOT, b"keep").unwrap().links, 3);
         let old_root = workspace.base_root;
+        let database = rusqlite::Connection::open_with_flags(
+            root.join("store.sqlite"), rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let before_objects: Vec<(Vec<u8>, Vec<u8>)> = {
+            let mut query = database.prepare("SELECT object_id, bytes FROM objects").unwrap();
+            let rows = query.query_map([], |row| Ok((row.get(0)?, row.get(1)?))).unwrap();
+            rows.collect::<std::result::Result<_, _>>().unwrap()
+        };
         let gone = workspace.lookup(ROOT, b"gone").unwrap().node;
         let open = workspace.lookup(ROOT, b"open").unwrap().node;
         workspace.pin(open, false).unwrap();
@@ -1765,6 +1772,14 @@ mod tests {
         workspace.unlink(ROOT, b"gone", true).unwrap();
         assert!(workspace.build_dense_delete_candidate().unwrap().is_some());
         workspace.commit().unwrap();
+        for (id, before) in &before_objects {
+            let after: Vec<u8> = database.query_row(
+                "SELECT bytes FROM objects WHERE object_id = ?1", [id.as_slice()],
+                |row| row.get(0)).unwrap();
+            assert_eq!(&after, before, "delete changed an immutable CAS object");
+        }
+        eprintln!("experiment_immutable_cas retained_unchanged_objects={}", before_objects.len());
+        drop(database);
         let a = workspace.lookup(ROOT, b"keep").unwrap();
         let b = workspace.lookup(ROOT, b"keep2").unwrap();
         assert_eq!((a.node, a.links), (b.node, 2));
