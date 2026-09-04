@@ -229,6 +229,7 @@ impl Workspace {
         for (node, spool) in obsolete_spools {
             self.remove_spool_if_exists(node, &spool)?;
         }
+        self.directory_cache_instance = committed.directory_cache_instance;
         self.reader = committed.reader.clone();
         self.expected_head = expected_head;
         self.expected_base = committed.expected_base;

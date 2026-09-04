@@ -1751,7 +1751,10 @@ mod tests {
         workspace.link(keep, gone, b"alias").unwrap();
         let open = workspace.create_file(ROOT, b"open", 0o640).unwrap().node;
         workspace.write(open, 0, b"open").unwrap();
+        let before_commit_instance = workspace.directory_cache_instance;
         workspace.commit().unwrap();
+        assert_ne!(workspace.directory_cache_instance, before_commit_instance,
+            "in-place rebase must invalidate listings even when mutation generation resets");
         assert_eq!(workspace.lookup(ROOT, b"keep").unwrap().links, 3);
         let old_root = workspace.base_root;
         let branch = workspace.branch_id;
