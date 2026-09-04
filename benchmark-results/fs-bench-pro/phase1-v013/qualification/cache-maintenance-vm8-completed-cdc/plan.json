@@ -1,0 +1,687 @@
+{
+  "schema": "phase1-vm8-completed-cdc-capacity-v1",
+  "recorded_at_utc": "2026-09-04T13:33:18.898080+00:00",
+  "protected_keys": [
+    "46e6cfc829f0d9c9102acb4a5416622df10f2f94aeb6332347288192f3a2bd62",
+    "b59c78c6825db854060663f70a78f2a9d40c5c41a01e294b36bc4a86abc3b268"
+  ],
+  "trigger": "scattered500 seed2 attemptb4acce77893e stopped beforeproduct atcachecap",
+  "cache_cap_bytes": 25769803776,
+  "candidates": [
+    {
+      "key": "d172fe59d9b91d547da3444c3c02189d8f2d933172dd7c095f71d4027032810b",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/d172fe59d9b91d547da3444c3c02189d8f2d933172dd7c095f71d4027032810b",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/d172fe59d9b91d547da3444c3c02189d8f2d933172dd7c095f71d4027032810b/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.d172fe59d9b91d547da3444c3c02189d8f2d933172dd7c095f71d4027032810b.prepare-9q5yn2pk/store",
+        "dedup-cdc-insert-500",
+        "2"
+      ],
+      "fixture": {
+        "fixture_bytes": 527384576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "6819578f963c38be08547dd71f452dea2447290190796ca4e98ef0607181fd44",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 527564800,
+        "logical_bytes": 527536171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "44f188f85ca50d2b8e4b6004fc014739f2f61678e4e9ea5eb52c2196772022c9",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/44f188f85ca50d2b8e4b6004fc014739f2f61678e4e9ea5eb52c2196772022c9",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/44f188f85ca50d2b8e4b6004fc014739f2f61678e4e9ea5eb52c2196772022c9/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.44f188f85ca50d2b8e4b6004fc014739f2f61678e4e9ea5eb52c2196772022c9.prepare-iah572u8/store",
+        "dedup-cdc-insert-500",
+        "3"
+      ],
+      "fixture": {
+        "fixture_bytes": 527384576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "806f1cd0b21131f2e6203b69c6f90c6f511f88307832a543fab2d8945f77fe49",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 527564800,
+        "logical_bytes": 527536171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "243fadd04174242a96a7c46f1c38e1ef0ecfa218fff74fc7deb6d3474cfd48a7",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/243fadd04174242a96a7c46f1c38e1ef0ecfa218fff74fc7deb6d3474cfd48a7",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/243fadd04174242a96a7c46f1c38e1ef0ecfa218fff74fc7deb6d3474cfd48a7/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.243fadd04174242a96a7c46f1c38e1ef0ecfa218fff74fc7deb6d3474cfd48a7.prepare-kwu57shi/store",
+        "dedup-cdc-insert-500",
+        "1"
+      ],
+      "fixture": {
+        "fixture_bytes": 527384576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "cdad37e8ae64b4e4890f70b36c830fcef0ad0ea8bdcfac574f5d1fc724833762",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 527564800,
+        "logical_bytes": 527536171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "2d0926289cc49591ceaea3dce2783a6ec1720e0e448260e74340d97f75087815",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/2d0926289cc49591ceaea3dce2783a6ec1720e0e448260e74340d97f75087815",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/2d0926289cc49591ceaea3dce2783a6ec1720e0e448260e74340d97f75087815/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.2d0926289cc49591ceaea3dce2783a6ec1720e0e448260e74340d97f75087815.prepare-2ak9939z/store",
+        "dedup-cdc-scattered-500",
+        "1"
+      ],
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "803607a0381a495902afacab5ac97af0ef27781844f1d7cb84e606e91e5ca72b",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "1cad1f318a805249ff83f3a8861614f48ff2be6f0d648ee8c289e50cec2dbe3b",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/1cad1f318a805249ff83f3a8861614f48ff2be6f0d648ee8c289e50cec2dbe3b",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/1cad1f318a805249ff83f3a8861614f48ff2be6f0d648ee8c289e50cec2dbe3b/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.1cad1f318a805249ff83f3a8861614f48ff2be6f0d648ee8c289e50cec2dbe3b.prepare-fzep_kr7/store",
+        "dedup-cdc-overwrite-500",
+        "1"
+      ],
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "4164bf306973f924806a7299714341b774901b4b029e156d3db62645c43863be",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "a76ee740e272b20e515edf35a74c43b8c7ebeeb969f7297585fd85c34c633d6b",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/a76ee740e272b20e515edf35a74c43b8c7ebeeb969f7297585fd85c34c633d6b",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/a76ee740e272b20e515edf35a74c43b8c7ebeeb969f7297585fd85c34c633d6b/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.a76ee740e272b20e515edf35a74c43b8c7ebeeb969f7297585fd85c34c633d6b.prepare-qz6av4bo/store",
+        "dedup-cdc-common-body-500",
+        "1"
+      ],
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "3b2951f05fd66905bff9bddd2e868e7000965123efed39fe23d3c83b2b0ba0ab",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "19a8ba0423092d1be9e9419b81ad335036fded7950bc08f648480f326668ce87",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/19a8ba0423092d1be9e9419b81ad335036fded7950bc08f648480f326668ce87",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/19a8ba0423092d1be9e9419b81ad335036fded7950bc08f648480f326668ce87/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.19a8ba0423092d1be9e9419b81ad335036fded7950bc08f648480f326668ce87.prepare-dzqju8o0/store",
+        "dedup-cdc-overwrite-500",
+        "3"
+      ],
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "00b0e949c879aa2c9fc3675008ca2b1de93d141a59acd38a4aec4d4c10c10902",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "55bad6b43e2cde3c4b2c2bff44a4d975d2d1712af8c581b2796cd010f9e115a9",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/55bad6b43e2cde3c4b2c2bff44a4d975d2d1712af8c581b2796cd010f9e115a9",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/55bad6b43e2cde3c4b2c2bff44a4d975d2d1712af8c581b2796cd010f9e115a9/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.55bad6b43e2cde3c4b2c2bff44a4d975d2d1712af8c581b2796cd010f9e115a9.prepare-ooshu6v5/store",
+        "dedup-cdc-common-body-500",
+        "3"
+      ],
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "f6c10cb6a65f68e5b2fd9e03fa73cd8cb2c89a23b9878ee777fc016dc65c1ed7",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "847b657756f71b09a6685ad918590f4c34ce3bb7da97aefd53c0e2f8774f7fea",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/847b657756f71b09a6685ad918590f4c34ce3bb7da97aefd53c0e2f8774f7fea",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/847b657756f71b09a6685ad918590f4c34ce3bb7da97aefd53c0e2f8774f7fea/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.847b657756f71b09a6685ad918590f4c34ce3bb7da97aefd53c0e2f8774f7fea.prepare-8ktc1e4d/store",
+        "dedup-cdc-common-body-500",
+        "2"
+      ],
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "a76269fde90906843ede045e65d40fd9d9bbe260fc537b9e88a1e80436c3d68b",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "3f86c568637af50a58329a1831ad9c7f805afb90f8ca4dfbb988af0d5db3bc24",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/3f86c568637af50a58329a1831ad9c7f805afb90f8ca4dfbb988af0d5db3bc24",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/3f86c568637af50a58329a1831ad9c7f805afb90f8ca4dfbb988af0d5db3bc24/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.3f86c568637af50a58329a1831ad9c7f805afb90f8ca4dfbb988af0d5db3bc24.prepare-nsmmhja9/store",
+        "dedup-cdc-overwrite-500",
+        "2"
+      ],
+      "fixture": {
+        "fixture_bytes": 525336576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "fe0309f416088c82aa89e6b55c11fa8d453d41407f87ca06d3059ae97edcfe7a",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 525516800,
+        "logical_bytes": 525488171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "75b31e811cbbc2eae0332d5f2d348b592eeb9fcdbf4f16f6068c98739cd6b235",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/75b31e811cbbc2eae0332d5f2d348b592eeb9fcdbf4f16f6068c98739cd6b235",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/75b31e811cbbc2eae0332d5f2d348b592eeb9fcdbf4f16f6068c98739cd6b235/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.75b31e811cbbc2eae0332d5f2d348b592eeb9fcdbf4f16f6068c98739cd6b235.prepare-s6t6kt7q/store",
+        "dedup-cdc-delete-500",
+        "2"
+      ],
+      "fixture": {
+        "fixture_bytes": 523288576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "ddd747469dfbb35abc8db60ba1336196b5b9ca5269ac97243f715f9691db703d",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 523468800,
+        "logical_bytes": 523440171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "83de193f824b6dba646e4896c1206d09d8df02fa3cdc3065f8cbd0774b7e9c42",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/83de193f824b6dba646e4896c1206d09d8df02fa3cdc3065f8cbd0774b7e9c42",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/83de193f824b6dba646e4896c1206d09d8df02fa3cdc3065f8cbd0774b7e9c42/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.83de193f824b6dba646e4896c1206d09d8df02fa3cdc3065f8cbd0774b7e9c42.prepare-aueq4y7k/store",
+        "dedup-cdc-delete-500",
+        "1"
+      ],
+      "fixture": {
+        "fixture_bytes": 523288576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "c5dfb5b7fe10a50c8a42de944f913b29a38511558ba3cadec0f8795dc301fd04",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 523468800,
+        "logical_bytes": 523440171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "f85c57cea22b04203e873cdaac536a8c6ca99096c8ebb1698e7e61dccc56bebc",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/f85c57cea22b04203e873cdaac536a8c6ca99096c8ebb1698e7e61dccc56bebc",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/f85c57cea22b04203e873cdaac536a8c6ca99096c8ebb1698e7e61dccc56bebc/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.f85c57cea22b04203e873cdaac536a8c6ca99096c8ebb1698e7e61dccc56bebc.prepare-32dz5800/store",
+        "dedup-cdc-delete-500",
+        "3"
+      ],
+      "fixture": {
+        "fixture_bytes": 523288576,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "e4f349834e51eddceab4674a62fb292339e43782a099bdfc7e96c51e38ae00e1",
+        "regular_files": 501
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 523468800,
+        "logical_bytes": 523440171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "24a22b2ec0952efacd09ec50edfb1644ea0fd44f165aa726b0fe3812159de763",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/24a22b2ec0952efacd09ec50edfb1644ea0fd44f165aa726b0fe3812159de763",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/24a22b2ec0952efacd09ec50edfb1644ea0fd44f165aa726b0fe3812159de763/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.24a22b2ec0952efacd09ec50edfb1644ea0fd44f165aa726b0fe3812159de763.prepare-_6z0m1i7/store",
+        "dedup-cdc-insert-100",
+        "2"
+      ],
+      "fixture": {
+        "fixture_bytes": 106315776,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "4ed1e1e540db8c690033bd2b30e577ddfd6f10ed5d7c976f1f2f27a8aef984c0",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106450944,
+        "logical_bytes": 106421771
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "0e2425c47b53c37ee890686e70ac9a6f7b5ec48ab02dfdc098cae8f0642e8ba7",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/0e2425c47b53c37ee890686e70ac9a6f7b5ec48ab02dfdc098cae8f0642e8ba7",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/0e2425c47b53c37ee890686e70ac9a6f7b5ec48ab02dfdc098cae8f0642e8ba7/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.0e2425c47b53c37ee890686e70ac9a6f7b5ec48ab02dfdc098cae8f0642e8ba7.prepare-b108v8pn/store",
+        "dedup-cdc-insert-100",
+        "1"
+      ],
+      "fixture": {
+        "fixture_bytes": 106315776,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "4dd103c1c40a9aa36ee165a3fe56fa1ba9e6e6c53095db04f6dc4ef2e3e9f2d7",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106450944,
+        "logical_bytes": 106421771
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "dd084bdf6f95dc1f8e4f57095515f7ddaa0e52dddbd2d8b4ac274c4014728c5c",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/dd084bdf6f95dc1f8e4f57095515f7ddaa0e52dddbd2d8b4ac274c4014728c5c",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/dd084bdf6f95dc1f8e4f57095515f7ddaa0e52dddbd2d8b4ac274c4014728c5c/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.dd084bdf6f95dc1f8e4f57095515f7ddaa0e52dddbd2d8b4ac274c4014728c5c.prepare-nkh79xm0/store",
+        "dedup-cdc-insert-100",
+        "3"
+      ],
+      "fixture": {
+        "fixture_bytes": 106315776,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "adf18f0bfddfd32add01ff68408e52985d4ef3e178ecc3161217f375fc52c1e5",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106450944,
+        "logical_bytes": 106421771
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "b92c46f2cb394fb36308053f0fb7e2992fdc045b5b3c59ee132194cd75c5f4d4",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/b92c46f2cb394fb36308053f0fb7e2992fdc045b5b3c59ee132194cd75c5f4d4",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/b92c46f2cb394fb36308053f0fb7e2992fdc045b5b3c59ee132194cd75c5f4d4/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.b92c46f2cb394fb36308053f0fb7e2992fdc045b5b3c59ee132194cd75c5f4d4.prepare-7htsax1z/store",
+        "dedup-cdc-common-body-100",
+        "1"
+      ],
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "f5b2e47e6a2680de63701542a0b211960e66a7aba3a5b92ad9e1b87d89430034",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "99e718d51c35cde54f971f3fee3bcf7c29a688b89575d3e7c34ef10111aba694",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/99e718d51c35cde54f971f3fee3bcf7c29a688b89575d3e7c34ef10111aba694",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/99e718d51c35cde54f971f3fee3bcf7c29a688b89575d3e7c34ef10111aba694/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.99e718d51c35cde54f971f3fee3bcf7c29a688b89575d3e7c34ef10111aba694.prepare-nv7wonpe/store",
+        "dedup-cdc-scattered-100",
+        "1"
+      ],
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "e01b0995ea66019a1985488f4403cb9f44f1f03b65bce0380e4576db35df35b9",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "0b2ad8c752069fad3692779ecfbea343580343ff7778b2af2727d014e4beb0aa",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/0b2ad8c752069fad3692779ecfbea343580343ff7778b2af2727d014e4beb0aa",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/0b2ad8c752069fad3692779ecfbea343580343ff7778b2af2727d014e4beb0aa/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.0b2ad8c752069fad3692779ecfbea343580343ff7778b2af2727d014e4beb0aa.prepare-_qr36man/store",
+        "dedup-cdc-overwrite-100",
+        "2"
+      ],
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "1e9d529ed2b185b2c431e256c194ba612a8e0567106eda085d23a05f5b4d0de7",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "4815c84953f3827562efabefda70d42a5832f95ba1938334ba8dc64b0abb0874",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/4815c84953f3827562efabefda70d42a5832f95ba1938334ba8dc64b0abb0874",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/4815c84953f3827562efabefda70d42a5832f95ba1938334ba8dc64b0abb0874/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.4815c84953f3827562efabefda70d42a5832f95ba1938334ba8dc64b0abb0874.prepare-qj55ai7b/store",
+        "dedup-cdc-common-body-100",
+        "2"
+      ],
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "5ce3b61cedcaeefb709747ed139c6b559ac5e2a1514210b3afd44c6ef13bcaf6",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "17bc978f73d48d57ede3154bd2bc8f3118c7491a1ca51435a7df091101476eca",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/17bc978f73d48d57ede3154bd2bc8f3118c7491a1ca51435a7df091101476eca",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/17bc978f73d48d57ede3154bd2bc8f3118c7491a1ca51435a7df091101476eca/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.17bc978f73d48d57ede3154bd2bc8f3118c7491a1ca51435a7df091101476eca.prepare-fqhhg3tn/store",
+        "dedup-cdc-scattered-100",
+        "2"
+      ],
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "772e9a9068ac376311faa2e528e598f71ce9096896ac24e2a2e5c918d386a6f6",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "a9791ac7c3201eac7a9a65ab688bc77006e1a741866a2e454d4de2fad8b11567",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/a9791ac7c3201eac7a9a65ab688bc77006e1a741866a2e454d4de2fad8b11567",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/a9791ac7c3201eac7a9a65ab688bc77006e1a741866a2e454d4de2fad8b11567/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.a9791ac7c3201eac7a9a65ab688bc77006e1a741866a2e454d4de2fad8b11567.prepare-5xrzay6y/store",
+        "dedup-cdc-scattered-100",
+        "3"
+      ],
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "49e7399cf8c43060d1e9d091b87e9cf75f58250b6f764c9595a7483cd12469af",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "fcb8be25ccbdef4693b5bdf8690c1b6ce30324fc8cc4cefd397ebdfe936fa81c",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/fcb8be25ccbdef4693b5bdf8690c1b6ce30324fc8cc4cefd397ebdfe936fa81c",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/fcb8be25ccbdef4693b5bdf8690c1b6ce30324fc8cc4cefd397ebdfe936fa81c/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.fcb8be25ccbdef4693b5bdf8690c1b6ce30324fc8cc4cefd397ebdfe936fa81c.prepare-1yp58ysk/store",
+        "dedup-cdc-overwrite-100",
+        "3"
+      ],
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "a9d5cdd19d1357a797749a5cb0fb777a1c7355301d50f41639412934881c1354",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "e41d4ced39fd014bfd1f38d48ac30e7b51c3d18fcc1e20d80f0010283c250dc2",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/e41d4ced39fd014bfd1f38d48ac30e7b51c3d18fcc1e20d80f0010283c250dc2",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/e41d4ced39fd014bfd1f38d48ac30e7b51c3d18fcc1e20d80f0010283c250dc2/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.e41d4ced39fd014bfd1f38d48ac30e7b51c3d18fcc1e20d80f0010283c250dc2.prepare-12gdasjc/store",
+        "dedup-cdc-overwrite-100",
+        "1"
+      ],
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "4f7adf62110edfb79d0612a2dc56aac8dfbf3396689d73631f9a67a06dcc9204",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    },
+    {
+      "key": "0dee7864335933bdf4b81a8bb0717e4c3f356a1e879a909e579faf041c03eddc",
+      "path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/0dee7864335933bdf4b81a8bb0717e4c3f356a1e879a909e579faf041c03eddc",
+      "metadata_path": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/0dee7864335933bdf4b81a8bb0717e4c3f356a1e879a909e579faf041c03eddc/cache.json",
+      "creation_command": [
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0/fs-benchmark-pro",
+        "workspace-prepare",
+        "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/.0dee7864335933bdf4b81a8bb0717e4c3f356a1e879a909e579faf041c03eddc.prepare-utat6e9r/store",
+        "dedup-cdc-common-body-100",
+        "3"
+      ],
+      "fixture": {
+        "fixture_bytes": 105906176,
+        "fixture_profile": "workspace-input-v1",
+        "input_mode": "directory",
+        "input_plan_sha256": "88581fe09f52aedf9a08d73135bad14d111bd447751a5a4160fb6a595c1426c9",
+        "regular_files": 101
+      },
+      "recorded_preparation_footprint": {
+        "allocated_bytes": 106041344,
+        "logical_bytes": 106012171
+      },
+      "preparation_compatibility_sha256": "d6090c105819b9de8ed1ebead3235cc6ab70a41ce891b6aa3d60a6ab739b2f27",
+      "cold_reacquisition_required": true,
+      "disposition": "Completed VM8 CDC performance input. Necessary24GiB cache-capacity eviction; protectremaining scattered500 seeds2/3. Exact qualified input will be reacquired for late full verification; preserve all raw results and metadata.",
+      "reacquisition": "Use selected a40-compatible preparation producer and exact frozen input_plan before its late verifier. Retain passing performance and do not rerun it."
+    }
+  ]
+}

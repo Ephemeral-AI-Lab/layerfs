@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "python3",
+    "benchmark/fs-bench-pro/workspace-runner.py",
+    "--assets",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-7948df2d",
+    "--preparation-assets",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-34224330",
+    "--output",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013",
+    "--cache",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared",
+    "--source-arm",
+    "corrected",
+    "--mode",
+    "fast-verify",
+    "--family",
+    "tiny_file_churn",
+    "--case",
+    "tiny-stat-1",
+    "--seed",
+    "1",
+    "--verification-certificate",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/tiny-stat-1-s1-verify-409ab5f7f943"
+  ],
+  "exit_code": 0,
+  "outer_invocation_wall_ns": 15979242083
+}
