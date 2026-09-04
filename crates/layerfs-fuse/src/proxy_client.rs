@@ -697,6 +697,38 @@ impl FilesystemPort for ProxyClient {
             no_replace,
         ))?)?;
         let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
+        let source = cache
+            .directories
+            .get(&parent)
+            .and_then(|directory| directory.entries.get(name))
+            .map(|(node, _)| *node);
+        let target = cache.directories.get(&new_parent).map(|directory| {
+            directory.entries.get(new_name).map(|(node, _)| *node)
+        });
+        if source.is_some() && target == Some(source) {
+            // The backend treats two names for the same inode as a no-op.
+            // Preserve both cached bindings and the unchanged link count.
+            return Ok(());
+        }
+        if !no_replace {
+            match target {
+                Some(Some(node)) => {
+                    // Replacement unlinks this inode, including its other aliases.
+                    // The next attr must fetch the backend's new link count.
+                    cache.attrs.remove(&node);
+                }
+                None => {
+                    // Without a complete destination directory, the overwritten
+                    // inode is unknown. Preserve only not-yet-published creates:
+                    // their attributes cannot be fetched from the backend yet.
+                    let closed = cache.pending_closed.iter().map(|entry| entry.3)
+                        .collect::<std::collections::HashSet<_>>();
+                    let Cache { attrs, pending_creates, .. } = &mut *cache;
+                    attrs.retain(|node, _| pending_creates.contains_key(node) || closed.contains(node));
+                }
+                Some(None) => (),
+            }
+        }
         let moved = cache
             .directories
             .get_mut(&parent)
@@ -1639,6 +1671,66 @@ mod tests {
             assert_eq!(client.pending.load(Ordering::Acquire), 0);
             assert!(client.cache.lock().unwrap().read_ahead.contains_key(&NodeId(2)));
             caller.join().unwrap(); host.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn rename_refreshes_overwritten_alias_attributes_and_preserves_same_inode_names() {
+        // Known replacement, unknown destination, same-inode no-op, and a
+        // completely cached absent destination exercise each cache decision.
+        for scenario in 0..4 {
+            let (stream, mut server) = stream_pair();
+            server.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+            let old = Attr { node: NodeId(2), size: 6, kind: Kind::File, mode: 0o640,
+                links: 2, mtime_seconds: 0, mtime_nanoseconds: 0 };
+            let host = std::thread::spawn(move || {
+                assert!(matches!(read_request(&mut server).unwrap(),
+                    Request::Rename(NodeId(1), name, NodeId(3), target, false)
+                    if name == b"source" && target == b"target"));
+                write_response(&mut server, &Response::Unit).unwrap();
+                if scenario < 2 {
+                    assert!(matches!(read_request(&mut server).unwrap(), Request::Attr(NodeId(2))));
+                    write_response(&mut server, &Response::Attr(Attr { links: 1, ..old })).unwrap();
+                }
+            });
+            let client = ProxyClient {
+                streams: vec![Mutex::new(stream)], next: AtomicUsize::new(0),
+                cache: Mutex::new(Cache::default()), write_buffer: Mutex::new(None),
+                reservation: Mutex::new(Reservation::default()), gate: RwLock::new(()),
+                callbacks: RwLock::new(()), paused: AtomicBool::new(false), pending: AtomicU64::new(0),
+                metrics: AtomicFuseWriteMetrics::default(), read_metrics: AtomicFuseReadMetrics::default(),
+                #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+                notifier: std::sync::OnceLock::new(),
+            };
+            let source = if scenario == 2 { NodeId(2) } else { NodeId(4) };
+            client.remember_directory(NodeId(1), &[(source, Kind::File, b"source".to_vec())]).unwrap();
+            if scenario != 1 {
+                let entries = if scenario == 3 { vec![] } else { vec![(NodeId(2), Kind::File, b"target".to_vec())] };
+                client.remember_directory(NodeId(3), &entries).unwrap();
+            }
+            {
+                let mut cache = client.cache.lock().unwrap();
+                cache.attrs.insert(NodeId(2), old);
+                cache.attrs.insert(NodeId(9), Attr { node: NodeId(9), links: 1, ..old });
+                cache.attrs.insert(NodeId(10), Attr { node: NodeId(10), links: 1, ..old });
+                cache.pending_closed.push((NodeId(8), b"closed".to_vec(), 0o640, NodeId(10), vec![], None));
+                cache.pending_creates.insert(NodeId(9), PendingCreate {
+                    parent: NodeId(8), name: b"pending".to_vec(), mode: 0o640,
+                    mtime: None, zero_len: 6, writes: vec![], bytes: 0,
+                });
+            }
+            client.rename(NodeId(1), b"source", NodeId(3), b"target", false).unwrap();
+            assert_eq!(client.attr(NodeId(2)).unwrap().links, if scenario < 2 { 1 } else { 2 });
+            let cache = client.cache.lock().unwrap();
+            assert!(cache.attrs.contains_key(&NodeId(9)), "pending create attr remains locally available");
+            assert!(cache.attrs.contains_key(&NodeId(10)), "pending closed-create attr remains locally available");
+            assert_eq!(cache.directories[&NodeId(1)].entries.contains_key(b"source".as_slice()), scenario == 2);
+            if scenario == 2 {
+                assert_eq!(cache.directories[&NodeId(3)].entries[b"target".as_slice()].0, NodeId(2));
+            }
+            drop(cache);
+            drop(client);
+            host.join().unwrap();
         }
     }
 
