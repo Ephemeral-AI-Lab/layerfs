@@ -1,5 +1,33 @@
 # fs-bench-pro
 
+## v0.1.3 compact Docker workflow
+
+The active `run-*.sh` entrypoints and `families/<family>/setup.sh`, `perf.sh`,
+and `verify.sh` share the Docker-only runner. Build the Linux image with
+`python3 shared/runner.py --build-image`, then supply the printed image tag
+through `--image` or `LAYERFS_BENCH_IMAGE`. No project/Store data mounts or
+Docker socket are used.
+
+`perf.sh --smoke` selects the smallest real fixture within 50,000,000 bytes
+and 1,000 files, not merely the smallest operation tier. `--perf-fast` is
+one complete sample; `--perf-samples N` repeats the same selected input N
+times. Post-initialization cases support `--setup fresh|clone`; initialization
+always uses a fresh output Store. `verify.sh` requires an explicit case,
+seed/repetition, source and input identity from the performance header and
+finishes with PASS/FAIL/TIMEOUT/INCOMPLETE under the 59-second deadline.
+
+Compact-v2 ordinary/reuse low tiers and compact-v3 namespace profiles replace
+the old oversized lower-tier fixtures. Higher tiers remain unchanged. The
+specialized 500 MiB capped replacements are large-only and are never chosen
+by `--smoke`. Old low-tier results are historical and not comparable with
+the compact profiles; use their frozen source revision for reproduction.
+
+Normal output is one `perf.jsonl` or `verification.json`; failures may add a
+bounded `failure.log`. Prepared data is a finite disposable Docker cache;
+sample Stores and containers are removed. The legacy documentation below
+describes historical contracts where it conflicts with this section. See
+the [current infrastructure specification](../../docs/roadmap/0.1/0.1.3/benchmark-infrastructure-optimization-spec.md).
+
 This benchmark follows the current
 [0.1.x benchmark contract](../../docs/roadmap/0.1/benchmarking.md). Its
 historical architecture is retained in

@@ -18,38 +18,38 @@ pub(crate) mod dedup_workloads;
 #[allow(dead_code)]
 pub(crate) mod workspace_registry;
 #[allow(dead_code)]
-pub(crate) mod edit_length_changing_capped { include!("families/edit_length_changing_capped.rs"); }
+pub(crate) mod edit_length_changing_capped { include!("families/edit_length_changing_capped/mod.rs"); }
 #[allow(dead_code)]
 pub(crate) mod reliability_workloads;
 #[allow(dead_code)]
-pub(crate) mod workspace_reliability { include!("families/workspace_reliability.rs"); }
+pub(crate) mod workspace_reliability { include!("families/workspace_reliability/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod payload_create_read { include!("families/payload_create_read.rs"); }
+pub(crate) mod payload_create_read { include!("families/payload_create_read/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod tiny_file_churn { include!("families/tiny_file_churn.rs"); }
+pub(crate) mod tiny_file_churn { include!("families/tiny_file_churn/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod directory_construction_traversal { include!("families/directory_construction_traversal.rs"); }
+pub(crate) mod directory_construction_traversal { include!("families/directory_construction_traversal/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod git_tool_workflow { include!("families/git_tool_workflow.rs"); }
+pub(crate) mod git_tool_workflow { include!("families/git_tool_workflow/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod namespace_mutation { include!("families/namespace_mutation.rs"); }
+pub(crate) mod namespace_mutation { include!("families/namespace_mutation/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod workspace_change_locality { include!("families/workspace_change_locality.rs"); }
+pub(crate) mod workspace_change_locality { include!("families/workspace_change_locality/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod mixed_load_bearing { include!("families/mixed_load_bearing.rs"); }
+pub(crate) mod mixed_load_bearing { include!("families/mixed_load_bearing/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod dedup_cross_file { include!("families/dedup_cross_file.rs"); }
+pub(crate) mod dedup_cross_file { include!("families/dedup_cross_file/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod dedup_cdc_locality { include!("families/dedup_cdc_locality.rs"); }
+pub(crate) mod dedup_cdc_locality { include!("families/dedup_cdc_locality/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod dedup_workspace_reuse { include!("families/dedup_workspace_reuse.rs"); }
+pub(crate) mod dedup_workspace_reuse { include!("families/dedup_workspace_reuse/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod dedup_branch_history { include!("families/dedup_branch_history.rs"); }
+pub(crate) mod dedup_branch_history { include!("families/dedup_branch_history/mod.rs"); }
 
 
 #[allow(dead_code)]
 pub(crate) mod init_namespace {
-    include!("families/init_namespace.rs");
+    include!("families/init_namespace/mod.rs");
 }
 pub(crate) use init_namespace::*;
 #[allow(dead_code)]
@@ -66,19 +66,19 @@ pub(crate) mod sdk_edit_common {
 }
 #[allow(dead_code)]
 pub(crate) mod edit_length_preserving {
-    include!("families/edit_length_preserving.rs");
+    include!("families/edit_length_preserving/mod.rs");
 }
 #[allow(dead_code)]
 pub(crate) mod edit_length_changing {
-    include!("families/edit_length_changing.rs");
+    include!("families/edit_length_changing/mod.rs");
 }
 #[allow(dead_code)]
 pub(crate) mod edit_canonical_chunk_count {
-    include!("families/edit_canonical_chunk_count.rs");
+    include!("families/edit_canonical_chunk_count/mod.rs");
 }
 #[allow(dead_code)]
 pub(crate) mod store_footprint {
-    include!("families/store_footprint.rs");
+    include!("families/store_footprint/mod.rs");
 }
 
 pub(crate) type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -290,7 +290,7 @@ pub(crate) fn namespace_plan(id: &str) -> Result<NamespacePlan> {
             relative_weight: role.relative_weight,
             size: match role.class {
                 NamespaceClass::Empty => 0,
-                NamespaceClass::Anchor => NAMESPACE_ANCHOR_BYTES,
+                NamespaceClass::Anchor => scenario.anchor_bytes,
                 _ => 1,
             },
         });
@@ -302,7 +302,7 @@ pub(crate) fn namespace_plan(id: &str) -> Result<NamespacePlan> {
         .ok_or("namespace positive count")?;
     let anchor_bytes = scenario
         .anchor_files
-        .checked_mul(NAMESPACE_ANCHOR_BYTES)
+        .checked_mul(scenario.anchor_bytes)
         .ok_or("namespace anchor bytes")?;
     let distributable = scenario
         .logical_bytes
@@ -435,7 +435,7 @@ fn validate_namespace_plan(plan: &NamespacePlan) -> Result<()> {
         || plan.anchor_bytes
             != plan
                 .anchor_files
-                .checked_mul(NAMESPACE_ANCHOR_BYTES)
+                .checked_mul(plan.scenario.anchor_bytes)
                 .ok_or("namespace anchor validation")?
     {
         return Err("namespace plan count equation".into());
@@ -474,7 +474,7 @@ fn validate_namespace_plan(plan: &NamespacePlan) -> Result<()> {
             NamespaceClass::Empty if file.size != 0 => {
                 return Err("namespace empty file size".into());
             }
-            NamespaceClass::Anchor if file.size != NAMESPACE_ANCHOR_BYTES => {
+            NamespaceClass::Anchor if file.size != plan.scenario.anchor_bytes => {
                 return Err("namespace anchor file size".into());
             }
             NamespaceClass::Tiny | NamespaceClass::Small | NamespaceClass::Medium
@@ -608,7 +608,7 @@ pub(crate) fn namespace_tree_digest(
     }
     let mut hash = Sha256::new();
     hash.update(b"layerfs/fs-bench-pro/namespace-file-digest-tree/v2\0");
-    hash_field(&mut hash, NAMESPACE_FIXTURE_PROFILE.as_bytes());
+    hash_field(&mut hash, plan.scenario.fixture_profile.as_bytes());
     hash_field(&mut hash, NAMESPACE_DIGEST_PROFILE.as_bytes());
     hash_field(&mut hash, plan.scenario.id.as_bytes());
     hash_tree_record(&mut hash, "", b'D', u8::MAX, 0, &[0; 32]);
@@ -800,20 +800,28 @@ fn update_store_edited_hash(
 
 fn create_store_footprint_fixture(root: &Path, control_id: &str, tier: u64) -> Result<()> {
     let control = store_footprint::control(control_id)?;
-    if root.exists() || ![100, 1_000, 10_000, 100_000].contains(&tier) {
+    if root.exists() || ![10, 100, 1_000, 10_000, 100_000].contains(&tier) {
         return Err("Store-footprint fixture arguments".into());
+    }
+    if control.id.ends_with("-low-v1") && tier != control.infra_tier {
+        return Err("Store-footprint low control tier identity".into());
+    }
+    if tier == 10 && control.kind != store_footprint::Kind::LargeObject {
+        return Err("Store-footprint tier10 requires the large-object control".into());
     }
     fs::create_dir(root)?;
     let (scenario, files) = if control.kind == store_footprint::Kind::LargeObject {
         let count = if tier == 100_000 { 100 } else { tier.min(100) };
         let size = if tier == 100_000 { 5_000_000 } else { 1_000_000 };
         let scenario = NamespaceScenario {
-            id: "store-footprint-large-object-500m",
-            alias: "store-footprint-large-object-500m",
-            display_name: "Store footprint large-object fixture",
+            id: control.id,
+            alias: control.id,
+            display_name: control.display_name,
+            fixture_profile: NAMESPACE_FIXTURE_PROFILE,
             regular_files: count,
             data_directories: 1,
             logical_bytes: count * size,
+            anchor_bytes: 0,
             anchor_files: 0,
             empty_files: 0,
             tiny_files: 0,
@@ -832,8 +840,8 @@ fn create_store_footprint_fixture(root: &Path, control_id: &str, tier: u64) -> R
         (scenario, files)
     } else {
         let namespace_id = match tier {
-            100 => "namespace-100",
-            1_000 => "namespace-1000",
+            100 => "namespace-100-compact-v3",
+            1_000 => "namespace-1000-compact-v3",
             10_000 => "namespace-10000",
             100_000 => "namespace-100000",
             _ => unreachable!(),
@@ -1968,8 +1976,8 @@ fn self_check() -> Result<()> {
             return Err("segmented SHA-256 known vector".into());
         }
         let expected_counts = [
-            ("namespace-100", [1, 78, 15, 5, 1], 125_000_000),
-            ("namespace-1000", [10, 789, 150, 50, 1], 200_000_000),
+            ("namespace-100-compact-v3", [1, 78, 15, 5, 1], 5_000_000),
+            ("namespace-1000-compact-v3", [10, 789, 150, 50, 1], 20_000_000),
             ("namespace-10000", [100, 7_899, 1_500, 500, 1], 300_000_000),
             (
                 "namespace-100000",
@@ -1987,12 +1995,13 @@ fn self_check() -> Result<()> {
                 first.anchor_files,
             ] != counts
                 || first.scenario.logical_bytes != logical_bytes
-                || (scenario == "namespace-100" && first != namespace_plan(scenario)?)
+                || (scenario == "namespace-100-compact-v3"
+                    && first != namespace_plan(scenario)?)
             {
                 return Err("namespace-v2 plan oracle".into());
             }
         }
-        let plan = namespace_plan("namespace-100")?;
+        let plan = namespace_plan("namespace-100-compact-v3")?;
         let edit = plan
             .files
             .iter()
@@ -2068,7 +2077,7 @@ fn self_check() -> Result<()> {
 
 #[cfg(test)]
 pub(crate) fn miniature_namespace_self_check(root: &Path) -> Result<()> {
-    let mut plan = namespace_plan("namespace-100")?;
+    let mut plan = namespace_plan("namespace-100-compact-v3")?;
     let edit_path = plan.edit_path.clone();
     for file in &mut plan.files {
         file.size = if file.class == NamespaceClass::Empty {

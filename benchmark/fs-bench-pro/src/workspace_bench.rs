@@ -532,7 +532,7 @@ fn prepare(root: &Path, case: &Case, seed: u8) -> AnyResult<()> {
             root,
             &[
                 "workspace-git-prepare".into(),
-                "/preparation/store/input".into(),
+                input.to_string_lossy().into_owned(),
                 seed.to_string(),
             ],
         )?;
@@ -578,6 +578,9 @@ fn prepare(root: &Path, case: &Case, seed: u8) -> AnyResult<()> {
 }
 
 fn native_preparation(root: &Path, command: &[String]) -> AnyResult<()> {
+    if std::env::var("LAYERFS_BENCH_LOCAL_RUNTIME").as_deref() == Ok("1") {
+        return workload_source::workspace_registry::dispatch(command);
+    }
     let image = std::env::var("LAYERFS_V013_IMAGE")?;
     let stage = std::fs::canonicalize(root.parent().ok_or("Git preparation stage")?)?;
     let mount = format!("type=bind,src={},dst=/preparation", stage.display());
@@ -653,7 +656,7 @@ fn prepare_reference(root: &Path, case: &Case, seed: u8) -> AnyResult<()> {
         root,
         &[
             "workspace-git-reference".into(),
-            "/preparation/store/input".into(),
+            root.join("input").to_string_lossy().into_owned(),
             case.id.clone(),
             seed.to_string(),
         ],
@@ -912,6 +915,26 @@ fn run_case(
     let mut genesis_root = None;
     let mut fast_certificate = None;
     let fast_fixture=if fast {Some(registry::fixture(case,seed)?)} else {None};
+    if case.family=="dedup_workspace_reuse" {
+        let started=Instant::now();
+        let branch=std::fs::read_to_string(root.join("branch-id"))?.trim().parse()?;
+        let pinned=store.pin_branch(branch)?;
+        let mut payloads=std::collections::BTreeSet::new();
+        for entry in registry::fixture(case,seed)? {
+            if matches!(entry.kind,EntryKind::File(_)) {
+                payloads.extend(super::payload_ids(&pinned.reader,pinned.root,&entry.path)?);
+            }
+        }
+        let mut hash=workload_source::Sha256::new();
+        for id in &payloads {hash.update(id.as_bytes());}
+        emit("initial-payload-attribution",&[
+            ("root",quote(&pinned.root.to_string())),
+            ("observed_payload_count",payloads.len().to_string()),
+            ("observed_payload_ids_sha256",quote(&workload_source::hex(&hash.finish()))),
+            ("elapsed_ns",elapsed_ns(started).to_string()),
+            ("scope",quote("actual pristine Store extent IDs before Workspace creation; structural reads only; outside product operation timer")),
+        ]);
+    }
     let orchestration_start = Instant::now();
     let mut pure_call_sum_ns = 0u64;
     let mut product_budget = ProductBudget::new(!verification);

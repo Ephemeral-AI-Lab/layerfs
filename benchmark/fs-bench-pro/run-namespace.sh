@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ ${LAYERFS_BENCH_ARCHIVAL:-0} != 1 && ${1:-} != --source-seal ]]; then
+  exec python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/shared/runner.py" --family init_namespace "$@"
+fi
 export LC_ALL=C
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)

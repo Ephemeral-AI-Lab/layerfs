@@ -488,7 +488,7 @@ CERTIFICATE_READONLY = {"tiny-stat", "payload-random-read", "directory-metadata-
 def certificate_source_bindings(source_revision, runtime_revision, families):
     paths = {"benchmark/fs-bench-pro/workspace_common.rs", "benchmark/fs-bench-pro/ordinary_workloads.rs",
         "benchmark/fs-bench-pro/workload.rs", "benchmark/fs-bench-pro/workspace_registry.rs"}
-    paths.update(f"benchmark/fs-bench-pro/families/{family}.rs" for family in families)
+    paths.update(f"benchmark/fs-bench-pro/families/{family}/mod.rs" for family in families)
     if any(family.startswith("dedup_") for family in families):paths.add("benchmark/fs-bench-pro/dedup_workloads.rs")
     bindings = {}
     for name in sorted(paths):

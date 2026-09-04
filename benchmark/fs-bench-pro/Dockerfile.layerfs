@@ -3,6 +3,7 @@
 FROM rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 AS build
 
 ARG TARGETARCH
+ARG CARGO_BUILD_JOBS=8
 
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
@@ -18,7 +19,12 @@ COPY benchmark/fs-bench-pro/*.rs /workload/
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    case "$TARGETARCH" in \
+    case "$CARGO_BUILD_JOBS" in \
+      ''|*[!0-9]*) exit 1 ;; \
+    esac \
+ && test "$CARGO_BUILD_JOBS" -ge 1 \
+ && test "$CARGO_BUILD_JOBS" -le 8 \
+ && case "$TARGETARCH" in \
       arm64) target=aarch64-unknown-linux-gnu ;; \
       amd64) target=x86_64-unknown-linux-gnu ;; \
       *) exit 1 ;; \
@@ -26,10 +32,13 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
  && rustup target add "$target" \
  && rustc --edition=2021 -C opt-level=3 -C strip=symbols \
       --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload \
- && cargo build --locked --release --target "$target" -p layerfs-daemon \
- && cargo build --locked --release --target "$target" -p layerfs-fuse --no-default-features --features proxy \
+ && cargo build --locked --release --target "$target" --jobs "$CARGO_BUILD_JOBS" \
+      -p layerfs-daemon -p fs-benchmark-pro \
+ && cargo build --locked --release --target "$target" --jobs "$CARGO_BUILD_JOBS" \
+      -p layerfs-fuse --no-default-features --features proxy \
  && cp "target/$target/release/layerfs-daemon" /layerfs-daemon \
- && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
+ && cp "target/$target/release/layerfs-fuse" /layerfs-fuse \
+ && cp "target/$target/release/fs-benchmark-pro" /fs-benchmark-pro
 
 ARG LAYERFS_SOURCE_COMMIT
 ARG LAYERFS_SOURCE_TREE
@@ -51,16 +60,19 @@ RUN test "${#LAYERFS_SOURCE_COMMIT}" -eq 40 \
 FROM rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
 
 
-RUN mkdir -p /run/layerfs /workspace /var/tmp/layerfs-owned \
+RUN mkdir -p /run/layerfs /workspace /var/tmp/layerfs-owned /var/lib/fs-bench \
  && chmod 0700 /run/layerfs
 
 COPY --from=build /fs-benchmark-workload /usr/local/bin/fs-benchmark-workload
+COPY --from=build /fs-benchmark-pro /usr/local/bin/fs-benchmark-pro
 COPY --from=build /layerfs-daemon /usr/local/bin/layerfs-daemon
 COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
 COPY benchmark/fs-bench-pro/daemon-entrypoint.sh /usr/local/bin/layerfs-daemon-entrypoint
-RUN chmod 0555 /usr/local/bin/fs-benchmark-workload /usr/local/bin/layerfs-daemon \
+RUN chmod 0555 /usr/local/bin/fs-benchmark-pro /usr/local/bin/fs-benchmark-workload \
+                  /usr/local/bin/layerfs-daemon \
                   /usr/local/bin/layerfs-fuse /usr/local/bin/layerfs-daemon-entrypoint \
  && /usr/local/bin/fs-benchmark-workload self-check \
+ && /usr/local/bin/fs-benchmark-pro workspace-self-check \
  && test -x /usr/local/bin/layerfs-daemon
 
 ARG LAYERFS_SOURCE_COMMIT

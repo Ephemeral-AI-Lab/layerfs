@@ -1,289 +1,353 @@
 #!/usr/bin/env python3
-"""Run one bounded, identity-pinned fs-bench-pro verification."""
+"""Run one identity-pinned verification through the shared Docker runner."""
 
-import argparse
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
-import platform
-import signal
-import subprocess
+import re
 import sys
 import time
 import uuid
 
 
-STARTED_NS = time.monotonic_ns()
-HARD_LIMIT_NS = 59_000_000_000
-WORK_LIMIT_NS = 54_000_000_000
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[1]
+HARD_LIMIT_SECONDS = 59.0
+WORK_LIMIT_SECONDS = 45.0
+PUBLICATION_GUARD_SECONDS = 0.25
+FAILURE_LOG_LIMIT = 1024 * 1024
+STATUSES = {"PASS", "FAIL", "TIMEOUT", "INCOMPLETE"}
+BULK_MARKERS = ("..", ",", "*", "[", "]")
 
 
 def sha256(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
-def write_exclusive(path, value):
-    data = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+def _json_digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _write(path, data):
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
     try:
-        os.write(descriptor, data)
+        with os.fdopen(descriptor, "wb", closefd=False) as output:
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
     finally:
         os.close(descriptor)
 
 
-def stop_group(child):
-    cleanup_started = time.monotonic_ns()
-    if child.poll() is None:
-        os.killpg(child.pid, signal.SIGTERM)
-        try:
-            child.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            os.killpg(child.pid, signal.SIGKILL)
-            child.wait(timeout=1)
-    return time.monotonic_ns() - cleanup_started
+def _encoded(value):
+    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
-    parser.add_argument("--family", required=True)
-    parser.add_argument("--case", required=True)
-    parser.add_argument("--seed", required=True, type=int, choices=(1, 2, 3))
-    parser.add_argument("--source-arm", required=True, choices=("baseline", "candidate"))
-    parser.add_argument("--assets", required=True)
-    parser.add_argument("--output", required=True)
-    proof = parser.add_mutually_exclusive_group()
-    proof.add_argument("--verification-certificate")
-    proof.add_argument("--independent-current", action="store_true")
-    args = parser.parse_args()
-    for value in (args.family, args.case):
-        if value == "all" or any(marker in value for marker in ("..", ",", "*", "[", "]")):
-            parser.error("bulk selections and ranges are forbidden")
+def publish_receipt(output, receipt, clock=time.monotonic, stage_writer=_write, linker=os.link):
+    """Durably finalize one owned receipt; a late provisional PASS is replaced."""
+    output = Path(output)
+    final = output / "verification.json"
+    staged = output.parent / f".{output.name}.verification-{uuid.uuid4().hex}.pending"
+    hard_deadline = receipt.pop("_hard_deadline")
+    started = receipt["monotonic_start_seconds"]
+    try:
+        receipt["monotonic_end_seconds"] = clock()
+        receipt["wall_seconds"] = receipt["monotonic_end_seconds"] - started
+        stage_writer(staged, _encoded(receipt))
+        linker(staged, final)
+        published_at = clock()
+        receipt["monotonic_end_seconds"] = published_at
+        receipt["wall_seconds"] = published_at - started
+        if receipt["status"] == "PASS" and published_at >= hard_deadline - PUBLICATION_GUARD_SECONDS:
+            receipt["status"] = "TIMEOUT"
+            receipt["error"] = "receipt publication reached the hard 59-second limit"
+        # The first exclusive link is provisional until its own duration is
+        # represented. Only this invocation's inode is removed and finalized.
+        final.unlink()
+        staged.unlink()
+        _write(staged, _encoded(receipt))
+        linker(staged, final)
+        final_at = clock()
+        if receipt["status"] == "PASS" and final_at >= hard_deadline:
+            final.unlink()
+            staged.unlink()
+            receipt["status"] = "TIMEOUT"
+            receipt["error"] = "final receipt publication exceeded the hard 59-second limit"
+            receipt["monotonic_end_seconds"] = final_at
+            receipt["wall_seconds"] = final_at - started
+            _write(staged, _encoded(receipt))
+            os.link(staged, final)
+    finally:
+        staged.unlink(missing_ok=True)
+    return receipt
+
+
+def _identity(value):
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value
+    return None
+
+
+def validate_selection(args, selection):
+    if not isinstance(selection, dict):
+        raise ValueError("runner returned no canonical selection metadata")
+    family = selection.get("family", selection.get("family_id"))
+    case = selection.get("case", selection.get("scenario_id"))
+    for label, requested, resolved in (
+        ("family", args.family, family), ("case", args.case, case)
+    ):
+        if not requested or requested == "all" or any(mark in requested for mark in BULK_MARKERS):
+            raise ValueError(f"{label} must identify exactly one registry entry")
+        if requested != resolved:
+            raise ValueError(f"resolved {label} identity does not match the request")
+    for key in ("source_identity", "input_identity", "setup_identity"):
+        if _identity(selection.get(key)) is None:
+            raise ValueError(f"resolved selection is missing exact {key}")
+    if _identity(selection.get("seed")) is None and _identity(selection.get("repetition")) is None:
+        raise ValueError("resolved selection is missing seed or inherited repetition identity")
+    return selection
+
+
+def _same_identity(old, selected):
+    aliases = (("family", "family_id"), ("case", "scenario_id"))
+    for canonical, alias in aliases:
+        if old.get(canonical, old.get(alias)) != selected.get(canonical, selected.get(alias)):
+            return False
+    for key in (
+        "seed", "repetition", "source_identity", "input_identity", "setup_identity",
+        "product_identity", "harness_identity", "image_identity",
+    ):
+        old_value = old.get(key, old.get("image") if key == "image_identity" else None)
+        selected_value = selected.get(key, selected.get("image") if key == "image_identity" else None)
+        if old_value != selected_value:
+            return False
+    old_environment = old.get("environment_identity")
+    selected_environment = selected.get("environment_identity")
+    if selected_environment is None and selected.get("environment"):
+        selected_environment = _json_digest(selected["environment"])
+    if old_environment != selected_environment:
+        return False
+    return True
+
+
+def reuse_pass(path, selected):
+    path = Path(path).resolve()
+    if not path.is_file() or path.stat().st_size > FAILURE_LOG_LIMIT:
+        raise ValueError("reused verification receipt is missing or unbounded")
+    old = json.loads(path.read_text())
+    if (
+        old.get("schema") != "layerfs-selected-verification-v2"
+        or old.get("status") != "PASS"
+        or str(old.get("cleanup", {}).get("status", "")).upper() != "PASS"
+        or old.get("wall_seconds", HARD_LIMIT_SECONDS) >= HARD_LIMIT_SECONDS
+        or not _same_identity(old, selected)
+    ):
+        raise ValueError("reused PASS does not exactly match the selected identity")
+    return {
+        "status": "PASS",
+        "checks": [{"check": "exact identity-matched verification PASS", "status": "PASS"}],
+        "sampled_paths_or_ranges": [],
+        "reused_proof_identities": [{"path": str(path), "sha256": sha256(path)}],
+        "omissions": ["execution reused an exact identity-matched PASS"],
+        "resource_precision": old.get("resource_precision", {}),
+        "cleanup": {"status": "PASS", "required": False},
+    }
+
+
+def normalize_result(result):
+    if not isinstance(result, dict):
+        raise ValueError("shared runner returned no verification result")
+    normalized = dict(result)
+    status = str(normalized.get("status", "INCOMPLETE")).upper()
+    if status not in STATUSES:
+        raise ValueError(f"unknown verification status {status!r}")
+    cleanup = normalized.get("cleanup")
+    if not isinstance(cleanup, dict):
+        cleanup = {"status": "INCOMPLETE", "error": "runner omitted cleanup result"}
+    cleanup_status = str(cleanup.get("status", "INCOMPLETE")).upper()
+    if status == "PASS" and cleanup_status != "PASS":
+        status = "INCOMPLETE"
+        normalized.setdefault("error", "verification checks passed but cleanup did not")
+    normalized["status"] = status
+    normalized["cleanup"] = cleanup
+    return normalized
+
+
+def _bounded_result_fields(result):
+    return {
+        "phase": result.get("phase"),
+        "resources": result.get("resources", {}),
+        "setup_observation": result.get("setup"),
+        "preparation_wall_ns": result.get("preparation_wall_ns"),
+        "command_wall_ns": result.get("command_wall_ns"),
+    }
+
+
+def _sanitized_failure(value):
+    text = str(value or "verification did not pass")
+    text = re.sub(
+        r"(?i)(authorization|password|secret|token)(\s*[:=]\s*)(\S+)",
+        r"\1\2<redacted>", text,
+    )
+    encoded = text.encode("utf-8", "replace")
+    marker = b"\n...[truncated to 1 MiB]\n"
+    if len(encoded) > FAILURE_LOG_LIMIT:
+        encoded = encoded[: FAILURE_LOG_LIMIT - len(marker)] + marker
+    return encoded
+
+
+def _failure_log(output, error):
+    path = Path(output) / "failure.log"
+    _write(path, _sanitized_failure(error))
+    return {"path": str(path), "sha256": sha256(path), "bytes": path.stat().st_size}
+
+
+def _add_reuse_argument(parser):
+    if not any("--reuse-pass" in action.option_strings for action in parser._actions):
+        parser.add_argument("--reuse-pass", help="reuse one exact identity-matched verification.json PASS")
+
+
+def _parse(runner, argv):
+    parser = runner.build_parser(include_modes=True)
+    _add_reuse_argument(parser)
+    raw = list(argv)
+    if any(flag in raw for flag in ("--perf-fast", "--perf-samples", "--smoke")):
+        parser.error("verify-selected.py rejects performance modes and implicit selection")
+    if "--verification" not in raw:
+        raw.insert(0, "--verification")
+    if not any(flag in raw for flag in ("--seed", "--repetition")):
+        parser.error("verification requires an explicit --seed or --repetition identity")
+    args = parser.parse_args(raw)
+    if not args.case or not args.source or not args.input or not args.image:
+        parser.error("verification requires exact case, source, input, and image identities")
+    if any(value == "all" or any(mark in value for mark in BULK_MARKERS)
+           for value in (args.family, args.case)):
+        parser.error("verification accepts exactly one family/case, never a range or expansion")
+    if args.seed is not None and args.repetition is not None:
+        parser.error("verification accepts a seed or inherited repetition, not both")
+    if getattr(args, "list", False) or getattr(args, "prepare_only", False):
+        parser.error("verification cannot list or prepare a matrix")
     return args
 
 
-def namespace_command(args, assets, evidence):
-    if not args.independent_current or args.verification_certificate:
-        raise ValueError("namespace verification requires --independent-current")
-    manifest = assets / "scenarios" / args.case / "fixture-manifest.json"
-    container = assets / "environment" / "container-inspect.json"
-    if not manifest.is_file() or not container.is_file():
-        raise ValueError("namespace assets require one sealed benchmark input and container identity")
-    fixture = json.loads(manifest.read_text())
-    inspected = json.loads(container.read_text())
-    if isinstance(inspected, list):
-        if len(inspected) != 1:
-            raise ValueError("namespace container identity cardinality")
-        inspected = inspected[0]
-    name = str(inspected.get("Name", "")).removeprefix("/")
-    if fixture.get("scenario") != args.case or not name:
-        raise ValueError("namespace input identity mismatch")
-    run_id = "verify-selected-" + uuid.uuid4().hex
-    command = [
-        str(HERE / "run-namespace.sh"), run_id, name,
-        "--case", args.case, "--seed", str(args.seed),
-        "--source", args.source_arm, "--mode", "verify",
-    ]
-    environment = dict(os.environ)
-    environment.update(
-        LAYERFS_NAMESPACE_RESULTS_ROOT=str(evidence),
-        LAYERFS_NAMESPACE_FIXTURE_ROOT=str(assets / "scenarios"),
-        CARGO_BUILD_JOBS="8",
-    )
-    environment_root = assets / "environment"
-    def identity(name):
-        path = environment_root / name
-        return path.read_text().strip() if path.is_file() else None
-    source_seal = identity("source-seal.sha256")
-    current_seal = subprocess.check_output(
-        [str(HERE / "run-namespace.sh"), "--source-seal"], text=True, cwd=REPO
-    ).strip()
-    if not source_seal or source_seal != current_seal:
-        raise ValueError("namespace assets do not match the current source seal")
-    return command, environment, evidence / run_id, {
-        "source_revision": identity("harness-head.commit"),
-        "source_seal": source_seal,
-        "product_identity": identity("product-source-seal.sha256"),
-        "harness_identity": identity("harness-source-seal.sha256"),
-        "fixture_manifest": str(manifest),
-        "fixture_manifest_sha256": sha256(manifest),
-        "fixture_digest": fixture.get("fixture_digest"),
-        "logical_bytes": fixture.get("logical_bytes"),
-        "regular_files": fixture.get("regular_files"),
-    }
-
-
-def workspace_command(args, assets, evidence):
-    build = assets / "evidence" / "build.json"
-    if not build.is_file():
-        raise ValueError("Workspace assets require a sealed build")
-    proof_case = args.case.endswith("-proof")
-    command = [
-        sys.executable, str(HERE / "workspace-runner.py"),
-        "--family", args.family, "--case", args.case, "--seed", str(args.seed),
-        "--source-arm", "baseline" if args.source_arm == "baseline" else "corrected",
-        "--mode", "verify" if proof_case else "fast-verify",
-        "--assets", str(assets), "--output", str(evidence),
-    ]
-    if proof_case:
-        if not args.independent_current or args.verification_certificate:
-            raise ValueError("proof verification requires --independent-current")
-    elif args.verification_certificate:
-        command += ["--verification-certificate", str(Path(args.verification_certificate).resolve())]
-    elif args.independent_current:
-        command.append("--fast-no-reuse")
-    else:
-        raise ValueError("Workspace verification requires one certificate or --independent-current")
-    build_identity = json.loads(build.read_text())
-    return command, dict(os.environ), evidence, {
-        "build_manifest": str(build),
-        "build_manifest_sha256": sha256(build),
-        "source_revision": build_identity.get("revision"),
-        "product_identity": build_identity.get("product_seal"),
-        "harness_identity": build_identity.get("harness_seal"),
-        "image_id": build_identity.get("image_id"),
-    }
-
-
-def namespace_result(evidence, case, arm, seed):
-    path = evidence / "scenarios" / case / arm / str(seed) / "result.json"
-    if not path.is_file():
-        return None, [], [], None, "incomplete"
-    row = json.loads(path.read_text())
-    passed = (
-        row.get("mode") == "verify"
-        and row.get("status") == "pass"
-        and row.get("cleanup_status") == "pass"
-        and row.get("resource_status") == "pass"
-    )
-    checks = [
-        "independent fixture digest", "fresh reopened root", "bounded verifier resources",
-        "runtime cleanup",
-    ]
-    sampled = row.get("sampled_paths", [{"scope": "bounded selected case", "regular_files": row.get("observed_file_count")}])
-    return passed, checks, sampled, {"result": str(path), "sha256": sha256(path)}, row.get("cleanup_status")
-
-
-def workspace_result(evidence, case, seed):
-    slots = evidence / "slots.json"
-    if not slots.is_file():
-        return None, [], [], None, "incomplete"
-    rows = [row for row in json.loads(slots.read_text()).values()
-            if row.get("scenario_id") == case and row.get("seed") == seed
-            and row.get("mode") == ("verify" if case.endswith("-proof") else "fast-verify")]
-    if len(rows) != 1:
-        return None, [], [], None, "incomplete"
-    row = rows[0]
-    passed = (
-        row.get("coverage_status") == "executed"
-        and row.get("product_status") == "pass"
-        and row.get("harness_status") not in {"fail", "needs-review"}
-        and row.get("supervisor_cleanup_status") == "pass"
-        and not row.get("timeout")
-    )
-    checks = ["existing Workspace oracle", "selected canonical/content checks", "resource receipt", "runtime cleanup"]
-    sampled = row.get("fast_sampled_paths", row.get("sampled_paths", []))
-    return passed, checks, sampled, {"result": row.get("evidence_path"), "slots_sha256": sha256(slots)}, row.get("supervisor_cleanup_status")
-
-
-def main():
-    args = parse_args()
+def run(runner, argv=None, clock=time.monotonic, publisher=publish_receipt):
+    started = clock()
+    work_deadline = started + WORK_LIMIT_SECONDS
+    hard_deadline = started + HARD_LIMIT_SECONDS
+    args = _parse(runner, sys.argv[1:] if argv is None else argv)
     output = Path(args.output).resolve()
     if output.exists():
         raise SystemExit("output already exists; verification receipts are immutable")
     output.mkdir(parents=True)
-    receipt_path = output / "verification.json"
-    evidence = output / "evidence"
-    evidence.mkdir()
-    assets = Path(args.assets).resolve()
     status = "INCOMPLETE"
-    cleanup = {"status": "not-started", "wall_ns": 0}
-    checks, sampled, proof = [], [], None
-    child = None
-    stdout = output / "runner.stdout"
-    stderr = output / "runner.stderr"
     error = None
+    selected = None
+    result = {"cleanup": {"status": "INCOMPLETE", "required": True}}
+    lock_path = Path(os.environ.get("TMPDIR", "/tmp")) / "layerfs-infra-measurement.lock"
+    lock = lock_path.open("a")
     try:
-        if not assets.is_dir():
-            raise ValueError("assets must be an existing directory")
-        if args.family == "init_namespace":
-            command, environment, result_root, input_identity = namespace_command(args, assets, evidence)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as cause:
+            raise RuntimeError("another benchmark owns the measurement lock") from cause
+        selected = validate_selection(args, runner.resolve_selection(args, deadline=work_deadline))
+        if selected.get("verification_supported") is False:
+            result = {
+                "status": "INCOMPLETE",
+                "checks": [],
+                "sampled_paths_or_ranges": [],
+                "reused_proof_identities": [],
+                "omissions": [selected.get("unsupported_reason") or "selected proof is unsupported by bounded verification"],
+                "resource_precision": {},
+                "cleanup": {"status": "PASS", "required": False},
+            }
+        elif clock() >= work_deadline:
+            raise TimeoutError("selection authentication consumed the 45-second work allowance")
         else:
-            command, environment, result_root, input_identity = workspace_command(args, assets, evidence)
-        remaining = (WORK_LIMIT_NS - (time.monotonic_ns() - STARTED_NS)) / 1_000_000_000
-        if remaining <= 0:
-            raise TimeoutError("setup consumed the verification work budget")
-        with stdout.open("xb") as out, stderr.open("xb") as err:
-            child = subprocess.Popen(command, cwd=REPO, env=environment, stdout=out, stderr=err,
-                                     start_new_session=True)
-            try:
-                child.wait(timeout=remaining)
-            except subprocess.TimeoutExpired as cause:
-                raise TimeoutError("verification work exceeded 54 seconds") from cause
-        cleanup["status"] = "pass"
-        if args.family == "init_namespace":
-            passed, checks, sampled, proof, verifier_cleanup = namespace_result(result_root, args.case, args.source_arm, args.seed)
-        else:
-            passed, checks, sampled, proof, verifier_cleanup = workspace_result(result_root, args.case, args.seed)
-        cleanup["verifier_status"] = verifier_cleanup
-        status = "INCOMPLETE" if passed is None else "PASS" if child.returncode == 0 and passed else "FAIL"
+            reused = getattr(args, "reuse_pass", None)
+            result = reuse_pass(reused, selected) if reused else runner.execute_selected(
+                args, deadline=work_deadline, verification=True
+            )
+        result = normalize_result(result)
+        status, error = result["status"], result.get("error")
     except TimeoutError as cause:
         status, error = "TIMEOUT", str(cause)
-    except BaseException as cause:
+        result = normalize_result({"status": status, "cleanup": result.get("cleanup", {})})
+    except Exception as cause:
         status, error = "INCOMPLETE", f"{type(cause).__name__}: {cause}"
+        result = normalize_result({"status": status, "cleanup": result.get("cleanup", {})})
+
+    now = clock()
+    if now >= hard_deadline:
+        status, error = "TIMEOUT", error or "hard 59-second end-to-end limit reached"
+    if status != "PASS":
+        try:
+            failure = _failure_log(output, error or result.get("error") or status)
+        except Exception as cause:
+            failure = None
+            status, error = "INCOMPLETE", f"failure log publication failed: {cause}"
+    else:
+        failure = None
+
+    selected = selected or {
+        "family": getattr(args, "family", None), "case": getattr(args, "case", None),
+        "seed": getattr(args, "seed", None), "repetition": getattr(args, "repetition", None),
+        "source_identity": getattr(args, "source", None),
+        "input_identity": getattr(args, "input", None),
+        "setup_identity": getattr(args, "setup", None),
+    }
+    environment = selected.get("environment")
+    receipt = {
+        "schema": "layerfs-selected-verification-v2",
+        "companion_sha256": sha256(__file__),
+        "status": status,
+        "family": selected.get("family", selected.get("family_id")),
+        "case": selected.get("case", selected.get("scenario_id")),
+        "seed": selected.get("seed"),
+        "repetition": selected.get("repetition"),
+        "source_identity": selected.get("source_identity"),
+        "input_identity": selected.get("input_identity"),
+        "setup_identity": selected.get("setup_identity"),
+        "product_identity": selected.get("product_identity"),
+        "harness_identity": selected.get("harness_identity"),
+        "image_identity": selected.get("image_identity", selected.get("image")),
+        "environment_identity": selected.get("environment_identity") or (_json_digest(environment) if environment else None),
+        "recipe_route": selected.get("recipe_route", selected.get("route", selected.get("operation"))),
+        "checks": result.get("records", result.get("checks", [])),
+        "sampled_paths_or_ranges": result.get("sampled_paths_or_ranges", []),
+        "reused_proof_identities": result.get("reused_proof_identities", []),
+        "omissions": ["no exhaustive Phase 1 replay", *result.get("omissions", [])],
+        "resource_precision": result.get("resource_precision", {}),
+        **_bounded_result_fields(result),
+        "cleanup": result.get("cleanup", {"status": "INCOMPLETE"}),
+        "monotonic_start_seconds": started,
+        "work_deadline_seconds": work_deadline,
+        "hard_limit_seconds": HARD_LIMIT_SECONDS,
+        "evidence_path": str(output / "verification.json"),
+        "failure_log": failure,
+        "error": error,
+        "_hard_deadline": hard_deadline,
+    }
+    try:
+        receipt = publisher(output, receipt, clock=clock)
     finally:
-        if child is not None:
-            try:
-                cleanup["wall_ns"] = stop_group(child)
-                cleanup["status"] = "pass"
-            except BaseException as cause:
-                cleanup.update(status="fail", error=f"{type(cause).__name__}: {cause}")
-                if status == "PASS":
-                    status = "INCOMPLETE"
-        finished = time.monotonic_ns()
-        if finished - STARTED_NS >= HARD_LIMIT_NS:
-            status = "TIMEOUT" if status != "INCOMPLETE" else status
-            error = error or "hard 59-second end-to-end limit reached"
-        environment = {
-            "platform": platform.platform(), "machine": platform.machine(), "python": platform.python_version()
-        }
-        environment_identity = hashlib.sha256(
-            json.dumps(environment, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        receipt = {
-            "schema": "layerfs-selected-verification-v1",
-            "companion_sha256": sha256(__file__),
-            "status": status,
-            "family": args.family,
-            "case": args.case,
-            "seed": args.seed,
-            "source_arm": args.source_arm,
-            "source_identity": {
-                key: input_identity.get(key) for key in ("source_revision", "source_seal")
-            } if "input_identity" in locals() else None,
-            "harness_identity": input_identity.get("harness_identity") if "input_identity" in locals() else None,
-            "product_identity": input_identity.get("product_identity") if "input_identity" in locals() else None,
-            "environment_identity": environment_identity,
-            "environment": environment,
-            "input_identity": input_identity if "input_identity" in locals() else {"assets": str(assets)},
-            "checks": checks,
-            "sampled_paths_or_ranges": sampled,
-            "reused_proof_identities": [proof] if proof else [],
-            "omissions": ["no exhaustive Phase 1 replay", "no per-sample full-file verification", "no history replay"],
-            "cleanup": cleanup,
-            "monotonic_start_ns": STARTED_NS,
-            "monotonic_end_ns": finished,
-            "wall_ns": finished - STARTED_NS,
-            "hard_limit_ns": HARD_LIMIT_NS,
-            "evidence_path": str(evidence),
-            "stdout_sha256": sha256(stdout) if stdout.is_file() else None,
-            "stderr_sha256": sha256(stderr) if stderr.is_file() else None,
-            "error": error,
-        }
-        write_exclusive(receipt_path, receipt)
-    return 0 if status == "PASS" else 1
+        lock.close()
+    return 0 if receipt["status"] == "PASS" else 1
+
+
+def main():
+    try:
+        from shared import runner
+    except ImportError as cause:
+        raise SystemExit(f"shared runner is unavailable: {cause}") from cause
+    return run(runner)
 
 
 if __name__ == "__main__":

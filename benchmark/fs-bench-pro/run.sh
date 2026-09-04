@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+[[ ${LAYERFS_BENCH_ARCHIVAL:-0} == 1 ]] || { printf '%s\n' 'Archived five-case payload campaign. Use families/payload_create_read/perf.sh; historical reproduction requires LAYERFS_BENCH_ARCHIVAL=1.' >&2; exit 2; }
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 repo=$(cd "$here/../.." && pwd -P)

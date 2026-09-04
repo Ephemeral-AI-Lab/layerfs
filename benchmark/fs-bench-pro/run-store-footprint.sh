@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ ${LAYERFS_BENCH_ARCHIVAL:-0} != 1 ]]; then
+  exec python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/shared/runner.py" --family store_footprint "$@"
+fi
 export LC_ALL=C
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
@@ -27,8 +30,8 @@ self_check() {
   bash -n "$0"
   scratch=$(mktemp -d "${TMPDIR:-/tmp}/layerfs-store-self-check.XXXXXX")
   trap 'rm -rf -- "$scratch"' EXIT
-  printf 'mod family { include!(r#"%s"#); } fn main() { family::self_check().unwrap(); assert_eq!(family::CONTROLS.len(), 3); }\n' \
-    "$here/families/store_footprint.rs" >"$scratch/check.rs"
+  printf 'mod family { include!(r#"%s"#); } fn main() { family::self_check().unwrap(); assert_eq!(family::CONTROLS.iter().filter(|c| c.infra_tier == 100_000).count(), 3); }\n' \
+    "$here/families/store_footprint/mod.rs" >"$scratch/check.rs"
   rustc --edition=2021 -Awarnings "$scratch/check.rs" -o "$scratch/check"
   "$scratch/check"
   write_failure_context "$scratch/failure.json" case 1 verify 23 90 250 \

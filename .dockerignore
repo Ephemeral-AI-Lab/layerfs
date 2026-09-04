@@ -1,0 +1,9 @@
+.git
+target
+**/target
+benchmark-results
+**/__pycache__
+docs
+release-notes
+.agents
+.codex

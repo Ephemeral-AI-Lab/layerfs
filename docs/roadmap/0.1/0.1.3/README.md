@@ -1,5 +1,12 @@
 # LayerFS 0.1.3
 
+> **Benchmark infrastructure workstream (2026-09-05), [#45](https://github.com/Ephemeral-AI-Lab/layerfs/issues/45):** See the
+> [benchmark infrastructure optimization specification](benchmark-infrastructure-optimization-spec.md)
+> for Docker-only product/preparation, no data mounts, three execution modes,
+> fresh/clone setup, compact logs, and the sequential family migration checklist.
+> This new workstream does not restart withdrawn Phase 1 verification or claim
+> product performance or release acceptance.
+
 > **Phase 1 scope updated 2026-09-04:** Apply the
 > [15-second runtime suppression policy](phase-1-runtime-suppressions.md).
 > Fourteen specified case/subset combinations are suppressed; any further

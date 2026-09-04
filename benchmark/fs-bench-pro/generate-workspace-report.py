@@ -1398,11 +1398,11 @@ def fast_acceptance_contract_pair(filename):
 
 def bridge_dependency_paths(family):
     base = "benchmark/fs-bench-pro/"
-    paths = {base + "workspace_common.rs", base + "workload.rs", base + "workspace_registry.rs", base + f"families/{family}.rs"}
+    paths = {base + "workspace_common.rs", base + "workload.rs", base + "workspace_registry.rs", base + f"families/{family}/mod.rs"}
     if family.startswith("dedup_"):
         paths.update({base + "dedup_workloads.rs", base + "families/sdk_edit_common.rs"})
     elif family == "edit_length_changing_capped":
-        paths.update({base + "families/edit_length_changing.rs", base + "families/sdk_edit_common.rs"})
+        paths.update({base + "families/edit_length_changing/mod.rs", base + "families/sdk_edit_common.rs"})
     elif family == "workspace_reliability":
         paths.add(base + "reliability_workloads.rs")
     else:

@@ -9,6 +9,46 @@ use std::time::Instant;
 
 const MIB: u64 = 1_048_576;
 const FLAT_SEED: u64 = 0x4c41_5945_5246_5331;
+pub(crate) const COMPACT_FIXTURE_PROFILE: &str = "ordinary-low-tier-compact-v2";
+
+fn compact(case: &Case) -> bool { case.tier<=10 && case.id.ends_with("-compact-v2") }
+fn background_shards(case:&Case, original:usize)->usize {if compact(case) {case.tier} else {original}}
+fn case_rank(case:&Case,seed:u8,domain:&str)->Result<Vec<usize>> {
+    let order=rank(seed,domain)?;
+    Ok(if compact(case) {order.into_iter().filter(|index|*index<case.tier).collect()} else {order})
+}
+fn shard_ordinals(case:&Case)->Vec<usize> {
+    if compact(case) {(0..32).chain(64..80).chain([128,199]).collect()} else {(0..200).collect()}
+}
+fn case_shard_content(case:&Case,seed:u8,s:usize,j:usize)->Result<Content> {
+    if !compact(case) {return shard_content(seed,s,j);}
+    if !shard_ordinals(case).contains(&j) {return Err("compact shard target absent".into());}
+    let len=match j {64=>1024,128=>8192,199=>MIB-47*(MIB/50)-1024-8192,_=>MIB/50};
+    Ok(Content::Seed {seed:common::frame_seed(&[COMPACT_FIXTURE_PROFILE,&seed_label(seed)?],&[s as u64,j as u64]),len})
+}
+fn case_shards(case:&Case,seed:u8,n:usize,prefix:&str)->Result<Vec<Entry>> {
+    if !compact(case) {return common::shards(seed,n,prefix);}
+    if n>10 {return Err("compact shard count exceeds10".into());}
+    let mut entries=BTreeMap::new();dir(&mut entries,".");
+    for s in 0..n {for j in shard_ordinals(case) {
+        let path=shard_path(s,j);
+        let path=if prefix.is_empty() {path} else {format!("{prefix}/{path}")};
+        file(&mut entries,path,case_shard_content(case,seed,s,j)?);
+    }}
+    let destination=if prefix.is_empty() {"dest".to_owned()} else {format!("{prefix}/dest")};
+    parents(&mut entries,&destination);dir(&mut entries,&destination);
+    Ok(entries.into_values().collect())
+}
+fn require_compact_bounds(case:&Case,entries:&[Entry])->Result<()> {
+    if compact(case) {
+        let bytes=common::validate_entries(entries)?;
+        let files=entries.iter().filter(|entry|matches!(entry.kind,EntryKind::File(_)|EntryKind::Hardlink(_))).count();
+        if bytes>50*MIB||files>1000 {return Err(format!("compact low-tier bounds: {} bytes={bytes} files={files}",case.id).into());}
+    }
+    Ok(())
+}
+fn payload_bytes(case:&Case)->u64 {if compact(case) {case.tier as u64*MIB} else {500*MIB}}
+fn namespace_files_per_shard(case:&Case)->usize {if compact(case) {25} else {200}}
 const TINY_LENGTHS: [u64; 10] = [0, 1, 7, 31, 127, 511, 1024, 2500, 4096, 8192];
 const DEPTHS: [usize; 10] = [1, 4, 2, 8, 3, 10, 5, 7, 6, 9];
 const GIT_KINDS: [&str; 10] = [
@@ -131,50 +171,50 @@ pub(crate) fn fixture(case: &Case, seed: u8) -> Result<Vec<Entry>> {
             "payload.bin".into(),
             Content::Seed {
                 seed: FLAT_SEED,
-                len: 500 * MIB,
+                len: payload_bytes(case),
             },
         ),
         "tiny-create" | "tiny-stat" | "tiny-unlink" => {
-            merge(&mut entries, common::shards(seed, 500, "")?);
+            merge(&mut entries, case_shards(case,seed, background_shards(case,500), "")?);
             dir(&mut entries, "tiny");
             for p in 0..10 {
                 dir(&mut entries, &format!("tiny/p{p}"));
             }
             if case.kind != "tiny-create" {
-                for (p, c) in tiny_targets(seed)? {
+                for (p, c) in tiny_targets(seed)?.into_iter().take(if compact(case) {case.tier} else {500}) {
                     file(&mut entries, p, c);
                 }
             }
         }
         "tiny-bulk-create" | "tiny-bulk-delete" => {
-            merge(&mut entries, common::shards(seed, 1, "witness")?);
+            merge(&mut entries, case_shards(case,seed, 1, "witness")?);
             if case.kind == "tiny-bulk-delete" {
-                merge(&mut entries, common::shards(seed, case.tier, "bulk")?);
+                merge(&mut entries, case_shards(case,seed, case.tier, "bulk")?);
             }
         }
         "directory-construct" => {
-            merge(&mut entries, common::shards(seed, 500, "")?);
+            merge(&mut entries, case_shards(case,seed, background_shards(case,500), "")?);
             dir(&mut entries, "new-directories");
         }
         "directory-metadata-scan"
         | "directory-content-scan"
         | "workspace-clean-commit"
-        | "workspace-fixed-move" => merge(&mut entries, common::shards(seed, case.tier, "")?),
+        | "workspace-fixed-move" => merge(&mut entries, case_shards(case,seed, case.tier, "")?),
         "workspace-distributed-sdk-edit" | "workspace-dense-rewrite" => {
-            merge(&mut entries, common::shards(seed, 500, "")?)
+            merge(&mut entries, case_shards(case,seed, background_shards(case,500), "")?)
         }
         "git-tool" => {
-            merge(&mut entries, common::shards(seed, 32, "background")?);
+            merge(&mut entries, case_shards(case,seed, if compact(case) {case.tier.min(4)} else {32}, "background")?);
             dir(&mut entries, "tracked");
             dir(&mut entries, "added");
-            for (kind, p, c) in git_targets(seed)? {
+            for (kind, p, c) in git_targets(seed)?.into_iter().take(if compact(case) {case.tier} else {500}) {
                 if kind != "add" {
                     file(&mut entries, p, c);
                 }
             }
         }
         "namespace-subtree-relocate-delete" => {
-            for i in 0..100_000 {
+            for i in 0..if compact(case) {200} else {100_000} {
                 let path = format!("background/d{:03}/f{i:06}.dat", i / 1000);
                 let data = content(seed, "namespace-mutation", &path, 2500)?;
                 file(&mut entries, path, data);
@@ -182,7 +222,7 @@ pub(crate) fn fixture(case: &Case, seed: u8) -> Result<Vec<Entry>> {
             dir(&mut entries, "destination");
             for tree in ["a", "b"] {
                 for s in 0..case.tier {
-                    for j in 0..200 {
+                    for j in 0..namespace_files_per_shard(case) {
                         let path = format!("source/tree-{tree}/s{s:03}/f{j:03}.dat");
                         let data = content(seed, "namespace-mutation", &path, 1024)?;
                         file(&mut entries, path, data);
@@ -191,10 +231,10 @@ pub(crate) fn fixture(case: &Case, seed: u8) -> Result<Vec<Entry>> {
             }
         }
         "agent-episodes" => {
-            merge(&mut entries, common::shards(seed, 64, "background")?);
+            merge(&mut entries, case_shards(case,seed, background_shards(case,64), "background")?);
             dir(&mut entries, "cells");
             dir(&mut entries, "finished");
-            for i in 0..500 {
+            for i in 0..if compact(case) {case.tier} else {500} {
                 for name in ["source.bin", "edit.bin", "replacement.bin"] {
                     let path = format!("cells/e{i:03}/{name}");
                     let data = content(seed, "agent-episodes", &path, 8192)?;
@@ -211,7 +251,9 @@ pub(crate) fn fixture(case: &Case, seed: u8) -> Result<Vec<Entry>> {
         }
         _ => return Err(format!("unknown ordinary case kind {}", case.kind).into()),
     }
-    Ok(entries.into_values().collect())
+    let entries=entries.into_values().collect::<Vec<_>>();
+    require_compact_bounds(case,&entries)?;
+    Ok(entries)
 }
 
 fn remove_tree(entries: &mut BTreeMap<String, Entry>, root: &str) {
@@ -295,13 +337,13 @@ pub(crate) fn sdk_edits(case: &Case, seed: u8) -> Result<Vec<SdkEdit>> {
     if case.kind != "workspace-distributed-sdk-edit" {
         return Err("case does not use SDK edits".into());
     }
-    rank(seed, "workspace-distributed-sdk")?
+    case_rank(case,seed, "workspace-distributed-sdk")?
         .into_iter()
         .take(case.tier)
         .map(|s| {
-            let j = 128 + s % 64;
+            let j = if compact(case) {128} else {128 + s % 64};
             let replacement = read_content(
-                &shard_content(seed, s, j)?
+                &case_shard_content(case,seed, s, j)?
                     .xor(0, 4096, 0x5a)?
                     .slice(0, 4096)?,
             )?;
@@ -345,10 +387,10 @@ pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>>
                 entries.remove(&p);
             }
         }
-        "tiny-bulk-create" => merge(&mut entries, common::shards(seed, case.tier, "bulk")?),
+        "tiny-bulk-create" => merge(&mut entries, case_shards(case,seed, case.tier, "bulk")?),
         "tiny-bulk-delete" => remove_tree(&mut entries, "bulk"),
         "directory-construct" => {
-            for (k, i) in rank(seed, "directory-construction")?
+            for (k, i) in case_rank(case,seed, "directory-construction")?
                 .into_iter()
                 .take(case.tier)
                 .enumerate()
@@ -399,20 +441,20 @@ pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>>
             }
         }
         "workspace-dense-rewrite" => {
-            for s in rank(seed, "workspace-dense-rewrite")?
+            for s in case_rank(case,seed, "workspace-dense-rewrite")?
                 .into_iter()
                 .take(case.tier)
             {
-                for j in 0..200 {
+                for j in shard_ordinals(case) {
                     let p = shard_path(s, j);
-                    let len = shard_content(seed, s, j)?.len();
+                    let len = case_shard_content(case,seed, s, j)?.len();
                     let data = content(seed, "workspace-dense-rewrite", &p, len)?;
                     file(&mut entries, p, data);
                 }
             }
         }
         "agent-episodes" => {
-            for i in rank(seed, "agent-episodes")?.into_iter().take(case.tier) {
+            for i in case_rank(case,seed, "agent-episodes")?.into_iter().take(case.tier) {
                 let old = format!("cells/e{i:03}");
                 let new = format!("finished/e{i:03}");
                 move_tree(&mut entries, &old, &new);
@@ -436,10 +478,17 @@ pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>>
         | "workspace-clean-commit" => (),
         _ => return Err("unknown ordinary expected kind".into()),
     }
-    Ok(entries.into_values().collect())
+    let entries=entries.into_values().collect::<Vec<_>>();
+    require_compact_bounds(case,&entries)?;
+    Ok(entries)
 }
 
 pub(crate) fn random_offsets(seed: u8, count: usize) -> Result<Vec<u64>> {
+    random_offsets_for_bytes(seed,count,500*MIB)
+}
+
+fn random_offsets_for_bytes(seed:u8,count:usize,bytes:u64)->Result<Vec<u64>> {
+    if bytes<4096 {return Err("random-read source too short".into());}
     let seed = seed_label(seed)?;
     Ok((0..count)
         .map(|i| {
@@ -450,7 +499,7 @@ pub(crate) fn random_offsets(seed: u8, count: usize) -> Result<Vec<u64>> {
             hash.update(&[0]);
             hash.update(&(i as u64).to_le_bytes());
             u64::from_le_bytes(hash.finish()[..8].try_into().expect("digest word"))
-                % (500 * MIB - 4096 + 1)
+                % (bytes - 4096 + 1)
         })
         .collect())
 }
@@ -462,14 +511,21 @@ pub(crate) fn check_cases(rows: &[Case], expected: usize) -> Result<()> {
         return Err("ordinary registry cardinality".into());
     }
     for row in rows {
+        let versioned=row.id.ends_with("-compact-v2");
+        let identity=row.id.strip_suffix("-compact-v2").unwrap_or(&row.id);
         if ![1, 10, 100, 500].contains(&row.tier)
-            || !row.id.ends_with(&row.tier.to_string())
-                && row.id != format!("payload-create-{}m", row.tier)
+            || versioned!=(row.tier<=10)
+            || !identity.ends_with(&row.tier.to_string())
+                && identity != format!("payload-create-{}m", row.tier)
         {
             return Err("ordinary ID/tier mismatch".into());
         }
     }
     for seed in 1..=3 {
+        for case in rows.iter().filter(|case|compact(case)) {
+            for step in [0,1] {require_compact_bounds(case,&self::expected(case,seed,step)?)?;}
+            if case.kind=="payload-random-read" && random_offsets_for_bytes(seed,case.tier,payload_bytes(case))?.iter().any(|offset|offset+4096>payload_bytes(case)) {return Err("compact random-read bound".into());}
+        }
         for domain in [
             "tiny-file-churn",
             "directory-construction",
@@ -1108,6 +1164,7 @@ pub(crate) fn prepared_git_entries(root: &Path, case: &Case, seed: u8) -> Result
     }
     let mut entries = fixture(case, seed)?;
     entries.extend(git_repository_entries(root)?);
+    require_compact_bounds(case,&entries)?;
     if common::validate_entries(&entries)? > 256 * MIB {
         return Err("prepared complete Git repository exceeds 256 MiB".into());
     }
@@ -1604,9 +1661,9 @@ pub(crate) fn apply(case: &Case, seed: u8, step: usize, verify: bool) -> Result<
     // filesystem work. Dense payload generation remains inside its declared wall.
     let plan_started = Instant::now();
     let order = match case.kind {
-        "directory-construct" => rank(seed, "directory-construction")?,
-        "workspace-dense-rewrite" => rank(seed, "workspace-dense-rewrite")?,
-        "agent-episodes" => rank(seed, "agent-episodes")?,
+        "directory-construct" => case_rank(case,seed, "directory-construction")?,
+        "workspace-dense-rewrite" => case_rank(case,seed, "workspace-dense-rewrite")?,
+        "agent-episodes" => case_rank(case,seed, "agent-episodes")?,
         _ => Vec::new(),
     };
     let tiny = if matches!(case.kind, "tiny-create" | "tiny-stat" | "tiny-unlink") {
@@ -1615,12 +1672,12 @@ pub(crate) fn apply(case: &Case, seed: u8, step: usize, verify: bool) -> Result<
         Vec::new()
     };
     let bulk = if case.kind == "tiny-bulk-create" {
-        common::shards(seed, case.tier, "bulk")?
+        case_shards(case,seed, case.tier, "bulk")?
     } else {
         Vec::new()
     };
     let offsets = if case.kind == "payload-random-read" {
-        random_offsets(seed, case.tier)?
+        random_offsets_for_bytes(seed, case.tier,payload_bytes(case))?
     } else {
         Vec::new()
     };
@@ -1707,7 +1764,7 @@ pub(crate) fn apply(case: &Case, seed: u8, step: usize, verify: bool) -> Result<
                         let mut expected = vec![0; 4096];
                         Content::Seed {
                             seed: FLAT_SEED,
-                            len: 500 * MIB,
+                            len: payload_bytes(case),
                         }
                         .read_at(offset, &mut expected)?;
                         require_bytes(true, &bytes, &expected, "random read")?;
@@ -1784,7 +1841,7 @@ pub(crate) fn apply(case: &Case, seed: u8, step: usize, verify: bool) -> Result<
                     let mut moved = vec![Entry::directory(".")];
                     for s in 0..case.tier {
                         moved.push(Entry::directory(format!("s{s:03}")));
-                        for j in 0..200 {
+                        for j in 0..namespace_files_per_shard(case) {
                             moved.push(Entry::file(
                                 format!("s{s:03}/f{j:03}.dat"),
                                 content(
@@ -1806,13 +1863,13 @@ pub(crate) fn apply(case: &Case, seed: u8, step: usize, verify: bool) -> Result<
             "workspace-fixed-move" => ops.rename("regular/s000/f064.dat", "dest/moved.dat")?,
             "workspace-dense-rewrite" => {
                 for s in order.iter().copied().take(case.tier) {
-                    for j in 0..200 {
+                    for j in shard_ordinals(case) {
                         let path = shard_path(s, j);
                         let data = content(
                             seed,
                             "workspace-dense-rewrite",
                             &path,
-                            shard_content(seed, s, j)?.len(),
+                            case_shard_content(case,seed, s, j)?.len(),
                         )?;
                         ops.write_content(&path, &data, false, false)?;
                     }
@@ -1900,7 +1957,7 @@ mod tests {
         }
         let root = std::env::current_dir()?;
         let payload = Case {
-            id: "payload-create-1m".into(),
+            id: "payload-create-1m-compact-v2".into(),
             family: "payload_create_read",
             tier: 1,
             kind: "payload-create",
@@ -1910,12 +1967,12 @@ mod tests {
         common::verify_native(&root, &expected(&payload, 1, 1)?)?;
         fs::remove_file("payload.bin")?;
         let episode_case = Case {
-            id: "agent-episodes-1".into(),
+            id: "agent-episodes-1-compact-v2".into(),
             family: "mixed_load_bearing",
             tier: 1,
             kind: "agent-episodes",
         };
-        let index = rank(1, "agent-episodes")?[0];
+        let index = case_rank(&episode_case,1, "agent-episodes")?[0];
         let old = format!("cells/e{index:03}");
         let new = format!("finished/e{index:03}");
         let select = |e: &Entry| {
@@ -1967,7 +2024,7 @@ mod tests {
         let repo = root.join("worktree");
         let reference = root.join("reference");
         let case = Case {
-            id: "git-tool-10".into(),
+            id: "git-tool-10-compact-v2".into(),
             family: "git_tool_workflow",
             tier: 10,
             kind: "git-tool",

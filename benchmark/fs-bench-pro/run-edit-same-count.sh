@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+[[ ${LAYERFS_BENCH_ARCHIVAL:-0} == 1 ]] || { printf '%s\n' 'Archived POSIX edit family; not supported by the active benchmark interface. Historical reproduction requires LAYERFS_BENCH_ARCHIVAL=1.' >&2; exit 2; }
 export LC_ALL=C
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)

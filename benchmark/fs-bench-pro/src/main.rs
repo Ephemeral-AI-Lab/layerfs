@@ -18,6 +18,7 @@ mod sdk_file_edit;
 mod workspace_bench;
 mod workspace_reliability;
 mod workspace_verify;
+mod infra;
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -58,6 +59,13 @@ struct ContainerCgroupSnapshot {
 }
 
 fn container_cgroup_snapshot(container: &ContainerId) -> AnyResult<ContainerCgroupSnapshot> {
+    if std::env::var("LAYERFS_BENCH_LOCAL_RUNTIME").as_deref() == Ok("1") {
+        let cgroup=Path::new("/sys/fs/cgroup");
+        let number=|name:&str|->AnyResult<u64> {Ok(std::fs::read_to_string(cgroup.join(name))?.trim().parse()?)};
+        let events=std::fs::read_to_string(cgroup.join("memory.events"))?;
+        let event=|key:&str|->AnyResult<u64> {Ok(events.lines().find_map(|line|line.strip_prefix(&format!("{key} "))).ok_or("missing local cgroup event")?.parse()?)};
+        return Ok(ContainerCgroupSnapshot {memory_current:number("memory.current")?,memory_peak:number("memory.peak")?,swap_current:number("memory.swap.current")?,pids_current:number("pids.current")?,oom:event("oom")?,oom_kill:event("oom_kill")?});
+    }
     let output = Command::new("docker")
         .args([
             "exec",
@@ -673,6 +681,9 @@ fn main() {
 fn run() -> AnyResult<()> {
     let _commit_diagnostics = layerfs_sdk::capture_workspace_commit_diagnostics()?;
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+    if args.first().is_some_and(|arg| arg.to_string_lossy().starts_with("infra-")) {
+        return infra::dispatch(&args);
+    }
     if args
         .first()
         .is_some_and(|arg| arg.to_string_lossy().starts_with("workspace-"))
@@ -1284,7 +1295,7 @@ fn emit_namespace_manifest(scenario: NamespaceScenario, fixture: &GeneratedNames
         "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"edited_fixture_digest\":\"{}\",\"edit_path\":\"{}\",\"edit_size\":{},\"fixture_plan_ns\":{},\"fixture_generate_ns\":{},\"fixture_manifest_ns\":{},\"fixture_files_per_second\":{},\"fixture_bytes_per_second\":{},\"fixture_worker_count\":1,\"fixture_cache_profile\":\"generated-warm-uncontrolled\",\"maximum_fixture_write_buffer_bytes\":{},\"fixture_plan_bytes\":{},\"fixture_path_state_bytes\":{},\"fixture_digest_record_bytes\":{},\"fixture_open_calls\":{},\"fixture_write_calls\":{},\"fixture_content_bytes_generated\":{},\"fixture_content_bytes_written\":{},\"fixture_content_hash_input_bytes\":{},\"post_generation_content_rereads\":0,\"complete_file_vec_allocations\":0,\"per_file_fsyncs\":0,\"atomic_publish\":true}}",
         workload_source::NAMESPACE_FIXTURE_SCHEMA,
         scenario.id,
-        workload_source::NAMESPACE_FIXTURE_PROFILE,
+        scenario.fixture_profile,
         workload_source::NAMESPACE_DIGEST_PROFILE,
         workload_source::NAMESPACE_EDIT_CONTRACT,
         manifest.regular_files,
@@ -1344,8 +1355,8 @@ fn namespace_self_check() -> AnyResult<()> {
         return Err("namespace-100000 binding threshold self-check".into());
     }
     let expected = [
-        ("namespace-100", [1, 78, 15, 5, 1], 125_000_000),
-        ("namespace-1000", [10, 789, 150, 50, 1], 200_000_000),
+        ("namespace-100-compact-v3", [1, 78, 15, 5, 1], 5_000_000),
+        ("namespace-1000-compact-v3", [10, 789, 150, 50, 1], 20_000_000),
         ("namespace-10000", [100, 7_899, 1_500, 500, 1], 300_000_000),
         (
             "namespace-100000",
@@ -1363,7 +1374,7 @@ fn namespace_self_check() -> AnyResult<()> {
             first.anchor_files,
         ] != counts
             || first.scenario.logical_bytes != logical_bytes
-            || (id == "namespace-100" && first != workload_source::namespace_plan(id)?)
+            || (id == "namespace-100-compact-v3" && first != workload_source::namespace_plan(id)?)
         {
             return Err("namespace-v2 planner self-check".into());
         }
@@ -1684,7 +1695,7 @@ fn namespace_manifest(scenario: NamespaceScenario, digest: &str) -> AnyResult<Na
         anchor_files: scenario.anchor_files,
         anchor_bytes: scenario
             .anchor_files
-            .checked_mul(workload_source::NAMESPACE_ANCHOR_BYTES)
+            .checked_mul(scenario.anchor_bytes)
             .ok_or("namespace anchor bytes")?,
         file_mode: workload_source::NAMESPACE_FILE_MODE,
         directory_mode: workload_source::NAMESPACE_DIRECTORY_MODE,
@@ -3787,9 +3798,15 @@ fn store_footprint_case(
     {
         return Err("Store-footprint Workspace temporary-byte accounting".into());
     }
+    let canonical = store.canonical_storage()?;
+    let storage = store.storage_snapshot()?;
+    let selected_root = store.pin_branch(branch)?.root;
     drop(client);
     drop(store);
 
+    let mut reopen_ns = 0;
+    let mut verification_ns = 0;
+    if verify {
     let reopen_started = Instant::now();
     let reopened_store = Arc::new(LayerStackStore::connect(&store_path)?);
     let reopened = Client::connect(reopened_store.clone())?;
@@ -3804,11 +3821,7 @@ fn store_footprint_case(
     {
         return Err("Store-footprint reopened root".into());
     }
-    let canonical = reopened_store.canonical_storage()?;
-    let storage = reopened_store.storage_snapshot()?;
-    let reopen_ns = elapsed_ns(reopen_started);
-    let mut verification_ns = 0;
-    if verify {
+    reopen_ns = elapsed_ns(reopen_started);
         let verification_started = Instant::now();
         let reopened_workspace = reopened.create_workspace_session(CreateWorkspaceSession {
             branch_id: branch,
@@ -3850,12 +3863,12 @@ fn store_footprint_case(
             elapsed_ns(verification_started)
         );
         verification_ns = elapsed_ns(verification_started);
-    }
     if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
         return Err("Store-footprint reopened cleanup".into());
     }
     drop(reopened);
     drop(reopened_store);
+    }
     let (durable_files, total_durable_store_bytes) = store_owned_bytes(root)?;
     let sqlite_database_bytes = storage.database_bytes;
     let other_durable_store_bytes = total_durable_store_bytes
@@ -3888,7 +3901,7 @@ fn store_footprint_case(
         seed,
         fixture_digest,
         edited_digest,
-        pinned.root,
+        selected_root,
         expected_files,
         expected_logical_bytes,
         attempted_operations,
@@ -4060,7 +4073,7 @@ fn namespace_performance_case(
         source,
         seed,
         seed,
-        workload_source::NAMESPACE_FIXTURE_PROFILE,
+        scenario.fixture_profile,
         fixture_digest,
         fixture_cache_profile,
         attempted_operations,
@@ -4316,7 +4329,7 @@ fn namespace_case(
             "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"product-lifecycle\",\"fixture_cache_profile\":\"{}\",\"failed_phase\":\"commit\",\"error\":{:?},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"edit_ns\":{},\"commit_ns\":{},\"workspace_end_ns\":{},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{}}}",
             workload_source::NAMESPACE_FAILURE_SCHEMA,
             scenario.id,
-            workload_source::NAMESPACE_FIXTURE_PROFILE,
+            scenario.fixture_profile,
             workload_source::NAMESPACE_DIGEST_PROFILE,
             workload_source::NAMESPACE_EDIT_CONTRACT,
             workload_source::NAMESPACE_LIFECYCLE_PROFILE,
@@ -4601,7 +4614,7 @@ fn namespace_case(
         "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"product-lifecycle\",\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{},\"branch_fork_ns\":{},\"workspace_create_ns\":{},\"edit_ns\":{},\"commit_ns\":{},\"workspace_end_ns\":{},\"reconnect_ns\":{},\"reopen_workspace_create_ns\":{},\"reopen_content_verify_ns\":{},\"reopen_workspace_end_ns\":{},\"reopen_verify_ns\":{},\"complete_product_ns\":{},\"product_lifecycle_ns\":{},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"edit_path\":\"{}\",\"edit_size\":{},\"fixture_digest\":\"{}\",\"verified_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{candidate_objects},\"candidate_bytes\":{candidate_bytes},\"inserted_objects\":{inserted_objects},\"inserted_bytes\":{inserted_bytes},\"reused_objects\":{reused_objects},\"reused_bytes\":{reused_bytes},\"max_transaction_objects\":{},\"max_transaction_bytes\":{},\"initialize_candidate_objects\":{},\"initialize_candidate_bytes\":{},\"initialize_inserted_objects\":{},\"initialize_inserted_bytes\":{},\"initialize_reused_objects\":{},\"initialize_reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"commit_candidate_objects\":{},\"commit_candidate_bytes\":{},\"commit_inserted_objects\":{},\"commit_inserted_bytes\":{},\"commit_reused_objects\":{},\"commit_reused_bytes\":{},\"commit_admission_transactions\":{},\"commit_max_transaction_objects\":{},\"commit_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{},\"maximum_verifier_buffer_bytes\":{},\"verifier_worker_count\":{},\"verifier_plan_bytes\":{},\"verifier_path_state_peak_bytes\":{},\"verifier_digest_state_peak_bytes\":{},\"maximum_product_read_ahead_bytes\":{},\"read_ahead_hits\":{},\"read_ahead_misses\":{},\"read_ahead_fetches\":{},\"read_ahead_requested_bytes\":{},\"read_ahead_fetched_bytes\":{},\"read_ahead_served_bytes\":{},\"read_ahead_unused_bytes\":{},\"workspace_read_local_calls\":{},\"workspace_read_local_ids\":{},\"workspace_read_local_rows\":{},\"workspace_read_local_bytes\":{},\"workspace_create_attach_ns\":{},\"workspace_create_non_attach_ns\":{},\"snapshot_database_calls\":{},\"snapshot_database_rows\":{},\"snapshot_database_bytes\":{},\"snapshot_cache_rows_at_create\":{},\"snapshot_cache_bytes_at_create\":{},\"snapshot_store_wide_scans\":{},\"small_file_prefetch_eligible\":{},\"small_file_prefetch_bytes\":{},\"anchor_prefetch_count\":{},\"commit_snapshot_database_calls\":{},\"commit_snapshot_database_rows\":{},\"commit_snapshot_database_bytes\":{},\"commit_payload_bytes_read\":{},\"commit_anchor_payload_reads\":{},\"process_t0_rss_bytes\":{},\"process_t1_rss_bytes\":{},\"process_t1_rss_growth_bytes\":{},\"process_t0_peak_rss_bytes\":{},\"process_t1_peak_rss_bytes\":{},\"process_initialization_incremental_peak_rss_bytes\":{},\"process_initialization_peak_status\":\"{initialization_peak_status}\",\"process_t0_swaps\":{},\"process_t1_swaps\":{},\"process_t0_physical_footprint_bytes\":{},\"process_t1_physical_footprint_bytes\":{},\"initialization_user_cpu_ns\":{},\"initialization_system_cpu_ns\":{},\"initialization_disk_read_bytes\":{},\"initialization_disk_write_bytes\":{},\"initialization_context_switches\":{},\"process_threads_before\":{},\"process_threads_after\":{},\"sqlite_t0_memory_used_bytes\":{sqlite_t0_memory_used_bytes},\"sqlite_t0_memory_peak_bytes\":{sqlite_t0_memory_peak_bytes},\"sqlite_t0_page_cache_overflow_bytes\":{sqlite_t0_page_cache_overflow_bytes},\"sqlite_t0_page_cache_overflow_peak_bytes\":{sqlite_t0_page_cache_overflow_peak_bytes},\"sqlite_t0_allocation_count\":{sqlite_t0_allocation_count},\"sqlite_t0_allocation_peak_count\":{sqlite_t0_allocation_peak_count},\"sqlite_t0_connection_cache_used_bytes\":{sqlite_t0_connection_cache_used_bytes},\"sqlite_connection_cache_target_bytes\":{sqlite_t0_connection_cache_target_bytes},\"sqlite_t1_memory_used_bytes\":{sqlite_t1_memory_used_bytes},\"sqlite_t1_memory_peak_bytes\":{sqlite_t1_memory_peak_bytes},\"sqlite_t1_page_cache_overflow_bytes\":{sqlite_t1_page_cache_overflow_bytes},\"sqlite_t1_page_cache_overflow_peak_bytes\":{sqlite_t1_page_cache_overflow_peak_bytes},\"sqlite_t1_allocation_count\":{sqlite_t1_allocation_count},\"sqlite_t1_allocation_peak_count\":{sqlite_t1_allocation_peak_count},\"sqlite_t1_connection_cache_used_bytes\":{sqlite_t1_connection_cache_used_bytes},\"sqlite_t1_connection_cache_target_bytes\":{sqlite_t1_connection_cache_target_bytes},\"process_t7_rss_bytes\":{},\"process_t7_peak_rss_bytes\":{},\"process_product_incremental_peak_rss_bytes\":{},\"process_product_peak_status\":\"{product_peak_status}\",\"process_t7_swaps\":{},\"process_t7_physical_footprint_bytes\":{},\"product_user_cpu_ns\":{},\"product_system_cpu_ns\":{},\"product_disk_read_bytes\":{},\"product_disk_write_bytes\":{},\"product_context_switches\":{},\"process_threads_at_t7\":{}}}",
         workload_source::NAMESPACE_SCHEMA,
         scenario.id,
-        workload_source::NAMESPACE_FIXTURE_PROFILE,
+        scenario.fixture_profile,
         workload_source::NAMESPACE_DIGEST_PROFILE,
         workload_source::NAMESPACE_EDIT_CONTRACT,
         workload_source::NAMESPACE_LIFECYCLE_PROFILE,
@@ -4878,7 +4891,7 @@ fn namespace_init_diagnostic(
         "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"init-only-diagnostic\",\"nonterminal\":true,\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{layerstack_init_ns},\"teardown_ns\":{teardown_ns},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{},\"process_t0_rss_bytes\":{},\"process_t1_rss_bytes\":{},\"process_t1_rss_growth_bytes\":{},\"process_t0_peak_rss_bytes\":{},\"process_t1_peak_rss_bytes\":{},\"process_initialization_incremental_peak_rss_bytes\":{},\"process_initialization_peak_status\":\"{initialization_peak_status}\",\"process_t0_swaps\":{},\"process_t1_swaps\":{},\"process_t0_physical_footprint_bytes\":{},\"process_t1_physical_footprint_bytes\":{},\"initialization_user_cpu_ns\":{},\"initialization_system_cpu_ns\":{},\"initialization_disk_read_bytes\":{},\"initialization_disk_write_bytes\":{},\"initialization_context_switches\":{},\"process_threads_before\":{},\"process_threads_after\":{},\"sqlite_t0_memory_used_bytes\":{sqlite_t0_memory_used_bytes},\"sqlite_t0_memory_peak_bytes\":{sqlite_t0_memory_peak_bytes},\"sqlite_t0_page_cache_overflow_bytes\":{sqlite_t0_page_cache_overflow_bytes},\"sqlite_t0_page_cache_overflow_peak_bytes\":{sqlite_t0_page_cache_overflow_peak_bytes},\"sqlite_t0_allocation_count\":{sqlite_t0_allocation_count},\"sqlite_t0_allocation_peak_count\":{sqlite_t0_allocation_peak_count},\"sqlite_t0_connection_cache_used_bytes\":{sqlite_t0_connection_cache_used_bytes},\"sqlite_connection_cache_target_bytes\":{sqlite_t0_connection_cache_target_bytes},\"sqlite_t1_memory_used_bytes\":{sqlite_t1_memory_used_bytes},\"sqlite_t1_memory_peak_bytes\":{sqlite_t1_memory_peak_bytes},\"sqlite_t1_page_cache_overflow_bytes\":{sqlite_t1_page_cache_overflow_bytes},\"sqlite_t1_page_cache_overflow_peak_bytes\":{sqlite_t1_page_cache_overflow_peak_bytes},\"sqlite_t1_allocation_count\":{sqlite_t1_allocation_count},\"sqlite_t1_allocation_peak_count\":{sqlite_t1_allocation_peak_count},\"sqlite_t1_connection_cache_used_bytes\":{sqlite_t1_connection_cache_used_bytes},\"sqlite_t1_connection_cache_target_bytes\":{sqlite_t1_connection_cache_target_bytes}}}",
         workload_source::NAMESPACE_SCHEMA,
         scenario.id,
-        workload_source::NAMESPACE_FIXTURE_PROFILE,
+        scenario.fixture_profile,
         workload_source::NAMESPACE_DIGEST_PROFILE,
         workload_source::NAMESPACE_EDIT_CONTRACT,
         workload_source::NAMESPACE_INIT_DIAGNOSTIC_PROFILE,
