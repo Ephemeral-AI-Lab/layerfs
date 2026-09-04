@@ -139,15 +139,24 @@ def build_assets(args):
     subprocess.run([sys.executable, str(helper), "build-workspace", str(destination), f"layerfs-v013:{revision[:12]}"], cwd=checkout, check=True)
 
 
-def source_validation(build):
+def sealed_build(build):
     custody.verify_manifest(build / "evidence")
     assets = read_json(build / "evidence/build.json")
     if assets["schema"] != "fs-bench-pro-workspace-build-v1" or assets["status"] != "pass": raise ValueError("unqualified Workspace build")
     if custody.sha(build / "fs-benchmark-pro") != assets["binary_sha256"]: raise ValueError("host binary seal")
+    assets["workspace_preparation_compatibility"] = custody.workspace_preparation_digest(assets)
+    image = read_json(build / "evidence/image.json")
+    custody.validate_image(image, assets)
+    if image["Id"] != assets["image_id"]: raise ValueError("sealed image identity mismatch")
+    custody.validate_image_binaries(build / "evidence", assets)
+    return assets
+
+
+def source_validation(build):
+    assets = sealed_build(build)
     for name in ("workspace-runner.py", "sdk-edit-custody.py", "lib-runtime.sh"):
         expected = subprocess.check_output(["git", "show", f"{assets['revision']}:benchmark/fs-bench-pro/{name}"], cwd=REPO)
         if (HERE / name).read_bytes() != expected: raise ValueError(f"running {name} differs from sealed build revision")
-    assets["workspace_preparation_compatibility"] = custody.workspace_preparation_digest(assets)
     docker = json.loads(command(["docker", "info", "--format", "{{json .}}"] ))
     environment = {"host": platform.uname()._asdict(), "host_cpu_count": os.cpu_count(),
                    "docker": {key: docker.get(key) for key in ("ID", "ServerVersion", "KernelVersion", "OperatingSystem", "OSType", "Architecture", "NCPU", "MemTotal")},
@@ -157,9 +166,60 @@ def source_validation(build):
     return assets
 
 
-def acquire(case, seed, binary, cache, run, build, acquisitions, assets, reference=False):
+# This frozen recipe has four generated-file COPY layers and one chmod/self-check
+# layer after its immutable system prefix. None replaces Git, libraries or config.
+GIT_SYSTEM_RECIPE_SHA256 = "7271d9f0437152402d556d3a0d7804f4a3e0fb4a3fdf5f59d2c1f87ac8166023"
+
+
+def git_system_identity(build, assets):
+    recipe = subprocess.check_output(["git", "show", f"{assets['revision']}:benchmark/fs-bench-pro/Dockerfile.layerfs"], cwd=REPO)
+    if hashlib.sha256(recipe).hexdigest() != GIT_SYSTEM_RECIPE_SHA256:
+        raise ValueError("preparation producer requires the reviewed immutable Git system recipe")
+    image = read_json(build / "evidence/image.json")
+    layers = image["RootFS"]["Layers"]
+    if image["Id"] != assets["image_id"] or image["Os"] != "linux" or len(layers) <= 5:
+        raise ValueError("preparation image system identity missing")
+    source_env = {"LAYERFS_SOURCE_COMMIT", "LAYERFS_SOURCE_TREE", "LAYERFS_SOURCE_SEAL"}
+    return {"recipe_sha256": GIT_SYSTEM_RECIPE_SHA256,
+            "platform": [image.get(key) for key in ("Os", "Architecture", "Variant")],
+            "rootfs_type": image["RootFS"]["Type"], "system_layers": layers[:-5],
+            "config": {key: value for key, value in image["Config"].items() if key not in {"Labels", "Env"}},
+            "environment": [item for item in image["Config"]["Env"] if item.partition("=")[0] not in source_env]}
+
+
+def select_preparation(build, assets, producer_build, registry, selected):
+    if producer_build == build:
+        return assets
+    producer = sealed_build(producer_build)
+    if producer["workspace_preparation_compatibility"] != assets["workspace_preparation_compatibility"]:
+        raise ValueError("preparation producer changes initialization or fixture generation")
+    contracts = ("testing-rules", "phase-1-handoff", "failure-repair-amendment", "execution-contract",
+        "ordinary-execution-contract", "dedup-reliability-execution-contract", "capped-inherited-replacements",
+        "payload-create-read", "tiny-file-churn", "directory-construction-traversal", "git-tool-workflow",
+        "namespace-mutation", "workspace-change-locality", "mixed-load-bearing-workload", "dedup-cross-file",
+        "dedup-cdc-locality", "dedup-workspace-reuse", "dedup-branch-history", "workspace-reliability")
+    for name in contracts:
+        path = f"docs/roadmap/0.1/0.1.3/{name}.md"
+        if path not in producer["phase1_contract_files"] or producer["phase1_contract_files"][path] != assets["phase1_contract_files"].get(path):
+            raise ValueError(f"preparation producer changes frozen contract: {path}")
+    producer_registry = [json.loads(line) for line in command([producer_build / "fs-benchmark-pro", "workspace-registry"]).splitlines()]
+    if producer_registry != registry:
+        raise ValueError("preparation producer changes frozen registry")
+    if any(case["operation"] == "git-tool" for case in selected):
+        system = git_system_identity(producer_build, producer)
+        if system != git_system_identity(build, assets):
+            raise ValueError("preparation producer changes immutable Git system/runtime identity")
+        producer["git_system_identity_sha256"] = hashlib.sha256(json.dumps(system, sort_keys=True).encode()).hexdigest()
+    return producer
+
+
+def acquire(case, seed, binary, cache, run, build, acquisitions, assets, reference=False, runtime_binary=None):
     started = time.monotonic_ns()
     info = json.loads(command([binary, "workspace-reference-info" if reference else "workspace-fixture-info", case["scenario_id"], seed]))
+    if runtime_binary is not None and str(runtime_binary) != str(binary):
+        runtime_info = json.loads(command([runtime_binary, "workspace-reference-info" if reference else "workspace-fixture-info", case["scenario_id"], seed]))
+        if runtime_info != info:
+            raise ValueError("runtime and preparation producer disagree on selected fixture/reference identity")
     identity = (assets["workspace_preparation_compatibility"], reference, json.dumps(info, sort_keys=True))
     if identity in acquisitions:
         receipt = dict(acquisitions[identity], run_acquisition_reused=True, run_acquisition_ns=time.monotonic_ns()-started)
@@ -184,7 +244,7 @@ def stream_samples(process, target, ready, errors):
         errors.append(str(error)); ready.set()
 
 
-def sample(case, seed, args, assets, campaign, acquisitions):
+def sample(case, seed, args, assets, campaign, acquisitions, producer=None):
     started = time.monotonic_ns()
     attempt = campaign / "attempts" / f"{case['scenario_id']}-s{seed}-{args.mode}-{uuid.uuid4().hex[:12]}"
     attempt.mkdir(parents=True)
@@ -192,7 +252,10 @@ def sample(case, seed, args, assets, campaign, acquisitions):
     mutable = campaign / "scratch" / attempt.name; mutable.mkdir(parents=True)
     name = "layerfs-v013-" + uuid.uuid4().hex[:16]
     binary = str(Path(args.assets).resolve() / "fs-benchmark-pro")
-    evidence = Path(args.assets).resolve() / "evidence"
+    producer = assets if producer is None else producer
+    producer_build = Path(args.preparation_assets or args.assets).resolve()
+    producer_binary = str(producer_build / "fs-benchmark-pro")
+    evidence = producer_build / "evidence"
     env = dict(os.environ, LAYERFS_V013_IMAGE=assets["image_id"], LAYERFS_V013_RESOURCE_PROFILE="1")
     for key in ("LAYERFS_V013_GIT_REFERENCE_HOST", "LAYERFS_V013_VERIFIER_EXCHANGE", "LAYERFS_V013_VERIFIER_EXCHANGE_HOST"):
         env.pop(key, None)
@@ -208,16 +271,23 @@ def sample(case, seed, args, assets, campaign, acquisitions):
     observer_errors = []; runtime_started = False
     cgroup_path = attempt / "cgroup-samples.tsv.gz"
     custody.write_json(attempt / "environment.json", assets["runtime_environment"])
+    custody.write_json(prepared_dir / "producer-selection.json", {
+        "assets": str(producer_build), "revision": producer["revision"], "image_id": producer["image_id"],
+        "binary_sha256": producer["binary_sha256"], "build_manifest_sha256": custody.sha(evidence / "build.json"),
+        "workspace_preparation_compatibility": producer["workspace_preparation_compatibility"],
+        "git_system_identity_sha256": producer.get("git_system_identity_sha256"),
+        "runtime_revision": assets["revision"], "runtime_image_id": assets["image_id"],
+        "scope": "Selected acquisition producer; cache hits retain their original master producer and input/oracle identities."})
     try:
         with phase_deadline(preparation_deadline(case), "selected input/runtime preparation"):
             old_image = os.environ.get("LAYERFS_V013_IMAGE")
-            os.environ["LAYERFS_V013_IMAGE"] = assets["image_id"]
+            os.environ["LAYERFS_V013_IMAGE"] = producer["image_id"]
             try:
-                acquired = acquire(case, seed, binary, Path(args.cache).resolve(), prepared_dir, evidence, acquisitions, assets)
+                acquired = acquire(case, seed, producer_binary, Path(args.cache).resolve(), prepared_dir, evidence, acquisitions, producer, runtime_binary=binary)
                 reference = None
                 if case["operation"] == "git-tool":
                     reference_dir=prepared_dir / "reference"; reference_dir.mkdir()
-                    reference=acquire(case, seed, binary, Path(args.cache).resolve(), reference_dir, evidence, acquisitions, assets, reference=True)
+                    reference=acquire(case, seed, producer_binary, Path(args.cache).resolve(), reference_dir, evidence, acquisitions, producer, reference=True, runtime_binary=binary)
             finally:
                 if old_image is None: os.environ.pop("LAYERFS_V013_IMAGE", None)
                 else: os.environ["LAYERFS_V013_IMAGE"] = old_image
@@ -451,6 +521,7 @@ def main():
     p.add_argument("--invalidate-reason",help="Explicitly recollect selected prior slots, preserving their raw outcomes and reason")
     p.add_argument("--self-check",action="store_true");p.add_argument("--recovery-self-check",action="store_true");p.add_argument("--build")
     p.add_argument("--assets",default=os.environ.get("LAYERFS_V013_ASSETS"))
+    p.add_argument("--preparation-assets",help="Compatible sealed producer used only for fixture/oracle acquisition; defaults to --assets")
     p.add_argument("--output",default=str(REPO / "benchmark-results/fs-bench-pro/phase1-v013"));p.add_argument("--cache",default=str(REPO / "target/phase1-prepared"))
     args=p.parse_args()
     if args.recovery_self_check: recovery_self_check();return 0
@@ -479,6 +550,9 @@ def main():
         rotations=((0,1,2,3,4),(2,3,4,0,1),(4,0,1,2,3),(1,2,3,4,0),(4,0,1,2,3))
         planned=[(selected[index],rep) for rep,order in enumerate(rotations,1) for index in order]
     if any(seed is None for _,seed in planned):p.error("selected row requires its matching seed or repetition selector")
+    producer_started = time.monotonic_ns()
+    producer = select_preparation(build, assets, Path(args.preparation_assets or args.assets).resolve(), registry, selected)
+    producer_validation_ns = time.monotonic_ns() - producer_started
     campaign=Path(args.output).resolve();campaign.mkdir(parents=True,exist_ok=True)
     failures=False
     with (campaign/"measurement.lock").open("a") as lock:
@@ -493,6 +567,8 @@ def main():
                 atomic_json(prior,record)
         invocation_path=invocations/(uuid.uuid4().hex+".json")
         invocation={"source_arm":args.source_arm,"source_revision":assets["revision"],"image_id":assets["image_id"],"source_validation_ns":validation_ns,"registry_query_ns":registry_ns,"planned_slots":[[case["scenario_id"],seed,args.mode] for case,seed in planned],"status":"running","invocation_wall_ns":None}
+        invocation["preparation_producer"] = {"assets": str(Path(args.preparation_assets or args.assets).resolve()),
+            "revision": producer["revision"], "image_id": producer["image_id"], "validation_ns": producer_validation_ns}
         with invocation_receipt(invocation_path,invocation,invocation_started):
             ledger_path=campaign/"slots.json";ledger=read_json(ledger_path) if ledger_path.exists() else {};acquisitions={}
             if reconcile_attempts(campaign,ledger):atomic_json(ledger_path,ledger)
@@ -509,7 +585,7 @@ def main():
                 if previous:
                     change={"slot":key,"previous_evidence":previous["evidence_path"],"reason":args.invalidate_reason,"at_unix_ns":time.time_ns()}
                     with (campaign/"invalidations.jsonl").open("a") as stream:stream.write(json.dumps(change,sort_keys=True)+"\n")
-                result=sample(case,seed,args,assets,campaign,acquisitions)
+                result=sample(case,seed,args,assets,campaign,acquisitions,producer)
                 if previous:result["previous_evidence_path"]=previous["evidence_path"]
                 ledger[key]=result;atomic_json(ledger_path,ledger)
                 print(json.dumps(result,sort_keys=True),flush=True)

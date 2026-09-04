@@ -1,0 +1,15 @@
+{
+  "status": "pass",
+  "source_sha256": "5c437e50495fd8e90cf0c073b5a29420393fea0c99090be14f23a0863e5092cf",
+  "checks": [
+    "actual b8/342 immutable Git system identity match",
+    "producer/runtime selection separated",
+    "compatibility/contract/registry/system mismatch rejected",
+    "Store and reference use producer image/binary/plan",
+    "same-run acquisition reused",
+    "original master provenance unchanged",
+    "runtime fixture mismatch rejects before acquisition",
+    "runtime execution image/binary preserved"
+  ],
+  "scope": "Mocked selection/acquisition model plus sealed image metadata comparison; no benchmark binary, Docker container, product execution or build."
+}
