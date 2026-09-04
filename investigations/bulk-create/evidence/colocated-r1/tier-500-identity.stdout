@@ -1,0 +1,34 @@
+9918d2a54620253c0740b90b75864e102678cd337f0dd0fcbe96dcd49d99d073  /usr/local/bin/fs-benchmark-pro
+2aef10316bcc83888139bfcb844535c02a88ff42395b45fef6b9280cb61cc759  /usr/local/bin/fs-benchmark-workload
+13b8c4b9576fc5377e5d87fe501979c805e5ac52af25670cf6dc5c17dd8e698d  /data/sample/store.sqlite
+rustc 1.85.1 (4eb161250 2025-03-15)
+binary: rustc
+commit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181
+commit-date: 2025-03-15
+host: aarch64-unknown-linux-gnu
+release: 1.85.1
+LLVM version: 19.1.7
+ext2/ext3
+205 124 0:68 / / rw,relatime - overlay overlay rw,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/77149/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/77146/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76825/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76824/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76823/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76822/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76821/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/76820/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57052/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57051/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57050/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57049/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/57048/fs,upperdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/77150/fs,workdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/77150/work
+207 205 0:89 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+208 205 0:90 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+209 208 0:91 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=5,mode=620,ptmxmode=666
+210 205 0:92 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs ro
+211 210 0:39 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw
+212 208 0:87 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw
+213 208 0:93 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=65536k
+214 205 254:1 /docker/volumes/b1ea52c80686475029486423b614e629ffe9a05ef29e9ac560774c98810895dd/_data /data rw,relatime master:1 - ext4 /dev/vda1 rw,discard
+215 205 254:1 /docker/containers/b491fa7f15a2ab2351dc9568999d5aa33c3ac70502a17936de439ffb58c5a25d/resolv.conf /etc/resolv.conf rw,relatime - ext4 /dev/vda1 rw,discard
+216 205 254:1 /docker/containers/b491fa7f15a2ab2351dc9568999d5aa33c3ac70502a17936de439ffb58c5a25d/hostname /etc/hostname rw,relatime - ext4 /dev/vda1 rw,discard
+217 205 254:1 /docker/containers/b491fa7f15a2ab2351dc9568999d5aa33c3ac70502a17936de439ffb58c5a25d/hosts /etc/hosts rw,relatime - ext4 /dev/vda1 rw,discard
+125 207 0:89 /bus /proc/bus ro,nosuid,nodev,noexec,relatime - proc proc rw
+126 207 0:89 /fs /proc/fs ro,nosuid,nodev,noexec,relatime - proc proc rw
+127 207 0:89 /irq /proc/irq ro,nosuid,nodev,noexec,relatime - proc proc rw
+128 207 0:89 /sys /proc/sys ro,nosuid,nodev,noexec,relatime - proc proc rw
+129 207 0:89 /sysrq-trigger /proc/sysrq-trigger ro,nosuid,nodev,noexec,relatime - proc proc rw
+130 207 0:90 /null /proc/interrupts rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+131 207 0:90 /null /proc/kcore rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+132 207 0:90 /null /proc/keys rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+133 207 0:94 / /proc/scsi ro,relatime - tmpfs tmpfs ro
+134 207 0:90 /null /proc/timer_list rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
+135 210 0:95 / /sys/firmware ro,relatime - tmpfs tmpfs ro

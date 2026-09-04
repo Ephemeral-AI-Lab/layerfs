@@ -1,6 +1,11 @@
 # 100k / 500 MiB bulk-create: 3–5-second feasibility investigation
 
-2026-09-04. Isolated investigation; no release requirement or production change.
+2026-09-04. Isolated investigation; no release requirement or production integration.
+
+Follow-up experiments are recorded in sections 7–8. The existing colocated route
+measured 32.147 s Exec and 159.195 s lifecycle; its separate 100k verifier failed
+with OOM. Subsequent exploration uses user-authorized independent containers
+without the Phase 1 campaign lock, with shared-host interference explicitly allowed.
 
 **Verdict: five seconds is a conditional research target, not a demonstrated
 capability. There is no credible five-second path that retains one synchronous
@@ -392,3 +397,122 @@ source commits, timings and exit status; SHA-256 manifests retain successes and
 failures. No production crate was changed. Reproduction scripts intentionally
 refuse existing output directories; use a new attempt directory and record a new
 source identity rather than overwriting retained results.
+
+
+## 7. Follow-up: existing colocated Linux FUSE route
+
+Source `5a5db40de2ada37bb63323cdd883c6618a562b93`, preceded by harness change
+`e420141d`. The only route change is the benchmark's explicit
+`diagnostic-host-fuse` selector: public SDK Create/Exec/Commit/query/End use the
+existing `WorkspacePlacement::Host` + `WorkspaceProjection::Fuse` implementation.
+No filesystem implementation changed in this experiment. The sealed workload
+helper and qualified witness Store were reused. The SDK/Workspace/Store process
+now shares the same Linux two-CPU/2-GiB cgroup as FUSE and the workload; native
+Linux disk replaces the macOS host path. These changes confound a pure network
+latency comparison and do not qualify under the frozen macOS profile.
+
+One 200-file/1-MiB seed-1 qualification passed canonical and fresh-FUSE-remount
+verification. Then one 100k/500-MiB seed-1 performance sample ran; no baseline was
+rerun. [Evidence](evidence/colocated-r1/summary.json):
+
+| Phase | Seconds |
+|---|---:|
+| Create | 0.001290 |
+| Complete Exec | **32.146803** |
+| Metadata normalization within Exec | **11.625014** |
+| Root sync within Exec | 0.451579 |
+| Commit | **126.901450** |
+| Visibility | 0.000155 |
+| End | 0.144916 |
+| Complete measured lifecycle | **159.194615** |
+
+The receipt reports 100,000 completed file writes, 524,288,000 written bytes and
+100,634 normalization records. Commit still uses 3,234 admission transactions,
+703,315 snapshot database calls, and 42.451 s of refresh. Its content phase is
+34.983 s, namespace phase 12.481 s, candidate finish 11.462 s, local admission
+5.061 s and object admission 20.329 s. The cgroup's pre-verifier memory peak was
+1,746,649,088 bytes, with no OOM/swap/CPU throttling recorded at that boundary.
+Process CPU was approximately 116.8 s; total cgroup CPU approximately 125.2 s.
+Host-FUSE does not expose the proxy's callback counters: those counters are
+unavailable, not zero. Source tracing and `transport: Host` establish that this
+route has no proxy TCP exchanges.
+
+**Result: reject colocation alone as a path to five seconds.** Exec is still over
+12 times the 2.6-s allocation. The earlier native filesystem result does not
+predict this FUSE/Workspace path. Remaining per-operation work and structural
+construction need measured reductions; this does not establish that every
+redesigned owner/FUSE implementation is incapable of five seconds.
+
+The separate existing-output verifier exited **137** before emitting its canonical
+verification receipt. A retained Docker `oom` event confirms an out-of-memory
+failure under the unchanged 2-GiB limit. Full 100k correctness/remount verification
+is therefore **incomplete**; performance completion must not be called a qualified
+pass. The allocation site was not profiled or proven. The output Store was copied
+to `evidence/colocated-r1/failed-state/` before owned container/volume removal; it
+is preserved locally and excluded from Git. No resource limit was raised.
+The experiment released the shared measurement lock after cleanup, reserving the
+next interval for Phase 1. Its raw files, commands and failure remain bound to this
+source; the original checkout and Phase 1 resources were untouched.
+
+
+## 8. Follow-up: independent-container metadata-cache experiment
+
+The user explicitly authorized concurrent exploratory containers on the same Mac
+and requested no campaign-lock conflicts. This supersedes exclusive-machine
+coordination for **these exploratory runs only**. The new
+`container-metadata-diagnostic.py` acquires no Phase 1 lock, uses private Docker
+volumes for source, Cargo registry/target and sample Stores, and leaves the
+original checkout and Phase 1 resources untouched. Build and runtime each retain
+2 CPUs, 2 GiB memory+swap and 256 pids. Shared physical hardware means these are
+exploratory results, not frozen-profile release evidence.
+
+Hypothesis: reuse exact `(kind, mode, mtime seconds, mtime nanos)` metadata roots
+in a bounded eight-entry cache during frontier Commit. This reuses the existing
+NativeImport idea; it adds no bulk API and changes no POSIX operation. The
+prototype is confined to this worktree's `changes.rs`, controlled by
+`LAYERFS_EXPERIMENT_METADATA_CACHE=0/1`. The cache is empty/off for the control;
+misses and eviction still call the unchanged canonical builder.
+
+Source `8bd5de4d` first attempted a fresh private build. It stalled at the network
+index update, was explicitly terminated (exit 143), and its logs/state were
+retained. No workload ran. Source `fd7655ca` then seeded immutable local crate
+archives after verifying every Cargo.lock checksum and built **offline** in its
+own container/cache. That build took 70.857 s, outside measured lifecycle time.
+
+One selected case, `tiny-bulk-create-10`, seed 1, was run once per arm in fresh
+containers using the same binary, qualified witness Store and sealed workload.
+Both used verification mode; timings are diagnostic call sums, not new eligible
+performance samples. [Raw summary](evidence/container-metadata-10-s1-r2/summary.json):
+
+| Observation | Cache off | Cache on |
+|---|---:|---:|
+| Metadata builds | 2,143 | **2** |
+| Cache hits / retained entries | 0 / 0 | **2,141 / 2** |
+| Exec | 0.180195 s | 0.193023 s |
+| Commit content phase | 0.243133 s | 0.239953 s |
+| Complete Commit | **0.734916 s** | **0.740459 s** |
+| Complete Create→Exec→Commit→query→End call sum | **0.920226 s** | **0.937502 s** |
+| Candidate objects / admission transactions | 8,644 / 61 | 8,644 / 61 |
+| Full command with verification | 4.231988 s | 4.137094 s |
+| Cgroup peak, including verification | 190,455,808 B | 188,448,768 B |
+
+**Result: the mechanism works, but no meaningful latency improvement was
+observed.** Metadata builds fell by 99.91%; Commit did not get faster. The roughly
+3-ms content-phase difference is insufficient evidence of a speedup with one
+sample on shared hardware. Deprioritize exact metadata reuse as a standalone
+optimization until scaling evidence justifies it. This does not establish its
+100k effect and does not support a five-second lifecycle claim.
+
+Both canonical verification and fresh-FUSE-remount verification passed all
+2,478 paths, 2,200 files and 11,534,336 bytes (including the 1-MiB witness). No
+OOM, swap or throttling was recorded. Decompressed file-root transcripts,
+payload-extents and independent manifests are identical between arms. Namespace
+root hashes differ; their equality is not claimed, and the cause was not isolated
+in this experiment. Both roots passed typed canonical-role, metadata, namespace
+coverage and content checks. All build/runtime containers and their volumes were
+removed. No passing test or baseline was rerun after these results.
+
+The smaller selected verifier passes do not repair or erase section 7's 100k
+verifier OOM. The next useful performance prototype should address repeated
+structural construction or checked refresh, while a separate bounded-verifier
+investigation is needed before a 100k result can receive complete qualification.

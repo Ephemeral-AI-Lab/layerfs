@@ -1,0 +1,14 @@
+{
+  "profile": "exploratory-linux-colocated-host-fuse",
+  "coordination": "user-authorized concurrent containers; no shared campaign lock",
+  "limits": {
+    "cpus": 2,
+    "memory_bytes": 2147483648,
+    "memory_swap_bytes": 2147483648,
+    "pids": 256
+  },
+  "case": "tiny-bulk-create-10",
+  "seed": 1,
+  "mode": "verify",
+  "warning": "shared physical hardware; not frozen-profile or release evidence"
+}

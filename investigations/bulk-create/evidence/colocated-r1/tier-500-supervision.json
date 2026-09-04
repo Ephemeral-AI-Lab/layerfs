@@ -1,0 +1,6 @@
+{
+  "at_unix_ns": 1788498165341731000,
+  "exit_code": 1,
+  "stdout": "usage_usec 120557052\nuser_usec 83588518\nsystem_usec 36968533\nnice_usec 0\nnr_periods 1557\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n1735700480\nlow 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n  PID STAT     ELAPSED     TIME COMMAND\n    1 Ss         02:35 00:00:00 sleep\n   26 Rsl        02:35 00:01:52 fs-benchmark-pr\n   41 Ss         00:00 00:00:00 sh\n   48 R          00:00 00:00:00 ps\n639628\t/data/sample\n",
+  "stderr": "du: cannot access '/data/sample/mount': Device or resource busy\n"
+}

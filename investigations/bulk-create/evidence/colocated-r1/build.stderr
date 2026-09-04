@@ -1,0 +1,88 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load remote build context
+#1 DONE 0.1s
+
+#2 copy /context /
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/layerfs-v013:fbf32e84662d
+#3 DONE 0.1s
+
+#4 [build 1/7] FROM docker.io/library/layerfs-v013:fbf32e84662d@sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e
+#4 resolve docker.io/library/layerfs-v013:fbf32e84662d@sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e done
+#4 DONE 0.0s
+
+#5 [build 2/7] WORKDIR /src
+#5 DONE 0.0s
+
+#6 [build 3/7] COPY Cargo.toml Cargo.lock ./
+#6 DONE 0.0s
+
+#7 [build 4/7] COPY crates ./crates
+#7 DONE 0.0s
+
+#8 [build 5/7] COPY tools ./tools
+#8 DONE 0.0s
+
+#9 [build 6/7] COPY benchmark/fs-bench-pro ./benchmark/fs-bench-pro
+#9 DONE 0.0s
+
+#10 [build 7/7] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     cargo build --locked --release -p fs-benchmark-pro  && cp target/release/fs-benchmark-pro /colocated-benchmark
+#10 0.169    Compiling cfg-if v1.0.4
+#10 0.169    Compiling libc v0.2.189
+#10 0.170    Compiling bitflags v2.13.1
+#10 0.170    Compiling memoffset v0.9.1
+#10 0.209    Compiling blake3 v1.8.5
+#10 0.226    Compiling constant_time_eq v0.4.2
+#10 0.389    Compiling arrayref v0.3.9
+#10 0.408    Compiling smallvec v1.15.2
+#10 0.424    Compiling arrayvec v0.7.8
+#10 0.565    Compiling parking_lot_core v0.9.12
+#10 0.568    Compiling foldhash v0.2.0
+#10 0.579    Compiling scopeguard v1.2.0
+#10 0.616    Compiling lock_api v0.4.14
+#10 0.735    Compiling hashbrown v0.17.1
+#10 0.873    Compiling layerfs-content v0.1.2 (/src/crates/layerfs-content)
+#10 1.204    Compiling ref-cast v1.0.27
+#10 1.238    Compiling zerocopy v0.8.56
+#10 1.278    Compiling nix v0.31.3
+#10 1.282    Compiling libsqlite3-sys v0.38.2
+#10 1.292    Compiling fuser v0.18.0
+#10 1.299    Compiling nix v0.29.0
+#10 1.661    Compiling hashlink v0.12.1
+#10 2.062    Compiling parking_lot v0.12.5
+#10 2.928    Compiling page_size v0.6.0
+#10 2.973    Compiling num_enum v0.7.6
+#10 3.206    Compiling log v0.4.34
+#10 3.338    Compiling memchr v2.8.3
+#10 3.970    Compiling fallible-iterator v0.3.0
+#10 4.219    Compiling fallible-streaming-iterator v0.1.9
+#10 4.325    Compiling rusqlite v0.40.2
+#10 5.735    Compiling layerfs-layerstack-store v0.1.2 (/src/crates/layerfs-layerstack-store)
+#10 6.692    Compiling layerfs-materialization v0.1.2 (/src/crates/layerfs-materialization)
+#10 7.941    Compiling layerfs-fuse v0.1.2 (/src/crates/layerfs-fuse)
+#10 8.790    Compiling layerfs-daemon v0.1.2 (/src/crates/layerfs-daemon)
+#10 9.535    Compiling layerfs-workspace v0.1.2 (/src/crates/layerfs-workspace)
+#10 12.94    Compiling layerfs-monitor v0.1.2 (/src/crates/layerfs-monitor)
+#10 13.29    Compiling layerfs-sdk v0.1.2 (/src/crates/layerfs-sdk)
+#10 22.67    Compiling fs-benchmark-pro v0.1.2 (/src/benchmark/fs-bench-pro)
+#10 35.59     Finished `release` profile [optimized] target(s) in 35.47s
+#10 DONE 35.7s
+
+#11 [stage-1 2/2] COPY --from=build /colocated-benchmark /usr/local/bin/fs-benchmark-pro
+#11 DONE 0.0s
+
+#12 exporting to image
+#12 exporting layers
+#12 exporting layers 0.2s done
+#12 exporting manifest sha256:534e1960835ca5e3089d1c18595f02e3be9664ecf89f2b51eea96e6b1b831a8d
+#12 exporting manifest sha256:534e1960835ca5e3089d1c18595f02e3be9664ecf89f2b51eea96e6b1b831a8d done
+#12 exporting config sha256:09a28b1a798b8efbf93aac6c0884c155fe5d9ba3c46eb2fbd07f0d352a91b76b done
+#12 exporting attestation manifest sha256:6361cc4527900bf7c09d192c37bef7c46a5fc466161b2b3426e44346d6e40d96 0.0s done
+#12 exporting manifest list sha256:ccfe29b451a2eb4100d5040386f1633833f86eedc0a52d0d95dc02f0a6fee6d4 done
+#12 naming to docker.io/library/layerfs-colocated:5a5db40de2ad done
+#12 unpacking to docker.io/library/layerfs-colocated:5a5db40de2ad 0.0s done
+#12 DONE 0.3s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/4dqbhqer9eq9q9754qrfc9g1d

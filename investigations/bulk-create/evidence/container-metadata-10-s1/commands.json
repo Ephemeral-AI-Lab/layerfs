@@ -1,0 +1,159 @@
+[
+  {
+    "label": "source",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "elapsed_ns": 11976875,
+    "exit_code": 0
+  },
+  {
+    "label": "source-diff",
+    "argv": [
+      "git",
+      "diff",
+      "5a5db40d",
+      "8bd5de4d7d1afac6568c11ba8f750a2d5547687e",
+      "--",
+      "crates",
+      "benchmark/fs-bench-pro"
+    ],
+    "elapsed_ns": 20799458,
+    "exit_code": 0
+  },
+  {
+    "label": "archive",
+    "argv": [
+      "git",
+      "archive",
+      "--format=tar",
+      "--output",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1/source.tar",
+      "8bd5de4d7d1afac6568c11ba8f750a2d5547687e",
+      "Cargo.toml",
+      "Cargo.lock",
+      "crates",
+      "tools",
+      "benchmark/fs-bench-pro"
+    ],
+    "elapsed_ns": 41420083,
+    "exit_code": 0
+  },
+  {
+    "label": "concurrent-containers",
+    "argv": [
+      "docker",
+      "ps",
+      "--format",
+      "{{.Names}}\t{{.Status}}"
+    ],
+    "elapsed_ns": 74923666,
+    "exit_code": 0
+  },
+  {
+    "label": "build-create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-explore-1b532121d314",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--device",
+      "/dev/fuse",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 229353541,
+    "exit_code": 0
+  },
+  {
+    "label": "build-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-1b532121d314"
+    ],
+    "elapsed_ns": 39357167,
+    "exit_code": 0
+  },
+  {
+    "label": "build-source-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1/source.tar",
+      "layerfs-explore-1b532121d314:/data/source.tar"
+    ],
+    "elapsed_ns": 76313708,
+    "exit_code": 0
+  },
+  {
+    "label": "build",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "CARGO_HOME=/data/cargo",
+      "-e",
+      "CARGO_TARGET_DIR=/data/target",
+      "-e",
+      "CARGO_BUILD_JOBS=2",
+      "layerfs-explore-1b532121d314",
+      "sh",
+      "-c",
+      "mkdir /data/source && tar -xf /data/source.tar -C /data/source && cd /data/source && cargo build --locked --release -p fs-benchmark-pro"
+    ],
+    "elapsed_ns": 97788474250,
+    "exit_code": 143
+  },
+  {
+    "label": "failed-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-1b532121d314"
+    ],
+    "elapsed_ns": 40343958,
+    "exit_code": 0
+  },
+  {
+    "label": "failed-state-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-explore-1b532121d314:/data",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1/failed-state"
+    ],
+    "elapsed_ns": 173452000,
+    "exit_code": 0
+  },
+  {
+    "label": "failed-cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-explore-1b532121d314"
+    ],
+    "elapsed_ns": 339253542,
+    "exit_code": 0
+  }
+]

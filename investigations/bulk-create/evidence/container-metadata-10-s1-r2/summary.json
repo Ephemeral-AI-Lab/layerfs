@@ -1,0 +1,74 @@
+{
+  "control": {
+    "phases_ns": {
+      "create": 1290500,
+      "exec": 180195000,
+      "commit": 734916292,
+      "visibility": 101083,
+      "end": 3723458
+    },
+    "lifecycle_ns": 920226333,
+    "commit": {
+      "content_ns": 243132500,
+      "namespace_ns": 136558750,
+      "in_place_rebase_ns": 283704292,
+      "candidate_objects": 8644,
+      "candidate_bytes": 11404313,
+      "admission_transactions": 61
+    },
+    "cache": "experiment_metadata_cache enabled=false hits=0 builds=2143 entries=0\n",
+    "verification": [
+      {
+        "kind": "canonical-verification",
+        "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"10531308\", \"canonical_Chunk_objects\": \"2168\", \"canonical_DirectoryNode_bytes\": \"119282\", \"canonical_DirectoryNode_objects\": \"284\", \"canonical_DirectoryState_bytes\": \"27146\", \"canonical_DirectoryState_objects\": \"277\", \"canonical_FileNode_bytes\": \"174852\", \"canonical_FileNode_objects\": \"2003\", \"canonical_FileState_bytes\": \"212318\", \"canonical_FileState_objects\": \"2003\", \"canonical_InodeRecord_bytes\": \"223146\", \"canonical_InodeRecord_objects\": \"2277\", \"canonical_InodeTable_bytes\": \"161552\", \"canonical_InodeTable_objects\": \"28\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"cd2a4b9634167e34be1909cada2873bcedfa8135628b5a5533f71b6781d8e0f4\", \"canonical_unique_objects\": \"9043\", \"independent_content_paths\": \"2200\", \"logical_bytes\": \"11534336\", \"oracle_identity\": \"e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"2478\", \"verified_regular_paths\": \"2200\"}"
+      },
+      {
+        "kind": "native-verification",
+        "step": 1,
+        "receipt": "independent_content_paths=2200\nlogical_bytes=11534336\noracle_identity=e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=2478\nverified_regular_paths=2200\n"
+      },
+      {
+        "kind": "verification-complete",
+        "status": "pass"
+      }
+    ],
+    "resources": "usage_usec 4043759\nuser_usec 3629486\nsystem_usec 414273\nnice_usec 0\nnr_periods 48\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n190455808\nlow 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n0\n3\n",
+    "workload_receipt": "attempted_syscall_count=6289\nbenchmark_injection_count=0\nbenchmark_reopen_count=0\nbenchmark_verifier_count=1\ncompleted_chain_count=0\ncompleted_episode_count=0\ncompleted_file_write_count=2000\ncompleted_read_bytes=0\ncompleted_read_request_count=0\ncompleted_syscall_count=6289\ncompleted_target_count=0\ncompleted_write_bytes=10485760\ndirectory_entry_count=0\neditor_save_count=0\ngit_process_count=0\ninplace_edit_count=0\ninterrupted_syscall_count=0\nmetadata_normalization_count=2144\nmetadata_normalization_ns=21259208\nroot_sync_ns=3650167\nscenario_id=tiny-bulk-create-10\nseed=1\nvisited_file_count=0\nvisited_path_count=0\nworkload_chmod_call_count=143\nworkload_close_call_count=2001\nworkload_closedir_call_count=0\nworkload_fsync_call_count=0\nworkload_fsyncdir_call_count=1\nworkload_ftruncate_call_count=0\nworkload_lstat_call_count=0\nworkload_mkdir_call_count=143\nworkload_ns=173615750\nworkload_open_call_count=2000\nworkload_open_directory_call_count=1\nworkload_opendir_call_count=0\nworkload_plan_ns=3554000\nworkload_pread_call_count=0\nworkload_pwrite_call_count=2000\nworkload_rename_call_count=0\nworkload_rmdir_call_count=0\nworkload_status=pass\nworkload_symlink_call_count=0\nworkload_unlink_call_count=0\n"
+  },
+  "cached": {
+    "phases_ns": {
+      "create": 1614250,
+      "exec": 193023375,
+      "commit": 740458542,
+      "visibility": 46083,
+      "end": 2360125
+    },
+    "lifecycle_ns": 937502375,
+    "commit": {
+      "content_ns": 239953459,
+      "namespace_ns": 136448334,
+      "in_place_rebase_ns": 292621417,
+      "candidate_objects": 8644,
+      "candidate_bytes": 11404313,
+      "admission_transactions": 61
+    },
+    "cache": "experiment_metadata_cache enabled=true hits=2141 builds=2 entries=2\n",
+    "verification": [
+      {
+        "kind": "canonical-verification",
+        "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"10531308\", \"canonical_Chunk_objects\": \"2168\", \"canonical_DirectoryNode_bytes\": \"119282\", \"canonical_DirectoryNode_objects\": \"284\", \"canonical_DirectoryState_bytes\": \"27146\", \"canonical_DirectoryState_objects\": \"277\", \"canonical_FileNode_bytes\": \"174852\", \"canonical_FileNode_objects\": \"2003\", \"canonical_FileState_bytes\": \"212318\", \"canonical_FileState_objects\": \"2003\", \"canonical_InodeRecord_bytes\": \"223146\", \"canonical_InodeRecord_objects\": \"2277\", \"canonical_InodeTable_bytes\": \"161552\", \"canonical_InodeTable_objects\": \"28\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"3e33ba2f9c96d4ebe0e5cb4ae0545c5c100c5a152b0280a199dc088f96e0c4bf\", \"canonical_unique_objects\": \"9043\", \"independent_content_paths\": \"2200\", \"logical_bytes\": \"11534336\", \"oracle_identity\": \"e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"2478\", \"verified_regular_paths\": \"2200\"}"
+      },
+      {
+        "kind": "native-verification",
+        "step": 1,
+        "receipt": "independent_content_paths=2200\nlogical_bytes=11534336\noracle_identity=e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=2478\nverified_regular_paths=2200\n"
+      },
+      {
+        "kind": "verification-complete",
+        "status": "pass"
+      }
+    ],
+    "resources": "usage_usec 3982741\nuser_usec 3594355\nsystem_usec 388386\nnice_usec 0\nnr_periods 45\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n188448768\nlow 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n0\n3\n",
+    "workload_receipt": "attempted_syscall_count=6289\nbenchmark_injection_count=0\nbenchmark_reopen_count=0\nbenchmark_verifier_count=1\ncompleted_chain_count=0\ncompleted_episode_count=0\ncompleted_file_write_count=2000\ncompleted_read_bytes=0\ncompleted_read_request_count=0\ncompleted_syscall_count=6289\ncompleted_target_count=0\ncompleted_write_bytes=10485760\ndirectory_entry_count=0\neditor_save_count=0\ngit_process_count=0\ninplace_edit_count=0\ninterrupted_syscall_count=0\nmetadata_normalization_count=2144\nmetadata_normalization_ns=24437376\nroot_sync_ns=10205584\nscenario_id=tiny-bulk-create-10\nseed=1\nvisited_file_count=0\nvisited_path_count=0\nworkload_chmod_call_count=143\nworkload_close_call_count=2001\nworkload_closedir_call_count=0\nworkload_fsync_call_count=0\nworkload_fsyncdir_call_count=1\nworkload_ftruncate_call_count=0\nworkload_lstat_call_count=0\nworkload_mkdir_call_count=143\nworkload_ns=183690875\nworkload_open_call_count=2000\nworkload_open_directory_call_count=1\nworkload_opendir_call_count=0\nworkload_plan_ns=3324583\nworkload_pread_call_count=0\nworkload_pwrite_call_count=2000\nworkload_rename_call_count=0\nworkload_rmdir_call_count=0\nworkload_status=pass\nworkload_symlink_call_count=0\nworkload_unlink_call_count=0\n"
+  }
+}

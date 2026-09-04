@@ -1,0 +1,14 @@
+{
+  "cache": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared/03638fe317044f1e9c30324e80e38d8da9ea76a348697b596900839bd015ee98",
+  "validation_and_clone_ns": 14117917,
+  "clone": {
+    "clone_method": "apfs-clone",
+    "clone_wall_ns": 7211625,
+    "clone_store_sha256": "13b8c4b9576fc5377e5d87fe501979c805e5ac52af25670cf6dc5c17dd8e698d",
+    "prepared_store_sha256": "13b8c4b9576fc5377e5d87fe501979c805e5ac52af25670cf6dc5c17dd8e698d",
+    "clone_bytes": 2293760,
+    "hard_link": false,
+    "status": "pass"
+  },
+  "cache_sha256": "91a886e2817d8344e83487b93d25ddc37ea78d13326773ccd47b6c03e8acd354"
+}

@@ -1,0 +1,4 @@
+{
+  "reason": "Fresh private Cargo cache stalled updating crates.io index; abort build only and seed pinned local dependency archives into next private container",
+  "at_unix_ns": 1788498915687330000
+}

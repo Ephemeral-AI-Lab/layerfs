@@ -1,0 +1,17 @@
+{
+  "file-roots.tsv.gz": {
+    "equal": true,
+    "uncompressed_sha256": "9e45fa133400e89944d3b3a347baf4bdbbb9391a10fd9ce75abcb322eeac6467"
+  },
+  "independent-manifest.tsv.gz": {
+    "equal": true,
+    "uncompressed_sha256": "e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95"
+  },
+  "payload-extents.tsv.gz": {
+    "equal": true,
+    "uncompressed_sha256": "228c1aa3e9e804e2451b0496221e5a58ac971a731ef1542fceb34c8c301482d9"
+  },
+  "control-container": "/layerfs-explore-fc7919a0ea2a",
+  "cached-container": "/layerfs-explore-19308dabf487",
+  "namespace_root_equality": "not established; roots differ, while full metadata/content/canonical-role verification passes"
+}

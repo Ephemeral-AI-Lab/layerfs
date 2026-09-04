@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "docker",
+    "events",
+    "--since",
+    "2026-09-04T05:00:09.540778927Z",
+    "--until",
+    "2026-09-04T05:05:01.271971+00:00",
+    "--filter",
+    "container=b491fa7f15a2ab2351dc9568999d5aa33c3ac70502a17936de439ffb58c5a25d",
+    "--format",
+    "{{json .}}"
+  ],
+  "exit_code": 0,
+  "stderr": ""
+}

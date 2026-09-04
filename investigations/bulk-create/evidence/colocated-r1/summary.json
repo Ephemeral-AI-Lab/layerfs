@@ -1,0 +1,17 @@
+{
+  "source": "5a5db40de2ada37bb63323cdd883c6618a562b93",
+  "profile": "linux-colocated-host-fuse-2cpu-2g",
+  "performance_completion": "pass",
+  "independent_verification": "failed-oom-exit-137",
+  "overall_qualification": "not-admitted",
+  "phases_ns": {
+    "create": 1290292,
+    "exec": 32146803431,
+    "commit": 126901450391,
+    "visibility": 154625,
+    "end": 144915792
+  },
+  "lifecycle_ns": 159194614531,
+  "failed_store": "failed-state/store.sqlite",
+  "cleanup": "owned container and volume removed; failed state retained locally"
+}

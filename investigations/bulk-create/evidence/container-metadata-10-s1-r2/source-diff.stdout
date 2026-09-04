@@ -1,0 +1,55 @@
+diff --git a/crates/layerfs-workspace/src/changes.rs b/crates/layerfs-workspace/src/changes.rs
+index cca2e97e..88850f95 100644
+--- a/crates/layerfs-workspace/src/changes.rs
++++ b/crates/layerfs-workspace/src/changes.rs
+@@ -379,6 +379,11 @@ impl Workspace {
+         };
+         let mut inodes = FrontierInodes::new(self.base_root, batch_size);
+         let mut cdc_bytes_scanned = 0_u64;
++        // Isolated experiment: exact tuple reuse, bounded like NativeImport's cache.
++        let cache_enabled = std::env::var("LAYERFS_EXPERIMENT_METADATA_CACHE").as_deref() == Ok("1");
++        let mut metadata_cache: Vec<((InodeKind, u32, i64, u32), ObjectId)> = Vec::with_capacity(8);
++        let mut metadata_hits = 0_u64;
++        let mut metadata_builds = 0_u64;
+         note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
+         let started = Instant::now();
+         for (&node, value) in &self.nodes {
+@@ -505,13 +510,22 @@ impl Workspace {
+             }) {
+                 before.unwrap().metadata_root
+             } else {
+-                filesystem::build_portable_metadata(
+-                    &mut objects,
+-                    inode_kind,
+-                    attr.mode,
+-                    attr.mtime_seconds,
+-                    attr.mtime_nanoseconds,
+-                )?
++                let key = (inode_kind, attr.mode, attr.mtime_seconds, attr.mtime_nanoseconds);
++                if let Some((_, root)) = metadata_cache.iter().find(|(cached, _)| *cached == key) {
++                    metadata_hits += 1;
++                    *root
++                } else {
++                    let root = filesystem::build_portable_metadata(
++                        &mut objects, inode_kind, attr.mode,
++                        attr.mtime_seconds, attr.mtime_nanoseconds,
++                    )?;
++                    metadata_builds += 1;
++                    if cache_enabled {
++                        if metadata_cache.len() == 8 { metadata_cache.remove(0); }
++                        metadata_cache.push((key, root));
++                    }
++                    root
++                }
+             };
+             let record = InodeRecordV1 {
+                 kind: inode_kind,
+@@ -530,6 +544,8 @@ impl Workspace {
+                 inodes.set(&mut objects, inode, Some(record))?;
+             }
+         }
++        eprintln!("experiment_metadata_cache enabled={} hits={} builds={} entries={}",
++            cache_enabled, metadata_hits, metadata_builds, metadata_cache.len());
+         note_commit_phase(WorkspaceCommitPhase::Content, started);
+         let started = Instant::now();
+         // Add all final edges before releasing old ones. A move therefore never

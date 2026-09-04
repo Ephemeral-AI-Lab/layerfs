@@ -1,0 +1,488 @@
+[
+  {
+    "label": "source",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "elapsed_ns": 11467000,
+    "exit_code": 0
+  },
+  {
+    "label": "source-diff",
+    "argv": [
+      "git",
+      "diff",
+      "5a5db40d",
+      "fd7655ca27691e915463390924bc921adfe7793e",
+      "--",
+      "crates",
+      "benchmark/fs-bench-pro"
+    ],
+    "elapsed_ns": 21449334,
+    "exit_code": 0
+  },
+  {
+    "label": "archive",
+    "argv": [
+      "git",
+      "archive",
+      "--format=tar",
+      "--output",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1-r2/source.tar",
+      "fd7655ca27691e915463390924bc921adfe7793e",
+      "Cargo.toml",
+      "Cargo.lock",
+      "crates",
+      "tools",
+      "benchmark/fs-bench-pro"
+    ],
+    "elapsed_ns": 41844334,
+    "exit_code": 0
+  },
+  {
+    "label": "concurrent-containers",
+    "argv": [
+      "docker",
+      "ps",
+      "--format",
+      "{{.Names}}\t{{.Status}}"
+    ],
+    "elapsed_ns": 76543917,
+    "exit_code": 0
+  },
+  {
+    "label": "build-create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-explore-97e5846fb06a",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--device",
+      "/dev/fuse",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 177873167,
+    "exit_code": 0
+  },
+  {
+    "label": "build-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-97e5846fb06a"
+    ],
+    "elapsed_ns": 39973334,
+    "exit_code": 0
+  },
+  {
+    "label": "build-dependencies-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1-r2/dependencies.tar",
+      "layerfs-explore-97e5846fb06a:/data/dependencies.tar"
+    ],
+    "elapsed_ns": 526389583,
+    "exit_code": 0
+  },
+  {
+    "label": "build-source-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1-r2/source.tar",
+      "layerfs-explore-97e5846fb06a:/data/source.tar"
+    ],
+    "elapsed_ns": 70442666,
+    "exit_code": 0
+  },
+  {
+    "label": "build",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "CARGO_HOME=/data/cargo",
+      "-e",
+      "CARGO_TARGET_DIR=/data/target",
+      "-e",
+      "CARGO_BUILD_JOBS=2",
+      "layerfs-explore-97e5846fb06a",
+      "sh",
+      "-c",
+      "mkdir /data/source && tar -xf /data/source.tar -C /data/source && tar -xf /data/dependencies.tar -C /data && cd /data/source && cargo build --offline --locked --release -p fs-benchmark-pro"
+    ],
+    "elapsed_ns": 70856816000,
+    "exit_code": 0
+  },
+  {
+    "label": "binary-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-explore-97e5846fb06a:/data/target/release/fs-benchmark-pro",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1-r2/fs-benchmark-pro"
+    ],
+    "elapsed_ns": 129364459,
+    "exit_code": 0
+  },
+  {
+    "label": "build-toolchain",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-97e5846fb06a",
+      "rustc",
+      "-Vv"
+    ],
+    "elapsed_ns": 127720167,
+    "exit_code": 0
+  },
+  {
+    "label": "build-cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-explore-97e5846fb06a"
+    ],
+    "elapsed_ns": 378327416,
+    "exit_code": 0
+  },
+  {
+    "label": "control-create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-explore-fc7919a0ea2a",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--device",
+      "/dev/fuse",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 290605792,
+    "exit_code": 0
+  },
+  {
+    "label": "control-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-fc7919a0ea2a"
+    ],
+    "elapsed_ns": 39744334,
+    "exit_code": 0
+  },
+  {
+    "label": "control-copy-input",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/colocated-r1/prepared",
+      "layerfs-explore-fc7919a0ea2a:/data/sample"
+    ],
+    "elapsed_ns": 122275417,
+    "exit_code": 0
+  },
+  {
+    "label": "control-copy-binary",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1-r2/fs-benchmark-pro",
+      "layerfs-explore-fc7919a0ea2a:/usr/local/bin/fs-benchmark-pro"
+    ],
+    "elapsed_ns": 125026583,
+    "exit_code": 0
+  },
+  {
+    "label": "control-identity",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-fc7919a0ea2a",
+      "sh",
+      "-c",
+      "sha256sum /usr/local/bin/fs-benchmark-pro /usr/local/bin/fs-benchmark-workload /data/sample/store.sqlite"
+    ],
+    "elapsed_ns": 125901333,
+    "exit_code": 0
+  },
+  {
+    "label": "control-before",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-fc7919a0ea2a",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 70060500,
+    "exit_code": 0
+  },
+  {
+    "label": "control-run",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "LAYERFS_EXPERIMENT_METADATA_CACHE=0",
+      "layerfs-explore-fc7919a0ea2a",
+      "fs-benchmark-pro",
+      "workspace-run",
+      "/data/sample",
+      "/unused-input",
+      "tiny-bulk-create-10",
+      "1",
+      "verify",
+      "diagnostic-host-fuse"
+    ],
+    "elapsed_ns": 4231988125,
+    "exit_code": 0
+  },
+  {
+    "label": "control-after",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-fc7919a0ea2a",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 122010500,
+    "exit_code": 0
+  },
+  {
+    "label": "control-proof-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-explore-fc7919a0ea2a:/data/sample/canonical-verification",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1-r2/control-canonical-verification"
+    ],
+    "elapsed_ns": 39108625,
+    "exit_code": 0
+  },
+  {
+    "label": "control-cleanup-check",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-fc7919a0ea2a",
+      "sh",
+      "-c",
+      "cat /proc/self/mountinfo; find /tmp/layerfs-runtime -type f 2>/dev/null; ps -eo pid,comm"
+    ],
+    "elapsed_ns": 126247417,
+    "exit_code": 0
+  },
+  {
+    "label": "control-cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-explore-fc7919a0ea2a"
+    ],
+    "elapsed_ns": 340405917,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-explore-19308dabf487",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--device",
+      "/dev/fuse",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 240483208,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-19308dabf487"
+    ],
+    "elapsed_ns": 46201041,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-copy-input",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/colocated-r1/prepared",
+      "layerfs-explore-19308dabf487:/data/sample"
+    ],
+    "elapsed_ns": 125935458,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-copy-binary",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1-r2/fs-benchmark-pro",
+      "layerfs-explore-19308dabf487:/usr/local/bin/fs-benchmark-pro"
+    ],
+    "elapsed_ns": 120543416,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-identity",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-19308dabf487",
+      "sh",
+      "-c",
+      "sha256sum /usr/local/bin/fs-benchmark-pro /usr/local/bin/fs-benchmark-workload /data/sample/store.sqlite"
+    ],
+    "elapsed_ns": 127916125,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-before",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-19308dabf487",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 73664417,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-run",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "LAYERFS_EXPERIMENT_METADATA_CACHE=1",
+      "layerfs-explore-19308dabf487",
+      "fs-benchmark-pro",
+      "workspace-run",
+      "/data/sample",
+      "/unused-input",
+      "tiny-bulk-create-10",
+      "1",
+      "verify",
+      "diagnostic-host-fuse"
+    ],
+    "elapsed_ns": 4137094417,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-after",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-19308dabf487",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 68767542,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-proof-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-explore-19308dabf487:/data/sample/canonical-verification",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-metadata-10-s1-r2/cached-canonical-verification"
+    ],
+    "elapsed_ns": 40479167,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-cleanup-check",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-19308dabf487",
+      "sh",
+      "-c",
+      "cat /proc/self/mountinfo; find /tmp/layerfs-runtime -type f 2>/dev/null; ps -eo pid,comm"
+    ],
+    "elapsed_ns": 73242834,
+    "exit_code": 0
+  },
+  {
+    "label": "cached-cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-explore-19308dabf487"
+    ],
+    "elapsed_ns": 286108833,
+    "exit_code": 0
+  }
+]
