@@ -3,7 +3,8 @@
 The [completion amendment](failure-repair-amendment.md) requires these repairs
 before terminal pass. The original 84 performance outcomes remain preserved:
 48 raw passes and 36 raw failures, all with their original producing identities.
-Corrected performance and complete independent verification are still pending.
+Corrected collection is in progress; the source-bound checkpoint below distinguishes
+confirmed repairs from remaining failures and verification work.
 
 | Shared cause | Minimum repair | Focused qualification |
 | --- | --- | --- |
@@ -42,3 +43,57 @@ Qualification evidence is under
 `benchmark-results/fs-bench-pro/phase1-v013/qualification/`, including
 `structural-frontier-final-stable`, `compact-spool`,
 `proxy-directory-fragments-recheck` and `host-cache-provenance`.
+
+
+## Current checkpoint: 34224330
+
+The original three repairs completed their affected initial performance collection.
+The later sampler fix replaced only one truncated observation; that original row
+remains invalid. Before the unlink repair, 120 unique performance slots and two
+focused independent proofs had been collected. These are historical checkpoints,
+not a claim that the complete campaign passed.
+
+A real Git workflow exposed another shared functional defect: an acknowledged
+unlink under an uncached parent could remain visible through a host lookup until
+a later barrier. Commit `0763fac6` changes only `ProxyClient::unlink`: finish the
+existing barrier before acknowledging an uncached-parent deletion. Cached-parent
+batching remains in place. The focused regression fails before the repair and
+passes afterward; source, commands and both outcomes are retained in
+`qualification/git-unlink-visibility/`.
+
+The qualified successor build is `3422433020a678a77f88e8a110492ca293c05e30`, with
+product seal `4637a27f57351decbee4f800ba97f63d743fb03c7c5b91bad56550eadb310170`.
+The original `git-tool-10` seed-1 failure remains at
+`attempts/git-tool-10-s1-performance-5abd0cdea1ba`.
+Its corrected real-workload execution passed at
+`attempts/git-tool-10-s1-performance-cd922cae2006`, including resource and cleanup
+validation. Command wall was 78.496 seconds, including 54.838 seconds of input
+preparation; this is not described as a fast whole-command result. Independent
+Git verification and the remaining family samples are still required.
+
+The explicit source map retains 96 prior performance slots and the old
+`payload-create-1m` seed-1 proof. Exact product/Cargo source comparisons permit
+only the unlink-method delta, and each retained attempt must contain complete
+zero-unlink and zero-rmdir receipts. All 24 tiny-deletion performance slots, three
+previous Git passes and the previous bulk-delete proof require recollection.
+The interrupted Git seed-2 preparation remains **not-run**, not a product failure.
+After the selected Git recovery, the current candidate has 97 validated performance
+slots. The ledger and generated review remain the authoritative live counts.
+
+The sustained harness had a separate source-proven error-path defect: one worker
+could leave its peer blocked at an infallible barrier. The 34224330 harness uses
+peer-disconnecting channels at the same three handoffs, each bounded by the
+remaining original 30-second cycle deadline. The exact 600-second workload,
+900/600-second guards and oracle are unchanged. Its one focused helper check passed.
+
+The required sustained proof then **failed**, without timeout or OOM, after
+11.138 seconds at `attempts/workspace-sustained-600s-proof-s1-verify-c3db3ad3ff04`.
+Worker 0 reported `EINVAL`; worker 1 immediately reported peer disconnection.
+The last periodic progress line was 1847 cycles. The focused public-API regression reproduced the exact cause: after 4096
+successful mutations, a zero-length file rejected the next write. Repair
+`101626e7` retires the prior logical edit generation only after a successful
+nonempty-to-empty transition. The same regression now passes and still verifies
+that a nonempty generation rejects mutation 4097 without changing bytes. The
+actual 600-second proof must still pass on the repaired source; this is not
+terminal pass or a performance-optimization task. Cleanup passed. No workload size, duration, budget
+or expected-error oracle has been reduced to resolve it.
