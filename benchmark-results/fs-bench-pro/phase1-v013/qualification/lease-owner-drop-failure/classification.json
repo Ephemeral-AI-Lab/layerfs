@@ -1,0 +1,10 @@
+{
+  "attempt": "attempts/workspace-lease-lifecycle-proof-s1-verify-a25c0cd6205c",
+  "classification": "required functional/cleanup failure; source-confirmed owner-drop ordering defect",
+  "original_error": "Workspace Io InvalidRequest",
+  "final_error": "owned Workspace spool files remain after cleanup",
+  "leftover_path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-runtime/40756-1/workspaces/w:74d7a131c03bf04686b2a3e6fdeccf67/mountinfo.txt",
+  "leftover_bytes": 139,
+  "supervisor_cleanup_status": "pass",
+  "status": "fix implementation pending runtime confirmation"
+}
