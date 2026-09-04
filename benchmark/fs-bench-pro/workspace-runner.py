@@ -40,7 +40,7 @@ INITIAL_SUPPRESSED_CASES = frozenset({
 SUPPRESSION_STATUS = "suppressed_phase1_time_budget"
 
 
-def load_suppressions(campaign):
+def load_suppressions(campaign, recheck_initial=False):
     path = Path(campaign) / "phase1-runtime-suppressions.json"
     value = read_json(path) if path.exists() else {"schema": "phase1-runtime-suppressions-v1", "limit_ns": PHASE1_PRODUCT_LIMIT_NS, "cases": {}}
     if value.get("schema") != "phase1-runtime-suppressions-v1" or value.get("limit_ns") != PHASE1_PRODUCT_LIMIT_NS or not isinstance(value.get("cases"), dict):
@@ -48,7 +48,13 @@ def load_suppressions(campaign):
     for case, record in value["cases"].items():
         if record.get("scenario_id") != case or record.get("status") != SUPPRESSION_STATUS:raise ValueError("invalid suppression identity/status")
     changed = False
-    for case in sorted(INITIAL_SUPPRESSED_CASES - value["cases"].keys()):
+    if recheck_initial and not value.get("recheck_initial"):
+        if path.exists():
+            raise ValueError("rechecking initial suppressions requires a fresh campaign")
+        value["recheck_initial"] = True
+        changed = True
+    initial = frozenset() if value.get("recheck_initial") else INITIAL_SUPPRESSED_CASES
+    for case in sorted(initial - value["cases"].keys()):
         value["cases"][case] = {"scenario_id": case, "status": SUPPRESSION_STATUS, "origin": "user-initial",
             "reason": "Explicit user-authorized initial14 Phase1 runtime exclusion; no confirmation run required", "at_unix_ns": time.time_ns(),
             "policy_sha256": custody.sha(SUPPRESSION_POLICY_PATH), "limit_ns": PHASE1_PRODUCT_LIMIT_NS}
@@ -1055,6 +1061,14 @@ def self_check():
         assert schedule(base,args)==(1,2,3)
         args.mode="verify"; assert schedule(dict(base,proof_only=True),args)==(1,)
         args.mode="performance";assert schedule(dict(base,inherited=True),args)==(1,2,3,4,5)
+        normal=root/"normal";normal.mkdir()
+        assert set(load_suppressions(normal)["cases"]) == INITIAL_SUPPRESSED_CASES
+        fresh=root/"recheck";fresh.mkdir()
+        assert load_suppressions(fresh, recheck_initial=True)["cases"] == {}
+        assert load_suppressions(fresh)["cases"] == {}
+        event={"scenario_id":"tiny-bulk-create-500","limit_ns":PHASE1_PRODUCT_LIMIT_NS,"observed_product_ns":PHASE1_PRODUCT_LIMIT_NS+1}
+        record_suppression(fresh,dict(base,scenario_id=event["scenario_id"]),"source",1,root,event)
+        assert event["scenario_id"] in load_suppressions(fresh)["cases"]
     print("runner_self_check=pass")
 
 
@@ -1095,6 +1109,7 @@ def main():
     p.add_argument("--mode",choices=("performance","verify","fast-verify","qualify-input"),default="performance")
     p.add_argument("--all",action="store_true");p.add_argument("--extended",action="store_true")
     p.add_argument("--invalidate-reason",help="Explicitly recollect selected prior slots, preserving their raw outcomes and reason")
+    p.add_argument("--recheck-initial-suppressions",action="store_true",help="Explicit new-campaign recheck of Phase 1 initial exclusions; preserve the 15-second budget and new timeout suppressions")
     p.add_argument("--fast-no-reuse",action="store_true",help="Explicitly check all uncertified current content; no prior input certificate")
     p.add_argument("--fast-components",action="store_true",help="Reuse only independently recipe-mapped certified content components")
     p.add_argument("--verification-certificate",help="Retained admitted full-verification attempt for the separate fast-verify profile")
@@ -1137,7 +1152,7 @@ def main():
     failures=False
     with (campaign/"measurement.lock").open("a") as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        suppressions = load_suppressions(campaign)
+        suppressions = load_suppressions(campaign, args.recheck_initial_suppressions)
         active = [case for case in selected if not is_suppressed(case, suppressions)]
         if any((r["family_id"]=="dedup_branch_history" and r["tier"]>=100) or (r["family_id"]=="workspace_reliability" and r["operation"] in EXTENDED) for r in active) and not args.extended:p.error("required active extended members need explicit --extended")
         producer_started = time.monotonic_ns()
