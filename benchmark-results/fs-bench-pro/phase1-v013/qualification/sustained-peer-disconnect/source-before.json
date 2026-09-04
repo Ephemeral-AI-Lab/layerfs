@@ -1,0 +1,5 @@
+{
+  "scope": "Before sustained-only harness repair; original condition is source-derived, not a live failure",
+  "path": "benchmark/fs-bench-pro/reliability_workloads.rs",
+  "sha256": "7dbbba9eab97526dd73f1c4cb4e5c757e45f6cd36e908c619621ffcd1e99d40d"
+}

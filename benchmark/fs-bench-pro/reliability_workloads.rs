@@ -102,6 +102,29 @@ fn require_mtimes(paths: &[&str], seconds: i64, nanoseconds: i64) -> Result<()> 
     println!("observed_mtime={seconds}.{nanoseconds:09} paths={paths:?}");
     Ok(())
 }
+
+fn sustained_handoff(
+    outgoing: &std::sync::mpsc::Sender<()>,
+    incoming: &std::sync::mpsc::Receiver<()>,
+    deadline: Instant,
+) -> Result<()> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        return Err("sustained 30-second progress gate".into());
+    }
+    outgoing
+        .send(())
+        .map_err(|_| "sustained peer disconnected during handoff")?;
+    incoming
+        .recv_timeout(remaining)
+        .map_err(|error| match error {
+            std::sync::mpsc::RecvTimeoutError::Timeout => "sustained 30-second progress gate",
+            std::sync::mpsc::RecvTimeoutError::Disconnected => {
+                "sustained peer disconnected during handoff"
+            }
+        })?;
+    Ok(())
+}
 fn wait(path: &Path, exists: bool) -> Result<()> {
     let end = Instant::now() + Duration::from_secs(120);
     while path.exists() != exists {
@@ -620,12 +643,13 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
         "sustained" => {
             use std::sync::atomic::{AtomicBool, Ordering};
             let start = std::sync::OnceLock::<Instant>::new();
-            let gate = Arc::new(Barrier::new(2));
+            let (send_zero, receive_zero) = std::sync::mpsc::channel();
+            let (send_one, receive_one) = std::sync::mpsc::channel();
+            let peers = [(send_one, receive_zero), (send_zero, receive_one)];
             let stop = AtomicBool::new(false);
             let cycles = std::thread::scope(|scope| -> Result<u64> {
                 let mut joins = Vec::new();
-                for w in 0..2 {
-                    let gate = gate.clone();
+                for (w, (outgoing, incoming)) in peers.into_iter().enumerate() {
                     let stop = &stop;
                     let start = &start;
                     joins.push(scope.spawn(move || -> std::result::Result<u64, String> {
@@ -634,6 +658,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
                             let mut last_report = Instant::now();
                             loop {
                                 let cycle_start = Instant::now();
+                                let cycle_deadline = cycle_start + Duration::from_secs(30);
                                 let mut immutable = [0u8; 64];
                                 let active_start = *start.get_or_init(Instant::now);
                                 File::open("sentinels/f0001.dat")?.read_exact(&mut immutable)?;
@@ -646,7 +671,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
                                     true,
                                 )?;
                                 fs::rename(&temp, format!("work/active{w}"))?;
-                                gate.wait();
+                                sustained_handoff(&outgoing, &incoming, cycle_deadline)?;
                                 let peer = 1 - w;
                                 let actual = fs::read(format!("work/active{peer}"))?;
                                 let mut expected = Vec::new();
@@ -658,7 +683,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
                                 let scratch = format!("work/.scratch{w}");
                                 write_tag(case, &scratch, "scratch", 64, true)?;
                                 fs::remove_file(scratch)?;
-                                gate.wait();
+                                sustained_handoff(&outgoing, &incoming, cycle_deadline)?;
                                 cycles += 1;
                                 if w == 0 {
                                     let mut result =
@@ -674,7 +699,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
                                         last_report = Instant::now();
                                     }
                                 }
-                                gate.wait();
+                                sustained_handoff(&outgoing, &incoming, cycle_deadline)?;
                                 if cycle_start.elapsed() >= Duration::from_secs(30) {
                                     return Err("sustained 30-second progress gate".into());
                                 }
@@ -684,7 +709,10 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
                             }
                             Ok(cycles)
                         })()
-                        .map_err(|e| e.to_string())
+                        .map_err(|error| {
+                            eprintln!("sustained_worker={w} failure={error}");
+                            error.to_string()
+                        })
                     }));
                 }
                 let mut counts = Vec::new();
@@ -775,6 +803,36 @@ pub(crate) fn dispatch(args: &[String]) -> Result<()> {
     let receipt = operations(&case, action, ordinal.parse()?)?;
     emit(receipt);
     Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn sustained_handoff_detects_peer_exit_and_progress_timeout() {
+    let (send_zero, receive_zero) = std::sync::mpsc::channel();
+    let (send_one, receive_one) = std::sync::mpsc::channel();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let peer = std::thread::spawn(move || {
+        sustained_handoff(&send_zero, &receive_one, deadline).unwrap();
+        // A worker failing between handoffs drops both endpoints.
+    });
+    sustained_handoff(&send_one, &receive_zero, deadline).unwrap();
+    let error = sustained_handoff(&send_one, &receive_zero, deadline).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "sustained peer disconnected during handoff"
+    );
+    peer.join().unwrap();
+
+    let (outgoing, _peer_receiver) = std::sync::mpsc::channel();
+    let (_silent_peer, incoming) = std::sync::mpsc::channel();
+    let error = sustained_handoff(
+        &outgoing,
+        &incoming,
+        Instant::now() + Duration::from_millis(20),
+    )
+    .unwrap_err();
+    assert_eq!(error.to_string(), "sustained 30-second progress gate");
+    assert!(sustained_handoff(&outgoing, &incoming, Instant::now()).is_err());
 }
 
 #[cfg(test)]

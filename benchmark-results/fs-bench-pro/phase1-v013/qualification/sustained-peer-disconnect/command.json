@@ -1,0 +1,17 @@
+{
+  "build": [
+    "rustc",
+    "--edition",
+    "2021",
+    "--test",
+    "benchmark/fs-bench-pro/workload.rs",
+    "-o",
+    "benchmark-results/fs-bench-pro/phase1-v013/qualification/sustained-peer-disconnect/workload-tests"
+  ],
+  "test": [
+    "benchmark-results/fs-bench-pro/phase1-v013/qualification/sustained-peer-disconnect/workload-tests",
+    "reliability_workloads::sustained_handoff_detects_peer_exit_and_progress_timeout",
+    "--exact",
+    "--nocapture"
+  ]
+}
