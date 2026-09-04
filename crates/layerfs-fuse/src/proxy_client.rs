@@ -256,6 +256,18 @@ impl ProxyClient {
 
     fn send_buffer_locked(&self, buffer: BufferedWrite) -> PortResult<()> {
         let stream = self.node_stream(buffer.node);
+        {
+            let mut cache = self.cache.lock().map_err(|_| PortError::Io)?;
+            if let Some(pending) = cache.pending_creates.get_mut(&buffer.node) {
+                // ponytail: retain one existing batch payload per new file; larger
+                // or rewritten files fall back to the ordinary streamed requests.
+                if pending.bytes + buffer.bytes.len() <= WRITE_COALESCE_BYTES {
+                    pending.bytes += buffer.bytes.len();
+                    pending.writes.push((buffer.offset, buffer.bytes));
+                    return Ok(());
+                }
+            }
+        }
         if let Some(pending) = self
             .cache
             .lock()
@@ -1867,6 +1879,63 @@ mod tests {
             Request::Write(NodeId(2), 0, bytes) if bytes == b"pending"
         ));
         assert!(client.write_buffer.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn bounded_nonempty_creates_use_the_existing_closed_batch() {
+        const FILES: usize = 1000;
+        const BYTES: usize = 5 * 1024;
+        let (client_stream, mut host_stream) = stream_pair();
+        host_stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        let client = ProxyClient {
+            streams:vec![Mutex::new(client_stream)],next:AtomicUsize::new(0),
+            cache:Mutex::new(Cache::default()),write_buffer:Mutex::new(None),
+            reservation:Mutex::new(Reservation::default()),gate:RwLock::new(()),
+            callbacks:RwLock::new(()),paused:AtomicBool::new(false),pending:AtomicU64::new(0),
+            metrics:AtomicFuseWriteMetrics::default(),read_metrics:AtomicFuseReadMetrics::default(),
+            #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+            notifier:std::sync::OnceLock::new(),
+        };
+        let handle = std::thread::spawn(move || {
+            let mut batches = 0;
+            let mut files = 0;
+            let mut writes = 0;
+            let mut bytes = 0;
+            loop {
+                match read_request(&mut host_stream).unwrap() {
+                    Request::CreateFilesClosedReserved(entries) => {
+                        batches += 1;
+                        files += entries.len();
+                        writes += entries.iter().map(|entry| entry.4.len()).sum::<usize>();
+                        bytes += entries.iter().flat_map(|entry| &entry.4)
+                            .map(|(_, data)| data.len()).sum::<usize>();
+                    }
+                    Request::Fence => {
+                        write_response(&mut host_stream, &Response::Unit).unwrap();
+                        break;
+                    }
+                    _ => panic!("unexpected request"),
+                }
+            }
+            (batches, files, writes, bytes)
+        });
+
+        for index in 0..FILES {
+            let node = NodeId(index as u64 + 2);
+            client.cache.lock().unwrap().pending_creates.insert(node, PendingCreate {
+                parent: NodeId(1),
+                name: format!("file-{index}").into_bytes(),
+                mode: 0o644,
+                mtime: None,
+                zero_len: 0,
+                writes: Vec::new(),
+                bytes: 0,
+            });
+            assert_eq!(client.write(node, 0, &vec![7; BYTES]), Ok(BYTES));
+            assert_eq!(client.unpin(node, true), Ok(()));
+        }
+        client.barrier().unwrap();
+        assert_eq!(handle.join().unwrap(), (FILES.div_ceil(128), FILES, FILES, FILES * BYTES));
     }
 
     fn stream_pair() -> (TcpStream, TcpStream) {
