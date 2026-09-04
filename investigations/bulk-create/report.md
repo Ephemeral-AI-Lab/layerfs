@@ -552,3 +552,25 @@ paths, not a measured attribution of each second. The main product process's
 21.81 CPU-seconds in the latest delete sample supports prioritizing repeated
 metadata/binding work over speculative disk-speed fixes. Directory-page caching
 alone does not remove this per-entry work.
+
+
+## 9. Implementation handoff and matched-initialization objective
+
+The [two-phase specification](two-phase-optimization-spec.md) and
+[Phase 1 implementation handoff](phase1-implementation-handoff.md) now require
+initialization-like throughput for shared canonical construction/hash/storage
+work under matched conditions, with the additional Commit obligations measured
+and explained. File distribution alone is insufficient: compare exact paths,
+metadata/witness, CPU/owner placement, memory, storage/cache conditions,
+instrumentation, canonical object counts and actual task parallelism. The
+historical 2.766-second initializer remains a reference, not a fixed requirement
+or a live-create timing. Do not rearrange the prescribed tree to feed more
+initializer producers.
+
+The 5–10-second create Commit planning range, 3–5-second stretch and subsecond
+generic delete target remain provisional and unchanged. Stable-candidate evidence
+adds one matched seed-1 initialization comparator when compatible evidence is
+missing; a large unexplained shared-work gap still requires investigation even
+if the broad Commit target passes. The handoff authorizes isolated implementation
+when executed, with no merge, publication, release changes or Phase 2 work.
+No performance measurements were run as part of this specification update.

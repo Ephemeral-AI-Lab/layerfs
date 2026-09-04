@@ -1,7 +1,8 @@
 # Two-phase optimization plan: generic Workspace Commit
 
-Status: **draft for review; no production implementation or integration authorized
-by this document**. Date: 2026-09-04. This plan's “Phase 1” means Commit
+Status: **reviewed implementation draft; isolated Phase 1 work is described in
+[the handoff](phase1-implementation-handoff.md). No merge, publication or production
+integration is authorized by this document**. Date: 2026-09-04. This plan's “Phase 1” means Commit
 optimization, not the existing v0.1.3 Phase 1 benchmark-execution campaign.
 
 ## 1. Objective and scope
@@ -73,8 +74,12 @@ this work to the benchmark owner's checkout. Preserve the experiment sources.
 | Create 100k / 500 MiB | 5–10 s | At most 10 s median over the prescribed three seeds | 3–5 s |
 | Delete 100k / 500 MiB | 0.1–0.5 s | At most 0.5 s median over the prescribed three seeds | Approximately 0.05–0.1 s |
 
-These are investigation targets, not promises or new release gates. Faster than
-the planning range is acceptable. The generic delete gate is **unproven**:
+These are provisional investigation targets for the two-CPU colocated profile,
+not promises, lower bounds or new release gates. Faster than the planning range
+is acceptable. The additional performance objective is to approach initialization
+throughput for shared work under matched conditions, with the remaining Commit
+overhead measured and explained; a broad planning range is not permission to
+retain a large unexplained gap. The generic delete gate is **unproven**:
 survivor reconstruction avoids removed keys; a generic delta engine may need to
 process 100k removed inode keys. Do not retain a case-specific route to pass it.
 If the generic engine misses a target, report the miss and the responsible work;
@@ -99,6 +104,62 @@ do not add nested or overlapping timers. Historical initialization consumed abou
 6.5 seconds before Workspace overhead. Three-to-five seconds needs CPU work
 reduction, not simply more workers. No worker-count or host-placement change may
 be hidden in the comparison.
+
+### Matched initialization reference
+
+Commit and initialization both construct/hash canonical content and structural
+objects and save them into the Store. Phase 1 should bring that shared work to
+comparable throughput under matched conditions. Commit additionally retains
+existing-Store/collision checks, conditional publication, live-handle state,
+checked refresh and private-staging cleanup. Measure those obligations; do not
+assume they explain a large latency gap or promise they cost zero.
+
+The historical **2.766-s** initialization is an opportunity reference, not a
+hard Commit target: it used prepared files, 500 decimal MB, another distribution
+and eight host producers. It excludes live file creation/normalization and is
+not the SDK Workspace Create call. Similar file sizes alone are insufficient.
+For the Phase 1 comparator, match or explicitly account for:
+
+- The exact prescribed payload bytes, file sizes, names, directory depth/width,
+  metadata and witness tree. Keep the frozen workload unchanged. Prepare the
+  initialization source separately from the existing ordinary-workload generator;
+  do not rearrange paths/top-level tasks to create more producer parallelism.
+- Source revision, canonical/chunking profile, binary configuration and diagnostic
+  instrumentation. Root IDs may differ because identity seeds or valid structural
+  shapes differ; record actual canonical object counts and bytes, not only files.
+- Owner/Store placement, CPU allocation, memory and scratch ceilings, bounded
+  worker count, storage backend, SQLite configuration, cache/qualification state
+  and concurrent host load. Record actual task parallelism and producer occupancy.
+- Work scope: prepared source generation is outside initialization; live POSIX
+  creation stays inside Exec; all Commit obligations remain inside Commit.
+  Initialization may encode the witness while Commit reuses it. Empty-Store
+  initialization and nonempty-Store Commit retain their genuine membership and
+  publication differences; disclose these rather than weakening either contract.
+
+Reuse existing initialization/public-SDK benchmark machinery and qualified
+preparation. On the stable candidate, run one selected seed-1 initialization
+comparator at 100k if no compatible measurement exists. Pair it with the same
+seed's required create-Commit sample. A minimal diagnostic input adapter may
+reuse the existing generator; do not add a benchmark family or change release
+selectors. Qualify the prepared source and verify the output separately. Repeat
+only when relevant source/environment changes invalidate the comparison or a
+specific remaining question requires it; do not rerun the historical baseline
+merely to reproduce 2.766 seconds.
+
+Report initialization and Commit wall/CPU, canonical bytes/objects, shared-stage
+throughput, actual concurrency, and Commit-specific refresh/cleanup/checking work.
+If pipelines overlap differently, use causal intervals and critical-path tails;
+raw phase sums are not a normalized comparison. Include total observed gap and
+its measured attribution, with unmeasured residual explicitly identified.
+
+There is no arbitrary required Commit/init ratio: the final report must show
+whether shared work has comparable throughput and explain any material remaining
+gap with evidence. A numeric target pass without that analysis is insufficient
+for an integration recommendation. A miss remains a miss; do not lower quality
+or broaden resource limits to manufacture parity. Retain the 5–10-s planning
+range and 3–5-s stretch unless a documented, source-bound result supports revising
+the forecast. This reference does not predict live create Exec or delete speed;
+delete retains its separate generic-engine gate and all other correctness gates.
 
 ## 3. Common mutation input and ownership
 
@@ -328,7 +389,9 @@ intermediate objects, copies and underfilled transactions; then test elapsed
 Commit time. Add concurrency only against a measured remaining CPU/queue issue.
 
 **D. Integrated qualification and recommendation.** Freeze one candidate source,
-run the selected large cases with required observations, then independent proof.
+run the selected large cases and matched initialization reference with required
+observations, then independent proof. Explain the shared-work throughput gap and
+the measured cost of Commit-specific obligations.
 Broader affected verification runs once when stable or to resolve a concrete
 remaining risk. Deliver a proposed integration sequence and remaining risks;
 this document does not authorize merging or publication.
@@ -374,7 +437,9 @@ For the stable candidate, measure the prescribed three performance seeds once
 per selected 100k case and report each sample plus median; run independent
 canonical and fresh-FUSE proofs separately. Target attainment, correctness,
 resource safety, route generality and release qualification are separate statuses.
-A good median never cancels a failing correctness or resource gate.
+A good median never cancels a failing correctness or resource gate. Include the
+matched-initialization comparison above; this adds one targeted comparator, not
+a second general benchmark campaign.
 
 For sparse-change nonregression, use matched source-bound comparisons on the
 existing representative large-tree case. Flag a median Commit regression exceeding
@@ -428,3 +493,10 @@ without a second namespace traversal; nonempty-Store failure semantics; and the
 measured performance targets. Approval of this draft certifies none of those
 unimplemented results. Reviewers performed source/evidence analysis only; no
 benchmark or production code was run or changed for this drafting task.
+
+
+The matched-initialization amendment and handoff performance section received an
+additional read-only performance review. The review approved the update after
+clarifying that limits are matched while actual task parallelism and producer
+occupancy are recorded/accounted for, not forced equal by changing the workload.
+No empirical parity or performance guarantee is implied by this review.
