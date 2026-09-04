@@ -1,0 +1,15 @@
+{
+  "source_sha256": "9b3a1b09b32c85b776fce93b3d5945a9ee880c1af83219afb1b33ce5715b4f0f",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-fuse",
+    "--no-default-features",
+    "--lib",
+    "proxy_client::tests::acknowledged_unlink_is_absent_with_and_without_parent_cache",
+    "--",
+    "--exact",
+    "--nocapture"
+  ]
+}
