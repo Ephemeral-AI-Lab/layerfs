@@ -1,7 +1,12 @@
 use layerfs_content::filesystem::ContentChange;
+use layerfs_content::{
+    encode_object, object::references::referenced_objects, CanonicalName, DirectoryEntry, Object,
+    ObjectId, ObjectKind, ObjectReference,
+};
 use layerfs_layerstack_store::{
-    apply_changes, AddLayerResult, CommitOutcome, EntityName, LayerStackInitialization,
-    LayerStackInitializationReceipt, LayerStackStore, LocalForkSource, ObjectSource, StoreError,
+    apply_changes, AddLayerResult, CanonicalStorage, CommitOutcome, EntityName,
+    LayerStackInitialization, LayerStackInitializationReceipt, LayerStackStore, LocalForkSource,
+    ObjectSource, StoreError,
 };
 use std::collections::BTreeSet;
 
@@ -119,6 +124,20 @@ fn one_store_initialize_fork_commit_add_and_dedup_are_atomic() {
         )
         .unwrap();
     let pinned = store.pin_branch(branch_id).unwrap();
+    assert_eq!(pinned.branch.head_commit_id, None);
+    assert_eq!(
+        pinned.root,
+        store
+            .layer(pinned.branch.base_layer_id)
+            .unwrap()
+            .unwrap()
+            .root_id
+    );
+    assert_eq!(
+        store.reachable_root_storage(pinned.root).unwrap(),
+        closure_oracle(&store, &[pinned.root]).unwrap()
+    );
+    let base_root = pinned.root;
     let built = apply_changes(
         &pinned.reader,
         pinned.root,
@@ -160,6 +179,20 @@ fn one_store_initialize_fork_commit_add_and_dedup_are_atomic() {
         Some(commit_id)
     );
     assert!(store.commit(commit_id).unwrap().is_some());
+    let committed = store.pin_branch(branch_id).unwrap();
+    assert_eq!(committed.branch.head_commit_id, Some(commit_id));
+    assert_eq!(
+        committed.root,
+        store.commit(commit_id).unwrap().unwrap().root_id
+    );
+    assert_eq!(
+        store.reachable_root_storage(committed.root).unwrap(),
+        closure_oracle(&store, &[committed.root]).unwrap()
+    );
+    assert_eq!(
+        store.reachable_storage().unwrap(),
+        closure_oracle(&store, &[base_root, committed.root]).unwrap()
+    );
     let layer_id = match store.add_layer(branch_id).unwrap() {
         AddLayerResult::Added { layer_id } => layer_id,
         outcome => panic!("unexpected Add outcome: {outcome:?}"),
@@ -424,6 +457,132 @@ fn visible_missing_and_same_length_corrupt_objects_are_integrity_errors() {
     ));
 
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn reachable_root_storage_is_exact_deduplicated_and_root_scoped() {
+    let root = temp("reachable-root");
+    let path = root.join("store.sqlite");
+    drop(LayerStackStore::create(&path).unwrap());
+    let shared = insert_object(&path, bytes_object(b"shared"));
+    let left = insert_object(&path, directory_object(&[shared]));
+    let right = insert_object(&path, directory_object(&[shared, shared]));
+    let graph_root = insert_object(&path, directory_object(&[left, right]));
+    let unrelated = insert_object(&path, bytes_object(b"unrelated"));
+    let child_bytes = bytes_object(b"child");
+    let child = insert_object(&path, child_bytes.clone());
+    let parent = insert_object(&path, directory_object(&[child]));
+    let malformed = insert_object(&path, bytes_object(b"LFS4FSR\0malformed"));
+    let mut deep_root = insert_object(&path, bytes_object(b"deep-leaf"));
+    for _ in 0..64 {
+        deep_root = insert_object(&path, directory_object(&[deep_root]));
+    }
+
+    let store = LayerStackStore::connect(&path).unwrap();
+    assert_eq!(
+        store.reachable_root_storage(shared).unwrap(),
+        closure_oracle(&store, &[shared]).unwrap()
+    );
+    let expected = closure_oracle(&store, &[graph_root]).unwrap();
+    assert_eq!(expected.objects, 4);
+    assert_eq!(store.reachable_root_storage(graph_root).unwrap(), expected);
+    let deep = store.reachable_root_storage(deep_root).unwrap();
+    assert_eq!(deep.objects, 65);
+    assert_eq!(deep, closure_oracle(&store, &[deep_root]).unwrap());
+    drop(store);
+
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute("DELETE FROM objects WHERE object_id=?1", [child.as_bytes()])
+        .unwrap();
+    corrupt_object(&path, unrelated);
+    let store = LayerStackStore::connect(&path).unwrap();
+    assert_eq!(store.reachable_root_storage(graph_root).unwrap(), expected);
+    store.read_object(parent).unwrap();
+    assert!(matches!(
+        store.reachable_root_storage(parent),
+        Err(StoreError::Integrity("visible object missing"))
+    ));
+    store.read_object(malformed).unwrap();
+    assert!(store.reachable_root_storage(malformed).is_err());
+    drop(store);
+
+    insert_object(&path, child_bytes);
+    corrupt_object(&path, child);
+    let store = LayerStackStore::connect(&path).unwrap();
+    store.read_object(parent).unwrap();
+    assert!(matches!(
+        store.reachable_root_storage(parent),
+        Err(StoreError::Integrity("object identity"))
+    ));
+
+    drop(store);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+fn bytes_object(value: &[u8]) -> Vec<u8> {
+    encode_object(&Object::bytes(value.to_vec()).unwrap()).unwrap()
+}
+
+fn directory_object(children: &[ObjectId]) -> Vec<u8> {
+    let entries = children
+        .iter()
+        .enumerate()
+        .map(|(index, id)| {
+            DirectoryEntry::new(
+                CanonicalName::new(&format!("entry-{index}")).unwrap(),
+                ObjectReference::new(ObjectKind::Bytes, *id),
+            )
+        })
+        .collect();
+    encode_object(&Object::directory(entries).unwrap()).unwrap()
+}
+
+fn insert_object(path: &std::path::Path, bytes: Vec<u8>) -> ObjectId {
+    let id = ObjectId::for_bytes(&bytes);
+    rusqlite::Connection::open(path)
+        .unwrap()
+        .execute(
+            "INSERT OR IGNORE INTO objects(object_id,bytes) VALUES(?1,?2)",
+            rusqlite::params![id.as_bytes(), bytes],
+        )
+        .unwrap();
+    id
+}
+
+fn corrupt_object(path: &std::path::Path, id: ObjectId) {
+    rusqlite::Connection::open(path)
+        .unwrap()
+        .execute(
+            "UPDATE objects SET bytes=zeroblob(length(bytes)) WHERE object_id=?1",
+            [id.as_bytes()],
+        )
+        .unwrap();
+}
+
+fn closure_oracle(
+    store: &LayerStackStore,
+    roots: &[ObjectId],
+) -> Result<CanonicalStorage, StoreError> {
+    let mut pending = roots.to_vec();
+    let mut seen = BTreeSet::new();
+    let mut storage = CanonicalStorage {
+        objects: 0,
+        encoded_bytes: 0,
+    };
+    while let Some(id) = pending.pop() {
+        if !seen.insert(id) {
+            continue;
+        }
+        let bytes = store.read_object(id)?;
+        storage.objects = storage.objects.checked_add(1).unwrap();
+        storage.encoded_bytes = storage
+            .encoded_bytes
+            .checked_add(bytes.len().try_into().unwrap())
+            .unwrap();
+        pending.extend(referenced_objects(&bytes)?);
+    }
+    Ok(storage)
 }
 
 fn pragma(connection: &rusqlite::Connection, name: &str) -> i64 {

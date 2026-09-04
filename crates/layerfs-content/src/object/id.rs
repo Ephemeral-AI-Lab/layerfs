@@ -83,10 +83,71 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ids_are_fixed_and_text_round_trips() {
+    fn fixed_width_hex_covers_every_byte_positions_and_seeded_ids() {
+        for value in u8::MIN..=u8::MAX {
+            for index in [0, DIGEST_BYTES - 1] {
+                let mut bytes = [0; DIGEST_BYTES];
+                bytes[index] = value;
+                let text = ObjectId::from_bytes(&bytes).unwrap().to_string();
+                assert_eq!(text.len(), DIGEST_BYTES * 2);
+                assert_eq!(&text[index * 2..index * 2 + 2], format!("{value:02x}"));
+                assert_eq!(text.parse::<ObjectId>().unwrap().to_bytes(), bytes);
+            }
+        }
+        let mut mixed = [0; DIGEST_BYTES];
+        for (index, value) in [(1, 0x01), (2, 0x10), (15, 0xab), (30, 0xfe), (31, 0xff)] {
+            mixed[index] = value;
+        }
+        let text = ObjectId::from_bytes(&mixed).unwrap().to_string();
+        assert!(text.starts_with("000110"));
+        assert_eq!(&text[30..32], "ab");
+        assert!(text.ends_with("feff"));
+
+        let mut state = 0x6a09_e667_f3bc_c909_u64;
+        for _ in 0..128 {
+            let mut bytes = [0; DIGEST_BYTES];
+            for byte in &mut bytes {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                *byte = state as u8;
+            }
+            let id = ObjectId::from_bytes(&bytes).unwrap();
+            assert_eq!(id.to_string().parse::<ObjectId>().unwrap(), id);
+        }
+    }
+
+    #[test]
+    fn parsing_accepts_hex_case_and_displays_canonical_lowercase() {
+        let id = ObjectId::for_bytes(b"case-equivalence");
+        let lowercase = id.to_string();
+        let uppercase = lowercase.to_ascii_uppercase();
+        assert_eq!(lowercase.parse::<ObjectId>().unwrap(), id);
+        assert_eq!(uppercase.parse::<ObjectId>().unwrap(), id);
+        assert_eq!(
+            uppercase.parse::<ObjectId>().unwrap().to_string(),
+            lowercase
+        );
+    }
+
+    #[test]
+    fn parsing_rejects_wrong_lengths_and_non_hex_text() {
+        for value in [String::new(), "0".repeat(63), "0".repeat(65)] {
+            assert_eq!(
+                value.parse::<ObjectId>(),
+                Err(CoreError::InvalidIdentityText)
+            );
+        }
+        let mut non_hex = "0".repeat(DIGEST_BYTES * 2);
+        non_hex.replace_range(31..32, "g");
+        assert_eq!(
+            non_hex.parse::<ObjectId>(),
+            Err(CoreError::InvalidIdentityText)
+        );
         let id = ObjectId::for_bytes(b"payload");
         assert_eq!(id.as_bytes().len(), DIGEST_BYTES);
         assert_eq!(id.to_string().parse::<ObjectId>().unwrap(), id);
+        assert_eq!(ObjectId::from_reader(&b"payload"[..]).unwrap(), id);
         assert_eq!(
             ObjectId::from_bytes(&[0; DIGEST_BYTES]).unwrap().to_bytes(),
             [0; DIGEST_BYTES]
@@ -97,10 +158,6 @@ mod tests {
                 expected: DIGEST_BYTES,
                 actual: DIGEST_BYTES - 1
             })
-        );
-        assert_eq!(
-            "zz".parse::<ObjectId>(),
-            Err(CoreError::InvalidIdentityText)
         );
     }
 }
