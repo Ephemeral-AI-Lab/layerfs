@@ -755,23 +755,21 @@ pub(crate) fn verify_fast_root(
     let reader = CoreReader(source);
     let namespace = layerfs_content::filesystem::namespace(&reader, root)?;
     let mut records = BTreeMap::new();
-    inode::visit_inode_table_entries(&reader, inode::InodeTableRoot(namespace.inode_table_root),
-        &mut Default::default(), |page| {
-            for batch in page.chunks(16) {
-                let ids = batch.iter().map(|(_,id)| *id).collect::<Vec<_>>();
-                let mut slot = 0;
-                reader.get_authenticated_batch(&ids, |id, bytes| {
-                    if batch.get(slot).map(|pair| pair.1) != Some(id) { return Err(layerfs_content::CoreError::IdentityMismatch); }
-                    let inode_id = batch[slot].0;
-                    slot += 1;
-                    let record = inode::codec::decode_inode_record(bytes)?;
-                    if records.insert(inode_id, record).is_some() { return Err(layerfs_content::CoreError::InvalidRecord("duplicate global inode")); }
-                    Ok(())
-                })?;
-                if slot != batch.len() { return Err(layerfs_content::CoreError::InvalidRecord("global inode batch cardinality")); }
-            }
-            Ok(())
-        })?;
+    let index = inode::inode_table_entries(&reader, inode::InodeTableRoot(namespace.inode_table_root), &mut Default::default())?;
+    for batch in index.chunks(16) {
+        let ids = batch.iter().map(|(_,id)| *id).collect::<Vec<_>>();
+        // ObjectRead::get_authenticated_batch passes decoded byte-object payloads;
+        // inode codecs require the complete canonical envelope. Keep that envelope.
+        let objects = source.read_authenticated_objects(&ids)?;
+        if objects.len() != batch.len() { return Err("fast global inode batch cardinality".into()); }
+        for ((inode_id,expected_id),object) in batch.iter().zip(objects) {
+            if object.id != *expected_id { return Err("fast global inode batch identity".into()); }
+            layerfs_content::authenticate_identity(&object.bytes,object.id)?;
+            let record = inode::codec::decode_inode_record(&object.bytes)?;
+            if records.insert(*inode_id,record).is_some() { return Err("fast duplicate global inode".into()); }
+        }
+    }
+    drop(index);
     let expected_by_path = entries.iter().map(|entry| (entry.path.as_str(), entry)).collect::<BTreeMap<_,_>>();
     let selected = common::fast_selected_paths(entries,delta)?;
     let mut reference_counts = BTreeMap::<&str,u64>::new();
@@ -881,12 +879,14 @@ pub(crate) fn fast_qualification(root: &Path) -> AnyResult<Receipt> {
     let branch = client.fork_branch(EntityName::new("main")?, LocalForkSource::Layer { layer_id: initialized.genesis_layer_id })?;
     drop(client);
     let pinned = store.pin_branch(branch)?;
-    let full = verify_root(&pinned.reader,pinned.root,&entries)?;
+    let full = verify_root(&pinned.reader,pinned.root,&entries)
+        .map_err(|error| format!("fast qualification exhaustive positive: {error}"))?;
     let certificate = FastCertificate { binding:"ab".repeat(32), root:pinned.root, file_roots:full.file_roots };
     let delta_for = |oracle: &[Entry]| common::FastDelta {
         changed_paths:oracle.iter().map(|e|e.path.clone()).collect(), absent_paths:BTreeSet::new(), witness_paths:BTreeSet::new(),
     };
-    let mut receipt = verify_fast_root(&pinned.reader,pinned.root,&entries,&delta_for(&entries),&certificate)?;
+    let mut receipt = verify_fast_root(&pinned.reader,pinned.root,&entries,&delta_for(&entries),&certificate)
+        .map_err(|error| format!("fast qualification canonical positive: {error}"))?;
     let mut rejections = 0;
     let mut reject = |name: &str, oracle: &[Entry]| -> AnyResult<()> {
         let error = verify_fast_root(&pinned.reader,pinned.root,oracle,&delta_for(oracle),&certificate).err().ok_or_else(||format!("fast canonical accepted {name}"))?;

@@ -1,0 +1,2 @@
+fast_profile_certificate_projection_scope_self_check=pass
+fast_profile_no_placeholder_or_full_gate_credit_self_check=pass

@@ -1,0 +1,10 @@
+{
+  "retained_store": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/qualification/fast-verification/host-cd2f49b3/artifacts/store.sqlite",
+  "readonly_query": "SELECT hex(object_id),bytes FROM objects WHERE instr(bytes, LFS4INO-NUL)>0 LIMIT1",
+  "object_id": "63CEF10607BCA927241C06B21F99ECD8B6C853857CDBAE6C8F5B7EF9A58AFCAD",
+  "canonical_length": 98,
+  "canonical_prefix_hex": "4c46534f0100000059000000554c465334494e4f00000104",
+  "inode_payload_offset": 13,
+  "cause": "CoreReader.get_authenticated_batch strips bytes-object envelope, inode.decode_inode_record expects complete envelope; repaired by ObjectSource.read_authenticated_objects canonical batch with retained count/order/identity checks",
+  "changed_source_sha256": "c0bdb1d9e2faef6efe7f542f2a7a1cd35fe1c1ba1c21991c16ec22f34b9bd4e4"
+}

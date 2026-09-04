@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-cd2f49b3/fs-benchmark-pro",
+    "workspace-qualify-fast",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/qualification/fast-verification/host-cd2f49b3/artifacts"
+  ],
+  "source_revision": "cd2f49b3fa2feea55bce3f9a6d7a9b284213450d",
+  "exit_code": 1,
+  "elapsed_ns": 1698016750,
+  "binary_sha256": "10e0dccb3e559d63de6c5dfcb4094b362b2cf2114865a3bf1cc2047d89d94e9b"
+}
