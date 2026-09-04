@@ -95,9 +95,10 @@ digest/root/reopen and adversarial proofs are separate `verify`/`admission`
 modes and never enter performance timing. `run-namespace.sh` is the v0.1.1
 `init_namespace` compatibility runner and the v0.1.2 family runner. Its pure
 definitions live in `families/init_namespace.rs`; raw IDs and descriptive
-aliases resolve to the same frozen scenarios. Existing `run.sh`, legacy
-`run-namespace.sh` positional commands, and raw schemas keep their frozen
-meanings.
+aliases resolve to the same frozen scenarios. Namespace performance now invokes
+only native host initialization. The historical positional lifecycle route
+requires `LAYERFS_NAMESPACE_LEGACY_LIFECYCLE=1`; its raw schema is retained for
+reproduction, and it must not be used for initialization-only performance.
 
 The benchmark contract carries the canonical problem statements, goals, files
 to read, and acceptance criteria; this README records harness usage and final
@@ -177,26 +178,31 @@ Run the namespace self-check and a sealed LayerFS-only tier or matrix with:
 
 ```sh
 benchmark/fs-bench-pro/run-namespace.sh --self-check
-benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID namespace-10000 1
-benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID all 4
+benchmark/fs-bench-pro/run-namespace.sh RUN_ID \
+  --case namespace-10000 --seed 1 --source candidate --mode performance
+benchmark/fs-bench-pro/run-namespace.sh RUN_ID \
+  --all --source candidate --mode performance
 ```
 
 The v0.1.2 family interface keeps performance and exact verification separate:
 
 ```sh
-benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID \
+benchmark/fs-bench-pro/run-namespace.sh RUN_ID \
   --case namespace-100-files-125mb --seed 1 --source candidate
 benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID \
   --case namespace-100 --source candidate --mode verify
-benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID \
-  --all --source candidate --mode admission
 ```
 
-`performance` is the default and requires one case, seed, and explicit source
-arm. `verify` writes no performance row. `admission` requires `--all`, runs all
-three seeds for the selected source arm, and then writes the exact verifier
-stream separately. Run baseline and candidate source-arm admissions against
-the same sealed fixture before paired comparison.
+`performance` is the default. Select one case/seed/source or explicit `--all`.
+The full matrix retains four samples and reports the median of samples 2–4.
+The binary, fixture reads, and fresh SQLite Store all run on the native host.
+No Docker command, Workspace creation, edit, Commit, or reopen occurs in this
+mode. Its primary metric is `layerstack_init_ns`, including final root and
+LayerStack publication. The existing initializer-only raw resource/counter
+receipt is reused; `performance/summary.json` describes the performance result.
+`verify` requires a container and writes no performance row. Combined
+`admission` is rejected; select verification separately through
+`verify-selected.py` when required, with its 59-second limit.
 
 The namespace runner creates fixtures outside product timing, starts one fresh
 benchmark process per tier/sample, supervises whole-process CPU and peak RSS,
@@ -279,7 +285,7 @@ fixture without regenerating it, point later runs at the earlier campaign's
 
 ```sh
 LAYERFS_NAMESPACE_FIXTURE_ROOT=/absolute/earlier-run/scenarios \
-  benchmark/fs-bench-pro/run-namespace.sh RUN_ID CONTAINER_ID all 4
+  benchmark/fs-bench-pro/run-namespace.sh RUN_ID --all --source candidate --mode performance
 ```
 
 The runner validates and copies each compact manifest into the new immutable

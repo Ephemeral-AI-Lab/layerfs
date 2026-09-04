@@ -82,8 +82,13 @@ family_cli_parse() {
   [[ "$source_arm" == baseline || "$source_arm" == candidate ]] || return 2
   case "$family_mode" in
     performance)
-      [[ $all -eq 0 && -n "$selection" && "$seed" =~ ^[123]$ ]] || return 2
-      seed_start=$seed; iterations=$seed
+      if [[ $all -eq 1 ]]; then
+        [[ -z "$selection" && -z "$seed" ]] || return 2
+        selection=all; seed_start=1; iterations=4
+      else
+        [[ -n "$selection" && "$seed" =~ ^[1234]$ ]] || return 2
+        seed_start=$seed; iterations=$seed
+      fi
       ;;
     verify)
       [[ $all -eq 0 && -n "$selection" && ( -z "$seed" || "$seed" =~ ^[123]$ ) ]] || return 2
@@ -91,7 +96,7 @@ family_cli_parse() {
       ;;
     admission|collect)
       [[ $all -eq 1 && -z "$selection" && -z "$seed" ]] || return 2
-      selection=all; seed_start=1; iterations=3
+      selection=all; seed_start=1; iterations=4
       ;;
     verify-all)
       [[ $all -eq 1 && -z "$selection" && -z "$seed" ]] || return 2
@@ -127,7 +132,9 @@ PY
   (family_cli_parse --all --source candidate --mode admission)
   (family_cli_parse --all --source candidate --mode collect)
   (family_cli_parse --all --source candidate --mode verify-all)
-  ! (family_cli_parse --all --source candidate) || die "performance --all self-check"
+  (family_cli_parse --all --source candidate; [[ $iterations == 4 ]]) || die "performance --all self-check"
+  (family_cli_parse --case namespace-100 --seed 4 --source candidate)
+  ! (family_cli_parse --all --seed 1 --source candidate) || die "ambiguous selection self-check"
   ! (family_cli_parse --case namespace-100 --seed 1) || die "explicit source self-check"
   ! (family_cli_parse --case namespace-100 --seed 1 --source candidate --mode performance --mode verify) ||
     die "duplicate mode self-check"
@@ -146,24 +153,38 @@ family_interface=0
 seed_start=1
 source_arm=legacy
 family_mode=legacy
+container=not-applicable
+native_performance=0
 if [[ $# -eq 4 && "${3:-}" != --* ]]; then
   run_id=$1
   container=$2
   selection=$3
   iterations=$4
+  if [[ ${LAYERFS_NAMESPACE_LEGACY_LIFECYCLE:-0} != 1 ]]; then
+    native_performance=1
+    family_mode=performance
+  fi
 else
-  [[ $# -ge 3 ]] || die "usage: $0 RUN_ID CONTAINER_ID namespace-10000|all ITERATIONS | RUN_ID CONTAINER_ID --case CASE --seed 1 --source baseline|candidate [--mode performance|verify] | RUN_ID CONTAINER_ID --all --source baseline|candidate --mode admission"
+  [[ $# -ge 3 ]] || die "usage: $0 RUN_ID [CONTAINER_ID] --case CASE --seed 1|2|3|4 --source baseline|candidate [--mode performance|verify] | RUN_ID --all --source baseline|candidate --mode performance"
   run_id=$1
-  container=$2
-  shift 2
+  shift
+  if [[ "$1" != --* ]]; then container=$1; shift; fi
   family_cli_parse "$@" || die "invalid family arguments"
   family_interface=1
+  case "$family_mode" in
+    performance|collect) native_performance=1 ;;
+    admission) die "admission no longer combines performance and verification; run performance, then verify-selected.py separately" ;;
+  esac
 fi
 results_root=${namespace_results_root:-"$repo/benchmark-results/fs-bench-pro/$([[ $family_interface -eq 1 ]] && printf init_namespace || printf namespace)"}
 daemon_container_port=${LAYERFS_DAEMON_CONTAINER_PORT:-41273}
 fixture_root=${LAYERFS_NAMESPACE_FIXTURE_ROOT:-}
 run_composite=${LAYERFS_NAMESPACE_RUN_COMPOSITE:-0}
 measurement_mode=${LAYERFS_NAMESPACE_MODE:-product}
+if [[ $native_performance -eq 1 ]]; then
+  measurement_mode=init-only-diagnostic
+  [[ "$run_composite" == 0 ]] || die "performance cannot invoke composite verification"
+fi
 [[ "$run_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || die "unsafe RUN_ID"
 [[ "$iterations" =~ ^[1-9][0-9]*$ ]] || die "invalid iteration count"
 [[ "$daemon_container_port" =~ ^[1-9][0-9]{0,4}$ ]] || die "invalid daemon container port"
@@ -337,7 +358,11 @@ print(json.dumps({
 }, sort_keys=True, separators=(",", ":")))
 PY
   cp "$run_dir/environment/container-inspect.json" "$run_dir/environment/docker.json"
-  docker inspect -f '{{.Image}}' "$container" >"$run_dir/environment/image-digest.txt"
+  if [[ "$measurement_mode" == product ]]; then
+    docker inspect -f '{{.Image}}' "$container" >"$run_dir/environment/image-digest.txt"
+  else
+    printf 'not applicable: native initialization\n' >"$run_dir/environment/image-digest.txt"
+  fi
 fi
 
 cargo build --manifest-path "$repo/Cargo.toml" --release -p fs-benchmark-pro
@@ -553,7 +578,7 @@ output_path.write_text(json.dumps({
     "full_content_verification": False,
 }, sort_keys=True, separators=(",", ":")) + "\n")
 PY
-    if [[ $family_interface -eq 1 ]]; then
+    if [[ $family_interface -eq 1 && $native_performance -eq 0 ]]; then
       command_mode=$family_mode
       [[ "$command_mode" == admission || "$command_mode" == collect ]] && command_mode=performance
       benchmark_command=(
@@ -671,7 +696,7 @@ PY
     if [[ $status -ne 0 ]]; then
       failed=1
     fi
-    if [[ $family_interface -eq 1 ]]; then
+    if [[ $family_interface -eq 1 && $native_performance -eq 0 ]]; then
       command_mode=$family_mode
       [[ "$command_mode" == admission || "$command_mode" == collect ]] && command_mode=performance
       set +e
@@ -1557,7 +1582,7 @@ PY
       printf '0\n' >"$sample_dir/validation-exit-status.txt"
     fi
   done
-  if [[ $family_interface -eq 1 && "$family_mode" == admission ]]; then
+  if [[ $family_interface -eq 1 && $native_performance -eq 0 && "$family_mode" == admission ]]; then
     ensure_daemon_running
     verify_dir="$scenario_dir/$source_arm/verification"
     mkdir -p "$verify_dir/raw"
@@ -1733,6 +1758,79 @@ printf '%s\n' "$ending_seal" >"$run_dir/environment/ending-source-seal.sha256"
 if [[ "$ending_seal" != "$current_seal" ]]; then
   printf 'source changed during campaign\n' >"$run_dir/INVALID"
   failed=1
+fi
+if [[ $native_performance -eq 1 ]]; then
+  mkdir "$run_dir/performance"
+  python3 - "$run_dir" "$source_arm" "$((${#scenarios[@]} * (iterations - seed_start + 1)))" "$failed" >"$run_dir/report.md" <<'PY'
+import json
+import statistics
+import sys
+from pathlib import Path
+
+root, source, expected, failed = Path(sys.argv[1]), sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+rows = []
+for path in sorted(root.glob("scenarios/**/result.json")):
+    row = json.loads(path.read_text())
+    valid = all((path.parent / name).read_text().strip() == "0"
+                for name in ("exit-status.txt", "validation-exit-status.txt", "cleanup-exit-status.txt"))
+    if not valid:
+        failed = 1
+        continue
+    if row.get("measurement_mode") != "init-only-diagnostic" or any(
+            name in row for name in ("workspace_create_ns", "reopen_verify_ns", "commit_ns")):
+        raise SystemExit("native initialization performance invoked a lifecycle route")
+    rows.append(row)
+
+summary = {"schema": "fs-bench-pro-namespace-initialization-performance-v1",
+           "family_id": "init_namespace", "source_arm": source,
+           "source_seal": (root / "environment/source-seal.sha256").read_text().strip(),
+           "timing_boundary": "native initialize_layerstack through root and LayerStack publication",
+           "verification_status": "not-run-performance-mode", "docker_used": False,
+           "samples": len(rows), "expected_samples": expected, "rows": []}
+for case in sorted({row["scenario"] for row in rows}, key=lambda name: int(name.rsplit("-", 1)[1])):
+    samples = sorted((row for row in rows if row["scenario"] == case), key=lambda row: row["iteration"])
+    subsequent = [row for row in samples if "-subsequent-sample-" in row["fixture_cache_profile"]]
+    selected = subsequent or samples
+    wall = int(statistics.median(row["layerstack_init_ns"] for row in selected))
+    cpu = int(statistics.median(row["initialization_user_cpu_ns"] + row["initialization_system_cpu_ns"] for row in selected))
+    summary["rows"].append({"scenario_id": case, "samples": len(samples),
+        "median_sample_ids": [row["iteration"] for row in selected],
+        "sample_initialization_ns": [row["layerstack_init_ns"] for row in samples],
+        "median_initialization_ns": wall, "median_product_cpu_ns": cpu,
+        "files": samples[0]["regular_files"], "logical_bytes": samples[0]["logical_bytes"],
+        "files_per_second": samples[0]["regular_files"] * 1e9 / wall,
+        "logical_MB_per_second": samples[0]["logical_bytes"] * 1e3 / wall,
+        "max_initialization_peak_rss_bytes": max(row["process_t1_peak_rss_bytes"] for row in samples),
+        "max_explicit_buffer_bytes": max(row["explicit_buffer_peak_bytes"] for row in samples)})
+resources = bool(rows) and all(
+    row["explicit_buffer_peak_bytes"] <= 10 * 1024 * 1024
+    and row["process_initialization_incremental_peak_rss_bytes"] <= 128 * 1024 * 1024
+    and row["whole_supervised_swaps"] == 0 and row["active_producers_after"] == 0
+    and row["worker_count"] <= 8 for row in rows)
+complete = len(rows) == expected and not failed and resources
+status = {"mode": "performance", "operation": "initialize", "docker_used": False,
+          "performance_status": "complete" if complete else "incomplete-or-failed",
+          "resource_status": "pass" if resources else "fail",
+          "verification_status": "not-run-performance-mode", "release_qualification": False}
+def write(path, value):
+    path.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n")
+write(root / "performance/summary.json", summary)
+write(root / "run-status.json", status)
+(root / "performance/raw.jsonl").write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in rows))
+print("# Native namespace initialization performance\n")
+print("Fresh host process and Store per sample. No Docker, Workspace, Commit, or reopen.\n")
+print("All four samples are retained; summaries use samples 2–4 when present. Verification is separate.\n")
+print("| Files | MB | Sample times (s) | Median init (s) | CPU (s) | MB/s | Files/s | Max RSS (MiB) |")
+print("| ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: |")
+for row in summary["rows"]:
+    times = ", ".join(f"{value / 1e9:.6f}" for value in row["sample_initialization_ns"])
+    print(f"| {row['files']} | {row['logical_bytes']/1e6:g} | {times} | {row['median_initialization_ns']/1e9:.6f} | {row['median_product_cpu_ns']/1e9:.3f} | {row['logical_MB_per_second']:.2f} | {row['files_per_second']:.0f} | {row['max_initialization_peak_rss_bytes']/1048576:.2f} |")
+print(f"\nPerformance: {status['performance_status']}. Resources: {status['resource_status']}. Verification: not run.")
+if not complete:
+    raise SystemExit(1)
+PY
+  printf 'NATIVE INITIALIZATION PERFORMANCE COMPLETE %s\n' "$run_dir"
+  exit 0
 fi
 if [[ $family_interface -eq 1 ]]; then
   mkdir "$run_dir/performance" "$run_dir/verification"
