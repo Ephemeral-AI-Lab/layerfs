@@ -479,3 +479,35 @@ Before production integration, add targeted mutation-during-enumeration,
 rewind/reopen, cache-eviction and same-root Workspace-replacement regressions.
 The current checks establish prescribed-workload correctness, not exhaustive
 concurrent directory-stream semantics.
+
+## 7. Priority correction after reviewing v0.1.1 again
+
+The v0.1.1 architecture shift explicitly identifies repeated path resolution,
+persistent point updates, intermediate structural retention and 127-object
+admission as the old failure pattern. The current create path still contains
+these mechanisms. Exact metadata interning was already known not to deliver a
+standalone wall-time win; its value was as part of a corrected pipeline. The
+investigation applied final-count/survivor construction, but devoted too much
+attention to isolated caches and batch size before addressing that full pattern.
+
+For create, prioritize a bounded candidate-identity handoff into checked refresh
+first: eliminate per-path rediscovery without deleting integrity/alias checks or
+spool cleanup. Then construct final directories/inodes once and move bounded
+owned slabs through normal nonempty-Store admission, carrying batches across
+directory boundaries. Preserve the sparse-change frontier. Treat exact metadata
+reuse and canonical small-file construction as parts of that pipeline. Shared
+mutable segments and versioned private compilation address Exec and overlap;
+authoritative live metadata handling remains a separate owner/FUSE requirement.
+The residual 156-ms namespace timer excludes structural work charged in the
+29.90-second content phase; it was not proof that whole-tree construction was solved.
+
+Source review also found an invalidation gap in the directory-cache prototype:
+in-place rebase reset the mutation generation without copying the newly allocated
+Workspace incarnation. The repair copies that incarnation and extends the focused
+retained-root test to assert the token changes across Commit. This affects a
+stream retained across Commit, not the measured delete workload, which closes
+its directory streams before Commit. The old timings remain bound to `22b31552`;
+no new performance measurement is claimed for the repaired source. The focused
+check passed (including byte-exact retention of all 52 preexisting object rows
+in this fixture); evidence source `c2713153` is retained under
+`container-directory-epoch-regression`. No performance run was repeated.
