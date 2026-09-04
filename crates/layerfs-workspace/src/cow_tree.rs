@@ -168,6 +168,7 @@ pub struct Workspace {
     pub(crate) capture: crate::capture::CaptureState,
     pub(crate) open_spools: HashMap<NodeId, std::fs::File>,
     pub(crate) mutation_generation: u64,
+    pub(crate) directory_cache_instance: u64,
     pub(crate) mutation_paths: BTreeMap<String, u64>,
     pub(crate) policy: ResourcePolicy,
     pub(crate) nodes: HashMap<NodeId, Node>,
@@ -275,7 +276,13 @@ impl Workspace {
                 changes: BTreeMap::new(),
             }),
         };
+        static CACHE_INSTANCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let directory_cache_instance = CACHE_INSTANCE.fetch_update(
+            std::sync::atomic::Ordering::Relaxed, std::sync::atomic::Ordering::Relaxed,
+            |value| value.checked_add(1),
+        ).map_err(|_| StorageError::Integrity("directory cache instance overflow"))?;
         Ok(Self {
+            directory_cache_instance,
             store,
             reader,
             branch_id,

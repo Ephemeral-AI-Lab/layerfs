@@ -2,7 +2,13 @@ use crate::handles::Handles;
 use crate::inode_table::InodeTable;
 use crate::{Attr, Kind, NodeId, PortError, SharedPort};
 use fuser::{FileAttr, FileHandle, FileType, INodeNo, ReplyEmpty};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, UNIX_EPOCH};
+
+pub(crate) type DirectoryEpoch = (u64, u64);
+pub(crate) type DirectoryEntries = Arc<Vec<(NodeId, Kind, Vec<u8>)>>;
+pub(crate) type DirectoryEntriesPlus = Arc<Vec<(Attr, Vec<u8>)>>;
 
 pub(crate) const TTL: Duration = Duration::from_secs(1);
 pub(crate) const O_TRUNC: i32 = 0o1000;
@@ -14,6 +20,10 @@ pub struct LayerFs {
     pub(crate) port: SharedPort,
     pub(crate) inodes: InodeTable,
     pub(crate) handles: Handles,
+    pub(crate) directory_entries: Mutex<Option<(u64, DirectoryEpoch, DirectoryEntries)>>,
+    pub(crate) directory_entries_plus: Mutex<Option<(u64, DirectoryEpoch, DirectoryEntriesPlus)>>,
+    pub(crate) directory_cache_enabled: bool,
+    pub(crate) directory_stats: [AtomicU64; 4],
     pub(crate) uid: u32,
     pub(crate) gid: u32,
 }
@@ -24,6 +34,10 @@ impl LayerFs {
             port,
             inodes: InodeTable,
             handles: Handles::default(),
+            directory_entries: Mutex::new(None),
+            directory_entries_plus: Mutex::new(None),
+            directory_cache_enabled: std::env::var("LAYERFS_EXPERIMENT_DIRECTORY_PAGES").as_deref() == Ok("1"),
+            directory_stats: Default::default(),
             uid,
             gid,
         }
@@ -102,5 +116,12 @@ pub(crate) fn errno(error: PortError) -> fuser::Errno {
         PortError::Busy => fuser::Errno::EBUSY,
         PortError::Invalid => fuser::Errno::EINVAL,
         PortError::Io => fuser::Errno::EIO,
+    }
+}
+
+impl Drop for LayerFs {
+    fn drop(&mut self) {
+        let [requests, loads, entries, hits] = self.directory_stats.each_ref().map(|n| n.load(Ordering::Relaxed));
+        eprintln!("experiment_directory_pages enabled={} requests={} loads={} loaded_entries={} hits={}", self.directory_cache_enabled, requests, loads, entries, hits);
     }
 }

@@ -68,6 +68,9 @@ pub enum KernelOperation {
 }
 
 pub trait FilesystemPort: Send + Sync {
+    /// Cache validity for a Workspace incarnation plus live mutation generation.
+    /// Unsupported ports retain uncached enumeration.
+    fn directory_cache_epoch(&self) -> Option<(u64, u64)> { None }
     fn note_kernel_operation(&self, _operation: KernelOperation) {}
     fn note_readdir_page(&self, _offset: u64, _entries: u64) {}
     fn note_fuse_max_write(&self, _bytes: u32) {}

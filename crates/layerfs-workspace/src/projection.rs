@@ -497,6 +497,12 @@ impl FuseView {
 }
 
 impl FilesystemPort for FuseView {
+    fn directory_cache_epoch(&self) -> Option<(u64, u64)> {
+        self.with(|workspace| {
+            workspace.ensure_active()?;
+            Ok((workspace.directory_cache_instance, workspace.mutation_generation))
+        }).ok()
+    }
     fn lookup(
         &self,
         parent: layerfs_fuse::NodeId,

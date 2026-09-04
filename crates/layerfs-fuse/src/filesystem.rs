@@ -10,6 +10,8 @@ use fuser::{
 };
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -451,21 +453,44 @@ impl Filesystem for LayerFs {
     ) {
         self.port
             .note_kernel_operation(crate::KernelOperation::Readdir);
-        let result = self
-            .handle(handle)
-            .and_then(|node| self.port.readdir(node).map_err(errno));
+        self.directory_stats[0].fetch_add(1, Ordering::Relaxed);
+        let result = self.handle(handle).and_then(|node| {
+            let epoch = if self.directory_cache_enabled { self.port.directory_cache_epoch() } else { None };
+            if offset != 0 {
+                if let Some(epoch) = epoch {
+                    if let Some(entries) = self.directory_entries.lock().ok().and_then(|cached| {
+                        cached.as_ref().filter(|(id, saved, _)| *id == handle.0 && *saved == epoch)
+                            .map(|(_, _, entries)| entries.clone())
+                    }) {
+                        self.directory_stats[3].fetch_add(1, Ordering::Relaxed);
+                        return Ok(entries);
+                    }
+                }
+            }
+            self.directory_stats[1].fetch_add(1, Ordering::Relaxed);
+            let entries = Arc::new(self.port.readdir(node).map_err(errno)?);
+            self.directory_stats[2].fetch_add(entries.len() as u64, Ordering::Relaxed);
+            // ponytail: one owned listing per reply form, at most 4 MiB each.
+            // A bounded paged port would remove the existing large-list fallback.
+            let bytes = entries.capacity().saturating_mul(std::mem::size_of::<(crate::NodeId, crate::Kind, Vec<u8>)>())
+                .saturating_add(entries.iter().map(|entry| entry.2.capacity()).sum::<usize>());
+            let mut cache = self.directory_entries.lock().map_err(|_| fuser::Errno::EIO)?;
+            *cache = epoch.filter(|_| bytes <= 4 * 1024 * 1024)
+                .map(|epoch| (handle.0, epoch, entries.clone()));
+            Ok(entries)
+        });
         match result {
             Ok(entries) => {
                 let mut returned_entries = 0;
                 for (index, (node, kind, name)) in
-                    entries.into_iter().enumerate().skip(offset as usize)
+                    entries.iter().enumerate().skip(offset as usize)
                 {
-                    let ino = self.inodes.kernel(node);
+                    let ino = self.inodes.kernel(*node);
                     if reply.add(
                         INodeNo(ino),
                         (index + 1) as u64,
-                        file_type(kind),
-                        OsStr::from_bytes(&name),
+                        file_type(*kind),
+                        OsStr::from_bytes(name),
                     ) {
                         break;
                     }
@@ -488,14 +513,37 @@ impl Filesystem for LayerFs {
     ) {
         self.port
             .note_kernel_operation(crate::KernelOperation::Readdirplus);
-        let result = self
-            .handle(handle)
-            .and_then(|node| self.port.readdirplus(node).map_err(errno));
+        self.directory_stats[0].fetch_add(1, Ordering::Relaxed);
+        let result = self.handle(handle).and_then(|node| {
+            let epoch = if self.directory_cache_enabled { self.port.directory_cache_epoch() } else { None };
+            if offset != 0 {
+                if let Some(epoch) = epoch {
+                    if let Some(entries) = self.directory_entries_plus.lock().ok().and_then(|cached| {
+                        cached.as_ref().filter(|(id, saved, _)| *id == handle.0 && *saved == epoch)
+                            .map(|(_, _, entries)| entries.clone())
+                    }) {
+                        self.directory_stats[3].fetch_add(1, Ordering::Relaxed);
+                        return Ok(entries);
+                    }
+                }
+            }
+            self.directory_stats[1].fetch_add(1, Ordering::Relaxed);
+            let entries = Arc::new(self.port.readdirplus(node).map_err(errno)?);
+            self.directory_stats[2].fetch_add(entries.len() as u64, Ordering::Relaxed);
+            // ponytail: one owned listing per reply form, at most 4 MiB each.
+            // A bounded paged port would remove the existing large-list fallback.
+            let bytes = entries.capacity().saturating_mul(std::mem::size_of::<(crate::Attr, Vec<u8>)>())
+                .saturating_add(entries.iter().map(|entry| entry.1.capacity()).sum::<usize>());
+            let mut cache = self.directory_entries_plus.lock().map_err(|_| fuser::Errno::EIO)?;
+            *cache = epoch.filter(|_| bytes <= 4 * 1024 * 1024)
+                .map(|epoch| (handle.0, epoch, entries.clone()));
+            Ok(entries)
+        });
         match result {
             Ok(entries) => {
                 let mut returned_entries = 0;
-                for (index, (attr, name)) in entries.into_iter().enumerate().skip(offset as usize) {
-                    let attr = match self.attr(attr) {
+                for (index, (attr, name)) in entries.iter().enumerate().skip(offset as usize) {
+                    let attr = match self.attr(*attr) {
                         Ok(attr) => attr,
                         Err(error) => {
                             reply.error(error);
@@ -531,6 +579,12 @@ impl Filesystem for LayerFs {
     ) {
         self.port
             .note_kernel_operation(crate::KernelOperation::Releasedir);
+        if let Ok(mut cache) = self.directory_entries.lock() {
+            if cache.as_ref().is_some_and(|(id, _, _)| *id == handle.0) { *cache = None; }
+        }
+        if let Ok(mut cache) = self.directory_entries_plus.lock() {
+            if cache.as_ref().is_some_and(|(id, _, _)| *id == handle.0) { *cache = None; }
+        }
         if self.handles.remove(handle.0).is_some() {
             reply.ok();
         } else {
