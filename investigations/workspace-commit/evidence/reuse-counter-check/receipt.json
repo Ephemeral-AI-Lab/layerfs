@@ -1,0 +1,19 @@
+{
+  "source": "7cdab66eb559a93771d256451b3542eac9c12c49",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--lib",
+    "sorted_inode_dense_delete_preserves_sparse_historical_records",
+    "--",
+    "--test-threads=1"
+  ],
+  "elapsed_ns": 2242044417,
+  "exit_code": 0,
+  "source_manifest_sha256": "0501b7cb60a225bc002c6baeca21061ceb59e33d50af76680ee99a994a04bf7c",
+  "stdout_sha256": "8ca838a88982a5e5b5ddeadf261def463a3e5f73fbfcf81e4b1b0e47317adc23",
+  "stderr_sha256": "918599eb3c0f6ccb92d57bf6f3fb03093a563b8d1214c5ceb59c96cb25d28b55"
+}

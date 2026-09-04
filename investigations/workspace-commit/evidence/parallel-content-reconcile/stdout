@@ -1,0 +1,7 @@
+
+running 2 tests
+test selected_inode_content_preserves_unselected_alias_reference_count ... ok
+test choices_expand_missing_parent_then_apply_later_child_without_losing_siblings ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

@@ -20,7 +20,7 @@ pub fn replace<S: ObjectStore, R: Read>(
     delete_len: u64,
     replacement: R,
 ) -> CoreResult<(FileStateRoot, RopeCounters)> {
-    replace_with_sinks(
+    let (root, counters, _) = replace_with_sinks(
         store,
         root,
         start,
@@ -28,7 +28,9 @@ pub fn replace<S: ObjectStore, R: Read>(
         replacement,
         |store, canonical| store.put(canonical),
         |store, canonical| store.put(canonical),
-    )
+        None,
+    )?;
+    Ok((root, counters))
 }
 
 fn replace_with_sinks<S, R, FP, FN>(
@@ -39,7 +41,8 @@ fn replace_with_sinks<S, R, FP, FN>(
     replacement: R,
     put_payload: FP,
     put_sealed_node: FN,
-) -> CoreResult<(FileStateRoot, RopeCounters)>
+    private_budget: Option<usize>,
+) -> CoreResult<(FileStateRoot, RopeCounters, super::state::DeferredNodeMetrics)>
 where
     S: ObjectStore,
     R: Read,
@@ -66,11 +69,15 @@ where
         extents: old.extent_count,
         level: old.tree_level,
     };
-    let scan = scan_replacement_mapping_with(store, replacement, put_payload, put_sealed_node)?;
+    let scan = scan_replacement_mapping_with(store, replacement, put_payload, put_sealed_node, private_budget)?;
     merge_counters(&mut counters, scan.counters)?;
     let persisted_nodes = scan.persisted_nodes;
     let mut levels = scan.levels;
-    let mut deferred = DeferredNodes::with_nodes(store, scan.pending);
+    let mut private_metrics = scan.private_metrics;
+    let mut deferred = match private_budget {
+        Some(maximum) => DeferredNodes::with_private_budget(store, scan.pending, maximum)?,
+        None => DeferredNodes::with_nodes(store, scan.pending),
+    };
     let middle = if scan.bytes_scanned == 0 {
         None
     } else {
@@ -86,6 +93,11 @@ where
         None => emit_leaf(&mut deferred, Vec::new(), &mut counters)?,
     };
     let committed = deferred.commit(mapping)?;
+    let final_private = deferred.private_metrics();
+    private_metrics.peak_bytes = private_metrics.peak_bytes.max(final_private.peak_bytes);
+    private_metrics.flush_objects = add(private_metrics.flush_objects, final_private.flush_objects)?;
+    private_metrics.flush_bytes = add(private_metrics.flush_bytes, final_private.flush_bytes)?;
+    drop(deferred);
     counters.nodes_created = add(persisted_nodes, committed)?;
     let next = FileStateV3 {
         logical_len: mapping.bytes,
@@ -97,7 +109,21 @@ where
     counters.logical_len_after = Some(next.logical_len);
     let canonical = encode_file_state(next)?;
     let id = store.put(&canonical)?;
-    Ok((FileStateRoot(id), counters))
+    Ok((FileStateRoot(id), counters, private_metrics))
+}
+
+/// Private preparation work, including superseded objects left for the caller's
+/// final-root pruning. These are not durable Store admission counters.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct FilePreparationMetrics {
+    pub deferred_peak_bytes: u64,
+    pub flushes: u64,
+    pub flush_bytes: u64,
+    pub flush_objects: u64,
+    pub private_puts: u64,
+    pub inner_deferred_peak_bytes: u64,
+    pub inner_flush_objects: u64,
+    pub inner_flush_bytes: u64,
 }
 
 /// Coalesces multiple ordered file edits in one private object overlay and
@@ -114,11 +140,37 @@ pub struct FileMutationBatch<'a, S> {
     initial_len: u64,
     current_len: u64,
     finalized_through: u64,
+    private_inner_budget: Option<usize>,
 }
 
 impl<'a, S: ObjectStore> FileMutationBatch<'a, S> {
     pub fn new(store: &'a mut S, root: Option<FileStateRoot>) -> CoreResult<Self> {
+        Self::from_objects(DeferredFileObjects::new(store), root, None)
+    }
+
+    /// Construct against a PRIVATE, read-your-writes preparation collector.
+    /// Under memory pressure all deferred objects, including superseded nodes,
+    /// are forwarded to that collector. It must perform final-root pruning and
+    /// cleanup before durable admission. Never use this with a persistent Store.
+    /// `maximum` is split between inner rope preparation and the outer file
+    /// overlay; their simultaneous retained capacities cannot exceed that share.
+    /// It is this worker's share of the file-deferred budget, independent
+    /// of the Workspace namespace/final-delta allowance.
+    pub fn new_private_preparation(store: &'a mut S, root: Option<FileStateRoot>, maximum: usize) -> CoreResult<Self> {
+        let inner = maximum / 2;
+        let outer = maximum - inner;
+        if outer < std::mem::size_of::<DeferredFileObjects<'a, S>>()
+            || inner < std::mem::size_of::<DeferredNodes<'a, S>>() {
+            return Err(CoreError::ObjectLimitExceeded);
+        }
         let mut objects = DeferredFileObjects::new(store);
+        objects.private_limit = Some(outer);
+        objects.charged_bytes = std::mem::size_of::<DeferredFileObjects<'a, S>>();
+        objects.peak_charged_bytes = objects.charged_bytes;
+        Self::from_objects(objects, root, Some(inner))
+    }
+
+    fn from_objects(mut objects: DeferredFileObjects<'a, S>, root: Option<FileStateRoot>, private_inner_budget: Option<usize>) -> CoreResult<Self> {
         let (root, mut counters) = match root {
             Some(root) => (root, RopeCounters::default()),
             None => build(&mut objects, std::io::empty())?,
@@ -132,6 +184,7 @@ impl<'a, S: ObjectStore> FileMutationBatch<'a, S> {
             initial_len: state.logical_len,
             current_len: state.logical_len,
             finalized_through: 0,
+            private_inner_budget,
         })
     }
 
@@ -145,6 +198,13 @@ impl<'a, S: ObjectStore> FileMutationBatch<'a, S> {
 
     pub fn deferred_prunes(&self) -> u64 {
         self.objects.prunes
+    }
+
+    pub fn preparation_metrics(&self) -> FilePreparationMetrics {
+        FilePreparationMetrics {
+            deferred_peak_bytes: self.objects.peak_charged_bytes as u64,
+            ..self.objects.preparation
+        }
     }
 
     pub fn replace<R: Read>(
@@ -162,7 +222,7 @@ impl<'a, S: ObjectStore> FileMutationBatch<'a, S> {
                 length: self.current_len,
             });
         }
-        let (root, counters) = replace_with_sinks(
+        let (root, counters, inner) = replace_with_sinks(
             &mut self.objects,
             self.root,
             start,
@@ -170,7 +230,11 @@ impl<'a, S: ObjectStore> FileMutationBatch<'a, S> {
             replacement,
             |objects, canonical| objects.put_payload(canonical),
             |objects, canonical| objects.put_sealed_node(canonical),
+            self.private_inner_budget,
         )?;
+        self.objects.preparation.inner_deferred_peak_bytes = self.objects.preparation.inner_deferred_peak_bytes.max(inner.peak_bytes as u64);
+        self.objects.preparation.inner_flush_objects = add(self.objects.preparation.inner_flush_objects, inner.flush_objects)?;
+        self.objects.preparation.inner_flush_bytes = add(self.objects.preparation.inner_flush_bytes, inner.flush_bytes)?;
         self.objects.prune_to(root)?;
         self.current_len = counters
             .logical_len_after
@@ -184,7 +248,12 @@ impl<'a, S: ObjectStore> FileMutationBatch<'a, S> {
         merge_counters(&mut self.counters, counters)
     }
 
-    pub fn finish(mut self) -> CoreResult<(FileStateRoot, RopeCounters)> {
+    pub fn finish(self) -> CoreResult<(FileStateRoot, RopeCounters)> {
+        let (root, counters, _) = self.finish_with_preparation_metrics()?;
+        Ok((root, counters))
+    }
+
+    pub fn finish_with_preparation_metrics(mut self) -> CoreResult<(FileStateRoot, RopeCounters, FilePreparationMetrics)> {
         let committed = self.objects.commit(self.root)?;
         self.counters.nodes_created = add(self.objects.sealed_node_puts, committed)?;
         self.counters.deferred_peak_bytes = self.objects.peak_charged_bytes as u64;
@@ -192,7 +261,8 @@ impl<'a, S: ObjectStore> FileMutationBatch<'a, S> {
         self.counters.tree_level_before = Some(self.initial_level);
         self.counters.logical_len_before = Some(self.initial_len);
         self.counters.logical_len_after = Some(self.current_len);
-        Ok((self.root, self.counters))
+        self.objects.preparation.deferred_peak_bytes = self.objects.peak_charged_bytes as u64;
+        Ok((self.root, self.counters, self.objects.preparation))
     }
 }
 
@@ -203,6 +273,9 @@ struct DeferredFileObjects<'a, S> {
     peak_charged_bytes: usize,
     prunes: u64,
     sealed_node_puts: u64,
+    private_limit: Option<usize>,
+    preparation: FilePreparationMetrics,
+    private_mapping_puts: u64,
 }
 
 const DEFERRED_FILE_PRUNE_BYTES: usize = 4 * 1024 * 1024;
@@ -218,15 +291,47 @@ impl<'a, S: ObjectStore> DeferredFileObjects<'a, S> {
             peak_charged_bytes: 0,
             prunes: 0,
             sealed_node_puts: 0,
+            private_limit: None,
+            preparation: FilePreparationMetrics::default(),
+            private_mapping_puts: 0,
         }
     }
 
+    fn private_put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
+        let id = self.store.put(canonical)?;
+        if id != ObjectId::for_bytes(canonical) { return Err(CoreError::IdentityMismatch); }
+        self.preparation.private_puts = add(self.preparation.private_puts, 1)?;
+        Ok(id)
+    }
+
+    fn flush_private(&mut self) -> CoreResult<()> {
+        if self.objects.is_empty() { return Ok(()); }
+        // Borrow every entry in place: no cloned bytes, ID vector, visited set,
+        // or partial drain. On error the local closed set remains intact while
+        // the caller owns any already forwarded private preparation.
+        for (id, canonical) in &self.objects {
+            if self.store.put(canonical)? != *id { return Err(CoreError::IdentityMismatch); }
+            self.preparation.private_puts = add(self.preparation.private_puts, 1)?;
+            self.preparation.flush_objects = add(self.preparation.flush_objects, 1)?;
+            self.preparation.flush_bytes = add(self.preparation.flush_bytes, canonical.len() as u64)?;
+            if decode_file_state(canonical).is_err() {
+                self.private_mapping_puts = add(self.private_mapping_puts, 1)?;
+            }
+        }
+        self.objects.clear();
+        self.charged_bytes = std::mem::size_of::<Self>();
+        self.preparation.flushes = add(self.preparation.flushes, 1)?;
+        Ok(())
+    }
+
     fn put_payload(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
-        self.store.put(canonical)
+        if self.private_limit.is_some() { self.private_put(canonical) }
+        else { self.store.put(canonical) }
     }
 
     fn put_sealed_node(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
-        let id = self.store.put(canonical)?;
+        let id = if self.private_limit.is_some() { self.private_put(canonical)? }
+            else { self.store.put(canonical)? };
         self.sealed_node_puts = self
             .sealed_node_puts
             .checked_add(1)
@@ -235,6 +340,9 @@ impl<'a, S: ObjectStore> DeferredFileObjects<'a, S> {
     }
 
     fn prune_to(&mut self, root: FileStateRoot) -> CoreResult<()> {
+        // The private collector owns final-root selection; avoiding a local
+        // reachability walk also avoids unreserved prune/visited sets per worker.
+        if self.private_limit.is_some() { return Ok(()); }
         if self.charged_bytes <= DEFERRED_FILE_PRUNE_BYTES {
             return Ok(());
         }
@@ -301,6 +409,10 @@ impl<'a, S: ObjectStore> DeferredFileObjects<'a, S> {
     }
 
     fn commit(&mut self, root: FileStateRoot) -> CoreResult<u64> {
+        if self.private_limit.is_some() {
+            self.flush_private()?;
+            return Ok(self.private_mapping_puts);
+        }
         let Some(canonical) = self.objects.get(&root.0).cloned() else {
             return Ok(0);
         };
@@ -366,12 +478,31 @@ impl<S: ObjectStore> ObjectStore for DeferredFileObjects<'_, S> {
             Some(_) => return Ok(id),
             None => {}
         }
-        let charged = deferred_object_charge(canonical.len())?;
+        let charged = if self.private_limit.is_some() {
+            // Conservative full BTree node allowance covers sparse first-node
+            // capacity as well as split allocation, not only amortized entries.
+            canonical.len().checked_add(1024).ok_or(CoreError::LengthOverflow)?
+        } else { deferred_object_charge(canonical.len())? };
+        if let Some(maximum) = self.private_limit {
+            if self.charged_bytes.checked_add(charged).ok_or(CoreError::LengthOverflow)? > maximum {
+                self.flush_private()?;
+            }
+            if self.charged_bytes.checked_add(charged).ok_or(CoreError::LengthOverflow)? > maximum {
+                // An oversized canonical page is already owned by the caller;
+                // forward its borrow rather than allocate an over-budget copy.
+                let id = self.private_put(canonical)?;
+                self.preparation.flush_objects = add(self.preparation.flush_objects, 1)?;
+                self.preparation.flush_bytes = add(self.preparation.flush_bytes, canonical.len() as u64)?;
+                self.preparation.flushes = add(self.preparation.flushes, 1)?;
+                if decode_file_state(canonical).is_err() { self.private_mapping_puts = add(self.private_mapping_puts, 1)?; }
+                return Ok(id);
+            }
+        }
         let next = self
             .charged_bytes
             .checked_add(charged)
             .ok_or(CoreError::LengthOverflow)?;
-        if next > FILE_MUTATION_BATCH_MAX_DEFERRED_BYTES {
+        if next > self.private_limit.unwrap_or(FILE_MUTATION_BATCH_MAX_DEFERRED_BYTES) {
             return Err(CoreError::ObjectLimitExceeded);
         }
         self.objects.insert(id, canonical.to_vec());
@@ -838,6 +969,70 @@ mod batch_tests {
             *self.puts.borrow_mut() += 1;
             Ok(id)
         }
+    }
+
+    #[test]
+    fn private_file_share_flushes_mixed_ranges_and_preserves_historical_roots() {
+        let mut store = SharedStore::default();
+        let original = (0..4096).map(|i| (i % 251) as u8).collect::<Vec<_>>();
+        let (base, _) = build(&mut store, original.as_slice()).unwrap();
+        let edits: [(u64, u64, &[u8]); 4] = [
+            (128, 32, b"abc"), (500, 0, b"inserted"), (1000, 64, b""), (1200, 0, b""),
+        ];
+        let mut expected = base;
+        for (offset, removed, inserted) in edits {
+            expected = replace(&mut store, expected, offset, removed, inserted).unwrap().0;
+        }
+        let mut batch = FileMutationBatch::new_private_preparation(&mut store, Some(base), 512).unwrap();
+        for (offset, removed, inserted) in edits { batch.replace(offset, removed, inserted).unwrap(); }
+        let (actual, counters, metrics) = batch.finish_with_preparation_metrics().unwrap();
+        assert_eq!(actual, expected);
+        assert!(metrics.flushes > 0 && metrics.flush_bytes > 0 && metrics.flush_objects > 0);
+        assert!(metrics.private_puts >= metrics.flush_objects);
+        assert!(metrics.deferred_peak_bytes + metrics.inner_deferred_peak_bytes <= 512);
+        assert!(metrics.inner_flush_objects > 0 && metrics.inner_flush_bytes > 0,
+            "forced small share crosses inner rope preparation boundary");
+        assert_eq!(counters.deferred_prunes, 0, "private mode has no per-worker reachability set");
+        let mut old = Vec::new(); read_all(&store, base, &mut old).unwrap();
+        assert_eq!(old, original);
+        let batch = FileMutationBatch::new_private_preparation(&mut store, Some(actual), 512).unwrap();
+        let (unchanged, _, metrics) = batch.finish_with_preparation_metrics().unwrap();
+        assert_eq!(unchanged, actual);
+        assert_eq!(metrics.private_puts, 0);
+    }
+
+    #[test]
+    fn private_file_share_refuses_before_growth_and_retains_closed_set_on_flush_failure() {
+        struct LimitedPrivate { inner: SharedStore, remaining: Rc<std::cell::Cell<usize>> }
+        impl ObjectStore for LimitedPrivate {
+            fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> { ObjectStore::get(&self.inner, id) }
+            fn put(&mut self, bytes: &[u8]) -> CoreResult<ObjectId> {
+                if self.remaining.get() == 0 { return Err(CoreError::ObjectLimitExceeded); }
+                self.remaining.set(self.remaining.get() - 1);
+                self.inner.put(bytes)
+            }
+        }
+        let inner = SharedStore::default();
+        let observed = inner.clone();
+        let remaining = Rc::new(std::cell::Cell::new(usize::MAX));
+        let mut store = LimitedPrivate { inner, remaining: remaining.clone() };
+        assert!(matches!(FileMutationBatch::new_private_preparation(&mut store, None, 0), Err(CoreError::ObjectLimitExceeded)));
+        assert_eq!(*observed.puts.borrow(), 0);
+        let mut objects = DeferredFileObjects::new(&mut store);
+        objects.private_limit = Some(4096);
+        objects.charged_bytes = std::mem::size_of::<DeferredFileObjects<'_, LimitedPrivate>>();
+        let first = objects.put(&crate::encode_bytes_object(b"first").unwrap()).unwrap();
+        let second = objects.put(&crate::encode_bytes_object(b"second").unwrap()).unwrap();
+        let retained = objects.charged_bytes;
+        remaining.set(1);
+        assert!(matches!(objects.put(&crate::encode_bytes_object(&[7; 4096]).unwrap()), Err(CoreError::ObjectLimitExceeded)));
+        assert_eq!(objects.objects.len(), 2, "partial private flush does not drain orphan descendants");
+        assert!(objects.objects.contains_key(&first) && objects.objects.contains_key(&second));
+        assert_eq!(objects.charged_bytes, retained);
+        assert_eq!(*observed.puts.borrow(), 1, "the sole successful write remains private and caller-owned");
+        drop(objects);
+        observed.objects.borrow_mut().clear();
+        assert!(observed.objects.borrow().is_empty(), "caller can discard all failed preparation");
     }
 
     #[test]

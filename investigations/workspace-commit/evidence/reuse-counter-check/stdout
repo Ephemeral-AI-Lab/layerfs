@@ -1,0 +1,6 @@
+
+running 1 test
+test tree::batch::tests::sorted_inode_dense_delete_preserves_sparse_historical_records ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.19s
+

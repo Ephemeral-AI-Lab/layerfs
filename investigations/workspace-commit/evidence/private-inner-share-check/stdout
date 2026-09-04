@@ -1,0 +1,9 @@
+
+running 4 tests
+test file::rope::edit::batch_tests::private_file_share_refuses_before_growth_and_retains_closed_set_on_flush_failure ... ok
+test file::rope::state::private_preparation_tests::private_inner_nodes_bound_growth_and_preserve_closed_set_on_failure ... ok
+test file::rope::edit::batch_tests::private_file_share_flushes_mixed_ranges_and_preserves_historical_roots ... ok
+test tree::batch::tests::full_source_leaf_and_output_share_sixteen_kib_via_private_input ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 49 filtered out; finished in 0.01s
+

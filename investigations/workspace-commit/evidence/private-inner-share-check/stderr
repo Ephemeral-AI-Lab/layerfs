@@ -1,0 +1,3 @@
+   Compiling layerfs-content v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.62s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_content-0bd826673ea002f5)

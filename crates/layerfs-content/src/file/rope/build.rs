@@ -114,6 +114,7 @@ pub(super) fn scan_replacement_mapping_with<S, R, FP, FN>(
     source: R,
     mut put_payload: FP,
     mut put_sealed_node: FN,
+    private_budget: Option<usize>,
 ) -> CoreResult<ReplacementScan>
 where
     S: ObjectStore,
@@ -121,7 +122,10 @@ where
     FP: FnMut(&mut S, &[u8]) -> CoreResult<ObjectId>,
     FN: FnMut(&mut S, &[u8]) -> CoreResult<ObjectId>,
 {
-    let mut deferred = DeferredNodes::new(store);
+    let mut deferred = match private_budget {
+        Some(maximum) => DeferredNodes::with_private_budget(store, std::collections::BTreeMap::new(), maximum)?,
+        None => DeferredNodes::new(store),
+    };
     let mut levels = vec![Pending::Extents(Vec::with_capacity(STREAM_FLUSH_AT + 1))];
     let mut counters = RopeCounters::default();
     let mut flushed = 0_u64;
@@ -144,12 +148,14 @@ where
         Ok(())
     })?;
     counters.cdc_bytes_scanned = cdc.bytes_scanned;
+    let private_metrics = deferred.private_metrics();
     Ok(ReplacementScan {
         levels,
         counters,
         bytes_scanned: cdc.bytes_scanned,
         pending: deferred.into_nodes(),
         persisted_nodes: flushed,
+        private_metrics,
     })
 }
 

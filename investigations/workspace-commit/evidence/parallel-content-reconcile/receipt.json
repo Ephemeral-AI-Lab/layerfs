@@ -1,0 +1,19 @@
+{
+  "source": "7cdab66eb559a93771d256451b3542eac9c12c49",
+  "command": [
+    "cargo",
+    "test",
+    "--offline",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "reconcile_delta"
+  ],
+  "elapsed_ns": 4063376166,
+  "exit_code": 0,
+  "working_source_unchanged_during_command": true,
+  "source_manifest_sha256": "07646b4f41abe5047a4dd8588368d9577f77bfc25f52044fd17a499aa301d2ba",
+  "stdout_sha256": "d097a6d89cd6c83172bb7b1f367893200d5aec161aa8f81835a58c23d84183f2",
+  "stderr_sha256": "2c054fb9439e924767ec42aab178c396a99514952aaf84074ca206ae24099195"
+}

@@ -1903,10 +1903,20 @@ mod tests {
         .unwrap();
         assert!(stats.nodes_read <= 6, "{stats:?}");
         assert!(stats.nodes_created < 10, "{stats:?}");
-        assert!(
-            stats.nodes_reused > 0 && stats.nodes_reused <= stats.nodes_read,
-            "{stats:?}"
-        );
+        // Forwarded immutable children deliberately need no read. Count those
+        // roots independently along the edited path rather than bounding reuse
+        // by the number of pages decoded by the engine.
+        let mut source = root.0;
+        let mut expected_reuse = 0;
+        while let InodeTableNodeV1::Branch { children, .. } =
+            decode_inode_table_node(&store.get(source).unwrap()).unwrap()
+        {
+            expected_reuse += children.len() as u64 - 1;
+            let index = children.partition_point(|(key, _)| *key < inode(9000))
+                .min(children.len() - 1);
+            source = children[index].1;
+        }
+        assert_eq!(stats.nodes_reused, expected_reuse);
         let (small, stats) = inode_table_apply_sorted(
             &mut store,
             sparse,

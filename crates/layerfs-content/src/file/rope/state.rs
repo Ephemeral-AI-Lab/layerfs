@@ -59,11 +59,22 @@ pub(super) struct ReplacementScan {
     pub(super) bytes_scanned: u64,
     pub(super) pending: BTreeMap<ObjectId, Vec<u8>>,
     pub(super) persisted_nodes: u64,
+    pub(super) private_metrics: DeferredNodeMetrics,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct DeferredNodeMetrics {
+    pub(super) peak_bytes: usize,
+    pub(super) flush_objects: u64,
+    pub(super) flush_bytes: u64,
 }
 
 pub(super) struct DeferredNodes<'a, S> {
     pub(super) store: &'a mut S,
     nodes: BTreeMap<ObjectId, Vec<u8>>,
+    private_limit: Option<usize>,
+    charged_bytes: usize,
+    metrics: DeferredNodeMetrics,
 }
 
 impl<'a, S: ObjectStore> DeferredNodes<'a, S> {
@@ -71,11 +82,41 @@ impl<'a, S: ObjectStore> DeferredNodes<'a, S> {
         Self {
             store,
             nodes: BTreeMap::new(),
+            private_limit: None,
+            charged_bytes: 0,
+            metrics: DeferredNodeMetrics::default(),
         }
     }
 
     pub(super) fn with_nodes(store: &'a mut S, nodes: BTreeMap<ObjectId, Vec<u8>>) -> Self {
-        Self { store, nodes }
+        Self { store, nodes, private_limit: None, charged_bytes: 0, metrics: DeferredNodeMetrics::default() }
+    }
+
+    /// Only for the explicitly private file preparation route. The map shares
+    /// the caller's file-deferred allowance with its outer collector.
+    pub(super) fn with_private_budget(store: &'a mut S, nodes: BTreeMap<ObjectId, Vec<u8>>, maximum: usize) -> CoreResult<Self> {
+        let charged_bytes = nodes.values().try_fold(std::mem::size_of::<Self>(), |total, bytes| {
+            total.checked_add(bytes.capacity()).and_then(|n| n.checked_add(1024)).ok_or(CoreError::LengthOverflow)
+        })?;
+        if charged_bytes > maximum { return Err(CoreError::ObjectLimitExceeded); }
+        Ok(Self { store, nodes, private_limit: Some(maximum), charged_bytes,
+            metrics: DeferredNodeMetrics { peak_bytes: charged_bytes, ..DeferredNodeMetrics::default() } })
+    }
+
+    pub(super) fn private_metrics(&self) -> DeferredNodeMetrics { self.metrics }
+
+    fn flush_private(&mut self) -> CoreResult<u64> {
+        let count = self.nodes.len() as u64;
+        // Never drain a subset: outer preparation owns any successfully copied
+        // prefix on failure, while local descendants remain a closed set.
+        for (id, canonical) in &self.nodes {
+            if self.store.put(canonical)? != *id { return Err(CoreError::IdentityMismatch); }
+            self.metrics.flush_objects = self.metrics.flush_objects.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+            self.metrics.flush_bytes = self.metrics.flush_bytes.checked_add(canonical.len() as u64).ok_or(CoreError::LengthOverflow)?;
+        }
+        self.nodes.clear();
+        self.charged_bytes = std::mem::size_of::<Self>();
+        Ok(count)
     }
 
     pub(super) fn into_nodes(self) -> BTreeMap<ObjectId, Vec<u8>> {
@@ -90,6 +131,9 @@ impl<'a, S: ObjectStore> DeferredNodes<'a, S> {
     where
         F: FnMut(&mut S, &[u8]) -> CoreResult<ObjectId>,
     {
+        // Private preparation flushes only under resource pressure and needs
+        // neither recursive boundary protection nor a sealed/visited set.
+        if self.private_limit.is_some() { return Ok(0); }
         let mut protected = BTreeSet::new();
         for pending in levels {
             if let Pending::Children(children) = pending {
@@ -172,6 +216,16 @@ impl<'a, S: ObjectStore> DeferredNodes<'a, S> {
     }
 
     pub(super) fn commit(&mut self, root: Summary) -> CoreResult<u64> {
+        if self.private_limit.is_some() {
+            ObjectStore::with_authenticated_canonical(self, root.id, |canonical| {
+                let node = decode_node_with_context(canonical, true)?;
+                if node.level() != root.level || node.logical_len() != root.bytes || node.extent_count() != root.extents {
+                    return Err(CoreError::InvalidRecord("deferred extent summary"));
+                }
+                Ok(())
+            })?;
+            return self.flush_private();
+        }
         let mut visited = BTreeSet::new();
         self.commit_node(root, true, &mut visited)?;
         u64::try_from(visited.len()).map_err(|_| CoreError::LengthOverflow)
@@ -222,6 +276,29 @@ impl<S: ObjectStore> ObjectStore for DeferredNodes<'_, S> {
 
     fn put(&mut self, canonical: &[u8]) -> CoreResult<ObjectId> {
         let id = ObjectId::for_bytes(canonical);
+        if let Some(maximum) = self.private_limit {
+            if let Some(prior) = self.nodes.get(&id) {
+                return if prior == canonical { Ok(id) } else { Err(CoreError::IdentityMismatch) };
+            }
+            let charge = canonical.len().checked_add(1024).ok_or(CoreError::LengthOverflow)?;
+            if self.charged_bytes.checked_add(charge).ok_or(CoreError::LengthOverflow)? > maximum {
+                self.flush_private()?;
+            }
+            let next = self.charged_bytes.checked_add(charge).ok_or(CoreError::LengthOverflow)?;
+            if next > maximum {
+                if self.store.put(canonical)? != id { return Err(CoreError::IdentityMismatch); }
+                self.metrics.flush_objects = self.metrics.flush_objects.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+                self.metrics.flush_bytes = self.metrics.flush_bytes.checked_add(canonical.len() as u64).ok_or(CoreError::LengthOverflow)?;
+                return Ok(id);
+            }
+            // Reserve before either BTreeMap growth or canonical ownership.
+            // Charge a full 1-KiB tree-node allowance per entry, including the
+            // initially sparse node, rather than amortizing allocator capacity.
+            self.charged_bytes = next;
+            self.metrics.peak_bytes = self.metrics.peak_bytes.max(next);
+            self.nodes.insert(id, canonical.to_vec());
+            return Ok(id);
+        }
         if self
             .nodes
             .insert(id, canonical.to_vec())
@@ -241,5 +318,48 @@ impl<S: ObjectStore> ObjectStore for DeferredNodes<'_, S> {
             Some(_) => Err(CoreError::IdentityMismatch),
             None => self.store.with_authenticated_canonical(id, callback),
         }
+    }
+}
+
+
+#[cfg(test)]
+mod private_preparation_tests {
+    use super::*;
+    struct PrivateStore { rows: BTreeMap<ObjectId, Vec<u8>>, remaining: usize }
+    impl ObjectStore for PrivateStore {
+        fn get(&self, id: ObjectId) -> CoreResult<Vec<u8>> {
+            self.rows.get(&id).cloned().ok_or(CoreError::MissingObject)
+        }
+        fn put(&mut self, bytes: &[u8]) -> CoreResult<ObjectId> {
+            if self.remaining == 0 { return Err(CoreError::ObjectLimitExceeded); }
+            self.remaining -= 1;
+            let id = ObjectId::for_bytes(bytes);
+            self.rows.insert(id, bytes.to_vec()); Ok(id)
+        }
+    }
+    #[test]
+    fn private_inner_nodes_bound_growth_and_preserve_closed_set_on_failure() {
+        let mut store = PrivateStore { rows: BTreeMap::new(), remaining: 1 };
+        assert!(matches!(DeferredNodes::with_private_budget(&mut store, BTreeMap::new(), 0), Err(CoreError::ObjectLimitExceeded)));
+        let mut nodes = DeferredNodes::with_private_budget(&mut store, BTreeMap::new(), 4096).unwrap();
+        let first = ObjectStore::put(&mut nodes, &crate::encode_bytes_object(b"one").unwrap()).unwrap();
+        let second = ObjectStore::put(&mut nodes, &crate::encode_bytes_object(b"two").unwrap()).unwrap();
+        let before = nodes.charged_bytes;
+        assert!(matches!(ObjectStore::put(&mut nodes, &crate::encode_bytes_object(&[7; 4096]).unwrap()), Err(CoreError::ObjectLimitExceeded)));
+        assert_eq!(nodes.nodes.len(), 2);
+        assert!(nodes.nodes.contains_key(&first) && nodes.nodes.contains_key(&second));
+        assert_eq!(nodes.charged_bytes, before);
+        assert!(nodes.metrics.peak_bytes <= 4096);
+        assert_eq!(nodes.metrics.flush_objects, 1);
+        assert_eq!(nodes.store.rows.len(), 1, "successful prefix remains private");
+        // The complete local set permits retry against the same private owner.
+        nodes.store.remaining = usize::MAX;
+        nodes.flush_private().unwrap();
+        assert!(nodes.nodes.is_empty());
+        assert!(ObjectStore::get(&nodes, first).is_ok());
+        assert!(ObjectStore::get(&nodes, second).is_ok());
+        drop(nodes);
+        store.rows.clear();
+        assert!(store.rows.is_empty());
     }
 }

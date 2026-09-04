@@ -1,0 +1,19 @@
+{
+  "source": "7cdab66eb559a93771d256451b3542eac9c12c49",
+  "command": [
+    "cargo",
+    "test",
+    "--offline",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--lib",
+    "private_"
+  ],
+  "elapsed_ns": 4544314708,
+  "exit_code": 0,
+  "working_source_unchanged_during_command": true,
+  "source_manifest_sha256": "07646b4f41abe5047a4dd8588368d9577f77bfc25f52044fd17a499aa301d2ba",
+  "stdout_sha256": "c3aa7600b03b40d9905803809a736932561c07a01f1e3e7a0ff211b27922622b",
+  "stderr_sha256": "33eaef3b63d6f33ddaa3cb90442c41d2ad256cde42dce18b4979b9e97bc568f4"
+}
