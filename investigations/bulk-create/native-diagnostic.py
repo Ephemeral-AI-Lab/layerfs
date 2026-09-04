@@ -3,7 +3,7 @@
 import fcntl, hashlib, json, pathlib, subprocess, time, uuid
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ORIGINAL = ROOT.parent / 'layerfs'
-OUT = ROOT / 'investigations/bulk-create/evidence/native-500-s1'
+OUT = ROOT / 'investigations/bulk-create/evidence/native-500-s1-r2'
 IMAGE = 'sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e'
 with (ORIGINAL / 'benchmark-results/fs-bench-pro/phase1-v013/measurement.lock').open('r') as lock:
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -21,11 +21,12 @@ with (ORIGINAL / 'benchmark-results/fs-bench-pro/phase1-v013/measurement.lock').
     name = 'layerfs-feasibility-'+uuid.uuid4().hex[:12]
     try:
         run('source', ['git','rev-parse','HEAD'])
-        run('build-fixture-helper',['rustc','--edition=2021','-O','investigations/bulk-create/native_fixture.rs','-o',OUT/'native-fixture'])
-        run('prepare',[OUT/'native-fixture',OUT/'fixture'])
+        fixture = OUT.parent / 'native-500-s1/fixture'
+        run('reused-preparation', ['shasum','-a','256',OUT.parent/'native-500-s1/prepare.stdout'])
         run('create',['docker','run','-d','--name',name,'--cpus','2','--memory','2g','--memory-swap','2g','--pids-limit','256','--mount','type=volume,destination=/native','--entrypoint','sleep',IMAGE,'infinity'])
         run('environment',['docker','inspect',name])
-        run('copy',['docker','cp',str(OUT/'fixture')+'/.',name+':/native'])
+        run('copy',['docker','cp',str(fixture)+'/.',name+':/native'])
+        run('prepare-root',['docker','exec',name,'sh','-c','chmod 0750 /native && touch -d @1700000000 /native'])
         run('helper-identity',['docker','exec',name,'sha256sum','/usr/local/bin/fs-benchmark-workload'])
         run('qualify',['docker','exec','-w','/native',name,'fs-benchmark-workload','workspace-verify-tree','tiny-bulk-create-500','1','0'])
         def stats(label):
