@@ -1,0 +1,2 @@
+   Compiling fs-benchmark-pro v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-source-e32469e975e8e185ca525b02bb71d70bafa4e865/benchmark/fs-bench-pro)
+    Finished `release` profile [optimized] target(s) in 10.04s
