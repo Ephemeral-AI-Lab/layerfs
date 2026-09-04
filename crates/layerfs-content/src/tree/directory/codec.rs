@@ -23,60 +23,52 @@ pub enum DirectoryNodeV1 {
 }
 
 pub fn encode_directory_node(node: &DirectoryNodeV1) -> CoreResult<Vec<u8>> {
-    let (role, level, count, subtree_count, subtree_bytes) = match node {
-        DirectoryNodeV1::Leaf {
-            subtree_encoded_bytes,
-            entries,
-        } => (
-            1,
-            0,
-            entries.len(),
-            entries.len() as u64,
-            *subtree_encoded_bytes,
-        ),
-        DirectoryNodeV1::Branch {
-            level,
-            subtree_entry_count,
-            subtree_encoded_bytes,
-            children,
-        } => (
-            2,
-            *level,
-            children.len(),
-            *subtree_entry_count,
-            *subtree_encoded_bytes,
-        ),
-    };
-    validate_node_header(level, count)?;
-    let mut value = node_header(
-        b"LFS4NSP\0",
-        role,
-        level,
-        count,
-        subtree_count,
-        subtree_bytes,
-    )?;
     match node {
-        DirectoryNodeV1::Leaf { entries, .. } => {
-            ordered(entries.iter().map(|(name, _)| name.as_bytes()))?;
-            for (name, inode) in entries {
-                put_bytes(&mut value, name.as_bytes())?;
-                value.extend_from_slice(inode.as_bytes());
-            }
-        }
-        DirectoryNodeV1::Branch { children, .. } => {
-            if level == 0 {
-                return Err(CoreError::InvalidRecord("directory branch level"));
-            }
-            ordered(children.iter().map(|(name, _)| name.as_bytes()))?;
-            for (name, child) in children {
-                put_bytes(&mut value, name.as_bytes())?;
-                value.extend_from_slice(child.as_bytes());
-            }
+        DirectoryNodeV1::Leaf { subtree_encoded_bytes, entries } =>
+            encode_directory_page(0, entries.len() as u64, *subtree_encoded_bytes,
+                entries.iter().map(|(name, inode)| (name, inode.as_bytes()))),
+        DirectoryNodeV1::Branch { level, subtree_entry_count, subtree_encoded_bytes, children } => {
+            validate_node_header(*level, children.len())?;
+            if *level == 0 { return Err(CoreError::InvalidRecord("directory branch level")); }
+            encode_directory_page(*level, *subtree_entry_count, *subtree_encoded_bytes,
+                children.iter().map(|(name, child)| (name, child.as_bytes())))
         }
     }
-    verify_subtree_bytes(node, subtree_bytes)?;
-    finish_node(value)
+}
+
+/// Borrowed ordered pairs encoded directly into one owned canonical buffer.
+/// Shared by the public node codec and the bounded final-state writer.
+pub(crate) fn encode_directory_page<'a>(
+    level: u8, subtree_count: u64, subtree_bytes: u64,
+    entries: impl ExactSizeIterator<Item = (&'a CanonicalName, &'a [u8; 32])> + Clone,
+) -> CoreResult<Vec<u8>> {
+    let count = entries.len();
+    validate_node_header(level, count)?;
+    ordered(entries.clone().map(|(name, _)| name.as_bytes()))?;
+    let entry_bytes = entries.clone().try_fold(0usize, |sum, (name, _)|
+        sum.checked_add(34 + name.as_bytes().len()).ok_or(CoreError::LengthOverflow))?;
+    if level == 0 && (subtree_count != count as u64 || subtree_bytes != entry_bytes as u64) {
+        return Err(CoreError::LengthMismatch { expected: subtree_bytes, actual: entry_bytes as u64 });
+    }
+    let mut canonical = canonical_node_header(b"LFS4NSP\0", if level == 0 {1} else {2}, level,
+        count, subtree_count, subtree_bytes, entry_bytes)?;
+    for (name, target) in entries {
+        put_bytes(&mut canonical, name.as_bytes())?;
+        canonical.extend_from_slice(target);
+    }
+    Ok(canonical)
+}
+
+pub(crate) fn canonical_node_header(
+    magic: &[u8;8], role: u8, level: u8, count: usize,
+    subtree_count: u64, subtree_bytes: u64, entry_bytes: usize,
+) -> CoreResult<Vec<u8>> {
+    let size = 44usize.checked_add(entry_bytes).ok_or(CoreError::LengthOverflow)?;
+    if size > NODE_LIMIT { return Err(CoreError::ObjectLimitExceeded); }
+    let mut canonical = Vec::with_capacity(size);
+    crate::object::encode_bytes_object_header_to(size - 13, &mut canonical)?;
+    canonical.extend_from_slice(&node_header(magic, role, level, count, subtree_count, subtree_bytes)?);
+    Ok(canonical)
 }
 
 pub fn decode_directory_node(canonical: &[u8]) -> CoreResult<DirectoryNodeV1> {
@@ -121,7 +113,11 @@ pub fn decode_directory_node(canonical: &[u8]) -> CoreResult<DirectoryNodeV1> {
     if cursor != value.len() {
         return Err(CoreError::TrailingBytes);
     }
-    encode_directory_node(&node)?;
+    match &node {
+        DirectoryNodeV1::Leaf { entries, .. } => ordered(entries.iter().map(|(name, _)| name.as_bytes()))?,
+        DirectoryNodeV1::Branch { children, .. } => ordered(children.iter().map(|(name, _)| name.as_bytes()))?,
+    }
+    verify_subtree_bytes(&node, subtree_bytes)?;
     Ok(node)
 }
 

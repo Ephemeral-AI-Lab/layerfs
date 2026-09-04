@@ -1,5 +1,5 @@
 use crate::tree::directory::codec::{
-    decode_node_value, exact_value, finish_node, node_count, node_header, node_subtree_bytes,
+    decode_node_value, exact_value, node_count, node_subtree_bytes,
     node_subtree_count, ordered, validate_node_header, VERSION,
 };
 use crate::tree::inode::{InodeId, InodeKind, InodeRecordV1};
@@ -16,50 +16,31 @@ pub enum InodeTableNodeV1 {
 }
 
 pub fn encode_inode_table_node(node: &InodeTableNodeV1) -> CoreResult<Vec<u8>> {
-    let (role, level, count, subtree_count) = match node {
-        InodeTableNodeV1::Leaf(entries) => (7, 0, entries.len(), entries.len() as u64),
-        InodeTableNodeV1::Branch {
-            level,
-            subtree_entry_count,
-            children,
-        } => (8, *level, children.len(), *subtree_entry_count),
-    };
-    validate_node_header(level, count)?;
-    if count > 127 {
-        return Err(CoreError::NonCanonicalPagePartition);
-    }
-    let mut value = node_header(
-        b"LFS4INT\0",
-        role,
-        level,
-        count,
-        subtree_count,
-        subtree_count
-            .checked_mul(64)
-            .ok_or(CoreError::LengthOverflow)?,
-    )?;
     match node {
-        InodeTableNodeV1::Leaf(entries) => {
-            ordered(entries.iter().map(|(id, _)| id.as_bytes().as_slice()))?;
-            for (id, record) in entries {
-                value.extend_from_slice(id.as_bytes());
-                value.extend_from_slice(record.as_bytes());
-            }
-        }
-        InodeTableNodeV1::Branch {
-            level, children, ..
-        } => {
-            if *level == 0 {
-                return Err(CoreError::InvalidRecord("inode branch level"));
-            }
-            ordered(children.iter().map(|(id, _)| id.as_bytes().as_slice()))?;
-            for (id, child) in children {
-                value.extend_from_slice(id.as_bytes());
-                value.extend_from_slice(child.as_bytes());
-            }
+        InodeTableNodeV1::Leaf(entries) => encode_inode_page(0, entries.len() as u64, entries.iter().map(|(key,id)|(key,id.as_bytes()))),
+        InodeTableNodeV1::Branch {level,subtree_entry_count,children} => {
+            validate_node_header(*level,children.len())?;
+            if children.len()>127 {return Err(CoreError::NonCanonicalPagePartition);}
+            subtree_entry_count.checked_mul(64).ok_or(CoreError::LengthOverflow)?;
+            if *level == 0 {return Err(CoreError::InvalidRecord("inode branch level"));}
+            encode_inode_page(*level,*subtree_entry_count,children.iter().map(|(key,id)|(key,id.as_bytes())))
         }
     }
-    finish_node(value)
+}
+
+pub(crate) fn encode_inode_page<'a>(
+    level: u8, subtree_count: u64,
+    entries: impl ExactSizeIterator<Item=(&'a InodeId,&'a [u8;32])> + Clone,
+) -> CoreResult<Vec<u8>> {
+    let count=entries.len();
+    validate_node_header(level,count)?;
+    if count>127 {return Err(CoreError::NonCanonicalPagePartition);}
+    if level==0 && subtree_count!=count as u64 {return Err(CoreError::InvalidRecord("inode leaf summary"));}
+    ordered(entries.clone().map(|(key,_)|key.as_bytes().as_slice()))?;
+    let bytes=subtree_count.checked_mul(64).ok_or(CoreError::LengthOverflow)?;
+    let mut canonical=super::super::directory::codec::canonical_node_header(b"LFS4INT\0",if level==0{7}else{8},level,count,subtree_count,bytes,count*64)?;
+    for (key,id) in entries {canonical.extend_from_slice(key.as_bytes());canonical.extend_from_slice(id);}
+    Ok(canonical)
 }
 
 pub fn decode_inode_table_node(canonical: &[u8]) -> CoreResult<InodeTableNodeV1> {

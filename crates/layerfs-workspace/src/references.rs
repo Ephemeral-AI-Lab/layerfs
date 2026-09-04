@@ -12,6 +12,9 @@ pub(crate) const MEMORY: u64 = (RECORD * BUFFER) as u64;
 pub(crate) struct References {
     pending: Vec<[u8; RECORD]>,
     raw: Option<Run<RECORD>>,
+    // A flush is committed only after every pending record was appended.
+    // Keep the old extent authoritative if append or rollback truncation fails.
+    pending_flush_base: Option<u64>,
     pub(crate) events: u64,
     pub(crate) bookkeeping_ns: u64,
 }
@@ -20,9 +23,10 @@ impl References {
         (self.pending.capacity() * RECORD) as u64
     }
     pub(crate) fn bytes(&self) -> u64 {
-        (self.raw.as_ref().map_or(0, |r| r.count) + self.pending.len() as u64) * RECORD as u64
+        (self.pending_flush_base.unwrap_or_else(|| self.raw.as_ref().map_or(0, |r| r.count)) + self.pending.len() as u64) * RECORD as u64
     }
     pub(crate) fn reserve(&mut self, dir: &Path, disk_limit: u64, memory_limit: u64) -> Result<()> {
+        self.repair_failed_flush()?;
         if self
             .bytes()
             .checked_add(RECORD as u64)
@@ -39,24 +43,49 @@ impl References {
                 .try_reserve_exact(capacity)
                 .map_err(|_| StoreError::InvalidInput("workspace reference allocation"))?;
         }
-        if self.pending.len() == self.pending.capacity() {
-            let raw = match &mut self.raw {
-                Some(raw) => raw,
-                None => self.raw.insert(Run::create(dir)?),
-            };
-            // Reserve and append before changing a binding. Roll back the full
-            // append on error so retry never counts completed facts twice.
-            let before = raw.count;
-            for record in &self.pending {
-                if let Err(error) = raw.push(record) {
-                    raw.truncate(before)?;
-                    return Err(error);
-                }
+        if self.pending.len() == self.pending.capacity() { self.flush_pending(dir)?; }
+        Ok(())
+    }
+    fn repair_failed_flush(&mut self) -> Result<()> {
+        if let Some(before) = self.pending_flush_base {
+            #[cfg(test)]
+            if TRUNCATE_FAILURES.with(|n| { let count = n.get(); n.set(count.saturating_sub(1)); count != 0 }) {
+                return Err(StoreError::Io(std::io::Error::other("injected reference truncate failure")));
             }
-            self.pending.clear();
+            self.raw.as_mut().ok_or(StoreError::Integrity("reference flush owner"))?.truncate(before)?;
+            self.pending_flush_base = None;
         }
         Ok(())
     }
+
+    fn flush_pending(&mut self, dir: &Path) -> Result<()> {
+        self.repair_failed_flush()?;
+        if self.pending.is_empty() { return Ok(()); }
+        if self.raw.is_none() { self.raw = Some(Run::create(dir)?); }
+        self.pending_flush_base = Some(self.raw.as_ref().unwrap().count);
+        for index in 0..self.pending.len() {
+            let record = self.pending[index];
+            #[cfg(test)]
+            let injected = APPEND_FAILURE_AFTER.with(|remaining| match remaining.get() {
+                Some(0) => { remaining.set(None); true }
+                Some(n) => { remaining.set(Some(n - 1)); false }
+                None => false,
+            });
+            #[cfg(not(test))]
+            let injected = false;
+            let appended = if injected {
+                Err(StoreError::Io(std::io::Error::other("injected reference append failure")))
+            } else { self.raw.as_mut().unwrap().push(&record) };
+            if let Err(error) = appended {
+                self.repair_failed_flush()?;
+                return Err(error);
+            }
+        }
+        self.pending.clear();
+        self.pending_flush_base = None;
+        Ok(())
+    }
+
     pub(crate) fn push(&mut self, inode: Option<InodeId>, node: NodeId, delta: i64) {
         debug_assert!(self.pending.len() < self.pending.capacity());
         let mut record = [0; RECORD];
@@ -95,15 +124,16 @@ impl References {
         disk_limit: u64,
         memory: u64,
     ) -> Result<Run<RECORD>> {
+        // Seal mutation facts before allocating Commit's sorter. The raw file
+        // remains the retry authority; release the now-empty mutation buffer.
+        self.flush_pending(dir)?;
+        self.pending = Vec::new();
         let mut sorter = Sorter::new(dir, disk_limit, memory)?;
         if let Some(raw) = &mut self.raw {
             raw.rewind()?;
             while let Some(record) = raw.next()? {
                 sorter.push(record)?;
             }
-        }
-        for &record in &self.pending {
-            sorter.push(record)?;
         }
         sorter.finish()
     }
@@ -119,7 +149,7 @@ impl References {
             Ok(())
         };
         if let Some(raw) = &self.raw {
-            for i in 0..raw.count {
+            for i in 0..self.pending_flush_base.unwrap_or(raw.count) {
                 add(raw.at(i)?)?;
             }
         }
@@ -132,7 +162,8 @@ impl References {
         if let Some(raw) = self.raw.take() {
             raw.remove()?;
         }
-        self.pending.clear();
+        self.pending = Vec::new();
+        self.pending_flush_base = None;
         self.events = 0;
         Ok(())
     }
@@ -179,8 +210,51 @@ impl Workspace {
 }
 
 #[cfg(test)]
+thread_local! {
+    static APPEND_FAILURE_AFTER: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+    static TRUNCATE_FAILURES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn failed_append_and_rollback_keep_authoritative_facts_and_retry_exactly_once() {
+        let dir = std::env::temp_dir().join(format!("layerfs-reference-rollback-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut refs = References::default();
+        let first = InodeId::allocate([41; 32], 1);
+        let second = InodeId::allocate([41; 32], 2);
+        for (node, inode) in [(NodeId(2), first), (NodeId(3), second)] {
+            refs.reserve(&dir, 4096, 2 * RECORD as u64).unwrap();
+            refs.push(Some(inode), node, 1);
+        }
+        // The first append physically succeeds; the second fails, then rollback
+        // fails twice. Neither retry may treat the appended prefix as new facts.
+        APPEND_FAILURE_AFTER.with(|n| n.set(Some(1)));
+        TRUNCATE_FAILURES.with(|n| n.set(2));
+        assert!(refs.reserve(&dir, 4096, 2 * RECORD as u64).is_err());
+        assert_eq!(refs.raw.as_ref().unwrap().count, 1);
+        assert_eq!(refs.pending_flush_base, Some(0));
+        assert_eq!(refs.bytes(), 2 * RECORD as u64);
+        assert_eq!(refs.existing_delta(first).unwrap(), 1);
+        assert_eq!(refs.existing_delta(second).unwrap(), 1);
+        assert!(refs.sorted(&dir, 4096, 4096).is_err());
+        assert_eq!(refs.pending.len(), 2);
+        let mut sorted = refs.sorted(&dir, 4096, 4096).unwrap();
+        assert_eq!(refs.pending_flush_base, None);
+        assert_eq!(refs.capacity(), 0, "Commit releases sealed mutation allocation");
+        assert_eq!(refs.raw.as_ref().unwrap().count, 2);
+        assert_eq!(refs.existing_delta(first).unwrap(), 1);
+        assert_eq!(refs.existing_delta(second).unwrap(), 1);
+        let mut records = 0;
+        while let Some(record) = sorted.next().unwrap() { assert_eq!(delta(&record), 1); records += 1; }
+        assert_eq!(records, 2);
+        sorted.remove().unwrap(); refs.clear().unwrap();
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+        std::fs::remove_dir(dir).unwrap();
+    }
+
     #[test]
     fn net_changes_coalesce_and_failed_reservation_preserves_facts() {
         let dir =

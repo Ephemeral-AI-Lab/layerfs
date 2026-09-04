@@ -12,6 +12,7 @@ pub use codec::{
     validate_bytes_identity, validate_identity, validate_object_from, ObjectSummary, HEADER_LEN,
     MAGIC,
 };
+pub(crate) use codec::encode_bytes_object_header_to;
 pub(crate) use digest::ObjectHashWriter;
 pub use digest::{hash_object_bytes, ContentDigestWriter, DIGEST_BYTES};
 pub use id::ObjectId;

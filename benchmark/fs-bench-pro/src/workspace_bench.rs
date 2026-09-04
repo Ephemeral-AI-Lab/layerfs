@@ -941,9 +941,11 @@ fn run_case(
                         &[("receipt", quote(&output_text(&receipt)?))],
                     );
                 }
+                resource_receipt("commit-before", process_resource_snapshot()?);
                 let start = Instant::now();
                 let result = client.commit_workspace_session_with_status(session.id);
                 let elapsed = elapsed_ns(start);
+                resource_receipt("commit-after", process_resource_snapshot()?);
                 let status = result?;
                 pure_call_sum_ns = pure_call_sum_ns
                     .checked_add(elapsed)

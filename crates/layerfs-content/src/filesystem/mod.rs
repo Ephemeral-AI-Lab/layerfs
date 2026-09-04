@@ -1,8 +1,12 @@
 mod apply;
 mod change;
 mod diff;
+#[doc(hidden)]
+pub mod delta_spool;
 mod read;
 mod reconcile;
+mod reconcile_delta;
+pub use reconcile_delta::{replace_paths_from_snapshot_bounded, ReconcileBudget};
 mod resolve;
 mod root;
 

@@ -28,12 +28,17 @@ pub fn encode_bytes_object(value: &[u8]) -> CoreResult<Vec<u8>> {
 }
 
 pub fn encode_bytes_object_to<W: Write>(value: &[u8], writer: &mut W) -> CoreResult<()> {
-    let payload_len = bytes_payload_len(value)?;
+    encode_bytes_object_header_to(value.len(), writer)?;
+    write(writer, value)
+}
+
+pub(crate) fn encode_bytes_object_header_to<W: Write>(length: usize, writer: &mut W) -> CoreResult<()> {
+    if length > MAX_OBJECT_FIELD_BYTES { return Err(CoreError::ObjectLimitExceeded); }
+    let payload_len = length.checked_add(4).ok_or(CoreError::LengthOverflow)?;
     checked_total_len(payload_len)?;
     encode_header_to(ObjectKind::Bytes, payload_len, writer)?;
-    let length = u32::try_from(value.len()).map_err(|_| CoreError::LengthOverflow)?;
-    write(writer, &length.to_be_bytes())?;
-    write(writer, value)
+    let length = u32::try_from(length).map_err(|_| CoreError::LengthOverflow)?;
+    write(writer, &length.to_be_bytes())
 }
 
 pub fn encode_object_to<W: Write>(object: &Object, writer: &mut W) -> CoreResult<()> {

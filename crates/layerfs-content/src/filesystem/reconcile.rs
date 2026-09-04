@@ -1,6 +1,6 @@
-use super::apply::{apply_directory_changes, CandidateRoot, InodeMutation};
+use super::apply::{CandidateRoot, InodeMutation};
 use super::apply_inode_mutations;
-use super::resolve::{namespace, resolve_parent, LogicalCounters};
+use super::resolve::{namespace, LogicalCounters};
 use crate::file::rope::{read_all, state, FileStateRoot, RopeCounters};
 use crate::object::access::{ObjectRead, ObjectStore};
 use crate::object::ContentDigestWriter;
@@ -8,10 +8,10 @@ use crate::tree::directory::codec::encode_namespace_root;
 use crate::tree::directory::{
     directory_lookup, directory_page_after, DirectoryStateRoot, NamespaceCounters,
 };
-use crate::tree::inode::codec::{decode_inode_record, encode_inode_record};
+use crate::tree::inode::codec::decode_inode_record;
 use crate::tree::inode::{
-    inode_table_lookup, inode_table_remove, inode_table_upsert, reconcile_inode_tables, InodeId,
-    InodeKind, InodeRecordV1, InodeTableCounters, InodeTableDiff, InodeTableRoot,
+    inode_table_lookup, reconcile_inode_tables, InodeId, InodeKind, InodeRecordV1,
+    InodeTableCounters, InodeTableDiff, InodeTableRoot,
 };
 use crate::tree::NamespaceRootV1;
 use crate::{CanonicalName, CanonicalPath, CoreError, CoreResult, ObjectId};
@@ -133,102 +133,17 @@ pub fn replace_paths_from_snapshot<S: ObjectStore>(
     source_root: ObjectId,
     paths: &[CanonicalPath],
 ) -> CoreResult<ObjectId> {
-    let destination = namespace(store, destination_root)?;
-    let source = namespace(store, source_root)?;
-    if destination.profile_id != source.profile_id
-        || destination.root_directory_inode != source.root_directory_inode
-    {
-        return Err(CoreError::InvalidRecord("namespace identity mismatch"));
-    }
-
-    let mut selected = paths.to_vec();
-    selected.sort();
-    selected.dedup();
-    let mut roots = Vec::<CanonicalPath>::new();
-    for path in selected {
-        if roots.iter().any(|parent| path_is_within(&path, parent)) {
-            continue;
-        }
-        roots.push(path);
-    }
-    if roots.iter().any(CanonicalPath::is_root) {
-        return Ok(source_root);
-    }
-
-    let source_table = InodeTableRoot(source.inode_table_root);
-    let mut root = destination_root;
-    let mut applied = Vec::<CanonicalPath>::new();
-    let mut removed = Vec::new();
-    let mut desired_roots = Vec::new();
-    for original in roots {
-        if applied
-            .iter()
-            .any(|parent| path_is_within(&original, parent))
-        {
-            continue;
-        }
-        let mut path = original;
-        let (parent, name) = loop {
-            if path.is_root() {
-                return Ok(source_root);
-            }
-            let mut counters = LogicalCounters::default();
-            match resolve_parent(store, root, &path, &mut counters) {
-                Ok(resolved) => break resolved,
-                Err(CoreError::MissingObject | CoreError::InvalidRecord(_)) => {
-                    path = parent_path(&path)?;
-                }
-                Err(error) => return Err(error),
-            }
-        };
-        if applied.iter().any(|parent| path_is_within(&path, parent)) {
-            continue;
-        }
-        let existing = lookup_path_inode(store, root, &path)?;
-        let desired = lookup_path_inode(store, source_root, &path)?;
-        let current_namespace = namespace(store, root)?;
-        let (directory, namespace_counters) = apply_directory_changes(
-            store,
-            DirectoryStateRoot(parent.record.content_root),
-            [(name, desired)],
-        )?;
-        let mut counters = LogicalCounters::default();
-        merge_namespace_counters(&mut counters.namespace, namespace_counters)?;
-
-        let mut table = InodeTableRoot(current_namespace.inode_table_root);
-        let parent_record = store.put(&encode_inode_record(InodeRecordV1 {
-            content_root: directory.0,
-            ..parent.record
-        })?)?;
-        let (next, inode_counters) = inode_table_upsert(store, table, parent.inode, parent_record)?;
-        merge_inode_counters(&mut counters.inode_table, inode_counters)?;
-        table = next;
-        if existing != desired {
-            removed.extend(existing);
-        }
-        if let Some(inode) = desired {
-            desired_roots.push(inode);
-        }
-        root = store.put(&encode_namespace_root(NamespaceRootV1 {
-            inode_table_root: table.0,
-            ..current_namespace
-        })?)?;
-        applied.push(path);
-    }
-
-    let current_namespace = namespace(store, root)?;
-    let mut table = InodeTableRoot(current_namespace.inode_table_root);
-    let mut active = BTreeSet::new();
-    for inode in removed {
-        release_namespace_reference(store, inode, &mut table, &mut active)?;
-    }
-    for inode in desired_roots {
-        copy_snapshot_inode(store, source_table, inode, &mut table, &mut active)?;
-    }
-    store.put(&encode_namespace_root(NamespaceRootV1 {
-        inode_table_root: table.0,
-        ..current_namespace
-    })?)
+    super::reconcile_delta::replace_paths_from_snapshot_bounded(
+        store,
+        destination_root,
+        source_root,
+        paths,
+        super::reconcile_delta::ReconcileBudget {
+            scratch_dir: &std::env::temp_dir(),
+            memory_bytes: 8 * 1024 * 1024,
+            spool_bytes: 1024 * 1024 * 1024,
+        },
+    )
 }
 
 pub fn replace_conflict_from_snapshot<S: ObjectStore>(
@@ -254,16 +169,7 @@ pub fn replace_conflict_from_snapshot<S: ObjectStore>(
     )
 }
 
-fn path_is_within(path: &CanonicalPath, parent: &CanonicalPath) -> bool {
-    parent.is_root()
-        || path == parent
-        || path
-            .as_bytes()
-            .strip_prefix(parent.as_bytes())
-            .is_some_and(|suffix| suffix.first() == Some(&b'/'))
-}
-
-fn parent_path(path: &CanonicalPath) -> CoreResult<CanonicalPath> {
+pub(super) fn parent_path(path: &CanonicalPath) -> CoreResult<CanonicalPath> {
     let bytes = path.as_bytes();
     CanonicalPath::from_bytes(
         bytes
@@ -273,7 +179,7 @@ fn parent_path(path: &CanonicalPath) -> CoreResult<CanonicalPath> {
     )
 }
 
-fn lookup_path_inode<S: ObjectRead>(
+pub(super) fn lookup_path_inode<S: ObjectRead>(
     store: &S,
     root: ObjectId,
     path: &CanonicalPath,
@@ -300,100 +206,6 @@ fn lookup_path_inode<S: ObjectRead>(
         inode = child;
     }
     Ok(Some(inode))
-}
-
-fn copy_snapshot_inode<S: ObjectStore>(
-    store: &mut S,
-    source_table: InodeTableRoot,
-    inode: InodeId,
-    destination_table: &mut InodeTableRoot,
-    active: &mut BTreeSet<InodeId>,
-) -> CoreResult<()> {
-    if !active.insert(inode) {
-        return Err(CoreError::InvalidRecord("directory cycle"));
-    }
-    let record_id = inode_table_lookup(
-        store,
-        source_table,
-        inode,
-        &mut InodeTableCounters::default(),
-    )?
-    .ok_or(CoreError::MissingObject)?;
-    let record = store.with_authenticated_canonical(record_id, decode_inode_record)?;
-    if record.kind == InodeKind::Directory {
-        let mut cursor = DirectoryCursor::new(record.content_root);
-        while let Some((_, child)) = cursor.next(store)? {
-            copy_snapshot_inode(store, source_table, child, destination_table, active)?;
-        }
-    }
-    let (next, _) = inode_table_upsert(store, *destination_table, inode, record_id)?;
-    *destination_table = next;
-    active.remove(&inode);
-    Ok(())
-}
-
-fn release_namespace_reference<S: ObjectStore>(
-    store: &mut S,
-    inode: InodeId,
-    table: &mut InodeTableRoot,
-    active: &mut BTreeSet<InodeId>,
-) -> CoreResult<()> {
-    if !active.insert(inode) {
-        return Err(CoreError::InvalidRecord("directory cycle"));
-    }
-    let record_id = inode_table_lookup(store, *table, inode, &mut InodeTableCounters::default())?
-        .ok_or(CoreError::MissingObject)?;
-    let record = store.with_authenticated_canonical(record_id, decode_inode_record)?;
-    if record.namespace_ref_count > 1 {
-        let record_id = store.put(&encode_inode_record(InodeRecordV1 {
-            namespace_ref_count: record.namespace_ref_count - 1,
-            ..record
-        })?)?;
-        let (next, _) = inode_table_upsert(store, *table, inode, record_id)?;
-        *table = next;
-        active.remove(&inode);
-        return Ok(());
-    }
-    if record.kind == InodeKind::Directory {
-        let mut cursor = DirectoryCursor::new(record.content_root);
-        while let Some((_, child)) = cursor.next(store)? {
-            release_namespace_reference(store, child, table, active)?;
-        }
-    }
-    let (next, _, _) = inode_table_remove(store, *table, inode)?;
-    *table = next;
-    active.remove(&inode);
-    Ok(())
-}
-
-fn merge_namespace_counters(
-    total: &mut NamespaceCounters,
-    value: NamespaceCounters,
-) -> CoreResult<()> {
-    total.nodes_read = total
-        .nodes_read
-        .checked_add(value.nodes_read)
-        .ok_or(CoreError::LengthOverflow)?;
-    total.nodes_created = total
-        .nodes_created
-        .checked_add(value.nodes_created)
-        .ok_or(CoreError::LengthOverflow)?;
-    Ok(())
-}
-
-fn merge_inode_counters(
-    total: &mut InodeTableCounters,
-    value: InodeTableCounters,
-) -> CoreResult<()> {
-    total.nodes_read = total
-        .nodes_read
-        .checked_add(value.nodes_read)
-        .ok_or(CoreError::LengthOverflow)?;
-    total.nodes_created = total
-        .nodes_created
-        .checked_add(value.nodes_created)
-        .ok_or(CoreError::LengthOverflow)?;
-    Ok(())
 }
 
 pub fn reconcile<S: ObjectStore>(

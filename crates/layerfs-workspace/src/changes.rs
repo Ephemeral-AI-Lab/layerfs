@@ -64,16 +64,28 @@ impl Workspace {
     // without building either complete namespace manifest.
     fn build_frontier_candidate(&mut self) -> Result<BuiltRoot> {
         let started = Instant::now();
-        let memory = self.policy.max_final_delta_memory_bytes;
+        let mut handoff = self.begin_handoff()?;
+        let memory = self.policy.max_final_delta_memory_bytes.checked_sub(handoff.buffer_capacity).ok_or(StorageError::InvalidInput("workspace final-delta limit"))?;
 
         let disk = self
             .policy
             .max_spool_bytes
             .checked_sub(self.spool_bytes)
             .and_then(|n| n.checked_sub(self.references.bytes()))
+            .and_then(|n| n.checked_sub(handoff.reserved_spool_bytes))
             .ok_or(StorageError::InvalidInput("workspace spool limit"))?;
-        let mut references = self.references.sorted(&self.spool, disk / 2, memory / 8)?;
-        let mut pairs = crate::commit_spool::Sorter::<65>::new(&self.spool, disk / 2, memory / 8)?;
+        let mut references = self.references.sorted(&self.spool, disk / 3, memory / 8)?;
+        let mut nodes = crate::commit_spool::Sorter::<41>::new(&self.spool, disk / 3, memory / 8)?;
+        for (&id, value) in &self.nodes {
+            if !value.commit_dirty && !self.dirty.contains(&id) { continue; }
+            let mut record = [0; 41];
+            record[..33].copy_from_slice(&crate::references::key(value.canonical, id));
+            record[33..].copy_from_slice(&id.0.to_be_bytes());
+            nodes.push(record)?;
+        }
+        let mut nodes = nodes.finish()?;
+        let mut next_reference = references.next()?;
+        let mut pairs = crate::commit_spool::Sorter::<65>::new(&self.spool, disk / 3, memory / 8)?;
         let captured = self.take_capture();
         if let Some(captured) = &captured {
             layerfs_layerstack_store::note_workspace_capture(1, captured.len);
@@ -96,13 +108,18 @@ impl Workspace {
         let mut cdc_bytes_scanned = 0_u64;
         note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
         let started = Instant::now();
-        for (&node, value) in &self.nodes {
-            if !value.commit_dirty && !self.dirty.contains(&node) {
-                continue;
-            }
+        while let Some(identity) = nodes.next()? {
+            let node = NodeId(u64::from_be_bytes(identity[33..].try_into().unwrap()));
+            let value = &self.nodes[&node];
             layerfs_layerstack_store::note_workspace_namespace_visits(0, 0, 0, 0, 1);
-            let change =
-                reference_delta(&references, crate::references::key(value.canonical, node))?;
+            let key = &identity[..33];
+            let mut change = 0i64;
+            while let Some(reference) = next_reference.filter(|r| r[..33] <= *key) {
+                if reference[..33] == *key {
+                    change = change.checked_add(crate::references::delta(&reference)).ok_or(StorageError::Integrity("namespace reference overflow"))?;
+                }
+                next_reference = references.next()?;
+            }
             let before = value
                 .canonical
                 .map(|inode| self.base_record(inode))
@@ -281,7 +298,9 @@ impl Workspace {
             if before != Some(record) {
                 push_inode(&mut pairs, &mut objects, inode, Some(record))?;
             }
+            self.push_handoff(&mut handoff, node, inode, record, attr)?;
         }
+        nodes.remove()?;
         note_commit_phase(WorkspaceCommitPhase::Content, started);
         let started = Instant::now();
         // Reclaimed and unmaterialized existing inodes use authenticated base
@@ -376,10 +395,10 @@ impl Workspace {
             tree_counts.nodes_reused,
             tree_counts.peak_scratch_bytes as u64,
         );
-        self.commit_handoff = Some(self.prepare_handoff(&objects, root)?);
-        let built = objects.finish(root, cdc_bytes_scanned);
+        let built = objects.finish(root, cdc_bytes_scanned)?;
+        self.commit_handoff = Some(self.finish_handoff(handoff, root, table)?);
         note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
-        built
+        Ok(built)
     }
 
     pub(crate) fn resolution_fingerprint(
@@ -958,30 +977,6 @@ pub(crate) fn inject_candidate_failure_once() {
 fn final_count(base: u64, change: i64) -> Result<u64> {
     base.checked_add_signed(change)
         .ok_or(StorageError::Integrity("namespace reference overflow"))
-}
-
-fn reference_delta(run: &crate::commit_spool::Run<41>, key: [u8; 33]) -> Result<i64> {
-    let (mut low, mut high) = (0, run.count);
-    while low < high {
-        let mid = low + (high - low) / 2;
-        if run.at(mid)?[..33] < key[..] {
-            low = mid + 1;
-        } else {
-            high = mid;
-        }
-    }
-    let mut delta = 0i64;
-    while low < run.count {
-        let record = run.at(low)?;
-        if record[..33] != key {
-            break;
-        }
-        delta = delta
-            .checked_add(crate::references::delta(&record))
-            .ok_or(StorageError::Integrity("namespace reference overflow"))?;
-        low += 1;
-    }
-    Ok(delta)
 }
 
 fn push_inode(
