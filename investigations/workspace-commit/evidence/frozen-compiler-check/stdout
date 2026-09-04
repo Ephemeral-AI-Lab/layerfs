@@ -1,0 +1,9 @@
+
+running 4 tests
+test commit_file::tests::bounded_source_rejects_oversize_and_preserves_original_error ... ok
+test commit_file::tests::frozen_compiler_preserves_exact_reverted_edit_noop ... ok
+test commit_file::tests::frozen_full_build_matches_canonical_cdc_boundaries ... ok
+test commit_file::tests::frozen_input_owns_mixed_pieces_and_positional_spool_descriptor ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 57 filtered out; finished in 0.07s
+

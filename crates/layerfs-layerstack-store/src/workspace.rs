@@ -581,6 +581,21 @@ impl layerfs_content::object::access::ObjectRead for PublishedInodeReader<'_> {
 }
 
 impl SnapshotReader {
+    /// Heap allocation made by Clone for the overlay handle vector. The Store,
+    /// cache, metric state and candidate payloads remain shared Arc ownership.
+    #[doc(hidden)]
+    pub fn clone_owned_bytes(&self) -> usize {
+        self.overlays
+            .len()
+            .saturating_mul(std::mem::size_of::<Arc<Mutex<DeferredObjectStore>>>())
+    }
+    #[doc(hidden)]
+    pub fn owned_capacity_bytes(&self) -> usize {
+        self.overlays
+            .capacity()
+            .saturating_mul(std::mem::size_of::<Arc<Mutex<DeferredObjectStore>>>())
+    }
+
     /// Inspect an inode table using this snapshot's source ownership. Published
     /// snapshots borrow cache/SQLite bytes; reconciliation snapshots retain the
     /// existing overlay lookup order and reserve one owned canonical page. Both
@@ -776,6 +791,44 @@ impl SnapshotReader {
 }
 
 impl ObjectSource for SnapshotReader {
+    fn read_object_bounded(&self, id: ObjectId, maximum: usize) -> Result<Vec<u8>> {
+        let started = Instant::now();
+        {
+            let cache = self
+                .cache
+                .lock()
+                .map_err(|_| StoreError::Integrity("snapshot object cache"))?;
+            if let Some(bytes) = cache.rows.get(&id) {
+                if bytes.len() > maximum {
+                    return Err(StoreError::Core(
+                        layerfs_content::CoreError::ObjectLimitExceeded,
+                    ));
+                }
+                self.note_snapshot_cache(1, bytes.len() as u64)?;
+                self.note_local_read(1, 1, bytes.len() as u64, elapsed_ns(started))?;
+                return Ok(bytes.clone());
+            }
+        }
+        for overlay in &self.overlays {
+            let result = overlay
+                .lock()
+                .map_err(|_| StoreError::Integrity("candidate overlay"))?
+                .read_object_bounded(id, maximum);
+            match result {
+                Ok(bytes) => {
+                    layerfs_content::authenticate_identity(&bytes, id)?;
+                    self.note_local_read(1, 1, bytes.len() as u64, elapsed_ns(started))?;
+                    return Ok(bytes);
+                }
+                Err(StoreError::MissingObject(_)) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        let bytes = self.db.read_object_bounded(id, maximum)?;
+        self.note_snapshot_database(1, bytes.len() as u64)?;
+        self.note_local_read(1, 1, bytes.len() as u64, elapsed_ns(started))?;
+        Ok(bytes)
+    }
     fn candidate_cleanup(&self) -> Option<crate::objects::CandidateCleanup> {
         Some(crate::objects::CandidateCleanup(self.db.clone()))
     }

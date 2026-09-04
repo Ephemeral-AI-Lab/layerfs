@@ -33,7 +33,7 @@ pub enum WorkspaceState {
 // Fixed records are held by one anonymous private file. The file is unlinked
 // before writing, so failed construction drops its descriptor without leaving a
 // scratch path; its full length is reserved against Workspace spool capacity.
-const HANDOFF_RECORD_BYTES: u64 = 104;
+const HANDOFF_RECORD_BYTES: u64 = 112;
 pub(crate) struct CommitHandoff {
     file: std::fs::File,
     generation: u64,
@@ -121,6 +121,10 @@ impl Workspace {
     pub(crate) fn commit(&mut self) -> Result<(CommitOutcome, CommitTransition)> {
         self.commit_scan_visits.set(0);
         let result = self.commit_inner();
+        layerfs_layerstack_store::note_workspace_reference_base_hints(
+            (self.nodes.len() as u64).saturating_mul(8),
+            (self.nodes.capacity() as u64).saturating_mul(8),
+        );
         layerfs_layerstack_store::note_workspace_commit_tracking(
             self.commit_mark_calls,
             self.commit_mark_ns,
@@ -401,6 +405,7 @@ impl Workspace {
         bytes[88..96].copy_from_slice(&attr.mtime_seconds.to_be_bytes());
         bytes[96..100].copy_from_slice(&attr.mtime_nanoseconds.to_be_bytes());
         bytes[100] = record.kind as u8;
+        bytes[104..112].copy_from_slice(&record.namespace_ref_count.to_be_bytes());
         writer.file.write_all(&bytes)?;
         writer.records += 1;
         if !self.canonical_nodes.contains_key(&inode) {
@@ -810,6 +815,7 @@ impl Workspace {
             file.write_all(&metadata.mtime_seconds.to_be_bytes())?;
             file.write_all(&metadata.mtime_nanoseconds.to_be_bytes())?;
             file.write_all(&[record.kind as u8, 0, 0, 0])?;
+            file.write_all(&record.namespace_ref_count.to_be_bytes())?;
         }
         if file.stream_position()? != bytes {
             return Err(StorageError::Integrity("handoff length"));
@@ -893,6 +899,7 @@ impl Workspace {
                     .ok_or(StorageError::Integrity("handoff Workspace node"))?;
                 old.paths.clear();
                 old.links = 0;
+                old.base_ref_count = 0;
                 if matches!(old.data, Data::Directory(_)) {
                     self.directory_parents.remove(&node);
                 }
@@ -953,6 +960,7 @@ impl Workspace {
                 }),
             };
             old.canonical = Some(inode);
+            old.base_ref_count = u64::from_be_bytes(bytes[104..112].try_into().unwrap());
             if self.canonical_nodes.insert(inode, node).is_none() {
                 handoff.new_canonical = handoff.new_canonical.saturating_sub(1);
             }
@@ -982,6 +990,7 @@ impl Workspace {
             if value.links != 0 && !matches!(value.data, Data::Directory(_)) {
                 return Err(StorageError::Integrity("uninstalled Commit node"));
             }
+            value.base_ref_count = 0;
             if let Some(inode) = value.canonical.take() {
                 self.canonical_nodes.remove(&inode);
             }

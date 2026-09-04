@@ -1,0 +1,170 @@
+
+running 53 tests
+test file::cdc::tests::scanner_buffer_capacity_is_fixed ... ok
+test file::rope::edit::batch_tests::private_file_share_refuses_before_growth_and_retains_closed_set_on_flush_failure ... ok
+test file::rope::state::private_preparation_tests::private_inner_nodes_bound_growth_and_preserve_closed_set_on_failure ... ok
+test file::cdc::tests::callback_failure_is_propagated_exactly ... ok
+test file::extent_codec::tests::single_allocation_chunk_encoding_is_byte_identical ... ok
+test object::codec::tests::borrowed_bytes_encoding_matches_owned_canonical_identity ... ok
+test object::codec::tests::directory_names_use_the_canonical_name_bound ... ok
+test object::codec::tests::canonical_vectors_are_fixed ... ok
+test object::codec::tests::identity_authenticates_supplied_bytes_before_decoding ... ok
+test file::rope::edit::batch_tests::private_file_share_flushes_mixed_ranges_and_preserves_historical_roots ... ok
+test object::codec::tests::object_id_matches_hash_of_canonical_encoding ... ok
+test file::rope::build::tests::known_single_chunk_bytes_match_streaming_builder_exactly ... ok
+test object::codec::tests::rejects_declared_fields_larger_than_remaining_payload ... ok
+test object::codec::tests::rejects_malformed_and_noncanonical_bytes ... ok
+test object::codec::tests::rejects_manually_unsorted_directory_wire_bytes ... ok
+test object::codec::tests::rejects_truncated_payloads_and_invalid_fields ... ok
+test object::codec::tests::round_trips_and_streams_each_object_kind ... ok
+test object::codec::tests::shallow_authentication_defers_payload_rules_to_the_exact_role_decoder ... ok
+test object::codec::tests::streaming_decode_handles_fragmented_and_short_reads ... ok
+test object::digest::tests::content_digest_writer_is_fragmentation_independent ... ok
+test object::digest::tests::object_domain_is_frozen_for_v2_and_differs_from_v1 ... ok
+test object::digest::tests::object_domain_is_not_unframed_hashing ... ok
+test object::digest::tests::object_hash_is_fragmentation_independent ... ok
+test object::id::tests::ids_are_fixed_and_text_round_trips ... ok
+test file::cdc::tests::frozen_boundaries_are_deterministic ... ok
+test file::cdc::tests::short_and_maximum_edges_are_bounded ... ok
+test object::references::tests::every_internal_magic_is_safe_as_user_file_prefix_and_transfer_leaf ... ok
+test tree::batch::tests::fully_visited_source_branch_rejects_inconsistent_count ... ok
+test tree::batch::tests::sorted_tiny_inode_update_uses_actual_capacity ... ok
+test tree::batch::tests::borrowed_page_codecs_match_canonical_framing_and_small_budget ... ok
+test tree::batch::tests::sorted_updates_validate_input_and_reserve_before_allocation ... ok
+test tree::batch::tests::spilled_boundary_identity_failure_admits_nothing_and_closes_run ... ok
+test tree::batch::tests::full_source_leaf_and_output_share_sixteen_kib_via_private_input ... ok
+test tree::directory::validate::tests::variable_width_directory_borrows_until_both_branches_are_filled ... ok
+test file::cdc::tests::fragmentation_does_not_change_boundaries ... ok
+test filesystem::delta_spool::tests::bounded_sort_merges_multiple_levels_and_cleans_all_runs ... ok
+test tree::path::tests::accepts_root_and_canonical_paths ... ok
+test tree::path::tests::enforces_path_bounds ... ok
+test tree::path::tests::orders_parents_and_components_by_bytes ... ok
+test tree::path::tests::rejects_invalid_paths ... ok
+test tree::batch::tests::sorted_sibling_growth_fits_sixteen_kib ... ok
+test filesystem::reconcile_overlay::tests::bounded_overlay_compaction_keeps_latest_values ... ok
+test tree::batch::tests::sorted_variable_names_balance_across_parent_boundaries ... ok
+test file::rope::edit::batch_tests::file_batch_streams_payload_while_deferring_only_structural_objects ... ok
+test tree::directory::validate::tests::directory_pages_resume_without_rescanning_or_skipping ... ok
+test tree::batch::tests::sorted_inode_dense_delete_preserves_sparse_historical_records ... ok
+test tree::inode::table::tests::one_page_lookup_reserves_decode_before_allocation_and_matches_existing_lookup ... ok
+test tree::inode::table::tests::batch_lookup_matches_sequential_with_fewer_node_reads ... ok
+test tree::batch::tests::sorted_directory_dense_mixed_sparse_and_empty ... ok
+test tree::batch::tests::sorted_mixed_boundaries_emit_only_final_reachable_pages ... ok
+test filesystem::apply::tests::deferred_inode_batch_matches_sequential_roots_with_local_final_puts ... ok
+test filesystem::apply::tests::deferred_directory_batch_matches_sequential_roots_with_local_final_puts ... ok
+test file::rope::edit::batch_tests::file_batch_streams_large_replacement_below_structural_hard_bound ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.61s
+
+
+running 1 test
+test independent_actual_fixture_oracle_freezes_complete_v2_corpus ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.57s
+
+
+running 3 tests
+test profile_digest_is_literal_and_malformed_framing_is_rejected ... ok
+test literal_empty_leaf_and_file_state_are_exact ... ok
+test selected_nonempty_boundary_ids_are_literal ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 21 tests
+test full_empty_read_authenticates_and_binds_its_mapping_root ... ok
+test paired_diff_skips_equal_roots_and_length_mismatch_mappings ... ok
+test missing_payload_batch_callback_is_rejected ... ok
+test extra_payload_batch_callback_is_rejected_without_panicking ... ok
+test fetched_identity_is_unconditional ... ok
+test authenticated_child_summary_mismatch_and_underfull_nonroot_are_rejected ... ok
+test paired_diff_handles_unequal_height_and_partition_without_payload_reads ... ok
+test fetched_payload_above_frozen_ceiling_is_rejected ... ok
+test payload_batches_continue_across_mapping_leaf_boundaries ... ok
+test validation_binds_empty_state_and_visits_unread_children ... ok
+test deep_splice_rejoins_boundary_fragments_before_they_become_nonroots ... ok
+test extent_visitor_streams_the_mapping_without_fetching_payload_bytes ... ok
+test product_range_reader_uses_bounded_authenticated_payload_batches ... ok
+test replace_persists_no_new_unreachable_objects ... ok
+test mutation_batch_rejects_later_overlap_before_sealed_nodes_can_be_orphaned ... ok
+test frozen_three_mib_mapping_is_below_one_percent ... ok
+test streamed_build_and_ranges_match_vec_oracle ... ok
+test splices_match_vec_and_preserve_retained_root_without_suffix_payload_reads ... ok
+test large_replacement_persists_no_flushed_unreachable_prefix_nodes ... ok
+test mutation_batch_preserves_root_and_persists_only_final_extent_spines ... ok
+test two_thousand_randomized_splices_match_every_revision_and_retained_history ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 51.84s
+
+
+running 1 test
+test shifted_stream_retains_a_frozen_canonical_suffix_that_fixed_blocks_lose ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+
+
+running 12 tests
+test exact_reads_and_local_mutation_share_one_logical_owner ... ok
+test three_root_reconciliation_combines_content_and_metadata_on_one_inode ... ok
+test three_root_reconciliation_combines_disjoint_metadata_keys ... ok
+test three_root_reconciliation_combines_disjoint_names_in_one_directory ... ok
+test path_diff_reuses_equal_persistent_objects_and_emits_incrementally ... ok
+test rename_keeps_old_roots_readable_and_handles_same_and_cross_directory_moves ... ok
+test three_root_reconciliation_never_publishes_an_undercounted_parallel_hard_link ... ok
+test three_root_reconciliation_streams_independent_inode_changes_and_reports_overlap ... ok
+test path_diff_preserves_order_types_metadata_symlinks_directories_and_hard_links ... ok
+test typed_conflicts_report_canonical_paths_and_exact_choice_roots ... ok
+test inode_reconciliation_prunes_equal_persistent_subtrees ... ok
+test new_file_write_preserves_replacement_cdc_and_structural_counters ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.77s
+
+
+running 9 tests
+test portable_and_apple_metadata_are_exact_and_order_preserving ... ok
+test inode_decoder_rejects_size_count_and_level_before_entry_allocation ... ok
+test exact_namespace_values_round_trip_and_reject_trailing_bytes ... ok
+test directory_inode_and_metadata_nodes_are_strict_and_ordered ... ok
+test metadata_empty_root_is_canonical_and_one_child_root_is_not ... ok
+test metadata_child_ranges_must_not_overlap ... ok
+test persistent_metadata_tree_round_trips_multiple_levels ... ok
+test metadata_lookup_and_fixed_key_replacement_touch_only_one_cow_spine ... ok
+test metadata_builder_keeps_only_bounded_tail_summaries ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+
+running 18 tests
+test repeated_child_levels_are_rejected_before_loading_grandchildren ... ok
+test inode_branch_summary_and_occupancy_are_authoritative ... ok
+test directory_state_and_branch_summaries_are_authoritative ... ok
+test directory_and_inode_child_ranges_must_not_overlap ... ok
+test directory_diff_merges_unequal_canonical_heights_without_collecting_entries ... ok
+test inode_diff_merges_unequal_canonical_heights_without_collecting_entries ... ok
+test directory_diff_streams_valid_unmatched_prefixes_tails_and_renames ... ok
+test underfull_middle_inode_leaf_borrows_right_before_merging_left ... ok
+test underfull_middle_directory_borrows_right_before_merging_left ... ok
+test variable_width_directory_borrows_until_both_leaves_are_filled ... ok
+test level_two_ranges_use_true_leftmost_leaf_minimum ... ok
+test paired_persistent_diffs_prune_unchanged_directory_and_inode_subtrees ... ok
+test deterministic_mixed_directory_edits_preserve_periodic_roots ... ok
+test remove_and_rename_persist_only_reachable_directory_and_inode_nodes ... ok
+test inode_remove_merges_collapses_and_preserves_retained_root ... ok
+test remove_merge_root_collapse_and_rename_match_oracle ... ok
+test inode_table_scales_and_record_update_rewrites_only_its_spine ... ok
+test ten_thousand_names_path_copy_and_retained_roots_match_ordered_oracle ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.68s
+
+
+running 2 tests
+test selected_inode_content_preserves_unselected_alias_reference_count ... ok
+test choices_expand_missing_parent_then_apply_later_child_without_losing_siblings ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

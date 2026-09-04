@@ -2,6 +2,7 @@
 
 mod capture;
 mod changes;
+mod commit_file;
 mod commit_spool;
 mod container;
 mod daemon;

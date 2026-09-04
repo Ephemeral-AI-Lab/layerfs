@@ -5,7 +5,7 @@ use layerfs_content::tree::inode::InodeId;
 use layerfs_layerstack_store::{Result, StoreError};
 use std::path::Path;
 
-const RECORD: usize = 41;
+pub(crate) const RECORD: usize = 49;
 const BUFFER: usize = 1024;
 #[derive(Default)]
 pub(crate) struct References {
@@ -14,6 +14,7 @@ pub(crate) struct References {
     // A flush is committed only after every pending record was appended.
     // Keep the old extent authoritative if append or rollback truncation fails.
     pending_flush_base: Option<u64>,
+    inconsistent_base_hint: bool,
     pub(crate) events: u64,
     pub(crate) bookkeeping_ns: u64,
     pub(crate) buffer_peak: u64,
@@ -116,7 +117,13 @@ impl References {
         Ok(())
     }
 
-    pub(crate) fn push(&mut self, inode: Option<InodeId>, node: NodeId, delta: i64) {
+    pub(crate) fn push(
+        &mut self,
+        inode: Option<InodeId>,
+        node: NodeId,
+        delta: i64,
+        base_count: u64,
+    ) {
         debug_assert!(self.pending.len() < self.pending.capacity());
         let mut record = [0; RECORD];
         match inode {
@@ -129,11 +136,19 @@ impl References {
                 record[25..33].copy_from_slice(&node.0.to_be_bytes());
             }
         }
-        record[33..].copy_from_slice(&delta.to_be_bytes());
+        record[33..41].copy_from_slice(&delta.to_be_bytes());
+        record[41..49].copy_from_slice(&base_count.to_be_bytes());
+        self.inconsistent_base_hint |= inode.is_none() && base_count != 0;
         match self
             .pending
             .binary_search_by(|previous| previous[..33].cmp(&record[..33]))
         {
+            Ok(index) if base_hint(&self.pending[index]) != base_count => {
+                // Reservation already allowed one additional record. Preserve
+                // both facts and surface corruption at Commit before publication.
+                self.inconsistent_base_hint = true;
+                self.pending.insert(index, record);
+            }
             Ok(index) => {
                 let net = super::references::delta(&self.pending[index])
                     .checked_add(delta)
@@ -141,7 +156,7 @@ impl References {
                 if net == 0 {
                     self.pending.remove(index);
                 } else {
-                    self.pending[index][33..].copy_from_slice(&net.to_be_bytes());
+                    self.pending[index][33..41].copy_from_slice(&net.to_be_bytes());
                 }
             }
             Err(index) => self.pending.insert(index, record),
@@ -154,6 +169,9 @@ impl References {
         disk_limit: u64,
         memory: u64,
     ) -> Result<Run<RECORD>> {
+        if self.inconsistent_base_hint {
+            return Err(StoreError::Integrity("namespace reference base hint"));
+        }
         // Seal mutation facts before allocating Commit's sorter. The raw file
         // remains the retry authority; release the now-empty mutation buffer.
         self.flush_pending(dir)?;
@@ -195,6 +213,7 @@ impl References {
         }
         self.pending = Vec::new();
         self.pending_flush_base = None;
+        self.inconsistent_base_hint = false;
         self.events = 0;
         self.bookkeeping_ns = 0;
         self.buffer_peak = 0;
@@ -213,7 +232,11 @@ pub(crate) fn key(inode: Option<InodeId>, node: NodeId) -> [u8; 33] {
     key
 }
 pub(crate) fn delta(record: &[u8; RECORD]) -> i64 {
-    i64::from_be_bytes(record[33..].try_into().unwrap())
+    i64::from_be_bytes(record[33..41].try_into().unwrap())
+}
+
+pub(crate) fn base_hint(record: &[u8; RECORD]) -> u64 {
+    u64::from_be_bytes(record[41..49].try_into().unwrap())
 }
 
 impl Workspace {
@@ -233,8 +256,12 @@ impl Workspace {
     pub(crate) fn note_reference(&mut self, node: NodeId, delta: i64) {
         let started = std::time::Instant::now();
         self.mark_commit_node(node);
-        self.references
-            .push(self.nodes[&node].canonical, node, delta);
+        self.references.push(
+            self.nodes[&node].canonical,
+            node,
+            delta,
+            self.nodes[&node].base_ref_count,
+        );
         self.references.bookkeeping_ns = self
             .references
             .bookkeeping_ns
@@ -252,6 +279,39 @@ thread_local! {
 mod tests {
     use super::*;
     #[test]
+    fn authenticated_base_hint_survives_spill_and_rejects_conflicting_coalescing() {
+        let dir =
+            std::env::temp_dir().join(format!("layerfs-reference-hints-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let inode = InodeId::allocate([21; 32], 1);
+        let mut refs = References::default();
+        refs.reserve(&dir, 4096, RECORD as u64).unwrap();
+        refs.push(Some(inode), NodeId(2), -1, 3);
+        refs.reserve(&dir, 4096, RECORD as u64).unwrap(); // flush first fact
+        refs.push(Some(inode), NodeId(2), -1, 3);
+        let mut sorted = refs.sorted(&dir, 4096, 4096).unwrap();
+        let mut net = 0;
+        while let Some(record) = sorted.next().unwrap() {
+            assert_eq!(base_hint(&record), 3);
+            net += delta(&record);
+        }
+        assert_eq!(net, -2);
+        sorted.remove().unwrap();
+        refs.clear().unwrap();
+        refs.reserve(&dir, 4096, 4096).unwrap();
+        refs.push(Some(inode), NodeId(2), 1, 3);
+        refs.reserve(&dir, 4096, 4096).unwrap();
+        refs.push(Some(inode), NodeId(2), -1, 4);
+        assert_eq!(refs.bytes(), 2 * RECORD as u64);
+        assert!(matches!(
+            refs.sorted(&dir, 4096, 4096),
+            Err(StoreError::Integrity("namespace reference base hint"))
+        ));
+        refs.clear().unwrap();
+        std::fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
     fn failed_append_and_rollback_keep_authoritative_facts_and_retry_exactly_once() {
         let dir =
             std::env::temp_dir().join(format!("layerfs-reference-rollback-{}", std::process::id()));
@@ -261,7 +321,7 @@ mod tests {
         let second = InodeId::allocate([41; 32], 2);
         for (node, inode) in [(NodeId(2), first), (NodeId(3), second)] {
             refs.reserve(&dir, 4096, 2 * RECORD as u64).unwrap();
-            refs.push(Some(inode), node, 1);
+            refs.push(Some(inode), node, 1, 1);
         }
         // The first append physically succeeds; the second fails, then rollback
         // fails twice. Neither retry may treat the appended prefix as new facts.
@@ -306,13 +366,13 @@ mod tests {
         let inode = InodeId::allocate([7; 32], 1);
         for _ in 0..10000 {
             refs.reserve(&dir, 4096, 4096).unwrap();
-            refs.push(Some(inode), NodeId(2), 1);
+            refs.push(Some(inode), NodeId(2), 1, 1);
             refs.reserve(&dir, 4096, 4096).unwrap();
-            refs.push(Some(inode), NodeId(2), -1);
+            refs.push(Some(inode), NodeId(2), -1, 1);
         }
         assert_eq!(refs.bytes(), 0);
         refs.reserve(&dir, 4096, 4096).unwrap();
-        refs.push(Some(inode), NodeId(2), -1);
+        refs.push(Some(inode), NodeId(2), -1, 1);
         assert!(refs.reserve(&dir, 0, 4096).is_err());
         assert_eq!(refs.existing_delta(inode).unwrap(), -1);
         refs.clear().unwrap();

@@ -12,3 +12,6 @@ test-instrumentation = []
 blake3.workspace = true
 layerfs-content = { path = "../layerfs-content" }
 rusqlite.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "=0.38.44", features = ["time"] }

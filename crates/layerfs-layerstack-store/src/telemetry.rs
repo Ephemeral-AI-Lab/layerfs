@@ -86,6 +86,13 @@ pub struct FuseWriteReceipt {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct WorkspaceCommitReceipt {
+    pub content_preparation_flushes: u64,
+    pub content_preparation_flush_objects: u64,
+    pub content_preparation_flush_bytes: u64,
+    pub content_preparation_private_puts: u64,
+    pub content_preparation_deferred_peak_bytes: u64,
+    pub content_preparation_pipeline_reserved_bytes: u64,
+    pub content_pool: crate::construction::ConstructionMetrics,
     pub total_ns: u64,
     pub pause_fence_ns: u64,
     pub quiesce_ns: u64,
@@ -164,6 +171,9 @@ pub struct WorkspaceCommitReceipt {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct WorkspaceCommitDiagnostics {
+    pub reference_base_hint_live_bytes: u64,
+    pub reference_base_hint_node_capacity_bytes: u64,
+    pub content_pool: crate::construction::ConstructionMetrics,
     pub cdc_bytes_scanned: u64,
     pub edit_count: u64,
     pub edit_piece_count: u64,
@@ -466,6 +476,15 @@ pub fn note_workspace_fingerprint_memory(scratch: u64, retained_references: u64)
     });
 }
 
+pub fn note_workspace_reference_base_hints(live: u64, capacity: u64) {
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.reference_base_hint_live_bytes = live;
+            diagnostic.reference_base_hint_node_capacity_bytes = capacity;
+        }
+    });
+}
+
 pub fn note_workspace_commit_tracking(calls: u64, ns: u64, visits: u64, bytes: u64, capacity: u64) {
     WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
         if let Some(diagnostic) = current.borrow_mut().as_mut() {
@@ -608,6 +627,43 @@ pub(crate) fn note_workspace_admission_pipeline(
             receipt.admission_workers_joined = joined;
             receipt.admission_pipeline_reserved_bytes = reserved;
             receipt.admission_producer_hash_calls = hashes;
+        }
+    });
+}
+
+pub fn note_workspace_content_preparation(
+    flushes: u64,
+    objects: u64,
+    bytes: u64,
+    puts: u64,
+    deferred_peak: u64,
+    pipeline_reserved: u64,
+) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.content_preparation_flushes += flushes;
+            receipt.content_preparation_flush_objects += objects;
+            receipt.content_preparation_flush_bytes += bytes;
+            receipt.content_preparation_private_puts += puts;
+            receipt.content_preparation_deferred_peak_bytes = receipt
+                .content_preparation_deferred_peak_bytes
+                .max(deferred_peak);
+            receipt.content_preparation_pipeline_reserved_bytes = receipt
+                .content_preparation_pipeline_reserved_bytes
+                .max(pipeline_reserved);
+        }
+    });
+}
+
+pub(crate) fn note_workspace_content_pool(metrics: crate::construction::ConstructionMetrics) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.content_pool.accumulate(metrics);
+        }
+    });
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.content_pool.accumulate(metrics);
         }
     });
 }

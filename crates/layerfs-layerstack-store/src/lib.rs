@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod branch;
+mod construction;
 mod error;
 mod ids;
 mod layerstack;
@@ -68,3 +69,11 @@ pub use telemetry::note_workspace_base_inode_reads;
 
 #[doc(hidden)]
 pub use telemetry::note_workspace_tree_spill;
+
+pub use construction::{
+    ConstructionMetrics, ConstructionWorkerMetrics, ConstructionWorkerStore, PrivateContentPool,
+};
+
+pub use telemetry::note_workspace_content_preparation;
+
+pub use telemetry::note_workspace_reference_base_hints;

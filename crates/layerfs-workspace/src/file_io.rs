@@ -595,6 +595,7 @@ impl Workspace {
             commit_prev: NodeId(0),
             commit_next: NodeId(0),
             canonical: None,
+            base_ref_count: 0,
             paths: [path].into(),
             mode,
             links: 1,

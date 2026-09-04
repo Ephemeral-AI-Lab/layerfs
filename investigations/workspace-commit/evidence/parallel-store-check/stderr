@@ -1,0 +1,17 @@
+warning: method `push` is never used
+    --> crates/layerfs-layerstack-store/src/objects.rs:1530:8
+     |
+1525 | impl IdOrder {
+     | ------------ method in this implementation
+...
+1530 |     fn push(&mut self, id: ObjectId) -> Result<()> {
+     |        ^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling layerfs-layerstack-store v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-layerstack-store)
+warning: `layerfs-layerstack-store` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.96s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_layerstack_store-06cf7196ab507abd)
+     Running tests/v4.rs (target/debug/deps/v4-b1cb77d8b1e57f7f)
+   Doc-tests layerfs_layerstack_store

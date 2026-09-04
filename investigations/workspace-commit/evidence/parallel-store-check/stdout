@@ -1,0 +1,78 @@
+
+running 55 tests
+test layerstack::tests::benchmark_initialization_seed_is_exact_lower_hex ... ok
+test ids::tests::ids_remain_typed_uuidv7_and_v2_domain_separated ... ok
+test construction::tests::pool_telemetry_accumulates_restarts_and_preserves_unavailable_cpu ... ok
+test construction::tests::private_pool_preserves_collector_collision_and_cancels ... ok
+test construction::tests::private_pool_preserves_read_own_writes_and_joins ... ok
+test layerstack::tests::parallel_large_spill_matches_legacy_after_fresh_store_reopen ... ignored, large spill correctness gate
+test layerstack::tests::batched_directory_import_matches_legacy_canonical_root ... ok
+test construction::tests::private_pool_drop_cancels_full_slab_queue_and_worker_panic ... ok
+test objects::tests::append_only_blocks_are_written_once_read_forward_and_unlinked ... ok
+test objects::tests::append_only_reversed_worker_completion_sorts_to_task_order ... ok
+test objects::tests::append_only_writer_rejects_and_counts_outer_gets ... ok
+test layerstack::tests::parallel_root_import_and_cross_directory_hard_link_match_legacy ... ok
+test objects::tests::compact_inode_pair_sidecar_is_bounded_forward_only_and_unlinked ... ok
+test layerstack::tests::late_direct_initialization_failure_publishes_nothing ... ok
+test layerstack::tests::native_metadata_cache_is_exact_canonical_and_bounded ... ok
+test objects::tests::empty_append_only_segment_finishes_without_a_read_pass ... ok
+test layerstack::tests::composite_initialization_builds_the_final_root_without_worker_payload_reads ... ok
+test layerstack::tests::compact_inode_cross_task_hard_link_falls_back_before_admission ... ok
+test objects::tests::final_admission_cancels_oversized_adoption_wait ... ok
+test objects::tests::construction_flush_and_index_failures_keep_only_owned_cleanup ... ok
+test objects::tests::final_candidate_consumption_moves_memory_and_reads_owned_spill ... ok
+test objects::tests::buffered_append_reader_scales_raw_reads_with_bytes_not_tiny_frames ... ok
+test objects::tests::final_admission_cancels_full_queue_and_preserves_consumer_error ... ok
+test objects::tests::final_admission_slabs_preserve_order_large_objects_and_join ... ok
+test objects::tests::memory_segment_moves_owned_canonical_bytes ... ok
+test objects::tests::parent_payload_copy_counter_has_a_positive_control ... ok
+test objects::tests::owned_candidate_capacity_boundary_spills_without_changing_encoded_bytes ... ok
+test objects::tests::direct_admission_is_independent_of_segment_order ... ok
+test objects::tests::immutable_source_checked_unlink_retains_index_and_order_reads_after_retry ... ok
+test objects::tests::initial_unlink_failure_and_many_owners_transfer_without_global_slot_limit ... ok
+test objects::tests::segment_admission_deduplicates_across_pending_segments ... ok
+test objects::tests::spill_index_overflow_preserves_lookup_dedup_and_cleanup_without_scans ... ok
+test objects::tests::spilled_segment_streams_bounded_pages_once_and_unlinks ... ok
+test schema::tests::candidate_cleanup_failure_retains_paths_and_blocks_next_operation_until_retry ... ok
+test layerstack::tests::compact_inode_mutable_records_are_bounded_by_one_task ... ok
+test layerstack::tests::append_only_zero_get_path_matches_every_canonical_object_class ... ok
+test schema::tests::wal_store_is_rejected_without_mutation ... ok
+test statements::tests::point_name_and_keyset_queries_use_indexed_search_plans ... ok
+test statements::tests::exact_manifest_prepares_against_exact_v4_schema ... ok
+test telemetry::tests::edit_diagnostics_are_separate_from_the_legacy_commit_receipt ... ok
+test workspace::tests::inode_lookup_preserves_private_overlay_source_and_owned_budget ... ok
+test workspace::tests::published_inode_lookup_borrows_sql_and_cache_with_tiny_budget ... ok
+test workspace::tests::snapshot_cache_reads_only_requested_authenticated_objects_and_reuses_them ... ok
+test objects::tests::direct_admission_honors_every_frozen_count_boundary ... ok
+test objects::tests::segment_admission_deduplicates_after_a_batch_boundary ... ok
+test objects::tests::planned_admission_keeps_every_object_transaction_below_the_frozen_bounds ... ok
+test objects::tests::prevalidated_transfer_seals_a_nonempty_spill_tail ... ok
+test objects::tests::finished_candidate_payload_spill_is_private_read_only_and_authenticated ... ok
+test objects::tests::resumable_transfer_keeps_a_spill_writable ... ok
+test layerstack::tests::batched_directory_import_retains_only_final_structure ... ok
+test layerstack::tests::over_task_block_limit_falls_back_before_admission_and_reuses_store ... ok
+test layerstack::tests::compact_inode_path_matches_canonical_roots_at_every_directory_tier ... ok
+test schema::tests::every_owned_connection_uses_the_frozen_runtime_pragmas ... ok
+test layerstack::tests::multi_batch_publication_failure_removes_admitted_objects ... ok
+test layerstack::tests::oversized_single_task_clears_direct_admission_and_falls_back ... ok
+
+test result: ok. 54 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 15.71s
+
+
+running 7 tests
+test entity_names_enforce_the_exact_boundary ... ok
+test directory_initialization_receipt_counts_scanned_files_and_bytes ... ok
+test exact_v4_schema_runtime_and_old_schema_rejection ... ok
+test one_store_initialize_fork_commit_add_and_dedup_are_atomic ... ok
+test concurrent_commit_has_one_cas_winner ... ok
+test visible_missing_and_same_length_corrupt_objects_are_integrity_errors ... ok
+test no_op_commit_writes_nothing_and_every_publication_statement_rolls_back ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 1 test
+test crates/layerfs-layerstack-store/src/telemetry.rs - telemetry::WorkspaceCommitDiagnosticsGuard (line 335) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+

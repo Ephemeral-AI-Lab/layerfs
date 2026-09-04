@@ -151,6 +151,56 @@ pub(crate) struct PieceTree {
     contiguous_spool_len: u64,
 }
 
+/// Allocation-free ordered slice iterator. Each step searches the immutable
+/// tree for the current logical offset; at most one Arc-backed Piece clone is
+/// live, with no flattened piece vector or recursion stack allocation.
+pub(crate) struct PieceRange<'a> {
+    tree: &'a PieceTree,
+    offset: u64,
+    end: u64,
+}
+
+impl Iterator for PieceRange<'_> {
+    type Item = Result<Piece>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.offset == self.end {
+            return None;
+        }
+        if self.tree.contiguous_spool_len != 0 {
+            let piece = Piece::Spool {
+                offset: self.offset,
+                len: self.end - self.offset,
+            };
+            self.offset = self.end;
+            layerfs_layerstack_store::note_workspace_commit_tree_visits(1);
+            return Some(Ok(piece));
+        }
+        let mut node = self.tree.root.as_deref();
+        let mut base = 0_u64;
+        let mut visits = 0;
+        while let Some(current) = node {
+            visits += 1;
+            let start = base + link_len(&current.left);
+            let end = start + current.piece.len();
+            if self.offset < start {
+                node = current.left.as_deref();
+            } else if self.offset >= end {
+                base = end;
+                node = current.right.as_deref();
+            } else {
+                let len = self.end.min(end) - self.offset;
+                let piece = current.piece.slice(self.offset - start, len);
+                self.offset += len;
+                layerfs_layerstack_store::note_workspace_commit_tree_visits(visits);
+                return Some(piece);
+            }
+        }
+        self.offset = self.end;
+        layerfs_layerstack_store::note_workspace_commit_tree_visits(visits);
+        Some(Err(StoreError::Integrity("piece iterator range")))
+    }
+}
+
 impl PieceTree {
     pub(crate) fn empty() -> Self {
         Self {
@@ -260,6 +310,25 @@ impl PieceTree {
             return Err(StoreError::InvalidInput("workspace piece limit"));
         }
         Ok(next)
+    }
+
+    pub(crate) fn iter_range(&self, start: u64, end: u64) -> Result<PieceRange<'_>> {
+        if start > end || end > self.len() {
+            return Err(StoreError::InvalidInput("file range"));
+        }
+        Ok(PieceRange {
+            tree: self,
+            offset: start,
+            end,
+        })
+    }
+
+    pub(crate) fn iter(&self) -> PieceRange<'_> {
+        PieceRange {
+            tree: self,
+            offset: 0,
+            end: self.len(),
+        }
     }
 
     pub(crate) fn pieces(&self) -> Vec<Piece> {

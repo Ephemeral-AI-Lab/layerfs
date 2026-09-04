@@ -1,0 +1,24 @@
+   Compiling layerfs-content v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-content)
+   Compiling layerfs-layerstack-store v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-layerstack-store)
+error[E0599]: no method named `send` found for enum `SlabTransport` in the current scope
+    --> crates/layerfs-layerstack-store/src/objects.rs:3481:30
+     |
+ 278 |   enum SlabTransport {
+     |   ------------------ method `send` not found for this enum
+...
+3479 |                           let sent = writer
+     |  ____________________________________-
+3480 | |                             .sender
+3481 | |                             .send(slab)
+     | |                             -^^^^ method not found in `SlabTransport`
+     | |_____________________________|
+     |
+     |
+note: the method `send` exists on the type `SyncSender<InitializationObjectSlab>`
+    --> /Users/yifanxu/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/sync/mpsc.rs:696:5
+     |
+ 696 |     pub fn send(&self, t: T) -> Result<(), SendError<T>> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `layerfs-layerstack-store` (lib test) due to 1 previous error

@@ -817,7 +817,7 @@ impl InitializationDiagnostic {
         );
         for producer in fast.producers {
             eprintln!(
-                "layerfs-initialization-producer-v1 nonce={} producer={} wall_ns={} blocked_ns={} tasks={} files={} bytes={} completion_offset_ns={}",
+                "layerfs-initialization-producer-v1 nonce={} producer={} wall_ns={} blocked_ns={} tasks={} files={} bytes={} completion_offset_ns={} cpu_ns={}",
                 self.nonce,
                 producer.index,
                 producer.metrics.producer_wall_ns,
@@ -826,6 +826,7 @@ impl InitializationDiagnostic {
                 producer.metrics.producer_files,
                 producer.metrics.producer_bytes,
                 producer.metrics.producer_completion_offset_ns,
+                producer.metrics.producer_cpu_ns.map_or_else(|| "unavailable".into(), |n| n.to_string()),
             );
         }
     }
@@ -978,6 +979,7 @@ fn direct_initialize_root_directories_inner(
                         active_producer_peak
                             .fetch_max(active, std::sync::atomic::Ordering::Relaxed);
                         let producer_started = std::time::Instant::now();
+                        let producer_cpu = crate::construction::thread_cpu();
                         let result = (|| {
                             let mut directories = Vec::new();
                             let mut pair_blocks = Vec::new();
@@ -1046,6 +1048,9 @@ fn direct_initialize_root_directories_inner(
                                 .as_nanos()
                                 .min(u128::from(u64::MAX))
                                 as u64;
+                            slab.producer_cpu_ns = producer_cpu
+                                .zip(crate::construction::thread_cpu())
+                                .map(|(before, after)| after.saturating_sub(before));
                             slab.producer_completion_offset_ns = pipeline_started
                                 .elapsed()
                                 .as_nanos()

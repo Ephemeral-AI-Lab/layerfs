@@ -228,6 +228,7 @@ pub(crate) struct InitializationSlabWriterMetrics {
     pub parent_payload_copy_bytes: u64,
     pub structural_peak_bytes: u64,
     pub producer_wall_ns: u64,
+    pub producer_cpu_ns: Option<u64>,
     pub producer_completion_offset_ns: u64,
     pub producer_tasks: u64,
     pub producer_files: u64,
@@ -275,8 +276,24 @@ impl InitializationSlabQueueMetrics {
     }
 }
 
+enum SlabTransport {
+    Channel(std::sync::mpsc::SyncSender<InitializationObjectSlab>),
+    Callback(Box<dyn FnMut(InitializationObjectSlab) -> Result<u64> + Send>),
+}
+
+impl SlabTransport {
+    fn send(&mut self, slab: InitializationObjectSlab) -> Result<()> {
+        match self {
+            Self::Channel(sender) => sender
+                .send(slab)
+                .map_err(|_| StoreError::Integrity("initialization slab receiver")),
+            Self::Callback(sender) => sender(slab).map(|_| ()),
+        }
+    }
+}
+
 pub(crate) struct InitializationSlabWriter {
-    sender: std::sync::mpsc::SyncSender<InitializationObjectSlab>,
+    sender: SlabTransport,
     queue: std::sync::Arc<InitializationSlabQueueMetrics>,
     objects: Vec<CanonicalObject>,
     payload_bytes: usize,
@@ -360,13 +377,30 @@ impl InitializationSlabWriter {
         queue: std::sync::Arc<InitializationSlabQueueMetrics>,
     ) -> Self {
         Self {
-            sender,
+            sender: SlabTransport::Channel(sender),
             queue,
             objects: Vec::with_capacity(INITIALIZATION_SLAB_OBJECTS),
             payload_bytes: 0,
             owned_capacity_bytes: 0,
             metrics: InitializationSlabWriterMetrics::default(),
         }
+    }
+
+    pub(crate) fn with_transport(
+        sender: Box<dyn FnMut(InitializationObjectSlab) -> Result<u64> + Send>,
+        queue: std::sync::Arc<InitializationSlabQueueMetrics>,
+    ) -> Self {
+        Self {
+            sender: SlabTransport::Callback(sender),
+            queue,
+            objects: Vec::with_capacity(INITIALIZATION_SLAB_OBJECTS),
+            payload_bytes: 0,
+            owned_capacity_bytes: 0,
+            metrics: InitializationSlabWriterMetrics::default(),
+        }
+    }
+    pub(crate) fn metrics(&self) -> InitializationSlabWriterMetrics {
+        self.metrics
     }
 
     pub(crate) fn finish(mut self) -> Result<InitializationSlabWriterMetrics> {
@@ -378,7 +412,7 @@ impl InitializationSlabWriter {
         self.metrics.canonical_hash_calls = self.metrics.canonical_hash_calls.saturating_add(calls);
     }
 
-    fn flush(&mut self) -> Result<()> {
+    pub(crate) fn flush(&mut self) -> Result<()> {
         if self.objects.is_empty() {
             return Ok(());
         }
@@ -388,21 +422,33 @@ impl InitializationSlabWriter {
         };
         self.owned_capacity_bytes = 0;
         self.queue.before_send(slab.payload_bytes);
-        match self.sender.try_send(slab) {
-            Ok(()) => {}
-            Err(std::sync::mpsc::TrySendError::Full(slab)) => {
-                let started = Instant::now();
-                let sent = self.sender.send(slab);
-                self.metrics.blocked_ns =
-                    self.metrics.blocked_ns.saturating_add(elapsed_ns(started));
-                if let Err(error) = sent {
-                    self.queue.send_failed(error.0.payload_bytes);
+        match &mut self.sender {
+            SlabTransport::Channel(sender) => match sender.try_send(slab) {
+                Ok(()) => {}
+                Err(std::sync::mpsc::TrySendError::Full(slab)) => {
+                    let started = Instant::now();
+                    let sent = sender.send(slab);
+                    self.metrics.blocked_ns =
+                        self.metrics.blocked_ns.saturating_add(elapsed_ns(started));
+                    if let Err(error) = sent {
+                        self.queue.send_failed(error.0.payload_bytes);
+                        return Err(StoreError::Integrity("initialization slab receiver"));
+                    }
+                }
+                Err(std::sync::mpsc::TrySendError::Disconnected(slab)) => {
+                    self.queue.send_failed(slab.payload_bytes);
                     return Err(StoreError::Integrity("initialization slab receiver"));
                 }
-            }
-            Err(std::sync::mpsc::TrySendError::Disconnected(slab)) => {
-                self.queue.send_failed(slab.payload_bytes);
-                return Err(StoreError::Integrity("initialization slab receiver"));
+            },
+            SlabTransport::Callback(sender) => {
+                let bytes = slab.payload_bytes;
+                match sender(slab) {
+                    Ok(blocked) => self.metrics.blocked_ns += blocked,
+                    Err(error) => {
+                        self.queue.send_failed(bytes);
+                        return Err(error);
+                    }
+                }
             }
         }
         self.metrics.handoffs += 1;
@@ -492,6 +538,13 @@ pub trait ObjectSource: Send + Sync {
     #[doc(hidden)]
     fn candidate_cleanup(&self) -> Option<CandidateCleanup> {
         None
+    }
+
+    #[doc(hidden)]
+    fn read_object_bounded(&self, _id: ObjectId, _maximum: usize) -> Result<Vec<u8>> {
+        Err(StoreError::InvalidInput(
+            "bounded object source unsupported",
+        ))
     }
 
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>>;
@@ -2108,6 +2161,34 @@ impl DeferredObjectStore {
         }
     }
 
+    fn get_bounded(&self, id: ObjectId, maximum: usize) -> Result<Option<Vec<u8>>> {
+        match &self.storage {
+            DeferredObjects::Memory { rows, .. } => rows
+                .get(&id)
+                .map(|bytes| {
+                    if bytes.len() > maximum {
+                        return Err(StoreError::Core(CoreError::ObjectLimitExceeded));
+                    }
+                    Ok(bytes.clone())
+                })
+                .transpose(),
+            DeferredObjects::Spill(spill) => {
+                if let Some((_, length)) = spill.pending_index.get(&id) {
+                    if *length > maximum {
+                        return Err(StoreError::Core(CoreError::ObjectLimitExceeded));
+                    }
+                } else if let Some((_, length)) = spill.location(id)? {
+                    if length > maximum as u64 {
+                        return Err(StoreError::Core(CoreError::ObjectLimitExceeded));
+                    }
+                } else {
+                    return Ok(None);
+                }
+                spill.get(id)
+            }
+        }
+    }
+
     fn encoded_length(&self, id: ObjectId) -> Result<u64> {
         match &self.storage {
             DeferredObjects::Memory { rows, .. } => rows
@@ -2658,6 +2739,18 @@ pub struct ObjectBuffer<'a> {
 }
 
 impl<'a> ObjectBuffer<'a> {
+    pub(crate) fn collect_owned(&mut self, object: CanonicalObject) -> Result<()> {
+        self.objects.put_owned(object.id, object.bytes)
+    }
+    pub(crate) fn read_bounded(&self, id: ObjectId, maximum: usize) -> Result<Vec<u8>> {
+        if let Some(bytes) = self.objects.get_bounded(id, maximum)? {
+            return Ok(bytes);
+        }
+        self.source
+            .ok_or(StoreError::MissingObject(id))?
+            .read_object_bounded(id, maximum)
+    }
+
     pub fn new(source: &'a dyn ObjectSource) -> Result<Self> {
         Ok(Self {
             source: Some(source),
@@ -2775,6 +2868,9 @@ impl ObjectStore for ObjectBuffer<'_> {
 }
 
 impl ObjectSource for ObjectBuffer<'_> {
+    fn read_object_bounded(&self, id: ObjectId, maximum: usize) -> Result<Vec<u8>> {
+        self.read_bounded(id, maximum)
+    }
     fn candidate_cleanup(&self) -> Option<CandidateCleanup> {
         self.objects.cleanup.clone()
     }
@@ -2784,6 +2880,10 @@ impl ObjectSource for ObjectBuffer<'_> {
 }
 
 impl ObjectSource for DeferredObjectStore {
+    fn read_object_bounded(&self, id: ObjectId, maximum: usize) -> Result<Vec<u8>> {
+        self.get_bounded(id, maximum)?
+            .ok_or(StoreError::MissingObject(id))
+    }
     fn candidate_cleanup(&self) -> Option<CandidateCleanup> {
         self.cleanup.clone()
     }
@@ -3868,6 +3968,23 @@ pub(crate) fn insert_initialization_segment_batch(
 }
 
 impl ObjectSource for crate::schema::StoreDb {
+    fn read_object_bounded(&self, id: ObjectId, maximum: usize) -> Result<Vec<u8>> {
+        let connection = self.reader()?;
+        let mut statement = connection.prepare_cached(crate::statements::objects::GET)?;
+        let mut rows = statement.query([id.as_bytes().as_slice()])?;
+        let row = rows.next()?.ok_or(StoreError::MissingObject(id))?;
+        let bytes = row
+            .get_ref(0)?
+            .as_blob()
+            .map_err(|_| StoreError::Integrity("object byte type"))?;
+        if bytes.len() > maximum {
+            return Err(StoreError::Core(CoreError::ObjectLimitExceeded));
+        }
+        layerfs_content::authenticate_identity(bytes, id)?;
+        note_read_batch_hash();
+        Ok(bytes.to_vec())
+    }
+
     fn candidate_cleanup(&self) -> Option<CandidateCleanup> {
         Some(CandidateCleanup(self.clone()))
     }

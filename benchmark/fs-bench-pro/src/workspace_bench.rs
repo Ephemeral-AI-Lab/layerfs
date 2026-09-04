@@ -646,6 +646,31 @@ fn native_verify(
     Ok(())
 }
 
+fn colocated_profile() -> AnyResult<()> {
+    let read = |name: &str| std::fs::read_to_string(format!("/sys/fs/cgroup/{name}"));
+    let cpu = read("cpu.max")?;
+    let memory = read("memory.max")?;
+    let swap = read("memory.swap.max")?;
+    let pids = read("pids.max")?;
+    let cpuset = read("cpuset.cpus.effective")?;
+    emit(
+        "diagnostic-profile",
+        &[
+            ("profile", quote("linux-colocated-host-fuse-exploratory")),
+            ("cpu_max", quote(cpu.trim())),
+            ("cpuset_cpus_effective", quote(cpuset.trim())),
+            (
+                "available_parallelism",
+                std::thread::available_parallelism()?.get().to_string(),
+            ),
+            ("memory_max", quote(memory.trim())),
+            ("memory_swap_max", quote(swap.trim())),
+            ("pids_max", quote(pids.trim())),
+        ],
+    );
+    Ok(())
+}
+
 fn run_case(
     root: &Path,
     input: &Path,
@@ -661,10 +686,7 @@ fn run_case(
         {
             return Err("colocated diagnostic requires Linux bulk mutation".into());
         }
-        emit(
-            "diagnostic-profile",
-            &[("profile", quote("linux-colocated-host-fuse-2cpu-2g"))],
-        );
+        colocated_profile()?;
         None
     } else {
         Some(container.clone())
@@ -1392,10 +1414,12 @@ fn colocated_initialize(root: &Path, fixture: &Path, case: &Case, seed: u8) -> A
             "matched initialization requires Linux create input and prescribed seed".into(),
         );
     }
+    colocated_profile()?;
     let (bytes, files, plan) = entry_info(&registry::expected(case, seed, 1)?)?;
     std::fs::create_dir(root)?;
     let store = Arc::new(LayerStackStore::create(root.join("store.sqlite"))?);
     let client = Client::connect(store.clone())?;
+    let _sampler = HostSampler::start()?;
     let before = process_resource_snapshot()?;
     let started = Instant::now();
     let initialized = client.initialize_layerstack(

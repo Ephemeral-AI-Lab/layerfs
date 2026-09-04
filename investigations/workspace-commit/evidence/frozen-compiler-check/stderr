@@ -1,0 +1,89 @@
+   Compiling layerfs-materialization v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-materialization)
+   Compiling layerfs-layerstack-store v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-layerstack-store)
+   Compiling layerfs-fuse v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-fuse)
+warning: method `push` is never used
+    --> crates/layerfs-layerstack-store/src/objects.rs:1530:8
+     |
+1525 | impl IdOrder {
+     | ------------ method in this implementation
+...
+1530 |     fn push(&mut self, id: ObjectId) -> Result<()> {
+     |        ^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `layerfs-layerstack-store` (lib) generated 1 warning
+   Compiling layerfs-workspace v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs-workspace-commit-engine/crates/layerfs-workspace)
+warning: fields `record`, `mode`, `mtime_seconds`, and `mtime_nanoseconds` are never read
+  --> crates/layerfs-workspace/src/changes.rs:25:5
+   |
+24 | struct BaseEntry {
+   |        --------- fields in this struct
+25 |     record: InodeRecordV1,
+   |     ^^^^^^
+26 |     mode: u32,
+   |     ^^^^
+27 |     mtime_seconds: i64,
+   |     ^^^^^^^^^^^^^
+28 |     mtime_nanoseconds: u32,
+   |     ^^^^^^^^^^^^^^^^^
+   |
+   = note: `BaseEntry` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `file_matches`, `base_record`, `file_may_differ`, `incremental_file_supported`, `mutate_existing_file`, and `workspace_range_matches_base` are never used
+    --> crates/layerfs-workspace/src/changes.rs:1371:8
+     |
+  76 | impl Workspace {
+     | -------------- methods in this implementation
+...
+1371 |     fn file_matches(&self, node: NodeId, base: ObjectId) -> Result<bool> {
+     |        ^^^^^^^^^^^^
+...
+1474 |     fn base_record(&self, inode: InodeId) -> Result<InodeRecordV1> {
+     |        ^^^^^^^^^^^
+...
+1522 |     fn file_may_differ(&self, node: NodeId, base: ObjectId) -> Result<bool> {
+     |        ^^^^^^^^^^^^^^^
+...
+1542 |     fn incremental_file_supported(&self, node: NodeId, base: ObjectId) -> bool {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1553 |     fn mutate_existing_file(
+     |        ^^^^^^^^^^^^^^^^^^^^
+...
+1651 |     fn workspace_range_matches_base(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `WorkspaceRangeReader` is never constructed
+    --> crates/layerfs-workspace/src/changes.rs:1746:8
+     |
+1746 | struct WorkspaceRangeReader<'a> {
+     |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `new` is never used
+    --> crates/layerfs-workspace/src/changes.rs:1755:8
+     |
+1754 | impl<'a> WorkspaceRangeReader<'a> {
+     | --------------------------------- associated function in this implementation
+1755 |     fn new(workspace: &'a Workspace, node: NodeId, offset: u64, len: u64) -> Result<Self> {
+     |        ^^^
+
+warning: constant `IO_SCRATCH_BYTES` is never used
+  --> crates/layerfs-workspace/src/commit_file.rs:20:18
+   |
+20 | pub(crate) const IO_SCRATCH_BYTES: usize = 2 * IO_BYTES;
+   |                  ^^^^^^^^^^^^^^^^
+
+warning: method `len` is never used
+  --> crates/layerfs-workspace/src/commit_file.rs:93:19
+   |
+47 | impl FrozenFile {
+   | --------------- method in this implementation
+...
+93 |     pub(crate) fn len(&self) -> u64 {
+   |                   ^^^
+
+warning: `layerfs-workspace` (lib test) generated 6 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.18s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-9f098567b60eadc8)

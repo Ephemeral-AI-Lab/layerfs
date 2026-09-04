@@ -357,6 +357,7 @@ dependencies = [
  "blake3",
  "layerfs-content",
  "rusqlite",
+ "rustix",
 ]
 
 [[package]]
