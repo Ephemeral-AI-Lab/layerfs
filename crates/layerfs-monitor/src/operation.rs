@@ -75,12 +75,10 @@ impl CandidateStats {
         self.validate_for(OperationFamily::WorkspaceCommit)
     }
 
-    pub fn validate_for(self, family: OperationFamily) -> bool {
-        let max_transaction_objects = if family == OperationFamily::LayerStackInitialize {
-            8192
-        } else {
-            128
-        };
+    pub fn validate_for(self, _family: OperationFamily) -> bool {
+        // The common checked admission engine and initialization share this
+        // bound; receipts must not reject a successfully published Commit.
+        let max_transaction_objects = 8192;
         self.candidate_objects == self.inserted_objects + self.reused_objects
             && self.candidate_bytes == self.inserted_bytes + self.reused_bytes
             && self.inserted_objects == self.batch_inserted_objects + self.final_inserted_objects
@@ -179,5 +177,21 @@ fn outcome_name(outcome: OperationOutcome) -> &'static str {
         OperationOutcome::HeadMoved => "head_moved",
         OperationOutcome::Busy => "busy",
         OperationOutcome::Failed => "failed",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn common_admission_receipts_check_equations_and_exact_bound() {
+        let mut stats = CandidateStats { max_transaction_objects: 8191, ..Default::default() };
+        assert!(stats.validate_for(OperationFamily::WorkspaceCommit));
+        assert!(stats.validate_for(OperationFamily::LayerStackInitialize));
+        stats.max_transaction_objects = 8192;
+        assert!(!stats.validate());
+        stats.max_transaction_objects = 1;
+        stats.candidate_objects = 1;
+        assert!(!stats.validate());
     }
 }
