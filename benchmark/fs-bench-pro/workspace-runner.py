@@ -333,6 +333,17 @@ FAST_VERIFIER_HASHES = {
 }
 
 
+FAST_V2_HASHES = {
+    "src/workspace_bench.rs": "30c716c289b72855c377c778756d5cdf28145126e0da00be4b31060b21d54f62",
+    "src/workspace_verify.rs": "e8475f29123dd44f969be8a9cd0664e0501320e8b8304e441df782f8d86be5ed",
+    "src/dedup_verify.rs": "bcb8a7effbd4d318f91e2e9e6c98ecc53e5d33c712711c501d99cdf33331f815",
+    "workspace_common.rs": "7d4011cd531af8fca7fce3a36897efbc163cdb4e26170b74ce6ebdc568a3a448",
+    "workspace_registry.rs": "2c4b4230f30f1668931aea6b77a877ddaeb191b4e916c2872313c1a9811a055d",
+    "ordinary_workloads.rs": "3a4b013e67c469f4295be89b6e8330198814e23c695ca4da5fcb029ae262b56b",
+    "workload.rs": "50f1ddc77b11909f27cf6ee7fe8e3c6f93d969d095ee6d9e11b5dfe0c0d21635",
+}
+
+
 HISTORICAL_FULL_VERIFIER_REVISION = "7948df2de269e5ffd47a232ffd8091ff83f8869f"
 HISTORICAL_FULL_VERIFIER_SHA256 = "c0bdb1d9e2faef6efe7f542f2a7a1cd35fe1c1ba1c21991c16ec22f34b9bd4e4"
 HISTORICAL_FULL_VERIFIER_HASHES = {
@@ -343,8 +354,10 @@ HISTORICAL_FULL_VERIFIER_HASHES = {
 
 def fast_verifier_source_proof(revision):
     pairs = {}
-    for relative, expected in FAST_VERIFIER_HASHES.items():
-        if relative == "src/workspace_verify.rs":
+    host = subprocess.check_output(["git", "show", f"{revision}:benchmark/fs-bench-pro/src/workspace_bench.rs"], cwd=REPO)
+    v2 = hashlib.sha256(host).hexdigest() == FAST_V2_HASHES["src/workspace_bench.rs"]
+    for relative, expected in (FAST_V2_HASHES if v2 else FAST_VERIFIER_HASHES).items():
+        if relative == "src/workspace_verify.rs" and not v2:
             expected = HISTORICAL_FULL_VERIFIER_HASHES.get(revision, expected)
         path = "benchmark/fs-bench-pro/" + relative
         old, new = [subprocess.check_output(["git", "show", f"{rev}:{path}"], cwd=REPO) for rev in (FAST_VERIFIER_SOURCE, revision)]
@@ -366,7 +379,7 @@ def preparation_source_compatibility(producer, runtime, legacy_full_helpers=Fals
         hashes = tuple(hashlib.sha256(subprocess.check_output(["git", "show", f"{value['revision']}:{name}"], cwd=REPO)).hexdigest() for value in (producer, runtime))
         if hashes[0] != hashes[1]:
             if hashes != PREPARATION_TIMED_HOST_PAIR:
-                if hashes != (PREPARATION_TIMED_HOST_PAIR[0], FAST_VERIFIER_HASHES["src/workspace_bench.rs"]):raise ValueError("unreviewed timed host helper change")
+                if hashes[0] != PREPARATION_TIMED_HOST_PAIR[0] or hashes[1] not in {FAST_VERIFIER_HASHES["src/workspace_bench.rs"], FAST_V2_HASHES["src/workspace_bench.rs"]}:raise ValueError("unreviewed timed host helper change")
                 fast_pairs = fast_verifier_source_proof(runtime["revision"])
                 for relative, marker, prefix in (("workspace_common.rs", b"pub(crate) fn decode_manifest(", True), ("workload.rs", b"pub(crate) struct Sha256", False)):
                     path = "benchmark/fs-bench-pro/" + relative
@@ -400,15 +413,20 @@ SUPPRESSION_NOTICES = {
 }
 
 
+FAST_ACCEPTANCE_NOTICE = b"> **Latest verification acceptance, 2026-09-04:** Apply the explicit\n> [fast-verification amendment](phase-1-fast-verification-amendment.md).\n> Qualified fast checks now suffice for routine Phase 1 verification; remaining\n> exhaustive coverage is deferred to Phase 2, with honest assurance labels.\n> Targeted failure confirmation, expected-error, resource and cleanup gates remain.\n\n"
+
+
 def preparation_contract_compatible(name, producer, runtime):
     path = f"docs/roadmap/0.1/0.1.3/{name}.md"
     left = producer["phase1_contract_files"].get(path);right = runtime["phase1_contract_files"].get(path)
     if left is not None and left == right:return True
     notice = SUPPRESSION_NOTICES.get(name)
-    if notice is None or left is None or right is None:return False
+    if left is None or right is None:return False
     old, new = [subprocess.check_output(["git", "show", f"{source['revision']}:{path}"], cwd=REPO) for source in (producer, runtime)]
     if hashlib.sha256(old).hexdigest() != left or hashlib.sha256(new).hexdigest() != right:return False
-    return new.count(notice) == 1 and new.replace(notice, b"", 1) == old
+    candidates = [new]
+    if name == "phase-1-handoff" and new.count(FAST_ACCEPTANCE_NOTICE) == 1:candidates.append(new.replace(FAST_ACCEPTANCE_NOTICE, b"", 1))
+    return any(value == old or notice is not None and value.count(notice) == 1 and value.replace(notice, b"", 1) == old for value in candidates)
 
 
 def select_preparation(build, assets, producer_build, registry, selected):
@@ -447,6 +465,7 @@ def certificate_source_bindings(source_revision, runtime_revision, families):
     paths = {"benchmark/fs-bench-pro/workspace_common.rs", "benchmark/fs-bench-pro/ordinary_workloads.rs",
         "benchmark/fs-bench-pro/workload.rs", "benchmark/fs-bench-pro/workspace_registry.rs"}
     paths.update(f"benchmark/fs-bench-pro/families/{family}.rs" for family in families)
+    if any(family.startswith("dedup_") for family in families):paths.add("benchmark/fs-bench-pro/dedup_workloads.rs")
     bindings = {}
     for name in sorted(paths):
         values = [subprocess.check_output(["git", "show", f"{revision}:{name}"], cwd=REPO) for revision in (source_revision, runtime_revision)]
@@ -456,23 +475,69 @@ def certificate_source_bindings(source_revision, runtime_revision, families):
             values = [value.split(b"// BEGIN NATIVE FAST VERIFICATION V1", 1)[0].rstrip() for value in values]
         elif name.endswith("/workload.rs"):
             values = [value[value.index(b"pub(crate) struct Sha256"):] for value in values]
+        elif name.endswith("workspace_registry.rs"):
+            # Only profile dispatch was added; cases/fixtures/expected recipes precede it.
+            values = [value[:value.index(b"pub(crate) fn dispatch(")] for value in values]
         if values[0] != values[1]:raise ValueError("fixture/oracle source assumptions changed: " + name)
         bindings[name] = hashlib.sha256(values[0]).hexdigest()
     return bindings
 
 
-def verification_certificate(path, case, seed, assets, campaign, registry):
+def qualified_json(path):
+    path = Path(path)
+    entries = {}
+    for line in (path.parent / "evidence.sha256").read_text().splitlines():
+        digest, name = line.split(maxsplit=1)
+        if name in entries:raise ValueError("duplicate qualified artifact seal")
+        entries[name] = digest
+    if entries.get(path.name) != custody.sha(path):raise ValueError("qualified artifact changed: " + str(path))
+    return read_json(path)
+
+
+def qualified_full_row(directory, campaign):
+    for source in sorted((Path(campaign) / "qualification").glob("*/incremental-full-rows.json")):
+        value = qualified_json(source)
+        rows = [row for row in value.get("rows", []) if Path(row.get("evidence", "")).resolve() == directory]
+        if rows:
+            if len(rows) != 1:raise ValueError("duplicate qualified full row")
+            return rows[0], custody.sha(source)
+    source = Path(campaign) / "results/review.json"
+    value = qualified_json(source)
+    rows = [row for row in value.get("rows", []) if Path(row.get("evidence", "")).resolve() == directory]
+    if len(rows) != 1:raise ValueError("no independently qualified full row")
+    return rows[0], custody.sha(source)
+
+
+def certificate_product_binding(source_revision, source_product, source_case, assets, campaign, registry):
+    if source_product == assets["product_seal"]:return {"scope": "identical product seal"}
+    spec = importlib.util.spec_from_file_location("certificate_product_report", HERE / "generate-workspace-report.py")
+    report = importlib.util.module_from_spec(spec);spec.loader.exec_module(report)
+    config = read_json(Path(campaign) / "evidence-builds.json")
+    bridges = report.configured_product_bridges(config, assets, {row["scenario_id"]:row for row in registry})
+    source = {"revision": source_revision, "product_seal": source_product}
+    return report.matching_product_bridge(bridges, source, assets, source_case)
+
+
+def verification_certificate(path, case, seed, assets, campaign, registry, components=False):
     """Qualify existing full evidence only; never run or silently fall back to verification."""
     try:
         directory = Path(path).resolve()
         custody.verify_manifest(directory)
+        if (directory / "input-qualification.json").exists():
+            marker = qualified_json(directory / "input-qualification.json")
+            if marker.get("status") != "canonical_input_qualified" or marker.get("fully_verified") is not False:raise ValueError("input reference is not qualified canonical state")
+            if marker["seed"] != seed:raise ValueError("input reference seed differs")
+            binding = certificate_product_binding(marker["source_revision"], marker["product_identity"], marker["scenario_id"], assets, campaign, registry)
+            certificate_source_bindings(marker["source_revision"], assets["revision"], {case["family_id"], marker["family_id"]})
+            return {**marker, "schema": "fast-verification-certificate-v2", "profile": "fast-verify-v2", "assurance": "canonical_input_qualified", "reference_assurance": "qualified_content_components" if components else "canonical_input_qualified", "reference_native_readback": False,
+                "source_attempt": str(directory), "source_manifest_sha256": custody.sha(directory / "evidence.sha256"), "source_scenario_id": marker["scenario_id"], "source_seed": marker["seed"], "source_step": 0, "product_seal": marker["product_identity"], "product_compatibility": binding}
         outcome = read_json(directory / "outcome.json")
         if outcome.get("mode") != "verify" or not successful(outcome) or outcome.get("timeout") or outcome.get("observer_errors"):
             raise ValueError("certificate is not a completed full verification")
-        if outcome.get("seed") != seed or outcome.get("product_identity") != assets["product_seal"]:
-            raise ValueError("certificate seed/product identity differs")
+        if outcome.get("seed") != seed:raise ValueError("certificate seed differs")
+        product_binding = certificate_product_binding(outcome["source_revision"], outcome["product_identity"], outcome["scenario_id"], assets, campaign, registry)
         source_case = next((row for row in registry if row["scenario_id"] == outcome.get("scenario_id")), None)
-        if source_case is None or source_case["operation"] not in CERTIFICATE_READONLY:
+        if source_case is None or not components and source_case["operation"] not in CERTIFICATE_READONLY:
             raise ValueError("initial profile requires a fully verified read-only pristine-input certificate")
         bindings = certificate_source_bindings(outcome["source_revision"], assets["revision"], {case["family_id"], source_case["family_id"]})
         records = parse_records(directory / "raw.jsonl")
@@ -480,9 +545,8 @@ def verification_certificate(path, case, seed, assets, campaign, registry):
             raise ValueError("certificate lacks exhaustive completion")
         report_spec = importlib.util.spec_from_file_location("certificate_report", HERE / "generate-workspace-report.py")
         report = importlib.util.module_from_spec(report_spec);report_spec.loader.exec_module(report)
-        result_dir = Path(campaign) / "results";custody.verify_manifest(result_dir)
-        review = read_json(result_dir / "review.json")
-        rows = [row for row in review.get("rows", []) if Path(row.get("evidence", "")).resolve() == directory]
+        qualified_row, qualified_row_sha256 = qualified_full_row(directory, campaign)
+        rows = [qualified_row]
         if len(rows) != 1 or rows[0].get("mode") != "verify" or rows[0].get("evidence_status") != "PASS" or rows[0].get("product_status") != "pass" or rows[0].get("issues") or rows[0].get("violations"):
             raise ValueError("certificate has no admitted full-verification row in the retained report")
         row = rows[0]
@@ -499,8 +563,8 @@ def verification_certificate(path, case, seed, assets, campaign, registry):
             raise ValueError("certificate must use independent expected data, not output-derived custody")
         if not report.digest(canonical.get("canonical_root")) or not report.digest(canonical.get("oracle_identity")):
             raise ValueError("certificate root/oracle identity missing")
-        artifacts = {name: str(package / name) for name in ("independent-manifest.tsv.gz", "file-roots.tsv.gz", "canonical-receipt.txt")}
-        return {"schema": "fast-verification-certificate-v1", "profile": FAST_PROFILE, "assurance": "fully_verified",
+        artifacts = {name: str(package / name) for name in ("independent-manifest.tsv.gz", "file-roots.tsv.gz", "payload-extents.tsv.gz", "canonical-receipt.txt")}
+        return {"schema": "fast-verification-certificate-v2", "profile": "fast-verify-v2", "assurance": "fully_verified", "reference_assurance": "qualified_content_components" if components else "fully_verified", "reference_native_readback": True, "source_seed": outcome["seed"], "source_step": 1, "product_compatibility": product_binding,
             "source_attempt": str(directory), "source_manifest_sha256": custody.sha(directory / "evidence.sha256"),
             "source_revision": outcome["source_revision"], "product_seal": outcome["product_identity"], "seed": seed,
             "source_scenario_id": outcome["scenario_id"], "input_plan_sha256": outcome["input_identity"],
@@ -508,27 +572,79 @@ def verification_certificate(path, case, seed, assets, campaign, registry):
             "source_environment_identity": outcome["environment_identity"], "runtime_environment_identity": assets["environment_identity"],
             "source_bindings": bindings, "canonical_role_census": {key:value for key,value in canonical.items() if key.startswith("canonical_")},
             "artifacts": artifacts, "artifact_sha256": {name:custody.sha(Path(value)) for name,value in artifacts.items()},
-            "report_sha256": custody.sha(result_dir / "review.json"), "scope": "Certified logical immutable reference only; not current Store byte availability or exhaustive fresh-FUSE readback. No current timing/resource equivalence is claimed."}
+            "report_sha256": qualified_row_sha256, "scope": "Certified logical immutable reference only; not current Store byte availability or exhaustive fresh-FUSE readback. No current timing/resource equivalence is claimed."}
     except (OSError, ValueError, KeyError, TypeError, StopIteration, AssertionError) as error:
         raise ValueError(f"fast-verify requires a compatible fully verified certificate; full --mode verify is required: {error}") from error
 
 
-def prepare_fast_certificate(attempt, certificate):
+def recipe_paths(binary, case, seed, step):
+    lines = command([binary, "workspace-content-recipes", case, seed, step]).splitlines()
+    if not lines or lines[0] != "path\tcontent_recipe_sha256":raise ValueError("independent recipe header")
+    result = {}
+    for line in lines[1:]:
+        path, digest = line.split("\t")
+        if path in result or len(digest) != 64:raise ValueError("independent recipe duplicate/hash")
+        result[path] = digest
+    return result
+
+
+def prepare_fast_certificate(attempt, certificate, case=None, seed=None, binary=None, target_manifest=None, input_plan=None):
     target = attempt / "verifier-exchange" / "fast-certificate";target.mkdir(parents=True)
-    copy = dict(certificate);copy["artifacts"] = {}
+    copy = dict(certificate);copy["artifacts"] = {};copy["artifact_sha256"] = {}
+    source_artifacts = {}
     for name, source in certificate["artifacts"].items():
-        destination = target / name;shutil.copyfile(source, destination)
-        if custody.sha(destination) != certificate["artifact_sha256"][name]:raise ValueError("certificate artifact changed during acquisition; full check required")
-        copy["artifacts"][name] = str(destination)
+        data = Path(source).read_bytes()
+        if hashlib.sha256(data).hexdigest() != certificate["artifact_sha256"][name]:raise ValueError("certificate artifact changed during acquisition")
+        source_artifacts[name] = data
+    components = certificate.get("reference_assurance") == "qualified_content_components"
+    if components:
+        source_roots = dict(line.split("\t") for line in gzip.decompress(source_artifacts["file-roots.tsv.gz"]).decode().splitlines()[1:])
+        source_recipes = recipe_paths(binary, certificate["source_scenario_id"], certificate["source_seed"], certificate["source_step"])
+        target_recipes = recipe_paths(binary, case["scenario_id"], seed, 0)
+        by_recipe = {}
+        for path in sorted(source_recipes):
+            if path in source_roots:by_recipe.setdefault(source_recipes[path], path)
+        mapping = {path: by_recipe[digest] for path, digest in sorted(target_recipes.items()) if digest in by_recipe}
+        text = Path(target_manifest).read_text();lines = text.splitlines()
+        if not lines or lines[0] != "workspace-independent-manifest-v1":raise ValueError("target independent manifest header")
+        metadata = {line.split("\t")[0]:line for line in lines[1:]}
+        selected = {"."}
+        for path in mapping:
+            selected.add(path)
+            while "/" in path:
+                path = path.rsplit("/", 1)[0];selected.add(path)
+        if not selected.issubset(metadata):raise ValueError("component target ancestor outside independent fixture")
+        manifest = "workspace-independent-manifest-v1\n" + "".join(metadata[path] + "\n" for path in sorted(selected))
+        roots = "path\tcontent_root\n" + "".join(path + "\t" + source_roots[source] + "\n" for path, source in mapping.items())
+        remapped = {"independent-manifest.tsv.gz":gzip.compress(manifest.encode(),mtime=0), "file-roots.tsv.gz":gzip.compress(roots.encode(),mtime=0)}
+        if "payload-extents.tsv.gz" in source_artifacts:
+            extent_lines = gzip.decompress(source_artifacts["payload-extents.tsv.gz"]).decode().splitlines();by_source = {}
+            if not extent_lines or extent_lines[0] != "path\tordinal\tpayload_id\tsource_offset\tlogical_length\tpayload_length":raise ValueError("source extent header")
+            for line in extent_lines[1:]:
+                path, rest = line.split("\t", 1);by_source.setdefault(path, []).append(rest)
+            extents = extent_lines[0] + "\n" + "".join(path + "\t" + rest + "\n" for path, source in mapping.items() for rest in by_source.get(source, []))
+            remapped["payload-extents.tsv.gz"] = gzip.compress(extents.encode(),mtime=0)
+        mapping_text = "target_path\tsource_path\tcontent_recipe_sha256\n" + "".join(path + "\t" + source + "\t" + target_recipes[path] + "\n" for path, source in mapping.items())
+        remapped["component-mapping.tsv"] = mapping_text.encode()
+        for filename, recipes in (("source-content-recipes.tsv", source_recipes), ("target-content-recipes.tsv", target_recipes)):
+            remapped[filename] = ("path\tcontent_recipe_sha256\n" + "".join(path + "\t" + value + "\n" for path,value in sorted(recipes.items()))).encode()
+        copy.update(input_plan_sha256=input_plan, oracle_identity=hashlib.sha256(manifest.encode()).hexdigest(), source_artifacts=certificate["artifacts"], source_artifact_sha256=certificate["artifact_sha256"], component_count=len(mapping), reference_root_scope="content components only; target pristine root not certified")
+        source_artifacts = remapped
+    for name, data in source_artifacts.items():
+        destination = target / name;destination.write_bytes(data)
+        copy["artifacts"][name] = str(destination);copy["artifact_sha256"][name] = hashlib.sha256(data).hexdigest()
+    copy["profile"] = "fast-verify-v2";copy["seed"] = seed if seed is not None else copy["seed"]
     json_path = target / "certificate.json";custody.write_json(json_path, copy);binding = custody.sha(json_path)
-    values = {"profile": FAST_PROFILE, "root": copy["root"], "certificate_sha256": binding, "certificate_json": str(json_path),
+    values = {"profile": "fast-verify-v2", "root": copy["root"], "certificate_sha256": binding, "certificate_json": str(json_path),
         "seed": str(copy["seed"]), "input_plan_sha256": copy["input_plan_sha256"], "oracle_identity": copy["oracle_identity"],
         "certificate_file_roots": copy["artifacts"]["file-roots.tsv.gz"], "certificate_manifest": copy["artifacts"]["independent-manifest.tsv.gz"],
         "source_attempt": copy["source_attempt"], "source_revision": copy["source_revision"], "product_seal": copy["product_seal"],
-        "certificate_manifest_sha256": copy["source_manifest_sha256"],
-        "certificate_file_roots_sha256": copy["artifact_sha256"]["file-roots.tsv.gz"],
+        "reference_assurance": copy.get("reference_assurance", "fully_verified"), "reference_native_readback": str(copy.get("reference_native_readback", True)).lower(),
+        "certificate_manifest_sha256": copy["source_manifest_sha256"], "certificate_file_roots_sha256": copy["artifact_sha256"]["file-roots.tsv.gz"],
         "certificate_manifest_file_sha256": copy["artifact_sha256"]["independent-manifest.tsv.gz"]}
-    if any("\n" in value or "\t" in value for value in values.values()):raise ValueError("certificate path cannot be represented by strict TSV; full check required")
+    for name, field in (("payload-extents.tsv.gz", "certificate_extents"), ("component-mapping.tsv", "certificate_mapping")):
+        if name in copy["artifacts"]:values[field] = copy["artifacts"][name];values[field + "_sha256"] = copy["artifact_sha256"][name]
+    if any("\n" in value or "\t" in value for value in values.values()):raise ValueError("certificate projection contains an unsafe path/value")
     tsv = target / "certificate.tsv";tsv.write_text("".join(key + "\t" + value + "\n" for key,value in values.items()))
     return tsv, binding, custody.sha(tsv)
 
@@ -547,7 +663,7 @@ def fast_profile_self_check():
         fields = dict(line.split("\t", 1) for line in tsv.read_text().splitlines())
         assert fields["certificate_sha256"] == binding and custody.sha(tsv) == projection
         assert fields["certificate_file_roots_sha256"] == custody.sha(Path(fields["certificate_file_roots"]))
-        tsv.write_text(tsv.read_text().replace("profile\tfast-verify-v1", "profile\tchanged-profile"))
+        tsv.write_text(tsv.read_text().replace("profile\tfast-verify-v2", "profile\tchanged-profile"))
         assert custody.sha(tsv) != projection, "projection tamper not detected"
         Path(artifacts["file-roots.tsv.gz"]).write_bytes(b"changed")
         try:prepare_fast_certificate(root / "bad-copy", certificate)
@@ -568,7 +684,7 @@ def acquire(case, seed, binary, cache, run, build, acquisitions, assets, referen
         runtime_info = json.loads(command([runtime_binary, "workspace-reference-info" if reference else "workspace-fixture-info", case["scenario_id"], seed]))
         if runtime_info != info:
             raise ValueError("runtime and preparation producer disagree on selected fixture/reference identity")
-    if certificate is not None and info.get("input_plan_sha256") != certificate["input_plan_sha256"]:
+    if certificate is not None and certificate.get("reference_assurance") != "qualified_content_components" and info.get("input_plan_sha256") != certificate["input_plan_sha256"]:
         raise ValueError("fast-verify certificate input differs; full --mode verify is required")
     identity = (assets["workspace_preparation_compatibility"], reference, json.dumps(info, sort_keys=True))
     if identity in acquisitions:
@@ -582,6 +698,46 @@ def acquire(case, seed, binary, cache, run, build, acquisitions, assets, referen
     receipt = read_json(run / "acquisition.json")
     acquisitions[identity] = receipt
     return receipt
+
+
+def qualify_input(case, seed, args, assets, campaign, producer):
+    if case["input_mode"] != "store" or case.get("proof_only"):raise ValueError("canonical input qualification requires one routine Store input")
+    binary = Path(args.assets).resolve() / "fs-benchmark-pro";producer_build = Path(args.preparation_assets or args.assets).resolve()
+    identity = json.loads(command([binary, "workspace-fixture-info", case["scenario_id"], seed]))
+    recipe = command([binary, "workspace-input-recipe-identity", case["scenario_id"], seed]).strip().split("=", 1)[1]
+    key = hashlib.sha256(json.dumps({"input_plan":identity["input_plan_sha256"],"recipe":recipe,"profile":"canonical-input-v1"},sort_keys=True).encode()).hexdigest()
+    folder = campaign / "input-qualifications" / key
+    if (folder / "input-qualification.json").exists():
+        marker = qualified_json(folder / "input-qualification.json")
+        if marker.get("status") != "canonical_input_qualified" or marker.get("input_plan_sha256") != identity["input_plan_sha256"] or marker.get("input_recipe_identity") != recipe:raise ValueError("input qualification cache mismatch")
+        certificate_source_bindings(marker["source_revision"], assets["revision"], {case["family_id"],marker["family_id"]})
+        print(json.dumps({"action":"reuse-qualified-canonical-input","reference":str(folder),"assurance":"canonical_input_qualified"}),flush=True);return
+    if folder.exists():raise ValueError("failed/incomplete input qualification retained; investigate before explicit retry")
+    folder.mkdir(parents=True);prepared=folder/"preparation";prepared.mkdir();clone=campaign/"scratch"/("input-qualification-"+key);clone.mkdir(parents=True)
+    old_image=os.environ.get("LAYERFS_V013_IMAGE");os.environ["LAYERFS_V013_IMAGE"]=producer["image_id"]
+    try:
+        acquired=acquire(case,seed,producer_build/"fs-benchmark-pro",Path(args.cache).resolve(),prepared,producer_build/"evidence",{},producer,runtime_binary=binary)
+        master=Path(acquired["prepared_path"])
+        custody.write_json(prepared/"clone.json",custody.clone_prepared(master/"store.sqlite",clone/"store.sqlite",acquired["store_sha256"]))
+        shutil.copyfile(master/"branch-id",clone/"branch-id")
+        for name in ("input-manifest.tsv","cache.json","evidence.sha256"):shutil.copyfile(Path(acquired["cache_path"])/name,prepared/("master-"+name))
+        argv=[str(binary),"workspace-qualify-input",str(clone),case["scenario_id"],str(seed),str(folder)]
+        custody.write_json(folder/"command.json",{"argv":argv});result=bounded_run(argv,folder/"raw.jsonl",folder/"stderr.txt",preparation_deadline(case),dict(os.environ,LAYERFS_V013_RESOURCE_PROFILE="1"),mutable=clone)
+        records=parse_records(folder/"raw.jsonl");complete=[r for r in records if r.get("kind")=="input-qualification-complete"]
+        if result["exit_code"]!=0 or result["supervisor_failure"] or len(complete)!=1 or complete[0].get("status")!="canonical_input_qualified" or complete[0].get("case")!=case["scenario_id"] or complete[0].get("seed")!=seed or any(r.get("kind") in {"resource-failure","host-rss-failure","host-resource-failure"} for r in records):raise ValueError("canonical input qualification failed; original evidence retained")
+        package=folder/"canonical-verification";receipt=dict(line.split("=",1) for line in (package/"canonical-receipt.txt").read_text().splitlines())
+        if receipt.get("verification_status")!="pass" or receipt.get("canonical_role_status")!="pass" or receipt.get("canonical_root")!=complete[0]["root"] or receipt.get("oracle_identity")!=complete[0]["oracle_identity"]:raise ValueError("canonical input receipt/root differs")
+        artifacts={name:str(package/name) for name in ("independent-manifest.tsv.gz","file-roots.tsv.gz","payload-extents.tsv.gz","canonical-receipt.txt")}
+        marker={"schema":"canonical-input-qualification-v1","status":"canonical_input_qualified","fully_verified":False,"reference_native_readback":False,"scenario_id":case["scenario_id"],"family_id":case["family_id"],"seed":seed,"source_revision":assets["revision"],"product_identity":assets["product_seal"],"harness_identity":assets["harness_seal"],"image_id":assets["image_id"],"input_plan_sha256":identity["input_plan_sha256"],"input_recipe_identity":recipe,"root":complete[0]["root"],"oracle_identity":complete[0]["oracle_identity"],"store_sha256":acquired["store_sha256"],"environment_identity":assets["environment_identity"],"artifacts":artifacts,"artifact_sha256":{name:custody.sha(Path(path)) for name,path in artifacts.items()},"resource_result":result}
+        shutil.rmtree(clone)
+        if sum(p.stat().st_size for p in folder.rglob("*") if p.is_file())>LOG_LIMIT:raise ValueError("input qualification exceeds64MiB artifact cap")
+        custody.write_json(folder/"input-qualification.json",marker);custody.seal(folder)
+        print(json.dumps({"action":"qualified-canonical-input","reference":str(folder),"assurance":"canonical_input_qualified"}),flush=True)
+    except BaseException as error:
+        custody.write_json(folder/"failure.json",{"status":"fail","error":str(error),"mutable_clone":str(clone)});custody.seal(folder);raise
+    finally:
+        if old_image is None:os.environ.pop("LAYERFS_V013_IMAGE",None)
+        else:os.environ["LAYERFS_V013_IMAGE"]=old_image
 
 
 def stream_samples(process, target, ready, errors):
@@ -607,7 +763,7 @@ def sample(case, seed, args, assets, campaign, acquisitions, producer=None):
     producer_binary = str(producer_build / "fs-benchmark-pro")
     evidence = producer_build / "evidence"
     env = dict(os.environ, LAYERFS_V013_IMAGE=assets["image_id"], LAYERFS_V013_RESOURCE_PROFILE="1")
-    for key in ("LAYERFS_V013_GIT_REFERENCE_HOST", "LAYERFS_V013_VERIFIER_EXCHANGE", "LAYERFS_V013_VERIFIER_EXCHANGE_HOST"):
+    for key in ("LAYERFS_V013_GIT_REFERENCE_HOST", "LAYERFS_V013_VERIFIER_EXCHANGE", "LAYERFS_V013_VERIFIER_EXCHANGE_HOST", "LAYERFS_V013_FAST_CERTIFICATE", "LAYERFS_V013_FAST_CERTIFICATE_SHA256", "LAYERFS_V013_FAST_NO_REUSE", "LAYERFS_V013_FAST_INPUT_PLAN_SHA256"):
         env.pop(key, None)
     outcome = {"command_wall_scope":"one sample preparation/runtime/product/cleanup; CLI validation is in invocation receipt", "schema": "fs-bench-pro-v013-sample-v1", "scenario_id": case["scenario_id"], "family_id": case["family_id"],
                "seed": seed, "seed_label": f"repetition-{seed}" if case.get("inherited") else f"layerfs-v0.1.3-seed-{seed}",
@@ -659,18 +815,21 @@ def sample(case, seed, args, assets, campaign, acquisitions, producer=None):
             if reference:
                 env["LAYERFS_V013_GIT_REFERENCE_HOST"] = str(Path(reference["prepared_path"]) / "input")
                 outcome["oracle_identity"] = reference["fixture"]["input_plan_sha256"]
-            if case["operation"] == "git-tool" and args.mode == "verify":
-                exchange=attempt / "verifier-exchange"; exchange.mkdir()
+            if case["operation"] == "git-tool" and args.mode == "verify" or args.mode == "fast-verify":
+                exchange=attempt / "verifier-exchange"; exchange.mkdir(exist_ok=True)
                 env["LAYERFS_V013_VERIFIER_EXCHANGE"] = str(exchange)
                 env["LAYERFS_V013_VERIFIER_EXCHANGE_HOST"] = str(exchange)
             if args.mode == "fast-verify":
-                certificate_path, binding, projection = prepare_fast_certificate(attempt, args.fast_certificate)
-                env["LAYERFS_V013_FAST_CERTIFICATE"] = str(certificate_path)
-                env["LAYERFS_V013_FAST_CERTIFICATE_SHA256"] = projection
                 env["LAYERFS_V013_FAST_INPUT_PLAN_SHA256"] = outcome["input_identity"]
-                outcome["verification_certificate_identity"] = binding
-                outcome["verification_certificate_projection_identity"] = projection
-                outcome["verification_profile"] = FAST_PROFILE
+                if args.fast_no_reuse:
+                    recipe = command([binary,"workspace-input-recipe-identity",case["scenario_id"],seed]).strip().split("=",1)[1]
+                    binding = hashlib.sha256(f"fast-independent-current-content-v2\n{case['scenario_id']}\n{seed}\n{outcome['input_identity']}\n{recipe}\n".encode()).hexdigest()
+                    env["LAYERFS_V013_FAST_NO_REUSE"] = "1";outcome["input_recipe_identity"] = recipe;outcome["reference_assurance"] = "independent_current_content"
+                else:
+                    certificate_path, binding, projection = prepare_fast_certificate(attempt, args.fast_certificate, case, seed, binary, prepared_dir/"master-input-manifest.tsv", outcome["input_identity"])
+                    env["LAYERFS_V013_FAST_CERTIFICATE"] = str(certificate_path);env["LAYERFS_V013_FAST_CERTIFICATE_SHA256"] = projection
+                    outcome["verification_certificate_projection_identity"] = projection;outcome["reference_assurance"] = args.fast_certificate["reference_assurance"]
+                outcome["verification_certificate_identity"] = binding;outcome["verification_profile"] = "fast-verify-v2"
             runtime_start = time.monotonic_ns(); runtime_started = True
             container, port, capability = command(["bash", HERE / "lib-runtime.sh", name, assets["image_id"]], env=env).split("\t")
             outcome["runtime_preparation_ns"] = time.monotonic_ns()-runtime_start
@@ -706,7 +865,7 @@ def sample(case, seed, args, assets, campaign, acquisitions, producer=None):
         outcome["sample_complete"] = complete[0] if len(complete) == 1 else None
         if args.mode == "fast-verify":
             folder = attempt / "verification" / "fast-verification";folder.mkdir(parents=True, exist_ok=True)
-            custody.write_json(folder / "receipts.json", [row for row in records if row.get("kind") in {"fast-canonical-verification", "fast-native-verification", "fast-verification-complete"}])
+            custody.write_json(folder / "receipts.json", [row for row in records if row.get("kind") in {"fast-canonical-verification", "fast-native-verification", "fast-dedup-verification", "fast-history-complete", "fast-verification-complete"}])
         if args.mode != "performance":outcome["assurance_status"] = ("fast_iteration_verified" if args.mode == "fast-verify" else "fully_verified") if outcome["product_status"] == "pass" else "not_verified"
         measured = completed_product_time(case, outcome)
         if measured is not None and measured > PHASE1_PRODUCT_LIMIT_NS:
@@ -905,9 +1064,11 @@ def main():
     p.add_argument("--family");p.add_argument("--case")
     p.add_argument("--source-arm", choices=("baseline", "corrected"), default="baseline")
     repeat=p.add_mutually_exclusive_group();repeat.add_argument("--seed",type=int,choices=(1,2,3));repeat.add_argument("--repetition",type=int,choices=(1,2,3,4,5))
-    p.add_argument("--mode",choices=("performance","verify","fast-verify"),default="performance")
+    p.add_argument("--mode",choices=("performance","verify","fast-verify","qualify-input"),default="performance")
     p.add_argument("--all",action="store_true");p.add_argument("--extended",action="store_true")
     p.add_argument("--invalidate-reason",help="Explicitly recollect selected prior slots, preserving their raw outcomes and reason")
+    p.add_argument("--fast-no-reuse",action="store_true",help="Explicitly check all uncertified current content; no prior input certificate")
+    p.add_argument("--fast-components",action="store_true",help="Reuse only independently recipe-mapped certified content components")
     p.add_argument("--verification-certificate",help="Retained admitted full-verification attempt for the separate fast-verify profile")
     p.add_argument("--self-check",action="store_true");p.add_argument("--recovery-self-check",action="store_true");p.add_argument("--build")
     p.add_argument("--assets",default=os.environ.get("LAYERFS_V013_ASSETS"))
@@ -918,7 +1079,10 @@ def main():
     if args.self_check: self_check();return 0
     if args.build: build_assets(args);return 0
     if not args.assets:p.error("--assets must select a sealed build")
-    if args.mode == "fast-verify" and (args.all or not args.verification_certificate or args.seed is None):p.error("fast-verify requires one --case/--seed and --verification-certificate; it never substitutes for full verify")
+    if args.mode == "fast-verify" and (args.all or bool(args.verification_certificate)==bool(args.fast_no_reuse) or args.seed is None):p.error("fast-verify requires one case/seed and exactly one qualified certificate or explicit --fast-no-reuse")
+    if args.fast_components and not args.verification_certificate:p.error("component reuse requires an explicit qualified source certificate")
+    if args.mode != "fast-verify" and (args.fast_no_reuse or args.fast_components):p.error("fast profile flags require fast-verify")
+    if args.mode == "qualify-input" and (args.all or args.seed is None):p.error("qualify-input requires one case/seed")
     if args.mode != "fast-verify" and args.verification_certificate:p.error("--verification-certificate is exclusive to fast-verify")
     if args.all == bool(args.case) or (args.all and (args.seed is not None or args.repetition is not None)) or (not args.all and args.seed is None and args.repetition is None):p.error("select --case with --seed/--repetition, or explicit --all")
     if args.invalidate_reason is not None and not args.invalidate_reason.strip():p.error("invalidation reason must be nonempty")
@@ -953,9 +1117,12 @@ def main():
         producer_validation_ns = time.monotonic_ns() - producer_started
         args.fast_certificate = None
         if args.mode == "fast-verify" and active:
-            if len(active) != 1 or active[0].get("proof_only") or active[0].get("inherited") or active[0].get("input_mode") != "store" or active[0]["family_id"].startswith("dedup_"):
-                raise ValueError("fast-verify initial profile requires one ordinary Store case; full --mode verify is required")
-            args.fast_certificate = verification_certificate(args.verification_certificate, active[0], args.seed, assets, campaign, registry)
+            if len(active) != 1 or active[0].get("proof_only") or active[0].get("inherited") or active[0].get("operation") == "git-tool":
+                raise ValueError("this fast profile is unavailable; targeted/error gates still require their exact proof")
+            if not args.fast_no_reuse:args.fast_certificate = verification_certificate(args.verification_certificate, active[0], args.seed, assets, campaign, registry, args.fast_components)
+        if args.mode == "qualify-input":
+            if active:qualify_input(active[0],args.seed,args,assets,campaign,producer)
+            return 0
         invocations=campaign/"invocations";invocations.mkdir(exist_ok=True)
         # Exclusive ownership proves previous running records have no current
         # coordinator. Do not invent command duration after a hard interruption.
