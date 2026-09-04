@@ -1,5 +1,10 @@
 # v0.1.3 benchmark testing rules
 
+> **Completion policy updated 2026-09-04:** Apply the
+> [failure-repair amendment](failure-repair-amendment.md). Required functional,
+> correctness, resource and cleanup failures must be repaired in Phase 1; it
+> supersedes the earlier issue-closure and product-deferral language below.
+
 > **Status:** Current planning checklist; no v0.1.3 release candidate exists.
 > These rules govern implementation and execution of the twelve family
 > specifications. They extend the [general benchmark rules](../../../general/benchmark_rules.md).

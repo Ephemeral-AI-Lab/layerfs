@@ -1,5 +1,10 @@
 # Phase 1 execution handoff
 
+> **Completion policy updated 2026-09-04:** Apply the
+> [failure-repair amendment](failure-repair-amendment.md). Required functional,
+> correctness, resource and cleanup failures must be repaired in Phase 1; it
+> supersedes the earlier deferral and terminal-pass language below.
+
 > **Status:** Reusable execution prompt for v0.1.3 Phase 1. Read current issues
 > and source before acting; this file does not claim implementation or results.
 

@@ -1,5 +1,10 @@
 # LayerFS 0.1.3
 
+> **Completion policy updated 2026-09-04:** The user requires functional failures
+> to be fixed in Phase 1. The [failure-repair amendment](failure-repair-amendment.md)
+> supersedes earlier completion/deferral wording here and in linked contracts;
+> optional performance and storage optimization remains Phase 2.
+
 > **Status:** Current planning checklist; no release candidate exists.
 > Twelve canonical family specifications: eleven performance families and
 > one proof-only Workspace reliability family. Workload adapters are not yet
