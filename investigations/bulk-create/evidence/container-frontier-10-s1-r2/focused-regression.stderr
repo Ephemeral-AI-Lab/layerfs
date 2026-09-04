@@ -1,0 +1,20 @@
+   Compiling layerfs-workspace v0.1.2 (/data/source/crates/layerfs-workspace)
+error[E0432]: unresolved import `layerfs_layerstack_store::set_transaction_failure_at`
+  --> crates/layerfs-workspace/tests/file_edit.rs:2:5
+   |
+2  |     set_transaction_failure_at, EntityName, LayerStackInitialization, LayerStackStore,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ no `set_transaction_failure_at` in the root
+   |
+note: found an item that was configured out
+  --> /data/source/crates/layerfs-layerstack-store/src/lib.rs:62:17
+   |
+62 | pub use schema::set_transaction_failure_at;
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: the item is gated here
+  --> /data/source/crates/layerfs-layerstack-store/src/lib.rs:60:1
+   |
+60 | #[cfg(debug_assertions)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `layerfs-workspace` (test "file_edit") due to 1 previous error

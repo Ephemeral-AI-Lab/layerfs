@@ -1,0 +1,50 @@
+   Compiling layerfs-layerstack-store v0.1.2 (/data/source/crates/layerfs-layerstack-store)
+   Compiling layerfs-workspace v0.1.2 (/data/source/crates/layerfs-workspace)
+error[E0432]: unresolved import `layerfs_layerstack_store::set_transaction_failure_at`
+  --> crates/layerfs-workspace/tests/file_edit.rs:2:5
+   |
+2  |     set_transaction_failure_at, EntityName, LayerStackInitialization, LayerStackStore,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ no `set_transaction_failure_at` in the root
+   |
+note: found an item that was configured out
+  --> /data/source/crates/layerfs-layerstack-store/src/lib.rs:62:17
+   |
+62 | pub use schema::set_transaction_failure_at;
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: the item is gated here
+  --> /data/source/crates/layerfs-layerstack-store/src/lib.rs:60:1
+   |
+60 | #[cfg(debug_assertions)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0432]: unresolved imports `layerfs_workspace::inject_candidate_failure_once`, `layerfs_workspace::inject_projection_resume_failure_once`
+  --> crates/layerfs-workspace/tests/file_edit.rs:6:5
+   |
+6  |     inject_candidate_failure_once, inject_projection_resume_failure_once, CreateWorkspaceSession,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `inject_projection_resume_failure_once` in the root
+   |     |
+   |     no `inject_candidate_failure_once` in the root
+   |
+note: found an item that was configured out
+  --> /data/source/crates/layerfs-workspace/src/lib.rs:66:8
+   |
+66 | pub fn inject_candidate_failure_once() {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: the item is gated here
+  --> /data/source/crates/layerfs-workspace/src/lib.rs:64:1
+   |
+64 | #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: found an item that was configured out
+  --> /data/source/crates/layerfs-workspace/src/lib.rs:60:8
+   |
+60 | pub fn inject_projection_resume_failure_once() {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: the item is gated here
+  --> /data/source/crates/layerfs-workspace/src/lib.rs:58:1
+   |
+58 | #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `layerfs-workspace` (test "file_edit") due to 2 previous errors

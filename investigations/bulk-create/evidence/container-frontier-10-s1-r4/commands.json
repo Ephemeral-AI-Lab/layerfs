@@ -1,0 +1,164 @@
+[
+  {
+    "label": "source",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "elapsed_ns": 11621084,
+    "exit_code": 0
+  },
+  {
+    "label": "binary-source",
+    "argv": [
+      "git",
+      "rev-parse",
+      "21c29290"
+    ],
+    "elapsed_ns": 11524958,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-explore-ce9db8105693",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--device",
+      "/dev/fuse",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 228266958,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-ce9db8105693"
+    ],
+    "elapsed_ns": 38451750,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-copy-input",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-frontier-10-s1-r4/delete-prepared",
+      "layerfs-explore-ce9db8105693:/data/sample"
+    ],
+    "elapsed_ns": 171217000,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-copy-binary",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-frontier-10-s1-r4/fs-benchmark-pro",
+      "layerfs-explore-ce9db8105693:/usr/local/bin/fs-benchmark-pro"
+    ],
+    "elapsed_ns": 125407375,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-identity",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-ce9db8105693",
+      "sh",
+      "-c",
+      "sha256sum /usr/local/bin/fs-benchmark-pro /usr/local/bin/fs-benchmark-workload /data/sample/store.sqlite"
+    ],
+    "elapsed_ns": 178983084,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-before",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-ce9db8105693",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 73860209,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-run",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "LAYERFS_EXPERIMENT_FRONTIER_BATCH=128",
+      "layerfs-explore-ce9db8105693",
+      "fs-benchmark-pro",
+      "workspace-run",
+      "/data/sample",
+      "/unused-input",
+      "tiny-bulk-delete-10",
+      "1",
+      "verify",
+      "diagnostic-host-fuse"
+    ],
+    "elapsed_ns": 72973292,
+    "exit_code": 127
+  },
+  {
+    "label": "failed-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-ce9db8105693"
+    ],
+    "elapsed_ns": 37977583,
+    "exit_code": 0
+  },
+  {
+    "label": "failed-state-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-explore-ce9db8105693:/data",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-frontier-10-s1-r4/failed-state"
+    ],
+    "elapsed_ns": 122408125,
+    "exit_code": 0
+  },
+  {
+    "label": "failed-cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-explore-ce9db8105693"
+    ],
+    "elapsed_ns": 280717416,
+    "exit_code": 0
+  }
+]

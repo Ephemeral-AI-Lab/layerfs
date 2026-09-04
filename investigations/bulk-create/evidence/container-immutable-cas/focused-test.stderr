@@ -1,0 +1,68 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.24
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.189
+   Compiling find-msvc-tools v0.1.11
+   Compiling cfg_aliases v0.2.2
+   Compiling shlex v2.0.1
+   Compiling pkg-config v0.3.34
+   Compiling cc v1.4.4
+   Compiling autocfg v1.5.1
+   Compiling memoffset v0.9.1
+   Compiling blake3 v1.8.5
+   Compiling equivalent v1.0.2
+   Compiling bitflags v2.13.1
+   Compiling winnow v1.0.4
+   Compiling hashbrown v0.17.1
+   Compiling indexmap v2.14.1
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling syn v2.0.119
+   Compiling arrayvec v0.7.8
+   Compiling constant_time_eq v0.4.2
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling smallvec v1.15.2
+   Compiling arrayref v0.3.9
+   Compiling toml_edit v0.25.13+spec-1.1.0
+   Compiling vcpkg v0.2.15
+   Compiling parking_lot_core v0.9.12
+   Compiling rustversion v1.0.23
+   Compiling libsqlite3-sys v0.38.2
+   Compiling proc-macro-crate v3.5.0
+   Compiling nix v0.31.3
+   Compiling syn v3.0.4
+   Compiling zerocopy v0.8.56
+   Compiling ref-cast v1.0.27
+   Compiling foldhash v0.2.0
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling num_enum_derive v0.7.6
+   Compiling ref-cast-impl v1.0.27
+   Compiling zerocopy-derive v0.8.56
+   Compiling layerfs-content v0.1.2 (/data/source/crates/layerfs-content)
+   Compiling fuser v0.18.0
+   Compiling nix v0.29.0
+   Compiling num_enum v0.7.6
+   Compiling parking_lot v0.12.5
+   Compiling hashlink v0.12.1
+   Compiling page_size v0.6.0
+   Compiling log v0.4.34
+   Compiling fallible-iterator v0.3.0
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling memchr v2.8.3
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-fuse v0.1.2 (/data/source/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.2 (/data/source/crates/layerfs-daemon)
+   Compiling layerfs-layerstack-store v0.1.2 (/data/source/crates/layerfs-layerstack-store)
+   Compiling layerfs-materialization v0.1.2 (/data/source/crates/layerfs-materialization)
+   Compiling layerfs-workspace v0.1.2 (/data/source/crates/layerfs-workspace)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 34.12s
+     Running unittests src/lib.rs (/data/target/debug/deps/layerfs_workspace-849242bba0af6a4a)
+experiment_metadata_cache enabled=false hits=0 builds=603 entries=0
+experiment_final_new_refs enabled=true pre_counted_inodes=603
+experiment_frontier_batch size=128 flushes=5 max_pending=128 deferred_peak_bytes=901848
+
+thread 'changes::tests::dense_delete_preserves_aliases_open_unlinked_and_old_root' panicked at crates/layerfs-workspace/src/changes.rs:1760:86:
+called `Result::unwrap()` on an `Err` value: SqliteFailure(Error { code: DatabaseBusy, extended_code: 5 }, Some("database is locked"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: test failed, to rerun pass `-p layerfs-workspace --lib`

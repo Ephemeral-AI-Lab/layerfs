@@ -1,0 +1,7 @@
+     Removed 0 files
+   Compiling layerfs-layerstack-store v0.1.2 (/data/source/crates/layerfs-layerstack-store)
+   Compiling layerfs-workspace v0.1.2 (/data/source/crates/layerfs-workspace)
+   Compiling layerfs-monitor v0.1.2 (/data/source/crates/layerfs-monitor)
+   Compiling layerfs-sdk v0.1.2 (/data/source/crates/layerfs-sdk)
+   Compiling fs-benchmark-pro v0.1.2 (/data/source/benchmark/fs-bench-pro)
+    Finished `release` profile [optimized] target(s) in 44.08s

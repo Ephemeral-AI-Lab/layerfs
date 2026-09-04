@@ -1,0 +1,251 @@
+[
+    {
+        "Id": "3c407802d76cb8dd0d5a99457537f5208de3ec1b869dd1ad2375d7f8f6548326",
+        "Created": "2026-09-04T05:28:35.1295183Z",
+        "Path": "sleep",
+        "Args": [
+            "infinity"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 74693,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-09-04T05:28:35.197820967Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+        "ResolvConfPath": "/var/lib/docker/containers/3c407802d76cb8dd0d5a99457537f5208de3ec1b869dd1ad2375d7f8f6548326/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/3c407802d76cb8dd0d5a99457537f5208de3ec1b869dd1ad2375d7f8f6548326/hostname",
+        "HostsPath": "/var/lib/docker/containers/3c407802d76cb8dd0d5a99457537f5208de3ec1b869dd1ad2375d7f8f6548326/hosts",
+        "LogPath": "/var/lib/docker/containers/3c407802d76cb8dd0d5a99457537f5208de3ec1b869dd1ad2375d7f8f6548326/3c407802d76cb8dd0d5a99457537f5208de3ec1b869dd1ad2375d7f8f6548326-json.log",
+        "Name": "/layerfs-explore-59a62bd59296",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": null,
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "bridge",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "no",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": [
+                "CAP_SYS_ADMIN"
+            ],
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": [],
+            "DnsSearch": [],
+            "ExtraHosts": null,
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": [
+                "apparmor=unconfined"
+            ],
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 2147483648,
+            "NanoCpus": 2000000000,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": [],
+            "BlkioDeviceReadBps": [],
+            "BlkioDeviceWriteBps": [],
+            "BlkioDeviceReadIOps": [],
+            "BlkioDeviceWriteIOps": [],
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": [
+                {
+                    "PathOnHost": "/dev/fuse",
+                    "PathInContainer": "/dev/fuse",
+                    "CgroupPermissions": "rwm"
+                }
+            ],
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 2147483648,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": 256,
+            "Ulimits": [],
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "Mounts": [
+                {
+                    "Type": "volume",
+                    "Target": "/data"
+                }
+            ],
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "decfff2e7f11c6192cd160c9099f3aba289ab927762f815fa907e6a934c0c3cf",
+                "Source": "/var/lib/docker/volumes/decfff2e7f11c6192cd160c9099f3aba289ab927762f815fa907e6a934c0c3cf/_data",
+                "Destination": "/data",
+                "Driver": "local",
+                "Mode": "z",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "3c407802d76c",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "41273/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "http_proxy=http://http.docker.internal:3128",
+                "HTTPS_PROXY=http://http.docker.internal:3128",
+                "https_proxy=http://http.docker.internal:3128",
+                "NO_PROXY=localhost,127.0.0.1,::1",
+                "no_proxy=localhost,127.0.0.1,::1",
+                "HTTP_PROXY=http://http.docker.internal:3128",
+                "PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "RUSTUP_HOME=/usr/local/rustup",
+                "CARGO_HOME=/usr/local/cargo",
+                "RUST_VERSION=1.85.1",
+                "LAYERFS_SOURCE_COMMIT=fbf32e84662d00993c033515e113437965395494",
+                "LAYERFS_SOURCE_TREE=bf775fd51d95c5859457c154ac79093acc80028e",
+                "LAYERFS_SOURCE_DIRTY=false",
+                "LAYERFS_SOURCE_SEAL=7f9119d2e8a2db1a34a2aa0d717915e849e21242492cce727bf90bbd3f2fde4e",
+                "LAYERFS_FUSE_HELPER=/usr/local/bin/layerfs-fuse",
+                "LAYERFS_FUSE_HOST=host.docker.internal",
+                "LAYERFS_DAEMON_TCP_LISTEN=0.0.0.0:41273"
+            ],
+            "Cmd": [
+                "infinity"
+            ],
+            "Image": "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "sleep"
+            ],
+            "Labels": {
+                "dev.layerfs.product-seal": "e24867af45d83c455dbfac530d43140fec7cdc40d3eae9ff70a30883d239125a",
+                "dev.layerfs.source-dirty": "false",
+                "dev.layerfs.source-seal": "7f9119d2e8a2db1a34a2aa0d717915e849e21242492cce727bf90bbd3f2fde4e",
+                "dev.layerfs.workload-source-sha256": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+                "org.opencontainers.image.revision": "fbf32e84662d00993c033515e113437965395494",
+                "org.opencontainers.image.source": "https://github.com/Ephemeral-AI-Lab/layerfs",
+                "org.opencontainers.image.source-tree": "bf775fd51d95c5859457c154ac79093acc80028e"
+            },
+            "StopTimeout": 1
+        },
+        "NetworkSettings": {
+            "SandboxID": "f9c5d55ddc1971de306de49dece7733696715ce6f2b6642823a2398d5360436b",
+            "SandboxKey": "/var/run/docker/netns/f9c5d55ddc19",
+            "Ports": {
+                "41273/tcp": null
+            },
+            "Networks": {
+                "bridge": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": null,
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "05f3e70b964154e3971b998ca01547c855d0c18088e5309fa397dc195f21bb00",
+                    "EndpointID": "09cfb6b031925c70ea4a579d03ee56c4c3ece8a7c4cd133d755b54108a3dc347",
+                    "Gateway": "172.17.0.1",
+                    "IPAddress": "172.17.0.3",
+                    "MacAddress": "82:9a:8c:ab:8b:85",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": null
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:43421f5a00ce4952cb5488fd6eafdcf5c918300472a41470894b7de4685c7968",
+            "size": 2397,
+            "platform": {
+                "architecture": "arm64",
+                "os": "linux"
+            }
+        }
+    }
+]

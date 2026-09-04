@@ -1,0 +1,898 @@
+{
+  "container-frontier-10-s1-r3": {
+    "create-batched-run": {
+      "phases_ns": {
+        "create": 1332125,
+        "exec": 223359958,
+        "commit": 692108167,
+        "visibility": 43375,
+        "end": 3858667
+      },
+      "source_file": "container-frontier-10-s1-r3/create-batched-run.stdout",
+      "lifecycle_ns": 920702292,
+      "commit": {
+        "content_ns": 234582125,
+        "namespace_ns": 116834209,
+        "candidate_finish_ns": 5992583,
+        "local_admission_ns": 18682125,
+        "object_admission_ns": 39872083,
+        "publication_ns": 508875,
+        "in_place_rebase_ns": 273217959,
+        "candidate_objects": 8651,
+        "candidate_bytes": 11405069,
+        "admission_transactions": 61,
+        "snapshot_database_rows": 10712,
+        "snapshot_database_bytes": 26335355
+      },
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 12574720,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 660000000,
+          "system_cpu_ns": 150000000,
+          "resident_bytes": 41250816,
+          "peak_resident_bytes": 41115648,
+          "physical_footprint_bytes": 41250816,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 49053696,
+          "swaps": 0
+        },
+        {
+          "kind": "host-rss-samples",
+          "sample_count": 332,
+          "baseline_bytes": 4030464,
+          "sampled_peak_bytes": 166182912,
+          "final_bytes": 166182912,
+          "maximum_gap_ns": 20036125,
+          "nominal_interval_ns": 10000000
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 3230000000,
+          "system_cpu_ns": 270000000,
+          "resident_bytes": 166182912,
+          "peak_resident_bytes": 165945344,
+          "physical_footprint_bytes": 166182912,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 49364992,
+          "swaps": 0
+        }
+      ],
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"10531308\", \"canonical_Chunk_objects\": \"2168\", \"canonical_DirectoryNode_bytes\": \"119282\", \"canonical_DirectoryNode_objects\": \"284\", \"canonical_DirectoryState_bytes\": \"27146\", \"canonical_DirectoryState_objects\": \"277\", \"canonical_FileNode_bytes\": \"174852\", \"canonical_FileNode_objects\": \"2003\", \"canonical_FileState_bytes\": \"212318\", \"canonical_FileState_objects\": \"2003\", \"canonical_InodeRecord_bytes\": \"223146\", \"canonical_InodeRecord_objects\": \"2277\", \"canonical_InodeTable_bytes\": \"162308\", \"canonical_InodeTable_objects\": \"35\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"55343102085201eeec97939ad3f57182f92cb8c6a000ecf6068ee8d3f60f3aaf\", \"canonical_unique_objects\": \"9050\", \"independent_content_paths\": \"2200\", \"logical_bytes\": \"11534336\", \"oracle_identity\": \"e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"2478\", \"verified_regular_paths\": \"2200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=2200\nlogical_bytes=11534336\noracle_identity=e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=2478\nverified_regular_paths=2200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "experiments": "experiment_metadata_cache enabled=false hits=0 builds=2143 entries=0\nexperiment_frontier_batch size=2048 flushes=3 max_pending=2048 deferred_peak_bytes=4203104\n"
+    },
+    "create-control-run": {
+      "phases_ns": {
+        "create": 1009833,
+        "exec": 228532625,
+        "commit": 728382167,
+        "visibility": 43083,
+        "end": 2442958
+      },
+      "source_file": "container-frontier-10-s1-r3/create-control-run.stdout",
+      "lifecycle_ns": 960410666,
+      "commit": {
+        "content_ns": 246102209,
+        "namespace_ns": 132245625,
+        "candidate_finish_ns": 5969708,
+        "local_admission_ns": 20350666,
+        "object_admission_ns": 41264083,
+        "publication_ns": 442750,
+        "in_place_rebase_ns": 278516583,
+        "candidate_objects": 8645,
+        "candidate_bytes": 11404421,
+        "admission_transactions": 61,
+        "snapshot_database_rows": 10711,
+        "snapshot_database_bytes": 27551951
+      },
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 12861440,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 670000000,
+          "system_cpu_ns": 170000000,
+          "resident_bytes": 41328640,
+          "peak_resident_bytes": 41054208,
+          "physical_footprint_bytes": 41328640,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 53190656,
+          "swaps": 0
+        },
+        {
+          "kind": "host-rss-samples",
+          "sample_count": 343,
+          "baseline_bytes": 4030464,
+          "sampled_peak_bytes": 160321536,
+          "final_bytes": 160321536,
+          "maximum_gap_ns": 13765125,
+          "nominal_interval_ns": 10000000
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 3340000000,
+          "system_cpu_ns": 250000000,
+          "resident_bytes": 160321536,
+          "peak_resident_bytes": 160026624,
+          "physical_footprint_bytes": 160321536,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 53501952,
+          "swaps": 0
+        }
+      ],
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"10531308\", \"canonical_Chunk_objects\": \"2168\", \"canonical_DirectoryNode_bytes\": \"119282\", \"canonical_DirectoryNode_objects\": \"284\", \"canonical_DirectoryState_bytes\": \"27146\", \"canonical_DirectoryState_objects\": \"277\", \"canonical_FileNode_bytes\": \"174852\", \"canonical_FileNode_objects\": \"2003\", \"canonical_FileState_bytes\": \"212318\", \"canonical_FileState_objects\": \"2003\", \"canonical_InodeRecord_bytes\": \"223146\", \"canonical_InodeRecord_objects\": \"2277\", \"canonical_InodeTable_bytes\": \"161660\", \"canonical_InodeTable_objects\": \"29\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"a6176b38fcafb9482e6ffb1535867cb0c3dfa2a4ddea12547ce7dc5d262c5efa\", \"canonical_unique_objects\": \"9044\", \"independent_content_paths\": \"2200\", \"logical_bytes\": \"11534336\", \"oracle_identity\": \"e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"2478\", \"verified_regular_paths\": \"2200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=2200\nlogical_bytes=11534336\noracle_identity=e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=2478\nverified_regular_paths=2200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "experiments": "experiment_metadata_cache enabled=false hits=0 builds=2143 entries=0\nexperiment_frontier_batch size=128 flushes=34 max_pending=128 deferred_peak_bytes=1042496\n"
+    }
+  },
+  "container-frontier-10-s1-r5": {
+    "delete-batched-run": {
+      "phases_ns": {
+        "create": 1128333,
+        "exec": 395509709,
+        "commit": 275243084,
+        "visibility": 43875,
+        "end": 1246125
+      },
+      "source_file": "container-frontier-10-s1-r5/delete-batched-run.stdout",
+      "lifecycle_ns": 673171126,
+      "commit": {
+        "content_ns": 112167,
+        "namespace_ns": 273802542,
+        "candidate_finish_ns": 73083,
+        "local_admission_ns": 116375,
+        "object_admission_ns": 2959,
+        "publication_ns": 391334,
+        "in_place_rebase_ns": 570500,
+        "candidate_objects": 9,
+        "candidate_bytes": 22318,
+        "admission_transactions": 0,
+        "snapshot_database_rows": 6145,
+        "snapshot_database_bytes": 25421221
+      },
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 12451840,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 520000000,
+          "system_cpu_ns": 30000000,
+          "resident_bytes": 33579008,
+          "peak_resident_bytes": 33382400,
+          "physical_footprint_bytes": 33579008,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 4096,
+          "swaps": 0
+        },
+        {
+          "kind": "host-rss-samples",
+          "sample_count": 117,
+          "baseline_bytes": 4030464,
+          "sampled_peak_bytes": 66035712,
+          "final_bytes": 66035712,
+          "maximum_gap_ns": 13086916,
+          "nominal_interval_ns": 10000000
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 1040000000,
+          "system_cpu_ns": 50000000,
+          "resident_bytes": 66035712,
+          "peak_resident_bytes": 65753088,
+          "physical_footprint_bytes": 66035712,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 49152,
+          "swaps": 0
+        }
+      ],
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"1053216\", \"canonical_Chunk_objects\": \"220\", \"canonical_DirectoryNode_bytes\": \"19759\", \"canonical_DirectoryNode_objects\": \"135\", \"canonical_DirectoryState_bytes\": \"13230\", \"canonical_DirectoryState_objects\": \"135\", \"canonical_FileNode_bytes\": \"17732\", \"canonical_FileNode_objects\": \"203\", \"canonical_FileState_bytes\": \"21518\", \"canonical_FileState_objects\": \"203\", \"canonical_InodeRecord_bytes\": \"32830\", \"canonical_InodeRecord_objects\": \"335\", \"canonical_InodeTable_bytes\": \"21916\", \"canonical_InodeTable_objects\": \"5\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"cd3f700b814e08db18a74c735a0e40fa0d45687daa705a1ac89e9b8097b3cfbb\", \"canonical_unique_objects\": \"1239\", \"independent_content_paths\": \"200\", \"logical_bytes\": \"1048576\", \"oracle_identity\": \"403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"335\", \"verified_regular_paths\": \"200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=200\nlogical_bytes=1048576\noracle_identity=403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=335\nverified_regular_paths=200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "experiments": "experiment_metadata_cache enabled=false hits=0 builds=0 entries=0\nexperiment_frontier_batch size=2048 flushes=2 max_pending=2048 deferred_peak_bytes=4203836\n"
+    },
+    "delete-control-run": {
+      "phases_ns": {
+        "create": 1330500,
+        "exec": 307695167,
+        "commit": 226535000,
+        "visibility": 40500,
+        "end": 1124584
+      },
+      "source_file": "container-frontier-10-s1-r5/delete-control-run.stdout",
+      "lifecycle_ns": 536725751,
+      "commit": {
+        "content_ns": 110458,
+        "namespace_ns": 224669750,
+        "candidate_finish_ns": 80209,
+        "local_admission_ns": 163458,
+        "object_admission_ns": 4166,
+        "publication_ns": 492500,
+        "in_place_rebase_ns": 743000,
+        "candidate_objects": 9,
+        "candidate_bytes": 22318,
+        "admission_transactions": 0,
+        "snapshot_database_rows": 2326,
+        "snapshot_database_bytes": 11834369
+      },
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 12316672,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 440000000,
+          "system_cpu_ns": 20000000,
+          "resident_bytes": 31744000,
+          "peak_resident_bytes": 31490048,
+          "physical_footprint_bytes": 31744000,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 4096,
+          "swaps": 0
+        },
+        {
+          "kind": "host-rss-samples",
+          "sample_count": 95,
+          "baseline_bytes": 4030464,
+          "sampled_peak_bytes": 65609728,
+          "final_bytes": 65609728,
+          "maximum_gap_ns": 13723500,
+          "nominal_interval_ns": 10000000
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 940000000,
+          "system_cpu_ns": 40000000,
+          "resident_bytes": 65609728,
+          "peak_resident_bytes": 65368064,
+          "physical_footprint_bytes": 65609728,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 49152,
+          "swaps": 0
+        }
+      ],
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"1053216\", \"canonical_Chunk_objects\": \"220\", \"canonical_DirectoryNode_bytes\": \"19759\", \"canonical_DirectoryNode_objects\": \"135\", \"canonical_DirectoryState_bytes\": \"13230\", \"canonical_DirectoryState_objects\": \"135\", \"canonical_FileNode_bytes\": \"17732\", \"canonical_FileNode_objects\": \"203\", \"canonical_FileState_bytes\": \"21518\", \"canonical_FileState_objects\": \"203\", \"canonical_InodeRecord_bytes\": \"32830\", \"canonical_InodeRecord_objects\": \"335\", \"canonical_InodeTable_bytes\": \"21916\", \"canonical_InodeTable_objects\": \"5\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"fa18f6c2344a24cda7d1939e2de19c64de704bf22199bb6044d5232e4276a054\", \"canonical_unique_objects\": \"1239\", \"independent_content_paths\": \"200\", \"logical_bytes\": \"1048576\", \"oracle_identity\": \"403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"335\", \"verified_regular_paths\": \"200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=200\nlogical_bytes=1048576\noracle_identity=403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=335\nverified_regular_paths=200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "experiments": "experiment_metadata_cache enabled=false hits=0 builds=0 entries=0\nexperiment_frontier_batch size=128 flushes=17 max_pending=128 deferred_peak_bytes=1269396\n"
+    }
+  },
+  "container-dense-delete-10-s1-r2": {
+    "delete-control-run": {
+      "phases_ns": {
+        "create": 1180250,
+        "exec": 259248167,
+        "commit": 226259500,
+        "visibility": 66292,
+        "end": 978583
+      },
+      "source_file": "container-dense-delete-10-s1-r2/delete-control-run.stdout",
+      "lifecycle_ns": 487732792,
+      "commit": {
+        "content_ns": 126375,
+        "namespace_ns": 224762792,
+        "candidate_finish_ns": 93292,
+        "local_admission_ns": 145958,
+        "object_admission_ns": 3334,
+        "publication_ns": 375541,
+        "in_place_rebase_ns": 507792,
+        "candidate_objects": 9,
+        "candidate_bytes": 22318,
+        "admission_transactions": 0,
+        "snapshot_database_rows": 2326,
+        "snapshot_database_bytes": 11834369
+      },
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 12173312,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 410000000,
+          "system_cpu_ns": 30000000,
+          "resident_bytes": 31784960,
+          "peak_resident_bytes": 31465472,
+          "physical_footprint_bytes": 31784960,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 4096,
+          "swaps": 0
+        },
+        {
+          "kind": "host-rss-samples",
+          "sample_count": 96,
+          "baseline_bytes": 4030464,
+          "sampled_peak_bytes": 65617920,
+          "final_bytes": 65617920,
+          "maximum_gap_ns": 13645292,
+          "nominal_interval_ns": 10000000
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 920000000,
+          "system_cpu_ns": 50000000,
+          "resident_bytes": 65617920,
+          "peak_resident_bytes": 65323008,
+          "physical_footprint_bytes": 65617920,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 49152,
+          "swaps": 0
+        }
+      ],
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"1053216\", \"canonical_Chunk_objects\": \"220\", \"canonical_DirectoryNode_bytes\": \"19759\", \"canonical_DirectoryNode_objects\": \"135\", \"canonical_DirectoryState_bytes\": \"13230\", \"canonical_DirectoryState_objects\": \"135\", \"canonical_FileNode_bytes\": \"17732\", \"canonical_FileNode_objects\": \"203\", \"canonical_FileState_bytes\": \"21518\", \"canonical_FileState_objects\": \"203\", \"canonical_InodeRecord_bytes\": \"32830\", \"canonical_InodeRecord_objects\": \"335\", \"canonical_InodeTable_bytes\": \"21916\", \"canonical_InodeTable_objects\": \"5\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"fa18f6c2344a24cda7d1939e2de19c64de704bf22199bb6044d5232e4276a054\", \"canonical_unique_objects\": \"1239\", \"independent_content_paths\": \"200\", \"logical_bytes\": \"1048576\", \"oracle_identity\": \"403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"335\", \"verified_regular_paths\": \"200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=200\nlogical_bytes=1048576\noracle_identity=403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=335\nverified_regular_paths=200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "experiments": "experiment_metadata_cache enabled=false hits=0 builds=0 entries=0\nexperiment_frontier_batch size=128 flushes=17 max_pending=128 deferred_peak_bytes=1269396\n"
+    },
+    "delete-survivors-run": {
+      "phases_ns": {
+        "create": 1083000,
+        "exec": 288152208,
+        "commit": 17289125,
+        "visibility": 46167,
+        "end": 1129334
+      },
+      "source_file": "container-dense-delete-10-s1-r2/delete-survivors-run.stdout",
+      "lifecycle_ns": 307699834,
+      "commit": {
+        "content_ns": 0,
+        "namespace_ns": 15297875,
+        "candidate_finish_ns": 235417,
+        "local_admission_ns": 507584,
+        "object_admission_ns": 2875,
+        "publication_ns": 464833,
+        "in_place_rebase_ns": 619250,
+        "candidate_objects": 344,
+        "candidate_bytes": 55158,
+        "admission_transactions": 0,
+        "snapshot_database_rows": 1272,
+        "snapshot_database_bytes": 3444059
+      },
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 12406784,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 210000000,
+          "system_cpu_ns": 30000000,
+          "resident_bytes": 29114368,
+          "peak_resident_bytes": 28803072,
+          "physical_footprint_bytes": 29114368,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 4096,
+          "swaps": 0
+        },
+        {
+          "kind": "host-rss-samples",
+          "sample_count": 77,
+          "baseline_bytes": 4030464,
+          "sampled_peak_bytes": 65261568,
+          "final_bytes": 65261568,
+          "maximum_gap_ns": 13253958,
+          "nominal_interval_ns": 10000000
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 680000000,
+          "system_cpu_ns": 50000000,
+          "resident_bytes": 65261568,
+          "peak_resident_bytes": 64962560,
+          "physical_footprint_bytes": 65261568,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 49152,
+          "swaps": 0
+        }
+      ],
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"1053216\", \"canonical_Chunk_objects\": \"220\", \"canonical_DirectoryNode_bytes\": \"19759\", \"canonical_DirectoryNode_objects\": \"135\", \"canonical_DirectoryState_bytes\": \"13230\", \"canonical_DirectoryState_objects\": \"135\", \"canonical_FileNode_bytes\": \"17732\", \"canonical_FileNode_objects\": \"203\", \"canonical_FileState_bytes\": \"21518\", \"canonical_FileState_objects\": \"203\", \"canonical_InodeRecord_bytes\": \"32830\", \"canonical_InodeRecord_objects\": \"335\", \"canonical_InodeTable_bytes\": \"22024\", \"canonical_InodeTable_objects\": \"6\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"c7ad220ede36af6e2c1d50185a353e1f2e91912d219d48dcddf9aa6479fecde7\", \"canonical_unique_objects\": \"1240\", \"independent_content_paths\": \"200\", \"logical_bytes\": \"1048576\", \"oracle_identity\": \"403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"335\", \"verified_regular_paths\": \"200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=200\nlogical_bytes=1048576\noracle_identity=403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=335\nverified_regular_paths=200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "experiments": "experiment_dense_delete survivors=335 edges=334 insert_capacity_bytes=41216\n"
+    }
+  },
+  "container-dense-delete-500-s1": {
+    "run": {
+      "phases_ns": {
+        "create": 1789042,
+        "exec": 69760837657,
+        "commit": 55651541,
+        "visibility": 59583,
+        "end": 108383041
+      },
+      "source_file": "container-dense-delete-500-s1/run.stdout",
+      "lifecycle_ns": 69926720864,
+      "commit": {
+        "content_ns": 0,
+        "namespace_ns": 22817083,
+        "candidate_finish_ns": 226125,
+        "local_admission_ns": 861250,
+        "object_admission_ns": 3500,
+        "publication_ns": 566625,
+        "in_place_rebase_ns": 30901708,
+        "candidate_objects": 344,
+        "candidate_bytes": 55158,
+        "admission_transactions": 0,
+        "snapshot_database_rows": 2140,
+        "snapshot_database_bytes": 4938188
+      },
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 12513280,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 58710000000,
+          "system_cpu_ns": 3040000000,
+          "resident_bytes": 275705856,
+          "peak_resident_bytes": 922804224,
+          "physical_footprint_bytes": 275705856,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 1052672,
+          "swaps": 0
+        },
+        {
+          "kind": "host-rss-samples",
+          "sample_count": 6166,
+          "baseline_bytes": 4030464,
+          "sampled_peak_bytes": 923189248,
+          "final_bytes": 321085440,
+          "maximum_gap_ns": 17875542,
+          "nominal_interval_ns": 10000000
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 59410000000,
+          "system_cpu_ns": 3060000000,
+          "resident_bytes": 321085440,
+          "peak_resident_bytes": 922804224,
+          "physical_footprint_bytes": 321085440,
+          "disk_read_bytes": 69632,
+          "disk_write_bytes": 1097728,
+          "swaps": 0
+        }
+      ],
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"1053216\", \"canonical_Chunk_objects\": \"220\", \"canonical_DirectoryNode_bytes\": \"19759\", \"canonical_DirectoryNode_objects\": \"135\", \"canonical_DirectoryState_bytes\": \"13230\", \"canonical_DirectoryState_objects\": \"135\", \"canonical_FileNode_bytes\": \"17732\", \"canonical_FileNode_objects\": \"203\", \"canonical_FileState_bytes\": \"21518\", \"canonical_FileState_objects\": \"203\", \"canonical_InodeRecord_bytes\": \"32830\", \"canonical_InodeRecord_objects\": \"335\", \"canonical_InodeTable_bytes\": \"22024\", \"canonical_InodeTable_objects\": \"6\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"b243c9242dc775e3fd04cdd0fad0c3523bf834ab1217566c8a904b17243b9caf\", \"canonical_unique_objects\": \"1240\", \"independent_content_paths\": \"200\", \"logical_bytes\": \"1048576\", \"oracle_identity\": \"403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"335\", \"verified_regular_paths\": \"200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=200\nlogical_bytes=1048576\noracle_identity=403888f6edc47df30c4165cf8208249e982dc8a1351b370a50fdc1e120fbaa80\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=335\nverified_regular_paths=200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "experiments": "experiment_dense_delete survivors=335 edges=334 insert_capacity_bytes=41216\n"
+    }
+  },
+  "container-final-create-10-s1": {
+    "create-control-run": {
+      "phases_ns": {
+        "create": 1069667,
+        "exec": 443861417,
+        "commit": 733519500,
+        "visibility": 52375,
+        "end": 3462333
+      },
+      "source_file": "container-final-create-10-s1/create-control-run.stdout",
+      "lifecycle_ns": 1181965292,
+      "commit": {
+        "content_ns": 241615501,
+        "namespace_ns": 133511833,
+        "candidate_finish_ns": 6791250,
+        "local_admission_ns": 20580959,
+        "object_admission_ns": 43164042,
+        "publication_ns": 450666,
+        "in_place_rebase_ns": 284900166,
+        "candidate_objects": 8644,
+        "candidate_bytes": 11404313,
+        "admission_transactions": 61,
+        "snapshot_database_rows": 10711,
+        "snapshot_database_bytes": 27895759
+      },
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 12406784,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 690000000,
+          "system_cpu_ns": 210000000,
+          "resident_bytes": 41521152,
+          "peak_resident_bytes": 41099264,
+          "physical_footprint_bytes": 41521152,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 53264384,
+          "swaps": 0
+        },
+        {
+          "kind": "host-rss-samples",
+          "sample_count": 349,
+          "baseline_bytes": 3964928,
+          "sampled_peak_bytes": 159367168,
+          "final_bytes": 159367168,
+          "maximum_gap_ns": 17467917,
+          "nominal_interval_ns": 10000000
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 3280000000,
+          "system_cpu_ns": 290000000,
+          "resident_bytes": 159367168,
+          "peak_resident_bytes": 158846976,
+          "physical_footprint_bytes": 159367168,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 53575680,
+          "swaps": 0
+        }
+      ],
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"10531308\", \"canonical_Chunk_objects\": \"2168\", \"canonical_DirectoryNode_bytes\": \"119282\", \"canonical_DirectoryNode_objects\": \"284\", \"canonical_DirectoryState_bytes\": \"27146\", \"canonical_DirectoryState_objects\": \"277\", \"canonical_FileNode_bytes\": \"174852\", \"canonical_FileNode_objects\": \"2003\", \"canonical_FileState_bytes\": \"212318\", \"canonical_FileState_objects\": \"2003\", \"canonical_InodeRecord_bytes\": \"223146\", \"canonical_InodeRecord_objects\": \"2277\", \"canonical_InodeTable_bytes\": \"161552\", \"canonical_InodeTable_objects\": \"28\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"8d6f07b49faa3d70a2a3469833d76f4f85f20ee900b0a5f822f56551fc63bbf7\", \"canonical_unique_objects\": \"9043\", \"independent_content_paths\": \"2200\", \"logical_bytes\": \"11534336\", \"oracle_identity\": \"e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"2478\", \"verified_regular_paths\": \"2200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=2200\nlogical_bytes=11534336\noracle_identity=e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=2478\nverified_regular_paths=2200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "experiments": "experiment_metadata_cache enabled=false hits=0 builds=2143 entries=0\nexperiment_final_new_refs enabled=false pre_counted_inodes=0\nexperiment_frontier_batch size=128 flushes=34 max_pending=128 deferred_peak_bytes=1072576\n"
+    },
+    "create-final-refs-run": {
+      "phases_ns": {
+        "create": 1663417,
+        "exec": 209883833,
+        "commit": 590594001,
+        "visibility": 44875,
+        "end": 2706791
+      },
+      "source_file": "container-final-create-10-s1/create-final-refs-run.stdout",
+      "lifecycle_ns": 804892917,
+      "commit": {
+        "content_ns": 244124709,
+        "namespace_ns": 7404167,
+        "candidate_finish_ns": 6080375,
+        "local_admission_ns": 17042792,
+        "object_admission_ns": 38457417,
+        "publication_ns": 430542,
+        "in_place_rebase_ns": 274879334,
+        "candidate_objects": 8644,
+        "candidate_bytes": 11404313,
+        "admission_transactions": 61,
+        "snapshot_database_rows": 10711,
+        "snapshot_database_bytes": 27778319
+      },
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 12800000,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 550000000,
+          "system_cpu_ns": 150000000,
+          "resident_bytes": 41455616,
+          "peak_resident_bytes": 41041920,
+          "physical_footprint_bytes": 41455616,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 50155520,
+          "swaps": 0
+        },
+        {
+          "kind": "host-rss-samples",
+          "sample_count": 326,
+          "baseline_bytes": 3964928,
+          "sampled_peak_bytes": 159334400,
+          "final_bytes": 159334400,
+          "maximum_gap_ns": 19280166,
+          "nominal_interval_ns": 10000000
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 3120000000,
+          "system_cpu_ns": 260000000,
+          "resident_bytes": 159334400,
+          "peak_resident_bytes": 159137792,
+          "physical_footprint_bytes": 159334400,
+          "disk_read_bytes": 0,
+          "disk_write_bytes": 50466816,
+          "swaps": 0
+        }
+      ],
+      "verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"10531308\", \"canonical_Chunk_objects\": \"2168\", \"canonical_DirectoryNode_bytes\": \"119282\", \"canonical_DirectoryNode_objects\": \"284\", \"canonical_DirectoryState_bytes\": \"27146\", \"canonical_DirectoryState_objects\": \"277\", \"canonical_FileNode_bytes\": \"174852\", \"canonical_FileNode_objects\": \"2003\", \"canonical_FileState_bytes\": \"212318\", \"canonical_FileState_objects\": \"2003\", \"canonical_InodeRecord_bytes\": \"223146\", \"canonical_InodeRecord_objects\": \"2277\", \"canonical_InodeTable_bytes\": \"161552\", \"canonical_InodeTable_objects\": \"28\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"63b35f79940fa2dc52a6c850489c2083390f0433df48e2d064f36c983043ddf4\", \"canonical_unique_objects\": \"9043\", \"independent_content_paths\": \"2200\", \"logical_bytes\": \"11534336\", \"oracle_identity\": \"e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"2478\", \"verified_regular_paths\": \"2200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=2200\nlogical_bytes=11534336\noracle_identity=e28abbf186b3d11241242628a4f22c6b6356a5c91070b2a02f8b73dc6adafc95\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=2478\nverified_regular_paths=2200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "experiments": "experiment_metadata_cache enabled=false hits=0 builds=2143 entries=0\nexperiment_final_new_refs enabled=true pre_counted_inodes=2143\nexperiment_frontier_batch size=128 flushes=17 max_pending=128 deferred_peak_bytes=1010244\n"
+    }
+  },
+  "container-final-create-500-s1": {
+    "create-final-refs-run": {
+      "phases_ns": {
+        "create": 1221750,
+        "exec": 29095950888,
+        "commit": 78739487745,
+        "visibility": 58750,
+        "end": 71538750
+      },
+      "source_file": "container-final-create-500-s1/create-final-refs-run.stdout",
+      "lifecycle_ns": 107908257883,
+      "commit": {
+        "content_ns": 29904022389,
+        "namespace_ns": 156164542,
+        "candidate_finish_ns": 7645110628,
+        "local_admission_ns": 2992199834,
+        "object_admission_ns": 10535727921,
+        "publication_ns": 2730500,
+        "in_place_rebase_ns": 27431951138,
+        "candidate_objects": 411653,
+        "candidate_bytes": 566847850,
+        "admission_transactions": 3234,
+        "snapshot_database_rows": 703315,
+        "snapshot_database_bytes": 2195895153
+      },
+      "resources": [
+        {
+          "kind": "host-resources",
+          "phase": "before",
+          "user_cpu_ns": 0,
+          "system_cpu_ns": 0,
+          "resident_bytes": 3883008,
+          "peak_resident_bytes": 12369920,
+          "physical_footprint_bytes": 3883008,
+          "disk_read_bytes": 16384,
+          "disk_write_bytes": 0,
+          "swaps": 0
+        },
+        {
+          "kind": "host-resources",
+          "phase": "after-product",
+          "user_cpu_ns": 56390000000,
+          "system_cpu_ns": 21210000000,
+          "resident_bytes": 293662720,
+          "peak_resident_bytes": 375328768,
+          "physical_footprint_bytes": 293662720,
+          "disk_read_bytes": 2078236672,
+          "disk_write_bytes": 3116331008,
+          "swaps": 0
+        },
+        {
+          "kind": "host-rss-samples",
+          "sample_count": 9623,
+          "baseline_bytes": 3899392,
+          "sampled_peak_bytes": 375857152,
+          "final_bytes": 293662720,
+          "maximum_gap_ns": 25389583,
+          "nominal_interval_ns": 10000000
+        },
+        {
+          "kind": "host-resources",
+          "phase": "final",
+          "user_cpu_ns": 56390000000,
+          "system_cpu_ns": 21210000000,
+          "resident_bytes": 293662720,
+          "peak_resident_bytes": 375328768,
+          "physical_footprint_bytes": 293662720,
+          "disk_read_bytes": 2078236672,
+          "disk_write_bytes": 3116331008,
+          "swaps": 0
+        }
+      ],
+      "verification": [],
+      "experiments": "experiment_metadata_cache enabled=false hits=0 builds=100633 entries=0\nexperiment_final_new_refs enabled=true pre_counted_inodes=100633\nexperiment_frontier_batch size=128 flushes=787 max_pending=128 deferred_peak_bytes=1868160\n",
+      "independent_verification": [
+        {
+          "kind": "canonical-verification",
+          "receipt": "{\"artifact_compressor\": \"/usr/bin/gzip -n -6 -c\", \"artifact_encoding\": \"gzip-v1\", \"canonical_Chunk_bytes\": \"526559947\", \"canonical_Chunk_objects\": \"108187\", \"canonical_DirectoryNode_bytes\": \"4466144\", \"canonical_DirectoryNode_objects\": \"1147\", \"canonical_DirectoryState_bytes\": \"75166\", \"canonical_DirectoryState_objects\": \"767\", \"canonical_FileNode_bytes\": \"8727612\", \"canonical_FileNode_objects\": \"100003\", \"canonical_FileState_bytes\": \"10600318\", \"canonical_FileState_objects\": \"100003\", \"canonical_InodeRecord_bytes\": \"9875166\", \"canonical_InodeRecord_objects\": \"100767\", \"canonical_InodeTable_bytes\": \"6588788\", \"canonical_InodeTable_objects\": \"1175\", \"canonical_Metadata_bytes\": \"286\", \"canonical_Metadata_objects\": \"2\", \"canonical_Namespace_bytes\": \"121\", \"canonical_Namespace_objects\": \"1\", \"canonical_role_status\": \"pass\", \"canonical_root\": \"226dc438ca2d9539ca8e86f4303ecf56badc10ba7745b753ffbeb1c610833f7c\", \"canonical_unique_objects\": \"412052\", \"independent_content_paths\": \"100200\", \"logical_bytes\": \"525336576\", \"oracle_identity\": \"e35bdb9f2cca540e9dc033badb453681dd23eadb007ad6c93b74112d16828283\", \"oracle_scope\": \"independent-source\", \"persistence_custody_paths\": \"0\", \"verification_status\": \"pass\", \"verified_paths\": \"100968\", \"verified_regular_paths\": \"100200\"}"
+        },
+        {
+          "kind": "native-verification",
+          "step": 1,
+          "receipt": "independent_content_paths=100200\nlogical_bytes=525336576\noracle_identity=e35bdb9f2cca540e9dc033badb453681dd23eadb007ad6c93b74112d16828283\noracle_scope=independent-source\npersistence_custody_paths=0\nverification_status=pass\nverified_paths=100968\nverified_regular_paths=100200\n"
+        },
+        {
+          "kind": "verification-complete",
+          "status": "pass"
+        }
+      ],
+      "independent_verification_command_ns": 252621721250,
+      "cgroup_after_performance": "usage_usec 84836998\nuser_usec 58621152\nsystem_usec 26215846\nnice_usec 0\nnr_periods 1088\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n1724968960\nlow 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n0\n3\n",
+      "cgroup_after_verification": "usage_usec 328319527\nuser_usec 262816949\nsystem_usec 65502577\nnice_usec 0\nnr_periods 3615\nnr_throttled 0\nthrottled_usec 0\nnr_bursts 0\nburst_usec 0\n1724968960\nlow 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n0\n3\n"
+    }
+  }
+}

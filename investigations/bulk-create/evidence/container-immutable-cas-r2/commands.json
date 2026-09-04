@@ -1,0 +1,157 @@
+[
+  {
+    "label": "archive",
+    "argv": [
+      "git",
+      "archive",
+      "--format=tar",
+      "--output",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-immutable-cas-r2/source.tar",
+      "2c30e7ef9d7fddeddb47ca6e8ec864bfbf11a5fe",
+      "Cargo.toml",
+      "Cargo.lock",
+      "crates",
+      "tools",
+      "benchmark/fs-bench-pro",
+      "investigations/bulk-create/sync-source.py"
+    ],
+    "elapsed_ns": 37070708,
+    "exit_code": 0
+  },
+  {
+    "label": "create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-immutable-1cc3802ff0ed",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 218877917,
+    "exit_code": 0
+  },
+  {
+    "label": "environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-immutable-1cc3802ff0ed"
+    ],
+    "elapsed_ns": 38397583,
+    "exit_code": 0
+  },
+  {
+    "label": "reuse-private-build",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1/failed-state/.",
+      "layerfs-immutable-1cc3802ff0ed:/data"
+    ],
+    "elapsed_ns": 3725315000,
+    "exit_code": 0
+  },
+  {
+    "label": "copy-source",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-immutable-cas-r2/source.tar",
+      "layerfs-immutable-1cc3802ff0ed:/data/new-source.tar"
+    ],
+    "elapsed_ns": 65909875,
+    "exit_code": 0
+  },
+  {
+    "label": "focused-test",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "CARGO_HOME=/data/cargo",
+      "-e",
+      "CARGO_TARGET_DIR=/data/target",
+      "-e",
+      "CARGO_BUILD_JOBS=2",
+      "-e",
+      "LAYERFS_EXPERIMENT_DENSE_DELETE=1",
+      "-e",
+      "LAYERFS_EXPERIMENT_FINAL_NEW_REFS=1",
+      "layerfs-immutable-1cc3802ff0ed",
+      "sh",
+      "-c",
+      "mkdir /data/update && tar -xf /data/new-source.tar -C /data/update && python3 /data/update/investigations/bulk-create/sync-source.py /data/update /data/source && cd /data/source && cargo test --offline --locked -p layerfs-workspace --features test-instrumentation --lib dense_delete_preserves_aliases_open_unlinked_and_old_root -- --nocapture"
+    ],
+    "elapsed_ns": 36420212792,
+    "exit_code": 0
+  },
+  {
+    "label": "trace-regression",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "CARGO_HOME=/data/cargo",
+      "-e",
+      "CARGO_TARGET_DIR=/data/target",
+      "-e",
+      "CARGO_BUILD_JOBS=2",
+      "layerfs-immutable-1cc3802ff0ed",
+      "sh",
+      "-c",
+      "cd /data/source && cargo test --offline --locked -p layerfs-layerstack-store --features test-instrumentation --lib snapshot_cache_reads_only_requested_authenticated_objects_and_reuses_them"
+    ],
+    "elapsed_ns": 5928358916,
+    "exit_code": 0
+  },
+  {
+    "label": "resources",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-immutable-1cc3802ff0ed",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current"
+    ],
+    "elapsed_ns": 121225625,
+    "exit_code": 0
+  },
+  {
+    "label": "cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-immutable-1cc3802ff0ed"
+    ],
+    "elapsed_ns": 2571094875,
+    "exit_code": 0
+  },
+  {
+    "label": "remaining",
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "name=^/layerfs-immutable-1cc3802ff0ed$"
+    ],
+    "elapsed_ns": 35784334,
+    "exit_code": 0
+  }
+]

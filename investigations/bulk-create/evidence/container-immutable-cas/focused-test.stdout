@@ -1,0 +1,13 @@
+investigations/bulk-create/sync-source.py
+crates/layerfs-workspace/src/changes.rs
+
+running 1 test
+test changes::tests::dense_delete_preserves_aliases_open_unlinked_and_old_root ... FAILED
+
+failures:
+
+failures:
+    changes::tests::dense_delete_preserves_aliases_open_unlinked_and_old_root
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 41 filtered out; finished in 6.44s
+

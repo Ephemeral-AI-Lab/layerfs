@@ -1,0 +1,472 @@
+[
+  {
+    "label": "source",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "elapsed_ns": 11707625,
+    "exit_code": 0
+  },
+  {
+    "label": "archive",
+    "argv": [
+      "git",
+      "archive",
+      "--format=tar",
+      "--output",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1-r2/source.tar",
+      "b5dd2829d56833d3b4c1eb1e21d2fcb80a212496",
+      "Cargo.toml",
+      "Cargo.lock",
+      "crates",
+      "tools",
+      "benchmark/fs-bench-pro"
+    ],
+    "elapsed_ns": 41748959,
+    "exit_code": 0
+  },
+  {
+    "label": "build-create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-explore-08e89a73c9f5",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--device",
+      "/dev/fuse",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 177311000,
+    "exit_code": 0
+  },
+  {
+    "label": "build-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-08e89a73c9f5"
+    ],
+    "elapsed_ns": 37597334,
+    "exit_code": 0
+  },
+  {
+    "label": "reuse-private-build",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1/failed-state/.",
+      "layerfs-explore-08e89a73c9f5:/data"
+    ],
+    "elapsed_ns": 3930758000,
+    "exit_code": 0
+  },
+  {
+    "label": "copy-new-source",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1-r2/source.tar",
+      "layerfs-explore-08e89a73c9f5:/data/new-source.tar"
+    ],
+    "elapsed_ns": 73874250,
+    "exit_code": 0
+  },
+  {
+    "label": "build",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "CARGO_HOME=/data/cargo",
+      "-e",
+      "CARGO_TARGET_DIR=/data/target",
+      "-e",
+      "CARGO_BUILD_JOBS=2",
+      "layerfs-explore-08e89a73c9f5",
+      "sh",
+      "-c",
+      "tar -xf /data/new-source.tar -C /data/source && cd /data/source && cargo clean -p layerfs-workspace -p fs-benchmark-pro && cargo build --offline --locked --release -p fs-benchmark-pro"
+    ],
+    "elapsed_ns": 50517522167,
+    "exit_code": 0
+  },
+  {
+    "label": "focused-regression",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "CARGO_HOME=/data/cargo",
+      "-e",
+      "CARGO_TARGET_DIR=/data/target",
+      "-e",
+      "CARGO_BUILD_JOBS=2",
+      "-e",
+      "LAYERFS_EXPERIMENT_DENSE_DELETE=1",
+      "layerfs-explore-08e89a73c9f5",
+      "sh",
+      "-c",
+      "cd /data/source && cargo test --offline --locked -p layerfs-workspace --features test-instrumentation --lib dense_delete_preserves_aliases_open_unlinked_and_old_root"
+    ],
+    "elapsed_ns": 32020616041,
+    "exit_code": 0
+  },
+  {
+    "label": "binary-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-explore-08e89a73c9f5:/data/target/release/fs-benchmark-pro",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1-r2/fs-benchmark-pro"
+    ],
+    "elapsed_ns": 125068208,
+    "exit_code": 0
+  },
+  {
+    "label": "build-cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-explore-08e89a73c9f5"
+    ],
+    "elapsed_ns": 1886632666,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-explore-72bd84703b02",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--device",
+      "/dev/fuse",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 335860584,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-72bd84703b02"
+    ],
+    "elapsed_ns": 42411417,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-copy-input",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1-r2/delete-prepared",
+      "layerfs-explore-72bd84703b02:/data/sample"
+    ],
+    "elapsed_ns": 224512166,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-copy-binary",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1-r2/fs-benchmark-pro",
+      "layerfs-explore-72bd84703b02:/usr/local/bin/fs-benchmark-pro"
+    ],
+    "elapsed_ns": 118213167,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-identity",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-72bd84703b02",
+      "sh",
+      "-c",
+      "sha256sum /usr/local/bin/fs-benchmark-pro /usr/local/bin/fs-benchmark-workload /data/sample/store.sqlite"
+    ],
+    "elapsed_ns": 181812208,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-before",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-72bd84703b02",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 73905166,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-run",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "LAYERFS_EXPERIMENT_DENSE_DELETE=0",
+      "layerfs-explore-72bd84703b02",
+      "fs-benchmark-pro",
+      "workspace-run",
+      "/data/sample",
+      "/unused-input",
+      "tiny-bulk-delete-10",
+      "1",
+      "verify",
+      "diagnostic-host-fuse"
+    ],
+    "elapsed_ns": 1191131125,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-after",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-72bd84703b02",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 72402292,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-proof-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-explore-72bd84703b02:/data/sample/canonical-verification",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1-r2/delete-control-canonical-verification"
+    ],
+    "elapsed_ns": 38956125,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-cleanup-check",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-72bd84703b02",
+      "sh",
+      "-c",
+      "cat /proc/self/mountinfo; find /tmp/layerfs-runtime -type f 2>/dev/null; ps -eo pid,comm"
+    ],
+    "elapsed_ns": 129330333,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-control-cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-explore-72bd84703b02"
+    ],
+    "elapsed_ns": 398100125,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-explore-8a0260cace7c",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--device",
+      "/dev/fuse",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 231967958,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-8a0260cace7c"
+    ],
+    "elapsed_ns": 40650833,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-copy-input",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1-r2/delete-prepared",
+      "layerfs-explore-8a0260cace7c:/data/sample"
+    ],
+    "elapsed_ns": 180196791,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-copy-binary",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1-r2/fs-benchmark-pro",
+      "layerfs-explore-8a0260cace7c:/usr/local/bin/fs-benchmark-pro"
+    ],
+    "elapsed_ns": 121848500,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-identity",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-8a0260cace7c",
+      "sh",
+      "-c",
+      "sha256sum /usr/local/bin/fs-benchmark-pro /usr/local/bin/fs-benchmark-workload /data/sample/store.sqlite"
+    ],
+    "elapsed_ns": 179087042,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-before",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-8a0260cace7c",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 78591458,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-run",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "LAYERFS_EXPERIMENT_DENSE_DELETE=1",
+      "layerfs-explore-8a0260cace7c",
+      "fs-benchmark-pro",
+      "workspace-run",
+      "/data/sample",
+      "/unused-input",
+      "tiny-bulk-delete-10",
+      "1",
+      "verify",
+      "diagnostic-host-fuse"
+    ],
+    "elapsed_ns": 915701750,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-after",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-8a0260cace7c",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 77416709,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-proof-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-explore-8a0260cace7c:/data/sample/canonical-verification",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1-r2/delete-survivors-canonical-verification"
+    ],
+    "elapsed_ns": 39944292,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-cleanup-check",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-8a0260cace7c",
+      "sh",
+      "-c",
+      "cat /proc/self/mountinfo; find /tmp/layerfs-runtime -type f 2>/dev/null; ps -eo pid,comm"
+    ],
+    "elapsed_ns": 72556375,
+    "exit_code": 0
+  },
+  {
+    "label": "delete-survivors-cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-explore-8a0260cace7c"
+    ],
+    "elapsed_ns": 330670875,
+    "exit_code": 0
+  }
+]

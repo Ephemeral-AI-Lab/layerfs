@@ -1,0 +1,63 @@
+     Removed 0 files
+   Compiling layerfs-content v0.1.2 (/data/source/crates/layerfs-content)
+   Compiling layerfs-daemon v0.1.2 (/data/source/crates/layerfs-daemon)
+   Compiling layerfs-fuse v0.1.2 (/data/source/crates/layerfs-fuse)
+   Compiling layerfs-materialization v0.1.2 (/data/source/crates/layerfs-materialization)
+   Compiling layerfs-layerstack-store v0.1.2 (/data/source/crates/layerfs-layerstack-store)
+   Compiling layerfs-workspace v0.1.2 (/data/source/crates/layerfs-workspace)
+error[E0034]: multiple applicable items in scope
+   --> crates/layerfs-workspace/src/changes.rs:400:46
+    |
+400 |                     let mut record = objects.with_authenticated_canonical(id, decode_inode_record)?;
+    |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ multiple `with_authenticated_canonical` found
+    |
+    = note: candidate #1 is defined in an impl of the trait `ObjectStore` for the type `ObjectBuffer<'_>`
+    = note: candidate #2 is defined in an impl of the trait `ObjectRead` for the type `T`
+help: disambiguate the method for candidate #1
+    |
+400 |                     let mut record = ObjectStore::with_authenticated_canonical(&objects, id, decode_inode_record)?;
+    |                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+help: disambiguate the method for candidate #2
+    |
+400 |                     let mut record = ObjectRead::with_authenticated_canonical(&objects, id, decode_inode_record)?;
+    |                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error[E0308]: mismatched types
+   --> crates/layerfs-workspace/src/changes.rs:405:58
+    |
+405 |                         let metadata = portable_metadata(&objects, record.metadata_root, record.kind)?;
+    |                                        ----------------- ^^^^^^^^ expected `&CoreReader<'_>`, found `&ObjectBuffer<'_>`
+    |                                        |
+    |                                        arguments to this function are incorrect
+    |
+    = note: expected reference `&CoreReader<'_>`
+               found reference `&ObjectBuffer<'_>`
+note: function defined here
+   --> crates/layerfs-workspace/src/cow_tree.rs:711:15
+    |
+711 | pub(crate) fn portable_metadata(
+    |               ^^^^^^^^^^^^^^^^^
+712 |     store: &CoreReader<'_>,
+    |     ----------------------
+
+error[E0034]: multiple applicable items in scope
+    --> crates/layerfs-workspace/src/changes.rs:1365:20
+     |
+1365 |         Ok(objects.with_authenticated_canonical(id, decode_inode_record)?)
+     |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ multiple `with_authenticated_canonical` found
+     |
+     = note: candidate #1 is defined in an impl of the trait `ObjectStore` for the type `ObjectBuffer<'_>`
+     = note: candidate #2 is defined in an impl of the trait `ObjectRead` for the type `T`
+help: disambiguate the method for candidate #1
+     |
+1365 |         Ok(ObjectStore::with_authenticated_canonical(&objects, id, decode_inode_record)?)
+     |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+help: disambiguate the method for candidate #2
+     |
+1365 |         Ok(ObjectRead::with_authenticated_canonical(&objects, id, decode_inode_record)?)
+     |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Some errors have detailed explanations: E0034, E0308.
+For more information about an error, try `rustc --explain E0034`.
+error: could not compile `layerfs-workspace` (lib) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...

@@ -1,0 +1,11 @@
+{
+  "binary_source": "b5dd2829d56833d3b4c1eb1e21d2fcb80a212496",
+  "runner_source": "249e570a8a5ab686b86ed3c3b2a9f7411b54a422",
+  "profile": "exploratory-linux-colocated-2cpu-2g",
+  "shared_host_interference_allowed": true,
+  "phase1_lock_acquired": false,
+  "case": "tiny-bulk-delete-500",
+  "seed": 1,
+  "mode": "verify",
+  "admission_eligible": false
+}

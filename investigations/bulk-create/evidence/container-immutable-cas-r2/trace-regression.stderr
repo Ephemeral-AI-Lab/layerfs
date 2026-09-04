@@ -1,0 +1,3 @@
+   Compiling layerfs-layerstack-store v0.1.2 (/data/source/crates/layerfs-layerstack-store)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.85s
+     Running unittests src/lib.rs (/data/target/debug/deps/layerfs_layerstack_store-c121e0b52939e45f)

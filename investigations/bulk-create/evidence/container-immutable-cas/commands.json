@@ -1,0 +1,125 @@
+[
+  {
+    "label": "archive",
+    "argv": [
+      "git",
+      "archive",
+      "--format=tar",
+      "--output",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-immutable-cas/source.tar",
+      "a6985d416b7767f7f8f64fe0f54fe7294685fdb1",
+      "Cargo.toml",
+      "Cargo.lock",
+      "crates",
+      "tools",
+      "benchmark/fs-bench-pro",
+      "investigations/bulk-create/sync-source.py"
+    ],
+    "elapsed_ns": 33921916,
+    "exit_code": 0
+  },
+  {
+    "label": "create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-immutable-358bd8876b2a",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 222885042,
+    "exit_code": 0
+  },
+  {
+    "label": "environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-immutable-358bd8876b2a"
+    ],
+    "elapsed_ns": 35459166,
+    "exit_code": 0
+  },
+  {
+    "label": "reuse-private-build",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1/failed-state/.",
+      "layerfs-immutable-358bd8876b2a:/data"
+    ],
+    "elapsed_ns": 3679745875,
+    "exit_code": 0
+  },
+  {
+    "label": "copy-source",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-immutable-cas/source.tar",
+      "layerfs-immutable-358bd8876b2a:/data/new-source.tar"
+    ],
+    "elapsed_ns": 69930208,
+    "exit_code": 0
+  },
+  {
+    "label": "focused-test",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "CARGO_HOME=/data/cargo",
+      "-e",
+      "CARGO_TARGET_DIR=/data/target",
+      "-e",
+      "CARGO_BUILD_JOBS=2",
+      "-e",
+      "LAYERFS_EXPERIMENT_DENSE_DELETE=1",
+      "-e",
+      "LAYERFS_EXPERIMENT_FINAL_NEW_REFS=1",
+      "layerfs-immutable-358bd8876b2a",
+      "sh",
+      "-c",
+      "mkdir /data/update && tar -xf /data/new-source.tar -C /data/update && python3 /data/update/investigations/bulk-create/sync-source.py /data/update /data/source && cd /data/source && cargo test --offline --locked -p layerfs-workspace --features test-instrumentation --lib dense_delete_preserves_aliases_open_unlinked_and_old_root -- --nocapture"
+    ],
+    "elapsed_ns": 40728007084,
+    "exit_code": 101
+  },
+  {
+    "label": "cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-immutable-358bd8876b2a"
+    ],
+    "elapsed_ns": 2122526958,
+    "exit_code": 0
+  },
+  {
+    "label": "remaining",
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "name=^/layerfs-immutable-358bd8876b2a$"
+    ],
+    "elapsed_ns": 35450458,
+    "exit_code": 0
+  }
+]

@@ -1,0 +1,7 @@
+{"kind":"diagnostic-profile","profile":"linux-colocated-host-fuse-2cpu-2g"}
+{"kind":"sample-start","scenario_id":"tiny-bulk-delete-10","family_id":"tiny_file_churn","seed":1,"mode":"verify"}
+{"kind":"host-resources","phase":"before","user_cpu_ns":0,"system_cpu_ns":0,"resident_bytes":3883008,"peak_resident_bytes":12382208,"physical_footprint_bytes":3883008,"disk_read_bytes":0,"disk_write_bytes":0,"swaps":0}
+{"kind":"store-observation","phase":"before","step":0,"file_bytes":14548992,"allocated_bytes":14548992,"page_size_bytes":65536,"page_count":222,"freelist_page_count":0,"live_page_bytes":14548992}
+{"kind":"host-rss-samples","sample_count":2,"baseline_bytes":4030464,"sampled_peak_bytes":6369280,"final_bytes":6369280,"maximum_gap_ns":12452084,"nominal_interval_ns":10000000}
+{"kind":"host-resources","phase":"final","user_cpu_ns":10000000,"system_cpu_ns":0,"resident_bytes":6434816,"peak_resident_bytes":12382208,"physical_footprint_bytes":6434816,"disk_read_bytes":0,"disk_write_bytes":0,"swaps":0}
+{"kind":"runtime-observation-window","scenario_id":"tiny-bulk-delete-10","mode":"verify","elapsed_ns":14805541,"scope":"selected-run dispatch through all reached product, verification and recovery work and local Client/Store drops; excludes process-wide daemon-owner teardown and supervisor cleanup","start_event":"selected-run-dispatch","end_event":"selected-run-return-before-process-owner-drain","status":"error"}

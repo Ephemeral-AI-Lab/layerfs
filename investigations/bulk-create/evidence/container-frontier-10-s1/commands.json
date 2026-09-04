@@ -1,0 +1,214 @@
+[
+  {
+    "label": "source",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "elapsed_ns": 11798000,
+    "exit_code": 0
+  },
+  {
+    "label": "source-diff",
+    "argv": [
+      "git",
+      "diff",
+      "5a5db40d",
+      "21c2929052c5bdf487b6d9c72fc0d9f8c3549063",
+      "--",
+      "crates",
+      "benchmark/fs-bench-pro"
+    ],
+    "elapsed_ns": 21446958,
+    "exit_code": 0
+  },
+  {
+    "label": "archive",
+    "argv": [
+      "git",
+      "archive",
+      "--format=tar",
+      "--output",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-frontier-10-s1/source.tar",
+      "21c2929052c5bdf487b6d9c72fc0d9f8c3549063",
+      "Cargo.toml",
+      "Cargo.lock",
+      "crates",
+      "tools",
+      "benchmark/fs-bench-pro"
+    ],
+    "elapsed_ns": 41604875,
+    "exit_code": 0
+  },
+  {
+    "label": "concurrent-containers",
+    "argv": [
+      "docker",
+      "ps",
+      "--format",
+      "{{.Names}}\t{{.Status}}"
+    ],
+    "elapsed_ns": 76428541,
+    "exit_code": 0
+  },
+  {
+    "label": "build-create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-explore-00abd1e4b85d",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--device",
+      "/dev/fuse",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 230915125,
+    "exit_code": 0
+  },
+  {
+    "label": "build-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-00abd1e4b85d"
+    ],
+    "elapsed_ns": 35530333,
+    "exit_code": 0
+  },
+  {
+    "label": "build-dependencies-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-frontier-10-s1/dependencies.tar",
+      "layerfs-explore-00abd1e4b85d:/data/dependencies.tar"
+    ],
+    "elapsed_ns": 531425000,
+    "exit_code": 0
+  },
+  {
+    "label": "build-source-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-frontier-10-s1/source.tar",
+      "layerfs-explore-00abd1e4b85d:/data/source.tar"
+    ],
+    "elapsed_ns": 74010666,
+    "exit_code": 0
+  },
+  {
+    "label": "build",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "CARGO_HOME=/data/cargo",
+      "-e",
+      "CARGO_TARGET_DIR=/data/target",
+      "-e",
+      "CARGO_BUILD_JOBS=2",
+      "layerfs-explore-00abd1e4b85d",
+      "sh",
+      "-c",
+      "mkdir /data/source && tar -xf /data/source.tar -C /data/source && tar -xf /data/dependencies.tar -C /data && cd /data/source && cargo build --offline --locked --release -p fs-benchmark-pro"
+    ],
+    "elapsed_ns": 67916945167,
+    "exit_code": 0
+  },
+  {
+    "label": "binary-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-explore-00abd1e4b85d:/data/target/release/fs-benchmark-pro",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-frontier-10-s1/fs-benchmark-pro"
+    ],
+    "elapsed_ns": 125379166,
+    "exit_code": 0
+  },
+  {
+    "label": "build-toolchain",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-explore-00abd1e4b85d",
+      "rustc",
+      "-Vv"
+    ],
+    "elapsed_ns": 120381000,
+    "exit_code": 0
+  },
+  {
+    "label": "focused-regression",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "CARGO_HOME=/data/cargo",
+      "-e",
+      "CARGO_TARGET_DIR=/data/target",
+      "-e",
+      "CARGO_BUILD_JOBS=2",
+      "-e",
+      "LAYERFS_EXPERIMENT_FRONTIER_BATCH=2048",
+      "layerfs-explore-00abd1e4b85d",
+      "sh",
+      "-c",
+      "cd /data/source && cargo test --offline --locked --release -p layerfs-workspace --test file_edit group_3_rename_parent_replace_unlink_and_final_alias_reclamation_are_inode_exact -- --exact"
+    ],
+    "elapsed_ns": 25170484500,
+    "exit_code": 101
+  },
+  {
+    "label": "failed-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-explore-00abd1e4b85d"
+    ],
+    "elapsed_ns": 35983959,
+    "exit_code": 0
+  },
+  {
+    "label": "failed-state-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-explore-00abd1e4b85d:/data",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-frontier-10-s1/failed-state"
+    ],
+    "elapsed_ns": 2799594709,
+    "exit_code": 0
+  },
+  {
+    "label": "failed-cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-explore-00abd1e4b85d"
+    ],
+    "elapsed_ns": 394207750,
+    "exit_code": 0
+  }
+]

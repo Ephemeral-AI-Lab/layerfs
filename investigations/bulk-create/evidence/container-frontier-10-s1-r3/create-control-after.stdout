@@ -1,0 +1,18 @@
+usage_usec 3951305
+user_usec 3572859
+system_usec 378446
+nice_usec 0
+nr_periods 46
+nr_throttled 0
+throttled_usec 0
+nr_bursts 0
+burst_usec 0
+190054400
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+0
+3

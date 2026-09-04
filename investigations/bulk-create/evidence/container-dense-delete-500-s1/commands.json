@@ -1,0 +1,193 @@
+[
+  {
+    "label": "create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-dense-delete-5fff50943774",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--device",
+      "/dev/fuse",
+      "--cap-add",
+      "SYS_ADMIN",
+      "--security-opt",
+      "apparmor=unconfined",
+      "--mount",
+      "type=volume,destination=/data",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 226124000,
+    "exit_code": 0
+  },
+  {
+    "label": "environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-dense-delete-5fff50943774"
+    ],
+    "elapsed_ns": 38399125,
+    "exit_code": 0
+  },
+  {
+    "label": "concurrent-containers",
+    "argv": [
+      "docker",
+      "ps",
+      "--format",
+      "{{.Names}}\t{{.Status}}"
+    ],
+    "elapsed_ns": 69802458,
+    "exit_code": 0
+  },
+  {
+    "label": "copy-input",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-500-s1/prepared",
+      "layerfs-dense-delete-5fff50943774:/data/sample"
+    ],
+    "elapsed_ns": 6420908833,
+    "exit_code": 0
+  },
+  {
+    "label": "copy-binary",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-10-s1-r2/fs-benchmark-pro",
+      "layerfs-dense-delete-5fff50943774:/usr/local/bin/fs-benchmark-pro"
+    ],
+    "elapsed_ns": 237433667,
+    "exit_code": 0
+  },
+  {
+    "label": "identity",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-dense-delete-5fff50943774",
+      "sh",
+      "-c",
+      "sha256sum /usr/local/bin/fs-benchmark-pro /usr/local/bin/fs-benchmark-workload /data/sample/store.sqlite"
+    ],
+    "elapsed_ns": 2269162916,
+    "exit_code": 0
+  },
+  {
+    "label": "before",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-dense-delete-5fff50943774",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 81221250,
+    "exit_code": 0
+  },
+  {
+    "label": "run",
+    "argv": [
+      "docker",
+      "exec",
+      "-e",
+      "LAYERFS_EXPERIMENT_DENSE_DELETE=1",
+      "layerfs-dense-delete-5fff50943774",
+      "fs-benchmark-pro",
+      "workspace-run",
+      "/data/sample",
+      "/unused-input",
+      "tiny-bulk-delete-500",
+      "1",
+      "verify",
+      "diagnostic-host-fuse"
+    ],
+    "elapsed_ns": 71011040459,
+    "exit_code": 0
+  },
+  {
+    "label": "after",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-dense-delete-5fff50943774",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current /sys/fs/cgroup/pids.current"
+    ],
+    "elapsed_ns": 74868083,
+    "exit_code": 0
+  },
+  {
+    "label": "proof-copy",
+    "argv": [
+      "docker",
+      "cp",
+      "layerfs-dense-delete-5fff50943774:/data/sample/canonical-verification",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/container-dense-delete-500-s1/canonical-verification"
+    ],
+    "elapsed_ns": 41102250,
+    "exit_code": 0
+  },
+  {
+    "label": "cleanup-check",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-dense-delete-5fff50943774",
+      "sh",
+      "-c",
+      "cat /proc/self/mountinfo; find /tmp/layerfs-runtime -type f 2>/dev/null; ps -eo pid,comm"
+    ],
+    "elapsed_ns": 73243166,
+    "exit_code": 0
+  },
+  {
+    "label": "terminal-environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-dense-delete-5fff50943774"
+    ],
+    "elapsed_ns": 38559084,
+    "exit_code": 0
+  },
+  {
+    "label": "cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-dense-delete-5fff50943774"
+    ],
+    "elapsed_ns": 388139583,
+    "exit_code": 0
+  },
+  {
+    "label": "remaining",
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "name=^/layerfs-dense-delete-5fff50943774$"
+    ],
+    "elapsed_ns": 39818708,
+    "exit_code": 0
+  }
+]
