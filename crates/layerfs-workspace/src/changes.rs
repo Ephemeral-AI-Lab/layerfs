@@ -620,6 +620,17 @@ impl Workspace {
         }) {
             return self.build_frontier_candidate().map(Some);
         }
+        let charge = self
+            .mutation_paths
+            .keys()
+            .map(|path| path_charge(path))
+            .sum();
+        if charge > self.policy.max_final_delta_memory_bytes {
+            // Large content-only deltas use the same bounded inode batches as
+            // structural changes, without materializing an all-path plan first.
+            return self.build_frontier_candidate().map(Some);
+        }
+        self.policy.check_final_delta(charge)?;
         let mut changed = BTreeSet::new();
         for path in self.mutation_paths.keys() {
             let Some(node) = self
@@ -640,12 +651,6 @@ impl Workspace {
         if changed.is_empty() || self.dirty.iter().any(|node| !changed.contains(node)) {
             return Ok(None);
         }
-        let charge = self
-            .mutation_paths
-            .keys()
-            .map(|path| path_charge(path))
-            .sum();
-        self.policy.check_final_delta(charge)?;
         note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
 
         let captured = self.take_capture();
@@ -1752,6 +1757,102 @@ mod tests {
         ));
         drop(workspace);
         drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn dense_existing_file_delta_uses_bounded_frontier_and_preserves_aliases() {
+        let (root, mut workspace) = empty_workspace("dense-frontier");
+        let mut files = Vec::new();
+        for index in 0..16 {
+            let name = format!("file-{index:02}");
+            let node = workspace
+                .create_file(ROOT, name.as_bytes(), 0o640)
+                .unwrap()
+                .node;
+            workspace.write(node, 0, b"initial").unwrap();
+            files.push((name, node));
+        }
+        workspace.link(files[0].1, ROOT, b"alias").unwrap();
+        let sentinel = workspace
+            .create_file(ROOT, b"sentinel", 0o600)
+            .unwrap()
+            .node;
+        workspace.write(sentinel, 0, b"unchanged").unwrap();
+        workspace.commit().unwrap();
+        let original_inodes = files
+            .iter()
+            .map(|(_, node)| workspace.nodes[node].canonical.unwrap())
+            .collect::<Vec<_>>();
+        workspace.policy.max_final_delta_memory_bytes = 4096;
+        for (index, (_, node)) in files.iter().enumerate() {
+            workspace
+                .write(*node, 0, format!("changed-{index:02}").as_bytes())
+                .unwrap();
+            workspace.set_mtime(*node, 1700000001, 123).unwrap();
+        }
+        assert!(workspace.nodes.values().all(|node| !matches!(&node.data,
+            Data::Directory(directory) if !directory.changes.is_empty())));
+        assert!(
+            workspace
+                .mutation_paths
+                .keys()
+                .map(|path| path_charge(path))
+                .sum::<u64>()
+                > workspace.policy.max_final_delta_memory_bytes
+        );
+        workspace.commit().unwrap();
+        let reader = workspace.store.snapshot_reader(workspace.base_root);
+        let core = CoreReader(&reader);
+        for (index, (name, _)) in files.iter().enumerate() {
+            let path = CanonicalPath::new(name).unwrap();
+            let resolved = filesystem::resolve(
+                &core,
+                workspace.base_root,
+                &path,
+                &mut LogicalCounters::default(),
+            )
+            .unwrap();
+            assert_eq!(resolved.inode, original_inodes[index]);
+            let metadata =
+                portable_metadata(&core, resolved.record.metadata_root, resolved.record.kind)
+                    .unwrap();
+            assert_eq!(
+                (
+                    metadata.permission_mode,
+                    metadata.mtime_seconds,
+                    metadata.mtime_nanoseconds
+                ),
+                (0o640, 1700000001, 123)
+            );
+            let mut bytes = Vec::new();
+            filesystem::stream(&core, workspace.base_root, &path, &mut bytes).unwrap();
+            assert_eq!(bytes, format!("changed-{index:02}").as_bytes());
+        }
+        for (path, expected) in [
+            ("alias", b"changed-00".as_slice()),
+            ("sentinel", b"unchanged"),
+        ] {
+            let mut bytes = Vec::new();
+            filesystem::stream(
+                &core,
+                workspace.base_root,
+                &CanonicalPath::new(path).unwrap(),
+                &mut bytes,
+            )
+            .unwrap();
+            assert_eq!(bytes, expected);
+        }
+        let alias = filesystem::resolve(
+            &core,
+            workspace.base_root,
+            &CanonicalPath::new("alias").unwrap(),
+            &mut LogicalCounters::default(),
+        )
+        .unwrap();
+        assert_eq!(alias.inode, original_inodes[0]);
+        assert_eq!(alias.record.namespace_ref_count, 2);
+        drop(workspace);
         std::fs::remove_dir_all(root).unwrap();
     }
 
