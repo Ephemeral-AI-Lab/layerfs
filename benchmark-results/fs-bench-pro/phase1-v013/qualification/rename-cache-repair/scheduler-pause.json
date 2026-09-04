@@ -1,0 +1,9 @@
+{
+  "coordinator_pid": 69292,
+  "children_at_pause": [
+    "72319 69292 S    /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python /Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark/fs-bench-pro/workspace-runner.py --assets /Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-30d13dee --preparation-assets /Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0 --output /Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013 --cache /Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-prepared --source-arm corrected --mode fast-verify --case agent-episodes-500 --seed 2 --verification-certificate /Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/tiny-stat-10-s2-verify-c62a1a011021 --fast-components"
+  ],
+  "action": "pause scheduler only, allow active sample to finish before focused build",
+  "active_sample_outcome": "agent-episodes-500 seed2 fastPASS;invocation83f9ea1301974856af96968f995d2895",
+  "action_after_completion": "terminate paused scheduler between samples; no benchmark interruption; resume fromordinal12 afterrepair"
+}

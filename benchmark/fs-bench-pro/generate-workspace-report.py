@@ -1546,9 +1546,49 @@ READONLY_PIN_AFFECTED_CASES = {f"{prefix}-{tier}" for prefix,tiers in (
     ("agent-episodes", (1,10,100,500)), ("dedup-history-metadata", (1,10,100,500))) for tier in tiers}
 
 
+RENAME_CACHE_BRIDGE_KIND = "proxy-rename-cache-source-scope-v1"
+RENAME_CACHE_PARENT = "30d13deeec72b46ff7bc411f1ec08a46990541e1"
+RENAME_CACHE_PAIR = (READONLY_PIN_PAIR[1], "5e2447f3a3335226b0c0bfb1e69df34d737a270eb83933b19e5bf411198dd94d")
+RENAME_CACHE_AFFECTED_CASES = {f"{prefix}-{tier}" for prefix,tiers in (
+    ("namespace-subtree-relocate-delete", (1,10,100)), ("workspace-fixed-move", (1,10,100,500)),
+    ("agent-episodes", (1,10,100,500))) for tier in tiers}
+
+
+@lru_cache(maxsize=None)
+def rename_cache_source_proof(old_revision, new_revision):
+    if old_revision != RENAME_CACHE_PARENT:raise ValueError("rename cache bridge must start at exact30d")
+    path = UNLINK_SOURCE_PATH
+    trees = [product_tree(revision) for revision in (old_revision,new_revision)]
+    if trees[0].pop(path).split()[:2] != trees[1].pop(path).split()[:2] or trees[0] != trees[1]:raise ValueError("rename cache repair changed another product/build input")
+    values = [subprocess.check_output(["git","show",revision+":"+path],cwd=HERE.parents[1]) for revision in (old_revision,new_revision)]
+    hashes = tuple(hashlib.sha256(value).hexdigest() for value in values)
+    if hashes != RENAME_CACHE_PAIR:raise ValueError("unreviewed rename cache source hashes")
+    data = values[1];method = data.index(b"    fn rename(")
+    start = data.index(b"        let source = cache\n",method);end = data.index(b"        let moved = cache\n",start)
+    runtime = data[start:end];data = data[:start]+data[end:]
+    start = data.index(b"    #[test]\n    fn rename_refreshes_overwritten_alias_attributes_and_preserves_same_inode_names()")
+    end = data.index(b"    #[test]\n    fn deferred_write_error_invalidates_optimistic_observations()",start)
+    if b"#[cfg(test)]\nmod tests {" not in data[:start] or data[:start]+data[end:] != values[0]:raise ValueError("rename cache changed outside exact post-Rename cache decisions/test")
+    return {"source_path":path,"old_sha256":hashes[0],"new_sha256":hashes[1],"runtime_fragment_sha256":hashlib.sha256(runtime).hexdigest(),"unchanged_product_tree_sha256":hashlib.sha256(json.dumps(trees[0],sort_keys=True).encode()).hexdigest(),
+        "affected_performance_case_ids":sorted(RENAME_CACHE_AFFECTED_CASES),"scope":"Exactly post-successful Rename cache invalidation/no-op handling. Retain original performance only when no Rename callback occurred; 33 affected timing slots require repaired product. Independently passing semantic full/fast checks retain their actual assurance and source, never cache-cost equivalence. The observed failed hardlink replacement proof must run the repair."}
+
+
+def validate_rename_cache_records(records, case, outcome, issues):
+    require(outcome.get("product_status") == "pass", "failed rename cache evidence cannot be retained as correct", issues)
+    if outcome["mode"] == "performance":
+        require(case["scenario_id"] not in RENAME_CACHE_AFFECTED_CASES, "Rename timing must execute repaired cache path", issues)
+        if case.get("input_mode") == "store":
+            reads = debug_structs(records,"WorkspaceReadReceipt")
+            require(bool(reads) and all(fields.get("callback_rename") == 0 for fields,_ in reads), "retained timing lacks observed zero Rename callbacks", issues)
+    else:require(outcome.get("assurance_status") in {"fully_verified","fast_iteration_verified"}, "retained rename semantic proof lacks actual assurance", issues)
+    return {"predicate":"No Rename callback in retained timing; independent successful semantic checks for retained verification", "source_revision":outcome["source_revision"],"timing_claim":"Original producing source only; repaired cache cost unmeasured by old observations"}
+
+
 @lru_cache(maxsize=None)
 def readonly_pin_source_proof(old_revision, new_revision):
     if old_revision != READONLY_PIN_PARENT:raise ValueError("readonly pin bridge must start at exact78")
+    if product_tree(RENAME_CACHE_PARENT)[UNLINK_SOURCE_PATH] != product_tree(new_revision)[UNLINK_SOURCE_PATH]:
+        return {"prior_readonly_pin_source_proof":readonly_pin_source_proof(old_revision,RENAME_CACHE_PARENT),"rename_cache_source_proof":rename_cache_source_proof(RENAME_CACHE_PARENT,new_revision),"scope":"Exact readonly Pin and post-Rename cache chain; apply separate affected timing exclusions and preserve original logical assurance."}
     path = UNLINK_SOURCE_PATH
     trees = [product_tree(revision) for revision in (old_revision,new_revision)]
     if trees[0].pop(path).split()[:2] != trees[1].pop(path).split()[:2] or trees[0] != trees[1]:raise ValueError("readonly pin repair changed another product/build input")
@@ -1959,8 +1999,13 @@ def configured_product_bridges(config, primary, cases):
     approved = []
     fields = {"kind", "old_revision", "new_revision", "old_product_seal", "new_product_seal", "case_ids", "source_proof", "required_zero_counters", "reviewed_impact"}
     for bridge in config.get("product_compatibility", []):
-        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND, RETAINED_PROOF_KIND, OWNER_DROP_BRIDGE_KIND, DEFERRED_SYNC_BRIDGE_KIND, GROUP_REAPER_BRIDGE_KIND, READONLY_PIN_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
+        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND, RETAINED_PROOF_KIND, OWNER_DROP_BRIDGE_KIND, DEFERRED_SYNC_BRIDGE_KIND, GROUP_REAPER_BRIDGE_KIND, READONLY_PIN_BRIDGE_KIND, RENAME_CACHE_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
             raise ValueError("invalid exact unlink product bridge identity")
+        if bridge["kind"] == RENAME_CACHE_BRIDGE_KIND:
+            if bridge["required_zero_counters"] != [] or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases for case in bridge["case_ids"]) or len(bridge["reviewed_impact"].strip()) < 80:raise ValueError("rename cache bridge lacks exact reviewed cases")
+            if bridge["source_proof"] != rename_cache_source_proof(bridge["old_revision"],bridge["new_revision"]):raise ValueError("rename cache source proof differs")
+            if any(item["old_revision"] == bridge["old_revision"] for item in approved):raise ValueError("duplicate rename cache source bridge")
+            approved.append(bridge);continue
         if bridge["kind"] == READONLY_PIN_BRIDGE_KIND:
             if bridge["required_zero_counters"] != [] or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases for case in bridge["case_ids"]) or len(bridge["reviewed_impact"].strip()) < 80:raise ValueError("readonly pin bridge lacks exact reviewed cases")
             if bridge["source_proof"] != readonly_pin_source_proof(bridge["old_revision"],bridge["new_revision"]):raise ValueError("readonly pin source proof differs")
@@ -2437,6 +2482,8 @@ def generate(campaign, assets):
                 if product_bridge["kind"] == OWNER_DROP_BRIDGE_KIND:
                     predicate_scope = validate_owner_drop_records(retained_records, case, value["issues"])
                     if "deferred_sync_source_proof" in product_bridge["source_proof"]:predicate_scope["deferred_sync"] = validate_deferred_sync_records(retained_records, case, value["issues"])
+                elif product_bridge["kind"] == RENAME_CACHE_BRIDGE_KIND:
+                    predicate_scope = validate_rename_cache_records(retained_records,case,outcome,value["issues"])
                 elif product_bridge["kind"] == READONLY_PIN_BRIDGE_KIND:
                     predicate_scope = validate_readonly_pin_records(retained_records,case,outcome,value["issues"])
                 elif product_bridge["kind"] == GROUP_REAPER_BRIDGE_KIND:
@@ -2457,6 +2504,8 @@ def generate(campaign, assets):
                     predicate_scope = validate_empty_generation_records(retained_records, case, value["issues"])
                 else:
                     validate_no_unlink_records(retained_records, value["issues"])
+                if source_stage(product_bridge["source_proof"], "rename_cache_source_proof"):
+                    predicate_scope = {**(predicate_scope or {}), "rename_cache":validate_rename_cache_records(retained_records,case,outcome,value["issues"])}
                 if source_stage(product_bridge["source_proof"], "readonly_pin_source_proof"):
                     predicate_scope = {**(predicate_scope or {}), "readonly_pin":validate_readonly_pin_records(retained_records,case,outcome,value["issues"])}
                 if source_stage(product_bridge["source_proof"], "group_reaper_source_proof"):
@@ -2578,6 +2627,7 @@ def generate(campaign, assets):
             if "deferred_sync_source_proof" in bridge["source_proof"]:validate_deferred_sync_records(fast_records, case, value["issues"])
             if source_stage(bridge["source_proof"], "group_reaper_source_proof"):validate_group_reaper_records(fast_records, case, value["issues"])
             if source_stage(bridge["source_proof"], "readonly_pin_source_proof"):validate_readonly_pin_records(fast_records,case,outcome,value["issues"])
+            if source_stage(bridge["source_proof"], "rename_cache_source_proof"):validate_rename_cache_records(fast_records,case,outcome,value["issues"])
             value["fast_iteration_pass"] = value["fast_iteration_pass"] and not value["issues"]
         fast_results.append({"case": outcome["scenario_id"], "seed": outcome["seed"], "mode": "fast-verify", "evidence": outcome["evidence_path"],
             "source_identity": source_identity(outcome), "environment_identity": outcome.get("environment_identity"),
