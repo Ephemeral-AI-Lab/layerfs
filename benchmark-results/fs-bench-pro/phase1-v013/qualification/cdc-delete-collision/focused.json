@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "cargo",
+    "test",
+    "--locked",
+    "--release",
+    "--target",
+    "aarch64-apple-darwin",
+    "-p",
+    "fs-benchmark-pro",
+    "--bin",
+    "fs-benchmark-pro",
+    "cdc_delete_offsets_preserve_all_but_the_frozen_collision",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "elapsed_ns": 9502923750,
+  "revision": "33b4580f4201e571a8f910deb79f4883ef293233"
+}

@@ -1,0 +1,41 @@
+"""Exactly the corrected CDC deletion performance/fast pair; reuse prior evidence."""
+import datetime,hashlib,importlib.util,json,subprocess
+from pathlib import Path
+OUT=Path(__file__).resolve().parent;ROOT=OUT.parents[4];C=ROOT/'benchmark-results/fs-bench-pro/phase1-v013';SOURCE=ROOT/'benchmark/fs-bench-pro/generate-workspace-report.py'
+SHA='329fa5da5cf54d959cb5298ee0683fc95714be9bcf0a6cb9159d05885c21b932';REV='e24a3b34b943e1f0a7f5ccf7fadf80217b6f1fb0';CASE='dedup-cdc-delete-500';OLD='e0922904e2bb607a138157755dab9613b441d5b9'
+sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+if sha(SOURCE)!=SHA:raise ValueError('validator differs from frozen source')
+spec=importlib.util.spec_from_file_location('cdc_repair_pair_report',SOURCE);r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
+build=r.read(C/'assets-e24a3b34/evidence/build.json');assert build['status']=='pass' and build['revision']==REV
+ledger=r.read(C/'slots.json');prior=r.read(C/'qualification/78-additional-reliability-checkpoint/checkpoint.json')['prior_report'];case=dict(kind='case',scenario_id=CASE,family_id='dedup_cdc_locality',operation='delete',tier=500,input_mode='directory',proof_only=False,inherited=False)
+rows={};seals={};acquisitions={};outcomes={}
+for mode,suffix in [('performance','d6bc24caf071'),('fast-verify','481af736189e')]:
+    matches=[x for x in ledger.values() if x.get('source_revision')==REV and x.get('mode')==mode and x.get('scenario_id')==CASE and x.get('seed')==3 and x['evidence_path'].endswith(suffix)];assert len(matches)==1
+    outcome=matches[0];p=Path(outcome['evidence_path']);destination=OUT/f'{mode}-validation.json'
+    if destination.exists():raise ValueError('refuse repeat scoped validation')
+    value=(r.validate_fast_attempt if mode=='fast-verify' else r.validate_attempt)(outcome,{},case,build);r.custody.write_json(destination,value)
+    if value['issues'] or value['violations'] or value['product_status']!='pass' or mode=='fast-verify' and not value['fast_iteration_pass']:raise ValueError(f'{mode}: {value["issues"]} {value["violations"]}')
+    assert not value['verification_pass']
+    row=dict(case=CASE,family_id='dedup_cdc_locality',seed=3,mode=mode,assurance_status='fast_iteration_verified' if mode=='fast-verify' else 'not_verified',inherited=False,source_identity=r.source_identity(outcome),source_arm=outcome['source_arm'],raw_product_status=outcome['product_status'],coverage_status=outcome['coverage_status'],product_status='pass',evidence_status='PASS',issues=[],violations=[],evidence=str(p),metrics=value['metrics'],resource_observations=value['resource_observations'],observations=value['observations'],canonical_packages=value['canonical_packages'],verification_summary=r.verification_summary(value['observations'],value['canonical_packages']),environment_identity=outcome['environment_identity'],input_identity=outcome['input_identity'],invalidation_context=[],product_source_compatibility=None,product_predicate_scope=None,measured_current_product_binary=True,performance_claim_eligible=mode=='performance',verification_pass=False,fast_iteration_pass=mode=='fast-verify',phase1_verification_accepted=mode=='fast-verify')
+    if mode=='fast-verify':
+        receipts=r.read(p/'verification/fast-verification/receipts.json');canonical=json.loads(next(x['receipt'] for x in receipts if x['kind']=='fast-canonical-verification'));native=dict(line.split('=',1) for line in next(x['receipt'] for x in receipts if x['kind']=='fast-native-verification').splitlines() if line);assert canonical['fully_verified']==native['fully_verified']=='false';r.custody.write_json(OUT/'coverage-and-omissions.json',dict(canonical=canonical,native=native,assurance_status='fast_iteration_verified',fully_verified=False))
+    rows[mode]=row;seals[str(p)]=r.custody.sha(p/'evidence.sha256');acquisitions[mode]=r.read(p/'preparation/acquisition.json');outcomes[mode]=outcome
+assert rows['performance']['input_identity']==rows['fast-verify']['input_identity']=='29a94581378e59218e01df37b5705f1ce5b601c307af0f9e37b6781836b0c682'
+assert rows['performance']['environment_identity']==rows['fast-verify']['environment_identity']
+assert all(x['fixture']['fixture_bytes']==523288576 and x['fixture']['regular_files']==501 and x['producer']['revision']==REV for x in acquisitions.values())
+assert {x['key'] for x in acquisitions.values()}=={'c11662d802fe1c5a0b291ddcf0879bab85e28c6c6078bd860501b4c7df19f35f'}
+oldfast=r.read(C/'attempts/dedup-cdc-delete-500-s3-fast-verify-bf6d01cc7939/outcome.json');assert oldfast['product_status']=='fail' and oldfast['input_identity']!=rows['performance']['input_identity']
+oldperf=[x for x in ledger.values() if x.get('scenario_id')==CASE and x.get('seed')==3 and x.get('mode')=='performance' and x.get('source_revision','').startswith('7948df2d')];assert len(oldperf)==1 and oldperf[0]['input_identity']==oldfast['input_identity']
+path=r.runner.CDC_DELETE_RECIPE_PATH;oldbytes=subprocess.check_output(['git','show',OLD+':'+path],cwd=ROOT);newbytes=subprocess.check_output(['git','show',REV+':'+path],cwd=ROOT)
+assert (hashlib.sha256(oldbytes).hexdigest(),hashlib.sha256(newbytes).hexdigest())==r.runner.CDC_DELETE_RECIPE_PAIR
+assert r.runner.cdc_delete_recipe_parts(newbytes)==oldbytes
+assert r.product_tree(OLD)==r.product_tree(REV)
+focused=C/'qualification/cdc-delete-collision';focused_json=r.read(focused/'focused.json');focused_stdout=(focused/'focused.stdout.txt').read_text();assert focused_json['exit_code']==0 and 'seeded_offsets=1500 changed_offsets=1 changed_case_seed_inputs=1' in focused_stdout and '1 passed; 0 failed' in focused_stdout
+for filename in ['focused.json','focused.stdout.txt','focused.stderr.txt']:(OUT/filename).write_bytes((focused/filename).read_bytes())
+impact=dict(schema='phase1-cdc-corrected-input-pair-v1',status='PASS',changed_case=CASE,changed_seed=3,changed_path='variants/v0471.dat',old_offset=359004,new_offset=359005,old_input_identity=oldfast['input_identity'],new_input_identity=rows['performance']['input_identity'],cache_key=acquisitions['performance']['key'],fixture_regular_files=501,fixture_logical_bytes=523288576,recipe_old_sha256=r.runner.CDC_DELETE_RECIPE_PAIR[0],recipe_new_sha256=r.runner.CDC_DELETE_RECIPE_PAIR[1],whole_normalized_recipe_equal=True,product_tree_unchanged=True,focused_test_reused_without_execution=dict(revision=focused_json['revision'],seeded_offsets=1500,changed_offsets=1,changed_case_seed_inputs=1),only_case_seed_input_changed=True,old_performance=dict(evidence=oldperf[0]['evidence_path'],raw_status=oldperf[0]['product_status'],disposition='historical recipe-invalid input; no corrected coverage credit'),old_fast=dict(evidence=oldfast['evidence_path'],raw_status='fail',disposition='preserved actual fixture-qualification failure'))
+r.custody.write_json(OUT/'input-impact-and-pair.json',impact)
+for mode,name in [('performance','incremental-performance-rows.json'),('fast-verify','incremental-fast-rows.json')]:r.custody.write_json(OUT/name,dict(schema='phase1-incremental-performance-rows-v1' if mode=='performance' else 'phase1-incremental-fast-verification-rows-v1',rows=[rows[mode]],source_revision=REV,report_generator_sha256=SHA,attempt_manifest_sha256={rows[mode]['evidence']:seals[rows[mode]['evidence']]},prior_report_sha256=prior['sha256']))
+if sha(SOURCE)!=SHA:raise ValueError('report changed during validation')
+r.custody.write_json(OUT/'checkpoint.json',dict(schema='phase1-cdc-delete-collision-final-checkpoint-v1',status='PASS',new_performance_passes=1,new_fast_verification_passes=1,new_full_verification_passes=0,source_revision=REV,report_generator_sha256=SHA,prior_report=prior,attempt_manifest_sha256=seals,issues=[],violations=[],recorded_at_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),scope='Exact corrected deletion500seed3 input and performance/fast pair only. Other input identities preserved by the qualified1500-offset schedule/source normalization. Prior invalid recipe timing and actual fast failure remain retained. No other verdict revalidation or overall terminal claim.',product_executions=0,full_report_reruns=0))
+r.custody.seal(OUT)
+print(json.dumps(dict(status='PASS',performance=1,fast=1,issues=0,violations=0,checkpoint=str(OUT/'checkpoint.json'))))

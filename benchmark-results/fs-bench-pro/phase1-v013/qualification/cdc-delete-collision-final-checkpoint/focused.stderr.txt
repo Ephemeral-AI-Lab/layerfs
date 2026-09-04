@@ -1,0 +1,3 @@
+   Compiling fs-benchmark-pro v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark/fs-bench-pro)
+    Finished `release` profile [optimized] target(s) in 6.42s
+     Running unittests src/main.rs (target/aarch64-apple-darwin/release/deps/fs_benchmark_pro-dcba3561a052e15e)

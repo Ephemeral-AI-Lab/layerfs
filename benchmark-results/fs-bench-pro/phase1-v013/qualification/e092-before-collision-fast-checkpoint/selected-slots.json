@@ -1,0 +1,290 @@
+[
+  {
+    "case": "dedup-cdc-common-body-1",
+    "seed": 2,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-1-s2-fast-verify-086f383168c0"
+  },
+  {
+    "case": "dedup-cdc-common-body-1",
+    "seed": 3,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-1-s3-fast-verify-22e586262f7c"
+  },
+  {
+    "case": "dedup-cdc-common-body-10",
+    "seed": 1,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-10-s1-fast-verify-026be4b5c57c"
+  },
+  {
+    "case": "dedup-cdc-common-body-10",
+    "seed": 2,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-10-s2-fast-verify-b0c594f64674"
+  },
+  {
+    "case": "dedup-cdc-common-body-10",
+    "seed": 3,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-10-s3-fast-verify-9257ca3d3504"
+  },
+  {
+    "case": "dedup-cdc-common-body-100",
+    "seed": 1,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-100-s1-fast-verify-eb5f9aa993b9"
+  },
+  {
+    "case": "dedup-cdc-common-body-100",
+    "seed": 2,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-100-s2-fast-verify-c9c31f12a629"
+  },
+  {
+    "case": "dedup-cdc-common-body-100",
+    "seed": 3,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-100-s3-fast-verify-5a5e698b810f"
+  },
+  {
+    "case": "dedup-cdc-common-body-500",
+    "seed": 1,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-500-s1-fast-verify-dca11cce9336"
+  },
+  {
+    "case": "dedup-cdc-common-body-500",
+    "seed": 2,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-500-s2-fast-verify-b0591660dd59"
+  },
+  {
+    "case": "dedup-cdc-common-body-500",
+    "seed": 3,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-common-body-500-s3-fast-verify-5cc7be8d87d2"
+  },
+  {
+    "case": "dedup-cdc-delete-1",
+    "seed": 1,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-1-s1-fast-verify-fad86c52f0fe"
+  },
+  {
+    "case": "dedup-cdc-delete-1",
+    "seed": 2,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-1-s2-fast-verify-ae2b165b5b5a"
+  },
+  {
+    "case": "dedup-cdc-delete-1",
+    "seed": 3,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-1-s3-fast-verify-58c42439a998"
+  },
+  {
+    "case": "dedup-cdc-delete-10",
+    "seed": 1,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-10-s1-fast-verify-0f4338660dee"
+  },
+  {
+    "case": "dedup-cdc-delete-10",
+    "seed": 2,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-10-s2-fast-verify-79274e55228a"
+  },
+  {
+    "case": "dedup-cdc-delete-10",
+    "seed": 3,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-10-s3-fast-verify-8936eea8d382"
+  },
+  {
+    "case": "dedup-cdc-delete-100",
+    "seed": 1,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-100-s1-fast-verify-3385b8f28ffe"
+  },
+  {
+    "case": "dedup-cdc-delete-100",
+    "seed": 2,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-100-s2-fast-verify-45dedd55565d"
+  },
+  {
+    "case": "dedup-cdc-delete-100",
+    "seed": 3,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-100-s3-fast-verify-a5ea61f8ff38"
+  },
+  {
+    "case": "dedup-cdc-delete-500",
+    "seed": 1,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-500-s1-fast-verify-9deecf4b7aa1"
+  },
+  {
+    "case": "dedup-cdc-delete-500",
+    "seed": 2,
+    "family_id": "dedup_cdc_locality",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cdc-delete-500-s2-fast-verify-cd08e1533890"
+  },
+  {
+    "case": "dedup-cross-file-anchor-1",
+    "seed": 1,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-anchor-1-s1-fast-verify-476c8b47e0cc"
+  },
+  {
+    "case": "dedup-cross-file-anchor-1",
+    "seed": 2,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-anchor-1-s2-fast-verify-a65a8e3a5c58"
+  },
+  {
+    "case": "dedup-cross-file-anchor-1",
+    "seed": 3,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-anchor-1-s3-fast-verify-48f023bdaf81"
+  },
+  {
+    "case": "dedup-cross-file-identical-10",
+    "seed": 1,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-identical-10-s1-fast-verify-28a3c2db5349"
+  },
+  {
+    "case": "dedup-cross-file-identical-10",
+    "seed": 2,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-identical-10-s2-fast-verify-44d88cabecf7"
+  },
+  {
+    "case": "dedup-cross-file-identical-10",
+    "seed": 3,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-identical-10-s3-fast-verify-48876823cea6"
+  },
+  {
+    "case": "dedup-cross-file-identical-100",
+    "seed": 1,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-identical-100-s1-fast-verify-b61736530cb6"
+  },
+  {
+    "case": "dedup-cross-file-identical-100",
+    "seed": 2,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-identical-100-s2-fast-verify-d2586da875df"
+  },
+  {
+    "case": "dedup-cross-file-identical-100",
+    "seed": 3,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-identical-100-s3-fast-verify-f8e425c52fef"
+  },
+  {
+    "case": "dedup-cross-file-identical-500",
+    "seed": 1,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-identical-500-s1-fast-verify-39207cf46cb0"
+  },
+  {
+    "case": "dedup-cross-file-identical-500",
+    "seed": 2,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-identical-500-s2-fast-verify-a91b8c67ca86"
+  },
+  {
+    "case": "dedup-cross-file-identical-500",
+    "seed": 3,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-identical-500-s3-fast-verify-53d6b3643eda"
+  },
+  {
+    "case": "dedup-cross-file-mixed-10",
+    "seed": 1,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-mixed-10-s1-fast-verify-00e88e84a401"
+  },
+  {
+    "case": "dedup-cross-file-mixed-10",
+    "seed": 2,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-mixed-10-s2-fast-verify-5e5ce9b78f5b"
+  },
+  {
+    "case": "dedup-cross-file-mixed-10",
+    "seed": 3,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-mixed-10-s3-fast-verify-9d3455510d64"
+  },
+  {
+    "case": "dedup-cross-file-mixed-100",
+    "seed": 1,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-mixed-100-s1-fast-verify-fc8c575cc1d6"
+  },
+  {
+    "case": "dedup-cross-file-mixed-100",
+    "seed": 2,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-mixed-100-s2-fast-verify-c9b2f715ee53"
+  },
+  {
+    "case": "dedup-cross-file-mixed-100",
+    "seed": 3,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-mixed-100-s3-fast-verify-ca83850d4220"
+  },
+  {
+    "case": "dedup-cross-file-mixed-500",
+    "seed": 1,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-mixed-500-s1-fast-verify-b70e8ca9a365"
+  },
+  {
+    "case": "dedup-cross-file-mixed-500",
+    "seed": 2,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-mixed-500-s2-fast-verify-b2e4489aba9e"
+  },
+  {
+    "case": "dedup-cross-file-mixed-500",
+    "seed": 3,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-mixed-500-s3-fast-verify-cd563f29328c"
+  },
+  {
+    "case": "dedup-cross-file-unique-10",
+    "seed": 1,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-unique-10-s1-fast-verify-fc3b5f0136fb"
+  },
+  {
+    "case": "dedup-cross-file-unique-10",
+    "seed": 2,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-unique-10-s2-fast-verify-1d8c329cf2fd"
+  },
+  {
+    "case": "dedup-cross-file-unique-10",
+    "seed": 3,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-unique-10-s3-fast-verify-c96647a97d93"
+  },
+  {
+    "case": "dedup-cross-file-unique-100",
+    "seed": 1,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-unique-100-s1-fast-verify-d0ad67b5bee5"
+  },
+  {
+    "case": "dedup-cross-file-unique-100",
+    "seed": 2,
+    "family_id": "dedup_cross_file",
+    "evidence": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/attempts/dedup-cross-file-unique-100-s2-fast-verify-28b72cc1bd0a"
+  }
+]

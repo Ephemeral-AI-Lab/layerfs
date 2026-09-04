@@ -1,0 +1,103 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.layerfs
+#1 transferring dockerfile: 3.96kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#2 DONE 1.9s
+
+#3 docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#3 resolve docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#4 DONE 3.8s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 2B done
+#5 DONE 0.0s
+
+#6 [stage-1 1/7] FROM docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#6 resolve docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 2.99MB 0.1s done
+#7 DONE 0.1s
+
+#8 [build  2/14] WORKDIR /src
+#8 CACHED
+
+#9 [build  3/14] COPY Cargo.toml Cargo.lock ./
+#9 CACHED
+
+#10 [build  4/14] COPY crates ./crates
+#10 DONE 0.1s
+
+#11 [build  5/14] COPY tools ./tools
+#11 DONE 0.0s
+
+#12 [build  6/14] COPY benchmark/fs-bench-pro/Cargo.toml ./benchmark/fs-bench-pro/Cargo.toml
+#12 DONE 0.0s
+
+#13 [build  7/14] COPY benchmark/fs-bench-pro/src ./benchmark/fs-bench-pro/src
+#13 DONE 0.0s
+
+#14 [build  8/14] COPY benchmark/fs-bench-pro/*.rs ./benchmark/fs-bench-pro/
+#14 DONE 0.0s
+
+#15 [build  9/14] COPY benchmark/fs-bench-pro/families ./benchmark/fs-bench-pro/families
+#15 DONE 0.0s
+
+#16 [build 10/14] COPY benchmark/fs-bench-pro/workload.rs /workload/workload.rs
+#16 DONE 0.0s
+
+#17 [build 11/14] COPY benchmark/fs-bench-pro/families /workload/families
+#17 DONE 0.0s
+
+#18 [build 12/14] COPY benchmark/fs-bench-pro/*.rs /workload/
+#18 DONE 0.0s
+
+#19 [build 13/14] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     case "arm64" in       arm64) target=aarch64-unknown-linux-gnu ;;       amd64) target=x86_64-unknown-linux-gnu ;;       *) exit 1 ;;     esac  && rustup target add "$target"  && rustc --edition=2021 -C opt-level=3 -C strip=symbols       --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload  && cargo build --locked --release --target "$target" -p layerfs-daemon  && cargo build --locked --release --target "$target" -p layerfs-fuse --no-default-features --features proxy  && cp "target/$target/release/layerfs-daemon" /layerfs-daemon  && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
+#19 0.174 info: component 'rust-std' for target 'aarch64-unknown-linux-gnu' is up to date
+#19 7.860    Compiling layerfs-daemon v0.1.2 (/src/crates/layerfs-daemon)
+#19 9.824     Finished `release` profile [optimized] target(s) in 2.03s
+#19 9.893    Compiling layerfs-content v0.1.2 (/src/crates/layerfs-content)
+#19 11.53    Compiling layerfs-fuse v0.1.2 (/src/crates/layerfs-fuse)
+#19 14.47     Finished `release` profile [optimized] target(s) in 4.63s
+#19 DONE 14.5s
+
+#20 [build 14/14] RUN test "${#LAYERFS_SOURCE_COMMIT}" -eq 40  && test "${#LAYERFS_SOURCE_TREE}" -eq 40  && test "${#LAYERFS_SOURCE_SEAL}" -eq 64  && test "${#LAYERFS_PRODUCT_SEAL}" -eq 64  && test "${#WORKLOAD_SOURCE_SHA256}" -eq 64  && echo "$WORKLOAD_SOURCE_SHA256  /workload/workload.rs" | sha256sum -c -  && case "$LAYERFS_SOURCE_DIRTY" in true|false) ;; *) exit 1 ;; esac  && case "$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE$LAYERFS_SOURCE_SEAL" in *[!0-9a-f]*) exit 1 ;; esac
+#20 0.104 /workload/workload.rs: OK
+#20 DONE 0.1s
+
+#21 [stage-1 6/7] COPY benchmark/fs-bench-pro/daemon-entrypoint.sh /usr/local/bin/layerfs-daemon-entrypoint
+#21 CACHED
+
+#22 [stage-1 2/7] RUN mkdir -p /run/layerfs /workspace /var/tmp/layerfs-owned  && chmod 0700 /run/layerfs
+#22 CACHED
+
+#23 [stage-1 3/7] COPY --from=build /fs-benchmark-workload /usr/local/bin/fs-benchmark-workload
+#23 CACHED
+
+#24 [stage-1 4/7] COPY --from=build /layerfs-daemon /usr/local/bin/layerfs-daemon
+#24 CACHED
+
+#25 [stage-1 5/7] COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
+#25 CACHED
+
+#26 [stage-1 7/7] RUN chmod 0555 /usr/local/bin/fs-benchmark-workload /usr/local/bin/layerfs-daemon                   /usr/local/bin/layerfs-fuse /usr/local/bin/layerfs-daemon-entrypoint  && /usr/local/bin/fs-benchmark-workload self-check  && test -x /usr/local/bin/layerfs-daemon
+#26 CACHED
+
+#27 exporting to image
+#27 exporting layers done
+#27 exporting manifest sha256:d6aa2cc8949eb234cc45b56297a511888b6878d0a49e5c80301ddb1c4e29e854 done
+#27 exporting config sha256:b323e82de47e42ff1731a2b46b91ed8ca6afa5803c9339595d0108df864c2015 done
+#27 exporting attestation manifest sha256:8a3ea6a48e5c7d3679d38b29f9355a7611575b74c6603dec1d3cf57a2f543ee0 0.0s done
+#27 exporting manifest list sha256:81c5724eb5188e7e4c8cd3e92f87bb44f08caf821bff2ea4600759bbc47b7069 done
+#27 naming to docker.io/library/layerfs-v013:a40b17e05486 done
+#27 unpacking to docker.io/library/layerfs-v013:a40b17e05486 done
+#27 DONE 0.1s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/szyyczbo7jktxe4u67drt7tch

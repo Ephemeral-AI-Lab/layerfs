@@ -1435,6 +1435,7 @@ def fast_definition_parts(filename, source):
     if filename.endswith("ordinary_workloads.rs"):return source.split(b"// BEGIN NATIVE FAST VERIFICATION V1", 1)[0].rstrip()
     if filename.endswith("/workload.rs"):return source[source.index(b"pub(crate) struct Sha256"):]
     if filename.endswith("workspace_registry.rs"):return source[:source.index(b"pub(crate) fn dispatch(")]
+    if filename == runner.CDC_DELETE_RECIPE_PATH:return runner.cdc_delete_recipe_parts(source)
     raise ValueError("fast profile partial source path is not approved")
 
 
@@ -1459,6 +1460,11 @@ def validate_bridge_path(filename, expected, revisions):
     if isinstance(expected, str):
         if not digest(expected) or any(hashlib.sha256(source).hexdigest() != expected for source in sources.values()):
             raise ValueError("verification bridge source path hash mismatch")
+        return
+    if filename == runner.CDC_DELETE_RECIPE_PATH and isinstance(expected,dict) and expected.get("comparison") == "cdc-delete-unaffected-recipes-v1":
+        if set(expected) != {"comparison","sha256","source_sha256","changed_case","changed_seed"} or expected["changed_case"] != "dedup-cdc-delete-500" or expected["changed_seed"] != 3 or set(expected["source_sha256"]) != set(revisions):raise ValueError("invalid exact CDC collision source bridge")
+        for revision,source in sources.items():
+            if hashlib.sha256(source).hexdigest() != expected["source_sha256"][revision] or hashlib.sha256(runner.cdc_delete_recipe_parts(source)).hexdigest() != expected["sha256"]:raise ValueError("CDC deletion source proof differs")
         return
     if isinstance(expected, dict) and expected.get("comparison") == "fast-verifier-definition-v1":
         if set(expected) != {"comparison", "sha256", "source_sha256"} or set(expected["source_sha256"]) != set(revisions):raise ValueError("invalid fast definition bridge")
@@ -2514,6 +2520,13 @@ def generate(campaign, assets):
                 value["issues"].append(f"product bridge observation invalid: {error}")
             if value["issues"]:
                 value["verification_pass"] = False
+        if case["scenario_id"] == "dedup-cdc-delete-500" and seed == 3:
+            recipe_path = runner.CDC_DELETE_RECIPE_PATH
+            current_recipe = subprocess.check_output(["git","show",build["revision"]+":"+recipe_path],cwd=HERE.parents[1])
+            producing_recipe = subprocess.check_output(["git","show",selected_source["revision"]+":"+recipe_path],cwd=HERE.parents[1])
+            if hashlib.sha256(current_recipe).hexdigest() == runner.CDC_DELETE_RECIPE_PAIR[1] and hashlib.sha256(producing_recipe).hexdigest() != runner.CDC_DELETE_RECIPE_PAIR[1]:
+                value["issues"].append("old duplicate deletion fixture cannot satisfy corrected500 seed3 input")
+                value["verification_pass"] = False;value["fast_iteration_pass"] = False
         invalidation = invalidated.get(str(Path(outcome["evidence_path"]).resolve()), [])
         if invalidation:
             value["issues"].append("selected observation was explicitly invalidated")
