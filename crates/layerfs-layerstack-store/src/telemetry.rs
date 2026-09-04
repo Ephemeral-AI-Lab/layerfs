@@ -238,6 +238,10 @@ impl WorkspaceLifecycleReceipt {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "Keep telemetry receipts Copy without per-receipt heap allocation"
+)]
 pub enum StorageReceipt {
     Candidate(CandidateReceipt),
     WorkspaceCommit(WorkspaceCommitReceipt),

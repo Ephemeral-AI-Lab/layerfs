@@ -7,17 +7,17 @@ use layerfs_content::filesystem::{
 };
 use layerfs_content::object::access::ObjectRead;
 use layerfs_content::object::{ContentDigestWriter, ObjectId};
-use layerfs_content::tree::directory::{
-    directory_lookup, directory_page_after, empty_directory, DirectoryStateRoot, NamespaceCounters,
-};
-use layerfs_content::tree::directory::codec::encode_namespace_root;
-use layerfs_content::tree::inode::codec::{decode_inode_record, encode_inode_record};
-use layerfs_content::tree::inode::{inode_table_lookup, InodeTableCounters};
-use layerfs_content::tree::inode::{InodeId, InodeKind, InodeRecordV1, InodeTableRoot};
 use layerfs_content::tree::batch::{
     directory_apply_sorted_with_budget, inode_table_apply_sorted_with_budget,
     SORTED_TREE_UPDATE_SCRATCH_BYTES,
 };
+use layerfs_content::tree::directory::codec::encode_namespace_root;
+use layerfs_content::tree::directory::{
+    directory_lookup, directory_page_after, empty_directory, DirectoryStateRoot, NamespaceCounters,
+};
+use layerfs_content::tree::inode::codec::{decode_inode_record, encode_inode_record};
+use layerfs_content::tree::inode::{inode_table_lookup, InodeTableCounters};
+use layerfs_content::tree::inode::{InodeId, InodeKind, InodeRecordV1, InodeTableRoot};
 use layerfs_content::tree::NamespaceRootV1;
 use layerfs_content::{CanonicalName, CanonicalPath};
 use layerfs_layerstack_store::{
@@ -511,13 +511,15 @@ impl Workspace {
             }) {
                 before.unwrap().metadata_root
             } else {
-                metadata_cache.get_or_build(
-                    &mut objects,
-                    inode_kind,
-                    attr.mode,
-                    attr.mtime_seconds,
-                    attr.mtime_nanoseconds,
-                )?.0
+                metadata_cache
+                    .get_or_build(
+                        &mut objects,
+                        inode_kind,
+                        attr.mode,
+                        attr.mtime_seconds,
+                        attr.mtime_nanoseconds,
+                    )?
+                    .0
             };
             let record = InodeRecordV1 {
                 kind: inode_kind,
@@ -643,12 +645,8 @@ impl Workspace {
                             .transpose()?,
                     ));
                     if batch.len() == batch_size {
-                        root = filesystem::apply_directory_changes(
-                            objects,
-                            root,
-                            batch.drain(..),
-                        )?
-                        .0;
+                        root =
+                            filesystem::apply_directory_changes(objects, root, batch.drain(..))?.0;
                     }
                 }
                 if !batch.is_empty() {
@@ -799,13 +797,15 @@ impl Workspace {
                 || base.mtime_seconds != attr.mtime_seconds
                 || base.mtime_nanoseconds != attr.mtime_nanoseconds
             {
-                record.metadata_root = metadata_cache.get_or_build(
-                    &mut objects,
-                    record.kind,
-                    attr.mode,
-                    attr.mtime_seconds,
-                    attr.mtime_nanoseconds,
-                )?.0;
+                record.metadata_root = metadata_cache
+                    .get_or_build(
+                        &mut objects,
+                        record.kind,
+                        attr.mode,
+                        attr.mtime_seconds,
+                        attr.mtime_nanoseconds,
+                    )?
+                    .0;
             }
             if record != base.record {
                 mutations.push(InodeMutation::Upsert {

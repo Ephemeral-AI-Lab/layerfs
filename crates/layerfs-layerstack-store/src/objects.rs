@@ -3376,26 +3376,26 @@ pub(crate) fn insert_checked_object_batch(
     let mut conflict_read_rows = 0_u64;
     let mut conflict_read_bytes = 0_u64;
     let mut conflict_read_ns = 0_u64;
-    let mut equal = transaction.prepare_cached(crate::statements::objects::GET)?;
-    for object in &skipped {
+    for page in skipped.chunks(OBJECT_PAGE_COUNT) {
+        let ids = page.iter().map(|object| object.id).collect::<Vec<_>>();
         let conflict_started = Instant::now();
-        let mut rows = equal.query([object.id.as_bytes().as_slice()])?;
-        let row = rows
-            .next()?
-            .ok_or(StoreError::Integrity("visible object missing"))?;
-        let bytes = row
-            .get_ref(0)?
-            .as_blob()
-            .map_err(|_| StoreError::Integrity("object byte type"))?;
-        layerfs_content::authenticate_identity(bytes, object.id)?;
-        note_read_batch_hash();
-        if bytes != object.bytes.as_slice() {
-            return Err(StoreError::Integrity("object collision"));
-        }
+        let durable = read_object_rows_from_connection(transaction, &ids)?;
         conflict_read_ns = conflict_read_ns.saturating_add(elapsed_ns(conflict_started));
         conflict_read_calls += 1;
-        conflict_read_rows += 1;
-        conflict_read_bytes = conflict_read_bytes.saturating_add(bytes.len() as u64);
+        conflict_read_rows = conflict_read_rows.saturating_add(durable.len() as u64);
+        conflict_read_bytes = conflict_read_bytes.saturating_add(
+            durable
+                .iter()
+                .map(|object| object.bytes.len() as u64)
+                .sum::<u64>(),
+        );
+        if durable
+            .iter()
+            .zip(page)
+            .any(|(durable, object)| durable.bytes != object.bytes)
+        {
+            return Err(StoreError::Integrity("object collision"));
+        }
     }
     Ok(ObjectInsertMetrics {
         insert_ns: elapsed_ns(started),
@@ -4149,12 +4149,26 @@ mod tests {
             300
         );
 
+        let object_count = 2 * ADMISSION_BATCH_COUNT as u64 + 46;
+        for index in 300..object_count {
+            let canonical = layerfs_content::encode_bytes_object(&index.to_le_bytes()).unwrap();
+            objects
+                .put(ObjectId::for_bytes(&canonical), &canonical)
+                .unwrap();
+        }
+        let plan = db.plan_candidate(&objects).unwrap();
         let mut statement_number = 0;
         let admission = admit_planned_objects(&db, &objects, &plan, &mut statement_number).unwrap();
         assert_eq!(admission.transactions, 2);
-        assert_eq!(admission.batch_inserted_objects, 254);
+        assert_eq!(
+            admission.batch_inserted_objects,
+            2 * ADMISSION_BATCH_COUNT as u64
+        );
         assert_eq!(admission.final_batch.len(), 46);
-        assert_eq!(admission.max_transaction_objects, 127);
+        assert_eq!(
+            admission.max_transaction_objects,
+            ADMISSION_BATCH_COUNT as u64
+        );
         assert!(admission.max_transaction_bytes < OBJECT_PAGE_BYTES as u64);
         {
             let mut connection = db.writer().unwrap();
@@ -4167,7 +4181,10 @@ mod tests {
             assert_eq!(final_metrics.objects, 46);
             transaction.commit().unwrap();
         }
-        assert_eq!(db.plan_candidate(&objects).unwrap().reused_objects, 300);
+        assert_eq!(
+            db.plan_candidate(&objects).unwrap().reused_objects,
+            object_count
+        );
         let existing = admission.final_batch[0].clone();
         let mut forged = DeferredObjectStore::new_all_reachable().unwrap();
         let forged_bytes = layerfs_content::encode_bytes_object(&u64::MAX.to_le_bytes()).unwrap();

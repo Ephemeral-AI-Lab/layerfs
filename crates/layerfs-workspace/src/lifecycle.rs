@@ -155,7 +155,7 @@ impl Workspace {
             self.presentation_failed = true;
             return Ok(CommitTransition::InstallationFailed);
         }
-        let rebased = self.rebase_committed(outcome, expected_base);
+        let rebased = self.rebase_committed(outcome, expected_base, refresh);
         layerfs_layerstack_store::note_workspace_commit_phase(
             WorkspaceCommitPhase::InPlaceRebase,
             elapsed_ns(started),
@@ -176,6 +176,7 @@ impl Workspace {
         &mut self,
         outcome: CommitOutcome,
         expected_base: layerfs_layerstack_store::LayerId,
+        refresh: bool,
     ) -> Result<()> {
         let (expected_head, root) = match outcome {
             CommitOutcome::Committed {
@@ -199,6 +200,14 @@ impl Workspace {
             &self.spool,
             self.policy,
         )?;
+        if refresh {
+            // Reconciliation can change inode identity, kind, and content. Its
+            // projection is rebuilt from the exact published snapshot.
+            self.clear_spool()?;
+            committed.physical_spool = std::mem::take(&mut self.physical_spool);
+            *self = committed;
+            return Ok(());
+        }
         let mut nodes = std::collections::HashMap::new();
         let mut canonical_nodes = std::collections::HashMap::new();
         let mut obsolete_spools = Vec::new();
@@ -1164,24 +1173,34 @@ mod tests {
             },
             projection: Some(WorkspaceProjection::Materialize),
         };
-        let created = first.create_workspace_session(request("first-mount")).unwrap();
+        let created = first
+            .create_workspace_session(request("first-mount"))
+            .unwrap();
         let concurrent = second
             .create_workspace_session(request("second-mount"))
             .unwrap();
         let before_root = store.pin_branch(branch).unwrap().root;
         let before_commits = store.store_counts().unwrap().commits;
-        prepend(&first,created.id).unwrap();
-        let state = first.runtime_root.join("workspaces").join(created.id.to_string());
+        prepend(&first, created.id).unwrap();
+        let state = first
+            .runtime_root
+            .join("workspaces")
+            .join(created.id.to_string());
         // Projection diagnostics belong to this exact state directory, not spool/.
         std::fs::write(state.join("mountinfo.txt"), b"owned projection diagnostic").unwrap();
         assert!(root.join("first-mount").exists());
         drop(first);
         assert!(!root.join("first-mount").exists());
         assert!(!state.exists());
-        assert_eq!(store.pin_branch(branch).unwrap().root,before_root);
-        assert_eq!(store.store_counts().unwrap().commits,before_commits);
-        assert_eq!(std::fs::read(root.join("second-mount/file")).unwrap(),b"abcdef");
-        second.end_workspace_session(concurrent.id,EndWorkspaceMode::Clean).unwrap();
+        assert_eq!(store.pin_branch(branch).unwrap().root, before_root);
+        assert_eq!(store.store_counts().unwrap().commits, before_commits);
+        assert_eq!(
+            std::fs::read(root.join("second-mount/file")).unwrap(),
+            b"abcdef"
+        );
+        second
+            .end_workspace_session(concurrent.id, EndWorkspaceMode::Clean)
+            .unwrap();
         drop(second);
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -1196,7 +1215,10 @@ mod tests {
         let status = workspaces
             .commit_workspace_session_with_status(session.id)
             .unwrap();
-        assert!(matches!(status.result, WorkspaceCommitResult::Created { .. }));
+        assert!(matches!(
+            status.result,
+            WorkspaceCommitResult::Created { .. }
+        ));
         assert!(status.presentation_failed);
         assert_eq!(store.store_counts().unwrap().commits, commits_before + 1);
         assert!(workspaces
@@ -1208,7 +1230,9 @@ mod tests {
             .pending_publication
             .is_some());
 
-        workspaces.recover_workspace_presentation(session.id).unwrap();
+        workspaces
+            .recover_workspace_presentation(session.id)
+            .unwrap();
         assert_eq!(std::fs::read(root.join("mount/file")).unwrap(), b"Pabcdef");
         assert_eq!(store.store_counts().unwrap().commits, commits_before + 1);
         assert!(matches!(
@@ -1226,7 +1250,8 @@ mod tests {
     fn continuing_workspace_installs_its_returned_snapshot_after_later_publication() {
         let (root, workspaces, branch_id, store) = fixture("returned-snapshot-race");
         drop(workspaces);
-        let mut first = Workspace::open(store.clone(), branch_id, root.join("first-spool")).unwrap();
+        let mut first =
+            Workspace::open(store.clone(), branch_id, root.join("first-spool")).unwrap();
         let first_file = lookup_path(&mut first, "file").unwrap();
         first.write(first_file, 0, b"first").unwrap();
         let expected = store.branch(branch_id).unwrap().unwrap();
@@ -1245,7 +1270,8 @@ mod tests {
             CommitOutcome::UpToDate { .. } => panic!("first edit must publish"),
         };
 
-        let mut second = Workspace::open(store.clone(), branch_id, root.join("second-spool")).unwrap();
+        let mut second =
+            Workspace::open(store.clone(), branch_id, root.join("second-spool")).unwrap();
         let second_file = lookup_path(&mut second, "file").unwrap();
         second.write(second_file, 0, b"second").unwrap();
         second.commit().unwrap();
@@ -1270,8 +1296,10 @@ mod tests {
     fn head_movement_retains_stage_and_freezes_mutation_until_discard() {
         let (root, workspaces, branch_id, store) = fixture("retained-stage-freeze");
         drop(workspaces);
-        let mut winner = Workspace::open(store.clone(), branch_id, root.join("winner-spool")).unwrap();
-        let mut stale = Workspace::open(store.clone(), branch_id, root.join("stale-spool")).unwrap();
+        let mut winner =
+            Workspace::open(store.clone(), branch_id, root.join("winner-spool")).unwrap();
+        let mut stale =
+            Workspace::open(store.clone(), branch_id, root.join("stale-spool")).unwrap();
         let winner_file = lookup_path(&mut winner, "file").unwrap();
         winner.write(winner_file, 0, b"winner").unwrap();
         winner.commit().unwrap();

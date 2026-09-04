@@ -631,21 +631,39 @@ pub(crate) fn qualify_import_input(
     seed: u8,
     input: &std::path::Path,
 ) -> Result<super::workload_source::workspace_common::Receipt> {
-    if !super::workload_source::workspace_registry::is_import(case) {return Err("input qualification is for import families".into());}
-    let expected=expected_transcripts(case,seed,0)?;
-    for (path,want) in &expected {
-        let got=transcript(std::fs::File::open(input.join(path))?)?;
-        compare(want,&got)?;
+    if !super::workload_source::workspace_registry::is_import(case) {
+        return Err("input qualification is for import families".into());
     }
-    let mut receipt=if case.kind=="boundaries" {verify_boundary_contract(&expected)?}
-        else {verify_expected_contract(case,seed,0,&expected,None)?};
-    let mut hash=super::workload_source::Sha256::new();
-    for (path,extents) in &expected {
-        hash.update(path.as_bytes());hash.update(&[0]);
-        for extent in extents {hash.update(extent.id.as_bytes());hash.update(&extent.source_offset.to_le_bytes());hash.update(&extent.len.to_le_bytes());hash.update(&extent.payload_len.to_le_bytes());}
+    let expected = expected_transcripts(case, seed, 0)?;
+    for (path, want) in &expected {
+        let got = transcript(std::fs::File::open(input.join(path))?)?;
+        compare(want, &got)?;
     }
-    receipt.insert("input_transcript_sha256".into(),super::workload_source::hex(&hash.finish()));
-    receipt.insert("scope".into(),"independent-source-transcripts-and-sharing-before-admission;not-product-verification".into());
+    let mut receipt = if case.kind == "boundaries" {
+        verify_boundary_contract(&expected)?
+    } else {
+        verify_expected_contract(case, seed, 0, &expected, None)?
+    };
+    let mut hash = super::workload_source::Sha256::new();
+    for (path, extents) in &expected {
+        hash.update(path.as_bytes());
+        hash.update(&[0]);
+        for extent in extents {
+            hash.update(extent.id.as_bytes());
+            hash.update(&extent.source_offset.to_le_bytes());
+            hash.update(&extent.len.to_le_bytes());
+            hash.update(&extent.payload_len.to_le_bytes());
+        }
+    }
+    receipt.insert(
+        "input_transcript_sha256".into(),
+        super::workload_source::hex(&hash.finish()),
+    );
+    receipt.insert(
+        "scope".into(),
+        "independent-source-transcripts-and-sharing-before-admission;not-product-verification"
+            .into(),
+    );
     Ok(receipt)
 }
 
@@ -655,7 +673,13 @@ pub(crate) fn verify_transcripts(
     completed_steps: usize,
     actual: &super::workspace_verify::SnapshotEvidence,
 ) -> Result<super::workload_source::workspace_common::Receipt> {
-    verify_file_transcripts(case,seed,completed_steps,&actual.extents,&actual.file_roots)
+    verify_file_transcripts(
+        case,
+        seed,
+        completed_steps,
+        &actual.extents,
+        &actual.file_roots,
+    )
 }
 
 /// File-level transcript checks also serve fast verification. The caller records
@@ -687,7 +711,13 @@ pub(crate) fn verify_file_transcripts(
             .collect();
         compare(want, &got)?;
     }
-    verify_expected_contract(case,seed,completed_steps,&expected,Some(actual_file_roots))
+    verify_expected_contract(
+        case,
+        seed,
+        completed_steps,
+        &expected,
+        Some(actual_file_roots),
+    )
 }
 
 fn verify_expected_contract(
@@ -695,11 +725,14 @@ fn verify_expected_contract(
     seed: u8,
     completed_steps: usize,
     expected: &BTreeMap<String, Vec<Extent>>,
-    actual_file_roots: Option<&BTreeMap<String,ObjectId>>,
+    actual_file_roots: Option<&BTreeMap<String, ObjectId>>,
 ) -> Result<super::workload_source::workspace_common::Receipt> {
-    use super::workload_source::{self as w,workspace_common::{EntryKind,Receipt}};
+    use super::workload_source::{
+        self as w,
+        workspace_common::{EntryKind, Receipt},
+    };
     let mut receipt = Receipt::new();
-    let u = union(&expected)?;
+    let u = union(expected)?;
     let logical: u64 = expected.values().flatten().map(|e| e.len).sum();
     let unique: u64 = u.values().sum();
     receipt.insert("dedup_transcript_status".into(), "pass".into());
@@ -727,7 +760,11 @@ fn verify_expected_contract(
             return Err("identical file transcripts differ".into());
         }
         if case.kind == "identical"
-            && actual_file_roots.is_some_and(|roots| roots.values().any(|root| Some(root) != roots.get("files/f0000.dat")))
+            && actual_file_roots.is_some_and(|roots| {
+                roots
+                    .values()
+                    .any(|root| Some(root) != roots.get("files/f0000.dat"))
+            })
         {
             return Err("identical imports have different content roots".into());
         }
@@ -913,10 +950,7 @@ fn verify_expected_contract(
                 return Err("exact addition did not reuse base content root".into());
             }
         }
-        receipt.insert(
-            "base_file_count".into(),
-            base_files.to_string(),
-        );
+        receipt.insert("base_file_count".into(), base_files.to_string());
         receipt.insert(
             "addition_logical_bytes".into(),
             added
@@ -1172,10 +1206,7 @@ impl HistoryAccounting {
 pub(crate) fn verify_boundaries(
     actual: &super::workspace_verify::SnapshotEvidence,
 ) -> Result<super::workload_source::workspace_common::Receipt> {
-    use super::workload_source::{
-        dedup_cdc_locality,
-        workspace_common::EntryKind,
-    };
+    use super::workload_source::{dedup_cdc_locality, workspace_common::EntryKind};
     let mut expected = BTreeMap::new();
     for entry in dedup_cdc_locality::boundaries()? {
         if let EntryKind::File(content) = entry.kind {
@@ -1204,9 +1235,13 @@ pub(crate) fn verify_boundaries(
     verify_boundary_contract(&expected)
 }
 
-fn verify_boundary_contract(expected: &BTreeMap<String,Vec<Extent>>) -> Result<super::workload_source::workspace_common::Receipt> {
+fn verify_boundary_contract(
+    expected: &BTreeMap<String, Vec<Extent>>,
+) -> Result<super::workload_source::workspace_common::Receipt> {
     use super::workload_source::workspace_common::Receipt;
-    if expected.len()!=60 {return Err("CDC boundary input cardinality".into());}
+    if expected.len() != 60 {
+        return Err("CDC boundary input cardinality".into());
+    }
     let mut receipt = Receipt::new();
     for seed in 1..=3 {
         for len in [0, 1, 8191, 8192, 16384, 32768, 32769] {

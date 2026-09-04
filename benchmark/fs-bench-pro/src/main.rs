@@ -13,12 +13,12 @@ use std::sync::{mpsc, Arc};
 use std::time::Instant;
 
 mod dedup_verify;
+mod infra;
 mod sdk_edit_verify;
 mod sdk_file_edit;
 mod workspace_bench;
 mod workspace_reliability;
 mod workspace_verify;
-mod infra;
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -60,11 +60,26 @@ struct ContainerCgroupSnapshot {
 
 fn container_cgroup_snapshot(container: &ContainerId) -> AnyResult<ContainerCgroupSnapshot> {
     if std::env::var("LAYERFS_BENCH_LOCAL_RUNTIME").as_deref() == Ok("1") {
-        let cgroup=Path::new("/sys/fs/cgroup");
-        let number=|name:&str|->AnyResult<u64> {Ok(std::fs::read_to_string(cgroup.join(name))?.trim().parse()?)};
-        let events=std::fs::read_to_string(cgroup.join("memory.events"))?;
-        let event=|key:&str|->AnyResult<u64> {Ok(events.lines().find_map(|line|line.strip_prefix(&format!("{key} "))).ok_or("missing local cgroup event")?.parse()?)};
-        return Ok(ContainerCgroupSnapshot {memory_current:number("memory.current")?,memory_peak:number("memory.peak")?,swap_current:number("memory.swap.current")?,pids_current:number("pids.current")?,oom:event("oom")?,oom_kill:event("oom_kill")?});
+        let cgroup = Path::new("/sys/fs/cgroup");
+        let number = |name: &str| -> AnyResult<u64> {
+            Ok(std::fs::read_to_string(cgroup.join(name))?.trim().parse()?)
+        };
+        let events = std::fs::read_to_string(cgroup.join("memory.events"))?;
+        let event = |key: &str| -> AnyResult<u64> {
+            Ok(events
+                .lines()
+                .find_map(|line| line.strip_prefix(&format!("{key} ")))
+                .ok_or("missing local cgroup event")?
+                .parse()?)
+        };
+        return Ok(ContainerCgroupSnapshot {
+            memory_current: number("memory.current")?,
+            memory_peak: number("memory.peak")?,
+            swap_current: number("memory.swap.current")?,
+            pids_current: number("pids.current")?,
+            oom: event("oom")?,
+            oom_kill: event("oom_kill")?,
+        });
     }
     let output = Command::new("docker")
         .args([
@@ -681,7 +696,10 @@ fn main() {
 fn run() -> AnyResult<()> {
     let _commit_diagnostics = layerfs_sdk::capture_workspace_commit_diagnostics()?;
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
-    if args.first().is_some_and(|arg| arg.to_string_lossy().starts_with("infra-")) {
+    if args
+        .first()
+        .is_some_and(|arg| arg.to_string_lossy().starts_with("infra-"))
+    {
         return infra::dispatch(&args);
     }
     if args
@@ -1356,7 +1374,11 @@ fn namespace_self_check() -> AnyResult<()> {
     }
     let expected = [
         ("namespace-100-compact-v3", [1, 78, 15, 5, 1], 5_000_000),
-        ("namespace-1000-compact-v3", [10, 789, 150, 50, 1], 20_000_000),
+        (
+            "namespace-1000-compact-v3",
+            [10, 789, 150, 50, 1],
+            20_000_000,
+        ),
         ("namespace-10000", [100, 7_899, 1_500, 500, 1], 300_000_000),
         (
             "namespace-100000",
@@ -3807,21 +3829,21 @@ fn store_footprint_case(
     let mut reopen_ns = 0;
     let mut verification_ns = 0;
     if verify {
-    let reopen_started = Instant::now();
-    let reopened_store = Arc::new(LayerStackStore::connect(&store_path)?);
-    let reopened = Client::connect(reopened_store.clone())?;
-    visible_head(&reopened, branch, head)?;
-    let pinned = reopened_store.pin_branch(branch)?;
-    let commit_id = head.ok_or("Store-footprint missing Commit")?;
-    if reopened_store
-        .commit(commit_id)?
-        .ok_or("Store-footprint Commit record")?
-        .root_id
-        != pinned.root
-    {
-        return Err("Store-footprint reopened root".into());
-    }
-    reopen_ns = elapsed_ns(reopen_started);
+        let reopen_started = Instant::now();
+        let reopened_store = Arc::new(LayerStackStore::connect(&store_path)?);
+        let reopened = Client::connect(reopened_store.clone())?;
+        visible_head(&reopened, branch, head)?;
+        let pinned = reopened_store.pin_branch(branch)?;
+        let commit_id = head.ok_or("Store-footprint missing Commit")?;
+        if reopened_store
+            .commit(commit_id)?
+            .ok_or("Store-footprint Commit record")?
+            .root_id
+            != pinned.root
+        {
+            return Err("Store-footprint reopened root".into());
+        }
+        reopen_ns = elapsed_ns(reopen_started);
         let verification_started = Instant::now();
         let reopened_workspace = reopened.create_workspace_session(CreateWorkspaceSession {
             branch_id: branch,
@@ -3863,11 +3885,11 @@ fn store_footprint_case(
             elapsed_ns(verification_started)
         );
         verification_ns = elapsed_ns(verification_started);
-    if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
-        return Err("Store-footprint reopened cleanup".into());
-    }
-    drop(reopened);
-    drop(reopened_store);
+        if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
+            return Err("Store-footprint reopened cleanup".into());
+        }
+        drop(reopened);
+        drop(reopened_store);
     }
     let (durable_files, total_durable_store_bytes) = store_owned_bytes(root)?;
     let sqlite_database_bytes = storage.database_bytes;

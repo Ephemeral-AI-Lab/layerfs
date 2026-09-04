@@ -7,6 +7,10 @@ const SDK: [&str; 3] = [
     "edit_canonical_chunk_count",
 ];
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Arguments mirror the emitted registry columns"
+)]
 fn row(
     family: &str,
     id: &str,
@@ -23,16 +27,24 @@ fn row(
     let inherited = SDK.contains(&family) || family == "edit_length_changing_capped";
     let low_tier = matches!(family, "init_namespace" | "store_footprint") || tier <= 10;
     let smoke_supported = low_tier && bytes <= 50_000_000 && files <= 1_000 && !proof;
-    let profile = if id.contains("compact-") || id.contains("low-v") { "compact-low-tier-v2" } else { "registered-fixture" };
+    let profile = if id.contains("compact-") || id.contains("low-v") {
+        "compact-low-tier-v2"
+    } else {
+        "registered-fixture"
+    };
     let bytes = bytes.to_string();
     println!("{{\"family_id\":\"{family}\",\"scenario_id\":\"{id}\",\"route\":\"{route}\",\"setup_policy\":\"{}\",\"proof_only\":{proof},\"seed_min\":1,\"seed_max\":{max_seed},\"supported\":{supported},\"verification_supported\":{verification},\"inherited\":{inherited},\"tier\":{tier},\"fixture_bytes\":{bytes},\"fixture_files\":{files},\"fixture_profile\":\"{profile}\",\"smoke_supported\":{smoke_supported},\"full_workload\":true}}", if fresh {"fresh-output"} else {"post-init"});
 }
 
 fn list(family_filter: Option<&str>, case_filter: Option<&str>) -> AnyResult<()> {
-    let selected = |family: &str, id: &str| family_filter.is_none_or(|value| value == family)
-        && case_filter.is_none_or(|value| value == id);
+    let selected = |family: &str, id: &str| {
+        family_filter.is_none_or(|value| value == family)
+            && case_filter.is_none_or(|value| value == id)
+    };
     for case in workload_source::NAMESPACE_SCENARIOS {
-        if !selected("init_namespace", case.id) { continue; }
+        if !selected("init_namespace", case.id) {
+            continue;
+        }
         row(
             "init_namespace",
             case.id,
@@ -49,7 +61,9 @@ fn list(family_filter: Option<&str>, case_filter: Option<&str>) -> AnyResult<()>
     }
     for family in SDK {
         for case in sdk_edit_registry(family)? {
-            if !selected(family, &case.id) { continue; }
+            if !selected(family, &case.id) {
+                continue;
+            }
             row(
                 family,
                 &case.id,
@@ -66,7 +80,9 @@ fn list(family_filter: Option<&str>, case_filter: Option<&str>) -> AnyResult<()>
         }
     }
     for case in workload_source::store_footprint::CONTROLS {
-        if !selected("store_footprint", case.id) { continue; }
+        if !selected("store_footprint", case.id) {
+            continue;
+        }
         row(
             "store_footprint",
             case.id,
@@ -86,14 +102,23 @@ fn list(family_filter: Option<&str>, case_filter: Option<&str>) -> AnyResult<()>
         .chain(workload_source::workspace_registry::proofs())
         .chain(workload_source::workspace_registry::inherited());
     for case in registry {
-        if !selected(case.family, &case.id) { continue; }
+        if !selected(case.family, &case.id) {
+            continue;
+        }
         let reliability = case.family == "workspace_reliability";
         let proof = reliability || case.kind == "boundaries";
         let entries = workload_source::workspace_registry::fixture(&case, 1)?;
         let fixture_bytes = workload_source::workspace_common::validate_entries(&entries)?;
-        let fixture_files = entries.iter().filter(|entry| matches!(entry.kind,
-            workload_source::workspace_common::EntryKind::File(_) |
-            workload_source::workspace_common::EntryKind::Hardlink(_))).count() as u64;
+        let fixture_files = entries
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    entry.kind,
+                    workload_source::workspace_common::EntryKind::File(_)
+                        | workload_source::workspace_common::EntryKind::Hardlink(_)
+                )
+            })
+            .count() as u64;
         row(
             case.family,
             &case.id,

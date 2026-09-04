@@ -56,9 +56,12 @@ impl Drop for Workspaces {
         // acknowledges projection cleanup and removes its state. Socket disconnect
         // alone does not retire a mount.
         let active = match self.sessions.lock() {
-            Ok(sessions) => sessions.iter().filter_map(|(id, record)| {
-                matches!(record, SessionRecord::Active(_)).then_some(*id)
-            }).collect::<Vec<_>>(),
+            Ok(sessions) => sessions
+                .iter()
+                .filter_map(|(id, record)| {
+                    matches!(record, SessionRecord::Active(_)).then_some(*id)
+                })
+                .collect::<Vec<_>>(),
             Err(error) => {
                 eprintln!("layerfs-workspace: owner-drop session registry: {error}");
                 return;

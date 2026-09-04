@@ -559,7 +559,6 @@ pub(crate) fn check_cases(rows: &[Case], expected: usize) -> Result<()> {
         }
     }
     if DEPTHS.iter().sum::<usize>() != 55
-        || 250_000_000_u64 + 2 * 500 * 200 * 1024 != 454_800_000
         || 64 * MIB + 500 * 32768 + 500 * (8192 + 256) + 8192 + 4096 + 32 != 87_729_184
     {
         return Err("ordinary transient algebra".into());
@@ -1445,7 +1444,7 @@ pub(crate) fn prepare_git_reference(root: &Path, case: &Case, seed: u8) -> Resul
             if let EntryKind::File(data) = entry.kind {
                 let n = data.len() + 64;
                 allocation_bound += n + (n >> 12) + (n >> 14) + (n >> 25) + 13;
-                index_bytes += ((62 + entry.path.len() as u64 + 1 + 7) / 8) * 8;
+                index_bytes += (62 + entry.path.len() as u64 + 1).div_ceil(8) * 8;
             }
         }
         for n in tree_bytes.into_values().map(|n| n + 64) {

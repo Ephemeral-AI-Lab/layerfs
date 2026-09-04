@@ -620,6 +620,7 @@ pub(crate) fn set_metadata(path: &Path, entry: &Entry) -> Result<()> {
     set_mtime_nofollow(path, entry.mtime_seconds, entry.mtime_nanoseconds)
 }
 
+#[allow(clippy::useless_conversion, reason = "Checked conversion to platform-dependent c_long")]
 pub(crate) fn set_mtime_nofollow(path: &Path, seconds: i64, nanoseconds: u32) -> Result<()> {
     use std::os::unix::ffi::OsStrExt;
     #[repr(C)]

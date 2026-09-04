@@ -389,7 +389,8 @@ impl ProxyClient {
             cache.attrs.clear();
             cache.directories.clear();
             for (_, read) in std::mem::take(&mut cache.read_ahead) {
-                self.read_metrics.note_unused(read.bytes.len().saturating_sub(read.served) as u64);
+                self.read_metrics
+                    .note_unused(read.bytes.len().saturating_sub(read.served) as u64);
             }
         }
         first_error.map_or(Ok(()), Err)
@@ -702,9 +703,10 @@ impl FilesystemPort for ProxyClient {
             .get(&parent)
             .and_then(|directory| directory.entries.get(name))
             .map(|(node, _)| *node);
-        let target = cache.directories.get(&new_parent).map(|directory| {
-            directory.entries.get(new_name).map(|(node, _)| *node)
-        });
+        let target = cache
+            .directories
+            .get(&new_parent)
+            .map(|directory| directory.entries.get(new_name).map(|(node, _)| *node));
         if source.is_some() && target == Some(source) {
             // The backend treats two names for the same inode as a no-op.
             // Preserve both cached bindings and the unchanged link count.
@@ -721,10 +723,19 @@ impl FilesystemPort for ProxyClient {
                     // Without a complete destination directory, the overwritten
                     // inode is unknown. Preserve only not-yet-published creates:
                     // their attributes cannot be fetched from the backend yet.
-                    let closed = cache.pending_closed.iter().map(|entry| entry.3)
+                    let closed = cache
+                        .pending_closed
+                        .iter()
+                        .map(|entry| entry.3)
                         .collect::<std::collections::HashSet<_>>();
-                    let Cache { attrs, pending_creates, .. } = &mut *cache;
-                    attrs.retain(|node, _| pending_creates.contains_key(node) || closed.contains(node));
+                    let Cache {
+                        attrs,
+                        pending_creates,
+                        ..
+                    } = &mut *cache;
+                    attrs.retain(|node, _| {
+                        pending_creates.contains_key(node) || closed.contains(node)
+                    });
                 }
                 Some(None) => (),
             }
@@ -763,7 +774,9 @@ impl FilesystemPort for ProxyClient {
         if !truncate && !writable {
             // Open may expose a handle only after the backend retained the inode.
             // A cached kernel inode can already have been replaced or unlinked.
-            return unit(self.exchange_at(self.node_stream(node), Request::Pin(node, false, false))?);
+            return unit(
+                self.exchange_at(self.node_stream(node), Request::Pin(node, false, false))?,
+            );
         }
         self.invalidate_read_ahead(node)?;
         unit(self.exchange(Request::Pin(node, truncate, writable))?)
@@ -1638,39 +1651,89 @@ mod tests {
     fn readonly_pin_waits_for_ack_and_rejects_replaced_inode() {
         for missing in [false, true] {
             let (stream, mut server) = stream_pair();
-            server.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+            server
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
             let (requested, request_seen) = std::sync::mpsc::channel();
             let (acknowledge, ack_allowed) = std::sync::mpsc::channel();
             let host = std::thread::spawn(move || {
-                assert!(matches!(read_request(&mut server).unwrap(), Request::Pin(NodeId(2), false, false)));
+                assert!(matches!(
+                    read_request(&mut server).unwrap(),
+                    Request::Pin(NodeId(2), false, false)
+                ));
                 requested.send(()).unwrap();
-                ack_allowed.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+                ack_allowed
+                    .recv_timeout(std::time::Duration::from_secs(2))
+                    .unwrap();
                 // A replaced cached inode must fail at Open; otherwise pin success
                 // means the backend has retained it before the handle is exposed.
-                write_response(&mut server, &if missing {Response::Error(PortError::NotFound)} else {Response::Unit}).unwrap();
+                write_response(
+                    &mut server,
+                    &if missing {
+                        Response::Error(PortError::NotFound)
+                    } else {
+                        Response::Unit
+                    },
+                )
+                .unwrap();
             });
             let client = Arc::new(ProxyClient {
-                streams: vec![Mutex::new(stream)], next: AtomicUsize::new(0),
-                cache: Mutex::new(Cache::default()), write_buffer: Mutex::new(None),
-                reservation: Mutex::new(Reservation::default()), gate: RwLock::new(()),
-                callbacks: RwLock::new(()), paused: AtomicBool::new(false), pending: AtomicU64::new(0),
-                metrics: AtomicFuseWriteMetrics::default(), read_metrics: AtomicFuseReadMetrics::default(),
+                streams: vec![Mutex::new(stream)],
+                next: AtomicUsize::new(0),
+                cache: Mutex::new(Cache::default()),
+                write_buffer: Mutex::new(None),
+                reservation: Mutex::new(Reservation::default()),
+                gate: RwLock::new(()),
+                callbacks: RwLock::new(()),
+                paused: AtomicBool::new(false),
+                pending: AtomicU64::new(0),
+                metrics: AtomicFuseWriteMetrics::default(),
+                read_metrics: AtomicFuseReadMetrics::default(),
                 #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
                 notifier: std::sync::OnceLock::new(),
             });
-            client.cache.lock().unwrap().read_ahead.insert(NodeId(2), ReadAhead {offset:0,bytes:vec![7;4],served:0});
+            client.cache.lock().unwrap().read_ahead.insert(
+                NodeId(2),
+                ReadAhead {
+                    offset: 0,
+                    bytes: vec![7; 4],
+                    served: 0,
+                },
+            );
             let (returned, result) = std::sync::mpsc::channel();
-            let caller = { let client = client.clone(); std::thread::spawn(move || {
-                returned.send(client.pin(NodeId(2), false, false)).unwrap();
-            }) };
-            request_seen.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
-            assert!(matches!(result.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty)), "read Open completed before pin acknowledgement");
+            let caller = {
+                let client = client.clone();
+                std::thread::spawn(move || {
+                    returned.send(client.pin(NodeId(2), false, false)).unwrap();
+                })
+            };
+            request_seen
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap();
+            assert!(
+                matches!(result.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty)),
+                "read Open completed before pin acknowledgement"
+            );
             acknowledge.send(()).unwrap();
-            assert_eq!(result.recv_timeout(std::time::Duration::from_secs(2)).unwrap(),
-                if missing {Err(PortError::NotFound)} else {Ok(())});
+            assert_eq!(
+                result
+                    .recv_timeout(std::time::Duration::from_secs(2))
+                    .unwrap(),
+                if missing {
+                    Err(PortError::NotFound)
+                } else {
+                    Ok(())
+                }
+            );
             assert_eq!(client.pending.load(Ordering::Acquire), 0);
-            assert!(client.cache.lock().unwrap().read_ahead.contains_key(&NodeId(2)));
-            caller.join().unwrap(); host.join().unwrap();
+            assert!(client
+                .cache
+                .lock()
+                .unwrap()
+                .read_ahead
+                .contains_key(&NodeId(2)));
+            caller.join().unwrap();
+            host.join().unwrap();
         }
     }
 
@@ -1680,53 +1743,125 @@ mod tests {
         // completely cached absent destination exercise each cache decision.
         for scenario in 0..4 {
             let (stream, mut server) = stream_pair();
-            server.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
-            let old = Attr { node: NodeId(2), size: 6, kind: Kind::File, mode: 0o640,
-                links: 2, mtime_seconds: 0, mtime_nanoseconds: 0 };
+            server
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
+            let old = Attr {
+                node: NodeId(2),
+                size: 6,
+                kind: Kind::File,
+                mode: 0o640,
+                links: 2,
+                mtime_seconds: 0,
+                mtime_nanoseconds: 0,
+            };
             let host = std::thread::spawn(move || {
                 assert!(matches!(read_request(&mut server).unwrap(),
                     Request::Rename(NodeId(1), name, NodeId(3), target, false)
                     if name == b"source" && target == b"target"));
                 write_response(&mut server, &Response::Unit).unwrap();
                 if scenario < 2 {
-                    assert!(matches!(read_request(&mut server).unwrap(), Request::Attr(NodeId(2))));
+                    assert!(matches!(
+                        read_request(&mut server).unwrap(),
+                        Request::Attr(NodeId(2))
+                    ));
                     write_response(&mut server, &Response::Attr(Attr { links: 1, ..old })).unwrap();
                 }
             });
             let client = ProxyClient {
-                streams: vec![Mutex::new(stream)], next: AtomicUsize::new(0),
-                cache: Mutex::new(Cache::default()), write_buffer: Mutex::new(None),
-                reservation: Mutex::new(Reservation::default()), gate: RwLock::new(()),
-                callbacks: RwLock::new(()), paused: AtomicBool::new(false), pending: AtomicU64::new(0),
-                metrics: AtomicFuseWriteMetrics::default(), read_metrics: AtomicFuseReadMetrics::default(),
+                streams: vec![Mutex::new(stream)],
+                next: AtomicUsize::new(0),
+                cache: Mutex::new(Cache::default()),
+                write_buffer: Mutex::new(None),
+                reservation: Mutex::new(Reservation::default()),
+                gate: RwLock::new(()),
+                callbacks: RwLock::new(()),
+                paused: AtomicBool::new(false),
+                pending: AtomicU64::new(0),
+                metrics: AtomicFuseWriteMetrics::default(),
+                read_metrics: AtomicFuseReadMetrics::default(),
                 #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
                 notifier: std::sync::OnceLock::new(),
             };
             let source = if scenario == 2 { NodeId(2) } else { NodeId(4) };
-            client.remember_directory(NodeId(1), &[(source, Kind::File, b"source".to_vec())]).unwrap();
+            client
+                .remember_directory(NodeId(1), &[(source, Kind::File, b"source".to_vec())])
+                .unwrap();
             if scenario != 1 {
-                let entries = if scenario == 3 { vec![] } else { vec![(NodeId(2), Kind::File, b"target".to_vec())] };
+                let entries = if scenario == 3 {
+                    vec![]
+                } else {
+                    vec![(NodeId(2), Kind::File, b"target".to_vec())]
+                };
                 client.remember_directory(NodeId(3), &entries).unwrap();
             }
             {
                 let mut cache = client.cache.lock().unwrap();
                 cache.attrs.insert(NodeId(2), old);
-                cache.attrs.insert(NodeId(9), Attr { node: NodeId(9), links: 1, ..old });
-                cache.attrs.insert(NodeId(10), Attr { node: NodeId(10), links: 1, ..old });
-                cache.pending_closed.push((NodeId(8), b"closed".to_vec(), 0o640, NodeId(10), vec![], None));
-                cache.pending_creates.insert(NodeId(9), PendingCreate {
-                    parent: NodeId(8), name: b"pending".to_vec(), mode: 0o640,
-                    mtime: None, zero_len: 6, writes: vec![], bytes: 0,
-                });
+                cache.attrs.insert(
+                    NodeId(9),
+                    Attr {
+                        node: NodeId(9),
+                        links: 1,
+                        ..old
+                    },
+                );
+                cache.attrs.insert(
+                    NodeId(10),
+                    Attr {
+                        node: NodeId(10),
+                        links: 1,
+                        ..old
+                    },
+                );
+                cache.pending_closed.push((
+                    NodeId(8),
+                    b"closed".to_vec(),
+                    0o640,
+                    NodeId(10),
+                    vec![],
+                    None,
+                ));
+                cache.pending_creates.insert(
+                    NodeId(9),
+                    PendingCreate {
+                        parent: NodeId(8),
+                        name: b"pending".to_vec(),
+                        mode: 0o640,
+                        mtime: None,
+                        zero_len: 6,
+                        writes: vec![],
+                        bytes: 0,
+                    },
+                );
             }
-            client.rename(NodeId(1), b"source", NodeId(3), b"target", false).unwrap();
-            assert_eq!(client.attr(NodeId(2)).unwrap().links, if scenario < 2 { 1 } else { 2 });
+            client
+                .rename(NodeId(1), b"source", NodeId(3), b"target", false)
+                .unwrap();
+            assert_eq!(
+                client.attr(NodeId(2)).unwrap().links,
+                if scenario < 2 { 1 } else { 2 }
+            );
             let cache = client.cache.lock().unwrap();
-            assert!(cache.attrs.contains_key(&NodeId(9)), "pending create attr remains locally available");
-            assert!(cache.attrs.contains_key(&NodeId(10)), "pending closed-create attr remains locally available");
-            assert_eq!(cache.directories[&NodeId(1)].entries.contains_key(b"source".as_slice()), scenario == 2);
+            assert!(
+                cache.attrs.contains_key(&NodeId(9)),
+                "pending create attr remains locally available"
+            );
+            assert!(
+                cache.attrs.contains_key(&NodeId(10)),
+                "pending closed-create attr remains locally available"
+            );
+            assert_eq!(
+                cache.directories[&NodeId(1)]
+                    .entries
+                    .contains_key(b"source".as_slice()),
+                scenario == 2
+            );
             if scenario == 2 {
-                assert_eq!(cache.directories[&NodeId(3)].entries[b"target".as_slice()].0, NodeId(2));
+                assert_eq!(
+                    cache.directories[&NodeId(3)].entries[b"target".as_slice()].0,
+                    NodeId(2)
+                );
             }
             drop(cache);
             drop(client);
@@ -1738,46 +1873,81 @@ mod tests {
     fn deferred_write_error_invalidates_optimistic_observations() {
         for failure in [PortError::Io, PortError::NoSpace] {
             let (stream, mut server) = stream_pair();
-            server.set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
-            let original = Attr {node:NodeId(2),size:0,kind:Kind::File,mode:0o640,
-                links:1,mtime_seconds:0,mtime_nanoseconds:0};
+            server
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
+            let original = Attr {
+                node: NodeId(2),
+                size: 0,
+                kind: Kind::File,
+                mode: 0o640,
+                links: 1,
+                mtime_seconds: 0,
+                mtime_nanoseconds: 0,
+            };
             let host = std::thread::spawn(move || {
-                assert!(matches!(read_request(&mut server).unwrap(),Request::Attr(NodeId(2))));
-                write_response(&mut server,&Response::Attr(original)).unwrap();
-                assert!(matches!(read_request(&mut server).unwrap(),Request::Write(NodeId(2),0,bytes) if bytes==vec![7;4096]));
+                assert!(matches!(
+                    read_request(&mut server).unwrap(),
+                    Request::Attr(NodeId(2))
+                ));
+                write_response(&mut server, &Response::Attr(original)).unwrap();
+                assert!(
+                    matches!(read_request(&mut server).unwrap(),Request::Write(NodeId(2),0,bytes) if bytes==vec![7;4096])
+                );
                 // Backend rejects the append and keeps its original zero length.
-                assert!(matches!(read_request(&mut server).unwrap(),Request::Fsync(Some(NodeId(2)))));
-                write_response(&mut server,&Response::Error(failure)).unwrap();
-                assert!(matches!(read_request(&mut server).unwrap(),Request::Attr(NodeId(2))));
-                write_response(&mut server,&Response::Attr(original)).unwrap();
-                assert!(matches!(read_request(&mut server).unwrap(),Request::Fence));
-                write_response(&mut server,&Response::Unit).unwrap();
+                assert!(matches!(
+                    read_request(&mut server).unwrap(),
+                    Request::Fsync(Some(NodeId(2)))
+                ));
+                write_response(&mut server, &Response::Error(failure)).unwrap();
+                assert!(matches!(
+                    read_request(&mut server).unwrap(),
+                    Request::Attr(NodeId(2))
+                ));
+                write_response(&mut server, &Response::Attr(original)).unwrap();
+                assert!(matches!(read_request(&mut server).unwrap(), Request::Fence));
+                write_response(&mut server, &Response::Unit).unwrap();
             });
             let client = ProxyClient {
-                streams:vec![Mutex::new(stream)],next:AtomicUsize::new(0),
-                cache:Mutex::new(Cache::default()),write_buffer:Mutex::new(None),
-                reservation:Mutex::new(Reservation::default()),gate:RwLock::new(()),
-                callbacks:RwLock::new(()),paused:AtomicBool::new(false),pending:AtomicU64::new(0),
-                metrics:AtomicFuseWriteMetrics::default(),read_metrics:AtomicFuseReadMetrics::default(),
+                streams: vec![Mutex::new(stream)],
+                next: AtomicUsize::new(0),
+                cache: Mutex::new(Cache::default()),
+                write_buffer: Mutex::new(None),
+                reservation: Mutex::new(Reservation::default()),
+                gate: RwLock::new(()),
+                callbacks: RwLock::new(()),
+                paused: AtomicBool::new(false),
+                pending: AtomicU64::new(0),
+                metrics: AtomicFuseWriteMetrics::default(),
+                read_metrics: AtomicFuseReadMetrics::default(),
                 #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
-                notifier:std::sync::OnceLock::new(),
+                notifier: std::sync::OnceLock::new(),
             };
-            assert_eq!(client.attr(NodeId(2)).unwrap(),original);
-            client.remember_directory(NodeId(1),&[(NodeId(2),Kind::File,b"file".to_vec())]).unwrap();
-            client.cache.lock().unwrap().read_ahead.insert(NodeId(3),ReadAhead {offset:0,bytes:vec![1,2,3],served:0});
-            assert_eq!(client.write(NodeId(2),0,&[7;4096]).unwrap(),4096);
-            assert_eq!(client.attr(NodeId(2)).unwrap().size,4096);
-            assert_eq!(client.fsync(Some(NodeId(2))),Err(failure));
-            assert_eq!(client.pending.load(Ordering::Acquire),1);
+            assert_eq!(client.attr(NodeId(2)).unwrap(), original);
+            client
+                .remember_directory(NodeId(1), &[(NodeId(2), Kind::File, b"file".to_vec())])
+                .unwrap();
+            client.cache.lock().unwrap().read_ahead.insert(
+                NodeId(3),
+                ReadAhead {
+                    offset: 0,
+                    bytes: vec![1, 2, 3],
+                    served: 0,
+                },
+            );
+            assert_eq!(client.write(NodeId(2), 0, &[7; 4096]).unwrap(), 4096);
+            assert_eq!(client.attr(NodeId(2)).unwrap().size, 4096);
+            assert_eq!(client.fsync(Some(NodeId(2))), Err(failure));
+            assert_eq!(client.pending.load(Ordering::Acquire), 1);
             {
-                let cache=client.cache.lock().unwrap();
+                let cache = client.cache.lock().unwrap();
                 assert!(cache.attrs.is_empty());
                 assert!(cache.directories.is_empty());
                 assert!(cache.read_ahead.is_empty());
             }
-            assert_eq!(client.attr(NodeId(2)).unwrap(),original);
+            assert_eq!(client.attr(NodeId(2)).unwrap(), original);
             client.barrier().unwrap();
-            assert_eq!(client.pending.load(Ordering::Acquire),0);
+            assert_eq!(client.pending.load(Ordering::Acquire), 0);
             drop(client);
             host.join().unwrap();
         }

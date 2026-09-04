@@ -39,7 +39,10 @@ fn edit_commit_end_inner(
     budget: Option<&super::workspace_bench::ProductBudget>,
 ) -> layerfs_sdk::Result<EditCommitTiming> {
     let workspace_id = edit.workspace_id;
-    let t0 = match budget { Some(b) => b.start_raw_clock("sdk-edit")?, None => super::sdk_edit_clock_ns()? };
+    let t0 = match budget {
+        Some(b) => b.start_raw_clock("sdk-edit")?,
+        None => super::sdk_edit_clock_ns()?,
+    };
     let edit_result = client.edit_workspace_file_range(edit);
     let t1 = match budget {
         Some(b) if edit_result.is_ok() => b.transition_raw_clock(t0, "commit")?,
@@ -49,9 +52,15 @@ fn edit_commit_end_inner(
     edit_result?;
     let t2 = t1;
     let commit_result = client.commit_workspace_session(workspace_id);
-    let t3 = match budget { Some(b) => b.transition_raw_clock(t2, "end")?, None => super::sdk_edit_clock_ns()? };
+    let t3 = match budget {
+        Some(b) => b.transition_raw_clock(t2, "end")?,
+        None => super::sdk_edit_clock_ns()?,
+    };
     let end_result = client.end_workspace_session(workspace_id, EndWorkspaceMode::Clean);
-    let t4 = match budget { Some(b) => b.finish_raw_clock(t3)?, None => super::sdk_edit_clock_ns()? };
+    let t4 = match budget {
+        Some(b) => b.finish_raw_clock(t3)?,
+        None => super::sdk_edit_clock_ns()?,
+    };
     let commit_id = match commit_result? {
         WorkspaceCommitResult::Created { commit_id, .. } => commit_id,
         _ => {
@@ -101,12 +110,19 @@ fn validate_visibility_inner(
     timing: &EditCommitTiming,
     budget: Option<&super::workspace_bench::ProductBudget>,
 ) -> layerfs_sdk::Result<FinishTiming> {
-    let started = match budget { Some(b) => b.start_clock("visibility").map_err(|_| layerfs_sdk::SdkError::InvalidRequest("product budget clock"))?, None => Instant::now() };
+    let started = match budget {
+        Some(b) => b
+            .start_clock("visibility")
+            .map_err(|_| layerfs_sdk::SdkError::InvalidRequest("product budget clock"))?,
+        None => Instant::now(),
+    };
     let result = client.query(Query::new(QueryKind::Branches).limit(512));
     let page = match result {
         Ok(page) => page,
         Err(error) => {
-            if let Some(b) = budget { let _ = b.finish_clock(started); }
+            if let Some(b) = budget {
+                let _ = b.finish_clock(started);
+            }
             return Err(error);
         }
     };
@@ -115,14 +131,18 @@ fn validate_visibility_inner(
             if branch.id == branch_id && branch.head_commit_id == Some(timing.commit_id))
     });
     if !visible || page.continuation.is_some() {
-        if let Some(b) = budget { let _ = b.finish_clock(started); }
+        if let Some(b) = budget {
+            let _ = b.finish_clock(started);
+        }
         return Err(layerfs_sdk::SdkError::InvalidRequest(
             "SDK edit Commit visibility",
         ));
     }
     Ok(FinishTiming {
         visibility_validation_ns: match budget {
-            Some(b) => b.finish_clock(started).map_err(|_| layerfs_sdk::SdkError::InvalidRequest("product budget clock"))?,
+            Some(b) => b
+                .finish_clock(started)
+                .map_err(|_| layerfs_sdk::SdkError::InvalidRequest("product budget clock"))?,
             None => elapsed_ns(started),
         },
     })

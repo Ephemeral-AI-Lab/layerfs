@@ -306,6 +306,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
             let _ = fs::remove_file(&release);
             let mut f = OpenOptions::new()
                 .create(true)
+                .truncate(false)
                 .read(true)
                 .write(true)
                 .open("work/a/writer.dat")?;
@@ -631,7 +632,7 @@ fn operations(case: &super::workspace_common::Case, action: &str, ordinal: u64) 
                 4096,
                 false,
             )?;
-            print!("{ordinal}\n");
+            println!("{ordinal}");
             operations = 1;
         }
         "stage" => {

@@ -1,12 +1,11 @@
 use layerfs_sdk::{
     Client, CreateWorkspaceSession, EndWorkspaceMode, EntityName, LayerStackInitialization,
-    LayerStackStore, LocalForkSource, SdkError, WorkspaceError, WorkspacePlacement,
-    WorkspaceProjection,
+    LayerStackStore, LocalForkSource, WorkspacePlacement, WorkspaceProjection,
 };
 use std::sync::Arc;
 
 #[test]
-fn writable_workspace_lease_is_shared_and_released_on_end_and_client_drop() {
+fn writable_workspaces_share_a_branch_and_clean_up_independently() {
     let root = temp();
     let store = Arc::new(LayerStackStore::create(root.join("store.sqlite")).unwrap());
     let first = Client::connect(store.clone()).unwrap();
@@ -33,16 +32,13 @@ fn writable_workspace_lease_is_shared_and_released_on_end_and_client_drop() {
         projection: Some(WorkspaceProjection::Materialize),
     };
     let session = first.create_workspace_session(request("one")).unwrap();
-    assert!(matches!(
-        second.create_workspace_session(request("two")),
-        Err(SdkError::Workspace(WorkspaceError::WorkspaceBusy))
-    ));
+    let second_session = second.create_workspace_session(request("two")).unwrap();
     first
         .end_workspace_session(session.id, EndWorkspaceMode::Discard)
         .unwrap();
-    let session = second.create_workspace_session(request("two")).unwrap();
+    assert!(root.join("two").is_dir());
     second
-        .end_workspace_session(session.id, EndWorkspaceMode::Discard)
+        .end_workspace_session(second_session.id, EndWorkspaceMode::Discard)
         .unwrap();
 
     let third = Client::connect(store.clone()).unwrap();

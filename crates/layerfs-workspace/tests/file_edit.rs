@@ -586,7 +586,15 @@ fn group_5_candidate_admission_and_publication_failures_retry_once() {
         let failed = workspaces.commit_workspace_session(session.id);
         set_transaction_failure_at(None);
         assert!(failed.is_err(), "failure={failure:?} result={failed:?}");
-        assert_eq!(store.store_counts().unwrap(), before);
+        let mut after = store.store_counts().unwrap();
+        // Failed staging may retain CAS rows, but must not publish any metadata.
+        assert!(after.objects >= before.objects);
+        assert!(after.objects <= before.objects + inserted_objects);
+        if failure.is_none() {
+            assert_eq!(after.objects, before.objects);
+        }
+        after.objects = before.objects;
+        assert_eq!(after, before);
         assert_eq!(store.branch(branch).unwrap().unwrap(), branch_before);
         assert_eq!(std::fs::read(mount.join("file")).unwrap(), b"Pabcdef");
         assert!(matches!(
@@ -594,6 +602,10 @@ fn group_5_candidate_admission_and_publication_failures_retry_once() {
             WorkspaceCommitResult::Created { .. }
         ));
         assert_eq!(store.store_counts().unwrap().commits, before.commits + 1);
+        assert_eq!(
+            store.store_counts().unwrap().objects,
+            before.objects + inserted_objects
+        );
         assert!(matches!(
             workspaces.commit_workspace_session(session.id).unwrap(),
             WorkspaceCommitResult::UpToDate { .. }

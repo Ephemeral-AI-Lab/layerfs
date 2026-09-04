@@ -22,7 +22,10 @@ struct ProductBudgetState {
     completed_ns: u64,
     active: Option<(&'static str, ProductPhaseClock)>,
 }
-enum ProductPhaseClock { Instant(Instant), Raw(u64) }
+enum ProductPhaseClock {
+    Instant(Instant),
+    Raw(u64),
+}
 impl ProductBudgetState {
     fn total_at(&self, active_elapsed_ns: u64) -> u64 {
         self.completed_ns.saturating_add(active_elapsed_ns)
@@ -32,7 +35,12 @@ impl ProductBudget {
     fn new(enabled: bool) -> Self {
         let state = Arc::new(std::sync::Mutex::new(ProductBudgetState::default()));
         let deadline = enabled.then(|| PhaseDeadline::product_budget(state.clone()));
-        Self { enabled, cumulative_ns: 0, state, _deadline: deadline }
+        Self {
+            enabled,
+            cumulative_ns: 0,
+            state,
+            _deadline: deadline,
+        }
     }
     pub(crate) fn start_clock(&self, phase: &'static str) -> AnyResult<Instant> {
         let mut state = self.state.lock().map_err(|_| "product budget lock")?;
@@ -43,32 +51,56 @@ impl ProductBudget {
     pub(crate) fn finish_clock(&self, start: Instant) -> AnyResult<u64> {
         let mut state = self.state.lock().map_err(|_| "product budget lock")?;
         let elapsed = elapsed_ns(start);
-        state.completed_ns = state.completed_ns.checked_add(elapsed).ok_or("phase sum overflow")?;
+        state.completed_ns = state
+            .completed_ns
+            .checked_add(elapsed)
+            .ok_or("phase sum overflow")?;
         state.active = None;
         Ok(elapsed)
     }
     pub(crate) fn start_raw_clock(&self, phase: &'static str) -> layerfs_sdk::Result<u64> {
-        let mut state = self.state.lock().map_err(|_| layerfs_sdk::SdkError::InvalidRequest("product budget lock"))?;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| layerfs_sdk::SdkError::InvalidRequest("product budget lock"))?;
         let start = super::sdk_edit_clock_ns()?;
         state.active = Some((phase, ProductPhaseClock::Raw(start)));
         Ok(start)
     }
-    pub(crate) fn transition_raw_clock(&self, start: u64, phase: &'static str) -> layerfs_sdk::Result<u64> {
-        let mut state = self.state.lock().map_err(|_| layerfs_sdk::SdkError::InvalidRequest("product budget lock"))?;
+    pub(crate) fn transition_raw_clock(
+        &self,
+        start: u64,
+        phase: &'static str,
+    ) -> layerfs_sdk::Result<u64> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| layerfs_sdk::SdkError::InvalidRequest("product budget lock"))?;
         let end = super::sdk_edit_clock_ns()?;
-        state.completed_ns = state.completed_ns.checked_add(end.saturating_sub(start))
+        state.completed_ns = state
+            .completed_ns
+            .checked_add(end.saturating_sub(start))
             .ok_or(layerfs_sdk::SdkError::InvalidRequest("phase sum overflow"))?;
         state.active = Some((phase, ProductPhaseClock::Raw(end)));
         Ok(end)
     }
     fn completed_group_ns(&self) -> AnyResult<u64> {
-        self.state.lock().map_err(|_| "product budget lock")?.completed_ns
-            .checked_sub(self.cumulative_ns).ok_or_else(|| "product budget group balance".into())
+        self.state
+            .lock()
+            .map_err(|_| "product budget lock")?
+            .completed_ns
+            .checked_sub(self.cumulative_ns)
+            .ok_or_else(|| "product budget group balance".into())
     }
     pub(crate) fn finish_raw_clock(&self, start: u64) -> layerfs_sdk::Result<u64> {
-        let mut state = self.state.lock().map_err(|_| layerfs_sdk::SdkError::InvalidRequest("product budget lock"))?;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| layerfs_sdk::SdkError::InvalidRequest("product budget lock"))?;
         let end = super::sdk_edit_clock_ns()?;
-        state.completed_ns = state.completed_ns.checked_add(end.saturating_sub(start))
+        state.completed_ns = state
+            .completed_ns
+            .checked_add(end.saturating_sub(start))
             .ok_or(layerfs_sdk::SdkError::InvalidRequest("phase sum overflow"))?;
         state.active = None;
         Ok(end)
@@ -87,36 +119,49 @@ impl ProductBudget {
         Ok(())
     }
     fn end(&mut self, phase: &str, elapsed_ns: u64, error: Option<String>) -> AnyResult<()> {
-        self.cumulative_ns = self.cumulative_ns.checked_add(elapsed_ns)
+        self.cumulative_ns = self
+            .cumulative_ns
+            .checked_add(elapsed_ns)
             .ok_or("product budget phase sum overflow")?;
         if self.enabled {
             self.event("end", phase, elapsed_ns, error);
             if self.cumulative_ns > PRODUCT_TIME_LIMIT_NS {
-                emit("product-time-budget-exceeded", &[
-                    ("limit_ns", PRODUCT_TIME_LIMIT_NS.to_string()),
-                    ("cumulative_ns", self.cumulative_ns.to_string()),
-                    ("phase", quote(phase)),
-                    ("measurement", quote("completed-pure-call-sum")),
-                ]);
+                emit(
+                    "product-time-budget-exceeded",
+                    &[
+                        ("limit_ns", PRODUCT_TIME_LIMIT_NS.to_string()),
+                        ("cumulative_ns", self.cumulative_ns.to_string()),
+                        ("phase", quote(phase)),
+                        ("measurement", quote("completed-pure-call-sum")),
+                    ],
+                );
             }
         }
         Ok(())
     }
     fn event(&self, state: &str, phase: &str, elapsed_ns: u64, error: Option<String>) {
-        emit("product-budget-phase", &[
-            ("state", quote(state)),
-            ("phase", quote(phase)),
-            ("cumulative_ns", self.cumulative_ns.to_string()),
-            ("limit_ns", PRODUCT_TIME_LIMIT_NS.to_string()),
-            ("elapsed_ns", elapsed_ns.to_string()),
-            ("phase_error", error.as_deref().map(quote).unwrap_or_else(|| "null".into())),
-        ]);
+        emit(
+            "product-budget-phase",
+            &[
+                ("state", quote(state)),
+                ("phase", quote(phase)),
+                ("cumulative_ns", self.cumulative_ns.to_string()),
+                ("limit_ns", PRODUCT_TIME_LIMIT_NS.to_string()),
+                ("elapsed_ns", elapsed_ns.to_string()),
+                (
+                    "phase_error",
+                    error.as_deref().map(quote).unwrap_or_else(|| "null".into()),
+                ),
+            ],
+        );
     }
 }
 
+type HostSamples = (u64, u64, u64, u64, u64);
+
 struct HostSampler {
     stop: Arc<std::sync::atomic::AtomicBool>,
-    thread: Option<std::thread::JoinHandle<Result<(u64, u64, u64, u64, u64), String>>>,
+    thread: Option<std::thread::JoinHandle<Result<HostSamples, String>>>,
 }
 
 pub(crate) struct PhaseDeadline {
@@ -132,36 +177,49 @@ impl PhaseDeadline {
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
             }
             let state = state.lock().expect("product budget lock");
-            let Some((phase, ref clock)) = state.active else { continue };
+            let Some((phase, ref clock)) = state.active else {
+                continue;
+            };
             let elapsed = match clock {
                 ProductPhaseClock::Instant(start) => elapsed_ns(*start),
                 ProductPhaseClock::Raw(start) => match super::sdk_edit_clock_ns() {
                     Ok(now) => now.saturating_sub(*start),
                     Err(error) => {
-                        emit("product-budget-observation-error", &[
-                            ("phase", quote(phase)),
-                            ("error", quote(&error.to_string())),
-                            ("status", quote("harness-error")),
-                        ]);
+                        emit(
+                            "product-budget-observation-error",
+                            &[
+                                ("phase", quote(phase)),
+                                ("error", quote(&error.to_string())),
+                                ("status", quote("harness-error")),
+                            ],
+                        );
                         std::process::exit(125);
                     }
                 },
             };
             let total = state.total_at(elapsed);
-            if total <= PRODUCT_TIME_LIMIT_NS { continue }
+            if total <= PRODUCT_TIME_LIMIT_NS {
+                continue;
+            }
             let completed = state.completed_ns;
             drop(state);
-            emit("product-time-budget-exceeded", &[
-                ("limit_ns", PRODUCT_TIME_LIMIT_NS.to_string()),
-                ("cumulative_ns", total.to_string()),
-                ("completed_product_ns", completed.to_string()),
-                ("active_phase_ns", elapsed.to_string()),
-                ("phase", quote(phase)),
-                ("measurement", quote("active-pure-call-sum")),
-            ]);
+            emit(
+                "product-time-budget-exceeded",
+                &[
+                    ("limit_ns", PRODUCT_TIME_LIMIT_NS.to_string()),
+                    ("cumulative_ns", total.to_string()),
+                    ("completed_product_ns", completed.to_string()),
+                    ("active_phase_ns", elapsed.to_string()),
+                    ("phase", quote(phase)),
+                    ("measurement", quote("active-pure-call-sum")),
+                ],
+            );
             std::process::exit(124);
         });
-        Self { stop: Some(tx), thread: Some(thread) }
+        Self {
+            stop: Some(tx),
+            thread: Some(thread),
+        }
     }
     pub(crate) fn start(scope: &'static str, seconds: u64) -> Self {
         let (tx, rx) = mpsc::channel();
@@ -304,79 +362,192 @@ pub(crate) fn emit(kind: &str, fields: &[(&str, String)]) {
     output.flush().expect("flush benchmark evidence");
 }
 
-fn fast_reference(case:&Case,seed:u8,pristine_root:layerfs_content::ObjectId,fixture:&[Entry]) -> AnyResult<super::workspace_verify::FastCertificate> {
+fn fast_reference(
+    case: &Case,
+    seed: u8,
+    pristine_root: layerfs_content::ObjectId,
+    fixture: &[Entry],
+) -> AnyResult<super::workspace_verify::FastCertificate> {
     if std::env::var_os("LAYERFS_V013_FAST_CERTIFICATE").is_some() {
-        return super::workspace_verify::FastCertificate::load(seed,pristine_root,fixture);
+        return super::workspace_verify::FastCertificate::load(seed, pristine_root, fixture);
     }
-    if std::env::var("LAYERFS_V013_FAST_NO_REUSE").as_deref()!=Ok("1") {
+    if std::env::var("LAYERFS_V013_FAST_NO_REUSE").as_deref() != Ok("1") {
         return Err("fast verification requires a qualified reference or explicit independent-current-content profile".into());
     }
-    let binding=workload_source::sdk_edit_common::sha256_hex(format!("fast-independent-current-content-v2\n{}\n{seed}\n{}\n{}\n",
-        case.id,std::env::var("LAYERFS_V013_FAST_INPUT_PLAN_SHA256")?,common::recipe_identity(fixture)?).as_bytes());
-    Ok(super::workspace_verify::FastCertificate::independent(pristine_root,binding))
+    let binding = workload_source::sdk_edit_common::sha256_hex(
+        format!(
+            "fast-independent-current-content-v2\n{}\n{seed}\n{}\n{}\n",
+            case.id,
+            std::env::var("LAYERFS_V013_FAST_INPUT_PLAN_SHA256")?,
+            common::recipe_identity(fixture)?
+        )
+        .as_bytes(),
+    );
+    Ok(super::workspace_verify::FastCertificate::independent(
+        pristine_root,
+        binding,
+    ))
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Pass the explicit verification inputs and runtime handles"
+)]
 fn fast_verify_branch(
-    store:&LayerStackStore,client:&Client,branch:BranchId,case:&Case,seed:u8,step:usize,
-    input:&[Entry],certificate:&super::workspace_verify::FastCertificate,root:&Path,container:&ContainerId,
+    store: &LayerStackStore,
+    client: &Client,
+    branch: BranchId,
+    case: &Case,
+    seed: u8,
+    step: usize,
+    input: &[Entry],
+    certificate: &super::workspace_verify::FastCertificate,
+    root: &Path,
+    container: &ContainerId,
 ) -> AnyResult<()> {
-    let expected=registry::expected(case,seed,step)?;
-    let empty=[Entry::directory(".")];
-    let before=if registry::is_import(case) {&empty[..]} else {input};
-    let mut delta=common::fast_delta_from_entries(before,&expected,seed,&case.id)?;
-    if case.kind=="tiny-stat" || (case.family=="dedup_branch_history" && case.kind=="metadata") {
-        delta=workload_source::ordinary_workloads::fast_delta_for_entries(case,seed,step,&expected)?;
+    let expected = registry::expected(case, seed, step)?;
+    let empty = [Entry::directory(".")];
+    let before = if registry::is_import(case) {
+        &empty[..]
+    } else {
+        input
+    };
+    let mut delta = common::fast_delta_from_entries(before, &expected, seed, &case.id)?;
+    if case.kind == "tiny-stat"
+        || (case.family == "dedup_branch_history" && case.kind == "metadata")
+    {
+        delta = workload_source::ordinary_workloads::fast_delta_for_entries(
+            case, seed, step, &expected,
+        )?;
     }
-    let dedup=case.family.starts_with("dedup_");
-    let pinned=store.pin_branch(branch)?;
-    let snapshot=super::workspace_verify::verify_fast_snapshot(&pinned.reader,pinned.root,&expected,&delta,certificate,dedup)?;
-    emit("fast-canonical-verification", &[("step",step.to_string()),("receipt",quote(&format!("{:?}",snapshot.receipt)))]);
+    let dedup = case.family.starts_with("dedup_");
+    let pinned = store.pin_branch(branch)?;
+    let snapshot = super::workspace_verify::verify_fast_snapshot(
+        &pinned.reader,
+        pinned.root,
+        &expected,
+        &delta,
+        certificate,
+        dedup,
+    )?;
+    emit(
+        "fast-canonical-verification",
+        &[
+            ("step", step.to_string()),
+            ("receipt", quote(&format!("{:?}", snapshot.receipt))),
+        ],
+    );
     if dedup {
-        let receipt=super::dedup_verify::verify_file_transcripts(case,seed,step,&snapshot.extents,&snapshot.file_roots)?;
+        let receipt = super::dedup_verify::verify_file_transcripts(
+            case,
+            seed,
+            step,
+            &snapshot.extents,
+            &snapshot.file_roots,
+        )?;
         emit("fast-dedup-verification", &[("step",step.to_string()),("receipt",quote(&format!("{receipt:?}"))),
             ("assurance",quote("current selected extents and qualified unchanged content-root references; exhaustive object/storage census deferred"))]);
     }
-    let covered=certificate.covered_paths(&expected,dedup);
-    let text=covered.iter().map(|path|format!("{path}\n")).collect::<String>();
-    let exchange=PathBuf::from(std::env::var("LAYERFS_V013_VERIFIER_EXCHANGE_HOST")?);
-    let name=format!("fast-covered-{step}.tsv");
-    std::fs::write(exchange.join(&name),text.as_bytes())?;
-    let coverage_sha=workload_source::sdk_edit_common::sha256_hex(text.as_bytes());
-    let session=client.create_workspace_session(CreateWorkspaceSession {
-        branch_id:branch,
-        placement:case_placement(&Some(container.clone()),root,seed as usize,&format!("{}-fast-{step}",case.id)),
-        projection:Some(WorkspaceProjection::Fuse),
+    let covered = certificate.covered_paths(&expected, dedup);
+    let text = covered
+        .iter()
+        .map(|path| format!("{path}\n"))
+        .collect::<String>();
+    let exchange = PathBuf::from(std::env::var("LAYERFS_V013_VERIFIER_EXCHANGE_HOST")?);
+    let name = format!("fast-covered-{step}.tsv");
+    std::fs::write(exchange.join(&name), text.as_bytes())?;
+    let coverage_sha = workload_source::sdk_edit_common::sha256_hex(text.as_bytes());
+    let session = client.create_workspace_session(CreateWorkspaceSession {
+        branch_id: branch,
+        placement: case_placement(
+            &Some(container.clone()),
+            root,
+            seed as usize,
+            &format!("{}-fast-{step}", case.id),
+        ),
+        projection: Some(WorkspaceProjection::Fuse),
     })?;
-    let result=execute(client,session.id,vec![
-        "/usr/local/bin/fs-benchmark-workload".into(),"workspace-verify-fast-v2".into(),
-        case.id.clone().into(),seed.to_string().into(),step.to_string().into(),certificate.assurance.clone().into(),
-        certificate.binding.clone().into(),format!("/verification/{name}").into(),coverage_sha.clone().into(),
-    ]);
+    let result = execute(
+        client,
+        session.id,
+        vec![
+            "/usr/local/bin/fs-benchmark-workload".into(),
+            "workspace-verify-fast-v2".into(),
+            case.id.clone().into(),
+            seed.to_string().into(),
+            step.to_string().into(),
+            certificate.assurance.clone().into(),
+            certificate.binding.clone().into(),
+            format!("/verification/{name}").into(),
+            coverage_sha.clone().into(),
+        ],
+    );
     match result {
-        Ok(output)=>emit("fast-native-verification", &[("step",step.to_string()),("coverage_sha256",quote(&coverage_sha)),("receipt",quote(&output_text(&output)?))]),
-        Err(error)=>{let _=client.end_workspace_session(session.id,EndWorkspaceMode::Discard);return Err(error);}
+        Ok(output) => emit(
+            "fast-native-verification",
+            &[
+                ("step", step.to_string()),
+                ("coverage_sha256", quote(&coverage_sha)),
+                ("receipt", quote(&output_text(&output)?)),
+            ],
+        ),
+        Err(error) => {
+            let _ = client.end_workspace_session(session.id, EndWorkspaceMode::Discard);
+            return Err(error);
+        }
     }
-    client.end_workspace_session(session.id,EndWorkspaceMode::Clean)?;
+    client.end_workspace_session(session.id, EndWorkspaceMode::Clean)?;
     Ok(())
 }
 
-fn qualify_fast_input(root:&Path,case:&Case,seed:u8,evidence:&Path) -> AnyResult<()> {
-    if registry::is_import(case) || case.kind=="git-tool" || case.family=="workspace_reliability" {
-        return Err("canonical input qualification requires a prepared routine Workspace Store".into());
+fn qualify_fast_input(root: &Path, case: &Case, seed: u8, evidence: &Path) -> AnyResult<()> {
+    if registry::is_import(case)
+        || case.kind == "git-tool"
+        || case.family == "workspace_reliability"
+    {
+        return Err(
+            "canonical input qualification requires a prepared routine Workspace Store".into(),
+        );
     }
-    let entries=registry::fixture(case,seed)?;
-    let store=LayerStackStore::connect(root.join("store.sqlite"))?;
-    let branch=std::fs::read_to_string(root.join("branch-id"))?.trim().parse()?;
-    let pinned=store.pin_branch(branch)?;
-    let mut snapshot=super::workspace_verify::verify_root(&pinned.reader,pinned.root,&entries)?;
-    snapshot.receipt.insert("reference_assurance".into(),"canonical_input_qualified".into());
-    snapshot.receipt.insert("reference_native_readback".into(),"false".into());
-    snapshot.receipt.insert("fully_verified".into(),"false".into());
-    super::workspace_verify::persist_snapshot(&entries,&mut snapshot,evidence)?;
-    resource_receipt("after-input-qualification",process_resource_snapshot()?);
-    emit("input-qualification-complete",&[("status",quote("canonical_input_qualified")),("case",quote(&case.id)),("seed",seed.to_string()),
-        ("root",quote(&pinned.root.to_string())),("oracle_identity",quote(snapshot.receipt.get("oracle_identity").ok_or("input oracle identity")?)),
-        ("reference_native_readback","false".into()),("fully_verified","false".into())]);
+    let entries = registry::fixture(case, seed)?;
+    let store = LayerStackStore::connect(root.join("store.sqlite"))?;
+    let branch = std::fs::read_to_string(root.join("branch-id"))?
+        .trim()
+        .parse()?;
+    let pinned = store.pin_branch(branch)?;
+    let mut snapshot = super::workspace_verify::verify_root(&pinned.reader, pinned.root, &entries)?;
+    snapshot.receipt.insert(
+        "reference_assurance".into(),
+        "canonical_input_qualified".into(),
+    );
+    snapshot
+        .receipt
+        .insert("reference_native_readback".into(), "false".into());
+    snapshot
+        .receipt
+        .insert("fully_verified".into(), "false".into());
+    super::workspace_verify::persist_snapshot(&entries, &mut snapshot, evidence)?;
+    resource_receipt("after-input-qualification", process_resource_snapshot()?);
+    emit(
+        "input-qualification-complete",
+        &[
+            ("status", quote("canonical_input_qualified")),
+            ("case", quote(&case.id)),
+            ("seed", seed.to_string()),
+            ("root", quote(&pinned.root.to_string())),
+            (
+                "oracle_identity",
+                quote(
+                    snapshot
+                        .receipt
+                        .get("oracle_identity")
+                        .ok_or("input oracle identity")?,
+                ),
+            ),
+            ("reference_native_readback", "false".into()),
+            ("fully_verified", "false".into()),
+        ],
+    );
     Ok(())
 }
 
@@ -883,7 +1054,12 @@ fn run_case(
 ) -> AnyResult<()> {
     let fast = mode == "fast-verify";
     let verification = mode == "verify" || fast;
-    if fast && (case.kind=="git-tool" || case.kind=="boundaries" || case.family=="workspace_reliability" || case.family=="edit_length_changing_capped") {
+    if fast
+        && (case.kind == "git-tool"
+            || case.kind == "boundaries"
+            || case.family == "workspace_reliability"
+            || case.family == "edit_length_changing_capped")
+    {
         return Err("fast-verify-v2 is for active ordinary/dedup routine cases; targeted and already-qualified capped cases keep their own route".into());
     }
     if !verification && mode != "performance" {
@@ -914,19 +1090,31 @@ fn run_case(
     let mut history = Vec::new();
     let mut genesis_root = None;
     let mut fast_certificate = None;
-    let fast_fixture=if fast {Some(registry::fixture(case,seed)?)} else {None};
-    if case.family=="dedup_workspace_reuse" {
-        let started=Instant::now();
-        let branch=std::fs::read_to_string(root.join("branch-id"))?.trim().parse()?;
-        let pinned=store.pin_branch(branch)?;
-        let mut payloads=std::collections::BTreeSet::new();
-        for entry in registry::fixture(case,seed)? {
-            if matches!(entry.kind,EntryKind::File(_)) {
-                payloads.extend(super::payload_ids(&pinned.reader,pinned.root,&entry.path)?);
+    let fast_fixture = if fast {
+        Some(registry::fixture(case, seed)?)
+    } else {
+        None
+    };
+    if case.family == "dedup_workspace_reuse" {
+        let started = Instant::now();
+        let branch = std::fs::read_to_string(root.join("branch-id"))?
+            .trim()
+            .parse()?;
+        let pinned = store.pin_branch(branch)?;
+        let mut payloads = std::collections::BTreeSet::new();
+        for entry in registry::fixture(case, seed)? {
+            if matches!(entry.kind, EntryKind::File(_)) {
+                payloads.extend(super::payload_ids(
+                    &pinned.reader,
+                    pinned.root,
+                    &entry.path,
+                )?);
             }
         }
-        let mut hash=workload_source::Sha256::new();
-        for id in &payloads {hash.update(id.as_bytes());}
+        let mut hash = workload_source::Sha256::new();
+        for id in &payloads {
+            hash.update(id.as_bytes());
+        }
         emit("initial-payload-attribution",&[
             ("root",quote(&pinned.root.to_string())),
             ("observed_payload_count",payloads.len().to_string()),
@@ -945,7 +1133,11 @@ fn run_case(
         let start = product_budget.start_clock("initialize")?;
         let result = client.initialize_layerstack(name, source);
         let initialize_ns = product_budget.finish_clock(start)?;
-        product_budget.end("initialize", initialize_ns, result.as_ref().err().map(ToString::to_string))?;
+        product_budget.end(
+            "initialize",
+            initialize_ns,
+            result.as_ref().err().map(ToString::to_string),
+        )?;
         let initialized = match result {
             Ok(value) => value,
             Err(error) => {
@@ -989,7 +1181,9 @@ fn run_case(
         observed(&client, &mut last_operation)?;
         store_metrics(&store, "after-initialize", 0)?;
         if !verification {
-            if product_budget.cumulative_ns != pure_call_sum_ns { return Err("product budget timing balance".into()); }
+            if product_budget.cumulative_ns != pure_call_sum_ns {
+                return Err("product budget timing balance".into());
+            }
             resource_receipt("after", process_resource_snapshot()?);
             let host_orchestration_ns = elapsed_ns(orchestration_start);
             drop(client);
@@ -1023,7 +1217,12 @@ fn run_case(
             },
         )?;
         if fast {
-            fast_certificate=Some(fast_reference(case,seed,store.pin_branch(branch)?.root,fast_fixture.as_deref().ok_or("fast input oracle")?)?);
+            fast_certificate = Some(fast_reference(
+                case,
+                seed,
+                store.pin_branch(branch)?.root,
+                fast_fixture.as_deref().ok_or("fast input oracle")?,
+            )?);
         }
     } else {
         branch = std::fs::read_to_string(root.join("branch-id"))?
@@ -1031,7 +1230,12 @@ fn run_case(
             .parse()?;
         genesis_root = Some(store.pin_branch(branch)?.root);
         if fast {
-            fast_certificate = Some(fast_reference(case,seed,genesis_root.ok_or("fast pristine input root")?,fast_fixture.as_deref().ok_or("fast input oracle")?)?);
+            fast_certificate = Some(fast_reference(
+                case,
+                seed,
+                genesis_root.ok_or("fast pristine input root")?,
+                fast_fixture.as_deref().ok_or("fast input oracle")?,
+            )?);
         }
         let request = CreateWorkspaceSession {
             branch_id: branch,
@@ -1042,7 +1246,11 @@ fn run_case(
         let create_start = product_budget.start_clock("create")?;
         let result = client.create_workspace_session(request);
         let create_ns = product_budget.finish_clock(create_start)?;
-        product_budget.end("create", create_ns, result.as_ref().err().map(ToString::to_string))?;
+        product_budget.end(
+            "create",
+            create_ns,
+            result.as_ref().err().map(ToString::to_string),
+        )?;
         let session = match result {
             Ok(value) => value,
             Err(error) => {
@@ -1093,13 +1301,27 @@ fn run_case(
                 };
                 let guard = PhaseDeadline::start("inherited-sdk-edit-commit-end", 2);
                 product_budget.begin("sdk-edit-commit-end")?;
-                let result = sdk_file_edit::edit_commit_end_budgeted(&client, edit, &product_budget);
-                product_budget.end("sdk-edit-commit-end", product_budget.completed_group_ns()?, result.as_ref().err().map(ToString::to_string))?;
+                let result =
+                    sdk_file_edit::edit_commit_end_budgeted(&client, edit, &product_budget);
+                product_budget.end(
+                    "sdk-edit-commit-end",
+                    product_budget.completed_group_ns()?,
+                    result.as_ref().err().map(ToString::to_string),
+                )?;
                 drop(guard);
                 let timing = result?;
                 product_budget.begin("visibility")?;
-                let result = sdk_file_edit::validate_visibility_budgeted(&client, branch, &timing, &product_budget);
-                product_budget.end("visibility", product_budget.completed_group_ns()?, result.as_ref().err().map(ToString::to_string))?;
+                let result = sdk_file_edit::validate_visibility_budgeted(
+                    &client,
+                    branch,
+                    &timing,
+                    &product_budget,
+                );
+                product_budget.end(
+                    "visibility",
+                    product_budget.completed_group_ns()?,
+                    result.as_ref().err().map(ToString::to_string),
+                )?;
                 let finish = result?;
                 for (phase, elapsed) in [
                     ("sdk-edit", timing.edit_call_ns),
@@ -1144,7 +1366,11 @@ fn run_case(
                         let start = product_budget.start_clock("sdk-edit")?;
                         let result = client.edit_workspace_file_range(request);
                         let edit_ns = product_budget.finish_clock(start)?;
-                        product_budget.end("sdk-edit", edit_ns, result.as_ref().err().map(ToString::to_string))?;
+                        product_budget.end(
+                            "sdk-edit",
+                            edit_ns,
+                            result.as_ref().err().map(ToString::to_string),
+                        )?;
                         result?;
                         pure_call_sum_ns = pure_call_sum_ns
                             .checked_add(edit_ns)
@@ -1172,7 +1398,11 @@ fn run_case(
                     let start = product_budget.start_clock("exec")?;
                     let result = execute(&client, session.id, argv);
                     let execution_ns = product_budget.finish_clock(start)?;
-                    product_budget.end("exec", execution_ns, result.as_ref().err().map(ToString::to_string))?;
+                    product_budget.end(
+                        "exec",
+                        execution_ns,
+                        result.as_ref().err().map(ToString::to_string),
+                    )?;
                     let output = result?;
                     pure_call_sum_ns = pure_call_sum_ns
                         .checked_add(execution_ns)
@@ -1208,7 +1438,11 @@ fn run_case(
                 let start = product_budget.start_clock("commit")?;
                 let result = client.commit_workspace_session_with_status(session.id);
                 let elapsed = product_budget.finish_clock(start)?;
-                product_budget.end("commit", elapsed, result.as_ref().err().map(ToString::to_string))?;
+                product_budget.end(
+                    "commit",
+                    elapsed,
+                    result.as_ref().err().map(ToString::to_string),
+                )?;
                 let status = result?;
                 pure_call_sum_ns = pure_call_sum_ns
                     .checked_add(elapsed)
@@ -1268,7 +1502,11 @@ fn run_case(
             let start = product_budget.start_clock("visibility")?;
             let result = visible_head(&client, branch, final_head);
             let visibility_ns = product_budget.finish_clock(start)?;
-            product_budget.end("visibility", visibility_ns, result.as_ref().err().map(ToString::to_string))?;
+            product_budget.end(
+                "visibility",
+                visibility_ns,
+                result.as_ref().err().map(ToString::to_string),
+            )?;
             result?;
             pure_call_sum_ns = pure_call_sum_ns
                 .checked_add(visibility_ns)
@@ -1284,7 +1522,11 @@ fn run_case(
             let start = product_budget.start_clock("end")?;
             let result = client.end_workspace_session(session.id, EndWorkspaceMode::Clean);
             let end_ns = product_budget.finish_clock(start)?;
-            product_budget.end("end", end_ns, result.as_ref().err().map(ToString::to_string))?;
+            product_budget.end(
+                "end",
+                end_ns,
+                result.as_ref().err().map(ToString::to_string),
+            )?;
             result?;
             pure_call_sum_ns = pure_call_sum_ns
                 .checked_add(end_ns)
@@ -1324,7 +1566,9 @@ fn run_case(
             return Err(error);
         }
     }
-    if product_budget.cumulative_ns != pure_call_sum_ns { return Err("product budget timing balance".into()); }
+    if product_budget.cumulative_ns != pure_call_sum_ns {
+        return Err("product budget timing balance".into());
+    }
     let host_orchestration_ns = elapsed_ns(orchestration_start);
     observed(&client, &mut last_operation)?;
     resource_receipt("after-product", process_resource_snapshot()?);
@@ -1343,10 +1587,20 @@ fn run_case(
         )?;
         let client = Client::connect(reopened.clone())?;
         let mut verifier_operation = 0;
-        if fast && case.family!="dedup_branch_history" {
-            fast_verify_branch(&reopened,&client,branch,case,seed,registry::steps(case),
-                fast_fixture.as_deref().ok_or("fast fixture")?,fast_certificate.as_ref().ok_or("fast certificate")?,root,&container)?;
-            observed(&client,&mut verifier_operation)?;
+        if fast && case.family != "dedup_branch_history" {
+            fast_verify_branch(
+                &reopened,
+                &client,
+                branch,
+                case,
+                seed,
+                registry::steps(case),
+                fast_fixture.as_deref().ok_or("fast fixture")?,
+                fast_certificate.as_ref().ok_or("fast certificate")?,
+                root,
+                &container,
+            )?;
+            observed(&client, &mut verifier_operation)?;
         }
         if !fast && case.family != "dedup_branch_history" {
             let mut expected = registry::expected(case, seed, registry::steps(case))?;
@@ -1440,7 +1694,7 @@ fn run_case(
                 let page = client.query(query.clone())?;
                 for item in &page.items {
                     if let QueryItem::Commit(commit) = item {
-                        if records.insert(commit.id, commit.clone()).is_some() {
+                        if records.insert(commit.id, *commit).is_some() {
                             return Err("duplicate historical Commit query row".into());
                         }
                     }
@@ -1466,177 +1720,229 @@ fn run_case(
             }
             observed(&client, &mut verifier_operation)?;
             if fast {
-                let input=fast_fixture.as_deref().ok_or("fast history fixture")?;
-                let certificate=fast_certificate.as_ref().ok_or("fast history reference")?;
-                let first=history.first().ok_or("empty history")?;
-                let base=client.fork_branch(EntityName::new("fast-history-genesis")?,LocalForkSource::Layer {layer_id:records[first].base_layer_id})?;
-                if reopened.pin_branch(base)?.root!=genesis_root.ok_or("history genesis root")? {return Err("fast history genesis identity".into());}
-                fast_verify_branch(&reopened,&client,base,case,seed,0,input,certificate,root,&container)?;
-                observed(&client,&mut verifier_operation)?;
-                for (offset,commit_id) in history.iter().enumerate() {
-                    let record=&records[commit_id];
-                    if record.parent_commit_id!=if offset==0 {None} else {Some(history[offset-1])} {return Err("fast history parent topology".into());}
-                    let fork=client.fork_branch(EntityName::new(format!("fast-history-{}",offset+1))?,LocalForkSource::Branch {branch_id:branch,commit_id:*commit_id})?;
-                    fast_verify_branch(&reopened,&client,fork,case,seed,offset+1,input,certificate,root,&container)?;
-                    observed(&client,&mut verifier_operation)?;
+                let input = fast_fixture.as_deref().ok_or("fast history fixture")?;
+                let certificate = fast_certificate.as_ref().ok_or("fast history reference")?;
+                let first = history.first().ok_or("empty history")?;
+                let base = client.fork_branch(
+                    EntityName::new("fast-history-genesis")?,
+                    LocalForkSource::Layer {
+                        layer_id: records[first].base_layer_id,
+                    },
+                )?;
+                if reopened.pin_branch(base)?.root != genesis_root.ok_or("history genesis root")? {
+                    return Err("fast history genesis identity".into());
                 }
-                emit("fast-history-complete",&[("snapshot_count",(history.len()+1).to_string()),("commit_count",history.len().to_string()),
-                    ("topology_status",quote("pass")),("exhaustive_object_union_status",quote("deferred_phase2"))]);
-            } else {
-            let mut accounting = super::dedup_verify::HistoryAccounting::default();
-            let genesis_root = genesis_root.ok_or("missing history genesis root")?;
-            let genesis_entries = registry::fixture(case, seed)?;
-            let mut genesis = super::workspace_verify::verify_root(
-                &reopened.snapshot_reader(genesis_root),
-                genesis_root,
-                &genesis_entries,
-            )?;
-            super::workspace_verify::persist_snapshot(
-                &genesis_entries,
-                &mut genesis,
-                &root.join("history-0"),
-            )?;
-            emit(
-                "history-canonical",
-                &[
-                    ("step", "0".into()),
-                    ("root", quote(&genesis_root.to_string())),
-                    ("receipt", quote(&format!("{:?}", genesis.receipt))),
-                ],
-            );
-            let genesis_transcript =
-                super::dedup_verify::verify_transcripts(case, seed, 0, &genesis)?;
-            emit(
-                "history-transcript",
-                &[
-                    ("step", "0".into()),
-                    ("receipt", quote(&format!("{genesis_transcript:?}"))),
-                ],
-            );
-            super::workspace_verify::write_gzip(
-                &root.join("history-0/canonical-verification/history-canonical-union.tsv.gz"),
-                |canonical_rows| {
-                    writeln!(canonical_rows, "step\troot\tobject_id\trole\tcanonical_bytes\tregular_file\tmetadata_value")?;
-                    emit(
-                        "history-accounting",
-                        &[
-                            ("step", "0".into()),
-                            (
-                                "receipt",
-                                quote(&format!(
-                                    "{:?}",
-                                    accounting.observe(case, 0, &genesis, canonical_rows)?
-                                )),
-                            ),
-                        ],
-                    );
-                    let base_layer = records[&history[0]].base_layer_id;
-                    let base_branch = client.fork_branch(
-                        EntityName::new("verify-genesis")?,
-                        LocalForkSource::Layer {
-                            layer_id: base_layer,
-                        },
-                    )?;
-                    let base_session = client.create_workspace_session(CreateWorkspaceSession {
-                        branch_id: base_branch,
-                        placement: case_placement(
-                            &Some(container.clone()),
-                            root,
-                            seed as usize,
-                            "history-genesis",
-                        ),
-                        projection: Some(WorkspaceProjection::Fuse),
-                    })?;
-                    native_verify(&client, base_session.id, case, seed, 0)?;
-                    client.end_workspace_session(base_session.id, EndWorkspaceMode::Clean)?;
-                    observed(&client, &mut verifier_operation)?;
-                    for (offset, commit_id) in history.iter().enumerate() {
-                        let step = offset + 1;
-                        let record = &records[commit_id];
-                        let expected_parent = if offset == 0 {
+                fast_verify_branch(
+                    &reopened,
+                    &client,
+                    base,
+                    case,
+                    seed,
+                    0,
+                    input,
+                    certificate,
+                    root,
+                    &container,
+                )?;
+                observed(&client, &mut verifier_operation)?;
+                for (offset, commit_id) in history.iter().enumerate() {
+                    let record = &records[commit_id];
+                    if record.parent_commit_id
+                        != if offset == 0 {
                             None
                         } else {
                             Some(history[offset - 1])
-                        };
-                        if record.parent_commit_id != expected_parent {
-                            return Err("history parent topology".into());
                         }
-                        let fork = client.fork_branch(
-                            EntityName::new(format!("verify-history-{step}"))?,
-                            LocalForkSource::Branch {
-                                branch_id: branch,
-                                commit_id: *commit_id,
-                            },
-                        )?;
-                        let expected = registry::expected(case, seed, step)?;
-                        let snapshot = super::workspace_verify::verify(
-                            &reopened,
-                            fork,
-                            &expected,
-                            &root.join(format!("history-{step}")),
-                        )?;
-                        emit(
-                            "history-canonical",
-                            &[
-                                ("step", step.to_string()),
-                                (
-                                    "root",
-                                    quote(
-                                        snapshot
-                                            .receipt
-                                            .get("canonical_root")
-                                            .ok_or("historical canonical root")?,
-                                    ),
-                                ),
-                                ("receipt", quote(&format!("{:?}", snapshot.receipt))),
-                            ],
-                        );
-                        let transcript =
-                            super::dedup_verify::verify_transcripts(case, seed, step, &snapshot)?;
-                        emit(
-                            "history-transcript",
-                            &[
-                                ("step", step.to_string()),
-                                ("receipt", quote(&format!("{transcript:?}"))),
-                            ],
-                        );
+                    {
+                        return Err("fast history parent topology".into());
+                    }
+                    let fork = client.fork_branch(
+                        EntityName::new(format!("fast-history-{}", offset + 1))?,
+                        LocalForkSource::Branch {
+                            branch_id: branch,
+                            commit_id: *commit_id,
+                        },
+                    )?;
+                    fast_verify_branch(
+                        &reopened,
+                        &client,
+                        fork,
+                        case,
+                        seed,
+                        offset + 1,
+                        input,
+                        certificate,
+                        root,
+                        &container,
+                    )?;
+                    observed(&client, &mut verifier_operation)?;
+                }
+                emit(
+                    "fast-history-complete",
+                    &[
+                        ("snapshot_count", (history.len() + 1).to_string()),
+                        ("commit_count", history.len().to_string()),
+                        ("topology_status", quote("pass")),
+                        ("exhaustive_object_union_status", quote("deferred_phase2")),
+                    ],
+                );
+            } else {
+                let mut accounting = super::dedup_verify::HistoryAccounting::default();
+                let genesis_root = genesis_root.ok_or("missing history genesis root")?;
+                let genesis_entries = registry::fixture(case, seed)?;
+                let mut genesis = super::workspace_verify::verify_root(
+                    &reopened.snapshot_reader(genesis_root),
+                    genesis_root,
+                    &genesis_entries,
+                )?;
+                super::workspace_verify::persist_snapshot(
+                    &genesis_entries,
+                    &mut genesis,
+                    &root.join("history-0"),
+                )?;
+                emit(
+                    "history-canonical",
+                    &[
+                        ("step", "0".into()),
+                        ("root", quote(&genesis_root.to_string())),
+                        ("receipt", quote(&format!("{:?}", genesis.receipt))),
+                    ],
+                );
+                let genesis_transcript =
+                    super::dedup_verify::verify_transcripts(case, seed, 0, &genesis)?;
+                emit(
+                    "history-transcript",
+                    &[
+                        ("step", "0".into()),
+                        ("receipt", quote(&format!("{genesis_transcript:?}"))),
+                    ],
+                );
+                super::workspace_verify::write_gzip(
+                    &root.join("history-0/canonical-verification/history-canonical-union.tsv.gz"),
+                    |canonical_rows| {
+                        writeln!(canonical_rows, "step\troot\tobject_id\trole\tcanonical_bytes\tregular_file\tmetadata_value")?;
                         emit(
                             "history-accounting",
                             &[
-                                ("step", step.to_string()),
-                                ("commit_id", quote(&commit_id.to_string())),
+                                ("step", "0".into()),
                                 (
                                     "receipt",
                                     quote(&format!(
                                         "{:?}",
-                                        accounting.observe(
-                                            case,
-                                            step,
-                                            &snapshot,
-                                            canonical_rows
-                                        )?
+                                        accounting.observe(case, 0, &genesis, canonical_rows)?
                                     )),
                                 ),
                             ],
                         );
-                        let historical =
+                        let base_layer = records[&history[0]].base_layer_id;
+                        let base_branch = client.fork_branch(
+                            EntityName::new("verify-genesis")?,
+                            LocalForkSource::Layer {
+                                layer_id: base_layer,
+                            },
+                        )?;
+                        let base_session =
                             client.create_workspace_session(CreateWorkspaceSession {
-                                branch_id: fork,
+                                branch_id: base_branch,
                                 placement: case_placement(
                                     &Some(container.clone()),
                                     root,
                                     seed as usize,
-                                    &format!("{}-history-{step}", case.id),
+                                    "history-genesis",
                                 ),
                                 projection: Some(WorkspaceProjection::Fuse),
                             })?;
-                        native_verify(&client, historical.id, case, seed, step)?;
-                        client.end_workspace_session(historical.id, EndWorkspaceMode::Clean)?;
+                        native_verify(&client, base_session.id, case, seed, 0)?;
+                        client.end_workspace_session(base_session.id, EndWorkspaceMode::Clean)?;
                         observed(&client, &mut verifier_operation)?;
-                    }
-                    Ok(())
-                },
-            )?;
+                        for (offset, commit_id) in history.iter().enumerate() {
+                            let step = offset + 1;
+                            let record = &records[commit_id];
+                            let expected_parent = if offset == 0 {
+                                None
+                            } else {
+                                Some(history[offset - 1])
+                            };
+                            if record.parent_commit_id != expected_parent {
+                                return Err("history parent topology".into());
+                            }
+                            let fork = client.fork_branch(
+                                EntityName::new(format!("verify-history-{step}"))?,
+                                LocalForkSource::Branch {
+                                    branch_id: branch,
+                                    commit_id: *commit_id,
+                                },
+                            )?;
+                            let expected = registry::expected(case, seed, step)?;
+                            let snapshot = super::workspace_verify::verify(
+                                &reopened,
+                                fork,
+                                &expected,
+                                &root.join(format!("history-{step}")),
+                            )?;
+                            emit(
+                                "history-canonical",
+                                &[
+                                    ("step", step.to_string()),
+                                    (
+                                        "root",
+                                        quote(
+                                            snapshot
+                                                .receipt
+                                                .get("canonical_root")
+                                                .ok_or("historical canonical root")?,
+                                        ),
+                                    ),
+                                    ("receipt", quote(&format!("{:?}", snapshot.receipt))),
+                                ],
+                            );
+                            let transcript = super::dedup_verify::verify_transcripts(
+                                case, seed, step, &snapshot,
+                            )?;
+                            emit(
+                                "history-transcript",
+                                &[
+                                    ("step", step.to_string()),
+                                    ("receipt", quote(&format!("{transcript:?}"))),
+                                ],
+                            );
+                            emit(
+                                "history-accounting",
+                                &[
+                                    ("step", step.to_string()),
+                                    ("commit_id", quote(&commit_id.to_string())),
+                                    (
+                                        "receipt",
+                                        quote(&format!(
+                                            "{:?}",
+                                            accounting.observe(
+                                                case,
+                                                step,
+                                                &snapshot,
+                                                canonical_rows
+                                            )?
+                                        )),
+                                    ),
+                                ],
+                            );
+                            let historical =
+                                client.create_workspace_session(CreateWorkspaceSession {
+                                    branch_id: fork,
+                                    placement: case_placement(
+                                        &Some(container.clone()),
+                                        root,
+                                        seed as usize,
+                                        &format!("{}-history-{step}", case.id),
+                                    ),
+                                    projection: Some(WorkspaceProjection::Fuse),
+                                })?;
+                            native_verify(&client, historical.id, case, seed, step)?;
+                            client.end_workspace_session(historical.id, EndWorkspaceMode::Clean)?;
+                            observed(&client, &mut verifier_operation)?;
+                        }
+                        Ok(())
+                    },
+                )?;
             }
         }
         observed(&client, &mut verifier_operation)?;
@@ -1645,13 +1951,26 @@ fn run_case(
         }
         drop(client);
         drop(reopened);
-        if !fast { emit("verification-complete", &[("status", quote("pass"))]); }
+        if !fast {
+            emit("verification-complete", &[("status", quote("pass"))]);
+        }
     }
     spool_observation("final-client-drop-cleanup")?;
     emit(
-        if fast { "fast-verification-complete" } else { "sample-complete" },
+        if fast {
+            "fast-verification-complete"
+        } else {
+            "sample-complete"
+        },
         &[
-            ("status", quote(if fast { "fast_iteration_verified" } else { "pass" })),
+            (
+                "status",
+                quote(if fast {
+                    "fast_iteration_verified"
+                } else {
+                    "pass"
+                }),
+            ),
             ("host_orchestration_ns", host_orchestration_ns.to_string()),
             ("orchestration_scope", quote(ORCHESTRATION_SCOPE)),
             ("pure_call_sum_ns", pure_call_sum_ns.to_string()),
@@ -1684,30 +2003,65 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         .collect::<Vec<_>>();
     match args.as_slice() {
         [command, root, id, seed, evidence] if command == "workspace-qualify-input" => {
-            resource_receipt("before-input-qualification",process_resource_snapshot()?);
-            let _sampler=HostSampler::start()?;
-            qualify_fast_input(Path::new(root),&registry::resolve(id)?,seed.parse()?,Path::new(evidence))
+            resource_receipt("before-input-qualification", process_resource_snapshot()?);
+            let _sampler = HostSampler::start()?;
+            qualify_fast_input(
+                Path::new(root),
+                &registry::resolve(id)?,
+                seed.parse()?,
+                Path::new(evidence),
+            )
         }
-        [command,id,seed] if command=="workspace-input-recipe-identity" => {
-            println!("recipe_identity={}",common::recipe_identity(&registry::fixture(&registry::resolve(id)?,seed.parse()?)?)?);
+        [command, id, seed] if command == "workspace-input-recipe-identity" => {
+            println!(
+                "recipe_identity={}",
+                common::recipe_identity(&registry::fixture(
+                    &registry::resolve(id)?,
+                    seed.parse()?
+                )?)?
+            );
             Ok(())
         }
-        [command,id,seed,step] if command=="workspace-content-recipes" => {
-            let case=registry::resolve(id)?;
-            let seed=seed.parse()?;
-            let step=step.parse()?;
-            let entries=if step==0 {registry::fixture(&case,seed)?} else {registry::expected(&case,seed,step)?};
-            let by_path=entries.iter().map(|entry|(entry.path.as_str(),entry)).collect::<BTreeMap<_,_>>();
+        [command, id, seed, step] if command == "workspace-content-recipes" => {
+            let case = registry::resolve(id)?;
+            let seed = seed.parse()?;
+            let step = step.parse()?;
+            let entries = if step == 0 {
+                registry::fixture(&case, seed)?
+            } else {
+                registry::expected(&case, seed, step)?
+            };
+            let by_path = entries
+                .iter()
+                .map(|entry| (entry.path.as_str(), entry))
+                .collect::<BTreeMap<_, _>>();
             println!("path\tcontent_recipe_sha256");
             for entry in &entries {
-                let content=match &entry.kind {EntryKind::File(c)=>c,EntryKind::Hardlink(target)=>match &by_path[target.as_str()].kind {EntryKind::File(c)=>c,_=>return Err("recipe alias".into())},_=>continue};
-                println!("{}\t{}",entry.path,common::content_recipe_identity(content)?);
+                let content = match &entry.kind {
+                    EntryKind::File(c) => c,
+                    EntryKind::Hardlink(target) => match &by_path[target.as_str()].kind {
+                        EntryKind::File(c) => c,
+                        _ => return Err("recipe alias".into()),
+                    },
+                    _ => continue,
+                };
+                println!(
+                    "{}\t{}",
+                    entry.path,
+                    common::content_recipe_identity(content)?
+                );
             }
             Ok(())
         }
         [command, root] if command == "workspace-qualify-fast" => {
             let receipt = super::workspace_verify::fast_qualification(Path::new(root))?;
-            emit("fast-verifier-qualification", &[("status",quote("pass")),("receipt",quote(&format!("{receipt:?}")))]);
+            emit(
+                "fast-verifier-qualification",
+                &[
+                    ("status", quote("pass")),
+                    ("receipt", quote(&format!("{receipt:?}"))),
+                ],
+            );
             Ok(())
         }
         [command, root] if command == "workspace-qualify-digests" => {
@@ -1870,7 +2224,12 @@ mod product_budget_tests {
             .env(CHILD, "1").output().unwrap();
         let stdout = String::from_utf8(output.stdout).unwrap();
         print!("{stdout}");
-        assert_eq!(output.status.code(), Some(124), "{}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(
+            output.status.code(),
+            Some(124),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert!(stdout.contains("\"kind\":\"product-time-budget-exceeded\""));
         assert!(stdout.contains("\"measurement\":\"active-pure-call-sum\""));
         assert!(stdout.contains("\"completed_product_ns\":14990000000"));
@@ -1880,15 +2239,22 @@ mod product_budget_tests {
     fn cumulative_budget_keeps_prior_phases_and_exact_boundary() {
         // Fake phase durations: no product work, sleeping, preparation or verifier.
         let mut budget = ProductBudget::new(true);
-        for (phase, duration) in [("create", 2_000_000_000), ("exec", 7_000_000_000),
-            ("commit", 5_000_000_000), ("end", 1_000_000_000)] {
+        for (phase, duration) in [
+            ("create", 2_000_000_000),
+            ("exec", 7_000_000_000),
+            ("commit", 5_000_000_000),
+            ("end", 1_000_000_000),
+        ] {
             budget.begin(phase).unwrap();
             budget.end(phase, duration, None).unwrap();
         }
         assert_eq!(budget.cumulative_ns, PRODUCT_TIME_LIMIT_NS);
         assert!(budget.check().is_ok());
         // The active phase's remaining allowance includes all previous calls.
-        let state = ProductBudgetState { completed_ns: 14_000_000_000, active: None };
+        let state = ProductBudgetState {
+            completed_ns: 14_000_000_000,
+            active: None,
+        };
         assert_eq!(state.total_at(1_000_000_000), PRODUCT_TIME_LIMIT_NS);
         assert!(state.total_at(1_000_000_001) > PRODUCT_TIME_LIMIT_NS);
         budget.end("visibility", 1, None).unwrap();
@@ -1896,7 +2262,9 @@ mod product_budget_tests {
         // Verification/proof mode keeps accounting but cannot arm a deadline.
         let mut disabled = ProductBudget::new(false);
         assert!(disabled._deadline.is_none());
-        disabled.end("verify", PRODUCT_TIME_LIMIT_NS + 1, None).unwrap();
+        disabled
+            .end("verify", PRODUCT_TIME_LIMIT_NS + 1, None)
+            .unwrap();
         assert!(disabled.begin("cleanup").is_ok());
     }
 }

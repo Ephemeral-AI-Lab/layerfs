@@ -768,10 +768,12 @@ pub(crate) fn read_response_measured(
     Ok((response, measured))
 }
 
+type MeasuredResponseFrame = (Response, ResponseReadMeasurement, Option<(u32, bool)>);
+
 fn read_response_frame(
     input: &mut impl Read,
     remaining: usize,
-) -> std::io::Result<(Response, ResponseReadMeasurement, Option<(u32, bool)>)> {
+) -> std::io::Result<MeasuredResponseFrame> {
     let started = std::time::Instant::now();
     let mut length = [0; 4];
     input.read_exact(&mut length)?;
@@ -1151,13 +1153,11 @@ mod tests {
             std::io::ErrorKind::InvalidData
         );
         let mut output = Vec::new();
-        assert!(
-            write_response(
-                &mut output,
-                &Response::Entries(vec![(NodeId(1), Kind::File, vec![0; MAX_FRAME])])
-            )
-            .is_err()
-        );
+        assert!(write_response(
+            &mut output,
+            &Response::Entries(vec![(NodeId(1), Kind::File, vec![0; MAX_FRAME])])
+        )
+        .is_err());
         assert!(output.is_empty());
     }
 

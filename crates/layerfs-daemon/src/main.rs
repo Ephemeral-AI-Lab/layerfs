@@ -1857,11 +1857,16 @@ mod linux {
     }
 
     fn reap_terminated_descendants(pgid: i32) -> io::Result<()> {
-        if pgid <= 0 { return Err(protocol::invalid("owned process group")); }
+        if pgid <= 0 {
+            return Err(protocol::invalid("owned process group"));
+        }
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
             if Instant::now() >= deadline {
-                return Err(io::Error::new(io::ErrorKind::TimedOut,"owned process-group descendants did not drain"));
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "owned process-group descendants did not drain",
+                ));
             }
             // Only this already-terminated owned group, never waitpid(-1).
             match waitpid(Pid::from_raw(-pgid), Some(WaitPidFlag::WNOHANG)) {
@@ -1944,42 +1949,70 @@ mod linux {
                 let output = Command::new(std::env::current_exe().unwrap())
                     .args(["linux::tests::forced_group_cleanup_reaps_descendants_without_stealing_status", "--exact", "--nocapture"])
                     .env(CHILD,"1").output().unwrap();
-                print!("{}",String::from_utf8_lossy(&output.stdout));
-                assert!(output.status.success(),"{}",String::from_utf8_lossy(&output.stderr));
+                print!("{}", String::from_utf8_lossy(&output.stdout));
+                assert!(
+                    output.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
                 return;
             }
             // Isolate process-wide orphan adoption from concurrent unit tests.
             nix::sys::prctl::set_child_subreaper(true).unwrap();
-            let mut unrelated = Command::new("/bin/sh").args(["-c","exit 23"])
-                .process_group(0).spawn().unwrap();
+            let mut unrelated = Command::new("/bin/sh")
+                .args(["-c", "exit 23"])
+                .process_group(0)
+                .spawn()
+                .unwrap();
             let unrelated_pid = Pid::from_raw(unrelated.id() as i32);
-            assert!(matches!(nix::sys::wait::waitid(nix::sys::wait::Id::Pid(unrelated_pid),
-                WaitPidFlag::WEXITED | WaitPidFlag::WNOWAIT).unwrap(),WaitStatus::Exited(pid,23) if pid==unrelated_pid));
+            assert!(
+                matches!(nix::sys::wait::waitid(nix::sys::wait::Id::Pid(unrelated_pid),
+                WaitPidFlag::WEXITED | WaitPidFlag::WNOWAIT).unwrap(),WaitStatus::Exited(pid,23) if pid==unrelated_pid)
+            );
             // exec replaces the shell: the direct sleep never waits for its child.
             let mut leader = Command::new("/bin/sh")
-                .args(["-c","sleep 30 & echo $!; exec sleep 30"])
-                .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null())
-                .process_group(0).spawn().unwrap();
+                .args(["-c", "sleep 30 & echo $!; exec sleep 30"])
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .process_group(0)
+                .spawn()
+                .unwrap();
             let mut output = BufReader::new(leader.stdout.take().unwrap());
             let mut child_pid = String::new();
             output.read_line(&mut child_pid).unwrap();
             let child_pid: u32 = child_pid.trim().parse().unwrap();
             let pgid = leader.id() as i32;
             let termination = Termination::new();
-            termination.terminate(pgid,1);
+            termination.terminate(pgid, 1);
             let direct = leader.wait().unwrap();
             let direct_code = direct.code();
             let direct_signal = direct.signal();
             let adopted = fs::read_to_string(format!("/proc/{child_pid}/status")).unwrap();
-            assert!(adopted.lines().any(|line|line.starts_with("State:") && line.contains('Z')),
-                "fixture must expose the killed, unreaped descendant");
-            assert!(adopted.lines().any(|line|line==format!("PPid:\t{}",std::process::id())),
-                "descendant must be adopted by the isolated subreaper");
-            let retained = finish_terminated_group(pgid,&termination,Ok(direct)).unwrap();
-            assert_eq!(retained.code(),direct_code);
-            assert_eq!(retained.signal(),direct_signal);
-            assert!(!Path::new(&format!("/proc/{child_pid}")).exists(),"owned descendant was not reaped");
-            assert_eq!(unrelated.wait().unwrap().code(),Some(23),"another group's direct status was stolen");
+            assert!(
+                adopted
+                    .lines()
+                    .any(|line| line.starts_with("State:") && line.contains('Z')),
+                "fixture must expose the killed, unreaped descendant"
+            );
+            assert!(
+                adopted
+                    .lines()
+                    .any(|line| line == format!("PPid:\t{}", std::process::id())),
+                "descendant must be adopted by the isolated subreaper"
+            );
+            let retained = finish_terminated_group(pgid, &termination, Ok(direct)).unwrap();
+            assert_eq!(retained.code(), direct_code);
+            assert_eq!(retained.signal(), direct_signal);
+            assert!(
+                !Path::new(&format!("/proc/{child_pid}")).exists(),
+                "owned descendant was not reaped"
+            );
+            assert_eq!(
+                unrelated.wait().unwrap().code(),
+                Some(23),
+                "another group's direct status was stolen"
+            );
         }
 
         #[test]
