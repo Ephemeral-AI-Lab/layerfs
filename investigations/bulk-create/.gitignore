@@ -2,3 +2,6 @@
 evidence/*/native-fixture
 evidence/*/segments
 evidence/*/fixture/
+evidence/colocated*/prepared/
+evidence/colocated*/source.tar
+evidence/colocated*/failed-state/
