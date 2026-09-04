@@ -68,9 +68,29 @@ fn bytes(content: &Content) -> Result<Vec<u8>> {
 }
 
 pub(crate) fn offset(family: &str, profile: &str, seed: u8, ordinal: usize) -> Result<u64> {
-    Ok(65536
-        + u64::from_le_bytes(hash(family, profile, seed, ordinal, "offset")?[..8].try_into()?)
-            % 917505)
+    let candidate = |i| -> Result<u64> {
+        Ok(65536
+            + u64::from_le_bytes(hash(family, profile, seed, i, "offset")?[..8].try_into()?)
+                % 917505)
+    };
+    if family != "dedup_cdc_locality" || profile != "delete" {
+        return candidate(ordinal);
+    }
+    // Deletion bytes have no ordinal-specific mask: equal offsets mean equal
+    // variants. Preserve the first candidate and probe only later collisions.
+    // See findings/cdc-delete-offset-collision.md; every tier uses this prefix.
+    if ordinal >= 917505 {
+        return Err("CDC deletion offset interval exhausted".into());
+    }
+    let mut assigned = BTreeSet::new();
+    let mut at = 65536;
+    for i in 0..=ordinal {
+        at = candidate(i)?;
+        while !assigned.insert(at) {
+            at = if at == 983040 { 65536 } else { at + 1 };
+        }
+    }
+    Ok(at)
 }
 
 pub(crate) fn variant(
@@ -491,4 +511,31 @@ fn acknowledged_bytes_survive_a_later_write_failure() {
         .write_all(b"abcdefgh")
         .is_err());
     assert_eq!(acknowledged, 6);
+}
+
+#[cfg(test)]
+#[test]
+fn cdc_delete_offsets_preserve_all_but_the_frozen_collision() -> Result<()> {
+    let mut changes = Vec::new();
+    for seed in 1..=3 {
+        let mut assigned = BTreeSet::new();
+        for ordinal in 0..500 {
+            let original = 65536
+                + u64::from_le_bytes(
+                    hash("dedup_cdc_locality", "delete", seed, ordinal, "offset")?[..8]
+                        .try_into()?,
+                ) % 917505;
+            let actual = offset("dedup_cdc_locality", "delete", seed, ordinal)?;
+            assert!((65536..=983040).contains(&actual));
+            assert!(assigned.insert(actual), "duplicate deletion offset");
+            if original != actual {
+                changes.push((seed, ordinal, original, actual));
+            }
+        }
+        assert_eq!(assigned.len(), 500);
+    }
+    assert_eq!(changes, vec![(3, 471, 359004, 359005)]);
+    assert_eq!(offset("dedup_cdc_locality", "delete", 3, 74)?, 359004);
+    println!("CDC_DELETE_OFFSET_RECIPE_CHECK seeded_offsets=1500 changed_offsets=1 changed_case_seed_inputs=1 variant_count=500 fixture_regular_files=501 fixture_logical_bytes=523288576");
+    Ok(())
 }
