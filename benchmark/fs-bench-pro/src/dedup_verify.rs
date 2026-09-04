@@ -629,17 +629,29 @@ pub(crate) fn verify_transcripts(
     completed_steps: usize,
     actual: &super::workspace_verify::SnapshotEvidence,
 ) -> Result<super::workload_source::workspace_common::Receipt> {
+    verify_file_transcripts(case,seed,completed_steps,&actual.extents,&actual.file_roots)
+}
+
+/// File-level transcript checks also serve fast verification. The caller records
+/// which extents came from current byte reads versus qualified root references;
+/// this function makes no exhaustive namespace/object-census claim.
+pub(crate) fn verify_file_transcripts(
+    case: &super::workload_source::workspace_common::Case,
+    seed: u8,
+    completed_steps: usize,
+    actual_extents: &BTreeMap<String, Vec<super::workspace_verify::Extent>>,
+    actual_file_roots: &BTreeMap<String, ObjectId>,
+) -> Result<super::workload_source::workspace_common::Receipt> {
     use super::workload_source::{
         self as w,
         workspace_common::{EntryKind, Receipt},
     };
     let expected = expected_transcripts(case, seed, completed_steps)?;
-    if actual.extents.len() != expected.len() {
+    if actual_extents.len() != expected.len() {
         return Err("dedup regular-file transcript cardinality".into());
     }
     for (path, want) in &expected {
-        let got = actual
-            .extents
+        let got = actual_extents
             .get(path)
             .ok_or("missing actual regular-file transcript")?;
         let got: Vec<_> = got
@@ -682,10 +694,9 @@ pub(crate) fn verify_transcripts(
             return Err("identical file transcripts differ".into());
         }
         if case.kind == "identical"
-            && actual
-                .file_roots
+            && actual_file_roots
                 .values()
-                .any(|root| Some(root) != actual.file_roots.get("files/f0000.dat"))
+                .any(|root| Some(root) != actual_file_roots.get("files/f0000.dat"))
         {
             return Err("identical imports have different content roots".into());
         }
@@ -859,8 +870,8 @@ pub(crate) fn verify_transcripts(
                 return Err("exact addition differs from selected base".into());
             }
             if case.kind == "exact"
-                && actual.file_roots.get(&format!("added/a{i:04}.dat"))
-                    != actual.file_roots.get(&format!("base/b{:04}.dat", i % 128))
+                && actual_file_roots.get(&format!("added/a{i:04}.dat"))
+                    != actual_file_roots.get(&format!("base/b{:04}.dat", i % 128))
             {
                 return Err("exact addition did not reuse base content root".into());
             }

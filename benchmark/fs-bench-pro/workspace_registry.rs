@@ -118,6 +118,23 @@ pub(crate) fn dispatch(args: &[String]) -> Result<()> {
         return super::reliability_workloads::dispatch(&args[1..]);
     }
     match args {
+        [command,id,seed,step,profile,binding,covered_path,covered_sha] if command=="workspace-verify-fast-v2" => {
+            if !matches!(profile.as_str(),"fully_verified"|"canonical_input_qualified"|"qualified_content_components"|"independent_current_content") {return Err("unknown fast reference assurance".into());}
+            let case=resolve(id)?; let seed=seed.parse::<u8>()?; let step=step.parse::<usize>()?;
+            if proofs().iter().any(|proof|proof.id==case.id) {return Err("targeted proof requires its original verification mode".into());}
+            let bytes=std::fs::read(covered_path)?;
+            if super::sdk_edit_common::sha256_hex(&bytes)!=*covered_sha {return Err("fast certified path projection hash mismatch".into());}
+            let text=std::str::from_utf8(&bytes)?;
+            let covered=text.lines().map(str::to_owned).collect::<std::collections::BTreeSet<_>>();
+            if covered.iter().map(|path|format!("{path}\n")).collect::<String>()!=text {return Err("fast certified paths must be canonical sorted unique lines".into());}
+            if profile=="independent_current_content"&&!covered.is_empty() {return Err("no-reference fast profile cannot claim certified content".into());}
+            let entries=expected(&case,seed,step)?;
+            let delta=super::ordinary_workloads::fast_delta_for_entries(&case,seed,step,&entries)?;
+            let mut receipt=super::workspace_common::verify_native_fast_with_coverage(Path::new("."),&entries,&delta,binding,&covered)?;
+            receipt.insert("reference_assurance".into(),profile.clone()); receipt.insert("covered_paths_sha256".into(),covered_sha.clone());
+            receipt.insert("fast_witness_profile".into(),"native-fast-witness-v2:first-middle-last-seeded-per-namespace-length-depth-class;declared-read-targets".into());
+            for(key,value)in receipt {println!("{key}={value}");}
+        }
         [command] if command == "workspace-resource-sample" => sample_resources()?,
         [command,root,seed] if command == "workspace-git-prepare" => {
             for (key,value) in super::ordinary_workloads::prepare_git(Path::new(root),seed.parse()?)? {println!("{key}={value}");}

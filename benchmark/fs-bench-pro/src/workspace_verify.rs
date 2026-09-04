@@ -326,37 +326,7 @@ pub(crate) fn verify_root(
                         return Err(format!("canonical persistence digest mismatch: {path}").into());
                     }
                 }
-                let mut file_extents = Vec::new();
-                rope::visit_extents(&reader, file_root, |page| {
-                    for extent in page {
-                        let payload_len = reader.with_authenticated_canonical(
-                            extent.payload_object_id,
-                            |canonical| {
-                                Ok(extent_codec::decode_chunk_payload(
-                                    layerfs_content::decode_bytes_object(canonical)?,
-                                )?
-                                .len() as u64)
-                            },
-                        )?;
-                        let source_offset = u64::from(extent.source_offset);
-                        let len = u64::from(extent.logical_length);
-                        if source_offset
-                            .checked_add(len)
-                            .is_none_or(|end| end > payload_len)
-                        {
-                            return Err(layerfs_content::CoreError::InvalidRecord(
-                                "extent payload bound",
-                            ));
-                        }
-                        file_extents.push(Extent {
-                            id: extent.payload_object_id,
-                            source_offset,
-                            len,
-                            payload_len,
-                        });
-                    }
-                    Ok(())
-                })?;
+                let file_extents = read_file_extents(&reader,file_root)?;
                 extents.insert(path, file_extents);
             }
         }
@@ -403,6 +373,41 @@ pub(crate) fn verify_root(
         canonical_objects,
         independent_manifest,
     })
+}
+
+fn read_file_extents(reader: &CoreReader<'_>, file_root: rope::FileStateRoot) -> AnyResult<Vec<Extent>> {
+let mut file_extents = Vec::new();
+rope::visit_extents(reader, file_root, |page| {
+    for extent in page {
+        let payload_len = reader.with_authenticated_canonical(
+            extent.payload_object_id,
+            |canonical| {
+                Ok(extent_codec::decode_chunk_payload(
+                    layerfs_content::decode_bytes_object(canonical)?,
+                )?
+                .len() as u64)
+            },
+        )?;
+        let source_offset = u64::from(extent.source_offset);
+        let len = u64::from(extent.logical_length);
+        if source_offset
+            .checked_add(len)
+            .is_none_or(|end| end > payload_len)
+        {
+            return Err(layerfs_content::CoreError::InvalidRecord(
+                "extent payload bound",
+            ));
+        }
+        file_extents.push(Extent {
+            id: extent.payload_object_id,
+            source_offset,
+            len,
+            payload_len,
+        });
+    }
+    Ok(())
+})?;
+    Ok(file_extents)
 }
 
 struct CompareSink<'a> {
@@ -680,6 +685,9 @@ pub(crate) struct FastCertificate {
     pub binding: String,
     root: ObjectId,
     file_roots: BTreeMap<String, ObjectId>,
+    extents: BTreeMap<String,Vec<Extent>>,
+    pub assurance: String,
+    native_reference_readback: bool,
 }
 fn read_gzip_text(path: &Path) -> AnyResult<String> {
     let output = Command::new("/usr/bin/gzip").args(["-dc"]).arg(path).output()?;
@@ -700,7 +708,35 @@ fn require_bound_file(path: &Path, expected: &str, scope: &str) -> AnyResult<Vec
     require_bound_bytes(&bytes,expected,scope)?;
     Ok(bytes)
 }
+fn verify_component_mapping(mapping:&str, expected:&BTreeMap<&str,&Entry>, regular:&BTreeSet<String>) -> AnyResult<()> {
+    let mut lines=mapping.lines();
+    if lines.next()!=Some("target_path\tsource_path\tcontent_recipe_sha256") {return Err("component mapping header".into());}
+    let mut mapped=BTreeSet::new();
+    for line in lines {
+        let columns=line.split('\t').collect::<Vec<_>>();
+        if columns.len()!=3 || columns[1].is_empty() || !mapped.insert(columns[0].to_owned()) {return Err("component mapping row".into());}
+        let entry=expected.get(columns[0]).ok_or("component target outside independent input")?;
+        let content=match &entry.kind {
+            EntryKind::File(c)=>c,
+            EntryKind::Hardlink(target)=>match &expected.get(target.as_str()).ok_or("component alias target")?.kind {EntryKind::File(c)=>c,_=>return Err("component alias content".into())},
+            _=>return Err("component mapped nonregular path".into()),
+        };
+        if common::content_recipe_identity(content)?!=columns[2] {return Err("component independent recipe mismatch".into());}
+    }
+    if &mapped!=regular {return Err("component mapping exact membership".into());}
+    Ok(())
+}
+
 impl FastCertificate {
+    pub(crate) fn independent(root: ObjectId, binding: String) -> Self {
+        Self {binding,root,file_roots:BTreeMap::new(),extents:BTreeMap::new(),
+            assurance:"independent_current_content".into(),native_reference_readback:false}
+    }
+    pub(crate) fn covered_paths(&self, entries:&[Entry], need_extents:bool) -> BTreeSet<String> {
+        entries.iter().filter(|entry|matches!(entry.kind,EntryKind::File(_)|EntryKind::Hardlink(_)))
+            .filter(|entry| self.file_roots.contains_key(&entry.path) && (!need_extents || self.extents.contains_key(&entry.path)))
+            .map(|entry|entry.path.clone()).collect()
+    }
     fn require_pristine_root(&self, root: ObjectId) -> AnyResult<()> {
         if self.root != root { return Err("fast certificate pristine root mismatch".into()); }
         Ok(())
@@ -717,7 +753,7 @@ impl FastCertificate {
             if value.is_empty() || fields.insert(key, value).is_some() { return Err("fast certificate duplicate/empty field".into()); }
         }
         let get = |key| fields.get(key).copied().ok_or("missing fast certificate field");
-        if get("profile")? != "fast-verify-v1" || get("seed")?.parse::<u8>()? != seed
+        if !matches!(get("profile")?, "fast-verify-v1" | "fast-verify-v2") || get("seed")?.parse::<u8>()? != seed
             || get("input_plan_sha256")? != std::env::var("LAYERFS_V013_FAST_INPUT_PLAN_SHA256")? {
             return Err("fast certificate profile/seed/input mismatch".into());
         }
@@ -728,7 +764,14 @@ impl FastCertificate {
         }
         for key in ["source_attempt", "source_revision", "product_seal", "certificate_manifest_sha256"] { get(key)?; }
         let root = get("root")?.parse()?;
-        if root != pristine_root { return Err("fast certificate pristine root mismatch".into()); }
+        let assurance = fields.get("reference_assurance").copied().unwrap_or("fully_verified");
+        if !matches!(assurance,"fully_verified"|"canonical_input_qualified"|"qualified_content_components") {
+            return Err("unsupported fast reference assurance".into());
+        }
+        let components = assurance=="qualified_content_components";
+        let native_reference_readback = fields.get("reference_native_readback").copied()
+            .unwrap_or(if assurance=="fully_verified" {"true"} else {"false"}).parse::<bool>()?;
+        if !components && root != pristine_root { return Err("fast certificate pristine root mismatch".into()); }
         require_bound_file(Path::new(get("certificate_manifest")?), get("certificate_manifest_file_sha256")?, "compressed manifest")?;
         require_bound_file(Path::new(get("certificate_file_roots")?), get("certificate_file_roots_sha256")?, "compressed file roots")?;
         let manifest = read_gzip_text(Path::new(get("certificate_manifest")?))?;
@@ -737,7 +780,7 @@ impl FastCertificate {
         }
         let certified = common::decode_manifest(&manifest)?;
         let expected = fixture.iter().map(|e| (e.path.as_str(), e)).collect::<BTreeMap<_, _>>();
-        if certified.len() != expected.len() { return Err("fast certificate input membership".into()); }
+        if !components && certified.len() != expected.len() { return Err("fast certificate input membership".into()); }
         for entry in &certified {
             let wanted = expected.get(entry.path.as_str()).ok_or("fast certificate extra input path")?;
             let kinds_match = match (&entry.kind, &wanted.kind) {
@@ -759,11 +802,38 @@ impl FastCertificate {
             let (path, root) = line.split_once('\t').ok_or("fast certificate file-root columns")?;
             if file_roots.insert(path.to_owned(), root.parse()?).is_some() { return Err("fast certificate duplicate file root".into()); }
         }
-        let regular = fixture.iter().filter(|e| matches!(e.kind,EntryKind::File(_)|EntryKind::Hardlink(_)))
+        let regular = certified.iter().filter(|e| matches!(e.kind,EntryKind::File(_)|EntryKind::Hardlink(_)))
             .map(|e| e.path.clone()).collect::<BTreeSet<_>>();
         if regular != file_roots.keys().cloned().collect() { return Err("fast certificate regular membership".into()); }
-        let certificate = Self { binding, root, file_roots };
-        certificate.require_pristine_root(pristine_root)?;
+        if components {
+            let mapping = String::from_utf8(require_bound_file(Path::new(get("certificate_mapping")?),
+                get("certificate_mapping_sha256")?,"component mapping")?)?;
+            verify_component_mapping(&mapping,&expected,&regular)?;
+        }
+        let mut extents=BTreeMap::<String,Vec<Extent>>::new();
+        if let Some(path)=fields.get("certificate_extents") {
+            require_bound_file(Path::new(path),get("certificate_extents_sha256")?,"compressed extents")?;
+            let text=read_gzip_text(Path::new(path))?;
+            let mut lines=text.lines();
+            if lines.next()!=Some("path\tordinal\tpayload_id\tsource_offset\tlogical_length\tpayload_length") {return Err("certificate extent header".into());}
+            for line in lines {
+                let c=line.split('\t').collect::<Vec<_>>();
+                if c.len()!=6 || !regular.contains(c[0]) {return Err("certificate extent path/columns".into());}
+                let rows=extents.entry(c[0].into()).or_default();
+                if c[1].parse::<usize>()?!=rows.len() {return Err("certificate extent ordinal".into());}
+                let extent=Extent {id:c[2].parse()?,source_offset:c[3].parse()?,len:c[4].parse()?,payload_len:c[5].parse()?};
+                if extent.source_offset.checked_add(extent.len).is_none_or(|end|end>extent.payload_len) {return Err("certificate extent range".into());}
+                rows.push(extent);
+            }
+            for entry in &certified {
+                let len=match &entry.kind {EntryKind::File(c)=>c.len(),EntryKind::Hardlink(target)=>match &expected[target.as_str()].kind {EntryKind::File(c)=>c.len(),_=>return Err("certificate alias length".into())},_=>continue};
+                let rows=extents.entry(entry.path.clone()).or_default();
+                let sum=rows.iter().try_fold(0u64,|sum,e|sum.checked_add(e.len)).ok_or("certificate extent total overflow")?;
+                if sum!=len {return Err("certificate extent length".into());}
+            }
+        }
+        let certificate = Self { binding, root, file_roots, extents, assurance:assurance.into(), native_reference_readback };
+        if !components {certificate.require_pristine_root(pristine_root)?;}
         Ok(certificate)
     }
 }
@@ -777,6 +847,19 @@ pub(crate) fn verify_fast_root(
     delta: &common::FastDelta,
     certificate: &FastCertificate,
 ) -> AnyResult<Receipt> {
+    Ok(verify_fast_snapshot(source,root,entries,delta,certificate,false)?.receipt)
+}
+
+pub(crate) struct FastSnapshotEvidence {
+    pub receipt: Receipt,
+    pub extents: BTreeMap<String,Vec<Extent>>,
+    pub file_roots: BTreeMap<String,ObjectId>,
+}
+
+pub(crate) fn verify_fast_snapshot(
+    source:&dyn ObjectSource, root:ObjectId, entries:&[Entry], delta:&common::FastDelta,
+    certificate:&FastCertificate, collect_extents:bool,
+) -> AnyResult<FastSnapshotEvidence> {
     if !hex_digest(&certificate.binding) { return Err("fast certificate binding format".into()); }
     if entries.iter().any(|e| matches!(e.kind,EntryKind::File(Content::Digest {..}))) {
         return Err("fast expected bytes require independent source".into());
@@ -785,7 +868,16 @@ pub(crate) fn verify_fast_root(
     let reader = CoreReader(source);
     let namespace = AuthenticatedNamespaceIndex::load(source,root)?;
     let expected_by_path = entries.iter().map(|entry| (entry.path.as_str(), entry)).collect::<BTreeMap<_,_>>();
-    let selected = common::fast_selected_paths(entries,delta)?;
+    let covered=certificate.covered_paths(entries,collect_extents);
+    let mut selected_delta=common::FastDelta {changed_paths:delta.changed_paths.clone(),absent_paths:delta.absent_paths.clone(),witness_paths:delta.witness_paths.clone()};
+    for entry in entries {
+        if matches!(entry.kind,EntryKind::File(_)|EntryKind::Hardlink(_)) && !covered.contains(&entry.path) {
+            selected_delta.witness_paths.insert(entry.path.clone());
+        }
+    }
+    let selected = common::fast_selected_paths(entries,&selected_delta)?;
+    let mut file_roots=BTreeMap::new();
+    let mut extents=BTreeMap::new();
     let mut reference_counts = BTreeMap::<&str,u64>::new();
     for entry in entries {
         let class = match &entry.kind { EntryKind::File(_) => entry.path.as_str(), EntryKind::Hardlink(target) => target, _ => continue };
@@ -841,9 +933,10 @@ pub(crate) fn verify_fast_root(
                     || class_inodes.insert(class.to_owned(),id).is_some_and(|old| old != id) {
                     return Err("fast regular type/alias/reference count".into());
                 }
-                if !delta.changed_paths.contains(&path) && certificate.file_roots.get(&path) != Some(&record.content_root) {
+                if !delta.changed_paths.contains(&path) && certificate.file_roots.get(&path).is_some_and(|old|*old!=record.content_root) {
                     return Err("fast unchanged content reference differs from certificate".into());
                 }
+                if collect_extents {file_roots.insert(path.clone(),record.content_root);}
                 if selected.contains(&path) {
                     let file_root = rope::FileStateRoot(record.content_root);
                     rope::validate_file(&reader,file_root)?;
@@ -853,7 +946,11 @@ pub(crate) fn verify_fast_root(
                     rope::read_all(&reader,file_root,&mut sink)?;
                     if sink.offset != content.len() { return Err("fast changed/witness short read".into()); }
                     actual_paths += 1; actual_bytes += content.len();
-                } else { skipped_paths += 1; skipped_bytes += content.len(); }
+                    if collect_extents {extents.insert(path.clone(),read_file_extents(&reader,file_root)?);}
+                } else {
+                    skipped_paths += 1; skipped_bytes += content.len();
+                    if collect_extents {extents.insert(path.clone(),certificate.extents.get(&path).ok_or("missing certified extent reference")?.clone());}
+                }
             }
         }
     }
@@ -862,9 +959,13 @@ pub(crate) fn verify_fast_root(
         return Err("fast exact namespace membership/absence".into());
     }
     namespace.require_complete_membership(&visited_inodes)?;
-    Ok(Receipt::from([
+    let mut receipt=Receipt::from([
         ("verification_status".into(),"fast_iteration_verified".into()),
-        ("verification_profile".into(),"fast-verify-v1".into()),
+        ("verification_profile".into(),"fast-verify-v2".into()),
+        ("reference_assurance".into(),certificate.assurance.clone()),
+        ("reference_native_readback".into(),certificate.native_reference_readback.to_string()),
+        ("has_reused_reference".into(),(skipped_paths>0).to_string()),
+        ("covered_regular_paths".into(),covered.len().to_string()),
         ("fully_verified".into(),"false".into()),
         ("full_canonical_census_performed".into(),"false".into()),
         ("certificate_binding".into(),certificate.binding.clone()),
@@ -877,7 +978,15 @@ pub(crate) fn verify_fast_root(
         ("skipped_current_store_regular_paths".into(),skipped_paths.to_string()),
         ("skipped_current_store_logical_bytes".into(),skipped_bytes.to_string()),
         ("scope".into(),"full current namespace/global inode/metadata/aliases; selected changed+witness bytes; unchanged file-state/extent/payload subgraph references certified, those current subgraph bytes not read".into()),
-    ]))
+    ]);
+    if certificate.assurance=="independent_current_content" {
+        receipt.remove("certificate_root");receipt.insert("reference_root_scope".into(),"none".into());
+    } else if certificate.assurance=="qualified_content_components" {
+        receipt.remove("certificate_root");receipt.insert("source_certificate_root".into(),certificate.root.to_string());
+        receipt.insert("reference_root_scope".into(),"mapped content components only; target pristine namespace not certified".into());
+    } else {receipt.insert("reference_root_scope".into(),"exact pristine input".into());}
+    if collect_extents {receipt.insert("extent_assurance".into(),"selected-current-reads-and-certified-unchanged-root-references".into());}
+    Ok(FastSnapshotEvidence {receipt,extents,file_roots})
 }
 
 /// One small aggregate verifier check; caller schedules it separately from samples.
@@ -905,7 +1014,7 @@ pub(crate) fn fast_qualification(root: &Path) -> AnyResult<Receipt> {
     wrong_metadata.iter_mut().find(|entry|entry.path=="empty").ok_or("qualification empty directory")?.mode ^= 1;
     let metadata_rejection = verify_root(&pinned.reader,pinned.root,&wrong_metadata).err()
         .ok_or("exhaustive verifier reused shared metadata despite different expected mode")?;
-    let certificate = FastCertificate { binding:"ab".repeat(32), root:pinned.root, file_roots:full.file_roots };
+    let certificate = FastCertificate { binding:"ab".repeat(32), root:pinned.root, file_roots:full.file_roots,extents:full.extents,assurance:"fully_verified".into(),native_reference_readback:true };
     let delta_for = |oracle: &[Entry]| common::FastDelta {
         changed_paths:oracle.iter().map(|e|e.path.clone()).collect(), absent_paths:BTreeSet::new(), witness_paths:BTreeSet::new(),
     };
@@ -935,7 +1044,7 @@ pub(crate) fn fast_qualification(root: &Path) -> AnyResult<Receipt> {
     rejections += 1;
     let reference_delta = common::FastDelta { changed_paths:BTreeSet::new(), absent_paths:BTreeSet::new(), witness_paths:BTreeSet::new() };
     verify_fast_root(&pinned.reader,pinned.root,&entries,&reference_delta,&certificate)?;
-    let mut wrong_certificate = FastCertificate { binding:certificate.binding.clone(),root:certificate.root,file_roots:certificate.file_roots.clone() };
+    let mut wrong_certificate = FastCertificate { binding:certificate.binding.clone(),root:certificate.root,file_roots:certificate.file_roots.clone(),extents:certificate.extents.clone(),assurance:certificate.assurance.clone(),native_reference_readback:true };
     wrong_certificate.file_roots.insert("payload".into(),wrong_root);
     if verify_fast_root(&pinned.reader,pinned.root,&entries,&reference_delta,&wrong_certificate).is_ok() {
         return Err("fast verifier accepted wrong certified content root".into());
@@ -958,6 +1067,29 @@ pub(crate) fn fast_qualification(root: &Path) -> AnyResult<Receipt> {
         return Err("fast certificate accepted modified bound artifact".into());
     }
     rejections += 1;
+    // No-reference coverage cannot silently omit an unchanged body.
+    let independent=FastCertificate::independent(pinned.root,"cd".repeat(32));
+    let no_reference=verify_fast_snapshot(&pinned.reader,pinned.root,&entries,&reference_delta,&independent,true)?;
+    if no_reference.receipt.get("skipped_current_store_regular_paths").map(String::as_str)!=Some("0")
+        || no_reference.extents.len()!=2 || no_reference.file_roots.len()!=2 {
+        return Err("no-reference fast coverage omitted current content/extents".into());
+    }
+    let mut wrong=entries.clone();
+    let file=wrong.iter_mut().find(|entry|entry.path=="payload").ok_or("qualification payload")?;
+    let EntryKind::File(content)=&file.kind else {return Err("qualification content".into())};
+    file.kind=EntryKind::File(content.xor(23,1,1)?);
+    if verify_fast_root(&pinned.reader,pinned.root,&wrong,&reference_delta,&independent).is_ok() {
+        return Err("no-reference fast verifier accepted wrong unchecked content".into());
+    }
+    rejections+=1;
+    let by_path=entries.iter().map(|entry|(entry.path.as_str(),entry)).collect::<BTreeMap<_,_>>();
+    let covered=["payload".to_owned()].into_iter().collect::<BTreeSet<_>>();
+    let content=match &entries[2].kind {EntryKind::File(c)=>c,_=>return Err("qualification mapping content".into())};
+    let mapping=format!("target_path\tsource_path\tcontent_recipe_sha256\npayload\tsource-payload\t{}\n",common::content_recipe_identity(content)?);
+    verify_component_mapping(&mapping,&by_path,&covered)?;
+    let wrong_mapping=format!("target_path\tsource_path\tcontent_recipe_sha256\npayload\tsource-payload\t{}\n","0".repeat(64));
+    if verify_component_mapping(&wrong_mapping,&by_path,&covered).is_ok() {return Err("component mapping accepted incompatible independent content recipe".into());}
+    rejections+=1;
     receipt.insert("canonical_negative_checks".into(),rejections.to_string());
     receipt.insert("qualification_status".into(),"pass".into());
     let native = common::fast_qualification(&root.join("native"))?;

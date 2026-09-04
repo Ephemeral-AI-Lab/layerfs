@@ -304,6 +304,82 @@ pub(crate) fn emit(kind: &str, fields: &[(&str, String)]) {
     output.flush().expect("flush benchmark evidence");
 }
 
+fn fast_reference(case:&Case,seed:u8,pristine_root:layerfs_content::ObjectId,fixture:&[Entry]) -> AnyResult<super::workspace_verify::FastCertificate> {
+    if std::env::var_os("LAYERFS_V013_FAST_CERTIFICATE").is_some() {
+        return super::workspace_verify::FastCertificate::load(seed,pristine_root,fixture);
+    }
+    if std::env::var("LAYERFS_V013_FAST_NO_REUSE").as_deref()!=Ok("1") {
+        return Err("fast verification requires a qualified reference or explicit independent-current-content profile".into());
+    }
+    let binding=workload_source::sdk_edit_common::sha256_hex(format!("fast-independent-current-content-v2\n{}\n{seed}\n{}\n{}\n",
+        case.id,std::env::var("LAYERFS_V013_FAST_INPUT_PLAN_SHA256")?,common::recipe_identity(fixture)?).as_bytes());
+    Ok(super::workspace_verify::FastCertificate::independent(pristine_root,binding))
+}
+
+fn fast_verify_branch(
+    store:&LayerStackStore,client:&Client,branch:BranchId,case:&Case,seed:u8,step:usize,
+    input:&[Entry],certificate:&super::workspace_verify::FastCertificate,root:&Path,container:&ContainerId,
+) -> AnyResult<()> {
+    let expected=registry::expected(case,seed,step)?;
+    let empty=[Entry::directory(".")];
+    let before=if registry::is_import(case) {&empty[..]} else {input};
+    let mut delta=common::fast_delta_from_entries(before,&expected,seed,&case.id)?;
+    if case.kind=="tiny-stat" || (case.family=="dedup_branch_history" && case.kind=="metadata") {
+        delta=workload_source::ordinary_workloads::fast_delta_for_entries(case,seed,step,&expected)?;
+    }
+    let dedup=case.family.starts_with("dedup_");
+    let pinned=store.pin_branch(branch)?;
+    let snapshot=super::workspace_verify::verify_fast_snapshot(&pinned.reader,pinned.root,&expected,&delta,certificate,dedup)?;
+    emit("fast-canonical-verification", &[("step",step.to_string()),("receipt",quote(&format!("{:?}",snapshot.receipt)))]);
+    if dedup {
+        let receipt=super::dedup_verify::verify_file_transcripts(case,seed,step,&snapshot.extents,&snapshot.file_roots)?;
+        emit("fast-dedup-verification", &[("step",step.to_string()),("receipt",quote(&format!("{receipt:?}"))),
+            ("assurance",quote("current selected extents and qualified unchanged content-root references; exhaustive object/storage census deferred"))]);
+    }
+    let covered=certificate.covered_paths(&expected,dedup);
+    let text=covered.iter().map(|path|format!("{path}\n")).collect::<String>();
+    let exchange=PathBuf::from(std::env::var("LAYERFS_V013_VERIFIER_EXCHANGE_HOST")?);
+    let name=format!("fast-covered-{step}.tsv");
+    std::fs::write(exchange.join(&name),text.as_bytes())?;
+    let coverage_sha=workload_source::sdk_edit_common::sha256_hex(text.as_bytes());
+    let session=client.create_workspace_session(CreateWorkspaceSession {
+        branch_id:branch,
+        placement:case_placement(&Some(container.clone()),root,seed as usize,&format!("{}-fast-{step}",case.id)),
+        projection:Some(WorkspaceProjection::Fuse),
+    })?;
+    let result=execute(client,session.id,vec![
+        "/usr/local/bin/fs-benchmark-workload".into(),"workspace-verify-fast-v2".into(),
+        case.id.clone().into(),seed.to_string().into(),step.to_string().into(),certificate.assurance.clone().into(),
+        certificate.binding.clone().into(),format!("/verification/{name}").into(),coverage_sha.clone().into(),
+    ]);
+    match result {
+        Ok(output)=>emit("fast-native-verification", &[("step",step.to_string()),("coverage_sha256",quote(&coverage_sha)),("receipt",quote(&output_text(&output)?))]),
+        Err(error)=>{let _=client.end_workspace_session(session.id,EndWorkspaceMode::Discard);return Err(error);}
+    }
+    client.end_workspace_session(session.id,EndWorkspaceMode::Clean)?;
+    Ok(())
+}
+
+fn qualify_fast_input(root:&Path,case:&Case,seed:u8,evidence:&Path) -> AnyResult<()> {
+    if registry::is_import(case) || case.kind=="git-tool" || case.family=="workspace_reliability" {
+        return Err("canonical input qualification requires a prepared routine Workspace Store".into());
+    }
+    let entries=registry::fixture(case,seed)?;
+    let store=LayerStackStore::connect(root.join("store.sqlite"))?;
+    let branch=std::fs::read_to_string(root.join("branch-id"))?.trim().parse()?;
+    let pinned=store.pin_branch(branch)?;
+    let mut snapshot=super::workspace_verify::verify_root(&pinned.reader,pinned.root,&entries)?;
+    snapshot.receipt.insert("reference_assurance".into(),"canonical_input_qualified".into());
+    snapshot.receipt.insert("reference_native_readback".into(),"false".into());
+    snapshot.receipt.insert("fully_verified".into(),"false".into());
+    super::workspace_verify::persist_snapshot(&entries,&mut snapshot,evidence)?;
+    resource_receipt("after-input-qualification",process_resource_snapshot()?);
+    emit("input-qualification-complete",&[("status",quote("canonical_input_qualified")),("case",quote(&case.id)),("seed",seed.to_string()),
+        ("root",quote(&pinned.root.to_string())),("oracle_identity",quote(snapshot.receipt.get("oracle_identity").ok_or("input oracle identity")?)),
+        ("reference_native_readback","false".into()),("fully_verified","false".into())]);
+    Ok(())
+}
+
 fn runtime_observation_window(
     case: &str,
     mode: &str,
@@ -804,8 +880,8 @@ fn run_case(
 ) -> AnyResult<()> {
     let fast = mode == "fast-verify";
     let verification = mode == "verify" || fast;
-    if fast && !matches!(case.kind, "tiny-create" | "tiny-stat" | "tiny-unlink") {
-        return Err("fast-verify-v1 supports tiny-create/stat/unlink only".into());
+    if fast && (case.kind=="git-tool" || case.kind=="boundaries" || case.family=="workspace_reliability" || case.family=="edit_length_changing_capped") {
+        return Err("fast-verify-v2 is for active ordinary/dedup routine cases; targeted and already-qualified capped cases keep their own route".into());
     }
     if !verification && mode != "performance" {
         return Err("invalid phase1 mode".into());
@@ -835,6 +911,7 @@ fn run_case(
     let mut history = Vec::new();
     let mut genesis_root = None;
     let mut fast_certificate = None;
+    let fast_fixture=if fast {Some(registry::fixture(case,seed)?)} else {None};
     let orchestration_start = Instant::now();
     let mut pure_call_sum_ns = 0u64;
     let mut product_budget = ProductBudget::new(!verification);
@@ -922,15 +999,16 @@ fn run_case(
                 layer_id: initialized.genesis_layer_id,
             },
         )?;
+        if fast {
+            fast_certificate=Some(fast_reference(case,seed,store.pin_branch(branch)?.root,fast_fixture.as_deref().ok_or("fast input oracle")?)?);
+        }
     } else {
         branch = std::fs::read_to_string(root.join("branch-id"))?
             .trim()
             .parse()?;
         genesis_root = Some(store.pin_branch(branch)?.root);
         if fast {
-            fast_certificate = Some(super::workspace_verify::FastCertificate::load(
-                seed, genesis_root.ok_or("fast pristine input root")?, &registry::fixture(case, seed)?,
-            )?);
+            fast_certificate = Some(fast_reference(case,seed,genesis_root.ok_or("fast pristine input root")?,fast_fixture.as_deref().ok_or("fast input oracle")?)?);
         }
         let request = CreateWorkspaceSession {
             branch_id: branch,
@@ -1242,25 +1320,9 @@ fn run_case(
         )?;
         let client = Client::connect(reopened.clone())?;
         let mut verifier_operation = 0;
-        if fast {
-            let certificate = fast_certificate.as_ref().ok_or("missing fast input certificate")?;
-            let expected = registry::expected(case, seed, registry::steps(case))?;
-            let delta = workload_source::ordinary_workloads::fast_delta_for_entries(case, seed, registry::steps(case), &expected)?;
-            let pinned = reopened.pin_branch(branch)?;
-            let receipt = super::workspace_verify::verify_fast_root(&pinned.reader, pinned.root, &expected, &delta, certificate)?;
-            emit("fast-canonical-verification", &[("receipt", quote(&format!("{receipt:?}")))]);
-            let session = client.create_workspace_session(CreateWorkspaceSession {
-                branch_id: branch,
-                placement: case_placement(&Some(container.clone()), root, seed as usize, &format!("{}-fast-reopen",case.id)),
-                projection: Some(WorkspaceProjection::Fuse),
-            })?;
-            let output = execute(&client,session.id,vec![
-                "/usr/local/bin/fs-benchmark-workload".into(), "workspace-verify-fast".into(),
-                case.id.clone().into(), seed.to_string().into(), registry::steps(case).to_string().into(),
-                certificate.binding.clone().into(),
-            ])?;
-            emit("fast-native-verification", &[("receipt",quote(&output_text(&output)?))]);
-            client.end_workspace_session(session.id,EndWorkspaceMode::Clean)?;
+        if fast && case.family!="dedup_branch_history" {
+            fast_verify_branch(&reopened,&client,branch,case,seed,registry::steps(case),
+                fast_fixture.as_deref().ok_or("fast fixture")?,fast_certificate.as_ref().ok_or("fast certificate")?,root,&container)?;
             observed(&client,&mut verifier_operation)?;
         }
         if !fast && case.family != "dedup_branch_history" {
@@ -1380,6 +1442,24 @@ fn run_case(
                 return Err("history Commit query exact membership".into());
             }
             observed(&client, &mut verifier_operation)?;
+            if fast {
+                let input=fast_fixture.as_deref().ok_or("fast history fixture")?;
+                let certificate=fast_certificate.as_ref().ok_or("fast history reference")?;
+                let first=history.first().ok_or("empty history")?;
+                let base=client.fork_branch(EntityName::new("fast-history-genesis")?,LocalForkSource::Layer {layer_id:records[first].base_layer_id})?;
+                if reopened.pin_branch(base)?.root!=genesis_root.ok_or("history genesis root")? {return Err("fast history genesis identity".into());}
+                fast_verify_branch(&reopened,&client,base,case,seed,0,input,certificate,root,&container)?;
+                observed(&client,&mut verifier_operation)?;
+                for (offset,commit_id) in history.iter().enumerate() {
+                    let record=&records[commit_id];
+                    if record.parent_commit_id!=if offset==0 {None} else {Some(history[offset-1])} {return Err("fast history parent topology".into());}
+                    let fork=client.fork_branch(EntityName::new(format!("fast-history-{}",offset+1))?,LocalForkSource::Branch {branch_id:branch,commit_id:*commit_id})?;
+                    fast_verify_branch(&reopened,&client,fork,case,seed,offset+1,input,certificate,root,&container)?;
+                    observed(&client,&mut verifier_operation)?;
+                }
+                emit("fast-history-complete",&[("snapshot_count",(history.len()+1).to_string()),("commit_count",history.len().to_string()),
+                    ("topology_status",quote("pass")),("exhaustive_object_union_status",quote("deferred_phase2"))]);
+            } else {
             let mut accounting = super::dedup_verify::HistoryAccounting::default();
             let genesis_root = genesis_root.ok_or("missing history genesis root")?;
             let genesis_entries = registry::fixture(case, seed)?;
@@ -1534,6 +1614,7 @@ fn run_case(
                     Ok(())
                 },
             )?;
+            }
         }
         observed(&client, &mut verifier_operation)?;
         if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
@@ -1579,6 +1660,28 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         .map(|s| s.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     match args.as_slice() {
+        [command, root, id, seed, evidence] if command == "workspace-qualify-input" => {
+            resource_receipt("before-input-qualification",process_resource_snapshot()?);
+            let _sampler=HostSampler::start()?;
+            qualify_fast_input(Path::new(root),&registry::resolve(id)?,seed.parse()?,Path::new(evidence))
+        }
+        [command,id,seed] if command=="workspace-input-recipe-identity" => {
+            println!("recipe_identity={}",common::recipe_identity(&registry::fixture(&registry::resolve(id)?,seed.parse()?)?)?);
+            Ok(())
+        }
+        [command,id,seed,step] if command=="workspace-content-recipes" => {
+            let case=registry::resolve(id)?;
+            let seed=seed.parse()?;
+            let step=step.parse()?;
+            let entries=if step==0 {registry::fixture(&case,seed)?} else {registry::expected(&case,seed,step)?};
+            let by_path=entries.iter().map(|entry|(entry.path.as_str(),entry)).collect::<BTreeMap<_,_>>();
+            println!("path\tcontent_recipe_sha256");
+            for entry in &entries {
+                let content=match &entry.kind {EntryKind::File(c)=>c,EntryKind::Hardlink(target)=>match &by_path[target.as_str()].kind {EntryKind::File(c)=>c,_=>return Err("recipe alias".into())},_=>continue};
+                println!("{}\t{}",entry.path,common::content_recipe_identity(content)?);
+            }
+            Ok(())
+        }
         [command, root] if command == "workspace-qualify-fast" => {
             let receipt = super::workspace_verify::fast_qualification(Path::new(root))?;
             emit("fast-verifier-qualification", &[("status",quote("pass")),("receipt",quote(&format!("{receipt:?}")))]);

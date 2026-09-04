@@ -900,6 +900,111 @@ pub(crate) struct FastDelta {
     pub witness_paths: BTreeSet<String>,
 }
 
+/// Structural equality is deliberately conservative: equal recipes imply equal bytes.
+/// A different representation is treated as changed; persistence digests are never a source oracle.
+pub(crate) fn content_recipe_equal(left: &Content, right: &Content) -> bool {
+    match (left, right) {
+        (Content::Seed { seed: a, len: x }, Content::Seed { seed: b, len: y }) => a == b && x == y,
+        (Content::Zero { len: a }, Content::Zero { len: b }) => a == b,
+        (Content::Literal(a), Content::Literal(b)) => a == b,
+        (Content::Slice { source: a, offset: x, len: n }, Content::Slice { source: b, offset: y, len: m }) => x == y && n == m && content_recipe_equal(a, b),
+        (Content::Concat(a), Content::Concat(b)) => a.len() == b.len() && a.iter().zip(b).all(|(x,y)| content_recipe_equal(x,y)),
+        (Content::Xor { source: a, offset: x, len: n, mask: q }, Content::Xor { source: b, offset: y, len: m, mask: r }) => x == y && n == m && q == r && content_recipe_equal(a,b),
+        _ => false,
+    }
+}
+
+fn hash_content_recipe(hash: &mut Sha256, content: &Content) -> Result<()> {
+    match content {
+        Content::Seed { seed, len } => { frame(hash,b"seed"); hash.update(&seed.to_le_bytes()); hash.update(&len.to_le_bytes()); },
+        Content::Zero { len } => { frame(hash,b"zero"); hash.update(&len.to_le_bytes()); },
+        Content::Literal(bytes) => { frame(hash,b"literal"); hash.update(&(bytes.len() as u64).to_le_bytes()); let mut value=Sha256::new(); value.update(bytes); hash.update(&value.finish()); },
+        Content::Slice { source, offset, len } => { frame(hash,b"slice"); hash.update(&offset.to_le_bytes()); hash.update(&len.to_le_bytes()); hash_content_recipe(hash,source)?; },
+        Content::Concat(parts) => { frame(hash,b"concat"); hash.update(&(parts.len() as u64).to_le_bytes()); for part in parts { hash_content_recipe(hash,part)?; } },
+        Content::Xor { source, offset, len, mask } => { frame(hash,b"xor"); hash.update(&offset.to_le_bytes()); hash.update(&len.to_le_bytes()); hash.update(&[*mask]); hash_content_recipe(hash,source)?; },
+        Content::Digest { .. } => return Err("persistence digest is not an independent content recipe".into()),
+    }
+    Ok(())
+}
+
+pub(crate) fn content_recipe_identity(content: &Content) -> Result<String> {
+    content.validate()?;
+    let mut hash=Sha256::new(); frame(&mut hash,b"workspace-content-recipe-v1"); hash_content_recipe(&mut hash,content)?;
+    Ok(hex(&hash.finish()))
+}
+
+pub(crate) fn recipe_identity(entries: &[Entry]) -> Result<String> {
+    validate_entries(entries)?;
+    let mut sorted=entries.iter().collect::<Vec<_>>(); sorted.sort_by(|a,b| a.path.cmp(&b.path));
+    let mut hash=Sha256::new(); frame(&mut hash,b"workspace-entry-recipes-v1"); hash.update(&(sorted.len() as u64).to_le_bytes());
+    for entry in sorted {
+        frame(&mut hash,entry.path.as_bytes()); hash.update(&entry.mode.to_le_bytes()); hash.update(&entry.mtime_seconds.to_le_bytes()); hash.update(&entry.mtime_nanoseconds.to_le_bytes());
+        match &entry.kind {
+            EntryKind::Directory => frame(&mut hash,b"directory"),
+            EntryKind::Symlink(target) => { frame(&mut hash,b"symlink"); frame(&mut hash,target.as_bytes()); },
+            EntryKind::Hardlink(target) => { frame(&mut hash,b"hardlink"); frame(&mut hash,target.as_bytes()); },
+            EntryKind::File(content) => { frame(&mut hash,b"file"); hash_content_recipe(&mut hash,content)?; },
+        }
+    }
+    Ok(hex(&hash.finish()))
+}
+
+fn add_fast_ancestors(paths: &mut BTreeSet<String>, path: &str) {
+    paths.insert(".".into());
+    for (index, _) in path.match_indices('/') { paths.insert(path[..index].to_owned()); }
+}
+
+pub(crate) fn fast_delta_from_entries(before: &[Entry], after: &[Entry], seed: u8, domain: &str) -> Result<FastDelta> {
+    seed_label(seed)?; validate_entries(before)?; validate_entries(after)?;
+    let old=before.iter().map(|entry|(entry.path.as_str(),entry)).collect::<BTreeMap<_,_>>();
+    let new=after.iter().map(|entry|(entry.path.as_str(),entry)).collect::<BTreeMap<_,_>>();
+    let mut delta=FastDelta::default();
+    for entry in after {
+        let equal=old.get(entry.path.as_str()).is_some_and(|previous| {
+            let metadata=(entry.mode,entry.mtime_seconds,entry.mtime_nanoseconds)==(previous.mode,previous.mtime_seconds,previous.mtime_nanoseconds);
+            metadata && match (&previous.kind,&entry.kind) {
+                (EntryKind::Directory,EntryKind::Directory)=>true,
+                (EntryKind::Symlink(a),EntryKind::Symlink(b))|(EntryKind::Hardlink(a),EntryKind::Hardlink(b))=>a==b,
+                (EntryKind::File(a),EntryKind::File(b))=>content_recipe_equal(a,b),
+                _=>false,
+            }
+        });
+        if !equal { delta.changed_paths.insert(entry.path.clone()); add_fast_ancestors(&mut delta.changed_paths,&entry.path); }
+    }
+    for entry in before {
+        if !new.contains_key(entry.path.as_str()) {
+            delta.absent_paths.insert(entry.path.clone());
+            let mut ancestors=BTreeSet::new(); add_fast_ancestors(&mut ancestors,&entry.path);
+            delta.changed_paths.extend(ancestors.into_iter().filter(|path|new.contains_key(path.as_str())));
+        }
+    }
+    // Alias deletion changes the surviving inode's link count even when its bytes are unchanged.
+    for entry in before.iter().chain(after) {
+        if let EntryKind::Hardlink(target)=&entry.kind {
+            if delta.changed_paths.contains(&entry.path)||delta.absent_paths.contains(&entry.path)||delta.changed_paths.contains(target)||delta.absent_paths.contains(target) {
+                if new.contains_key(target.as_str()) { delta.changed_paths.insert(target.clone()); }
+                if new.contains_key(entry.path.as_str()) { delta.changed_paths.insert(entry.path.clone()); }
+            }
+        }
+    }
+    let alias_targets=delta.changed_paths.clone();
+    for entry in after { if let EntryKind::Hardlink(target)=&entry.kind { if alias_targets.contains(target) { delta.changed_paths.insert(entry.path.clone()); } } }
+    for path in delta.changed_paths.clone() { add_fast_ancestors(&mut delta.changed_paths,&path); }
+    let mut classes=BTreeMap::<(String,u64,usize),Vec<&Entry>>::new();
+    for entry in after {
+        let EntryKind::File(content)=&entry.kind else {continue};
+        if delta.changed_paths.contains(&entry.path) {continue;}
+        classes.entry((entry.path.split('/').next().unwrap_or(".").to_owned(),content.len(),entry.path.bytes().filter(|b|*b==b'/').count())).or_default().push(entry);
+    }
+    for ((namespace,len,depth),mut candidates) in classes {
+        candidates.sort_by(|a,b|a.path.cmp(&b.path));
+        let selected=frame_seed(&["native-fast-witness-v2",domain,&namespace],&[seed as u64,len,depth as u64]) as usize%candidates.len();
+        for index in [0,candidates.len()/2,candidates.len()-1,selected] { delta.witness_paths.insert(candidates[index].path.clone()); }
+    }
+    for path in delta.witness_paths.clone() {add_fast_ancestors(&mut delta.witness_paths,&path);}
+    Ok(delta)
+}
+
 pub(crate) fn fast_selected_paths(entries: &[Entry], delta: &FastDelta) -> Result<BTreeSet<String>> {
     let expected = entries.iter().map(|entry| (entry.path.as_str(), entry)).collect::<BTreeMap<_, _>>();
     let mut selected = delta.changed_paths.union(&delta.witness_paths).cloned().collect::<BTreeSet<_>>();
@@ -926,12 +1031,25 @@ pub(crate) fn fast_selected_paths(entries: &[Entry], delta: &FastDelta) -> Resul
 /// Full namespace/type census, then independently selected body/metadata checks.
 /// An authenticated base certificate is required from the host; this is not full verification.
 pub(crate) fn verify_native_fast(root: &Path, entries: &[Entry], delta: &FastDelta, certificate_binding: &str) -> Result<Receipt> {
+    verify_native_fast_impl(root,entries,delta,certificate_binding,None)
+}
+
+pub(crate) fn verify_native_fast_with_coverage(root: &Path, entries: &[Entry], delta: &FastDelta, certificate_binding: &str, certified_paths: &BTreeSet<String>) -> Result<Receipt> {
+    verify_native_fast_impl(root,entries,delta,certificate_binding,Some(certified_paths))
+}
+
+fn verify_native_fast_impl(root: &Path, entries: &[Entry], delta: &FastDelta, certificate_binding: &str, certified_paths: Option<&BTreeSet<String>>) -> Result<Receipt> {
     if certificate_binding.len() != 64 || !certificate_binding.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
         return Err("fast verification requires the host's qualified certificate binding".into());
     }
     let logical = validate_entries(entries)?;
     let expected = entries.iter().map(|entry| (entry.path.clone(), entry)).collect::<BTreeMap<_, _>>();
-    let selected = fast_selected_paths(entries, delta)?;
+    let mut required=delta.clone();
+    if let Some(certified)=certified_paths {
+        if certified.iter().any(|path| !expected.get(path).is_some_and(|entry|matches!(&entry.kind,EntryKind::File(_)|EntryKind::Hardlink(_)))) {return Err("certificate covers an unknown/nonregular current path".into());}
+        for entry in entries {if matches!(&entry.kind,EntryKind::File(_)|EntryKind::Hardlink(_))&&!certified.contains(&entry.path) {required.changed_paths.insert(entry.path.clone());}}
+    }
+    let selected = fast_selected_paths(entries, &required)?;
     let mut found = BTreeMap::from([(".".to_owned(), fs::symlink_metadata(root)?.file_type())]);
     let mut pending = vec![root.to_owned()];
     while let Some(directory) = pending.pop() {
@@ -981,7 +1099,7 @@ pub(crate) fn verify_native_fast(root: &Path, entries: &[Entry], delta: &FastDel
         ("verification_status".into(), "fast_iteration_verified".into()),
         ("fully_verified".into(), "false".into()),
         ("certificate_binding".into(), certificate_binding.into()),
-        ("fast_witness_profile".into(), "native-fast-witness-v1:first-middle-last-seeded-per-namespace-length-depth-class".into()),
+        ("fast_witness_profile".into(), "native-fast-witness-v2:first-middle-last-seeded-per-namespace-length-depth-class".into()),
         ("native_namespace_paths_verified".into(), entries.len().to_string()),
         ("native_namespace_types_verified".into(), entries.len().to_string()),
         ("native_namespace_type_source".into(), "DirEntry::file_type;platform-metadata-fallback-permitted;skipped-counts-describe-unperformed-checks-not-syscalls".into()),
@@ -994,9 +1112,30 @@ pub(crate) fn verify_native_fast(root: &Path, entries: &[Entry], delta: &FastDel
         ("skipped_untouched_regular_bodies".into(), (regular_paths - files).to_string()),
         ("skipped_untouched_metadata_paths".into(), (entries.len() - selected.len()).to_string()),
         ("logical_bytes".into(), logical.to_string()),
-        ("selected_independent_oracle_identity".into(), sdk_edit_common::sha256_hex(manifest(&selected_entries)?.as_bytes())),
+        ("selected_independent_oracle_identity".into(), if certified_paths.is_some() { recipe_identity(&selected_entries)? } else { sdk_edit_common::sha256_hex(manifest(&selected_entries)?.as_bytes()) }),
+        ("oracle_identity_encoding".into(), if certified_paths.is_some() {"structural-entry-recipes-v1"} else {"independent-manifest-v1"}.into()),
+        ("uncertified_regular_paths_checked".into(), certified_paths.map_or(0,|paths|entries.iter().filter(|entry|matches!(&entry.kind,EntryKind::File(_)|EntryKind::Hardlink(_))&&!paths.contains(&entry.path)).count()).to_string()),
         ("oracle_scope".into(), "independent-delta-and-witnesses;complete-native-namespace;certified-unchanged-content-roots-checked-by-host".into()),
     ]))
+}
+
+fn generic_fast_delta_qualification() -> Result<Receipt> {
+    let before=vec![Entry::directory("."),Entry::directory("a"),Entry::file("a/data",Content::Seed{seed:1,len:8}),Entry::hardlink("a/alias","a/data"),Entry::hardlink("a/alias2","a/data"),Entry::file("untouched",Content::Zero{len:4})];
+    let mut after=before.clone(); after.retain(|entry|entry.path!="a/alias");
+    let data=after.iter_mut().find(|entry|entry.path=="a/data").ok_or("generic qualification data")?;
+    data.kind=EntryKind::File(Content::Seed{seed:2,len:8});
+    after.iter_mut().find(|entry|entry.path=="a").ok_or("generic qualification directory")?.mode=0o700;
+    after.push(Entry::file("created",Content::Literal(vec![1,2])));
+    let delta=fast_delta_from_entries(&before,&after,1,"generic-qualification")?;
+    for path in [".","a","a/data","a/alias2","created"] {if !delta.changed_paths.contains(path) {return Err(format!("generic fast delta omitted affected path:{path}").into());}}
+    if delta.absent_paths!=BTreeSet::from(["a/alias".to_owned()])||!delta.witness_paths.contains("untouched") {return Err("generic fast delta absence/witness mismatch".into());}
+    if !content_recipe_equal(&Content::Seed{seed:1,len:8},&Content::Seed{seed:1,len:8})||content_recipe_equal(&Content::Seed{seed:1,len:8},&Content::Seed{seed:2,len:8})||content_recipe_equal(&Content::Zero{len:2},&Content::Literal(vec![0,0])) {return Err("generic conservative recipe equality mismatch".into());}
+    if content_recipe_identity(&Content::Digest{len:2,sha256:"0".repeat(64)}).is_ok() {return Err("generic fast recipe accepted persistence digest".into());}
+    let mut reversed=before.clone(); reversed.reverse();
+    if recipe_identity(&before)?!=recipe_identity(&reversed)?||recipe_identity(&before)?==recipe_identity(&after)? {return Err("generic recipe identity ordering/change mismatch".into());}
+    let stable=fast_delta_from_entries(&before,&before,1,"generic-qualification")?;
+    if !stable.changed_paths.is_empty()||!stable.absent_paths.is_empty()||stable.witness_paths.is_empty() {return Err("generic unchanged recipe delta mismatch".into());}
+    Ok(Receipt::from([("fast_generic_delta_qualification".into(),"pass".into()),("fast_generic_qualified_checks".into(),"created-content,changed-content,metadata,ancestors,alias-closure,deletion,witnesses,conservative-recipe-equality,digest-rejection,order-stable-identity".into())]))
 }
 
 /// One small aggregate qualification, called only by the explicit host command.
@@ -1007,7 +1146,7 @@ pub(crate) fn fast_qualification(root: &Path) -> Result<Receipt> {
     let delta = FastDelta { changed_paths: BTreeSet::from(["changed.dat".into()]),
         absent_paths: BTreeSet::from(["gone.dat".into()]), witness_paths: BTreeSet::from(["witness.dat".into()]) };
     let binding = "a".repeat(64);
-    let mut receipt = Receipt::new();
+    let mut receipt = generic_fast_delta_qualification()?;
     for mutation in ["baseline", "wrong-bytes", "extra-path", "missing-path", "required-absence", "alias-mode", "alias-split", "witness-bytes", "missing-certificate"] {
         let directory = root.join(mutation);
         create_fixture(&directory, &entries)?;
@@ -1044,8 +1183,17 @@ pub(crate) fn fast_qualification(root: &Path) -> Result<Receipt> {
             receipt.insert(format!("fast_native_rejection_{mutation}"), error);
         }
     }
+    let directory=root.join("uncertified-content"); create_fixture(&directory,&entries)?;
+    fs::write(directory.join("untouched.dat"),[0,9])?; set_metadata(&directory.join("untouched.dat"),&entries[4])?;
+    let covered=BTreeSet::from(["changed.dat".into(),"alias.dat".into(),"witness.dat".into()]);
+    let error=verify_native_fast_with_coverage(&directory,&entries,&delta,&binding,&covered).err().ok_or("fast native skipped uncertified content")?.to_string();
+    if !error.contains("native content mismatch: untouched.dat") {return Err(format!("uncertified content rejected for unexpected reason:{error}").into());}
+    receipt.insert("fast_native_rejection_uncertified-content".into(),error);
+    let error=verify_native_fast_with_coverage(&directory,&entries,&delta,&binding,&BTreeSet::from(["missing".into()])).err().ok_or("fast native accepted unknown certified path")?.to_string();
+    if !error.contains("certificate covers an unknown/nonregular") {return Err(format!("certified membership rejected for unexpected reason:{error}").into());}
+    receipt.insert("fast_native_rejection_unknown-certified-path".into(),error);
     receipt.insert("fast_native_qualification_status".into(), "pass".into());
-    receipt.insert("fast_native_negative_cases".into(), "8".into());
+    receipt.insert("fast_native_negative_cases".into(), "10".into());
     Ok(receipt)
 }
 
