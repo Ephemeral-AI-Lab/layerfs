@@ -372,3 +372,16 @@ publication success followed by cleanup failure; exact old-row retention and
 correct new-row inventory. Only after the failure footprint is reviewed should
 a matched larger-CPU performance experiment test removal of full-payload staging.
 No such experiment or semantic change was performed in this review.
+
+
+## User decision: no rollback of failed-Commit CAS batches
+
+The user subsequently explicitly waived object rollback for failed Commit. The
+[streaming amendment](no-rollback-streaming-amendment.md) therefore supersedes the
+preflight-preserving recommendation and hypothetical owned-insert undo journal
+above. Early completed batches may remain unreferenced after failure; successful
+publication and individual SQLite transactions remain atomic. Three additional
+read-only reviewers synthesized direct checked construction/admission, final-only
+successful output, exact dedup/accounting and simultaneous memory requirements.
+The consolidated recommendation is being delivered to the implementation task
+at the user's request, without concurrent builds or benchmark work here.

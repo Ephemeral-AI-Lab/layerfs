@@ -1,5 +1,14 @@
 # Handoff prompt — implement Phase 1
 
+> **User amendment — failed-Commit object rollback is not required.** Read
+> [the no-rollback streaming amendment](no-rollback-streaming-amendment.md) first.
+> It supersedes earlier requirements for complete preflight before persistent
+> insertion, zero new CAS rows after failed preflight, and owned-insert rollback.
+> It adds a sub-five-second eight-CPU research target while keeping two-CPU results
+> separate. Atomic publication, historical roots, exact checks, successful final
+> selection, resource bounds, worker/private cleanup and genericity remain required.
+
+
 Implement Phase 1 of the LayerFS optimization plan: one generic, bounded Workspace
 Commit engine. Do the implementation and measurements; do not stop at another
 plan or code inventory. Phase 2 live-operation optimization is out of scope.

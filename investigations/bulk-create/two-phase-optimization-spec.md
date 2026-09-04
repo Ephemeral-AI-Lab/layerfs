@@ -1,5 +1,14 @@
 # Two-phase optimization plan: generic Workspace Commit
 
+> **User amendment — failed-Commit object rollback is not required.** Read
+> [the no-rollback streaming amendment](no-rollback-streaming-amendment.md) first.
+> It supersedes earlier requirements for complete preflight before persistent
+> insertion, zero new CAS rows after failed preflight, and owned-insert rollback.
+> It adds a sub-five-second eight-CPU research target while keeping two-CPU results
+> separate. Atomic publication, historical roots, exact checks, successful final
+> selection, resource bounds, worker/private cleanup and genericity remain required.
+
+
 Status: **reviewed implementation draft; isolated Phase 1 work is described in
 [the handoff](phase1-implementation-handoff.md). No merge, publication or production
 integration is authorized by this document**. Date: 2026-09-04. This plan's “Phase 1” means Commit
