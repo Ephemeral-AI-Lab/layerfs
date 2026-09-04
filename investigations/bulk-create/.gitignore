@@ -5,3 +5,6 @@ evidence/*/fixture/
 evidence/colocated*/prepared/
 evidence/colocated*/source.tar
 evidence/colocated*/failed-state/
+evidence/container-*/source.tar
+evidence/container-*/fs-benchmark-pro
+evidence/container-*/failed-state/
