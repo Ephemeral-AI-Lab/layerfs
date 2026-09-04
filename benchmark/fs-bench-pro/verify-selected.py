@@ -218,6 +218,8 @@ def _parse(runner, argv):
     parser = runner.build_parser(include_modes=True)
     _add_reuse_argument(parser)
     raw = list(argv)
+    if "--help" in raw or "-h" in raw:
+        parser.parse_args(raw)
     if any(flag in raw for flag in ("--perf-fast", "--perf-samples", "--smoke")):
         parser.error("verify-selected.py rejects performance modes and implicit selection")
     if "--verification" not in raw:

@@ -83,13 +83,14 @@ Target layout (move existing code incrementally; names denote responsibilities, 
 benchmark/fs-bench-pro/
   Cargo.toml
   Dockerfile.layerfs
-  daemon-entrypoint.sh
   verify-selected.py                 # sole verification implementation
   shared/
-    runner.py                        # adapt existing workspace-runner.py
-    runtime.sh                       # adapt lib-runtime.sh
-    preparation.py                   # reuse sdk-edit-custody.py logic
-    report.py                        # optional, invoked only on request
+    runner.py                        # selected modes and orchestration
+    runtime.py                       # Docker lifecycle and prepared-state reuse
+    daemon-entrypoint.sh              # image bootstrap; not a family runner
+    test_runner.py
+    test_runtime.py
+    test_layout.py
   src/
     main.rs                          # one Linux coordinator binary
     ...                              # existing shared Rust helpers/oracles
@@ -103,7 +104,7 @@ benchmark/fs-bench-pro/
 
 Preserve existing canonical family/case IDs; directory moves must not rename inputs or alter recipes. A family module is not a separate executable or crate. Existing shared Rust oracles may remain shared. Shell launchers only bind the family and forward arguments/exit status; they contain no Docker, timing, clone, oracle, deadline, or cleanup implementation. Proof-only `perf.sh` returns an unsupported-selection error without starting work.
 
-Keep old supported entrypoints forwarding while callers transfer. Delete a superseded path only after its supported input domain transfers and its caller inventory is reconciled. Leave explicitly archival interfaces clearly marked archival; never reinterpret historical evidence. Update build COPY paths, Rust module paths, source seals, documentation, and all shell/Python callers with each move.
+The user subsequently authorized removal of the root shell entrypoints and obsolete compatibility pipeline. Family-local scripts are now the only supported shell interface. Remove superseded callers and imports together; historical commands/reports are reproduced from their frozen Git revision, not an archive directory or compatibility launcher in the current tree. Update build COPY paths, Rust module paths, source seals, documentation, and all shell/Python callers with each move. Never reinterpret historical evidence.
 
 ## 4. Modes and selection
 
@@ -242,9 +243,9 @@ Sequential queue (18 non-archival family IDs, then three historical-entrypoint d
 - [ ] **16 `dedup_workspace_reuse`** — 12 cases. Fresh/clone genesis; seal observed pre-operation payload attribution identity outside timing; reuse independent final oracle, no product scaling fix.
 - [ ] **17 `dedup_branch_history`** — 20 cases. Clone/fresh genesis, execute every Commit in selected tier, preserve Commit-and-continue; no correctness replay in performance and explicit long-verification omissions.
 - [ ] **18 `workspace_reliability`** — 28 named subcases/12 recipe groups. Verification-only; reject perf modes. Distinguish same-root collision from same-Branch isolation and no-history from required no-op staging; retain long proofs unsupported under59s rather than running them.
-- [ ] **19 Registered payload `run.sh`** — reconcile five legacy campaign cases and frozen anchors with supported family adapters; either transfer each supported domain without changing its identity/timer or explicitly archive it. No duplicate active lane or unconditional full campaign/reopen.
-- [ ] **20 Archival `edit_same_count`** — preserve historical reproducibility and clearly mark unsupported by new active interface; reconcile all callers, no benchmark rerun required.
-- [ ] **21 Archival `edit_count_changing`** — same explicit archival disposition; do not advertise universal modern modes for archival scripts.
+- [x] **19 Registered payload `run.sh`** — retired from the current tree with the user's cleanup authorization. Its five-operation campaign and frozen anchors remain historical Git evidence, not an additional active lane.
+- [x] **20 Archival `edit_same_count`** — root runner removed; historical reproduction requires its frozen revision. No benchmark rerun or active-family PASS is claimed.
+- [x] **21 Archival `edit_count_changing`** — same explicit historical disposition; no modern-mode compatibility is advertised.
 
 Do not mark an active row complete from compilation or code reuse alone. If a real product failure blocks a representative check, preserve the compact failure, diagnose whether it is adapter or product, and leave the row blocked. Do not broaden this issue into a later-family optimization.
 
@@ -263,9 +264,11 @@ Completion means benchmark infrastructure is migrated and bounded representative
 
 ## 12. Implementation checkpoint (2026-09-05)
 
-The compact fixture changes and Docker-only adapters are implemented. This is
-not a terminal all-family PASS: the product Monitor mismatch below keeps #45
-open. Builds/measurements were serialized; no product crate was changed.
+At the `db4703274` checkpoint, the compact fixture changes and Docker-only
+adapters were implemented. This was not a terminal all-family PASS: the product
+Monitor mismatch below kept the selected checks nonpassing. Builds/measurements
+were serialized; that checkpoint changed no product crate. See the scoped
+Monitor repair below for subsequent results.
 
 - 73 versioned compact cases/proofs are present: 34 ordinary, six Workspace
   reuse, two namespace, three Store-footprint and 28 reliability definitions.
@@ -324,3 +327,76 @@ Retained failures and corrections:
 Every retained verification invocation, including failures, completed below
 59 seconds; compact successful invocations above took 2.43–9.03 seconds.
 Long endurance proofs remain unsupported under the bounded interface.
+
+## 13. Authorized root-entrypoint cleanup
+
+The user approved the cleanup after reviewing the dependency inventory.
+All 24 former root-level shell files were addressed: 21 run scripts and two
+shell libraries removed, and the unchanged daemon entrypoint moved into
+`shared/`. The obsolete `workspace-runner.py`, `sdk-edit-custody.py`, and
+their two mutually dependent report generators were removed together so
+no executable is left importing deleted modules. Historical versions remain
+recoverable from Git; no archive folder or replacement wrapper was added.
+
+The Dockerfile's COPY source was updated; the installed entrypoint path and
+script bytes remain unchanged. A focused layout test checks the absence of
+root shell scripts/retired modules, all 18 families' 54 shell entrypoints,
+their dispatch targets and executable bits, and the Docker COPY source.
+All three public script styles also support `--help` without requiring a
+runtime or selected input; the verifier's pre-parse seed guard was corrected
+with a failing-then-passing regression check. Twenty-two focused Python
+checks passed. The relocated entrypoint is byte-identical; its Docker COPY
+input was validated without rerunning a benchmark matrix or rebuilding the
+full image.
+The active README now documents only current commands. Historical roadmap
+and results documents retain their historical references.
+
+This is structural cleanup, not a performance qualification or a product
+repair. Product changes already present in the worktree are outside this
+cleanup and are not included in its commit.
+
+## 13. Selected Monitor admission-limit repair (2026-09-05)
+
+The two failed selections above shared a stale product validation limit, not an
+oversized-fixture or slow-operation failure. Store admitted up to 8,191 objects
+per transaction, but `CandidateStats::validate_for` still required non-initializer
+operations to contain fewer than 128. SDK observation happens after the operation,
+so this Monitor error could mask a successful publication; it did not imply rollback.
+
+The follow-up local patch uses Store's `ADMISSION_BATCH_COUNT` and existing
+`OBJECT_PAGE_BYTES` in Monitor, removes the duplicate family-specific limit, and
+makes the initializer's count constant an alias of the same Store constant. All
+accounting equations and the strict <4 MiB byte bound remain enforced. The
+`validate_for` signature remains compatible.
+
+The new regression check failed before the fix and passed afterward. It covers
+127/128/512/8,191 objects for Commit, Resolve, Initialize and Add; rejects 8,192
+objects, a 4 MiB batch and inconsistent accounting; and exercises default validation.
+Both tests in the Monitor integration-test file passed, including passive snapshot
+and dedup analysis. The Linux benchmark image rebuilt successfully.
+
+These are one-sample selected checks, not matched speedup/scaling results:
+
+| Case / seed 1 | Declared product time | Exec | Commit | Maximum transaction objects | Selected verification |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `tiny-bulk-create-1-compact-v2` | 145.450958 ms | 98.164250 ms | 39.180625 ms | 652 | PASS, 2.846490 s |
+| `directory-construct-10-compact-v2` | 36.095375 ms | 24.485042 ms | 6.315708 ms | 158 | PASS, 3.384589 s |
+
+All four invocations report cleanup PASS, zero OOM kills and zero current swap;
+both verifiers finished below the hard 59-second deadline. No owned sample
+container remained after these runs. Both transaction counts exceed the obsolete
+127-object bound and remain below Store's real limit.
+
+Evidence-producing source is `db4703274` plus the four-file local product/test
+patch, not a new committed revision. Source seal:
+`1a53315a4811c4319b23942f5e98745b0436718b6e49c84eba6b91c237e2fc95`.
+Image: `layerfs-bench-infra:1a53315a4811c431`, digest
+`sha256:52eac7c40ffbff87680597c1a203057b0dacf41dfebc4c47ef1d6b22cb530256`.
+The image digest is recorded authoritatively in the compact receipts below.
+
+Compact evidence root:
+`/Users/yifanxu/Ephemeral-AI-Lab/layerfs-infra-smoke-20260905/monitor-admission-fix-1a53315a4811c431`.
+Each `tiny-perf` / `directory-perf` contains `perf.jsonl`; each `tiny-verify` /
+`directory-verify` contains the identity-matched `verification.json`. Original
+failed attempts remain untouched. This fixes those two selected blockers only;
+it does not close #45, qualify every family or run the large-only cases.

@@ -67,7 +67,7 @@ COPY --from=build /fs-benchmark-workload /usr/local/bin/fs-benchmark-workload
 COPY --from=build /fs-benchmark-pro /usr/local/bin/fs-benchmark-pro
 COPY --from=build /layerfs-daemon /usr/local/bin/layerfs-daemon
 COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
-COPY benchmark/fs-bench-pro/daemon-entrypoint.sh /usr/local/bin/layerfs-daemon-entrypoint
+COPY benchmark/fs-bench-pro/shared/daemon-entrypoint.sh /usr/local/bin/layerfs-daemon-entrypoint
 RUN chmod 0555 /usr/local/bin/fs-benchmark-pro /usr/local/bin/fs-benchmark-workload \
                   /usr/local/bin/layerfs-daemon \
                   /usr/local/bin/layerfs-fuse /usr/local/bin/layerfs-daemon-entrypoint \
