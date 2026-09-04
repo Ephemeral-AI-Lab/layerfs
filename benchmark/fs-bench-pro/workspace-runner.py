@@ -301,6 +301,11 @@ def sample(case, seed, args, assets, campaign, acquisitions):
                     if sampler_thread.is_alive(): raise RuntimeError("sampler output did not quiesce")
                 if sampler_stderr is not None: sampler_stderr.close()
                 if observer_errors: outcome.update(harness_status="fail", observer_errors=observer_errors)
+                if args.mode=="verify":
+                    for directory in sorted(mutable.rglob("canonical-verification")):
+                        retained=attempt/"verification"/directory.relative_to(mutable)
+                        retained.parent.mkdir(parents=True,exist_ok=True)
+                        shutil.move(str(directory),str(retained))
                 if outcome.get("product_status") == "pass" and outcome.get("harness_status") != "fail":
                     shutil.rmtree(mutable); outcome["mutable_sample_cleanup_status"] = "pass"
                 else: outcome["mutable_sample_cleanup_status"] = "retained-for-investigation"
