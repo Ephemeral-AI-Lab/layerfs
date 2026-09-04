@@ -10,6 +10,44 @@ use std::sync::{
 };
 
 #[allow(dead_code)]
+pub(crate) mod workspace_common;
+#[allow(dead_code)]
+pub(crate) mod ordinary_workloads;
+#[allow(dead_code)]
+pub(crate) mod dedup_workloads;
+#[allow(dead_code)]
+pub(crate) mod workspace_registry;
+#[allow(dead_code)]
+pub(crate) mod edit_length_changing_capped { include!("families/edit_length_changing_capped.rs"); }
+#[allow(dead_code)]
+pub(crate) mod reliability_workloads;
+#[allow(dead_code)]
+pub(crate) mod workspace_reliability { include!("families/workspace_reliability.rs"); }
+#[allow(dead_code)]
+pub(crate) mod payload_create_read { include!("families/payload_create_read.rs"); }
+#[allow(dead_code)]
+pub(crate) mod tiny_file_churn { include!("families/tiny_file_churn.rs"); }
+#[allow(dead_code)]
+pub(crate) mod directory_construction_traversal { include!("families/directory_construction_traversal.rs"); }
+#[allow(dead_code)]
+pub(crate) mod git_tool_workflow { include!("families/git_tool_workflow.rs"); }
+#[allow(dead_code)]
+pub(crate) mod namespace_mutation { include!("families/namespace_mutation.rs"); }
+#[allow(dead_code)]
+pub(crate) mod workspace_change_locality { include!("families/workspace_change_locality.rs"); }
+#[allow(dead_code)]
+pub(crate) mod mixed_load_bearing { include!("families/mixed_load_bearing.rs"); }
+#[allow(dead_code)]
+pub(crate) mod dedup_cross_file { include!("families/dedup_cross_file.rs"); }
+#[allow(dead_code)]
+pub(crate) mod dedup_cdc_locality { include!("families/dedup_cdc_locality.rs"); }
+#[allow(dead_code)]
+pub(crate) mod dedup_workspace_reuse { include!("families/dedup_workspace_reuse.rs"); }
+#[allow(dead_code)]
+pub(crate) mod dedup_branch_history { include!("families/dedup_branch_history.rs"); }
+
+
+#[allow(dead_code)]
 pub(crate) mod init_namespace {
     include!("families/init_namespace.rs");
 }
@@ -1038,6 +1076,9 @@ fn main() {
 
 fn run() -> Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args.first().is_some_and(|arg| arg.starts_with("workspace-")) {
+        return workspace_registry::dispatch(&args);
+    }
     match args.as_slice() {
         [command] if command == "self-check" => self_check(),
         [command] if command == "family-list" => {

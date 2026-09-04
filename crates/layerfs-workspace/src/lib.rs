@@ -28,6 +28,11 @@ pub(crate) use cow_tree::{Attr, Kind, NodeId, Workspace, ROOT};
 pub use layerfs_daemon::protocol::CgroupResourceSample;
 pub use layerfs_daemon::ResourceSampleClock;
 pub use lifecycle::WorkspaceState;
+#[cfg(feature = "test-instrumentation")]
+pub use lifecycle::{
+    arm_verification_fault, take_verification_fault_receipt, VerificationFault,
+    VerificationFaultReceipt, VerificationWorkspaceState,
+};
 pub(crate) use limits::ResourcePolicy;
 pub use output::{OutputPage, OutputReader};
 pub use reconcile::{
@@ -44,19 +49,19 @@ pub use session::{
     WorkspaceResult, WorkspaceSession, WorkspaceSummary,
 };
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
 #[doc(hidden)]
 pub fn inject_projection_refresh_failure_once() {
     projection::inject_refresh_failure_once();
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
 #[doc(hidden)]
 pub fn inject_projection_resume_failure_once() {
     projection::inject_resume_failure_once();
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
 #[doc(hidden)]
 pub fn inject_candidate_failure_once() {
     changes::inject_candidate_failure_once();

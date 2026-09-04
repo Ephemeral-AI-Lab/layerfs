@@ -311,16 +311,8 @@ run_in_fresh_container() {
   name="layerfs-i20-$$-${container_serial}"
   active_container=$name
   container_start_started=$(python3 -c 'import time; print(time.monotonic_ns())')
-  docker run -d --name "$name" --device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor=unconfined -p 127.0.0.1::41273 "$image" >/dev/null
-  container_id=$(docker inspect -f '{{.Id}}' "$name")
-  port=$(docker inspect -f '{{(index (index .NetworkSettings.Ports "41273/tcp") 0).HostPort}}' "$name")
-  ready=false
-  for _ in $(seq 1 50); do
-    if docker exec "$name" test -s /run/layerfs/capability >/dev/null 2>&1; then ready=true; break; fi
-    sleep 0.05
-  done
-  [[ $ready == true ]] || die "daemon readiness timeout"
-  capability=$(docker exec "$name" sh -c 'od -An -tx1 -v /run/layerfs/capability | tr -d " \n"')
+  source "$here/lib-runtime.sh"
+  start_benchmark_runtime "$name" "$image" || die "daemon readiness timeout"
   container_start_ns=$(( $(python3 -c 'import time; print(time.monotonic_ns())') - container_start_started ))
   if [[ $command == performance ]]; then
     timeout_seconds=10

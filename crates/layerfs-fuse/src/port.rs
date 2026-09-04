@@ -37,7 +37,39 @@ pub enum PortError {
 
 pub type PortResult<T> = Result<T, PortError>;
 
+/// Actual kernel callback observations; independent of proxy cache hits.
+#[derive(Clone, Copy, Debug)]
+pub enum KernelOperation {
+    Lookup,
+    Getattr,
+    Setattr,
+    Readlink,
+    Mknod,
+    Mkdir,
+    Unlink,
+    Rmdir,
+    Symlink,
+    Rename,
+    Link,
+    Open,
+    Read,
+    Write,
+    Flush,
+    Release,
+    Fsync,
+    Opendir,
+    Readdir,
+    Readdirplus,
+    Releasedir,
+    Fsyncdir,
+    Statfs,
+    Access,
+    Create,
+}
+
 pub trait FilesystemPort: Send + Sync {
+    fn note_kernel_operation(&self, _operation: KernelOperation) {}
+    fn note_readdir_page(&self, _offset: u64, _entries: u64) {}
     fn note_fuse_max_write(&self, _bytes: u32) {}
     fn note_fuse_read_config(&self, _max_readahead: u32, _capabilities: u64) {}
     fn lookup(&self, parent: NodeId, name: &[u8]) -> PortResult<Attr>;

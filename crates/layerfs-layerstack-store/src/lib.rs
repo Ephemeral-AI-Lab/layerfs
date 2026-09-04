@@ -31,7 +31,8 @@ pub use store::LayerStackStore;
 pub use telemetry::{
     begin_workspace_commit, capture_workspace_commit_diagnostics, note_workspace_capture,
     note_workspace_commit_edit_state, note_workspace_commit_phase, note_workspace_commit_reads,
-    note_workspace_commit_tree_visits, note_workspace_create_snapshot, record_fuse_write,
+    note_workspace_commit_tree_visits, note_workspace_create_snapshot,
+    note_workspace_namespace_visits, note_workspace_physical_spool, record_fuse_write,
     record_workspace_lifecycle, record_workspace_read, take_storage_receipts,
     take_workspace_commit_diagnostics, CandidateReceipt, CaptureMode, FuseWriteReceipt,
     LayerStackInitializationReceipt, StorageReceipt, WorkspaceCommitDiagnostics,
@@ -48,6 +49,11 @@ pub use layerfs_content::filesystem::{
 
 #[cfg(feature = "test-instrumentation")]
 pub use objects::{read_batch_counters, reset_read_batch_counters, ReadBatchCounters};
+#[cfg(feature = "test-instrumentation")]
+pub use schema::{
+    arm_verification_store_fault, take_verification_store_fault_receipt, VerificationStoreFault,
+    VerificationStoreFaultReceipt,
+};
 #[cfg(feature = "test-instrumentation")]
 pub use schema::{reset_sql_trace, sql_trace};
 

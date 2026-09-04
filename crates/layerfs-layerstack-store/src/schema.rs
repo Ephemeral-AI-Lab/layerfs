@@ -497,3 +497,108 @@ mod tests {
         files
     }
 }
+
+#[cfg(feature = "test-instrumentation")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VerificationStoreFault {
+    LaterAdmissionBatch,
+    FinalPublication,
+}
+#[cfg(feature = "test-instrumentation")]
+#[derive(Clone, Debug)]
+pub struct VerificationStoreFaultReceipt {
+    pub branch: BranchId,
+    pub fault: VerificationStoreFault,
+    pub hit_count: u64,
+    pub committed_early_transactions: u64,
+    pub candidate_spill_count: u64,
+    pub active: bool,
+}
+#[cfg(feature = "test-instrumentation")]
+thread_local! {static VERIFICATION_STORE_FAULT:std::cell::RefCell<Option<VerificationStoreFaultReceipt>>=const{std::cell::RefCell::new(None)};}
+#[cfg(feature = "test-instrumentation")]
+pub fn arm_verification_store_fault(branch: BranchId, fault: VerificationStoreFault) -> Result<()> {
+    VERIFICATION_STORE_FAULT.with(|state| {
+        let mut state = state.borrow_mut();
+        if state.is_some() {
+            return Err(StoreError::StoreBusy);
+        }
+        *state = Some(VerificationStoreFaultReceipt {
+            branch,
+            fault,
+            hit_count: 0,
+            committed_early_transactions: 0,
+            candidate_spill_count: 0,
+            active: false,
+        });
+        Ok(())
+    })
+}
+#[cfg(feature = "test-instrumentation")]
+pub fn take_verification_store_fault_receipt() -> Option<VerificationStoreFaultReceipt> {
+    VERIFICATION_STORE_FAULT.with(|s| s.borrow_mut().take())
+}
+#[cfg(feature = "test-instrumentation")]
+pub(crate) fn verification_candidate(branch: BranchId, spills: u64) {
+    VERIFICATION_STORE_FAULT.with(|s| {
+        if let Some(r) = s.borrow_mut().as_mut() {
+            if r.branch == branch {
+                r.active = true;
+                r.candidate_spill_count = spills;
+            }
+        }
+    });
+}
+#[cfg(feature = "test-instrumentation")]
+pub(crate) fn verification_early_committed() {
+    VERIFICATION_STORE_FAULT.with(|s| {
+        if let Some(r) = s.borrow_mut().as_mut() {
+            if r.active && r.hit_count == 0 {
+                r.committed_early_transactions += 1;
+            }
+        }
+    });
+}
+#[cfg(feature = "test-instrumentation")]
+pub(crate) fn verification_store_checkpoint(fault: VerificationStoreFault) -> Result<()> {
+    VERIFICATION_STORE_FAULT.with(|s| {
+        if let Some(r) = s.borrow_mut().as_mut() {
+            if r.active
+                && r.hit_count == 0
+                && r.fault == fault
+                && (fault != VerificationStoreFault::LaterAdmissionBatch
+                    || r.committed_early_transactions == 1)
+            {
+                r.hit_count = 1;
+                return Err(StoreError::Integrity(
+                    "injected qualified Workspace transaction failure",
+                ));
+            }
+        }
+        Ok(())
+    })
+}
+
+#[cfg(all(test, feature = "test-instrumentation"))]
+#[test]
+fn verification_store_fault_boundary_is_one_shot() {
+    let branch = BranchId::new();
+    arm_verification_store_fault(branch, VerificationStoreFault::LaterAdmissionBatch).unwrap();
+    verification_candidate(BranchId::new(), 1);
+    assert!(verification_store_checkpoint(VerificationStoreFault::LaterAdmissionBatch).is_ok());
+    verification_candidate(branch, 1);
+    assert!(verification_store_checkpoint(VerificationStoreFault::LaterAdmissionBatch).is_ok());
+    verification_early_committed();
+    assert!(verification_store_checkpoint(VerificationStoreFault::LaterAdmissionBatch).is_err());
+    assert!(verification_store_checkpoint(VerificationStoreFault::LaterAdmissionBatch).is_ok());
+    let receipt = take_verification_store_fault_receipt().unwrap();
+    assert_eq!(
+        (
+            receipt.hit_count,
+            receipt.committed_early_transactions,
+            receipt.candidate_spill_count
+        ),
+        (1, 1, 1)
+    );
+    assert!(take_verification_store_fault_receipt().is_none());
+}

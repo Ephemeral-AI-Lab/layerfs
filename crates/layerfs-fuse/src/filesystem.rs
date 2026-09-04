@@ -53,6 +53,8 @@ impl Filesystem for LayerFs {
     }
 
     fn lookup(&self, _request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Lookup);
         let result = self.node(parent).and_then(|parent| {
             self.port
                 .lookup(parent, name.as_bytes())
@@ -72,6 +74,8 @@ impl Filesystem for LayerFs {
         _handle: Option<FileHandle>,
         reply: ReplyAttr,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Getattr);
         let result = self.node(ino).and_then(|node| {
             self.port
                 .attr(node)
@@ -103,6 +107,8 @@ impl Filesystem for LayerFs {
         flags: Option<BsdFileFlags>,
         reply: ReplyAttr,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Setattr);
         if uid.is_some_and(|value| value != self.uid)
             || gid.is_some_and(|value| value != self.gid)
             || flags.is_some()
@@ -138,6 +144,8 @@ impl Filesystem for LayerFs {
     }
 
     fn readlink(&self, _request: &Request, ino: INodeNo, reply: ReplyData) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Readlink);
         match self
             .node(ino)
             .and_then(|node| self.port.readlink(node).map_err(errno))
@@ -157,6 +165,8 @@ impl Filesystem for LayerFs {
         rdev: u32,
         reply: ReplyEntry,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Mknod);
         if rdev != 0 || mode & 0o170000 != 0o100000 {
             reply.error(fuser::Errno::EOPNOTSUPP);
             return;
@@ -183,6 +193,8 @@ impl Filesystem for LayerFs {
         umask: u32,
         reply: ReplyEntry,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Mkdir);
         let result = self.node(parent).and_then(|parent| {
             let attr = self
                 .port
@@ -197,6 +209,8 @@ impl Filesystem for LayerFs {
     }
 
     fn unlink(&self, _request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Unlink);
         empty_reply(
             self.node(parent).and_then(|parent| {
                 self.port
@@ -208,6 +222,8 @@ impl Filesystem for LayerFs {
     }
 
     fn rmdir(&self, _request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Rmdir);
         empty_reply(
             self.node(parent).and_then(|parent| {
                 self.port
@@ -226,6 +242,8 @@ impl Filesystem for LayerFs {
         target: &Path,
         reply: ReplyEntry,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Symlink);
         let result = self.node(parent).and_then(|parent| {
             let attr = self
                 .port
@@ -253,6 +271,8 @@ impl Filesystem for LayerFs {
         flags: RenameFlags,
         reply: ReplyEmpty,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Rename);
         if flags.intersects(RenameFlags::RENAME_EXCHANGE | RenameFlags::RENAME_WHITEOUT) {
             reply.error(fuser::Errno::EOPNOTSUPP);
             return;
@@ -282,6 +302,8 @@ impl Filesystem for LayerFs {
         new_name: &OsStr,
         reply: ReplyEntry,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Link);
         let result = self.node(ino).and_then(|node| {
             let parent = self.node(new_parent)?;
             let attr = self
@@ -297,6 +319,8 @@ impl Filesystem for LayerFs {
     }
 
     fn open(&self, _request: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Open);
         match self.node(ino).and_then(|node| {
             let writable = matches!(flags.0 & O_ACCMODE, O_WRONLY | O_RDWR);
             self.open_handle(node, flags.0 & O_TRUNC != 0, writable)
@@ -318,6 +342,8 @@ impl Filesystem for LayerFs {
         _lock_owner: Option<LockOwner>,
         reply: ReplyData,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Read);
         match self
             .handle(handle)
             .and_then(|node| self.port.read(node, offset, size as usize).map_err(errno))
@@ -340,6 +366,8 @@ impl Filesystem for LayerFs {
         _lock_owner: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Write);
         match self
             .handle(handle)
             .and_then(|node| self.port.write(node, offset, data).map_err(errno))
@@ -357,6 +385,8 @@ impl Filesystem for LayerFs {
         _lock_owner: LockOwner,
         reply: ReplyEmpty,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Flush);
         reply.ok();
     }
 
@@ -370,6 +400,8 @@ impl Filesystem for LayerFs {
         _flush: bool,
         reply: ReplyEmpty,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Release);
         let result = self
             .handles
             .remove(handle.0)
@@ -386,6 +418,8 @@ impl Filesystem for LayerFs {
         _datasync: bool,
         reply: ReplyEmpty,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Fsync);
         empty_reply(
             self.handle(handle)
                 .and_then(|node| self.port.fsync(Some(node)).map_err(errno)),
@@ -394,6 +428,8 @@ impl Filesystem for LayerFs {
     }
 
     fn opendir(&self, _request: &Request, ino: INodeNo, _flags: OpenFlags, reply: ReplyOpen) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Opendir);
         match self.node(ino).and_then(|node| {
             if self.port.attr(node).map_err(errno)?.kind != Kind::Directory {
                 return Err(fuser::Errno::ENOTDIR);
@@ -413,11 +449,14 @@ impl Filesystem for LayerFs {
         offset: u64,
         mut reply: ReplyDirectory,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Readdir);
         let result = self
             .handle(handle)
             .and_then(|node| self.port.readdir(node).map_err(errno));
         match result {
             Ok(entries) => {
+                let mut returned_entries = 0;
                 for (index, (node, kind, name)) in
                     entries.into_iter().enumerate().skip(offset as usize)
                 {
@@ -430,7 +469,9 @@ impl Filesystem for LayerFs {
                     ) {
                         break;
                     }
+                    returned_entries += 1;
                 }
+                self.port.note_readdir_page(offset, returned_entries);
                 reply.ok();
             }
             Err(error) => reply.error(error),
@@ -445,11 +486,14 @@ impl Filesystem for LayerFs {
         offset: u64,
         mut reply: ReplyDirectoryPlus,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Readdirplus);
         let result = self
             .handle(handle)
             .and_then(|node| self.port.readdirplus(node).map_err(errno));
         match result {
             Ok(entries) => {
+                let mut returned_entries = 0;
                 for (index, (attr, name)) in entries.into_iter().enumerate().skip(offset as usize) {
                     let attr = match self.attr(attr) {
                         Ok(attr) => attr,
@@ -468,7 +512,9 @@ impl Filesystem for LayerFs {
                     ) {
                         break;
                     }
+                    returned_entries += 1;
                 }
+                self.port.note_readdir_page(offset, returned_entries);
                 reply.ok();
             }
             Err(error) => reply.error(error),
@@ -483,6 +529,8 @@ impl Filesystem for LayerFs {
         _flags: OpenFlags,
         reply: ReplyEmpty,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Releasedir);
         if self.handles.remove(handle.0).is_some() {
             reply.ok();
         } else {
@@ -498,14 +546,20 @@ impl Filesystem for LayerFs {
         _datasync: bool,
         reply: ReplyEmpty,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Fsyncdir);
         empty_reply(self.port.fsync(None).map_err(errno), reply);
     }
 
     fn statfs(&self, _request: &Request, _ino: INodeNo, reply: ReplyStatfs) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Statfs);
         reply.statfs(1 << 30, 1 << 29, 1 << 29, 1 << 30, 1 << 29, 4096, 255, 4096);
     }
 
     fn access(&self, _request: &Request, ino: INodeNo, _mask: AccessFlags, reply: ReplyEmpty) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Access);
         match self
             .node(ino)
             .and_then(|node| self.port.attr(node).map_err(errno))
@@ -525,6 +579,8 @@ impl Filesystem for LayerFs {
         _flags: i32,
         reply: ReplyCreate,
     ) {
+        self.port
+            .note_kernel_operation(crate::KernelOperation::Create);
         let result = self.node(parent).and_then(|parent| {
             let attr = self
                 .port

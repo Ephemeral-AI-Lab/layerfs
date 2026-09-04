@@ -99,6 +99,13 @@ impl Workspace {
             self.spool_bytes.saturating_sub(spool_live),
             metric_nodes_scanned,
         );
+        let (current, peak, errors, observations) = self.physical_spool.borrow().snapshot();
+        layerfs_layerstack_store::note_workspace_physical_spool(
+            current,
+            peak,
+            errors,
+            observations,
+        );
         Ok(())
     }
 
@@ -125,9 +132,7 @@ impl Workspace {
         if matches!(checkpoint.value.data, Data::File(FileData::Base { .. })) {
             self.open_spools.remove(&checkpoint.node);
             if let Data::File(FileData::Edited { spool, .. }) = &self.nodes[&checkpoint.node].data {
-                if spool.exists() {
-                    std::fs::remove_file(spool)?;
-                }
+                self.remove_spool_if_exists(checkpoint.node, spool)?;
             }
         }
         self.nodes.insert(checkpoint.node, checkpoint.value);
@@ -227,6 +232,22 @@ impl Workspace {
         let generation = self.next_generation()?;
         let paths = self.nodes[&node].paths.iter().cloned().collect();
         let appended = bytes.map_or(0, |bytes| bytes.len() as u64);
+        #[cfg(feature = "test-instrumentation")]
+        if appended > 0
+            && crate::lifecycle::consume_verification_fault(
+                self.branch_id,
+                crate::lifecycle::VerificationFault::NoSpace,
+                self.spool_bytes,
+            )
+        {
+            let mut lowered = self.policy;
+            lowered.max_spool_bytes = self.spool_bytes;
+            lowered.check(
+                self.spool_bytes
+                    .checked_add(appended)
+                    .ok_or(StoreError::InvalidInput("workspace spool limit"))?,
+            )?;
+        }
         self.policy.check(
             self.spool_bytes
                 .checked_add(appended)
@@ -235,13 +256,36 @@ impl Workspace {
         self.check_piece_resources(&old, &next)?;
         if let Some(bytes) = bytes {
             let started = std::time::Instant::now();
+            #[cfg(feature = "test-instrumentation")]
+            let inject_short = crate::lifecycle::consume_verification_fault(
+                self.branch_id,
+                crate::lifecycle::VerificationFault::ShortAppend,
+                self.spool_bytes,
+            );
             let file = self.spool_file(node, &spool)?;
-            if file.metadata()?.len() != high_water {
+            let metadata = file
+                .metadata()
+                .inspect_err(|_| self.physical_spool.borrow_mut().error())?;
+            self.physical_spool.borrow_mut().observe(node, &metadata);
+            if metadata.len() != high_water {
                 return Err(StoreError::Integrity("spool high-water"));
             }
-            if let Err(error) = append_spool(file, bytes, high_water) {
-                file.set_len(high_water)
-                    .map_err(|_| StoreError::Integrity("spool append cleanup failure"))?;
+            #[cfg(feature = "test-instrumentation")]
+            let append = if inject_short {
+                file.write_all_at(&bytes[..bytes.len() / 2], high_water)
+                    .and_then(|_| Err(std::io::Error::other("injected short spool append")))
+            } else {
+                append_spool(file, bytes, high_water)
+            };
+            #[cfg(not(feature = "test-instrumentation"))]
+            let append = append_spool(file, bytes, high_water);
+            // Observe actual allocation before rollback can erase a partial
+            // append's footprint. Measurement failures never change write results.
+            self.observe_spool_file(node, file);
+            if let Err(error) = append {
+                let cleanup = file.set_len(high_water);
+                self.observe_spool_file(node, file);
+                cleanup.map_err(|_| StoreError::Integrity("spool append cleanup failure"))?;
                 return Err(error.into());
             }
             self.spool_write_metrics.write_bytes = self
@@ -494,11 +538,9 @@ impl Workspace {
     pub(crate) fn clear_spool(&mut self) -> Result<()> {
         self.invalidate_capture();
         self.open_spools.clear();
-        for value in self.nodes.values() {
+        for (node, value) in &self.nodes {
             if let Data::File(FileData::Edited { spool, .. }) = &value.data {
-                if spool.exists() {
-                    std::fs::remove_file(spool)?;
-                }
+                self.remove_spool_if_exists(*node, spool)?;
             }
         }
         self.spool_bytes = 0;
@@ -530,6 +572,7 @@ impl Workspace {
         let spool = self.spool.join(node.0.to_string());
         let started = std::time::Instant::now();
         let file = create_spool(&spool)?;
+        self.observe_spool_file(node, &file);
         self.note_spool_open(elapsed_ns(started));
         let data = Data::File(FileData::Edited {
             base: None,
@@ -572,9 +615,10 @@ impl Workspace {
                 .ok_or(StoreError::InvalidInput("workspace piece allocation limit"))?;
             let started = std::time::Instant::now();
             let file = create_spool(&path)?;
+            self.observe_spool_file(node, &file);
             let open_ns = elapsed_ns(started);
             if self.open_spools.contains_key(&node) {
-                let _ = std::fs::remove_file(path);
+                let _ = self.remove_spool_file(node, &path);
                 return Err(StoreError::Integrity("spool descriptor"));
             }
             self.nodes.get_mut(&node).unwrap().data = Data::File(FileData::Edited {
@@ -597,12 +641,64 @@ impl Workspace {
             .open_spools
             .get(&node)
             .ok_or(StoreError::Integrity("spool descriptor"))?;
-        let open = file.metadata()?;
-        let linked = std::fs::metadata(path)?;
+        let open = file
+            .metadata()
+            .inspect_err(|_| self.physical_spool.borrow_mut().error())?;
+        let linked =
+            std::fs::metadata(path).inspect_err(|_| self.physical_spool.borrow_mut().error())?;
         if open.dev() != linked.dev() || open.ino() != linked.ino() {
+            self.physical_spool.borrow_mut().error();
             return Err(StoreError::Integrity("spool descriptor identity"));
         }
+        self.physical_spool.borrow_mut().observe(node, &open);
         Ok(file)
+    }
+
+    fn observe_spool_file(&self, node: NodeId, file: &File) {
+        match file.metadata() {
+            Ok(metadata) => self.physical_spool.borrow_mut().observe(node, &metadata),
+            Err(_) => self.physical_spool.borrow_mut().error(),
+        }
+    }
+
+    pub(crate) fn remove_spool_file(&self, node: NodeId, path: &Path) -> std::io::Result<()> {
+        match std::fs::metadata(path) {
+            Ok(metadata) => self.physical_spool.borrow_mut().observe(node, &metadata),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+            Err(_) => self.physical_spool.borrow_mut().error(),
+        }
+        let result = std::fs::remove_file(path);
+        if result.is_ok()
+            || result
+                .as_ref()
+                .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+        {
+            self.physical_spool.borrow_mut().removed(node);
+        }
+        result
+    }
+
+    pub(crate) fn remove_spool_if_exists(&self, node: NodeId, path: &Path) -> std::io::Result<()> {
+        // Reuse the metadata lookup previously performed by Path::exists.
+        // Preserve its error suppression; only the observation becomes unknown.
+        match std::fs::metadata(path) {
+            Ok(metadata) => {
+                self.physical_spool.borrow_mut().observe(node, &metadata);
+                let result = std::fs::remove_file(path);
+                if result.is_ok() {
+                    self.physical_spool.borrow_mut().removed(node);
+                }
+                result
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                self.physical_spool.borrow_mut().removed(node);
+                Ok(())
+            }
+            Err(_) => {
+                self.physical_spool.borrow_mut().error();
+                Ok(())
+            }
+        }
     }
     fn note_spool_open(&mut self, ns: u64) {
         self.spool_write_metrics.write_open_count =
@@ -793,6 +889,97 @@ mod tests {
         workspace.policy.max_spool_bytes = before_charge;
         assert!(workspace.write(file, 4, b"x").is_err());
         assert_eq!(workspace.spool_bytes, before_charge);
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn physical_spool_peak_survives_short_append_reclaim_and_discard() {
+        let (root, mut workspace) = workspace("physical-spool-accounting");
+        let first = workspace.create_file(ROOT, b"first", 0o600).unwrap().node;
+        let second = workspace.create_file(ROOT, b"second", 0o600).unwrap().node;
+        workspace.write(first, 0, b"a").unwrap();
+        workspace.write(second, 0, &[0x53; 8192]).unwrap();
+        let actual = || {
+            workspace
+                .open_spools
+                .values()
+                .map(|f| f.metadata().unwrap().blocks() * 512)
+                .sum::<u64>()
+        };
+        assert_eq!(
+            workspace.physical_spool.borrow().snapshot().0,
+            Some(actual())
+        );
+        let first_blocks = workspace.open_spools[&first].metadata().unwrap().blocks() * 512;
+        let initial_peak = workspace.physical_spool.borrow().snapshot().1.unwrap();
+        let failed = workspace.create_file(ROOT, b"failed", 0o600).unwrap().node;
+        let logical_before = (workspace.spool_bytes, workspace.spool_bytes_peak);
+        INJECT_SHORT_APPEND.with(|inject| inject.set(true));
+        assert!(workspace.write(failed, 0, &vec![0xa5; 256 * 1024]).is_err());
+        assert_eq!(
+            (workspace.spool_bytes, workspace.spool_bytes_peak),
+            logical_before
+        );
+        assert_eq!(workspace.open_spools[&failed].metadata().unwrap().len(), 0);
+        let (current, peak, errors, count) = workspace.physical_spool.borrow().snapshot();
+        let actual = workspace
+            .open_spools
+            .values()
+            .map(|f| f.metadata().unwrap().blocks() * 512)
+            .sum::<u64>();
+        assert_eq!(current, Some(actual));
+        assert!(
+            peak.unwrap() > initial_peak,
+            "partial append allocation must be observed before truncation"
+        );
+        assert_eq!(errors, 0);
+        assert!(count > 0);
+        let capture = layerfs_layerstack_store::capture_workspace_commit_diagnostics().unwrap();
+        {
+            let _timer = layerfs_layerstack_store::begin_workspace_commit(
+                layerfs_layerstack_store::CaptureMode::Materialized,
+            )
+            .unwrap();
+            workspace.note_commit_edit_state().unwrap();
+        }
+        let diagnostic = layerfs_layerstack_store::take_workspace_commit_diagnostics()
+            .pop()
+            .unwrap();
+        assert_eq!(diagnostic.physical_spool_allocated_bytes, current);
+        assert_eq!(diagnostic.physical_spool_peak_bytes, peak);
+        assert_eq!(diagnostic.physical_spool_observation_errors, 0);
+        drop(capture);
+
+        workspace.pin(first, false).unwrap();
+        workspace.unlink(ROOT, b"first", false).unwrap();
+        assert_eq!(
+            workspace.physical_spool.borrow().snapshot().0,
+            current,
+            "open unlinked spool stays charged"
+        );
+        workspace.unpin(first).unwrap();
+        assert_eq!(
+            workspace.physical_spool.borrow().snapshot().0,
+            Some(actual - first_blocks)
+        );
+        assert_eq!(workspace.physical_spool.borrow().snapshot().1, peak);
+
+        workspace.commit().unwrap();
+        assert_eq!(workspace.physical_spool.borrow().snapshot().0, Some(0));
+        assert_eq!(
+            workspace.physical_spool.borrow().snapshot().1,
+            peak,
+            "Commit rebase keeps lifetime allocation evidence"
+        );
+        let last = workspace.create_file(ROOT, b"last", 0o600).unwrap().node;
+        workspace.write(last, 0, b"later").unwrap();
+        workspace.discard().unwrap();
+        assert_eq!(workspace.physical_spool.borrow().snapshot().0, Some(0));
+        assert_eq!(workspace.physical_spool.borrow().snapshot().1, peak);
+        workspace.physical_spool.borrow_mut().error();
+        assert_eq!(workspace.physical_spool.borrow().snapshot().0, None);
+        assert_eq!(workspace.physical_spool.borrow().snapshot().1, None);
         drop(workspace);
         std::fs::remove_dir_all(root).unwrap();
     }

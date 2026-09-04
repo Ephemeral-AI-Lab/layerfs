@@ -12,8 +12,12 @@ use std::process::{Command, Stdio};
 use std::sync::{mpsc, Arc};
 use std::time::Instant;
 
+mod dedup_verify;
 mod sdk_edit_verify;
 mod sdk_file_edit;
+mod workspace_bench;
+mod workspace_reliability;
+mod workspace_verify;
 
 type AnyResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -669,6 +673,12 @@ fn main() {
 fn run() -> AnyResult<()> {
     let _commit_diagnostics = layerfs_sdk::capture_workspace_commit_diagnostics()?;
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+    if args
+        .first()
+        .is_some_and(|arg| arg.to_string_lossy().starts_with("workspace-"))
+    {
+        return workspace_bench::dispatch(&args);
+    }
     match args.as_slice() {
         [command] if command == "self-check" => self_check(),
         [command, fixture, scenario] if command == "namespace-fixture" => {

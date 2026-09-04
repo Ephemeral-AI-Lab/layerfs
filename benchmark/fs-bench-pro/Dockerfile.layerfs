@@ -16,14 +16,8 @@ COPY crates ./crates
 COPY tools ./tools
 COPY benchmark/fs-bench-pro ./benchmark/fs-bench-pro
 COPY benchmark/fs-bench-pro/workload.rs /workload/workload.rs
-COPY benchmark/fs-bench-pro/families/init_namespace.rs /workload/families/init_namespace.rs
-COPY benchmark/fs-bench-pro/families/edit_same_count.rs /workload/families/edit_same_count.rs
-COPY benchmark/fs-bench-pro/families/edit_count_changing.rs /workload/families/edit_count_changing.rs
-COPY benchmark/fs-bench-pro/families/sdk_edit_common.rs /workload/families/sdk_edit_common.rs
-COPY benchmark/fs-bench-pro/families/edit_length_preserving.rs /workload/families/edit_length_preserving.rs
-COPY benchmark/fs-bench-pro/families/edit_length_changing.rs /workload/families/edit_length_changing.rs
-COPY benchmark/fs-bench-pro/families/edit_canonical_chunk_count.rs /workload/families/edit_canonical_chunk_count.rs
-COPY benchmark/fs-bench-pro/families/store_footprint.rs /workload/families/store_footprint.rs
+COPY benchmark/fs-bench-pro/families /workload/families
+COPY benchmark/fs-bench-pro/*.rs /workload/
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
@@ -41,11 +35,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
       *) exit 1 ;; \
     esac \
  && rustup target add "$target" \
- && cargo clean --target "$target" -p layerfs-content -p layerfs-daemon -p layerfs-fuse \
- && cargo clean --release --target "$target" -p layerfs-content -p layerfs-daemon -p layerfs-fuse \
  && rustc --edition=2021 -C opt-level=3 -C strip=symbols \
       --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload \
- && cargo test --locked --target "$target" -p layerfs-daemon \
  && cargo build --locked --release --target "$target" -p layerfs-daemon \
  && cargo build --locked --release --target "$target" -p layerfs-fuse --no-default-features --features proxy \
  && cp "target/$target/release/layerfs-daemon" /layerfs-daemon \

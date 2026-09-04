@@ -73,6 +73,14 @@ impl Workspace {
                 CommitTransition::Rebased,
             ));
         }
+        #[cfg(feature = "test-instrumentation")]
+        if consume_verification_fault(
+            self.branch_id,
+            VerificationFault::Candidate,
+            self.spool_bytes,
+        ) {
+            crate::changes::inject_candidate_failure_once();
+        }
         let candidate = self.build_candidate()?;
         let outcome =
             self.store
@@ -212,16 +220,14 @@ impl Workspace {
                 if !self.open_spools.contains_key(&id) {
                     return Err(StorageError::Integrity("spool descriptor"));
                 }
-                obsolete_spools.push(spool);
+                obsolete_spools.push((id, spool));
             }
             nodes.insert(id, rebased);
         }
         self.open_spools
             .retain(|node, _| retained_spool_nodes.contains(node));
-        for spool in obsolete_spools {
-            if spool.exists() {
-                std::fs::remove_file(spool)?;
-            }
+        for (node, spool) in obsolete_spools {
+            self.remove_spool_if_exists(node, &spool)?;
         }
         self.reader = committed.reader.clone();
         self.expected_head = expected_head;
@@ -269,6 +275,7 @@ impl Workspace {
             self.policy,
         )?;
         committed.state = WorkspaceState::Active;
+        committed.physical_spool = std::mem::take(&mut self.physical_spool);
         *self = committed;
         Ok(())
     }
@@ -299,6 +306,30 @@ impl Workspace {
 }
 
 impl Workspaces {
+    #[cfg(feature = "test-instrumentation")]
+    pub fn verification_workspace_state(
+        &self,
+        id: WorkspaceId,
+    ) -> WorkspaceResult<VerificationWorkspaceState> {
+        let worker = self.worker(id)?;
+        let workspace = worker
+            .workspace
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        let (physical_current, physical_peak, physical_errors, physical_observations) =
+            workspace.physical_spool.borrow().snapshot();
+        Ok(VerificationWorkspaceState {
+            spool_bytes: workspace.spool_bytes,
+            spool_peak_bytes: workspace.spool_bytes_peak,
+            physical_spool_allocated_bytes: physical_current,
+            physical_spool_peak_bytes: physical_peak,
+            physical_spool_observation_errors: physical_errors,
+            physical_spool_observation_count: physical_observations,
+            mutation_generation: workspace.mutation_generation,
+            open_spool_files: workspace.open_spools.len(),
+        })
+    }
+
     pub fn create_workspace_session(
         &self,
         request: CreateWorkspaceSession,
@@ -494,6 +525,16 @@ impl Workspaces {
             )?;
             committed
         })();
+        #[cfg(feature = "test-instrumentation")]
+        if matches!(&result, Ok((WorkspaceCommitResult::Created { .. }, _)))
+            && consume_verification_fault(
+                worker.request.branch_id,
+                VerificationFault::PresentationResume,
+                0,
+            )
+        {
+            crate::projection::inject_resume_failure_once();
+        }
         let presentation = match &result {
             Ok((
                 WorkspaceCommitResult::Created { .. } | WorkspaceCommitResult::UpToDate { .. },
@@ -1251,4 +1292,123 @@ mod tests {
             .unwrap();
         std::fs::remove_dir_all(root).unwrap();
     }
+}
+
+#[cfg(feature = "test-instrumentation")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VerificationFault {
+    Candidate,
+    PresentationResume,
+    ShortAppend,
+    NoSpace,
+}
+#[cfg(feature = "test-instrumentation")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct VerificationWorkspaceState {
+    pub spool_bytes: u64,
+    pub spool_peak_bytes: u64,
+    pub physical_spool_allocated_bytes: Option<u64>,
+    pub physical_spool_peak_bytes: Option<u64>,
+    pub physical_spool_observation_errors: u64,
+    pub physical_spool_observation_count: u64,
+    pub mutation_generation: u64,
+    pub open_spool_files: usize,
+}
+#[cfg(feature = "test-instrumentation")]
+#[derive(Clone, Debug)]
+pub struct VerificationFaultReceipt {
+    pub branch: layerfs_layerstack_store::BranchId,
+    pub fault: VerificationFault,
+    pub hit_count: u64,
+    pub spool_bytes_before: u64,
+}
+#[cfg(feature = "test-instrumentation")]
+static VERIFICATION_FAULT: std::sync::Mutex<Option<VerificationFaultReceipt>> =
+    std::sync::Mutex::new(None);
+#[cfg(feature = "test-instrumentation")]
+static VERIFICATION_FAULT_ARMED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+#[cfg(feature = "test-instrumentation")]
+pub fn arm_verification_fault(
+    branch: layerfs_layerstack_store::BranchId,
+    fault: VerificationFault,
+) -> WorkspaceResult<()> {
+    let mut state = VERIFICATION_FAULT
+        .lock()
+        .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+    if state.is_some() {
+        return Err(WorkspaceError::WorkspaceBusy);
+    }
+    *state = Some(VerificationFaultReceipt {
+        branch,
+        fault,
+        hit_count: 0,
+        spool_bytes_before: 0,
+    });
+    VERIFICATION_FAULT_ARMED.store(true, std::sync::atomic::Ordering::Release);
+    Ok(())
+}
+#[cfg(feature = "test-instrumentation")]
+pub fn take_verification_fault_receipt() -> WorkspaceResult<Option<VerificationFaultReceipt>> {
+    VERIFICATION_FAULT_ARMED.store(false, std::sync::atomic::Ordering::Release);
+    Ok(VERIFICATION_FAULT
+        .lock()
+        .map_err(|_| WorkspaceError::WorkspaceBusy)?
+        .take())
+}
+#[cfg(feature = "test-instrumentation")]
+pub(crate) fn consume_verification_fault(
+    branch: layerfs_layerstack_store::BranchId,
+    fault: VerificationFault,
+    spool_bytes: u64,
+) -> bool {
+    if !VERIFICATION_FAULT_ARMED.load(std::sync::atomic::Ordering::Acquire) {
+        return false;
+    }
+    let Ok(mut state) = VERIFICATION_FAULT.lock() else {
+        return false;
+    };
+    let Some(receipt) = state.as_mut() else {
+        return false;
+    };
+    if receipt.branch != branch || receipt.fault != fault || receipt.hit_count != 0 {
+        return false;
+    }
+    receipt.hit_count = 1;
+    receipt.spool_bytes_before = spool_bytes;
+    VERIFICATION_FAULT_ARMED.store(false, std::sync::atomic::Ordering::Release);
+    true
+}
+
+#[cfg(all(test, feature = "test-instrumentation"))]
+#[test]
+fn verification_fault_scope_is_one_shot() {
+    let branch = layerfs_layerstack_store::BranchId::new();
+    let other = layerfs_layerstack_store::BranchId::new();
+    assert!(!consume_verification_fault(
+        branch,
+        VerificationFault::ShortAppend,
+        0
+    ));
+    arm_verification_fault(branch, VerificationFault::ShortAppend).unwrap();
+    assert!(!consume_verification_fault(
+        other,
+        VerificationFault::ShortAppend,
+        0
+    ));
+    assert!(std::thread::spawn(move || consume_verification_fault(
+        branch,
+        VerificationFault::ShortAppend,
+        4096
+    ))
+    .join()
+    .unwrap());
+    assert!(!consume_verification_fault(
+        branch,
+        VerificationFault::ShortAppend,
+        8192
+    ));
+    let receipt = take_verification_fault_receipt().unwrap().unwrap();
+    assert_eq!((receipt.hit_count, receipt.spool_bytes_before), (1, 4096));
+    assert!(take_verification_fault_receipt().unwrap().is_none());
 }

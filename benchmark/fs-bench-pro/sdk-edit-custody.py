@@ -5,6 +5,8 @@ import fcntl
 import json
 import os
 import platform
+import signal
+import stat
 import shutil
 import subprocess
 import sys
@@ -149,32 +151,103 @@ def working_preparation_digest():
     return preparation_digest({str(path.relative_to(REPO)): path.read_bytes() for path in paths})
 
 
-def prepared_key(expected, compatibility):
-    value = {"cache_profile": "sdk-edit-prepared-store-cache-v1", "fixture": expected,
+def prepared_key(expected, compatibility, profile="sdk-edit-prepared-store-cache-v1"):
+    value = {"cache_profile": profile, "fixture": expected,
              "preparation_compatibility_sha256": compatibility, "journal_policy": "MEMORY-no-sidecars"}
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), value
 
 
-def acquire_prepared(cache_root, binary, size, receipt_path, build_evidence=""):
+def workspace_preparation_digest(producer):
+    """Read compatibility inputs from the sealed producing commit, never cwd."""
+    revision = producer["revision"]
+    identity = source_identity(revision)
+    assert all(producer[key] == identity[key] for key in ("source_seal", "product_seal", "harness_seal")), "producer source identity"
+    digest = hashlib.sha256(identity["preparation_compatibility_sha256"].encode())
+    selections = {
+        HARNESS + "src/workspace_bench.rs": [(b"fn fixture_info(", b"\nfn output_text(")],
+        HARNESS + "workspace_common.rs": [(b"", b"pub(crate) fn decode_manifest(")],
+    }
+    for path, ranges in sorted(selections.items()):
+        data = subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=REPO)
+        for start, end in ranges:
+            left = data.index(start) if start else 0
+            right = data.index(end, left)
+            digest.update(path.encode() + b"\0" + start + b"\0" + data[left:right])
+    return digest.hexdigest()
+
+
+def directory_metadata(root):
+    root = Path(root)
+    records = {}
+    links = {}
+    for path in [root, *sorted(root.rglob("*"))]:
+        value = path.lstat()
+        records[str(path.relative_to(root))] = {
+            "mode": stat.S_IMODE(value.st_mode), "type": stat.S_IFMT(value.st_mode),
+            "mtime_ns": value.st_mtime_ns, "size": value.st_size if stat.S_ISREG(value.st_mode) else None,
+            "symlink": os.readlink(path) if path.is_symlink() else None,
+            "link_class": links.setdefault((value.st_dev,value.st_ino),str(path.relative_to(root))) if stat.S_ISREG(value.st_mode) and value.st_nlink>1 else None,
+        }
+    return records
+
+
+def preparation_footprint(root):
+    logical = allocated = 0
+    for directory, _, files in os.walk(root):
+        for name in files:
+            value = (Path(directory) / name).lstat()
+            logical += value.st_size
+            allocated += value.st_blocks * 512
+    return {"logical_bytes":logical,"allocated_bytes":allocated}
+
+
+def cleanup_preparation_runtime(token):
+    ids = subprocess.check_output(["docker", "ps", "-aq", "--filter", f"label=layerfs.phase1.preparation={token}"], text=True, timeout=10).split()
+    if ids:
+        subprocess.run(["docker", "rm", "-f", *ids], check=True, stdout=subprocess.DEVNULL, timeout=45)
+
+
+def acquire_prepared(cache_root, binary, size, receipt_path, build_evidence="", workspace=None,
+                     workspace_timeout=600, workspace_expected=None, workspace_compatibility=None,
+                     workspace_reference=False):
     started = time.monotonic_ns()
     cache_root, receipt_path = Path(cache_root).resolve(), Path(receipt_path).resolve()
-    expected = json.loads(output(binary, "sdk-edit-fixture-info", str(size)))
-    compatibility = working_preparation_digest()
-    key, key_data = prepared_key(expected, compatibility)
+    info_command = "workspace-reference-info" if workspace_reference else "workspace-fixture-info"
+    expected = workspace_expected if workspace_expected is not None else json.loads(output(binary, info_command, *workspace)) if workspace else json.loads(output(binary, "sdk-edit-fixture-info", str(size)))
+    compatibility = working_preparation_digest() if not workspace else workspace_compatibility
+    if workspace:
+        assert build_evidence, "Workspace preparation requires sealed build evidence"
+        if compatibility is None:
+            verify_manifest(build_evidence)
+            compatibility = workspace_preparation_digest(json.loads((Path(build_evidence) / "build.json").read_text()))
+    profile = "workspace-reference-v1" if workspace_reference else "workspace-prepared-input-v1" if workspace else "sdk-edit-prepared-store-cache-v1"
+    is_directory = expected.get("input_mode") == "directory"
+    key, key_data = prepared_key(expected, compatibility, profile)
     cache_root.mkdir(parents=True, exist_ok=True)
     entry = cache_root / key
     build_ns, validation_ns, disposition, quarantine = 0, 0, "hit", None
+    expires = time.monotonic() + workspace_timeout if workspace else None
     with (cache_root / f"{key}.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if workspace else 0))
+                break
+            except BlockingIOError:
+                if time.monotonic() >= expires: raise TimeoutError("qualified input cache lock deadline")
+                time.sleep(.01)
         if entry.exists():
             validation_started = time.monotonic_ns()
             try:
                 entries = verify_manifest(entry)
                 metadata = json.loads((entry / "cache.json").read_text())
                 assert metadata["key_data"] == key_data
-                assert {path.name for path in (entry / "store").iterdir()} == {"store.sqlite", "branch-id"}
-                assert entries["store/store.sqlite"] == metadata["store_sha256"]
-                assert (entry / "store/store.sqlite").stat().st_size == metadata["store_bytes"]
+                if is_directory:
+                    assert {path.name for path in (entry / "store").iterdir()} == {"input"}
+                    assert directory_metadata(entry / "store/input") == metadata["input_metadata"], "input metadata corruption"
+                else:
+                    assert {path.name for path in (entry / "store").iterdir()} == {"store.sqlite", "branch-id"}
+                    assert entries["store/store.sqlite"] == metadata["store_sha256"]
+                    assert (entry / "store/store.sqlite").stat().st_size == metadata["store_bytes"]
                 assert all(metadata["fixture"].get(field) == value for field, value in expected.items() if field != "generator_seed")
                 if build_evidence:
                     assert metadata["producer"]["status"] == "pass", "unbound cache producer"
@@ -189,33 +262,58 @@ def acquire_prepared(cache_root, binary, size, receipt_path, build_evidence=""):
             stage = Path(tempfile.mkdtemp(prefix=f".{key}.prepare-", dir=cache_root))
             build_started = time.monotonic_ns()
             result = None
+            token = uuid.uuid4().hex
             try:
-                command = [str(binary), "sdk-edit-prepare", str(stage / "store"), str(size)]
+                command = [str(binary), "workspace-reference-prepare" if workspace_reference else "workspace-prepare", str(stage / "store"), *workspace] if workspace else [str(binary), "sdk-edit-prepare", str(stage / "store"), str(size)]
                 with (stage / "fixture.json").open("wb") as stdout, (stage / "prepare.stderr.txt").open("wb") as stderr:
-                    result = subprocess.run(command, cwd=REPO, stdout=stdout, stderr=stderr, timeout=30)
+                    environment = dict(os.environ, LAYERFS_V013_PREPARATION_TOKEN=token)
+                    result = subprocess.Popen(command, cwd=REPO, stdout=stdout, stderr=stderr, env=environment, start_new_session=True)
+                    try:
+                        result.wait(timeout=max(.001, expires-time.monotonic()) if workspace else 30)
+                    except BaseException:
+                        try: os.killpg(result.pid, signal.SIGKILL)
+                        except ProcessLookupError: pass
+                        result.wait()
+                        raise
                 build_ns = time.monotonic_ns() - build_started
                 validation_started = time.monotonic_ns()
                 assert result.returncode == 0, "prepared Store process failed"
                 fixture = json.loads((stage / "fixture.json").read_text())
                 assert all(fixture.get(field) == value for field, value in expected.items() if field != "generator_seed"), "prepared fixture identity"
-                assert {path.name for path in (stage / "store").iterdir()} == {"store.sqlite"}, "prepared Store sidecars"
-                with (stage / "store/store.sqlite").open("rb") as stream:
-                    assert stream.read(16) == b"SQLite format 3\0", "Store file format"
-                (stage / "store/branch-id").write_text(fixture["branch_id"] + "\n")
+                if is_directory:
+                    assert {path.name for path in (stage / "store").iterdir()} == {"input"}
+                else:
+                    assert {path.name for path in (stage / "store").iterdir()} == {"store.sqlite"}, "prepared Store sidecars"
+                    with (stage / "store/store.sqlite").open("rb") as stream:
+                        assert stream.read(16) == b"SQLite format 3\0", "Store file format"
+                    (stage / "store/branch-id").write_text(fixture["branch_id"] + "\n")
                 if build_evidence:
-                    producer = validate_build(build_evidence, binary, json.loads((Path(build_evidence) / "build.json").read_text())["revision"])
-                    assert producer["preparation_compatibility_sha256"] == compatibility
+                    if workspace:
+                        verify_manifest(build_evidence)
+                        producer = json.loads((Path(build_evidence) / "build.json").read_text())
+                        assert producer["schema"] == "fs-bench-pro-workspace-build-v1"
+                        assert producer["status"] == "pass" and producer["binary_sha256"] == sha(binary)
+                    else:
+                        producer = validate_build(build_evidence, binary, json.loads((Path(build_evidence) / "build.json").read_text())["revision"])
+                        assert producer["preparation_compatibility_sha256"] == compatibility
                     shutil.copytree(build_evidence, stage / "producer-build")
                 else:
                     producer = {"revision": output("git", "rev-parse", "HEAD"), "binary_sha256": sha(binary), "status": "unbound-selected"}
-                metadata = {"schema": "fs-bench-pro-sdk-edit-prepared-v1", "key": key, "key_data": key_data,
+                metadata = {"schema": "fs-bench-pro-workspace-prepared-v1" if workspace else "fs-bench-pro-sdk-edit-prepared-v1", "key": key, "key_data": key_data,
                             "producer": producer, "command": command, "exit_code": result.returncode,
-                            "store_bytes": (stage / "store/store.sqlite").stat().st_size,
-                            "store_sha256": sha(stage / "store/store.sqlite"), "fixture": fixture}
+                            "store_bytes": None if is_directory else (stage / "store/store.sqlite").stat().st_size,
+                            "store_sha256": None if is_directory else sha(stage / "store/store.sqlite"), "fixture": fixture}
+                if is_directory:
+                    metadata["input_metadata"] = directory_metadata(stage / "store/input")
+                if workspace:
+                    metadata["preparation_footprint"] = preparation_footprint(stage)
+                    assert max(metadata["preparation_footprint"].values()) <= 4*1024**3, "one prepared input/oracle exceeds 4 GiB"
                 write_json(stage / "cache.json", metadata)
                 seal(stage)
                 verify_manifest(stage)
                 for path in stage.rglob("*"):
+                    if is_directory and (path == stage / "store/input" or stage / "store/input" in path.parents):
+                        continue  # Source-file modes are measured import input metadata.
                     path.chmod(0o555 if path.is_dir() else 0o444)
                 stage.chmod(0o555)
                 os.replace(stage, entry)
@@ -226,11 +324,15 @@ def acquire_prepared(cache_root, binary, size, receipt_path, build_evidence=""):
                 for name in ("fixture.json", "prepare.stderr.txt"):
                     if (stage / name).is_file():
                         shutil.copy2(stage / name, failure / name)
-                write_json(failure / "context.json", {"schema":"fs-bench-pro-sdk-edit-preparation-failure-v1",
-                           "command":[str(binary),"sdk-edit-prepare",str(stage/"store"),str(size)],
+                write_json(failure / "context.json", {"schema":"fs-bench-pro-workspace-preparation-failure-v1" if workspace else "fs-bench-pro-sdk-edit-preparation-failure-v1",
+                           "command":command,
                            "timeout":isinstance(error,subprocess.TimeoutExpired),"error":str(error),
                            "exit_code":124 if isinstance(error,subprocess.TimeoutExpired) else result.returncode if result is not None else None,
                            "elapsed_ns":time.monotonic_ns()-build_started,"cache_key":key,"status":"fail"})
+                if workspace:
+                    try: cleanup_preparation_runtime(token)
+                    except BaseException as cleanup_error:
+                        write_json(failure / "runtime-cleanup-failure.json", {"token": token, "error": str(cleanup_error)})
                 seal(failure)
                 # Only this exact unpublished staging directory is disposable.
                 if stage.exists():
@@ -247,7 +349,15 @@ def acquire_prepared(cache_root, binary, size, receipt_path, build_evidence=""):
                    "cache_build_ns": build_ns, "cache_validation_ns": validation_ns,
                    "cache_acquisition_ns": time.monotonic_ns() - started,
                    "quarantined_path": str(quarantine) if quarantine else None,
-                   "cache_profile": "sdk-edit-prepared-store-cache-v1", "status": "pass"}
+                   "cache_profile": profile, "status": "pass"}
+        if workspace:
+            receipt["cache_footprint"] = preparation_footprint(cache_root)
+            assert max(receipt["cache_footprint"].values()) <= 24*1024**3, "shared prepared cache exceeds 24 GiB; explicit maintenance required"
+        if is_directory:
+            prefix = "store/input/"
+            receipt["input_file_sha256"] = {relative[len(prefix):]: digest for digest, relative in
+                (line.split(maxsplit=1) for line in (entry / "evidence.sha256").read_text().splitlines())
+                if relative.startswith(prefix)}
         write_json(receipt_path, receipt)
     print(str(entry / "store"))
 
@@ -270,6 +380,27 @@ def clone_prepared(source, target, expected_sha256):
     return {"clone_method": method, "clone_wall_ns": time.monotonic_ns() - started,
             "clone_store_sha256": cloned_sha256, "prepared_store_sha256": expected_sha256,
             "clone_bytes": target.stat().st_size, "hard_link": False, "status": "pass"}
+
+
+def clone_prepared_directory(source, target, receipt):
+    started = time.monotonic_ns()
+    source, target = Path(source), Path(target)
+    assert source.is_dir() and not target.exists(), "independent directory clone paths"
+    result = subprocess.run(["cp", "-c", "-p", "-R", str(source), str(target)], stderr=subprocess.DEVNULL)
+    method = "apfs-clone"
+    if result.returncode:
+        if target.exists(): shutil.rmtree(target)
+        shutil.copytree(source, target, symlinks=True, copy_function=shutil.copy2)
+        method = "byte-copy"
+    assert directory_metadata(target) == receipt["input_metadata"], "directory clone metadata"
+    expected = receipt["input_file_sha256"]
+    actual = {str(p.relative_to(target)) for p in target.rglob("*") if p.is_file() and not p.is_symlink()}
+    assert actual == set(expected), "directory clone file membership"
+    for relative, digest in expected.items():
+        assert not os.path.samefile(source / relative, target / relative), "sample file aliases master"
+        assert sha(target / relative) == digest, "directory clone identity"
+    return {"clone_method": method, "clone_wall_ns": time.monotonic_ns()-started,
+            "clone_file_count": len(expected), "hard_link": False, "status": "pass"}
 
 
 def cache_self_check(binary):
@@ -339,6 +470,39 @@ def cache_self_check(binary):
                                  "failed-preparation-exit-and-logs-retained"]}))
 
 
+def workspace_cache_self_check(binary, build_evidence):
+    # The original publisher regression covers concurrency/interruption, corrupt
+    # content, key invalidation and isolation once for this changed publisher.
+    cache_self_check(binary)
+    with tempfile.TemporaryDirectory(prefix="layerfs-workspace-cache-check-") as temporary:
+        root=Path(temporary); cache=root/"cache"
+        producer=json.loads((Path(build_evidence)/"build.json").read_text())
+        compatibility=workspace_preparation_digest(producer)
+        def acquire(case,label):
+            evidence=root/label;evidence.mkdir()
+            acquire_prepared(cache,binary,case,evidence/"acquisition.json",build_evidence,
+                workspace=(case,"1"),workspace_compatibility=compatibility)
+            return json.loads((evidence/"acquisition.json").read_text())
+        try:
+            left=acquire("workspace-clean-commit-1","shared-first")
+            right=acquire("directory-metadata-scan-1","shared-other-family")
+            assert left["key"]==right["key"] and right["cache_disposition"]=="hit", "cross-family pristine input reuse"
+            directory=acquire("dedup-cross-file-anchor-1","directory-first")
+            master=Path(directory["prepared_path"])/"input"
+            source=master/"files/f0000.dat"; before=sha(source)
+            clone=root/"input-clone"
+            clone_prepared_directory(master,clone,directory)
+            (clone/"files/f0000.dat").write_bytes(b"independent sample mutation")
+            assert sha(source)==before, "directory sample altered immutable master"
+            source.chmod(0o600)
+            repaired=acquire("dedup-cross-file-anchor-1","directory-corruption")
+            assert repaired["cache_disposition"]=="rebuilt-invalid", "directory metadata corruption not quarantined"
+        finally:
+            for path in root.rglob("*"):
+                if not path.is_symlink():path.chmod(0o755 if path.is_dir() else 0o644)
+    print(json.dumps({"schema":"fs-bench-pro-workspace-cache-self-check-v1","status":"pass","checks":["shared-publisher-regressions","cross-family-reuse","directory-clone-isolation","directory-metadata-corruption"]}))
+
+
 def validate_image(image, identity):
     labels = image["Config"]["Labels"]
     expected = {"org.opencontainers.image.revision": identity["revision"],
@@ -368,6 +532,22 @@ def host_identity():
             "cgroup_sampler_threads": 2, "swap_allowed": False}
 
 
+def workspace_identity(revision):
+    identity = source_identity(revision)
+    prefix = "docs/roadmap/0.1/0.1.3/"
+    files = output("git", "ls-tree", "-r", "--name-only", revision, "--", prefix).splitlines()
+    hashes = {path: hashlib.sha256(subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=REPO)).hexdigest() for path in files}
+    identity.update(phase1_contract_files=hashes,
+                    phase1_contract_sha256=hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest(),
+                    phase1_contract_commit=output("git", "log", "-1", "--format=%H", revision, "--", prefix),
+                    product_baseline="1e81e9b8cf871324341c221a51b0a0239c580da9")
+    report_path = HARNESS + "generate-workspace-report.py"
+    report_bytes = subprocess.check_output(["git", "show", f"{revision}:{report_path}"], cwd=REPO)
+    identity.update(report_generator_path=report_path,
+                    report_generator_sha256=hashlib.sha256(report_bytes).hexdigest())
+    return identity
+
+
 def build_configuration():
     rustc = output("rustc", "-Vv")
     target = next(line.removeprefix("host: ") for line in rustc.splitlines() if line.startswith("host: "))
@@ -385,9 +565,9 @@ def build_configuration():
             "profile":"release","locked":True,"target_directory":"repository-target"}
 
 
-def build(destination, image_tag):
+def build(destination, image_tag, workspace=False):
     revision = require_clean()
-    identity = source_identity(revision)
+    identity = workspace_identity(revision) if workspace else source_identity(revision)
     configuration = build_configuration()
     destination = Path(destination).resolve()
     assert not destination.exists(), "build destination exists"
@@ -407,8 +587,8 @@ def build(destination, image_tag):
             raise SystemExit(result.returncode)
 
     run("host-build", ["cargo", "build", "--locked", "--release", "--target", configuration["target"], "--target-dir", str(REPO / "target"), "-p", "fs-benchmark-pro"])
-    for test in ("group_4_invalid_type_range_overflow_and_limits_are_atomic",
-                 "group_5_commit_publication_is_exactly_once_and_retry_is_up_to_date"):
+    for test in (() if workspace else ("group_4_invalid_type_range_overflow_and_limits_are_atomic",
+                 "group_5_commit_publication_is_exactly_once_and_retry_is_up_to_date")):
         run(test, ["cargo", "test", "--locked", "-p", "layerfs-workspace", "--test", "file_edit", test, "--", "--exact"])
     command = ["docker", "build", "-f", HARNESS + "Dockerfile.layerfs", "-t", image_tag]
     for key, value in {"LAYERFS_SOURCE_COMMIT": revision, "LAYERFS_SOURCE_TREE": identity["tree"],
@@ -428,7 +608,7 @@ def build(destination, image_tag):
     binary = destination / "fs-benchmark-pro"
     shutil.copy2(REPO / "target" / configuration["target"] / "release/fs-benchmark-pro", binary)
     write_json(evidence / "image.json", image)
-    receipt = {"schema": "fs-bench-pro-sdk-edit-build-v1", **identity,
+    receipt = {"schema": "fs-bench-pro-workspace-build-v1" if workspace else "fs-bench-pro-sdk-edit-build-v1", **identity,
                "binary_sha256": sha(binary), "image_id": image["Id"], "image_tag": image_tag,
                "image_binaries_sha256": image_binaries,
                "rustc": output("rustc", "-Vv"), "cargo": output("cargo", "-V"),
@@ -595,6 +775,8 @@ def repository_gates(destination, measured_revision=None):
 if __name__ == "__main__":
     if len(sys.argv) == 4 and sys.argv[1] == "build":
         build(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) == 4 and sys.argv[1] == "build-workspace":
+        build(sys.argv[2], sys.argv[3], workspace=True)
     elif len(sys.argv) == 3 and sys.argv[1] == "identity":
         print(json.dumps(source_identity(sys.argv[2]), sort_keys=True))
     elif len(sys.argv) == 10 and sys.argv[1] == "capture":
@@ -603,8 +785,12 @@ if __name__ == "__main__":
         finalize(sys.argv[2])
     elif len(sys.argv) in (6, 7) and sys.argv[1] == "prepare":
         acquire_prepared(*sys.argv[2:])
+    elif len(sys.argv) == 7 and sys.argv[1] == "workspace-prepare":
+        acquire_prepared(sys.argv[2], sys.argv[3], sys.argv[4] + "-" + sys.argv[5], sys.argv[6], workspace=(sys.argv[4], sys.argv[5]))
     elif len(sys.argv) == 5 and sys.argv[1] == "clone":
         print(json.dumps(clone_prepared(*sys.argv[2:]), sort_keys=True, separators=(",", ":")))
+    elif len(sys.argv) == 4 and sys.argv[1] == "workspace-cache-self-check":
+        workspace_cache_self_check(sys.argv[2],sys.argv[3])
     elif len(sys.argv) == 3 and sys.argv[1] == "cache-self-check":
         cache_self_check(sys.argv[2])
     elif len(sys.argv) in (3,4) and sys.argv[1] == "repository-gates":

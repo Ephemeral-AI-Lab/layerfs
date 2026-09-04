@@ -226,6 +226,7 @@ dependencies = [
  "layerfs-content",
  "layerfs-layerstack-store",
  "layerfs-sdk",
+ "layerfs-workspace",
  "rusqlite",
 ]
 

@@ -79,6 +79,26 @@ impl Execution {
 }
 
 impl Workspaces {
+    /// Verification-only loss of the live daemon transport after a caller-observed barrier.
+    #[cfg(feature = "test-instrumentation")]
+    pub fn verification_disconnect_execution(
+        &self,
+        execution_id: ExecutionId,
+    ) -> WorkspaceResult<()> {
+        let execution = self.execution(execution_id)?;
+        let process = execution
+            .process
+            .lock()
+            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
+        match process.as_ref() {
+            #[cfg(unix)]
+            Some(ExecutionProcess::Daemon(process)) => {
+                process.disconnect().map_err(WorkspaceError::Io)
+            }
+            _ => Err(WorkspaceError::InvalidExecution),
+        }
+    }
+
     pub fn exec(
         &self,
         session_id: WorkspaceId,

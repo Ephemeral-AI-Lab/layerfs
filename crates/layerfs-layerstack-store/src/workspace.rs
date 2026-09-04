@@ -227,6 +227,8 @@ impl LayerStackStore {
         built: BuiltRoot,
     ) -> Result<CommitOutcome> {
         let _operation = self.db.enter_operation()?;
+        #[cfg(feature = "test-instrumentation")]
+        crate::schema::verification_candidate(expected.id, built.counters.spill_count);
         crate::telemetry::note_workspace_commit_cdc(built.counters.cdc_bytes_scanned);
         if built.root_id == expected_root && new_base_layer_id == expected.base_layer_id {
             return Ok(CommitOutcome::UpToDate {
@@ -301,6 +303,10 @@ impl LayerStackStore {
         }
         statement_number += 1;
         crate::schema::fail_transaction_statement(statement_number)?;
+        #[cfg(feature = "test-instrumentation")]
+        crate::schema::verification_store_checkpoint(
+            crate::schema::VerificationStoreFault::FinalPublication,
+        )?;
         if transaction.execute(
             crate::statements::workspace::ADVANCE_BRANCH,
             rusqlite::params![

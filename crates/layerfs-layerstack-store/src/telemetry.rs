@@ -132,8 +132,20 @@ pub struct WorkspaceCommitDiagnostics {
     pub edit_spool_peak_bytes: u64,
     pub edit_spool_live_bytes: u64,
     pub edit_spool_superseded_bytes: u64,
+    /// Aggregate owned spool inode st_blocks * 512 at observed mutation boundaries.
+    /// None means an observation failed; these are not logical spool lengths.
+    pub physical_spool_allocated_bytes: Option<u64>,
+    /// Lifetime observed high-water, including failed writes before rollback.
+    pub physical_spool_peak_bytes: Option<u64>,
+    pub physical_spool_observation_errors: u64,
+    pub physical_spool_observation_count: u64,
     pub edit_tree_visits: u64,
     pub edit_metric_nodes_scanned: u64,
+    pub namespace_base_paths_visited: u64,
+    pub namespace_final_paths_visited: u64,
+    pub namespace_dirty_nodes_visited: u64,
+    pub namespace_clean_nodes_visited: u64,
+    pub namespace_candidate_probe_nodes: u64,
 }
 
 impl WorkspaceCommitReceipt {
@@ -326,6 +338,51 @@ pub fn note_workspace_commit_edit_state(
             diagnostic.edit_spool_live_bytes = spool_live_bytes;
             diagnostic.edit_spool_superseded_bytes = spool_superseded_bytes;
             diagnostic.edit_metric_nodes_scanned = metric_nodes_scanned;
+        }
+    });
+}
+
+/// Adds passive allocation observations without changing legacy receipt fields.
+pub fn note_workspace_physical_spool(
+    current: Option<u64>,
+    peak: Option<u64>,
+    errors: u64,
+    observations: u64,
+) {
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current_diagnostic| {
+        if let Some(diagnostic) = current_diagnostic.borrow_mut().as_mut() {
+            diagnostic.physical_spool_allocated_bytes = current;
+            diagnostic.physical_spool_peak_bytes = peak;
+            diagnostic.physical_spool_observation_errors = errors;
+            diagnostic.physical_spool_observation_count = observations;
+        }
+    });
+}
+
+/// Counts actual candidate traversal work only while diagnostic capture is active.
+pub fn note_workspace_namespace_visits(
+    base: u64,
+    final_paths: u64,
+    dirty: u64,
+    clean: u64,
+    probes: u64,
+) {
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.namespace_base_paths_visited =
+                diagnostic.namespace_base_paths_visited.saturating_add(base);
+            diagnostic.namespace_final_paths_visited = diagnostic
+                .namespace_final_paths_visited
+                .saturating_add(final_paths);
+            diagnostic.namespace_dirty_nodes_visited = diagnostic
+                .namespace_dirty_nodes_visited
+                .saturating_add(dirty);
+            diagnostic.namespace_clean_nodes_visited = diagnostic
+                .namespace_clean_nodes_visited
+                .saturating_add(clean);
+            diagnostic.namespace_candidate_probe_nodes = diagnostic
+                .namespace_candidate_probe_nodes
+                .saturating_add(probes);
         }
     });
 }
@@ -573,6 +630,7 @@ mod tests {
             note_workspace_commit_edit_state(2, 3, 4, 5, 6, 7, 8, 9, 10);
             note_workspace_commit_tree_visits(11);
             note_workspace_commit_cdc(12);
+            note_workspace_namespace_visits(13, 14, 15, 16, 17);
         }
         let receipts = take_storage_receipts();
         let [StorageReceipt::WorkspaceCommit(receipt)] = receipts.as_slice() else {
@@ -595,8 +653,17 @@ mod tests {
                 edit_spool_peak_bytes: 7,
                 edit_spool_live_bytes: 8,
                 edit_spool_superseded_bytes: 9,
+                physical_spool_allocated_bytes: None,
+                physical_spool_peak_bytes: None,
+                physical_spool_observation_errors: 0,
+                physical_spool_observation_count: 0,
                 edit_tree_visits: 11,
                 edit_metric_nodes_scanned: 10,
+                namespace_base_paths_visited: 13,
+                namespace_final_paths_visited: 14,
+                namespace_dirty_nodes_visited: 15,
+                namespace_clean_nodes_visited: 16,
+                namespace_candidate_probe_nodes: 17,
             }
         );
     }

@@ -386,6 +386,13 @@ impl ProxyClient {
 }
 
 impl FilesystemPort for ProxyClient {
+    fn note_kernel_operation(&self, operation: crate::KernelOperation) {
+        self.read_metrics.note_kernel_operation(operation);
+    }
+    fn note_readdir_page(&self, offset: u64, entries: u64) {
+        self.read_metrics.note_readdir_page(offset, entries);
+    }
+
     fn note_fuse_max_write(&self, bytes: u32) {
         self.metrics.note_max_write(u64::from(bytes));
     }

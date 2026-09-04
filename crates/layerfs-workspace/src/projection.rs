@@ -217,7 +217,7 @@ pub(crate) fn record_read_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<(
     let Some(transport) = transport else {
         return Ok(());
     };
-    if transport.kernel_read_requests == 0 {
+    if transport.kernel_read_requests == 0 && transport.kernel_callback_count() == 0 {
         return Ok(());
     }
     let mut receipt = worker
@@ -226,6 +226,33 @@ pub(crate) fn record_read_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<(
         .map_err(|_| WorkspaceError::WorkspaceBusy)?
         .reader
         .take_read_metrics()?;
+    receipt.callback_lookup = transport.callback_lookup;
+    receipt.callback_getattr = transport.callback_getattr;
+    receipt.callback_setattr = transport.callback_setattr;
+    receipt.callback_readlink = transport.callback_readlink;
+    receipt.callback_mknod = transport.callback_mknod;
+    receipt.callback_mkdir = transport.callback_mkdir;
+    receipt.callback_unlink = transport.callback_unlink;
+    receipt.callback_rmdir = transport.callback_rmdir;
+    receipt.callback_symlink = transport.callback_symlink;
+    receipt.callback_rename = transport.callback_rename;
+    receipt.callback_link = transport.callback_link;
+    receipt.callback_open = transport.callback_open;
+    receipt.callback_read = transport.callback_read;
+    receipt.callback_write = transport.callback_write;
+    receipt.callback_flush = transport.callback_flush;
+    receipt.callback_release = transport.callback_release;
+    receipt.callback_fsync = transport.callback_fsync;
+    receipt.callback_opendir = transport.callback_opendir;
+    receipt.callback_readdir = transport.callback_readdir;
+    receipt.callback_readdirplus = transport.callback_readdirplus;
+    receipt.callback_releasedir = transport.callback_releasedir;
+    receipt.callback_fsyncdir = transport.callback_fsyncdir;
+    receipt.callback_statfs = transport.callback_statfs;
+    receipt.callback_access = transport.callback_access;
+    receipt.callback_create = transport.callback_create;
+    receipt.directory_entries_returned = transport.directory_entries_returned;
+    receipt.directory_nonzero_offset_requests = transport.directory_nonzero_offset_requests;
     receipt.max_readahead_bytes = transport.max_readahead_bytes;
     receipt.init_capabilities = transport.init_capabilities;
     receipt.kernel_read_requests = transport.kernel_read_requests;
@@ -260,7 +287,7 @@ pub(crate) fn record_read_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<(
 }
 
 pub(crate) fn resume(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
     if INJECT_RESUME_FAILURE.with(|inject| inject.replace(false)) {
         return Err(WorkspaceError::Io(std::io::Error::other(
             "injected projection resume failure",
@@ -421,7 +448,7 @@ pub(crate) fn refresh(
     daemon: Option<&crate::daemon::DaemonOwner>,
 ) -> WorkspaceResult<()> {
     end(worker)?;
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
     if INJECT_REFRESH_FAILURE.with(|inject| inject.replace(false)) {
         return Err(WorkspaceError::Io(std::io::Error::other(
             "injected projection refresh failure",
@@ -435,18 +462,18 @@ pub(crate) fn refresh(
     Ok(())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
 thread_local! {
     static INJECT_REFRESH_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static INJECT_RESUME_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
 pub(crate) fn inject_refresh_failure_once() {
     INJECT_REFRESH_FAILURE.with(|inject| inject.set(true));
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
 pub(crate) fn inject_resume_failure_once() {
     INJECT_RESUME_FAILURE.with(|inject| inject.set(true));
 }

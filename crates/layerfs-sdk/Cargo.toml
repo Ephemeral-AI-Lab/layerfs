@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+test-instrumentation = ["layerfs-workspace/test-instrumentation"]
+
 [dependencies]
 layerfs-content = { path = "../layerfs-content" }
 layerfs-layerstack-store = { path = "../layerfs-layerstack-store" }

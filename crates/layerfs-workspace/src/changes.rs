@@ -33,7 +33,7 @@ struct FinalEntry {
 
 impl Workspace {
     pub(crate) fn build_candidate(&mut self) -> Result<BuiltRoot> {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
         if INJECT_CANDIDATE_FAILURE.with(|inject| inject.replace(false)) {
             return Err(StorageError::Integrity(
                 "injected Workspace candidate failure",
@@ -352,7 +352,7 @@ impl Workspace {
 
     fn build_localized_candidate(&mut self) -> Result<Option<BuiltRoot>> {
         let started = Instant::now();
-        if self.nodes.values().any(|node| {
+        if self.nodes.values().inspect(|_| layerfs_layerstack_store::note_workspace_namespace_visits(0, 0, 0, 0, 1)).any(|node| {
             matches!(&node.data, Data::Directory(directory) if !directory.changes.is_empty())
         }) {
             return Ok(None);
@@ -362,6 +362,9 @@ impl Workspace {
             let Some(node) = self
                 .nodes
                 .iter()
+                .inspect(|_| {
+                    layerfs_layerstack_store::note_workspace_namespace_visits(0, 0, 0, 0, 1)
+                })
                 .find_map(|(node, value)| value.paths.contains(path).then_some(*node))
             else {
                 return Ok(None);
@@ -390,6 +393,13 @@ impl Workspace {
         let reader = CoreReader(&self.reader);
         let mut entries = Vec::with_capacity(changed.len());
         for node in changed {
+            layerfs_layerstack_store::note_workspace_namespace_visits(
+                0,
+                0,
+                u64::from(self.dirty.contains(&node)),
+                u64::from(!self.dirty.contains(&node)),
+                0,
+            );
             let inode = self.nodes[&node]
                 .canonical
                 .ok_or(StorageError::Integrity("localized inode"))?;
@@ -634,6 +644,13 @@ impl Workspace {
                     128,
                     256 * 1024,
                 )?;
+                layerfs_layerstack_store::note_workspace_namespace_visits(
+                    page.entries.len() as u64,
+                    0,
+                    0,
+                    0,
+                    0,
+                );
                 for (name, _) in page.entries {
                     let path = join(&directory, name.as_str())?;
                     let resolved = filesystem::resolve(
@@ -677,6 +694,14 @@ impl Workspace {
         let mut pending = vec![(ROOT, String::new())];
         while let Some((directory, prefix)) = pending.pop() {
             for (name, node) in self.directory_entries(directory)? {
+                let dirty = self.dirty.contains(&node);
+                layerfs_layerstack_store::note_workspace_namespace_visits(
+                    0,
+                    1,
+                    u64::from(dirty),
+                    u64::from(!dirty),
+                    0,
+                );
                 let name = std::str::from_utf8(&name)
                     .map_err(|_| StorageError::Integrity("Workspace path"))?;
                 let path = if prefix.is_empty() {
@@ -891,12 +916,12 @@ impl Workspace {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
 thread_local! {
     static INJECT_CANDIDATE_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
 pub(crate) fn inject_candidate_failure_once() {
     INJECT_CANDIDATE_FAILURE.with(|inject| inject.set(true));
 }

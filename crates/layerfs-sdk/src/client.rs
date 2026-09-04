@@ -31,6 +31,25 @@ struct ClientInner {
 }
 
 impl Client {
+    #[cfg(feature = "test-instrumentation")]
+    pub fn verification_workspace_state(
+        &self,
+        id: WorkspaceId,
+    ) -> Result<layerfs_workspace::VerificationWorkspaceState> {
+        Ok(self.0.workspaces.verification_workspace_state(id)?)
+    }
+
+    #[cfg(feature = "test-instrumentation")]
+    pub fn verification_disconnect_workspace_execution(
+        &self,
+        execution_id: ExecutionId,
+    ) -> Result<()> {
+        Ok(self
+            .0
+            .workspaces
+            .verification_disconnect_execution(execution_id)?)
+    }
+
     pub fn connect(store: Arc<LayerStackStore>) -> Result<Self> {
         Self::connect_inner(store, None)
     }

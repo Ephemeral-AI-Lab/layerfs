@@ -20,7 +20,9 @@ mod write_metrics;
 pub use adapter::LayerFs;
 #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
 pub use host_mount::{mount_host, HostMount};
-pub use port::{Attr, FilesystemPort, Kind, NodeId, PortError, PortResult, SharedPort, ROOT};
+pub use port::{
+    Attr, FilesystemPort, KernelOperation, Kind, NodeId, PortError, PortResult, SharedPort, ROOT,
+};
 pub use proxy_client::ProxyClient;
 #[doc(hidden)]
 pub use proxy_client::{serve_remote_control, RemoteControl};

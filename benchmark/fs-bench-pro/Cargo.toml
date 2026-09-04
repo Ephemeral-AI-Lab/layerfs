@@ -8,7 +8,8 @@ license.workspace = true
 [dependencies]
 layerfs-content = { path = "../../crates/layerfs-content" }
 layerfs-layerstack-store = { path = "../../crates/layerfs-layerstack-store" }
-layerfs-sdk = { path = "../../crates/layerfs-sdk" }
+layerfs-sdk = { path = "../../crates/layerfs-sdk", features = ["test-instrumentation"] }
+layerfs-workspace = { path = "../../crates/layerfs-workspace", features = ["test-instrumentation"] }
 rusqlite.workspace = true
 
 [[bin]]

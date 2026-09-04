@@ -2983,6 +2983,12 @@ fn insert_admission_batch(
     let transaction =
         connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
     let begin_ns = elapsed_ns(begin_started);
+    #[cfg(feature = "test-instrumentation")]
+    if !bulk_insert {
+        crate::schema::verification_store_checkpoint(
+            crate::schema::VerificationStoreFault::LaterAdmissionBatch,
+        )?;
+    }
     let insert = if bulk_insert {
         insert_initialization_object_batch(&transaction, batch, statement_number)?
     } else {
@@ -2990,6 +2996,10 @@ fn insert_admission_batch(
     };
     let commit_started = Instant::now();
     transaction.commit()?;
+    #[cfg(feature = "test-instrumentation")]
+    if !bulk_insert {
+        crate::schema::verification_early_committed();
+    }
     Ok(AdmissionBatchMetrics {
         insert,
         begin_ns,

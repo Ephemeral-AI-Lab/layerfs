@@ -262,10 +262,69 @@ pub struct FuseReadMetrics {
     pub client_decode_ns: u64,
     pub client_decode_copy_bytes: u64,
     pub host_dispatch_ns: u64,
+    pub callback_lookup: u64,
+    pub callback_getattr: u64,
+    pub callback_setattr: u64,
+    pub callback_readlink: u64,
+    pub callback_mknod: u64,
+    pub callback_mkdir: u64,
+    pub callback_unlink: u64,
+    pub callback_rmdir: u64,
+    pub callback_symlink: u64,
+    pub callback_rename: u64,
+    pub callback_link: u64,
+    pub callback_open: u64,
+    pub callback_read: u64,
+    pub callback_write: u64,
+    pub callback_flush: u64,
+    pub callback_release: u64,
+    pub callback_fsync: u64,
+    pub callback_opendir: u64,
+    pub callback_readdir: u64,
+    pub callback_readdirplus: u64,
+    pub callback_releasedir: u64,
+    pub callback_fsyncdir: u64,
+    pub callback_statfs: u64,
+    pub callback_access: u64,
+    pub callback_create: u64,
+    pub directory_entries_returned: u64,
+    pub directory_nonzero_offset_requests: u64,
 }
 
 impl FuseReadMetrics {
-    const FIELD_COUNT: usize = 28;
+    pub fn kernel_callback_count(&self) -> u64 {
+        [
+            self.callback_lookup,
+            self.callback_getattr,
+            self.callback_setattr,
+            self.callback_readlink,
+            self.callback_mknod,
+            self.callback_mkdir,
+            self.callback_unlink,
+            self.callback_rmdir,
+            self.callback_symlink,
+            self.callback_rename,
+            self.callback_link,
+            self.callback_open,
+            self.callback_read,
+            self.callback_write,
+            self.callback_flush,
+            self.callback_release,
+            self.callback_fsync,
+            self.callback_opendir,
+            self.callback_readdir,
+            self.callback_readdirplus,
+            self.callback_releasedir,
+            self.callback_fsyncdir,
+            self.callback_statfs,
+            self.callback_access,
+            self.callback_create,
+        ]
+        .into_iter()
+        .fold(0_u64, u64::saturating_add)
+    }
+
+    const FIELD_COUNT: usize = 55;
 
     pub(crate) fn merge(&mut self, other: Self) {
         self.max_readahead_bytes = self.max_readahead_bytes.max(other.max_readahead_bytes);
@@ -323,6 +382,33 @@ impl FuseReadMetrics {
             self.client_decode_ns,
             self.client_decode_copy_bytes,
             self.host_dispatch_ns,
+            self.callback_lookup,
+            self.callback_getattr,
+            self.callback_setattr,
+            self.callback_readlink,
+            self.callback_mknod,
+            self.callback_mkdir,
+            self.callback_unlink,
+            self.callback_rmdir,
+            self.callback_symlink,
+            self.callback_rename,
+            self.callback_link,
+            self.callback_open,
+            self.callback_read,
+            self.callback_write,
+            self.callback_flush,
+            self.callback_release,
+            self.callback_fsync,
+            self.callback_opendir,
+            self.callback_readdir,
+            self.callback_readdirplus,
+            self.callback_releasedir,
+            self.callback_fsyncdir,
+            self.callback_statfs,
+            self.callback_access,
+            self.callback_create,
+            self.directory_entries_returned,
+            self.directory_nonzero_offset_requests,
         ]
     }
 
@@ -356,6 +442,33 @@ impl FuseReadMetrics {
             &mut self.client_decode_ns,
             &mut self.client_decode_copy_bytes,
             &mut self.host_dispatch_ns,
+            &mut self.callback_lookup,
+            &mut self.callback_getattr,
+            &mut self.callback_setattr,
+            &mut self.callback_readlink,
+            &mut self.callback_mknod,
+            &mut self.callback_mkdir,
+            &mut self.callback_unlink,
+            &mut self.callback_rmdir,
+            &mut self.callback_symlink,
+            &mut self.callback_rename,
+            &mut self.callback_link,
+            &mut self.callback_open,
+            &mut self.callback_read,
+            &mut self.callback_write,
+            &mut self.callback_flush,
+            &mut self.callback_release,
+            &mut self.callback_fsync,
+            &mut self.callback_opendir,
+            &mut self.callback_readdir,
+            &mut self.callback_readdirplus,
+            &mut self.callback_releasedir,
+            &mut self.callback_fsyncdir,
+            &mut self.callback_statfs,
+            &mut self.callback_access,
+            &mut self.callback_create,
+            &mut self.directory_entries_returned,
+            &mut self.directory_nonzero_offset_requests,
         ]
     }
 
@@ -398,9 +511,76 @@ pub(crate) struct AtomicFuseReadMetrics {
     client_decode_ns: AtomicU64,
     client_decode_copy_bytes: AtomicU64,
     host_dispatch_ns: AtomicU64,
+    callback_lookup: AtomicU64,
+    callback_getattr: AtomicU64,
+    callback_setattr: AtomicU64,
+    callback_readlink: AtomicU64,
+    callback_mknod: AtomicU64,
+    callback_mkdir: AtomicU64,
+    callback_unlink: AtomicU64,
+    callback_rmdir: AtomicU64,
+    callback_symlink: AtomicU64,
+    callback_rename: AtomicU64,
+    callback_link: AtomicU64,
+    callback_open: AtomicU64,
+    callback_read: AtomicU64,
+    callback_write: AtomicU64,
+    callback_flush: AtomicU64,
+    callback_release: AtomicU64,
+    callback_fsync: AtomicU64,
+    callback_opendir: AtomicU64,
+    callback_readdir: AtomicU64,
+    callback_readdirplus: AtomicU64,
+    callback_releasedir: AtomicU64,
+    callback_fsyncdir: AtomicU64,
+    callback_statfs: AtomicU64,
+    callback_access: AtomicU64,
+    callback_create: AtomicU64,
+    directory_entries_returned: AtomicU64,
+    directory_nonzero_offset_requests: AtomicU64,
 }
 
 impl AtomicFuseReadMetrics {
+    pub(crate) fn note_kernel_operation(&self, operation: crate::KernelOperation) {
+        let counter = match operation {
+            crate::KernelOperation::Lookup => &self.callback_lookup,
+            crate::KernelOperation::Getattr => &self.callback_getattr,
+            crate::KernelOperation::Setattr => &self.callback_setattr,
+            crate::KernelOperation::Readlink => &self.callback_readlink,
+            crate::KernelOperation::Mknod => &self.callback_mknod,
+            crate::KernelOperation::Mkdir => &self.callback_mkdir,
+            crate::KernelOperation::Unlink => &self.callback_unlink,
+            crate::KernelOperation::Rmdir => &self.callback_rmdir,
+            crate::KernelOperation::Symlink => &self.callback_symlink,
+            crate::KernelOperation::Rename => &self.callback_rename,
+            crate::KernelOperation::Link => &self.callback_link,
+            crate::KernelOperation::Open => &self.callback_open,
+            crate::KernelOperation::Read => &self.callback_read,
+            crate::KernelOperation::Write => &self.callback_write,
+            crate::KernelOperation::Flush => &self.callback_flush,
+            crate::KernelOperation::Release => &self.callback_release,
+            crate::KernelOperation::Fsync => &self.callback_fsync,
+            crate::KernelOperation::Opendir => &self.callback_opendir,
+            crate::KernelOperation::Readdir => &self.callback_readdir,
+            crate::KernelOperation::Readdirplus => &self.callback_readdirplus,
+            crate::KernelOperation::Releasedir => &self.callback_releasedir,
+            crate::KernelOperation::Fsyncdir => &self.callback_fsyncdir,
+            crate::KernelOperation::Statfs => &self.callback_statfs,
+            crate::KernelOperation::Access => &self.callback_access,
+            crate::KernelOperation::Create => &self.callback_create,
+        };
+        counter.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn note_readdir_page(&self, offset: u64, entries: u64) {
+        self.directory_entries_returned
+            .fetch_add(entries, Ordering::Relaxed);
+        if offset != 0 {
+            self.directory_nonzero_offset_requests
+                .fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
     pub(crate) fn note_config(&self, max_readahead: u64, capabilities: u64) {
         self.max_readahead_bytes
             .fetch_max(max_readahead, Ordering::Relaxed);
@@ -523,9 +703,96 @@ impl AtomicFuseReadMetrics {
             &self.client_decode_ns,
             &self.client_decode_copy_bytes,
             &self.host_dispatch_ns,
+            &self.callback_lookup,
+            &self.callback_getattr,
+            &self.callback_setattr,
+            &self.callback_readlink,
+            &self.callback_mknod,
+            &self.callback_mkdir,
+            &self.callback_unlink,
+            &self.callback_rmdir,
+            &self.callback_symlink,
+            &self.callback_rename,
+            &self.callback_link,
+            &self.callback_open,
+            &self.callback_read,
+            &self.callback_write,
+            &self.callback_flush,
+            &self.callback_release,
+            &self.callback_fsync,
+            &self.callback_opendir,
+            &self.callback_readdir,
+            &self.callback_readdirplus,
+            &self.callback_releasedir,
+            &self.callback_fsyncdir,
+            &self.callback_statfs,
+            &self.callback_access,
+            &self.callback_create,
+            &self.directory_entries_returned,
+            &self.directory_nonzero_offset_requests,
         ]) {
             *target = source.swap(0, Ordering::Relaxed);
         }
         metrics
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kernel_observation_round_trip_and_reset() {
+        let metrics = AtomicFuseReadMetrics::default();
+        let operations = [
+            crate::KernelOperation::Lookup,
+            crate::KernelOperation::Getattr,
+            crate::KernelOperation::Setattr,
+            crate::KernelOperation::Readlink,
+            crate::KernelOperation::Mknod,
+            crate::KernelOperation::Mkdir,
+            crate::KernelOperation::Unlink,
+            crate::KernelOperation::Rmdir,
+            crate::KernelOperation::Symlink,
+            crate::KernelOperation::Rename,
+            crate::KernelOperation::Link,
+            crate::KernelOperation::Open,
+            crate::KernelOperation::Read,
+            crate::KernelOperation::Write,
+            crate::KernelOperation::Flush,
+            crate::KernelOperation::Release,
+            crate::KernelOperation::Fsync,
+            crate::KernelOperation::Opendir,
+            crate::KernelOperation::Readdir,
+            crate::KernelOperation::Readdirplus,
+            crate::KernelOperation::Releasedir,
+            crate::KernelOperation::Fsyncdir,
+            crate::KernelOperation::Statfs,
+            crate::KernelOperation::Access,
+            crate::KernelOperation::Create,
+        ];
+        for (index, operation) in operations.into_iter().enumerate() {
+            for _ in 0..=index {
+                metrics.note_kernel_operation(operation);
+            }
+        }
+        metrics.note_readdir_page(0, 13);
+        metrics.note_readdir_page(13, 7);
+        let taken = metrics.take();
+        assert_eq!(taken.kernel_callback_count(), 325);
+        assert_eq!(taken.directory_entries_returned, 20);
+        assert_eq!(taken.directory_nonzero_offset_requests, 1);
+        let mut wire = Vec::new();
+        taken.write_to(&mut wire).unwrap();
+        assert_eq!(
+            FuseReadMetrics::read_from(&mut wire.as_slice()).unwrap(),
+            taken
+        );
+        assert_eq!(metrics.take(), FuseReadMetrics::default());
+        let mut merged = taken;
+        merged.merge(taken);
+        assert_eq!(merged.kernel_callback_count(), 650);
+        assert_eq!(merged.directory_entries_returned, 40);
+        assert_eq!(merged.directory_nonzero_offset_requests, 2);
     }
 }

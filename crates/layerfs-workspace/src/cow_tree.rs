@@ -92,6 +92,64 @@ pub(crate) struct Node {
     pub data: Data,
 }
 
+/// Event-boundary observations of owned regular spool inode allocation, not
+/// logical file lengths or a continuous filesystem allocator peak. Kept outside
+/// edit checkpoints so failed writes cannot erase resources they actually used.
+#[derive(Default)]
+pub(crate) struct PhysicalSpoolMetrics {
+    allocated: HashMap<NodeId, u64>,
+    current: u64,
+    peak: u64,
+    errors: u64,
+    observations: u64,
+}
+
+impl PhysicalSpoolMetrics {
+    pub(crate) fn observe(&mut self, node: NodeId, metadata: &std::fs::Metadata) {
+        use std::os::unix::fs::MetadataExt;
+        self.observations = self.observations.saturating_add(1);
+        let previous = self.allocated.get(&node).copied().unwrap_or(0);
+        let Some(allocated) = metadata.blocks().checked_mul(512) else {
+            self.error();
+            return;
+        };
+        let Some(current) = self
+            .current
+            .checked_sub(previous)
+            .and_then(|n| n.checked_add(allocated))
+        else {
+            self.error();
+            return;
+        };
+        self.allocated.insert(node, allocated);
+        self.current = current;
+        self.peak = self.peak.max(current);
+    }
+
+    pub(crate) fn removed(&mut self, node: NodeId) {
+        if let Some(bytes) = self.allocated.remove(&node) {
+            if let Some(current) = self.current.checked_sub(bytes) {
+                self.current = current;
+            } else {
+                self.error();
+            }
+        }
+    }
+
+    pub(crate) fn error(&mut self) {
+        self.errors = self.errors.saturating_add(1);
+    }
+
+    pub(crate) fn snapshot(&self) -> (Option<u64>, Option<u64>, u64, u64) {
+        (
+            (self.errors == 0).then_some(self.current),
+            (self.errors == 0).then_some(self.peak),
+            self.errors,
+            self.observations,
+        )
+    }
+}
+
 pub struct Workspace {
     pub(crate) store: LayerStackStore,
     pub(crate) reader: SnapshotReader,
@@ -103,6 +161,7 @@ pub struct Workspace {
     pub(crate) spool: PathBuf,
     pub(crate) spool_bytes: u64,
     pub(crate) spool_bytes_peak: u64,
+    pub(crate) physical_spool: std::cell::RefCell<PhysicalSpoolMetrics>,
     pub(crate) inline_bytes: u64,
     pub(crate) piece_allocation_bytes: u64,
     pub(crate) spool_write_metrics: SpoolWriteMetrics,
@@ -227,6 +286,7 @@ impl Workspace {
             spool,
             spool_bytes: 0,
             spool_bytes_peak: 0,
+            physical_spool: std::cell::RefCell::default(),
             inline_bytes: 0,
             piece_allocation_bytes: 0,
             spool_write_metrics: SpoolWriteMetrics::default(),
@@ -992,7 +1052,7 @@ impl Workspace {
                     self.piece_allocation_bytes = self
                         .piece_allocation_bytes
                         .saturating_sub(pieces.logical_allocation_charge().unwrap_or(0));
-                    let _ = std::fs::remove_file(spool);
+                    let _ = self.remove_spool_file(node, &spool);
                 }
             }
         }
