@@ -142,11 +142,6 @@ impl Workspace {
             &rebase_spool,
             self.policy,
         )?;
-        let current = self
-            .nodes
-            .iter()
-            .map(|(id, node)| (*id, node.clone()))
-            .collect::<Vec<_>>();
         let mut nodes = std::collections::HashMap::new();
         let mut canonical_nodes = std::collections::HashMap::new();
         let mut obsolete_spools = Vec::new();
@@ -154,10 +149,12 @@ impl Workspace {
         let mut retained_spool_bytes = 0_u64;
         let mut retained_inline_bytes = 0_u64;
         let mut retained_piece_allocation_bytes = 0_u64;
-        for (id, old) in current {
+        // Keep the original Workspace intact until every fallible validation
+        // succeeds, without cloning its entire node/path/spool graph up front.
+        for (&id, old) in &self.nodes {
             if old.paths.is_empty() {
                 if old.pins != 0 {
-                    let mut retained = old;
+                    let mut retained = old.clone();
                     retained.canonical = None;
                     if let crate::cow_tree::Data::File(crate::cow_tree::FileData::Edited {
                         spool_high_water,
@@ -201,12 +198,34 @@ impl Workspace {
             {
                 return Err(StorageError::Integrity("committed Workspace presentation"));
             }
-            let mut rebased = committed
-                .nodes
-                .get(&fresh_id)
-                .ok_or(StorageError::Integrity("committed Workspace node"))?
-                .clone();
-            rebased.paths = old.paths;
+            #[cfg(test)]
+            assert!(
+                committed
+                    .nodes
+                    .values()
+                    .filter(|node| !matches!(node.data, crate::cow_tree::Data::Directory(_)))
+                    .count()
+                    <= 1,
+                "rebase must stage at most one non-directory node"
+            );
+            let mut rebased = if fresh_attr.kind == crate::cow_tree::Kind::Directory {
+                // Ancestors remain available for subsequent path resolution.
+                committed
+                    .nodes
+                    .get(&fresh_id)
+                    .ok_or(StorageError::Integrity("committed Workspace node"))?
+                    .clone()
+            } else {
+                let node = committed
+                    .nodes
+                    .remove(&fresh_id)
+                    .ok_or(StorageError::Integrity("committed Workspace node"))?;
+                if let Some(inode) = node.canonical {
+                    committed.canonical_nodes.remove(&inode);
+                }
+                node
+            };
+            rebased.paths = old.paths.clone();
             rebased.pins = old.pins;
             if let Some(inode) = rebased.canonical {
                 if canonical_nodes.insert(inode, id).is_some() {
@@ -215,12 +234,12 @@ impl Workspace {
             }
             if let crate::cow_tree::Data::File(crate::cow_tree::FileData::Edited {
                 spool, ..
-            }) = old.data
+            }) = &old.data
             {
                 if !self.open_spools.contains_key(&id) {
                     return Err(StorageError::Integrity("spool descriptor"));
                 }
-                obsolete_spools.push((id, spool));
+                obsolete_spools.push((id, spool.clone()));
             }
             nodes.insert(id, rebased);
         }
@@ -1074,6 +1093,88 @@ mod tests {
             delete_len: 0,
             replacement: crate::WorkspaceFileReplacement::Inline(b"P".to_vec()),
         })
+    }
+
+    #[test]
+    fn rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools() {
+        let (root, workspaces, branch, store) = fixture("streamed-rebase");
+        drop(workspaces);
+        let mut workspace = Workspace::open(store.clone(), branch, root.join("spool")).unwrap();
+        let directory = workspace.mkdir(crate::ROOT, b"group", 0o750).unwrap().node;
+        let mut files = Vec::new();
+        for index in 0..32 {
+            let name = format!("f{index:02}");
+            let node = workspace
+                .create_file(directory, name.as_bytes(), 0o640)
+                .unwrap()
+                .node;
+            workspace.write(node, 0, b"before").unwrap();
+            files.push((name, node));
+        }
+        workspace.link(files[0].1, directory, b"alias").unwrap();
+        workspace.commit().unwrap();
+        let inodes = files
+            .iter()
+            .map(|(_, node)| workspace.nodes[node].canonical.unwrap())
+            .collect::<Vec<_>>();
+        for (index, (_, node)) in files.iter().enumerate() {
+            workspace
+                .write(*node, 0, format!("after-{index:02}").as_bytes())
+                .unwrap();
+            workspace.set_mtime(*node, 1700000007, 23).unwrap();
+        }
+        let orphan = workspace
+            .create_file(directory, b"held", 0o600)
+            .unwrap()
+            .node;
+        workspace.write(orphan, 0, b"pinned-data").unwrap();
+        workspace.pin(orphan, false).unwrap();
+        workspace.unlink(directory, b"held", false).unwrap();
+        let (outcome, transition) = workspace.commit().unwrap();
+        assert!(matches!(outcome, CommitOutcome::Committed { .. }));
+        assert_eq!(transition, CommitTransition::Rebased);
+        assert_eq!(
+            workspace.lookup(crate::ROOT, b"group").unwrap().node,
+            directory
+        );
+        for (index, (name, node)) in files.iter().enumerate() {
+            assert_eq!(
+                workspace.lookup(directory, name.as_bytes()).unwrap().node,
+                *node
+            );
+            assert_eq!(workspace.nodes[node].canonical, Some(inodes[index]));
+            assert_eq!(
+                workspace.read(*node, 0, 64).unwrap(),
+                format!("after-{index:02}").as_bytes()
+            );
+            let attr = workspace.attr(*node).unwrap();
+            assert_eq!(
+                (attr.mode, attr.mtime_seconds, attr.mtime_nanoseconds),
+                (0o640, 1700000007, 23)
+            );
+            assert!(matches!(
+                workspace.nodes[node].data,
+                crate::cow_tree::Data::File(crate::cow_tree::FileData::Base { .. })
+            ));
+        }
+        assert_eq!(
+            workspace.lookup(directory, b"alias").unwrap().node,
+            files[0].1
+        );
+        assert_eq!(workspace.attr(files[0].1).unwrap().links, 2);
+        assert!(workspace.nodes[&orphan].paths.is_empty());
+        assert_eq!(workspace.nodes[&orphan].pins, 1);
+        assert_eq!(workspace.read(orphan, 0, 64).unwrap(), b"pinned-data");
+        assert_eq!(workspace.spool_bytes, 11);
+        assert_eq!(workspace.open_spools.len(), 1);
+        assert!(workspace.dirty.is_empty() && workspace.mutation_paths.is_empty());
+        assert_eq!(workspace.mutation_generation, 0);
+        workspace.unpin(orphan).unwrap();
+        assert_eq!(workspace.spool_bytes, 0);
+        assert!(workspace.open_spools.is_empty());
+        drop(workspace);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
