@@ -1,9 +1,9 @@
 use crate::cow_tree::{Data, DirectoryData, FileData, Kind, NodeId};
 use crate::{
-    worker::WorkspaceWorker, CreateWorkspaceSession, EndWorkspaceMode, Workspace,
-    WorkspaceCommitResult, WorkspaceCommitStatus, WorkspaceDetail, WorkspaceDiff,
-    WorkspaceEndResult, WorkspaceError, WorkspaceFileRangeEdit, WorkspaceId, WorkspacePlacement,
-    WorkspaceProjection, WorkspaceResult, WorkspaceSession, WorkspaceSummary, Workspaces,
+    CreateWorkspaceSession, EndWorkspaceMode, Workspace, WorkspaceCommitResult,
+    WorkspaceCommitStatus, WorkspaceDetail, WorkspaceDiff, WorkspaceEndResult, WorkspaceError,
+    WorkspaceFileRangeEdit, WorkspaceId, WorkspacePlacement, WorkspaceProjection, WorkspaceResult,
+    WorkspaceSession, WorkspaceSummary, Workspaces, worker::WorkspaceWorker,
 };
 use layerfs_content::object::access::ObjectRead;
 use layerfs_content::tree::inode::{InodeId, InodeKind, InodeTableCounters, InodeTableRoot};
@@ -125,14 +125,23 @@ impl Workspace {
         }
         self.ensure_active()?;
         if let Some(mut resolution) = self.resolution.take() {
-            resolution.invalidate_if_mutated(self)?;
+            if let Err(error) = resolution.invalidate_if_mutated(self) {
+                self.resolution = Some(resolution);
+                return Err(error);
+            }
             if resolution.unresolved() != 0 {
                 self.resolution = Some(resolution);
                 return Err(StorageError::InvalidInput(
                     "unresolved reconciliation conflict",
                 ));
             }
-            let choices = resolution.choices()?;
+            let choices = match resolution.choices() {
+                Ok(choices) => choices,
+                Err(error) => {
+                    self.resolution = Some(resolution);
+                    return Err(error);
+                }
+            };
             let candidate = match self.build_candidate() {
                 Ok(candidate) => candidate,
                 Err(error) => {
@@ -141,17 +150,47 @@ impl Workspace {
                 }
             };
             self.commit_handoff = None;
-            let outcome = self.store.clone().commit_reconciliation_checked(
-                &resolution.prepared,
-                candidate,
-                &choices,
-                |reader, working_root, final_root| {
-                    let objects = layerfs_layerstack_store::CoreReader(reader);
-                    self.commit_handoff =
-                        Some(self.prepare_selected_handoff(&objects, working_root, final_root)?);
-                    Ok(())
-                },
-            );
+            let scratch = self.spool.clone();
+            let outcome = (|| {
+                let budget = layerfs_content::filesystem::ReconcileBudget {
+                    scratch_dir: &scratch,
+                    memory_bytes: self
+                        .policy
+                        .max_final_delta_memory_bytes
+                        .checked_sub(self.references.capacity())
+                        .and_then(|n| n.checked_sub(scratch.capacity() as u64))
+                        .and_then(|n| {
+                            n.checked_sub(
+                                (choices.capacity()
+                                    * std::mem::size_of::<
+                                        layerfs_content::filesystem::ReconcileChoice,
+                                    >()) as u64,
+                            )
+                        })
+                        .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?,
+                    spool_bytes: self
+                        .policy
+                        .max_spool_bytes
+                        .checked_sub(self.spool_bytes)
+                        .and_then(|n| n.checked_sub(self.references.bytes()))
+                        .ok_or(StorageError::InvalidInput("workspace spool limit"))?,
+                };
+                self.store.clone().commit_reconciliation_checked_bounded(
+                    &resolution.prepared,
+                    candidate,
+                    &choices,
+                    budget,
+                    |reader, working_root, final_root| {
+                        let objects = layerfs_layerstack_store::CoreReader(reader);
+                        self.commit_handoff = Some(self.prepare_selected_handoff(
+                            &objects,
+                            working_root,
+                            final_root,
+                        )?);
+                        Ok(())
+                    },
+                )
+            })();
             if outcome.is_err() {
                 self.resolution = Some(resolution);
             }
@@ -233,32 +272,91 @@ impl Workspace {
 
     pub(crate) fn begin_handoff(&self) -> Result<HandoffWriter> {
         let started = Instant::now();
-        let expected_records = self.nodes.keys().filter(|&&id| self.handoff_needs_node(id)).count() as u64;
-        let reserved_spool_bytes = expected_records.checked_mul(HANDOFF_RECORD_BYTES).ok_or(StorageError::Integrity("handoff size"))?;
-        self.policy.check(self.spool_bytes.checked_add(self.references.bytes()).and_then(|n| n.checked_add(reserved_spool_bytes)).ok_or(StorageError::Integrity("handoff spool"))?)?;
+        let expected_records = self
+            .nodes
+            .keys()
+            .filter(|&&id| self.handoff_needs_node(id))
+            .count() as u64;
+        let reserved_spool_bytes = expected_records
+            .checked_mul(HANDOFF_RECORD_BYTES)
+            .ok_or(StorageError::Integrity("handoff size"))?;
+        self.policy.check(
+            self.spool_bytes
+                .checked_add(self.references.bytes())
+                .and_then(|n| n.checked_add(reserved_spool_bytes))
+                .ok_or(StorageError::Integrity("handoff spool"))?,
+        )?;
         let buffer_capacity = (self.policy.max_final_delta_memory_bytes / 64).min(64 * 1024);
-        self.policy.check_final_delta(self.references.capacity().checked_add(buffer_capacity).ok_or(StorageError::Integrity("handoff allocation"))?)?;
+        self.policy.check_final_delta(
+            self.references
+                .capacity()
+                .checked_add(buffer_capacity)
+                .ok_or(StorageError::Integrity("handoff allocation"))?,
+        )?;
         let path = self.spool.join("commit-handoff");
-        let file = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(&path)?;
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(&path)?;
         std::fs::remove_file(path)?;
-        Ok(HandoffWriter { file: std::io::BufWriter::with_capacity(buffer_capacity as usize, file), generation: self.mutation_generation, base_root: self.base_root, expected_records, records: 0, new_canonical: 0, prepare_ns: elapsed_ns(started), reserved_spool_bytes, buffer_capacity })
+        Ok(HandoffWriter {
+            file: std::io::BufWriter::with_capacity(buffer_capacity as usize, file),
+            generation: self.mutation_generation,
+            base_root: self.base_root,
+            expected_records,
+            records: 0,
+            new_canonical: 0,
+            prepare_ns: elapsed_ns(started),
+            reserved_spool_bytes,
+            buffer_capacity,
+        })
     }
 
-    pub(crate) fn push_handoff(&self, writer: &mut HandoffWriter, node: NodeId, inode: InodeId,
-        record: layerfs_content::tree::inode::InodeRecordV1, attr: crate::cow_tree::Attr) -> Result<()> {
+    pub(crate) fn push_handoff(
+        &self,
+        writer: &mut HandoffWriter,
+        node: NodeId,
+        inode: InodeId,
+        record: layerfs_content::tree::inode::InodeRecordV1,
+        attr: crate::cow_tree::Attr,
+    ) -> Result<()> {
         let started = Instant::now();
-        if writer.generation != self.mutation_generation || writer.base_root != self.base_root
-            || attr.node != node || !self.handoff_needs_node(node) || writer.records == writer.expected_records {
+        if writer.generation != self.mutation_generation
+            || writer.base_root != self.base_root
+            || attr.node != node
+            || !self.handoff_needs_node(node)
+            || writer.records == writer.expected_records
+        {
             return Err(StorageError::Integrity("construction handoff ownership"));
         }
-        if self.nodes[&node].canonical.is_some_and(|known| known != inode) {
+        if self.nodes[&node]
+            .canonical
+            .is_some_and(|known| known != inode)
+        {
             return Err(StorageError::Integrity("construction handoff inode"));
         }
         record.validate(node == crate::ROOT)?;
-        let kind = match record.kind { InodeKind::RegularFile => Kind::File, InodeKind::Directory => Kind::Directory, InodeKind::Symlink => Kind::Symlink };
-        let links = if kind == Kind::Directory { 2 } else { u32::try_from(record.namespace_ref_count).map_err(|_| StorageError::Integrity("construction handoff links"))? };
-        if kind != attr.kind || links != attr.links { return Err(StorageError::Integrity("construction handoff presentation")); }
-        layerfs_content::tree::metadata::PortableMetadataV1 { permission_mode: attr.mode, mtime_seconds: attr.mtime_seconds, mtime_nanoseconds: attr.mtime_nanoseconds }.validate(record.kind)?;
+        let kind = match record.kind {
+            InodeKind::RegularFile => Kind::File,
+            InodeKind::Directory => Kind::Directory,
+            InodeKind::Symlink => Kind::Symlink,
+        };
+        let links = if kind == Kind::Directory {
+            2
+        } else {
+            u32::try_from(record.namespace_ref_count)
+                .map_err(|_| StorageError::Integrity("construction handoff links"))?
+        };
+        if kind != attr.kind || links != attr.links {
+            return Err(StorageError::Integrity("construction handoff presentation"));
+        }
+        layerfs_content::tree::metadata::PortableMetadataV1 {
+            permission_mode: attr.mode,
+            mtime_seconds: attr.mtime_seconds,
+            mtime_nanoseconds: attr.mtime_nanoseconds,
+        }
+        .validate(record.kind)?;
         let mut bytes = [0_u8; HANDOFF_RECORD_BYTES as usize];
         bytes[..8].copy_from_slice(&node.0.to_be_bytes());
         bytes[8..40].copy_from_slice(inode.as_bytes());
@@ -271,22 +369,53 @@ impl Workspace {
         bytes[100] = record.kind as u8;
         writer.file.write_all(&bytes)?;
         writer.records += 1;
-        if !self.canonical_nodes.contains_key(&inode) { writer.new_canonical += 1; }
+        if !self.canonical_nodes.contains_key(&inode) {
+            writer.new_canonical += 1;
+        }
         writer.prepare_ns = writer.prepare_ns.saturating_add(elapsed_ns(started));
         Ok(())
     }
 
-    pub(crate) fn finish_handoff(&self, mut writer: HandoffWriter, root: layerfs_content::ObjectId, inodes: InodeTableRoot) -> Result<CommitHandoff> {
+    pub(crate) fn finish_handoff(
+        &self,
+        mut writer: HandoffWriter,
+        root: layerfs_content::ObjectId,
+        inodes: InodeTableRoot,
+    ) -> Result<CommitHandoff> {
         let started = Instant::now();
-        if writer.generation != self.mutation_generation || writer.base_root != self.base_root
-            || writer.records != writer.expected_records {
+        if writer.generation != self.mutation_generation
+            || writer.base_root != self.base_root
+            || writer.records != writer.expected_records
+        {
             return Err(StorageError::Integrity("construction handoff completeness"));
         }
-        if writer.file.stream_position()? != writer.reserved_spool_bytes { return Err(StorageError::Integrity("handoff length")); }
+        if writer.file.stream_position()? != writer.reserved_spool_bytes {
+            return Err(StorageError::Integrity("handoff length"));
+        }
         writer.file.seek(SeekFrom::Start(0))?;
-        let file = writer.file.into_inner().map_err(|error| error.into_error())?;
-        layerfs_layerstack_store::note_workspace_handoff(writer.records, writer.reserved_spool_bytes, writer.buffer_capacity, 0, 0, writer.prepare_ns.saturating_add(elapsed_ns(started)));
-        Ok(CommitHandoff { file, generation: writer.generation, base_root: writer.base_root, root, inodes, records: writer.records, removed: None, selected: false, new_canonical: writer.new_canonical })
+        let file = writer
+            .file
+            .into_inner()
+            .map_err(|error| error.into_error())?;
+        layerfs_layerstack_store::note_workspace_handoff(
+            writer.records,
+            writer.reserved_spool_bytes,
+            writer.buffer_capacity,
+            0,
+            0,
+            writer.prepare_ns.saturating_add(elapsed_ns(started)),
+        );
+        Ok(CommitHandoff {
+            file,
+            generation: writer.generation,
+            base_root: writer.base_root,
+            root,
+            inodes,
+            records: writer.records,
+            removed: None,
+            selected: false,
+            new_canonical: writer.new_canonical,
+        })
     }
 
     fn prepare_selected_handoff<S: ObjectRead>(
@@ -295,8 +424,13 @@ impl Workspace {
         working_root: layerfs_content::ObjectId,
         final_root: layerfs_content::ObjectId,
     ) -> Result<CommitHandoff> {
-        use layerfs_content::tree::directory::{diff_directory_entries, DirectoryStateRoot};
-        use layerfs_content::tree::inode::{codec::decode_inode_record, inode_table_lookup};
+        use layerfs_content::tree::directory::{DirectoryStateRoot, diff_directory_entries};
+        use layerfs_content::tree::inode::{
+            codec::decode_inode_record, inode_table_lookup_with_budget,
+        };
+        let started = Instant::now();
+        let mut lookup_counters = InodeTableCounters::default();
+        let mut lookup_peak = 0;
         let old_table = InodeTableRoot(
             layerfs_content::filesystem::namespace(objects, working_root)?.inode_table_root,
         );
@@ -325,6 +459,23 @@ impl Workspace {
             limit,
             self.policy.max_final_delta_memory_bytes / 4,
         )?;
+        let lookup_budget = self
+            .policy
+            .max_final_delta_memory_bytes
+            .checked_sub(self.references.capacity())
+            .and_then(|n| {
+                n.checked_sub(
+                    (self.policy.max_final_delta_memory_bytes / 4)
+                        .min(crate::commit_spool::SORT_BYTES),
+                )
+            })
+            .and_then(|n| {
+                n.checked_sub(
+                    2 * std::mem::size_of::<layerfs_content::tree::inode::InodeRecordV1>() as u64,
+                )
+            })
+            .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?
+            as usize;
         let mut count = 0_u64;
         let mut name_bytes = 0_u64;
         let mut remove_prefix = |prefix: &str| -> Result<()> {
@@ -361,26 +512,32 @@ impl Workspace {
                 continue;
             }
             let inode = self.frontier_inode(node)?;
-            let before = inode_table_lookup(
+            let (before, peak) = inode_table_lookup_with_budget(
                 objects,
                 old_table,
                 inode,
-                &mut InodeTableCounters::default(),
-            )?
-            .ok_or(StorageError::Integrity("selected old directory"))?;
-            let Some(after) = inode_table_lookup(
+                lookup_budget,
+                &mut lookup_counters,
+            )?;
+            lookup_peak = lookup_peak.max(peak);
+            let before = before.ok_or(StorageError::Integrity("selected old directory"))?;
+            let (after, peak) = inode_table_lookup_with_budget(
                 objects,
                 new_table,
                 inode,
-                &mut InodeTableCounters::default(),
-            )?
-            else {
+                lookup_budget,
+                &mut lookup_counters,
+            )?;
+            lookup_peak = lookup_peak.max(peak);
+            let Some(after) = after else {
                 continue;
             };
             let before = objects.with_authenticated_canonical(before, decode_inode_record)?;
             let after = objects.with_authenticated_canonical(after, decode_inode_record)?;
             let parent = value.paths.first().unwrap();
-            if before.kind != InodeKind::Directory { continue; }
+            if before.kind != InodeKind::Directory {
+                continue;
+            }
             if after.kind != InodeKind::Directory {
                 remove_prefix(parent)?;
                 continue;
@@ -417,6 +574,16 @@ impl Workspace {
             diff?;
         }
         let index = sorter.finish()?;
+        layerfs_layerstack_store::note_workspace_handoff(
+            0,
+            name_bytes + count * 48,
+            lookup_peak as u64 + self.policy.max_final_delta_memory_bytes
+                - self.references.capacity()
+                - lookup_budget as u64,
+            lookup_counters.nodes_read,
+            0,
+            elapsed_ns(started),
+        );
         self.prepare_identity_handoff(
             objects,
             final_root,
@@ -440,9 +607,11 @@ impl Workspace {
         let mut binding_checks = 0;
         let mut new_canonical = 0;
         use layerfs_content::tree::directory::{
-            directory_lookup, DirectoryStateRoot, NamespaceCounters,
+            DirectoryStateRoot, NamespaceCounters, directory_lookup,
         };
-        use layerfs_content::tree::inode::{codec::decode_inode_record, inode_table_lookup_many};
+        use layerfs_content::tree::inode::{
+            codec::decode_inode_record, inode_table_lookup_with_budget,
+        };
         let records = self
             .nodes
             .iter()
@@ -464,15 +633,17 @@ impl Workspace {
                 .and_then(|n| n.checked_add(removed.as_ref().map_or(0, |removed| removed.bytes)))
                 .ok_or(StorageError::Integrity("handoff spool"))?,
         )?;
-        let batch_size = (self.policy.max_final_delta_memory_bytes / 4096).clamp(1, 128) as usize;
         let buffer_capacity =
             (self.policy.max_final_delta_memory_bytes / 64).min(64 * 1024) as usize;
-        let handoff_capacity =
-            buffer_capacity as u64 + batch_size as u64 * 256 + HANDOFF_RECORD_BYTES;
-        self.policy.check_final_delta(
-            handoff_capacity
-                + crate::references::MEMORY.min(self.policy.max_final_delta_memory_bytes / 8),
-        )?;
+        let handoff_capacity = buffer_capacity as u64 + HANDOFF_RECORD_BYTES;
+        let lookup_budget = self
+            .policy
+            .max_final_delta_memory_bytes
+            .checked_sub(self.references.capacity())
+            .and_then(|n| n.checked_sub(handoff_capacity))
+            .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?
+            as usize;
+        let mut peak_capacity = handoff_capacity;
         let path = self.spool.join("commit-handoff");
         let file = std::fs::OpenOptions::new()
             .read(true)
@@ -483,141 +654,133 @@ impl Workspace {
         let mut file = std::io::BufWriter::with_capacity(buffer_capacity, file);
         let namespace = layerfs_content::filesystem::namespace(objects, root)?;
         let inodes = InodeTableRoot(namespace.inode_table_root);
-        let mut batch = Vec::with_capacity(batch_size);
-        // Omitted materialized nodes remain the authenticated base identities and
-        // backing already owned by this frozen Workspace. The common writer has
-        // no mutation for them; installation retains them without rediscovery.
-        let mut live = self.nodes.iter().filter(|(id, node)| {
+        for (&node, _) in self.nodes.iter().filter(|(id, node)| {
             selected
                 || ((!node.paths.is_empty() || node.links != 0)
                     && (node.commit_dirty || self.dirty.contains(id) || node.canonical.is_none()))
-        });
-        loop {
-            batch.clear();
-            for _ in 0..batch_size {
-                let Some((&node, _)) = live.next() else {
-                    break;
-                };
-                let inode = if self.nodes[&node].canonical.is_none()
-                    && self.nodes[&node].paths.is_empty()
-                {
+        }) {
+            let inode =
+                if self.nodes[&node].canonical.is_none() && self.nodes[&node].paths.is_empty() {
                     None
                 } else {
                     Some(self.frontier_inode(node)?)
                 };
-                batch.push((node, inode));
-            }
-            if batch.is_empty() {
-                break;
-            }
-            let keys = batch
-                .iter()
-                .map(|(_, inode)| inode.unwrap_or(namespace.root_directory_inode))
-                .collect::<Vec<_>>();
-            let ids = inode_table_lookup_many(objects, inodes, &keys, &mut inode_counters)?;
-            for ((node, inode), record_id) in batch.iter().copied().zip(ids) {
-                let record_id = record_id.filter(|_| inode.is_some());
-                if record_id.is_none() && selected {
-                    let mut bytes = [0_u8; HANDOFF_RECORD_BYTES as usize];
-                    bytes[..8].copy_from_slice(&node.0.to_be_bytes());
-                    file.write_all(&bytes)?;
-                    continue;
+            let record_id = match inode {
+                Some(inode) => {
+                    let (record, peak) = inode_table_lookup_with_budget(
+                        objects,
+                        inodes,
+                        inode,
+                        lookup_budget,
+                        &mut inode_counters,
+                    )?;
+                    peak_capacity = peak_capacity.max(handoff_capacity + peak as u64);
+                    record
                 }
-                let inode = inode.ok_or(StorageError::Integrity("handoff final inode"))?;
-                let record_id = record_id.ok_or(StorageError::Integrity("handoff final inode"))?;
-                let record =
-                    objects.with_authenticated_canonical(record_id, decode_inode_record)?;
-                record.validate(node == crate::ROOT)?;
-                let old = &self.nodes[&node];
-                let attr = self.attr(node)?;
-                let metadata =
-                    crate::cow_tree::portable_metadata(objects, record.metadata_root, record.kind)?;
-                let (kind, len) = match record.kind {
-                    InodeKind::RegularFile => (
-                        Kind::File,
-                        layerfs_content::file::rope::state(
-                            objects,
-                            layerfs_content::file::rope::FileStateRoot(record.content_root),
-                            &mut layerfs_content::file::rope::RopeCounters::default(),
+                None => None,
+            };
+            let record_id = record_id.filter(|_| inode.is_some());
+            if record_id.is_none() && selected {
+                let mut bytes = [0_u8; HANDOFF_RECORD_BYTES as usize];
+                bytes[..8].copy_from_slice(&node.0.to_be_bytes());
+                file.write_all(&bytes)?;
+                continue;
+            }
+            let inode = inode.ok_or(StorageError::Integrity("handoff final inode"))?;
+            let record_id = record_id.ok_or(StorageError::Integrity("handoff final inode"))?;
+            let record = objects.with_authenticated_canonical(record_id, decode_inode_record)?;
+            record.validate(node == crate::ROOT)?;
+            let old = &self.nodes[&node];
+            let attr = self.attr(node)?;
+            let metadata =
+                crate::cow_tree::portable_metadata(objects, record.metadata_root, record.kind)?;
+            let (kind, len) = match record.kind {
+                InodeKind::RegularFile => (
+                    Kind::File,
+                    layerfs_content::file::rope::state(
+                        objects,
+                        layerfs_content::file::rope::FileStateRoot(record.content_root),
+                        &mut layerfs_content::file::rope::RopeCounters::default(),
+                    )?
+                    .logical_len,
+                ),
+                InodeKind::Directory => (Kind::Directory, 0),
+                InodeKind::Symlink => {
+                    let target = objects
+                        .with_authenticated_canonical(
+                            record.content_root,
+                            layerfs_content::tree::directory::codec::decode_symlink,
                         )?
-                        .logical_len,
-                    ),
-                    InodeKind::Directory => (Kind::Directory, 0),
-                    InodeKind::Symlink => {
-                        let target = objects
-                            .with_authenticated_canonical(
-                                record.content_root,
-                                layerfs_content::tree::directory::codec::decode_symlink,
-                            )?
-                            .target;
-                        if !selected
-                            && !matches!(&old.data, Data::Symlink(previous) if *previous == target)
-                        {
-                            return Err(StorageError::Integrity("handoff symlink content"));
-                        }
-                        (Kind::Symlink, target.len() as u64)
+                        .target;
+                    if !selected
+                        && !matches!(&old.data, Data::Symlink(previous) if *previous == target)
+                    {
+                        return Err(StorageError::Integrity("handoff symlink content"));
                     }
-                };
-                if selected && kind != attr.kind {
-                    // A selected snapshot may reuse the canonical key across a
-                    // type replacement. Preserve the old open handle as unlinked;
-                    // the replacement obtains a fresh Workspace NodeId on lookup.
-                    let mut bytes = [0_u8; HANDOFF_RECORD_BYTES as usize];
-                    bytes[..8].copy_from_slice(&node.0.to_be_bytes());
-                    file.write_all(&bytes)?;
-                    continue;
+                    (Kind::Symlink, target.len() as u64)
                 }
-                if !self.canonical_nodes.contains_key(&inode) { new_canonical += 1; }
-                let links = if kind == Kind::Directory {
-                    2
-                } else {
-                    u32::try_from(record.namespace_ref_count)
-                        .map_err(|_| StorageError::Integrity("handoff links"))?
-                };
-                if kind != attr.kind
-                    || (!selected
-                        && (len != attr.size
-                            || links != attr.links
-                            || metadata.permission_mode != attr.mode
-                            || metadata.mtime_seconds != attr.mtime_seconds
-                            || metadata.mtime_nanoseconds != attr.mtime_nanoseconds))
-                {
-                    return Err(StorageError::Integrity("committed Workspace presentation"));
-                }
-                // Identity membership follows authenticated surviving base
-                // bindings plus the common writer's exact final overlays. Check
-                // the changed edges against that final directory here; paths and
-                // aliases retained by Workspace need no root-to-leaf discovery.
-                if let Data::Directory(directory) = &old.data {
-                    if !selected {
-                        for (name, desired) in &directory.changes {
-                            binding_checks += 1;
-                            let actual = directory_lookup(
-                                objects,
-                                DirectoryStateRoot(record.content_root),
-                                &layerfs_content::CanonicalName::from_bytes(name)?,
-                                &mut NamespaceCounters::default(),
-                            )?;
-                            if actual
-                                != desired
-                                    .map(|child| self.frontier_inode(child))
-                                    .transpose()?
-                            {
-                                return Err(StorageError::Integrity("handoff final binding"));
-                            }
-                        }
-                    }
-                }
-                file.write_all(&node.0.to_be_bytes())?;
-                file.write_all(inode.as_bytes())?;
-                file.write_all(record.content_root.as_bytes())?;
-                file.write_all(&len.to_be_bytes())?;
-                file.write_all(&metadata.permission_mode.to_be_bytes())?;
-                file.write_all(&links.to_be_bytes())?;
-                file.write_all(&metadata.mtime_seconds.to_be_bytes())?;
-                file.write_all(&metadata.mtime_nanoseconds.to_be_bytes())?;
-                file.write_all(&[record.kind as u8, 0, 0, 0])?;
+            };
+            if selected && kind != attr.kind {
+                // A selected snapshot may reuse the canonical key across a
+                // type replacement. Preserve the old open handle as unlinked;
+                // the replacement obtains a fresh Workspace NodeId on lookup.
+                let mut bytes = [0_u8; HANDOFF_RECORD_BYTES as usize];
+                bytes[..8].copy_from_slice(&node.0.to_be_bytes());
+                file.write_all(&bytes)?;
+                continue;
             }
+            if !self.canonical_nodes.contains_key(&inode) {
+                new_canonical += 1;
+            }
+            let links = if kind == Kind::Directory {
+                2
+            } else {
+                u32::try_from(record.namespace_ref_count)
+                    .map_err(|_| StorageError::Integrity("handoff links"))?
+            };
+            if kind != attr.kind
+                || (!selected
+                    && (len != attr.size
+                        || links != attr.links
+                        || metadata.permission_mode != attr.mode
+                        || metadata.mtime_seconds != attr.mtime_seconds
+                        || metadata.mtime_nanoseconds != attr.mtime_nanoseconds))
+            {
+                return Err(StorageError::Integrity("committed Workspace presentation"));
+            }
+            // Identity membership follows authenticated surviving base
+            // bindings plus the common writer's exact final overlays. Check
+            // the changed edges against that final directory here; paths and
+            // aliases retained by Workspace need no root-to-leaf discovery.
+            if let Data::Directory(directory) = &old.data {
+                if !selected {
+                    for (name, desired) in &directory.changes {
+                        binding_checks += 1;
+                        let actual = directory_lookup(
+                            objects,
+                            DirectoryStateRoot(record.content_root),
+                            &layerfs_content::CanonicalName::from_bytes(name)?,
+                            &mut NamespaceCounters::default(),
+                        )?;
+                        if actual
+                            != desired
+                                .map(|child| self.frontier_inode(child))
+                                .transpose()?
+                        {
+                            return Err(StorageError::Integrity("handoff final binding"));
+                        }
+                    }
+                }
+            }
+            file.write_all(&node.0.to_be_bytes())?;
+            file.write_all(inode.as_bytes())?;
+            file.write_all(record.content_root.as_bytes())?;
+            file.write_all(&len.to_be_bytes())?;
+            file.write_all(&metadata.permission_mode.to_be_bytes())?;
+            file.write_all(&links.to_be_bytes())?;
+            file.write_all(&metadata.mtime_seconds.to_be_bytes())?;
+            file.write_all(&metadata.mtime_nanoseconds.to_be_bytes())?;
+            file.write_all(&[record.kind as u8, 0, 0, 0])?;
         }
         if file.stream_position()? != bytes {
             return Err(StorageError::Integrity("handoff length"));
@@ -627,7 +790,7 @@ impl Workspace {
         layerfs_layerstack_store::note_workspace_handoff(
             records,
             bytes,
-            handoff_capacity,
+            peak_capacity,
             inode_counters.nodes_read,
             binding_checks,
             elapsed_ns(started),
@@ -755,7 +918,8 @@ impl Workspace {
         // snapshot. Descriptors for obsolete linked spools stay owned until all
         // cleanup succeeds, so a partial cleanup failure can be retried safely.
         for (&node, value) in &self.nodes {
-            if (!matches!(value.data, Data::File(FileData::Edited { .. })) || (value.links == 0 && value.pins == 0))
+            if (!matches!(value.data, Data::File(FileData::Edited { .. }))
+                || (value.links == 0 && value.pins == 0))
                 && self.open_spools.contains_key(&node)
             {
                 let path = self.spool.join(node.0.to_string());
@@ -772,9 +936,13 @@ impl Workspace {
             }
         }
         self.open_spools.retain(|node, _| {
-            self.nodes.get(node).is_some_and(|node| (node.links != 0 || node.pins != 0) && matches!(node.data, Data::File(FileData::Edited { .. })))
+            self.nodes.get(node).is_some_and(|node| {
+                (node.links != 0 || node.pins != 0)
+                    && matches!(node.data, Data::File(FileData::Edited { .. }))
+            })
         });
-        self.nodes.retain(|id, node| *id == crate::ROOT || node.links != 0 || node.pins != 0);
+        self.nodes
+            .retain(|id, node| *id == crate::ROOT || node.links != 0 || node.pins != 0);
         let mut retained_spool = 0_u64;
         let mut retained_inline = 0_u64;
         let mut retained_pieces = 0_u64;
@@ -827,6 +995,9 @@ impl Workspace {
             return Err(StorageError::InvalidInput("workspace committed"));
         }
         self.store.retry_candidate_cleanup()?;
+        if let Some(resolution) = &self.resolution {
+            self.store.cleanup_reconciliation(&resolution.prepared)?;
+        }
         self.clear_spool()?;
         self.references.clear()?;
         self.commit_handoff = None;
@@ -836,6 +1007,9 @@ impl Workspace {
 
     pub(crate) fn end_clean(&mut self) -> Result<()> {
         self.store.retry_candidate_cleanup()?;
+        if let Some(resolution) = &self.resolution {
+            self.store.cleanup_reconciliation(&resolution.prepared)?;
+        }
         self.clear_spool()?;
         self.references.clear()?;
         self.commit_handoff = None;
@@ -1649,6 +1823,76 @@ mod tests {
     }
 
     #[test]
+    fn reconciliation_validation_failure_keeps_resolution_for_retry() {
+        let (root, workspaces, branch, store) = fixture("resolution-validation-retry");
+        let base = store.branch(branch).unwrap().unwrap().base_layer_id;
+        let accepted = store
+            .fork_branch(
+                EntityName::new("accepted").unwrap(),
+                LocalForkSource::Layer { layer_id: base },
+            )
+            .unwrap();
+        for (id, value, spool) in [
+            (accepted, b"layer!".as_slice(), "accepted-spool"),
+            (branch, b"branch".as_slice(), "branch-spool"),
+        ] {
+            let mut workspace = Workspace::open(store.clone(), id, root.join(spool)).unwrap();
+            let file = workspace.lookup_node(crate::ROOT, b"file").unwrap();
+            workspace.write(file, 0, value).unwrap();
+            workspace.commit().unwrap();
+            workspace.end_clean().unwrap();
+        }
+        let layerfs_layerstack_store::AddLayerResult::Added { layer_id } =
+            store.add_layer(accepted).unwrap()
+        else {
+            panic!("accepted layer");
+        };
+        let (id, conflicts) = workspaces
+            .create_reconciliation_workspace(branch, layer_id)
+            .unwrap();
+        assert!(conflicts > 0);
+        for conflict in workspaces.workspace_conflicts(id, None).unwrap().conflicts {
+            workspaces
+                .resolve_workspace_conflict(id, conflict.conflict_id, crate::ResolveChoice::Layer)
+                .unwrap();
+        }
+        let before = store.branch(branch).unwrap().unwrap().head_commit_id;
+        let worker = workspaces.worker(id).unwrap();
+        {
+            let mut workspace = worker.workspace.lock().unwrap();
+            let policy = workspace.policy;
+            workspace.policy.max_final_delta_memory_bytes = 0;
+            assert!(workspace.commit().is_err());
+            assert!(
+                workspace.resolution.is_some(),
+                "failed validation must not convert retry into ordinary Commit"
+            );
+            workspace.policy = policy;
+        }
+        assert_eq!(
+            store.branch(branch).unwrap().unwrap().head_commit_id,
+            before
+        );
+        assert!(matches!(
+            workspaces.commit_workspace_session(id).unwrap(),
+            WorkspaceCommitResult::Created { .. }
+        ));
+        let WorkspacePlacement::Host { root: mount } =
+            workspaces.session(id).unwrap().session.placement
+        else {
+            unreachable!()
+        };
+        assert_eq!(std::fs::read(mount.join("file")).unwrap(), b"layer!");
+        workspaces
+            .end_workspace_session(id, EndWorkspaceMode::Clean)
+            .unwrap();
+        drop(worker);
+        drop(workspaces);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn no_op_candidate_rechecks_head_before_returning_up_to_date() {
         let (root, _, branch, store) = fixture("no-op-head-check");
         let pinned = store.pin_branch(branch).unwrap();
@@ -1724,7 +1968,10 @@ mod tests {
     fn published_cleanup_failure_retries_installation_without_second_commit() {
         let (root, _, branch, store) = fixture("handoff-cleanup-failure");
         let mut workspace = Workspace::open(store.clone(), branch, root.join("spool")).unwrap();
-        let file = workspace.create_file(crate::ROOT, b"new", 0o640).unwrap().node;
+        let file = workspace
+            .create_file(crate::ROOT, b"new", 0o640)
+            .unwrap()
+            .node;
         workspace.write(file, 0, b"published").unwrap();
         let path = workspace.spool.join(file.0.to_string());
         let held = workspace.spool.join("held-spool");
@@ -1733,8 +1980,13 @@ mod tests {
         let before = store.store_counts().unwrap().commits;
         let (published, transition) = workspace.commit().unwrap();
         assert_eq!(transition, CommitTransition::InstallationFailed);
-        let CommitOutcome::Committed { commit_id, .. } = published else { panic!("publication must survive cleanup failure"); };
-        assert_eq!(store.branch(branch).unwrap().unwrap().head_commit_id, Some(commit_id));
+        let CommitOutcome::Committed { commit_id, .. } = published else {
+            panic!("publication must survive cleanup failure");
+        };
+        assert_eq!(
+            store.branch(branch).unwrap().unwrap().head_commit_id,
+            Some(commit_id)
+        );
         assert_eq!(store.store_counts().unwrap().commits, before + 1);
         std::fs::remove_dir(&path).unwrap();
         std::fs::rename(&held, &path).unwrap();
@@ -1742,20 +1994,26 @@ mod tests {
         assert_eq!(retried, published);
         assert_eq!(transition, CommitTransition::Rebased);
         assert_eq!(store.store_counts().unwrap().commits, before + 1);
-        assert!(!path.exists()); assert!(workspace.open_spools.is_empty());
+        assert!(!path.exists());
+        assert!(workspace.open_spools.is_empty());
         assert_eq!(workspace.read(file, 0, 32).unwrap(), b"published");
-        workspace.end_clean().unwrap(); drop(workspace); drop(store);
+        workspace.end_clean().unwrap();
+        drop(workspace);
+        drop(store);
         std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
     fn selected_type_replacement_retains_handles_and_prunes_old_directory_paths() {
         use layerfs_content::filesystem::{self, InodeMutation};
-        use layerfs_content::tree::inode::{inode_table_lookup, codec::decode_inode_record};
+        use layerfs_content::tree::inode::{codec::decode_inode_record, inode_table_lookup};
         let (root, _, branch, store) = fixture("selected-type-handoff");
         let mut workspace = Workspace::open(store.clone(), branch, root.join("spool")).unwrap();
         let directory = workspace.mkdir(crate::ROOT, b"dir", 0o755).unwrap().node;
-        let child = workspace.create_file(directory, b"child", 0o644).unwrap().node;
+        let child = workspace
+            .create_file(directory, b"child", 0o644)
+            .unwrap()
+            .node;
         workspace.write(child, 0, b"survivor").unwrap();
         workspace.link(child, crate::ROOT, b"outside").unwrap();
         workspace.commit().unwrap();
@@ -1764,40 +2022,119 @@ mod tests {
         let core = layerfs_layerstack_store::CoreReader(&workspace.reader);
         let load = |node| {
             let inode = workspace.nodes[&node].canonical.unwrap();
-            let id = inode_table_lookup(&core, workspace.base_inodes, inode, &mut InodeTableCounters::default()).unwrap().unwrap();
-            (inode, core.with_authenticated_canonical(id, decode_inode_record).unwrap())
+            let id = inode_table_lookup(
+                &core,
+                workspace.base_inodes,
+                inode,
+                &mut InodeTableCounters::default(),
+            )
+            .unwrap()
+            .unwrap();
+            (
+                inode,
+                core.with_authenticated_canonical(id, decode_inode_record)
+                    .unwrap(),
+            )
         };
         let (file_inode, file_record) = load(old_file);
         let (dir_inode, dir_record) = load(directory);
         let (child_inode, child_record) = load(child);
         let mut objects = layerfs_layerstack_store::ObjectBuffer::new(&workspace.reader).unwrap();
         let file_target = filesystem::symlink_content(&mut objects, b"outside".to_vec()).unwrap();
-        let file_metadata = filesystem::build_portable_metadata(&mut objects, InodeKind::Symlink, 0o777, 0, 0).unwrap();
-        let dir_content = layerfs_content::file::rope::build_bytes(&mut objects, b"replacement directory").unwrap().0;
-        let dir_metadata = filesystem::build_portable_metadata(&mut objects, InodeKind::RegularFile, 0o600, 0, 0).unwrap();
-        let selected = filesystem::apply_inode_mutations(&mut objects, workspace.base_root, [
-            InodeMutation::Upsert { inode: file_inode, record: layerfs_content::tree::inode::InodeRecordV1 { kind: InodeKind::Symlink, content_root: file_target, metadata_root: file_metadata, ..file_record } },
-            InodeMutation::Upsert { inode: dir_inode, record: layerfs_content::tree::inode::InodeRecordV1 { kind: InodeKind::RegularFile, content_root: dir_content.0, metadata_root: dir_metadata, ..dir_record } },
-            InodeMutation::Upsert { inode: child_inode, record: layerfs_content::tree::inode::InodeRecordV1 { namespace_ref_count: 1, ..child_record } },
-        ]).unwrap().root();
-        workspace.commit_handoff = Some(workspace.prepare_selected_handoff(&objects, workspace.base_root, selected).unwrap());
+        let file_metadata =
+            filesystem::build_portable_metadata(&mut objects, InodeKind::Symlink, 0o777, 0, 0)
+                .unwrap();
+        let dir_content =
+            layerfs_content::file::rope::build_bytes(&mut objects, b"replacement directory")
+                .unwrap()
+                .0;
+        let dir_metadata =
+            filesystem::build_portable_metadata(&mut objects, InodeKind::RegularFile, 0o600, 0, 0)
+                .unwrap();
+        let selected = filesystem::apply_inode_mutations(
+            &mut objects,
+            workspace.base_root,
+            [
+                InodeMutation::Upsert {
+                    inode: file_inode,
+                    record: layerfs_content::tree::inode::InodeRecordV1 {
+                        kind: InodeKind::Symlink,
+                        content_root: file_target,
+                        metadata_root: file_metadata,
+                        ..file_record
+                    },
+                },
+                InodeMutation::Upsert {
+                    inode: dir_inode,
+                    record: layerfs_content::tree::inode::InodeRecordV1 {
+                        kind: InodeKind::RegularFile,
+                        content_root: dir_content.0,
+                        metadata_root: dir_metadata,
+                        ..dir_record
+                    },
+                },
+                InodeMutation::Upsert {
+                    inode: child_inode,
+                    record: layerfs_content::tree::inode::InodeRecordV1 {
+                        namespace_ref_count: 1,
+                        ..child_record
+                    },
+                },
+            ],
+        )
+        .unwrap()
+        .root();
+        workspace.commit_handoff = Some(
+            workspace
+                .prepare_selected_handoff(&objects, workspace.base_root, selected)
+                .unwrap(),
+        );
         let candidate = objects.finish(selected, 0).unwrap();
         let pinned = store.pin_branch(branch).unwrap();
-        let outcome = store.commit_candidate(&pinned.branch, workspace.base_root, workspace.expected_base, candidate).unwrap();
-        assert_eq!(workspace.transition_committed(outcome, true).unwrap(), CommitTransition::RebasedRefresh);
+        let outcome = store
+            .commit_candidate(
+                &pinned.branch,
+                workspace.base_root,
+                workspace.expected_base,
+                candidate,
+            )
+            .unwrap();
+        assert_eq!(
+            workspace.transition_committed(outcome, true).unwrap(),
+            CommitTransition::RebasedRefresh
+        );
         assert_eq!(workspace.read(old_file, 0, 32).unwrap(), b"abcdef");
         assert_eq!(workspace.attr(old_file).unwrap().links, 0);
         let symlink = workspace.lookup_node(crate::ROOT, b"file").unwrap();
         assert_ne!(symlink, old_file);
         assert_eq!(workspace.readlink(symlink).unwrap(), b"outside");
-        assert!(!workspace.nodes.contains_key(&directory), "unpinned replaced directory must be reclaimed during Commit");
+        assert!(
+            !workspace.nodes.contains_key(&directory),
+            "unpinned replaced directory must be reclaimed during Commit"
+        );
         let replacement = workspace.lookup_node(crate::ROOT, b"dir").unwrap();
-        assert_eq!(workspace.read(replacement, 0, 32).unwrap(), b"replacement directory");
-        assert_eq!(workspace.lookup_node(crate::ROOT, b"outside").unwrap(), child);
-        assert_eq!(workspace.nodes[&child].paths.iter().map(String::as_str).collect::<Vec<_>>(), ["outside"]);
+        assert_eq!(
+            workspace.read(replacement, 0, 32).unwrap(),
+            b"replacement directory"
+        );
+        assert_eq!(
+            workspace.lookup_node(crate::ROOT, b"outside").unwrap(),
+            child
+        );
+        assert_eq!(
+            workspace.nodes[&child]
+                .paths
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            ["outside"]
+        );
         assert_eq!(workspace.attr(child).unwrap().links, 1);
-        workspace.unpin(old_file).unwrap(); workspace.end_clean().unwrap();
-        drop(workspace); drop(store); std::fs::remove_dir_all(root).unwrap();
+        workspace.unpin(old_file).unwrap();
+        workspace.end_clean().unwrap();
+        drop(workspace);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -2215,13 +2552,15 @@ fn verification_fault_scope_is_one_shot() {
         VerificationFault::ShortAppend,
         0
     ));
-    assert!(std::thread::spawn(move || consume_verification_fault(
-        branch,
-        VerificationFault::ShortAppend,
-        4096
-    ))
-    .join()
-    .unwrap());
+    assert!(
+        std::thread::spawn(move || consume_verification_fault(
+            branch,
+            VerificationFault::ShortAppend,
+            4096
+        ))
+        .join()
+        .unwrap()
+    );
     assert!(!consume_verification_fault(
         branch,
         VerificationFault::ShortAppend,

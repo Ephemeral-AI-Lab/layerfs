@@ -114,6 +114,11 @@ pub struct WorkspaceCommitReceipt {
     pub reference_bytes: u64,
     pub reference_buffer_capacity: u64,
     pub reference_bookkeeping_ns: u64,
+    pub base_inode_pages_read: u64,
+    pub base_inode_records_read: u64,
+    pub tree_spill_write_bytes: u64,
+    pub tree_spill_read_bytes: u64,
+    pub tree_spill_peak_bytes: u64,
     pub generic_tree_reads: u64,
     pub generic_tree_emissions: u64,
     pub generic_tree_reused_children: u64,
@@ -125,6 +130,19 @@ pub struct WorkspaceCommitReceipt {
     pub sort_write_calls: u64,
     pub sort_write_bytes: u64,
     pub sort_merge_passes: u64,
+    pub admission_producer_wall_ns: u64,
+    pub admission_producer_blocked_ns: u64,
+    pub admission_consumer_idle_ns: u64,
+    pub admission_slab_handoffs: u64,
+    pub admission_queue_peak_slabs: u64,
+    pub admission_queue_peak_payload_bytes: u64,
+    pub admission_producer_slab_owned_peak_bytes: u64,
+    pub admission_oversized_objects: u64,
+    pub admission_oversized_peak_capacity_bytes: u64,
+    pub admission_workers_started: u64,
+    pub admission_workers_joined: u64,
+    pub admission_pipeline_reserved_bytes: u64,
+    pub admission_producer_hash_calls: u64,
     pub publication_ns: u64,
     pub publication_begin_ns: u64,
     pub publication_payload_ns: u64,
@@ -512,6 +530,40 @@ pub(crate) fn note_workspace_admission(
     });
 }
 
+pub(crate) fn note_workspace_admission_pipeline(
+    producer_wall: u64,
+    blocked: u64,
+    idle: u64,
+    handoffs: u64,
+    queue_peak: u64,
+    queue_payload_peak: u64,
+    slab_owned_peak: u64,
+    oversized: u64,
+    oversized_peak: u64,
+    started: u64,
+    joined: u64,
+    reserved: u64,
+    hashes: u64,
+) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.admission_producer_wall_ns = producer_wall;
+            receipt.admission_producer_blocked_ns = blocked;
+            receipt.admission_consumer_idle_ns = idle;
+            receipt.admission_slab_handoffs = handoffs;
+            receipt.admission_queue_peak_slabs = queue_peak;
+            receipt.admission_queue_peak_payload_bytes = queue_payload_peak;
+            receipt.admission_producer_slab_owned_peak_bytes = slab_owned_peak;
+            receipt.admission_oversized_objects = oversized;
+            receipt.admission_oversized_peak_capacity_bytes = oversized_peak;
+            receipt.admission_workers_started = started;
+            receipt.admission_workers_joined = joined;
+            receipt.admission_pipeline_reserved_bytes = reserved;
+            receipt.admission_producer_hash_calls = hashes;
+        }
+    });
+}
+
 pub(crate) fn note_workspace_admission_buffers(moved: u64, spill_read: u64, peak: u64) {
     WORKSPACE_COMMIT.with(|current| {
         if let Some(receipt) = current.borrow_mut().as_mut() {
@@ -558,13 +610,21 @@ pub fn note_workspace_commit_sort(
 ) {
     WORKSPACE_COMMIT.with(|current| {
         if let Some(receipt) = current.borrow_mut().as_mut() {
-            receipt.sort_sequential_read_calls = sequential_read_calls;
-            receipt.sort_sequential_read_bytes = sequential_read_bytes;
-            receipt.sort_positional_read_calls = positional_read_calls;
-            receipt.sort_positional_read_bytes = positional_read_bytes;
-            receipt.sort_write_calls = write_calls;
-            receipt.sort_write_bytes = write_bytes;
-            receipt.sort_merge_passes = merge_passes;
+            receipt.sort_sequential_read_calls = receipt
+                .sort_sequential_read_calls
+                .saturating_add(sequential_read_calls);
+            receipt.sort_sequential_read_bytes = receipt
+                .sort_sequential_read_bytes
+                .saturating_add(sequential_read_bytes);
+            receipt.sort_positional_read_calls = receipt
+                .sort_positional_read_calls
+                .saturating_add(positional_read_calls);
+            receipt.sort_positional_read_bytes = receipt
+                .sort_positional_read_bytes
+                .saturating_add(positional_read_bytes);
+            receipt.sort_write_calls = receipt.sort_write_calls.saturating_add(write_calls);
+            receipt.sort_write_bytes = receipt.sort_write_bytes.saturating_add(write_bytes);
+            receipt.sort_merge_passes = receipt.sort_merge_passes.saturating_add(merge_passes);
         }
     });
 }
@@ -773,4 +833,23 @@ mod tests {
             }
         );
     }
+}
+
+pub fn note_workspace_base_inode_reads(pages: u64, records: u64) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.base_inode_pages_read += pages;
+            receipt.base_inode_records_read += records;
+        }
+    });
+}
+
+pub fn note_workspace_tree_spill(written: u64, read: u64, peak: u64) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.tree_spill_write_bytes += written;
+            receipt.tree_spill_read_bytes += read;
+            receipt.tree_spill_peak_bytes = receipt.tree_spill_peak_bytes.max(peak);
+        }
+    });
 }

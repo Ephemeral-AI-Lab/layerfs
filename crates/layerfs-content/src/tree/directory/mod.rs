@@ -22,3 +22,5 @@ pub use validate::{validate_inode_record, validate_inode_record_metadata};
 
 pub(crate) use validate::nearest_half;
 pub use super::batch::{directory_apply_sorted, directory_apply_sorted_with_budget};
+
+pub use super::batch::directory_apply_sorted_with_spill;

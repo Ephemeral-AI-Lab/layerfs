@@ -1,7 +1,7 @@
 use crate::objects::{
-    admit_planned_objects, apply_reconcile_choices, combine_candidates, insert_object_batch,
-    reconcile_candidate, BuildCounters, BuiltRoot, CanonicalObject, DeferredObjectStore,
-    ObjectSource,
+    BuildCounters, BuiltRoot, CanonicalObject, DeferredObjectStore, ObjectSource,
+    admit_planned_objects, apply_reconcile_choices_bounded, combine_candidates,
+    insert_object_batch, reconcile_candidate,
 };
 use crate::records::{
     decode_branch, decode_commit, decode_layer_stack_at, decode_object_id, optional_id,
@@ -162,6 +162,17 @@ impl LayerStackStore {
         })
     }
 
+    /// Dispose a prepared source when a Workspace ends without committing it.
+    #[doc(hidden)]
+    pub fn cleanup_reconciliation(&self, prepared: &PreparedReconciliation) -> Result<()> {
+        let _operation = self.db.enter_operation()?;
+        prepared
+            .objects
+            .lock()
+            .map_err(|_| StoreError::Integrity("reconciliation candidate"))?
+            .unlink_private(&self.db)
+    }
+
     pub fn commit_reconciliation(
         &self,
         prepared: &PreparedReconciliation,
@@ -180,6 +191,38 @@ impl LayerStackStore {
         choices: &[layerfs_content::filesystem::ReconcileChoice],
         inspect: impl FnOnce(&SnapshotReader, ObjectId, ObjectId) -> Result<()>,
     ) -> Result<CommitOutcome> {
+        self.commit_reconciliation_checked_bounded(
+            prepared,
+            working,
+            choices,
+            layerfs_content::filesystem::ReconcileBudget {
+                scratch_dir: &std::env::temp_dir(),
+                memory_bytes: 8 * 1024 * 1024,
+                spool_bytes: 1024 * 1024 * 1024,
+            },
+            inspect,
+        )
+    }
+
+    pub fn commit_reconciliation_checked_bounded(
+        &self,
+        prepared: &PreparedReconciliation,
+        working: BuiltRoot,
+        choices: &[layerfs_content::filesystem::ReconcileChoice],
+        budget: layerfs_content::filesystem::ReconcileBudget<'_>,
+        inspect: impl FnOnce(&SnapshotReader, ObjectId, ObjectId) -> Result<()>,
+    ) -> Result<CommitOutcome> {
+        // Own all source cleanup through publication under the normal Store
+        // gate. Each source is unlinked before another disposable source exists,
+        // so the five-path failure owner never needs an unbounded list.
+        let _operation = self.db.enter_operation()?;
+        let mut working = working;
+        working.objects.unlink_private(&self.db)?;
+        prepared
+            .objects
+            .lock()
+            .map_err(|_| StoreError::Integrity("reconciliation candidate"))?
+            .unlink_private(&self.db)?;
         let branch = self
             .branch(prepared.branch_id)?
             .ok_or(StoreError::NotFound("Branch"))?;
@@ -200,21 +243,47 @@ impl LayerStackStore {
             read_metrics: Arc::new(Mutex::new(WorkspaceReadReceipt::default())),
             cache: Arc::new(Mutex::new(SnapshotCache::default())),
         };
-        let selected = apply_reconcile_choices(
+        let selected_started = Instant::now();
+        layerfs_content::filesystem::delta_spool::reset_metrics();
+        let selected = apply_reconcile_choices_bounded(
             &reader,
             working_root,
             prepared.branch_root,
             prepared.layer_root,
             &prepared.conflicts,
             choices,
-        )?;
+            budget,
+        );
+        crate::telemetry::note_workspace_commit_phase(
+            crate::WorkspaceCommitPhase::Namespace,
+            elapsed_ns(selected_started),
+        );
+        if let Some(metrics) = layerfs_content::filesystem::delta_spool::take_metrics() {
+            crate::telemetry::note_workspace_commit_sort(
+                metrics.sequential_read_calls,
+                metrics.sequential_read_bytes,
+                metrics.positional_read_calls,
+                metrics.positional_read_bytes,
+                metrics.write_calls,
+                metrics.write_bytes,
+                metrics.merge_passes,
+            );
+        }
+        let mut selected = selected?;
+        selected.objects.unlink_private(&self.db)?;
         let selected_root = selected.root_id;
         let selected_counters = selected.counters;
         let selected = Arc::new(Mutex::new(selected.objects));
         let mut selected_reader = reader.clone();
         selected_reader.root = selected_root;
         selected_reader.overlays.insert(0, selected.clone());
-        inspect(&selected_reader, working_root, selected_root)?;
+        let inspect_started = Instant::now();
+        let inspected = inspect(&selected_reader, working_root, selected_root);
+        crate::telemetry::note_workspace_commit_phase(
+            crate::WorkspaceCommitPhase::CandidateFinish,
+            elapsed_ns(inspect_started),
+        );
+        inspected?;
         let selected = selected
             .lock()
             .map_err(|_| StoreError::Integrity("reconciliation candidate"))?;
@@ -226,7 +295,7 @@ impl LayerStackStore {
             .lock()
             .map_err(|_| StoreError::Integrity("reconciliation candidate"))?;
         let objects = combine_candidates(selected_root, &[&working, &prepared_objects, &selected])?;
-        self.commit_candidate(
+        self.commit_candidate_under_permit(
             &branch,
             prepared.branch_root,
             prepared.current_layer_id,
@@ -246,6 +315,16 @@ impl LayerStackStore {
         built: BuiltRoot,
     ) -> Result<CommitOutcome> {
         let _operation = self.db.enter_operation()?;
+        self.commit_candidate_under_permit(expected, expected_root, new_base_layer_id, built)
+    }
+
+    fn commit_candidate_under_permit(
+        &self,
+        expected: &BranchRecord,
+        expected_root: ObjectId,
+        new_base_layer_id: LayerId,
+        built: BuiltRoot,
+    ) -> Result<CommitOutcome> {
         #[cfg(feature = "test-instrumentation")]
         crate::schema::verification_candidate(expected.id, built.counters.spill_count);
         crate::telemetry::note_workspace_commit_cdc(built.counters.cdc_bytes_scanned);

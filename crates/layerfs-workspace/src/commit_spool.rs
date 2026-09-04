@@ -1,12 +1,15 @@
 //! Workspace error boundary for shared anonymous fixed-record sorting.
 use layerfs_content::filesystem::delta_spool as shared;
 use layerfs_layerstack_store::{Result, StoreError};
-pub(crate) use shared::{reset_metrics, take_metrics, SORT_BYTES};
+pub(crate) use shared::{SORT_BYTES, reset_metrics, take_metrics};
 use std::path::Path;
-fn error(error: layerfs_content::CoreError) -> StoreError {
+fn error(error: shared::SpoolError) -> StoreError {
     match error {
-        layerfs_content::CoreError::InvalidRecord(message) => StoreError::InvalidInput(message),
-        error => error.into(),
+        shared::SpoolError::Io(error) => StoreError::Io(error),
+        shared::SpoolError::Core(layerfs_content::CoreError::InvalidRecord(message)) => {
+            StoreError::InvalidInput(message)
+        }
+        shared::SpoolError::Core(error) => error.into(),
     }
 }
 pub(crate) struct Run<const N: usize>(shared::Run<N>);
@@ -54,5 +57,43 @@ impl<const N: usize> Sorter<N> {
     }
     pub(crate) fn finish(self) -> Result<Run<N>> {
         self.0.finish().map(Run).map_err(error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn shared_spool_preserves_workspace_os_errors_and_content_errors() {
+        // Actual open failure crosses shared storage and the Workspace wrapper.
+        let absent = std::env::temp_dir()
+            .join(format!("layerfs-absent-spool-{}", std::process::id()))
+            .join("missing-parent");
+        let failure = match Run::<8>::create(&absent) {
+            Ok(_) => panic!("missing directory must fail"),
+            Err(error) => error,
+        };
+        let StoreError::Io(error) = failure else {
+            panic!("OS error was erased at shared spool boundary");
+        };
+        assert_eq!(error.raw_os_error(), Some(2)); // ENOENT on supported Unix hosts.
+        let StoreError::Io(error) = super::error(shared::SpoolError::Io(
+            std::io::Error::from_raw_os_error(28),
+        )) else {
+            panic!("ENOSPC must retain its OS error");
+        };
+        assert_eq!(error.raw_os_error(), Some(28));
+        assert!(matches!(
+            super::error(shared::SpoolError::Core(
+                layerfs_content::CoreError::InvalidRecord("workspace spool limit")
+            )),
+            StoreError::InvalidInput("workspace spool limit")
+        ));
+        assert!(matches!(
+            layerfs_content::CoreError::from(shared::SpoolError::Io(
+                std::io::Error::from_raw_os_error(28)
+            )),
+            layerfs_content::CoreError::Io
+        ));
     }
 }

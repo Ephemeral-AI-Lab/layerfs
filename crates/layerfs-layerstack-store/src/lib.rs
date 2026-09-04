@@ -61,3 +61,9 @@ pub use schema::{reset_sql_trace, sql_trace};
 #[cfg(debug_assertions)]
 #[doc(hidden)]
 pub use schema::set_transaction_failure_at;
+
+#[doc(hidden)]
+pub use telemetry::note_workspace_base_inode_reads;
+
+#[doc(hidden)]
+pub use telemetry::note_workspace_tree_spill;

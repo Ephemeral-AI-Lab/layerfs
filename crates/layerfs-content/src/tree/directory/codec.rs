@@ -59,6 +59,25 @@ pub(crate) fn encode_directory_page<'a>(
     Ok(canonical)
 }
 
+pub(crate) fn encode_directory_leaf_from_iter(
+    count: usize, bytes: u64,
+    entries: impl Iterator<Item=CoreResult<(CanonicalName,ObjectId)>>,
+) -> CoreResult<Vec<u8>> {
+    validate_node_header(0,count)?;
+    let mut canonical=canonical_node_header(b"LFS4NSP\0",1,0,count,count as u64,bytes,usize::try_from(bytes).map_err(|_|CoreError::LengthOverflow)?)?;
+    let mut prior=None;let mut actual=0usize;let mut logical=0u64;
+    for entry in entries {
+        let (key,id)=entry?;
+        if prior.as_ref().is_some_and(|prior|prior>=&key) {return Err(CoreError::NonCanonicalOrdering);}
+        logical=logical.checked_add(34+key.as_bytes().len() as u64).ok_or(CoreError::LengthOverflow)?;
+        if actual>=count || logical>bytes {return Err(CoreError::InvalidRecord("spilled directory leaf summary"));}
+        put_bytes(&mut canonical,key.as_bytes())?;canonical.extend_from_slice(id.as_bytes());
+        actual+=1;prior=Some(key);
+    }
+    if actual!=count || logical!=bytes {return Err(CoreError::InvalidRecord("spilled directory leaf summary"));}
+    Ok(canonical)
+}
+
 pub(crate) fn canonical_node_header(
     magic: &[u8;8], role: u8, level: u8, count: usize,
     subtree_count: u64, subtree_bytes: u64, entry_bytes: usize,

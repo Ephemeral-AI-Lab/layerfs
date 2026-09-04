@@ -6,7 +6,8 @@ pub mod delta_spool;
 mod read;
 mod reconcile;
 mod reconcile_delta;
-pub use reconcile_delta::{replace_paths_from_snapshot_bounded, ReconcileBudget};
+mod reconcile_overlay;
+pub use reconcile_delta::{replace_choices_from_snapshots_bounded, replace_paths_from_snapshot_bounded, ReconcileBudget};
 mod resolve;
 mod root;
 

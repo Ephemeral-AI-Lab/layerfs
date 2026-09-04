@@ -1,8 +1,51 @@
 //! Fixed-record private Commit sorting. No namespace-sized allocation or worker.
-use crate::{CoreError, CoreResult as Result};
+use crate::CoreError;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+
+/// Keep OS errors until the caller chooses its public error boundary. Content
+/// algorithms retain CoreError; Workspace mutators preserve the original errno.
+#[derive(Debug)]
+pub enum SpoolError {
+    Io(std::io::Error),
+    Core(CoreError),
+}
+impl From<std::io::Error> for SpoolError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+impl From<CoreError> for SpoolError {
+    fn from(error: CoreError) -> Self {
+        Self::Core(error)
+    }
+}
+impl From<SpoolError> for CoreError {
+    fn from(error: SpoolError) -> Self {
+        match error {
+            SpoolError::Io(_) => Self::Io,
+            SpoolError::Core(error) => error,
+        }
+    }
+}
+impl std::fmt::Display for SpoolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(error) => error.fmt(f),
+            Self::Core(error) => error.fmt(f),
+        }
+    }
+}
+impl std::error::Error for SpoolError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(match self {
+            Self::Io(error) => error,
+            Self::Core(error) => error,
+        })
+    }
+}
+pub type Result<T> = std::result::Result<T, SpoolError>;
 
 pub const SORT_BYTES: u64 = 256 * 1024;
 
@@ -52,12 +95,16 @@ impl Write for CountedFile<'_> {
         note(|m| m.write_bytes += n as u64);
         Ok(n)
     }
-    fn flush(&mut self) -> std::io::Result<()> { self.0.flush() }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.flush()
+    }
 }
 fn read_record<const N: usize>(reader: &mut impl Read) -> Result<Option<[u8; N]>> {
     let mut record = [0; N];
-    if reader.read(&mut record[..1]).map_err(|_| CoreError::Io)? == 0 { return Ok(None); }
-    reader.read_exact(&mut record[1..]).map_err(|_| CoreError::Io)?;
+    if reader.read(&mut record[..1])? == 0 {
+        return Ok(None);
+    }
+    reader.read_exact(&mut record[1..])?;
     Ok(Some(record))
 }
 
@@ -76,51 +123,39 @@ impl<const N: usize> Run<N> {
             .create_new(true)
             .read(true)
             .write(true)
-            .open(&path)
-            .map_err(|_| CoreError::Io)?;
+            .open(&path)?;
         // Keep only the descriptor; failed later construction cannot orphan a
         // named run. A failed unlink is reported before any record is written.
-        std::fs::remove_file(&path).map_err(|_| CoreError::Io)?;
+        std::fs::remove_file(&path)?;
         Ok(Self { file, count: 0 })
     }
     pub fn push(&mut self, record: &[u8; N]) -> Result<()> {
         note(|m| m.write_calls += 1);
-        self.file.write_all(record).map_err(|_| CoreError::Io)?;
+        self.file.write_all(record)?;
         note(|m| m.write_bytes += N as u64);
         self.count += 1;
         Ok(())
     }
     pub fn truncate(&mut self, count: u64) -> Result<()> {
-        self.file
-            .set_len(count * N as u64)
-            .map_err(|_| CoreError::Io)?;
-        self.file
-            .seek(SeekFrom::End(0))
-            .map_err(|_| CoreError::Io)?;
+        self.file.set_len(count * N as u64)?;
+        self.file.seek(SeekFrom::End(0))?;
         self.count = count;
         Ok(())
     }
     pub fn rewind(&mut self) -> Result<()> {
-        self.file
-            .seek(SeekFrom::Start(0))
-            .map_err(|_| CoreError::Io)?;
+        self.file.seek(SeekFrom::Start(0))?;
         Ok(())
     }
     pub fn next(&mut self) -> Result<Option<[u8; N]>> {
         let mut record = [0; N];
         note(|m| m.sequential_read_calls += 1);
-        let read = self
-            .file
-            .read(&mut record[..1])
-            .map_err(|_| CoreError::Io)?;
+        let read = self.file.read(&mut record[..1])?;
         note(|m| m.sequential_read_bytes += read as u64);
         if read == 0 {
             return Ok(None);
         }
         note(|m| m.sequential_read_calls += 1);
-        self.file
-            .read_exact(&mut record[1..])
-            .map_err(|_| CoreError::Io)?;
+        self.file.read_exact(&mut record[1..])?;
         note(|m| m.sequential_read_bytes += (N - 1) as u64);
         Ok(Some(record))
     }
@@ -128,9 +163,7 @@ impl<const N: usize> Run<N> {
         use std::os::unix::fs::FileExt;
         let mut record = [0; N];
         note(|m| m.positional_read_calls += 1);
-        self.file
-            .read_exact_at(&mut record, index * N as u64)
-            .map_err(|_| CoreError::Io)?;
+        self.file.read_exact_at(&mut record, index * N as u64)?;
         note(|m| m.positional_read_bytes += N as u64);
         Ok(record)
     }
@@ -158,7 +191,7 @@ impl<const N: usize> Sorter<N> {
         let buffer_bytes = (memory_bytes / 16).min(8192) as usize;
         let capacity = ((memory_bytes - 3 * buffer_bytes as u64) / N as u64) as usize;
         if capacity == 0 {
-            return Err(CoreError::InvalidRecord("workspace final-delta limit"));
+            return Err(CoreError::InvalidRecord("workspace final-delta limit").into());
         }
         let records = Vec::new();
         Ok(Self {
@@ -172,28 +205,40 @@ impl<const N: usize> Sorter<N> {
         })
     }
     pub fn capacity(&self) -> u64 {
-        if self.records.capacity() == 0 { 0 } else { (self.records.capacity() * N + 3 * self.buffer_bytes) as u64 }
+        if self.records.capacity() == 0 {
+            0
+        } else {
+            (self.records.capacity() * N + 3 * self.buffer_bytes) as u64
+        }
     }
     pub fn push(&mut self, record: [u8; N]) -> Result<()> {
         if (self.count + 1)
             .checked_mul(2 * N as u64)
             .is_none_or(|n| n > self.max_bytes)
         {
-            return Err(CoreError::InvalidRecord("workspace spool limit"));
+            return Err(CoreError::InvalidRecord("workspace spool limit").into());
         }
         if self.records.capacity() == 0 {
-            self.records.try_reserve_exact(self.record_limit).map_err(|_| CoreError::InvalidRecord("workspace final-delta allocation"))?;
+            self.records
+                .try_reserve_exact(self.record_limit)
+                .map_err(|_| CoreError::InvalidRecord("workspace final-delta allocation"))?;
         }
-        if self.records.len() == self.records.capacity() { self.flush()?; }
+        if self.records.len() == self.records.capacity() {
+            self.flush()?;
+        }
         self.records.push(record);
         self.count += 1;
         Ok(())
     }
     fn merge(dir: &Path, mut a: Run<N>, mut b: Run<N>, buffer: usize) -> Result<Run<N>> {
         note(|m| m.merge_passes += 1);
-        a.rewind()?; b.rewind()?;
+        a.rewind()?;
+        b.rewind()?;
         let mut out = Run::create(dir)?;
-        out.count = a.count.checked_add(b.count).ok_or(CoreError::LengthOverflow)?;
+        out.count = a
+            .count
+            .checked_add(b.count)
+            .ok_or(CoreError::LengthOverflow)?;
         {
             let mut a = BufReader::with_capacity(buffer, CountedFile(&mut a.file));
             let mut b = BufReader::with_capacity(buffer, CountedFile(&mut b.file));
@@ -201,17 +246,23 @@ impl<const N: usize> Sorter<N> {
             let mut left = read_record::<N>(&mut a)?;
             let mut right = read_record::<N>(&mut b)?;
             while left.is_some() || right.is_some() {
-                if right.is_none() || left.as_ref().zip(right.as_ref()).is_some_and(|(a,b)| a <= b) {
-                    output.write_all(&left.take().unwrap()).map_err(|_| CoreError::Io)?;
+                if right.is_none()
+                    || left
+                        .as_ref()
+                        .zip(right.as_ref())
+                        .is_some_and(|(a, b)| a <= b)
+                {
+                    output.write_all(&left.take().unwrap())?;
                     left = read_record(&mut a)?;
                 } else {
-                    output.write_all(&right.take().unwrap()).map_err(|_| CoreError::Io)?;
+                    output.write_all(&right.take().unwrap())?;
                     right = read_record(&mut b)?;
                 }
             }
-            output.flush().map_err(|_| CoreError::Io)?;
+            output.flush()?;
         }
-        a.remove()?; b.remove()?;
+        a.remove()?;
+        b.remove()?;
         Ok(out)
     }
     fn flush(&mut self) -> Result<()> {
@@ -221,9 +272,12 @@ impl<const N: usize> Sorter<N> {
         self.records.sort_unstable();
         let mut run = Run::create(&self.dir)?;
         {
-            let mut output = BufWriter::with_capacity(self.buffer_bytes, CountedFile(&mut run.file));
-            for record in &self.records { output.write_all(record).map_err(|_| CoreError::Io)?; }
-            output.flush().map_err(|_| CoreError::Io)?;
+            let mut output =
+                BufWriter::with_capacity(self.buffer_bytes, CountedFile(&mut run.file));
+            for record in &self.records {
+                output.write_all(record)?;
+            }
+            output.flush()?;
         }
         run.count = self.records.len() as u64;
         self.records.clear();
@@ -236,7 +290,7 @@ impl<const N: usize> Sorter<N> {
                 Some(before) => run = Self::merge(&self.dir, before, run, self.buffer_bytes)?,
             }
         }
-        Err(CoreError::InvalidRecord("workspace sort run limit"))
+        Err(CoreError::InvalidRecord("workspace sort run limit").into())
     }
     pub fn finish(mut self) -> Result<Run<N>> {
         self.flush()?;

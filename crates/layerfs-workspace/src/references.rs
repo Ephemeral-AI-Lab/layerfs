@@ -17,6 +17,7 @@ pub(crate) struct References {
     pending_flush_base: Option<u64>,
     pub(crate) events: u64,
     pub(crate) bookkeeping_ns: u64,
+    pub(crate) buffer_peak: u64,
 }
 impl References {
     pub(crate) fn capacity(&self) -> u64 {
@@ -43,6 +44,7 @@ impl References {
                 .try_reserve_exact(capacity)
                 .map_err(|_| StoreError::InvalidInput("workspace reference allocation"))?;
         }
+        self.buffer_peak = self.buffer_peak.max(self.capacity());
         if self.pending.len() == self.pending.capacity() { self.flush_pending(dir)?; }
         Ok(())
     }
@@ -165,6 +167,8 @@ impl References {
         self.pending = Vec::new();
         self.pending_flush_base = None;
         self.events = 0;
+        self.bookkeeping_ns = 0;
+        self.buffer_peak = 0;
         Ok(())
     }
 }

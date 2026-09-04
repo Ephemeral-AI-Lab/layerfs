@@ -211,6 +211,7 @@ pub(crate) struct InitializationSlabWriterMetrics {
     pub blocked_ns: u64,
     pub partial_peak_objects: u64,
     pub partial_peak_payload_bytes: u64,
+    pub partial_peak_owned_bytes: u64,
     pub candidate_copy_bytes: u64,
     pub parent_payload_copy_bytes: u64,
     pub structural_peak_bytes: u64,
@@ -267,6 +268,7 @@ pub(crate) struct InitializationSlabWriter {
     queue: std::sync::Arc<InitializationSlabQueueMetrics>,
     objects: Vec<CanonicalObject>,
     payload_bytes: usize,
+    owned_capacity_bytes: usize,
     metrics: InitializationSlabWriterMetrics,
 }
 
@@ -350,6 +352,7 @@ impl InitializationSlabWriter {
             queue,
             objects: Vec::with_capacity(INITIALIZATION_SLAB_OBJECTS),
             payload_bytes: 0,
+            owned_capacity_bytes: 0,
             metrics: InitializationSlabWriterMetrics::default(),
         }
     }
@@ -371,17 +374,19 @@ impl InitializationSlabWriter {
             objects: std::mem::take(&mut self.objects),
             payload_bytes: std::mem::take(&mut self.payload_bytes),
         };
+        self.owned_capacity_bytes = 0;
         self.queue.before_send(slab.payload_bytes);
         match self.sender.try_send(slab) {
             Ok(()) => {}
             Err(std::sync::mpsc::TrySendError::Full(slab)) => {
                 let started = Instant::now();
-                if let Err(error) = self.sender.send(slab) {
+                let sent = self.sender.send(slab);
+                self.metrics.blocked_ns =
+                    self.metrics.blocked_ns.saturating_add(elapsed_ns(started));
+                if let Err(error) = sent {
                     self.queue.send_failed(error.0.payload_bytes);
                     return Err(StoreError::Integrity("initialization slab receiver"));
                 }
-                self.metrics.blocked_ns =
-                    self.metrics.blocked_ns.saturating_add(elapsed_ns(started));
             }
             Err(std::sync::mpsc::TrySendError::Disconnected(slab)) => {
                 self.queue.send_failed(slab.payload_bytes);
@@ -394,37 +399,48 @@ impl InitializationSlabWriter {
     }
 
     fn push_owned(&mut self, canonical: Vec<u8>, copied: bool) -> CoreResult<ObjectId> {
-        if canonical.len() > INITIALIZATION_SLAB_BYTES {
+        if canonical.capacity() > INITIALIZATION_SLAB_BYTES {
             return Err(CoreError::ObjectLimitExceeded);
-        }
-        if !self.objects.is_empty()
-            && (self.objects.len() == INITIALIZATION_SLAB_OBJECTS
-                || self.payload_bytes.saturating_add(canonical.len()) > INITIALIZATION_SLAB_BYTES)
-        {
-            self.flush().map_err(|_| CoreError::Io)?;
         }
         let id = ObjectId::for_bytes(&canonical);
         self.metrics.canonical_hash_calls += 1;
-        self.payload_bytes += canonical.len();
-        self.metrics.objects += 1;
-        self.metrics.payload_bytes = self
-            .metrics
-            .payload_bytes
-            .saturating_add(canonical.len() as u64);
-        self.metrics.payload_capacity_bytes = self
-            .metrics
-            .payload_capacity_bytes
-            .saturating_add(canonical.capacity() as u64);
         if copied {
             self.metrics.candidate_copy_bytes = self
                 .metrics
                 .candidate_copy_bytes
                 .saturating_add(canonical.len() as u64);
         }
-        self.objects.push(CanonicalObject {
+        self.push_prevalidated(CanonicalObject {
             id,
             bytes: canonical,
-        });
+        })
+        .map_err(|_| CoreError::Io)?;
+        Ok(id)
+    }
+
+    // Only finalized, authenticated candidate objects enter this owned handoff.
+    fn push_prevalidated(&mut self, object: CanonicalObject) -> Result<()> {
+        if object.bytes.capacity() > INITIALIZATION_SLAB_BYTES {
+            return Err(StoreError::Integrity("canonical slab capacity"));
+        }
+        if !self.objects.is_empty()
+            && (self.objects.len() == INITIALIZATION_SLAB_OBJECTS
+                || self.owned_capacity_bytes + object.bytes.capacity() > INITIALIZATION_SLAB_BYTES)
+        {
+            self.flush()?;
+        }
+        self.payload_bytes += object.bytes.len();
+        self.owned_capacity_bytes += object.bytes.capacity();
+        self.metrics.objects += 1;
+        self.metrics.payload_bytes = self
+            .metrics
+            .payload_bytes
+            .saturating_add(object.bytes.len() as u64);
+        self.metrics.payload_capacity_bytes = self
+            .metrics
+            .payload_capacity_bytes
+            .saturating_add(object.bytes.capacity() as u64);
+        self.objects.push(object);
         self.metrics.partial_peak_objects = self
             .metrics
             .partial_peak_objects
@@ -433,7 +449,12 @@ impl InitializationSlabWriter {
             .metrics
             .partial_peak_payload_bytes
             .max(self.payload_bytes as u64);
-        Ok(id)
+        self.metrics.partial_peak_owned_bytes = self.metrics.partial_peak_owned_bytes.max(
+            (self.owned_capacity_bytes
+                + self.objects.capacity() * std::mem::size_of::<CanonicalObject>())
+                as u64,
+        );
+        Ok(())
     }
 }
 
@@ -602,24 +623,43 @@ pub fn apply_reconcile_choices(
     conflicts: &[ReconcileConflict],
     choices: &[filesystem::ReconcileChoice],
 ) -> Result<BuiltRoot> {
+    apply_reconcile_choices_bounded(
+        source,
+        working_root,
+        branch_root,
+        layer_root,
+        conflicts,
+        choices,
+        filesystem::ReconcileBudget {
+            scratch_dir: &std::env::temp_dir(),
+            memory_bytes: 8 * 1024 * 1024,
+            spool_bytes: 1024 * 1024 * 1024,
+        },
+    )
+}
+
+pub(crate) fn apply_reconcile_choices_bounded(
+    source: &dyn ObjectSource,
+    working_root: ObjectId,
+    branch_root: ObjectId,
+    layer_root: ObjectId,
+    conflicts: &[ReconcileConflict],
+    choices: &[filesystem::ReconcileChoice],
+    budget: filesystem::ReconcileBudget<'_>,
+) -> Result<BuiltRoot> {
     if conflicts.len() != choices.len() {
         return Err(StoreError::InvalidInput("reconciliation choice count"));
     }
     let mut objects = ObjectBuffer::new(source)?;
-    let mut root = working_root;
-    for (conflict, choice) in conflicts.iter().zip(choices) {
-        let selected_root = match choice {
-            filesystem::ReconcileChoice::Branch => branch_root,
-            filesystem::ReconcileChoice::Layer => layer_root,
-            filesystem::ReconcileChoice::WorkingTree => continue,
-        };
-        root = filesystem::replace_conflict_from_snapshot(
-            &mut objects,
-            root,
-            selected_root,
-            conflict,
-        )?;
-    }
+    let root = filesystem::replace_choices_from_snapshots_bounded(
+        &mut objects,
+        working_root,
+        branch_root,
+        layer_root,
+        conflicts,
+        choices,
+        budget,
+    )?;
     objects.finish(root, 0)
 }
 
@@ -1776,6 +1816,13 @@ impl DeferredObjectStore {
     }
 
     pub(crate) fn cleanup(mut self, db: &crate::schema::StoreDb) -> Result<()> {
+        self.unlink_private(db)
+    }
+
+    /// Finalized immutable sources remain readable through their owned object,
+    /// order and SQLite-index descriptors. The caller holds Store's operation
+    /// permit so a failed unlink stays in the bounded cleanup owner for retry.
+    pub(crate) fn unlink_private(&mut self, db: &crate::schema::StoreDb) -> Result<()> {
         let [objects, index, order] = self.take_cleanup_paths();
         db.cleanup_candidate_paths([objects, index, order, None, None])
     }
@@ -1788,12 +1835,13 @@ impl DeferredObjectStore {
                 spill
                     .disk_index
                     .as_mut()
+                    .filter(|index| !index._path.0.as_os_str().is_empty())
                     .map(|index| std::mem::take(&mut index._path.0)),
             ),
         };
         let order = match &mut self.reachable {
             IdOrder::Memory(_) => None,
-            IdOrder::Spill { path, .. } => Some(std::mem::take(&mut path.0)),
+            IdOrder::Spill { path, .. } => (!path.0.as_os_str().is_empty()).then(|| std::mem::take(&mut path.0)),
         };
         [objects, index, order]
     }
@@ -2027,7 +2075,9 @@ impl DeferredObjectStore {
         } else {
             None
         };
-        let charge = length.saturating_add(64);
+        // Retained ownership includes reserved Vec storage; encoded accounting
+        // below still uses the canonical length. Keep the existing row overhead.
+        let charge = canonical.capacity().saturating_add(64);
         if matches!(&self.storage, DeferredObjects::Memory { bytes, .. } if bytes.saturating_add(charge) > CANDIDATE_MEMORY_BYTES)
         {
             self.spill()?;
@@ -3005,6 +3055,161 @@ impl<'a> InitializationSegmentAdmission<'a> {
     }
 }
 
+const FINAL_ADMISSION_WORKER_STACK_BYTES: usize = 256 * 1024;
+// Covers the configured stack, guard/TLS/control state and queue packet headers.
+const FINAL_ADMISSION_WORKER_RESERVE_BYTES: usize = 512 * 1024;
+const FINAL_ADMISSION_CONTROL_RESERVE_BYTES: usize = 64 * 1024;
+
+#[derive(Default)]
+struct FinalAdmissionPipelineMetrics {
+    queue: std::sync::Arc<InitializationSlabQueueMetrics>,
+    producer: InitializationSlabWriterMetrics,
+    producer_wall_ns: u64,
+    consumer_idle_ns: u64,
+    oversized_objects: u64,
+    oversized_peak_capacity: u64,
+    workers_started: u64,
+    workers_joined: u64,
+}
+
+impl FinalAdmissionPipelineMetrics {
+    fn reserved_bytes(&self) -> u64 {
+        // Memory candidates move their payloads out of the existing 8-MiB buffer.
+        // A spilled candidate instead owns a 1-MiB read-side pending buffer, six
+        // small slabs and at most one large handoff. Both retain the old bounds.
+        let candidate = CANDIDATE_MEMORY_BYTES.max(
+            CANDIDATE_SPILL_BUFFER_BYTES + 6 * INITIALIZATION_SLAB_BYTES + ADMISSION_BATCH_BYTES,
+        );
+        (candidate
+            + 7 * INITIALIZATION_SLAB_OBJECTS * std::mem::size_of::<CanonicalObject>()
+            + ADMISSION_BATCH_BYTES
+            + ADMISSION_BATCH_COUNT * std::mem::size_of::<CanonicalObject>()
+            + FINAL_ADMISSION_WORKER_RESERVE_BYTES
+            + FINAL_ADMISSION_CONTROL_RESERVE_BYTES) as u64
+    }
+}
+
+fn visit_final_candidate_slabs(
+    objects: DeferredObjectStore,
+    order: &IdOrder,
+    visitor: &mut dyn FnMut(CanonicalObject) -> Result<()>,
+    metrics: &mut FinalAdmissionPipelineMetrics,
+) -> Result<()> {
+    // All reservations are fixed before allocation: four queued small slabs,
+    // one producer slab, one consumer slab, one incoming legal object and the
+    // existing carried SQL batch. A large singleton waits for adoption, so it
+    // cannot multiply by the four queue slots.
+    let queue = metrics.queue.clone();
+    let cancelled = std::sync::atomic::AtomicBool::new(false);
+    std::thread::scope(|scope| {
+        let (sender, receiver) = std::sync::mpsc::sync_channel(INITIALIZATION_SLAB_QUEUE_SLOTS);
+        let (adopted, adoption) = std::sync::mpsc::sync_channel::<()>(0);
+        let cancellation = &cancelled;
+        let producer = std::thread::Builder::new()
+            .name("layerfs-final-admission".into())
+            .stack_size(FINAL_ADMISSION_WORKER_STACK_BYTES)
+            .spawn_scoped(scope, move || {
+                let started = Instant::now();
+                let mut writer = InitializationSlabWriter::new(sender, queue);
+                let mut oversized_objects = 0;
+                let mut oversized_peak_capacity = 0;
+                let result = (|| {
+                    objects.consume_prevalidated_order(order, &mut |object| {
+                        if cancellation.load(Ordering::Acquire) {
+                            return Err(StoreError::Integrity("candidate admission cancelled"));
+                        }
+                        if object.bytes.capacity() > ADMISSION_BATCH_BYTES {
+                            return Err(StoreError::Integrity("canonical object admission size"));
+                        }
+                        if object.bytes.capacity() <= INITIALIZATION_SLAB_BYTES {
+                            return writer.push_prevalidated(object);
+                        }
+                        writer.flush()?;
+                        oversized_objects += 1;
+                        oversized_peak_capacity =
+                            oversized_peak_capacity.max(object.bytes.capacity() as u64);
+                        writer.metrics.objects += 1;
+                        writer.metrics.payload_bytes += object.bytes.len() as u64;
+                        writer.metrics.payload_capacity_bytes += object.bytes.capacity() as u64;
+                        let slab = InitializationObjectSlab {
+                            payload_bytes: object.bytes.len(),
+                            objects: vec![object],
+                        };
+                        let blocked = Instant::now();
+                        let sent = writer
+                            .sender
+                            .send(slab)
+                            .map_err(|_| StoreError::Integrity("candidate admission cancelled"));
+                        if sent.is_ok() {
+                            writer.metrics.handoffs += 1;
+                        }
+                        let result = sent.and_then(|_| {
+                            adoption
+                                .recv()
+                                .map_err(|_| StoreError::Integrity("candidate admission cancelled"))
+                        });
+                        writer.metrics.blocked_ns += elapsed_ns(blocked);
+                        result?;
+                        Ok(())
+                    })?;
+                    writer.flush()
+                })();
+                (
+                    result,
+                    writer.metrics,
+                    elapsed_ns(started),
+                    oversized_objects,
+                    oversized_peak_capacity,
+                )
+            })?;
+        metrics.workers_started = 1;
+        let result = (|| {
+            loop {
+                let started = Instant::now();
+                let next = receiver.recv();
+                metrics.consumer_idle_ns += elapsed_ns(started);
+                let Ok(slab) = next else {
+                    break;
+                };
+                let oversized = slab
+                    .objects
+                    .first()
+                    .is_some_and(|object| object.bytes.capacity() > INITIALIZATION_SLAB_BYTES);
+                if !oversized {
+                    metrics.queue.received(slab.payload_bytes);
+                }
+                for object in slab.objects {
+                    visitor(object)?;
+                }
+                if oversized {
+                    adopted
+                        .send(())
+                        .map_err(|_| StoreError::Integrity("candidate admission producer"))?;
+                }
+            }
+            Ok(())
+        })();
+        cancelled.store(result.is_err(), Ordering::Release);
+        // Disconnect both possible blocking points before joining on an error.
+        drop(receiver);
+        drop(adopted);
+        let joined = producer.join();
+        metrics.workers_joined = 1;
+        let produced = match joined {
+            Ok((outcome, producer, wall, oversized, peak)) => {
+                metrics.producer = producer;
+                metrics.producer_wall_ns = wall;
+                metrics.oversized_objects = oversized;
+                metrics.oversized_peak_capacity = peak;
+                outcome
+            }
+            Err(_) => Err(StoreError::Integrity("candidate admission producer")),
+        };
+        // A cancelled producer must never mask the original admission failure.
+        result.and(produced)
+    })
+}
+
 pub(crate) fn admit_planned_objects(
     db: &crate::schema::StoreDb,
     mut objects: DeferredObjectStore,
@@ -3035,6 +3240,7 @@ pub(crate) fn admit_planned_objects(
         missing_order_path,
     ])?;
     let spilled = matches!(&objects.storage, DeferredObjects::Spill(_));
+    let mut pipeline = FinalAdmissionPipelineMetrics::default();
     let admission = admit_object_stream(
         db,
         plan,
@@ -3042,8 +3248,24 @@ pub(crate) fn admit_planned_objects(
         ADMISSION_BATCH_COUNT,
         ADMISSION_BATCH_BYTES,
         false,
-        |visitor| objects.consume_prevalidated_order(&plan.missing_order, visitor),
-    )?;
+        |visitor| visit_final_candidate_slabs(objects, &plan.missing_order, visitor, &mut pipeline),
+    );
+    crate::telemetry::note_workspace_admission_pipeline(
+        pipeline.producer_wall_ns,
+        pipeline.producer.blocked_ns,
+        pipeline.consumer_idle_ns,
+        pipeline.producer.handoffs,
+        pipeline.queue.peak(),
+        pipeline.queue.peak_bytes(),
+        pipeline.producer.partial_peak_owned_bytes,
+        pipeline.oversized_objects,
+        pipeline.oversized_peak_capacity,
+        pipeline.workers_started,
+        pipeline.workers_joined,
+        pipeline.reserved_bytes(),
+        pipeline.producer.canonical_hash_calls,
+    );
+    let admission = admission?;
     crate::telemetry::note_workspace_admission_buffers(
         admission.payload_moved_bytes,
         if spilled {
@@ -4054,6 +4276,188 @@ mod tests {
         drop(connection);
         drop(db);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn owned_candidate_capacity_boundary_spills_without_changing_encoded_bytes() {
+        let canonical = layerfs_content::encode_bytes_object(b"capacity boundary").unwrap();
+        let id = ObjectId::for_bytes(&canonical);
+        for extra in [0usize, 1] {
+            let mut owned = Vec::with_capacity(CANDIDATE_MEMORY_BYTES - 64 + extra);
+            owned.extend_from_slice(&canonical);
+            let capacity = owned.capacity();
+            let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
+            objects.put_owned(id, owned).unwrap();
+            assert_eq!(objects.encoded_bytes(), canonical.len() as u64);
+            assert_eq!(objects.first_store_write_bytes, canonical.len() as u64);
+            if extra == 0 {
+                let DeferredObjects::Memory { bytes, rows, .. } = &objects.storage else {
+                    panic!("exact allocated-capacity boundary spilled");
+                };
+                assert_eq!(*bytes, capacity + 64);
+                assert_eq!(*bytes, CANDIDATE_MEMORY_BYTES);
+                assert_eq!(rows[&id].capacity(), capacity);
+            } else {
+                assert!(matches!(&objects.storage, DeferredObjects::Spill(_)));
+                assert_eq!(objects.spill_count, 1);
+            }
+            let objects = objects.all_reachable().unwrap();
+            assert_eq!(objects.get(id).unwrap().unwrap(), canonical);
+        }
+    }
+
+    #[test]
+    fn final_admission_cancels_oversized_adoption_wait() {
+        let bytes =
+            layerfs_content::encode_bytes_object(&vec![3; INITIALIZATION_SLAB_BYTES + 1]).unwrap();
+        let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
+        objects
+            .put_owned(ObjectId::for_bytes(&bytes), bytes)
+            .unwrap();
+        let order = std::mem::replace(&mut objects.reachable, IdOrder::empty());
+        let mut metrics = FinalAdmissionPipelineMetrics::default();
+        let failed = visit_final_candidate_slabs(
+            objects,
+            &order,
+            &mut |_| {
+                Err(StoreError::Integrity(
+                    "original oversized admission failure",
+                ))
+            },
+            &mut metrics,
+        );
+        assert!(matches!(
+            failed,
+            Err(StoreError::Integrity(
+                "original oversized admission failure"
+            ))
+        ));
+        assert_eq!(metrics.oversized_objects, 1);
+        assert_eq!(metrics.producer.handoffs, 1);
+        assert_eq!((metrics.workers_started, metrics.workers_joined), (1, 1));
+    }
+
+    #[test]
+    fn final_admission_slabs_preserve_order_large_objects_and_join() {
+        let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
+        let mut expected = Vec::new();
+        for index in 0u64..1200 {
+            let canonical = if index == 550 {
+                layerfs_content::encode_bytes_object(&vec![7; INITIALIZATION_SLAB_BYTES + 1])
+                    .unwrap()
+            } else {
+                layerfs_content::encode_bytes_object(&index.to_le_bytes()).unwrap()
+            };
+            let id = ObjectId::for_bytes(&canonical);
+            expected.push(id);
+            objects.put_owned(id, canonical).unwrap();
+        }
+        let order = std::mem::replace(&mut objects.reachable, IdOrder::empty());
+        let mut metrics = FinalAdmissionPipelineMetrics::default();
+        let mut observed = Vec::new();
+        visit_final_candidate_slabs(
+            objects,
+            &order,
+            &mut |object| {
+                assert_eq!(ObjectId::for_bytes(&object.bytes), object.id);
+                observed.push(object.id);
+                Ok(())
+            },
+            &mut metrics,
+        )
+        .unwrap();
+        assert_eq!(observed, expected);
+        assert_eq!(metrics.oversized_objects, 1);
+        assert!(metrics.oversized_peak_capacity > INITIALIZATION_SLAB_BYTES as u64);
+        assert!(metrics.queue.peak() <= INITIALIZATION_SLAB_QUEUE_SLOTS as u64);
+        assert_eq!((metrics.workers_started, metrics.workers_joined), (1, 1));
+        assert_eq!(metrics.producer.canonical_hash_calls, 0);
+    }
+
+    #[test]
+    fn final_admission_cancels_full_queue_and_preserves_consumer_error() {
+        let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
+        for index in 0u64..4096 {
+            let bytes = layerfs_content::encode_bytes_object(&index.to_le_bytes()).unwrap();
+            objects
+                .put_owned(ObjectId::for_bytes(&bytes), bytes)
+                .unwrap();
+        }
+        let order = std::mem::replace(&mut objects.reachable, IdOrder::empty());
+        let mut metrics = FinalAdmissionPipelineMetrics::default();
+        let queue = metrics.queue.clone();
+        let failed = visit_final_candidate_slabs(
+            objects,
+            &order,
+            &mut |_| {
+                let started = Instant::now();
+                while queue.queued.load(Ordering::Acquire) <= INITIALIZATION_SLAB_QUEUE_SLOTS as u64
+                {
+                    assert!(
+                        started.elapsed() < std::time::Duration::from_secs(2),
+                        "producer did not reach full queue"
+                    );
+                    std::thread::yield_now();
+                }
+                Err(StoreError::Integrity("original admission failure"))
+            },
+            &mut metrics,
+        );
+        assert!(matches!(
+            failed,
+            Err(StoreError::Integrity("original admission failure"))
+        ));
+        assert_eq!((metrics.workers_started, metrics.workers_joined), (1, 1));
+    }
+
+    #[test]
+    fn immutable_source_checked_unlink_retains_index_and_order_reads_after_retry() {
+        let root = std::env::temp_dir().join(format!("layerfs-source-cleanup-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&root).unwrap();
+        let db = crate::schema::StoreDb::create(root.join("store.sqlite")).unwrap();
+        let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
+        let first = layerfs_content::encode_bytes_object(b"first private source").unwrap();
+        let second = layerfs_content::encode_bytes_object(b"second private source").unwrap();
+        let ids = [ObjectId::for_bytes(&first), ObjectId::for_bytes(&second)];
+        objects.put_owned(ids[0], first.clone()).unwrap();
+        objects.spill().unwrap();
+        if let DeferredObjects::Spill(spill) = &mut objects.storage { spill.index_limit = 0; }
+        objects.put_owned(ids[1], second.clone()).unwrap();
+        let mut objects = objects.all_reachable().unwrap();
+        let order_path = root.join("source-order");
+        let mut order = std::fs::OpenOptions::new().create_new(true).read(true).write(true).open(&order_path).unwrap();
+        for id in ids { order.write_all(id.as_bytes()).unwrap(); }
+        objects.reachable = IdOrder::Spill { file: order, path: TempPath(order_path.clone()) };
+        let held = root.join("held-order");
+        std::fs::rename(&order_path, &held).unwrap();
+        std::fs::create_dir(&order_path).unwrap();
+        {
+            let _operation = db.enter_operation().unwrap();
+            assert!(objects.unlink_private(&db).is_err());
+        }
+        assert!(db.enter_operation().is_err(), "failed private cleanup must block the next Store operation");
+        // The disk-index name is gone; evict SQLite's private pager cache so
+        // these reads exercise its retained descriptor, not only cached rows.
+        let DeferredObjects::Spill(spill) = &objects.storage else { unreachable!() };
+        let index = spill.disk_index.as_ref().expect("forced disk index");
+        assert!(index._path.0.as_os_str().is_empty());
+        index.connection.lock().unwrap().execute_batch("PRAGMA shrink_memory").unwrap();
+        assert_eq!(objects.get(ids[0]).unwrap(), Some(first));
+        assert_eq!(objects.get(ids[1]).unwrap(), Some(second));
+        std::fs::remove_dir(&order_path).unwrap();
+        std::fs::rename(&held, &order_path).unwrap();
+        db.retry_candidate_cleanup().unwrap();
+        {
+            let _operation = db.enter_operation().unwrap();
+            objects.unlink_private(&db).unwrap(); // idempotent after failed-owner retry
+        }
+        let mut observed = Vec::new();
+        objects.reachable.visit(|id| { observed.push(id); Ok(()) }).unwrap();
+        assert_eq!(observed, ids);
+        assert!(!order_path.exists());
+        let persisted: i64 = db.reader().unwrap().query_row("SELECT count(*) FROM objects", [], |row| row.get(0)).unwrap();
+        assert_eq!(persisted, 0, "source cleanup must not admit or publish objects");
+        drop(objects); drop(db); std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
