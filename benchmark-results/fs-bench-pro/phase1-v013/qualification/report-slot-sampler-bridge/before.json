@@ -1,8 +1,0 @@
-{
-  "source_sha256": "c9cc8e4c68018b4a104a00d452343c9bfbf8406fbb619b09e30b0ce3519c9538",
-  "command": [
-    "python3",
-    "benchmark-results/fs-bench-pro/phase1-v013/qualification/report-slot-sampler-bridge/check.py"
-  ],
-  "scope": "exact-slot and precise sampler source-boundary model only; no campaign or product operations"
-}

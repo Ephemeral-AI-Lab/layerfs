@@ -1,5 +1,6 @@
 use layerfs_layerstack_store::{
     BranchId, CommitId, EntityName, LayerId, LayerStackId, StorageReceipt,
+    ADMISSION_BATCH_COUNT, OBJECT_PAGE_BYTES,
 };
 use layerfs_workspace::{ExecutionId, WorkspaceId};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -75,20 +76,15 @@ impl CandidateStats {
         self.validate_for(OperationFamily::WorkspaceCommit)
     }
 
-    pub fn validate_for(self, family: OperationFamily) -> bool {
-        let max_transaction_objects = if family == OperationFamily::LayerStackInitialize {
-            8192
-        } else {
-            128
-        };
+    pub fn validate_for(self, _family: OperationFamily) -> bool {
         self.candidate_objects == self.inserted_objects + self.reused_objects
             && self.candidate_bytes == self.inserted_bytes + self.reused_bytes
             && self.inserted_objects == self.batch_inserted_objects + self.final_inserted_objects
             && self.inserted_bytes == self.batch_inserted_bytes + self.final_inserted_bytes
             && self.reused_objects == self.preexisting_reused_objects
             && self.reused_bytes == self.preexisting_reused_bytes
-            && self.max_transaction_objects < max_transaction_objects
-            && self.max_transaction_bytes < 4 * 1024 * 1024
+            && self.max_transaction_objects <= ADMISSION_BATCH_COUNT as u64
+            && self.max_transaction_bytes < OBJECT_PAGE_BYTES as u64
     }
 }
 

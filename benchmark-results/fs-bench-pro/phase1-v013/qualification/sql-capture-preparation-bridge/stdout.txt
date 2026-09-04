@@ -1,1 +1,0 @@
-{"status": "pass", "source_revision": "8278d8174940712b542f0ebee9d78c041f479c5e", "342_changed_inputs": 2, "a40_changed_inputs": 1, "namespace500_old_producer_rejected": true, "unrelated_source_and_plan_changes_rejected": true}

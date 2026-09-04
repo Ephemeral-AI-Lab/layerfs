@@ -123,6 +123,7 @@ and [#12](https://github.com/Ephemeral-AI-Lab/layerfs/issues/12) are closed.
 
 ## Detailed evidence and documentation
 
+- [Architecture shifts, diagrams and complexity analysis](../../docs/roadmap/0.1/0.1.2/architecture_shift.md)
 - [Benchmark results and acceptance scope](benchmark-results.md)
 - [Complete SDK edit timing and memory tables](sdk-edit-benchmark-results.md)
 - [Refreshed namespace and Store tables](supporting-benchmarks.md)

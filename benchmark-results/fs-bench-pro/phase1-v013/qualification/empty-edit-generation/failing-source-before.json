@@ -1,8 +1,0 @@
-{
-  "recorded_at_utc": "2026-09-04T05:28:38.532807+00:00",
-  "files": {
-    "crates/layerfs-workspace/src/file_io.rs": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
-    "crates/layerfs-workspace/src/file_edit.rs": "52d4fd2741995fb19bfa1f293cdca793fcf585e888c4d1cb2cf786806f48d7f4",
-    "crates/layerfs-workspace/tests/file_edit.rs": "3c537b2a748475e86181f9268b6fdbd3080076e85905666d77b927ae116afdae"
-  }
-}

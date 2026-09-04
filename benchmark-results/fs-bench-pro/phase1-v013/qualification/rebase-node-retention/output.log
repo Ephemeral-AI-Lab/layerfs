@@ -1,9 +1,0 @@
-   Compiling layerfs-workspace v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.64s
-     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-80aa7845441f185e)
-
-running 1 test
-test lifecycle::tests::rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 40 filtered out; finished in 0.09s
-

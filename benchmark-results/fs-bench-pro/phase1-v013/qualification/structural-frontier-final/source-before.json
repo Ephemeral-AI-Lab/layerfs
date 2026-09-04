@@ -1,5 +1,0 @@
-{
-  "path": "crates/layerfs-workspace/src/changes.rs",
-  "sha256": "9ed0e0fb44724106800a8a27b696e585a6ec3274b424779222b0ed855c341130",
-  "reason": "New fail-closed transient path budget guard invalidates the prior low-budget targeted regression; rerun only that test against final source."
-}

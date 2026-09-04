@@ -9,6 +9,39 @@ use layerfs_workspace::Workspaces;
 use std::sync::Arc;
 
 #[test]
+fn candidate_stats_accept_store_admission_bounds() {
+    let stats = |objects, bytes| CandidateStats {
+        candidate_objects: objects,
+        candidate_bytes: bytes,
+        inserted_objects: objects,
+        inserted_bytes: bytes,
+        batch_inserted_objects: objects,
+        batch_inserted_bytes: bytes,
+        admission_transactions: 1,
+        max_transaction_objects: objects,
+        max_transaction_bytes: bytes,
+        ..CandidateStats::default()
+    };
+    for family in [
+        OperationFamily::WorkspaceCommit,
+        OperationFamily::WorkspaceResolve,
+        OperationFamily::LayerStackInitialize,
+        OperationFamily::LayerStackAdd,
+    ] {
+        for objects in [127, 128, 512, 8191] {
+            assert!(stats(objects, objects).validate_for(family));
+        }
+        assert!(stats(8191, 4 * 1024 * 1024 - 1).validate_for(family));
+        assert!(!stats(8192, 8192).validate_for(family));
+        assert!(!stats(1, 4 * 1024 * 1024).validate_for(family));
+        let mut invalid = stats(128, 128);
+        invalid.candidate_objects += 1;
+        assert!(!invalid.validate_for(family));
+    }
+    assert!(stats(128, 128).validate());
+}
+
+#[test]
 fn passive_snapshot_has_zero_sql_and_explicit_analysis_is_exact() {
     let root = temp();
     std::fs::create_dir_all(&root).unwrap();

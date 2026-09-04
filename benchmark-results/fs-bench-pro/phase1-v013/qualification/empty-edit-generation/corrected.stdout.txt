@@ -1,6 +1,0 @@
-
-running 1 test
-test whole_file_empty_generation_reclaims_edit_budget ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 8.03s
-

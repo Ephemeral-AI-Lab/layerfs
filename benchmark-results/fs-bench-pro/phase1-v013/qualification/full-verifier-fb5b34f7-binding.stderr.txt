@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-bind-full-verifier-assets.py", line 16, in <module>
-    fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-BlockingIOError: [Errno 35] Resource temporarily unavailable

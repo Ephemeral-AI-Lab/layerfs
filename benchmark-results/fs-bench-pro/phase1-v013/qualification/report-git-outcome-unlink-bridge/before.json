@@ -1,8 +1,0 @@
-{
-  "source_sha256": "c455a827f513ab62e341ce82a29cf3eea7026eebaa816095f9516aba3d1cb7ef",
-  "command": [
-    "python3",
-    "benchmark-results/fs-bench-pro/phase1-v013/qualification/report-git-outcome-unlink-bridge/check.py"
-  ],
-  "scope": "retained small Git receipts and committed source only; no product executions or report regeneration"
-}

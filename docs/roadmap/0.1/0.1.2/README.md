@@ -7,6 +7,15 @@ LayerFS 0.1.2 includes the completed
 and the [release refresh](release-refresh.md) under parent
 [#12](https://github.com/Ephemeral-AI-Lab/layerfs/issues/12).
 
+The [diagram-led architecture history](architecture_shift.md) traces the
+pre-v0.1 foundations through v0.1.2, including edit/Commit time and space
+complexity, storage authority changes, and measured optimization boundaries.
+For a focused visual explanation, see
+[Extent trees: before/after and complexity](extent_tree.md).
+The publication-ready [X Article editions](x-article/) contain English and
+Simplified Chinese articles, localized diagrams, benchmark charts, Big-O tables,
+and the accompanying long-form reply sequences.
+
 ## Ordered work
 
 | Issue | Disposition |

@@ -1,7 +1,0 @@
-
-running 1 test
-CDC_DELETE_OFFSET_RECIPE_CHECK seeded_offsets=1500 changed_offsets=1 changed_case_seed_inputs=1 variant_count=500 fixture_regular_files=501 fixture_logical_bytes=523288576
-test workload_source::dedup_workloads::cdc_delete_offsets_preserve_all_but_the_frozen_collision ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.28s
-

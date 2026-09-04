@@ -1,2 +1,0 @@
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
-     Running tests/file_edit.rs (target/debug/deps/file_edit-72da02e47864b988)

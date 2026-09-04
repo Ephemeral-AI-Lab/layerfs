@@ -1,2 +1,0 @@
-   Compiling fs-benchmark-pro v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-source-7948df2de269e5ffd47a232ffd8091ff83f8869f/benchmark/fs-bench-pro)
-    Finished `release` profile [optimized] target(s) in 10.26s

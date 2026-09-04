@@ -1,4 +1,0 @@
-git_effective_config=core.autocrlf=false;core.filemode=true;core.symlinks=true;core.logAllRefUpdates=false;core.hooksPath=/dev/null;commit.gpgSign=false;tag.gpgSign=false;gc.auto=0;maintenance.auto=false;credential.helper=;status.showUntrackedFiles=all;diff.renames=false;index.version=2;core.untrackedCache=false;core.fsmonitor=false;protocol.allow=never
-git_genesis_head=3bffa1b35f1a00e6dbcf744e6d111a970655caa3
-git_prepare_ns=16259857757
-git_version=git version 2.39.5

@@ -1,2 +1,0 @@
-candidate sdk-edit-run truncate-tail-4k-on-10mib-ops-1 repetition=4 clone_method=apfs-clone clone_wall_ns=17117333 clone_sha256=pass container_exit=0 oom_killed=false
-baseline sdk-edit-run truncate-tail-4k-on-10mib-ops-1 repetition=4 clone_method=apfs-clone clone_wall_ns=16756209 clone_sha256=pass container_exit=0 oom_killed=false

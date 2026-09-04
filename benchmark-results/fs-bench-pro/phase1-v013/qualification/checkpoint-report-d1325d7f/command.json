@@ -1,7 +1,0 @@
-[
-  "python3",
-  "benchmark/fs-bench-pro/generate-workspace-report.py",
-  "benchmark-results/fs-bench-pro/phase1-v013",
-  "--assets",
-  "benchmark-results/fs-bench-pro/phase1-v013/assets-d1325d7f"
-]

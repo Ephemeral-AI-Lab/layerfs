@@ -1,9 +1,0 @@
-{
-  "source_sha256": "3ca36112b4b30b6281416db82dbd35cce6f7d7c5224ba6b4248ff21f2b3e7f8a",
-  "command": [
-    "python3",
-    "benchmark/fs-bench-pro/generate-workspace-report.py",
-    "--aggregation-self-check"
-  ],
-  "scope": "tiny synthetic report-only models; no campaign readback or product execution"
-}

@@ -1,1 +1,0 @@
-fs-benchmark-pro: duplicate CDC reference/variant fixture

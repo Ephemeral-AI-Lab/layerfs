@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">LayerFS v2 bounded direct-admission pipeline</title>
+  <desc id="desc">Eight import producers read and construct canonical objects, reuse exact metadata roots, and fill owned slabs bounded by 256 KiB and 512 objects. A synchronous queue holds four slabs. The calling thread carries one batch bounded below 4 MiB and 8,191 objects into SQLite. Final structure and the LayerStack are published last. This overlaps producer and SQLite work, changing wall time from P plus A plus F toward the maximum of P and A plus F.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#667085"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17202a; }
+    .bg { fill: #ffffff; }
+    .title { font-size: 42px; font-weight: 700; }
+    .subtitle { font-size: 22px; fill: #667085; }
+    .section { font-size: 24px; font-weight: 700; }
+    .label { font-size: 19px; font-weight: 650; }
+    .body { font-size: 17px; fill: #475467; }
+    .formula { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 21px; font-weight: 650; }
+    .producer { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 2.5; }
+    .step { fill: #ffffff; stroke: #c4b5fd; stroke-width: 2; }
+    .queue { fill: #fff7ed; stroke: #ea580c; stroke-width: 2.5; }
+    .sqlite { fill: #eff6ff; stroke: #2563eb; stroke-width: 2.5; }
+    .publish { fill: #ecfdf3; stroke: #16825d; stroke-width: 2.5; }
+    .arrow { fill: none; stroke: #667085; stroke-width: 3; marker-end: url(#arrow); }
+    .lane-bg { fill: #f8fafc; }
+    .producer-bar { fill: #7c3aed; }
+    .sqlite-bar { fill: #2563eb; }
+    .final-bar { fill: #16825d; }
+    .guide { stroke: #98a2b3; stroke-width: 1.5; }
+    .inside { font-size: 17px; fill: #ffffff; }
+  </style>
+
+  <rect class="bg" width="1600" height="900"/>
+  <text class="title" x="85" y="68">v2 removes the serialization boundary</text>
+  <text class="subtitle" x="85" y="106">Bounded ownership transfer overlaps construction with one SQLite writer</text>
+
+  <text class="section" x="90" y="170">Eight producers, each running the same bounded sequence</text>
+  <rect class="producer" x="90" y="205" width="875" height="150" rx="12"/>
+
+  <rect class="step" x="110" y="235" width="180" height="90" rx="9"/>
+  <text class="label" x="200" y="270" text-anchor="middle">Read / stat / open</text>
+  <text class="body" x="200" y="300" text-anchor="middle">source files</text>
+  <path class="arrow" d="M290 280 H320"/>
+
+  <rect class="step" x="320" y="235" width="180" height="90" rx="9"/>
+  <text class="label" x="410" y="270" text-anchor="middle">CDC + canonical</text>
+  <text class="body" x="410" y="300" text-anchor="middle">unchanged builders</text>
+  <path class="arrow" d="M500 280 H530"/>
+
+  <rect class="step" x="530" y="235" width="180" height="90" rx="9"/>
+  <text class="label" x="620" y="270" text-anchor="middle">Metadata reuse</text>
+  <text class="body" x="620" y="300" text-anchor="middle">8-entry exact cache</text>
+  <path class="arrow" d="M710 280 H740"/>
+
+  <rect class="step" x="740" y="235" width="200" height="90" rx="9"/>
+  <text class="label" x="840" y="270" text-anchor="middle">Fill owned slab</text>
+  <text class="body" x="840" y="300" text-anchor="middle">≤256 KiB · ≤512 objects</text>
+
+  <path class="arrow" d="M965 280 H1025"/>
+  <text class="body" x="995" y="255" text-anchor="middle">move</text>
+
+  <rect class="queue" x="1025" y="205" width="205" height="150" rx="12"/>
+  <text class="label" x="1127" y="244" text-anchor="middle">Sync queue</text>
+  <text class="section" x="1127" y="286" text-anchor="middle">4 slabs</text>
+  <text class="body" x="1127" y="320" text-anchor="middle">bounded backpressure</text>
+
+  <path class="arrow" d="M1230 280 H1290"/>
+
+  <rect class="sqlite" x="1290" y="185" width="240" height="190" rx="12"/>
+  <text class="label" x="1410" y="225" text-anchor="middle">Calling thread</text>
+  <text class="body" x="1410" y="256" text-anchor="middle">sole SQLite owner</text>
+  <text class="section" x="1410" y="300" text-anchor="middle">&lt;4 MiB</text>
+  <text class="body" x="1410" y="330" text-anchor="middle">or ≤8,191 objects</text>
+  <text class="body" x="1410" y="353" text-anchor="middle">per carried batch</text>
+
+  <path class="arrow" d="M1410 375 V440"/>
+  <rect class="publish" x="1115" y="440" width="415" height="100" rx="12"/>
+  <text class="label" x="1322" y="479" text-anchor="middle">Build final structure</text>
+  <text class="body" x="1322" y="510" text-anchor="middle">publish Layer + LayerStack last</text>
+
+  <text class="section" x="90" y="440">Measured at 100,000 files</text>
+  <text class="label" x="90" y="480">2,147 slab handoffs · queue peak 4 slabs</text>
+  <text class="label" x="90" y="514">544.3 MB canonical payload · 0 parent payload copies</text>
+  <text class="label" x="90" y="548">647 MB write + 647 MB reread removed</text>
+
+  <line class="guide" x1="90" y1="610" x2="1530" y2="610"/>
+  <text class="section" x="90" y="658">Critical path</text>
+
+  <text class="label" x="90" y="708">v1 serial</text>
+  <rect class="lane-bg" x="245" y="678" width="1180" height="42" rx="6"/>
+  <rect class="producer-bar" x="245" y="678" width="560" height="42" rx="6"/>
+  <rect class="sqlite-bar" x="805" y="678" width="400" height="42" rx="6"/>
+  <rect class="final-bar" x="1205" y="678" width="135" height="42" rx="6"/>
+  <text class="inside" x="525" y="706" text-anchor="middle">producer P</text>
+  <text class="inside" x="1005" y="706" text-anchor="middle">SQLite A</text>
+  <text class="inside" x="1272" y="706" text-anchor="middle">F</text>
+  <text class="formula" x="1370" y="706">P + A + F</text>
+
+  <text class="label" x="90" y="788">v2 pipeline</text>
+  <rect class="lane-bg" x="245" y="758" width="1180" height="42" rx="6"/>
+  <rect class="producer-bar" x="245" y="758" width="560" height="18" rx="5"/>
+  <rect class="sqlite-bar" x="360" y="782" width="400" height="18" rx="5"/>
+  <rect class="final-bar" x="805" y="758" width="135" height="42" rx="6"/>
+  <text class="formula" x="985" y="786">max(P, A) + F + stalls</text>
+
+  <rect class="producer-bar" x="245" y="842" width="18" height="12"/>
+  <text class="body" x="274" y="854">construction</text>
+  <rect class="sqlite-bar" x="420" y="842" width="18" height="12"/>
+  <text class="body" x="449" y="854">SQLite admission</text>
+  <rect class="final-bar" x="650" y="842" width="18" height="12"/>
+  <text class="body" x="679" y="854">structural finalization</text>
+</svg>

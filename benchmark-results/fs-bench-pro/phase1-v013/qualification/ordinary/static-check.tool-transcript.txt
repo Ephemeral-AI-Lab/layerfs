@@ -1,1 +1,0 @@
-ordinary static registries PASS: 68 IDs, 204 slots, six schedules per seed and transient algebra

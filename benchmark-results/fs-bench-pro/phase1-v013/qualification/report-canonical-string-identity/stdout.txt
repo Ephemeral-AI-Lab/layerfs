@@ -1,1 +1,0 @@
-canonical_package_string_identity_self_check=pass

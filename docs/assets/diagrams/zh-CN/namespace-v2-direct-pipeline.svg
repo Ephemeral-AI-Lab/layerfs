@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">LayerFS v2 有界直接入库流水线</title>
+  <desc id="desc">8 个生产线程读取并构建规范对象、复用精确元数据根，并填充受 256 KiB 和 512 个对象限制的独占 slab。同步队列最多持有 4 个 slab。调用线程使用低于 4 MiB 或 8,191 个对象的批次写入 SQLite，最后发布完整结构和 LayerStack。生产者和 SQLite 工作由此重叠。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#667085"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", ui-sans-serif, sans-serif; fill: #17202a; }
+    .bg { fill: #ffffff; }
+    .title { font-size: 42px; font-weight: 700; }
+    .subtitle { font-size: 22px; fill: #667085; }
+    .section { font-size: 24px; font-weight: 700; }
+    .label { font-size: 19px; font-weight: 650; }
+    .body { font-size: 17px; fill: #475467; }
+    .formula { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 21px; font-weight: 650; }
+    .producer { fill: #f5f3ff; stroke: #7c3aed; stroke-width: 2.5; }
+    .step { fill: #ffffff; stroke: #c4b5fd; stroke-width: 2; }
+    .queue { fill: #fff7ed; stroke: #ea580c; stroke-width: 2.5; }
+    .sqlite { fill: #eff6ff; stroke: #2563eb; stroke-width: 2.5; }
+    .publish { fill: #ecfdf3; stroke: #16825d; stroke-width: 2.5; }
+    .arrow { fill: none; stroke: #667085; stroke-width: 3; marker-end: url(#arrow); }
+    .lane-bg { fill: #f8fafc; }
+    .producer-bar { fill: #7c3aed; }
+    .sqlite-bar { fill: #2563eb; }
+    .final-bar { fill: #16825d; }
+    .guide { stroke: #98a2b3; stroke-width: 1.5; }
+    .inside { font-size: 17px; fill: #ffffff; }
+  </style>
+
+  <rect class="bg" width="1600" height="900"/>
+  <text class="title" x="85" y="68">v2 移除了串行化边界</text>
+  <text class="subtitle" x="85" y="106">有界所有权转移让对象构建与唯一 SQLite 写入方重叠执行</text>
+
+  <text class="section" x="90" y="170">8 个生产线程，各自执行相同的有界流程</text>
+  <rect class="producer" x="90" y="205" width="875" height="150" rx="12"/>
+
+  <rect class="step" x="110" y="235" width="180" height="90" rx="9"/>
+  <text class="label" x="200" y="270" text-anchor="middle">读取 / stat / open</text>
+  <text class="body" x="200" y="300" text-anchor="middle">源文件</text>
+  <path class="arrow" d="M290 280 H320"/>
+
+  <rect class="step" x="320" y="235" width="180" height="90" rx="9"/>
+  <text class="label" x="410" y="270" text-anchor="middle">CDC + 规范化构建</text>
+  <text class="body" x="410" y="300" text-anchor="middle">构建器保持不变</text>
+  <path class="arrow" d="M500 280 H530"/>
+
+  <rect class="step" x="530" y="235" width="180" height="90" rx="9"/>
+  <text class="label" x="620" y="270" text-anchor="middle">元数据复用</text>
+  <text class="body" x="620" y="300" text-anchor="middle">8 项精确缓存</text>
+  <path class="arrow" d="M710 280 H740"/>
+
+  <rect class="step" x="740" y="235" width="200" height="90" rx="9"/>
+  <text class="label" x="840" y="270" text-anchor="middle">填充独占 slab</text>
+  <text class="body" x="840" y="300" text-anchor="middle">≤256 KiB · ≤512 个对象</text>
+
+  <path class="arrow" d="M965 280 H1025"/>
+  <text class="body" x="995" y="255" text-anchor="middle">转移</text>
+
+  <rect class="queue" x="1025" y="205" width="205" height="150" rx="12"/>
+  <text class="label" x="1127" y="244" text-anchor="middle">同步队列</text>
+  <text class="section" x="1127" y="286" text-anchor="middle">4 个 slab</text>
+  <text class="body" x="1127" y="320" text-anchor="middle">有界背压</text>
+
+  <path class="arrow" d="M1230 280 H1290"/>
+
+  <rect class="sqlite" x="1290" y="185" width="240" height="190" rx="12"/>
+  <text class="label" x="1410" y="225" text-anchor="middle">调用线程</text>
+  <text class="body" x="1410" y="256" text-anchor="middle">唯一 SQLite 写入方</text>
+  <text class="section" x="1410" y="300" text-anchor="middle">&lt;4 MiB</text>
+  <text class="body" x="1410" y="330" text-anchor="middle">或 ≤8,191 个对象</text>
+  <text class="body" x="1410" y="353" text-anchor="middle">每个连续批次</text>
+
+  <path class="arrow" d="M1410 375 V440"/>
+  <rect class="publish" x="1115" y="440" width="415" height="100" rx="12"/>
+  <text class="label" x="1322" y="479" text-anchor="middle">构建最终结构</text>
+  <text class="body" x="1322" y="510" text-anchor="middle">最后发布 Layer + LayerStack</text>
+
+  <text class="section" x="90" y="440">100,000 个文件的测量结果</text>
+  <text class="label" x="90" y="480">2,147 次 slab 交接 · 队列峰值 4 个 slab</text>
+  <text class="label" x="90" y="514">544.3 MB 规范化载荷 · 父线程载荷复制为 0</text>
+  <text class="label" x="90" y="548">删除 647 MB 写入 + 647 MB 重新读取</text>
+
+  <line class="guide" x1="90" y1="610" x2="1530" y2="610"/>
+  <text class="section" x="90" y="658">关键路径</text>
+
+  <text class="label" x="90" y="708">v1 串行</text>
+  <rect class="lane-bg" x="245" y="678" width="1180" height="42" rx="6"/>
+  <rect class="producer-bar" x="245" y="678" width="560" height="42" rx="6"/>
+  <rect class="sqlite-bar" x="805" y="678" width="400" height="42" rx="6"/>
+  <rect class="final-bar" x="1205" y="678" width="135" height="42" rx="6"/>
+  <text class="inside" x="525" y="706" text-anchor="middle">生产者 P</text>
+  <text class="inside" x="1005" y="706" text-anchor="middle">SQLite 入库 A</text>
+  <text class="inside" x="1272" y="706" text-anchor="middle">F</text>
+  <text class="formula" x="1370" y="706">P + A + F</text>
+
+  <text class="label" x="90" y="788">v2 流水线</text>
+  <rect class="lane-bg" x="245" y="758" width="1180" height="42" rx="6"/>
+  <rect class="producer-bar" x="245" y="758" width="560" height="18" rx="5"/>
+  <rect class="sqlite-bar" x="360" y="782" width="400" height="18" rx="5"/>
+  <rect class="final-bar" x="805" y="758" width="135" height="42" rx="6"/>
+  <text class="formula" x="985" y="786">max(P, A) + F + stalls</text>
+
+  <rect class="producer-bar" x="245" y="842" width="18" height="12"/>
+  <text class="body" x="274" y="854">对象构建</text>
+  <rect class="sqlite-bar" x="420" y="842" width="18" height="12"/>
+  <text class="body" x="449" y="854">SQLite 入库</text>
+  <rect class="final-bar" x="650" y="842" width="18" height="12"/>
+  <text class="body" x="679" y="854">结构最终构建</text>
+</svg>

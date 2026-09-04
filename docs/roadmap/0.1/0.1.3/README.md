@@ -39,8 +39,28 @@ The released crash/power-loss durability limitation remains explicit.
 
 ## Delivery stages and issue structure
 
+### Phase 2 implementation handoff
+
+Product scaling work is tracked by [#38](https://github.com/Ephemeral-AI-Lab/layerfs/issues/38)
+and children #41–#44, after the completed
+[#45 infrastructure handoff](https://github.com/Ephemeral-AI-Lab/layerfs/issues/45).
+Use the [shared-code layout and refactoring plan](phase-2-shared-code-layout.md),
+[mechanism-adoption audit](phase-2.1-mechanism-adoption-audit.md), and
+[Workspace admission complexity analysis](workspace-admission-complexity.md).
+The [API/algorithm simplification audit](api-algorithm-simplification-audit.md)
+records the before/after targets and distinguishes implementation consolidation
+from public method removal: zero immediate SDK deletions, one possible versioned
+Commit-variant removal, and one compatibility-gated `PinRead` wire candidate.
+These are source-based plans, not new benchmark results. They distinguish
+already-adopted #40 mechanisms from remaining transfers and keep native and
+Workspace implementation ownership separate while serializing measurements.
+
 Use the [Phase 1 agent handoff prompt](phase-1-handoff.md) to coordinate execution
 of all Stage 1 issues with performance-first collection and limited verification.
+
+The [bulk-create/delete optimization notes](bulk-create-delete-optimization-notes.md)
+record the 2.7-second v0.1.1 initialization reference, proposed reuse of its
+construction pipeline, and aggressive targets for later optimization discussion.
 
 Central roadmap: [#21](https://github.com/Ephemeral-AI-Lab/layerfs/issues/21).
 Its fourteen sub-issues are shared infrastructure

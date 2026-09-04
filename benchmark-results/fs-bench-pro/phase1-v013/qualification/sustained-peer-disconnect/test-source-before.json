@@ -1,8 +1,0 @@
-{
-  "recorded_at_utc": "2026-09-04T05:08:19.792327+00:00",
-  "scope": "Focused helper test implementation, standard library only; no product execution",
-  "files": {
-    "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
-    "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68"
-  }
-}

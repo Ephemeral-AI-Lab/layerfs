@@ -1,9 +1,0 @@
-   Compiling layerfs-fuse v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.74s
-     Running unittests src/lib.rs (target/debug/deps/layerfs_fuse-fbf60f0974ac96cd)
-
-running 1 test
-test proxy_client::tests::acknowledged_unlink_is_absent_with_and_without_parent_cache ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
-

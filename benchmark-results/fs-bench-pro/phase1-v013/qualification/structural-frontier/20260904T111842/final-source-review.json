@@ -1,7 +1,0 @@
-{
-  "sha256": "9ed0e0fb44724106800a8a27b696e585a6ec3274b424779222b0ed855c341130",
-  "previous_review": "post-test-review.json",
-  "additional_change": "Check pending-batch allowance plus transient new CanonicalPath charge before allocating; rejects insufficient custom limits and leaves tested short paths unchanged.",
-  "test_rerun": false,
-  "default_resource_policy_unchanged": true
-}

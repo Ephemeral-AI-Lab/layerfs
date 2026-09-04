@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">LayerFS v0、v1 和 v2 命名空间初始化吞吐量</title>
+  <desc id="desc">使用 0 到 800 MB/s 线性刻度的逻辑初始化吞吐量图。v0 和 v1 使用相同的每文件 2,500 bytes 基准数据集；v2 使用不同的混合文件大小数据集，仅作为背景参考。</desc>
+  <style>
+    text { font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", ui-sans-serif, sans-serif; fill: #17202a; }
+    .bg { fill: #ffffff; }
+    .title { font-size: 28px; font-weight: 700; }
+    .subtitle, .axis, .note { fill: #667085; }
+    .subtitle { font-size: 16px; }
+    .axis { font-size: 14px; }
+    .value { font-size: 14px; font-weight: 650; }
+    .note { font-size: 13px; }
+    .grid { stroke: #d0d5dd; stroke-width: 1; }
+    .frame { fill: none; stroke: #d0d5dd; stroke-width: 1.25; }
+    .v0-line { fill: none; stroke: #c9364f; stroke-width: 4; }
+    .v1-line { fill: none; stroke: #2563eb; stroke-width: 4; }
+    .v2-line { fill: none; stroke: #7c3aed; stroke-width: 4; stroke-dasharray: 10 8; }
+    .v0-mark { fill: #c9364f; }
+    .v1-mark { fill: #2563eb; }
+    .v2-mark { fill: #7c3aed; }
+    .v0-text { fill: #b4233b; }
+    .v1-text { fill: #1849a9; }
+    .v2-text { fill: #6d28d9; }
+  </style>
+
+  <rect class="bg" width="1200" height="800"/>
+  <text class="title" x="100" y="48">三代架构的逻辑吞吐量</text>
+  <text class="subtitle" x="100" y="76">初始化 MB/s · 线性刻度 · v0/v1 可直接比较，v2 仅作背景参考</text>
+
+  <line class="grid" x1="120" y1="570" x2="1090" y2="570"/>
+  <line class="grid" x1="120" y1="455" x2="1090" y2="455"/>
+  <line class="grid" x1="120" y1="340" x2="1090" y2="340"/>
+  <line class="grid" x1="120" y1="225" x2="1090" y2="225"/>
+  <line class="grid" x1="120" y1="110" x2="1090" y2="110"/>
+  <rect class="frame" x="120" y="110" width="970" height="460"/>
+
+  <text class="axis" x="104" y="575" text-anchor="end">0</text>
+  <text class="axis" x="104" y="460" text-anchor="end">200</text>
+  <text class="axis" x="104" y="345" text-anchor="end">400</text>
+  <text class="axis" x="104" y="230" text-anchor="end">600</text>
+  <text class="axis" x="104" y="115" text-anchor="end">800</text>
+  <text class="axis" transform="translate(38 340) rotate(-90)" text-anchor="middle">逻辑吞吐量 (MB/s)</text>
+
+  <text class="axis" x="210" y="616" text-anchor="middle">100</text>
+  <text class="axis" x="490" y="616" text-anchor="middle">1,000</text>
+  <text class="axis" x="770" y="616" text-anchor="middle">10,000</text>
+  <text class="axis" x="1050" y="616" text-anchor="middle">100,000</text>
+  <text class="axis" x="605" y="650" text-anchor="middle">普通文件数量</text>
+
+  <path class="v0-line" d="M210 566.2 L490 568.2 L770 570"/>
+  <circle class="v0-mark" cx="210" cy="566.2" r="7"/>
+  <circle class="v0-mark" cx="490" cy="568.2" r="7"/>
+  <path class="v0-mark" d="M770 579 l-8 -14 h16 z"/>
+
+  <path class="v1-line" d="M210 551.4 L490 532.4 L770 540.6 L1050 548.9"/>
+  <circle class="v1-mark" cx="210" cy="551.4" r="7"/>
+  <circle class="v1-mark" cx="490" cy="532.4" r="7"/>
+  <circle class="v1-mark" cx="770" cy="540.6" r="7"/>
+  <circle class="v1-mark" cx="1050" cy="548.9" r="7"/>
+
+  <path class="v2-line" d="M210 244.5 L490 143.7 L770 154.0 L1050 466.1"/>
+  <rect class="v2-mark" x="204" y="238.5" width="12" height="12"/>
+  <rect class="v2-mark" x="484" y="137.7" width="12" height="12"/>
+  <rect class="v2-mark" x="764" y="148" width="12" height="12"/>
+  <rect class="v2-mark" x="1044" y="460.1" width="12" height="12"/>
+
+  <text class="value v0-text" x="210" y="590" text-anchor="middle">≈6.6</text>
+  <text class="value v0-text" x="490" y="590" text-anchor="middle">3.20</text>
+  <text class="value v0-text" x="770" y="590" text-anchor="middle">&lt;0.0476</text>
+  <text class="note" x="1050" y="590" text-anchor="middle">v0 未测试</text>
+
+  <text class="value v1-text" x="210" y="536" text-anchor="middle">32.33</text>
+  <text class="value v1-text" x="490" y="516" text-anchor="middle">65.39</text>
+  <text class="value v1-text" x="770" y="524" text-anchor="middle">51.08</text>
+  <text class="value v1-text" x="1050" y="533" text-anchor="middle">36.77</text>
+
+  <text class="value v2-text" x="224" y="232">566.1</text>
+  <text class="value v2-text" x="490" y="128" text-anchor="middle">741.4</text>
+  <text class="value v2-text" x="770" y="181" text-anchor="middle">723.4</text>
+  <text class="value v2-text" x="1036" y="452" text-anchor="end">180.7</text>
+
+  <line class="v0-line" x1="120" y1="687" x2="158" y2="687"/>
+  <text class="axis" x="168" y="692">v0 · 重放单点变更</text>
+  <line class="v1-line" x1="410" y1="687" x2="448" y2="687"/>
+  <text class="axis" x="458" y="692">v1 · 构建最终状态</text>
+  <line class="v2-line" x1="690" y1="687" x2="728" y2="687"/>
+  <rect class="v2-mark" x="703" y="681" width="12" height="12"/>
+  <text class="axis" x="738" y="692">v2 · 有界直接入库</text>
+
+  <text class="note" x="120" y="732">直接比较：v0/v1 使用统一的 2,500 bytes 文件（0.25 / 2.5 / 25 / 250 MB）。</text>
+  <text class="note" x="120" y="756">背景参考：v2 使用混合大小数据集（125 / 200 / 300 / 500 MB）；MB/s 只归一化字节量，不归一化单文件工作。</text>
+  <text class="note" x="120" y="780">v0 的 10k 点是被终止 CPU 测试所得的吞吐量上界；v0 未测试 100k 档位。</text>
+</svg>

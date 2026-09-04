@@ -1,6 +1,0 @@
-
-running 1 test
-test reliability_workloads::open_handle_oracle_rejects_wrong_or_extra_bytes ... ok
-
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
-

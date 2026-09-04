@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">LayerFS v0 命名空间初始化为什么出现性能断崖</title>
+  <desc id="desc">v0 把每个文件重放为持久化树变更并生成中间根。8 MiB 候选对象索引溢出后，精确查询会从头扫描暂存文件，重复查询形成通常为 E 平方的最坏路径。文件数从 1,000 增加到 10,000 时，初始化耗时增加超过 672 倍。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#667085"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c9364f"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", ui-sans-serif, sans-serif; fill: #17202a; }
+    .bg { fill: #ffffff; }
+    .title { font-size: 42px; font-weight: 700; }
+    .subtitle { font-size: 22px; fill: #667085; }
+    .section { font-size: 25px; font-weight: 700; }
+    .label { font-size: 20px; font-weight: 600; }
+    .body { font-size: 18px; fill: #475467; }
+    .formula { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 21px; font-weight: 650; }
+    .node { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 2; }
+    .bad { fill: #fff1f3; stroke: #c9364f; stroke-width: 2.5; }
+    .good { fill: #eff6ff; stroke: #2563eb; stroke-width: 2.5; }
+    .arrow { fill: none; stroke: #667085; stroke-width: 2.5; marker-end: url(#arrow); }
+    .arrow-red { fill: none; stroke: #c9364f; stroke-width: 3; marker-end: url(#arrow-red); }
+    .divider { stroke: #e4e7ec; stroke-width: 2; }
+    .red { fill: #b4233b; }
+    .blue { fill: #1849a9; }
+  </style>
+
+  <rect class="bg" width="1600" height="900"/>
+  <text class="title" x="90" y="70">v0 为什么出现性能断崖</text>
+  <text class="subtitle" x="90" y="108">两个高成本选择相互叠加，触发跨越容量阈值后的最坏路径</text>
+  <line class="divider" x1="800" y1="150" x2="800" y2="700"/>
+
+  <text class="section" x="90" y="185">1 · 把每个源条目重放为变更</text>
+  <rect class="node" x="100" y="225" width="245" height="84" rx="10"/>
+  <text class="label" x="222" y="259" text-anchor="middle">解析路径</text>
+  <text class="body" x="222" y="286" text-anchor="middle">基于当前根</text>
+  <path class="arrow" d="M345 267 H405"/>
+
+  <rect class="node" x="405" y="225" width="280" height="84" rx="10"/>
+  <text class="label" x="545" y="259" text-anchor="middle">重建树路径</text>
+  <text class="body" x="545" y="286" text-anchor="middle">目录 + inode</text>
+  <path class="arrow" d="M545 309 V365"/>
+
+  <rect class="bad" x="405" y="365" width="280" height="84" rx="10"/>
+  <text class="label red" x="545" y="399" text-anchor="middle">生成新根</text>
+  <text class="body" x="545" y="426" text-anchor="middle">即使它只是中间状态</text>
+  <path class="arrow-red" d="M405 407 H345 V351 H222 V309"/>
+
+  <text class="formula red" x="100" y="520">Big-O 对象生成：C + N log N</text>
+  <text class="body" x="100" y="554">规范对象包含不断增长的中间命名空间历史。</text>
+  <text class="body" x="100" y="588">独立元数据变更可能再次重建相同路径。</text>
+
+  <text class="section" x="855" y="185">2 · 候选对象索引在 8 MiB 后改变算法</text>
+  <rect class="good" x="875" y="225" width="270" height="94" rx="10"/>
+  <text class="label blue" x="1010" y="260" text-anchor="middle">索引可用</text>
+  <text class="body" x="1010" y="290" text-anchor="middle">精确查询 O(log E)</text>
+
+  <path class="arrow" d="M1145 272 H1215"/>
+  <text class="body" x="1180" y="251" text-anchor="middle">溢出</text>
+
+  <rect class="bad" x="1215" y="225" width="280" height="94" rx="10"/>
+  <text class="label red" x="1355" y="260" text-anchor="middle">索引被丢弃</text>
+  <text class="body" x="1355" y="290" text-anchor="middle">从 byte 0 扫描暂存文件</text>
+  <path class="arrow-red" d="M1355 319 V382"/>
+
+  <rect class="bad" x="1030" y="382" width="465" height="105" rx="10"/>
+  <text class="label red" x="1262" y="420" text-anchor="middle">后续候选对象重复扫描</text>
+  <text class="formula red" x="1262" y="458" text-anchor="middle">最坏情况 E·S → 通常 E²</text>
+
+  <text class="formula" x="875" y="540">8 MiB / 64 B ≈ 131,072 个条目</text>
+  <text class="body" x="875" y="578">基准测试跨过容量边界，系统由此进入另一种算法。</text>
+
+  <rect class="bad" x="90" y="735" width="1420" height="110" rx="12"/>
+  <text class="section red" x="130" y="780">观测到的扩展行为</text>
+  <text class="label" x="500" y="780">1,000 → 10,000 个文件</text>
+  <text class="body" x="500" y="814">文件数增加 10×</text>
+  <text class="label red" x="980" y="780">780.515 ms → &gt;524.79 s</text>
+  <text class="body" x="980" y="814">耗时增加超过 672×</text>
+</svg>

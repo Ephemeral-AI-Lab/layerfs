@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Why LayerFS v0 namespace initialization fell off a cliff</title>
+  <desc id="desc">The v0 importer replayed every file as persistent tree mutations, emitting intermediate roots. After an 8 MiB candidate index overflowed, exact lookup scanned the spool from the beginning. Repeating that lookup created an O(E squared) worst case. Increasing files from 1,000 to 10,000 increased initialization time more than 672 times.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#667085"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c9364f"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17202a; }
+    .bg { fill: #ffffff; }
+    .title { font-size: 42px; font-weight: 700; }
+    .subtitle { font-size: 22px; fill: #667085; }
+    .section { font-size: 25px; font-weight: 700; }
+    .label { font-size: 20px; font-weight: 600; }
+    .body { font-size: 18px; fill: #475467; }
+    .formula { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 21px; font-weight: 650; }
+    .node { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 2; }
+    .bad { fill: #fff1f3; stroke: #c9364f; stroke-width: 2.5; }
+    .good { fill: #eff6ff; stroke: #2563eb; stroke-width: 2.5; }
+    .arrow { fill: none; stroke: #667085; stroke-width: 2.5; marker-end: url(#arrow); }
+    .arrow-red { fill: none; stroke: #c9364f; stroke-width: 3; marker-end: url(#arrow-red); }
+    .divider { stroke: #e4e7ec; stroke-width: 2; }
+    .red { fill: #b4233b; }
+    .blue { fill: #1849a9; }
+  </style>
+
+  <rect class="bg" width="1600" height="900"/>
+  <text class="title" x="90" y="70">Why v0 fell off a cliff</text>
+  <text class="subtitle" x="90" y="108">Two individually expensive choices multiplied into a threshold-triggered worst case</text>
+  <line class="divider" x1="800" y1="150" x2="800" y2="700"/>
+
+  <text class="section" x="90" y="185">1 · Replay every source entry as mutations</text>
+  <rect class="node" x="100" y="225" width="245" height="84" rx="10"/>
+  <text class="label" x="222" y="259" text-anchor="middle">Resolve path</text>
+  <text class="body" x="222" y="286" text-anchor="middle">against current root</text>
+  <path class="arrow" d="M345 267 H405"/>
+
+  <rect class="node" x="405" y="225" width="280" height="84" rx="10"/>
+  <text class="label" x="545" y="259" text-anchor="middle">Rebuild tree paths</text>
+  <text class="body" x="545" y="286" text-anchor="middle">directory + inode</text>
+  <path class="arrow" d="M545 309 V365"/>
+
+  <rect class="bad" x="405" y="365" width="280" height="84" rx="10"/>
+  <text class="label red" x="545" y="399" text-anchor="middle">Emit a new root</text>
+  <text class="body" x="545" y="426" text-anchor="middle">even though it is transient</text>
+  <path class="arrow-red" d="M405 407 H345 V351 H222 V309"/>
+
+  <text class="formula red" x="100" y="520">Big-O emissions: C + N log N</text>
+  <text class="body" x="100" y="554">Canonical objects include the growing history of intermediate namespaces.</text>
+  <text class="body" x="100" y="588">A separate metadata mutation can rebuild the same paths again.</text>
+
+  <text class="section" x="855" y="185">2 · Candidate lookup changes after 8 MiB</text>
+  <rect class="good" x="875" y="225" width="270" height="94" rx="10"/>
+  <text class="label blue" x="1010" y="260" text-anchor="middle">Index available</text>
+  <text class="body" x="1010" y="290" text-anchor="middle">exact lookup O(log E)</text>
+
+  <path class="arrow" d="M1145 272 H1215"/>
+  <text class="body" x="1180" y="251" text-anchor="middle">overflow</text>
+
+  <rect class="bad" x="1215" y="225" width="280" height="94" rx="10"/>
+  <text class="label red" x="1355" y="260" text-anchor="middle">Index discarded</text>
+  <text class="body" x="1355" y="290" text-anchor="middle">scan spool from byte 0</text>
+  <path class="arrow-red" d="M1355 319 V382"/>
+
+  <rect class="bad" x="1030" y="382" width="465" height="105" rx="10"/>
+  <text class="label red" x="1262" y="420" text-anchor="middle">Repeat for later candidates</text>
+  <text class="formula red" x="1262" y="458" text-anchor="middle">worst case E·S → commonly E²</text>
+
+  <text class="formula" x="875" y="540">8 MiB / 64 B ≈ 131,072 entries</text>
+  <text class="body" x="875" y="578">The benchmark crossed a capacity boundary—and entered a different algorithm.</text>
+
+  <rect class="bad" x="90" y="735" width="1420" height="110" rx="12"/>
+  <text class="section red" x="130" y="780">Observed scaling</text>
+  <text class="label" x="500" y="780">1,000 → 10,000 files</text>
+  <text class="body" x="500" y="814">10× more files</text>
+  <text class="label red" x="980" y="780">780.515 ms → &gt;524.79 s</text>
+  <text class="body" x="980" y="814">more than 672× more time</text>
+</svg>

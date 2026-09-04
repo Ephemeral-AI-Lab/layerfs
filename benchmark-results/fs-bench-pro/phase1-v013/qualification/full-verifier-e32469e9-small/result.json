@@ -1,6 +1,0 @@
-{
-  "revision": "e32469e975e8e185ca525b02bb71d70bafa4e865",
-  "exit_code": 0,
-  "elapsed_ns": 1710606292,
-  "scope": "Small aggregate regression exercises changed exhaustive canonical traversal and existing exact negative/native checks. Passing Python model and earlier representative not repeated."
-}

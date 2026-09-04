@@ -1,1 +1,0 @@
-{"status": "pass", "product_bridges": 4, "retained_performance_slots": 186, "proof_producer_selectors": "earlier e784/prep342; namespace500 and locality d132/prep a40", "failed_scope_and_unreviewed_source_rejection": true}

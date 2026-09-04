@@ -1,6 +1,0 @@
-   Compiling layerfs-fuse v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
-   Compiling layerfs-workspace v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
-   Compiling layerfs-monitor v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-monitor)
-   Compiling layerfs-sdk v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-sdk)
-   Compiling fs-benchmark-pro v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark/fs-bench-pro)
-    Finished `release` profile [optimized] target(s) in 12.22s

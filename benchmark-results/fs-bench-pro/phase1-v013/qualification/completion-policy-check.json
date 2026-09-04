@@ -1,9 +1,0 @@
-{
-  "status": "pass",
-  "source_sha256": "d76020b690facd86b4100d3f719ee2b547a88815b9e4be58f8ef366292fb22ae",
-  "checks": [
-    "complete passing candidate allows terminal pass",
-    "complete failing product blocks terminal pass",
-    "missing evidence blocks terminal pass"
-  ]
-}

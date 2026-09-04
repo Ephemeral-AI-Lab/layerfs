@@ -1,5 +1,0 @@
-   Compiling layerfs-workspace v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-source-e7840da1da81404ff228be734a91783cebb946ca/crates/layerfs-workspace)
-   Compiling layerfs-monitor v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-source-e7840da1da81404ff228be734a91783cebb946ca/crates/layerfs-monitor)
-   Compiling layerfs-sdk v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-source-e7840da1da81404ff228be734a91783cebb946ca/crates/layerfs-sdk)
-   Compiling fs-benchmark-pro v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-source-e7840da1da81404ff228be734a91783cebb946ca/benchmark/fs-bench-pro)
-    Finished `release` profile [optimized] target(s) in 14.18s
