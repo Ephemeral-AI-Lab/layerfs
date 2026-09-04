@@ -1,5 +1,12 @@
 # Verification profiles
 
+> **Acceptance amended 2026-09-04:** The user's subsequent explicit request
+> makes qualified fast verification sufficient for routine Phase 1 checks.
+> Apply the [fast-verification amendment](phase-1-fast-verification-amendment.md)
+> instead of the earlier development-only/no-acceptance-credit restrictions
+> below. Preserve actual assurance and coverage; defer unrun exhaustive checks
+> to Phase 2 and retain targeted failure, resource and cleanup gates.
+
 The user requested approximately ten times faster verification for development
 iteration after the fixed 100,000-file background made each tiny-file proof take
 about three minutes. This authorizes a separate fast profile and removal of

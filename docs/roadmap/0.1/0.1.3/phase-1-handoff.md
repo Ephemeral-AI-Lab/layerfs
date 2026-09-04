@@ -1,5 +1,11 @@
 # Phase 1 execution handoff
 
+> **Latest verification acceptance, 2026-09-04:** Apply the explicit
+> [fast-verification amendment](phase-1-fast-verification-amendment.md).
+> Qualified fast checks now suffice for routine Phase 1 verification; remaining
+> exhaustive coverage is deferred to Phase 2, with honest assurance labels.
+> Targeted failure confirmation, expected-error, resource and cleanup gates remain.
+
 > **Latest Phase 1 scope:** Enforce the [15-second suppression policy](phase-1-runtime-suppressions.md)
 > before scheduling work. Its permanent Phase 1 exclusions supersede the
 > original full-inventory completion language below; never count a suppression
