@@ -1,0 +1,3 @@
+   Compiling layerfs-workspace v0.1.2 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+    Finished `release` profile [optimized] target(s) in 6.37s
+     Running unittests src/lib.rs (target/release/deps/layerfs_workspace-ab4e11d91d24668e)

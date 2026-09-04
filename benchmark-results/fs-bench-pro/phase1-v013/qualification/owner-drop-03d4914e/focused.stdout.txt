@@ -1,0 +1,6 @@
+
+running 1 test
+test lifecycle::tests::owner_drop_discards_active_projection_before_releasing_lease ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.02s
+

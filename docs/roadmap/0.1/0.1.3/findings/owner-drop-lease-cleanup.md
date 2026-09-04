@@ -23,10 +23,24 @@ Workspace destruction also clears its spool without removing the complete
 Workspace state directory. Explicit End already provides the required ordered
 projection close, state cleanup, and lease release.
 
-The proposed minimal repair reuses explicit Discard End for active sessions
-when their final owner drops. It must preserve error diagnostics and avoid
-panics in destruction. A focused local owner-drop regression and the real
-failed lease proof are required before claiming the repair passes. At this
-checkpoint the implementation and runtime confirmation are pending. Earlier
-passing results remain at their actual sources; reuse requires a reviewed
-source proof and evidence that this active-owner-drop path was not exercised.
+The minimal repair in `03d4914ee36da6d303ab268e9102519d1755a8e4` reuses
+explicit Discard End for active sessions when their final owner drops. It
+preserves cleanup error diagnostics and avoids panics in destruction. The
+focused owner-drop regression passed once (0.02 seconds test execution; 8.62
+seconds including its scoped build). The exact real Docker/FUSE lease proof
+then passed in 5.211185208 seconds, with independent correctness, resource,
+observation and cleanup validation reporting no issues or violations.
+
+The corrected attempt is
+`attempts/workspace-lease-lifecycle-proof-s1-verify-4264e5969411/`; qualification
+is in `qualification/owner-drop-03d4914e/`. The original failed attempt remains
+unchanged. Its leaked diagnostic was copied and hashed, then that exact stale
+state was removed in an explicit recovery recorded under
+`qualification/lease-owner-drop-failure/recovery.json`. This recovery does not
+relabel the original cleanup result.
+
+Earlier passing results remain at their actual sources. Their reuse requires
+the exact source proof and successful Create/End balance (or initialization
+without a Workspace), establishing that active-owner drop was not exercised.
+The original 600-second proof receives the same additional predicate check;
+it is not repeated or relabeled as a new-source run.
