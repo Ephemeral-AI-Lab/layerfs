@@ -1,0 +1,9 @@
+{
+  "source_sha256": "643083e91f223baea1d4df112dee83672c906e6b5212ee2e6b7c44f6122ca63b",
+  "command": [
+    "python3",
+    "benchmark/fs-bench-pro/generate-workspace-report.py",
+    "--canonical-receipt-self-check"
+  ],
+  "scope": "changed canonical string parsing branch only; no earlier model checks or campaign readback repeated"
+}

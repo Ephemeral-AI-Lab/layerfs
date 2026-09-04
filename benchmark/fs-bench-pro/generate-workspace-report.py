@@ -138,7 +138,7 @@ def validate_input_manifest(text):
 
 def debug_numbers(text):
     """Read only named integer fields from the source-sealed Rust Debug schema."""
-    pairs = re.findall(r"\b([a-z_]+): ([0-9]+)(?=[, }])", text)
+    pairs = re.findall(r"\b([a-z_][a-z_0-9]*): ([0-9]+)(?=[, }])", text)
     return {key: int(value) for key, value in pairs}
 
 
@@ -161,33 +161,155 @@ def debug_stdout(text):
     return output.decode("utf-8")
 
 
+# Explicit reductions: work counters sum; capacity/current-state gauges take a
+# maximum; cumulative process counters use boundary differences below.
+MAX_COUNTERS = {
+    "max_transaction_objects", "max_transaction_bytes", "max_write_bytes",
+    "max_readahead_bytes", "init_capabilities", "snapshot_cache_rows",
+    "snapshot_cache_bytes", "snapshot_cache_rows_at_create", "snapshot_cache_bytes_at_create",
+    "edit_piece_count", "edit_piece_height", "edit_piece_logical_charge",
+    "edit_spool_allocated_bytes", "edit_spool_peak_bytes", "edit_spool_live_bytes",
+    "edit_spool_superseded_bytes", "physical_spool_allocated_bytes",
+    "physical_spool_peak_bytes", "physical_spool_observation_count",
+}
+STRUCT_METRICS = {
+    "WorkspaceCommitReceipt": "commit_work", "CandidateReceipt": "candidate",
+    "WorkspaceLifecycleReceipt": "lifecycle", "WorkspaceReadReceipt": "fuse_read",
+    "FuseWriteReceipt": "fuse_write",
+}
+CPU_COUNTERS = ("user_cpu_ns", "system_cpu_ns", "disk_read_bytes", "disk_write_bytes", "swaps")
+STORE_GAUGES = ("file_bytes", "allocated_bytes", "page_count", "freelist_page_count", "live_page_bytes")
+
+
+def numeric_values(value):
+    return {key: int(item) for key, item in receipt(value).items()
+            if not key.endswith(("_root", "_id", "_identity", "_sha256", "_revision")) and (type(item) is int or isinstance(item, str) and re.fullmatch(r"-?[0-9]+", item))}
+
+
+def reduce_counter(target, key, value, maximum=False):
+    target[key] = max(target.get(key, value), value) if maximum else target.get(key, 0) + value
+
+
 def metrics(records):
-    result = defaultdict(int)
+    result = {}
     for row in records:
         if row["kind"] == "sample-complete":
-            for key in ("host_orchestration_ns", "pure_call_sum_ns", "orchestration_unattributed_ns"):
+            for key in ("host_orchestration_ns", "pure_call_sum_ns", "orchestration_unattributed_ns", "created_commit_count"):
                 if key in row:
                     result[key] = number(row[key], key)
-        if row["kind"] == "phase":
+        if row["kind"] in {"phase", "phase-failure"}:
             phase = row.get("phase")
             if not isinstance(phase, str):
                 raise ValueError("phase name missing")
-            result[phase + "_ns"] += number(row.get("elapsed_ns"), "phase elapsed_ns")
+            reduce_counter(result, phase + ("_failed_ns" if row["kind"] == "phase-failure" else "_ns"), number(row.get("elapsed_ns"), "phase elapsed_ns"))
             if "workload_receipt" in row:
-                for key, value in receipt(row["workload_receipt"]).items():
-                    if type(value) is int and (key.endswith(("_ns", "_bytes", "_count")) or key in ("attempted_operations", "completed_operations")):
-                        number(value, key)
-                        if "peak" in key or "high_water" in key or key.startswith("maximum_"):
-                            result[key] = max(result[key], value)
-                        else:
-                            result[key] += value
-    return dict(result)
+                for key, value in numeric_values(row["workload_receipt"]).items():
+                    if key.endswith(("_ns", "_bytes", "_count")) or key in {"attempted_operations", "completed_operations"}:
+                        reduce_counter(result, key, number(value, key), key in MAX_COUNTERS)
+        for struct, prefix in STRUCT_METRICS.items():
+            for fields, _ in debug_structs([row], struct):
+                for key, value in fields.items():
+                    reduce_counter(result, prefix + "." + key, value, key in MAX_COUNTERS)
+        if row["kind"] == "commit-diagnostics":
+            fields = debug_numbers(row.get("details", ""))
+            fields.update({key: int(value) for key, value in re.findall(r"\b(physical_spool_(?:allocated|peak)_bytes): Some\(([0-9]+)\)", row.get("details", ""))})
+            for key, value in fields.items():
+                reduce_counter(result, "commit_diagnostics." + key, value, key in MAX_COUNTERS)
+    return result
+
+
+def observation_data(records, outcome, acquired, clone):
+    result = metrics(records)
+    steps = {}
+    current_step = 0
+    host, stores, spool = [], [], []
+    verification = []
+    for row in records:
+        kind = row["kind"]
+        if kind == "phase" and (type(row.get("step")) is int or row.get("phase") in {"initialize", "sdk-edit", "commit", "exec"}):
+            current_step = row["step"] + 1 if type(row.get("step")) is int else 1
+            point = steps.setdefault(current_step, {"step": current_step, "timings": {}, "diagnostics": {}})
+            reduce_counter(point["timings"], row["phase"] + "_ns", row["elapsed_ns"])
+        elif kind == "published-root":
+            point = steps.setdefault(row["step"] + 1, {"step": row["step"] + 1, "timings": {}, "diagnostics": {}})
+            point.update(root=row["root"], head=row.get("head"))
+        elif kind == "store-observation":
+            stores.append(row)
+            if row.get("phase") in {"before", "after-commit", "after-initialize", "after-capped-edit"}:
+                snapshot_step = 1 if row.get("phase") == "after-initialize" else row["step"]
+                point = steps.setdefault(snapshot_step, {"step": snapshot_step, "timings": {}, "diagnostics": {}})
+                point["store"] = {key: row[key] for key in STORE_GAUGES}
+        elif kind == "host-resources":
+            host.append(row)
+        elif kind == "host-rss-samples":
+            for key in ("baseline_bytes", "sampled_peak_bytes", "final_bytes", "maximum_gap_ns", "sample_count"):
+                result["host_sampler." + key] = row[key]
+        elif kind in {"workspace-spool-observation", "workspace-physical-spool"}:
+            spool.append(row)
+            prefix = "spool_boundary" if kind == "workspace-spool-observation" else "spool_event"
+            for key in ("logical_bytes", "allocated_bytes", "peak_bytes", "file_count", "observation_count"):
+                if type(row.get(key)) is int:
+                    reduce_counter(result, prefix + ".max_" + key, row[key], True)
+        elif kind in {"canonical-verification", "history-canonical", "history-accounting", "history-transcript", "dedup-verification", "capped-verification"}:
+            verification.append({**row, "receipt": receipt(row["receipt"])})
+        if kind in {"operation", "commit-diagnostics"} and current_step:
+            point = steps.setdefault(current_step, {"step": current_step, "timings": {}, "diagnostics": {}})
+            # Details emitted immediately after a reached Commit belong to that
+            # zero-based operation ordinal +1; verifier forks are separate rows.
+            for key, value in metrics([row]).items():
+                reduce_counter(point["diagnostics"], key, value, key.rsplit(".", 1)[-1] in MAX_COUNTERS)
+    if host:
+        before = next((row for row in host if row.get("phase") == "before"), host[0])
+        after = next((row for row in host if row.get("phase") == "after-product"), host[-1])
+        for key in CPU_COUNTERS:
+            result["host." + key + ".start"] = before[key]
+            result["host." + key + ".end"] = after[key]
+            if after[key] < before[key]:
+                raise ValueError("cumulative host resource counter regressed: " + key)
+            result["host." + key + ".delta"] = after[key] - before[key]
+        for key in ("resident_bytes", "peak_resident_bytes", "physical_footprint_bytes"):
+            result["host." + key + ".max"] = max(row[key] for row in host)
+    product_stores = [row for row in stores if row.get("phase") in {"before", "after-commit", "after-initialize", "after-capped-edit", "failure", "initialization-failure"}]
+    if product_stores:
+        for key in STORE_GAUGES:
+            result["store." + key + ".start"] = product_stores[0][key]
+            result["store." + key + ".end"] = product_stores[-1][key]
+            result["store." + key + ".delta"] = product_stores[-1][key] - product_stores[0][key]
+            result["store." + key + ".max"] = max(row[key] for row in product_stores)
+        before = product_stores[0]
+        previous = before
+        for row in product_stores[1:]:
+            point = steps.get(1 if row.get("phase") == "after-initialize" else row.get("step"))
+            if point is not None:
+                point["store_growth_from_input"] = {key: row[key] - before[key] for key in STORE_GAUGES}
+                point["store_growth_this_step"] = {key: row[key] - previous[key] for key in STORE_GAUGES}
+            previous = row
+    for key in ("preparation_ns", "command_wall_ns", "cleanup_ns", "runtime_preparation_ns", "external_process_wall_ns"):
+        if type(outcome.get(key)) is int:
+            result[key] = outcome[key]
+    reused = acquired.get("run_acquisition_reused") is True
+    for key in ("cache_acquisition_ns", "cache_build_ns", "cache_validation_ns"):
+        if key in acquired:
+            result[key] = number(acquired.get("run_acquisition_ns"), "run_acquisition_ns") if reused and key == "cache_acquisition_ns" else 0 if reused else acquired[key]
+    for key in ("clone_wall_ns", "clone_bytes"):
+        if key in clone:
+            result[key] = clone[key]
+    fixture = acquired.get("fixture", {})
+    for key in ("fixture_bytes", "regular_files"):
+        if key in fixture:
+            result["input." + key] = fixture[key]
+    return {"metrics": result, "steps": [steps[key] for key in sorted(steps)], "verification": verification,
+            "resources": {"host": host, "store": stores, "spool": spool},
+            "preparation": {"cache_disposition": acquired.get("cache_disposition"), "run_acquisition_reused": reused,
+                            "clone_method": clone.get("clone_method"), "key": acquired.get("key")},
+            "reduction_scope": "Named public/work counters sum; maxima never sum; CPU/I/O are before-to-after-product differences (failure falls back to final); Store changes are signed product-boundary differences. Spool boundary maxima are distinct from mutation-event high-water."}
 
 
 def cgroup_observations(path, required_scope_ns):
     required = {"memory.current", "memory.peak", "memory.swap.current", "pids.current", "memory.events.oom", "memory.events.oom_kill", "cpu.stat.usage_usec"}
     required.update("memory.stat." + key for key in ("anon", "file", "file_dirty", "file_writeback", "shmem", "kernel", "slab"))
     first = last = None
+    first_fields = last_fields = None
     count = gap = 0
     maxima = defaultdict(int)
     violations = set()
@@ -216,9 +338,13 @@ def cgroup_observations(path, required_scope_ns):
                 raise ValueError("nonmonotonic cgroup sampler")
             if first is None:
                 first = stamp
+                first_fields = fields.copy()
             else:
                 gap = max(gap, stamp - last)
+            if last_fields is not None and fields["cpu.stat.usage_usec"] < last_fields["cpu.stat.usage_usec"]:
+                raise ValueError("cumulative cgroup CPU counter regressed")
             last = stamp
+            last_fields = fields.copy()
             count += 1
             for key in required:
                 maxima[key] = max(maxima[key], fields[key])
@@ -242,6 +368,9 @@ def cgroup_observations(path, required_scope_ns):
             "required_scope_ns": required_scope_ns,
             "coverage_scope": "sampler-ready-before-worker; operation/orchestration envelope; excludes post-owner-close host drain and supervisor polling",
             "precision": "causally-bracketed samples; not exact continuous phase/category maxima",
+            "cpu_usage_usec_start": first_fields["cpu.stat.usage_usec"],
+            "cpu_usage_usec_end": last_fields["cpu.stat.usage_usec"],
+            "cpu_usage_usec_delta": last_fields["cpu.stat.usage_usec"] - first_fields["cpu.stat.usage_usec"],
             "maxima": dict(maxima)}, sorted(violations)
 
 
@@ -557,6 +686,10 @@ def validate_performance(case, outcome, records, issues, violations, require_com
         recovery = any(row["kind"] == "recovery" for row in records)
         wanted = {"initialize": succeeded["layerstack.initialize"]} if case["input_mode"] == "directory" else {"create": succeeded["workspace.create"], "end": max(0, succeeded["workspace.end"] - int(recovery)), "visibility": succeeded["query"], "commit": succeeded["workspace.commit"], "exec": max(0, min(succeeded["workspace.exec"], succeeded["workspace.output"]) - int(failed_exec_ns is not None)), "sdk-edit": succeeded["workspace.file_range_edit"]}
     require(phases == Counter({key: value for key, value in wanted.items() if value}), "missing/extra reached product phase boundaries", issues)
+    if case["family_id"] == "dedup_branch_history":
+        for phase in ("commit", "exec", "sdk-edit"):
+            ordinals = [row.get("step") for row in records if row["kind"] == "phase" and row.get("phase") == phase]
+            require(ordinals == list(range(len(ordinals))), "history public phase ordinals missing/repeated/reordered", issues)
     sums = sum(number(row.get("elapsed_ns"), "phase elapsed_ns") for row in records if row["kind"] == "phase")
     if final:
         require(sums <= duration, "phase sum exceeds product lifecycle", issues)
@@ -661,7 +794,7 @@ def validate_verification(case, records, issues, require_complete=True):
         accounting = [row for row in records if row["kind"] == "history-accounting"]
         transcripts = [row for row in records if row["kind"] == "history-transcript"]
         require(sorted(row.get("step") for row in accounting) == list(range(case["tier"] + 1)), "history accounting omitted retained snapshots", issues)
-        require(sorted(row.get("step") for row in transcripts) == list(range(1, case["tier"] + 1)), "history transcript coverage", issues)
+        require(sorted(row.get("step") for row in transcripts) == list(range(case["tier"] + 1)), "history transcript coverage", issues)
         for row in accounting:
             value = receipt(row.get("receipt"))
             require(int(value.get("retained_snapshot_count", -1)) == row["step"] + 1 and int(value.get("retained_logical_snapshot_bytes", -1)) == (row["step"] + 1) * 1_048_576, "history retained logical bound", issues)
@@ -684,7 +817,7 @@ def validate_verification(case, records, issues, require_complete=True):
     if family.startswith("dedup_"):
         kind = "history-transcript" if family == "dedup_branch_history" else "dedup-verification"
         rows = [row for row in records if row["kind"] == kind]
-        require(len(rows) == (case["tier"] if family == "dedup_branch_history" else 1), "independent dedup proof omitted", issues)
+        require(len(rows) == (case["tier"] + 1 if family == "dedup_branch_history" else 1), "independent dedup proof omitted", issues)
         for row in rows:
             value = receipt(row.get("receipt"))
             require(value.get("dedup_transcript_status") == "pass", "independent dedup transcript failure", issues)
@@ -719,11 +852,17 @@ def validate_classification(directory, outcome, classification, issues):
         require(bool(signature) and signature in evidence, "linked reproduction does not exhibit classified failure", issues)
 
 
-def validate_canonical_artifacts(directory, issues):
-    for marker in directory.rglob("canonical-receipt.txt"):
-        value = receipt(marker.read_text())
+def validate_canonical_artifacts(directory, issues, case=None, records=(), complete=False):
+    packages = []
+    for marker in sorted(directory.rglob("canonical-receipt.txt")):
+        pairs = [line.partition("=") for line in marker.read_text().splitlines() if line]
+        if any(not key or separator != "=" for key, separator, _ in pairs):
+            raise ValueError("malformed canonical package receipt")
+        value = unique_object([(key, item) for key, _, item in pairs])
         compressed = value.get("artifact_encoding") == "gzip-v1"
         require(value.get("artifact_encoding") in {None, "gzip-v1"}, "unknown canonical artifact encoding", issues)
+        if case is not None:
+            require(value.get("verification_status") == value.get("canonical_role_status") == "pass" and digest(value.get("canonical_root")) and digest(value.get("oracle_identity")), "retained canonical package status/root/oracle missing", issues)
         if compressed:
             require(value.get("artifact_compressor") == "/usr/bin/gzip -n -6 -c", "canonical artifact compressor identity missing", issues)
         suffix = ".gz" if compressed else ""
@@ -732,12 +871,107 @@ def validate_canonical_artifacts(directory, issues):
         manifests = [folder / (name + suffix) for name in ("independent-manifest.tsv", "persistence-bound-manifest.tsv") if (folder / (name + suffix)).is_file()]
         require(len(manifests) == 1, "canonical artifact lacks exactly one expectation manifest", issues)
         tables += [(path.name.removesuffix(suffix) if suffix else path.name, "workspace-independent-manifest-v1", 7) for path in manifests]
+        row_counts = {}
         for filename, header, columns in tables:
             path = folder / (filename + suffix)
+            count = 0
             with (gzip.open(path, "rt") if compressed else path.open()) as stream:
                 require(stream.readline().rstrip("\n") == header, "canonical artifact header mismatch", issues)
                 for line in stream:
                     require(len(line.rstrip("\n").split("\t")) == columns, "canonical artifact row schema mismatch", issues)
+                    count += 1
+            row_counts[filename] = count
+        if case is not None:
+            require(row_counts.get("file-roots.tsv") == int(value.get("verified_regular_paths", -1)), "canonical regular-file package count mismatch", issues)
+            require(sum(count for name, count in row_counts.items() if name.endswith("manifest.tsv")) == int(value.get("verified_paths", -1)), "canonical manifest path count mismatch", issues)
+        packages.append({"path": str(folder.relative_to(directory)), "receipt": value, "table_rows": row_counts})
+    if case is None or case["family_id"] == "workspace_reliability":
+        return packages
+    if case["family_id"] == "dedup_branch_history":
+        events = [row for row in records if row["kind"] == "history-canonical"]
+        if complete:
+            require(sorted(row.get("step") for row in events) == list(range(case["tier"] + 1)), "history canonical event coverage missing", issues)
+        expected = {f"verification/history-{row['step']}/canonical-verification": row for row in events}
+    else:
+        events = [row for row in records if row["kind"] == "canonical-verification"]
+        if complete:
+            require(len(events) == 1, "complete verifier lacks canonical package event", issues)
+        expected = {"verification/canonical-verification": row for row in events}
+    actual = {row["path"]: row for row in packages}
+    require(set(expected).issubset(actual) and (not complete or set(actual) == set(expected)), "missing/extra canonical snapshot packages", issues)
+    for path in set(expected) & set(actual):
+        event = expected[path]
+        declared = receipt(event["receipt"])
+        package = actual[path]["receipt"]
+        require(package == declared, "canonical package differs from emitted authenticated receipt", issues)
+        if "step" in event:
+            accounting = [row for row in records if row["kind"] == "history-accounting" and row.get("step") == event["step"]]
+            if accounting:
+                account = numeric_values(accounting[0]["receipt"])
+                require(account.get("current_canonical_objects") == int(package.get("canonical_unique_objects", -1)) and account.get("current_canonical_bytes") == int(package.get("canonical_unique_bytes", -1)), "current canonical census/accounting mismatch", issues)
+            require(event.get("root") == package.get("canonical_root"), "history canonical step/root mismatch", issues)
+            if event["step"] > 0:
+                published = [row for row in records if row["kind"] == "published-root" and row.get("step") == event["step"] - 1]
+                require(len(published) == 1 and published[0].get("root") == event["root"], "history package does not bind published root", issues)
+    if case["family_id"] == "dedup_branch_history" and complete:
+        validate_canonical_union(directory, records, case, issues)
+    return packages
+
+
+def validate_canonical_union(directory, records, case, issues):
+    path = directory / "verification/history-0/canonical-verification/history-canonical-union.tsv.gz"
+    accounts = {row["step"]: receipt(row["receipt"]) for row in records if row["kind"] == "history-accounting"}
+    roots = {row["step"]: row["root"] for row in records if row["kind"] == "history-canonical"}
+    seen, totals, new = {}, Counter(), Counter()
+    previous_step = 0
+    last_row_step, last_object = None, None
+    def check(step):
+        value = numeric_values(accounts[step])
+        require(roots[step] in seen and seen[roots[step]][0] == "Namespace", "canonical union omits the snapshot namespace root", issues)
+        require(accounts[step].get("canonical_union_status") == "pass" and accounts[step].get("canonical_root") == roots[step], "history canonical union status/root missing", issues)
+        expected = {"retained_canonical_objects": totals["objects"], "retained_canonical_bytes": totals["bytes"],
+                    "retained_regular_payload_canonical_objects": totals["regular_objects"], "retained_regular_payload_canonical_bytes": totals["regular_bytes"],
+                    "retained_non_payload_canonical_objects": totals["objects"] - totals["regular_objects"], "retained_non_payload_canonical_bytes": totals["bytes"] - totals["regular_bytes"],
+                    "retained_metadata_value_canonical_objects": totals["metadata_objects"], "retained_metadata_value_canonical_bytes": totals["metadata_bytes"],
+                    "step_new_canonical_objects": new["objects"], "step_new_canonical_bytes": new["bytes"]}
+        for role in {entry[0] for entry in seen.values()}:
+            expected[f"retained_canonical_{role}_objects"] = totals[role + "_objects"]
+            expected[f"retained_canonical_{role}_bytes"] = totals[role + "_bytes"]
+        require(all(value.get(key) == count for key, count in expected.items()), f"history step {step} canonical union arithmetic mismatch", issues)
+        new.clear()
+    with gzip.open(path, "rt") as stream:
+        if stream.readline().rstrip("\n") != "step\troot\tobject_id\trole\tcanonical_bytes\tregular_file\tmetadata_value":
+            raise ValueError("canonical union ledger header")
+        for line in stream:
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) != 7:
+                raise ValueError("canonical union ledger row")
+            step_text, root, object_id, role, length_text, regular, metadata = fields
+            step, length = int(step_text), int(length_text)
+            if not previous_step <= step <= case["tier"] or roots.get(step) != root or not digest(object_id) or length <= 0 or regular not in {"0", "1"} or metadata not in {"0", "1"} or role not in {"Namespace", "InodeTable", "InodeRecord", "Metadata", "FileState", "FileNode", "Chunk", "Symlink", "DirectoryState", "DirectoryNode"}:
+                raise ValueError("canonical union ledger identity/order/length")
+            if last_row_step == step and object_id <= last_object:
+                raise ValueError("canonical union step object order/duplicate")
+            last_row_step, last_object = step, object_id
+            while previous_step < step:
+                check(previous_step)
+                previous_step += 1
+            flags = (regular == "1", metadata == "1")
+            old = seen.get(object_id)
+            if old is not None and (old[:2] != (role, length) or any(was and not now for was, now in zip(old[2:], flags)) or old[2:] == flags):
+                raise ValueError("canonical union identity changed or usage did not expand")
+            if old is None:
+                totals.update(objects=1, bytes=length)
+                totals.update({role + "_objects": 1, role + "_bytes": length})
+                new.update(objects=1, bytes=length)
+            if role == "Chunk" and flags[0] and (old is None or not old[2]):
+                totals.update(regular_objects=1, regular_bytes=length)
+            if flags[1] and (old is None or not old[3]):
+                totals.update(metadata_objects=1, metadata_bytes=length)
+            seen[object_id] = (role, length, *flags)
+    while previous_step <= case["tier"]:
+        check(previous_step)
+        previous_step += 1
 
 
 def validate_git_custody(precommit, reopened, records, successful, issues):
@@ -752,7 +986,7 @@ def validate_git_custody(precommit, reopened, records, successful, issues):
 
 def validate_attempt(outcome, classification, case, build):
     issues, violations = [], []
-    records, observed, resource = [], {}, {}
+    records, observed, resource, details, packages = [], {}, {}, {}, []
     directory = Path(outcome.get("evidence_path", ""))
     successful = outcome.get("product_status") == "pass"
     try:
@@ -824,13 +1058,20 @@ def validate_attempt(outcome, classification, case, build):
         else:
             validate_verification(case, records, issues, successful)
         if outcome["mode"] == "verify":
-            validate_canonical_artifacts(directory, issues)
-        observed = metrics(records)
+            packages = validate_canonical_artifacts(directory, issues, case, records, successful)
+        details = observation_data(records, outcome, acquired, clone)
+        observed = details["metrics"]
+        for key, value in resource.get("maxima", {}).items():
+            if key != "cpu.stat.usage_usec":
+                observed["cgroup.observed_max." + key] = value
+        for key in ("cpu_usage_usec_start", "cpu_usage_usec_end", "cpu_usage_usec_delta"):
+            if key in resource:
+                observed["cgroup." + key] = resource[key]
         if not successful or violations:
             validate_classification(directory, outcome, classification, issues)
     except (OSError, ValueError, KeyError, TypeError, IndexError, AssertionError, EOFError) as error:
         issues.append(f"invalid/missing evidence: {type(error).__name__}: {error}")
-    return {"issues": sorted(set(issues)), "violations": sorted(set(violations)), "metrics": observed, "resource_observations": resource,
+    return {"issues": sorted(set(issues)), "violations": sorted(set(violations)), "metrics": observed, "resource_observations": resource, "observations": details, "canonical_packages": packages,
             "product_status": "pass" if successful and not violations else "fail", "verification_pass": successful and outcome.get("mode") == "verify" and not issues and not violations}
 
 
@@ -864,8 +1105,68 @@ def qualified_build(assets):
     return build, registry
 
 
-def selected_build(builds, case, mode):
-    return next(builds[key] for key in (f"case:{case['scenario_id']}:{mode}", f"family:{case['family_id']}:{mode}", f"family:{case['family_id']}", "default") if key in builds)
+def selected_build(builds, case, mode, seed=None):
+    seed = case.get("seed") if seed is None else seed
+    keys = (f"slot:{case['scenario_id']}:{seed}:{mode}", f"case:{case['scenario_id']}:{mode}", f"family:{case['family_id']}:{mode}", f"family:{case['family_id']}", "default")
+    return next(builds[key] for key in keys if key in builds)
+
+
+NORMATIVE_CONTRACT_FILES = {"docs/roadmap/0.1/0.1.3/" + name + ".md" for name in (
+    "README", "testing-rules", "phase-1-handoff", "failure-repair-amendment",
+    "execution-contract", "ordinary-execution-contract", "dedup-reliability-execution-contract",
+    "capped-inherited-replacements", "payload-create-read", "tiny-file-churn",
+    "directory-construction-traversal", "git-tool-workflow", "namespace-mutation",
+    "workspace-change-locality", "mixed-load-bearing-workload", "dedup-cross-file",
+    "dedup-cdc-locality", "dedup-workspace-reuse", "dedup-branch-history", "workspace-reliability",
+)}
+
+
+def bridge_dependency_paths(family):
+    base = "benchmark/fs-bench-pro/"
+    paths = {base + "workspace_common.rs", base + "workload.rs", base + "workspace_registry.rs", base + f"families/{family}.rs"}
+    if family.startswith("dedup_"):
+        paths.update({base + "dedup_workloads.rs", base + "families/sdk_edit_common.rs"})
+    elif family == "edit_length_changing_capped":
+        paths.update({base + "families/edit_length_changing.rs", base + "families/sdk_edit_common.rs"})
+    elif family == "workspace_reliability":
+        paths.add(base + "reliability_workloads.rs")
+    else:
+        paths.add(base + "ordinary_workloads.rs")
+    return paths
+
+
+def sampler_source_parts(source):
+    """Narrow source bridge: preserve signature and every non-sampler byte.
+
+    This known function is top-level, with indented body lines. Reject an
+    unfamiliar layout instead of broadening the exclusion into other items.
+    """
+    marker = b"fn sample_resources() -> Result<()> {\n"
+    matches = [match.start() for match in re.finditer(rb"(?m)^" + re.escape(marker), source)]
+    if len(matches) != 1:
+        raise ValueError("sampler bridge requires exactly the known function signature")
+    start = matches[0] + len(marker)
+    end = source.find(b"\n}", start)
+    if end < 0 or source[end + 2:end + 3] not in {b"", b"\n"}:
+        raise ValueError("sampler bridge closing boundary missing")
+    body = source[start:end]
+    if any(line and not line[:1].isspace() for line in body.splitlines()):
+        raise ValueError("sampler bridge encountered an unindented body item")
+    return source[:start] + b"    /* source-bound sampler body excluded */" + source[end:], body
+
+
+def validate_bridge_path(filename, expected, revisions):
+    sources = {revision: subprocess.check_output(["git", "show", f"{revision}:{filename}"], cwd=HERE.parents[1]) for revision in revisions}
+    if isinstance(expected, str):
+        if not digest(expected) or any(hashlib.sha256(source).hexdigest() != expected for source in sources.values()):
+            raise ValueError("verification bridge source path hash mismatch")
+        return
+    if filename != "benchmark/fs-bench-pro/workspace_registry.rs" or not isinstance(expected, dict) or set(expected) != {"comparison", "sha256", "function_sha256"} or expected.get("comparison") != "exclude-sample_resources-body-v1" or not digest(expected.get("sha256")) or not isinstance(expected.get("function_sha256"), dict) or set(expected["function_sha256"]) != set(revisions):
+        raise ValueError("unapproved partial source bridge")
+    for revision, source in sources.items():
+        normalized, body = sampler_source_parts(source)
+        if hashlib.sha256(normalized).hexdigest() != expected["sha256"] or not digest(expected["function_sha256"][revision]) or hashlib.sha256(body).hexdigest() != expected["function_sha256"][revision]:
+            raise ValueError("sampler-only source bridge hash mismatch")
 
 
 def family_builds(campaign, assets, primary, registry):
@@ -881,9 +1182,12 @@ def family_builds(campaign, assets, primary, registry):
     loaded = {assets.resolve(): (primary, registry)}
     for selector, choice in config["selections"].items():
         parts = selector.split(":")
-        valid = len(parts) in {2, 3} and parts[0] == "family" and parts[1] in families
-        valid |= len(parts) == 3 and parts[0] == "case" and parts[1] in cases
-        valid &= len(parts) == 2 or parts[2] in {"performance", "verify"}
+        valid = len(parts) in {2, 3} and parts[0] == "family" and parts[1] in families and (len(parts) == 2 or parts[2] in {"performance", "verify"})
+        valid |= len(parts) == 3 and parts[0] == "case" and parts[1] in cases and parts[2] in {"performance", "verify"}
+        if len(parts) == 4 and parts[0] == "slot" and parts[1] in cases and parts[2].isdecimal() and parts[3] in {"performance", "verify"}:
+            selected_case, seed, mode = cases[parts[1]], int(parts[2]), parts[3]
+            allowed = [1] if selected_case.get("proof_only") or selected_case.get("inherited") and mode == "verify" else range(1, 6) if selected_case.get("inherited") else range(1, 4)
+            valid = str(seed) == parts[2] and seed in allowed and not (selected_case.get("proof_only") and mode != "verify")
         if not valid or not isinstance(choice, dict) or set(choice) != {"assets", "reason", "build_manifest_sha256"}:
             raise ValueError("unknown selector or malformed scoped build provenance")
         if not isinstance(choice["reason"], str) or len(choice["reason"].strip()) < 16 or not digest(choice["build_manifest_sha256"]):
@@ -896,10 +1200,10 @@ def family_builds(campaign, assets, primary, registry):
         build, candidate_registry = loaded[location]
         if any(build.get(key) != primary.get(key) for key in ("product_baseline", "product_seal")):
             raise ValueError("scoped harness mapping cannot change instrumented product baseline")
-        # Added qualification reports may change the aggregate contract identity;
-        # every common normative file remains byte-identical.
-        for filename in set(primary["phase1_contract_files"]) & set(build["phase1_contract_files"]):
-            if build["phase1_contract_files"][filename] != primary["phase1_contract_files"][filename]:
+        # Qualification/results/finding narratives can evolve independently.
+        # Every explicitly normative file must exist and remain byte-identical.
+        for filename in NORMATIVE_CONTRACT_FILES:
+            if filename not in build["phase1_contract_files"] or filename not in primary["phase1_contract_files"] or build["phase1_contract_files"][filename] != primary["phase1_contract_files"][filename]:
                 raise ValueError(f"scoped mapping changed existing frozen contract: {filename}")
         family = parts[1] if parts[0] == "family" else cases[parts[1]]["family_id"]
         if [row for row in registry if row["family_id"] == family] != [row for row in candidate_registry if row["family_id"] == family]:
@@ -909,21 +1213,86 @@ def family_builds(campaign, assets, primary, registry):
     sources = {build["revision"]: build for build in selected.values()}
     for bridge in config.get("verification_compatibility", []):
         fields = {"family_id", "performance_revision", "verification_revision", "reviewed_impact", "unchanged_paths"}
-        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["family_id"] not in {"payload_create_read", "tiny_file_churn"} or len(bridge["reviewed_impact"].strip()) < 80:
+        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["family_id"] not in families or len(bridge["reviewed_impact"].strip()) < 80:
             raise ValueError("unqualified verification source bridge")
         revisions = [bridge["performance_revision"], bridge["verification_revision"]]
         if revisions[0] == revisions[1] or any(revision not in sources for revision in revisions):
             raise ValueError("verification bridge must name two selected sealed sources")
-        required = {"benchmark/fs-bench-pro/workspace_common.rs", "benchmark/fs-bench-pro/ordinary_workloads.rs", f"benchmark/fs-bench-pro/families/{bridge['family_id']}.rs"}
+        required = bridge_dependency_paths(bridge["family_id"])
         if set(bridge["unchanged_paths"]) != required:
             raise ValueError("verification bridge omitted fixed input/workload/oracle definitions")
         for filename, expected in bridge["unchanged_paths"].items():
-            if not digest(expected) or any(hashlib.sha256(subprocess.check_output(["git", "show", f"{revision}:{filename}"], cwd=HERE.parents[1])).hexdigest() != expected for revision in revisions):
-                raise ValueError("verification bridge source path hash mismatch")
+            validate_bridge_path(filename, expected, revisions)
         if any(all(old.get(key) == bridge[key] for key in ("family_id", "performance_revision", "verification_revision")) for old in bridges):
             raise ValueError("duplicate verification compatibility bridge")
         bridges.append(bridge)
     return selected, provenance, bridges
+
+
+def source_identity(outcome):
+    return {key: outcome.get(key) for key in ("source_arm", *IDENTITY_FIELDS, "environment_identity")}
+
+
+def source_group(outcome):
+    identity = source_identity(outcome)
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest(), identity
+
+
+def sharing_values(value):
+    """Keep exact numerator/denominator next to every derived sharing fraction."""
+    output = {}
+    for label, numerator, denominator in (
+        ("regular_payload_sharing", "distinct_payload_bytes", "regular_file_logical_bytes"),
+        ("addition_payload_sharing", "addition_new_payload_bytes", "addition_logical_bytes"),
+        ("retained_history_payload_sharing", "distinct_retained_payload_bytes", "retained_logical_snapshot_bytes"),
+    ):
+        if numerator in value and denominator in value:
+            n, d = int(value[numerator]), int(value[denominator])
+            output[label] = {"unique_bytes": n, "logical_bytes": d, "saved_fraction": 1 - n / d if d else None,
+                             "scope": "logical regular-file payload sharing; excludes canonical wrappers, metadata and physical Store slack; not an emitted-CAS-hit fraction"}
+    return output
+
+
+def verification_summary(observations, packages):
+    steps = {}
+    for event in observations.get("verification", []):
+        step = event.get("step", 1)
+        point = steps.setdefault(step, {"step": step})
+        value = dict(event["receipt"])
+        if event["kind"] in {"canonical-verification", "history-canonical"} and "canonical_unique_bytes" not in value:
+            roles = [int(size) for key, size in value.items() if re.fullmatch(r"canonical_[A-Z][A-Za-z]*_bytes", key)]
+            if roles:
+                value["canonical_unique_bytes"] = str(sum(roles))
+        point[event["kind"]] = value
+        if event.get("root"):
+            point["root"] = event["root"]
+    for package in packages:
+        match = re.search(r"/history-([0-9]+)/", "/" + package["path"])
+        step = int(match[1]) if match else 1
+        steps.setdefault(step, {"step": step})["canonical-package"] = package
+    for point in steps.values():
+        point["sharing"] = {}
+        for key, value in list(point.items()):
+            if isinstance(value, dict) and key != "canonical-package":
+                point["sharing"].update(sharing_values(value))
+    final = steps[max(steps)] if steps else {}
+    final_metrics = {}
+    for kind in ("canonical-verification", "history-canonical", "history-accounting", "history-transcript", "dedup-verification", "capped-verification"):
+        for key, value in numeric_values(final.get(kind, {})).items():
+            if not key.startswith("variant_"):
+                final_metrics["verified." + kind + "." + key] = value
+    return {"steps": [steps[key] for key in sorted(steps)], "final_metrics": final_metrics,
+            "final_sharing": final.get("sharing", {}),
+            "scope": "Independent matching verification execution; per-step state and retained-union gauges are endpoints, never summed across snapshots. Step-new canonical counts mean first reachable in the union, not emitted CAS insertions."}
+
+
+def distribution_rows(values, sources):
+    rows = []
+    for (source_id, case), metrics_for_case in sorted(values.items()):
+        for metric, samples in sorted(metrics_for_case.items()):
+            rows.append({"source_group": source_id, "source_identity": sources[source_id], "case": case, "metric": metric,
+                         "n": len(samples), "median": statistics.median(samples), "min": min(samples), "max": max(samples)})
+    return rows
 
 
 def terminal_status(missing, invalid, issues, failures):
@@ -936,6 +1305,12 @@ def generate(campaign, assets):
     selected_builds, build_provenance, compatibility = family_builds(campaign, assets, build, registry)
     ledger = read(campaign / "slots.json") if (campaign / "slots.json").exists() else {}
     classifications = read(campaign / "classifications.json") if (campaign / "classifications.json").exists() else {}
+    invalidations = [decode(line) for line in (campaign / "invalidations.jsonl").read_text().splitlines() if line] if (campaign / "invalidations.jsonl").exists() else []
+    invalidated = defaultdict(list)
+    for entry in invalidations:
+        if not isinstance(entry.get("previous_evidence"), str) or not isinstance(entry.get("reason"), str) or not entry["reason"].strip():
+            raise ValueError("invalidation lacks retained evidence/reason")
+        invalidated[str(Path(entry["previous_evidence"]).resolve())].append(entry)
     required = [(case, seed, mode) for case in new for mode in ("performance", "verify") for seed in (1, 2, 3)]
     required += [(case, 1, "verify") for case in proofs]
     required += [(case, rep, "performance") for case in inherited for rep in range(1, 6)] + [(case, 1, "verify") for case in inherited]
@@ -982,17 +1357,23 @@ def generate(campaign, assets):
             missing.append({"case": key[0], "seed": seed, "mode": mode})
             continue
         classification = classifications.get(Path(outcome["evidence_path"]).name, {})
-        value = validate_attempt(outcome, classification, case, selected_build(selected_builds, case, mode))
+        value = validate_attempt(outcome, classification, case, selected_build(selected_builds, case, mode, seed))
+        invalidation = invalidated.get(str(Path(outcome["evidence_path"]).resolve()), [])
+        if invalidation:
+            value["issues"].append("selected observation was explicitly invalidated")
+            value["verification_pass"] = False
         checked[key] = value
         row = {"case": key[0], "family_id": case["family_id"], "seed": seed, "mode": mode, "inherited": case.get("inherited", False),
                "source_identity": {key: outcome.get(key) for key in IDENTITY_FIELDS}, "source_arm": outcome.get("source_arm"), "raw_product_status": outcome.get("product_status"), "coverage_status": outcome.get("coverage_status"), "product_status": value["product_status"], "evidence_status": "REVISE" if value["issues"] else "PASS",
-               "issues": value["issues"], "violations": value["violations"], "evidence": outcome["evidence_path"], "metrics": value["metrics"], "resource_observations": value["resource_observations"]}
+               "issues": value["issues"], "violations": value["violations"], "evidence": outcome["evidence_path"], "metrics": value["metrics"], "resource_observations": value["resource_observations"], "observations": value["observations"], "canonical_packages": value["canonical_packages"],
+               "verification_summary": verification_summary(value["observations"], value["canonical_packages"]), "environment_identity": outcome.get("environment_identity"), "input_identity": outcome.get("input_identity"), "invalidation_context": invalidation}
         rows.append(row)
         if value["issues"]:
             invalid.append(row)
         if value["product_status"] != "pass":
             failures.append({**row, "classification": classification})
     distributions = defaultdict(lambda: defaultdict(list))
+    distribution_sources, step_evidence = {}, []
     for row in rows:
         case = next(case for case in registry if case["scenario_id"] == row["case"])
         proof_key = (row["case"], 1 if case.get("inherited") else row["seed"], "verify")
@@ -1005,49 +1386,75 @@ def generate(campaign, assets):
         eligible = (same_source or bridge is not None) and not global_issues and row["mode"] == "performance" and row["evidence_status"] == "PASS" and row["product_status"] == "pass" and proof.get("verification_pass") and proof_outcome.get("input_identity") == outcome.get("input_identity") and proof_outcome.get("environment_identity") == outcome.get("environment_identity")
         row["performance_claim_eligible"] = bool(eligible)
         if eligible:
-            for metric, value in row["metrics"].items():
-                distributions[row["case"]][metric].append(value)
-            for metric in ("command_wall_ns", "preparation_ns"):
-                distributions[row["case"]][metric].append(outcome[metric])
+            source_id, identity = source_group(outcome)
+            distribution_sources[source_id] = identity
+            proof_details = verification_summary(proof["observations"], proof["canonical_packages"])
+            row["matched_verification"] = {"evidence": proof_outcome["evidence_path"], "source_identity": source_identity(proof_outcome), **proof_details}
+            for metric, value in {**row["metrics"], **proof_details["final_metrics"]}.items():
+                distributions[(source_id, row["case"])][metric].append(value)
+            verified_steps = {point["step"]: point for point in proof_details["steps"]}
+            measured_steps = {point["step"]: point for point in row["observations"].get("steps", [])}
+            for step in sorted(set(verified_steps) | set(measured_steps)):
+                step_evidence.append({"case": row["case"], "family_id": row["family_id"], "seed": row["seed"], "source_group": source_id,
+                    "source_identity": identity, "performance_evidence": row["evidence"], "verification_evidence": proof_outcome["evidence_path"],
+                    "verification_source_identity": source_identity(proof_outcome), "step": step,
+                    "measured": measured_steps.get(step), "verified": verified_steps.get(step)})
+    eligible_distributions = distribution_rows(distributions, distribution_sources)
     counts = {"planned_new_cases": 130, "planned_initial_sample_slots": 390, "executed_initial_sample_slots": sum(row["coverage_status"] == "executed" and not row["inherited"] and row["mode"] == "performance" for row in rows),
               "planned_new_verification_slots": 390, "executed_new_verification_slots": sum(row["coverage_status"] == "executed" and row["family_id"] in FAMILY_COUNTS and row["mode"] == "verify" and row["case"] != "dedup-cdc-boundaries-proof" for row in rows),
               "planned_reliability_subcases": 28, "executed_reliability_subcases": sum(row["coverage_status"] == "executed" and row["family_id"] == "workspace_reliability" for row in rows),
               "planned_capped_performance_slots": 25, "executed_capped_performance_slots": sum(row["coverage_status"] == "executed" and row["inherited"] and row["mode"] == "performance" for row in rows),
               "planned_capped_verifiers": 5, "executed_capped_verifiers": sum(row["coverage_status"] == "executed" and row["inherited"] and row["mode"] == "verify" for row in rows),
               "missing_slots": len(missing), "invalid_slots": len(invalid), "product_failed_outcomes": len(failures)}
-    retained = []
+    retained, retained_outcomes = [], []
     for path in sorted((campaign / "attempts").glob("*/outcome.json")):
         value = read(path)
-        if value.get("product_status") != "pass" or value.get("harness_status") == "fail":
-            retained.append({key: value.get(key) for key in ("scenario_id", "seed", "mode", "source_revision", "product_status", "harness_status", "error", "evidence_path")})
+        value["invalidation_context"] = invalidated.get(str(path.parent.resolve()), [])
+        retained_outcomes.append(value)
+        if value.get("product_status") != "pass" or value.get("harness_status") == "fail" or value["invalidation_context"]:
+            retained.append({key: value.get(key) for key in ("scenario_id", "seed", "mode", "source_revision", "source_arm", "product_status", "harness_status", "error", "evidence_path", "invalidation_context")})
     arms = {}
-    for value in ledger.values():
-        key = (value.get("source_arm"), value.get("source_revision"))
-        arm = arms.setdefault(key, {"source_arm": key[0], "source_revision": key[1], "product_identity": value.get("product_identity"), "image_id": value.get("image_id"), "raw_performance_outcomes": 0, "raw_pass": 0, "raw_fail": 0, "evidence": []})
+    for value in retained_outcomes:
+        key, identity = source_group(value)
+        arm = arms.setdefault(key, {"source_group": key, **identity, "raw_performance_outcomes": 0, "raw_pass": 0, "raw_fail": 0, "invalidated_observations": 0, "evidence": []})
         if value.get("mode") == "performance" and value.get("coverage_status") == "executed":
             arm["raw_performance_outcomes"] += 1
+            arm["invalidated_observations"] += bool(value.get("invalidation_context"))
             arm["raw_pass" if value.get("product_status") == "pass" else "raw_fail"] += 1
             arm["evidence"].append(value["evidence_path"])
     summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "scoped_builds": build_provenance, "verification_compatibility": compatibility, "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
-               "retained_source_arms": list(arms.values()), "counts": counts, "phase1_evidence_status": "PASS" if not missing and not invalid and not global_issues else "REVISE", "product_status": "FAIL" if failures else "NOT_ESTABLISHED" if missing or invalid or global_issues else "PASS",
+               "retained_source_arms": list(arms.values()), "retained_invalidations": invalidations, "eligible_distributions": eligible_distributions, "step_evidence_path": "step-evidence.json", "counts": counts, "phase1_evidence_status": "PASS" if not missing and not invalid and not global_issues else "REVISE", "product_status": "FAIL" if failures else "NOT_ESTABLISHED" if missing or invalid or global_issues else "PASS",
                "phase1_terminal_status": terminal_status(missing, invalid, global_issues, failures), "completion_policy": "failure-repair-amendment-2026-09-04", "global_issues": global_issues, "missing": missing, "invalid": invalid, "product_findings": failures, "retained_failure_history": retained, "invocations": invocations, "rows": rows}
     results = campaign / "results"
     results.mkdir(exist_ok=True)
     custody.write_json(results / "review.json", summary)
+    custody.write_json(results / "step-evidence.json", {"schema": "fs-bench-pro-step-evidence-v1", "rows": step_evidence,
+        "scope": "Each row joins a measured operation ordinal+1 with an independently verified snapshot ordinal. Raw roots stay in their own executions; no cross-execution root equality is assumed. Store deltas and retained-union gauges are not summed."})
     inputs = {"build_manifest_sha256": custody.sha(assets / "evidence/evidence.sha256"), "ledger_sha256": custody.sha(campaign / "slots.json") if (campaign / "slots.json").exists() else None,
               "family_build_mapping_sha256": custody.sha(campaign / "evidence-builds.json") if (campaign / "evidence-builds.json").exists() else None,
+              "invalidations_sha256": custody.sha(campaign / "invalidations.jsonl") if (campaign / "invalidations.jsonl").exists() else None,
               "classifications_sha256": custody.sha(campaign / "classifications.json") if (campaign / "classifications.json").exists() else None,
               "generator_sha256": summary["report_generator_sha256"], "policy_helper_sha256": custody.sha(HERE / "workspace-runner.py"), "custody_helper_sha256": custody.sha(HERE / "sdk-edit-custody.py"), "attempt_manifests": {path: custody.sha(Path(path) / "evidence.sha256") if (Path(path) / "evidence.sha256").is_file() else None for path in sorted(evidence_paths)}}
     custody.write_json(results / "report-inputs.json", inputs)
     lines = ["# LayerFS v0.1.3 Phase 1 initial baseline", "", f"Evidence: **{summary['phase1_evidence_status']}**. Product: **{summary['product_status']}**. Phase 1 terminal gate: **{summary['phase1_terminal_status']}**.", "", f"Sealed source: `{build['revision']}`. Report generator: `{summary['report_generator_sha256']}`.", "", "| Coverage | Count |", "| --- | ---: |"]
     lines += [f"| {key} | {value} |" for key, value in counts.items()]
-    lines += ["", "## Retained original and corrected source arms", "", "Raw outcomes below are preserved with their producing identities; they are not all eligible current-candidate performance evidence.", "", "| Arm | Source | Raw performance outcomes | Raw pass | Raw fail |", "| --- | --- | ---: | ---: | ---: |"]
-    lines += [f"| {arm['source_arm']} | `{arm['source_revision']}` | {arm['raw_performance_outcomes']} | {arm['raw_pass']} | {arm['raw_fail']} |" for arm in arms.values()]
-    lines += ["", "## Eligible initial distributions", "", "Only complete, authentic, source/input-matched independently verified samples are eligible. Pending or failed verification excludes performance claims without deleting raw timing evidence.", "", "| Case | Metric | n | Median | Min | Max |", "| --- | --- | ---: | ---: | ---: | ---: |"]
-    for case, values in sorted(distributions.items()):
-        for metric, values in sorted(values.items()):
-            lines.append(f"| {case} | {metric} | {len(values)} | {statistics.median(values)} | {min(values)} | {max(values)} |")
+    lines += ["", "## Retained original and corrected source arms", "", "Raw outcomes below are preserved with their producing identities; they are not all eligible current-candidate performance evidence.", "", "| Arm | Source / identity group | Image | Raw performance outcomes | Raw pass | Raw fail | Invalidated observations |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"]
+    lines += [f"| {arm['source_arm']} | `{arm['source_revision']}` / `{arm['source_group'][:16]}` | `{arm['image_id']}` | {arm['raw_performance_outcomes']} | {arm['raw_pass']} | {arm['raw_fail']} | {arm['invalidated_observations']} |" for arm in arms.values()]
+    lines += ["", "## Eligible source-bound distributions", "", "Only complete, authentic, source/input/environment-matched independently verified samples are eligible. Every source group is separate. CPU/I/O use observed boundary differences; transaction and memory/spool high-water values take maxima; Store growth uses signed endpoint differences. Verification-derived sharing/storage values are labelled verified and retain their independent producing evidence.", "", "| Arm / source group | Case | Metric | n | Median | Min | Max |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"]
+    for item in eligible_distributions:
+        identity = item["source_identity"]
+        lines.append(f"| {identity['source_arm']} / `{item['source_group'][:16]}` | {item['case']} | {item['metric']} | {item['n']} | {item['median']} | {item['min']} | {item['max']} |")
+    lines += ["", "## Per-step curves and sharing denominators", "", "[step-evidence.json](step-evidence.json) retains every eligible sample's per-step public timings, published root, Commit/FUSE/candidate observations, Store endpoints/deltas, matching canonical role census, per-variant CDC evidence and retained-history union accounting. Genesis is step0; measured operation ordinal0 joins verified snapshot1. Current-state and retained-union gauges stay distinct. Regular payload sharing excludes metadata, canonical wrappers and Store slack; addition-only and retained-history denominators are explicit.", "", "| Case | Seed | Arm / source group | Step | Commit ns | Store growth this step | New payload bytes | Retained payload bytes | Retained logical bytes | Retained canonical bytes |", "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    for item in step_evidence:
+        measured, verified = item.get("measured") or {}, item.get("verified") or {}
+        account = verified.get("history-accounting", {})
+        if item["family_id"] == "dedup_branch_history":
+            lines.append(f"| {item['case']} | {item['seed']} | {item['source_identity']['source_arm']} / `{item['source_group'][:16]}` | {item['step']} | {measured.get('timings', {}).get('commit_ns', '—')} | {measured.get('store_growth_this_step', {}).get('file_bytes', '—')} | {account.get('step_new_payload_bytes', '—')} | {account.get('distinct_retained_payload_bytes', '—')} | {account.get('retained_logical_snapshot_bytes', '—')} | {account.get('retained_canonical_bytes', '—')} |")
+    lines += ["", "## CLI invocation wall", "", "A family invocation can cover many samples. Its full CLI wall is not copied into each sample or added to sample wall. Interrupted invocation wall remains unknown.", "", "| Source | Arm | Selected slots | Full CLI ns | Source validation ns | Registry ns |", "| --- | --- | ---: | ---: | ---: | ---: |"]
+    for item in invocations:
+        lines.append(f"| `{item.get('source_revision')}` | {item.get('source_arm', 'not recorded')} | {len(item.get('planned_slots', []))} | {item.get('invocation_wall_ns')} | {item.get('source_validation_ns')} | {item.get('registry_query_ns')} |")
     lines += ["", "## Failures and remaining evidence work", ""]
+    lines += [f"- **Retained invalidated observation**: `{entry['previous_evidence']}` — {entry['reason']}. Its original product status is unchanged; it cannot support performance claims." for entry in invalidations]
     lines += [f"- `{row['case']}` repetition/seed {row['seed']} {row['mode']}: **FAIL**. {row['classification'].get('finding', 'Requires classification')}. Evidence: `{row['evidence']}`." for row in failures]
     lines += [f"- `{row['case']}` repetition/seed {row['seed']} {row['mode']}: **REVISE** — {'; '.join(row['issues'])}." for row in invalid]
     lines += [f"- **REVISE** — {issue}." for issue in global_issues]
@@ -1057,6 +1464,101 @@ def generate(campaign, assets):
     (results / "initial-results.md").write_text("\n".join(lines))
     custody.seal(results)
     return summary
+
+
+def canonical_receipt_self_check():
+    with tempfile.TemporaryDirectory(prefix="phase1-canonical-receipt-") as temporary:
+        directory = Path(temporary)
+        folder = directory / "verification/canonical-verification"
+        folder.mkdir(parents=True)
+        value = {"verification_status": "pass", "canonical_role_status": "pass", "canonical_root": "0" * 64,
+                 "oracle_identity": "1" * 64, "verified_regular_paths": "0", "verified_paths": "1"}
+        (folder / "canonical-receipt.txt").write_text("".join(f"{key}={item}\n" for key, item in value.items()))
+        (folder / "payload-extents.tsv").write_text("path\tordinal\tpayload_id\tsource_offset\tlogical_length\tpayload_length\n")
+        (folder / "file-roots.tsv").write_text("path\tcontent_root\n")
+        (folder / "independent-manifest.tsv").write_text("workspace-independent-manifest-v1\n.\tdirectory\t0\t755\t0\t0\t-\n")
+        events = [{"kind": "canonical-verification", "receipt": json.dumps(value)}]
+        issues = []
+        packages = validate_canonical_artifacts(directory, issues, {"family_id": "payload_create_read"}, events, True)
+        assert not issues, issues
+        assert packages[0]["receipt"]["canonical_root"] == "0" * 64
+        events[0]["receipt"] = json.dumps({**value, "canonical_root": "2" * 64})
+        issues = []
+        validate_canonical_artifacts(directory, issues, {"family_id": "payload_create_read"}, events, True)
+        assert "canonical package differs from emitted authenticated receipt" in issues
+    print("canonical_package_string_identity_self_check=pass")
+
+
+def aggregation_self_check():
+    """Tiny synthetic receipt/ledger models; no registry, Store, Docker or hashing campaign files."""
+    def host(phase, cpu, rss):
+        return {"kind": "host-resources", "phase": phase, "user_cpu_ns": cpu, "system_cpu_ns": cpu,
+                "disk_read_bytes": cpu, "disk_write_bytes": cpu, "swaps": 0,
+                "resident_bytes": rss, "peak_resident_bytes": rss, "physical_footprint_bytes": rss}
+    def store(step, length, phase):
+        return {"kind": "store-observation", "phase": phase, "step": step,
+                **{key: length for key in STORE_GAUGES}}
+    records = [host("before", 10, 20), store(0, 100, "before"),
+               {"kind": "phase", "phase": "commit", "step": 0, "elapsed_ns": 5},
+               {"kind": "operation", "details": "CandidateReceipt { candidate_objects: 7, max_transaction_objects: 4, max_transaction_bytes: 20 }"},
+               store(1, 120, "after-commit"),
+               {"kind": "phase", "phase": "commit", "step": 1, "elapsed_ns": 9},
+               {"kind": "operation", "details": "CandidateReceipt { candidate_objects: 9, max_transaction_objects: 2, max_transaction_bytes: 30 }"},
+               store(2, 116, "after-commit"), host("after-product", 17, 25), host("final", 100, 30)]
+    observed = observation_data(records, {}, {"run_acquisition_reused": True, "run_acquisition_ns": 2, "cache_acquisition_ns": 100, "cache_build_ns": 80, "cache_validation_ns": 10}, {"clone_wall_ns": 3})
+    values = observed["metrics"]
+    assert values["commit_ns"] == 14 and values["candidate.candidate_objects"] == 16
+    assert values["candidate.max_transaction_objects"] == 4 and values["candidate.max_transaction_bytes"] == 30
+    assert values["host.user_cpu_ns.delta"] == 7 and values["host.peak_resident_bytes.max"] == 30
+    assert values["store.file_bytes.delta"] == 16 and observed["steps"][-1]["store_growth_this_step"]["file_bytes"] == -4
+    assert values["cache_acquisition_ns"] == 2 and values["cache_build_ns"] == values["cache_validation_ns"] == 0
+    assert source_group({"source_revision": "same", "image_id": "first"})[0] != source_group({"source_revision": "same", "image_id": "second"})[0]
+    assert "benchmark/fs-bench-pro/dedup_workloads.rs" in bridge_dependency_paths("dedup_branch_history")
+    with tempfile.TemporaryDirectory(prefix="phase1-report-aggregation-") as temporary:
+        directory = Path(temporary)
+        folder = directory / "verification/history-0/canonical-verification"
+        folder.mkdir(parents=True)
+        ledger = folder / "history-canonical-union.tsv.gz"
+        root, object_id = "a" * 64, "b" * 64
+        events = []
+        for step in range(3):
+            account = {"canonical_root": root, "canonical_union_status": "pass",
+                "retained_canonical_objects": "2", "retained_canonical_bytes": "30",
+                "retained_regular_payload_canonical_objects": str(int(step > 0)), "retained_regular_payload_canonical_bytes": str(10 if step else 0),
+                "retained_non_payload_canonical_objects": str(1 + int(step == 0)), "retained_non_payload_canonical_bytes": str(20 if step else 30),
+                "retained_metadata_value_canonical_objects": "1", "retained_metadata_value_canonical_bytes": "10",
+                "retained_canonical_Chunk_objects": "1", "retained_canonical_Chunk_bytes": "10",
+                "retained_canonical_Namespace_objects": "1", "retained_canonical_Namespace_bytes": "20",
+                "step_new_canonical_objects": str(2 if step == 0 else 0), "step_new_canonical_bytes": str(30 if step == 0 else 0),
+                "retained_logical_snapshot_bytes": str((step + 1) * 100), "distinct_retained_payload_bytes": "10"}
+            events.extend([{"kind": "history-canonical", "step": step, "root": root, "receipt": {}},
+                           {"kind": "history-accounting", "step": step, "receipt": account}])
+        header = "step\troot\tobject_id\trole\tcanonical_bytes\tregular_file\tmetadata_value\n"
+        rows = [f"0\t{root}\t{root}\tNamespace\t20\t0\t0\n", f"0\t{root}\t{object_id}\tChunk\t10\t0\t1\n", f"1\t{root}\t{object_id}\tChunk\t10\t1\t1\n"]
+        def write(rows):
+            with gzip.open(ledger, "wt") as stream:
+                stream.write(header + "".join(rows))
+        write(rows)
+        issues = []
+        validate_canonical_union(directory, events, {"tier": 2}, issues)
+        assert not issues, issues
+        # A skipped ledger step keeps its union endpoints and adds zero objects.
+        summary = verification_summary({"verification": events}, [])
+        assert summary["final_metrics"]["verified.history-accounting.retained_logical_snapshot_bytes"] == 300
+        assert summary["final_sharing"]["retained_history_payload_sharing"]["logical_bytes"] == 300
+        for malformed in (rows + [rows[-1]], [*rows[:2], rows[2].replace("\t10\t", "\t11\t")], [*rows[:2], rows[2].replace("Chunk", "FileNode")]):
+            write(malformed)
+            try:
+                validate_canonical_union(directory, events, {"tier": 2}, [])
+                raise AssertionError("malformed canonical union accepted")
+            except ValueError:
+                pass
+        # An ordinary successful proof requires its actual package, not merely a status event.
+        case = {"family_id": "payload_create_read", "scenario_id": "synthetic", "tier": 1}
+        issues = []
+        validate_canonical_artifacts(directory / "absent", issues, case, [{"kind": "canonical-verification", "receipt": {}}], True)
+        assert "missing/extra canonical snapshot packages" in issues
+    print("report_aggregation_and_history_union_self_check=pass")
 
 
 def failure_self_check():
@@ -1137,7 +1639,15 @@ def main():
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--self-check", action="store_true")
     parser.add_argument("--failure-self-check", action="store_true")
+    parser.add_argument("--aggregation-self-check", action="store_true")
+    parser.add_argument("--canonical-receipt-self-check", action="store_true")
     args = parser.parse_args()
+    if args.canonical_receipt_self_check:
+        canonical_receipt_self_check()
+        return 0
+    if args.aggregation_self_check:
+        aggregation_self_check()
+        return 0
     if args.failure_self_check:
         failure_self_check()
         return 0

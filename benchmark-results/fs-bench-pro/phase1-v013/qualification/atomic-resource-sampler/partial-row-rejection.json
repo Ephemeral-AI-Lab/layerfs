@@ -1,0 +1,7 @@
+{
+  "status": "pass",
+  "expected_error": "incomplete sampler row",
+  "partial_row_bytes": 1017,
+  "original_artifact_sha256": "cd3216ee1747ffb932a95c0c4b0636017c65863beafa85d9a3758692e80789ab",
+  "original_failure_unchanged": true
+}

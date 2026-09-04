@@ -1,0 +1,8 @@
+{
+  "source_sha256": "29a79b7d5d95d37fd8e2691af754507dd1b2cc080dfa2f2b0e185e0a045af4a4",
+  "command": [
+    "python3",
+    "benchmark-results/fs-bench-pro/phase1-v013/qualification/report-single-step-join/check.py"
+  ],
+  "scope": "single-step import/capped report join only; no earlier tests or campaign readback"
+}

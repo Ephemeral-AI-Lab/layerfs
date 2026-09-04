@@ -166,19 +166,35 @@ pub(crate) fn dispatch(args: &[String]) -> Result<()> {
 }
 
 fn sample_resources() -> Result<()> {
+    use std::fmt::Write as _;
     use std::io::{Read, Seek, SeekFrom, Write};
+    use std::os::unix::fs::FileTypeExt;
+    // Linux blocking-pipe writes up to PIPE_BUF are atomic. Bypass stdout's
+    // line buffering so container shutdown cannot interrupt between row fields.
+    const PIPE_BUF: usize = 4096;
+    let mut output = std::fs::OpenOptions::new().write(true).open("/proc/self/fd/1")?;
+    if !output.metadata()?.file_type().is_fifo() {
+        return Err("resource sampler stdout must be a blocking pipe".into());
+    }
     let fields = ["memory.current", "memory.peak", "memory.stat", "memory.events", "memory.swap.current", "pids.current", "cpu.stat"];
     let mut files = fields.iter().map(|field| std::fs::File::open(format!("/sys/fs/cgroup/{field}"))).collect::<std::io::Result<Vec<_>>>()?;
     let start = std::time::Instant::now();
     let mut buffer = String::new();
+    let mut row = String::with_capacity(PIPE_BUF);
     loop {
-        print!("sample_ns={}", start.elapsed().as_nanos());
+        row.clear();
+        write!(&mut row, "sample_ns={}", start.elapsed().as_nanos())?;
         for (name,file) in fields.iter().zip(&mut files) {
             file.seek(SeekFrom::Start(0))?;
             buffer.clear(); file.read_to_string(&mut buffer)?;
-            for line in buffer.lines() { print!("\t{}:{}",name,line.replace(' ',"=")); }
+            for line in buffer.lines() { write!(&mut row, "\t{}:{}",name,line.replace(' ',"="))?; }
         }
-        println!(); std::io::stdout().flush()?;
+        row.push('\n');
+        if row.len() > PIPE_BUF {
+            return Err(format!("resource sampler row exceeds atomic pipe bound: {} > {PIPE_BUF}", row.len()).into());
+        }
+        output.write_all(row.as_bytes())?;
+        output.flush()?;
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 }
