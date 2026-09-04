@@ -184,7 +184,7 @@ def metrics(records):
     return dict(result)
 
 
-def cgroup_observations(path, external_wall_ns):
+def cgroup_observations(path, required_scope_ns):
     required = {"memory.current", "memory.peak", "memory.swap.current", "pids.current", "memory.events.oom", "memory.events.oom_kill", "cpu.stat.usage_usec"}
     required.update("memory.stat." + key for key in ("anon", "file", "file_dirty", "file_writeback", "shmem", "kernel", "slab"))
     first = last = None
@@ -232,11 +232,17 @@ def cgroup_observations(path, external_wall_ns):
                 violations.add("cgroup PID limit exceeded")
     if count < 2:
         raise ValueError("cgroup sampler has fewer than two observations")
-    # The sampler starts before the worker and remains alive through cleanup.
-    # No fixed sampling-gap gate was frozen; report the actual gap instead.
-    if last - first + gap < external_wall_ns:
-        raise ValueError("cgroup observations do not span the worker interval")
-    return {"sample_count": count, "first_ns": first, "last_ns": last, "maximum_gap_ns": gap, "maxima": dict(maxima)}, sorted(violations)
+    # Sampler readiness precedes worker startup. The released daemon can exit
+    # normally after Client drop, before host observer drain/supervisor polling.
+    # This checks the declared causal operation envelope, not host process wall
+    # or an exact continuous/category peak. Retain the actual final sample gap.
+    if last - first + gap < required_scope_ns:
+        raise ValueError("cgroup observations do not span the declared orchestration scope")
+    return {"sample_count": count, "first_ns": first, "last_ns": last, "maximum_gap_ns": gap,
+            "required_scope_ns": required_scope_ns,
+            "coverage_scope": "sampler-ready-before-worker; operation/orchestration envelope; excludes post-owner-close host drain and supervisor polling",
+            "precision": "causally-bracketed samples; not exact continuous phase/category maxima",
+            "maxima": dict(maxima)}, sorted(violations)
 
 
 def validate_environment(directory, outcome, build, issues, violations):
@@ -254,9 +260,16 @@ def validate_environment(directory, outcome, build, issues, violations):
     require(type(after.get("State", {}).get("OOMKilled")) is bool, "runtime OOM observation missing", issues)
     require(before.get("State", {}).get("Running") is True and type(after.get("State", {}).get("Running")) is bool, "runtime running-state observation missing", issues)
     if after.get("State", {}).get("Running") is False:
-        violations.append("owned daemon container exited before supervisor cleanup")
+        state = after["State"]
+        if state.get("ExitCode") != 0 or state.get("OOMKilled") or state.get("Error") or state.get("Dead") or state.get("Restarting"):
+            violations.append("owned daemon container exited abnormally")
+        elif outcome.get("product_status") == "pass":
+            rows = raw(directory / "raw.jsonl")
+            final = [row for row in rows if row["kind"] == "workspace-spool-observation" and row.get("phase") == "final-client-drop-cleanup"]
+            require(len(final) == 1 and all(final[0].get(key) == 0 for key in ("logical_bytes", "allocated_bytes", "file_count")), "normal daemon exit lacks successful Client-drop cleanup evidence", issues)
     require(any(device.get("PathOnHost") == "/dev/fuse" for device in config.get("Devices", [])), "real FUSE device absent", issues)
-    require("SYS_ADMIN" in config.get("CapAdd", []), "FUSE capability absent", issues)
+    for capabilities in (config.get("CapAdd"), after.get("HostConfig", {}).get("CapAdd")):
+        require(isinstance(capabilities, list) and len(capabilities) == 1 and capabilities[0] in {"SYS_ADMIN", "CAP_SYS_ADMIN"}, "FUSE capability differs from the single SYS_ADMIN grant", issues)
     bindings = before.get("NetworkSettings", {}).get("Ports", {}).get("41273/tcp") or []
     require(len(bindings) == 1 and bindings[0].get("HostIp") == "127.0.0.1", "daemon endpoint is not loopback-bound", issues)
     for mount in before.get("Mounts", []):
@@ -282,7 +295,9 @@ def validate_resources(directory, outcome, case, records, successful, issues, vi
         violations.append("worker exceeded frozen case deadline")
     require(outcome["command_wall_ns"] >= outcome["preparation_ns"] + duration, "command wall hides preparation or worker time", issues)
     require(outcome.get("command_wall_scope") == "one sample preparation/runtime/product/cleanup; CLI validation is in invocation receipt", "sample command wall scope missing", issues)
-    observations, cgroup_failures = cgroup_observations(directory / "cgroup-samples.tsv.gz", duration)
+    complete = [row for row in records if row["kind"] == "sample-complete"]
+    required_scope = number(complete[0].get("host_orchestration_ns"), "host_orchestration_ns") if len(complete) == 1 else duration
+    observations, cgroup_failures = cgroup_observations(directory / "cgroup-samples.tsv.gz", required_scope)
     violations.extend(cgroup_failures)
     host = [row for row in records if row["kind"] == "host-resources"]
     require(bool(host), "missing native host resource observation", issues)
