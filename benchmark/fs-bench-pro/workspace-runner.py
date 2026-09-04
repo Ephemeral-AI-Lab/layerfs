@@ -187,12 +187,67 @@ def git_system_identity(build, assets):
             "environment": [item for item in image["Config"]["Env"] if item.partition("=")[0] not in source_env]}
 
 
+SQL_CAPTURE_SCHEMA = "crates/layerfs-layerstack-store/src/schema.rs"
+SQL_CAPTURE_SCHEMA_PAIR = ("bf21e1b0f4d20f0752c3baa180e83b2cf842a0b0f4e97244d7fbf80c141b1daf",
+                           "827c18cc63eeb5c1df0decb9b2e35291c0de18e2222eed0f07c776382c0af950")
+PREPARATION_SPILL_OBJECTS = "crates/layerfs-layerstack-store/src/objects.rs"
+PREPARATION_SPILL_PAIR = ("1e88000d97560d5d9d8afdaaf379144cfd859133897650f357c8299a19b3aa32",
+                          "4b07eb03a2e6ddfe926a2c5fa621db462c659ff1ee164e41ec3b90cb871df9c8")
+
+
+def preparation_inputs(revision):
+    # Stronger than the digest's function slices: these existing preparation
+    # files must match in full, alongside all four preparation dependency crates.
+    exact = {"Cargo.toml", "Cargo.lock", *("benchmark/fs-bench-pro/" + path for path in
+        ("families/sdk_edit_common.rs", "src/main.rs", "workload.rs", "src/workspace_bench.rs", "workspace_common.rs"))}
+    prefixes = ("crates/layerfs-content/", "crates/layerfs-layerstack-store/", "crates/layerfs-sdk/", "crates/layerfs-monitor/")
+    entries = {}
+    for row in subprocess.check_output(["git", "ls-tree", "-rz", revision], cwd=REPO).split(b"\0"):
+        if not row:continue
+        metadata, path = row.split(b"\t", 1);path = path.decode();mode, kind, oid = metadata.split()
+        if path in exact or path.startswith(prefixes):
+            if kind != b"blob":raise ValueError("non-file preparation input")
+            entries[path] = (mode.decode(), oid)
+    batch = subprocess.check_output(["git", "cat-file", "--batch"], cwd=REPO, input=b"\n".join(value[1] for value in entries.values()) + b"\n")
+    files, cursor = {}, 0
+    for path, (mode, _) in entries.items():
+        end = batch.index(b"\n", cursor);_, kind, length = batch[cursor:end].split();cursor = end + 1
+        if kind != b"blob":raise ValueError("missing preparation blob")
+        files[path] = (mode, batch[cursor:cursor + int(length)]);cursor += int(length) + 1
+    return files
+
+
+def preparation_source_compatibility(producer, runtime):
+    if producer["revision"] not in {"3422433020a678a77f88e8a110492ca293c05e30", "a40b17e05486e5b747b689e7710475d739556a69"}:
+        raise ValueError("unreviewed preparation producer revision")
+    old, new = preparation_inputs(producer["revision"]), preparation_inputs(runtime["revision"])
+    if set(old) != set(new):raise ValueError("preparation source inventory changed")
+    changed = {}
+    for path, expected in ((SQL_CAPTURE_SCHEMA, SQL_CAPTURE_SCHEMA_PAIR), (PREPARATION_SPILL_OBJECTS, PREPARATION_SPILL_PAIR)):
+        if old[path] == new[path]:
+            if path == SQL_CAPTURE_SCHEMA:raise ValueError("compatibility mismatch is not the reviewed SQL capture fix")
+            continue
+        hashes = tuple(hashlib.sha256(value[path][1]).hexdigest() for value in (old, new))
+        if hashes != expected or old[path][0] != new[path][0]:raise ValueError("unreviewed preparation implementation pair")
+        changed[path] = {"producer_sha256": hashes[0], "runtime_sha256": hashes[1]}
+        new[path] = old[path]
+    if old != new:raise ValueError("another preparation dependency changed")
+    manifest = {path: {"mode": value[0], "sha256": hashlib.sha256(value[1]).hexdigest()} for path, value in old.items()}
+    return {"kind": "exact-sql-capture-and-derived-spill-preparation-v1", "producer_revision": producer["revision"],
+            "runtime_revision": runtime["revision"], "producer_compatibility": producer["workspace_preparation_compatibility"],
+            "runtime_compatibility": runtime["workspace_preparation_compatibility"], "changed_inputs": changed,
+            "producer_input_manifest_sha256": hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest(),
+            "scope": "Qualified canonical input/reference bytes only; SQL history capture is outside persistent state, and the reviewed derived spill index preserves canonical bytes/order/collision results. Actual producer identity and cache key remain unchanged; no performance compatibility claim."}
+
+
 def select_preparation(build, assets, producer_build, registry, selected):
     if producer_build == build:
         return assets
     producer = sealed_build(producer_build)
+    if producer["revision"] == "3422433020a678a77f88e8a110492ca293c05e30" and any(case["scenario_id"] == "namespace-subtree-relocate-delete-500" for case in selected):
+        raise ValueError("namespace500 requires the qualified a40 producer; old342 preparation exceeded its deadline")
     if producer["workspace_preparation_compatibility"] != assets["workspace_preparation_compatibility"]:
-        raise ValueError("preparation producer changes initialization or fixture generation")
+        producer["preparation_source_compatibility"] = preparation_source_compatibility(producer, assets)
     contracts = ("testing-rules", "phase-1-handoff", "failure-repair-amendment", "execution-contract",
         "ordinary-execution-contract", "dedup-reliability-execution-contract", "capped-inherited-replacements",
         "payload-create-read", "tiny-file-churn", "directory-construction-traversal", "git-tool-workflow",
@@ -276,6 +331,7 @@ def sample(case, seed, args, assets, campaign, acquisitions, producer=None):
         "binary_sha256": producer["binary_sha256"], "build_manifest_sha256": custody.sha(evidence / "build.json"),
         "workspace_preparation_compatibility": producer["workspace_preparation_compatibility"],
         "git_system_identity_sha256": producer.get("git_system_identity_sha256"),
+        "source_compatibility": producer.get("preparation_source_compatibility"),
         "runtime_revision": assets["revision"], "runtime_image_id": assets["image_id"],
         "scope": "Selected acquisition producer; cache hits retain their original master producer and input/oracle identities."})
     try:
@@ -568,7 +624,8 @@ def main():
         invocation_path=invocations/(uuid.uuid4().hex+".json")
         invocation={"source_arm":args.source_arm,"source_revision":assets["revision"],"image_id":assets["image_id"],"source_validation_ns":validation_ns,"registry_query_ns":registry_ns,"planned_slots":[[case["scenario_id"],seed,args.mode] for case,seed in planned],"status":"running","invocation_wall_ns":None}
         invocation["preparation_producer"] = {"assets": str(Path(args.preparation_assets or args.assets).resolve()),
-            "revision": producer["revision"], "image_id": producer["image_id"], "validation_ns": producer_validation_ns}
+            "revision": producer["revision"], "image_id": producer["image_id"], "validation_ns": producer_validation_ns,
+            "source_compatibility": producer.get("preparation_source_compatibility")}
         with invocation_receipt(invocation_path,invocation,invocation_started):
             ledger_path=campaign/"slots.json";ledger=read_json(ledger_path) if ledger_path.exists() else {};acquisitions={}
             if reconcile_attempts(campaign,ledger):atomic_json(ledger_path,ledger)
