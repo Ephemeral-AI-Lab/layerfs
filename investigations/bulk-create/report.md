@@ -511,3 +511,44 @@ no new performance measurement is claimed for the repaired source. The focused
 check passed (including byte-exact retention of all 52 preexisting object rows
 in this fixture); evidence source `c2713153` is retained under
 `container-directory-epoch-regression`. No performance run was repeated.
+
+## 8. Native Linux delete comparator
+
+[Evidence](evidence/native-delete-500-s1/), source `a20bdb14`, uses the same sealed
+helper, seed 1, prescribed tree and native Docker volume under 2 CPUs / 2 GiB.
+There is no LayerFS SDK, FUSE or Commit. The existing witness was copied, then
+the sealed create helper produced only the selected delete input as preparation.
+The delete input passed full qualification before timing. This makes native
+metadata/data warm; it is a diagnostic comparator, not frozen-profile admission
+or a cold-cache claim. The exact helper hash matches prior corrected runs.
+
+The complete native POSIX delete helper took **0.735762 s** (workload 735,761,584 ns,
+planning 209 ns), including root fsync **0.018493 s**. It completed 100,000 unlinks,
+100, 633 lstat calls, 633 directory removals, 633 enumerations and the prescribed
+root metadata normalization. Independent final verification passed 335 paths /
+200 witness files / 1,048,576 bytes. Docker-exec command wall was **0.834761 s**;
+input creation 2.589207 s, qualification 3.934976 s, separate verification 0.292199 s,
+and outer container/volume disposal 0.385221 s are excluded from the workload
+number. Cgroup CPU delta was 0.735816 s; no OOM, swap or throttling. Memory peak
+967,892,992 B was already reached in preparation/qualification and must not be
+reported as deletion's private-memory use. All owned resources were removed.
+
+The latest LayerFS delete Exec **30.128114 s** is about **40.95×** this native
+helper observation. Its complete managed lifecycle is 30.167729 s. The earlier
+native create comparator remains **2.566234 s** including planning versus LayerFS
+Exec **29.095951 s** (about 11.34×); LayerFS create Commit adds 78.739488 s for a
+107.908258-s lifecycle. Native helpers have no immutable-root publication phase,
+so no native "Commit" equivalent or SDK lifecycle speedup is claimed.
+
+The remaining LayerFS delete work is not physical CAS chunk reclamation.
+`lookup_node` performs immutable directory lookup before materialization even if
+an earlier listing already found that binding. `materialize_record` obtains
+file length and portable metadata through canonical objects; `portable_metadata`
+resolves and reads the mode and timestamp value graphs. The current plain
+Workspace readdir also delegates to readdirplus, and unlink resolves its name
+again before updating links, paths and mutation state. FUSE callback dispatch and
+Workspace locking add overhead to these operations. These are source-confirmed
+paths, not a measured attribution of each second. The main product process's
+21.81 CPU-seconds in the latest delete sample supports prioritizing repeated
+metadata/binding work over speculative disk-speed fixes. Directory-page caching
+alone does not remove this per-entry work.

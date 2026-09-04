@@ -1,0 +1,15 @@
+{
+  "profile": "native-linux-volume",
+  "case": "tiny-bulk-delete-500",
+  "seed": 1,
+  "source": "a20bdb14b922ead87eff6db237a9a3fd18031fc4",
+  "limits": {
+    "cpus": 2,
+    "memory_bytes": 2147483648,
+    "memory_swap_bytes": 2147483648,
+    "pids": 256
+  },
+  "phase1_lock": false,
+  "shared_host_interference_allowed": true,
+  "scope": "Identical POSIX workload only; no LayerFS SDK, FUSE, Commit, visibility or End. Creation and qualification are input preparation."
+}

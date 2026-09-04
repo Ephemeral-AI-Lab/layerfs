@@ -1,0 +1,193 @@
+[
+  {
+    "label": "create",
+    "argv": [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "layerfs-native-delete-9b0590c7444a",
+      "--cpus",
+      "2",
+      "--memory",
+      "2g",
+      "--memory-swap",
+      "2g",
+      "--pids-limit",
+      "256",
+      "--mount",
+      "type=volume,destination=/native",
+      "--entrypoint",
+      "sleep",
+      "sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e",
+      "infinity"
+    ],
+    "elapsed_ns": 555889375,
+    "exit_code": 0
+  },
+  {
+    "label": "environment",
+    "argv": [
+      "docker",
+      "inspect",
+      "layerfs-native-delete-9b0590c7444a"
+    ],
+    "elapsed_ns": 38785334,
+    "exit_code": 0
+  },
+  {
+    "label": "copy-witness",
+    "argv": [
+      "docker",
+      "cp",
+      "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-bulk-create-feasibility/investigations/bulk-create/evidence/native-500-s1/fixture/.",
+      "layerfs-native-delete-9b0590c7444a:/native"
+    ],
+    "elapsed_ns": 120222583,
+    "exit_code": 0
+  },
+  {
+    "label": "prepare-root",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-native-delete-9b0590c7444a",
+      "sh",
+      "-c",
+      "chmod 0750 /native && touch -d @1700000000 /native"
+    ],
+    "elapsed_ns": 76394042,
+    "exit_code": 0
+  },
+  {
+    "label": "helper-identity",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-native-delete-9b0590c7444a",
+      "sha256sum",
+      "/usr/local/bin/fs-benchmark-workload"
+    ],
+    "elapsed_ns": 75814708,
+    "exit_code": 0
+  },
+  {
+    "label": "prepare-input",
+    "argv": [
+      "docker",
+      "exec",
+      "-w",
+      "/native",
+      "layerfs-native-delete-9b0590c7444a",
+      "fs-benchmark-workload",
+      "workspace-apply",
+      "tiny-bulk-create-500",
+      "1",
+      "0",
+      "performance"
+    ],
+    "elapsed_ns": 2589206750,
+    "exit_code": 0
+  },
+  {
+    "label": "qualify-delete-input",
+    "argv": [
+      "docker",
+      "exec",
+      "-w",
+      "/native",
+      "layerfs-native-delete-9b0590c7444a",
+      "fs-benchmark-workload",
+      "workspace-verify-tree",
+      "tiny-bulk-delete-500",
+      "1",
+      "0"
+    ],
+    "elapsed_ns": 3934976250,
+    "exit_code": 0
+  },
+  {
+    "label": "before",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-native-delete-9b0590c7444a",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current; stat -f -c %T /native"
+    ],
+    "elapsed_ns": 72456292,
+    "exit_code": 0
+  },
+  {
+    "label": "performance",
+    "argv": [
+      "docker",
+      "exec",
+      "-w",
+      "/native",
+      "layerfs-native-delete-9b0590c7444a",
+      "fs-benchmark-workload",
+      "workspace-apply",
+      "tiny-bulk-delete-500",
+      "1",
+      "0",
+      "performance"
+    ],
+    "elapsed_ns": 834760500,
+    "exit_code": 0
+  },
+  {
+    "label": "after",
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-native-delete-9b0590c7444a",
+      "sh",
+      "-c",
+      "cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current; stat -f -c %T /native"
+    ],
+    "elapsed_ns": 69502083,
+    "exit_code": 0
+  },
+  {
+    "label": "verify",
+    "argv": [
+      "docker",
+      "exec",
+      "-w",
+      "/native",
+      "layerfs-native-delete-9b0590c7444a",
+      "fs-benchmark-workload",
+      "workspace-verify-tree",
+      "tiny-bulk-delete-500",
+      "1",
+      "1"
+    ],
+    "elapsed_ns": 292198583,
+    "exit_code": 0
+  },
+  {
+    "label": "cleanup",
+    "argv": [
+      "docker",
+      "rm",
+      "-fv",
+      "layerfs-native-delete-9b0590c7444a"
+    ],
+    "elapsed_ns": 385221458,
+    "exit_code": 0
+  },
+  {
+    "label": "remaining",
+    "argv": [
+      "docker",
+      "ps",
+      "-aq",
+      "--filter",
+      "name=^/layerfs-native-delete-9b0590c7444a$"
+    ],
+    "elapsed_ns": 37796334,
+    "exit_code": 0
+  }
+]
