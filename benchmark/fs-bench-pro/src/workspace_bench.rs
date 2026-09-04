@@ -656,8 +656,8 @@ fn run_case(
 ) -> AnyResult<()> {
     // Investigation-only selector: public SDK + existing native Linux FUSE route.
     let placement_container = if container.0 == "diagnostic-host-fuse" {
-        if !cfg!(target_os = "linux") || case.kind != "tiny-bulk-create" {
-            return Err("colocated diagnostic requires Linux bulk-create".into());
+        if !cfg!(target_os = "linux") || !matches!(case.kind, "tiny-bulk-create" | "tiny-bulk-delete") {
+            return Err("colocated diagnostic requires Linux bulk mutation".into());
         }
         emit("diagnostic-profile", &[("profile", quote("linux-colocated-host-fuse-2cpu-2g"))]);
         None
@@ -1327,8 +1327,8 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
     match args.as_slice() {
         [command, root, id, seed] if command == "workspace-colocated-verify-existing" => {
             let case = registry::resolve(id)?;
-            if !cfg!(target_os = "linux") || case.kind != "tiny-bulk-create" {
-                return Err("colocated diagnostic requires Linux bulk-create".into());
+            if !cfg!(target_os = "linux") || !matches!(case.kind, "tiny-bulk-create" | "tiny-bulk-delete") {
+                return Err("colocated diagnostic requires Linux bulk mutation".into());
             }
             let root = Path::new(root);
             let seed = seed.parse()?;

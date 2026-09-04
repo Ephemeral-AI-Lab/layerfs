@@ -359,7 +359,12 @@ impl Workspace {
     fn build_frontier_candidate(&mut self) -> Result<BuiltRoot> {
         let started = Instant::now();
         self.policy.check_final_delta(4096)?;
-        let batch_size = (self.policy.max_final_delta_memory_bytes / 4096).min(128) as usize;
+        let batch_cap = match std::env::var("LAYERFS_EXPERIMENT_FRONTIER_BATCH").as_deref() {
+            Ok("2048") => 2048,
+            Ok("128") | Err(std::env::VarError::NotPresent) => 128,
+            _ => return Err(StorageError::InvalidInput("experimental frontier batch")),
+        };
+        let batch_size = (self.policy.max_final_delta_memory_bytes / 4096).min(batch_cap) as usize;
         let captured = self.take_capture();
         if let Some(captured) = &captured {
             layerfs_layerstack_store::note_workspace_capture(1, captured.len);
@@ -598,6 +603,8 @@ impl Workspace {
             }
         }
         inodes.flush(&mut objects)?;
+        eprintln!("experiment_frontier_batch size={} flushes={} max_pending={} deferred_peak_bytes={}",
+            batch_size, inodes.flushes, inodes.max_pending, inodes.deferred_peak_bytes);
         note_commit_phase(WorkspaceCommitPhase::Namespace, started);
         let started = Instant::now();
         let built = objects.finish(inodes.root, cdc_bytes_scanned);
@@ -617,7 +624,8 @@ impl Workspace {
             .paths
             .first()
             .ok_or(StorageError::Integrity("frontier path"))?;
-        let batch_allowance = (self.policy.max_final_delta_memory_bytes / 4096).min(128) * 1024;
+        // Reserve the largest experimental planner batch without raising the policy.
+        let batch_allowance = (self.policy.max_final_delta_memory_bytes / 4096).min(2048) * 1024;
         self.policy
             .check_final_delta(batch_allowance.saturating_add(path_charge(path)))?;
         layerfs_layerstack_store::note_workspace_namespace_visits(0, 1, 0, 0, 0);
@@ -1211,6 +1219,9 @@ struct FrontierInodes {
     root: ObjectId,
     pending: BTreeMap<InodeId, Option<InodeRecordV1>>,
     batch_size: usize,
+    flushes: u64,
+    max_pending: usize,
+    deferred_peak_bytes: u64,
 }
 
 impl FrontierInodes {
@@ -1219,6 +1230,9 @@ impl FrontierInodes {
             root,
             pending: BTreeMap::new(),
             batch_size,
+            flushes: 0,
+            max_pending: 0,
+            deferred_peak_bytes: 0,
         }
     }
 
@@ -1244,6 +1258,7 @@ impl FrontierInodes {
         record: Option<InodeRecordV1>,
     ) -> Result<()> {
         self.pending.insert(inode, record);
+        self.max_pending = self.max_pending.max(self.pending.len());
         if self.pending.len() >= self.batch_size {
             self.flush(objects)?;
         }
@@ -1252,7 +1267,7 @@ impl FrontierInodes {
 
     fn flush(&mut self, objects: &mut ObjectBuffer<'_>) -> Result<()> {
         if !self.pending.is_empty() {
-            self.root = filesystem::apply_inode_mutations(
+            let candidate = filesystem::apply_inode_mutations(
                 objects,
                 self.root,
                 std::mem::take(&mut self.pending)
@@ -1261,8 +1276,11 @@ impl FrontierInodes {
                         Some(record) => InodeMutation::Upsert { inode, record },
                         None => InodeMutation::Remove { inode },
                     }),
-            )?
-            .root();
+            )?;
+            self.deferred_peak_bytes = self.deferred_peak_bytes
+                .max(candidate.counters().structural_deferred_peak_bytes);
+            self.root = candidate.root();
+            self.flushes += 1;
         }
         Ok(())
     }

@@ -9,3 +9,4 @@ evidence/container-*/source.tar
 evidence/container-*/fs-benchmark-pro
 evidence/container-*/failed-state/
 evidence/container-*/dependencies.tar
+evidence/container-*/delete-prepared/
