@@ -298,7 +298,7 @@ impl Default for PortableMetadataCache {
 impl PortableMetadataCache {
     pub const CAPACITY: usize = PORTABLE_METADATA_CACHE_CAPACITY;
 
-    pub fn len(&self) -> usize {
+    pub fn entry_count(&self) -> usize {
         self.entries.iter().flatten().count()
     }
 
@@ -457,7 +457,7 @@ mod tests {
                     .1
             );
         }
-        assert_eq!(cache.len(), PortableMetadataCache::CAPACITY);
+        assert_eq!(cache.entry_count(), PortableMetadataCache::CAPACITY);
         assert!(
             !cache
                 .get_or_build(&mut store, InodeKind::RegularFile, 0o644, 1, 0)

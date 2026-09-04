@@ -382,6 +382,7 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
         let left = std::mem::replace(page, right);
         self.node(left).map(Some)
     }
+    #[allow(clippy::type_complexity)]
     fn merge(
         &mut self,
         left: Node<F::Key>,
@@ -430,6 +431,7 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
             output(self, node)
         }
     }
+    #[allow(clippy::type_complexity)]
     fn sibling(
         &mut self,
         pending: &mut Option<Node<F::Key>>,
@@ -453,6 +455,7 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
         }
         Ok(())
     }
+    #[allow(clippy::type_complexity)]
     fn edit<I: Iterator<Item = CoreResult<(F::Key, Option<ObjectId>)>>>(
         &mut self,
         id: ObjectId,
@@ -472,7 +475,7 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
                 let delta_first = deltas.in_range(bound)
                     && old
                         .peek()
-                        .is_none_or(|old| &old.0 >= &deltas.next.as_ref().unwrap().0);
+                        .is_none_or(|old| old.0 >= deltas.next.as_ref().unwrap().0);
                 let (key, value) = if delta_first {
                     let (key, value) = deltas.take()?;
                     self.counters.delta_keys += 1;

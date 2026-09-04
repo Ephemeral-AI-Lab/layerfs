@@ -1623,10 +1623,7 @@ fn prepare_append_only_root_directories(
                             worker_index,
                             pair_checkpoint,
                         )?);
-                        directories.push(PreparedCompactDirectory {
-                            index,
-                            imported,
-                        });
+                        directories.push(PreparedCompactDirectory { index, imported });
                     }
                     if segment.get_calls() != 0 {
                         return Err(StoreError::Integrity("append-only initialization get"));
@@ -1936,7 +1933,7 @@ impl<'objects, 'structure, S: ObjectStore, T: ObjectStore>
         self.source.metadata_cache_peak_entries = self
             .source
             .metadata_cache_peak_entries
-            .max(self.metadata_cache.len() as u64);
+            .max(self.metadata_cache.entry_count() as u64);
         Ok(root)
     }
 
