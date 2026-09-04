@@ -1,6 +1,8 @@
 # v0.1.3 benchmark infrastructure optimization
 
-Status: implementation specification; no migration or new benchmark qualification is claimed.
+Status: infrastructure migration completed with bounded representative smoke coverage;
+closure evidence and explicit exclusions are recorded in section 15. No full-matrix
+performance qualification or release readiness is claimed.
 
 Tracking issue: [#45](https://github.com/Ephemeral-AI-Lab/layerfs/issues/45).
 
@@ -355,7 +357,7 @@ This is structural cleanup, not a performance qualification or a product
 repair. Product changes already present in the worktree are outside this
 cleanup and are not included in its commit.
 
-## 13. Selected Monitor admission-limit repair (2026-09-05)
+## 14. Selected Monitor admission-limit repair (2026-09-05)
 
 The two failed selections above shared a stale product validation limit, not an
 oversized-fixture or slow-operation failure. Store admitted up to 8,191 objects
@@ -400,3 +402,67 @@ Each `tiny-perf` / `directory-perf` contains `perf.jsonl`; each `tiny-verify` /
 `directory-verify` contains the identity-matched `verification.json`. Original
 failed attempts remain untouched. This fixes those two selected blockers only;
 it does not close #45, qualify every family or run the large-only cases.
+
+## 15. Issue #45 closure verification (2026-09-05)
+
+The user requested independent verification of the other task's repair and closure
+of #45. Both previously failed cases were rerun serially, each followed by its
+separate identity-matched companion. No full matrix or large-background case was run.
+
+| Case, seed 1, clone setup | Product-call sum | Container command CPU | Container lifetime peak | Verification wall | Outcome |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `tiny-bulk-create-1-compact-v2` | 159.349877 ms | 165.599 ms | 15,511,552 B | 2.883782 s | perf / verification / cleanup PASS |
+| `directory-construct-10-compact-v2` | 50.014250 ms | 74.726 ms | 22,495,232 B | 3.057962 s | perf / verification / cleanup PASS |
+
+These are single-sample smoke results, not speedup estimates. Command CPU is
+inclusive container command-window CPU, not product-call-only CPU; lifetime
+memory includes setup. Both performance receipts report zero benchmark reopen
+and verifier calls. Maximum transaction objects were 652 and 158, respectively:
+both exercise the repaired gate. All four invocations report cleanup PASS,
+zero OOM kills and zero current swap. The sample Stores were independent
+Docker-local byte copies with equal master/sample hashes and distinct inodes.
+
+The current host harness is `cab5793e8cd2949c58c4ead41ecb12ba826bfee7c54b67f4406c9192c2aa9549`.
+The reused image/source identities are those in section 14. Its product seal
+`1bf45522946c68d57effbc4334a93100af208b79f21f3f237a45927d596cd84e`
+matches the current product files. The current whole-source seal differs
+(`1127c5640bdf106f6fab9b6f6b90625e7e2f91826cd42731e10a0a087406b37c`)
+because root-entrypoint cleanup followed the image build; do not describe the
+image as built from cleanup commit `3bcc31bdadca689eba2a5d6a2ffb73ca9b83e174`.
+The four-file product/test repair remains an uncommitted change owned by the
+repair task; this closure does not overwrite or include it in a documentation commit.
+
+Current closure disposition for the sequential checklist (sections 9–11 retain
+the original detailed design gates; this table records the observed migration
+coverage, not an assertion that every fault permutation was tested):
+
+| Checklist rows | Closure disposition |
+| --- | --- |
+| 01–04, 06–17: 16 small-performance families | Family-local adapters transferred; selected performance and separate verification PASS receipts retained. Unrelated already-passing routes were not rerun. |
+| 05: capped length-changing family | Interface transferred; fixed 500 MiB cases explicitly large-only, excluded from smoke by the latest user scope. No live PASS claimed. |
+| 18: reliability | Verification-only interface; compact dirty-net-zero proof PASS. Long endurance proofs remain unsupported/unverified under 59 seconds. |
+| 19–21: historical entrypoints | Retired with explicit user authorization; frozen Git history preserves reproduction. |
+| Shared harness and layout | 22 focused Python tests PASS on the current harness; 18 family directories / 54 launchers; no root shell wrappers. |
+
+Retained evidence covers 17 families with selected verification PASS (16
+performance-capable small families plus the proof-only family). The complete
+local receipt census contains 26 verification attempts, including original
+failures and these user-requested rechecks: 134.317113 s combined, maximum
+41.188612 s. Every recorded invocation is below 59 s; historical FAIL/TIMEOUT
+receipts remain unchanged. This census is not a new final-family campaign.
+
+Closure evidence root:
+`/Users/yifanxu/Ephemeral-AI-Lab/layerfs-infra-smoke-20260905/issue45-closure-recheck`.
+Only four files are retained (97,436 bytes total):
+
+| Relative evidence path | SHA-256 |
+| --- | --- |
+| `tiny-perf/perf.jsonl` | `444303230c6803f4f7e57a1caeca6efe16e65e3ddc11dc0f32937ffa554c3fa7` |
+| `tiny-verify/verification.json` | `c69a5351ca31a0e1c725a0a3f3ad912f4e9e1260293f539fc72bffcf20816734` |
+| `directory-perf/perf.jsonl` | `9899eb21a20ea29928d7395d885195b43f3e6142b406999da8670d3619ac0c86` |
+| `directory-verify/verification.json` | `901b34a204d90c720188cb4e81ecbd9c4dda5332b4d7224c8da2e3f22f7d6509` |
+
+#45 is complete for the user-authorized infrastructure migration and smoke
+scope. The large-only capped cases, remaining reliability proofs, higher tiers,
+unselected cases and performance targets are not qualified by this closure.
+No merge, push, release, Phase 1 replay or later-family optimization is included.
