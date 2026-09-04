@@ -2,7 +2,7 @@
 """Focused immutable-CAS retention check, bounded private container, no campaign lock."""
 import hashlib,json,pathlib,subprocess,time,uuid
 ROOT=pathlib.Path(__file__).resolve().parents[2]
-OUT=ROOT/'investigations/bulk-create/evidence/container-immutable-cas'
+OUT=ROOT/'investigations/bulk-create/evidence/container-immutable-cas-r2'
 BASE='sha256:2a9a6dc9d5f09a9785d611916f96100fe82f515f45a453bb35c83204fafb8d3e'
 OUT.mkdir();commands=[];active=None
 def run(label,argv,timeout=600):
@@ -21,6 +21,7 @@ try:
     run('reuse-private-build',['docker','cp',str(ROOT/'investigations/bulk-create/evidence/container-dense-delete-10-s1/failed-state')+'/.',active+':/data'])
     run('copy-source',['docker','cp',OUT/'source.tar',active+':/data/new-source.tar'])
     run('focused-test',['docker','exec','-e','CARGO_HOME=/data/cargo','-e','CARGO_TARGET_DIR=/data/target','-e','CARGO_BUILD_JOBS=2','-e','LAYERFS_EXPERIMENT_DENSE_DELETE=1','-e','LAYERFS_EXPERIMENT_FINAL_NEW_REFS=1',active,'sh','-c','mkdir /data/update && tar -xf /data/new-source.tar -C /data/update && python3 /data/update/investigations/bulk-create/sync-source.py /data/update /data/source && cd /data/source && cargo test --offline --locked -p layerfs-workspace --features test-instrumentation --lib dense_delete_preserves_aliases_open_unlinked_and_old_root -- --nocapture'],1200)
+    run('trace-regression',['docker','exec','-e','CARGO_HOME=/data/cargo','-e','CARGO_TARGET_DIR=/data/target','-e','CARGO_BUILD_JOBS=2',active,'sh','-c','cd /data/source && cargo test --offline --locked -p layerfs-layerstack-store --features test-instrumentation --lib snapshot_cache_reads_only_requested_authenticated_objects_and_reuses_them'],1200)
     run('resources',['docker','exec',active,'sh','-c','cat /sys/fs/cgroup/memory.peak /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.swap.current'])
 finally:
     if active:

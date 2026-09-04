@@ -1804,6 +1804,7 @@ mod tests {
             assert_eq!(&after, before, "delete changed an immutable CAS object");
         }
         eprintln!("experiment_immutable_cas retained_unchanged_objects={}", before_objects.len());
+        assert!(layerfs_layerstack_store::sql_trace().is_empty(), "SQL trace must be opt-in");
         drop(database);
         std::fs::remove_dir_all(root).unwrap();
     }

@@ -14,7 +14,7 @@ pub const SQLITE_PAGE_CACHE_KIB: i64 = 32 * 1024;
 
 #[cfg(feature = "test-instrumentation")]
 thread_local! {
-    static SQL_TRACE: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    static SQL_TRACE: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(debug_assertions)]
@@ -25,18 +25,23 @@ thread_local! {
 #[cfg(feature = "test-instrumentation")]
 fn trace_sql(event: rusqlite::trace::TraceEvent<'_>) {
     if let rusqlite::trace::TraceEvent::Stmt(_, sql) = event {
-        SQL_TRACE.with(|trace| trace.borrow_mut().push(sql.to_owned()));
+        SQL_TRACE.with(|trace| {
+            if let Some(trace) = trace.borrow_mut().as_mut() {
+                trace.push(sql.to_owned());
+            }
+        });
     }
 }
 
 #[cfg(feature = "test-instrumentation")]
 pub fn reset_sql_trace() {
-    SQL_TRACE.with(|trace| trace.borrow_mut().clear());
+    // Explicit tracing request; ordinary instrumented runs retain no SQL strings.
+    SQL_TRACE.with(|trace| *trace.borrow_mut() = Some(Vec::new()));
 }
 
 #[cfg(feature = "test-instrumentation")]
 pub fn sql_trace() -> Vec<String> {
-    SQL_TRACE.with(|trace| trace.borrow().clone())
+    SQL_TRACE.with(|trace| trace.borrow().as_ref().cloned().unwrap_or_default())
 }
 
 #[cfg(debug_assertions)]
