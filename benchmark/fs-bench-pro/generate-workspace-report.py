@@ -1330,7 +1330,7 @@ def fast_definition_parts(filename, source):
 @lru_cache(maxsize=None)
 def fast_profile_source_proof(revision):
     baseline = runner.FAST_VERIFIER_SOURCE
-    if product_tree(baseline) != product_tree(revision):raise ValueError("fast profile changes product source/build inputs")
+    if product_tree(baseline) != product_tree(revision):owner_drop_source_proof(baseline, revision)
     pairs = runner.fast_verifier_source_proof(revision)
     changed = set(subprocess.check_output(["git", "diff", "--name-only", baseline, revision, "--", "benchmark/fs-bench-pro"], cwd=HERE.parents[1], text=True).splitlines())
     if changed - set(pairs) - {"benchmark/fs-bench-pro/workspace-runner.py", "benchmark/fs-bench-pro/generate-workspace-report.py"}:raise ValueError("fast profile includes unreviewed benchmark source")
@@ -1403,6 +1403,50 @@ def product_tree(revision):
     if UNLINK_SOURCE_PATH not in entries:
         raise ValueError("product bridge proxy source missing")
     return entries
+
+
+OWNER_DROP_BRIDGE_KIND = "workspace-owner-drop-explicit-end-v1"
+OWNER_DROP_PARENT = "fb5b34f7a882e257cd3647591fbd6c7f6ac6c2ec"
+OWNER_DROP_PAIRS = {
+    "crates/layerfs-workspace/src/registry.rs": ("d7f4de80f3610ca9a0fcecf9e25a8e50341316638c5a1b5fc805366505842d0c", "31eba9c4f126a906c3be566608417dd4578fda544005bbc08623f1be1b92279e"),
+    "crates/layerfs-workspace/src/lifecycle.rs": ("91e65bf1ab13f452a15dab7e6934e1256a39f508a39efbc0b2a00c718ad0c2ac", "3dbf9254217ce04d31fa243566d02cd0c083b858a2164c1de0536249628b9ea7"),
+}
+
+
+@lru_cache(maxsize=None)
+def owner_drop_source_proof(old_revision, new_revision):
+    trees = [product_tree(revision) for revision in (old_revision, new_revision)]
+    pairs = {}
+    for path, expected in OWNER_DROP_PAIRS.items():
+        values = [subprocess.check_output(["git", "show", revision + ":" + path], cwd=HERE.parents[1]) for revision in (old_revision, new_revision)]
+        hashes = tuple(hashlib.sha256(value).hexdigest() for value in values)
+        if hashes != expected or trees[0].pop(path).split()[:2] != trees[1].pop(path).split()[:2]:raise ValueError("unreviewed owner-drop source pair")
+        if path.endswith("registry.rs"):
+            start = values[1].index(b"\nimpl Drop for Workspaces {\n");end = values[1].index(b"\nimpl Workspaces {", start)
+        else:
+            start = values[1].index(b"    #[test]\n    fn owner_drop_discards_active_projection_before_releasing_lease()")
+            end = values[1].index(b"    #[test]\n    fn rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools()", start)
+            if b"#[cfg(test)]\nmod tests {" not in values[1][:start]:raise ValueError("owner-drop regression is not test-only")
+        if values[1][:start] + values[1][end:] != values[0]:raise ValueError("owner-drop changed code outside exact Drop/test additions")
+        pairs[path] = {"old_sha256": hashes[0], "new_sha256": hashes[1]}
+    if trees[0] != trees[1]:raise ValueError("owner-drop repair changed another product/build input")
+    return {"source_pairs": pairs, "unchanged_product_tree_sha256": hashlib.sha256(json.dumps(trees[0], sort_keys=True).encode()).hexdigest(),
+        "scope": "Only Workspaces Drop for unmatched Active sessions plus a test. Retained rows must prove no Active session at owner Drop: public successful Create/End balance or initialize-only. Original timing/resource identities remain; no successor-cost equivalence."}
+
+
+def validate_owner_drop_records(records, case, issues):
+    operations = operation_rows(records, issues)
+    balance = created = ended = 0
+    for row in operations:
+        if row.get("outcome") != "success":continue
+        if row.get("family") == "workspace.create":created += 1;balance += 1
+        elif row.get("family") == "workspace.end":ended += 1;balance -= 1
+        require(balance >= 0, "owner-drop predicate has unmatched/reordered successful End", issues)
+    require(balance == 0, "retained row reached unmatched Active owner Drop", issues)
+    require(created > 0 or any(row.get("family") == "layerstack.initialize" and row.get("outcome") == "success" for row in operations), "owner-drop predicate lacks lifecycle observations", issues)
+    require(case.get("operation") != "lease-lifecycle", "lease owner-drop proof must execute the repaired product", issues)
+    return {"successful_workspace_creates": created, "successful_workspace_ends": ended, "unmatched_successful_workspace_creates": balance,
+        "state_predicate": "no Active session at owner Drop", "timing_claim": "original producing source only; successor Drop overhead not measured"}
 
 
 def unlink_source_proof(old_revision, new_revision):
@@ -1656,6 +1700,10 @@ SQL_CAPTURE_PARENT = "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c"
 
 def retained_proof_source_proof(old_revision, new_revision):
     if old_revision not in RETAINED_PROOFS:raise ValueError("unreviewed retained independent proof")
+    if product_tree(OWNER_DROP_PARENT) != product_tree(new_revision):
+        return {"retained_evidence_basename": RETAINED_PROOFS[old_revision][1], "prior_retained_proof": retained_proof_source_proof(old_revision, OWNER_DROP_PARENT),
+            "owner_drop_source_proof": owner_drop_source_proof(OWNER_DROP_PARENT, new_revision),
+            "scope": "Exact historical full proof only, additionally requiring explicit successful End balance before owner Drop. No timing relabeling."}
     revisions = (SQL_CAPTURE_PARENT, new_revision)
     trees = {revision: product_tree(revision) for revision in revisions}
     modes = [trees[revision].pop(runner.SQL_CAPTURE_SCHEMA).split()[:2] for revision in revisions]
@@ -1673,8 +1721,14 @@ def configured_product_bridges(config, primary, cases):
     approved = []
     fields = {"kind", "old_revision", "new_revision", "old_product_seal", "new_product_seal", "case_ids", "source_proof", "required_zero_counters", "reviewed_impact"}
     for bridge in config.get("product_compatibility", []):
-        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND, RETAINED_PROOF_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
+        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND, RETAINED_PROOF_KIND, OWNER_DROP_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
             raise ValueError("invalid exact unlink product bridge identity")
+        if bridge["kind"] == OWNER_DROP_BRIDGE_KIND:
+            if bridge["required_zero_counters"] != ["unmatched_successful_workspace_creates"] or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases or cases[case].get("operation") == "lease-lifecycle" for case in bridge["case_ids"]) or len(bridge["reviewed_impact"].strip()) < 80:
+                raise ValueError("owner-drop bridge lacks exact cases/End predicate")
+            if bridge["source_proof"] != owner_drop_source_proof(bridge["old_revision"], bridge["new_revision"]):raise ValueError("owner-drop source proof differs")
+            if any(item["old_revision"] == bridge["old_revision"] for item in approved):raise ValueError("duplicate owner-drop source bridge")
+            approved.append(bridge);continue
         retained_proof = bridge["kind"] == RETAINED_PROOF_KIND
         if retained_proof:
             if bridge["old_revision"] not in RETAINED_PROOFS or bridge["case_ids"] != [RETAINED_PROOFS[bridge["old_revision"]][0]] or bridge["required_zero_counters"] != [] or len(bridge["reviewed_impact"].strip()) < 80:
@@ -1768,7 +1822,7 @@ def full_verifier_source_proof(old_revision, new_revision):
     if old_revision != runner.HISTORICAL_FULL_VERIFIER_REVISION or new_revision == old_revision:
         raise ValueError("full verifier bridge must start at exact7948 VM8 source")
     old_tree, new_tree = product_tree(old_revision), product_tree(new_revision)
-    if old_tree != new_tree:raise ValueError("full verifier bridge changed product/build inputs")
+    drop_proof = owner_drop_source_proof(old_revision, new_revision) if old_tree != new_tree else None
     old_pairs = runner.fast_verifier_source_proof(old_revision)
     new_pairs = runner.fast_verifier_source_proof(new_revision)
     path = "benchmark/fs-bench-pro/src/workspace_verify.rs"
@@ -1786,7 +1840,7 @@ def full_verifier_source_proof(old_revision, new_revision):
     return {"old_revision": old_revision, "new_revision": new_revision,
         "old_verifier_sha256": runner.HISTORICAL_FULL_VERIFIER_SHA256,
         "new_verifier_sha256": expected_new,
-        "unchanged_product_tree_sha256": hashlib.sha256(json.dumps(old_tree, sort_keys=True).encode()).hexdigest(),
+        **({"unchanged_product_tree_sha256": hashlib.sha256(json.dumps(old_tree, sort_keys=True).encode()).hexdigest()} if drop_proof is None else {"original_product_tree_sha256": hashlib.sha256(json.dumps(old_tree, sort_keys=True).encode()).hexdigest(), "owner_drop_product_source_proof": drop_proof}),
         "unchanged_normative_contract_sha256": contracts,
         "fast_profile_source_proof": fast_profile_source_proof(new_revision),
         "scope": ("Only exhaustive verifier namespace lookup changes: authenticated inode index replaces repeated root resolution. Every full byte/metadata/alias/typed-census check remains required. Historical7948 product timings stay at their original source/environment; no successor timing or fast-to-full assurance claim." if new_revision in runner.HISTORICAL_FULL_VERIFIER_HASHES else "Exhaustive verifier reuses authenticated inode records and successful validation of identical immutable metadata. Every per-path inode/root/expected-metadata binding, full body, extent, alias and typed-census check remains required. Historical7948 product timings retain their actual source/environment; no fast-to-full or successor timing claim.")}
@@ -2094,9 +2148,13 @@ def generate(campaign, assets):
         if product_bridge:
             try:
                 retained_records = raw(Path(outcome["evidence_path"]) / "raw.jsonl")
-                if product_bridge["kind"] == RETAINED_PROOF_KIND:
+                if product_bridge["kind"] == OWNER_DROP_BRIDGE_KIND:
+                    predicate_scope = validate_owner_drop_records(retained_records, case, value["issues"])
+                elif product_bridge["kind"] == RETAINED_PROOF_KIND:
                     require(outcome["mode"] == "verify" and seed == 1 and Path(outcome["evidence_path"]).name == product_bridge["source_proof"]["retained_evidence_basename"], "only the exact completed proof is reusable", value["issues"])
                     predicate_scope = {"correctness": "retained independent proof with explicit state identity", "timing_claim": "none; original proof resources only"}
+                    if "owner_drop_source_proof" in product_bridge["source_proof"]:
+                        predicate_scope["owner_drop"] = validate_owner_drop_records(retained_records, case, value["issues"])
                 elif product_bridge["kind"] == CONTENT_FRONTIER_BRIDGE_KIND:
                     predicate_scope = validate_content_frontier_records(retained_records, case, product_bridge, value["issues"])
                 elif product_bridge["kind"] == SPILL_INDEX_BRIDGE_KIND:
@@ -2211,6 +2269,11 @@ def generate(campaign, assets):
         selected = selected_build(selected_builds, outcome, "fast-verify") if case else None
         if selected is None or any(outcome.get(key) != selected[value] for key, value in IDENTITY_FIELDS.items()):continue
         value = validate_fast_attempt(outcome, classifications.get(Path(outcome["evidence_path"]).name, {}), case, selected)
+        if selected["product_seal"] != build["product_seal"]:
+            bridge = matching_product_bridge(list(product_compatibility.values()), selected, build, case["scenario_id"])
+            if bridge["kind"] != OWNER_DROP_BRIDGE_KIND:raise ValueError("unqualified fast demonstration product bridge")
+            validate_owner_drop_records(raw(Path(outcome["evidence_path"]) / "raw.jsonl"), case, value["issues"])
+            value["fast_iteration_pass"] = value["fast_iteration_pass"] and not value["issues"]
         fast_results.append({"case": outcome["scenario_id"], "seed": outcome["seed"], "mode": "fast-verify", "evidence": outcome["evidence_path"],
             "source_identity": source_identity(outcome), "environment_identity": outcome.get("environment_identity"),
             "assurance_status": "fast_iteration_verified" if value["fast_iteration_pass"] else "not_verified", "counts_toward_full_phase1_gate": False,
