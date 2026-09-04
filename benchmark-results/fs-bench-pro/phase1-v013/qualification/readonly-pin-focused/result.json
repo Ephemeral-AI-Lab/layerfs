@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "cargo",
+    "test",
+    "--locked",
+    "--release",
+    "-p",
+    "layerfs-fuse",
+    "--no-default-features",
+    "--lib",
+    "proxy_client::tests::readonly_pin_waits_for_ack_and_rejects_replaced_inode",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "revision": "957b40c7b59fb932ad1e0198b68c515f20168d01",
+  "exit_code": 0,
+  "elapsed_ns": 4201403000
+}

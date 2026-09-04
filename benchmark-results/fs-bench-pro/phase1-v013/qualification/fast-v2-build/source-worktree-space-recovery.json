@@ -1,0 +1,14 @@
+[
+  {
+    "revision": "78d0f46d90744bbce729909cdf57f6eafe2eb9e6",
+    "action": "exclude duplicate tracked benchmark-results from clean source worktree; authoritative root artifacts preserved",
+    "exit": 0,
+    "stderr": ""
+  },
+  {
+    "revision": "f5d1c3036eb501d415031fb3b4b625be423c346f",
+    "action": "exclude duplicate tracked benchmark-results from clean source worktree; authoritative root artifacts preserved",
+    "exit": 0,
+    "stderr": ""
+  }
+]

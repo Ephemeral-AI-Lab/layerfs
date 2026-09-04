@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-30d13dee/fs-benchmark-pro",
+    "workspace-qualify-fast",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-fast-v2-qualification"
+  ],
+  "revision": "30d13deeec72b46ff7bc411f1ec08a46990541e1",
+  "exit_code": 0,
+  "elapsed_ns": 1734938834
+}

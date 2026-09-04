@@ -45,7 +45,66 @@ Qualification evidence is under
 `proxy-directory-fragments-recheck` and `host-cache-provenance`.
 
 
-## Current checkpoint: dense-content repair runtime-confirmed
+## Current checkpoint: 2026-09-04, read-only pin repair runtime-confirmed
+
+Phase 1 is **not terminally complete**. The latest candidate is
+`30d13deeec72b46ff7bc411f1ec08a46990541e1`, incorporating the read-only pin repair
+`957b40c7b59fb932ad1e0198b68c515f20168d01` and the expanded qualified fast verifier.
+Its sealed build and aggregate fast-verifier qualification passed. The real contention proof
+passed in `workspace-shared-path-contention-proof-s1-verify-278b3a754568`; independent
+report validation qualified all six new proofs with zero issues or violations. Original failures,
+invalidated timings and earlier source identities remain preserved.
+
+| Evidence category | Current disposition | Required next evidence |
+| --- | --- | --- |
+| Performance | 373 eligible slots had passed before the pin repair. Exactly 328 timings are retained under the reviewed operation-path/source predicate; 45 require recollection. | Recollect random-read (12), directory content-scan (9), agent episodes (12), and metadata-history (12) slots on the repaired runtime. Preserve the old 45 observations as original-source evidence. |
+| Routine verification | 48 full proofs are retained: 43 new-family and five inherited capped cases. The remaining 305 routine slots may use the authorized qualified fast profile. | Qualify the expanded implementation and collect those 305 fast proofs with independent changed-content/metadata/alias checks, authenticated references where reused, and explicit skipped-read scope. Fast results remain `fully_verified=false`. |
+| Targeted verification | 20 targeted proofs are qualified, including five source-78 recoveries and repaired contention on30d13dee. | Complete the nine remaining targeted cases; the six new independently validated receipts are sealed in `qualification/78-additional-reliability-checkpoint/`. The CDC boundary and reliability suite retain their targeted gates. |
+
+The [runtime suppression policy](phase-1-runtime-suppressions.md) keeps 14 disabled
+case definitions for Phase 2. The [fast-verification amendment](phase-1-fast-verification-amendment.md)
+and [reference assurance contract](phase-1-fast-reference-qualification.md) authorize
+routine fast acceptance; they do not turn a preparation seal into verified input,
+waive targeted error/resource/cleanup checks, or authorize relabeling skipped reads
+as exhaustive verification. The retained 600-second sustained proof is reused once.
+
+The five qualified source-78 passes are workload cancellation
+(`c7a34133754e`), dirty runtime disconnection (`2e969fd5d84f`), corrupt descendant
+(`3c8a1f12c1e2`), missing descendant (`fbe2a2784bad`), and parallel read/write
+(`2f940d084aa8`). Their attempt directories under
+`benchmark-results/fs-bench-pro/phase1-v013/attempts/` retain the original
+raw outcomes and successful supervisor cleanup receipts; the separate qualified checkpoint supplies independent validation.
+
+Two recent shared functional findings explain the current work:
+
+- **Canceled descendants were dead but unreaped.** The original cancellation
+  failure `workspace-workload-cancel-proof-s1-verify-b46498591d62` and the retained
+  diagnostic `qualification/cancel-child-diagnostic-f5d1/process-observations.json`
+  show the child becoming a zombie, adopted by daemon PID 1, and remaining past
+  the unchanged ten-second disappearance gate. Repair
+  `78d0f46d90744bbce729909cdf57f6eafe2eb9e6` reaps only the owned forcibly terminated
+  process group after collecting its direct child's exact status. Its isolated
+  Linux regression passed (`qualification/group-reap-78d0f46d/focused.json`). The
+  corrected cancellation and disconnection runs are among the independently qualified passes above. Normal successful execution does
+  not enter the new forced-group reap loop.
+- **Read-only Open acknowledged an unretained inode.** The source-78 contention
+  attempt `workspace-shared-path-contention-proof-s1-verify-56ec99b0b027` failed with
+  ENOENT after successful Open. A concurrent replacement could remove the inode
+  before the one-way read pin was processed, while Open had already succeeded.
+  Repair `957b40c7b59fb932ad1e0198b68c515f20168d01` waits for the existing backend
+  `Pin(node, false, false)` response before exposing the handle, preserving
+  read-ahead and the other branches. The focused acknowledgement/NotFound test
+  passed (`qualification/readonly-pin-focused/result.json`). Real contention
+  recovery passed and was independently qualified; the 45 affected timing slots are being recollected;
+  the change is not claimed to have equal instruction cost.
+
+All `qualification/` and `attempts/` paths above are relative to
+`benchmark-results/fs-bench-pro/phase1-v013/`. Issues #34 and #21 remain open.
+The following sections preserve earlier source-specific checkpoints, including
+now-superseded counts and next actions; they are historical records, not the current
+campaign disposition.
+
+## Historical checkpoint: 2026-09-04, d1325d7f dense-content recovery
 
 The checkpoint has **187 compatible performance passes out of 390 prescribed
 new-family seed slots**: 187 unique slots have executed successfully and 203

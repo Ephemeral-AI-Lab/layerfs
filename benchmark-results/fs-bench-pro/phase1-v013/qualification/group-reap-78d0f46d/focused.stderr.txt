@@ -1,0 +1,92 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.focused
+#1 transferring dockerfile: 1.21kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#2 DONE 3.0s
+
+#3 docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#3 resolve docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#4 DONE 1.5s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 2B done
+#5 DONE 0.0s
+
+#6 [build  1/13] FROM docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+#6 resolve docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 3.06MB 0.8s done
+#7 DONE 0.9s
+
+#8 [build  2/13] WORKDIR /src
+#8 CACHED
+
+#9 [build  3/13] COPY Cargo.toml Cargo.lock ./
+#9 CACHED
+
+#10 [build  4/13] COPY crates ./crates
+#10 DONE 0.1s
+
+#11 [build  5/13] COPY tools ./tools
+#11 DONE 0.0s
+
+#12 [build  6/13] COPY benchmark/fs-bench-pro/Cargo.toml ./benchmark/fs-bench-pro/Cargo.toml
+#12 DONE 0.0s
+
+#13 [build  7/13] COPY benchmark/fs-bench-pro/src ./benchmark/fs-bench-pro/src
+#13 DONE 0.0s
+
+#14 [build  8/13] COPY benchmark/fs-bench-pro/*.rs ./benchmark/fs-bench-pro/
+#14 DONE 0.0s
+
+#15 [build  9/13] COPY benchmark/fs-bench-pro/families ./benchmark/fs-bench-pro/families
+#15 DONE 0.0s
+
+#16 [build 10/13] COPY benchmark/fs-bench-pro/workload.rs /workload/workload.rs
+#16 DONE 0.0s
+
+#17 [build 11/13] COPY benchmark/fs-bench-pro/families /workload/families
+#17 DONE 0.0s
+
+#18 [build 12/13] COPY benchmark/fs-bench-pro/*.rs /workload/
+#18 DONE 0.0s
+
+#19 [build 13/13] RUN --mount=type=cache,target=/usr/local/cargo/registry     --mount=type=cache,target=/src/target     case "arm64" in arm64) target=aarch64-unknown-linux-gnu ;; amd64) target=x86_64-unknown-linux-gnu ;; *) exit 1 ;; esac  && cargo test --locked --release --target "$target" -p layerfs-daemon --bin layerfs-daemon linux::tests::forced_group_cleanup_reaps_descendants_without_stealing_status -- --exact --nocapture
+#19 0.149    Compiling layerfs-daemon v0.1.2 (/src/crates/layerfs-daemon)
+#19 1.467     Finished `release` profile [optimized] target(s) in 1.35s
+#19 1.469      Running unittests src/main.rs (target/aarch64-unknown-linux-gnu/release/deps/layerfs_daemon-fddafab9b353ccf5)
+#19 1.470 
+#19 1.470 running 1 test
+#19 1.578 
+#19 1.578 running 1 test
+#19 1.578 test linux::tests::forced_group_cleanup_reaps_descendants_without_stealing_status ... ok
+#19 1.578 
+#19 1.578 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.11s
+#19 1.578 
+#19 1.578 test linux::tests::forced_group_cleanup_reaps_descendants_without_stealing_status ... ok
+#19 1.578 
+#19 1.578 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.11s
+#19 1.578 
+#19 DONE 1.6s
+
+#20 exporting to image
+#20 exporting layers
+#20 exporting layers 0.2s done
+#20 exporting manifest sha256:c51bfef859bbbabeca0b30df6d02ea699b7e86f5db0aabca0056ced23164351d
+#20 exporting manifest sha256:c51bfef859bbbabeca0b30df6d02ea699b7e86f5db0aabca0056ced23164351d done
+#20 exporting config sha256:3156c337c81467f3f6e22f3b89979b7164b08979e31a6767757de70b9be9c247 done
+#20 exporting attestation manifest sha256:a0590dd6b71e239f6ea7a145d368e488be75e047ffd5871fb70e7829636a6cb3 0.0s done
+#20 exporting manifest list sha256:c333ee24ef8f938c8e02f9bc4fcbcca8322066d640b98a07e6a2705255c19433 done
+#20 naming to moby-dangling@sha256:c333ee24ef8f938c8e02f9bc4fcbcca8322066d640b98a07e6a2705255c19433 done
+#20 unpacking to moby-dangling@sha256:c333ee24ef8f938c8e02f9bc4fcbcca8322066d640b98a07e6a2705255c19433 0.1s done
+#20 DONE 0.3s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/k6wrk0gngs7fpk9w7665mr6zr

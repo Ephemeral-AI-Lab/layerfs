@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "python3",
+    "benchmark/fs-bench-pro/workspace-runner.py",
+    "--assets",
+    "benchmark-results/fs-bench-pro/phase1-v013/assets-f5d1c303",
+    "--preparation-assets",
+    "benchmark-results/fs-bench-pro/phase1-v013/assets-a40b17e0",
+    "--output",
+    "benchmark-results/fs-bench-pro/phase1-v013",
+    "--cache",
+    "target/phase1-prepared",
+    "--source-arm",
+    "corrected",
+    "--mode",
+    "verify",
+    "--family",
+    "workspace_reliability",
+    "--case",
+    "workspace-workload-cancel-proof",
+    "--seed",
+    "1",
+    "--invalidate-reason",
+    "Diagnostic replay only: capture owned child proc state after cancellation; preserve prior failed cleanup outcome"
+  ],
+  "exit_code": 1,
+  "elapsed_ns": 20473198958,
+  "scope": "Read-only sidecar process-state diagnostic during one selected failing proof; not performance evidence, no gate or workload change",
+  "observations": 43
+}
