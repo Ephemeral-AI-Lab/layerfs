@@ -1,0 +1,98 @@
+[
+  {
+    "key": "2ab3718f8c0a4a78a277e91847496b391e7e4df37d07936bc3c09864d94912c1",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "3511b9da1a4503c64abca0e8e580281378102b0d4374c9523210052a0a879485",
+    "status": "evicted"
+  },
+  {
+    "key": "d2cc5bc3f0c0bbf71bbfa6c10c677d0ac250ef0d3d866e88a586e8b0038ae3e8",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "c841fb8f779e771fd71f5cfb7c0af5c5f154862bb38b80225dc0ad070183909c",
+    "status": "evicted"
+  },
+  {
+    "key": "79e88f164219448d7a5ff7ca08d3d3a82730594dc1be62b6c5df85b6ebd3f0f3",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "962198b2e3b957ff3b4da09b066d453b640072edf7b586f9aed472874df9c75a",
+    "status": "evicted"
+  },
+  {
+    "key": "ee98e6fdfef0c45b42ea38ca478ce358d1ecc2faca21c7a02518802e3304a378",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "cdd1cab3523e18ece427c37c6a902f2f53a90ad209ed9fe36efed06b63a5115f",
+    "status": "evicted"
+  },
+  {
+    "key": "233c0d8ef6169c9a2309da81480602bca1ee325ef16b315a8d60dc7e6e38a163",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "c95b2a60584994ededee844e9b7918e55a3f99cdb610fcbd48ab433e4cd03550",
+    "status": "evicted"
+  },
+  {
+    "key": "96f135fb7dc67b67b32fd5258ccdcfd5fdf3ee1efc2207b8a53032b2170d148a",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "0b6c57e4089c59d51aeb23c9ef3ddc6e668d2d8346f9f80a021a384170c30b98",
+    "status": "evicted"
+  },
+  {
+    "key": "17cf386d0fb5f65062e07adc5aa5166ae472ce8976defca2775b4a2ddf3e9390",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "4f2d8402f7e82eed2145abe7d7cb5ba0e16f0c8104730f3a122658adb7fc43cd",
+    "status": "evicted"
+  },
+  {
+    "key": "59b1e0bdde818218aeceaa9992039dac94e90bd8ce4d17b8b3bac33d858ce190",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "aa44bafcbfe5343ed61e6c107740a97bbeb0ec1af1e48a446909be225ca80289",
+    "status": "evicted"
+  },
+  {
+    "key": "d9344e59368912a6ca2bbdbc018162bd9d5d6842a10679cb5b4f1381da5d36f3",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "ae4982ccb36f40ca3631a550713a20e6cc163a4a771141217c668bd6262a9526",
+    "status": "evicted"
+  },
+  {
+    "key": "74d330e4abe5f697a006b11c575d79adb811edb571d606a9fb31fb2aa254f4cc",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "28b11f74d6e2a9db3d2a8e4319af9b20c2a22d1a83ece397f39a2efa00fea117",
+    "status": "evicted"
+  },
+  {
+    "key": "83dffa9c9bcfd438620f69df1fe463343ec38fb5403665a321f3c86638f69254",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "3aa228a71141369a1d2581f0b6d811475966cd20e73c9d773c64f15d910e32ba",
+    "status": "evicted"
+  },
+  {
+    "key": "5d734ee6cb7dd63d56fddadcea2da0a782b9ce96012b38b388d682d2a3c33bfc",
+    "reason": "duplicate logical input: replace later scan preparation selection with retained a40 producer",
+    "retained_key": "e9aab34f001df62df95f512c9592584de11faba5654375444a7d52ef2d841c4e",
+    "status": "evicted"
+  },
+  {
+    "key": "b16086eeef72da9b355677c80102e28737244f40ad9aaf1f44f093f0944d9bb3",
+    "reason": "capacity eviction of a still-required far-future qualified input; not obsolete and not duplicate",
+    "retained_key": null,
+    "status": "evicted"
+  },
+  {
+    "key": "6b562e1ebe88e1dfa1a8f8aa6ec0a5140b275497d362d3b321518bb545947e91",
+    "reason": "capacity eviction of a still-required far-future qualified input; not obsolete and not duplicate",
+    "retained_key": null,
+    "status": "evicted"
+  },
+  {
+    "key": "6c6e9f3f4d6ad577c34c05760bd271258c770531ffd87aa52ebe876a2c62dbba",
+    "reason": "capacity eviction of a still-required far-future qualified input; not obsolete and not duplicate",
+    "retained_key": null,
+    "status": "evicted"
+  },
+  {
+    "key": "39f8e0985e1086f46011ee53b37ad5e790db567e8a3085661845591d31a49a4c",
+    "reason": "capacity eviction of a still-required far-future qualified input; not obsolete and not duplicate",
+    "retained_key": null,
+    "status": "evicted"
+  }
+]

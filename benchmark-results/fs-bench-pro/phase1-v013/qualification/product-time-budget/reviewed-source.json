@@ -1,0 +1,19 @@
+{
+  "base_commit": "6c54f8d74a8f07867c6b658da674603c4be6a7c3",
+  "files": {
+    "benchmark/fs-bench-pro/src/workspace_bench.rs": {
+      "before_sha256": "0a0df8c560928ac916aae8ce984b683f65085c344cd832fc86f9e3ffee51fcb3",
+      "after_sha256": "7467f5819a8e86e7ebd929d85d8edec8b99fdaae14c105f80f7fa8b3d6a0f47e"
+    },
+    "benchmark/fs-bench-pro/src/sdk_file_edit.rs": {
+      "before_sha256": "8cb37ded94f711c6d0a2d463ab70e76ce5d12557a7579a4bdecc78d6fc1e8e36",
+      "after_sha256": "729f4499b652f8bb39f0f90e99dcb9cc4a013650c6db1ac986a5b4283b5bdd6c"
+    }
+  },
+  "test": "cumulative_budget_keeps_prior_phases_and_exact_boundary",
+  "test_outcome": "PASS; one test; no product workload; 0.00s test runtime",
+  "timer_boundary_overhead": "One shared mutex transition at each existing clock boundary; no output, strings, per-phase thread creation or monitor allocation inside pure timing. No equivalence claim with prior monitor overhead.",
+  "active_enforcement": "One existing PhaseDeadline owner/thread per performance sample polls1ms; exact host clock plus prior completed phases must exceed15e9 before exit124. Runner persists exact-case suppression and owns necessary cleanup.",
+  "scope": "initialize/import OR create+all sdk-edit/exec/commit+visibility+end; same aggregate asserted equal to pure_call_sum_ns on successful completion; verify/proof/preparation/cleanup excluded",
+  "preparation_span_identical": true
+}

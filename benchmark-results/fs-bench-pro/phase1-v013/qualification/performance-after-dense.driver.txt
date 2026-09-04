@@ -1,0 +1,8 @@
+START remaining-locality --case workspace-dense-rewrite-100 --seed 2
+FINISH remaining-locality exit=0
+START remaining-locality --case workspace-dense-rewrite-100 --seed 3
+FINISH remaining-locality exit=0
+START remaining-locality --case workspace-dense-rewrite-500 --seed 1
+FINISH remaining-locality exit=0
+START remaining-locality --case workspace-dense-rewrite-500 --seed 2
+FINISH remaining-locality exit=1

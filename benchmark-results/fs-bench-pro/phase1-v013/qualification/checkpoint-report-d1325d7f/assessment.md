@@ -1,0 +1,9 @@
+# d132 checkpoint report and selected failure correction
+
+The combined source/selector model passed once in3.379162875s. The full retained-evidence report then completed in79.051405292s: zero global/source-map issues,190 passing performance observations, two passing required proofs, one failed performance observation and646 missing required slots. Status remains REVISE / product FAIL / terminal NO_GO. Dense500 seed3 is missing, not executed or counted as a product failure.
+
+The initial derived report omitted the HostSampler's exact `resource-failure` event from resource violations. The sealed row contains host_rss_bytes2150727680 and exit125. Report source now validates this precise event/exit/failed-outcome pairing, records the frozen2GiB violation and the observed threshold-crossing RSS metric, and recognizes the reached watchdog termination boundary. It rejects duplicate events, below-threshold values and mismatched exit status. It does not invent a final sampler peak or completed public-operation receipt.
+
+Only the affected row was revalidated after this report-only fix: `report-rss-watchdog/check.py` passed once in1.813958500s, and its complete corrected selected result is retained in `report-rss-watchdog/selected-validation.json`. The failed row remains ineligible and invalid because operation receipts were not drained before the process exited, and explicit classification/reproduction fields are still pending. Those are preserved evidence gaps; no gates were relaxed. The other192 passing validations were not repeated.
+
+The first full report and its command/result records retain their actual generator identity866be28f2e31f13ff5a4ba68c0761378fba2e5a5828ba767a4c88d9d931cbcf0. The selected correction was generated with source2c3e940a30eb441c26b8a2fcd4e183bcb7000e22d2659172bf4c107d4e205e0f and will enter the next batched full report. No product/build/preparation/benchmark execution occurred in this checkpoint work.

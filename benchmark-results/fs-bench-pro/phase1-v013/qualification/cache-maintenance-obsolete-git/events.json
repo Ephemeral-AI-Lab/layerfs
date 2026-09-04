@@ -1,0 +1,50 @@
+[
+  {
+    "key": "1233fff51c6eb6d92a8996907057257bfe26788f5ded6a8292a4e9190c69725f",
+    "reason": "Obsolete image-bound Git Store/reference plan from b8; future Git verifiers explicitly select342 preparation image. fixture_info/reference_info bind image into input_plan. Its exact recorded plan differs from all retained342 Git masters; no upcoming selected Git run uses this image/plan.",
+    "metadata_archive": "benchmark-results/fs-bench-pro/phase1-v013/qualification/cache-maintenance-obsolete-git/1233fff51c6eb6d92a8996907057257bfe26788f5ded6a8292a4e9190c69725f",
+    "status": "evicted-obsolete-derived-cache"
+  },
+  {
+    "key": "230222ce46a364110f7c11b5238f21e3c8293cf3ae7332f66390b99ad8846457",
+    "reason": "Obsolete image-bound Git Store/reference plan from b8; future Git verifiers explicitly select342 preparation image. fixture_info/reference_info bind image into input_plan. Its exact recorded plan differs from all retained342 Git masters; no upcoming selected Git run uses this image/plan.",
+    "metadata_archive": "benchmark-results/fs-bench-pro/phase1-v013/qualification/cache-maintenance-obsolete-git/230222ce46a364110f7c11b5238f21e3c8293cf3ae7332f66390b99ad8846457",
+    "status": "evicted-obsolete-derived-cache"
+  },
+  {
+    "key": "3138b3d0c5ff00ca915092ff41be258af51a30544256a3acbb8518bd6b69f310",
+    "reason": "Obsolete image-bound Git Store/reference plan from b8; future Git verifiers explicitly select342 preparation image. fixture_info/reference_info bind image into input_plan. Its exact recorded plan differs from all retained342 Git masters; no upcoming selected Git run uses this image/plan.",
+    "metadata_archive": "benchmark-results/fs-bench-pro/phase1-v013/qualification/cache-maintenance-obsolete-git/3138b3d0c5ff00ca915092ff41be258af51a30544256a3acbb8518bd6b69f310",
+    "status": "evicted-obsolete-derived-cache"
+  },
+  {
+    "key": "64c142c3fce7ed45fc3e7becb8281d77456ff7e7d1280fb027fd2e3e8ff51fe5",
+    "reason": "Obsolete image-bound Git Store/reference plan from b8; future Git verifiers explicitly select342 preparation image. fixture_info/reference_info bind image into input_plan. Its exact recorded plan differs from all retained342 Git masters; no upcoming selected Git run uses this image/plan.",
+    "metadata_archive": "benchmark-results/fs-bench-pro/phase1-v013/qualification/cache-maintenance-obsolete-git/64c142c3fce7ed45fc3e7becb8281d77456ff7e7d1280fb027fd2e3e8ff51fe5",
+    "status": "evicted-obsolete-derived-cache"
+  },
+  {
+    "key": "6975c0d9651bd25b51d9c21eaaeb09fb1254e63c13c5cd660223e010522b6267",
+    "reason": "Obsolete image-bound Git Store/reference plan from b8; future Git verifiers explicitly select342 preparation image. fixture_info/reference_info bind image into input_plan. Its exact recorded plan differs from all retained342 Git masters; no upcoming selected Git run uses this image/plan.",
+    "metadata_archive": "benchmark-results/fs-bench-pro/phase1-v013/qualification/cache-maintenance-obsolete-git/6975c0d9651bd25b51d9c21eaaeb09fb1254e63c13c5cd660223e010522b6267",
+    "status": "evicted-obsolete-derived-cache"
+  },
+  {
+    "key": "7ea14165f8a8f854dcf6c4f175e55d0a26a2b92bfbb5742f5d8d4bca3feb7cbf",
+    "reason": "Obsolete image-bound Git Store/reference plan from b8; future Git verifiers explicitly select342 preparation image. fixture_info/reference_info bind image into input_plan. Its exact recorded plan differs from all retained342 Git masters; no upcoming selected Git run uses this image/plan.",
+    "metadata_archive": "benchmark-results/fs-bench-pro/phase1-v013/qualification/cache-maintenance-obsolete-git/7ea14165f8a8f854dcf6c4f175e55d0a26a2b92bfbb5742f5d8d4bca3feb7cbf",
+    "status": "evicted-obsolete-derived-cache"
+  },
+  {
+    "key": "a1686715cd95083dc850aa00406b68ba9f383fc3653ca7dd19209e42d529556b",
+    "reason": "Obsolete image-bound Git Store/reference plan from b8; future Git verifiers explicitly select342 preparation image. fixture_info/reference_info bind image into input_plan. Its exact recorded plan differs from all retained342 Git masters; no upcoming selected Git run uses this image/plan.",
+    "metadata_archive": "benchmark-results/fs-bench-pro/phase1-v013/qualification/cache-maintenance-obsolete-git/a1686715cd95083dc850aa00406b68ba9f383fc3653ca7dd19209e42d529556b",
+    "status": "evicted-obsolete-derived-cache"
+  },
+  {
+    "key": "bef6b0e6fcee56a0d792a48b3822aabbcc14e00b7f4309abd65842251b572fe2",
+    "reason": "Obsolete image-bound Git Store/reference plan from b8; future Git verifiers explicitly select342 preparation image. fixture_info/reference_info bind image into input_plan. Its exact recorded plan differs from all retained342 Git masters; no upcoming selected Git run uses this image/plan.",
+    "metadata_archive": "benchmark-results/fs-bench-pro/phase1-v013/qualification/cache-maintenance-obsolete-git/bef6b0e6fcee56a0d792a48b3822aabbcc14e00b7f4309abd65842251b572fe2",
+    "status": "evicted-obsolete-derived-cache"
+  }
+]

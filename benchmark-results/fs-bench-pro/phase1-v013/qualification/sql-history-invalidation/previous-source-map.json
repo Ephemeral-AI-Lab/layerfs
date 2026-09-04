@@ -1,0 +1,969 @@
+{
+  "product_compatibility": [
+    {
+      "case_ids": [
+        "directory-construct-1",
+        "directory-construct-10",
+        "directory-construct-100",
+        "directory-construct-500",
+        "directory-content-scan-1",
+        "directory-content-scan-10",
+        "directory-content-scan-100",
+        "directory-content-scan-500",
+        "directory-metadata-scan-1",
+        "directory-metadata-scan-10",
+        "directory-metadata-scan-100",
+        "directory-metadata-scan-500",
+        "payload-create-100m",
+        "payload-create-10m",
+        "payload-create-1m",
+        "payload-create-500m",
+        "payload-random-read-1",
+        "payload-random-read-10",
+        "payload-random-read-100",
+        "payload-random-read-500",
+        "tiny-bulk-create-1",
+        "tiny-bulk-create-10",
+        "tiny-bulk-create-100",
+        "tiny-bulk-create-500",
+        "tiny-create-1",
+        "tiny-create-10",
+        "tiny-create-100",
+        "tiny-create-500",
+        "tiny-stat-1",
+        "tiny-stat-10",
+        "tiny-stat-100",
+        "tiny-stat-500"
+      ],
+      "kind": "bounded-content-frontier-source-baseline-v1",
+      "new_product_seal": "dd0b2e19da1b391a1279187355f5c2d299e55b7c43a0d637a6ba3961f5113049",
+      "new_revision": "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c",
+      "old_product_seal": "e24867af45d83c455dbfac530d43140fec7cdc40d3eae9ff70a30883d239125a",
+      "old_revision": "fbf32e84662d00993c033515e113437965395494",
+      "required_zero_counters": [
+        "callback_unlink",
+        "callback_rmdir"
+      ],
+      "reviewed_impact": "Coordinator-reviewed exact rebase node-lifetime source pair: lifecycle.rs is pinned and every other d132 product input is unchanged. The original Workspace remains intact during validation; fresh non-directory values move into the final node map, with the same original NodeIds, paths, canonical identities, aliases, pin counts, metadata and retained orphan spools. Only temporary copies and cache lifetimes change. Existing source chains and observed predicates remain mandatory. Old timing/resource evidence stays at its original source; new rebase allocation/instruction cost is unmeasured. Dense500 verification for every seed must run the repaired current product, including seed1 whose original timing is retained. Earlier compatible proofs preserve logical state identity, not current memory-cost claims.",
+      "source_proof": {
+        "new_rebase_allocation_and_instruction_cost": "not-measured-by-retained-observations",
+        "performance_claim_scope": "original-producing-source-only",
+        "prior_content_frontier_proof": {
+          "changed_path": "crates/layerfs-workspace/src/changes.rs",
+          "new_planner_instruction_cost": "not-measured-by-retained-observations",
+          "performance_claim_scope": "original-producing-source-only",
+          "prior_spill_index_proof": {
+            "changed_path": "crates/layerfs-layerstack-store/src/objects.rs",
+            "new_index_resource_and_instruction_cost": "not-measured-by-retained-observations",
+            "performance_claim_scope": "original-producing-source-only",
+            "prior_predicate_proof": {
+              "cfg_test_module_sha256": {
+                "e7840da1da81404ff228be734a91783cebb946ca": "af1348928f85898a3425392474e4f89f8083884fde9b38b18419423963aba8a2",
+                "fbf32e84662d00993c033515e113437965395494": "3e2ce3305677d21f2610efaf3c020a423c04d461bb5ed85c4c258059752e78fb"
+              },
+              "changed_runtime_paths": [
+                "crates/layerfs-fuse/src/proxy_client.rs",
+                "crates/layerfs-workspace/src/file_io.rs"
+              ],
+              "install_edit_file_sha256": {
+                "e7840da1da81404ff228be734a91783cebb946ca": "eb744b70a156dedfa050a0ae0ed42aa2ddcb5ef6f90437ee2f15329909abe2e3",
+                "fbf32e84662d00993c033515e113437965395494": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281"
+              },
+              "install_edit_transform": "exact-prefix-predicate-and-conditional-edit-counter-v1",
+              "integration_test_only": {
+                "path": "crates/layerfs-workspace/tests/file_edit.rs",
+                "sha256": {
+                  "e7840da1da81404ff228be734a91783cebb946ca": "3c537b2a748475e86181f9268b6fdbd3080076e85905666d77b927ae116afdae",
+                  "fbf32e84662d00993c033515e113437965395494": "3be583a592141d8b01054d6fa7e7d8e159d5bd80b6754223462e25e42ad5c565"
+                }
+              },
+              "new_guard_instruction_cost": "not-measured-by-retained-timings",
+              "normalized_proxy_sha256": "be79d14a042d172502041dd5fa6dc152ee6a94453b1e8cc1555dc6e45fde8758",
+              "performance_claim_scope": "original-producing-source-only",
+              "restored_installer_file_sha256": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
+              "unchanged_product_tree_sha256": "ebdcddeaf853a4f255216192f449f778d58739d13da3c3d42cd8abf0675a36e2",
+              "unlink_body_sha256": {
+                "e7840da1da81404ff228be734a91783cebb946ca": "5b1abfc4532e0a45d195f30138248a0fb91cd4e379fd39b769250fbc00a730ae",
+                "fbf32e84662d00993c033515e113437965395494": "75ce985451c13f7ded3dd59388fc540924200497ff7046ac6023d45df711e6b9"
+              },
+              "workload_predicate_source": {
+                "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+                "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+                "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+                "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+                "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+                "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+                "benchmark/fs-bench-pro/workspace_registry.rs": {
+                  "comparison": "exclude-sample_resources-body-v1",
+                  "function_sha256": {
+                    "e7840da1da81404ff228be734a91783cebb946ca": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+                    "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
+                  },
+                  "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
+                }
+              }
+            },
+            "qualification_test": "objects::tests::spill_index_overflow_preserves_lookup_dedup_and_cleanup_without_scans",
+            "reviewed_source_sha256": {
+              "a40b17e05486e5b747b689e7710475d739556a69": "4b07eb03a2e6ddfe926a2c5fa621db462c659ff1ee164e41ec3b90cb871df9c8",
+              "e7840da1da81404ff228be734a91783cebb946ca": "1e88000d97560d5d9d8afdaaf379144cfd859133897650f357c8299a19b3aa32"
+            },
+            "state_compatibility": "derived-offset-index-preserves-canonical-byte-and-collision-results",
+            "unchanged_product_tree_sha256": "6e018662629153e65da07c62b53d665a7c26e0e506c7285b1d1233776230328d",
+            "unchanged_workload_paths": {
+              "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+              "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+              "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+              "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+              "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+              "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+              "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+              "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+              "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+              "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+              "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+            }
+          },
+          "qualification_test": "changes::tests::dense_existing_file_delta_uses_bounded_frontier_and_preserves_aliases",
+          "reviewed_source_sha256": {
+            "a40b17e05486e5b747b689e7710475d739556a69": "65d3914cda565ee333832b6da83c1246a0d59dc24ac06e5f859672d4a8378563",
+            "d1325d7f44ef205f5fa748130f3b9868973e9edc": "ea0e3a21653baaaecf35a5d9bfa59da2f33485a003b0a026936fba3f203c08a7"
+          },
+          "state_compatibility": "structural-frontier-clean-or-fitting-content-plan-results-preserved",
+          "unchanged_product_tree_sha256": "4deeb44b854963b0876abb9176a79311b34392017238b8506b6dca297e84df0b",
+          "unchanged_workload_paths": {
+            "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+            "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+            "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+            "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+            "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+            "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+            "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+            "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+            "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+            "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+            "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+            "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+          }
+        },
+        "qualification_test": "lifecycle::tests::rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools",
+        "rebase_lifetime_source": {
+          "path": "crates/layerfs-workspace/src/lifecycle.rs",
+          "reviewed_source_sha256": {
+            "d1325d7f44ef205f5fa748130f3b9868973e9edc": "aa14df244edb8aed1c4cb5cff94ed1fa530cf2610785d89e559c2a67735292f8",
+            "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c": "91e65bf1ab13f452a15dab7e6934e1256a39f508a39efbc0b2a00c718ad0c2ac"
+          }
+        },
+        "state_compatibility": "same-live-nodes-canonical-identity-aliases-pins-and-spool-state",
+        "unchanged_product_tree_sha256": "305fa8cf62c06c08e5ccd9dc2d8164cf409cf729d5bb4bad4df5344b7b52b813",
+        "unchanged_workload_paths": {
+          "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+          "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+          "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+          "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+          "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+          "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+          "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+          "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+          "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+          "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+          "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+          "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+        }
+      }
+    },
+    {
+      "case_ids": [
+        "tiny-stat-1"
+      ],
+      "kind": "bounded-content-frontier-source-baseline-v1",
+      "new_product_seal": "dd0b2e19da1b391a1279187355f5c2d299e55b7c43a0d637a6ba3961f5113049",
+      "new_revision": "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c",
+      "old_product_seal": "e24867af45d83c455dbfac530d43140fec7cdc40d3eae9ff70a30883d239125a",
+      "old_revision": "b8c2ad4bf4fa0415fd49d57abea15729b33a4284",
+      "required_zero_counters": [
+        "callback_unlink",
+        "callback_rmdir"
+      ],
+      "reviewed_impact": "Coordinator-reviewed exact rebase node-lifetime source pair: lifecycle.rs is pinned and every other d132 product input is unchanged. The original Workspace remains intact during validation; fresh non-directory values move into the final node map, with the same original NodeIds, paths, canonical identities, aliases, pin counts, metadata and retained orphan spools. Only temporary copies and cache lifetimes change. Existing source chains and observed predicates remain mandatory. Old timing/resource evidence stays at its original source; new rebase allocation/instruction cost is unmeasured. Dense500 verification for every seed must run the repaired current product, including seed1 whose original timing is retained. Earlier compatible proofs preserve logical state identity, not current memory-cost claims.",
+      "source_proof": {
+        "new_rebase_allocation_and_instruction_cost": "not-measured-by-retained-observations",
+        "performance_claim_scope": "original-producing-source-only",
+        "prior_content_frontier_proof": {
+          "changed_path": "crates/layerfs-workspace/src/changes.rs",
+          "new_planner_instruction_cost": "not-measured-by-retained-observations",
+          "performance_claim_scope": "original-producing-source-only",
+          "prior_spill_index_proof": {
+            "changed_path": "crates/layerfs-layerstack-store/src/objects.rs",
+            "new_index_resource_and_instruction_cost": "not-measured-by-retained-observations",
+            "performance_claim_scope": "original-producing-source-only",
+            "prior_predicate_proof": {
+              "cfg_test_module_sha256": {
+                "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "3e2ce3305677d21f2610efaf3c020a423c04d461bb5ed85c4c258059752e78fb",
+                "e7840da1da81404ff228be734a91783cebb946ca": "af1348928f85898a3425392474e4f89f8083884fde9b38b18419423963aba8a2"
+              },
+              "changed_runtime_paths": [
+                "crates/layerfs-fuse/src/proxy_client.rs",
+                "crates/layerfs-workspace/src/file_io.rs"
+              ],
+              "install_edit_file_sha256": {
+                "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
+                "e7840da1da81404ff228be734a91783cebb946ca": "eb744b70a156dedfa050a0ae0ed42aa2ddcb5ef6f90437ee2f15329909abe2e3"
+              },
+              "install_edit_transform": "exact-prefix-predicate-and-conditional-edit-counter-v1",
+              "integration_test_only": {
+                "path": "crates/layerfs-workspace/tests/file_edit.rs",
+                "sha256": {
+                  "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "3be583a592141d8b01054d6fa7e7d8e159d5bd80b6754223462e25e42ad5c565",
+                  "e7840da1da81404ff228be734a91783cebb946ca": "3c537b2a748475e86181f9268b6fdbd3080076e85905666d77b927ae116afdae"
+                }
+              },
+              "new_guard_instruction_cost": "not-measured-by-retained-timings",
+              "normalized_proxy_sha256": "be79d14a042d172502041dd5fa6dc152ee6a94453b1e8cc1555dc6e45fde8758",
+              "performance_claim_scope": "original-producing-source-only",
+              "restored_installer_file_sha256": "7d36abbd403923db5c1346981ee3cc585ff8efcddcc0015ad912c009b0929281",
+              "unchanged_product_tree_sha256": "ebdcddeaf853a4f255216192f449f778d58739d13da3c3d42cd8abf0675a36e2",
+              "unlink_body_sha256": {
+                "b8c2ad4bf4fa0415fd49d57abea15729b33a4284": "75ce985451c13f7ded3dd59388fc540924200497ff7046ac6023d45df711e6b9",
+                "e7840da1da81404ff228be734a91783cebb946ca": "5b1abfc4532e0a45d195f30138248a0fb91cd4e379fd39b769250fbc00a730ae"
+              },
+              "workload_predicate_source": {
+                "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+                "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+                "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+                "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+                "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+                "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+                "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+              }
+            },
+            "qualification_test": "objects::tests::spill_index_overflow_preserves_lookup_dedup_and_cleanup_without_scans",
+            "reviewed_source_sha256": {
+              "a40b17e05486e5b747b689e7710475d739556a69": "4b07eb03a2e6ddfe926a2c5fa621db462c659ff1ee164e41ec3b90cb871df9c8",
+              "e7840da1da81404ff228be734a91783cebb946ca": "1e88000d97560d5d9d8afdaaf379144cfd859133897650f357c8299a19b3aa32"
+            },
+            "state_compatibility": "derived-offset-index-preserves-canonical-byte-and-collision-results",
+            "unchanged_product_tree_sha256": "6e018662629153e65da07c62b53d665a7c26e0e506c7285b1d1233776230328d",
+            "unchanged_workload_paths": {
+              "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+              "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+              "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+              "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+              "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+              "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+              "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+              "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+              "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+              "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+              "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+            }
+          },
+          "qualification_test": "changes::tests::dense_existing_file_delta_uses_bounded_frontier_and_preserves_aliases",
+          "reviewed_source_sha256": {
+            "a40b17e05486e5b747b689e7710475d739556a69": "65d3914cda565ee333832b6da83c1246a0d59dc24ac06e5f859672d4a8378563",
+            "d1325d7f44ef205f5fa748130f3b9868973e9edc": "ea0e3a21653baaaecf35a5d9bfa59da2f33485a003b0a026936fba3f203c08a7"
+          },
+          "state_compatibility": "structural-frontier-clean-or-fitting-content-plan-results-preserved",
+          "unchanged_product_tree_sha256": "4deeb44b854963b0876abb9176a79311b34392017238b8506b6dca297e84df0b",
+          "unchanged_workload_paths": {
+            "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+            "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+            "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+            "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+            "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+            "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+            "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+            "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+            "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+            "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+            "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+            "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+          }
+        },
+        "qualification_test": "lifecycle::tests::rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools",
+        "rebase_lifetime_source": {
+          "path": "crates/layerfs-workspace/src/lifecycle.rs",
+          "reviewed_source_sha256": {
+            "d1325d7f44ef205f5fa748130f3b9868973e9edc": "aa14df244edb8aed1c4cb5cff94ed1fa530cf2610785d89e559c2a67735292f8",
+            "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c": "91e65bf1ab13f452a15dab7e6934e1256a39f508a39efbc0b2a00c718ad0c2ac"
+          }
+        },
+        "state_compatibility": "same-live-nodes-canonical-identity-aliases-pins-and-spool-state",
+        "unchanged_product_tree_sha256": "305fa8cf62c06c08e5ccd9dc2d8164cf409cf729d5bb4bad4df5344b7b52b813",
+        "unchanged_workload_paths": {
+          "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+          "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+          "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+          "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+          "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+          "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+          "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+          "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+          "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+          "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+          "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+          "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+        }
+      }
+    },
+    {
+      "case_ids": [
+        "directory-construct-1",
+        "directory-construct-10",
+        "directory-construct-100",
+        "directory-construct-500",
+        "directory-content-scan-1",
+        "directory-content-scan-10",
+        "directory-content-scan-100",
+        "directory-content-scan-500",
+        "directory-metadata-scan-1",
+        "directory-metadata-scan-10",
+        "directory-metadata-scan-100",
+        "directory-metadata-scan-500",
+        "git-tool-1",
+        "git-tool-10",
+        "git-tool-100",
+        "git-tool-500",
+        "namespace-subtree-relocate-delete-1",
+        "namespace-subtree-relocate-delete-10",
+        "namespace-subtree-relocate-delete-100",
+        "payload-create-100m",
+        "payload-create-10m",
+        "payload-create-1m",
+        "payload-create-500m",
+        "payload-random-read-1",
+        "payload-random-read-10",
+        "payload-random-read-100",
+        "payload-random-read-500",
+        "tiny-bulk-create-1",
+        "tiny-bulk-create-10",
+        "tiny-bulk-create-100",
+        "tiny-bulk-create-500",
+        "tiny-bulk-delete-1",
+        "tiny-bulk-delete-10",
+        "tiny-bulk-delete-100",
+        "tiny-bulk-delete-500",
+        "tiny-create-1",
+        "tiny-create-10",
+        "tiny-create-100",
+        "tiny-create-500",
+        "tiny-stat-1",
+        "tiny-stat-10",
+        "tiny-stat-100",
+        "tiny-stat-500",
+        "tiny-unlink-1",
+        "tiny-unlink-10",
+        "tiny-unlink-100",
+        "tiny-unlink-500",
+        "workspace-sustained-600s-proof"
+      ],
+      "kind": "bounded-content-frontier-source-baseline-v1",
+      "new_product_seal": "dd0b2e19da1b391a1279187355f5c2d299e55b7c43a0d637a6ba3961f5113049",
+      "new_revision": "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c",
+      "old_product_seal": "733b90b4dcf879abefed090cdfd2802d05d925d2f8805e4352bc294b4110a1c6",
+      "old_revision": "e7840da1da81404ff228be734a91783cebb946ca",
+      "required_zero_counters": [],
+      "reviewed_impact": "Coordinator-reviewed exact rebase node-lifetime source pair: lifecycle.rs is pinned and every other d132 product input is unchanged. The original Workspace remains intact during validation; fresh non-directory values move into the final node map, with the same original NodeIds, paths, canonical identities, aliases, pin counts, metadata and retained orphan spools. Only temporary copies and cache lifetimes change. Existing source chains and observed predicates remain mandatory. Old timing/resource evidence stays at its original source; new rebase allocation/instruction cost is unmeasured. Dense500 verification for every seed must run the repaired current product, including seed1 whose original timing is retained. Earlier compatible proofs preserve logical state identity, not current memory-cost claims.",
+      "source_proof": {
+        "new_rebase_allocation_and_instruction_cost": "not-measured-by-retained-observations",
+        "performance_claim_scope": "original-producing-source-only",
+        "prior_content_frontier_proof": {
+          "changed_path": "crates/layerfs-workspace/src/changes.rs",
+          "new_planner_instruction_cost": "not-measured-by-retained-observations",
+          "performance_claim_scope": "original-producing-source-only",
+          "prior_spill_index_proof": {
+            "changed_path": "crates/layerfs-layerstack-store/src/objects.rs",
+            "new_index_resource_and_instruction_cost": "not-measured-by-retained-observations",
+            "performance_claim_scope": "original-producing-source-only",
+            "prior_predicate_proof": null,
+            "qualification_test": "objects::tests::spill_index_overflow_preserves_lookup_dedup_and_cleanup_without_scans",
+            "reviewed_source_sha256": {
+              "a40b17e05486e5b747b689e7710475d739556a69": "4b07eb03a2e6ddfe926a2c5fa621db462c659ff1ee164e41ec3b90cb871df9c8",
+              "e7840da1da81404ff228be734a91783cebb946ca": "1e88000d97560d5d9d8afdaaf379144cfd859133897650f357c8299a19b3aa32"
+            },
+            "state_compatibility": "derived-offset-index-preserves-canonical-byte-and-collision-results",
+            "unchanged_product_tree_sha256": "6e018662629153e65da07c62b53d665a7c26e0e506c7285b1d1233776230328d",
+            "unchanged_workload_paths": {
+              "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+              "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+              "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+              "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+              "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+              "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+              "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+              "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+              "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+              "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+              "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+            }
+          },
+          "qualification_test": "changes::tests::dense_existing_file_delta_uses_bounded_frontier_and_preserves_aliases",
+          "reviewed_source_sha256": {
+            "a40b17e05486e5b747b689e7710475d739556a69": "65d3914cda565ee333832b6da83c1246a0d59dc24ac06e5f859672d4a8378563",
+            "d1325d7f44ef205f5fa748130f3b9868973e9edc": "ea0e3a21653baaaecf35a5d9bfa59da2f33485a003b0a026936fba3f203c08a7"
+          },
+          "state_compatibility": "structural-frontier-clean-or-fitting-content-plan-results-preserved",
+          "unchanged_product_tree_sha256": "4deeb44b854963b0876abb9176a79311b34392017238b8506b6dca297e84df0b",
+          "unchanged_workload_paths": {
+            "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+            "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+            "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+            "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+            "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+            "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+            "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+            "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+            "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+            "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+            "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+            "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+          }
+        },
+        "qualification_test": "lifecycle::tests::rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools",
+        "rebase_lifetime_source": {
+          "path": "crates/layerfs-workspace/src/lifecycle.rs",
+          "reviewed_source_sha256": {
+            "d1325d7f44ef205f5fa748130f3b9868973e9edc": "aa14df244edb8aed1c4cb5cff94ed1fa530cf2610785d89e559c2a67735292f8",
+            "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c": "91e65bf1ab13f452a15dab7e6934e1256a39f508a39efbc0b2a00c718ad0c2ac"
+          }
+        },
+        "state_compatibility": "same-live-nodes-canonical-identity-aliases-pins-and-spool-state",
+        "unchanged_product_tree_sha256": "305fa8cf62c06c08e5ccd9dc2d8164cf409cf729d5bb4bad4df5344b7b52b813",
+        "unchanged_workload_paths": {
+          "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+          "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+          "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+          "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+          "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+          "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+          "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+          "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+          "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+          "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+          "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+          "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+        }
+      }
+    },
+    {
+      "case_ids": [
+        "namespace-subtree-relocate-delete-500",
+        "workspace-clean-commit-1",
+        "workspace-clean-commit-10",
+        "workspace-clean-commit-100",
+        "workspace-clean-commit-500",
+        "workspace-dense-rewrite-1",
+        "workspace-dense-rewrite-10",
+        "workspace-distributed-sdk-edit-1",
+        "workspace-distributed-sdk-edit-10",
+        "workspace-distributed-sdk-edit-100",
+        "workspace-distributed-sdk-edit-500",
+        "workspace-fixed-move-1",
+        "workspace-fixed-move-10",
+        "workspace-fixed-move-100",
+        "workspace-fixed-move-500"
+      ],
+      "kind": "bounded-content-frontier-source-baseline-v1",
+      "new_product_seal": "dd0b2e19da1b391a1279187355f5c2d299e55b7c43a0d637a6ba3961f5113049",
+      "new_revision": "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c",
+      "old_product_seal": "e8188680e2696b16513483358542e0b14f35c10c709d4b1e9e1f93b995192a48",
+      "old_revision": "a40b17e05486e5b747b689e7710475d739556a69",
+      "required_zero_counters": [],
+      "reviewed_impact": "Coordinator-reviewed exact rebase node-lifetime source pair: lifecycle.rs is pinned and every other d132 product input is unchanged. The original Workspace remains intact during validation; fresh non-directory values move into the final node map, with the same original NodeIds, paths, canonical identities, aliases, pin counts, metadata and retained orphan spools. Only temporary copies and cache lifetimes change. Existing source chains and observed predicates remain mandatory. Old timing/resource evidence stays at its original source; new rebase allocation/instruction cost is unmeasured. Dense500 verification for every seed must run the repaired current product, including seed1 whose original timing is retained. Earlier compatible proofs preserve logical state identity, not current memory-cost claims.",
+      "source_proof": {
+        "new_rebase_allocation_and_instruction_cost": "not-measured-by-retained-observations",
+        "performance_claim_scope": "original-producing-source-only",
+        "prior_content_frontier_proof": {
+          "changed_path": "crates/layerfs-workspace/src/changes.rs",
+          "new_planner_instruction_cost": "not-measured-by-retained-observations",
+          "performance_claim_scope": "original-producing-source-only",
+          "prior_spill_index_proof": null,
+          "qualification_test": "changes::tests::dense_existing_file_delta_uses_bounded_frontier_and_preserves_aliases",
+          "reviewed_source_sha256": {
+            "a40b17e05486e5b747b689e7710475d739556a69": "65d3914cda565ee333832b6da83c1246a0d59dc24ac06e5f859672d4a8378563",
+            "d1325d7f44ef205f5fa748130f3b9868973e9edc": "ea0e3a21653baaaecf35a5d9bfa59da2f33485a003b0a026936fba3f203c08a7"
+          },
+          "state_compatibility": "structural-frontier-clean-or-fitting-content-plan-results-preserved",
+          "unchanged_product_tree_sha256": "4deeb44b854963b0876abb9176a79311b34392017238b8506b6dca297e84df0b",
+          "unchanged_workload_paths": {
+            "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+            "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+            "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+            "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+            "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+            "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+            "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+            "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+            "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+            "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+            "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+            "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+          }
+        },
+        "qualification_test": "lifecycle::tests::rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools",
+        "rebase_lifetime_source": {
+          "path": "crates/layerfs-workspace/src/lifecycle.rs",
+          "reviewed_source_sha256": {
+            "d1325d7f44ef205f5fa748130f3b9868973e9edc": "aa14df244edb8aed1c4cb5cff94ed1fa530cf2610785d89e559c2a67735292f8",
+            "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c": "91e65bf1ab13f452a15dab7e6934e1256a39f508a39efbc0b2a00c718ad0c2ac"
+          }
+        },
+        "state_compatibility": "same-live-nodes-canonical-identity-aliases-pins-and-spool-state",
+        "unchanged_product_tree_sha256": "305fa8cf62c06c08e5ccd9dc2d8164cf409cf729d5bb4bad4df5344b7b52b813",
+        "unchanged_workload_paths": {
+          "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+          "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+          "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+          "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+          "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+          "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+          "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+          "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+          "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+          "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+          "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+          "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+        }
+      }
+    },
+    {
+      "case_ids": [
+        "workspace-dense-rewrite-100",
+        "workspace-dense-rewrite-500"
+      ],
+      "kind": "bounded-content-frontier-source-baseline-v1",
+      "new_product_seal": "dd0b2e19da1b391a1279187355f5c2d299e55b7c43a0d637a6ba3961f5113049",
+      "new_revision": "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c",
+      "old_product_seal": "36d141f4ae58dfcf354e321fb9eb329bfc58aa3ea64bd915cd7c1d46abb87654",
+      "old_revision": "d1325d7f44ef205f5fa748130f3b9868973e9edc",
+      "required_zero_counters": [],
+      "reviewed_impact": "Coordinator-reviewed exact rebase node-lifetime source pair: lifecycle.rs is pinned and every other d132 product input is unchanged. The original Workspace remains intact during validation; fresh non-directory values move into the final node map, with the same original NodeIds, paths, canonical identities, aliases, pin counts, metadata and retained orphan spools. Only temporary copies and cache lifetimes change. Existing source chains and observed predicates remain mandatory. Old timing/resource evidence stays at its original source; new rebase allocation/instruction cost is unmeasured. Dense500 verification for every seed must run the repaired current product, including seed1 whose original timing is retained. Earlier compatible proofs preserve logical state identity, not current memory-cost claims.",
+      "source_proof": {
+        "new_rebase_allocation_and_instruction_cost": "not-measured-by-retained-observations",
+        "performance_claim_scope": "original-producing-source-only",
+        "prior_content_frontier_proof": null,
+        "qualification_test": "lifecycle::tests::rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools",
+        "rebase_lifetime_source": {
+          "path": "crates/layerfs-workspace/src/lifecycle.rs",
+          "reviewed_source_sha256": {
+            "d1325d7f44ef205f5fa748130f3b9868973e9edc": "aa14df244edb8aed1c4cb5cff94ed1fa530cf2610785d89e559c2a67735292f8",
+            "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c": "91e65bf1ab13f452a15dab7e6934e1256a39f508a39efbc0b2a00c718ad0c2ac"
+          }
+        },
+        "state_compatibility": "same-live-nodes-canonical-identity-aliases-pins-and-spool-state",
+        "unchanged_product_tree_sha256": "305fa8cf62c06c08e5ccd9dc2d8164cf409cf729d5bb4bad4df5344b7b52b813",
+        "unchanged_workload_paths": {
+          "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+          "benchmark/fs-bench-pro/families/git_tool_workflow.rs": "32c48833fee61b6ef31babbd8f7b8c63ce95125cdb48063c079ca851fe65b7df",
+          "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+          "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+          "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+          "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+          "benchmark/fs-bench-pro/families/workspace_reliability.rs": "a7fdaadfcfa077bafd513f1b4443ac5a782682cc2f0f98dc091748bad60c7eb9",
+          "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+          "benchmark/fs-bench-pro/reliability_workloads.rs": "d174ce0069e390db7b69e9c9472fd21c95629ef9fa6bde08cd974f4177d6ea68",
+          "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+          "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+          "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+        }
+      }
+    }
+  ],
+  "schema": "fs-bench-pro-scoped-builds-v1",
+  "selections": {
+    "case:git-tool-100:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:git-tool-10:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:git-tool-1:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:git-tool-500:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:namespace-subtree-relocate-delete-100:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:namespace-subtree-relocate-delete-100:verify": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Run this independent proof on authentic e784 runtime with --preparation-assets assets-34224330 to reuse already-qualified inputs and preserve exact producer provenance. Git image-bound Store/reference plans then match its performance input exactly. The exact product source bridge preserves semantic scope; do not claim d132 timing or resource measurement."
+    },
+    "case:namespace-subtree-relocate-delete-10:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:namespace-subtree-relocate-delete-10:verify": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Run this independent proof on authentic e784 runtime with --preparation-assets assets-34224330 to reuse already-qualified inputs and preserve exact producer provenance. Git image-bound Store/reference plans then match its performance input exactly. The exact product source bridge preserves semantic scope; do not claim d132 timing or resource measurement."
+    },
+    "case:namespace-subtree-relocate-delete-1:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:namespace-subtree-relocate-delete-1:verify": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Run this independent proof on authentic e784 runtime with --preparation-assets assets-34224330 to reuse already-qualified inputs and preserve exact producer provenance. Git image-bound Store/reference plans then match its performance input exactly. The exact product source bridge preserves semantic scope; do not claim d132 timing or resource measurement."
+    },
+    "case:namespace-subtree-relocate-delete-500:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:tiny-bulk-create-100:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-bulk-create-10:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-bulk-create-1:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-bulk-create-500:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-bulk-delete-100:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:tiny-bulk-delete-10:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:tiny-bulk-delete-1:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:tiny-bulk-delete-500:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:tiny-create-100:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-create-10:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-create-1:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-create-500:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-stat-100:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-stat-10:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-stat-1:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-stat-500:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "case:tiny-unlink-100:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:tiny-unlink-10:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:tiny-unlink-1:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:tiny-unlink-500:performance": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    },
+    "case:workspace-clean-commit-100:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-clean-commit-10:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-clean-commit-1:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-clean-commit-500:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-dense-rewrite-100:performance": {
+      "assets": "assets-d1325d7f",
+      "build_manifest_sha256": "534441a9ae201d685d71e0233c26e389fa354a716c74f2aebd3016bd53400da7",
+      "reason": "Coordinator-reviewed exact rebase node-lifetime source pair: lifecycle.rs is pinned and every other d132 product input is unchanged. The original Workspace remains intact during validation; fresh non-directory values move into the final node map, with the same original NodeIds, paths, canonical identities, aliases, pin counts, metadata and retained orphan spools. Only temporary copies and cache lifetimes change. Existing source chains and observed predicates remain mandatory. Old timing/resource evidence stays at its original source; new rebase allocation/instruction cost is unmeasured. Dense500 verification for every seed must run the repaired current product, including seed1 whose original timing is retained. Earlier compatible proofs preserve logical state identity, not current memory-cost claims."
+    },
+    "case:workspace-dense-rewrite-10:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-dense-rewrite-1:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-distributed-sdk-edit-100:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-distributed-sdk-edit-10:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-distributed-sdk-edit-1:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-distributed-sdk-edit-500:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-fixed-move-100:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-fixed-move-10:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-fixed-move-1:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "case:workspace-fixed-move-500:performance": {
+      "assets": "assets-a40b17e0",
+      "build_manifest_sha256": "3b69034426559bae612e097b0ee21d43d0bd72d51e93d1a13cf236a92ca9360d",
+      "reason": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory."
+    },
+    "family:directory_construction_traversal:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "family:directory_construction_traversal:verify": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Run this independent proof on authentic e784 runtime with --preparation-assets assets-34224330 to reuse already-qualified inputs and preserve exact producer provenance. Git image-bound Store/reference plans then match its performance input exactly. The exact product source bridge preserves semantic scope; do not claim d132 timing or resource measurement."
+    },
+    "family:git_tool_workflow:verify": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Run this independent proof on authentic e784 runtime with --preparation-assets assets-34224330 to reuse already-qualified inputs and preserve exact producer provenance. Git image-bound Store/reference plans then match its performance input exactly. The exact product source bridge preserves semantic scope; do not claim d132 timing or resource measurement."
+    },
+    "family:payload_create_read:performance": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "family:payload_create_read:verify": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Run this independent proof on authentic e784 runtime with --preparation-assets assets-34224330 to reuse already-qualified inputs and preserve exact producer provenance. Git image-bound Store/reference plans then match its performance input exactly. The exact product source bridge preserves semantic scope; do not claim d132 timing or resource measurement."
+    },
+    "family:tiny_file_churn:verify": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Run this independent proof on authentic e784 runtime with --preparation-assets assets-34224330 to reuse already-qualified inputs and preserve exact producer provenance. Git image-bound Store/reference plans then match its performance input exactly. The exact product source bridge preserves semantic scope; do not claim d132 timing or resource measurement."
+    },
+    "slot:payload-create-1m:1:verify": {
+      "assets": "assets-fbf32e84",
+      "build_manifest_sha256": "c4179c51fb0e67e527288f13531c64d7efd610eeebfba86c82cd72b3eb0f52ef",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "slot:tiny-stat-1:1:performance": {
+      "assets": "assets-b8c2ad4b",
+      "build_manifest_sha256": "2ae27960652337d2c77326e6df792491a75c8aeb1c39607e2cf47ffa96b750f4",
+      "reason": "Retain this exact selected original-source evidence under the reviewed unlink/empty-generation predicate bridge and complete observed counter guards. Timing distributions retain original binary identities; the later creation-path guard cost is unmeasured. Delete/Git cases use new default assets; the prior partial cgroup observation remains invalidated."
+    },
+    "slot:workspace-dense-rewrite-500:1:performance": {
+      "assets": "assets-d1325d7f",
+      "build_manifest_sha256": "534441a9ae201d685d71e0233c26e389fa354a716c74f2aebd3016bd53400da7",
+      "reason": "Coordinator-reviewed exact rebase node-lifetime source pair: lifecycle.rs is pinned and every other d132 product input is unchanged. The original Workspace remains intact during validation; fresh non-directory values move into the final node map, with the same original NodeIds, paths, canonical identities, aliases, pin counts, metadata and retained orphan spools. Only temporary copies and cache lifetimes change. Existing source chains and observed predicates remain mandatory. Old timing/resource evidence stays at its original source; new rebase allocation/instruction cost is unmeasured. Dense500 verification for every seed must run the repaired current product, including seed1 whose original timing is retained. Earlier compatible proofs preserve logical state identity, not current memory-cost claims."
+    },
+    "slot:workspace-sustained-600s-proof:1:verify": {
+      "assets": "assets-e7840da1",
+      "build_manifest_sha256": "e0e299d67a82278dd3b6f6bf5ec7c74701a4dad39ed8c19cf17c1048fd438496",
+      "reason": "Coordinator-reviewed exact derived spill-index repair: only the pinned objects.rs source pair differs from e784 product bytes. Temporary index layout/lookup cost changes; canonical byte encoding, collision checking, object order and persistent Store schema/routes remain unchanged. Retained observations measure their original source and resources only, never the new index or layout cost. Prior legacy sources additionally require the existing unlink/empty-generation predicate and complete original observation guards. Explicit prior passing cases are retained; namespace500 and all actual failures are excluded. Current independent verification and original input/environment/custody gates still apply."
+    }
+  },
+  "verification_compatibility": [
+    {
+      "family_id": "payload_create_read",
+      "performance_revision": "fbf32e84662d00993c033515e113437965395494",
+      "reviewed_impact": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory.",
+      "unchanged_paths": {
+        "benchmark/fs-bench-pro/families/payload_create_read.rs": "e2b09c6f11c1dd2c00641ff2a72465a4dc37f6753f70fa6972dad0bc0d8ffb5e",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": {
+          "comparison": "exclude-sample_resources-body-v1",
+          "function_sha256": {
+            "e7840da1da81404ff228be734a91783cebb946ca": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+            "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
+          },
+          "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
+        }
+      },
+      "verification_revision": "e7840da1da81404ff228be734a91783cebb946ca"
+    },
+    {
+      "family_id": "tiny_file_churn",
+      "performance_revision": "fbf32e84662d00993c033515e113437965395494",
+      "reviewed_impact": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory.",
+      "unchanged_paths": {
+        "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": {
+          "comparison": "exclude-sample_resources-body-v1",
+          "function_sha256": {
+            "e7840da1da81404ff228be734a91783cebb946ca": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+            "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
+          },
+          "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
+        }
+      },
+      "verification_revision": "e7840da1da81404ff228be734a91783cebb946ca"
+    },
+    {
+      "family_id": "directory_construction_traversal",
+      "performance_revision": "fbf32e84662d00993c033515e113437965395494",
+      "reviewed_impact": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory.",
+      "unchanged_paths": {
+        "benchmark/fs-bench-pro/families/directory_construction_traversal.rs": "fdf9eb1705f0528074423d3e7b1f31800bfb1333767d41b4a614466686c333d9",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": {
+          "comparison": "exclude-sample_resources-body-v1",
+          "function_sha256": {
+            "e7840da1da81404ff228be734a91783cebb946ca": "270e1dafc1957ba63aa7c0e1d438c2bc4cddc3b4cb17f307c1e9445007a6993f",
+            "fbf32e84662d00993c033515e113437965395494": "fc304bf7e56f9c89467c3572140d1dbbb66e3950688a7109060c568b74355ff2"
+          },
+          "sha256": "5a2d6bd97f73e77d37a4e398e360f50d9c4d3166a1b8d931affb55fa298e163f"
+        }
+      },
+      "verification_revision": "e7840da1da81404ff228be734a91783cebb946ca"
+    },
+    {
+      "family_id": "tiny_file_churn",
+      "performance_revision": "b8c2ad4bf4fa0415fd49d57abea15729b33a4284",
+      "reviewed_impact": "Coordinator-reviewed exact bounded content-frontier repair: pinned changes.rs source pair and unchanged remaining a40 product inputs. Structural candidates already used the same frontier; clean and fitting prior content-only cases preserve logical results, with charge calculation moved and a new over-budget branch. Earlier product repairs compose through their separately pinned source proofs and observed predicates. Old timings/resources remain original-source observations; current planner/index/layout instruction and allocation cost is unmeasured. Only explicit prior successful scopes are admitted; old dense100/500 failures are excluded and require repaired execution. Independent verification, exact input/environment matching, resources and sealed custody remain mandatory.",
+      "unchanged_paths": {
+        "benchmark/fs-bench-pro/families/tiny_file_churn.rs": "d5ac1fbbb9cbf9b9afdd85e1ab9af21abf26828560e6e9de63fcf6f5eeb319bb",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+      },
+      "verification_revision": "e7840da1da81404ff228be734a91783cebb946ca"
+    },
+    {
+      "family_id": "namespace_mutation",
+      "performance_revision": "a40b17e05486e5b747b689e7710475d739556a69",
+      "reviewed_impact": "Coordinator-reviewed exact rebase node-lifetime source pair: lifecycle.rs is pinned and every other d132 product input is unchanged. The original Workspace remains intact during validation; fresh non-directory values move into the final node map, with the same original NodeIds, paths, canonical identities, aliases, pin counts, metadata and retained orphan spools. Only temporary copies and cache lifetimes change. Existing source chains and observed predicates remain mandatory. Old timing/resource evidence stays at its original source; new rebase allocation/instruction cost is unmeasured. Dense500 verification for every seed must run the repaired current product, including seed1 whose original timing is retained. Earlier compatible proofs preserve logical state identity, not current memory-cost claims.",
+      "unchanged_paths": {
+        "benchmark/fs-bench-pro/families/namespace_mutation.rs": "1542e63cf4ad3df85a5d448d46f0f88905a83bdbbeffa0296c29ad7548a89452",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+      },
+      "verification_revision": "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c"
+    },
+    {
+      "family_id": "workspace_change_locality",
+      "performance_revision": "a40b17e05486e5b747b689e7710475d739556a69",
+      "reviewed_impact": "Coordinator-reviewed exact rebase node-lifetime source pair: lifecycle.rs is pinned and every other d132 product input is unchanged. The original Workspace remains intact during validation; fresh non-directory values move into the final node map, with the same original NodeIds, paths, canonical identities, aliases, pin counts, metadata and retained orphan spools. Only temporary copies and cache lifetimes change. Existing source chains and observed predicates remain mandatory. Old timing/resource evidence stays at its original source; new rebase allocation/instruction cost is unmeasured. Dense500 verification for every seed must run the repaired current product, including seed1 whose original timing is retained. Earlier compatible proofs preserve logical state identity, not current memory-cost claims.",
+      "unchanged_paths": {
+        "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+      },
+      "verification_revision": "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c"
+    },
+    {
+      "family_id": "workspace_change_locality",
+      "performance_revision": "d1325d7f44ef205f5fa748130f3b9868973e9edc",
+      "reviewed_impact": "Coordinator-reviewed exact rebase node-lifetime source pair: lifecycle.rs is pinned and every other d132 product input is unchanged. The original Workspace remains intact during validation; fresh non-directory values move into the final node map, with the same original NodeIds, paths, canonical identities, aliases, pin counts, metadata and retained orphan spools. Only temporary copies and cache lifetimes change. Existing source chains and observed predicates remain mandatory. Old timing/resource evidence stays at its original source; new rebase allocation/instruction cost is unmeasured. Dense500 verification for every seed must run the repaired current product, including seed1 whose original timing is retained. Earlier compatible proofs preserve logical state identity, not current memory-cost claims.",
+      "unchanged_paths": {
+        "benchmark/fs-bench-pro/families/workspace_change_locality.rs": "8ea279521d2d61652c5775e1d9aa4dad4253e7a951782e1136f7ca53c2c99aa2",
+        "benchmark/fs-bench-pro/ordinary_workloads.rs": "57c2aa888124c268726e0ef9b672d22aae002f37931320e310990730ba97f117",
+        "benchmark/fs-bench-pro/workload.rs": "5cc55b928c6225ca22a71db8ce8cea9804adf9fb43ffb909be4d8c27d3f5404e",
+        "benchmark/fs-bench-pro/workspace_common.rs": "d75c67cd800e7918afd41f8f583867c5c1697c1e2b4bfafa9a7b70492ec6455f",
+        "benchmark/fs-bench-pro/workspace_registry.rs": "c1a64d4ed41d87c797df63a0f207ce61f139fe033cb11c21b8f6bbf961bdc4ac"
+      },
+      "verification_revision": "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c"
+    }
+  ]
+}

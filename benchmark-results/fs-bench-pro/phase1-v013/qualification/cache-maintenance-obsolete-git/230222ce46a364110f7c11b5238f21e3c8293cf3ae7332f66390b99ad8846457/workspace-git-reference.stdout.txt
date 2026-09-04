@@ -1,0 +1,10 @@
+expected_head=fc7c2dcb675aeb5db34949a6efe0748ad2a5b394
+expected_parent=44a418ec7d3f8d78f7f9f92fef5b4bc34392ba9d
+expected_tree=c777131d586d0e04756792d7cd4a84770766bb85
+git_effective_config=core.autocrlf=false;core.filemode=true;core.symlinks=true;core.logAllRefUpdates=false;core.hooksPath=/dev/null;commit.gpgSign=false;tag.gpgSign=false;gc.auto=0;maintenance.auto=false;credential.helper=;status.showUntrackedFiles=all;diff.renames=false;index.version=2;core.untrackedCache=false;core.fsmonitor=false;protocol.allow=never
+git_genesis_head=44a418ec7d3f8d78f7f9f92fef5b4bc34392ba9d
+git_prepare_ns=14876124090
+git_repository_transient_bound_bytes=108550228
+git_version=git version 2.39.5
+reference_case=git-tool-1
+reference_seed=2

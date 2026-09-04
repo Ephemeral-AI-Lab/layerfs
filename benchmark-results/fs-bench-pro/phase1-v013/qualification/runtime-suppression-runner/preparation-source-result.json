@@ -1,0 +1,55 @@
+{
+  "clock_error_exit": 125,
+  "clock_error_kind": "product-budget-observation-error",
+  "producer_checks": {
+    "3422433020a678a77f88e8a110492ca293c05e30": {
+      "changed_canonical_input_dependencies": {
+        "crates/layerfs-layerstack-store/src/objects.rs": [
+          "1e88000d97560d5d9d8afdaaf379144cfd859133897650f357c8299a19b3aa32",
+          "4b07eb03a2e6ddfe926a2c5fa621db462c659ff1ee164e41ec3b90cb871df9c8"
+        ],
+        "crates/layerfs-layerstack-store/src/schema.rs": [
+          "bf21e1b0f4d20f0752c3baa180e83b2cf842a0b0f4e97244d7fbf80c141b1daf",
+          "827c18cc63eeb5c1df0decb9b2e35291c0de18e2222eed0f07c776382c0af950"
+        ]
+      },
+      "exact_scope_only_notices": {
+        "phase-1-handoff": {
+          "current_sha256": "409e97c2a85c554bb0d23b746e4f3e6d09265ee46c972f2fe02b46b6779804dc",
+          "producer_sha256": "822d2914161cd6756061d1d9fa23ebf8a855eddf9984d1009fe7e2672a45d395"
+        },
+        "testing-rules": {
+          "current_sha256": "7390668ab483d7e2e4a0c76b90fae355fe9a20b9dafd7bb53f12d49cbb029e1d",
+          "producer_sha256": "726fcc5dc36bf964f025a1a68ca39ae90cee62101e2add4fa8d90e9dd561ae4c"
+        }
+      }
+    },
+    "a40b17e05486e5b747b689e7710475d739556a69": {
+      "changed_canonical_input_dependencies": {
+        "crates/layerfs-layerstack-store/src/schema.rs": [
+          "bf21e1b0f4d20f0752c3baa180e83b2cf842a0b0f4e97244d7fbf80c141b1daf",
+          "827c18cc63eeb5c1df0decb9b2e35291c0de18e2222eed0f07c776382c0af950"
+        ]
+      },
+      "exact_scope_only_notices": {
+        "phase-1-handoff": {
+          "current_sha256": "409e97c2a85c554bb0d23b746e4f3e6d09265ee46c972f2fe02b46b6779804dc",
+          "producer_sha256": "822d2914161cd6756061d1d9fa23ebf8a855eddf9984d1009fe7e2672a45d395"
+        },
+        "testing-rules": {
+          "current_sha256": "7390668ab483d7e2e4a0c76b90fae355fe9a20b9dafd7bb53f12d49cbb029e1d",
+          "producer_sha256": "726fcc5dc36bf964f025a1a68ca39ae90cee62101e2add4fa8d90e9dd561ae4c"
+        }
+      }
+    }
+  },
+  "qualification": "source-byte comparisons only; no repeated model/product execution",
+  "resource_rss_event_unchanged": "resource-failure",
+  "runner_sha256": "90fc26dbd5c91b149cf3f69951e6872094740197d6bb5026d8abf9ef43dbbdf8",
+  "status": "pass",
+  "timed_host_pair": [
+    "0a0df8c560928ac916aae8ce984b683f65085c344cd832fc86f9e3ffee51fcb3",
+    "df074a4160010b328db3ecb92d99f82a87f4acacd0bf347e5490d435e9f85771"
+  ],
+  "unchanged_preparation_input_count": 137
+}

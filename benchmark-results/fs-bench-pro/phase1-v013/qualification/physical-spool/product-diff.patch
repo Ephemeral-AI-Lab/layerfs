@@ -1,0 +1,1901 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index e1364bf0..807807c1 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -226,6 +226,7 @@ dependencies = [
+  "layerfs-content",
+  "layerfs-layerstack-store",
+  "layerfs-sdk",
++ "layerfs-workspace",
+  "rusqlite",
+ ]
+ 
+diff --git a/crates/layerfs-fuse/src/filesystem.rs b/crates/layerfs-fuse/src/filesystem.rs
+index 4b9ef493..7a918e19 100644
+--- a/crates/layerfs-fuse/src/filesystem.rs
++++ b/crates/layerfs-fuse/src/filesystem.rs
+@@ -53,6 +53,8 @@ impl Filesystem for LayerFs {
+     }
+ 
+     fn lookup(&self, _request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Lookup);
+         let result = self.node(parent).and_then(|parent| {
+             self.port
+                 .lookup(parent, name.as_bytes())
+@@ -72,6 +74,8 @@ impl Filesystem for LayerFs {
+         _handle: Option<FileHandle>,
+         reply: ReplyAttr,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Getattr);
+         let result = self.node(ino).and_then(|node| {
+             self.port
+                 .attr(node)
+@@ -103,6 +107,8 @@ impl Filesystem for LayerFs {
+         flags: Option<BsdFileFlags>,
+         reply: ReplyAttr,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Setattr);
+         if uid.is_some_and(|value| value != self.uid)
+             || gid.is_some_and(|value| value != self.gid)
+             || flags.is_some()
+@@ -138,6 +144,8 @@ impl Filesystem for LayerFs {
+     }
+ 
+     fn readlink(&self, _request: &Request, ino: INodeNo, reply: ReplyData) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Readlink);
+         match self
+             .node(ino)
+             .and_then(|node| self.port.readlink(node).map_err(errno))
+@@ -157,6 +165,8 @@ impl Filesystem for LayerFs {
+         rdev: u32,
+         reply: ReplyEntry,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Mknod);
+         if rdev != 0 || mode & 0o170000 != 0o100000 {
+             reply.error(fuser::Errno::EOPNOTSUPP);
+             return;
+@@ -183,6 +193,8 @@ impl Filesystem for LayerFs {
+         umask: u32,
+         reply: ReplyEntry,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Mkdir);
+         let result = self.node(parent).and_then(|parent| {
+             let attr = self
+                 .port
+@@ -197,6 +209,8 @@ impl Filesystem for LayerFs {
+     }
+ 
+     fn unlink(&self, _request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Unlink);
+         empty_reply(
+             self.node(parent).and_then(|parent| {
+                 self.port
+@@ -208,6 +222,8 @@ impl Filesystem for LayerFs {
+     }
+ 
+     fn rmdir(&self, _request: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Rmdir);
+         empty_reply(
+             self.node(parent).and_then(|parent| {
+                 self.port
+@@ -226,6 +242,8 @@ impl Filesystem for LayerFs {
+         target: &Path,
+         reply: ReplyEntry,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Symlink);
+         let result = self.node(parent).and_then(|parent| {
+             let attr = self
+                 .port
+@@ -253,6 +271,8 @@ impl Filesystem for LayerFs {
+         flags: RenameFlags,
+         reply: ReplyEmpty,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Rename);
+         if flags.intersects(RenameFlags::RENAME_EXCHANGE | RenameFlags::RENAME_WHITEOUT) {
+             reply.error(fuser::Errno::EOPNOTSUPP);
+             return;
+@@ -282,6 +302,8 @@ impl Filesystem for LayerFs {
+         new_name: &OsStr,
+         reply: ReplyEntry,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Link);
+         let result = self.node(ino).and_then(|node| {
+             let parent = self.node(new_parent)?;
+             let attr = self
+@@ -297,6 +319,8 @@ impl Filesystem for LayerFs {
+     }
+ 
+     fn open(&self, _request: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Open);
+         match self.node(ino).and_then(|node| {
+             let writable = matches!(flags.0 & O_ACCMODE, O_WRONLY | O_RDWR);
+             self.open_handle(node, flags.0 & O_TRUNC != 0, writable)
+@@ -318,6 +342,8 @@ impl Filesystem for LayerFs {
+         _lock_owner: Option<LockOwner>,
+         reply: ReplyData,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Read);
+         match self
+             .handle(handle)
+             .and_then(|node| self.port.read(node, offset, size as usize).map_err(errno))
+@@ -340,6 +366,8 @@ impl Filesystem for LayerFs {
+         _lock_owner: Option<LockOwner>,
+         reply: ReplyWrite,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Write);
+         match self
+             .handle(handle)
+             .and_then(|node| self.port.write(node, offset, data).map_err(errno))
+@@ -357,6 +385,8 @@ impl Filesystem for LayerFs {
+         _lock_owner: LockOwner,
+         reply: ReplyEmpty,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Flush);
+         reply.ok();
+     }
+ 
+@@ -370,6 +400,8 @@ impl Filesystem for LayerFs {
+         _flush: bool,
+         reply: ReplyEmpty,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Release);
+         let result = self
+             .handles
+             .remove(handle.0)
+@@ -386,6 +418,8 @@ impl Filesystem for LayerFs {
+         _datasync: bool,
+         reply: ReplyEmpty,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Fsync);
+         empty_reply(
+             self.handle(handle)
+                 .and_then(|node| self.port.fsync(Some(node)).map_err(errno)),
+@@ -394,6 +428,8 @@ impl Filesystem for LayerFs {
+     }
+ 
+     fn opendir(&self, _request: &Request, ino: INodeNo, _flags: OpenFlags, reply: ReplyOpen) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Opendir);
+         match self.node(ino).and_then(|node| {
+             if self.port.attr(node).map_err(errno)?.kind != Kind::Directory {
+                 return Err(fuser::Errno::ENOTDIR);
+@@ -413,11 +449,14 @@ impl Filesystem for LayerFs {
+         offset: u64,
+         mut reply: ReplyDirectory,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Readdir);
+         let result = self
+             .handle(handle)
+             .and_then(|node| self.port.readdir(node).map_err(errno));
+         match result {
+             Ok(entries) => {
++                let mut returned_entries = 0;
+                 for (index, (node, kind, name)) in
+                     entries.into_iter().enumerate().skip(offset as usize)
+                 {
+@@ -430,7 +469,9 @@ impl Filesystem for LayerFs {
+                     ) {
+                         break;
+                     }
++                    returned_entries += 1;
+                 }
++                self.port.note_readdir_page(offset, returned_entries);
+                 reply.ok();
+             }
+             Err(error) => reply.error(error),
+@@ -445,11 +486,14 @@ impl Filesystem for LayerFs {
+         offset: u64,
+         mut reply: ReplyDirectoryPlus,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Readdirplus);
+         let result = self
+             .handle(handle)
+             .and_then(|node| self.port.readdirplus(node).map_err(errno));
+         match result {
+             Ok(entries) => {
++                let mut returned_entries = 0;
+                 for (index, (attr, name)) in entries.into_iter().enumerate().skip(offset as usize) {
+                     let attr = match self.attr(attr) {
+                         Ok(attr) => attr,
+@@ -468,7 +512,9 @@ impl Filesystem for LayerFs {
+                     ) {
+                         break;
+                     }
++                    returned_entries += 1;
+                 }
++                self.port.note_readdir_page(offset, returned_entries);
+                 reply.ok();
+             }
+             Err(error) => reply.error(error),
+@@ -483,6 +529,8 @@ impl Filesystem for LayerFs {
+         _flags: OpenFlags,
+         reply: ReplyEmpty,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Releasedir);
+         if self.handles.remove(handle.0).is_some() {
+             reply.ok();
+         } else {
+@@ -498,14 +546,20 @@ impl Filesystem for LayerFs {
+         _datasync: bool,
+         reply: ReplyEmpty,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Fsyncdir);
+         empty_reply(self.port.fsync(None).map_err(errno), reply);
+     }
+ 
+     fn statfs(&self, _request: &Request, _ino: INodeNo, reply: ReplyStatfs) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Statfs);
+         reply.statfs(1 << 30, 1 << 29, 1 << 29, 1 << 30, 1 << 29, 4096, 255, 4096);
+     }
+ 
+     fn access(&self, _request: &Request, ino: INodeNo, _mask: AccessFlags, reply: ReplyEmpty) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Access);
+         match self
+             .node(ino)
+             .and_then(|node| self.port.attr(node).map_err(errno))
+@@ -525,6 +579,8 @@ impl Filesystem for LayerFs {
+         _flags: i32,
+         reply: ReplyCreate,
+     ) {
++        self.port
++            .note_kernel_operation(crate::KernelOperation::Create);
+         let result = self.node(parent).and_then(|parent| {
+             let attr = self
+                 .port
+diff --git a/crates/layerfs-fuse/src/lib.rs b/crates/layerfs-fuse/src/lib.rs
+index b9863dbc..6915fe3b 100644
+--- a/crates/layerfs-fuse/src/lib.rs
++++ b/crates/layerfs-fuse/src/lib.rs
+@@ -20,7 +20,9 @@ mod write_metrics;
+ pub use adapter::LayerFs;
+ #[cfg(all(target_os = "linux", any(feature = "host", feature = "proxy")))]
+ pub use host_mount::{mount_host, HostMount};
+-pub use port::{Attr, FilesystemPort, Kind, NodeId, PortError, PortResult, SharedPort, ROOT};
++pub use port::{
++    Attr, FilesystemPort, KernelOperation, Kind, NodeId, PortError, PortResult, SharedPort, ROOT,
++};
+ pub use proxy_client::ProxyClient;
+ #[doc(hidden)]
+ pub use proxy_client::{serve_remote_control, RemoteControl};
+diff --git a/crates/layerfs-fuse/src/port.rs b/crates/layerfs-fuse/src/port.rs
+index f9d8eecc..09b4e72a 100644
+--- a/crates/layerfs-fuse/src/port.rs
++++ b/crates/layerfs-fuse/src/port.rs
+@@ -37,7 +37,39 @@ pub enum PortError {
+ 
+ pub type PortResult<T> = Result<T, PortError>;
+ 
++/// Actual kernel callback observations; independent of proxy cache hits.
++#[derive(Clone, Copy, Debug)]
++pub enum KernelOperation {
++    Lookup,
++    Getattr,
++    Setattr,
++    Readlink,
++    Mknod,
++    Mkdir,
++    Unlink,
++    Rmdir,
++    Symlink,
++    Rename,
++    Link,
++    Open,
++    Read,
++    Write,
++    Flush,
++    Release,
++    Fsync,
++    Opendir,
++    Readdir,
++    Readdirplus,
++    Releasedir,
++    Fsyncdir,
++    Statfs,
++    Access,
++    Create,
++}
++
+ pub trait FilesystemPort: Send + Sync {
++    fn note_kernel_operation(&self, _operation: KernelOperation) {}
++    fn note_readdir_page(&self, _offset: u64, _entries: u64) {}
+     fn note_fuse_max_write(&self, _bytes: u32) {}
+     fn note_fuse_read_config(&self, _max_readahead: u32, _capabilities: u64) {}
+     fn lookup(&self, parent: NodeId, name: &[u8]) -> PortResult<Attr>;
+diff --git a/crates/layerfs-fuse/src/proxy_client.rs b/crates/layerfs-fuse/src/proxy_client.rs
+index bab2c118..b844d972 100644
+--- a/crates/layerfs-fuse/src/proxy_client.rs
++++ b/crates/layerfs-fuse/src/proxy_client.rs
+@@ -386,6 +386,13 @@ impl ProxyClient {
+ }
+ 
+ impl FilesystemPort for ProxyClient {
++    fn note_kernel_operation(&self, operation: crate::KernelOperation) {
++        self.read_metrics.note_kernel_operation(operation);
++    }
++    fn note_readdir_page(&self, offset: u64, entries: u64) {
++        self.read_metrics.note_readdir_page(offset, entries);
++    }
++
+     fn note_fuse_max_write(&self, bytes: u32) {
+         self.metrics.note_max_write(u64::from(bytes));
+     }
+diff --git a/crates/layerfs-fuse/src/write_metrics.rs b/crates/layerfs-fuse/src/write_metrics.rs
+index cefaf914..028e1bbe 100644
+--- a/crates/layerfs-fuse/src/write_metrics.rs
++++ b/crates/layerfs-fuse/src/write_metrics.rs
+@@ -262,10 +262,69 @@ pub struct FuseReadMetrics {
+     pub client_decode_ns: u64,
+     pub client_decode_copy_bytes: u64,
+     pub host_dispatch_ns: u64,
++    pub callback_lookup: u64,
++    pub callback_getattr: u64,
++    pub callback_setattr: u64,
++    pub callback_readlink: u64,
++    pub callback_mknod: u64,
++    pub callback_mkdir: u64,
++    pub callback_unlink: u64,
++    pub callback_rmdir: u64,
++    pub callback_symlink: u64,
++    pub callback_rename: u64,
++    pub callback_link: u64,
++    pub callback_open: u64,
++    pub callback_read: u64,
++    pub callback_write: u64,
++    pub callback_flush: u64,
++    pub callback_release: u64,
++    pub callback_fsync: u64,
++    pub callback_opendir: u64,
++    pub callback_readdir: u64,
++    pub callback_readdirplus: u64,
++    pub callback_releasedir: u64,
++    pub callback_fsyncdir: u64,
++    pub callback_statfs: u64,
++    pub callback_access: u64,
++    pub callback_create: u64,
++    pub directory_entries_returned: u64,
++    pub directory_nonzero_offset_requests: u64,
+ }
+ 
+ impl FuseReadMetrics {
+-    const FIELD_COUNT: usize = 28;
++    pub fn kernel_callback_count(&self) -> u64 {
++        [
++            self.callback_lookup,
++            self.callback_getattr,
++            self.callback_setattr,
++            self.callback_readlink,
++            self.callback_mknod,
++            self.callback_mkdir,
++            self.callback_unlink,
++            self.callback_rmdir,
++            self.callback_symlink,
++            self.callback_rename,
++            self.callback_link,
++            self.callback_open,
++            self.callback_read,
++            self.callback_write,
++            self.callback_flush,
++            self.callback_release,
++            self.callback_fsync,
++            self.callback_opendir,
++            self.callback_readdir,
++            self.callback_readdirplus,
++            self.callback_releasedir,
++            self.callback_fsyncdir,
++            self.callback_statfs,
++            self.callback_access,
++            self.callback_create,
++        ]
++        .into_iter()
++        .fold(0_u64, u64::saturating_add)
++    }
++
++    const FIELD_COUNT: usize = 55;
+ 
+     pub(crate) fn merge(&mut self, other: Self) {
+         self.max_readahead_bytes = self.max_readahead_bytes.max(other.max_readahead_bytes);
+@@ -323,6 +382,33 @@ impl FuseReadMetrics {
+             self.client_decode_ns,
+             self.client_decode_copy_bytes,
+             self.host_dispatch_ns,
++            self.callback_lookup,
++            self.callback_getattr,
++            self.callback_setattr,
++            self.callback_readlink,
++            self.callback_mknod,
++            self.callback_mkdir,
++            self.callback_unlink,
++            self.callback_rmdir,
++            self.callback_symlink,
++            self.callback_rename,
++            self.callback_link,
++            self.callback_open,
++            self.callback_read,
++            self.callback_write,
++            self.callback_flush,
++            self.callback_release,
++            self.callback_fsync,
++            self.callback_opendir,
++            self.callback_readdir,
++            self.callback_readdirplus,
++            self.callback_releasedir,
++            self.callback_fsyncdir,
++            self.callback_statfs,
++            self.callback_access,
++            self.callback_create,
++            self.directory_entries_returned,
++            self.directory_nonzero_offset_requests,
+         ]
+     }
+ 
+@@ -356,6 +442,33 @@ impl FuseReadMetrics {
+             &mut self.client_decode_ns,
+             &mut self.client_decode_copy_bytes,
+             &mut self.host_dispatch_ns,
++            &mut self.callback_lookup,
++            &mut self.callback_getattr,
++            &mut self.callback_setattr,
++            &mut self.callback_readlink,
++            &mut self.callback_mknod,
++            &mut self.callback_mkdir,
++            &mut self.callback_unlink,
++            &mut self.callback_rmdir,
++            &mut self.callback_symlink,
++            &mut self.callback_rename,
++            &mut self.callback_link,
++            &mut self.callback_open,
++            &mut self.callback_read,
++            &mut self.callback_write,
++            &mut self.callback_flush,
++            &mut self.callback_release,
++            &mut self.callback_fsync,
++            &mut self.callback_opendir,
++            &mut self.callback_readdir,
++            &mut self.callback_readdirplus,
++            &mut self.callback_releasedir,
++            &mut self.callback_fsyncdir,
++            &mut self.callback_statfs,
++            &mut self.callback_access,
++            &mut self.callback_create,
++            &mut self.directory_entries_returned,
++            &mut self.directory_nonzero_offset_requests,
+         ]
+     }
+ 
+@@ -398,9 +511,76 @@ pub(crate) struct AtomicFuseReadMetrics {
+     client_decode_ns: AtomicU64,
+     client_decode_copy_bytes: AtomicU64,
+     host_dispatch_ns: AtomicU64,
++    callback_lookup: AtomicU64,
++    callback_getattr: AtomicU64,
++    callback_setattr: AtomicU64,
++    callback_readlink: AtomicU64,
++    callback_mknod: AtomicU64,
++    callback_mkdir: AtomicU64,
++    callback_unlink: AtomicU64,
++    callback_rmdir: AtomicU64,
++    callback_symlink: AtomicU64,
++    callback_rename: AtomicU64,
++    callback_link: AtomicU64,
++    callback_open: AtomicU64,
++    callback_read: AtomicU64,
++    callback_write: AtomicU64,
++    callback_flush: AtomicU64,
++    callback_release: AtomicU64,
++    callback_fsync: AtomicU64,
++    callback_opendir: AtomicU64,
++    callback_readdir: AtomicU64,
++    callback_readdirplus: AtomicU64,
++    callback_releasedir: AtomicU64,
++    callback_fsyncdir: AtomicU64,
++    callback_statfs: AtomicU64,
++    callback_access: AtomicU64,
++    callback_create: AtomicU64,
++    directory_entries_returned: AtomicU64,
++    directory_nonzero_offset_requests: AtomicU64,
+ }
+ 
+ impl AtomicFuseReadMetrics {
++    pub(crate) fn note_kernel_operation(&self, operation: crate::KernelOperation) {
++        let counter = match operation {
++            crate::KernelOperation::Lookup => &self.callback_lookup,
++            crate::KernelOperation::Getattr => &self.callback_getattr,
++            crate::KernelOperation::Setattr => &self.callback_setattr,
++            crate::KernelOperation::Readlink => &self.callback_readlink,
++            crate::KernelOperation::Mknod => &self.callback_mknod,
++            crate::KernelOperation::Mkdir => &self.callback_mkdir,
++            crate::KernelOperation::Unlink => &self.callback_unlink,
++            crate::KernelOperation::Rmdir => &self.callback_rmdir,
++            crate::KernelOperation::Symlink => &self.callback_symlink,
++            crate::KernelOperation::Rename => &self.callback_rename,
++            crate::KernelOperation::Link => &self.callback_link,
++            crate::KernelOperation::Open => &self.callback_open,
++            crate::KernelOperation::Read => &self.callback_read,
++            crate::KernelOperation::Write => &self.callback_write,
++            crate::KernelOperation::Flush => &self.callback_flush,
++            crate::KernelOperation::Release => &self.callback_release,
++            crate::KernelOperation::Fsync => &self.callback_fsync,
++            crate::KernelOperation::Opendir => &self.callback_opendir,
++            crate::KernelOperation::Readdir => &self.callback_readdir,
++            crate::KernelOperation::Readdirplus => &self.callback_readdirplus,
++            crate::KernelOperation::Releasedir => &self.callback_releasedir,
++            crate::KernelOperation::Fsyncdir => &self.callback_fsyncdir,
++            crate::KernelOperation::Statfs => &self.callback_statfs,
++            crate::KernelOperation::Access => &self.callback_access,
++            crate::KernelOperation::Create => &self.callback_create,
++        };
++        counter.fetch_add(1, Ordering::Relaxed);
++    }
++
++    pub(crate) fn note_readdir_page(&self, offset: u64, entries: u64) {
++        self.directory_entries_returned
++            .fetch_add(entries, Ordering::Relaxed);
++        if offset != 0 {
++            self.directory_nonzero_offset_requests
++                .fetch_add(1, Ordering::Relaxed);
++        }
++    }
++
+     pub(crate) fn note_config(&self, max_readahead: u64, capabilities: u64) {
+         self.max_readahead_bytes
+             .fetch_max(max_readahead, Ordering::Relaxed);
+@@ -523,9 +703,96 @@ impl AtomicFuseReadMetrics {
+             &self.client_decode_ns,
+             &self.client_decode_copy_bytes,
+             &self.host_dispatch_ns,
++            &self.callback_lookup,
++            &self.callback_getattr,
++            &self.callback_setattr,
++            &self.callback_readlink,
++            &self.callback_mknod,
++            &self.callback_mkdir,
++            &self.callback_unlink,
++            &self.callback_rmdir,
++            &self.callback_symlink,
++            &self.callback_rename,
++            &self.callback_link,
++            &self.callback_open,
++            &self.callback_read,
++            &self.callback_write,
++            &self.callback_flush,
++            &self.callback_release,
++            &self.callback_fsync,
++            &self.callback_opendir,
++            &self.callback_readdir,
++            &self.callback_readdirplus,
++            &self.callback_releasedir,
++            &self.callback_fsyncdir,
++            &self.callback_statfs,
++            &self.callback_access,
++            &self.callback_create,
++            &self.directory_entries_returned,
++            &self.directory_nonzero_offset_requests,
+         ]) {
+             *target = source.swap(0, Ordering::Relaxed);
+         }
+         metrics
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn kernel_observation_round_trip_and_reset() {
++        let metrics = AtomicFuseReadMetrics::default();
++        let operations = [
++            crate::KernelOperation::Lookup,
++            crate::KernelOperation::Getattr,
++            crate::KernelOperation::Setattr,
++            crate::KernelOperation::Readlink,
++            crate::KernelOperation::Mknod,
++            crate::KernelOperation::Mkdir,
++            crate::KernelOperation::Unlink,
++            crate::KernelOperation::Rmdir,
++            crate::KernelOperation::Symlink,
++            crate::KernelOperation::Rename,
++            crate::KernelOperation::Link,
++            crate::KernelOperation::Open,
++            crate::KernelOperation::Read,
++            crate::KernelOperation::Write,
++            crate::KernelOperation::Flush,
++            crate::KernelOperation::Release,
++            crate::KernelOperation::Fsync,
++            crate::KernelOperation::Opendir,
++            crate::KernelOperation::Readdir,
++            crate::KernelOperation::Readdirplus,
++            crate::KernelOperation::Releasedir,
++            crate::KernelOperation::Fsyncdir,
++            crate::KernelOperation::Statfs,
++            crate::KernelOperation::Access,
++            crate::KernelOperation::Create,
++        ];
++        for (index, operation) in operations.into_iter().enumerate() {
++            for _ in 0..=index {
++                metrics.note_kernel_operation(operation);
++            }
++        }
++        metrics.note_readdir_page(0, 13);
++        metrics.note_readdir_page(13, 7);
++        let taken = metrics.take();
++        assert_eq!(taken.kernel_callback_count(), 325);
++        assert_eq!(taken.directory_entries_returned, 20);
++        assert_eq!(taken.directory_nonzero_offset_requests, 1);
++        let mut wire = Vec::new();
++        taken.write_to(&mut wire).unwrap();
++        assert_eq!(
++            FuseReadMetrics::read_from(&mut wire.as_slice()).unwrap(),
++            taken
++        );
++        assert_eq!(metrics.take(), FuseReadMetrics::default());
++        let mut merged = taken;
++        merged.merge(taken);
++        assert_eq!(merged.kernel_callback_count(), 650);
++        assert_eq!(merged.directory_entries_returned, 40);
++        assert_eq!(merged.directory_nonzero_offset_requests, 2);
++    }
++}
+diff --git a/crates/layerfs-layerstack-store/src/lib.rs b/crates/layerfs-layerstack-store/src/lib.rs
+index ae50ba03..7d6e02e8 100644
+--- a/crates/layerfs-layerstack-store/src/lib.rs
++++ b/crates/layerfs-layerstack-store/src/lib.rs
+@@ -31,7 +31,8 @@ pub use store::LayerStackStore;
+ pub use telemetry::{
+     begin_workspace_commit, capture_workspace_commit_diagnostics, note_workspace_capture,
+     note_workspace_commit_edit_state, note_workspace_commit_phase, note_workspace_commit_reads,
+-    note_workspace_commit_tree_visits, note_workspace_create_snapshot, record_fuse_write,
++    note_workspace_commit_tree_visits, note_workspace_create_snapshot,
++    note_workspace_namespace_visits, note_workspace_physical_spool, record_fuse_write,
+     record_workspace_lifecycle, record_workspace_read, take_storage_receipts,
+     take_workspace_commit_diagnostics, CandidateReceipt, CaptureMode, FuseWriteReceipt,
+     LayerStackInitializationReceipt, StorageReceipt, WorkspaceCommitDiagnostics,
+@@ -49,6 +50,11 @@ pub use layerfs_content::filesystem::{
+ #[cfg(feature = "test-instrumentation")]
+ pub use objects::{read_batch_counters, reset_read_batch_counters, ReadBatchCounters};
+ #[cfg(feature = "test-instrumentation")]
++pub use schema::{
++    arm_verification_store_fault, take_verification_store_fault_receipt, VerificationStoreFault,
++    VerificationStoreFaultReceipt,
++};
++#[cfg(feature = "test-instrumentation")]
+ pub use schema::{reset_sql_trace, sql_trace};
+ 
+ #[cfg(debug_assertions)]
+diff --git a/crates/layerfs-layerstack-store/src/objects.rs b/crates/layerfs-layerstack-store/src/objects.rs
+index 4239c521..059ca549 100644
+--- a/crates/layerfs-layerstack-store/src/objects.rs
++++ b/crates/layerfs-layerstack-store/src/objects.rs
+@@ -2983,6 +2983,12 @@ fn insert_admission_batch(
+     let transaction =
+         connection.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+     let begin_ns = elapsed_ns(begin_started);
++    #[cfg(feature = "test-instrumentation")]
++    if !bulk_insert {
++        crate::schema::verification_store_checkpoint(
++            crate::schema::VerificationStoreFault::LaterAdmissionBatch,
++        )?;
++    }
+     let insert = if bulk_insert {
+         insert_initialization_object_batch(&transaction, batch, statement_number)?
+     } else {
+@@ -2990,6 +2996,10 @@ fn insert_admission_batch(
+     };
+     let commit_started = Instant::now();
+     transaction.commit()?;
++    #[cfg(feature = "test-instrumentation")]
++    if !bulk_insert {
++        crate::schema::verification_early_committed();
++    }
+     Ok(AdmissionBatchMetrics {
+         insert,
+         begin_ns,
+diff --git a/crates/layerfs-layerstack-store/src/records.rs b/crates/layerfs-layerstack-store/src/records.rs
+index f5f3840b..79cdd435 100644
+--- a/crates/layerfs-layerstack-store/src/records.rs
++++ b/crates/layerfs-layerstack-store/src/records.rs
+@@ -245,6 +245,33 @@ pub struct WorkspaceReadReceipt {
+     pub local_bytes: u64,
+     pub local_read_auth_ns: u64,
+     pub collection_ns: u64,
++    pub callback_lookup: u64,
++    pub callback_getattr: u64,
++    pub callback_setattr: u64,
++    pub callback_readlink: u64,
++    pub callback_mknod: u64,
++    pub callback_mkdir: u64,
++    pub callback_unlink: u64,
++    pub callback_rmdir: u64,
++    pub callback_symlink: u64,
++    pub callback_rename: u64,
++    pub callback_link: u64,
++    pub callback_open: u64,
++    pub callback_read: u64,
++    pub callback_write: u64,
++    pub callback_flush: u64,
++    pub callback_release: u64,
++    pub callback_fsync: u64,
++    pub callback_opendir: u64,
++    pub callback_readdir: u64,
++    pub callback_readdirplus: u64,
++    pub callback_releasedir: u64,
++    pub callback_fsyncdir: u64,
++    pub callback_statfs: u64,
++    pub callback_access: u64,
++    pub callback_create: u64,
++    pub directory_entries_returned: u64,
++    pub directory_nonzero_offset_requests: u64,
+ }
+ 
+ pub(crate) fn decode_layer_stack(row: &rusqlite::Row<'_>) -> rusqlite::Result<LayerStackRecord> {
+diff --git a/crates/layerfs-layerstack-store/src/schema.rs b/crates/layerfs-layerstack-store/src/schema.rs
+index b702d17e..df57ef0f 100644
+--- a/crates/layerfs-layerstack-store/src/schema.rs
++++ b/crates/layerfs-layerstack-store/src/schema.rs
+@@ -497,3 +497,108 @@ mod tests {
+         files
+     }
+ }
++
++#[cfg(feature = "test-instrumentation")]
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum VerificationStoreFault {
++    LaterAdmissionBatch,
++    FinalPublication,
++}
++#[cfg(feature = "test-instrumentation")]
++#[derive(Clone, Debug)]
++pub struct VerificationStoreFaultReceipt {
++    pub branch: BranchId,
++    pub fault: VerificationStoreFault,
++    pub hit_count: u64,
++    pub committed_early_transactions: u64,
++    pub candidate_spill_count: u64,
++    pub active: bool,
++}
++#[cfg(feature = "test-instrumentation")]
++thread_local! {static VERIFICATION_STORE_FAULT:std::cell::RefCell<Option<VerificationStoreFaultReceipt>>=const{std::cell::RefCell::new(None)};}
++#[cfg(feature = "test-instrumentation")]
++pub fn arm_verification_store_fault(branch: BranchId, fault: VerificationStoreFault) -> Result<()> {
++    VERIFICATION_STORE_FAULT.with(|state| {
++        let mut state = state.borrow_mut();
++        if state.is_some() {
++            return Err(StoreError::StoreBusy);
++        }
++        *state = Some(VerificationStoreFaultReceipt {
++            branch,
++            fault,
++            hit_count: 0,
++            committed_early_transactions: 0,
++            candidate_spill_count: 0,
++            active: false,
++        });
++        Ok(())
++    })
++}
++#[cfg(feature = "test-instrumentation")]
++pub fn take_verification_store_fault_receipt() -> Option<VerificationStoreFaultReceipt> {
++    VERIFICATION_STORE_FAULT.with(|s| s.borrow_mut().take())
++}
++#[cfg(feature = "test-instrumentation")]
++pub(crate) fn verification_candidate(branch: BranchId, spills: u64) {
++    VERIFICATION_STORE_FAULT.with(|s| {
++        if let Some(r) = s.borrow_mut().as_mut() {
++            if r.branch == branch {
++                r.active = true;
++                r.candidate_spill_count = spills;
++            }
++        }
++    });
++}
++#[cfg(feature = "test-instrumentation")]
++pub(crate) fn verification_early_committed() {
++    VERIFICATION_STORE_FAULT.with(|s| {
++        if let Some(r) = s.borrow_mut().as_mut() {
++            if r.active && r.hit_count == 0 {
++                r.committed_early_transactions += 1;
++            }
++        }
++    });
++}
++#[cfg(feature = "test-instrumentation")]
++pub(crate) fn verification_store_checkpoint(fault: VerificationStoreFault) -> Result<()> {
++    VERIFICATION_STORE_FAULT.with(|s| {
++        if let Some(r) = s.borrow_mut().as_mut() {
++            if r.active
++                && r.hit_count == 0
++                && r.fault == fault
++                && (fault != VerificationStoreFault::LaterAdmissionBatch
++                    || r.committed_early_transactions == 1)
++            {
++                r.hit_count = 1;
++                return Err(StoreError::Integrity(
++                    "injected qualified Workspace transaction failure",
++                ));
++            }
++        }
++        Ok(())
++    })
++}
++
++#[cfg(all(test, feature = "test-instrumentation"))]
++#[test]
++fn verification_store_fault_boundary_is_one_shot() {
++    let branch = BranchId::new();
++    arm_verification_store_fault(branch, VerificationStoreFault::LaterAdmissionBatch).unwrap();
++    verification_candidate(BranchId::new(), 1);
++    assert!(verification_store_checkpoint(VerificationStoreFault::LaterAdmissionBatch).is_ok());
++    verification_candidate(branch, 1);
++    assert!(verification_store_checkpoint(VerificationStoreFault::LaterAdmissionBatch).is_ok());
++    verification_early_committed();
++    assert!(verification_store_checkpoint(VerificationStoreFault::LaterAdmissionBatch).is_err());
++    assert!(verification_store_checkpoint(VerificationStoreFault::LaterAdmissionBatch).is_ok());
++    let receipt = take_verification_store_fault_receipt().unwrap();
++    assert_eq!(
++        (
++            receipt.hit_count,
++            receipt.committed_early_transactions,
++            receipt.candidate_spill_count
++        ),
++        (1, 1, 1)
++    );
++    assert!(take_verification_store_fault_receipt().is_none());
++}
+diff --git a/crates/layerfs-layerstack-store/src/telemetry.rs b/crates/layerfs-layerstack-store/src/telemetry.rs
+index e87f9eeb..85e8ca7f 100644
+--- a/crates/layerfs-layerstack-store/src/telemetry.rs
++++ b/crates/layerfs-layerstack-store/src/telemetry.rs
+@@ -132,8 +132,20 @@ pub struct WorkspaceCommitDiagnostics {
+     pub edit_spool_peak_bytes: u64,
+     pub edit_spool_live_bytes: u64,
+     pub edit_spool_superseded_bytes: u64,
++    /// Aggregate owned spool inode st_blocks * 512 at observed mutation boundaries.
++    /// None means an observation failed; these are not logical spool lengths.
++    pub physical_spool_allocated_bytes: Option<u64>,
++    /// Lifetime observed high-water, including failed writes before rollback.
++    pub physical_spool_peak_bytes: Option<u64>,
++    pub physical_spool_observation_errors: u64,
++    pub physical_spool_observation_count: u64,
+     pub edit_tree_visits: u64,
+     pub edit_metric_nodes_scanned: u64,
++    pub namespace_base_paths_visited: u64,
++    pub namespace_final_paths_visited: u64,
++    pub namespace_dirty_nodes_visited: u64,
++    pub namespace_clean_nodes_visited: u64,
++    pub namespace_candidate_probe_nodes: u64,
+ }
+ 
+ impl WorkspaceCommitReceipt {
+@@ -330,6 +342,51 @@ pub fn note_workspace_commit_edit_state(
+     });
+ }
+ 
++/// Adds passive allocation observations without changing legacy receipt fields.
++pub fn note_workspace_physical_spool(
++    current: Option<u64>,
++    peak: Option<u64>,
++    errors: u64,
++    observations: u64,
++) {
++    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current_diagnostic| {
++        if let Some(diagnostic) = current_diagnostic.borrow_mut().as_mut() {
++            diagnostic.physical_spool_allocated_bytes = current;
++            diagnostic.physical_spool_peak_bytes = peak;
++            diagnostic.physical_spool_observation_errors = errors;
++            diagnostic.physical_spool_observation_count = observations;
++        }
++    });
++}
++
++/// Counts actual candidate traversal work only while diagnostic capture is active.
++pub fn note_workspace_namespace_visits(
++    base: u64,
++    final_paths: u64,
++    dirty: u64,
++    clean: u64,
++    probes: u64,
++) {
++    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
++        if let Some(diagnostic) = current.borrow_mut().as_mut() {
++            diagnostic.namespace_base_paths_visited =
++                diagnostic.namespace_base_paths_visited.saturating_add(base);
++            diagnostic.namespace_final_paths_visited = diagnostic
++                .namespace_final_paths_visited
++                .saturating_add(final_paths);
++            diagnostic.namespace_dirty_nodes_visited = diagnostic
++                .namespace_dirty_nodes_visited
++                .saturating_add(dirty);
++            diagnostic.namespace_clean_nodes_visited = diagnostic
++                .namespace_clean_nodes_visited
++                .saturating_add(clean);
++            diagnostic.namespace_candidate_probe_nodes = diagnostic
++                .namespace_candidate_probe_nodes
++                .saturating_add(probes);
++        }
++    });
++}
++
+ pub fn note_workspace_commit_tree_visits(visits: u64) {
+     WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+         if let Some(diagnostic) = current.borrow_mut().as_mut() {
+@@ -573,6 +630,7 @@ mod tests {
+             note_workspace_commit_edit_state(2, 3, 4, 5, 6, 7, 8, 9, 10);
+             note_workspace_commit_tree_visits(11);
+             note_workspace_commit_cdc(12);
++            note_workspace_namespace_visits(13, 14, 15, 16, 17);
+         }
+         let receipts = take_storage_receipts();
+         let [StorageReceipt::WorkspaceCommit(receipt)] = receipts.as_slice() else {
+@@ -595,8 +653,17 @@ mod tests {
+                 edit_spool_peak_bytes: 7,
+                 edit_spool_live_bytes: 8,
+                 edit_spool_superseded_bytes: 9,
++                physical_spool_allocated_bytes: None,
++                physical_spool_peak_bytes: None,
++                physical_spool_observation_errors: 0,
++                physical_spool_observation_count: 0,
+                 edit_tree_visits: 11,
+                 edit_metric_nodes_scanned: 10,
++                namespace_base_paths_visited: 13,
++                namespace_final_paths_visited: 14,
++                namespace_dirty_nodes_visited: 15,
++                namespace_clean_nodes_visited: 16,
++                namespace_candidate_probe_nodes: 17,
+             }
+         );
+     }
+diff --git a/crates/layerfs-layerstack-store/src/workspace.rs b/crates/layerfs-layerstack-store/src/workspace.rs
+index 253c95b9..c460587c 100644
+--- a/crates/layerfs-layerstack-store/src/workspace.rs
++++ b/crates/layerfs-layerstack-store/src/workspace.rs
+@@ -227,6 +227,8 @@ impl LayerStackStore {
+         built: BuiltRoot,
+     ) -> Result<CommitOutcome> {
+         let _operation = self.db.enter_operation()?;
++        #[cfg(feature = "test-instrumentation")]
++        crate::schema::verification_candidate(expected.id, built.counters.spill_count);
+         crate::telemetry::note_workspace_commit_cdc(built.counters.cdc_bytes_scanned);
+         if built.root_id == expected_root && new_base_layer_id == expected.base_layer_id {
+             return Ok(CommitOutcome::UpToDate {
+@@ -301,6 +303,10 @@ impl LayerStackStore {
+         }
+         statement_number += 1;
+         crate::schema::fail_transaction_statement(statement_number)?;
++        #[cfg(feature = "test-instrumentation")]
++        crate::schema::verification_store_checkpoint(
++            crate::schema::VerificationStoreFault::FinalPublication,
++        )?;
+         if transaction.execute(
+             crate::statements::workspace::ADVANCE_BRANCH,
+             rusqlite::params![
+diff --git a/crates/layerfs-sdk/Cargo.toml b/crates/layerfs-sdk/Cargo.toml
+index c7e7a20e..777788bd 100644
+--- a/crates/layerfs-sdk/Cargo.toml
++++ b/crates/layerfs-sdk/Cargo.toml
+@@ -5,6 +5,9 @@ edition.workspace = true
+ rust-version.workspace = true
+ license.workspace = true
+ 
++[features]
++test-instrumentation = ["layerfs-workspace/test-instrumentation"]
++
+ [dependencies]
+ layerfs-content = { path = "../layerfs-content" }
+ layerfs-layerstack-store = { path = "../layerfs-layerstack-store" }
+diff --git a/crates/layerfs-sdk/src/client.rs b/crates/layerfs-sdk/src/client.rs
+index ef0ac9bb..52d93883 100644
+--- a/crates/layerfs-sdk/src/client.rs
++++ b/crates/layerfs-sdk/src/client.rs
+@@ -31,6 +31,25 @@ struct ClientInner {
+ }
+ 
+ impl Client {
++    #[cfg(feature = "test-instrumentation")]
++    pub fn verification_workspace_state(
++        &self,
++        id: WorkspaceId,
++    ) -> Result<layerfs_workspace::VerificationWorkspaceState> {
++        Ok(self.0.workspaces.verification_workspace_state(id)?)
++    }
++
++    #[cfg(feature = "test-instrumentation")]
++    pub fn verification_disconnect_workspace_execution(
++        &self,
++        execution_id: ExecutionId,
++    ) -> Result<()> {
++        Ok(self
++            .0
++            .workspaces
++            .verification_disconnect_execution(execution_id)?)
++    }
++
+     pub fn connect(store: Arc<LayerStackStore>) -> Result<Self> {
+         Self::connect_inner(store, None)
+     }
+diff --git a/crates/layerfs-workspace/Cargo.toml b/crates/layerfs-workspace/Cargo.toml
+index e6a75a21..9590df61 100644
+--- a/crates/layerfs-workspace/Cargo.toml
++++ b/crates/layerfs-workspace/Cargo.toml
+@@ -8,6 +8,7 @@ license.workspace = true
+ [features]
+ default = ["host-fuse"]
+ host-fuse = ["layerfs-fuse/host"]
++test-instrumentation = ["layerfs-layerstack-store/test-instrumentation"]
+ 
+ [dependencies]
+ layerfs-content = { path = "../layerfs-content" }
+diff --git a/crates/layerfs-workspace/src/changes.rs b/crates/layerfs-workspace/src/changes.rs
+index 74e40eac..acc9201a 100644
+--- a/crates/layerfs-workspace/src/changes.rs
++++ b/crates/layerfs-workspace/src/changes.rs
+@@ -33,7 +33,7 @@ struct FinalEntry {
+ 
+ impl Workspace {
+     pub(crate) fn build_candidate(&mut self) -> Result<BuiltRoot> {
+-        #[cfg(debug_assertions)]
++        #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+         if INJECT_CANDIDATE_FAILURE.with(|inject| inject.replace(false)) {
+             return Err(StorageError::Integrity(
+                 "injected Workspace candidate failure",
+@@ -352,7 +352,7 @@ impl Workspace {
+ 
+     fn build_localized_candidate(&mut self) -> Result<Option<BuiltRoot>> {
+         let started = Instant::now();
+-        if self.nodes.values().any(|node| {
++        if self.nodes.values().inspect(|_| layerfs_layerstack_store::note_workspace_namespace_visits(0, 0, 0, 0, 1)).any(|node| {
+             matches!(&node.data, Data::Directory(directory) if !directory.changes.is_empty())
+         }) {
+             return Ok(None);
+@@ -362,6 +362,9 @@ impl Workspace {
+             let Some(node) = self
+                 .nodes
+                 .iter()
++                .inspect(|_| {
++                    layerfs_layerstack_store::note_workspace_namespace_visits(0, 0, 0, 0, 1)
++                })
+                 .find_map(|(node, value)| value.paths.contains(path).then_some(*node))
+             else {
+                 return Ok(None);
+@@ -390,6 +393,13 @@ impl Workspace {
+         let reader = CoreReader(&self.reader);
+         let mut entries = Vec::with_capacity(changed.len());
+         for node in changed {
++            layerfs_layerstack_store::note_workspace_namespace_visits(
++                0,
++                0,
++                u64::from(self.dirty.contains(&node)),
++                u64::from(!self.dirty.contains(&node)),
++                0,
++            );
+             let inode = self.nodes[&node]
+                 .canonical
+                 .ok_or(StorageError::Integrity("localized inode"))?;
+@@ -634,6 +644,13 @@ impl Workspace {
+                     128,
+                     256 * 1024,
+                 )?;
++                layerfs_layerstack_store::note_workspace_namespace_visits(
++                    page.entries.len() as u64,
++                    0,
++                    0,
++                    0,
++                    0,
++                );
+                 for (name, _) in page.entries {
+                     let path = join(&directory, name.as_str())?;
+                     let resolved = filesystem::resolve(
+@@ -677,6 +694,14 @@ impl Workspace {
+         let mut pending = vec![(ROOT, String::new())];
+         while let Some((directory, prefix)) = pending.pop() {
+             for (name, node) in self.directory_entries(directory)? {
++                let dirty = self.dirty.contains(&node);
++                layerfs_layerstack_store::note_workspace_namespace_visits(
++                    0,
++                    1,
++                    u64::from(dirty),
++                    u64::from(!dirty),
++                    0,
++                );
+                 let name = std::str::from_utf8(&name)
+                     .map_err(|_| StorageError::Integrity("Workspace path"))?;
+                 let path = if prefix.is_empty() {
+@@ -891,12 +916,12 @@ impl Workspace {
+     }
+ }
+ 
+-#[cfg(debug_assertions)]
++#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+ thread_local! {
+     static INJECT_CANDIDATE_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+ }
+ 
+-#[cfg(debug_assertions)]
++#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+ pub(crate) fn inject_candidate_failure_once() {
+     INJECT_CANDIDATE_FAILURE.with(|inject| inject.set(true));
+ }
+diff --git a/crates/layerfs-workspace/src/cow_tree.rs b/crates/layerfs-workspace/src/cow_tree.rs
+index cad87275..52c71911 100644
+--- a/crates/layerfs-workspace/src/cow_tree.rs
++++ b/crates/layerfs-workspace/src/cow_tree.rs
+@@ -92,6 +92,64 @@ pub(crate) struct Node {
+     pub data: Data,
+ }
+ 
++/// Event-boundary observations of owned regular spool inode allocation, not
++/// logical file lengths or a continuous filesystem allocator peak. Kept outside
++/// edit checkpoints so failed writes cannot erase resources they actually used.
++#[derive(Default)]
++pub(crate) struct PhysicalSpoolMetrics {
++    allocated: HashMap<NodeId, u64>,
++    current: u64,
++    peak: u64,
++    errors: u64,
++    observations: u64,
++}
++
++impl PhysicalSpoolMetrics {
++    pub(crate) fn observe(&mut self, node: NodeId, metadata: &std::fs::Metadata) {
++        use std::os::unix::fs::MetadataExt;
++        self.observations = self.observations.saturating_add(1);
++        let previous = self.allocated.get(&node).copied().unwrap_or(0);
++        let Some(allocated) = metadata.blocks().checked_mul(512) else {
++            self.error();
++            return;
++        };
++        let Some(current) = self
++            .current
++            .checked_sub(previous)
++            .and_then(|n| n.checked_add(allocated))
++        else {
++            self.error();
++            return;
++        };
++        self.allocated.insert(node, allocated);
++        self.current = current;
++        self.peak = self.peak.max(current);
++    }
++
++    pub(crate) fn removed(&mut self, node: NodeId) {
++        if let Some(bytes) = self.allocated.remove(&node) {
++            if let Some(current) = self.current.checked_sub(bytes) {
++                self.current = current;
++            } else {
++                self.error();
++            }
++        }
++    }
++
++    pub(crate) fn error(&mut self) {
++        self.errors = self.errors.saturating_add(1);
++    }
++
++    pub(crate) fn snapshot(&self) -> (Option<u64>, Option<u64>, u64, u64) {
++        (
++            (self.errors == 0).then_some(self.current),
++            (self.errors == 0).then_some(self.peak),
++            self.errors,
++            self.observations,
++        )
++    }
++}
++
+ pub struct Workspace {
+     pub(crate) store: LayerStackStore,
+     pub(crate) reader: SnapshotReader,
+@@ -103,6 +161,7 @@ pub struct Workspace {
+     pub(crate) spool: PathBuf,
+     pub(crate) spool_bytes: u64,
+     pub(crate) spool_bytes_peak: u64,
++    pub(crate) physical_spool: std::cell::RefCell<PhysicalSpoolMetrics>,
+     pub(crate) inline_bytes: u64,
+     pub(crate) piece_allocation_bytes: u64,
+     pub(crate) spool_write_metrics: SpoolWriteMetrics,
+@@ -227,6 +286,7 @@ impl Workspace {
+             spool,
+             spool_bytes: 0,
+             spool_bytes_peak: 0,
++            physical_spool: std::cell::RefCell::default(),
+             inline_bytes: 0,
+             piece_allocation_bytes: 0,
+             spool_write_metrics: SpoolWriteMetrics::default(),
+@@ -992,7 +1052,7 @@ impl Workspace {
+                     self.piece_allocation_bytes = self
+                         .piece_allocation_bytes
+                         .saturating_sub(pieces.logical_allocation_charge().unwrap_or(0));
+-                    let _ = std::fs::remove_file(spool);
++                    let _ = self.remove_spool_file(node, &spool);
+                 }
+             }
+         }
+diff --git a/crates/layerfs-workspace/src/execution.rs b/crates/layerfs-workspace/src/execution.rs
+index 81b3d402..df98598c 100644
+--- a/crates/layerfs-workspace/src/execution.rs
++++ b/crates/layerfs-workspace/src/execution.rs
+@@ -79,6 +79,26 @@ impl Execution {
+ }
+ 
+ impl Workspaces {
++    /// Verification-only loss of the live daemon transport after a caller-observed barrier.
++    #[cfg(feature = "test-instrumentation")]
++    pub fn verification_disconnect_execution(
++        &self,
++        execution_id: ExecutionId,
++    ) -> WorkspaceResult<()> {
++        let execution = self.execution(execution_id)?;
++        let process = execution
++            .process
++            .lock()
++            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
++        match process.as_ref() {
++            #[cfg(unix)]
++            Some(ExecutionProcess::Daemon(process)) => {
++                process.disconnect().map_err(WorkspaceError::Io)
++            }
++            _ => Err(WorkspaceError::InvalidExecution),
++        }
++    }
++
+     pub fn exec(
+         &self,
+         session_id: WorkspaceId,
+diff --git a/crates/layerfs-workspace/src/file_io.rs b/crates/layerfs-workspace/src/file_io.rs
+index f008f5c3..f57b1fd0 100644
+--- a/crates/layerfs-workspace/src/file_io.rs
++++ b/crates/layerfs-workspace/src/file_io.rs
+@@ -99,6 +99,13 @@ impl Workspace {
+             self.spool_bytes.saturating_sub(spool_live),
+             metric_nodes_scanned,
+         );
++        let (current, peak, errors, observations) = self.physical_spool.borrow().snapshot();
++        layerfs_layerstack_store::note_workspace_physical_spool(
++            current,
++            peak,
++            errors,
++            observations,
++        );
+         Ok(())
+     }
+ 
+@@ -125,9 +132,7 @@ impl Workspace {
+         if matches!(checkpoint.value.data, Data::File(FileData::Base { .. })) {
+             self.open_spools.remove(&checkpoint.node);
+             if let Data::File(FileData::Edited { spool, .. }) = &self.nodes[&checkpoint.node].data {
+-                if spool.exists() {
+-                    std::fs::remove_file(spool)?;
+-                }
++                self.remove_spool_if_exists(checkpoint.node, spool)?;
+             }
+         }
+         self.nodes.insert(checkpoint.node, checkpoint.value);
+@@ -227,6 +232,22 @@ impl Workspace {
+         let generation = self.next_generation()?;
+         let paths = self.nodes[&node].paths.iter().cloned().collect();
+         let appended = bytes.map_or(0, |bytes| bytes.len() as u64);
++        #[cfg(feature = "test-instrumentation")]
++        if appended > 0
++            && crate::lifecycle::consume_verification_fault(
++                self.branch_id,
++                crate::lifecycle::VerificationFault::NoSpace,
++                self.spool_bytes,
++            )
++        {
++            let mut lowered = self.policy;
++            lowered.max_spool_bytes = self.spool_bytes;
++            lowered.check(
++                self.spool_bytes
++                    .checked_add(appended)
++                    .ok_or(StoreError::InvalidInput("workspace spool limit"))?,
++            )?;
++        }
+         self.policy.check(
+             self.spool_bytes
+                 .checked_add(appended)
+@@ -235,13 +256,36 @@ impl Workspace {
+         self.check_piece_resources(&old, &next)?;
+         if let Some(bytes) = bytes {
+             let started = std::time::Instant::now();
++            #[cfg(feature = "test-instrumentation")]
++            let inject_short = crate::lifecycle::consume_verification_fault(
++                self.branch_id,
++                crate::lifecycle::VerificationFault::ShortAppend,
++                self.spool_bytes,
++            );
+             let file = self.spool_file(node, &spool)?;
+-            if file.metadata()?.len() != high_water {
++            let metadata = file
++                .metadata()
++                .inspect_err(|_| self.physical_spool.borrow_mut().error())?;
++            self.physical_spool.borrow_mut().observe(node, &metadata);
++            if metadata.len() != high_water {
+                 return Err(StoreError::Integrity("spool high-water"));
+             }
+-            if let Err(error) = append_spool(file, bytes, high_water) {
+-                file.set_len(high_water)
+-                    .map_err(|_| StoreError::Integrity("spool append cleanup failure"))?;
++            #[cfg(feature = "test-instrumentation")]
++            let append = if inject_short {
++                file.write_all_at(&bytes[..bytes.len() / 2], high_water)
++                    .and_then(|_| Err(std::io::Error::other("injected short spool append")))
++            } else {
++                append_spool(file, bytes, high_water)
++            };
++            #[cfg(not(feature = "test-instrumentation"))]
++            let append = append_spool(file, bytes, high_water);
++            // Observe actual allocation before rollback can erase a partial
++            // append's footprint. Measurement failures never change write results.
++            self.observe_spool_file(node, file);
++            if let Err(error) = append {
++                let cleanup = file.set_len(high_water);
++                self.observe_spool_file(node, file);
++                cleanup.map_err(|_| StoreError::Integrity("spool append cleanup failure"))?;
+                 return Err(error.into());
+             }
+             self.spool_write_metrics.write_bytes = self
+@@ -494,11 +538,9 @@ impl Workspace {
+     pub(crate) fn clear_spool(&mut self) -> Result<()> {
+         self.invalidate_capture();
+         self.open_spools.clear();
+-        for value in self.nodes.values() {
++        for (node, value) in &self.nodes {
+             if let Data::File(FileData::Edited { spool, .. }) = &value.data {
+-                if spool.exists() {
+-                    std::fs::remove_file(spool)?;
+-                }
++                self.remove_spool_if_exists(*node, spool)?;
+             }
+         }
+         self.spool_bytes = 0;
+@@ -530,6 +572,7 @@ impl Workspace {
+         let spool = self.spool.join(node.0.to_string());
+         let started = std::time::Instant::now();
+         let file = create_spool(&spool)?;
++        self.observe_spool_file(node, &file);
+         self.note_spool_open(elapsed_ns(started));
+         let data = Data::File(FileData::Edited {
+             base: None,
+@@ -572,9 +615,10 @@ impl Workspace {
+                 .ok_or(StoreError::InvalidInput("workspace piece allocation limit"))?;
+             let started = std::time::Instant::now();
+             let file = create_spool(&path)?;
++            self.observe_spool_file(node, &file);
+             let open_ns = elapsed_ns(started);
+             if self.open_spools.contains_key(&node) {
+-                let _ = std::fs::remove_file(path);
++                let _ = self.remove_spool_file(node, &path);
+                 return Err(StoreError::Integrity("spool descriptor"));
+             }
+             self.nodes.get_mut(&node).unwrap().data = Data::File(FileData::Edited {
+@@ -597,13 +641,65 @@ impl Workspace {
+             .open_spools
+             .get(&node)
+             .ok_or(StoreError::Integrity("spool descriptor"))?;
+-        let open = file.metadata()?;
+-        let linked = std::fs::metadata(path)?;
++        let open = file
++            .metadata()
++            .inspect_err(|_| self.physical_spool.borrow_mut().error())?;
++        let linked =
++            std::fs::metadata(path).inspect_err(|_| self.physical_spool.borrow_mut().error())?;
+         if open.dev() != linked.dev() || open.ino() != linked.ino() {
++            self.physical_spool.borrow_mut().error();
+             return Err(StoreError::Integrity("spool descriptor identity"));
+         }
++        self.physical_spool.borrow_mut().observe(node, &open);
+         Ok(file)
+     }
++
++    fn observe_spool_file(&self, node: NodeId, file: &File) {
++        match file.metadata() {
++            Ok(metadata) => self.physical_spool.borrow_mut().observe(node, &metadata),
++            Err(_) => self.physical_spool.borrow_mut().error(),
++        }
++    }
++
++    pub(crate) fn remove_spool_file(&self, node: NodeId, path: &Path) -> std::io::Result<()> {
++        match std::fs::metadata(path) {
++            Ok(metadata) => self.physical_spool.borrow_mut().observe(node, &metadata),
++            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
++            Err(_) => self.physical_spool.borrow_mut().error(),
++        }
++        let result = std::fs::remove_file(path);
++        if result.is_ok()
++            || result
++                .as_ref()
++                .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
++        {
++            self.physical_spool.borrow_mut().removed(node);
++        }
++        result
++    }
++
++    pub(crate) fn remove_spool_if_exists(&self, node: NodeId, path: &Path) -> std::io::Result<()> {
++        // Reuse the metadata lookup previously performed by Path::exists.
++        // Preserve its error suppression; only the observation becomes unknown.
++        match std::fs::metadata(path) {
++            Ok(metadata) => {
++                self.physical_spool.borrow_mut().observe(node, &metadata);
++                let result = std::fs::remove_file(path);
++                if result.is_ok() {
++                    self.physical_spool.borrow_mut().removed(node);
++                }
++                result
++            }
++            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
++                self.physical_spool.borrow_mut().removed(node);
++                Ok(())
++            }
++            Err(_) => {
++                self.physical_spool.borrow_mut().error();
++                Ok(())
++            }
++        }
++    }
+     fn note_spool_open(&mut self, ns: u64) {
+         self.spool_write_metrics.write_open_count =
+             self.spool_write_metrics.write_open_count.saturating_add(1);
+@@ -797,6 +893,97 @@ mod tests {
+         std::fs::remove_dir_all(root).unwrap();
+     }
+ 
++    #[test]
++    fn physical_spool_peak_survives_short_append_reclaim_and_discard() {
++        let (root, mut workspace) = workspace("physical-spool-accounting");
++        let first = workspace.create_file(ROOT, b"first", 0o600).unwrap().node;
++        let second = workspace.create_file(ROOT, b"second", 0o600).unwrap().node;
++        workspace.write(first, 0, b"a").unwrap();
++        workspace.write(second, 0, &[0x53; 8192]).unwrap();
++        let actual = || {
++            workspace
++                .open_spools
++                .values()
++                .map(|f| f.metadata().unwrap().blocks() * 512)
++                .sum::<u64>()
++        };
++        assert_eq!(
++            workspace.physical_spool.borrow().snapshot().0,
++            Some(actual())
++        );
++        let first_blocks = workspace.open_spools[&first].metadata().unwrap().blocks() * 512;
++        let initial_peak = workspace.physical_spool.borrow().snapshot().1.unwrap();
++        let failed = workspace.create_file(ROOT, b"failed", 0o600).unwrap().node;
++        let logical_before = (workspace.spool_bytes, workspace.spool_bytes_peak);
++        INJECT_SHORT_APPEND.with(|inject| inject.set(true));
++        assert!(workspace.write(failed, 0, &vec![0xa5; 256 * 1024]).is_err());
++        assert_eq!(
++            (workspace.spool_bytes, workspace.spool_bytes_peak),
++            logical_before
++        );
++        assert_eq!(workspace.open_spools[&failed].metadata().unwrap().len(), 0);
++        let (current, peak, errors, count) = workspace.physical_spool.borrow().snapshot();
++        let actual = workspace
++            .open_spools
++            .values()
++            .map(|f| f.metadata().unwrap().blocks() * 512)
++            .sum::<u64>();
++        assert_eq!(current, Some(actual));
++        assert!(
++            peak.unwrap() > initial_peak,
++            "partial append allocation must be observed before truncation"
++        );
++        assert_eq!(errors, 0);
++        assert!(count > 0);
++        let capture = layerfs_layerstack_store::capture_workspace_commit_diagnostics().unwrap();
++        {
++            let _timer = layerfs_layerstack_store::begin_workspace_commit(
++                layerfs_layerstack_store::CaptureMode::Materialized,
++            )
++            .unwrap();
++            workspace.note_commit_edit_state().unwrap();
++        }
++        let diagnostic = layerfs_layerstack_store::take_workspace_commit_diagnostics()
++            .pop()
++            .unwrap();
++        assert_eq!(diagnostic.physical_spool_allocated_bytes, current);
++        assert_eq!(diagnostic.physical_spool_peak_bytes, peak);
++        assert_eq!(diagnostic.physical_spool_observation_errors, 0);
++        drop(capture);
++
++        workspace.pin(first, false).unwrap();
++        workspace.unlink(ROOT, b"first", false).unwrap();
++        assert_eq!(
++            workspace.physical_spool.borrow().snapshot().0,
++            current,
++            "open unlinked spool stays charged"
++        );
++        workspace.unpin(first).unwrap();
++        assert_eq!(
++            workspace.physical_spool.borrow().snapshot().0,
++            Some(actual - first_blocks)
++        );
++        assert_eq!(workspace.physical_spool.borrow().snapshot().1, peak);
++
++        workspace.commit().unwrap();
++        assert_eq!(workspace.physical_spool.borrow().snapshot().0, Some(0));
++        assert_eq!(
++            workspace.physical_spool.borrow().snapshot().1,
++            peak,
++            "Commit rebase keeps lifetime allocation evidence"
++        );
++        let last = workspace.create_file(ROOT, b"last", 0o600).unwrap().node;
++        workspace.write(last, 0, b"later").unwrap();
++        workspace.discard().unwrap();
++        assert_eq!(workspace.physical_spool.borrow().snapshot().0, Some(0));
++        assert_eq!(workspace.physical_spool.borrow().snapshot().1, peak);
++        workspace.physical_spool.borrow_mut().error();
++        assert_eq!(workspace.physical_spool.borrow().snapshot().0, None);
++        assert_eq!(workspace.physical_spool.borrow().snapshot().1, None);
++        drop(workspace);
++        std::fs::remove_dir_all(root).unwrap();
++    }
++
+     #[test]
+     fn workspace_inline_limit_accepts_eight_mib_and_rejects_the_next_byte() {
+         let (root, mut workspace) = workspace("inline-limit");
+diff --git a/crates/layerfs-workspace/src/lib.rs b/crates/layerfs-workspace/src/lib.rs
+index acbcb0d3..d303f9cf 100644
+--- a/crates/layerfs-workspace/src/lib.rs
++++ b/crates/layerfs-workspace/src/lib.rs
+@@ -28,6 +28,11 @@ pub(crate) use cow_tree::{Attr, Kind, NodeId, Workspace, ROOT};
+ pub use layerfs_daemon::protocol::CgroupResourceSample;
+ pub use layerfs_daemon::ResourceSampleClock;
+ pub use lifecycle::WorkspaceState;
++#[cfg(feature = "test-instrumentation")]
++pub use lifecycle::{
++    arm_verification_fault, take_verification_fault_receipt, VerificationFault,
++    VerificationFaultReceipt, VerificationWorkspaceState,
++};
+ pub(crate) use limits::ResourcePolicy;
+ pub use output::{OutputPage, OutputReader};
+ pub use reconcile::{
+@@ -44,19 +49,19 @@ pub use session::{
+     WorkspaceResult, WorkspaceSession, WorkspaceSummary,
+ };
+ 
+-#[cfg(debug_assertions)]
++#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+ #[doc(hidden)]
+ pub fn inject_projection_refresh_failure_once() {
+     projection::inject_refresh_failure_once();
+ }
+ 
+-#[cfg(debug_assertions)]
++#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+ #[doc(hidden)]
+ pub fn inject_projection_resume_failure_once() {
+     projection::inject_resume_failure_once();
+ }
+ 
+-#[cfg(debug_assertions)]
++#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+ #[doc(hidden)]
+ pub fn inject_candidate_failure_once() {
+     changes::inject_candidate_failure_once();
+diff --git a/crates/layerfs-workspace/src/lifecycle.rs b/crates/layerfs-workspace/src/lifecycle.rs
+index d01e8da7..833b6fac 100644
+--- a/crates/layerfs-workspace/src/lifecycle.rs
++++ b/crates/layerfs-workspace/src/lifecycle.rs
+@@ -73,6 +73,14 @@ impl Workspace {
+                 CommitTransition::Rebased,
+             ));
+         }
++        #[cfg(feature = "test-instrumentation")]
++        if consume_verification_fault(
++            self.branch_id,
++            VerificationFault::Candidate,
++            self.spool_bytes,
++        ) {
++            crate::changes::inject_candidate_failure_once();
++        }
+         let candidate = self.build_candidate()?;
+         let outcome =
+             self.store
+@@ -212,16 +220,14 @@ impl Workspace {
+                 if !self.open_spools.contains_key(&id) {
+                     return Err(StorageError::Integrity("spool descriptor"));
+                 }
+-                obsolete_spools.push(spool);
++                obsolete_spools.push((id, spool));
+             }
+             nodes.insert(id, rebased);
+         }
+         self.open_spools
+             .retain(|node, _| retained_spool_nodes.contains(node));
+-        for spool in obsolete_spools {
+-            if spool.exists() {
+-                std::fs::remove_file(spool)?;
+-            }
++        for (node, spool) in obsolete_spools {
++            self.remove_spool_if_exists(node, &spool)?;
+         }
+         self.reader = committed.reader.clone();
+         self.expected_head = expected_head;
+@@ -269,6 +275,7 @@ impl Workspace {
+             self.policy,
+         )?;
+         committed.state = WorkspaceState::Active;
++        committed.physical_spool = std::mem::take(&mut self.physical_spool);
+         *self = committed;
+         Ok(())
+     }
+@@ -299,6 +306,30 @@ impl Workspace {
+ }
+ 
+ impl Workspaces {
++    #[cfg(feature = "test-instrumentation")]
++    pub fn verification_workspace_state(
++        &self,
++        id: WorkspaceId,
++    ) -> WorkspaceResult<VerificationWorkspaceState> {
++        let worker = self.worker(id)?;
++        let workspace = worker
++            .workspace
++            .lock()
++            .map_err(|_| WorkspaceError::WorkspaceBusy)?;
++        let (physical_current, physical_peak, physical_errors, physical_observations) =
++            workspace.physical_spool.borrow().snapshot();
++        Ok(VerificationWorkspaceState {
++            spool_bytes: workspace.spool_bytes,
++            spool_peak_bytes: workspace.spool_bytes_peak,
++            physical_spool_allocated_bytes: physical_current,
++            physical_spool_peak_bytes: physical_peak,
++            physical_spool_observation_errors: physical_errors,
++            physical_spool_observation_count: physical_observations,
++            mutation_generation: workspace.mutation_generation,
++            open_spool_files: workspace.open_spools.len(),
++        })
++    }
++
+     pub fn create_workspace_session(
+         &self,
+         request: CreateWorkspaceSession,
+@@ -494,6 +525,16 @@ impl Workspaces {
+             )?;
+             committed
+         })();
++        #[cfg(feature = "test-instrumentation")]
++        if matches!(&result, Ok((WorkspaceCommitResult::Created { .. }, _)))
++            && consume_verification_fault(
++                worker.request.branch_id,
++                VerificationFault::PresentationResume,
++                0,
++            )
++        {
++            crate::projection::inject_resume_failure_once();
++        }
+         let presentation = match &result {
+             Ok((
+                 WorkspaceCommitResult::Created { .. } | WorkspaceCommitResult::UpToDate { .. },
+@@ -1252,3 +1293,122 @@ mod tests {
+         std::fs::remove_dir_all(root).unwrap();
+     }
+ }
++
++#[cfg(feature = "test-instrumentation")]
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum VerificationFault {
++    Candidate,
++    PresentationResume,
++    ShortAppend,
++    NoSpace,
++}
++#[cfg(feature = "test-instrumentation")]
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub struct VerificationWorkspaceState {
++    pub spool_bytes: u64,
++    pub spool_peak_bytes: u64,
++    pub physical_spool_allocated_bytes: Option<u64>,
++    pub physical_spool_peak_bytes: Option<u64>,
++    pub physical_spool_observation_errors: u64,
++    pub physical_spool_observation_count: u64,
++    pub mutation_generation: u64,
++    pub open_spool_files: usize,
++}
++#[cfg(feature = "test-instrumentation")]
++#[derive(Clone, Debug)]
++pub struct VerificationFaultReceipt {
++    pub branch: layerfs_layerstack_store::BranchId,
++    pub fault: VerificationFault,
++    pub hit_count: u64,
++    pub spool_bytes_before: u64,
++}
++#[cfg(feature = "test-instrumentation")]
++static VERIFICATION_FAULT: std::sync::Mutex<Option<VerificationFaultReceipt>> =
++    std::sync::Mutex::new(None);
++#[cfg(feature = "test-instrumentation")]
++static VERIFICATION_FAULT_ARMED: std::sync::atomic::AtomicBool =
++    std::sync::atomic::AtomicBool::new(false);
++#[cfg(feature = "test-instrumentation")]
++pub fn arm_verification_fault(
++    branch: layerfs_layerstack_store::BranchId,
++    fault: VerificationFault,
++) -> WorkspaceResult<()> {
++    let mut state = VERIFICATION_FAULT
++        .lock()
++        .map_err(|_| WorkspaceError::WorkspaceBusy)?;
++    if state.is_some() {
++        return Err(WorkspaceError::WorkspaceBusy);
++    }
++    *state = Some(VerificationFaultReceipt {
++        branch,
++        fault,
++        hit_count: 0,
++        spool_bytes_before: 0,
++    });
++    VERIFICATION_FAULT_ARMED.store(true, std::sync::atomic::Ordering::Release);
++    Ok(())
++}
++#[cfg(feature = "test-instrumentation")]
++pub fn take_verification_fault_receipt() -> WorkspaceResult<Option<VerificationFaultReceipt>> {
++    VERIFICATION_FAULT_ARMED.store(false, std::sync::atomic::Ordering::Release);
++    Ok(VERIFICATION_FAULT
++        .lock()
++        .map_err(|_| WorkspaceError::WorkspaceBusy)?
++        .take())
++}
++#[cfg(feature = "test-instrumentation")]
++pub(crate) fn consume_verification_fault(
++    branch: layerfs_layerstack_store::BranchId,
++    fault: VerificationFault,
++    spool_bytes: u64,
++) -> bool {
++    if !VERIFICATION_FAULT_ARMED.load(std::sync::atomic::Ordering::Acquire) {
++        return false;
++    }
++    let Ok(mut state) = VERIFICATION_FAULT.lock() else {
++        return false;
++    };
++    let Some(receipt) = state.as_mut() else {
++        return false;
++    };
++    if receipt.branch != branch || receipt.fault != fault || receipt.hit_count != 0 {
++        return false;
++    }
++    receipt.hit_count = 1;
++    receipt.spool_bytes_before = spool_bytes;
++    VERIFICATION_FAULT_ARMED.store(false, std::sync::atomic::Ordering::Release);
++    true
++}
++
++#[cfg(all(test, feature = "test-instrumentation"))]
++#[test]
++fn verification_fault_scope_is_one_shot() {
++    let branch = layerfs_layerstack_store::BranchId::new();
++    let other = layerfs_layerstack_store::BranchId::new();
++    assert!(!consume_verification_fault(
++        branch,
++        VerificationFault::ShortAppend,
++        0
++    ));
++    arm_verification_fault(branch, VerificationFault::ShortAppend).unwrap();
++    assert!(!consume_verification_fault(
++        other,
++        VerificationFault::ShortAppend,
++        0
++    ));
++    assert!(std::thread::spawn(move || consume_verification_fault(
++        branch,
++        VerificationFault::ShortAppend,
++        4096
++    ))
++    .join()
++    .unwrap());
++    assert!(!consume_verification_fault(
++        branch,
++        VerificationFault::ShortAppend,
++        8192
++    ));
++    let receipt = take_verification_fault_receipt().unwrap().unwrap();
++    assert_eq!((receipt.hit_count, receipt.spool_bytes_before), (1, 4096));
++    assert!(take_verification_fault_receipt().unwrap().is_none());
++}
+diff --git a/crates/layerfs-workspace/src/projection.rs b/crates/layerfs-workspace/src/projection.rs
+index a8c9c13b..5ad73126 100644
+--- a/crates/layerfs-workspace/src/projection.rs
++++ b/crates/layerfs-workspace/src/projection.rs
+@@ -217,7 +217,7 @@ pub(crate) fn record_read_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<(
+     let Some(transport) = transport else {
+         return Ok(());
+     };
+-    if transport.kernel_read_requests == 0 {
++    if transport.kernel_read_requests == 0 && transport.kernel_callback_count() == 0 {
+         return Ok(());
+     }
+     let mut receipt = worker
+@@ -226,6 +226,33 @@ pub(crate) fn record_read_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<(
+         .map_err(|_| WorkspaceError::WorkspaceBusy)?
+         .reader
+         .take_read_metrics()?;
++    receipt.callback_lookup = transport.callback_lookup;
++    receipt.callback_getattr = transport.callback_getattr;
++    receipt.callback_setattr = transport.callback_setattr;
++    receipt.callback_readlink = transport.callback_readlink;
++    receipt.callback_mknod = transport.callback_mknod;
++    receipt.callback_mkdir = transport.callback_mkdir;
++    receipt.callback_unlink = transport.callback_unlink;
++    receipt.callback_rmdir = transport.callback_rmdir;
++    receipt.callback_symlink = transport.callback_symlink;
++    receipt.callback_rename = transport.callback_rename;
++    receipt.callback_link = transport.callback_link;
++    receipt.callback_open = transport.callback_open;
++    receipt.callback_read = transport.callback_read;
++    receipt.callback_write = transport.callback_write;
++    receipt.callback_flush = transport.callback_flush;
++    receipt.callback_release = transport.callback_release;
++    receipt.callback_fsync = transport.callback_fsync;
++    receipt.callback_opendir = transport.callback_opendir;
++    receipt.callback_readdir = transport.callback_readdir;
++    receipt.callback_readdirplus = transport.callback_readdirplus;
++    receipt.callback_releasedir = transport.callback_releasedir;
++    receipt.callback_fsyncdir = transport.callback_fsyncdir;
++    receipt.callback_statfs = transport.callback_statfs;
++    receipt.callback_access = transport.callback_access;
++    receipt.callback_create = transport.callback_create;
++    receipt.directory_entries_returned = transport.directory_entries_returned;
++    receipt.directory_nonzero_offset_requests = transport.directory_nonzero_offset_requests;
+     receipt.max_readahead_bytes = transport.max_readahead_bytes;
+     receipt.init_capabilities = transport.init_capabilities;
+     receipt.kernel_read_requests = transport.kernel_read_requests;
+@@ -260,7 +287,7 @@ pub(crate) fn record_read_metrics(worker: &WorkspaceWorker) -> WorkspaceResult<(
+ }
+ 
+ pub(crate) fn resume(worker: &WorkspaceWorker) -> WorkspaceResult<()> {
+-    #[cfg(debug_assertions)]
++    #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+     if INJECT_RESUME_FAILURE.with(|inject| inject.replace(false)) {
+         return Err(WorkspaceError::Io(std::io::Error::other(
+             "injected projection resume failure",
+@@ -421,7 +448,7 @@ pub(crate) fn refresh(
+     daemon: Option<&crate::daemon::DaemonOwner>,
+ ) -> WorkspaceResult<()> {
+     end(worker)?;
+-    #[cfg(debug_assertions)]
++    #[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+     if INJECT_REFRESH_FAILURE.with(|inject| inject.replace(false)) {
+         return Err(WorkspaceError::Io(std::io::Error::other(
+             "injected projection refresh failure",
+@@ -435,18 +462,18 @@ pub(crate) fn refresh(
+     Ok(())
+ }
+ 
+-#[cfg(debug_assertions)]
++#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+ thread_local! {
+     static INJECT_REFRESH_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+     static INJECT_RESUME_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+ }
+ 
+-#[cfg(debug_assertions)]
++#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+ pub(crate) fn inject_refresh_failure_once() {
+     INJECT_REFRESH_FAILURE.with(|inject| inject.set(true));
+ }
+ 
+-#[cfg(debug_assertions)]
++#[cfg(any(debug_assertions, feature = "test-instrumentation"))]
+ pub(crate) fn inject_resume_failure_once() {
+     INJECT_RESUME_FAILURE.with(|inject| inject.set(true));
+ }

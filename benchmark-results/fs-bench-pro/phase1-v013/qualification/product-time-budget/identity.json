@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "-p",
+    "fs-benchmark-pro",
+    "workspace_bench::product_budget_tests::cumulative_budget_keeps_prior_phases_and_exact_boundary",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "sources": {
+    "benchmark/fs-bench-pro/src/workspace_bench.rs": "7467f5819a8e86e7ebd929d85d8edec8b99fdaae14c105f80f7fa8b3d6a0f47e",
+    "benchmark/fs-bench-pro/src/sdk_file_edit.rs": "729f4499b652f8bb39f0f90e99dcb9cc4a013650c6db1ac986a5b4283b5bdd6c"
+  },
+  "scope": "One deterministic fake-duration budget boundary test, no product/fixture/benchmark workloads"
+}

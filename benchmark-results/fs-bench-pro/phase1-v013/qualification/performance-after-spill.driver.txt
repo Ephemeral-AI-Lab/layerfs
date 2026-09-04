@@ -1,0 +1,6 @@
+START namespace500 --case namespace-subtree-relocate-delete-500 --seed 2
+FINISH namespace500 exit=0
+START namespace500 --case namespace-subtree-relocate-delete-500 --seed 3
+FINISH namespace500 exit=0
+START workspace_change_locality --family workspace_change_locality --all
+FINISH workspace_change_locality exit=1

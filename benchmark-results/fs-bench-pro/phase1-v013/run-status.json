@@ -1,6 +1,6 @@
 {
   "schema": "fs-bench-pro-v013-progress-v1",
-  "phase": "resource-repair-before-resuming-performance",
+  "phase": "sealing-runtime-suppression-and-final-verification",
   "product_baseline": "1e81e9b8cf871324341c221a51b0a0239c580da9",
   "planned_timed_cases": 130,
   "planned_sample_slots": 390,
@@ -25,79 +25,90 @@
       "next_action": "Publish the checkpoint evidence and close shared infrastructure issue #22; final family and terminal qualification remain separate."
     },
     "23": {
-      "status": "corrected-performance-complete",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [
         "qualification/payload-performance.stdout.txt"
       ],
-      "next_action": "Complete 23 remaining independent verifier slots; retain payload-create-1m seed-1 proof under its original source.",
-      "compatible_performance_passes": 24
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
+      "compatible_performance_passes": 24,
+      "historical_status_before_sql_capture_audit": "corrected-performance-complete"
     },
     "24": {
-      "status": "corrected-performance-complete",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [
         "qualification/tiny-performance.stdout.txt"
       ],
-      "next_action": "Run all 60 current independent verifier slots; the old bulk-delete500 seed-1 proof is invalidated.",
-      "compatible_performance_passes": 60
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
+      "compatible_performance_passes": 60,
+      "historical_status_before_sql_capture_audit": "corrected-performance-complete"
     },
     "25": {
-      "status": "corrected-performance-complete",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [],
-      "next_action": "Run 36 independent verifier slots after broad performance collection.",
-      "compatible_performance_passes": 36
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
+      "compatible_performance_passes": 36,
+      "historical_status_before_sql_capture_audit": "corrected-performance-complete"
     },
     "26": {
-      "status": "corrected-performance-complete",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [],
-      "next_action": "Run 12 independent Git semantic/custody/full-tree verifier slots after performance collection.",
-      "compatible_performance_passes": 12
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
+      "compatible_performance_passes": 12,
+      "historical_status_before_sql_capture_audit": "corrected-performance-complete"
     },
     "27": {
-      "status": "corrected-performance-complete",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [],
-      "next_action": "Run 12 independent namespace verifier slots after performance collection.",
-      "compatible_performance_passes": 12
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
+      "compatible_performance_passes": 12,
+      "historical_status_before_sql_capture_audit": "corrected-performance-complete"
     },
     "28": {
-      "status": "43-performance-passes-5-remaining",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [],
-      "next_action": "Finish dense100 seeds 2/3 and dense500 seeds 1/2/3; all48 independent verifier slots remain.",
-      "compatible_performance_passes": 43
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
+      "compatible_performance_passes": 43,
+      "historical_status_before_sql_capture_audit": "43-performance-passes-5-remaining"
     },
     "29": {
-      "status": "implemented-performance-not-yet-collected",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [],
-      "next_action": "Collect prescribed performance first, then independent verification; extended selections remain explicit.",
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
       "compatible_performance_passes": 0,
-      "planned_performance_slots": 12
+      "planned_performance_slots": 12,
+      "historical_status_before_sql_capture_audit": "implemented-performance-not-yet-collected"
     },
     "30": {
-      "status": "implemented-performance-not-yet-collected",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [],
-      "next_action": "Collect prescribed performance first, then independent verification; extended selections remain explicit.",
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
       "compatible_performance_passes": 0,
-      "planned_performance_slots": 30
+      "planned_performance_slots": 30,
+      "historical_status_before_sql_capture_audit": "implemented-performance-not-yet-collected"
     },
     "31": {
-      "status": "implemented-performance-not-yet-collected",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [],
-      "next_action": "Collect prescribed performance first, then independent verification; extended selections remain explicit.",
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
       "compatible_performance_passes": 0,
-      "planned_performance_slots": 60
+      "planned_performance_slots": 60,
+      "historical_status_before_sql_capture_audit": "implemented-performance-not-yet-collected"
     },
     "32": {
-      "status": "implemented-performance-not-yet-collected",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [],
-      "next_action": "Collect prescribed performance first, then independent verification; extended selections remain explicit.",
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
       "compatible_performance_passes": 0,
-      "planned_performance_slots": 36
+      "planned_performance_slots": 36,
+      "historical_status_before_sql_capture_audit": "implemented-performance-not-yet-collected"
     },
     "33": {
-      "status": "implemented-performance-not-yet-collected",
+      "status": "implemented-awaiting-clean-performance",
       "evidence": [],
-      "next_action": "Collect prescribed performance first, then independent verification; extended selections remain explicit.",
+      "next_action": "Collect authentic performance after SQL-history repair; previous timings retained as contaminated diagnostics; independent verification follows performance.",
       "compatible_performance_passes": 0,
-      "planned_performance_slots": 60
+      "planned_performance_slots": 60,
+      "historical_status_before_sql_capture_audit": "implemented-performance-not-yet-collected"
     },
     "34": {
       "status": "1-of-28-proof-subcases-passed",
@@ -260,7 +271,7 @@
     "raw_fail": 36,
     "status": "preserved original baseline;not corrected-candidate evidence"
   },
-  "corrected_candidate_executed_slots": 191,
+  "corrected_candidate_executed_slots": 388,
   "github_policy_updates": {
     "21": "updated;remainsopen",
     "35": "updated;remainsopen",
@@ -278,7 +289,7 @@
     "34": "updated;remainsopen",
     "23": "updated;remainsopen"
   },
-  "corrected_candidate_source": "d1325d7f44ef205f5fa748130f3b9868973e9edc",
+  "corrected_candidate_source": "6c54f8d74a8f07867c6b658da674603c4be6a7c3",
   "corrected_selected": {
     "tiny-create-1/seed1/performance": "rawpass; evidencevalid; Commit22.911ms on100000-filebackground",
     "tiny-bulk-create-100/seed1/performance": "rawpass; fences andCommit completed; independentverificationpending"
@@ -292,9 +303,9 @@
     "evidence": "qualification/corrected-tiny-bulk-delete-500-verify.stdout.txt",
     "next_action": "Recollect this independent proof with the remaining tiny verifiers."
   },
-  "publication_status": "Remote codex/v013-phase1 confirmed7a6e119a; main remains1e81e9b8. Temporarytransport43/58 confirmed; nextpush timedout60s, helperterminated, remoteoutcomeawaitsboundedcheck. Localcommits intact.",
+  "publication_status": "Original branch codex/v013-phase1 published through b1cf098a; all58 temporary transport stages acknowledged. main unchanged. New evidence/implementation closeout pending.",
   "upcoming_verifier_source_policy": "Select the qualified successor with explicitly reviewed source/preparation mappings. Retain only payload and sustained proofs; old tiny-delete proof remains invalidated. Mappings are prepared, not fully reviewed.",
-  "next_action": "Repair dense500 seed2 post-publication rebase RSS breach; one focused regression and selected seed2 integration; then remaining performance.",
+  "next_action": "Seal focused suppression implementation/model proofs, build once, map373exactperformance+2retainedproofs, refreshreport, execute380remainingverifiers.",
   "sustained": {
     "status": "PASS",
     "source": "e7840da1da81404ff228be734a91783cebb946ca",
@@ -319,9 +330,9 @@
     },
     "repair": "101626e7 retires the previous edit generation after successful nonempty-to-empty transition; unchanged nonempty4096 gate."
   },
-  "scope": "Phase1 correct wiring/fullrequiredcoverage andfunctionalresourcecleanupPASS; optional3-5sbulkcreateoptimizationseparatePhase2",
+  "scope": "Phase1 policy b1cf098a disables14exactscenarioIDs acrossseeds/revisions; all definitions/oldoutcomes retainedforPhase2. Every active correctness/resource/cleanup gate remains required.",
   "execution_cadence": "user2026-09-04: performancefirst; smallestregression+oneintegrationafterfix; fullverificationlate; batchbookkeeping",
-  "active_family": "workspace_change_locality",
+  "active_family": null,
   "namespace_preparation_repair": {
     "status": "Runtime-confirmed: namespace500 all three performance seeds PASS; full independent verification pending.",
     "failed_seed1": "attempts/namespace-subtree-relocate-delete-500-s1-performance-12f5f3256014",
@@ -330,7 +341,7 @@
     "source": "a40b17e05486e5b747b689e7710475d739556a69",
     "preparation_seconds": 127.030938416,
     "outer_sample_seconds": 178.285860958,
-    "next": "Namespace performance complete; retain original preparation timeout/interruption as unexecuted/not-run and verify the family later.",
+    "next": "Historical preparation repair confirmed. namespace500 is now disabled for Phase1 by explicit user scope; implementation/evidence retained forPhase2.",
     "corrected_all_seeds": [
       "attempts/namespace-subtree-relocate-delete-500-s1-performance-6a046f9b5838",
       "attempts/namespace-subtree-relocate-delete-500-s2-performance-18608b6eec7b",
@@ -342,13 +353,9 @@
       138.062860708
     ]
   },
-  "compatible_performance_passes": 187,
-  "current_failed_performance_slots": 0,
-  "unexecuted_performance_slots": 203,
   "retained_timed_verifier_slots": 1,
   "retained_reliability_proof_slots": 1,
   "source_compatibility_status": "Mappings prepared; final review pending. Checkpoint counts are not terminal admission.",
-  "count_scope": "Unique current-candidate new-family slots; historical attempts and the separate inherited capped cohort are excluded.",
   "planned_inherited_capped_performance_slots": 25,
   "planned_inherited_capped_verifier_slots": 5,
   "retained_proofs": [
@@ -386,16 +393,66 @@
     "total_sample_seconds": 63.608725583,
     "cleanup": "PASS"
   },
-  "retained_valid_corrected_performance_slots": 190,
   "current_resource_failure": {
     "case": "workspace-dense-rewrite-500",
     "seed": 2,
     "source": "d1325d7f44ef205f5fa748130f3b9868973e9edc",
     "evidence": "attempts/workspace-dense-rewrite-500-s2-performance-7eed48854a32",
-    "status": "FAIL; source investigation confirmed publication completed before RSS stop during rebase",
+    "status": "FIXED; opt-in SQLhistory root repair confirmed by public dense500seed2 PASS with independent resource/cleanup validation",
     "host_rss_bytes": 2150727680,
     "limit_bytes": 2147483648,
     "subsequent_seed3": "not-run; fail-fast stopped family",
-    "previous_seed1": "PASS at original source retained"
+    "previous_seed1": "PASS at original source retained",
+    "repair_attempts": [
+      {
+        "source": "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c",
+        "focused_test": "PASS; rebase copies reduced",
+        "runtime": "FAIL; insufficient for RSS gate",
+        "evidence": "attempts/workspace-dense-rewrite-500-s2-performance-d648880f3f73",
+        "host_rss_bytes": 2147876864,
+        "external_process_wall_ns": 264928366042
+      }
+    ],
+    "corrected_evidence": "attempts/workspace-dense-rewrite-500-s2-performance-b8a7d661b72d",
+    "corrected_host_peak_rss_bytes": 504905728
+  },
+  "historical_performance_checkpoint": {
+    "previous_selected_raw_passes": 191,
+    "disposition": "preserved diagnostics; invalid for admitted performance because undeclared SQL history allocations contaminated inner timers and resources",
+    "genuine_invalidation": "shared unbounded SQL capture enabled by test-instrumentation on every Store/Workspace route; frozen monitor exclusion applies"
+  },
+  "active_command": null,
+  "summary_updated_at_utc": "2026-09-04T11:23:11.284880+00:00",
+  "derived_review_status": "results/review.json remains historical checkpoint until new source map refresh; do not present its old RSS failure as current unresolved defect.",
+  "pre_suppression_checkpoint": {
+    "compatible_performance_passes": 187,
+    "current_failed_performance_slots": 0,
+    "unexecuted_performance_slots": 203,
+    "retained_valid_corrected_performance_slots": 388,
+    "count_scope": "Unique current-candidate new-family slots; historical attempts and the separate inherited capped cohort are excluded.",
+    "clean_raw_performance_counts": {
+      "mixed_load_bearing:pass": 12,
+      "edit_length_changing_capped:pass": 25,
+      "dedup_cdc_locality:pass": 60,
+      "dedup_cross_file:pass": 30,
+      "dedup_branch_history:pass": 60,
+      "dedup_workspace_reuse:pass": 36,
+      "directory_construction_traversal:pass": 33,
+      "payload_create_read:pass": 24,
+      "tiny_file_churn:pass": 60,
+      "workspace_change_locality:pass": 48
+    }
+  },
+  "active_coverage": {
+    "original_new_cases": 130,
+    "suppressed_new_cases": 14,
+    "active_new_cases": 116,
+    "active_new_performance_slots": 348,
+    "active_inherited_performance_slots": 25,
+    "completed_clean_source_performance_candidates": 373,
+    "required_active_verification_slots": 382,
+    "retained_completed_verification_proofs": 2,
+    "remaining_active_verification_slots": 380,
+    "admission": "373 completed clean6c candidates; exact reviewed source joins and fresh report checkpoint pending. No recollection for scheduling amendment."
   }
 }

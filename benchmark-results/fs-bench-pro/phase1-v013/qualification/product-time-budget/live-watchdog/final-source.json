@@ -1,0 +1,10 @@
+{
+  "base_commit": "b1cf098a024870d79097e07e17c6a17bff4b8eb3",
+  "sources": {
+    "benchmark/fs-bench-pro/src/workspace_bench.rs": "df074a4160010b328db3ecb92d99f82a87f4acacd0bf347e5490d435e9f85771",
+    "benchmark/fs-bench-pro/src/sdk_file_edit.rs": "729f4499b652f8bb39f0f90e99dcb9cc4a013650c6db1ac986a5b4283b5bdd6c"
+  },
+  "proof_exemption": "Direct dispatch rejects performance for CDC boundaries and reliability; reliability bypasses run_case, boundaries requires verify before run_case. ProductBudget enabled only when !verification.",
+  "clock_failure": "product-budget-observation-error/status=harness-error and exit125; not a budget suppression",
+  "result": "New exact live-watchdog test PASS0.01s; 14.99s prior+10,531,792ns active caused authoritative cumulative15,000,531,792ns and exit124; prior fake-duration PASS not rerun"
+}

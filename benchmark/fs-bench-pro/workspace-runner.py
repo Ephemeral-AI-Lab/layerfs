@@ -29,6 +29,83 @@ FIXED_LARGE = {"tiny-create", "tiny-stat", "tiny-unlink", "directory-construct",
 LOG_LIMIT = 64 * 1024 * 1024
 
 
+PHASE1_PRODUCT_LIMIT_NS = 15_000_000_000
+SUPPRESSION_POLICY_PATH = REPO / "docs/roadmap/0.1/0.1.3/phase-1-runtime-suppressions.md"
+INITIAL_SUPPRESSED_CASES = frozenset({
+    "dedup-history-unrelated-500", "workspace-dense-rewrite-500", "tiny-bulk-create-500",
+    "dedup-history-unrelated-100", "directory-content-scan-500", "workspace-dense-rewrite-100",
+    "namespace-subtree-relocate-delete-500", "tiny-bulk-delete-500", "tiny-bulk-create-100",
+    "git-tool-500", "git-tool-1", "git-tool-100", "git-tool-10", "dedup-history-distributed-500",
+})
+SUPPRESSION_STATUS = "suppressed_phase1_time_budget"
+
+
+def load_suppressions(campaign):
+    path = Path(campaign) / "phase1-runtime-suppressions.json"
+    value = read_json(path) if path.exists() else {"schema": "phase1-runtime-suppressions-v1", "limit_ns": PHASE1_PRODUCT_LIMIT_NS, "cases": {}}
+    if value.get("schema") != "phase1-runtime-suppressions-v1" or value.get("limit_ns") != PHASE1_PRODUCT_LIMIT_NS or not isinstance(value.get("cases"), dict):
+        raise ValueError("invalid persistent Phase1 suppression ledger")
+    for case, record in value["cases"].items():
+        if record.get("scenario_id") != case or record.get("status") != SUPPRESSION_STATUS:raise ValueError("invalid suppression identity/status")
+    changed = False
+    for case in sorted(INITIAL_SUPPRESSED_CASES - value["cases"].keys()):
+        value["cases"][case] = {"scenario_id": case, "status": SUPPRESSION_STATUS, "origin": "user-initial",
+            "reason": "Explicit user-authorized initial14 Phase1 runtime exclusion; no confirmation run required", "at_unix_ns": time.time_ns(),
+            "policy_sha256": custody.sha(SUPPRESSION_POLICY_PATH), "limit_ns": PHASE1_PRODUCT_LIMIT_NS}
+        changed = True
+    if changed or not path.exists():atomic_json(path, value)
+    return value
+
+
+def is_suppressed(case, ledger):
+    return not case.get("proof_only") and case["scenario_id"] in ledger["cases"]
+
+
+def product_budget_observation(event):
+    value = event.get("cumulative_ns")
+    if event.get("kind") != "product-time-budget-exceeded" or event.get("limit_ns") != PHASE1_PRODUCT_LIMIT_NS or type(value) is not int or value <= PHASE1_PRODUCT_LIMIT_NS or event.get("measurement") not in {"active-pure-call-sum", "completed-pure-call-sum"} or not isinstance(event.get("phase"), str):
+        raise ValueError("invalid authoritative product-budget event")
+    if event["measurement"] == "active-pure-call-sum":
+        completed, active = event.get("completed_product_ns"), event.get("active_phase_ns")
+        if type(completed) is not int or type(active) is not int or min(completed, active) < 0 or completed + active != value:
+            raise ValueError("product-budget clock equation mismatch")
+    return value
+
+
+def record_suppression(campaign, case, source, seed, evidence, event):
+    if case.get("proof_only"):raise ValueError("standalone proof is exempt from performance suppression")
+    if event.get("scenario_id") != case["scenario_id"] or event.get("limit_ns") != PHASE1_PRODUCT_LIMIT_NS or type(event.get("observed_product_ns")) is not int or event["observed_product_ns"] <= PHASE1_PRODUCT_LIMIT_NS:
+        raise ValueError("invalid measured product-budget trigger")
+    ledger = load_suppressions(campaign)
+    if case["scenario_id"] not in ledger["cases"]:
+        ledger["cases"][case["scenario_id"]] = {"scenario_id": case["scenario_id"], "status": SUPPRESSION_STATUS,
+            "origin": "measured-product-budget", "reason": "One measured performance sample exceeded the cumulative15-second product budget",
+            "at_unix_ns": time.time_ns(), "policy_sha256": custody.sha(SUPPRESSION_POLICY_PATH), "limit_ns": PHASE1_PRODUCT_LIMIT_NS,
+            "source_revision": source, "seed": seed, "mode": "performance", "evidence_path": str(evidence),
+            "observed_product_ns": event["observed_product_ns"], "event": event}
+        atomic_json(Path(campaign) / "phase1-runtime-suppressions.json", ledger)
+    return ledger["cases"][case["scenario_id"]]
+
+
+def completed_product_time(case, outcome):
+    if outcome.get("mode") != "performance" or case.get("proof_only"):return None
+    complete = outcome.get("sample_complete")
+    if not isinstance(complete, dict):return None
+    if case.get("input_mode") == "directory":
+        phases = [row for row in parse_records(Path(outcome["evidence_path"]) / "raw.jsonl") if row.get("kind") == "phase" and row.get("phase") == "initialize"]
+        if len(phases) != 1:raise ValueError("initialization product-time boundary unavailable")
+        value = phases[0].get("elapsed_ns")
+    else:
+        value = complete.get("pure_call_sum_ns")
+    if type(value) is not int or value < 0:raise ValueError("completed product-time sum unavailable")
+    return value
+
+
+def budget_suppression_can_continue(outcome):
+    sound = outcome.get("supervisor_cleanup_status") == "pass" and not outcome.get("container_oom_killed") and not outcome.get("observer_errors") and not outcome.get("other_resource_failure") and not outcome.get("other_product_failure") and outcome.get("harness_status") != "fail"
+    return sound and (successful(outcome) or outcome.get("phase1_status") == SUPPRESSION_STATUS and outcome.get("supervisor_failure") in {None, "product-time-budget"})
+
+
 def kill_group(child):
     try: os.killpg(child.pid, signal.SIGKILL)
     except ProcessLookupError: pass
@@ -86,13 +163,28 @@ def preparation_deadline(case):
     return 1800 if case["tier"] >= 100 or case["operation"] in FIXED_LARGE else 600
 
 
-def bounded_run(argv, out, err, seconds, env, resource_files=(), mutable=None, observer_errors=None, observer_process=None):
+def bounded_run(argv, out, err, seconds, env, resource_files=(), mutable=None, observer_errors=None, observer_process=None, on_budget=None):
     started = time.monotonic_ns()
     reason = None
     with Path(out).open("xb") as stdout, Path(err).open("xb") as stderr:
         child = subprocess.Popen(argv, stdout=stdout, stderr=stderr, env=env, start_new_session=True)
+        budget_reader = Path(out).open("rb") if on_budget is not None else None
+        pending = b""
+        def poll_budget():
+            nonlocal pending
+            if budget_reader is None:return False
+            pending += budget_reader.read()
+            lines = pending.split(b"\n");pending = lines.pop()
+            tripped = False
+            for line in lines:
+                if b"product-time-budget-exceeded" not in line:continue
+                event = json.loads(line.removeprefix(b"RELIABILITY\t"))
+                if event.get("kind") == "product-time-budget-exceeded":
+                    on_budget(event);tripped = True
+            return tripped
         try:
             while child.poll() is None:
+                if poll_budget():reason = "product-time-budget"
                 if (time.monotonic_ns()-started)/1e9 >= seconds:
                     reason = "case-timeout"
                 if sum(p.stat().st_size for p in (Path(out), Path(err), *resource_files) if p.exists()) > LOG_LIMIT:
@@ -108,13 +200,18 @@ def bounded_run(argv, out, err, seconds, env, resource_files=(), mutable=None, o
                     stderr.write(f"phase1 supervisor: {reason}\n".encode())
                     break
                 time.sleep(.05)
-        except BaseException:
+            if poll_budget() and reason is None:reason = "product-time-budget"
+        except BaseException as error:
             kill_group(child)
+            error.phase1_result = {"exit_code": child.returncode, "timeout": False, "supervisor_failure": "interrupted" if isinstance(error, KeyboardInterrupt) else "supervisor-error",
+                "external_process_wall_ns": time.monotonic_ns()-started, "hard_deadline_seconds": seconds}
             raise
+        finally:
+            if budget_reader is not None:budget_reader.close()
         if sum(p.stat().st_size for p in (Path(out), Path(err), *resource_files) if p.exists()) > LOG_LIMIT:
             reason = "retained-log-limit"
-        code = 124 if reason == "case-timeout" else 125 if reason else child.returncode
-    return {"exit_code": code, "timeout": reason == "case-timeout", "supervisor_failure": reason,
+        code = 124 if reason in {"case-timeout", "product-time-budget"} else 125 if reason else child.returncode
+    return {"exit_code": code, "child_exit_code": child.returncode, "timeout": reason in {"case-timeout", "product-time-budget"}, "supervisor_failure": reason,
             "external_process_wall_ns": time.monotonic_ns()-started, "hard_deadline_seconds": seconds}
 
 
@@ -195,9 +292,9 @@ PREPARATION_SPILL_PAIR = ("1e88000d97560d5d9d8afdaaf379144cfd859133897650f357c82
                           "4b07eb03a2e6ddfe926a2c5fa621db462c659ff1ee164e41ec3b90cb871df9c8")
 
 
-def preparation_inputs(revision):
-    # Stronger than the digest's function slices: these existing preparation
-    # files must match in full, alongside all four preparation dependency crates.
+def preparation_inputs(revision, full_helpers=False):
+    # The timed host helper uses the existing custody preparation slice;
+    # all other helper/dependency inputs still match in full.
     exact = {"Cargo.toml", "Cargo.lock", *("benchmark/fs-bench-pro/" + path for path in
         ("families/sdk_edit_common.rs", "src/main.rs", "workload.rs", "src/workspace_bench.rs", "workspace_common.rs"))}
     prefixes = ("crates/layerfs-content/", "crates/layerfs-layerstack-store/", "crates/layerfs-sdk/", "crates/layerfs-monitor/")
@@ -213,16 +310,31 @@ def preparation_inputs(revision):
     for path, (mode, _) in entries.items():
         end = batch.index(b"\n", cursor);_, kind, length = batch[cursor:end].split();cursor = end + 1
         if kind != b"blob":raise ValueError("missing preparation blob")
-        files[path] = (mode, batch[cursor:cursor + int(length)]);cursor += int(length) + 1
+        data = batch[cursor:cursor + int(length)];cursor += int(length) + 1
+        ranges = {"benchmark/fs-bench-pro/src/workspace_bench.rs": (b"fn fixture_info(", b"\nfn output_text(")}
+        if not full_helpers and path in ranges:
+            start, end = ranges[path];left = data.index(start) if start else 0;right = data.index(end, left) if end else len(data);data = data[left:right]
+        files[path] = (mode, data)
     return files
 
 
-def preparation_source_compatibility(producer, runtime):
+PREPARATION_TIMED_HOST_PAIR = ("0a0df8c560928ac916aae8ce984b683f65085c344cd832fc86f9e3ffee51fcb3",
+                               "df074a4160010b328db3ecb92d99f82a87f4acacd0bf347e5490d435e9f85771")
+
+
+def preparation_source_compatibility(producer, runtime, legacy_full_helpers=False):
     if producer["revision"] not in {"3422433020a678a77f88e8a110492ca293c05e30", "a40b17e05486e5b747b689e7710475d739556a69"}:
         raise ValueError("unreviewed preparation producer revision")
-    old, new = preparation_inputs(producer["revision"]), preparation_inputs(runtime["revision"])
+    old, new = preparation_inputs(producer["revision"], legacy_full_helpers), preparation_inputs(runtime["revision"], legacy_full_helpers)
     if set(old) != set(new):raise ValueError("preparation source inventory changed")
     changed = {}
+    timed_host = None
+    if not legacy_full_helpers:
+        name = "benchmark/fs-bench-pro/src/workspace_bench.rs"
+        hashes = tuple(hashlib.sha256(subprocess.check_output(["git", "show", f"{value['revision']}:{name}"], cwd=REPO)).hexdigest() for value in (producer, runtime))
+        if hashes[0] != hashes[1]:
+            if hashes != PREPARATION_TIMED_HOST_PAIR:raise ValueError("unreviewed timed host helper change")
+            timed_host = {"path": name, "producer_sha256": hashes[0], "runtime_sha256": hashes[1], "unchanged_preparation_span": "fn fixture_info( through before fn output_text("}
     for path, expected in ((SQL_CAPTURE_SCHEMA, SQL_CAPTURE_SCHEMA_PAIR), (PREPARATION_SPILL_OBJECTS, PREPARATION_SPILL_PAIR)):
         if old[path] == new[path]:
             if path == SQL_CAPTURE_SCHEMA:raise ValueError("compatibility mismatch is not the reviewed SQL capture fix")
@@ -233,11 +345,30 @@ def preparation_source_compatibility(producer, runtime):
         new[path] = old[path]
     if old != new:raise ValueError("another preparation dependency changed")
     manifest = {path: {"mode": value[0], "sha256": hashlib.sha256(value[1]).hexdigest()} for path, value in old.items()}
-    return {"kind": "exact-sql-capture-and-derived-spill-preparation-v1", "producer_revision": producer["revision"],
+    result = {"kind": "exact-sql-capture-and-derived-spill-preparation-v1" if legacy_full_helpers else "exact-sql-capture-and-derived-spill-preparation-v2", "producer_revision": producer["revision"],
             "runtime_revision": runtime["revision"], "producer_compatibility": producer["workspace_preparation_compatibility"],
             "runtime_compatibility": runtime["workspace_preparation_compatibility"], "changed_inputs": changed,
             "producer_input_manifest_sha256": hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest(),
             "scope": "Qualified canonical input/reference bytes only; SQL history capture is outside persistent state, and the reviewed derived spill index preserves canonical bytes/order/collision results. Actual producer identity and cache key remain unchanged; no performance compatibility claim."}
+    if not legacy_full_helpers:result["timed_host_source_pair"] = timed_host
+    return result
+
+
+SUPPRESSION_NOTICES = {
+    "phase-1-handoff": b"> **Latest Phase 1 scope:** Enforce the [15-second suppression policy](phase-1-runtime-suppressions.md)\n> before scheduling work. Its permanent Phase 1 exclusions supersede the\n> original full-inventory completion language below; never count a suppression\n> as a passing benchmark.\n\n",
+    "testing-rules": b"> **Latest Phase 1 scope:** The [15-second suppression policy](phase-1-runtime-suppressions.md)\n> supersedes the original full-inventory execution requirement. Keep suppressed\n> combinations explicit; all remaining active cases require valid results and\n> independent verification.\n\n",
+}
+
+
+def preparation_contract_compatible(name, producer, runtime):
+    path = f"docs/roadmap/0.1/0.1.3/{name}.md"
+    left = producer["phase1_contract_files"].get(path);right = runtime["phase1_contract_files"].get(path)
+    if left is not None and left == right:return True
+    notice = SUPPRESSION_NOTICES.get(name)
+    if notice is None or left is None or right is None:return False
+    old, new = [subprocess.check_output(["git", "show", f"{source['revision']}:{path}"], cwd=REPO) for source in (producer, runtime)]
+    if hashlib.sha256(old).hexdigest() != left or hashlib.sha256(new).hexdigest() != right:return False
+    return new.count(notice) == 1 and new.replace(notice, b"", 1) == old
 
 
 def select_preparation(build, assets, producer_build, registry, selected):
@@ -255,7 +386,7 @@ def select_preparation(build, assets, producer_build, registry, selected):
         "dedup-cdc-locality", "dedup-workspace-reuse", "dedup-branch-history", "workspace-reliability")
     for name in contracts:
         path = f"docs/roadmap/0.1/0.1.3/{name}.md"
-        if path not in producer["phase1_contract_files"] or producer["phase1_contract_files"][path] != assets["phase1_contract_files"].get(path):
+        if not preparation_contract_compatible(name, producer, assets):
             raise ValueError(f"preparation producer changes frozen contract: {path}")
     producer_registry = [json.loads(line) for line in command([producer_build / "fs-benchmark-pro", "workspace-registry"]).splitlines()]
     if producer_registry != registry:
@@ -383,7 +514,13 @@ def sample(case, seed, args, assets, campaign, acquisitions, producer=None):
             outcome["preparation_ns"] = time.monotonic_ns()-started
         argv = [binary, "workspace-run", str(mutable), str(sample_input), case["scenario_id"], str(seed), args.mode, container]
         custody.write_json(attempt / "command.json", {"argv": argv, "environment_names": sorted(k for k in env if k.startswith("LAYERFS_")), "capability": "redacted"})
-        result = bounded_run(argv, attempt / "raw.jsonl", attempt / "stderr.txt", deadline(case,args.mode), env, (cgroup_path, attempt / "sampler-stderr.txt"), mutable, observer_errors, sampler)
+        def product_budget_trip(event):
+            value = product_budget_observation(event)
+            decision = record_suppression(campaign, case, assets["revision"], seed, attempt,
+                {**event, "scenario_id": case["scenario_id"], "observed_product_ns": value})
+            outcome.update(phase1_status=SUPPRESSION_STATUS, phase1_suppression=decision)
+        result = bounded_run(argv, attempt / "raw.jsonl", attempt / "stderr.txt", deadline(case,args.mode), env, (cgroup_path, attempt / "sampler-stderr.txt"), mutable, observer_errors, sampler,
+            product_budget_trip if args.mode == "performance" and not case.get("proof_only") else None)
         outcome.update(result)
         records = parse_records(attempt / "raw.jsonl")
         internal_deadlines=[r for r in records if r.get("kind")=="deadline-failure"]
@@ -395,10 +532,29 @@ def sample(case, seed, args, assets, campaign, acquisitions, producer=None):
         outcome["product_status"] = "pass" if result["exit_code"] == 0 and len(complete) == 1 else "fail"
         outcome["harness_status"] = "needs-review" if outcome["product_status"] != "pass" else "pending-validation"
         outcome["sample_complete"] = complete[0] if len(complete) == 1 else None
+        measured = completed_product_time(case, outcome)
+        if measured is not None and measured > PHASE1_PRODUCT_LIMIT_NS:
+            decision = record_suppression(campaign, case, assets["revision"], seed, attempt,
+                {"scenario_id": case["scenario_id"], "limit_ns": PHASE1_PRODUCT_LIMIT_NS, "observed_product_ns": measured,
+                 "kind": "completed-performance-sum", "measurement": "phase.initialize.elapsed_ns" if case.get("input_mode") == "directory" else "sample-complete.pure_call_sum_ns"})
+            outcome.update(phase1_status=SUPPRESSION_STATUS, phase1_suppression=decision)
+        outcome["other_product_failure"] = any(row.get("kind") == "product-budget-phase" and row.get("state") == "end" and row.get("phase_error") is not None for row in records)
+        outcome["other_resource_failure"] = any(row.get("kind") in {"resource-failure", "host-rss-failure", "host-resource-failure", "required-observation-failure", "monitor-observation-failure", "spool-observation-failure", "product-budget-observation-error"} for row in records)
         if outcome["coverage_status"] != "executed": outcome.update(harness_status="fail", product_status="not-run")
-        if observer_errors or any(r.get("kind") in {"host-rss-failure","host-resource-failure"} for r in records): outcome["harness_status"] = "fail"
+        if observer_errors or any(r.get("kind") in {"host-rss-failure","host-resource-failure","product-budget-observation-error"} for r in records): outcome["harness_status"] = "fail"
     except BaseException as error:
+        outcome.update(getattr(error, "phase1_result", {}))
         outcome.update(error=f"{type(error).__name__}: {error}", harness_status="fail")
+        raw_path = attempt / "raw.jsonl"
+        if raw_path.exists():
+            began = False
+            for line in raw_path.read_text(errors="replace").splitlines():
+                try:row = json.loads(line.removeprefix("RELIABILITY\t"))
+                except ValueError:continue
+                began |= row.get("kind") in {"sample-start", "proof-start"}
+            if began:
+                outcome["coverage_status"] = "executed"
+                if outcome["product_status"] == "not-run":outcome["product_status"] = "fail"
         if isinstance(error, subprocess.CalledProcessError):
             (attempt / "supervisor-command-stderr.txt").write_text(error.stderr or "")
         if isinstance(error, KeyboardInterrupt): outcome["interrupted"] = True
@@ -598,7 +754,6 @@ def main():
     if args.mode=="performance":selected=[r for r in selected if not r.get("proof_only")]
     if not selected or (not args.all and len(selected)!=1):p.error("unknown, ambiguous or proof-only performance selection")
     if args.all and not args.family:p.error("--all requires one family")
-    if any((r["family_id"]=="dedup_branch_history" and r["tier"]>=100) or (r["family_id"]=="workspace_reliability" and r["operation"] in EXTENDED) for r in selected) and not args.extended:p.error("required extended members need explicit --extended")
     try: planned=[(case,seed) for case in selected for seed in schedule(case,args)]
     except ValueError as error:p.error(str(error))
     if args.all and args.family=="edit_length_changing_capped" and args.mode=="performance":
@@ -606,13 +761,16 @@ def main():
         rotations=((0,1,2,3,4),(2,3,4,0,1),(4,0,1,2,3),(1,2,3,4,0),(4,0,1,2,3))
         planned=[(selected[index],rep) for rep,order in enumerate(rotations,1) for index in order]
     if any(seed is None for _,seed in planned):p.error("selected row requires its matching seed or repetition selector")
-    producer_started = time.monotonic_ns()
-    producer = select_preparation(build, assets, Path(args.preparation_assets or args.assets).resolve(), registry, selected)
-    producer_validation_ns = time.monotonic_ns() - producer_started
     campaign=Path(args.output).resolve();campaign.mkdir(parents=True,exist_ok=True)
     failures=False
     with (campaign/"measurement.lock").open("a") as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        suppressions = load_suppressions(campaign)
+        active = [case for case in selected if not is_suppressed(case, suppressions)]
+        if any((r["family_id"]=="dedup_branch_history" and r["tier"]>=100) or (r["family_id"]=="workspace_reliability" and r["operation"] in EXTENDED) for r in active) and not args.extended:p.error("required active extended members need explicit --extended")
+        producer_started = time.monotonic_ns()
+        producer = select_preparation(build, assets, Path(args.preparation_assets or args.assets).resolve(), registry, active) if active else None
+        producer_validation_ns = time.monotonic_ns() - producer_started
         invocations=campaign/"invocations";invocations.mkdir(exist_ok=True)
         # Exclusive ownership proves previous running records have no current
         # coordinator. Do not invent command duration after a hard interruption.
@@ -625,17 +783,41 @@ def main():
         invocation={"source_arm":args.source_arm,"source_revision":assets["revision"],"image_id":assets["image_id"],"source_validation_ns":validation_ns,"registry_query_ns":registry_ns,"planned_slots":[[case["scenario_id"],seed,args.mode] for case,seed in planned],"status":"running","invocation_wall_ns":None}
         invocation["preparation_producer"] = {"assets": str(Path(args.preparation_assets or args.assets).resolve()),
             "revision": producer["revision"], "image_id": producer["image_id"], "validation_ns": producer_validation_ns,
-            "source_compatibility": producer.get("preparation_source_compatibility")}
+            "source_compatibility": producer.get("preparation_source_compatibility")} if producer else None
+        invocation["suppressed_slots"] = []
+        processed_active = 0
+        def note_suppressed(case, seed, record):
+            skipped = {"status": SUPPRESSION_STATUS, "scenario_id": case["scenario_id"], "seed": seed, "mode": args.mode,
+                "suppression": record, "scope": "Phase1 exclusion, not a product pass or a newly executed sample"}
+            invocation["suppressed_slots"].append(skipped)
+            print(json.dumps(skipped, sort_keys=True), flush=True)
         with invocation_receipt(invocation_path,invocation,invocation_started):
             ledger_path=campaign/"slots.json";ledger=read_json(ledger_path) if ledger_path.exists() else {};acquisitions={}
             if reconcile_attempts(campaign,ledger):atomic_json(ledger_path,ledger)
             for case,seed in planned:
+                suppressions = load_suppressions(campaign)
+                if is_suppressed(case, suppressions):
+                    note_suppressed(case, seed, suppressions["cases"][case["scenario_id"]])
+                    continue
                 key=slot_key({"harness_identity":assets["harness_seal"],"product_identity":assets["product_seal"],"image_id":assets["image_id"],"environment_identity":assets["environment_identity"],"scenario_id":case["scenario_id"],"seed":seed,"mode":args.mode})
                 previous=ledger.get(key)
                 if previous and previous.get("source_arm") != args.source_arm:
                     raise ValueError("retained outcome belongs to a different named source arm")
                 action=ledger_action(previous,args.invalidate_reason)
                 if action in {"reuse-recorded-outcome","retained-failure-needs-investigation"}:
+                    measured = completed_product_time(case, previous)
+                    if measured is not None and measured > PHASE1_PRODUCT_LIMIT_NS:
+                        retained_path = Path(previous["evidence_path"])
+                        custody.verify_manifest(retained_path)
+                        sealed_previous = read_json(retained_path / "outcome.json")
+                        if any(previous.get(key) != value for key, value in sealed_previous.items()):
+                            raise ValueError("retained budget trigger differs from its sealed outcome")
+                        record = record_suppression(campaign, case, previous["source_revision"], seed, previous["evidence_path"],
+                            {"scenario_id": case["scenario_id"], "limit_ns": PHASE1_PRODUCT_LIMIT_NS, "observed_product_ns": measured, "kind": "completed-performance-sum", "measurement": "retained completed product sum"})
+                        note_suppressed(case, seed, record)
+                        if not budget_suppression_can_continue(previous):failures = True;break
+                        continue
+                    processed_active += 1
                     print(json.dumps({"action":action,"case":case["scenario_id"],"seed":seed,"evidence":previous["evidence_path"]}),flush=True)
                     failures |= not successful(previous)
                     if failures:break
@@ -643,13 +825,17 @@ def main():
                 if previous:
                     change={"slot":key,"previous_evidence":previous["evidence_path"],"reason":args.invalidate_reason,"at_unix_ns":time.time_ns()}
                     with (campaign/"invalidations.jsonl").open("a") as stream:stream.write(json.dumps(change,sort_keys=True)+"\n")
+                processed_active += 1
                 result=sample(case,seed,args,assets,campaign,acquisitions,producer)
                 if previous:result["previous_evidence_path"]=previous["evidence_path"]
                 ledger[key]=result;atomic_json(ledger_path,ledger)
                 print(json.dumps(result,sort_keys=True),flush=True)
+                if result.get("phase1_status") == SUPPRESSION_STATUS:
+                    note_suppressed(case, seed, result["phase1_suppression"])
+                    if budget_suppression_can_continue(result):continue
                 failures |= not successful(result)
                 if failures or result.get("interrupted"):break
-            invocation["status"]="failed-outcomes" if failures else "pass"
+            invocation["status"] = "failed-outcomes" if failures else ("completed_with_suppressions" if processed_active else SUPPRESSION_STATUS) if invocation["suppressed_slots"] else "pass"
     print(json.dumps({"invocation_receipt":str(invocation_path),"invocation_wall_ns":invocation["invocation_wall_ns"],"status":invocation["status"]}),flush=True)
     return 1 if failures else 0
 

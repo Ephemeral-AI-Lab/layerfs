@@ -1,0 +1,3 @@
+Sampling process 17896 for 1 second with 1 millisecond of run time between samples
+Sampling completed, processing symbols...
+Sample analysis of process 17896 written to file benchmark-results/fs-bench-pro/phase1-v013/qualification/namespace-500-preparation-stack/sample.txt

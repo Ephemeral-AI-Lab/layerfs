@@ -1,0 +1,7 @@
+{
+  "removed_masters": 8,
+  "recorded_allocated_bytes": 839999488,
+  "actual_reclaimed_bytes": "not measured; next custody acquisition measures shared footprint",
+  "reliability_master": "retained",
+  "initial_attempt": "PermissionError because sealed cache directories mode0555; archived metadata unchanged; explicit maintenance restoreddirectoryownerwrite beforeeviction"
+}

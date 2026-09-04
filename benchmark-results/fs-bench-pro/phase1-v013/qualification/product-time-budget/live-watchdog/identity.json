@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "-p",
+    "fs-benchmark-pro",
+    "workspace_bench::product_budget_tests::live_watchdog_stops_at_remaining_cumulative_budget",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "sources": {
+    "benchmark/fs-bench-pro/src/workspace_bench.rs": "df074a4160010b328db3ecb92d99f82a87f4acacd0bf347e5490d435e9f85771",
+    "benchmark/fs-bench-pro/src/sdk_file_edit.rs": "729f4499b652f8bb39f0f90e99dcb9cc4a013650c6db1ac986a5b4283b5bdd6c"
+  },
+  "scope": "One test; child precredited14.99s, active sleep50ms fallback; expected watchdog exit124 after10ms; no product workload"
+}

@@ -1,0 +1,1 @@
+{"status": "pass", "initial_suppressed": 14, "suppression_precedes_preparation": true, "associated_verify_skipped": true, "proof_only_exempt": true, "dynamic_persist_then_skip_other_seeds": true, "future_source_persistence": true, "other_active_cases_continue": true, "passing_rows_reused": true, "authoritative_event_and_cumulative_equation": true}

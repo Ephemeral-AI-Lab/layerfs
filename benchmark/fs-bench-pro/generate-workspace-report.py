@@ -3,6 +3,7 @@
 import argparse
 from collections import Counter, defaultdict
 import gzip
+from functools import lru_cache
 import hashlib
 import importlib.util
 import json
@@ -1038,6 +1039,47 @@ def derived_product_status(outcome, violations):
     return "fail" if outcome.get("product_status") == "fail" else "not-established"
 
 
+@lru_cache(maxsize=None)
+def sql_history_status(revision):
+    source = subprocess.check_output(["git", "show", f"{revision}:{runner.SQL_CAPTURE_SCHEMA}"], cwd=HERE.parents[1])
+    if hashlib.sha256(source).hexdigest() == runner.SQL_CAPTURE_SCHEMA_PAIR[1]:
+        return "explicit-opt-in; default capture disabled"
+    if b"static SQL_TRACE: std::cell::RefCell<Vec<String>>" in source:
+        return "unrequested-unbounded-history; diagnostic-only"
+    return "unqualified SQL capture state; no performance claim"
+
+
+@lru_cache(maxsize=None)
+def preparation_compatibility(revision):
+    return custody.workspace_preparation_digest(custody.source_identity(revision))
+
+
+def validate_preparation_selection(directory, acquired, build, case, issues):
+    path = directory / "preparation/producer-selection.json"
+    if not path.exists():
+        require(sql_history_status(build["revision"]) != "explicit-opt-in; default capture disabled", "current source lacks preparation producer selection", issues)
+        return
+    selection = read(path)
+    require(selection.get("runtime_revision") == build["revision"] and selection.get("runtime_image_id") == build["image_id"], "preparation selection runtime identity mismatch", issues)
+    selected_build = Path(selection["assets"]) / "evidence/build.json"
+    require(custody.sha(selected_build) == selection.get("build_manifest_sha256"), "selected producer build manifest mismatch", issues)
+    producer = read(selected_build)
+    require(producer.get("status") == "pass" and all(producer.get(key) == selection.get(key) for key in ("revision", "image_id", "binary_sha256")), "selected producer identity differs from sealed build", issues)
+    producer["workspace_preparation_compatibility"] = preparation_compatibility(producer["revision"])
+    runtime = {**build, "workspace_preparation_compatibility": preparation_compatibility(build["revision"])}
+    compatible = producer["workspace_preparation_compatibility"]
+    require(selection.get("workspace_preparation_compatibility") == compatible and acquired.get("key_data", {}).get("preparation_compatibility_sha256") == compatible and preparation_compatibility(acquired["producer"]["revision"]) == compatible, "actual acquisition producer/cache compatibility mismatch", issues)
+    if producer["revision"] == "3422433020a678a77f88e8a110492ca293c05e30":
+        require(case["scenario_id"] != "namespace-subtree-relocate-delete-500", "namespace500 selected the known-failing old producer", issues)
+    if compatible != runtime["workspace_preparation_compatibility"]:
+        recorded_kind = selection.get("source_compatibility", {}).get("kind")
+        require(recorded_kind in {"exact-sql-capture-and-derived-spill-preparation-v1", "exact-sql-capture-and-derived-spill-preparation-v2"}, "unknown preparation source compatibility version", issues)
+        expected = runner.preparation_source_compatibility(producer, runtime, legacy_full_helpers=recorded_kind == "exact-sql-capture-and-derived-spill-preparation-v1")
+        require(selection.get("source_compatibility") == expected, "missing or altered exact preparation source proof", issues)
+    else:
+        require(selection.get("source_compatibility") is None, "unexpected preparation compatibility exception", issues)
+
+
 def validate_attempt(outcome, classification, case, build):
     issues, violations = [], []
     records, observed, resource, details, packages = [], {}, {}, {}, []
@@ -1045,6 +1087,8 @@ def validate_attempt(outcome, classification, case, build):
     successful = outcome.get("product_status") == "pass"
     try:
         custody.verify_manifest(directory)
+        if outcome.get("mode") == "performance":
+            require(sql_history_status(build["revision"]) == "explicit-opt-in; default capture disabled", "performance timer/resource contamination by unrequested or unqualified SQL history capture", issues)
         sealed = read(directory / "outcome.json")
         require(all(value == outcome.get(key) for key, value in sealed.items()) and not (set(outcome) - set(sealed) - {"previous_evidence_path"}), "ledger differs from sealed outcome", issues)
         require(outcome.get("schema") == "fs-bench-pro-v013-sample-v1" and outcome.get("coverage_status") == "executed", "slot has no executed result", issues)
@@ -1063,6 +1107,7 @@ def validate_attempt(outcome, classification, case, build):
             return {"issues": sorted(set(issues)), "violations": [], "metrics": observed, "resource_observations": {}, "observations": details, "canonical_packages": [],
                     "product_status": derived_product_status(outcome, []), "verification_pass": False}
         records = raw(directory / "raw.jsonl")
+        require(not any(row.get("kind") == "product-budget-observation-error" for row in records), "mandatory product-budget observer failed", issues)
         if case["family_id"] != "workspace_reliability":
             starts = [row for row in records if row["kind"] == "sample-start"]
             require(len(starts) == 1 and all(starts[0].get(key) == outcome.get(key) for key in ("scenario_id", "family_id", "seed", "mode")), "raw sample identity differs from scheduled slot", issues)
@@ -1073,6 +1118,7 @@ def validate_attempt(outcome, classification, case, build):
         acquired = read(directory / "preparation/acquisition.json")
         clone = read(directory / "preparation/clone.json")
         require(acquired.get("status") == "pass" and acquired.get("producer", {}).get("status") == "pass", "unqualified prepared input producer", issues)
+        validate_preparation_selection(directory, acquired, build, case, issues)
         require(digest(outcome.get("input_identity")) and outcome["input_identity"] == acquired.get("fixture", {}).get("input_plan_sha256") and outcome.get("cache_key") == acquired.get("key"), "input/cache identity mismatch", issues)
         require(clone.get("status") == "pass" and clone.get("hard_link") is False, "sample not an independent qualified clone", issues)
         cache = read(directory / "preparation/master-cache.json")
@@ -1181,6 +1227,17 @@ NORMATIVE_CONTRACT_FILES = {"docs/roadmap/0.1/0.1.3/" + name + ".md" for name in
     "workspace-change-locality", "mixed-load-bearing-workload", "dedup-cross-file",
     "dedup-cdc-locality", "dedup-workspace-reuse", "dedup-branch-history", "workspace-reliability",
 )}
+
+
+RUNTIME_SCOPE_POLICY_REVISION = "b1cf098a024870d79097e07e17c6a17bff4b8eb3"
+
+
+@lru_cache(maxsize=None)
+def runtime_scope_contract_pair(filename):
+    if filename not in {"docs/roadmap/0.1/0.1.3/" + name for name in ("README.md", "testing-rules.md", "phase-1-handoff.md")}:
+        return None
+    return tuple(hashlib.sha256(subprocess.check_output(["git", "show", f"{revision}:{filename}"], cwd=HERE.parents[1])).hexdigest()
+                 for revision in (CLEAN_PRE_BUDGET_REVISION, RUNTIME_SCOPE_POLICY_REVISION))
 
 
 def bridge_dependency_paths(family):
@@ -1436,7 +1493,40 @@ CONTENT_FRONTIER_EXTRA_CASES = ({f"{operation}-{tier}" for operation in ("worksp
                               | {"workspace-dense-rewrite-1", "workspace-dense-rewrite-10", "namespace-subtree-relocate-delete-500"})
 
 
+REBASE_LIFETIME_PARENT = "d1325d7f44ef205f5fa748130f3b9868973e9edc"
+REBASE_LIFETIME_PATH = "crates/layerfs-workspace/src/lifecycle.rs"
+REBASE_LIFETIME_SOURCE_HASHES = ("aa14df244edb8aed1c4cb5cff94ed1fa530cf2610785d89e559c2a67735292f8",
+                                "91e65bf1ab13f452a15dab7e6934e1256a39f508a39efbc0b2a00c718ad0c2ac")
+REBASE_LIFETIME_EXTRA_CASES = {"workspace-dense-rewrite-100", "workspace-dense-rewrite-500"}
+
+
 def content_frontier_source_proof(old_revision, new_revision):
+    # Continue the existing exact-pair chain for the reviewed rebase lifetime
+    # change; this does not create a general compatibility or cost waiver.
+    trees = {revision: product_tree(revision) for revision in (REBASE_LIFETIME_PARENT, new_revision)}
+    if trees[REBASE_LIFETIME_PARENT][REBASE_LIFETIME_PATH] != trees[new_revision][REBASE_LIFETIME_PATH]:
+        revisions = (REBASE_LIFETIME_PARENT, new_revision)
+        modes = [trees[revision].pop(REBASE_LIFETIME_PATH).split()[:2] for revision in revisions]
+        if modes[0] != modes[1] or trees[revisions[0]] != trees[revisions[1]]:
+            raise ValueError("rebase lifetime bridge changed another product/build input")
+        hashes = tuple(hashlib.sha256(subprocess.check_output(["git", "show", f"{revision}:{REBASE_LIFETIME_PATH}"], cwd=HERE.parents[1])).hexdigest() for revision in revisions)
+        if hashes != REBASE_LIFETIME_SOURCE_HASHES:
+            raise ValueError("unreviewed rebase lifetime source pair")
+        prior = None if old_revision == REBASE_LIFETIME_PARENT else content_frontier_source_proof(old_revision, REBASE_LIFETIME_PARENT)
+        families = ("payload_create_read", "tiny_file_churn", "directory_construction_traversal", "git_tool_workflow", "namespace_mutation", "workspace_change_locality", "workspace_reliability")
+        unchanged = {}
+        for path in sorted(set().union(*(bridge_dependency_paths(family) for family in families))):
+            values = [subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=HERE.parents[1]) for revision in revisions]
+            if values[0] != values[1]:
+                raise ValueError("rebase lifetime bridge changed a retained fixture/workload/oracle definition")
+            unchanged[path] = hashlib.sha256(values[0]).hexdigest()
+        return {"rebase_lifetime_source": {"path": REBASE_LIFETIME_PATH, "reviewed_source_sha256": dict(zip(revisions, hashes))},
+                "unchanged_product_tree_sha256": hashlib.sha256(json.dumps(trees[revisions[0]], sort_keys=True).encode()).hexdigest(),
+                "unchanged_workload_paths": unchanged, "prior_content_frontier_proof": prior,
+                "state_compatibility": "same-live-nodes-canonical-identity-aliases-pins-and-spool-state",
+                "qualification_test": "lifecycle::tests::rebase_streams_nodes_preserving_identity_aliases_and_pinned_spools",
+                "performance_claim_scope": "original-producing-source-only",
+                "new_rebase_allocation_and_instruction_cost": "not-measured-by-retained-observations"}
     revisions = (CONTENT_FRONTIER_PARENT, new_revision)
     trees = {revision: product_tree(revision) for revision in revisions}
     modes = [trees[revision].pop(CONTENT_FRONTIER_PATH).split()[:2] for revision in revisions]
@@ -1463,6 +1553,17 @@ def content_frontier_source_proof(old_revision, new_revision):
 
 
 def validate_content_frontier_records(records, case, bridge, issues):
+    if "rebase_lifetime_source" in bridge["source_proof"]:
+        prior = bridge["source_proof"]["prior_content_frontier_proof"]
+        scope = validate_content_frontier_records(records, case, {"source_proof": prior}, issues) if prior is not None else None
+        if prior is None:
+            require(case["scenario_id"] in REBASE_LIFETIME_EXTRA_CASES, "unreviewed direct rebase baseline case", issues)
+            if case["scenario_id"] == "workspace-dense-rewrite-500":
+                starts = [row for row in records if row["kind"] == "sample-start"]
+                require(len(starts) == 1 and starts[0].get("seed") == 1 and not any(row["kind"] == "resource-failure" for row in records),
+                        "only the completed pre-repair dense500 seed1 observation is reusable", issues)
+        return {"state_compatibility": "same-live-nodes-canonical-identity-aliases-pins-and-spool-state", "prior_planner_scope": scope,
+                "timing_claim": "original producing source only", "current_rebase_allocation_and_instruction_cost": "unmeasured"}
     prior = bridge["source_proof"]["prior_spill_index_proof"]
     scope = validate_spill_index_records(records, case, {"source_proof": prior}, issues) if prior is not None else None
     require(case["operation"] in NO_UNLINK_OPERATIONS or case["scenario_id"] in SPILL_INDEX_EXTRA_CASES | CONTENT_FRONTIER_EXTRA_CASES,
@@ -1471,18 +1572,50 @@ def validate_content_frontier_records(records, case, bridge, issues):
             "timing_claim": "original producing source only", "current_planner_instruction_cost": "unmeasured"}
 
 
+RETAINED_PROOF_KIND = "completed-independent-proof-state-only-v1"
+RETAINED_PROOFS = {
+    "fbf32e84662d00993c033515e113437965395494": ("payload-create-1m", "payload-create-1m-s1-verify-09ef8212a24f"),
+    "e7840da1da81404ff228be734a91783cebb946ca": ("workspace-sustained-600s-proof", "workspace-sustained-600s-proof-s1-verify-01219f621176"),
+}
+SQL_CAPTURE_PARENT = "d6fdf964464ecb6f4a1188c69ee4bbd2e06c3f9c"
+
+
+def retained_proof_source_proof(old_revision, new_revision):
+    if old_revision not in RETAINED_PROOFS:raise ValueError("unreviewed retained independent proof")
+    revisions = (SQL_CAPTURE_PARENT, new_revision)
+    trees = {revision: product_tree(revision) for revision in revisions}
+    modes = [trees[revision].pop(runner.SQL_CAPTURE_SCHEMA).split()[:2] for revision in revisions]
+    if modes[0] != modes[1] or trees[revisions[0]] != trees[revisions[1]]:raise ValueError("proof retention changed another product input after rebase qualification")
+    hashes = tuple(hashlib.sha256(subprocess.check_output(["git", "show", f"{revision}:{runner.SQL_CAPTURE_SCHEMA}"], cwd=HERE.parents[1])).hexdigest() for revision in revisions)
+    if hashes != runner.SQL_CAPTURE_SCHEMA_PAIR:raise ValueError("unreviewed SQL capture state-equivalence pair")
+    return {"retained_evidence_basename": RETAINED_PROOFS[old_revision][1],
+            "prior_state_identity": content_frontier_source_proof(old_revision, SQL_CAPTURE_PARENT),
+            "sql_capture_source_pair": dict(zip(revisions, hashes)),
+            "unchanged_product_tree_sha256": hashlib.sha256(json.dumps(trees[revisions[0]], sort_keys=True).encode()).hexdigest(),
+            "scope": "Exactly the already-completed independent verification, including its original resource/deadline observations. SQL history changes no canonical/presentation state. No old performance timing is admitted and no current resource cost is inferred."}
+
+
 def configured_product_bridges(config, primary, cases):
     approved = []
     fields = {"kind", "old_revision", "new_revision", "old_product_seal", "new_product_seal", "case_ids", "source_proof", "required_zero_counters", "reviewed_impact"}
     for bridge in config.get("product_compatibility", []):
-        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
+        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND, RETAINED_PROOF_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
             raise ValueError("invalid exact unlink product bridge identity")
+        retained_proof = bridge["kind"] == RETAINED_PROOF_KIND
+        if retained_proof:
+            if bridge["old_revision"] not in RETAINED_PROOFS or bridge["case_ids"] != [RETAINED_PROOFS[bridge["old_revision"]][0]] or bridge["required_zero_counters"] != [] or len(bridge["reviewed_impact"].strip()) < 80:
+                raise ValueError("only the two completed independent proofs may be retained")
+            if bridge["source_proof"] != retained_proof_source_proof(bridge["old_revision"], bridge["new_revision"]):raise ValueError("retained proof source-state identity differs")
+            if any(other["old_revision"] == bridge["old_revision"] for other in approved):raise ValueError("duplicate retained proof source")
+            approved.append(bridge)
+            continue
         spill = bridge["kind"] == SPILL_INDEX_BRIDGE_KIND
         frontier = bridge["kind"] == CONTENT_FRONTIER_BRIDGE_KIND
         direct_spill = (spill or frontier) and bridge["old_revision"] == SPILL_INDEX_PARENT
         direct_frontier = frontier and bridge["old_revision"] == CONTENT_FRONTIER_PARENT
-        counters = [] if direct_spill or direct_frontier else ["callback_unlink", "callback_rmdir"]
-        allowed = lambda case: case in cases and (cases[case]["operation"] in NO_UNLINK_OPERATIONS or direct_spill and case in SPILL_INDEX_EXTRA_CASES or direct_frontier and case in CONTENT_FRONTIER_EXTRA_CASES)
+        direct_rebase = frontier and bridge["old_revision"] == REBASE_LIFETIME_PARENT
+        counters = [] if direct_spill or direct_frontier or direct_rebase else ["callback_unlink", "callback_rmdir"]
+        allowed = lambda case: case in cases and (cases[case]["operation"] in NO_UNLINK_OPERATIONS or direct_spill and case in SPILL_INDEX_EXTRA_CASES or direct_frontier and case in CONTENT_FRONTIER_EXTRA_CASES or direct_rebase and case in REBASE_LIFETIME_EXTRA_CASES)
         if bridge["required_zero_counters"] != counters or not isinstance(bridge["case_ids"], list) or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(not allowed(case) for case in bridge["case_ids"]) or not isinstance(bridge["reviewed_impact"], str) or len(bridge["reviewed_impact"].strip()) < 80:
             raise ValueError("product bridge lacks explicit reviewed case/observation scope")
         prove = content_frontier_source_proof if frontier else spill_index_source_proof if spill else empty_generation_source_proof if bridge["kind"] == EMPTY_GENERATION_BRIDGE_KIND else unlink_source_proof
@@ -1509,6 +1642,47 @@ def validate_no_unlink_records(records, issues):
     require(all(fields.get("callback_unlink") == 0 and fields.get("callback_rmdir") == 0 for fields, _ in reads), "retained attempt reached or failed to observe the changed unlink/rmdir path", issues)
 
 
+CLEAN_PRE_BUDGET_REVISION = "6c54f8d74a8f07867c6b658da674603c4be6a7c3"
+BUDGET_HOST_SOURCE_PAIRS = {
+    "benchmark/fs-bench-pro/src/workspace_bench.rs": ("0a0df8c560928ac916aae8ce984b683f65085c344cd832fc86f9e3ffee51fcb3", "df074a4160010b328db3ecb92d99f82a87f4acacd0bf347e5490d435e9f85771"),
+    "benchmark/fs-bench-pro/src/sdk_file_edit.rs": ("8cb37ded94f711c6d0a2d463ab70e76ce5d12557a7579a4bdecc78d6fc1e8e36", "729f4499b652f8bb39f0f90e99dcb9cc4a013650c6db1ac986a5b4283b5bdd6c"),
+}
+BUDGET_HARNESS_PATHS = {"benchmark/fs-bench-pro/" + path for path in (
+    "src/workspace_bench.rs", "src/sdk_file_edit.rs", "workspace-runner.py", "generate-workspace-report.py")}
+
+
+def runtime_budget_source_proof(old_revision, new_revision):
+    """Bind the reviewed timer-only harness change; never assert equal cost."""
+    if old_revision != CLEAN_PRE_BUDGET_REVISION or old_revision == new_revision:
+        raise ValueError("runtime budget bridge must start at exact clean6c source")
+    if sql_history_status(old_revision) != "explicit-opt-in; default capture disabled" or sql_history_status(new_revision) != "explicit-opt-in; default capture disabled":
+        raise ValueError("runtime budget bridge cannot admit SQL-contaminated timing")
+    old_tree, new_tree = product_tree(old_revision), product_tree(new_revision)
+    if old_tree != new_tree:
+        raise ValueError("runtime budget bridge changed product source/build inputs")
+    changed = set(subprocess.check_output(["git", "diff", "--name-only", old_revision, new_revision, "--", "benchmark/fs-bench-pro"], cwd=HERE.parents[1], text=True).splitlines())
+    if not {"benchmark/fs-bench-pro/src/workspace_bench.rs", "benchmark/fs-bench-pro/src/sdk_file_edit.rs", "benchmark/fs-bench-pro/workspace-runner.py"}.issubset(changed) or changed - BUDGET_HARNESS_PATHS:
+        raise ValueError("runtime budget bridge changed unreviewed harness dependencies")
+    hashes = {path: {revision: hashlib.sha256(subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=HERE.parents[1])).hexdigest() for revision in (old_revision, new_revision)} for path in sorted(changed)}
+    for path, reviewed_pair in BUDGET_HOST_SOURCE_PAIRS.items():
+        if tuple(hashes[path][revision] for revision in (old_revision, new_revision)) != reviewed_pair:
+            raise ValueError("unreviewed host timer implementation; completed clean6c cannot be silently bridged")
+    return {"unchanged_product_tree_sha256": hashlib.sha256(json.dumps(old_tree, sort_keys=True).encode()).hexdigest(),
+            "changed_harness_source_sha256": hashes,
+            "scope": "Only already completed successful clean6c performance with pure_call_sum_ns<=15000000000. Original-producing-source timing/resources only; no new timer observer instruction-cost equivalence. Active correctness verified separately with unchanged workload/oracle definitions."}
+
+
+def configured_runtime_budget_bridge(config, primary):
+    bridge = config.get("runtime_budget_compatibility")
+    if bridge is None:
+        return None
+    if not isinstance(bridge, dict) or set(bridge) != {"old_revision", "new_revision", "source_proof", "reviewed_impact"} or bridge["new_revision"] != primary["revision"] or not isinstance(bridge["reviewed_impact"], str) or len(bridge["reviewed_impact"].strip()) < 80:
+        raise ValueError("malformed source-bound runtime-budget evidence bridge")
+    if bridge["source_proof"] != runtime_budget_source_proof(bridge["old_revision"], bridge["new_revision"]):
+        raise ValueError("runtime-budget reviewed source hashes differ from actual committed bytes")
+    return bridge
+
+
 def family_builds(campaign, assets, primary, registry):
     families = {row["family_id"] for row in registry}
     cases = {row["scenario_id"]: row for row in registry}
@@ -1517,9 +1691,10 @@ def family_builds(campaign, assets, primary, registry):
     if not path.exists():
         return selected, provenance, bridges
     config = read(path)
-    if set(config) - {"schema", "selections", "verification_compatibility", "product_compatibility"} or config.get("schema") != "fs-bench-pro-scoped-builds-v1" or not isinstance(config.get("selections"), dict):
+    if set(config) - {"schema", "selections", "verification_compatibility", "product_compatibility", "runtime_budget_compatibility"} or config.get("schema") != "fs-bench-pro-scoped-builds-v1" or not isinstance(config.get("selections"), dict):
         raise ValueError("invalid explicit scoped build mapping")
     product_bridges = configured_product_bridges(config, primary, cases)
+    runtime_budget_bridge = configured_runtime_budget_bridge(config, primary)
     loaded = {assets.resolve(): (primary, registry)}
     for selector, choice in config["selections"].items():
         parts = selector.split(":")
@@ -1539,6 +1714,9 @@ def family_builds(campaign, assets, primary, registry):
         if location not in loaded:
             loaded[location] = qualified_build(location)
         build, candidate_registry = loaded[location]
+        if build["revision"] == CLEAN_PRE_BUDGET_REVISION and primary["revision"] != CLEAN_PRE_BUDGET_REVISION:
+            if runtime_budget_bridge is None or selector.split(":")[-1] != "performance" or parts[0] != "slot":
+                raise ValueError("old clean6c runtime-budget reuse requires exact completed performance-slot selector and source proof")
         if build.get("product_baseline") != primary.get("product_baseline"):
             raise ValueError("scoped mapping changed the pinned release baseline")
         if build["product_seal"] != primary["product_seal"]:
@@ -1546,18 +1724,26 @@ def family_builds(campaign, assets, primary, registry):
                 raise ValueError("cfg(test)-excluded product bridge requires release assets")
             selected_cases = [case for case in registry if case["family_id"] == parts[1]] if parts[0] == "family" else [cases[parts[1]]]
             for selected_case in selected_cases:
-                matching_product_bridge(product_bridges, build, primary, selected_case["scenario_id"])
+                bridge = matching_product_bridge(product_bridges, build, primary, selected_case["scenario_id"])
+                if bridge["kind"] == RETAINED_PROOF_KIND and selector != f"slot:{selected_case['scenario_id']}:1:verify":
+                    raise ValueError("completed proof compatibility cannot select performance or another verification slot")
         # Qualification/results/finding narratives can evolve independently.
         # Every explicitly normative file must exist and remain byte-identical.
         for filename in NORMATIVE_CONTRACT_FILES:
-            if filename not in build["phase1_contract_files"] or filename not in primary["phase1_contract_files"] or build["phase1_contract_files"][filename] != primary["phase1_contract_files"][filename]:
-                raise ValueError(f"scoped mapping changed existing frozen contract: {filename}")
+            old_hash, new_hash = build["phase1_contract_files"].get(filename), primary["phase1_contract_files"].get(filename)
+            if old_hash is None or new_hash is None or old_hash != new_hash and (old_hash, new_hash) != runtime_scope_contract_pair(filename):
+                raise ValueError(f"scoped mapping changed existing frozen contract beyond exact user scope amendment: {filename}")
         family = parts[1] if parts[0] == "family" else cases[parts[1]]["family_id"]
         if [row for row in registry if row["family_id"] == family] != [row for row in candidate_registry if row["family_id"] == family]:
             raise ValueError("scoped build changed frozen registry descriptors")
         selected[selector] = build
         provenance[selector] = {**choice, "assets": str(location), "source": build,
+            "runtime_budget_compatibility": runtime_budget_bridge if build["revision"] == CLEAN_PRE_BUDGET_REVISION and primary["revision"] != CLEAN_PRE_BUDGET_REVISION else None,
             "product_compatibility": [item for item in product_bridges if item["old_revision"] == build["revision"]] if build["product_seal"] != primary["product_seal"] else []}
+    if any("rebase_lifetime_source" in bridge["source_proof"] for bridge in product_bridges):
+        dense = cases["workspace-dense-rewrite-500"]
+        if any(selected_build(selected, dense, "verify", seed)["product_seal"] != primary["product_seal"] for seed in (1, 2, 3)):
+            raise ValueError("all dense500 verification seeds must exercise the repaired current rebase")
     sources = {build["revision"]: build for build in selected.values()}
     for bridge in config.get("verification_compatibility", []):
         fields = {"family_id", "performance_revision", "verification_revision", "reviewed_impact", "unchanged_paths"}
@@ -1643,6 +1829,58 @@ def distribution_rows(values, sources):
     return rows
 
 
+def read_runtime_suppressions(campaign, registry):
+    path = campaign / "phase1-runtime-suppressions.json"
+    if not path.is_file():
+        raise ValueError("persistent Phase1 runtime suppression ledger missing")
+    ledger = read(path)
+    if ledger.get("schema") != "phase1-runtime-suppressions-v1" or ledger.get("limit_ns") != 15_000_000_000 or not isinstance(ledger.get("cases"), dict):
+        raise ValueError("invalid runtime suppression ledger schema/limit/cases")
+    initial = runner.INITIAL_SUPPRESSED_CASES
+    if not initial.issubset(ledger["cases"]):
+        raise ValueError("persistent ledger omitted initial user suppression")
+    policy_path = "docs/roadmap/0.1/0.1.3/phase-1-runtime-suppressions.md"
+    policy_hash = hashlib.sha256(subprocess.check_output(["git", "show", f"{RUNTIME_SCOPE_POLICY_REVISION}:{policy_path}"], cwd=HERE.parents[1])).hexdigest()
+    for case_id, entry in ledger["cases"].items():
+        if not isinstance(entry, dict) or entry.get("scenario_id") != case_id or entry.get("status") != "suppressed_phase1_time_budget" or entry.get("origin") not in {"user-initial", "measured-product-budget"} or not isinstance(entry.get("reason"), str) or not entry["reason"].strip() or not digest(entry.get("policy_sha256")):
+            raise ValueError("malformed persistent runtime suppression record")
+        number(entry.get("at_unix_ns"), "suppression timestamp")
+        if entry["policy_sha256"] != policy_hash:
+            raise ValueError("suppression record differs from exact user scope amendment")
+        if entry["origin"] == "user-initial" and case_id not in initial:
+            raise ValueError("unrequested initial runtime suppression")
+        if entry["origin"] == "measured-product-budget":
+            if entry.get("mode") != "performance" or entry.get("limit_ns") != ledger["limit_ns"] or number(entry.get("observed_product_ns"), "suppression cumulative product time") <= ledger["limit_ns"]:
+                raise ValueError("runtime suppression lacks reached cumulative performance limit")
+            directory = Path(entry["evidence_path"])
+            original = read(directory / "outcome.json")
+            if original.get("scenario_id") != case_id or original.get("seed") != entry.get("seed") or original.get("source_revision") != entry.get("source_revision") or original.get("mode") != "performance":
+                raise ValueError("runtime suppression trigger source/slot differs from original outcome")
+            if not runner.budget_suppression_can_continue(original):
+                raise ValueError("suppressed trigger has unresolved cleanup/resource/observer failure")
+    phase1_scope(registry, ledger["cases"])
+    return ledger
+
+
+def phase1_scope(registry, suppressions):
+    """Apply durable exact-ID scope decisions without rewriting raw outcomes."""
+    ids = {case["scenario_id"]: case for case in registry}
+    if set(suppressions) - set(ids):
+        raise ValueError("runtime suppression names an unknown frozen scenario")
+    if any(ids[key].get("proof_only") for key in suppressions):
+        raise ValueError("standalone proof cannot be runtime suppressed")
+    new, proofs, inherited = registry_cases(registry)
+    all_required = [(case, seed, mode) for case in new for mode in ("performance", "verify") for seed in (1, 2, 3)]
+    all_required += [(case, 1, "verify") for case in proofs]
+    all_required += [(case, rep, "performance") for case in inherited for rep in range(1, 6)] + [(case, 1, "verify") for case in inherited]
+    active = [slot for slot in all_required if slot[0]["scenario_id"] not in suppressions]
+    suppressed = [{"case": case["scenario_id"], "family_id": case["family_id"], "seed": seed, "mode": mode,
+                   "inherited": case.get("inherited", False), "coverage_status": "suppressed_phase1_time_budget",
+                   "product_status": "not-claimed", "suppression": suppressions[case["scenario_id"]]}
+                  for case, seed, mode in all_required if case["scenario_id"] in suppressions]
+    return active, suppressed
+
+
 def terminal_status(missing, invalid, issues, failures):
     return "NO_GO" if missing or invalid or issues or failures else "PHASE1_TERMINAL_PASS"
 
@@ -1660,20 +1898,26 @@ def generate(campaign, assets):
         if not isinstance(entry.get("previous_evidence"), str) or not isinstance(entry.get("reason"), str) or not entry["reason"].strip():
             raise ValueError("invalidation lacks retained evidence/reason")
         invalidated[str(Path(entry["previous_evidence"]).resolve())].append(entry)
-    required = [(case, seed, mode) for case in new for mode in ("performance", "verify") for seed in (1, 2, 3)]
-    required += [(case, 1, "verify") for case in proofs]
-    required += [(case, rep, "performance") for case in inherited for rep in range(1, 6)] + [(case, 1, "verify") for case in inherited]
+    suppression_ledger = read_runtime_suppressions(campaign, registry)
+    suppressions = suppression_ledger["cases"]
+    required, suppressed_slots = phase1_scope(registry, suppressions)
     required_keys = {(case["scenario_id"], seed, mode) for case, seed, mode in required}
-    current = [row for row in ledger.values() if all(row.get(key) == selected_build(selected_builds, row, row.get("mode"))[value] for key, value in IDENTITY_FIELDS.items())]
+    current = [row for row in ledger.values() if row.get("scenario_id") not in suppressions and all(row.get(key) == selected_build(selected_builds, row, row.get("mode"))[value] for key, value in IDENTITY_FIELDS.items())]
     by_slot, global_issues, evidence_paths = {}, [], set()
     for family in {case["family_id"] for case in registry}:
         environments = {row.get("environment_identity") for row in current if row.get("family_id") == family}
         if len(environments) > 1:
             global_issues.append(f"multiple runtime environment identities cannot be pooled within {family}")
     invocations = []
+    selected_invocation_slots = {(row.get("source_revision"), row.get("image_id"), row.get("scenario_id"), row.get("seed"), row.get("mode")) for row in current}
+    covered_invocation_slots = set()
     for path in sorted((campaign / "invocations").glob("*.json")):
         value = read(path)
         if not any(value.get("source_revision") == chosen["revision"] and value.get("image_id") == chosen["image_id"] for chosen in selected_builds.values()):
+            continue
+        planned_rows = value.get("planned_slots")
+        planned = {(value.get("source_revision"), value.get("image_id"), *slot) for slot in planned_rows if isinstance(slot, list) and len(slot) == 3 and isinstance(slot[0], str) and type(slot[1]) is int and isinstance(slot[2], str) and slot[2] in {"performance", "verify"}} if isinstance(planned_rows, list) else set()
+        if not planned & selected_invocation_slots:
             continue
         try:
             for key in ("source_validation_ns", "registry_query_ns"):
@@ -1683,13 +1927,16 @@ def generate(campaign, assets):
             else:
                 number(value.get("invocation_wall_ns"), "invocation_wall_ns")
                 require(value["invocation_wall_ns"] >= value["source_validation_ns"] + value["registry_query_ns"], "CLI invocation hides validation/query work", global_issues)
-                require(value.get("status") in {"pass", "failed-outcomes"}, "CLI invocation has not completed", global_issues)
+                require(value.get("status") in {"pass", "failed-outcomes", "completed_with_suppressions", "suppressed_phase1_time_budget"}, "CLI invocation has not completed", global_issues)
             require(isinstance(value.get("planned_slots"), list), "CLI invocation lacks selected slot inventory", global_issues)
         except (ValueError, TypeError) as error:
             global_issues.append(f"invalid invocation receipt {path.name}: {error}")
         invocations.append({**value, "path": str(path), "sha256": custody.sha(path)})
+        covered_invocation_slots.update(planned)
     if current and not invocations:
         global_issues.append("no retained CLI invocation wall receipts")
+    if selected_invocation_slots - covered_invocation_slots:
+        global_issues.append("selected outcomes lack matching CLI invocation slot receipts")
     for outcome in current:
         key = (outcome.get("scenario_id"), outcome.get("seed"), outcome.get("mode"))
         if key not in required_keys or key in by_slot or outcome.get("evidence_path") in evidence_paths:
@@ -1713,7 +1960,10 @@ def generate(campaign, assets):
         if product_bridge:
             try:
                 retained_records = raw(Path(outcome["evidence_path"]) / "raw.jsonl")
-                if product_bridge["kind"] == CONTENT_FRONTIER_BRIDGE_KIND:
+                if product_bridge["kind"] == RETAINED_PROOF_KIND:
+                    require(outcome["mode"] == "verify" and seed == 1 and Path(outcome["evidence_path"]).name == product_bridge["source_proof"]["retained_evidence_basename"], "only the exact completed proof is reusable", value["issues"])
+                    predicate_scope = {"correctness": "retained independent proof with explicit state identity", "timing_claim": "none; original proof resources only"}
+                elif product_bridge["kind"] == CONTENT_FRONTIER_BRIDGE_KIND:
                     predicate_scope = validate_content_frontier_records(retained_records, case, product_bridge, value["issues"])
                 elif product_bridge["kind"] == SPILL_INDEX_BRIDGE_KIND:
                     predicate_scope = validate_spill_index_records(retained_records, case, product_bridge, value["issues"])
@@ -1729,6 +1979,9 @@ def generate(campaign, assets):
         if invalidation:
             value["issues"].append("selected observation was explicitly invalidated")
             value["verification_pass"] = False
+        if mode == "performance" and value["product_status"] == "pass":
+            require(type(value["metrics"].get("pure_call_sum_ns")) is int and value["metrics"]["pure_call_sum_ns"] <= 15_000_000_000,
+                    "active performance exceeds15s or lacks the exact cumulative product-time receipt; durable suppression required", value["issues"])
         checked[key] = value
         row = {"case": key[0], "family_id": case["family_id"], "seed": seed, "mode": mode, "inherited": case.get("inherited", False),
                "source_identity": {key: outcome.get(key) for key in IDENTITY_FIELDS}, "source_arm": outcome.get("source_arm"), "raw_product_status": outcome.get("product_status"), "coverage_status": outcome.get("coverage_status"), "product_status": value["product_status"], "evidence_status": "REVISE" if value["issues"] else "PASS",
@@ -1775,25 +2028,53 @@ def generate(campaign, assets):
               "planned_capped_verifiers": 5, "executed_capped_verifiers": sum(row["coverage_status"] == "executed" and row["inherited"] and row["mode"] == "verify" for row in rows),
               "missing_slots": len(missing), "invalid_slots": len(invalid), "unexecuted_slots": sum(row["coverage_status"] != "executed" for row in rows),
               "unknown_product_outcomes": sum(row["product_status"] == "not-established" for row in rows), "product_failed_outcomes": len(failures)}
+    counts.update(original_new_cases=len(new), original_new_performance_slots=3 * len(new),
+                  suppressed_new_cases=sum(case["scenario_id"] in suppressions for case in new),
+                  suppressed_new_performance_slots=3 * sum(case["scenario_id"] in suppressions for case in new),
+                  active_new_cases=sum(case["scenario_id"] not in suppressions for case in new),
+                  active_new_performance_slots=3 * sum(case["scenario_id"] not in suppressions for case in new),
+                  active_new_verification_slots=3 * sum(case["scenario_id"] not in suppressions for case in new),
+                  original_capped_cases=len(inherited), original_capped_performance_slots=5 * len(inherited),
+                  suppressed_capped_cases=sum(case["scenario_id"] in suppressions for case in inherited),
+                  suppressed_capped_performance_slots=5 * sum(case["scenario_id"] in suppressions for case in inherited),
+                  active_capped_performance_slots=5 * sum(case["scenario_id"] not in suppressions for case in inherited),
+                  active_capped_verification_slots=sum(case["scenario_id"] not in suppressions for case in inherited),
+                  suppressed_associated_verification_slots=sum(row["mode"] == "verify" for row in suppressed_slots),
+                  active_required_slots=len(required), suppressed_prescribed_slots=len(suppressed_slots))
+    family_scope = {family: {"original_cases": len([case for case in registry if case["family_id"] == family]),
+                           "suppressed_cases": [case["scenario_id"] for case in registry if case["family_id"] == family and case["scenario_id"] in suppressions],
+                           "active_cases": [case["scenario_id"] for case in registry if case["family_id"] == family and case["scenario_id"] not in suppressions]}
+                    for family in sorted({case["family_id"] for case in registry})}
+    for value in family_scope.values():
+        value["execution_scope"] = "wired; all performance and associated verification suppressed_phase1_time_budget" if not value["active_cases"] else "active coverage required; suppressed subsets are not passing coverage"
     retained, retained_outcomes = [], []
     for path in sorted((campaign / "attempts").glob("*/outcome.json")):
         value = read(path)
         value["invalidation_context"] = invalidated.get(str(path.parent.resolve()), [])
+        value["sql_history_scope"] = sql_history_status(value["source_revision"]) if value.get("mode") == "performance" else "separate verification; actual original gates retained"
+        value["phase1_scope_status"] = "suppressed_phase1_time_budget" if value.get("scenario_id") in suppressions else "active-or-historical"
+        if path.parent.name.endswith("fa8300eb5d36"):
+            # Preserve the sealed pre-fix coverage field; independently expose the reached work.
+            started = any(record.get("kind") in {"sample-start", "proof-start"} for record in raw(path.parent / "raw.jsonl"))
+            value["derived_execution_status"] = "executed-partial" if started else "not-established"
+            value["derived_phase1_disposition"] = "user-policy-stop" if started and value.get("scenario_id") in suppressions and value.get("supervisor_cleanup_status") == "pass" else "requires-investigation"
         retained_outcomes.append(value)
-        if value.get("product_status") != "pass" or value.get("harness_status") == "fail" or value["invalidation_context"]:
-            retained.append({key: value.get(key) for key in ("scenario_id", "seed", "mode", "source_revision", "source_arm", "product_status", "harness_status", "error", "evidence_path", "invalidation_context")})
+        if value.get("product_status") != "pass" or value.get("harness_status") == "fail" or value["invalidation_context"] or "diagnostic-only" in value["sql_history_scope"]:
+            retained.append({key: value.get(key) for key in ("scenario_id", "seed", "mode", "source_revision", "source_arm", "product_status", "harness_status", "error", "evidence_path", "invalidation_context", "sql_history_scope", "phase1_scope_status", "derived_execution_status", "derived_phase1_disposition")})
     arms = {}
     for value in retained_outcomes:
         key, identity = source_group(value)
-        arm = arms.setdefault(key, {"source_group": key, **identity, "raw_performance_outcomes": 0, "raw_pass": 0, "raw_fail": 0, "invalidated_observations": 0, "evidence": []})
+        arm = arms.setdefault(key, {"source_group": key, **identity, "raw_performance_outcomes": 0, "raw_pass": 0, "raw_fail": 0, "invalidated_observations": 0, "sql_history_scope": sql_history_status(value["source_revision"]), "evidence": []})
         if value.get("mode") == "performance" and value.get("coverage_status") == "executed":
             arm["raw_performance_outcomes"] += 1
             arm["invalidated_observations"] += bool(value.get("invalidation_context"))
             arm["raw_pass" if value.get("product_status") == "pass" else "raw_fail"] += 1
             arm["evidence"].append(value["evidence_path"])
-    summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "scoped_builds": build_provenance, "verification_compatibility": compatibility, "product_compatibility": list(product_compatibility.values()), "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
+    summary = {"schema": "fs-bench-pro-phase1-review-v2", "source": build, "scoped_builds": build_provenance, "verification_compatibility": compatibility, "product_compatibility": list(product_compatibility.values()), "runtime_budget_compatibility": next((item["runtime_budget_compatibility"] for item in build_provenance.values() if item.get("runtime_budget_compatibility")), None), "report_generator_sha256": custody.sha(Path(__file__)), "runtime_report_generator_sha256": build["report_generator_sha256"],
+               "runtime_suppressions": suppression_ledger, "suppressed_slots": suppressed_slots, "family_scope": family_scope,
+               "suppressed_original_outcomes": [value for value in retained_outcomes if value["phase1_scope_status"] == "suppressed_phase1_time_budget"],
                "retained_source_arms": list(arms.values()), "retained_invalidations": invalidations, "eligible_distributions": eligible_distributions, "step_evidence_path": "step-evidence.json", "counts": counts, "phase1_evidence_status": "PASS" if not missing and not invalid and not global_issues else "REVISE", "product_status": "FAIL" if failures else "NOT_ESTABLISHED" if missing or invalid or global_issues else "PASS",
-               "phase1_terminal_status": terminal_status(missing, invalid, global_issues, failures), "completion_policy": "failure-repair-amendment-2026-09-04", "global_issues": global_issues, "missing": missing, "invalid": invalid, "product_findings": failures, "retained_failure_history": retained, "invocations": invocations, "rows": rows}
+               "phase1_terminal_status": terminal_status(missing, invalid, global_issues, failures), "completion_policy": "phase-1-runtime-suppressions-2026-09-04; all remaining active failure-repair gates unchanged", "scope_amendment_revision": RUNTIME_SCOPE_POLICY_REVISION, "global_issues": global_issues, "missing": missing, "invalid": invalid, "product_findings": failures, "retained_failure_history": retained, "invocations": invocations, "rows": rows}
     results = campaign / "results"
     results.mkdir(exist_ok=True)
     custody.write_json(results / "review.json", summary)
@@ -1801,15 +2082,18 @@ def generate(campaign, assets):
         "scope": "Each row joins a measured operation ordinal+1 with an independently verified snapshot ordinal. Raw roots stay in their own executions; no cross-execution root equality is assumed. Store deltas and retained-union gauges are not summed."})
     inputs = {"build_manifest_sha256": custody.sha(assets / "evidence/evidence.sha256"), "ledger_sha256": custody.sha(campaign / "slots.json") if (campaign / "slots.json").exists() else None,
               "family_build_mapping_sha256": custody.sha(campaign / "evidence-builds.json") if (campaign / "evidence-builds.json").exists() else None,
+              "runtime_suppressions_sha256": custody.sha(campaign / "phase1-runtime-suppressions.json") if (campaign / "phase1-runtime-suppressions.json").exists() else None,
               "invalidations_sha256": custody.sha(campaign / "invalidations.jsonl") if (campaign / "invalidations.jsonl").exists() else None,
               "classifications_sha256": custody.sha(campaign / "classifications.json") if (campaign / "classifications.json").exists() else None,
               "generator_sha256": summary["report_generator_sha256"], "policy_helper_sha256": custody.sha(HERE / "workspace-runner.py"), "custody_helper_sha256": custody.sha(HERE / "sdk-edit-custody.py"), "attempt_manifests": {path: custody.sha(Path(path) / "evidence.sha256") if (Path(path) / "evidence.sha256").is_file() else None for path in sorted(evidence_paths)}}
     custody.write_json(results / "report-inputs.json", inputs)
     lines = ["# LayerFS v0.1.3 Phase 1 initial baseline", "", f"Evidence: **{summary['phase1_evidence_status']}**. Product: **{summary['product_status']}**. Phase 1 terminal gate: **{summary['phase1_terminal_status']}**.", "", f"Sealed source: `{build['revision']}`. Report generator: `{summary['report_generator_sha256']}`.", "", "| Coverage | Count |", "| --- | ---: |"]
     lines += [f"| {key} | {value} |" for key, value in counts.items()]
-    lines += ["", "## Retained original and corrected source arms", "", "Raw outcomes below are preserved with their producing identities; they are not all eligible current-candidate performance evidence.", "", "| Arm | Source / identity group | Image | Raw performance outcomes | Raw pass | Raw fail | Invalidated observations |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"]
-    lines += [f"| {arm['source_arm']} | `{arm['source_revision']}` / `{arm['source_group'][:16]}` | `{arm['image_id']}` | {arm['raw_performance_outcomes']} | {arm['raw_pass']} | {arm['raw_fail']} | {arm['invalidated_observations']} |" for arm in arms.values()]
-    lines += ["", "## Eligible source-bound distributions", "", "Only complete, authentic, source/input/environment-matched independently verified samples are eligible. Every source group is separate. Retained original-source timings do not measure a later candidate binary or its added guard instruction cost; predicate bridges establish unchanged state and retain the actual producing identity. CPU/I/O use observed boundary differences; transaction and memory/spool high-water values take maxima; Store growth uses signed endpoint differences. Verification-derived sharing/storage values are labelled verified and retain their independent producing evidence.", "", "| Arm / source group | Case | Metric | n | Median | Min | Max |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"]
+    lines += ["", "## Phase1 runtime scope suppressions", "", "The original inventory remains visible. Suppressed exact IDs and their associated verification are outside active Phase1 coverage; suppression is neither PASS nor FAIL nor unimplemented work. Their raw historical outcomes are preserved. All active correctness/resource/cleanup gates still apply. Git remains wired with all four execution subsets suppressed.", "", "| Case | Phase1 scope | Reason |", "| --- | --- | --- |"]
+    lines += [f"| `{case}` | suppressed_phase1_time_budget | {decision.get('reason', decision.get('trigger', 'persistent15s product-time scope decision'))} |" for case, decision in sorted(suppressions.items())]
+    lines += ["", "## Retained original and corrected source arms", "", "Raw outcomes keep their actual producing identities and pass/fail statuses. Every unrequested SQL-history performance recording is diagnostic-only: source labelling does not repair its contaminated timers or memory observations.", "", "| Arm | Source / identity group | Image | Raw performance outcomes | Raw pass | Raw fail | Invalidated observations | SQL history scope |", "| --- | --- | --- | ---: | ---: | ---: | ---: | --- |"]
+    lines += [f"| {arm['source_arm']} | `{arm['source_revision']}` / `{arm['source_group'][:16]}` | `{arm['image_id']}` | {arm['raw_performance_outcomes']} | {arm['raw_pass']} | {arm['raw_fail']} | {arm['invalidated_observations']} | {arm['sql_history_scope']} |" for arm in arms.values()]
+    lines += ["", "## Eligible source-bound distributions", "", "Only complete, authentic, source/input/environment-matched independently verified samples are eligible. Every source group is separate. Old unrequested SQL-history timings cannot enter these distributions. The two exact already-completed independent proofs retain their original source identity. Separately, successful clean6c samples within15seconds may retain their original timing/resource claims through the explicit product-identical, budget-only harness source bridge; this does not admit SQL-contaminated timings or claim new-observer cost equivalence. CPU/I/O use observed boundary differences; transaction and memory/spool high-water values take maxima; Store growth uses signed endpoint differences. Verification-derived sharing/storage values are labelled verified and retain their independent producing evidence.", "", "| Arm / source group | Case | Metric | n | Median | Min | Max |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"]
     for item in eligible_distributions:
         identity = item["source_identity"]
         lines.append(f"| {identity['source_arm']} / `{item['source_group'][:16]}` | {item['case']} | {item['metric']} | {item['n']} | {item['median']} | {item['min']} | {item['max']} |")
@@ -1829,7 +2113,7 @@ def generate(campaign, assets):
     lines += [f"- **REVISE** — {issue}." for issue in global_issues]
     if missing:
         lines.append(f"- {len(missing)} required slots remain missing; review.json contains exact IDs.")
-    lines += ["", "## Scope", "", "This is initial benchmark evidence, not release admission. Required product failures block Phase 1 completion and require repair. Original baselines remain failed in retained_failure_history; corrected candidate outcomes keep separate source identities. Report regeneration does not rerun product work. No cold-cache, optimization or crash/power-loss guarantee is claimed. Issue #21 remains open.", ""]
+    lines += ["", "## Scope", "", "This is initial benchmark evidence, not release admission. Still-active product failures block Phase1 completion and require repair. Runtime-suppressed coverage is explicitly outside this amended Phase1 scope and is never labelled passing. Historical raw passes and failures remain unchanged in retained_failure_history with diagnostic/invalidation labels; corrected clean-capture outcomes keep separate source identities. Report regeneration does not rerun product work. No cold-cache, optimization or crash/power-loss guarantee is claimed. Issue #21 remains open.", ""]
     (results / "initial-results.md").write_text("\n".join(lines))
     custody.seal(results)
     return summary
@@ -1965,6 +2249,34 @@ def failure_self_check():
     print("failed_phase_and_git_custody_self_check=pass")
 
 
+def suppression_scope_self_check():
+    """Product-free inventory model: skips never masquerade as passes."""
+    registry = [{"kind": "case", "scenario_id": f"{family}-{index}", "family_id": family}
+                for family, count in FAMILY_COUNTS.items() for index in range(count)]
+    registry += [{"kind": "case", "scenario_id": f"proof-{index}", "family_id": "workspace_reliability", "proof_only": True} for index in range(28)]
+    registry += [{"kind": "case", "scenario_id": "cdc-proof", "family_id": "dedup_cdc_locality", "proof_only": True}]
+    registry += [{"kind": "case", "scenario_id": f"edit-{index}-capped-v1", "family_id": "edit_length_changing_capped", "inherited": True, "proof_only": False} for index in range(5)]
+    decisions = {row["scenario_id"]: {"status": "suppressed_phase1_time_budget"} for row in registry[:14]}
+    active, omitted = phase1_scope(registry, decisions)
+    assert len(active) == 755 and len(omitted) == 84
+    assert sum(mode == "performance" and not case.get("inherited") for case, _, mode in active) == 348
+    assert sum(case.get("proof_only", False) for case, _, _ in active) == 29
+    assert all(row["coverage_status"] == "suppressed_phase1_time_budget" and row["product_status"] == "not-claimed" for row in omitted)
+    decisions["edit-0-capped-v1"] = {"status": "suppressed_phase1_time_budget"}
+    next_active, next_omitted = phase1_scope(registry, decisions)
+    assert len(next_active) == len(active) - 6 and len(next_omitted) == len(omitted) + 6
+    assert terminal_status([], [], [], []) == "PHASE1_TERMINAL_PASS"
+    assert terminal_status([{}], [], [], []) == "NO_GO"
+    for bad in ("missing-scenario", "cdc-proof"):
+        try:
+            phase1_scope(registry, {**decisions, bad: {}})
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid/standalone-proof suppression accepted")
+    print("runtime_suppression_scope_model=pass original_new=130 suppressed_new=14 active_new=116 active_new_performance=348 standalone_proofs=29 capped_dynamic_removal=6")
+
+
 def self_check():
     """One product-free malformed-receipt regression; never start Docker/LayerFS."""
     case = {"scenario_id": "payload-create-1m", "family_id": "payload_create_read", "operation": "payload-create", "tier": 1, "input_mode": "store", "proof_only": False, "inherited": False}
@@ -2007,10 +2319,14 @@ def main():
     parser.add_argument("campaign", type=Path, nargs="?")
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--self-check", action="store_true")
+    parser.add_argument("--suppression-scope-self-check", action="store_true")
     parser.add_argument("--failure-self-check", action="store_true")
     parser.add_argument("--aggregation-self-check", action="store_true")
     parser.add_argument("--canonical-receipt-self-check", action="store_true")
     args = parser.parse_args()
+    if args.suppression_scope_self_check:
+        suppression_scope_self_check()
+        return 0
     if args.canonical_receipt_self_check:
         canonical_receipt_self_check()
         return 0

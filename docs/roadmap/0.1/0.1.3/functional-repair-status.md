@@ -139,3 +139,27 @@ claimed. The watchdog exits before some operation receipts are drained, so the
 failure also retains that evidence incompleteness. The report now recognizes the
 exact RSS event and exit125; the changed row alone was revalidated. Full campaign
 verification and terminal qualification remain pending.
+
+## SQL-history root cause and genuine performance invalidation
+
+The second dense500 seed2 attempt, on d6fdf964, still crossed the 2 GiB RSS gate.
+The rebase copy reduction alone was insufficient. A 57-second diagnostic reused
+its already-published Store without repeating fixture preparation or the FUSE
+writes. Heap analysis identified an unbounded `SQL_TRACE` vector enabled by the
+benchmark's test-instrumentation feature. SQL strings plus vector capacity growth
+explain 99.97% of the observed heap growth during rebase.
+
+Commit 8278d817 makes SQL history explicitly opt-in through the existing test
+reset function. Query counters and fault features remain enabled. The focused
+trace-contract test passed; the identical rebase diagnostic's RSS checkpoint
+peak fell from 1,333,968,896 to 234,651,648 bytes. This is a causal diagnostic,
+not yet the public dense500 runtime gate. Both prior resource failures remain.
+
+The trace recorder allocated monitoring data inside timed product operations,
+contrary to the frozen monitor exclusion. All 191 previously selected performance
+passes therefore require clean recollection; they remain preserved at their real
+sources as contaminated diagnostics. This is a shared measurement defect, not a
+routine rerun of passing work. The two actual independent correctness proofs are
+reviewed separately. Their checks are not automatically invalidated by timing
+purity. Qualified canonical input Stores and native Git reference data remain
+reusable through the exact producer-source checks committed in 6c54f8d7.

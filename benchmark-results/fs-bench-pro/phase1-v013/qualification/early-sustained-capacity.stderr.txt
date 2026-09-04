@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark/fs-bench-pro/workspace-runner.py", line 527, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark/fs-bench-pro/workspace-runner.py", line 485, in main
+    fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+BlockingIOError: [Errno 35] Resource temporarily unavailable

@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark/fs-bench-pro/workspace-runner.py", line 524, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark/fs-bench-pro/workspace-runner.py", line 457, in main
+    if args.build: build_assets(args);return 0
+                   ~~~~~~~~~~~~^^^^^^
+  File "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark/fs-bench-pro/workspace-runner.py", line 139, in build_assets
+    subprocess.run([sys.executable, str(helper), "build-workspace", str(destination), f"layerfs-v013:{revision[:12]}"], cwd=checkout, check=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['/opt/homebrew/opt/python@3.14/bin/python3.14', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs/target/phase1-source-f51859c32356a40a5fbe2e52ee30690f995f8746/benchmark/fs-bench-pro/sdk-edit-custody.py', 'build-workspace', '/Users/yifanxu/Ephemeral-AI-Lab/layerfs/benchmark-results/fs-bench-pro/phase1-v013/assets-f51859c3', 'layerfs-v013:f51859c32356']' returned non-zero exit status 1.
