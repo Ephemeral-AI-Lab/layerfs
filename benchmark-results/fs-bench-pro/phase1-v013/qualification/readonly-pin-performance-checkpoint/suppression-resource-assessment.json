@@ -1,0 +1,9 @@
+{
+  "schema": "phase1-suppression-resource-assessment-v1",
+  "validator_call_count": 1,
+  "issues": [],
+  "violations": [
+    "worker exceeded frozen case deadline"
+  ],
+  "basis": "Exact existing validate_resources result from assembly pass. outcome.timeout=true and supervisor_failure=product-time-budget; raw authoritative cumulative15s event confirmed. This preserved violation is the permitted runtime suppression trigger, not a passing timing. Other resource issues/violations absent."
+}

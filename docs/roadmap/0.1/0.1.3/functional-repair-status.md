@@ -57,11 +57,11 @@ invalidated timings and earlier source identities remain preserved.
 
 | Evidence category | Current disposition | Required next evidence |
 | --- | --- | --- |
-| Performance | 373 eligible slots had passed before the pin repair. Exactly 328 timings are retained under the reviewed operation-path/source predicate; 45 require recollection. | Recollect random-read (12), directory content-scan (9), agent episodes (12), and metadata-history (12) slots on the repaired runtime. Preserve the old 45 observations as original-source evidence. |
-| Routine verification | 48 full proofs are retained: 43 new-family and five inherited capped cases. The remaining 305 routine slots may use the authorized qualified fast profile. | Qualify the expanded implementation and collect those 305 fast proofs with independent changed-content/metadata/alias checks, authenticated references where reused, and explicit skipped-read scope. Fast results remain `fully_verified=false`. |
+| Performance | 373 eligible slots had passed before the pin repair. Exactly 328 timings are retained under the reviewed operation-path/source predicate; 42 replacement samples passed; directory-content-scan-100 seed1 hit the15-second budget and seeds2/3 were suppressed. Active performance scope is370. | Independently validate42 new samples and the separate retained budget failure; historical45 timings remain original-source only. Preserve the old 45 observations as original-source evidence. |
+| Routine verification | 48 full proofs are retained: 43 new-family and five inherited capped cases. The remaining302 active routine slots may use the authorized qualified fast profile. | Qualify the expanded implementation and collect those302 fast proofs with independent changed-content/metadata/alias checks, authenticated references where reused, and explicit skipped-read scope. Fast results remain `fully_verified=false`. |
 | Targeted verification | 20 targeted proofs are qualified, including five source-78 recoveries and repaired contention on30d13dee. | Complete the nine remaining targeted cases; the six new independently validated receipts are sealed in `qualification/78-additional-reliability-checkpoint/`. The CDC boundary and reliability suite retain their targeted gates. |
 
-The [runtime suppression policy](phase-1-runtime-suppressions.md) keeps 14 disabled
+The [runtime suppression policy](phase-1-runtime-suppressions.md) keeps15 disabled
 case definitions for Phase 2. The [fast-verification amendment](phase-1-fast-verification-amendment.md)
 and [reference assurance contract](phase-1-fast-reference-qualification.md) authorize
 routine fast acceptance; they do not turn a preparation seal into verified input,
