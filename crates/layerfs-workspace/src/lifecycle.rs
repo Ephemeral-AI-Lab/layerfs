@@ -1,9 +1,9 @@
 use crate::cow_tree::{Data, DirectoryData, FileData, Kind, NodeId};
 use crate::{
-    CreateWorkspaceSession, EndWorkspaceMode, Workspace, WorkspaceCommitResult,
-    WorkspaceCommitStatus, WorkspaceDetail, WorkspaceDiff, WorkspaceEndResult, WorkspaceError,
-    WorkspaceFileRangeEdit, WorkspaceId, WorkspacePlacement, WorkspaceProjection, WorkspaceResult,
-    WorkspaceSession, WorkspaceSummary, Workspaces, worker::WorkspaceWorker,
+    worker::WorkspaceWorker, CreateWorkspaceSession, EndWorkspaceMode, Workspace,
+    WorkspaceCommitResult, WorkspaceCommitStatus, WorkspaceDetail, WorkspaceDiff,
+    WorkspaceEndResult, WorkspaceError, WorkspaceFileRangeEdit, WorkspaceId, WorkspacePlacement,
+    WorkspaceProjection, WorkspaceResult, WorkspaceSession, WorkspaceSummary, Workspaces,
 };
 use layerfs_content::object::access::ObjectRead;
 use layerfs_content::tree::inode::{InodeId, InodeKind, InodeTableCounters, InodeTableRoot};
@@ -458,7 +458,7 @@ impl Workspace {
         working_root: layerfs_content::ObjectId,
         final_root: layerfs_content::ObjectId,
     ) -> Result<CommitHandoff> {
-        use layerfs_content::tree::directory::{DirectoryStateRoot, diff_directory_entries};
+        use layerfs_content::tree::directory::{diff_directory_entries, DirectoryStateRoot};
         use layerfs_content::tree::inode::{
             codec::decode_inode_record, inode_table_lookup_with_budget,
         };
@@ -643,7 +643,7 @@ impl Workspace {
         let mut binding_checks = 0;
         let mut new_canonical = 0;
         use layerfs_content::tree::directory::{
-            DirectoryStateRoot, NamespaceCounters, directory_lookup,
+            directory_lookup, DirectoryStateRoot, NamespaceCounters,
         };
         use layerfs_content::tree::inode::{
             codec::decode_inode_record, inode_table_lookup_with_budget,
@@ -2618,15 +2618,13 @@ fn verification_fault_scope_is_one_shot() {
         VerificationFault::ShortAppend,
         0
     ));
-    assert!(
-        std::thread::spawn(move || consume_verification_fault(
-            branch,
-            VerificationFault::ShortAppend,
-            4096
-        ))
-        .join()
-        .unwrap()
-    );
+    assert!(std::thread::spawn(move || consume_verification_fault(
+        branch,
+        VerificationFault::ShortAppend,
+        4096
+    ))
+    .join()
+    .unwrap());
     assert!(!consume_verification_fault(
         branch,
         VerificationFault::ShortAppend,

@@ -1,7 +1,7 @@
 use crate::objects::{
-    BuildCounters, BuiltRoot, CanonicalObject, DeferredObjectStore, ObjectSource,
     admit_planned_objects, apply_reconcile_choices_bounded, combine_candidates,
-    insert_object_batch, reconcile_candidate,
+    insert_object_batch, reconcile_candidate, BuildCounters, BuiltRoot, CanonicalObject,
+    DeferredObjectStore, ObjectSource,
 };
 use crate::records::{
     decode_branch, decode_commit, decode_layer_stack_at, decode_object_id, optional_id,
@@ -518,7 +518,104 @@ impl LayerStackStore {
     }
 }
 
+// Restricted to pure inode-page inspection: a callback may not reenter the
+// reader while its cache/SQLite row borrow is live. Published roots need no
+// candidate overlay lookup. Preserve Store errors outside the content adapter.
+struct PublishedInodeReader<'a> {
+    reader: &'a SnapshotReader,
+    error: std::cell::RefCell<Option<StoreError>>,
+}
+impl layerfs_content::object::access::ObjectRead for PublishedInodeReader<'_> {
+    fn get(&self, _: ObjectId) -> layerfs_content::CoreResult<Vec<u8>> {
+        Err(layerfs_content::CoreError::InvalidRecord(
+            "borrowed inode reader",
+        ))
+    }
+    fn with_authenticated_canonical<T, F>(
+        &self,
+        id: ObjectId,
+        callback: F,
+    ) -> layerfs_content::CoreResult<T>
+    where
+        F: FnOnce(&[u8]) -> layerfs_content::CoreResult<T>,
+    {
+        let result = (|| -> Result<T> {
+            let started = Instant::now();
+            {
+                let cache = self
+                    .reader
+                    .cache
+                    .lock()
+                    .map_err(|_| StoreError::Integrity("snapshot object cache"))?;
+                if let Some(bytes) = cache.rows.get(&id) {
+                    // Cache insertion authenticated immutable identity already.
+                    let result = callback(bytes);
+                    self.reader.note_snapshot_cache(1, bytes.len() as u64)?;
+                    self.reader
+                        .note_local_read(1, 1, bytes.len() as u64, elapsed_ns(started))?;
+                    return Ok(result?);
+                }
+            }
+            let connection = self.reader.db.reader()?;
+            let mut statement = connection.prepare_cached(crate::statements::objects::GET)?;
+            let mut rows = statement.query([id.as_bytes().as_slice()])?;
+            let row = rows
+                .next()?
+                .ok_or(StoreError::Integrity("visible object missing"))?;
+            let bytes = row
+                .get_ref(0)?
+                .as_blob()
+                .map_err(|_| StoreError::Integrity("object bytes"))?;
+            layerfs_content::authenticate_identity(bytes, id)?;
+            let result = callback(bytes);
+            self.reader.note_snapshot_database(1, bytes.len() as u64)?;
+            self.reader
+                .note_local_read(1, 1, bytes.len() as u64, elapsed_ns(started))?;
+            Ok(result?)
+        })();
+        result.map_err(|error| {
+            *self.error.borrow_mut() = Some(error);
+            layerfs_content::CoreError::InvalidRecord("published inode read")
+        })
+    }
+}
+
 impl SnapshotReader {
+    /// Inspect an inode table using this snapshot's source ownership. Published
+    /// snapshots borrow cache/SQLite bytes; reconciliation snapshots retain the
+    /// existing overlay lookup order and reserve one owned canonical page. Both
+    /// routes share the same checked traversal and caller scratch allowance.
+    pub fn lookup_inode_with_budget(
+        &self,
+        root: layerfs_content::tree::inode::InodeTableRoot,
+        key: layerfs_content::tree::inode::InodeId,
+        maximum: usize,
+        counters: &mut layerfs_content::tree::inode::InodeTableCounters,
+    ) -> Result<(Option<ObjectId>, usize)> {
+        if !self.overlays.is_empty() {
+            return Ok(
+                layerfs_content::tree::inode::inode_table_lookup_with_budget(
+                    &crate::objects::CoreReader(self),
+                    root,
+                    key,
+                    maximum,
+                    counters,
+                )?,
+            );
+        }
+        let reader = PublishedInodeReader {
+            reader: self,
+            error: std::cell::RefCell::new(None),
+        };
+        let result = layerfs_content::tree::inode::inode_table_lookup_with_source_budget(
+            &reader, root, key, maximum, 0, counters,
+        );
+        if let Some(error) = reader.error.into_inner() {
+            return Err(error);
+        }
+        Ok(result?)
+    }
+
     pub fn root(&self) -> ObjectId {
         self.root
     }
@@ -809,6 +906,169 @@ fn elapsed_ns(started: Instant) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inode_lookup_preserves_private_overlay_source_and_owned_budget() {
+        use layerfs_content::object::access::ObjectStore;
+        use layerfs_content::tree::inode::codec::{encode_inode_table_node, InodeTableNodeV1};
+        use layerfs_content::tree::inode::{InodeId, InodeTableCounters, InodeTableRoot};
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-overlay-inode-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let inode = InodeId::allocate([85; 32], 1);
+        let record = ObjectId::for_bytes(b"private inode record");
+        let canonical =
+            encode_inode_table_node(&InodeTableNodeV1::Leaf(vec![(inode, record)])).unwrap();
+        let mut buffer = crate::objects::ObjectBuffer::empty().unwrap();
+        let id = buffer.put(&canonical).unwrap();
+        assert!(
+            store.db.read_object_row(id).is_err(),
+            "private page is absent from SQLite"
+        );
+        let mut reader = store.snapshot_reader(id);
+        reader
+            .overlays
+            .push(Arc::new(Mutex::new(buffer.into_resumable())));
+        let mut counters = InodeTableCounters::default();
+        assert!(matches!(
+            reader.lookup_inode_with_budget(InodeTableRoot(id), inode, 8703, &mut counters),
+            Err(StoreError::Core(
+                layerfs_content::CoreError::ObjectLimitExceeded
+            ))
+        ));
+        assert_eq!(
+            counters.nodes_read, 0,
+            "owned source rejected before reading or allocating"
+        );
+        assert_eq!(reader.read_metrics_snapshot().unwrap().local_calls, 0);
+        assert_eq!(
+            reader
+                .lookup_inode_with_budget(InodeTableRoot(id), inode, 8704, &mut counters)
+                .unwrap(),
+            (Some(record), 8704)
+        );
+        assert_eq!(
+            reader
+                .read_metrics_snapshot()
+                .unwrap()
+                .snapshot_database_rows,
+            0
+        );
+        assert!(
+            store.db.read_object_row(id).is_err(),
+            "lookup does not publish private preparation"
+        );
+        drop(reader);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn published_inode_lookup_borrows_sql_and_cache_with_tiny_budget() {
+        use layerfs_content::tree::inode::codec::{encode_inode_table_node, InodeTableNodeV1};
+        use layerfs_content::tree::inode::{InodeId, InodeTableCounters, InodeTableRoot};
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-published-inode-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let inode = InodeId::allocate([83; 32], 1);
+        let record = ObjectId::for_bytes(b"inode record identity");
+        let canonical =
+            encode_inode_table_node(&InodeTableNodeV1::Leaf(vec![(inode, record)])).unwrap();
+        let id = ObjectId::for_bytes(&canonical);
+        let corrupt_id = ObjectId::for_bytes(b"wrong inode page identity");
+        {
+            let connection = store.db.writer().unwrap();
+            for key in [id, corrupt_id] {
+                connection
+                    .execute(
+                        crate::statements::objects::INSERT,
+                        rusqlite::params![key.as_bytes().as_slice(), &canonical],
+                    )
+                    .unwrap();
+            }
+        }
+        let reader = store.snapshot_reader(id);
+        let mut counters = InodeTableCounters::default();
+        assert!(matches!(
+            reader.lookup_inode_with_budget(InodeTableRoot(id), inode, 511, &mut counters),
+            Err(StoreError::Core(
+                layerfs_content::CoreError::ObjectLimitExceeded
+            ))
+        ));
+        assert_eq!(counters.nodes_read, 0, "reject before borrowing a page");
+        assert_eq!(
+            reader
+                .lookup_inode_with_budget(InodeTableRoot(id), inode, 512, &mut counters)
+                .unwrap(),
+            (Some(record), 512)
+        );
+        assert_eq!(
+            reader
+                .read_metrics_snapshot()
+                .unwrap()
+                .snapshot_database_rows,
+            1
+        );
+        assert!(
+            reader.cache.lock().unwrap().rows.is_empty(),
+            "borrowed SQL inspection does not allocate a cache copy"
+        );
+        // The ordinary authenticated route populates the small immutable cache.
+        assert_eq!(reader.read_object(id).unwrap(), canonical);
+        reader.reset_read_metrics().unwrap();
+        assert_eq!(
+            reader
+                .lookup_inode_with_budget(InodeTableRoot(id), inode, 512, &mut counters)
+                .unwrap(),
+            (Some(record), 512)
+        );
+        let metrics = reader.read_metrics_snapshot().unwrap();
+        assert_eq!(metrics.snapshot_cache_rows, 1);
+        assert_eq!(metrics.snapshot_database_rows, 0);
+        assert!(matches!(
+            reader.lookup_inode_with_budget(InodeTableRoot(corrupt_id), inode, 512, &mut counters),
+            Err(StoreError::Integrity("object identity"))
+        ));
+        // A full canonical leaf uses the same copied-state allowance: its SQL
+        // bytes stay in the already accounted Store page instead of a new Vec.
+        let mut entries = (0..127)
+            .map(|index| (InodeId::allocate([84; 32], index), record))
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|entry| entry.0);
+        let selected = entries[83].0;
+        let large = encode_inode_table_node(&InodeTableNodeV1::Leaf(entries)).unwrap();
+        let large_id = ObjectId::for_bytes(&large);
+        store
+            .db
+            .writer()
+            .unwrap()
+            .execute(
+                crate::statements::objects::INSERT,
+                rusqlite::params![large_id.as_bytes().as_slice(), large],
+            )
+            .unwrap();
+        assert_eq!(
+            reader
+                .lookup_inode_with_budget(InodeTableRoot(large_id), selected, 512, &mut counters)
+                .unwrap(),
+            (Some(record), 512)
+        );
+        drop(reader);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn snapshot_cache_reads_only_requested_authenticated_objects_and_reuses_them() {

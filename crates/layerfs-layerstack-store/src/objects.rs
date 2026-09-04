@@ -3,14 +3,14 @@ use layerfs_content::filesystem::{self, ContentChange, ReconcileConflict};
 use layerfs_content::object::access::{ObjectRead, ObjectStore};
 use layerfs_content::object::references::referenced_objects;
 use layerfs_content::{CoreError, CoreResult, ObjectId};
-use rusqlite::{Connection, OptionalExtension, params_from_iter, types::Value};
+use rusqlite::{params_from_iter, types::Value, Connection, OptionalExtension};
 #[cfg(test)]
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::Instant;
 
 pub const OBJECT_PAGE_COUNT: usize = 128;
@@ -833,7 +833,9 @@ struct SpillObjects {
 
 struct SpillDiskIndex {
     // Drop the connection before its owned temporary path.
-    connection: Mutex<Connection>,
+    connection: Option<Mutex<Connection>>,
+    frozen: Option<(std::fs::File, u64)>,
+    rows: AtomicU64,
     _path: TempPath,
 }
 
@@ -2241,7 +2243,7 @@ impl SpillObjects {
                 self.path.clear();
             }
             if let Some(index) = &mut self.disk_index {
-                index._path.unlink()?;
+                index.seal()?;
             }
         }
         Ok(())
@@ -2373,33 +2375,31 @@ impl SpillObjects {
             .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
         file.seek(SeekFrom::Start(0))?;
         let mut canonical = Vec::new();
-        order.visit(|expected| {
-            loop {
-                let mut object_id = [0; 32];
-                match file.read_exact(&mut object_id) {
-                    Ok(()) => {}
-                    Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
-                        return Err(StoreError::MissingObject(expected));
-                    }
-                    Err(error) => return Err(error.into()),
+        order.visit(|expected| loop {
+            let mut object_id = [0; 32];
+            match file.read_exact(&mut object_id) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    return Err(StoreError::MissingObject(expected));
                 }
-                let mut length = [0; 8];
-                file.read_exact(&mut length)?;
-                let length = usize::try_from(u64::from_le_bytes(length))
-                    .map_err(|_| StoreError::Integrity("candidate object length"))?;
-                if object_id == *expected.as_bytes() {
-                    if length > OBJECT_PAGE_BYTES {
-                        return Err(StoreError::InvalidInput("candidate object page"));
-                    }
-                    canonical.resize(length, 0);
-                    file.read_exact(&mut canonical)?;
-                    return visitor(expected, &mut canonical);
-                }
-                file.seek(SeekFrom::Current(
-                    i64::try_from(length)
-                        .map_err(|_| StoreError::Integrity("candidate object length"))?,
-                ))?;
+                Err(error) => return Err(error.into()),
             }
+            let mut length = [0; 8];
+            file.read_exact(&mut length)?;
+            let length = usize::try_from(u64::from_le_bytes(length))
+                .map_err(|_| StoreError::Integrity("candidate object length"))?;
+            if object_id == *expected.as_bytes() {
+                if length > OBJECT_PAGE_BYTES {
+                    return Err(StoreError::InvalidInput("candidate object page"));
+                }
+                canonical.resize(length, 0);
+                file.read_exact(&mut canonical)?;
+                return visitor(expected, &mut canonical);
+            }
+            file.seek(SeekFrom::Current(
+                i64::try_from(length)
+                    .map_err(|_| StoreError::Integrity("candidate object length"))?,
+            ))?;
         })
     }
 
@@ -2462,6 +2462,7 @@ impl SpillDiskIndex {
         )?;
         file.seek(SeekFrom::Start(0))?;
         let mut offset = 0_u64;
+        let mut rows = 0_u64;
         while offset < end {
             let transaction = connection.transaction()?;
             {
@@ -2491,19 +2492,104 @@ impl SpillDiskIndex {
                             .map_err(|_| StoreError::Integrity("candidate object length"))?
                     ])?;
                     file.seek(SeekFrom::Start(offset))?;
+                    rows += 1;
                 }
             }
             transaction.commit()?;
         }
         Ok(Self {
-            connection: Mutex::new(connection),
+            connection: Some(Mutex::new(connection)),
+            frozen: None,
+            rows: AtomicU64::new(rows),
             _path: path,
         })
+    }
+
+    fn seal(&mut self) -> Result<()> {
+        if self.frozen.is_some() {
+            return self._path.unlink();
+        }
+        let started = Instant::now();
+        let expected = self.rows.load(Ordering::Relaxed);
+        let output_bytes = expected
+            .checked_mul(48)
+            .ok_or(StoreError::Integrity("candidate frozen index length"))?;
+        let sqlite_bytes = std::fs::metadata(&self._path.0)?.len();
+        let cleanup = self._path.1.as_ref().map(|(owner, _)| owner);
+        let (writer, reader, _) = anonymous_candidate_file("candidate-frozen-index", cleanup)?;
+        let mut writer = std::io::BufWriter::with_capacity(8192, writer);
+        let mut count = 0_u64;
+        let mut previous: Option<ObjectId> = None;
+        {
+            let connection = self
+                .connection
+                .as_ref()
+                .ok_or(StoreError::Integrity("candidate index connection"))?
+                .lock()
+                .map_err(|_| StoreError::Integrity("candidate index lock"))?;
+            // WITHOUT ROWID primary-key order streams final fixed records; no
+            // second tree, survivor manifest or in-memory collection is built.
+            let mut statement =
+                connection.prepare("SELECT id,offset,length FROM offsets ORDER BY id")?;
+            let mut rows = statement.query([])?;
+            while let Some(row) = rows.next()? {
+                if count == expected {
+                    return Err(StoreError::Integrity("candidate frozen index count"));
+                }
+                let id = ObjectId::from_bytes(
+                    row.get_ref(0)?
+                        .as_blob()
+                        .map_err(|_| StoreError::Integrity("candidate index key type"))?,
+                )?;
+                if previous.is_some_and(|old| old >= id) {
+                    return Err(StoreError::Integrity("candidate frozen index order"));
+                }
+                let offset = u64::try_from(row.get::<_, i64>(1)?)
+                    .map_err(|_| StoreError::Integrity("candidate index offset"))?;
+                let length = u64::try_from(row.get::<_, i64>(2)?)
+                    .map_err(|_| StoreError::Integrity("candidate object length"))?;
+                let mut record = [0; 48];
+                record[..32].copy_from_slice(id.as_bytes());
+                record[32..40].copy_from_slice(&offset.to_be_bytes());
+                record[40..48].copy_from_slice(&length.to_be_bytes());
+                writer.write_all(&record)?;
+                previous = Some(id);
+                count += 1;
+            }
+        }
+        if count != expected {
+            return Err(StoreError::Integrity("candidate frozen index count"));
+        }
+        writer.flush()?;
+        if reader.metadata()?.len() != output_bytes {
+            return Err(StoreError::Integrity("candidate frozen index length"));
+        }
+        drop(writer);
+        let connection = self
+            .connection
+            .take()
+            .ok_or(StoreError::Integrity("candidate index connection"))?
+            .into_inner()
+            .map_err(|_| StoreError::Integrity("candidate index lock"))?;
+        if let Err((connection, error)) = connection.close() {
+            self.connection = Some(Mutex::new(connection));
+            return Err(error.into());
+        }
+        self.frozen = Some((reader, count));
+        crate::telemetry::note_workspace_index_freeze(
+            count,
+            output_bytes,
+            sqlite_bytes.saturating_add(output_bytes),
+            elapsed_ns(started),
+        );
+        self._path.unlink()
     }
 
     fn insert(&self, id: ObjectId, offset: u64, length: u64) -> Result<()> {
         let connection = self
             .connection
+            .as_ref()
+            .ok_or(StoreError::Integrity("candidate index connection"))?
             .lock()
             .map_err(|_| StoreError::Integrity("candidate index lock"))?;
         connection
@@ -2515,12 +2601,36 @@ impl SpillDiskIndex {
                 i64::try_from(length)
                     .map_err(|_| StoreError::Integrity("candidate object length"))?
             ])?;
+        self.rows.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
     fn location(&self, id: ObjectId) -> Result<Option<(u64, u64)>> {
+        if let Some((file, rows)) = &self.frozen {
+            use std::os::unix::fs::FileExt;
+            let mut low = 0_u64;
+            let mut high = *rows;
+            let mut record = [0; 48];
+            while low < high {
+                let middle = low + (high - low) / 2;
+                file.read_exact_at(&mut record, middle * 48)?;
+                match record[..32].cmp(id.as_bytes()) {
+                    std::cmp::Ordering::Less => low = middle + 1,
+                    std::cmp::Ordering::Greater => high = middle,
+                    std::cmp::Ordering::Equal => {
+                        return Ok(Some((
+                            u64::from_be_bytes(record[32..40].try_into().unwrap()),
+                            u64::from_be_bytes(record[40..48].try_into().unwrap()),
+                        )))
+                    }
+                }
+            }
+            return Ok(None);
+        }
         let connection = self
             .connection
+            .as_ref()
+            .ok_or(StoreError::Integrity("candidate index connection"))?
             .lock()
             .map_err(|_| StoreError::Integrity("candidate index lock"))?;
         let location: Option<(i64, i64)> = connection
@@ -4080,7 +4190,7 @@ mod tests {
             0o600
         );
         {
-            let connection = disk.connection.lock().unwrap();
+            let connection = disk.connection.as_ref().unwrap().lock().unwrap();
             let rows: i64 = connection
                 .query_row("SELECT count(*) FROM offsets", [], |row| row.get(0))
                 .unwrap();
@@ -4142,7 +4252,24 @@ mod tests {
         ));
         let objects = objects.all_reachable().unwrap();
         assert!(!payload_path.exists());
-        assert_eq!(objects.get(ids[3]).unwrap(), Some(canonical[3].clone()));
+        for index in 0..4 {
+            assert_eq!(
+                objects.get(ids[index]).unwrap(),
+                Some(canonical[index].clone())
+            );
+            assert_eq!(
+                objects.encoded_length(ids[index]).unwrap(),
+                canonical[index].len() as u64
+            );
+        }
+        assert_eq!(objects.get(missing).unwrap(), None);
+        let DeferredObjects::Spill(spill) = &objects.storage else {
+            unreachable!()
+        };
+        let disk = spill.disk_index.as_ref().unwrap();
+        assert!(disk.connection.is_none());
+        let (index, rows) = disk.frozen.as_ref().unwrap();
+        assert_eq!((*rows, index.metadata().unwrap().len()), (4, 4 * 48));
         drop(objects);
         assert!(!index_path.exists());
         for suffix in ["-journal", "-wal", "-shm"] {
@@ -4704,19 +4831,19 @@ mod tests {
             db.enter_operation().is_err(),
             "failed private cleanup must block the next Store operation"
         );
-        // The disk-index name is gone; evict SQLite's private pager cache so
-        // these reads exercise its retained descriptor, not only cached rows.
+        // No SQLite connection/cache remains after seal. These lookups read the
+        // anonymous fixed-record descriptor after the named database is removed.
         let DeferredObjects::Spill(spill) = &objects.storage else {
             unreachable!()
         };
         let index = spill.disk_index.as_ref().expect("forced disk index");
         assert!(index._path.0.as_os_str().is_empty());
-        index
-            .connection
-            .lock()
-            .unwrap()
-            .execute_batch("PRAGMA shrink_memory")
-            .unwrap();
+        assert!(
+            index.connection.is_none(),
+            "SQLite is closed before its name is removed"
+        );
+        let (frozen, rows) = index.frozen.as_ref().expect("sealed fixed index");
+        assert_eq!(frozen.metadata().unwrap().len(), rows * 48);
         assert_eq!(objects.get(ids[0]).unwrap(), Some(first));
         assert_eq!(objects.get(ids[1]).unwrap(), Some(second));
         std::fs::remove_dir(&order_path).unwrap();
@@ -5112,10 +5239,9 @@ mod tests {
                 cloned_bytes: first.len() as u64,
             }
         );
-        assert!(
-            db.read_object_rows(&[ObjectId::for_bytes(b"missing")])
-                .is_err()
-        );
+        assert!(db
+            .read_object_rows(&[ObjectId::for_bytes(b"missing")])
+            .is_err());
         assert!(db.read_object_rows(&[corrupt_id]).is_err());
 
         struct Claimed(Vec<CanonicalObject>);
@@ -5138,31 +5264,25 @@ mod tests {
                 bytes: first.clone(),
             },
         ]);
-        assert!(
-            CoreReader(&reversed)
-                .get_authenticated_batch(&[first_id, second_id], |_, _| Ok(()))
-                .is_err()
-        );
+        assert!(CoreReader(&reversed)
+            .get_authenticated_batch(&[first_id, second_id], |_, _| Ok(()))
+            .is_err());
         let short = Claimed(vec![CanonicalObject {
             id: first_id,
             bytes: first,
         }]);
-        assert!(
-            CoreReader(&short)
-                .get_authenticated_batch(&[first_id, second_id], |_, _| Ok(()))
-                .is_err()
-        );
+        assert!(CoreReader(&short)
+            .get_authenticated_batch(&[first_id, second_id], |_, _| Ok(()))
+            .is_err());
         struct Untrusted(Vec<u8>);
         impl ObjectSource for Untrusted {
             fn read_object(&self, _: ObjectId) -> Result<Vec<u8>> {
                 Ok(self.0.clone())
             }
         }
-        assert!(
-            CoreReader(&Untrusted(second))
-                .get_authenticated_batch(&[corrupt_id], |_, _| Ok(()))
-                .is_err()
-        );
+        assert!(CoreReader(&Untrusted(second))
+            .get_authenticated_batch(&[corrupt_id], |_, _| Ok(()))
+            .is_err());
 
         drop(db);
         std::fs::remove_dir_all(root).unwrap();

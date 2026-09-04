@@ -1,13 +1,15 @@
 mod apply;
 mod change;
-mod diff;
 #[doc(hidden)]
 pub mod delta_spool;
+mod diff;
 mod read;
 mod reconcile;
 mod reconcile_delta;
 mod reconcile_overlay;
-pub use reconcile_delta::{replace_choices_from_snapshots_bounded, replace_paths_from_snapshot_bounded, ReconcileBudget};
+pub use reconcile_delta::{
+    replace_choices_from_snapshots_bounded, replace_paths_from_snapshot_bounded, ReconcileBudget,
+};
 mod resolve;
 mod root;
 

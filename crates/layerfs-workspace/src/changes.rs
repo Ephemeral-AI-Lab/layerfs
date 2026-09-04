@@ -21,7 +21,6 @@ use std::time::Instant;
 
 #[derive(Clone, Copy)]
 struct BaseEntry {
-    inode: InodeId,
     record: InodeRecordV1,
     mode: u32,
     mtime_seconds: i64,
@@ -65,7 +64,11 @@ impl Workspace {
     fn build_frontier_candidate(&mut self) -> Result<BuiltRoot> {
         let started = Instant::now();
         let mut handoff = self.begin_handoff()?;
-        let memory = self.policy.max_final_delta_memory_bytes.checked_sub(handoff.buffer_capacity).ok_or(StorageError::InvalidInput("workspace final-delta limit"))?;
+        let memory = self
+            .policy
+            .max_final_delta_memory_bytes
+            .checked_sub(handoff.buffer_capacity)
+            .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?;
 
         let disk = self
             .policy
@@ -117,13 +120,23 @@ impl Workspace {
             let mut change = 0i64;
             while let Some(reference) = next_reference.filter(|r| r[..33] <= *key) {
                 if reference[..33] == *key {
-                    change = change.checked_add(crate::references::delta(&reference)).ok_or(StorageError::Integrity("namespace reference overflow"))?;
+                    change = change
+                        .checked_add(crate::references::delta(&reference))
+                        .ok_or(StorageError::Integrity("namespace reference overflow"))?;
                 }
                 next_reference = references.next()?;
             }
             let before = value
                 .canonical
-                .map(|inode| self.base_record(inode))
+                .map(|inode| {
+                    let reserved = self.references.capacity()
+                        + (memory / 8).min(crate::commit_spool::SORT_BYTES)
+                        + (metadata_cache.capacity() * 64) as u64;
+                    let available = memory
+                        .checked_sub(reserved)
+                        .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?;
+                    self.base_record_with_budget(inode, available as usize)
+                })
                 .transpose()?;
             let count = final_count(
                 before.map_or(0, |record| record.namespace_ref_count),
@@ -175,7 +188,8 @@ impl Workspace {
                         )?;
                     tree_counts.spill_write_bytes += stats.spill_write_bytes;
                     tree_counts.spill_read_bytes += stats.spill_read_bytes;
-                    tree_counts.peak_spill_bytes = tree_counts.peak_spill_bytes.max(stats.peak_spill_bytes);
+                    tree_counts.peak_spill_bytes =
+                        tree_counts.peak_spill_bytes.max(stats.peak_spill_bytes);
                     tree_counts.nodes_read += stats.nodes_read;
                     tree_counts.nodes_created += stats.nodes_created;
                     tree_counts.nodes_reused += stats.nodes_reused;
@@ -207,7 +221,6 @@ impl Workspace {
                                 record.kind,
                             )?;
                             let base = BaseEntry {
-                                inode,
                                 record,
                                 mode: metadata.permission_mode,
                                 mtime_seconds: metadata.mtime_seconds,
@@ -315,26 +328,20 @@ impl Workspace {
         drop(metadata_cache);
         // The pair sorter may allocate lazily during this loop; reserve its
         // configured share rather than only its current capacity.
-        let reference_reserve = self.references.capacity()
-            + (memory / 8).min(crate::commit_spool::SORT_BYTES);
-        let reference_available = memory.checked_sub(reference_reserve)
+        let reference_reserve =
+            self.references.capacity() + (memory / 8).min(crate::commit_spool::SORT_BYTES);
+        let reference_available = memory
+            .checked_sub(reference_reserve)
             .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?;
         const LOOKUP_PER_KEY: u64 = 32 * 1024;
         let row_bytes = std::mem::size_of::<(InodeId, i64)>() as u64;
-        let batch_limit = (reference_available / (LOOKUP_PER_KEY + row_bytes)).min(128).max(1) as usize;
-        let lookup_budget = reference_available.checked_sub(batch_limit as u64 * row_bytes)
+        let batch_limit = (reference_available / (LOOKUP_PER_KEY + row_bytes))
+            .min(128)
+            .max(1) as usize;
+        let lookup_budget = reference_available
+            .checked_sub(batch_limit as u64 * row_bytes)
             .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?;
-        // The borrowed one-page fallback needs no decoded entry vector.
-        if lookup_budget < 8192 + 512 {
-            return Err(StorageError::InvalidInput("workspace final-delta limit"));
-        }
         let mut pending_references = Vec::new();
-        pending_references.try_reserve_exact(batch_limit)
-            .map_err(|_| StorageError::InvalidInput("workspace reference allocation"))?;
-        tree_counts.peak_scratch_bytes = tree_counts.peak_scratch_bytes.max(
-            (reference_reserve + pending_references.capacity() as u64 * row_bytes
-                + if batch_limit == 1 { 8192 + 512 } else { batch_limit as u64 * LOOKUP_PER_KEY }) as usize,
-        );
         let mut current = references.next()?;
         while let Some(record) = current.take() {
             let key = <[u8; 33]>::try_from(&record[..33]).unwrap();
@@ -353,13 +360,48 @@ impl Workspace {
                 continue;
             }
             let inode = InodeId::from_slice(&key[1..])?;
-            if self.canonical_nodes.get(&inode).is_some_and(|id| self.nodes[id].links != 0) { continue; }
+            if self
+                .canonical_nodes
+                .get(&inode)
+                .is_some_and(|id| self.nodes[id].links != 0)
+            {
+                continue;
+            }
+            // Reserve only when the semantic input actually needs a base
+            // reference lookup; an empty reference stream owns no lookup batch.
+            if pending_references.capacity() == 0 {
+                if lookup_budget < 8192 + 512 {
+                    return Err(StorageError::InvalidInput("workspace final-delta limit"));
+                }
+                pending_references
+                    .try_reserve_exact(batch_limit)
+                    .map_err(|_| StorageError::InvalidInput("workspace reference allocation"))?;
+                tree_counts.peak_scratch_bytes = tree_counts.peak_scratch_bytes.max(
+                    (reference_reserve
+                        + pending_references.capacity() as u64 * row_bytes
+                        + if batch_limit == 1 {
+                            8192 + 512
+                        } else {
+                            batch_limit as u64 * LOOKUP_PER_KEY
+                        }) as usize,
+                );
+            }
             pending_references.push((inode, change));
             if pending_references.len() == batch_limit {
-                self.apply_reference_batch(&mut objects, &mut pairs, &mut pending_references, lookup_budget as usize)?;
+                self.apply_reference_batch(
+                    &mut objects,
+                    &mut pairs,
+                    &mut pending_references,
+                    lookup_budget as usize,
+                )?;
             }
         }
-        self.apply_reference_batch(&mut objects, &mut pairs, &mut pending_references, lookup_budget as usize)?;
+        self.apply_reference_batch(
+            &mut objects,
+            &mut pairs,
+            &mut pending_references,
+            lookup_budget as usize,
+        )?;
         drop(pending_references);
         references.remove()?;
         let mut pairs = pairs.finish()?;
@@ -419,7 +461,11 @@ impl Workspace {
             tree_counts.nodes_reused,
             tree_counts.peak_scratch_bytes as u64,
         );
-        layerfs_layerstack_store::note_workspace_tree_spill(tree_counts.spill_write_bytes, tree_counts.spill_read_bytes, tree_counts.peak_spill_bytes);
+        layerfs_layerstack_store::note_workspace_tree_spill(
+            tree_counts.spill_write_bytes,
+            tree_counts.spill_read_bytes,
+            tree_counts.peak_spill_bytes,
+        );
         let built = objects.finish(root, cdc_bytes_scanned)?;
         self.commit_handoff = Some(self.finish_handoff(handoff, root, table)?);
         note_commit_phase(WorkspaceCommitPhase::CandidateFinish, started);
@@ -430,23 +476,63 @@ impl Workspace {
         &mut self,
         affected_paths: &[CanonicalPath],
     ) -> Result<[u8; 32]> {
-        self.policy
-            .check_final_delta((affected_paths.len() as u64).saturating_mul(8))?;
-        let mut affected = affected_paths.iter().collect::<Vec<_>>();
-        affected.sort();
+        let affected_bytes = (affected_paths.len() as u64)
+            .checked_mul(std::mem::size_of::<&CanonicalPath>() as u64)
+            .ok_or(StorageError::Integrity("resolution affected paths"))?;
+        let retained = affected_bytes
+            .checked_add(self.references.capacity())
+            .ok_or(StorageError::Integrity("resolution retained allocation"))?;
+        self.policy.check_final_delta(retained)?;
+        let memory = self
+            .policy
+            .max_final_delta_memory_bytes
+            .checked_sub(retained)
+            .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?
+            / 8;
+        // First sort groups only affected bindings by temporary identity; the
+        // second sorts group digests. Neither temporary identity nor discovery
+        // order becomes part of the logical fingerprint.
+        let disk = self
+            .policy
+            .max_spool_bytes
+            .checked_sub(self.spool_bytes)
+            .and_then(|n| n.checked_sub(self.references.bytes()))
+            .ok_or(StorageError::InvalidInput("workspace spool limit"))?;
+        // Sorter owns one scratch-directory path; the later group sorter
+        // coexists with the first run's handle. Reserve both path capacities.
+        let walk_reservation = affected_bytes
+            .checked_add(memory)
+            .and_then(|n| n.checked_add(2 * self.spool.capacity() as u64 + 4096))
+            .ok_or(StorageError::Integrity("resolution traversal reservation"))?;
+        self.fingerprint_check(walk_reservation, 0)?;
+        let mut aliases = crate::commit_spool::Sorter::<65>::new(&self.spool, disk / 2, memory)?;
+        let mut affected = Vec::new();
+        affected
+            .try_reserve_exact(affected_paths.len())
+            .map_err(|_| StorageError::InvalidInput("resolution affected allocation"))?;
+        affected.extend(affected_paths);
+        affected.sort_unstable();
         let mut digest = ContentDigestWriter::new();
-        digest.write_all(b"layerfs/workspace-resolution/v4\0")?;
+        digest.write_all(b"layerfs/workspace-resolution/v5\0")?;
         for path in affected {
             digest.write_all(b"A")?;
             frame(&mut digest, path.as_bytes())?;
             let mut current = FingerprintNode::Workspace(ROOT);
-            let mut prefix = String::new();
+            self.fingerprint_check(walk_reservation, path.as_bytes().len() as u64)?;
+            let mut prefix = String::with_capacity(path.as_bytes().len());
+            let path_reservation = walk_reservation + prefix.capacity() as u64;
             let mut components = path.components().peekable();
             if components.peek().is_none() {
-                self.fingerprint_children(current, &prefix, &mut digest, 0)?;
+                self.fingerprint_children(
+                    current,
+                    &prefix,
+                    &mut digest,
+                    &mut aliases,
+                    path_reservation,
+                )?;
             } else {
                 while let Some(component) = components.next() {
-                    let (base, overlay) = self.fingerprint_directory(current)?;
+                    let (base, overlay) = self.fingerprint_directory(current, path_reservation)?;
                     let child = if let Some(desired) =
                         overlay.and_then(|id| match &self.nodes[&id].data {
                             Data::Directory(dir) => dir.changes.get(component),
@@ -454,6 +540,7 @@ impl Workspace {
                         }) {
                         desired.map(FingerprintNode::Workspace)
                     } else if let Some(base) = base {
+                        self.fingerprint_directory_preflight(base, path_reservation)?;
                         directory_lookup(
                             &CoreReader(&self.reader),
                             base,
@@ -474,9 +561,21 @@ impl Workspace {
                         std::str::from_utf8(component)
                             .map_err(|_| StorageError::Integrity("resolution path"))?,
                     );
-                    let directory = self.fingerprint_entry(child, &prefix, &mut digest)?;
+                    let directory = self.fingerprint_entry(
+                        child,
+                        &prefix,
+                        &mut digest,
+                        &mut aliases,
+                        path_reservation,
+                    )?;
                     if components.peek().is_none() && directory {
-                        self.fingerprint_children(child, &prefix, &mut digest, 0)?;
+                        self.fingerprint_children(
+                            child,
+                            &prefix,
+                            &mut digest,
+                            &mut aliases,
+                            path_reservation,
+                        )?;
                     } else if !directory {
                         break;
                     }
@@ -485,6 +584,35 @@ impl Workspace {
             }
             digest.write_all(b"Z")?;
         }
+        let mut aliases = aliases.finish()?;
+        let mut groups = crate::commit_spool::Sorter::<32>::new(&self.spool, disk / 2, memory)?;
+        let mut identity = None;
+        let mut previous_path = None;
+        let mut group = ContentDigestWriter::new();
+        while let Some(record) = aliases.next()? {
+            let key: [u8; 33] = record[..33].try_into().unwrap();
+            let path: [u8; 32] = record[33..].try_into().unwrap();
+            if identity.is_some_and(|previous| previous != key) {
+                groups.push(group.finish())?;
+                group = ContentDigestWriter::new();
+                previous_path = None;
+            }
+            identity = Some(key);
+            if previous_path != Some(path) {
+                group.write_all(&path)?;
+            }
+            previous_path = Some(path);
+        }
+        if identity.is_some() {
+            groups.push(group.finish())?;
+        }
+        aliases.remove()?;
+        let mut groups = groups.finish()?;
+        digest.write_all(b"alias-groups\0")?;
+        while let Some(group) = groups.next()? {
+            digest.write_all(&group)?;
+        }
+        groups.remove()?;
         Ok(digest.finish())
     }
 
@@ -498,6 +626,7 @@ impl Workspace {
     fn fingerprint_directory(
         &self,
         node: FingerprintNode,
+        owned: u64,
     ) -> Result<(Option<DirectoryStateRoot>, Option<NodeId>)> {
         match node {
             FingerprintNode::Workspace(id) => match &self.nodes[&id].data {
@@ -505,7 +634,8 @@ impl Workspace {
                 _ => Err(StorageError::InvalidInput("resolution directory")),
             },
             FingerprintNode::Base(inode) => {
-                let record = self.base_record(inode)?;
+                let record =
+                    self.base_record_with_budget(inode, self.fingerprint_remaining(owned)?)?;
                 if record.kind != InodeKind::Directory {
                     return Err(StorageError::InvalidInput("resolution directory"));
                 }
@@ -519,21 +649,26 @@ impl Workspace {
         node: FingerprintNode,
         prefix: &str,
         digest: &mut ContentDigestWriter,
+        aliases: &mut crate::commit_spool::Sorter<65>,
         stack_bytes: u64,
     ) -> Result<()> {
-        self.fingerprint_walk(node, prefix, stack_bytes, &mut |node, path| self.fingerprint_entry(node, path, digest))
+        self.fingerprint_walk(node, prefix, stack_bytes, &mut |node, path, owned| {
+            self.fingerprint_entry(node, path, digest, aliases, owned)
+        })
     }
 
     fn fingerprint_walk(
-        &self, node: FingerprintNode, prefix: &str, stack_bytes: u64,
-        visit: &mut impl FnMut(FingerprintNode, &str) -> Result<bool>,
+        &self,
+        node: FingerprintNode,
+        prefix: &str,
+        stack_bytes: u64,
+        visit: &mut impl FnMut(FingerprintNode, &str, u64) -> Result<bool>,
     ) -> Result<()> {
         let charge = stack_bytes
-            .checked_add(512 + prefix.len() as u64 * 2)
+            .checked_add(2048)
             .ok_or(StorageError::Integrity("resolution traversal"))?;
-        self.policy
-            .check_final_delta(charge + self.references.capacity())?;
-        let (base, overlay) = self.fingerprint_directory(node)?;
+        self.fingerprint_check(charge, 0)?;
+        let (base, overlay) = self.fingerprint_directory(node, charge)?;
         let mut after: Option<CanonicalName> = None;
         loop {
             let changes = overlay.and_then(|id| match &self.nodes[&id].data {
@@ -551,6 +686,7 @@ impl Workspace {
             let mut base_after = after.clone();
             let next_base = if let Some(base) = base {
                 loop {
+                    self.fingerprint_directory_preflight(base, charge)?;
                     let page = directory_page_after(
                         &CoreReader(&self.reader),
                         base,
@@ -590,60 +726,25 @@ impl Workspace {
             let Some((name, child)) = next else {
                 break;
             };
-            let path = if prefix.is_empty() {
-                name.as_str().to_owned()
-            } else {
-                format!("{prefix}/{}", name.as_str())
-            };
-            self.policy
-                .check_final_delta(charge + path.len() as u64 + self.references.capacity())?;
-            if visit(child, &path)? {
-                self.fingerprint_walk(child, &path, charge, visit)?;
+            let path_len = prefix
+                .len()
+                .checked_add(name.as_bytes().len())
+                .and_then(|n| n.checked_add(usize::from(!prefix.is_empty())))
+                .ok_or(StorageError::Integrity("resolution path length"))?;
+            self.fingerprint_check(charge, path_len as u64)?;
+            let mut path = String::with_capacity(path_len);
+            path.push_str(prefix);
+            if !prefix.is_empty() {
+                path.push('/');
+            }
+            path.push_str(name.as_str());
+            let retained_path = charge + path.capacity() as u64;
+            if visit(child, &path, retained_path)? {
+                self.fingerprint_walk(child, &path, retained_path, visit)?;
             }
             after = Some(name);
         }
         Ok(())
-    }
-
-    fn fingerprint_aliases(&self, node: FingerprintNode, path: &str, attr: Attr) -> Result<[u8; 32]> {
-        let path_hash = |path: &str| -> Result<[u8; 32]> {
-            let mut hash = ContentDigestWriter::new(); frame(&mut hash, path.as_bytes())?; Ok(hash.finish())
-        };
-        if attr.kind == Kind::Directory || attr.links <= 1 { return path_hash(path); }
-        let disk = u64::from(attr.links).checked_mul(64).ok_or(StorageError::Integrity("resolution aliases"))?;
-        self.policy.check(self.spool_bytes.checked_add(self.references.bytes()).and_then(|n| n.checked_add(disk)).ok_or(StorageError::Integrity("resolution alias spool"))?)?;
-        let memory = self.policy.max_final_delta_memory_bytes / 8;
-        self.policy.check_final_delta(memory + self.references.capacity())?;
-        let mut paths = crate::commit_spool::Sorter::<32>::new(&self.spool, disk, memory)?;
-        let mut count = 0_u64;
-        let mut add = |path: &str| -> Result<()> { paths.push(path_hash(path)?)?; count += 1; Ok(()) };
-        let complete = match node {
-            FingerprintNode::Workspace(id) => Some(&self.nodes[&id].paths).filter(|paths| paths.len() as u64 == u64::from(attr.links)),
-            FingerprintNode::Base(_) => None,
-        };
-        if let Some(known) = complete {
-            for path in known { add(path)?; }
-        } else {
-            // An incomplete hard-link view genuinely needs alias discovery.
-            // Stream final bindings without materializing a namespace manifest;
-            // the common fully materialized reconciliation projection skips it.
-            self.fingerprint_walk(FingerprintNode::Workspace(ROOT), "", memory, &mut |child, path| {
-                layerfs_layerstack_store::note_workspace_namespace_visits(u64::from(matches!(child, FingerprintNode::Base(_))), 1, 0, 0, 0);
-                if child == node { add(path)?; }
-                Ok(match child {
-                    FingerprintNode::Workspace(id) => matches!(self.nodes[&id].data, Data::Directory(_)),
-                    FingerprintNode::Base(inode) => self.base_record(inode)?.kind == InodeKind::Directory,
-                })
-            })?;
-        }
-        drop(add);
-        if count != u64::from(attr.links) { return Err(StorageError::Integrity("resolution alias count")); }
-        let mut paths = paths.finish()?;
-        let mut hash = ContentDigestWriter::new();
-        hash.write_all(&count.to_be_bytes())?;
-        while let Some(path) = paths.next()? { hash.write_all(&path)?; }
-        paths.remove()?;
-        Ok(hash.finish())
     }
 
     fn fingerprint_entry(
@@ -651,11 +752,19 @@ impl Workspace {
         node: FingerprintNode,
         path: &str,
         digest: &mut ContentDigestWriter,
+        aliases: &mut crate::commit_spool::Sorter<65>,
+        owned: u64,
     ) -> Result<bool> {
         let (attr, record) = match node {
             FingerprintNode::Workspace(id) => (self.attr(id)?, None),
             FingerprintNode::Base(inode) => {
-                let record = self.base_record(inode)?;
+                let record =
+                    self.base_record_with_budget(inode, self.fingerprint_remaining(owned)?)?;
+                // Metadata lookup decodes one 8192-byte page at a time; its
+                // tiny portable values use the shared rope reader. This bound
+                // covers two metadata decodes, key clones, selected extents,
+                // ancestor vectors and every possible decoded rope level.
+                self.fingerprint_check(owned, 1024 * 1024)?;
                 let portable = portable_metadata(
                     &CoreReader(&self.reader),
                     record.metadata_root,
@@ -663,6 +772,7 @@ impl Workspace {
                 )?;
                 let size = match record.kind {
                     InodeKind::RegularFile => {
+                        self.fingerprint_check(owned, 1024)?;
                         rope::state(
                             &CoreReader(&self.reader),
                             FileStateRoot(record.content_root),
@@ -671,7 +781,10 @@ impl Workspace {
                         .logical_len
                     }
                     InodeKind::Directory => 0,
-                    InodeKind::Symlink => self.base_symlink(record.content_root)?.len() as u64,
+                    InodeKind::Symlink => {
+                        self.fingerprint_check(owned, 4096)?;
+                        self.base_symlink(record.content_root)?.len() as u64
+                    }
                 };
                 (
                     Attr {
@@ -715,31 +828,196 @@ impl Workspace {
         digest.write_all(&attr.links.to_be_bytes())?;
         digest.write_all(&attr.mtime_seconds.to_be_bytes())?;
         digest.write_all(&attr.mtime_nanoseconds.to_be_bytes())?;
-        // Capture can rebuild canonical identities while preserving the same
-        // logical file. Fingerprint final alias paths, not transient inode IDs.
-        digest.write_all(&self.fingerprint_aliases(node, path, attr)?)?;
+        if attr.kind != Kind::Directory {
+            let key = match node {
+                FingerprintNode::Workspace(id) => {
+                    crate::references::key(self.nodes[&id].canonical, id)
+                }
+                FingerprintNode::Base(inode) => crate::references::key(Some(inode), NodeId(0)),
+            };
+            let mut path_digest = ContentDigestWriter::new();
+            frame(&mut path_digest, path.as_bytes())?;
+            let mut record = [0; 65];
+            record[..33].copy_from_slice(&key);
+            record[33..].copy_from_slice(&path_digest.finish());
+            aliases.push(record)?;
+        }
         if let FingerprintNode::Workspace(id) = node {
             match attr.kind {
                 Kind::File => {
-                    std::io::copy(&mut WorkspaceFileReader::new(self, id)?, digest)?;
+                    self.fingerprint_check(owned, 8192)?;
+                    self.fingerprint_workspace_file(id, digest, owned)?;
                 }
-                Kind::Symlink => frame(digest, &self.readlink(id)?)?,
+                Kind::Symlink => {
+                    let Data::Symlink(target) = &self.nodes[&id].data else {
+                        unreachable!()
+                    };
+                    frame(digest, target)?;
+                }
                 Kind::Directory => {}
             }
         } else if let Some((_, record)) = record {
             match attr.kind {
                 Kind::File => {
-                    rope::read_all(
-                        &CoreReader(&self.reader),
+                    self.fingerprint_base_file(
                         FileStateRoot(record.content_root),
+                        0,
+                        attr.size,
                         digest,
+                        owned,
                     )?;
                 }
-                Kind::Symlink => frame(digest, &self.base_symlink(record.content_root)?)?,
+                Kind::Symlink => {
+                    self.fingerprint_check(owned, 4096)?;
+                    frame(digest, &self.base_symlink(record.content_root)?)?;
+                }
                 Kind::Directory => {}
             }
         }
         Ok(attr.kind == Kind::Directory)
+    }
+
+    fn fingerprint_remaining(&self, owned: u64) -> Result<usize> {
+        self.policy
+            .max_final_delta_memory_bytes
+            .checked_sub(self.references.capacity())
+            .and_then(|n| n.checked_sub(owned))
+            .and_then(|n| usize::try_from(n).ok())
+            .ok_or(StorageError::InvalidInput("workspace final-delta limit"))
+    }
+
+    fn fingerprint_check(&self, owned: u64, temporary: u64) -> Result<()> {
+        let scratch = owned
+            .checked_add(temporary)
+            .ok_or(StorageError::Integrity("resolution scratch capacity"))?;
+        self.policy.check_final_delta(
+            scratch
+                .checked_add(self.references.capacity())
+                .ok_or(StorageError::Integrity("resolution total capacity"))?,
+        )?;
+        layerfs_layerstack_store::note_workspace_fingerprint_memory(
+            scratch,
+            self.references.capacity(),
+        );
+        Ok(())
+    }
+
+    fn fingerprint_directory_preflight(&self, root: DirectoryStateRoot, owned: u64) -> Result<()> {
+        self.fingerprint_check(owned, 1024)?;
+        let state = CoreReader(&self.reader).with_authenticated_canonical(
+            root.0,
+            layerfs_content::tree::directory::codec::decode_directory_state,
+        )?;
+        // Canonical directory pages are <=8192 bytes, each entry encodes at
+        // least 35 bytes. Cursor pending siblings retain names at every level;
+        // 3x frame slots covers Vec growth's old+new allocation. Four decoded
+        // pages cover parent/child handoff and the leaf IntoIter collection.
+        let entries = 8192_u64 / 35;
+        let page = 8192 + entries * std::mem::size_of::<(CanonicalName, InodeId)>() as u64;
+        let frames = (u64::from(state.tree_level) + 1) * (3 * entries * 128 + 8192);
+        self.fingerprint_check(owned, frames + 4 * page + 4096)
+    }
+
+    fn fingerprint_base_file(
+        &self,
+        root: FileStateRoot,
+        start: u64,
+        len: u64,
+        digest: &mut ContentDigestWriter,
+        owned: u64,
+    ) -> Result<()> {
+        self.fingerprint_check(owned, 1024)?;
+        let state = rope::state(
+            &CoreReader(&self.reader),
+            root,
+            &mut RopeCounters::default(),
+        )?;
+        let end = start
+            .checked_add(len)
+            .filter(|end| *end <= state.logical_len)
+            .ok_or(StorageError::Integrity("resolution base range"))?;
+        // Valid 8192-byte mapping nodes have at most 128 descriptors. Ancestors
+        // retain decoded nodes and summary vectors during descent: 16KiB per
+        // level covers those vectors. Selected extents/IDs and geometric
+        // ancestor growth fit the fixed 32KiB term.
+        // Valid payload batches are <=4MiB (127 canonical CDC chunks), owned
+        // by the existing Store ObjectSource; this is not zero-cost storage.
+        let decoded = (u64::from(state.tree_level) + 1) * 16384 + 32768;
+        self.fingerprint_check(owned, decoded)?;
+        rope::read_range(&CoreReader(&self.reader), root, start..end, digest)?;
+        Ok(())
+    }
+
+    fn fingerprint_workspace_file(
+        &self,
+        id: NodeId,
+        digest: &mut ContentDigestWriter,
+        owned: u64,
+    ) -> Result<()> {
+        use crate::file_edit::Piece;
+        match &self.nodes[&id].data {
+            Data::File(FileData::Base { root, len }) => {
+                self.fingerprint_base_file(*root, 0, *len, digest, owned)
+            }
+            Data::File(FileData::Edited { pieces, spool, .. }) => {
+                let descriptors = (pieces.count() as u64)
+                    .checked_mul(std::mem::size_of::<Piece>() as u64)
+                    .ok_or(StorageError::Integrity("resolution piece capacity"))?;
+                self.fingerprint_check(owned, descriptors + 8192)?;
+                // Piece payload Arcs and the original tree remain retained
+                // Workspace state. This snapshot allocates descriptors only.
+                let pieces = pieces.pieces();
+                let owned =
+                    owned + (pieces.capacity() * std::mem::size_of::<Piece>()) as u64 + 8192;
+                let mut buffer = [0_u8; 8192];
+                for piece in pieces.iter() {
+                    match piece {
+                        Piece::Base { root, offset, len } => {
+                            self.fingerprint_base_file(*root, *offset, *len, digest, owned)?
+                        }
+                        Piece::Inline { bytes, offset, len } => {
+                            let start = usize::try_from(*offset)
+                                .map_err(|_| StorageError::Integrity("resolution inline range"))?;
+                            let end = usize::try_from(
+                                offset
+                                    .checked_add(*len)
+                                    .ok_or(StorageError::Integrity("resolution inline range"))?,
+                            )
+                            .map_err(|_| StorageError::Integrity("resolution inline range"))?;
+                            digest.write_all(
+                                bytes
+                                    .get(start..end)
+                                    .ok_or(StorageError::Integrity("resolution inline range"))?,
+                            )?;
+                        }
+                        Piece::Zero { len } => {
+                            buffer.fill(0);
+                            let mut left = *len;
+                            while left != 0 {
+                                let count = left.min(buffer.len() as u64) as usize;
+                                digest.write_all(&buffer[..count])?;
+                                left -= count as u64;
+                            }
+                        }
+                        Piece::Spool { offset, len } => {
+                            let file = self.spool_file(id, spool)?;
+                            let mut position = *offset;
+                            let end = offset
+                                .checked_add(*len)
+                                .ok_or(StorageError::Integrity("resolution spool range"))?;
+                            while position < end {
+                                let count = (end - position).min(buffer.len() as u64) as usize;
+                                file.read_exact_at(&mut buffer[..count], position)?;
+                                digest.write_all(&buffer[..count])?;
+                                position += count as u64;
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            }
+            _ => Err(StorageError::InvalidInput("resolution file")),
+        }
     }
 
     fn base_symlink(&self, root: ObjectId) -> Result<Vec<u8>> {
@@ -796,7 +1074,6 @@ impl Workspace {
                     output.insert(
                         path,
                         BaseEntry {
-                            inode: resolved.inode,
                             record: resolved.record,
                             mode: metadata.permission_mode,
                             mtime_seconds: metadata.mtime_seconds,
@@ -828,7 +1105,7 @@ impl Workspace {
                 && pieces.len() == *base_len
                 && matches!(pieces.pieces().as_slice(), [crate::file_edit::Piece::Base { root: piece_root, offset: 0, len }] if *piece_root == *root && *len == *base_len) =>
             {
-                return Ok(true)
+                return Ok(true);
             }
             Data::File(_) => {}
             _ => return Err(StorageError::InvalidInput("file")),
@@ -852,19 +1129,33 @@ impl Workspace {
         changes: &mut Vec<(InodeId, i64)>,
         maximum: usize,
     ) -> Result<()> {
-        if changes.is_empty() { return Ok(()); }
+        if changes.is_empty() {
+            return Ok(());
+        }
         let reader = CoreReader(&self.reader);
         let mut counters = InodeTableCounters::default();
         if changes.len() == 1 {
             let (inode, change) = changes[0];
             let (record, _) = layerfs_content::tree::inode::inode_table_lookup_with_budget(
-                &reader, self.base_inodes, inode, maximum, &mut counters,
+                &reader,
+                self.base_inodes,
+                inode,
+                maximum,
+                &mut counters,
             )?;
             layerfs_layerstack_store::note_workspace_base_inode_reads(counters.nodes_read, 1);
             let record = record.ok_or(StorageError::Integrity("Workspace reference base inode"))?;
             let before = reader.with_authenticated_canonical(record, decode_inode_record)?;
             let count = final_count(before.namespace_ref_count, change)?;
-            push_inode(pairs, objects, inode, (count != 0).then_some(InodeRecordV1 { namespace_ref_count: count, ..before }))?;
+            push_inode(
+                pairs,
+                objects,
+                inode,
+                (count != 0).then_some(InodeRecordV1 {
+                    namespace_ref_count: count,
+                    ..before
+                }),
+            )?;
             changes.clear();
             return Ok(());
         }
@@ -874,27 +1165,52 @@ impl Workspace {
             return Err(StorageError::InvalidInput("workspace final-delta limit"));
         }
         let keys = changes.iter().map(|(inode, _)| *inode).collect::<Vec<_>>();
-        let records = layerfs_content::tree::inode::inode_table_lookup_many(&reader, self.base_inodes, &keys, &mut counters)?;
-        layerfs_layerstack_store::note_workspace_base_inode_reads(counters.nodes_read, records.len() as u64);
+        let records = layerfs_content::tree::inode::inode_table_lookup_many(
+            &reader,
+            self.base_inodes,
+            &keys,
+            &mut counters,
+        )?;
+        layerfs_layerstack_store::note_workspace_base_inode_reads(
+            counters.nodes_read,
+            records.len() as u64,
+        );
         for ((inode, change), record) in changes.drain(..).zip(records) {
             let record = record.ok_or(StorageError::Integrity("Workspace reference base inode"))?;
             let before = reader.with_authenticated_canonical(record, decode_inode_record)?;
             let count = final_count(before.namespace_ref_count, change)?;
-            push_inode(pairs, objects, inode, (count != 0).then_some(InodeRecordV1 { namespace_ref_count: count, ..before }))?;
+            push_inode(
+                pairs,
+                objects,
+                inode,
+                (count != 0).then_some(InodeRecordV1 {
+                    namespace_ref_count: count,
+                    ..before
+                }),
+            )?;
         }
         Ok(())
     }
 
     fn base_record(&self, inode: InodeId) -> Result<InodeRecordV1> {
+        let maximum = self
+            .policy
+            .max_final_delta_memory_bytes
+            .checked_sub(self.references.capacity())
+            .ok_or(StorageError::InvalidInput("workspace final-delta limit"))?;
+        self.base_record_with_budget(inode, maximum as usize)
+    }
+
+    fn base_record_with_budget(&self, inode: InodeId, maximum: usize) -> Result<InodeRecordV1> {
         let core = CoreReader(&self.reader);
         let mut counters = InodeTableCounters::default();
-        let id = inode_table_lookup(
-            &core,
+        let (id, _) = self.reader.lookup_inode_with_budget(
             self.base_inodes,
             inode,
+            maximum,
             &mut counters,
-        )?
-        .ok_or(StorageError::Integrity("Workspace base inode"))?;
+        )?;
+        let id = id.ok_or(StorageError::Integrity("Workspace base inode"))?;
         layerfs_layerstack_store::note_workspace_base_inode_reads(counters.nodes_read, 1);
         Ok(core.with_authenticated_canonical(id, decode_inode_record)?)
     }
@@ -1122,20 +1438,6 @@ fn frame(output: &mut impl Write, value: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn path_intersects(left: &str, right: &str) -> bool {
-    left == right || path_is_ancestor(left, right) || path_is_ancestor(right, left)
-}
-
-fn path_is_ancestor(parent: &str, child: &str) -> bool {
-    parent.is_empty()
-        || (child.starts_with(parent) && child.as_bytes().get(parent.len()) == Some(&b'/'))
-}
-
-#[cfg(test)]
-fn manifest_charge<T>(manifest: &BTreeMap<String, T>) -> u64 {
-    manifest.keys().map(|path| path_charge(path)).sum()
-}
-
 fn path_charge(path: &str) -> u64 {
     (path.len() as u64).saturating_mul(4).saturating_add(512)
 }
@@ -1358,7 +1660,9 @@ mod tests {
         let (root, mut workspace) = empty_workspace("immutable-delete");
         let gone = workspace.mkdir(ROOT, b"gone", 0o750).unwrap().node;
         for index in 0..600 {
-            workspace.create_file(gone, format!("f{index:04}").as_bytes(), 0o640).unwrap();
+            workspace
+                .create_file(gone, format!("f{index:04}").as_bytes(), 0o640)
+                .unwrap();
         }
         let keep = workspace.create_file(ROOT, b"keep", 0o640).unwrap().node;
         workspace.write(keep, 0, b"sentinel").unwrap();
@@ -1372,23 +1676,35 @@ mod tests {
         let branch = workspace.branch_id;
         drop(workspace);
         let database = rusqlite::Connection::open_with_flags(
-            root.join("store.sqlite"), rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+            root.join("store.sqlite"),
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
         let before_objects: Vec<(Vec<u8>, Vec<u8>)> = {
-            let mut query = database.prepare("SELECT object_id, bytes FROM objects").unwrap();
-            let rows = query.query_map([], |row| Ok((row.get(0)?, row.get(1)?))).unwrap();
+            let mut query = database
+                .prepare("SELECT object_id, bytes FROM objects")
+                .unwrap();
+            let rows = query
+                .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .unwrap();
             rows.collect::<std::result::Result<_, _>>().unwrap()
         };
         drop(database);
         let mut workspace = Workspace::open(
-            LayerStackStore::connect(root.join("store.sqlite")).unwrap(), branch,
-            root.join("reopened-spool")).unwrap();
+            LayerStackStore::connect(root.join("store.sqlite")).unwrap(),
+            branch,
+            root.join("reopened-spool"),
+        )
+        .unwrap();
         let gone = workspace.lookup(ROOT, b"gone").unwrap().node;
         let open = workspace.lookup(ROOT, b"open").unwrap().node;
         workspace.pin(open, false).unwrap();
         workspace.write(open, 0, b"unlinked-edited").unwrap();
         workspace.unlink(ROOT, b"open", false).unwrap();
         for index in 0..600 {
-            workspace.unlink(gone, format!("f{index:04}").as_bytes(), false).unwrap();
+            workspace
+                .unlink(gone, format!("f{index:04}").as_bytes(), false)
+                .unwrap();
         }
         workspace.unlink(gone, b"alias", false).unwrap();
         workspace.unlink(ROOT, b"gone", true).unwrap();
@@ -1398,7 +1714,10 @@ mod tests {
         assert_eq!((a.node, a.links), (b.node, 2));
         assert_eq!(workspace.read(a.node, 0, 8).unwrap(), b"sentinel");
         assert_eq!(workspace.read(open, 0, 32).unwrap(), b"unlinked-edited");
-        assert!(workspace.spool_bytes > 0, "open-unlinked backing stays charged");
+        assert!(
+            workspace.spool_bytes > 0,
+            "open-unlinked backing stays charged"
+        );
         workspace.unpin(open).unwrap();
         assert!(workspace.attr(open).is_err());
         assert!(workspace.lookup(ROOT, b"gone").is_err());
@@ -1407,23 +1726,43 @@ mod tests {
         drop(workspace);
         let reopened = LayerStackStore::connect(root.join("store.sqlite")).unwrap();
         let reader = reopened.snapshot_reader(old_root);
-        assert!(filesystem::resolve(&CoreReader(&reader), old_root,
-            &CanonicalPath::new("gone/f0000").unwrap(), &mut LogicalCounters::default()).is_ok());
+        assert!(filesystem::resolve(
+            &CoreReader(&reader),
+            old_root,
+            &CanonicalPath::new("gone/f0000").unwrap(),
+            &mut LogicalCounters::default()
+        )
+        .is_ok());
         let mut bytes = Vec::new();
-        filesystem::stream(&CoreReader(&reader), old_root, &CanonicalPath::new("open").unwrap(),
-            &mut bytes).unwrap();
+        filesystem::stream(
+            &CoreReader(&reader),
+            old_root,
+            &CanonicalPath::new("open").unwrap(),
+            &mut bytes,
+        )
+        .unwrap();
         assert_eq!(bytes, b"open");
         drop(reader);
         drop(reopened);
         let database = rusqlite::Connection::open_with_flags(
-            root.join("store.sqlite"), rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+            root.join("store.sqlite"),
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
         for (id, before) in &before_objects {
-            let after: Vec<u8> = database.query_row(
-                "SELECT bytes FROM objects WHERE object_id = ?1", [id.as_slice()],
-                |row| row.get(0)).unwrap();
+            let after: Vec<u8> = database
+                .query_row(
+                    "SELECT bytes FROM objects WHERE object_id = ?1",
+                    [id.as_slice()],
+                    |row| row.get(0),
+                )
+                .unwrap();
             assert_eq!(&after, before, "delete changed an immutable CAS object");
         }
-        eprintln!("immutable_cas retained_unchanged_objects={}", before_objects.len());
+        eprintln!(
+            "immutable_cas retained_unchanged_objects={}",
+            before_objects.len()
+        );
         drop(database);
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -1434,12 +1773,24 @@ mod tests {
         let file = workspace.create_file(ROOT, b"file", 0o640).unwrap().node;
         workspace.write(file, 0, b"same contents").unwrap();
         workspace.link(file, ROOT, b"alias").unwrap();
-        let paths = [CanonicalPath::new("file").unwrap()];
+        let paths = [
+            CanonicalPath::new("file").unwrap(),
+            CanonicalPath::new("alias").unwrap(),
+        ];
         let expected = workspace.resolution_fingerprint(&paths).unwrap();
         workspace.commit().unwrap();
-        let mut fresh = Workspace::open(workspace.store.clone(), workspace.branch_id, root.join("fresh-spool")).unwrap();
+        let mut fresh = Workspace::open(
+            workspace.store.clone(),
+            workspace.branch_id,
+            root.join("fresh-spool"),
+        )
+        .unwrap();
         assert_eq!(fresh.resolution_fingerprint(&paths).unwrap(), expected);
-        assert_eq!(fresh.nodes.len(), 1, "alias discovery must not materialize the namespace");
+        assert_eq!(
+            fresh.nodes.len(),
+            1,
+            "alias discovery must not materialize the namespace"
+        );
         let old = fresh.lookup_node(ROOT, b"file").unwrap();
         assert_eq!(fresh.resolution_fingerprint(&paths).unwrap(), expected);
         assert_eq!(fresh.lookup_node(ROOT, b"alias").unwrap(), old);
@@ -1454,10 +1805,101 @@ mod tests {
         fresh.link(recreated, ROOT, b"alias").unwrap();
         fresh.create_file(ROOT, b"unrelated", 0o600).unwrap();
         assert_eq!(fresh.resolution_fingerprint(&paths).unwrap(), expected);
-        fresh.rename(ROOT, b"alias", ROOT, b"renamed-alias", false).unwrap();
-        assert_ne!(fresh.resolution_fingerprint(&paths).unwrap(), expected, "an outside alias rename remains a relevant logical mutation");
-        fresh.end_clean().unwrap(); workspace.end_clean().unwrap();
-        drop(fresh); drop(workspace); std::fs::remove_dir_all(root).unwrap();
+        fresh
+            .rename(ROOT, b"alias", ROOT, b"renamed-alias", false)
+            .unwrap();
+        assert_ne!(
+            fresh.resolution_fingerprint(&paths).unwrap(),
+            expected,
+            "an outside alias rename remains a relevant logical mutation"
+        );
+        fresh.end_clean().unwrap();
+        workspace.end_clean().unwrap();
+        drop(fresh);
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn affected_alias_fingerprint_detects_group_changes_without_global_discovery() {
+        let (root, mut workspace) = empty_workspace("fingerprint-affected-groups");
+        let first = workspace.create_file(ROOT, b"a", 0o640).unwrap().node;
+        let second = workspace.create_file(ROOT, b"c", 0o640).unwrap().node;
+        workspace.write(first, 0, b"same").unwrap();
+        workspace.write(second, 0, b"same").unwrap();
+        workspace.link(first, ROOT, b"b").unwrap();
+        workspace.link(second, ROOT, b"d").unwrap();
+        for index in 0..1024 {
+            workspace
+                .create_file(ROOT, format!("unrelated-{index:04}").as_bytes(), 0o600)
+                .unwrap();
+        }
+        let paths = ["a", "b", "c", "d"].map(|path| CanonicalPath::new(path).unwrap());
+        let expected = workspace.resolution_fingerprint(&paths).unwrap();
+        workspace.commit().unwrap();
+        let mut fresh = Workspace::open(
+            workspace.store.clone(),
+            workspace.branch_id,
+            root.join("fresh-spool"),
+        )
+        .unwrap();
+        let before = fresh.reader.read_metrics_snapshot().unwrap();
+        assert_eq!(fresh.resolution_fingerprint(&paths).unwrap(), expected);
+        let after = fresh.reader.read_metrics_snapshot().unwrap();
+        assert_eq!(fresh.nodes.len(), 1);
+        assert!(
+            after.snapshot_database_calls - before.snapshot_database_calls < 128,
+            "affected aliases must not discover the unrelated namespace"
+        );
+        let first = fresh.lookup_node(ROOT, b"a").unwrap();
+        let second = fresh.lookup_node(ROOT, b"c").unwrap();
+        fresh.unlink(ROOT, b"b", false).unwrap();
+        fresh.unlink(ROOT, b"d", false).unwrap();
+        fresh.link(first, ROOT, b"d").unwrap();
+        fresh.link(second, ROOT, b"b").unwrap();
+        // Every path retains its bytes, metadata and global link count. Only
+        // the equivalence relation changes from {a,b}/{c,d} to {a,d}/{b,c}.
+        assert_ne!(fresh.resolution_fingerprint(&paths).unwrap(), expected);
+        fresh.end_clean().unwrap();
+        workspace.end_clean().unwrap();
+        drop(fresh);
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn fingerprint_scratch_preflight_failure_preserves_mutations_and_retries() {
+        let (root, mut workspace) = empty_workspace("fingerprint-scratch-bound");
+        let file = workspace.create_file(ROOT, b"file", 0o640).unwrap().node;
+        workspace
+            .write(file, 0, b"content requiring the spool reader")
+            .unwrap();
+        let paths = [CanonicalPath::new("file").unwrap()];
+        let expected = workspace.resolution_fingerprint(&paths).unwrap();
+        let generation = workspace.mutation_generation;
+        let nodes = workspace.nodes.len();
+        let limit = workspace.policy.max_final_delta_memory_bytes;
+        workspace.policy.max_final_delta_memory_bytes = 8192;
+        assert!(matches!(
+            workspace.resolution_fingerprint(&paths),
+            Err(StorageError::InvalidInput("workspace final-delta limit"))
+        ));
+        assert_eq!(workspace.mutation_generation, generation);
+        assert_eq!(workspace.nodes.len(), nodes);
+        workspace.policy.max_final_delta_memory_bytes = limit;
+        assert_eq!(workspace.resolution_fingerprint(&paths).unwrap(), expected);
+        let remaining = std::fs::read_dir(&workspace.spool)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            remaining,
+            [std::ffi::OsString::from(file.0.to_string())],
+            "fingerprint leaves no private named sorter files"
+        );
+        workspace.end_clean().unwrap();
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1466,21 +1908,34 @@ mod tests {
         for count in [128, 4096] {
             let (root, mut workspace) = empty_workspace(&format!("materialized-sparse-{count}"));
             for index in 0..count {
-                let node = workspace.create_file(ROOT, format!("f{index:05}").as_bytes(), 0o640).unwrap().node;
+                let node = workspace
+                    .create_file(ROOT, format!("f{index:05}").as_bytes(), 0o640)
+                    .unwrap()
+                    .node;
                 workspace.write(node, 0, b"unchanged payload").unwrap();
             }
             workspace.commit().unwrap();
             assert_eq!(workspace.nodes.len(), count + 1);
             let inode_table_before = workspace.base_inodes;
-            let directory_before = match &workspace.nodes[&ROOT].data { Data::Directory(dir) => dir.base, _ => unreachable!() };
+            let directory_before = match &workspace.nodes[&ROOT].data {
+                Data::Directory(dir) => dir.base,
+                _ => unreachable!(),
+            };
             let edited = workspace.lookup_node(ROOT, b"f00000").unwrap();
             workspace.chmod(edited, 0o600).unwrap();
             let reads_before = workspace.reader.read_metrics_snapshot().unwrap();
             layerfs_layerstack_store::take_storage_receipts();
-            let diagnostics = layerfs_layerstack_store::capture_workspace_commit_diagnostics().unwrap();
+            let diagnostics =
+                layerfs_layerstack_store::capture_workspace_commit_diagnostics().unwrap();
             {
-                let _timer = layerfs_layerstack_store::begin_workspace_commit(layerfs_layerstack_store::CaptureMode::Live).unwrap();
-                assert!(matches!(workspace.commit().unwrap().0, CommitOutcome::Committed { .. }));
+                let _timer = layerfs_layerstack_store::begin_workspace_commit(
+                    layerfs_layerstack_store::CaptureMode::Live,
+                )
+                .unwrap();
+                assert!(matches!(
+                    workspace.commit().unwrap().0,
+                    CommitOutcome::Committed { .. }
+                ));
             }
             let reads_after = workspace.reader.read_metrics_snapshot().unwrap();
             let samples = layerfs_layerstack_store::take_workspace_commit_diagnostics();
@@ -1489,36 +1944,89 @@ mod tests {
             assert_eq!(sample.handoff_records, 1);
             assert_eq!(sample.handoff_inode_pages_read, 0);
             assert_eq!(sample.namespace_candidate_probe_nodes, 1);
-            assert_eq!(sample.commit_node_visits, 3, "count, sorted input, and installation each visit only the changed inode");
-            assert_eq!(sample.commit_tracking_live_field_bytes, 16 * (count as u64 + 1));
+            assert_eq!(
+                sample.commit_node_visits, 3,
+                "count, sorted input, and installation each visit only the changed inode"
+            );
+            assert_eq!(
+                sample.commit_tracking_live_field_bytes,
+                16 * (count as u64 + 1)
+            );
             assert_eq!(sample.cdc_bytes_scanned, 0);
-            assert_eq!(reads_after.payload_bytes_read, reads_before.payload_bytes_read);
-            let receipt = layerfs_layerstack_store::take_storage_receipts().into_iter().find_map(|receipt| match receipt {
-                layerfs_layerstack_store::StorageReceipt::WorkspaceCommit(receipt) => Some(receipt), _ => None,
-            }).unwrap();
+            assert_eq!(
+                reads_after.payload_bytes_read,
+                reads_before.payload_bytes_read
+            );
+            let receipt = layerfs_layerstack_store::take_storage_receipts()
+                .into_iter()
+                .find_map(|receipt| match receipt {
+                    layerfs_layerstack_store::StorageReceipt::WorkspaceCommit(receipt) => {
+                        Some(receipt)
+                    }
+                    _ => None,
+                })
+                .unwrap();
             assert_eq!(receipt.reference_events, 0);
             assert!(receipt.generic_tree_reads > 0 && receipt.generic_tree_reads < 32);
             assert!(receipt.generic_tree_emissions > 0 && receipt.generic_tree_emissions < 8);
             // Forwarded immutable children need not visit the writer's persist
             // method, so prove reuse with IDs instead of assuming that counter.
             let core = CoreReader(&workspace.reader);
-            let before = core.with_authenticated_canonical(inode_table_before.0, layerfs_content::tree::inode::codec::decode_inode_table_node).unwrap();
-            let after = core.with_authenticated_canonical(workspace.base_inodes.0, layerfs_content::tree::inode::codec::decode_inode_table_node).unwrap();
-            if let layerfs_content::tree::inode::codec::InodeTableNodeV1::Branch { children: before, .. } = before {
-                let layerfs_content::tree::inode::codec::InodeTableNodeV1::Branch { children: after, .. } = after else { panic!("metadata edit cannot collapse an unchanged key set"); };
-                assert!(before.iter().any(|(_, id)| after.iter().any(|(_, after)| after == id)), "untouched inode children must keep their object IDs");
+            let before = core
+                .with_authenticated_canonical(
+                    inode_table_before.0,
+                    layerfs_content::tree::inode::codec::decode_inode_table_node,
+                )
+                .unwrap();
+            let after = core
+                .with_authenticated_canonical(
+                    workspace.base_inodes.0,
+                    layerfs_content::tree::inode::codec::decode_inode_table_node,
+                )
+                .unwrap();
+            if let layerfs_content::tree::inode::codec::InodeTableNodeV1::Branch {
+                children: before,
+                ..
+            } = before
+            {
+                let layerfs_content::tree::inode::codec::InodeTableNodeV1::Branch {
+                    children: after,
+                    ..
+                } = after
+                else {
+                    panic!("metadata edit cannot collapse an unchanged key set");
+                };
+                assert!(
+                    before
+                        .iter()
+                        .any(|(_, id)| after.iter().any(|(_, after)| after == id)),
+                    "untouched inode children must keep their object IDs"
+                );
             }
             if let Some((reads, emissions)) = previous {
-                assert!(receipt.generic_tree_reads <= reads + 4, "structural reads grow with tree height, not materialized file count");
+                assert!(
+                    receipt.generic_tree_reads <= reads + 4,
+                    "structural reads grow with tree height, not materialized file count"
+                );
                 assert!(receipt.generic_tree_emissions <= emissions + 4);
             }
             previous = Some((receipt.generic_tree_reads, receipt.generic_tree_emissions));
-            let directory_after = match &workspace.nodes[&ROOT].data { Data::Directory(dir) => dir.base, _ => unreachable!() };
+            let directory_after = match &workspace.nodes[&ROOT].data {
+                Data::Directory(dir) => dir.base,
+                _ => unreachable!(),
+            };
             assert_eq!(directory_after, directory_before);
             assert_eq!(workspace.attr(edited).unwrap().mode, 0o600);
-            eprintln!("sparse_materialized files={count} tree_reads={} emissions={} reused={} handoff={}", receipt.generic_tree_reads, receipt.generic_tree_emissions, receipt.generic_tree_reused_children, sample.handoff_records);
+            eprintln!(
+                "sparse_materialized files={count} tree_reads={} emissions={} reused={} handoff={}",
+                receipt.generic_tree_reads,
+                receipt.generic_tree_emissions,
+                receipt.generic_tree_reused_children,
+                sample.handoff_records
+            );
             drop(diagnostics);
-            workspace.end_clean().unwrap(); drop(workspace);
+            workspace.end_clean().unwrap();
+            drop(workspace);
             std::fs::remove_dir_all(root).unwrap();
         }
     }

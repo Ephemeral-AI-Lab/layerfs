@@ -116,6 +116,10 @@ pub struct WorkspaceCommitReceipt {
     pub reference_bookkeeping_ns: u64,
     pub base_inode_pages_read: u64,
     pub base_inode_records_read: u64,
+    pub candidate_index_frozen_records: u64,
+    pub candidate_index_copied_bytes: u64,
+    pub candidate_index_peak_disk_bytes: u64,
+    pub candidate_index_freeze_ns: u64,
     pub tree_spill_write_bytes: u64,
     pub tree_spill_read_bytes: u64,
     pub tree_spill_peak_bytes: u64,
@@ -194,10 +198,18 @@ pub struct WorkspaceCommitDiagnostics {
     pub commit_mark_ns: u64,
     /// Actual nodes visited by tracked input, handoff count, and installation.
     pub commit_node_visits: u64,
-    /// Two intrusive NodeId links per live materialized Node (no heap list).
+    /// Lower bound: two intrusive NodeId fields in live Nodes only. Unused
+    /// HashMap slots and allocator overhead are not measured by this counter.
     pub commit_tracking_live_field_bytes: u64,
     /// HashMap entry capacity; allocator overhead is not inferred from this.
     pub commit_tracking_node_map_capacity: u64,
+    /// Conservative preflight bound for additional fingerprint scratch; includes
+    /// its sorter share/path snapshots/decoded readers, excludes retained refs.
+    pub fingerprint_scratch_preflight_peak_bytes: u64,
+    pub fingerprint_retained_reference_capacity_bytes: u64,
+    /// Upper bound for valid rope payload batches (127 canonical CDC chunks),
+    /// not measured occupancy or a general Store allocation limit.
+    pub fingerprint_valid_payload_batch_bound_bytes: u64,
 }
 
 impl WorkspaceCommitReceipt {
@@ -439,6 +451,21 @@ pub fn note_workspace_namespace_visits(
     });
 }
 
+pub fn note_workspace_fingerprint_memory(scratch: u64, retained_references: u64) {
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.fingerprint_scratch_preflight_peak_bytes = diagnostic
+                .fingerprint_scratch_preflight_peak_bytes
+                .max(scratch);
+            diagnostic.fingerprint_retained_reference_capacity_bytes = diagnostic
+                .fingerprint_retained_reference_capacity_bytes
+                .max(retained_references);
+            diagnostic.fingerprint_valid_payload_batch_bound_bytes =
+                crate::objects::OBJECT_PAGE_BYTES as u64;
+        }
+    });
+}
+
 pub fn note_workspace_commit_tracking(calls: u64, ns: u64, visits: u64, bytes: u64, capacity: u64) {
     WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
         if let Some(diagnostic) = current.borrow_mut().as_mut() {
@@ -581,6 +608,18 @@ pub(crate) fn note_workspace_admission_pipeline(
             receipt.admission_workers_joined = joined;
             receipt.admission_pipeline_reserved_bytes = reserved;
             receipt.admission_producer_hash_calls = hashes;
+        }
+    });
+}
+
+pub(crate) fn note_workspace_index_freeze(records: u64, bytes: u64, peak: u64, ns: u64) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.candidate_index_frozen_records += records;
+            receipt.candidate_index_copied_bytes += bytes;
+            receipt.candidate_index_peak_disk_bytes =
+                receipt.candidate_index_peak_disk_bytes.max(peak);
+            receipt.candidate_index_freeze_ns += ns;
         }
     });
 }

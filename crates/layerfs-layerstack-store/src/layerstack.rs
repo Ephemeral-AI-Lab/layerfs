@@ -1,15 +1,15 @@
 use crate::ids::TypedId;
-#[cfg(test)]
 use crate::objects::{
-    AppendOnlyInitializationSegment, AppendOnlyInitializationWriter, InitializationTaskBlock,
-};
-use crate::objects::{
-    BuiltRoot, DeferredObjectStore, INITIALIZATION_SLAB_QUEUE_SLOTS,
+    admit_initialization_objects, empty_root, insert_initialization_object_batch,
+    insert_initialization_segment_batch, BuiltRoot, DeferredObjectStore,
     InitializationDirectAdmissionWriter, InitializationObjectSlab, InitializationSegmentAdmission,
     InitializationSlabQueueMetrics, InitializationSlabWriter, InitializationSlabWriterMetrics,
     InitializationSqlPhase, InitializationTaskObjectBuffer, ObjectBuffer,
-    admit_initialization_objects, empty_root, insert_initialization_object_batch,
-    insert_initialization_segment_batch,
+    INITIALIZATION_SLAB_QUEUE_SLOTS,
+};
+#[cfg(test)]
+use crate::objects::{
+    AppendOnlyInitializationSegment, AppendOnlyInitializationWriter, InitializationTaskBlock,
 };
 use crate::records::decode_object_id;
 use crate::{
@@ -2019,8 +2019,8 @@ impl<'objects, 'structure, S: ObjectStore, T: ObjectStore>
 
 #[cfg(test)]
 fn legacy_directory_root(path: &std::path::Path, seed: [u8; 32]) -> Result<(BuiltRoot, u64, u64)> {
-    use layerfs_content::CanonicalPath;
     use layerfs_content::filesystem;
+    use layerfs_content::CanonicalPath;
     use std::collections::HashMap;
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
@@ -2074,8 +2074,8 @@ fn legacy_import_directory(
     scanned_files: &mut u64,
     scanned_bytes: &mut u64,
 ) -> Result<()> {
-    use layerfs_content::CanonicalName;
     use layerfs_content::filesystem;
+    use layerfs_content::CanonicalName;
     use std::os::unix::ffi::OsStrExt;
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
@@ -2190,7 +2190,7 @@ fn child(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::os::unix::fs::{symlink, PermissionsExt};
 
     #[test]
     fn benchmark_initialization_seed_is_exact_lower_hex() {
@@ -2626,20 +2626,16 @@ mod tests {
             .map(|directory| directory.imported.record_capacity)
             .collect::<Vec<_>>();
         assert_eq!(record_lengths, vec![101, 101]);
-        assert!(
-            record_capacities
-                .iter()
-                .zip(&record_lengths)
-                .all(|(capacity, length)| capacity >= length)
-        );
+        assert!(record_capacities
+            .iter()
+            .zip(&record_lengths)
+            .all(|(capacity, length)| capacity >= length));
         assert!(record_capacities.iter().all(|capacity| *capacity < 202));
-        assert!(
-            prepared
-                .pair_blocks
-                .iter()
-                .zip(&record_lengths)
-                .all(|(block, length)| block.pair_count == *length as u64)
-        );
+        assert!(prepared
+            .pair_blocks
+            .iter()
+            .zip(&record_lengths)
+            .all(|(block, length)| block.pair_count == *length as u64));
         let object_reader_capacity = prepared
             .segments
             .iter()
@@ -2688,22 +2684,16 @@ mod tests {
             .filter(|sql| sql.contains("INSERT INTO objects(object_id, bytes)"))
             .collect::<Vec<_>>();
         assert!(!object_inserts.is_empty());
-        assert!(
-            object_inserts
-                .iter()
-                .all(|sql| !sql.contains("RETURNING object_id"))
-        );
-        assert!(
-            trace
-                .iter()
-                .all(|sql| !sql.contains("SELECT bytes FROM objects WHERE object_id ="))
-        );
-        assert!(
-            trace
-                .iter()
-                .filter(|sql| sql.contains("FROM objects"))
-                .all(|sql| sql.contains("SELECT NOT EXISTS") || sql.contains("WHERE object_id IN"))
-        );
+        assert!(object_inserts
+            .iter()
+            .all(|sql| !sql.contains("RETURNING object_id")));
+        assert!(trace
+            .iter()
+            .all(|sql| !sql.contains("SELECT bytes FROM objects WHERE object_id =")));
+        assert!(trace
+            .iter()
+            .filter(|sql| sql.contains("FROM objects"))
+            .all(|sql| sql.contains("SELECT NOT EXISTS") || sql.contains("WHERE object_id IN")));
 
         drop(store);
         std::fs::remove_dir_all(root).unwrap();

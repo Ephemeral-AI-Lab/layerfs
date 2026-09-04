@@ -185,7 +185,10 @@ mod tests {
     use super::*;
     #[test]
     fn common_admission_receipts_check_equations_and_exact_bound() {
-        let mut stats = CandidateStats { max_transaction_objects: 8191, ..Default::default() };
+        let mut stats = CandidateStats {
+            max_transaction_objects: 8191,
+            ..Default::default()
+        };
         assert!(stats.validate_for(OperationFamily::WorkspaceCommit));
         assert!(stats.validate_for(OperationFamily::LayerStackInitialize));
         stats.max_transaction_objects = 8192;

@@ -38,31 +38,66 @@ pub fn inode_table_lookup<S: ObjectRead>(
 /// or parent page survives into the next read. The fixed allowance includes one
 /// format-bounded 8-KiB source page and 512 bytes for headers and copied state.
 pub fn inode_table_lookup_with_budget<S: ObjectRead>(
-    store: &S, root: InodeTableRoot, key: InodeId, maximum: usize,
+    store: &S,
+    root: InodeTableRoot,
+    key: InodeId,
+    maximum: usize,
+    counters: &mut InodeTableCounters,
+) -> CoreResult<(Option<ObjectId>, usize)> {
+    inode_table_lookup_with_source_budget(store, root, key, maximum, 8192, counters)
+}
+
+/// Shared checked traversal for adapters that already account for their source
+/// storage. `source_capacity` must cover any page ownership created by the
+/// adapter; zero is valid only when callbacks borrow previously reserved bytes.
+/// The callback must finish before another page is requested.
+pub fn inode_table_lookup_with_source_budget<S: ObjectRead>(
+    store: &S,
+    root: InodeTableRoot,
+    key: InodeId,
+    maximum: usize,
+    source_capacity: usize,
     counters: &mut InodeTableCounters,
 ) -> CoreResult<(Option<ObjectId>, usize)> {
     const CANONICAL: usize = 8192;
-    const RESERVE: usize = CANONICAL + 512;
-    if maximum < RESERVE { return Err(CoreError::ObjectLimitExceeded); }
+    let reserve = source_capacity
+        .checked_add(512)
+        .ok_or(CoreError::LengthOverflow)?;
+    if maximum < reserve {
+        return Err(CoreError::ObjectLimitExceeded);
+    }
     let mut current = root.0;
     let mut expected_max = None;
     let mut expected_level = None;
     let mut is_root = true;
     loop {
-        counters.nodes_read = counters.nodes_read.checked_add(1).ok_or(CoreError::LengthOverflow)?;
+        counters.nodes_read = counters
+            .nodes_read
+            .checked_add(1)
+            .ok_or(CoreError::LengthOverflow)?;
         let (found, next) = store.with_authenticated_canonical(current, |bytes| {
-            if bytes.len() > CANONICAL { return Err(CoreError::ObjectLimitExceeded); }
+            if bytes.len() > CANONICAL {
+                return Err(CoreError::ObjectLimitExceeded);
+            }
             let value = super::codec::checked_inode_page(bytes)?;
             let count = crate::tree::directory::codec::node_count(value);
             let level = value[11];
-            if count == 0 { return Err(CoreError::InvalidRecord(if level == 0 { "empty inode table" } else { "empty inode branch" })); }
+            if count == 0 {
+                return Err(CoreError::InvalidRecord(if level == 0 {
+                    "empty inode table"
+                } else {
+                    "empty inode branch"
+                }));
+            }
             if (is_root && level != 0 && count < 2) || (!is_root && !(64..=127).contains(&count)) {
                 return Err(CoreError::NonCanonicalPagePartition);
             }
             let entries = &value[31..];
-            let maximum_key = InodeId::from_slice(&entries[(count - 1) * 64..(count - 1) * 64 + 32])?;
+            let maximum_key =
+                InodeId::from_slice(&entries[(count - 1) * 64..(count - 1) * 64 + 32])?;
             if expected_max.is_some_and(|expected| maximum_key != expected)
-                || expected_level.is_some_and(|expected| level != expected) {
+                || expected_level.is_some_and(|expected| level != expected)
+            {
                 return Err(CoreError::InvalidRecord("inode child summary"));
             }
             // All entries were ordered and length-checked by the shared codec.
@@ -71,25 +106,41 @@ pub fn inode_table_lookup_with_budget<S: ObjectRead>(
             let mut high = count;
             while low < high {
                 let middle = low + (high - low) / 2;
-                if entries[middle * 64..middle * 64 + 32] < key.as_bytes()[..] { low = middle + 1; }
-                else { high = middle; }
+                if entries[middle * 64..middle * 64 + 32] < key.as_bytes()[..] {
+                    low = middle + 1;
+                } else {
+                    high = middle;
+                }
             }
             if level == 0 {
-                let found = if low < count && entries[low * 64..low * 64 + 32] == key.as_bytes()[..] {
-                    Some(ObjectId::from_bytes(&entries[low * 64 + 32..low * 64 + 64])?)
-                } else { None };
+                let found = if low < count && entries[low * 64..low * 64 + 32] == key.as_bytes()[..]
+                {
+                    Some(ObjectId::from_bytes(
+                        &entries[low * 64 + 32..low * 64 + 64],
+                    )?)
+                } else {
+                    None
+                };
                 Ok((found, None))
             } else {
                 let index = low.min(count - 1);
-                Ok((None, Some((
-                    ObjectId::from_bytes(&entries[index * 64 + 32..index * 64 + 64])?,
-                    InodeId::from_slice(&entries[index * 64..index * 64 + 32])?,
-                    level - 1,
-                ))))
+                Ok((
+                    None,
+                    Some((
+                        ObjectId::from_bytes(&entries[index * 64 + 32..index * 64 + 64])?,
+                        InodeId::from_slice(&entries[index * 64..index * 64 + 32])?,
+                        level - 1,
+                    )),
+                ))
             }
         })?;
-        let Some((child, maximum_key, level)) = next else { return Ok((found, RESERVE)); };
-        current = child; expected_max = Some(maximum_key); expected_level = Some(level); is_root = false;
+        let Some((child, maximum_key, level)) = next else {
+            return Ok((found, reserve));
+        };
+        current = child;
+        expected_max = Some(maximum_key);
+        expected_level = Some(level);
+        is_root = false;
     }
 }
 
@@ -1729,18 +1780,71 @@ mod tests {
     #[test]
     fn one_page_lookup_reserves_decode_before_allocation_and_matches_existing_lookup() {
         let mut store = MemoryStore::default();
-        let entries = (0..400_u64).map(|index| (InodeId::allocate([73; 32], index), ObjectId::for_bytes(&index.to_be_bytes()))).collect::<Vec<_>>();
+        let entries = (0..400_u64)
+            .map(|index| {
+                (
+                    InodeId::allocate([73; 32], index),
+                    ObjectId::for_bytes(&index.to_be_bytes()),
+                )
+            })
+            .collect::<Vec<_>>();
         let mut table = inode_table_from_root(&mut store, entries[0].0, entries[0].1).unwrap();
-        for (inode, record) in entries.iter().copied().skip(1) { table = inode_table_upsert(&mut store, table, inode, record).unwrap().0; }
+        for (inode, record) in entries.iter().copied().skip(1) {
+            table = inode_table_upsert(&mut store, table, inode, record)
+                .unwrap()
+                .0;
+        }
         for (key, expected) in entries.iter().step_by(31) {
-            let (found, peak) = inode_table_lookup_with_budget(&store, table, *key, 9 * 1024, &mut InodeTableCounters::default()).unwrap();
+            let (found, peak) = inode_table_lookup_with_budget(
+                &store,
+                table,
+                *key,
+                9 * 1024,
+                &mut InodeTableCounters::default(),
+            )
+            .unwrap();
             assert_eq!(found, Some(*expected));
-            assert_eq!(peak, 8192 + 512, "one canonical page and fixed state, no decoded pair allocation");
-            assert_eq!(inode_table_lookup_with_budget(&store, table, *key, peak, &mut InodeTableCounters::default()).unwrap().0, found);
-            assert!(matches!(inode_table_lookup_with_budget(&store, table, *key, peak - 1, &mut InodeTableCounters::default()), Err(CoreError::ObjectLimitExceeded)));
+            assert_eq!(
+                peak,
+                8192 + 512,
+                "one canonical page and fixed state, no decoded pair allocation"
+            );
+            assert_eq!(
+                inode_table_lookup_with_budget(
+                    &store,
+                    table,
+                    *key,
+                    peak,
+                    &mut InodeTableCounters::default()
+                )
+                .unwrap()
+                .0,
+                found
+            );
+            assert!(matches!(
+                inode_table_lookup_with_budget(
+                    &store,
+                    table,
+                    *key,
+                    peak - 1,
+                    &mut InodeTableCounters::default()
+                ),
+                Err(CoreError::ObjectLimitExceeded)
+            ));
         }
         let missing = InodeId::allocate([74; 32], 0);
-        assert_eq!(inode_table_lookup_with_budget(&store, table, missing, 32 * 1024, &mut InodeTableCounters::default()).unwrap().0, None);
+        assert_eq!(
+            inode_table_lookup_with_budget(
+                &store,
+                table,
+                missing,
+                32 * 1024,
+                &mut InodeTableCounters::default()
+            )
+            .unwrap()
+            .0,
+            None
+        );
     }
 
     #[test]

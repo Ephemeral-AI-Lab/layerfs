@@ -479,10 +479,9 @@ mod tests {
         let candidate = root.join("candidate");
         // A directory deterministically fails remove_file even under root in Docker.
         std::fs::create_dir(&candidate).unwrap();
-        assert!(
-            db.cleanup_candidate_paths([Some(candidate.clone()), None, None, None, None])
-                .is_err()
-        );
+        assert!(db
+            .cleanup_candidate_paths([Some(candidate.clone()), None, None, None, None])
+            .is_err());
         assert!(db.enter_operation().is_err());
         assert_eq!(
             db.0.candidate_cleanup

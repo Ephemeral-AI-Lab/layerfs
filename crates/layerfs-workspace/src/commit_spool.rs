@@ -1,7 +1,7 @@
 //! Workspace error boundary for shared anonymous fixed-record sorting.
 use layerfs_content::filesystem::delta_spool as shared;
 use layerfs_layerstack_store::{Result, StoreError};
-pub(crate) use shared::{SORT_BYTES, reset_metrics, take_metrics};
+pub(crate) use shared::{reset_metrics, take_metrics, SORT_BYTES};
 use std::path::Path;
 fn error(error: shared::SpoolError) -> StoreError {
     match error {
