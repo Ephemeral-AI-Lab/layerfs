@@ -654,6 +654,16 @@ fn run_case(
     mode: &str,
     container: ContainerId,
 ) -> AnyResult<()> {
+    // Investigation-only selector: public SDK + existing native Linux FUSE route.
+    let placement_container = if container.0 == "diagnostic-host-fuse" {
+        if !cfg!(target_os = "linux") || case.kind != "tiny-bulk-create" {
+            return Err("colocated diagnostic requires Linux bulk-create".into());
+        }
+        emit("diagnostic-profile", &[("profile", quote("linux-colocated-host-fuse-2cpu-2g"))]);
+        None
+    } else {
+        Some(container.clone())
+    };
     let verification = mode == "verify";
     if !verification && mode != "performance" {
         return Err("invalid phase1 mode".into());
@@ -771,7 +781,7 @@ fn run_case(
         genesis_root = Some(store.pin_branch(branch)?.root);
         let request = CreateWorkspaceSession {
             branch_id: branch,
-            placement: case_placement(&Some(container.clone()), root, seed as usize, &case.id),
+            placement: case_placement(&placement_container, root, seed as usize, &case.id),
             projection: Some(WorkspaceProjection::Fuse),
         };
         let create_start = Instant::now();
@@ -1101,7 +1111,7 @@ fn run_case(
             let session = client.create_workspace_session(CreateWorkspaceSession {
                 branch_id: branch,
                 placement: case_placement(
-                    &Some(container.clone()),
+                    &placement_container,
                     root,
                     seed as usize,
                     &format!("{}-reopen", case.id),
@@ -1201,7 +1211,7 @@ fn run_case(
             let base_session = client.create_workspace_session(CreateWorkspaceSession {
                 branch_id: base_branch,
                 placement: case_placement(
-                    &Some(container.clone()),
+                    &placement_container,
                     root,
                     seed as usize,
                     "history-genesis",
@@ -1259,7 +1269,7 @@ fn run_case(
                 let historical = client.create_workspace_session(CreateWorkspaceSession {
                     branch_id: fork,
                     placement: case_placement(
-                        &Some(container.clone()),
+                        &placement_container,
                         root,
                         seed as usize,
                         &format!("{}-history-{step}", case.id),
@@ -1315,6 +1325,34 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         .map(|s| s.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     match args.as_slice() {
+        [command, root, id, seed] if command == "workspace-colocated-verify-existing" => {
+            let case = registry::resolve(id)?;
+            if !cfg!(target_os = "linux") || case.kind != "tiny-bulk-create" {
+                return Err("colocated diagnostic requires Linux bulk-create".into());
+            }
+            let root = Path::new(root);
+            let seed = seed.parse()?;
+            let branch = std::fs::read_to_string(root.join("branch-id"))?.trim().parse()?;
+            let store = Arc::new(LayerStackStore::connect(root.join("store.sqlite"))?);
+            let expected = registry::expected(&case, seed, 1)?;
+            let verified = super::workspace_verify::verify(&store, branch, &expected, root)?;
+            emit("canonical-verification", &[("receipt", quote(&format!("{:?}", verified.receipt)))]);
+            let client = Client::connect(store.clone())?;
+            let session = client.create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: WorkspacePlacement::Host { root: root.join("reopen-mount") },
+                projection: Some(WorkspaceProjection::Fuse),
+            })?;
+            let verified = native_verify(&client, session.id, &case, seed, 1);
+            let ended = client.end_workspace_session(session.id, EndWorkspaceMode::Clean);
+            verified?;
+            ended?;
+            if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
+                return Err("colocated verifier retained owned runtime".into());
+            }
+            emit("verification-complete", &[("status", quote("pass"))]);
+            Ok(())
+        }
         [command, root] if command == "workspace-qualify-digests" => {
             let receipt = super::workspace_verify::digest_qualification(Path::new(root))?;
             emit(

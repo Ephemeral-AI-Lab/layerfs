@@ -1,0 +1,16 @@
+# Investigation only. Driver verifies this local base tag against the retained image ID.
+FROM layerfs-v013:fbf32e84662d AS build
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY tools ./tools
+COPY benchmark/fs-bench-pro ./benchmark/fs-bench-pro
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build --locked --release -p fs-benchmark-pro \
+ && cp target/release/fs-benchmark-pro /colocated-benchmark
+FROM layerfs-v013:fbf32e84662d
+COPY --from=build /colocated-benchmark /usr/local/bin/fs-benchmark-pro
+ARG INVESTIGATION_SOURCE
+LABEL dev.layerfs.investigation-source=$INVESTIGATION_SOURCE
+ENTRYPOINT ["sleep", "infinity"]
