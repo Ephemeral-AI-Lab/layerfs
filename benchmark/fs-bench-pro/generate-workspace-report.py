@@ -1413,8 +1413,56 @@ OWNER_DROP_PAIRS = {
 }
 
 
+DEFERRED_SYNC_BRIDGE_KIND = "proxy-deferred-sync-success-path-v1"
+DEFERRED_SYNC_PARENT = "03d4914ee36da6d303ab268e9102519d1755a8e4"
+DEFERRED_SYNC_PAIR = ("5e136f4ba3e7d9ea2c84778440753aa952b02259d643b7179fb2e697e036ffe5", "d3edf2705394f0074b4ca790ba6fe917479aa6de53c6a2e41aafa0c424263a75")
+DEFERRED_SYNC_SAFE_PROOFS = {"lease-lifecycle", "invalid-sdk-edit", "invalid-namespace", "candidate-failure-retry", "admission-batch-failure-retry", "final-publication-failure-retry", "published-presentation-failure", "dirty-end-discard", "dirty-net-zero", "open-writer-busy", "live-execution-busy", "sustained-600s"}
+
+
+@lru_cache(maxsize=None)
+def deferred_sync_source_proof(old_revision, new_revision):
+    if old_revision != DEFERRED_SYNC_PARENT:raise ValueError("deferred-sync source pair must start at exact03")
+    path = "crates/layerfs-fuse/src/proxy_client.rs"
+    trees = [product_tree(revision) for revision in (old_revision, new_revision)]
+    if trees[0].pop(path).split()[:2] != trees[1].pop(path).split()[:2] or trees[0] != trees[1]:raise ValueError("deferred-sync repair changed another product/build input")
+    values = [subprocess.check_output(["git", "show", revision + ":" + path], cwd=HERE.parents[1]) for revision in (old_revision, new_revision)]
+    hashes = tuple(hashlib.sha256(value).hexdigest() for value in values)
+    if hashes != DEFERRED_SYNC_PAIR:raise ValueError("unreviewed deferred-sync source hashes")
+    source = values[1]
+    start = source.index(b"        } else if let Ok(mut cache) = self.cache.lock() {", source.index(b"    fn synchronize_locked("))
+    end = source.index(b"        }\n        first_error.map_or(Ok(()), Err)", start)
+    source = source[:start] + source[end:]
+    start = source.index(b"    #[test]\n    fn deferred_write_error_invalidates_optimistic_observations()")
+    end = source.index(b"    #[test]\n    fn multi_stream_barrier_drains_every_stream_after_the_first_error()", start)
+    if b"#[cfg(test)]\nmod tests {" not in source[:start] or source[:start] + source[end:] != values[0]:raise ValueError("deferred-sync changed code outside exact error branch/test")
+    callers = {}
+    for name in ("src/workspace_bench.rs", "src/workspace_reliability.rs", "src/sdk_file_edit.rs", "ordinary_workloads.rs", "dedup_workloads.rs", "reliability_workloads.rs"):
+        full = "benchmark/fs-bench-pro/" + name
+        data = [subprocess.check_output(["git", "show", revision + ":" + full], cwd=HERE.parents[1]) for revision in (old_revision, new_revision)]
+        if data[0] != data[1]:raise ValueError("deferred-sync repair changed frozen caller/error sites")
+        callers[full] = hashlib.sha256(data[0]).hexdigest()
+    return {"source_path": path, "old_sha256": hashes[0], "new_sha256": hashes[1], "unchanged_callers": callers,
+        "scope": "Only failed synchronize_locked cache invalidation plus test. Success branch/layout/fence/pending/error semantics unchanged. Retain original-source observations only when the failed synchronization branch is not reached; short-spool and deferred-NoSpace require repaired-product execution."}
+
+
+def validate_deferred_sync_records(records, case, issues):
+    operation = case.get("operation")
+    require(operation not in {"short-spool-write", "deferred-nospace"}, "deferred-error proof must execute repaired product", issues)
+    if case.get("family_id") == "workspace_reliability":
+        require(operation in DEFERRED_SYNC_SAFE_PROOFS, "unreviewed reliability error site for deferred-sync retention", issues)
+    else:
+        require(all(row.get("outcome") in {"success", "up_to_date"} for row in operation_rows(records, issues)), "retained ordinary caller has failed public work", issues)
+    require(not any("error_boundary=fsync" in str(row.get("receipt", "")) or "error_boundary=fsync" in str(row.get("workload_receipt", "")) for row in records), "retained caller exercised a failed fsync", issues)
+    return {"predicate": "failed synchronize_locked branch not reached", "basis": "Qualified successful sync/caller outcomes and exact reviewed expected-error sites; no numeric deferred-error counter is invented", "case_operation": operation, "timing_claim": "original source only"}
+
+
 @lru_cache(maxsize=None)
 def owner_drop_source_proof(old_revision, new_revision):
+    proxy = "crates/layerfs-fuse/src/proxy_client.rs"
+    if product_tree(DEFERRED_SYNC_PARENT)[proxy] != product_tree(new_revision)[proxy]:
+        later = deferred_sync_source_proof(DEFERRED_SYNC_PARENT, new_revision)
+        prior = None if product_tree(old_revision) == product_tree(DEFERRED_SYNC_PARENT) else owner_drop_source_proof(old_revision, DEFERRED_SYNC_PARENT)
+        return {"prior_owner_drop_source_proof": prior, "deferred_sync_source_proof": later, "scope": "Retain only the separately qualified no-active-owner-Drop and no-failed-synchronization predicates; actual source/timing identities remain unchanged."}
     trees = [product_tree(revision) for revision in (old_revision, new_revision)]
     pairs = {}
     for path, expected in OWNER_DROP_PAIRS.items():
@@ -1721,8 +1769,14 @@ def configured_product_bridges(config, primary, cases):
     approved = []
     fields = {"kind", "old_revision", "new_revision", "old_product_seal", "new_product_seal", "case_ids", "source_proof", "required_zero_counters", "reviewed_impact"}
     for bridge in config.get("product_compatibility", []):
-        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND, RETAINED_PROOF_KIND, OWNER_DROP_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
+        if not isinstance(bridge, dict) or set(bridge) != fields or bridge["kind"] not in {UNLINK_BRIDGE_KIND, EMPTY_GENERATION_BRIDGE_KIND, SPILL_INDEX_BRIDGE_KIND, CONTENT_FRONTIER_BRIDGE_KIND, RETAINED_PROOF_KIND, OWNER_DROP_BRIDGE_KIND, DEFERRED_SYNC_BRIDGE_KIND} or bridge["new_revision"] != primary["revision"] or bridge["old_revision"] == bridge["new_revision"] or bridge["new_product_seal"] != primary["product_seal"] or not digest(bridge["old_product_seal"]) or bridge["old_product_seal"] == bridge["new_product_seal"]:
             raise ValueError("invalid exact unlink product bridge identity")
+        if bridge["kind"] == DEFERRED_SYNC_BRIDGE_KIND:
+            if bridge["required_zero_counters"] != [] or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases or cases[case].get("operation") in {"short-spool-write", "deferred-nospace"} or (cases[case].get("family_id") == "workspace_reliability" and cases[case].get("operation") not in DEFERRED_SYNC_SAFE_PROOFS) for case in bridge["case_ids"]) or len(bridge["reviewed_impact"].strip()) < 80:
+                raise ValueError("deferred-sync bridge lacks exact unaffected cases")
+            if bridge["source_proof"] != deferred_sync_source_proof(bridge["old_revision"], bridge["new_revision"]):raise ValueError("deferred-sync source proof differs")
+            if any(item["old_revision"] == bridge["old_revision"] for item in approved):raise ValueError("duplicate deferred-sync bridge")
+            approved.append(bridge);continue
         if bridge["kind"] == OWNER_DROP_BRIDGE_KIND:
             if bridge["required_zero_counters"] != ["unmatched_successful_workspace_creates"] or not bridge["case_ids"] or len(set(bridge["case_ids"])) != len(bridge["case_ids"]) or any(case not in cases or cases[case].get("operation") == "lease-lifecycle" for case in bridge["case_ids"]) or len(bridge["reviewed_impact"].strip()) < 80:
                 raise ValueError("owner-drop bridge lacks exact cases/End predicate")
@@ -2150,11 +2204,15 @@ def generate(campaign, assets):
                 retained_records = raw(Path(outcome["evidence_path"]) / "raw.jsonl")
                 if product_bridge["kind"] == OWNER_DROP_BRIDGE_KIND:
                     predicate_scope = validate_owner_drop_records(retained_records, case, value["issues"])
+                    if "deferred_sync_source_proof" in product_bridge["source_proof"]:predicate_scope["deferred_sync"] = validate_deferred_sync_records(retained_records, case, value["issues"])
+                elif product_bridge["kind"] == DEFERRED_SYNC_BRIDGE_KIND:
+                    predicate_scope = validate_deferred_sync_records(retained_records, case, value["issues"])
                 elif product_bridge["kind"] == RETAINED_PROOF_KIND:
                     require(outcome["mode"] == "verify" and seed == 1 and Path(outcome["evidence_path"]).name == product_bridge["source_proof"]["retained_evidence_basename"], "only the exact completed proof is reusable", value["issues"])
                     predicate_scope = {"correctness": "retained independent proof with explicit state identity", "timing_claim": "none; original proof resources only"}
                     if "owner_drop_source_proof" in product_bridge["source_proof"]:
                         predicate_scope["owner_drop"] = validate_owner_drop_records(retained_records, case, value["issues"])
+                        if "deferred_sync_source_proof" in product_bridge["source_proof"]["owner_drop_source_proof"]:predicate_scope["deferred_sync"] = validate_deferred_sync_records(retained_records, case, value["issues"])
                 elif product_bridge["kind"] == CONTENT_FRONTIER_BRIDGE_KIND:
                     predicate_scope = validate_content_frontier_records(retained_records, case, product_bridge, value["issues"])
                 elif product_bridge["kind"] == SPILL_INDEX_BRIDGE_KIND:
@@ -2272,7 +2330,9 @@ def generate(campaign, assets):
         if selected["product_seal"] != build["product_seal"]:
             bridge = matching_product_bridge(list(product_compatibility.values()), selected, build, case["scenario_id"])
             if bridge["kind"] != OWNER_DROP_BRIDGE_KIND:raise ValueError("unqualified fast demonstration product bridge")
-            validate_owner_drop_records(raw(Path(outcome["evidence_path"]) / "raw.jsonl"), case, value["issues"])
+            fast_records = raw(Path(outcome["evidence_path"]) / "raw.jsonl")
+            validate_owner_drop_records(fast_records, case, value["issues"])
+            if "deferred_sync_source_proof" in bridge["source_proof"]:validate_deferred_sync_records(fast_records, case, value["issues"])
             value["fast_iteration_pass"] = value["fast_iteration_pass"] and not value["issues"]
         fast_results.append({"case": outcome["scenario_id"], "seed": outcome["seed"], "mode": "fast-verify", "evidence": outcome["evidence_path"],
             "source_identity": source_identity(outcome), "environment_identity": outcome.get("environment_identity"),
