@@ -503,6 +503,8 @@ impl Workspace {
         let mut metadata_cache: Vec<((InodeKind, u32, i64, u32), ObjectId)> = Vec::with_capacity(8);
         let mut metadata_hits = 0_u64;
         let mut metadata_builds = 0_u64;
+        let final_new_refs = std::env::var("LAYERFS_EXPERIMENT_FINAL_NEW_REFS").as_deref() == Ok("1");
+        let mut pre_counted_inodes = 0_u64;
         note_commit_phase(WorkspaceCommitPhase::CandidatePlan, started);
         let started = Instant::now();
         for (&node, value) in &self.nodes {
@@ -650,7 +652,13 @@ impl Workspace {
                 kind: inode_kind,
                 content_root,
                 metadata_root,
-                namespace_ref_count: before.map_or(0, |record| record.namespace_ref_count),
+                namespace_ref_count: if final_new_refs && before.is_none() {
+                    pre_counted_inodes += 1;
+                    u64::try_from(value.paths.len())
+                        .map_err(|_| StorageError::Integrity("new inode reference count"))?
+                } else {
+                    before.map_or(0, |record| record.namespace_ref_count)
+                },
             };
             layerfs_layerstack_store::note_workspace_namespace_visits(
                 0,
@@ -699,6 +707,9 @@ impl Workspace {
                     }
                     if additions {
                         if let Some(inode) = after {
+                            if final_new_refs && desired.is_some_and(|node| self.nodes[&node].canonical.is_none()) {
+                                continue;
+                            }
                             let mut record = inodes.record(&objects, inode)?;
                             record.namespace_ref_count = record
                                 .namespace_ref_count
@@ -717,6 +728,7 @@ impl Workspace {
             }
         }
         inodes.flush(&mut objects)?;
+        eprintln!("experiment_final_new_refs enabled={} pre_counted_inodes={}", final_new_refs, pre_counted_inodes);
         eprintln!("experiment_frontier_batch size={} flushes={} max_pending={} deferred_peak_bytes={}",
             batch_size, inodes.flushes, inodes.max_pending, inodes.deferred_peak_bytes);
         note_commit_phase(WorkspaceCommitPhase::Namespace, started);
@@ -1740,6 +1752,7 @@ mod tests {
         let open = workspace.create_file(ROOT, b"open", 0o640).unwrap().node;
         workspace.write(open, 0, b"open").unwrap();
         workspace.commit().unwrap();
+        assert_eq!(workspace.lookup(ROOT, b"keep").unwrap().links, 3);
         let old_root = workspace.base_root;
         let gone = workspace.lookup(ROOT, b"gone").unwrap().node;
         let open = workspace.lookup(ROOT, b"open").unwrap().node;
