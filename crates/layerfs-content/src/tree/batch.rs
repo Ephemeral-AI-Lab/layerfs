@@ -206,7 +206,7 @@ struct Entry<K> {
     pending: Option<Box<Page<K>>>, reuse:bool,
 }
 struct Child<K> { count: u64, bytes: u64, size: usize, pending: Option<Box<Page<K>>>, reuse:bool }
-struct Page<K> { level: u8, entries: Pairs<K>, children: Vec<Child<K>>, origin: Option<ObjectId>, _lease: Lease, spilled: Option<Box<Spilled<K>>> }
+struct Page<K> { level: u8, entries: Pairs<K>, children: Vec<Child<K>>, origin: Option<ObjectId>, aggregate:Option<(u64,u64)>, _lease: Lease, spilled: Option<Box<Spilled<K>>> }
 struct PageEntries<K> { entries: std::iter::Flatten<std::vec::IntoIter<Vec<(K,ObjectId)>>>, children: std::vec::IntoIter<Child<K>>, level: u8, _lease: Lease }
 impl<K> Iterator for PageEntries<K> {
     type Item=Entry<K>;
@@ -224,6 +224,9 @@ struct Node<K> {
     size: usize, items: usize, pending: Option<Box<Page<K>>>, reuse:bool,
 }
 impl<K: Clone> Node<K> {
+    fn opaque(id:ObjectId,max:K,level:u8)->Self {
+        Self {max:Some(max),id:Some(id),level,count:0,bytes:0,size:0,items:0,pending:None,reuse:true}
+    }
     fn existing(id: ObjectId, wire: &Wire<K>) -> Self {
         Self { max: wire.entries.last().map(|v| v.0.clone()), id: Some(id), level: wire.level,
             count: wire.count, bytes: wire.bytes, size: wire.size, items: wire.entries.len(), pending: None, reuse:true }
@@ -234,7 +237,7 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
     fn page(&self, level: u8) -> CoreResult<Page<F::Key>> {
         if level > 31 { return Err(CoreError::MappingDepthExceeded); }
         let lease = self.budget.reserve(std::mem::size_of::<Page<F::Key>>())?.label("page",level,0,0);
-        Ok(Page { level, entries: Pairs::new(), children: Vec::new(), origin: None, _lease: lease, spilled:None })
+        Ok(Page { level, entries: Pairs::new(), children: Vec::new(), origin: None, aggregate:None, _lease: lease, spilled:None })
     }
     fn spill_pool(&mut self)->CoreResult<Rc<SpillPool>> {
         if let Some(pool)=&self.spills {return Ok(pool.clone());}
@@ -313,19 +316,37 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
         }
         Ok(ReadPage { wire, _lease: lease })
     }
-    fn node(&self, mut page: Page<F::Key>) -> CoreResult<Node<F::Key>> {
+    fn complete_summaries(&mut self,page:&mut Page<F::Key>)->CoreResult<()> {
+        if page.level==0 {return Ok(());}
+        for ((key,id),child) in page.entries.iter().zip(&mut page.children) {
+            if child.count==0 {
+                let read=self.read(*id,false)?;self.check_child(page.level,key,&read.wire)?;
+                child.count=read.wire.count;child.bytes=read.wire.bytes;child.size=read.wire.size;
+            }
+        }
+        Ok(())
+    }
+    fn node(&mut self, mut page: Page<F::Key>) -> CoreResult<Node<F::Key>> {
         if let Some(spilled)=&page.spilled {
             page._lease.grow(F::heap_bytes(&spilled.max))?;
             return Ok(Node {max:Some(spilled.max.clone()),id:page.origin,level:0,count:spilled.items as u64,bytes:spilled.bytes,size:spilled.size,items:spilled.items,pending:Some(Box::new(page)),reuse:false});
         }
         page._lease.grow(page.entries.last().map_or(0, |e| F::heap_bytes(&e.0)))?;
-        let count = if page.level==0 {page.entries.len() as u64} else {page.children.iter().try_fold(0u64, |n,e|n.checked_add(e.count).ok_or(CoreError::LengthOverflow))?};
-        let bytes = if page.level==0 {page.entries.iter().try_fold(0u64,|n,e|n.checked_add(F::width(&e.0) as u64).ok_or(CoreError::LengthOverflow))?} else {page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.bytes).ok_or(CoreError::LengthOverflow))?};
+        if page.level>0 && page.aggregate.is_none() {self.complete_summaries(&mut page)?;}
+        let (count,bytes)=if page.level==0 {
+            (page.entries.len() as u64,page.entries.iter().try_fold(0u64,|n,e|n.checked_add(F::width(&e.0) as u64).ok_or(CoreError::LengthOverflow))?)
+        } else {match page.aggregate {
+            Some(summary)=>summary,
+            None=>(page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.count).ok_or(CoreError::LengthOverflow))?,page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.bytes).ok_or(CoreError::LengthOverflow))?),
+        }};
+        page.aggregate=Some((count,bytes));
         let size = 44 + page.entries.iter().map(|e| F::width(&e.0)).sum::<usize>();
         Ok(Node { max: page.entries.last().map(|e| e.0.clone()), id: page.origin, level: page.level,
             count, bytes, size, items: page.entries.len(), pending: Some(Box::new(page)), reuse:false })
     }
-    fn filled(node: &Node<F::Key>) -> bool { F::filled(node.size, node.items) }
+    fn filled(node: &Node<F::Key>) -> bool {
+        node.pending.is_none() && node.count==0 && node.reuse || F::filled(node.size,node.items)
+    }
     fn persist(&mut self, mut node: Node<F::Key>) -> CoreResult<Node<F::Key>> {
         if let Some(mut page) = node.pending.take() {
             for ((_,id),child) in page.entries.iter_mut().zip(&mut page.children) {
@@ -368,7 +389,7 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
         Ok(None)
     }
     fn child(entry: Entry<F::Key>, level: u8) -> Node<F::Key> {
-        let items = entry.pending.as_ref().map_or_else(|| (entry.size - 44) / 64, |p| p.spilled.as_ref().map_or_else(||p.entries.len(),|spill|spill.items));
+        let items = entry.pending.as_ref().map_or_else(|| entry.size.saturating_sub(44) / 64, |p| p.spilled.as_ref().map_or_else(||p.entries.len(),|spill|spill.items));
         Node { max: Some(entry.key), id: Some(entry.id), level, count: entry.count,
             bytes: entry.bytes, size: entry.size, items, pending: entry.pending, reuse:entry.reuse }
     }
@@ -383,7 +404,10 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
             return Ok(*page);
         }
         let id = node.id.ok_or(CoreError::IdentityMismatch)?;
-        let read = self.read(id, true)?;
+        let read = self.read(id, node.count!=0)?;
+        if read.wire.level!=node.level || read.wire.entries.last().map(|entry|&entry.0)!=node.max.as_ref() {
+            return Err(CoreError::InvalidRecord("materialized tree child summary"));
+        }
         self.page_from_wire(id, read)
     }
     fn page_from_wire(&mut self, id: ObjectId, mut read: ReadPage<F::Key>) -> CoreResult<Page<F::Key>> {
@@ -397,21 +421,14 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
             page.entries=Pairs {chunks:vec![read.wire.entries],len};
             return Ok(page);
         }
-        for (key, value) in read.wire.entries {
-            if page.level == 0 {
-                self.append_entry(&mut page, Entry { bytes: F::width(&key) as u64, key, id: value, count: 1, size: 0, pending: None, reuse:false })?;
-            } else {
-                let child = self.read(value, false)?;
-                self.check_child(page.level, &key, &child.wire)?;
-                self.append_entry(&mut page, Entry { key, id: value, count: child.wire.count, bytes: child.wire.bytes,
-                    size: child.wire.size, pending: None, reuse:true })?;
-            }
+        for (key,value) in read.wire.entries {
+            let child=self.read(value,false)?;self.check_child(page.level,&key,&child.wire)?;
+            self.append_entry(&mut page,Entry {key,id:value,count:child.wire.count,bytes:child.wire.bytes,size:child.wire.size,pending:None,reuse:true})?;
         }
-        let count=if page.level==0 {page.entries.len() as u64} else {page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.count).ok_or(CoreError::LengthOverflow))?};
-        let bytes=if page.level==0 {page.entries.iter().map(|e|F::width(&e.0) as u64).sum()} else {page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.bytes).ok_or(CoreError::LengthOverflow))?};
-        if count != read.wire.count || bytes != read.wire.bytes {
-            return Err(CoreError::InvalidRecord("batched tree subtree summary"));
-        }
+        let count=page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.count).ok_or(CoreError::LengthOverflow))?;
+        let bytes=page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.bytes).ok_or(CoreError::LengthOverflow))?;
+        if count!=read.wire.count || bytes!=read.wire.bytes {return Err(CoreError::InvalidRecord("batched tree subtree summary"));}
+        page.aggregate=Some((count,bytes));
         Ok(page)
     }
     fn check_child(&self, level: u8, max: &F::Key, child: &Wire<F::Key>) -> CoreResult<()> {
@@ -421,6 +438,7 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
         Ok(())
     }
     fn append_entry(&self, page: &mut Page<F::Key>, entry: Entry<F::Key>) -> CoreResult<()> {
+        page.aggregate=None;
         page._lease.relabel("growing-page",page.level,page.entries.len(),page.entries.chunks.iter().map(Vec::capacity).sum());
         if page.level>0 && page.children.len()==page.children.capacity() {
             let before=page.children.capacity();
@@ -450,6 +468,7 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
         self.append_entry(page,entry)?;
         let size = 44 + page.entries.iter().map(|e| F::width(&e.0)).sum::<usize>();
         if F::fits(size, page.entries.len()) { return Ok(None); }
+        self.complete_summaries(page)?;
         let mut right = self.page(page.level)?;
         let widths_lease=self.budget.reserve(page.entries.len()*std::mem::size_of::<usize>())?.label("split-widths",page.level,page.entries.len(),0);
         let split = super::directory::nearest_half(page.entries.iter().map(|e| F::width(&e.0)).collect());
@@ -505,7 +524,13 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
         }
         { let node = self.node(left)?; output(self, node) }
     }
-    fn sibling(&mut self, pending: &mut Option<Node<F::Key>>, next: Node<F::Key>, output: &mut dyn FnMut(&mut Self, Node<F::Key>) -> CoreResult<()>) -> CoreResult<()> {
+    fn sibling(&mut self, pending: &mut Option<Node<F::Key>>, mut next: Node<F::Key>, output: &mut dyn FnMut(&mut Self, Node<F::Key>) -> CoreResult<()>) -> CoreResult<()> {
+        // Multiple output pages can come from one old leaf. Release retained
+        // siblings here, before returning to that leaf's still-growing output.
+        if self.spill_options.is_some() && self.budget.limit.saturating_sub(self.budget.used.get())<2*8192 {
+            if let Some(previous)=pending {if let Some(page)=&mut previous.pending {self.spill_page(page)?;}}
+            if let Some(page)=&mut next.pending {self.spill_page(page)?;}
+        }
         let Some(previous) = pending.take() else {
             if let Some(page)=&next.pending {page._lease.relabel("pending-sibling",next.level,next.items,page.entries.chunks.iter().map(Vec::capacity).sum());}
             *pending=Some(next);return Ok(());
@@ -571,31 +596,66 @@ impl<S: ObjectStore, F: Format> Engine<'_, S, F> {
             return self.edit_leaf(id,input,bound,deltas,output);
         }
         let mut page=self.page(read.wire.level)?;page.origin=Some(id);
-            let level = page.level;
-            let count = read.wire.entries.len();
-            let mut old_count = 0u64;
-            let mut old_bytes = 0u64;
-            let mut pending = None;
-            for (index, (key, child_id)) in read.wire.entries.into_iter().enumerate() {
-                self.relieve(&mut page,&mut pending)?;
-                let child = self.read(child_id, false)?;
-                self.check_child(level, &key, &child.wire)?;
-                old_count = old_count.checked_add(child.wire.count).ok_or(CoreError::LengthOverflow)?;
-                old_bytes = old_bytes.checked_add(child.wire.bytes).ok_or(CoreError::LengthOverflow)?;
-                let child_bound = if index + 1 == count { bound } else { Some(&key) };
-                self.edit(child_id, child, child_bound, deltas, &mut |engine, node| {
+        let level=page.level;let children=read.wire.entries.len();
+        let (mut count,mut bytes)=(read.wire.count,read.wire.bytes);
+        let mut pending=None;let mut split=false;
+        let (mut source_count,mut source_bytes)=(0u64,0u64);let mut opaque=false;
+        let (mut emitted_count,mut emitted_bytes)=(0u64,0u64);
+        for (index,(key,child_id)) in read.wire.entries.into_iter().enumerate() {
+            self.relieve(&mut page,&mut pending)?;
+            let child_bound=if index+1==children {bound}else{Some(&key)};
+            if deltas.in_range(child_bound) {
+                let child=self.read(child_id,false)?;self.check_child(level,&key,&child.wire)?;
+                source_count=source_count.checked_add(child.wire.count).ok_or(CoreError::LengthOverflow)?;
+                source_bytes=source_bytes.checked_add(child.wire.bytes).ok_or(CoreError::LengthOverflow)?;
+                count=count.checked_sub(child.wire.count).ok_or(CoreError::LengthOverflow)?;
+                bytes=bytes.checked_sub(child.wire.bytes).ok_or(CoreError::LengthOverflow)?;
+                self.edit(child_id,child,child_bound,deltas,&mut |engine,node| {
+                    count=count.checked_add(node.count).ok_or(CoreError::LengthOverflow)?;
+                    bytes=bytes.checked_add(node.bytes).ok_or(CoreError::LengthOverflow)?;
                     engine.sibling(&mut pending,node,&mut |engine,node| {
-                        let entry = engine.entry(node)?;
-                        if let Some(node) = engine.push(&mut page, entry)? { output(engine,node)?; }
+                        let entry=engine.entry(node)?;
+                        if let Some(node)=engine.push(&mut page,entry)? {
+                            split=true;emitted_count=emitted_count.checked_add(node.count).ok_or(CoreError::LengthOverflow)?;
+                            emitted_bytes=emitted_bytes.checked_add(node.bytes).ok_or(CoreError::LengthOverflow)?;output(engine,node)?;
+                        }
                         Ok(())
                     })
                 })?;
+            } else {
+                opaque=true;
+                self.sibling(&mut pending,Node::opaque(child_id,key,level-1),&mut |engine,node| {
+                    let entry=engine.entry(node)?;
+                    if let Some(node)=engine.push(&mut page,entry)? {
+                            split=true;emitted_count=emitted_count.checked_add(node.count).ok_or(CoreError::LengthOverflow)?;
+                            emitted_bytes=emitted_bytes.checked_add(node.bytes).ok_or(CoreError::LengthOverflow)?;output(engine,node)?;
+                        }
+                    Ok(())
+                })?;
             }
-            if old_count != read.wire.count || old_bytes != read.wire.bytes { return Err(CoreError::InvalidRecord("batched tree subtree summary")); }
-            if let Some(node) = pending {
-                let entry = self.entry(node)?;
-                if let Some(node) = self.push(&mut page, entry)? { output(self,node)?; }
+        }
+        if let Some(node)=pending {
+            let entry=self.entry(node)?;
+            if let Some(node)=self.push(&mut page,entry)? {
+                split=true;emitted_count=emitted_count.checked_add(node.count).ok_or(CoreError::LengthOverflow)?;
+                emitted_bytes=emitted_bytes.checked_add(node.bytes).ok_or(CoreError::LengthOverflow)?;output(self,node)?;
             }
+        }
+        // Without a parent split, authenticated old totals plus changed ranges
+        // are exact; untouched child pages need neither decode nor traversal.
+        if !opaque && (source_count!=read.wire.count || source_bytes!=read.wire.bytes) {
+            return Err(CoreError::InvalidRecord("batched tree subtree summary"));
+        }
+        if !split {page.aggregate=Some((count,bytes));}
+        else {
+            self.complete_summaries(&mut page)?;
+            let tail_count=page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.count).ok_or(CoreError::LengthOverflow))?;
+            let tail_bytes=page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.bytes).ok_or(CoreError::LengthOverflow))?;
+            if emitted_count.checked_add(tail_count)!=Some(count) || emitted_bytes.checked_add(tail_bytes)!=Some(bytes) {
+                return Err(CoreError::InvalidRecord("batched tree split summary"));
+            }
+            page.aggregate=Some((tail_count,tail_bytes));
+        }
         drop(read._lease);
         if !page.entries.is_empty() {let node=self.node(page)?;output(self,node)?;}
         Ok(())
@@ -687,8 +747,8 @@ impl Format for Directory {
         Ok(Wire {level,count,bytes:logical,entries,size:bytes.len()})
     }
     fn encode(page:&Page<Self::Key>)->CoreResult<Vec<u8>> {
-        let count=if page.level==0 {page.entries.len() as u64} else {page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.count).ok_or(CoreError::LengthOverflow))?};
-        let bytes=if page.level==0 {page.entries.iter().map(|e|Self::width(&e.0) as u64).sum()} else {page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.bytes).ok_or(CoreError::LengthOverflow))?};
+        let count=if page.level==0 {page.entries.len() as u64} else {page.aggregate.ok_or(CoreError::InvalidRecord("unresolved tree summary"))?.0};
+        let bytes=if page.level==0 {page.entries.iter().map(|e|Self::width(&e.0) as u64).sum()} else {page.aggregate.ok_or(CoreError::InvalidRecord("unresolved tree summary"))?.1};
         super::directory::codec::encode_directory_page(page.level,count,bytes,page.entries.iter().map(|(key,id)|(key,id.as_bytes())))
     }
     fn key_bytes(key:&Self::Key)->&[u8] {key.as_bytes()}
@@ -713,7 +773,7 @@ impl Format for Inodes {
         Ok(Wire {level,count,bytes:count.checked_mul(64).ok_or(CoreError::LengthOverflow)?,entries,size:bytes.len()})
     }
     fn encode(page:&Page<Self::Key>)->CoreResult<Vec<u8>> {
-        let count=if page.level==0 {page.entries.len() as u64} else {page.children.iter().try_fold(0u64,|n,e|n.checked_add(e.count).ok_or(CoreError::LengthOverflow))?};
+        let count=if page.level==0 {page.entries.len() as u64} else {page.aggregate.ok_or(CoreError::InvalidRecord("unresolved tree summary"))?.0};
         super::inode::codec::encode_inode_page(page.level,count,page.entries.iter().map(|(key,id)|(key,id.as_bytes())))
     }
     fn key_bytes(key:&Self::Key)->&[u8] {key.as_bytes()}
@@ -815,7 +875,7 @@ mod tests {
         let (root,stats)=inode_table_apply_sorted(&mut store,root,(1..20000).map(|i|Ok((inode(i),Some(value(i)))))).unwrap();
         assert!(stats.nodes_created<400,"{stats:?}");
         let (sparse,stats)=inode_table_apply_sorted(&mut store,root,std::iter::once(Ok((inode(9000),Some(value(90000)))))).unwrap();
-        assert!(stats.nodes_read<500,"{stats:?}");assert!(stats.nodes_created<10,"{stats:?}");
+        assert!(stats.nodes_read<=6,"{stats:?}");assert!(stats.nodes_created<10,"{stats:?}");
         assert!(stats.nodes_reused>0 && stats.nodes_reused<=stats.nodes_read,"{stats:?}");
         let (small,stats)=inode_table_apply_sorted(&mut store,sparse,(1..20000).filter(|i|i%777!=0).map(|i|Ok((inode(i),None)))).unwrap();
         let expected:Vec<_>=std::iter::once((inode(0),value(0))).chain((1..20000).filter(|i|i%777==0).map(|i|(inode(i),value(i)))).collect();
@@ -988,6 +1048,15 @@ mod tests {
         assert!(stats.spill_write_bytes>=127*SPILL_RECORD as u64,"{stats:?}");
         assert_eq!(inode_table_entries(&store,next,&mut super::super::inode::InodeTableCounters::default()).unwrap().len(),127);
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(),0);std::fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
+    fn fully_visited_source_branch_rejects_inconsistent_count() {
+        let mut store=MemoryStore::default();
+        let left=store.put(&encode_inode_table_node(&InodeTableNodeV1::Leaf((0..64).map(|i|(inode(i),value(i))).collect())).unwrap()).unwrap();
+        let right=store.put(&encode_inode_table_node(&InodeTableNodeV1::Leaf((64..128).map(|i|(inode(i),value(i))).collect())).unwrap()).unwrap();
+        let root=InodeTableRoot(store.put(&encode_inode_table_node(&InodeTableNodeV1::Branch {level:1,subtree_entry_count:127,children:vec![(inode(63),left),(inode(127),right)]}).unwrap()).unwrap());
+        assert!(matches!(inode_table_apply_sorted(&mut store,root,(0..128).map(|i|Ok((inode(i),Some(value(i+1000)))))),Err(CoreError::InvalidRecord("batched tree subtree summary"))));
     }
 
 }

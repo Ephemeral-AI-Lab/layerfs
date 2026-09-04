@@ -83,6 +83,8 @@ pub(crate) struct DirectoryData {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Node {
     pub(crate) commit_dirty: bool,
+    pub(crate) commit_prev: NodeId,
+    pub(crate) commit_next: NodeId,
     pub canonical: Option<InodeId>,
     pub paths: BTreeSet<String>,
     pub mode: u32,
@@ -173,6 +175,11 @@ pub struct Workspace {
     pub(crate) mutation_paths: BTreeMap<String, u64>,
     pub(crate) policy: ResourcePolicy,
     pub(crate) nodes: HashMap<NodeId, Node>,
+    pub(crate) commit_head: NodeId,
+    pub(crate) commit_tracked: usize,
+    pub(crate) commit_scan_visits: std::cell::Cell<u64>,
+    pub(crate) commit_mark_calls: u64,
+    pub(crate) commit_mark_ns: u64,
     pub(crate) canonical_nodes: HashMap<InodeId, NodeId>,
     pub(crate) directory_parents: HashMap<NodeId, NodeId>,
     pub(crate) dirty: BTreeSet<NodeId>,
@@ -183,6 +190,37 @@ pub struct Workspace {
     pub(crate) commit_handoff: Option<crate::lifecycle::CommitHandoff>,
     pub(crate) pending_publication: Option<(layerfs_layerstack_store::CommitOutcome, bool)>,
     pub(crate) resolution: Option<crate::reconcile::ResolutionState>,
+}
+
+pub(crate) struct CommitNodes<'a> {
+    workspace: &'a Workspace,
+    next: NodeId,
+    remaining: usize,
+}
+impl Iterator for CommitNodes<'_> {
+    type Item = Result<NodeId>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next == NodeId(0) && self.remaining == 0 {
+            return None;
+        }
+        let id = self.next;
+        let Some(node) = self
+            .workspace
+            .nodes
+            .get(&id)
+            .filter(|node| node.commit_dirty && self.remaining != 0)
+        else {
+            self.next = NodeId(0);
+            self.remaining = 0;
+            return Some(Err(StorageError::Integrity("Workspace changed-node links")));
+        };
+        self.workspace
+            .commit_scan_visits
+            .set(self.workspace.commit_scan_visits.get().saturating_add(1));
+        self.next = node.commit_next;
+        self.remaining -= 1;
+        Some(Ok(id))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -268,6 +306,8 @@ impl Workspace {
         std::fs::create_dir_all(&spool)?;
         let root = Node {
             commit_dirty: false,
+            commit_prev: NodeId(0),
+            commit_next: NodeId(0),
             canonical: Some(resolved.inode),
             paths: BTreeSet::from([String::new()]),
             mode: portable.permission_mode,
@@ -302,6 +342,11 @@ impl Workspace {
             mutation_paths: BTreeMap::new(),
             policy,
             nodes: HashMap::from([(ROOT, root)]),
+            commit_head: NodeId(0),
+            commit_tracked: 0,
+            commit_scan_visits: std::cell::Cell::new(0),
+            commit_mark_calls: 0,
+            commit_mark_ns: 0,
             canonical_nodes: HashMap::from([(resolved.inode, ROOT)]),
             directory_parents: HashMap::from([(ROOT, ROOT)]),
             dirty: BTreeSet::new(),
@@ -374,11 +419,70 @@ impl Workspace {
         Ok(output.into())
     }
 
-    pub(crate) fn allocate(&mut self, node: Node) -> NodeId {
+    pub(crate) fn allocate(&mut self, mut node: Node) -> NodeId {
         let id = NodeId(self.next_node);
         self.next_node += 1;
+        let changed = node.commit_dirty;
+        node.commit_dirty = false;
         self.nodes.insert(id, node);
+        if changed {
+            self.mark_commit_node(id);
+        }
         id
+    }
+
+    // Intrusive links add a fixed 16 bytes to each retained Node. Marking and
+    // reclamation allocate nothing; sparse Commit visits only this list.
+    pub(crate) fn track_commit_node(&mut self, id: NodeId) {
+        if self.nodes[&id].commit_dirty {
+            return;
+        }
+        let next = self.commit_head;
+        let node = self.nodes.get_mut(&id).unwrap();
+        node.commit_dirty = true;
+        node.commit_prev = NodeId(0);
+        node.commit_next = next;
+        if next != NodeId(0) {
+            self.nodes.get_mut(&next).unwrap().commit_prev = id;
+        }
+        self.commit_head = id;
+        self.commit_tracked += 1;
+    }
+
+    pub(crate) fn mark_commit_node(&mut self, id: NodeId) {
+        let started = std::time::Instant::now();
+        self.track_commit_node(id);
+        self.commit_mark_calls = self.commit_mark_calls.saturating_add(1);
+        self.commit_mark_ns = self
+            .commit_mark_ns
+            .saturating_add(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+    }
+
+    pub(crate) fn untrack_commit_node(&mut self, id: NodeId) {
+        let Some(node) = self.nodes.get_mut(&id).filter(|node| node.commit_dirty) else {
+            return;
+        };
+        let (prev, next) = (node.commit_prev, node.commit_next);
+        node.commit_dirty = false;
+        node.commit_prev = NodeId(0);
+        node.commit_next = NodeId(0);
+        if prev == NodeId(0) {
+            self.commit_head = next;
+        } else {
+            self.nodes.get_mut(&prev).unwrap().commit_next = next;
+        }
+        if next != NodeId(0) {
+            self.nodes.get_mut(&next).unwrap().commit_prev = prev;
+        }
+        self.commit_tracked -= 1;
+    }
+
+    pub(crate) fn commit_nodes(&self) -> CommitNodes<'_> {
+        CommitNodes {
+            workspace: self,
+            next: self.commit_head,
+            remaining: self.commit_tracked,
+        }
     }
 
     pub(crate) fn reserve_nodes(&mut self, count: u32) -> Result<NodeId> {
@@ -506,6 +610,8 @@ impl Workspace {
         };
         let node = self.allocate(Node {
             commit_dirty: false,
+            commit_prev: NodeId(0),
+            commit_next: NodeId(0),
             canonical: Some(inode),
             paths: BTreeSet::from([path]),
             mode: portable.permission_mode,
@@ -667,10 +773,16 @@ impl Workspace {
     }
 
     pub(crate) fn directory_mut(&mut self, node: NodeId) -> Result<&mut DirectoryData> {
-        self.nodes
-            .get_mut(&node)
-            .ok_or(StorageError::NotFound("node"))?
-            .commit_dirty = true;
+        if !matches!(
+            self.nodes
+                .get(&node)
+                .ok_or(StorageError::NotFound("node"))?
+                .data,
+            Data::Directory(_)
+        ) {
+            return Err(StorageError::InvalidInput("directory"));
+        }
+        self.mark_commit_node(node);
         match &mut self
             .nodes
             .get_mut(&node)
@@ -815,7 +927,10 @@ impl Workspace {
         if !self.reserved.remove(&node) {
             return Err(StorageError::Integrity("reserved node"));
         }
-        self.nodes.insert(node, new_directory(path.clone(), mode));
+        let mut value = new_directory(path.clone(), mode);
+        value.commit_dirty = false;
+        self.nodes.insert(node, value);
+        self.mark_commit_node(node);
         self.insert_name(parent, name, node)?;
         self.note_mutation([path])?;
         self.attr(node)
@@ -830,6 +945,8 @@ impl Workspace {
         self.prepare_name(parent, name)?;
         let node = self.allocate(Node {
             commit_dirty: true,
+            commit_prev: NodeId(0),
+            commit_next: NodeId(0),
             canonical: None,
             paths: BTreeSet::from([path.clone()]),
             mode: 0o777,
@@ -1002,11 +1119,17 @@ impl Workspace {
 
     pub fn chmod(&mut self, node: NodeId, mode: u32) -> Result<()> {
         self.ensure_active()?;
+        self.nodes
+            .get(&node)
+            .ok_or(StorageError::NotFound("node"))?;
+        self.mutation_generation
+            .checked_add(1)
+            .ok_or(StorageError::Integrity("Workspace mutation generation"))?;
+        self.mark_commit_node(node);
         let value = self
             .nodes
             .get_mut(&node)
             .ok_or(StorageError::NotFound("node"))?;
-        value.commit_dirty = true;
         value.mode = mode & 0o1777;
         let paths = value.paths.iter().cloned().collect::<Vec<_>>();
         self.note_mutation(paths)?;
@@ -1018,11 +1141,17 @@ impl Workspace {
         if nanos > 999_999_999 {
             return Err(StorageError::InvalidInput("mtime"));
         }
+        self.nodes
+            .get(&node)
+            .ok_or(StorageError::NotFound("node"))?;
+        self.mutation_generation
+            .checked_add(1)
+            .ok_or(StorageError::Integrity("Workspace mutation generation"))?;
+        self.mark_commit_node(node);
         let value = self
             .nodes
             .get_mut(&node)
             .ok_or(StorageError::NotFound("node"))?;
-        value.commit_dirty = true;
         value.mtime_seconds = seconds;
         value.mtime_nanoseconds = nanos;
         let paths = value.paths.iter().cloned().collect::<Vec<_>>();
@@ -1076,12 +1205,13 @@ impl Workspace {
         }
     }
 
-    fn reclaim(&mut self, node: NodeId) {
+    pub(crate) fn reclaim(&mut self, node: NodeId) {
         if self.nodes.get(&node).is_some_and(|value| {
             value.paths.is_empty()
                 && value.pins == 0
                 && (value.links == 0 || matches!(value.data, Data::Directory(_)))
         }) {
+            self.untrack_commit_node(node);
             self.dirty.remove(&node);
             self.directory_parents.remove(&node);
             if let Some(value) = self.nodes.remove(&node) {
@@ -1111,6 +1241,8 @@ impl Workspace {
 fn new_directory(path: String, mode: u32) -> Node {
     Node {
         commit_dirty: true,
+        commit_prev: NodeId(0),
+        commit_next: NodeId(0),
         canonical: None,
         paths: BTreeSet::from([path]),
         mode: mode & 0o1777,
@@ -1139,6 +1271,8 @@ mod tests {
         canonical_nodes: std::collections::HashMap<layerfs_content::tree::inode::InodeId, NodeId>,
         directory_parents: std::collections::HashMap<NodeId, NodeId>,
         dirty: BTreeSet<NodeId>,
+        commit_head: NodeId,
+        commit_tracked: usize,
         next_node: u64,
         spool_bytes: u64,
         inline_bytes: u64,
@@ -1151,6 +1285,8 @@ mod tests {
             canonical_nodes: workspace.canonical_nodes.clone(),
             directory_parents: workspace.directory_parents.clone(),
             dirty: workspace.dirty.clone(),
+            commit_head: workspace.commit_head,
+            commit_tracked: workspace.commit_tracked,
             next_node: workspace.next_node,
             spool_bytes: workspace.spool_bytes,
             inline_bytes: workspace.inline_bytes,
@@ -1184,6 +1320,56 @@ mod tests {
             .unwrap();
         let workspace = Workspace::open(store, id, root.join("spool")).unwrap();
         (root, workspace)
+    }
+
+    #[test]
+    fn changed_node_links_reclaim_rollback_and_metadata_failure_are_exact() {
+        let (root, mut workspace) = fixture("changed-links");
+        let a = workspace.create_file(ROOT, b"a", 0o600).unwrap().node;
+        let b = workspace.create_file(ROOT, b"b", 0o600).unwrap().node;
+        let c = workspace.create_file(ROOT, b"c", 0o600).unwrap().node;
+        workspace.commit().unwrap();
+        assert_eq!(workspace.commit_tracked, 0);
+        workspace.chmod(a, 0o640).unwrap();
+        workspace.chmod(b, 0o640).unwrap();
+        workspace.chmod(a, 0o640).unwrap();
+        workspace.chmod(c, 0o640).unwrap();
+        assert_eq!(
+            workspace
+                .commit_nodes()
+                .collect::<Result<Vec<_>>>()
+                .unwrap(),
+            vec![c, b, a]
+        );
+        workspace.unlink(ROOT, b"b", false).unwrap();
+        assert_eq!(
+            workspace
+                .commit_nodes()
+                .collect::<Result<Vec<_>>>()
+                .unwrap(),
+            vec![ROOT, c, a]
+        );
+        let before = snapshot(&workspace);
+        let checkpoint = workspace.edit_checkpoint(a).unwrap();
+        workspace.write(a, 0, b"rolled back").unwrap();
+        workspace.restore_edit(checkpoint).unwrap();
+        assert_eq!(snapshot(&workspace), before);
+        workspace.commit().unwrap();
+        let checkpoint = workspace.edit_checkpoint(a).unwrap();
+        workspace.write(a, 0, b"rolled back again").unwrap();
+        assert_eq!(workspace.commit_tracked, 1);
+        workspace.restore_edit(checkpoint).unwrap();
+        assert_eq!(workspace.commit_tracked, 0);
+        assert_eq!(workspace.commit_head, NodeId(0));
+        workspace.mutation_generation = u64::MAX;
+        let before = snapshot(&workspace);
+        assert!(workspace.chmod(a, 0o777).is_err());
+        assert!(workspace.set_mtime(a, 42, 0).is_err());
+        assert_eq!(snapshot(&workspace), before);
+        workspace.mutation_generation = 0;
+        workspace.end_clean().unwrap();
+        drop(workspace);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

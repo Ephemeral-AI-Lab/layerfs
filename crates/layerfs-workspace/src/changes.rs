@@ -76,8 +76,9 @@ impl Workspace {
             .ok_or(StorageError::InvalidInput("workspace spool limit"))?;
         let mut references = self.references.sorted(&self.spool, disk / 4, memory / 8)?;
         let mut nodes = crate::commit_spool::Sorter::<41>::new(&self.spool, disk / 4, memory / 8)?;
-        for (&id, value) in &self.nodes {
-            if !value.commit_dirty && !self.dirty.contains(&id) { continue; }
+        for id in self.commit_nodes() {
+            let id = id?;
+            let value = &self.nodes[&id];
             let mut record = [0; 41];
             record[..33].copy_from_slice(&crate::references::key(value.canonical, id));
             record[33..].copy_from_slice(&id.0.to_be_bytes());
@@ -1488,6 +1489,8 @@ mod tests {
             assert_eq!(sample.handoff_records, 1);
             assert_eq!(sample.handoff_inode_pages_read, 0);
             assert_eq!(sample.namespace_candidate_probe_nodes, 1);
+            assert_eq!(sample.commit_node_visits, 3, "count, sorted input, and installation each visit only the changed inode");
+            assert_eq!(sample.commit_tracking_live_field_bytes, 16 * (count as u64 + 1));
             assert_eq!(sample.cdc_bytes_scanned, 0);
             assert_eq!(reads_after.payload_bytes_read, reads_before.payload_bytes_read);
             let receipt = layerfs_layerstack_store::take_storage_receipts().into_iter().find_map(|receipt| match receipt {

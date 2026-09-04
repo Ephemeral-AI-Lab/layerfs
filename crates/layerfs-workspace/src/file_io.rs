@@ -135,6 +135,9 @@ impl Workspace {
                 self.remove_spool_if_exists(checkpoint.node, spool)?;
             }
         }
+        if !checkpoint.value.commit_dirty {
+            self.untrack_commit_node(checkpoint.node);
+        }
         self.nodes.insert(checkpoint.node, checkpoint.value);
         if checkpoint.dirty {
             self.dirty.insert(checkpoint.node);
@@ -497,6 +500,7 @@ impl Workspace {
         *current_edits = if emptied { 0 } else { edits };
         *spool_high_water = high_water;
         self.dirty.insert(node);
+        self.mark_commit_node(node);
         self.mutation_generation = generation;
         for path in paths {
             self.mutation_paths.insert(path, generation);
@@ -587,7 +591,9 @@ impl Workspace {
             edits: 0,
         });
         let value = Node {
-            commit_dirty: true,
+            commit_dirty: false,
+            commit_prev: NodeId(0),
+            commit_next: NodeId(0),
             canonical: None,
             paths: [path].into(),
             mode,
@@ -605,6 +611,7 @@ impl Workspace {
             let allocated = self.allocate(value);
             debug_assert_eq!(allocated, node);
         }
+        self.mark_commit_node(node);
         if self.open_spools.insert(node, file).is_some() {
             return Err(StoreError::Integrity("spool descriptor"));
         }

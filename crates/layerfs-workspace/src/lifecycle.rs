@@ -119,11 +119,35 @@ impl RemovedBindings {
 
 impl Workspace {
     pub(crate) fn commit(&mut self) -> Result<(CommitOutcome, CommitTransition)> {
+        self.commit_scan_visits.set(0);
+        let result = self.commit_inner();
+        layerfs_layerstack_store::note_workspace_commit_tracking(
+            self.commit_mark_calls,
+            self.commit_mark_ns,
+            self.commit_scan_visits.get(),
+            (self.nodes.len() as u64).saturating_mul(16),
+            self.nodes.capacity() as u64,
+        );
+        if matches!(
+            result,
+            Ok((
+                _,
+                CommitTransition::Rebased | CommitTransition::RebasedRefresh
+            ))
+        ) {
+            self.commit_mark_calls = 0;
+            self.commit_mark_ns = 0;
+        }
+        result
+    }
+
+    fn commit_inner(&mut self) -> Result<(CommitOutcome, CommitTransition)> {
         if let Some((outcome, refresh)) = self.pending_publication {
             let transition = self.transition_committed(outcome, refresh)?;
             return Ok((outcome, transition));
         }
         self.ensure_active()?;
+        self.store.retry_candidate_cleanup()?;
         if let Some(mut resolution) = self.resolution.take() {
             if let Err(error) = resolution.invalidate_if_mutated(self) {
                 self.resolution = Some(resolution);
@@ -145,6 +169,7 @@ impl Workspace {
             let candidate = match self.build_candidate() {
                 Ok(candidate) => candidate,
                 Err(error) => {
+                    let _ = self.store.retry_candidate_cleanup();
                     self.resolution = Some(resolution);
                     return Err(error);
                 }
@@ -225,7 +250,15 @@ impl Workspace {
         ) {
             crate::changes::inject_candidate_failure_once();
         }
-        let candidate = self.build_candidate()?;
+        let candidate = match self.build_candidate() {
+            Ok(candidate) => candidate,
+            Err(error) => {
+                // Preserve the construction error; failed cleanup remains owned
+                // by Store and blocks the next operation or End until retry.
+                let _ = self.store.retry_candidate_cleanup();
+                return Err(error);
+            }
+        };
         let outcome =
             self.store
                 .commit_candidate(&branch, self.base_root, self.expected_base, candidate)?;
@@ -272,11 +305,12 @@ impl Workspace {
 
     pub(crate) fn begin_handoff(&self) -> Result<HandoffWriter> {
         let started = Instant::now();
-        let expected_records = self
-            .nodes
-            .keys()
-            .filter(|&&id| self.handoff_needs_node(id))
-            .count() as u64;
+        let mut expected_records = 0_u64;
+        for id in self.commit_nodes() {
+            if self.handoff_needs_node(id?) {
+                expected_records += 1;
+            }
+        }
         let reserved_spool_bytes = expected_records
             .checked_mul(HANDOFF_RECORD_BYTES)
             .ok_or(StorageError::Integrity("handoff size"))?;
@@ -508,6 +542,8 @@ impl Workspace {
             Ok(())
         };
         for (&node, value) in &self.nodes {
+            self.commit_scan_visits
+                .set(self.commit_scan_visits.get().saturating_add(1));
             if !matches!(value.data, Data::Directory(_)) || value.paths.is_empty() {
                 continue;
             }
@@ -612,17 +648,12 @@ impl Workspace {
         use layerfs_content::tree::inode::{
             codec::decode_inode_record, inode_table_lookup_with_budget,
         };
-        let records = self
-            .nodes
-            .iter()
-            .filter(|(id, node)| {
-                selected
-                    || ((!node.paths.is_empty() || node.links != 0)
-                        && (node.commit_dirty
-                            || self.dirty.contains(id)
-                            || node.canonical.is_none()))
-            })
-            .count() as u64;
+        // This adapter is exclusively for a semantically selected final root;
+        // ordinary construction supplies its own affected-node handoff.
+        if !selected {
+            return Err(StorageError::Integrity("selected handoff proof"));
+        }
+        let records = self.nodes.len() as u64;
         let bytes = records
             .checked_mul(HANDOFF_RECORD_BYTES)
             .ok_or(StorageError::Integrity("handoff size"))?;
@@ -654,11 +685,9 @@ impl Workspace {
         let mut file = std::io::BufWriter::with_capacity(buffer_capacity, file);
         let namespace = layerfs_content::filesystem::namespace(objects, root)?;
         let inodes = InodeTableRoot(namespace.inode_table_root);
-        for (&node, _) in self.nodes.iter().filter(|(id, node)| {
-            selected
-                || ((!node.paths.is_empty() || node.links != 0)
-                    && (node.commit_dirty || self.dirty.contains(id) || node.canonical.is_none()))
-        }) {
+        for &node in self.nodes.keys() {
+            self.commit_scan_visits
+                .set(self.commit_scan_visits.get().saturating_add(1));
             let inode =
                 if self.nodes[&node].canonical.is_none() && self.nodes[&node].paths.is_empty() {
                     None
@@ -822,10 +851,23 @@ impl Workspace {
         if pinned.branch.head_commit_id != expected_head || pinned.root != expected_root {
             return Err(StorageError::Integrity("committed Workspace head"));
         }
-        let handoff = self
+        let mut handoff = self
             .commit_handoff
-            .as_mut()
+            .take()
             .ok_or(StorageError::Integrity("missing Commit handoff"))?;
+        let result = self.install_committed(&mut handoff, pinned, expected_head);
+        if result.is_err() {
+            self.commit_handoff = Some(handoff);
+        }
+        result
+    }
+
+    fn install_committed(
+        &mut self,
+        handoff: &mut CommitHandoff,
+        pinned: layerfs_layerstack_store::PinnedSnapshot,
+        expected_head: Option<layerfs_layerstack_store::CommitId>,
+    ) -> Result<()> {
         if handoff.generation != self.mutation_generation
             || handoff.base_root != self.base_root
             || handoff.root != pinned.root
@@ -841,6 +883,8 @@ impl Workspace {
         for _ in 0..handoff.records {
             let mut bytes = [0; HANDOFF_RECORD_BYTES as usize];
             handoff.file.read_exact(&mut bytes)?;
+            self.commit_scan_visits
+                .set(self.commit_scan_visits.get().saturating_add(1));
             let node = NodeId(u64::from_be_bytes(bytes[..8].try_into().unwrap()));
             if bytes[100] == 0 {
                 let old = self
@@ -849,13 +893,13 @@ impl Workspace {
                     .ok_or(StorageError::Integrity("handoff Workspace node"))?;
                 old.paths.clear();
                 old.links = 0;
-                old.commit_dirty = false;
                 if matches!(old.data, Data::Directory(_)) {
                     self.directory_parents.remove(&node);
                 }
                 if let Some(inode) = old.canonical.take() {
                     self.canonical_nodes.remove(&inode);
                 }
+                self.track_commit_node(node);
                 continue;
             }
             let inode = InodeId::from_slice(&bytes[8..40])?;
@@ -882,7 +926,6 @@ impl Workspace {
             if handoff.selected && old.paths.is_empty() && matches!(old.data, Data::Directory(_)) {
                 self.directory_parents.remove(&node);
             }
-            old.commit_dirty = false;
             old.mode = u32::from_be_bytes(bytes[80..84].try_into().unwrap());
             old.links = u32::from_be_bytes(bytes[84..88].try_into().unwrap());
             old.mtime_seconds = i64::from_be_bytes(bytes[88..96].try_into().unwrap());
@@ -913,46 +956,38 @@ impl Workspace {
             if self.canonical_nodes.insert(inode, node).is_none() {
                 handoff.new_canonical = handoff.new_canonical.saturating_sub(1);
             }
+            self.cleanup_committed_spool(node)?;
+            self.untrack_commit_node(node);
         }
-        // Retain open-unlinked backing; drop only reachability from the new
-        // snapshot. Descriptors for obsolete linked spools stay owned until all
-        // cleanup succeeds, so a partial cleanup failure can be retried safely.
-        for (&node, value) in &self.nodes {
-            if (!matches!(value.data, Data::File(FileData::Edited { .. }))
-                || (value.links == 0 && value.pins == 0))
-                && self.open_spools.contains_key(&node)
-            {
-                let path = self.spool.join(node.0.to_string());
-                match std::fs::metadata(&path) {
-                    Ok(metadata) => self.physical_spool.borrow_mut().observe(node, &metadata),
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                        self.physical_spool.borrow_mut().removed(node);
-                        continue;
-                    }
-                    Err(error) => return Err(error.into()),
-                }
-                std::fs::remove_file(path)?;
-                self.physical_spool.borrow_mut().removed(node);
-            }
-        }
-        self.open_spools.retain(|node, _| {
-            self.nodes.get(node).is_some_and(|node| {
-                (node.links != 0 || node.pins != 0)
-                    && matches!(node.data, Data::File(FileData::Edited { .. }))
-            })
-        });
-        self.nodes
-            .retain(|id, node| *id == crate::ROOT || node.links != 0 || node.pins != 0);
+        // Only unlinked ghosts remain in the ordinary mutation list. Their
+        // backing stays alive through repeated Commits until the final unpin.
         let mut retained_spool = 0_u64;
         let mut retained_inline = 0_u64;
         let mut retained_pieces = 0_u64;
-        for value in self
-            .nodes
-            .values_mut()
-            .filter(|node| node.paths.is_empty() && node.links == 0)
-        {
+        let mut next = self.commit_head;
+        let mut remaining = self.commit_tracked;
+        while next != NodeId(0) {
+            if remaining == 0 {
+                return Err(StorageError::Integrity("Commit mutation list"));
+            }
+            remaining -= 1;
+            let id = next;
+            let value = self
+                .nodes
+                .get_mut(&id)
+                .ok_or(StorageError::Integrity("Commit tracked node"))?;
+            next = value.commit_next;
+            self.commit_scan_visits
+                .set(self.commit_scan_visits.get().saturating_add(1));
+            if value.links != 0 && !matches!(value.data, Data::Directory(_)) {
+                return Err(StorageError::Integrity("uninstalled Commit node"));
+            }
             if let Some(inode) = value.canonical.take() {
                 self.canonical_nodes.remove(&inode);
+            }
+            if value.pins == 0 {
+                self.cleanup_committed_spool(id)?;
+                continue;
             }
             if let Data::File(FileData::Edited {
                 spool_high_water,
@@ -966,10 +1001,23 @@ impl Workspace {
             }
         }
         self.references.clear()?;
-        if let Some(removed) = self.commit_handoff.as_mut().unwrap().removed.take() {
+        if let Some(removed) = handoff.removed.take() {
             removed.index.remove()?;
         }
-        let inodes = self.commit_handoff.as_ref().unwrap().inodes;
+        // Reclaim only after every fallible installation/cleanup step: an
+        // earlier failure must leave every handoff NodeId available for replay.
+        let mut next = self.commit_head;
+        while next != NodeId(0) {
+            let id = next;
+            let value = &self.nodes[&id];
+            next = value.commit_next;
+            self.commit_scan_visits
+                .set(self.commit_scan_visits.get().saturating_add(1));
+            if value.pins == 0 {
+                self.reclaim(id);
+            }
+        }
+        let inodes = handoff.inodes;
         self.reader = pinned.reader.with_read_metrics_from(&self.reader);
         self.expected_head = expected_head;
         self.expected_base = pinned.branch.base_layer_id;
@@ -986,6 +1034,24 @@ impl Workspace {
         self.resolution = None;
         self.state = WorkspaceState::Active;
         self.commit_handoff = None;
+        Ok(())
+    }
+
+    fn cleanup_committed_spool(&mut self, node: NodeId) -> Result<()> {
+        if !self.open_spools.contains_key(&node) {
+            return Ok(());
+        }
+        let path = self.spool.join(node.0.to_string());
+        match std::fs::metadata(&path) {
+            Ok(metadata) => {
+                self.physical_spool.borrow_mut().observe(node, &metadata);
+                std::fs::remove_file(path)?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        self.physical_spool.borrow_mut().removed(node);
+        self.open_spools.remove(&node);
         Ok(())
     }
 

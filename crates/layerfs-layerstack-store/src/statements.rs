@@ -107,7 +107,7 @@ pub mod query {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusqlite::{params_from_iter, types::Value, Connection};
+    use rusqlite::{Connection, params_from_iter, types::Value};
     use std::collections::{BTreeMap, BTreeSet};
 
     #[test]

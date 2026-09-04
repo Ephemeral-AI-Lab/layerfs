@@ -189,6 +189,15 @@ pub struct WorkspaceCommitDiagnostics {
     pub handoff_inode_pages_read: u64,
     pub handoff_binding_checks: u64,
     pub handoff_prepare_ns: u64,
+    /// Mutation mark time overlaps reference_bookkeeping_ns for reference edits.
+    pub commit_mark_calls: u64,
+    pub commit_mark_ns: u64,
+    /// Actual nodes visited by tracked input, handoff count, and installation.
+    pub commit_node_visits: u64,
+    /// Two intrusive NodeId links per live materialized Node (no heap list).
+    pub commit_tracking_live_field_bytes: u64,
+    /// HashMap entry capacity; allocator overhead is not inferred from this.
+    pub commit_tracking_node_map_capacity: u64,
 }
 
 impl WorkspaceCommitReceipt {
@@ -426,6 +435,18 @@ pub fn note_workspace_namespace_visits(
             diagnostic.namespace_candidate_probe_nodes = diagnostic
                 .namespace_candidate_probe_nodes
                 .saturating_add(probes);
+        }
+    });
+}
+
+pub fn note_workspace_commit_tracking(calls: u64, ns: u64, visits: u64, bytes: u64, capacity: u64) {
+    WORKSPACE_COMMIT_DIAGNOSTIC.with(|current| {
+        if let Some(diagnostic) = current.borrow_mut().as_mut() {
+            diagnostic.commit_mark_calls = calls;
+            diagnostic.commit_mark_ns = ns;
+            diagnostic.commit_node_visits = visits;
+            diagnostic.commit_tracking_live_field_bytes = bytes;
+            diagnostic.commit_tracking_node_map_capacity = capacity;
         }
     });
 }

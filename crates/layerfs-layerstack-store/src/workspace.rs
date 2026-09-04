@@ -679,6 +679,9 @@ impl SnapshotReader {
 }
 
 impl ObjectSource for SnapshotReader {
+    fn candidate_cleanup(&self) -> Option<crate::objects::CandidateCleanup> {
+        Some(crate::objects::CandidateCleanup(self.db.clone()))
+    }
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
         let started = Instant::now();
         if let Some(bytes) = self.cached_object(id)? {

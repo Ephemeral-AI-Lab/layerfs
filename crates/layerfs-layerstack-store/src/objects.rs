@@ -3,14 +3,14 @@ use layerfs_content::filesystem::{self, ContentChange, ReconcileConflict};
 use layerfs_content::object::access::{ObjectRead, ObjectStore};
 use layerfs_content::object::references::referenced_objects;
 use layerfs_content::{CoreError, CoreResult, ObjectId};
-use rusqlite::{params_from_iter, types::Value, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params_from_iter, types::Value};
 #[cfg(test)]
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 pub const OBJECT_PAGE_COUNT: usize = 128;
@@ -23,6 +23,18 @@ pub(crate) const INITIALIZATION_SLAB_OBJECTS: usize = 512;
 pub(crate) const INITIALIZATION_SLAB_QUEUE_SLOTS: usize = 4;
 pub(crate) const INITIALIZATION_TASK_STRUCTURAL_BYTES: usize = 256 * 1024;
 const CANDIDATE_MEMORY_BYTES: usize = 8 * 1024 * 1024;
+// Registration nodes and their owned temporary names share the existing index
+// allowance. At most six candidate/seen/order/index names are simultaneously
+// attributable to one construction/admission owner, each below one path page.
+const CANDIDATE_CLEANUP_RESERVE_BYTES: usize = 64 * 1024;
+fn candidate_index_limit(cleanup: Option<&CandidateCleanup>) -> usize {
+    CANDIDATE_INDEX_BYTES
+        - if cleanup.is_some() {
+            CANDIDATE_CLEANUP_RESERVE_BYTES
+        } else {
+            0
+        }
+}
 const CANDIDATE_INDEX_BYTES: usize = 64 * 1024 * 1024;
 const CANDIDATE_SPILL_BUFFER_BYTES: usize = 1024 * 1024;
 
@@ -472,7 +484,16 @@ impl ObjectStore for InitializationSlabWriter {
     }
 }
 
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct CandidateCleanup(pub(crate) crate::schema::StoreDb);
+
 pub trait ObjectSource: Send + Sync {
+    #[doc(hidden)]
+    fn candidate_cleanup(&self) -> Option<CandidateCleanup> {
+        None
+    }
+
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>>;
 
     fn read_authenticated_objects(&self, ids: &[ObjectId]) -> Result<Vec<CanonicalObject>> {
@@ -664,6 +685,7 @@ pub(crate) fn apply_reconcile_choices_bounded(
 }
 
 pub struct DeferredObjectStore {
+    cleanup: Option<CandidateCleanup>,
     storage: DeferredObjects,
     reachable: IdOrder,
     references: Option<BTreeMap<ObjectId, Vec<ObjectId>>>,
@@ -795,6 +817,7 @@ enum DeferredObjects {
 }
 
 struct SpillObjects {
+    cleanup: Option<CandidateCleanup>,
     writer: Option<std::fs::File>,
     reader: Mutex<std::fs::File>,
     path: PathBuf,
@@ -814,25 +837,56 @@ struct SpillDiskIndex {
     _path: TempPath,
 }
 
-impl Drop for SpillObjects {
-    fn drop(&mut self) {
-        if !self.path.as_os_str().is_empty() {
-            let _ = std::fs::remove_file(&self.path);
-        }
-    }
-}
-
 enum IdOrder {
     Memory(Vec<ObjectId>),
     Spill { file: std::fs::File, path: TempPath },
 }
 
-struct TempPath(PathBuf);
+struct TempPath(
+    PathBuf,
+    Option<(CandidateCleanup, Box<crate::schema::CandidateCleanupNode>)>,
+);
+impl TempPath {
+    fn unowned(path: PathBuf) -> Self {
+        Self(path, None)
+    }
+    fn unlink(&mut self) -> Result<()> {
+        if self.0.as_os_str().is_empty() {
+            return Ok(());
+        }
+        match std::fs::remove_file(&self.0) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        self.0.clear();
+        self.1 = None;
+        Ok(())
+    }
+    fn take_cleanup_path(&mut self) -> Option<PathBuf> {
+        if self.0.as_os_str().is_empty() {
+            return None;
+        }
+        let path = std::mem::take(&mut self.0);
+        if let Some((owner, mut node)) = self.1.take() {
+            node.paths[0] = Some(path);
+            owner.0.retain_candidate_cleanup(node);
+            None
+        } else {
+            Some(path)
+        }
+    }
+}
 
 impl Drop for TempPath {
     fn drop(&mut self) {
         if !self.0.as_os_str().is_empty() {
-            let _ = std::fs::remove_file(&self.0);
+            if let Some((owner, mut node)) = self.1.take() {
+                node.paths[0] = Some(std::mem::take(&mut self.0));
+                owner.0.retain_candidate_cleanup(node);
+            } else {
+                let _ = std::fs::remove_file(&self.0);
+            }
         }
     }
 }
@@ -848,7 +902,7 @@ impl AppendOnlyInitializationWriter {
         Ok(Self {
             writer,
             reader,
-            path: TempPath(path),
+            path: TempPath::unowned(path),
             pending: Vec::with_capacity(pending_limit),
             pending_limit,
             end: 0,
@@ -1134,7 +1188,7 @@ impl CompactInodePairWriter {
         Ok(Self {
             writer,
             reader,
-            path: TempPath(path),
+            path: TempPath::unowned(path),
             pending: Vec::with_capacity(pending_limit),
             pending_limit,
             end: 0,
@@ -1419,17 +1473,26 @@ impl IdOrder {
     }
 
     fn push(&mut self, id: ObjectId) -> Result<()> {
-        if matches!(self, Self::Memory(ids) if (ids.len() + 1) * 32 > CANDIDATE_INDEX_BYTES) {
+        self.push_with_cleanup(id, None)
+    }
+
+    fn push_with_cleanup(
+        &mut self,
+        id: ObjectId,
+        cleanup: Option<&CandidateCleanup>,
+    ) -> Result<()> {
+        if matches!(self, Self::Memory(ids) if (ids.len() + 1) * 32 > candidate_index_limit(cleanup))
+        {
             let Self::Memory(ids) = std::mem::replace(self, Self::Memory(Vec::new())) else {
                 unreachable!()
             };
-            let (mut file, path) = temporary_file("candidate-order")?;
+            let (mut file, _, path) = anonymous_candidate_file("candidate-order", cleanup)?;
             for id in ids {
                 file.write_all(id.as_bytes())?;
             }
             *self = Self::Spill {
                 file,
-                path: TempPath(path),
+                path: TempPath::unowned(path),
             };
         }
         match self {
@@ -1464,6 +1527,7 @@ impl IdOrder {
 }
 
 pub struct SpillableObjectSet {
+    cleanup: Option<CandidateCleanup>,
     storage: SeenStorage,
     count: usize,
 }
@@ -1665,7 +1729,11 @@ enum SeenStorage {
 
 impl SpillableObjectSet {
     pub fn empty() -> Result<Self> {
+        Self::with_cleanup(None)
+    }
+    fn with_cleanup(cleanup: Option<CandidateCleanup>) -> Result<Self> {
         Ok(Self {
+            cleanup,
             storage: SeenStorage::Memory(BTreeSet::new()),
             count: 0,
         })
@@ -1674,7 +1742,7 @@ impl SpillableObjectSet {
     pub fn contains(&self, id: ObjectId) -> Result<bool> {
         match &self.storage {
             SeenStorage::Memory(ids) => Ok(ids.contains(&id)),
-            SeenStorage::Spill { path, .. } => scan_id_file(&path.0, id),
+            SeenStorage::Spill { file, .. } => scan_id_file(file, id),
         }
     }
 
@@ -1684,20 +1752,21 @@ impl SpillableObjectSet {
             if self.contains(*id)? {
                 continue;
             }
-            if matches!(&self.storage, SeenStorage::Memory(_) if (self.count + 1) * 48 > CANDIDATE_INDEX_BYTES)
+            if matches!(&self.storage, SeenStorage::Memory(_) if (self.count + 1) * 48 > candidate_index_limit(self.cleanup.as_ref()))
             {
                 let SeenStorage::Memory(known) =
                     std::mem::replace(&mut self.storage, SeenStorage::Memory(BTreeSet::new()))
                 else {
                     unreachable!()
                 };
-                let (mut file, path) = temporary_file("candidate-seen")?;
+                let (mut file, _, path) =
+                    anonymous_candidate_file("candidate-seen", self.cleanup.as_ref())?;
                 for known in known {
                     file.write_all(known.as_bytes())?;
                 }
                 self.storage = SeenStorage::Spill {
                     file,
-                    path: TempPath(path),
+                    path: TempPath::unowned(path),
                 };
             }
             match &mut self.storage {
@@ -1728,6 +1797,7 @@ impl DeferredObjectStore {
 
     fn with_reference_index(reference_index: bool) -> Result<Self> {
         Ok(Self {
+            cleanup: None,
             storage: DeferredObjects::Memory {
                 order: Vec::new(),
                 rows: BTreeMap::new(),
@@ -1783,7 +1853,7 @@ impl DeferredObjectStore {
         let mut count = 0_usize;
         let mut push = |id| {
             if missing.contains(id)? {
-                output.push(id)?;
+                output.push_with_cleanup(id, self.cleanup.as_ref())?;
                 count += 1;
             }
             Ok(())
@@ -1836,12 +1906,12 @@ impl DeferredObjectStore {
                     .disk_index
                     .as_mut()
                     .filter(|index| !index._path.0.as_os_str().is_empty())
-                    .map(|index| std::mem::take(&mut index._path.0)),
+                    .and_then(|index| index._path.take_cleanup_path()),
             ),
         };
         let order = match &mut self.reachable {
             IdOrder::Memory(_) => None,
-            IdOrder::Spill { path, .. } => (!path.0.as_os_str().is_empty()).then(|| std::mem::take(&mut path.0)),
+            IdOrder::Spill { path, .. } => path.take_cleanup_path(),
         };
         [objects, index, order]
     }
@@ -1958,7 +2028,7 @@ impl DeferredObjectStore {
         if let DeferredObjects::Spill(spill) = &mut self.storage {
             spill.flush()?;
         }
-        let mut seen = SpillableObjectSet::empty()?;
+        let mut seen = SpillableObjectSet::with_cleanup(self.cleanup.clone())?;
         seen.insert_page(&[root])?;
         let mut active = BTreeSet::new();
         let mut stack = vec![(root, false)];
@@ -1973,7 +2043,7 @@ impl DeferredObjectStore {
             };
             if expanded {
                 active.remove(&id);
-                order.push(id)?;
+                order.push_with_cleanup(id, self.cleanup.as_ref())?;
                 count += 1;
                 encoded_bytes = encoded_bytes
                     .checked_add(length)
@@ -2018,7 +2088,9 @@ impl DeferredObjectStore {
             return;
         };
         let charge = 64_usize.saturating_add(children.len().saturating_mul(32));
-        if self.reference_bytes.saturating_add(charge) > CANDIDATE_INDEX_BYTES {
+        if self.reference_bytes.saturating_add(charge)
+            > candidate_index_limit(self.cleanup.as_ref())
+        {
             self.references = None;
             self.reference_bytes = 0;
             return;
@@ -2090,7 +2162,8 @@ impl DeferredObjectStore {
             }
             DeferredObjects::Spill(spill) => spill.put(id, &canonical)?,
         }
-        self.reachable.push(id)?;
+        self.reachable
+            .push_with_cleanup(id, self.cleanup.as_ref())?;
         self.count += 1;
         self.encoded_bytes = self
             .encoded_bytes
@@ -2120,9 +2193,10 @@ impl DeferredObjectStore {
         ) else {
             return Ok(());
         };
-        let (file, path) = temporary_file("candidate-objects")?;
-        let reader = std::fs::File::open(&path)?;
+        let (file, reader, path) =
+            anonymous_candidate_file("candidate-objects", self.cleanup.as_ref())?;
         let mut spill = SpillObjects {
+            cleanup: self.cleanup.clone(),
             writer: Some(file),
             reader: Mutex::new(reader),
             path,
@@ -2162,8 +2236,13 @@ impl SpillObjects {
         self.writer = None;
         #[cfg(unix)]
         {
-            std::fs::remove_file(&self.path)?;
-            self.path.clear();
+            if !self.path.as_os_str().is_empty() {
+                std::fs::remove_file(&self.path)?;
+                self.path.clear();
+            }
+            if let Some(index) = &mut self.disk_index {
+                index._path.unlink()?;
+            }
         }
         Ok(())
     }
@@ -2204,7 +2283,7 @@ impl SpillObjects {
             .checked_add(row_len as u64)
             .ok_or(StoreError::Integrity("candidate object length"))?;
         #[cfg(not(test))]
-        let index_limit = CANDIDATE_INDEX_BYTES;
+        let index_limit = candidate_index_limit(self.cleanup.as_ref());
         #[cfg(test)]
         let index_limit = self.index_limit;
         if let Some(index) = &mut self.index {
@@ -2218,8 +2297,11 @@ impl SpillObjects {
                     .reader
                     .lock()
                     .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
-                self.disk_index =
-                    Some(Box::new(SpillDiskIndex::from_spill(&mut reader, self.end)?));
+                self.disk_index = Some(Box::new(SpillDiskIndex::from_spill(
+                    &mut reader,
+                    self.end,
+                    self.cleanup.as_ref(),
+                )?));
             } else {
                 index.insert(id, (start + 40, canonical.len() as u64));
                 self.index_bytes += 64;
@@ -2291,31 +2373,33 @@ impl SpillObjects {
             .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
         file.seek(SeekFrom::Start(0))?;
         let mut canonical = Vec::new();
-        order.visit(|expected| loop {
-            let mut object_id = [0; 32];
-            match file.read_exact(&mut object_id) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    return Err(StoreError::MissingObject(expected));
+        order.visit(|expected| {
+            loop {
+                let mut object_id = [0; 32];
+                match file.read_exact(&mut object_id) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
+                        return Err(StoreError::MissingObject(expected));
+                    }
+                    Err(error) => return Err(error.into()),
                 }
-                Err(error) => return Err(error.into()),
-            }
-            let mut length = [0; 8];
-            file.read_exact(&mut length)?;
-            let length = usize::try_from(u64::from_le_bytes(length))
-                .map_err(|_| StoreError::Integrity("candidate object length"))?;
-            if object_id == *expected.as_bytes() {
-                if length > OBJECT_PAGE_BYTES {
-                    return Err(StoreError::InvalidInput("candidate object page"));
+                let mut length = [0; 8];
+                file.read_exact(&mut length)?;
+                let length = usize::try_from(u64::from_le_bytes(length))
+                    .map_err(|_| StoreError::Integrity("candidate object length"))?;
+                if object_id == *expected.as_bytes() {
+                    if length > OBJECT_PAGE_BYTES {
+                        return Err(StoreError::InvalidInput("candidate object page"));
+                    }
+                    canonical.resize(length, 0);
+                    file.read_exact(&mut canonical)?;
+                    return visitor(expected, &mut canonical);
                 }
-                canonical.resize(length, 0);
-                file.read_exact(&mut canonical)?;
-                return visitor(expected, &mut canonical);
+                file.seek(SeekFrom::Current(
+                    i64::try_from(length)
+                        .map_err(|_| StoreError::Integrity("candidate object length"))?,
+                ))?;
             }
-            file.seek(SeekFrom::Current(
-                i64::try_from(length)
-                    .map_err(|_| StoreError::Integrity("candidate object length"))?,
-            ))?;
         })
     }
 
@@ -2358,9 +2442,12 @@ impl SpillObjects {
 }
 
 impl SpillDiskIndex {
-    fn from_spill(file: &mut std::fs::File, end: u64) -> Result<Self> {
-        let (temporary, path) = temporary_file("candidate-index")?;
-        let path = TempPath(path);
+    fn from_spill(
+        file: &mut std::fs::File,
+        end: u64,
+        cleanup: Option<&CandidateCleanup>,
+    ) -> Result<Self> {
+        let (temporary, path) = named_candidate_file("candidate-index", cleanup)?;
         drop(temporary);
         let mut connection = Connection::open(&path.0)?;
         // Derived, private scratch state: no persistent Store policy changes.
@@ -2464,7 +2551,11 @@ impl<'a> ObjectBuffer<'a> {
     pub fn new(source: &'a dyn ObjectSource) -> Result<Self> {
         Ok(Self {
             source: Some(source),
-            objects: DeferredObjectStore::new()?,
+            objects: {
+                let mut objects = DeferredObjectStore::new()?;
+                objects.cleanup = source.candidate_cleanup();
+                objects
+            },
         })
     }
 
@@ -2574,12 +2665,18 @@ impl ObjectStore for ObjectBuffer<'_> {
 }
 
 impl ObjectSource for ObjectBuffer<'_> {
+    fn candidate_cleanup(&self) -> Option<CandidateCleanup> {
+        self.objects.cleanup.clone()
+    }
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
         ObjectStore::get(self, id).map_err(StoreError::from)
     }
 }
 
 impl ObjectSource for DeferredObjectStore {
+    fn candidate_cleanup(&self) -> Option<CandidateCleanup> {
+        self.cleanup.clone()
+    }
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
         self.get(id)?.ok_or(StoreError::MissingObject(id))
     }
@@ -2607,6 +2704,9 @@ pub(crate) fn combine_candidates(
     candidates: &[&DeferredObjectStore],
 ) -> Result<DeferredObjectStore> {
     let mut combined = DeferredObjectStore::new()?;
+    combined.cleanup = candidates
+        .iter()
+        .find_map(|candidate| candidate.cleanup.clone());
     for candidate in candidates {
         candidate.visit_batches(&mut |batch, _| {
             for object in batch {
@@ -2618,11 +2718,52 @@ pub(crate) fn combine_candidates(
     combined.reachable_from(root_id)
 }
 
+// Reserve registration ownership before creating a named file. Raw candidate
+// files become anonymous before their first write; only mutable SQLite indexes
+// retain this token until checked seal-time unlink.
+fn named_candidate_file(
+    label: &str,
+    cleanup: Option<&CandidateCleanup>,
+) -> Result<(std::fs::File, TempPath)> {
+    let owner = cleanup.map(|owner| (owner.clone(), crate::schema::CandidateCleanupNode::empty()));
+    let (file, path) = temporary_file_with_reservation(label, cleanup.is_some())?;
+    Ok((file, TempPath(path, owner)))
+}
+fn anonymous_candidate_file(
+    label: &str,
+    cleanup: Option<&CandidateCleanup>,
+) -> Result<(std::fs::File, std::fs::File, PathBuf)> {
+    let (writer, mut path) = named_candidate_file(label, cleanup)?;
+    let reader = std::fs::File::open(&path.0)?;
+    path.unlink()?;
+    Ok((writer, reader, PathBuf::new()))
+}
+
 fn temporary_file(label: &str) -> Result<(std::fs::File, PathBuf)> {
+    temporary_file_with_reservation(label, false)
+}
+fn temporary_file_with_reservation(label: &str, owned: bool) -> Result<(std::fs::File, PathBuf)> {
     static SERIAL: AtomicU64 = AtomicU64::new(0);
     let directory = std::env::temp_dir();
+    // Two exact path buffers (directory plus constructed name), one short name
+    // string and the preallocated queue node fit each of six reserved shares.
+    let path_capacity = directory
+        .as_os_str()
+        .len()
+        .saturating_add(label.len())
+        .saturating_add(64);
+    if owned
+        && path_capacity
+            .saturating_mul(2)
+            .saturating_add(std::mem::size_of::<crate::schema::CandidateCleanupNode>() + 128)
+            > CANDIDATE_CLEANUP_RESERVE_BYTES / 6
+    {
+        return Err(StoreError::InvalidInput("candidate cleanup path capacity"));
+    }
     for _ in 0..32 {
-        let path = directory.join(format!(
+        let mut path = PathBuf::with_capacity(path_capacity);
+        path.push(&directory);
+        path.push(format!(
             "layerfs-{label}-{}-{}",
             std::process::id(),
             SERIAL.fetch_add(1, Ordering::Relaxed)
@@ -2647,13 +2788,14 @@ fn elapsed_ns(started: Instant) -> u64 {
     started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
 }
 
-fn scan_id_file(path: &std::path::Path, id: ObjectId) -> Result<bool> {
-    let mut file = std::fs::File::open(path)?;
+fn scan_id_file(file: &std::fs::File, id: ObjectId) -> Result<bool> {
+    use std::os::unix::fs::FileExt;
     let mut bytes = [0; 32];
+    let mut offset = 0;
     loop {
-        match file.read_exact(&mut bytes) {
+        match file.read_exact_at(&mut bytes, offset) {
             Ok(()) if bytes == *id.as_bytes() => return Ok(true),
-            Ok(()) => {}
+            Ok(()) => offset += 32,
             Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(false),
             Err(error) => return Err(error.into()),
         }
@@ -2711,7 +2853,7 @@ impl crate::schema::StoreDb {
 
     pub(crate) fn plan_candidate(&self, objects: &DeferredObjectStore) -> Result<CandidatePlan> {
         let mut plan = CandidatePlan {
-            missing: SpillableObjectSet::empty()?,
+            missing: SpillableObjectSet::with_cleanup(Some(CandidateCleanup(self.clone())))?,
             missing_order: IdOrder::empty(),
             all_missing: false,
             candidate_objects: 0,
@@ -2767,7 +2909,7 @@ impl crate::schema::StoreDb {
             return self.plan_candidate(objects);
         }
         Ok(CandidatePlan {
-            missing: SpillableObjectSet::empty()?,
+            missing: SpillableObjectSet::with_cleanup(Some(CandidateCleanup(self.clone())))?,
             missing_order: IdOrder::empty(),
             all_missing: true,
             candidate_objects: objects.len(),
@@ -3226,11 +3368,11 @@ pub(crate) fn admit_planned_objects(
     let [objects_path, index_path, order_path] = objects.take_cleanup_paths();
     let missing_path = match &mut plan.missing.storage {
         SeenStorage::Memory(_) => None,
-        SeenStorage::Spill { path, .. } => Some(std::mem::take(&mut path.0)),
+        SeenStorage::Spill { path, .. } => path.take_cleanup_path(),
     };
     let missing_order_path = match &mut plan.missing_order {
         IdOrder::Memory(_) => None,
-        IdOrder::Spill { path, .. } => Some(std::mem::take(&mut path.0)),
+        IdOrder::Spill { path, .. } => path.take_cleanup_path(),
     };
     db.cleanup_candidate_paths([
         objects_path,
@@ -3616,6 +3758,9 @@ pub(crate) fn insert_initialization_segment_batch(
 }
 
 impl ObjectSource for crate::schema::StoreDb {
+    fn candidate_cleanup(&self) -> Option<CandidateCleanup> {
+        Some(CandidateCleanup(self.clone()))
+    }
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
         self.read_object_row(id)
     }
@@ -4411,8 +4556,116 @@ mod tests {
     }
 
     #[test]
+    fn construction_flush_and_index_failures_keep_only_owned_cleanup() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-construction-cleanup-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let db = crate::schema::StoreDb::create(root.join("store.sqlite")).unwrap();
+        let cleanup = CandidateCleanup(db.clone());
+        let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
+        objects.cleanup = Some(cleanup.clone());
+        let first = layerfs_content::encode_bytes_object(b"first").unwrap();
+        objects
+            .put_owned(ObjectId::for_bytes(&first), first)
+            .unwrap();
+        objects.spill().unwrap();
+        let DeferredObjects::Spill(spill) = &mut objects.storage else {
+            unreachable!()
+        };
+        assert!(
+            spill.path.as_os_str().is_empty(),
+            "raw payload was anonymous before first flush"
+        );
+        spill.writer = None; // deterministic flush failure before seal/reachability
+        assert!(matches!(
+            spill.flush(),
+            Err(StoreError::Integrity("sealed candidate spool"))
+        ));
+        drop(objects);
+        assert!(db.candidate_cleanup_paths_for_test().is_empty());
+
+        let (mut malformed, _, _) =
+            anonymous_candidate_file("index-failure-input", Some(&cleanup)).unwrap();
+        malformed.write_all(&[0; 32]).unwrap();
+        malformed.write_all(&100_u64.to_le_bytes()).unwrap();
+        let failed = SpillDiskIndex::from_spill(&mut malformed, 40, Some(&cleanup));
+        assert!(matches!(
+            failed,
+            Err(StoreError::Integrity("candidate index frame bounds"))
+        ));
+        let paths = db.candidate_cleanup_paths_for_test();
+        assert_eq!(
+            paths.len(),
+            1,
+            "failed mutable SQLite backfill retains its exact named source"
+        );
+        assert!(paths[0].exists());
+        db.retry_candidate_cleanup().unwrap();
+        assert!(!paths[0].exists());
+        drop(db);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn initial_unlink_failure_and_many_owners_transfer_without_global_slot_limit() {
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-unlink-cleanup-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let db = crate::schema::StoreDb::create(root.join("store.sqlite")).unwrap();
+        let cleanup = CandidateCleanup(db.clone());
+        let (file, mut path) =
+            named_candidate_file("initial-unlink-failure", Some(&cleanup)).unwrap();
+        let name = path.0.clone();
+        let held = root.join("held");
+        std::fs::rename(&name, &held).unwrap();
+        std::fs::create_dir(&name).unwrap();
+        assert!(path.unlink().is_err());
+        drop(file);
+        drop(path);
+        assert_eq!(db.candidate_cleanup_paths_for_test(), vec![name.clone()]);
+        assert!(db.enter_operation().is_err());
+        std::fs::remove_dir(&name).unwrap();
+        std::fs::rename(&held, &name).unwrap();
+        db.retry_candidate_cleanup().unwrap();
+        assert!(!name.exists());
+        let owners = (0..8)
+            .map(|_| named_candidate_file("independent-owner", Some(&cleanup)).unwrap())
+            .collect::<Vec<_>>();
+        let names = owners
+            .iter()
+            .map(|(_, path)| path.0.clone())
+            .collect::<Vec<_>>();
+        drop(owners); // registration uses the nodes allocated before each create
+        assert_eq!(db.candidate_cleanup_paths_for_test().len(), 8);
+        db.retry_candidate_cleanup().unwrap();
+        assert!(names.iter().all(|name| !name.exists()));
+        assert!(db.candidate_cleanup_paths_for_test().is_empty());
+        drop(db);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn immutable_source_checked_unlink_retains_index_and_order_reads_after_retry() {
-        let root = std::env::temp_dir().join(format!("layerfs-source-cleanup-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let root = std::env::temp_dir().join(format!(
+            "layerfs-source-cleanup-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&root).unwrap();
         let db = crate::schema::StoreDb::create(root.join("store.sqlite")).unwrap();
         let mut objects = DeferredObjectStore::new_all_reachable().unwrap();
@@ -4421,13 +4674,25 @@ mod tests {
         let ids = [ObjectId::for_bytes(&first), ObjectId::for_bytes(&second)];
         objects.put_owned(ids[0], first.clone()).unwrap();
         objects.spill().unwrap();
-        if let DeferredObjects::Spill(spill) = &mut objects.storage { spill.index_limit = 0; }
+        if let DeferredObjects::Spill(spill) = &mut objects.storage {
+            spill.index_limit = 0;
+        }
         objects.put_owned(ids[1], second.clone()).unwrap();
         let mut objects = objects.all_reachable().unwrap();
         let order_path = root.join("source-order");
-        let mut order = std::fs::OpenOptions::new().create_new(true).read(true).write(true).open(&order_path).unwrap();
-        for id in ids { order.write_all(id.as_bytes()).unwrap(); }
-        objects.reachable = IdOrder::Spill { file: order, path: TempPath(order_path.clone()) };
+        let mut order = std::fs::OpenOptions::new()
+            .create_new(true)
+            .read(true)
+            .write(true)
+            .open(&order_path)
+            .unwrap();
+        for id in ids {
+            order.write_all(id.as_bytes()).unwrap();
+        }
+        objects.reachable = IdOrder::Spill {
+            file: order,
+            path: TempPath::unowned(order_path.clone()),
+        };
         let held = root.join("held-order");
         std::fs::rename(&order_path, &held).unwrap();
         std::fs::create_dir(&order_path).unwrap();
@@ -4435,13 +4700,23 @@ mod tests {
             let _operation = db.enter_operation().unwrap();
             assert!(objects.unlink_private(&db).is_err());
         }
-        assert!(db.enter_operation().is_err(), "failed private cleanup must block the next Store operation");
+        assert!(
+            db.enter_operation().is_err(),
+            "failed private cleanup must block the next Store operation"
+        );
         // The disk-index name is gone; evict SQLite's private pager cache so
         // these reads exercise its retained descriptor, not only cached rows.
-        let DeferredObjects::Spill(spill) = &objects.storage else { unreachable!() };
+        let DeferredObjects::Spill(spill) = &objects.storage else {
+            unreachable!()
+        };
         let index = spill.disk_index.as_ref().expect("forced disk index");
         assert!(index._path.0.as_os_str().is_empty());
-        index.connection.lock().unwrap().execute_batch("PRAGMA shrink_memory").unwrap();
+        index
+            .connection
+            .lock()
+            .unwrap()
+            .execute_batch("PRAGMA shrink_memory")
+            .unwrap();
         assert_eq!(objects.get(ids[0]).unwrap(), Some(first));
         assert_eq!(objects.get(ids[1]).unwrap(), Some(second));
         std::fs::remove_dir(&order_path).unwrap();
@@ -4452,12 +4727,27 @@ mod tests {
             objects.unlink_private(&db).unwrap(); // idempotent after failed-owner retry
         }
         let mut observed = Vec::new();
-        objects.reachable.visit(|id| { observed.push(id); Ok(()) }).unwrap();
+        objects
+            .reachable
+            .visit(|id| {
+                observed.push(id);
+                Ok(())
+            })
+            .unwrap();
         assert_eq!(observed, ids);
         assert!(!order_path.exists());
-        let persisted: i64 = db.reader().unwrap().query_row("SELECT count(*) FROM objects", [], |row| row.get(0)).unwrap();
-        assert_eq!(persisted, 0, "source cleanup must not admit or publish objects");
-        drop(objects); drop(db); std::fs::remove_dir_all(root).unwrap();
+        let persisted: i64 = db
+            .reader()
+            .unwrap()
+            .query_row("SELECT count(*) FROM objects", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            persisted, 0,
+            "source cleanup must not admit or publish objects"
+        );
+        drop(objects);
+        drop(db);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -4651,8 +4941,24 @@ mod tests {
             DeferredObjects::Memory { .. } => panic!("candidate did not spill"),
         };
         assert_eq!(
-            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            match &objects.storage {
+                DeferredObjects::Spill(spill) =>
+                    spill
+                        .reader
+                        .lock()
+                        .unwrap()
+                        .metadata()
+                        .unwrap()
+                        .permissions()
+                        .mode()
+                        & 0o777,
+                _ => unreachable!(),
+            },
             0o600
+        );
+        assert!(
+            path.as_os_str().is_empty(),
+            "payload is anonymous before any flush can fail"
         );
 
         let root = root.unwrap();
@@ -4806,9 +5112,10 @@ mod tests {
                 cloned_bytes: first.len() as u64,
             }
         );
-        assert!(db
-            .read_object_rows(&[ObjectId::for_bytes(b"missing")])
-            .is_err());
+        assert!(
+            db.read_object_rows(&[ObjectId::for_bytes(b"missing")])
+                .is_err()
+        );
         assert!(db.read_object_rows(&[corrupt_id]).is_err());
 
         struct Claimed(Vec<CanonicalObject>);
@@ -4831,25 +5138,31 @@ mod tests {
                 bytes: first.clone(),
             },
         ]);
-        assert!(CoreReader(&reversed)
-            .get_authenticated_batch(&[first_id, second_id], |_, _| Ok(()))
-            .is_err());
+        assert!(
+            CoreReader(&reversed)
+                .get_authenticated_batch(&[first_id, second_id], |_, _| Ok(()))
+                .is_err()
+        );
         let short = Claimed(vec![CanonicalObject {
             id: first_id,
             bytes: first,
         }]);
-        assert!(CoreReader(&short)
-            .get_authenticated_batch(&[first_id, second_id], |_, _| Ok(()))
-            .is_err());
+        assert!(
+            CoreReader(&short)
+                .get_authenticated_batch(&[first_id, second_id], |_, _| Ok(()))
+                .is_err()
+        );
         struct Untrusted(Vec<u8>);
         impl ObjectSource for Untrusted {
             fn read_object(&self, _: ObjectId) -> Result<Vec<u8>> {
                 Ok(self.0.clone())
             }
         }
-        assert!(CoreReader(&Untrusted(second))
-            .get_authenticated_batch(&[corrupt_id], |_, _| Ok(()))
-            .is_err());
+        assert!(
+            CoreReader(&Untrusted(second))
+                .get_authenticated_batch(&[corrupt_id], |_, _| Ok(()))
+                .is_err()
+        );
 
         drop(db);
         std::fs::remove_dir_all(root).unwrap();

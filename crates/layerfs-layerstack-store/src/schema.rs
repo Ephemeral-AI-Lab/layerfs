@@ -69,8 +69,24 @@ struct StoreInner {
     connection: Mutex<Connection>,
     gate: TicketGate,
     leases: Mutex<BTreeSet<BranchId>>,
-    candidate_cleanup: Mutex<[Option<PathBuf>; 5]>,
+    candidate_cleanup: Mutex<Option<Box<CandidateCleanupNode>>>,
     path: PathBuf,
+}
+
+// A node is allocated while its candidate still owns its existing scratch
+// reservation, before any named file is created. Failure transfers that same
+// allocation here; queueing in Drop never allocates or loses a path.
+pub(crate) struct CandidateCleanupNode {
+    pub(crate) paths: [Option<PathBuf>; 5],
+    next: Option<Box<CandidateCleanupNode>>,
+}
+impl CandidateCleanupNode {
+    pub(crate) fn empty() -> Box<Self> {
+        Box::new(Self {
+            paths: std::array::from_fn(|_| None),
+            next: None,
+        })
+    }
 }
 
 struct CreatedStoreFile {
@@ -207,7 +223,7 @@ impl StoreDb {
             connection: Mutex::new(connection),
             gate: TicketGate::default(),
             leases: Mutex::new(BTreeSet::new()),
-            candidate_cleanup: Mutex::new(std::array::from_fn(|_| None)),
+            candidate_cleanup: Mutex::new(None),
             path,
         }));
         if let Some(created) = &mut created {
@@ -226,16 +242,23 @@ impl StoreDb {
         Ok(permit)
     }
 
-    pub(crate) fn cleanup_candidate_paths(&self, paths: [Option<PathBuf>; 5]) -> Result<()> {
+    pub(crate) fn retain_candidate_cleanup(&self, mut node: Box<CandidateCleanupNode>) {
         let mut pending = self
             .0
             .candidate_cleanup
             .lock()
-            .map_err(|_| StoreError::Integrity("candidate cleanup ownership"))?;
-        // The operation gate drained the previous candidate before this one began.
-        debug_assert!(pending.iter().all(Option::is_none));
-        *pending = paths;
-        Self::drain_candidate_cleanup(&mut pending)
+            .unwrap_or_else(|e| e.into_inner());
+        node.next = pending.take();
+        *pending = Some(node);
+    }
+
+    pub(crate) fn cleanup_candidate_paths(&self, paths: [Option<PathBuf>; 5]) -> Result<()> {
+        if paths.iter().any(Option::is_some) {
+            let mut node = CandidateCleanupNode::empty();
+            node.paths = paths;
+            self.retain_candidate_cleanup(node);
+        }
+        self.retry_candidate_cleanup()
     }
 
     pub(crate) fn retry_candidate_cleanup(&self) -> Result<()> {
@@ -244,24 +267,42 @@ impl StoreDb {
             .candidate_cleanup
             .lock()
             .map_err(|_| StoreError::Integrity("candidate cleanup ownership"))?;
-        Self::drain_candidate_cleanup(&mut pending)
-    }
-
-    fn drain_candidate_cleanup(pending: &mut [Option<PathBuf>; 5]) -> Result<()> {
+        let mut current = pending.take();
+        let mut retained = None;
         let mut failure = None;
-        for owned in pending {
-            let Some(path) = owned else { continue };
-            match std::fs::remove_file(&path) {
-                Ok(()) => *owned = None,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => *owned = None,
-                Err(error) => {
-                    if failure.is_none() {
-                        failure = Some(error);
+        while let Some(mut node) = current {
+            current = node.next.take();
+            for owned in &mut node.paths {
+                let Some(path) = owned else { continue };
+                match std::fs::remove_file(&path) {
+                    Ok(()) => *owned = None,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => *owned = None,
+                    Err(error) => {
+                        if failure.is_none() {
+                            failure = Some(error);
+                        }
                     }
                 }
             }
+            if node.paths.iter().any(Option::is_some) {
+                node.next = retained.take();
+                retained = Some(node);
+            }
         }
+        *pending = retained;
         failure.map_or(Ok(()), |error| Err(error.into()))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn candidate_cleanup_paths_for_test(&self) -> Vec<PathBuf> {
+        let pending = self.0.candidate_cleanup.lock().unwrap();
+        let mut node = pending.as_deref();
+        let mut paths = Vec::new();
+        while let Some(current) = node {
+            paths.extend(current.paths.iter().flatten().cloned());
+            node = current.next.as_deref();
+        }
+        paths
     }
 
     pub fn acquire_workspace_lease(&self, branch_id: BranchId) -> Result<Option<BranchLease>> {
@@ -438,25 +479,26 @@ mod tests {
         let candidate = root.join("candidate");
         // A directory deterministically fails remove_file even under root in Docker.
         std::fs::create_dir(&candidate).unwrap();
-        assert!(db
-            .cleanup_candidate_paths([Some(candidate.clone()), None, None, None, None])
-            .is_err());
+        assert!(
+            db.cleanup_candidate_paths([Some(candidate.clone()), None, None, None, None])
+                .is_err()
+        );
         assert!(db.enter_operation().is_err());
         assert_eq!(
-            db.0.candidate_cleanup.lock().unwrap()[0].as_ref(),
+            db.0.candidate_cleanup
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .paths[0]
+                .as_ref(),
             Some(&candidate)
         );
         std::fs::remove_dir(&candidate).unwrap();
         std::fs::write(&candidate, b"recovered private artifact").unwrap();
         db.retry_candidate_cleanup().unwrap();
         assert!(!candidate.exists());
-        assert!(db
-            .0
-            .candidate_cleanup
-            .lock()
-            .unwrap()
-            .iter()
-            .all(Option::is_none));
+        assert!(db.0.candidate_cleanup.lock().unwrap().is_none());
         drop(db.enter_operation().unwrap());
         drop(db);
         std::fs::remove_dir_all(root).unwrap();

@@ -408,6 +408,9 @@ impl LayerStackStore {
 }
 
 impl crate::objects::ObjectSource for LayerStackStore {
+    fn candidate_cleanup(&self) -> Option<crate::objects::CandidateCleanup> {
+        Some(crate::objects::CandidateCleanup(self.db.clone()))
+    }
     fn read_object(&self, id: ObjectId) -> Result<Vec<u8>> {
         self.db.read_object_row(id)
     }

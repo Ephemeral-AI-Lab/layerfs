@@ -7,7 +7,6 @@ use std::path::Path;
 
 const RECORD: usize = 41;
 const BUFFER: usize = 1024;
-pub(crate) const MEMORY: u64 = (RECORD * BUFFER) as u64;
 #[derive(Default)]
 pub(crate) struct References {
     pending: Vec<[u8; RECORD]>,
@@ -24,7 +23,11 @@ impl References {
         (self.pending.capacity() * RECORD) as u64
     }
     pub(crate) fn bytes(&self) -> u64 {
-        (self.pending_flush_base.unwrap_or_else(|| self.raw.as_ref().map_or(0, |r| r.count)) + self.pending.len() as u64) * RECORD as u64
+        (self
+            .pending_flush_base
+            .unwrap_or_else(|| self.raw.as_ref().map_or(0, |r| r.count))
+            + self.pending.len() as u64)
+            * RECORD as u64
     }
     pub(crate) fn reserve(&mut self, dir: &Path, disk_limit: u64, memory_limit: u64) -> Result<()> {
         self.repair_failed_flush()?;
@@ -45,16 +48,27 @@ impl References {
                 .map_err(|_| StoreError::InvalidInput("workspace reference allocation"))?;
         }
         self.buffer_peak = self.buffer_peak.max(self.capacity());
-        if self.pending.len() == self.pending.capacity() { self.flush_pending(dir)?; }
+        if self.pending.len() == self.pending.capacity() {
+            self.flush_pending(dir)?;
+        }
         Ok(())
     }
     fn repair_failed_flush(&mut self) -> Result<()> {
         if let Some(before) = self.pending_flush_base {
             #[cfg(test)]
-            if TRUNCATE_FAILURES.with(|n| { let count = n.get(); n.set(count.saturating_sub(1)); count != 0 }) {
-                return Err(StoreError::Io(std::io::Error::other("injected reference truncate failure")));
+            if TRUNCATE_FAILURES.with(|n| {
+                let count = n.get();
+                n.set(count.saturating_sub(1));
+                count != 0
+            }) {
+                return Err(StoreError::Io(std::io::Error::other(
+                    "injected reference truncate failure",
+                )));
             }
-            self.raw.as_mut().ok_or(StoreError::Integrity("reference flush owner"))?.truncate(before)?;
+            self.raw
+                .as_mut()
+                .ok_or(StoreError::Integrity("reference flush owner"))?
+                .truncate(before)?;
             self.pending_flush_base = None;
         }
         Ok(())
@@ -62,22 +76,36 @@ impl References {
 
     fn flush_pending(&mut self, dir: &Path) -> Result<()> {
         self.repair_failed_flush()?;
-        if self.pending.is_empty() { return Ok(()); }
-        if self.raw.is_none() { self.raw = Some(Run::create(dir)?); }
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        if self.raw.is_none() {
+            self.raw = Some(Run::create(dir)?);
+        }
         self.pending_flush_base = Some(self.raw.as_ref().unwrap().count);
         for index in 0..self.pending.len() {
             let record = self.pending[index];
             #[cfg(test)]
             let injected = APPEND_FAILURE_AFTER.with(|remaining| match remaining.get() {
-                Some(0) => { remaining.set(None); true }
-                Some(n) => { remaining.set(Some(n - 1)); false }
+                Some(0) => {
+                    remaining.set(None);
+                    true
+                }
+                Some(n) => {
+                    remaining.set(Some(n - 1));
+                    false
+                }
                 None => false,
             });
             #[cfg(not(test))]
             let injected = false;
             let appended = if injected {
-                Err(StoreError::Io(std::io::Error::other("injected reference append failure")))
-            } else { self.raw.as_mut().unwrap().push(&record) };
+                Err(StoreError::Io(std::io::Error::other(
+                    "injected reference append failure",
+                )))
+            } else {
+                self.raw.as_mut().unwrap().push(&record)
+            };
             if let Err(error) = appended {
                 self.repair_failed_flush()?;
                 return Err(error);
@@ -139,6 +167,7 @@ impl References {
         }
         sorter.finish()
     }
+    #[cfg(test)]
     pub(crate) fn existing_delta(&self, inode: InodeId) -> Result<i64> {
         let wanted = key(Some(inode), NodeId(0));
         let mut total = 0i64;
@@ -203,7 +232,7 @@ impl Workspace {
     }
     pub(crate) fn note_reference(&mut self, node: NodeId, delta: i64) {
         let started = std::time::Instant::now();
-        self.nodes.get_mut(&node).unwrap().commit_dirty = true;
+        self.mark_commit_node(node);
         self.references
             .push(self.nodes[&node].canonical, node, delta);
         self.references.bookkeeping_ns = self
@@ -224,7 +253,8 @@ mod tests {
     use super::*;
     #[test]
     fn failed_append_and_rollback_keep_authoritative_facts_and_retry_exactly_once() {
-        let dir = std::env::temp_dir().join(format!("layerfs-reference-rollback-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("layerfs-reference-rollback-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut refs = References::default();
         let first = InodeId::allocate([41; 32], 1);
@@ -247,14 +277,22 @@ mod tests {
         assert_eq!(refs.pending.len(), 2);
         let mut sorted = refs.sorted(&dir, 4096, 4096).unwrap();
         assert_eq!(refs.pending_flush_base, None);
-        assert_eq!(refs.capacity(), 0, "Commit releases sealed mutation allocation");
+        assert_eq!(
+            refs.capacity(),
+            0,
+            "Commit releases sealed mutation allocation"
+        );
         assert_eq!(refs.raw.as_ref().unwrap().count, 2);
         assert_eq!(refs.existing_delta(first).unwrap(), 1);
         assert_eq!(refs.existing_delta(second).unwrap(), 1);
         let mut records = 0;
-        while let Some(record) = sorted.next().unwrap() { assert_eq!(delta(&record), 1); records += 1; }
+        while let Some(record) = sorted.next().unwrap() {
+            assert_eq!(delta(&record), 1);
+            records += 1;
+        }
         assert_eq!(records, 2);
-        sorted.remove().unwrap(); refs.clear().unwrap();
+        sorted.remove().unwrap();
+        refs.clear().unwrap();
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
         std::fs::remove_dir(dir).unwrap();
     }
