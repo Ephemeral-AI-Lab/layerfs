@@ -119,13 +119,18 @@ def workspace_command(args, assets, evidence):
     build = assets / "evidence" / "build.json"
     if not build.is_file():
         raise ValueError("Workspace assets require a sealed build")
+    proof_case = args.case.endswith("-proof")
     command = [
         sys.executable, str(HERE / "workspace-runner.py"),
         "--family", args.family, "--case", args.case, "--seed", str(args.seed),
         "--source-arm", "baseline" if args.source_arm == "baseline" else "corrected",
-        "--mode", "fast-verify", "--assets", str(assets), "--output", str(evidence),
+        "--mode", "verify" if proof_case else "fast-verify",
+        "--assets", str(assets), "--output", str(evidence),
     ]
-    if args.verification_certificate:
+    if proof_case:
+        if not args.independent_current or args.verification_certificate:
+            raise ValueError("proof verification requires --independent-current")
+    elif args.verification_certificate:
         command += ["--verification-certificate", str(Path(args.verification_certificate).resolve())]
     elif args.independent_current:
         command.append("--fast-no-reuse")
@@ -167,7 +172,7 @@ def workspace_result(evidence, case, seed):
         return None, [], [], None, "incomplete"
     rows = [row for row in json.loads(slots.read_text()).values()
             if row.get("scenario_id") == case and row.get("seed") == seed
-            and row.get("mode") == "fast-verify"]
+            and row.get("mode") == ("verify" if case.endswith("-proof") else "fast-verify")]
     if len(rows) != 1:
         return None, [], [], None, "incomplete"
     row = rows[0]
@@ -249,6 +254,7 @@ def main():
         ).hexdigest()
         receipt = {
             "schema": "layerfs-selected-verification-v1",
+            "companion_sha256": sha256(__file__),
             "status": status,
             "family": args.family,
             "case": args.case,
