@@ -1,0 +1,12 @@
+{
+  "attempt": "attempts/workspace-short-spool-write-proof-s1-verify-65caef92bbd4",
+  "source_revision": "03d4914ee36da6d303ab268e9102519d1755a8e4",
+  "status": "FAIL; required native correctness gate",
+  "expected_error": "4096 write bytes acknowledged, then fsync EIO=5; ShortAppend injection hit exactly once",
+  "backend_rollback": "logical spool bytes and peak remain4096, mutation generation remains29",
+  "failure": "fresh native file type/length mismatch at work/b/fail.dat; expected empty file",
+  "source_cause": "ProxyClient write grows cached length optimistically; synchronize_locked does not clear attribute/read caches when the deferred synchronization reports an error",
+  "remaining_confirmation": "focused protocol regression, then exact real short-spool proof; kernel visibility may need separate confirmation",
+  "cleanup": "Explicit failure Discard and after-client-drop zero-spool observation passed; original pre-cleanup active-spool observation failure is also retained",
+  "acceptance": "No error oracle, metadata/byte check, deadline, or resource gate is weakened"
+}
