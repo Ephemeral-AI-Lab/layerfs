@@ -122,7 +122,7 @@ def _same_identity(old, selected):
             return False
     for key in (
         "seed", "repetition", "source_identity", "input_identity", "setup_identity",
-        "product_identity", "harness_identity", "image_identity",
+        "product_identity", "harness_identity", "image_identity", "topology", "host_executor",
     ):
         old_value = old.get(key, old.get("image") if key == "image_identity" else None)
         selected_value = selected.get(key, selected.get("image") if key == "image_identity" else None)
@@ -182,6 +182,13 @@ def normalize_result(result):
 
 def _bounded_result_fields(result):
     return {
+        "topology": result.get("identities", {}).get("topology"),
+        "host_executor": result.get("identities", {}).get("host_executor"),
+        "image_source_identity": result.get("identities", {}).get("image_source_identity"),
+        "host_environment": result.get("identities", {}).get("host_environment"),
+        "environment_observation": result.get("environment_observation"),
+        "preparation": result.get("preparation"),
+        "prepared_master_unchanged": result.get("prepared_master_unchanged"),
         "phase": result.get("phase"),
         "resources": result.get("resources", {}),
         "setup_observation": result.get("setup"),

@@ -1,6 +1,9 @@
 """Small offline checks for sample identity and compact result parsing."""
 import json
 import time
+import tempfile
+import sqlite3
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -9,6 +12,42 @@ import runner
 
 
 class RunnerTests(unittest.TestCase):
+    def test_host_cache_semantic_reuse_and_sample_isolation(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(runner, "HOST_ROOT", Path(directory)):
+            fixture = {"fixture_profile": "test-v1", "input_mode": "store", "input_plan_sha256": "plan", "fixture_bytes": 0}
+            selection = {"family": "payload_create_read", "case": "first", "seed": 1, "setup_identity": "clone", "image": "image-a", "host_executor": {"source": "a", "schema_sha256": "schema-a"}}
+            args = SimpleNamespace(host_binary="fake")
+            preparations = []
+            def command(argv, deadline, **kwargs):
+                if argv[1] == "infra-prepare":
+                    root = Path(argv[-1])
+                    (root / "payload").mkdir(parents=True)
+                    db = sqlite3.connect(root / "payload/store.sqlite")
+                    db.execute("CREATE TABLE state(value)")
+                    db.execute("INSERT INTO state VALUES (1)")
+                    db.commit()
+                    db.close()
+                    (root / "payload/branch-id").write_text("branch")
+                    (root / "manifest.json").write_text('{}')
+                    preparations.append(root)
+                return SimpleNamespace(stdout=json.dumps(fixture))
+            with patch.object(runner, "_command", side_effect=command):
+                first = runner._host_acquire(args, selection, time.monotonic() + 5)
+                changed_executor = {**selection, "case": "second", "image": "image-b", "host_executor": {"source": "b", "schema_sha256": "schema-a"}}
+                second = runner._host_acquire(args, changed_executor, time.monotonic() + 5)
+                self.assertFalse(first["cache_hit"])
+                self.assertTrue(second["cache_hit"])
+                self.assertEqual(len(preparations), 1)
+                self.assertEqual(second["producer"], selection["host_executor"])
+                one = runner._host_sample(first, selection, "one", time.monotonic() + 5)
+                two = runner._host_sample(second, changed_executor, "two", time.monotonic() + 5)
+                self.assertNotEqual(one["sample_store_inode"], two["sample_store_inode"])
+                self.assertEqual(one["sample_store_sha256"], two["sample_store_sha256"])
+                fixture["input_plan_sha256"] = "changed"
+                third = runner._host_acquire(args, selection, time.monotonic() + 5)
+                self.assertFalse(third["cache_hit"])
+                self.assertNotEqual(first["cache_key"], third["cache_key"])
+
     def test_deadline_units(self):
         remaining = runner._deadline(time.monotonic() + 5).remaining()
         self.assertGreater(remaining, 4)

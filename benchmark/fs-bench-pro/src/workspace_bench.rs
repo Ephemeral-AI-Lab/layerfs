@@ -3,6 +3,95 @@ use std::collections::BTreeMap;
 use workload_source::workspace_common::{self as common, Case, Entry, EntryKind};
 use workload_source::workspace_registry as registry;
 
+fn sample_binding(
+    root: &Path,
+    container: &ContainerId,
+) -> AnyResult<Option<layerfs_sdk::ContainerBinding>> {
+    if super::infra::host_store() {
+        let manager = layerfs_sdk::ContainerManager::open(root.join("container-control"))?;
+        Ok(Some(manager.connect(&container.0)?.binding()))
+    } else {
+        Ok(None)
+    }
+}
+
+fn sample_client(
+    store: Arc<LayerStackStore>,
+    binding: &Option<layerfs_sdk::ContainerBinding>,
+) -> AnyResult<Client> {
+    Ok(match binding {
+        Some(binding) => Client::connect_with_container(store, binding.clone())?,
+        None => Client::connect(store)?,
+    })
+}
+
+fn host_continuation_proof(
+    client: &Client,
+    store: &LayerStackStore,
+    root: &Path,
+    container: &ContainerId,
+) -> AnyResult<()> {
+    let initialized = client.initialize_layerstack(
+        EntityName::new("host-continuation")?,
+        LayerStackInitialization::Empty,
+    )?;
+    let branch = client.fork_branch(
+        EntityName::new("host-continuation")?,
+        LocalForkSource::Layer {
+            layer_id: initialized.genesis_layer_id,
+        },
+    )?;
+    let request = || CreateWorkspaceSession {
+        branch_id: branch,
+        placement: case_placement(&Some(container.clone()), root, 0, "host-continuation-proof"),
+        projection: Some(WorkspaceProjection::Fuse),
+    };
+    let session = client.create_workspace_session(request())?;
+    let mut previous = None;
+    for (step, command) in [
+        "printf first > continuation; chmod 640 continuation; sync continuation",
+        "test \"$(cat continuation)\" = first && test \"$(stat -c %a continuation)\" = 640 && printf second > continuation && sync continuation",
+    ].iter().enumerate() {
+        execute(client, session.id, vec!["/bin/sh".into(), "-ceu".into(), (*command).into()])?;
+        let status = client.commit_workspace_session_with_status(session.id)?;
+        if status.presentation_failed { return Err("host continuation presentation failed".into()); }
+        let WorkspaceCommitResult::Created { commit_id, previous_head } = status.result else {
+            return Err("host continuation expected a new Commit".into());
+        };
+        let pinned = store.pin_branch(branch)?;
+        if pinned.branch.head_commit_id != Some(commit_id) || (step > 0 && previous_head != previous) {
+            return Err("host continuation returned/published Commit mismatch".into());
+        }
+        previous = Some(commit_id);
+        emit("host-continuation-commit-proof", &[("step", step.to_string()), ("commit", quote(&commit_id.to_string())), ("root", quote(&pinned.root.to_string()))]);
+    }
+    execute(
+        client,
+        session.id,
+        vec![
+            "/bin/sh".into(),
+            "-ceu".into(),
+            "test \"$(cat continuation)\" = second && test \"$(stat -c %a continuation)\" = 640"
+                .into(),
+        ],
+    )?;
+    client.end_workspace_session(session.id, EndWorkspaceMode::Clean)?;
+    let reopened = client.create_workspace_session(request())?;
+    execute(
+        client,
+        reopened.id,
+        vec![
+            "/bin/sh".into(),
+            "-ceu".into(),
+            "test \"$(cat continuation)\" = second && test \"$(stat -c %a continuation)\" = 640"
+                .into(),
+        ],
+    )?;
+    client.end_workspace_session(reopened.id, EndWorkspaceMode::Clean)?;
+    emit("host-continuation-proof", &[("status", quote("PASS")), ("scope", quote("same real FUSE Workspace reads/writes after two full-status Commits; returned/published heads; bytes and mode; fresh projection; clean End"))]);
+    Ok(())
+}
+
 const ORCHESTRATION_SCOPE:&str="post-Store-open orchestration through timed calls and in-loop observations, including argument preparation and output; excludes post-loop observations, owner close and post-End verification; verify mode includes precommit custody";
 
 // Output and allocation stay outside pure-call clocks. A single PhaseDeadline
@@ -456,6 +545,20 @@ fn fast_verify_branch(
     let exchange = PathBuf::from(std::env::var("LAYERFS_V013_VERIFIER_EXCHANGE_HOST")?);
     let name = format!("fast-covered-{step}.tsv");
     std::fs::write(exchange.join(&name), text.as_bytes())?;
+    if super::infra::host_store()
+        && (!Command::new("docker")
+            .args(["exec", &container.0, "mkdir", "-p", "/verification"])
+            .status()?
+            .success()
+            || !Command::new("docker")
+                .arg("cp")
+                .arg(exchange.join(&name))
+                .arg(format!("{}:/verification/{name}", container.0))
+                .status()?
+                .success())
+    {
+        return Err("host verification exchange copy failed".into());
+    }
     let coverage_sha = workload_source::sdk_edit_common::sha256_hex(text.as_bytes());
     let session = client.create_workspace_session(CreateWorkspaceSession {
         branch_id: branch,
@@ -1082,7 +1185,9 @@ fn run_case(
     } else {
         LayerStackStore::connect(&path)?
     });
-    let client = Client::connect(store.clone())?;
+    // One daemon owner spans both Clients; dropping a Client still closes/reopens the Store.
+    let binding = sample_binding(root, &container)?;
+    let client = sample_client(store.clone(), &binding)?;
     store_metrics(&store, "before", 0)?;
     let mut last_operation = 0;
     let mut final_head = None;
@@ -1585,7 +1690,7 @@ fn run_case(
             "after-reconnect-before-verifier-forks",
             history.len(),
         )?;
-        let client = Client::connect(reopened.clone())?;
+        let client = sample_client(reopened.clone(), &binding)?;
         let mut verifier_operation = 0;
         if fast && case.family != "dedup_branch_history" {
             fast_verify_branch(
@@ -1601,6 +1706,9 @@ fn run_case(
                 &container,
             )?;
             observed(&client, &mut verifier_operation)?;
+            if super::infra::host_store() && case.family == "payload_create_read" {
+                host_continuation_proof(&client, &reopened, root, &container)?;
+            }
         }
         if !fast && case.family != "dedup_branch_history" {
             let mut expected = registry::expected(case, seed, registry::steps(case))?;

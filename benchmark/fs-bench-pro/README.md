@@ -115,3 +115,23 @@ instructions to run deleted scripts on this revision.
 
 See the [current infrastructure specification](../../docs/roadmap/0.1/0.1.3/benchmark-infrastructure-optimization-spec.md)
 and [issue #45](https://github.com/Ephemeral-AI-Lab/layerfs/issues/45).
+
+
+### Host-owned SQLite comparison
+
+The four construction families also support `--topology host-store`. Build the host coordinator with `python3 shared/runner.py --build-host`, then use the same family `perf.sh`/`verify.sh`, selectors and seeds. Pass the frozen compatible Linux image with `--image`; host and image product seals must match. Host binary identity is sealed beside `target/release/fs-benchmark-pro`. The Linux image keeps its original source identity. Default host performance output is `benchmark-results/host-store/results/run-…`; pass an explicit host results directory for verification.
+
+Example (from this directory):
+
+```sh
+python3 shared/runner.py --build-host
+families/payload_create_read/perf.sh --topology host-store --image "$IMAGE" \
+  --case payload-create-500m --seed 1 --setup clone --perf-fast \
+  --output ../../benchmark-results/host-store/results/payload-500-s1
+```
+
+The host owns the SDK, Workspace manager/capture/spool and local SQLite Store. The existing authenticated ContainerBinding/ProxyHost route connects to the real Linux daemon/FUSE/workload. Docker has no data-sharing mounts or socket; the daemon has one loopback-only published TCP port. The existing container guards still validate resources, image, ownership, device and capabilities. The 2 CPU/2 GiB container limit does **not** cap the host coordinator. Report host process CPU/RSS/I/O separately; moving file cache out of the cgroup and using additional host workers is not a pure efficiency gain.
+
+Prepared cache and samples are local to the ignored project `benchmark-results/host-store/`: `prepared/`, `fixtures/`, `samples/`, `results/`. Workspace masters are closed, self-contained and protected; every invocation byte-copies to an absent independent writable Store, fsyncs, quick-checks and verifies equal hashes/distinct inodes before timing. WAL/SHM/journal sidecars are rejected: this helper is deliberately not a live-database snapshot API. Native imports reuse source fixtures with original modes and always create a fresh output Store. Masters are checked again after samples. Cache compatibility uses schema/format/fixture/seed/initial-state identity, separately from producing and executing code/image provenance. Bump the versioned compatibility contract if canonical format or byte-generation semantics change outside the fixture descriptors. Reuse is bounded to 8 prepared/fixture entries and 10 GiB; only marked benchmark-owned data can be evicted. Completed sample data is removed.
+
+Prepared cache entries are evictable, and samples are disposable. Git ignore is not a backup mechanism. Durable backups require separate storage and retention; ordinary product Store locations remain caller-selected and are outside these cleanup paths. Docker-only results remain evidence for their original topology and must never be relabeled as host qualification.

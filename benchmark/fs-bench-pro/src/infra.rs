@@ -1,4 +1,8 @@
-//! Selected Linux coordinator adapter. Recipes and oracles remain in their owners.
+//! Selected coordinator adapter. Recipes and oracles remain in their owners.
+pub(crate) fn host_store() -> bool {
+    std::env::var("LAYERFS_BENCH_HOST_STORE").as_deref() == Ok("1")
+}
+
 use super::*;
 
 const SDK: [&str; 3] = [
@@ -457,7 +461,8 @@ fn run_selected(
                 family,
                 "workspace_reliability" | "dedup_cross_file" | "dedup_cdc_locality"
             ) {
-                OsString::from("/var/lib/fs-bench/prepared/payload/input")
+                std::env::var_os("LAYERFS_BENCH_PREPARED_INPUT")
+                    .unwrap_or_else(|| OsString::from("/var/lib/fs-bench/prepared/payload/input"))
             } else {
                 payload.join("input").as_os_str().into()
             },
@@ -473,7 +478,12 @@ fn run_selected(
         let mut command = Command::new(std::env::current_exe()?);
         command.args(args);
         if fast {
-            std::fs::create_dir_all("/verification")?;
+            let exchange = if host_store() {
+                root.join("verification")
+            } else {
+                PathBuf::from("/verification")
+            };
+            std::fs::create_dir_all(&exchange)?;
             command
                 .env_remove("LAYERFS_V013_FAST_CERTIFICATE")
                 .env_remove("LAYERFS_V013_FAST_CERTIFICATE_SHA256")
@@ -482,7 +492,7 @@ fn run_selected(
                     "LAYERFS_V013_FAST_INPUT_PLAN_SHA256",
                     field(&fixture, "input_plan_sha256")?,
                 )
-                .env("LAYERFS_V013_VERIFIER_EXCHANGE_HOST", "/verification");
+                .env("LAYERFS_V013_VERIFIER_EXCHANGE_HOST", &exchange);
         }
         if family == "git_tool_workflow" {
             std::fs::create_dir_all("/qualified")?;

@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import hashlib
+import shutil
+import sqlite3
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -315,6 +318,7 @@ class SampleContainer:
     image: str
     _capability: str = field(repr=False)
     removed: bool = False
+    observation: dict = field(default_factory=dict)
 
     def exec(
         self,
@@ -443,6 +447,7 @@ def start_sample(
     cpus: float = 2,
     memory_bytes: int = 2 * GIB,
     pids: int = 256,
+    host_store: bool = False,
 ) -> SampleContainer:
     """Start one fresh no-mount sample container and authenticate its daemon."""
     cleanup_deadline = deadline
@@ -456,17 +461,19 @@ def start_sample(
         raise RuntimeFailure("runtime image declares volumes")
     owned = {OWNER_LABEL: OWNER, ROLE_LABEL: "sample", **labels}
     command = [
-        "docker", "create", "--name", name, "--network", "none",
+        "docker", "create", "--name", name, "--network", "bridge" if host_store else "none",
         "--cpus", str(cpus), "--memory", str(memory_bytes),
         "--memory-swap", str(memory_bytes), "--pids-limit", str(pids),
         "--device", "/dev/fuse", "--cap-add", "SYS_ADMIN",
         "--security-opt", "apparmor=unconfined",
-        "--env", "LAYERFS_BENCH_LOCAL_RUNTIME=1",
-        "--env", "LAYERFS_DAEMON_TCP_LISTEN=127.0.0.1:41273",
-        "--env", "LAYERFS_FUSE_HOST=127.0.0.1",
+        "--env", "LAYERFS_BENCH_LOCAL_RUNTIME=" + ("0" if host_store else "1"),
+        "--env", "LAYERFS_DAEMON_TCP_LISTEN=" + ("0.0.0.0:41273" if host_store else "127.0.0.1:41273"),
+        "--env", "LAYERFS_FUSE_HOST=" + ("host.docker.internal" if host_store else "127.0.0.1"),
         "--env", "LAYERFS_V013_GIT_REFERENCE=/qualified/git-reference",
         "--entrypoint", "/bin/sh",
     ]
+    if host_store:
+        command.extend(["--publish", "127.0.0.1::41273"])
     _labels(command, owned)
     command.extend([image, "-c",
         "/usr/local/bin/layerfs-daemon-entrypoint & daemon_pid=$!; "
@@ -515,9 +522,14 @@ def start_sample(
             cpus,
             memory_bytes,
             pids,
+            host_store=host_store,
         )
         sample.id = inspection["Id"]
         sample._capability = capability
+        sample.observation = {"mounts": inspection.get("Mounts"), "image_volumes": image_info.get("Config", {}).get("Volumes"),
+            "host_config": {key: inspection.get("HostConfig", {}).get(key) for key in
+                ("Binds", "Mounts", "NetworkMode", "PortBindings", "Devices", "CapAdd", "NanoCpus", "Memory", "MemorySwap", "PidsLimit")},
+            "ports": inspection.get("NetworkSettings", {}).get("Ports"), "validated": True}
         return sample
     except BaseException:
         if cleanup_deadline.remaining() > 0.05:
@@ -537,6 +549,7 @@ def _validate_sample_inspection(
     cpus: float,
     memory_bytes: int,
     pids: int,
+    host_store: bool = False,
 ) -> None:
     host = inspection.get("HostConfig", {})
     config = inspection.get("Config", {})
@@ -548,9 +561,21 @@ def _validate_sample_inspection(
         raise RuntimeFailure("sample container has a runtime mount")
     if config.get("Volumes") not in (None, {}):
         raise RuntimeFailure("sample container declares a volume")
-    if host.get("PortBindings") not in (None, {}) or host.get("PublishAllPorts"):
-        raise RuntimeFailure("sample publishes a daemon port")
-    if any(value for value in ports.values()):
+    if host.get("PublishAllPorts"):
+        raise RuntimeFailure("sample publishes all ports")
+    if host_store:
+        if host.get("NetworkMode") != "bridge":
+            raise RuntimeFailure("host Store requires bridge network")
+        for bindings in (host.get("PortBindings") or {}, ports):
+            if set(bindings) != {"41273/tcp"} or len(bindings["41273/tcp"] or []) != 1:
+                raise RuntimeFailure("host Store daemon port set mismatch")
+            binding = bindings["41273/tcp"][0]
+            port = binding.get("HostPort", "")
+            if binding.get("HostIp") != "127.0.0.1" or (port and (not port.isdigit() or not 1 <= int(port) <= 65535)):
+                raise RuntimeFailure("host Store daemon must publish only to loopback")
+        if not ports["41273/tcp"][0].get("HostPort"):
+            raise RuntimeFailure("host Store daemon has no allocated port")
+    elif host.get("PortBindings") or any(ports.values()):
         raise RuntimeFailure("sample has a published port binding")
     if len(devices) != 1 or devices[0].get("PathOnHost") != "/dev/fuse":
         raise RuntimeFailure("sample device set differs from /dev/fuse only")
@@ -568,9 +593,9 @@ def _validate_sample_inspection(
         raise RuntimeFailure("sample ownership label mismatch")
     environment = set(config.get("Env") or [])
     for value in (
-        "LAYERFS_BENCH_LOCAL_RUNTIME=1",
-        "LAYERFS_DAEMON_TCP_LISTEN=127.0.0.1:41273",
-        "LAYERFS_FUSE_HOST=127.0.0.1",
+        "LAYERFS_BENCH_LOCAL_RUNTIME=" + ("0" if host_store else "1"),
+        "LAYERFS_DAEMON_TCP_LISTEN=" + ("0.0.0.0:41273" if host_store else "127.0.0.1:41273"),
+        "LAYERFS_FUSE_HOST=" + ("host.docker.internal" if host_store else "127.0.0.1"),
     ):
         if value not in environment:
             raise RuntimeFailure("sample loopback environment mismatch")
@@ -1268,6 +1293,89 @@ def _pure_self_check() -> None:
         raise AssertionError("raw image ID accepted in generated FROM")
     deadline = Deadline(time.monotonic() + 1.0)
     assert 0.0 < deadline.remaining() <= 1.0
+
+
+
+
+def file_sha256(path):
+    with Path(path).open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def closed_store_copy(source, target, *, deadline):
+    """Only benchmark-owned, quiescent masters; never a snapshot of a live Store."""
+    source, target = Path(source), Path(target)
+    deadline.require("closed Store copy")
+    if source.is_symlink() or not source.is_file() or target.exists():
+        raise RuntimeFailure("closed Store copy requires a regular source and absent destination")
+    for suffix in ("-wal", "-shm", "-journal"):
+        if Path(str(source) + suffix).exists():
+            raise RuntimeFailure("master has SQLite sidecars; close/checkpoint it before preparing")
+    before = file_sha256(source)
+    # copyfileobj deliberately requests an independent byte copy, not APFS cloning.
+    with source.open("rb") as src, target.open("xb") as dst:
+        shutil.copyfileobj(src, dst, 1024 * 1024)
+        dst.flush()
+        os.fsync(dst.fileno())
+    target.chmod(0o600)
+    connection = sqlite3.connect(target.as_uri() + "?mode=ro", uri=True)
+    try:
+        connection.set_progress_handler(lambda: int(deadline.remaining() <= 0), 10000)
+        if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+            raise RuntimeFailure("sample SQLite quick_check failed")
+    finally:
+        connection.close()
+    if file_sha256(source) != before or file_sha256(target) != before:
+        raise RuntimeFailure("master/sample identity changed during closed copy")
+    if (source.stat().st_dev, source.stat().st_ino) == (target.stat().st_dev, target.stat().st_ino):
+        raise RuntimeFailure("sample aliases master inode")
+    deadline.require("closed Store validation")
+    return {"clone_method": "closed-quiescent-byte-copy", "master_store_sha256": before,
+            "sample_store_sha256": before, "store_bytes": target.stat().st_size,
+            "master_store_inode": source.stat().st_ino, "sample_store_inode": target.stat().st_ino,
+            "sqlite_quick_check": "ok", "master_unchanged": True}
+
+
+def host_tree_identity(root, deadline):
+    result = {}
+    for path in sorted(Path(root).rglob("*")):
+        deadline.require("host fixture identity")
+        if path.is_symlink():
+            result[str(path.relative_to(root))] = {"symlink": os.readlink(path)}
+        elif path.is_file() and path.name != "host-cache.json":
+            result[str(path.relative_to(root))] = {"bytes": path.stat().st_size, "sha256": file_sha256(path)}
+    return result
+
+
+def remove_host_owned(path):
+    path = Path(path)
+    if path.is_symlink() or json.loads((path / "host-owner.json").read_text()) != {"owner": OWNER}:
+        raise RuntimeFailure("refusing unowned host benchmark cleanup")
+    for child in path.rglob("*"):
+        if child.is_dir() and not child.is_symlink():
+            child.chmod(0o700)
+    path.chmod(0o700)
+    shutil.rmtree(path)
+
+
+def evict_host_cache(root, protected, *, max_entries=8, max_bytes=10 * GIB):
+    entries = []
+    for folder in ("prepared", "fixtures"):
+        for path in (Path(root) / folder).glob("*"):
+            if path.is_symlink() or not (path / "host-cache.json").is_file():
+                raise RuntimeFailure("unexpected host cache entry")
+            manifest = json.loads((path / "host-cache.json").read_text())
+            entries.append((path, manifest))
+    removed = []
+    while len(entries) > max_entries or sum(item[1]["data_bytes"] for item in entries) > max_bytes:
+        candidates = [item for item in entries if str(item[0]) != str(protected)]
+        if not candidates:
+            raise RuntimeFailure("protected host cache exceeds budget")
+        item = min(candidates, key=lambda item: item[1]["created_ns"])
+        remove_host_owned(item[0])
+        entries.remove(item)
+        removed.append(str(item[0]))
+    return removed
 
 
 if __name__ == "__main__":
