@@ -120,7 +120,7 @@ def source_build_args():
             "LAYERFS_SOURCE_TREE": git("rev-parse", "HEAD^{tree}"),
             "LAYERFS_SOURCE_DIRTY": "true", "LAYERFS_SOURCE_SEAL": source.hexdigest(),
             "LAYERFS_PRODUCT_SEAL": product.hexdigest(),
-            "WORKLOAD_SOURCE_SHA256": hashlib.sha256((BENCH / "workload.rs").read_bytes()).hexdigest()}
+            "WORKLOAD_SOURCE_SHA256": hashlib.sha256((BENCH / "workload/main.rs").read_bytes()).hexdigest()}
 
 
 def image_info(image, deadline):

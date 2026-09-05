@@ -770,7 +770,7 @@ pub(crate) fn fixture_info(case: &Case, seed: u8, branch: Option<BranchId>) -> A
         plan = workload_source::sdk_edit_common::sha256_hex(
             format!(
                 "{plan}{}{}",
-                include_str!("../ordinary_workloads.rs"),
+                include_str!("../workload/ordinary_workloads.rs"),
                 std::env::var("LAYERFS_V013_IMAGE").unwrap_or_default()
             )
             .as_bytes(),
@@ -904,7 +904,7 @@ fn reference_info(case: &Case, seed: u8) -> AnyResult<()> {
         format!(
             "{}:{seed}:{}:{}",
             case.id,
-            include_str!("../ordinary_workloads.rs"),
+            include_str!("../workload/ordinary_workloads.rs"),
             std::env::var("LAYERFS_V013_IMAGE")?
         )
         .as_bytes(),

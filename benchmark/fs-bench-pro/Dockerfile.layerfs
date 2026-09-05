@@ -11,11 +11,8 @@ COPY crates ./crates
 COPY tools ./tools
 COPY benchmark/fs-bench-pro/Cargo.toml ./benchmark/fs-bench-pro/Cargo.toml
 COPY benchmark/fs-bench-pro/src ./benchmark/fs-bench-pro/src
-COPY benchmark/fs-bench-pro/*.rs ./benchmark/fs-bench-pro/
+COPY benchmark/fs-bench-pro/workload ./benchmark/fs-bench-pro/workload
 COPY benchmark/fs-bench-pro/families ./benchmark/fs-bench-pro/families
-COPY benchmark/fs-bench-pro/workload.rs /workload/workload.rs
-COPY benchmark/fs-bench-pro/families /workload/families
-COPY benchmark/fs-bench-pro/*.rs /workload/
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
@@ -35,7 +32,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
       -p layerfs-workspace -p layerfs-monitor -p layerfs-sdk \
       -p layerfs-daemon -p layerfs-fuse -p fs-benchmark-pro \
  && rustc --edition=2021 -C opt-level=3 -C strip=symbols \
-      --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload \
+      --remap-path-prefix=/src/benchmark/fs-bench-pro=. \
+      benchmark/fs-bench-pro/workload/main.rs -o /fs-benchmark-workload \
  && cargo build --locked --release --target "$target" --jobs "$CARGO_BUILD_JOBS" \
       -p layerfs-daemon -p fs-benchmark-pro \
  && cargo build --locked --release --target "$target" --jobs "$CARGO_BUILD_JOBS" \
@@ -56,7 +54,7 @@ RUN test "${#LAYERFS_SOURCE_COMMIT}" -eq 40 \
  && test "${#LAYERFS_SOURCE_SEAL}" -eq 64 \
  && test "${#LAYERFS_PRODUCT_SEAL}" -eq 64 \
  && test "${#WORKLOAD_SOURCE_SHA256}" -eq 64 \
- && echo "$WORKLOAD_SOURCE_SHA256  /workload/workload.rs" | sha256sum -c - \
+ && echo "$WORKLOAD_SOURCE_SHA256  /src/benchmark/fs-bench-pro/workload/main.rs" | sha256sum -c - \
  && case "$LAYERFS_SOURCE_DIRTY" in true|false) ;; *) exit 1 ;; esac \
  && case "$LAYERFS_SOURCE_COMMIT$LAYERFS_SOURCE_TREE$LAYERFS_SOURCE_SEAL" in *[!0-9a-f]*) exit 1 ;; esac
 

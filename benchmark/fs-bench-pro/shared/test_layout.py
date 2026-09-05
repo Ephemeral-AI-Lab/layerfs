@@ -22,6 +22,8 @@ class LayoutTests(unittest.TestCase):
 
     def test_no_root_shell_or_retired_pipeline(self):
         self.assertEqual(list(BENCH.glob("*.sh")), [])
+        self.assertEqual(list(BENCH.glob("*.rs")), [])
+        self.assertEqual(list((BENCH / "families").glob("*.rs")), [])
         for name in ("workspace-runner.py", "sdk-edit-custody.py",
                      "generate-workspace-report.py", "generate-sdk-edit-report.py"):
             self.assertFalse((BENCH / name).exists(), name)

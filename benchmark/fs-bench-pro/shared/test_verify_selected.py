@@ -7,7 +7,7 @@ import unittest
 from unittest import mock
 
 
-SCRIPT = Path(__file__).with_name("verify-selected.py")
+SCRIPT = Path(__file__).resolve().parent.parent / "verify-selected.py"
 SPEC = importlib.util.spec_from_file_location("verify_selected", SCRIPT)
 VERIFY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VERIFY)

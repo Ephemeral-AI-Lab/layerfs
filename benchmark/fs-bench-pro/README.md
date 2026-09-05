@@ -1,22 +1,26 @@
 # fs-bench-pro
 
-Selected Docker/Linux benchmarks with real LayerFS daemon/FUSE execution.
-The host orchestrates; fixtures, Stores and product processes stay inside
-Docker. No project bind mounts, data volumes or Docker socket are used.
+See the [benchmark quick note](QUICKSTART.md) for the current environment and fast iteration commands.
+
+Selected benchmarks with real LayerFS daemon/FUSE execution. The default
+`host-store` topology runs SDK/Workspace/SQLite on macOS and daemon/FUSE/workloads
+inside Docker Linux. The explicit `docker` topology keeps product work and
+Stores in Linux. No project bind mounts, data volumes or Docker socket are used.
 
 ## Source layout
 
 ```text
 benchmark/fs-bench-pro/
+  Cargo.toml
   Dockerfile.layerfs
+  README.md
+  QUICKSTART.md
   verify-selected.py
   shared/
     runner.py
     runtime.py
     daemon-entrypoint.sh
-    test_runner.py
-    test_runtime.py
-    test_layout.py
+    test_*.py
   families/<family>/
     mod.rs
     setup.sh
@@ -26,26 +30,41 @@ benchmark/fs-bench-pro/
     main.rs
     infra.rs
     ... shared operation and oracle implementations
+  workload/
+    main.rs
+    workspace_common.rs
+    workspace_registry.rs
+    ordinary_workloads.rs
+    dedup_workloads.rs
+    reliability_workloads.rs
+    sdk_edit_common.rs
 ```
 
 The 18 current family folders are the public entrypoints. Their shell scripts
-only bind the family and forward arguments to shared infrastructure. Shared
-Rust workload helpers remain at the benchmark root where required by the
-coordinator and standalone workload build.
+only bind the family and forward arguments to shared infrastructure. Every
+family uses the same `mod.rs` plus `setup.sh`/`perf.sh`/`verify.sh` layout.
+
+`src/` contains the SDK/Store coordinator and verification code. `workload/`
+contains the standalone workload helper and Rust code it shares with the
+coordinator. `sdk_edit_common.rs` supplies fixtures, plans, and identities for
+the three current SDK edit families. The retired `edit_same_count` and
+`edit_count_changing` definitions, commands, and tests have been removed.
+`shared/` contains Python infrastructure and its tests.
 
 ## Build and run
 
 Run these commands from this directory:
 
 ```bash
+python3 shared/runner.py --build-host
 export LAYERFS_BENCH_IMAGE="$(python3 shared/runner.py --build-image)"
 
 families/init_namespace/setup.sh --smoke
 families/init_namespace/perf.sh --smoke
 
-families/directory_construction_traversal/perf.sh \
-  --case directory-construct-1-compact-v2 --seed 1 \
-  --setup clone --perf-samples 3
+families/edit_length_changing/perf.sh \
+  --case insert-middle-4k-on-500mib-result-capped-v2-ops-1 \
+  --repetition 1 --perf-fast
 ```
 
 Preparation is optional prewarming: a performance run acquires a compatible

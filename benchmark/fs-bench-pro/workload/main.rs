@@ -2,7 +2,7 @@ use std::error::Error;
 use std::ffi::OsString;
 use std::fs::Metadata;
 use std::fs::{self, File, FileTimes, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -18,67 +18,59 @@ pub(crate) mod dedup_workloads;
 #[allow(dead_code)]
 pub(crate) mod workspace_registry;
 #[allow(dead_code)]
-pub(crate) mod edit_length_changing_capped { include!("families/edit_length_changing_capped/mod.rs"); }
+pub(crate) mod edit_length_changing_capped { include!("../families/edit_length_changing_capped/mod.rs"); }
 #[allow(dead_code)]
 pub(crate) mod reliability_workloads;
 #[allow(dead_code)]
-pub(crate) mod workspace_reliability { include!("families/workspace_reliability/mod.rs"); }
+pub(crate) mod workspace_reliability { include!("../families/workspace_reliability/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod payload_create_read { include!("families/payload_create_read/mod.rs"); }
+pub(crate) mod payload_create_read { include!("../families/payload_create_read/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod tiny_file_churn { include!("families/tiny_file_churn/mod.rs"); }
+pub(crate) mod tiny_file_churn { include!("../families/tiny_file_churn/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod directory_construction_traversal { include!("families/directory_construction_traversal/mod.rs"); }
+pub(crate) mod directory_construction_traversal { include!("../families/directory_construction_traversal/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod git_tool_workflow { include!("families/git_tool_workflow/mod.rs"); }
+pub(crate) mod git_tool_workflow { include!("../families/git_tool_workflow/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod namespace_mutation { include!("families/namespace_mutation/mod.rs"); }
+pub(crate) mod namespace_mutation { include!("../families/namespace_mutation/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod workspace_change_locality { include!("families/workspace_change_locality/mod.rs"); }
+pub(crate) mod workspace_change_locality { include!("../families/workspace_change_locality/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod mixed_load_bearing { include!("families/mixed_load_bearing/mod.rs"); }
+pub(crate) mod mixed_load_bearing { include!("../families/mixed_load_bearing/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod dedup_cross_file { include!("families/dedup_cross_file/mod.rs"); }
+pub(crate) mod dedup_cross_file { include!("../families/dedup_cross_file/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod dedup_cdc_locality { include!("families/dedup_cdc_locality/mod.rs"); }
+pub(crate) mod dedup_cdc_locality { include!("../families/dedup_cdc_locality/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod dedup_workspace_reuse { include!("families/dedup_workspace_reuse/mod.rs"); }
+pub(crate) mod dedup_workspace_reuse { include!("../families/dedup_workspace_reuse/mod.rs"); }
 #[allow(dead_code)]
-pub(crate) mod dedup_branch_history { include!("families/dedup_branch_history/mod.rs"); }
+pub(crate) mod dedup_branch_history { include!("../families/dedup_branch_history/mod.rs"); }
 
 
 #[allow(dead_code)]
 pub(crate) mod init_namespace {
-    include!("families/init_namespace/mod.rs");
+    include!("../families/init_namespace/mod.rs");
 }
 pub(crate) use init_namespace::*;
 #[allow(dead_code)]
-pub(crate) mod edit_same_count {
-    include!("families/edit_same_count.rs");
-}
-#[allow(dead_code)]
-pub(crate) mod edit_count_changing {
-    include!("families/edit_count_changing.rs");
-}
-#[allow(dead_code)]
 pub(crate) mod sdk_edit_common {
-    include!("families/sdk_edit_common.rs");
+    include!("sdk_edit_common.rs");
 }
 #[allow(dead_code)]
 pub(crate) mod edit_length_preserving {
-    include!("families/edit_length_preserving/mod.rs");
+    include!("../families/edit_length_preserving/mod.rs");
 }
 #[allow(dead_code)]
 pub(crate) mod edit_length_changing {
-    include!("families/edit_length_changing/mod.rs");
+    include!("../families/edit_length_changing/mod.rs");
 }
 #[allow(dead_code)]
 pub(crate) mod edit_canonical_chunk_count {
-    include!("families/edit_canonical_chunk_count/mod.rs");
+    include!("../families/edit_canonical_chunk_count/mod.rs");
 }
 #[allow(dead_code)]
 pub(crate) mod store_footprint {
-    include!("families/store_footprint/mod.rs");
+    include!("../families/store_footprint/mod.rs");
 }
 
 pub(crate) type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -1111,58 +1103,6 @@ fn run() -> Result<()> {
             println!("{}\t{}\t{}", scenario.id, scenario.alias, scenario.display_name);
             Ok(())
         }
-        [command] if command == "same-count-list" => {
-            for scenario in edit_same_count::SCENARIOS {
-                println!("{}\t{}", scenario.id, scenario.display_name);
-            }
-            Ok(())
-        }
-        [command] if command == "same-count-self-check" => {
-            edit_same_count::self_check()?;
-            println!("same-count-self-check=pass");
-            Ok(())
-        }
-        [command, case] if command == "same-count-resolve" => {
-            let scenario = edit_same_count::scenario(case)?;
-            println!("{}\t{}", scenario.id, scenario.display_name);
-            Ok(())
-        }
-        [command, case] if command == "same-count-control-resolve" => {
-            let control = edit_same_count::pair_control(case)?;
-            println!("{}\t{}\t{}", control.id, control.operations, control.position.name());
-            Ok(())
-        }
-        [command] if command == "count-changing-list" => {
-            for scenario in edit_count_changing::SCENARIOS {
-                println!(
-                    "{}\t{}\t{}",
-                    scenario.id, scenario.display_name, scenario.paired_same_count_control_id
-                );
-            }
-            Ok(())
-        }
-        [command] if command == "count-changing-scaling-list" => {
-            for scenario in edit_count_changing::SCALING_SCENARIOS {
-                println!(
-                    "{}\t{}\t{}",
-                    scenario.id, scenario.display_name, scenario.fixture_bytes
-                );
-            }
-            Ok(())
-        }
-        [command] if command == "count-changing-self-check" => {
-            edit_count_changing::self_check()?;
-            println!("count-changing-self-check=pass");
-            Ok(())
-        }
-        [command, case] if command == "count-changing-resolve" => {
-            let scenario = edit_count_changing::scenario(case)?;
-            println!(
-                "{}\t{}\t{}",
-                scenario.id, scenario.display_name, scenario.paired_same_count_control_id
-            );
-            Ok(())
-        }
         [command] if command == "store-footprint-list" => {
             for control in store_footprint::CONTROLS {
                 println!("{}\t{}", control.id, control.display_name);
@@ -1241,21 +1181,6 @@ fn run() -> Result<()> {
             println!("normal_overwrite_mtime_nanoseconds={nanoseconds}");
             Ok(())
         }
-        [command, path, case, seed] if command == "same-count-edit" => {
-            same_count_edit(path, case, seed.parse()?)
-        }
-        [command, path, cohort, count, seed] if command == "same-count-fragmented" => {
-            same_count_fragmented(path, cohort, count.parse()?, seed.parse()?)
-        }
-        [command, path, case, seed] if command == "same-count-control-edit" => {
-            same_count_control_edit(path, case, seed.parse()?)
-        }
-        [command, path, case, seed] if command == "count-changing-edit" => {
-            count_changing_edit(path, case, seed.parse()?)
-        }
-        [command, path, verifier] if command == "count-changing-proof" => {
-            count_changing_proof(path, verifier)
-        }
         [command, path] if command == "prepend" => prepend(path),
         [command, path, expected_size, expected_digest] if command == "verify" => {
             let (size, digest) = digest(Path::new(path))?;
@@ -1268,7 +1193,7 @@ fn run() -> Result<()> {
             println!("{size}\t{digest}");
             Ok(())
         }
-        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | same-count-self-check | same-count-list | same-count-resolve CASE | same-count-control-resolve CASE | count-changing-self-check | count-changing-list | count-changing-scaling-list | count-changing-resolve CASE | store-footprint-self-check | store-footprint-list | store-footprint-resolve CASE | store-footprint-fixture ROOT CASE TIER | store-footprint-digest ROOT | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | same-count-edit PATH CASE SEED | same-count-control-edit PATH CASE SEED | same-count-fragmented PATH COHORT COUNT SEED | count-changing-edit PATH CASE SEED | count-changing-proof PATH VERIFIER | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
+        _ => Err("usage: fs-benchmark-workload self-check | family-list | family-resolve CASE | store-footprint-self-check | store-footprint-list | store-footprint-resolve CASE | store-footprint-fixture ROOT CASE TIER | store-footprint-digest ROOT | digest|read PATH | namespace-verify PATH SCENARIO | namespace-edit|namespace-edit-normal PATH | create FIXTURE PATH | edit PATH INDEX BASE_SIZE | prepend PATH | verify PATH SIZE SHA256".into()),
     }
 }
 
@@ -1321,261 +1246,6 @@ fn namespace_edit_normal(path: impl AsRef<Path>) -> Result<(i64, i64)> {
     {
         Err("normal overwrite mtime requires Unix".into())
     }
-}
-
-fn same_count_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<()> {
-    let scenario = edit_same_count::scenario(case)?;
-    let schedule = edit_same_count::schedule(scenario, seed)?;
-    same_count_apply(path.as_ref(), &schedule, seed)
-}
-
-fn same_count_control_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<()> {
-    let control = edit_same_count::pair_control(case)?;
-    let schedule = edit_same_count::pair_control_schedule(control, seed)?;
-    same_count_apply(path.as_ref(), &schedule, seed)
-}
-
-fn same_count_apply(path: &Path, schedule: &[edit_same_count::Edit], seed: u8) -> Result<()> {
-    let file = OpenOptions::new().read(true).write(true).open(path)?;
-    if file.metadata()?.len() != edit_same_count::FIXTURE_BYTES {
-        return Err("same-count fixture length".into());
-    }
-    let mut coverage = vec![false; edit_same_count::FIXTURE_BYTES as usize];
-    let mut supplied = 0_u64;
-    let mut identical = 0_u64;
-    let started = std::time::Instant::now();
-    for (operation, edit) in schedule.iter().copied().enumerate() {
-        let bytes = edit_same_count::replacement_bytes(seed, operation, edit);
-        let mut before = vec![0; edit.len];
-        read_exact_at(&file, &mut before, edit.offset)?;
-        identical += before
-            .iter()
-            .zip(&bytes)
-            .filter(|(left, right)| left == right)
-            .count() as u64;
-        write_all_at(&file, &bytes, edit.offset)?;
-        supplied += edit.len as u64;
-        coverage[edit.offset as usize..edit.offset as usize + edit.len].fill(true);
-    }
-    let inner_edit_ns = started.elapsed().as_nanos();
-    file.sync_all()?;
-    let unique = coverage.into_iter().filter(|covered| *covered).count() as u64;
-    println!("attempted_operations={}", schedule.len());
-    println!("completed_operations={}", schedule.len());
-    println!("final_file_bytes={}", file.metadata()?.len());
-    println!("supplied_bytes={supplied}");
-    println!("unique_bytes={unique}");
-    println!("overlapping_bytes={}", supplied - unique);
-    println!("identical_bytes={identical}");
-    println!("superseded_bytes={}", supplied - unique);
-    println!("inner_edit_ns={inner_edit_ns}");
-    Ok(())
-}
-
-fn same_count_fragmented(path: impl AsRef<Path>, cohort: &str, count: usize, seed: u8) -> Result<()> {
-    let path = path.as_ref();
-    let schedule = edit_same_count::fragmented_schedule(cohort, count, seed)?;
-    let file = OpenOptions::new().read(true).write(true).open(path)?;
-    if file.metadata()?.len() != edit_same_count::FIXTURE_BYTES {
-        return Err("same-count fragmented fixture length".into());
-    }
-    for (operation, edit) in schedule.iter().copied().enumerate() {
-        write_all_at(
-            &file,
-            &edit_same_count::replacement_bytes(seed, operation, edit),
-            edit.offset,
-        )?;
-    }
-    file.sync_all()?;
-    println!("attempted_operations={}", schedule.len());
-    println!("completed_operations={}", schedule.len());
-    println!("final_file_bytes={}", file.metadata()?.len());
-    Ok(())
-}
-
-fn count_changing_edit(path: impl AsRef<Path>, case: &str, seed: u8) -> Result<()> {
-    use edit_count_changing::Kind;
-    use std::os::unix::fs::MetadataExt;
-
-    let path = path.as_ref();
-    let scenario = edit_count_changing::scenario(case)?;
-    let schedule = edit_count_changing::schedule(scenario, seed)?;
-    if fs::metadata(path)?.len() != scenario.fixture_bytes {
-        return Err("count-changing fixture length".into());
-    }
-    let initial_inode = fs::metadata(path)?.ino();
-    let temporary = path.with_extension("count-changing.tmp");
-    let mut supplied = 0_u64;
-    let mut inserted = 0_u64;
-    let mut deleted = 0_u64;
-    let mut overlapping = 0_u64;
-    let mut superseded = 0_u64;
-    let mut logical_zero = 0_u64;
-    let mut copied_payload = 0_u64;
-    let mut read_payload = 0_u64;
-    let started = std::time::Instant::now();
-    for (operation, edit) in schedule.iter().copied().enumerate() {
-        let replacement = edit_count_changing::replacement_bytes(seed, operation, edit);
-        match scenario.kind {
-            Kind::Append => {
-                let mut file = OpenOptions::new().append(true).open(path)?;
-                file.write_all(&replacement)?;
-                file.sync_all()?;
-            }
-            Kind::Truncate => {
-                let file = OpenOptions::new().write(true).open(path)?;
-                file.set_len(edit.final_len)?;
-                file.sync_all()?;
-            }
-            Kind::Sparse => {
-                let file = OpenOptions::new().write(true).open(path)?;
-                write_all_at(&file, &replacement, edit.offset)?;
-                file.sync_all()?;
-            }
-            Kind::Prepend | Kind::Insert | Kind::Delete | Kind::Grow | Kind::Shrink => {
-                let copied = rewrite_file_range(
-                    path,
-                    &temporary,
-                    edit.offset,
-                    edit.deleted as u64,
-                    &replacement,
-                )?;
-                copied_payload = copied_payload
-                    .checked_add(copied)
-                    .ok_or("count-changing copied payload")?;
-                read_payload = read_payload
-                    .checked_add(copied.checked_add(edit.deleted as u64).ok_or(
-                        "count-changing operation read payload",
-                    )?)
-                    .ok_or("count-changing read payload")?;
-            }
-            Kind::FrozenPrepend => return Err("frozen count-changing workload".into()),
-        }
-        supplied += edit.inserted as u64;
-        inserted += edit.inserted as u64;
-        deleted += edit.deleted as u64;
-        overlapping += edit.deleted.min(edit.inserted) as u64;
-        superseded += edit.deleted as u64;
-        logical_zero += edit.logical_zero as u64;
-    }
-    let inner_edit_ns = started.elapsed().as_nanos();
-    let final_file_bytes = fs::metadata(path)?.len();
-    if final_file_bytes != schedule.last().ok_or("empty count-changing schedule")?.final_len {
-        return Err("count-changing final length".into());
-    }
-    println!("attempted_operations={}", schedule.len());
-    println!("completed_operations={}", schedule.len());
-    println!("final_file_bytes={final_file_bytes}");
-    println!("initial_inode={initial_inode}");
-    println!("final_inode={}", fs::metadata(path)?.ino());
-    println!("supplied_bytes={supplied}");
-    println!("inserted_bytes={inserted}");
-    println!("deleted_bytes={deleted}");
-    println!("overlapping_bytes={overlapping}");
-    println!("superseded_bytes={superseded}");
-    println!("logical_zero_bytes={logical_zero}");
-    println!("copied_payload_bytes={copied_payload}");
-    println!("read_payload_bytes={read_payload}");
-    println!("inner_edit_ns={inner_edit_ns}");
-    Ok(())
-}
-
-fn rewrite_file_range(
-    path: &Path,
-    temporary: &Path,
-    offset: u64,
-    deleted: u64,
-    replacement: &[u8],
-) -> Result<u64> {
-    let mut source = BufReader::with_capacity(1024 * 1024, File::open(path)?);
-    let target = File::create(temporary)?;
-    let mut output = BufWriter::with_capacity(1024 * 1024, target);
-    let prefix = std::io::copy(&mut source.by_ref().take(offset), &mut output)?;
-    if prefix != offset {
-        return Err("count-changing rewrite prefix".into());
-    }
-    output.write_all(replacement)?;
-    let mut remaining = deleted;
-    while remaining != 0 {
-        let available = source.fill_buf()?;
-        if available.is_empty() {
-            return Err("count-changing rewrite deletion".into());
-        }
-        let consumed = available.len().min(usize::try_from(remaining)?);
-        source.consume(consumed);
-        remaining -= consumed as u64;
-    }
-    let suffix = std::io::copy(&mut source, &mut output)?;
-    output.flush()?;
-    output.into_inner()?.sync_all()?;
-    fs::rename(temporary, path)?;
-    prefix
-        .checked_add(suffix)
-        .ok_or_else(|| "count-changing copied bytes".into())
-}
-
-fn count_changing_proof(path: impl AsRef<Path>, verifier: &str) -> Result<()> {
-    use std::os::unix::fs::MetadataExt;
-    const MIB: u64 = 1024 * 1024;
-    let path = path.as_ref();
-    let temporary = path.with_extension("count-changing-proof.tmp");
-    if fs::metadata(path)?.len() != 8 * MIB {
-        return Err("count-changing proof fixture".into());
-    }
-    let initial_inode = fs::metadata(path)?.ino();
-    match verifier {
-        "insert-middle-4k-on-8m-proof" => {
-            let bytes = (0..4096)
-                .map(|index| ((index * 17 + 3) % 251) as u8)
-                .collect::<Vec<_>>();
-            rewrite_file_range(path, &temporary, 4 * MIB, 0, &bytes)?;
-        }
-        "delete-middle-4k-on-8m-proof" => {
-            rewrite_file_range(path, &temporary, 4 * MIB - 2048, 4096, &[])?;
-        }
-        "rewrite-full-grow-8m-to-12m-proof" | "rewrite-full-shrink-8m-to-4m-proof" => {
-            let final_len = if verifier.contains("grow") {
-                12 * MIB
-            } else {
-                4 * MIB
-            };
-            let mut output = BufWriter::with_capacity(64 * 1024, File::create(&temporary)?);
-            let mut offset = 0_u64;
-            let mut buffer = vec![0_u8; 64 * 1024];
-            while offset < final_len {
-                let count = usize::try_from((final_len - offset).min(buffer.len() as u64))?;
-                for (index, byte) in buffer[..count].iter_mut().enumerate() {
-                    *byte = (((offset + index as u64) * 31 + final_len / MIB) % 251) as u8;
-                }
-                output.write_all(&buffer[..count])?;
-                offset += count as u64;
-            }
-            output.flush()?;
-            output.into_inner()?.sync_all()?;
-            fs::rename(&temporary, path)?;
-        }
-        _ => return Err("unknown count-changing proof".into()),
-    }
-    println!("attempted_operations=1");
-    println!("completed_operations=1");
-    println!("final_file_bytes={}", fs::metadata(path)?.len());
-    println!("initial_inode={initial_inode}");
-    println!("final_inode={}", fs::metadata(path)?.ino());
-    Ok(())
-}
-
-#[cfg(unix)]
-fn read_exact_at(file: &File, bytes: &mut [u8], offset: u64) -> std::io::Result<()> {
-    use std::os::unix::fs::FileExt;
-    file.read_exact_at(bytes, offset)
-}
-
-#[cfg(not(unix))]
-fn read_exact_at(file: &File, bytes: &mut [u8], offset: u64) -> std::io::Result<()> {
-    use std::io::{Seek, SeekFrom};
-    let mut file = file;
-    file.seek(SeekFrom::Start(offset))?;
-    file.read_exact(bytes)
 }
 
 #[cfg(unix)]
@@ -1945,8 +1615,6 @@ fn digest(path: &Path) -> Result<(u64, String)> {
 
 fn self_check() -> Result<()> {
     init_namespace::self_check()?;
-    edit_same_count::self_check()?;
-    edit_count_changing::self_check()?;
     store_footprint::self_check()?;
     let root = std::env::temp_dir().join(format!(
         "fs-benchmark-pro-{}-{}",
@@ -1976,30 +1644,6 @@ fn self_check() -> Result<()> {
         let expected = [PREPEND, &expected].concat();
         if fs::read(&payload)? != expected {
             return Err("workload byte oracle mismatch".into());
-        }
-        let same_count = root.join("same-count.bin");
-        fs::write(&same_count, edit_same_count::fixture_bytes())?;
-        same_count_edit(&same_count, "overwrite-middle-4k-ops-1", 1)?;
-        if fs::metadata(&same_count)?.len() != edit_same_count::FIXTURE_BYTES {
-            return Err("same-count workload length".into());
-        }
-        let count_changing = root.join("count-changing.bin");
-        fs::write(&count_changing, edit_count_changing::fixture_bytes())?;
-        count_changing_edit(&count_changing, "append-tail-4k-ops-1", 1)?;
-        if fs::metadata(&count_changing)?.len() != edit_count_changing::FIXTURE_BYTES + 4096 {
-            return Err("count-changing workload length".into());
-        }
-        let count_delete = root.join("count-delete.bin");
-        let mut expected_delete = edit_count_changing::fixture_bytes();
-        let edit = edit_count_changing::schedule(
-            edit_count_changing::scenario("delete-middle-2k-ops-1")?,
-            1,
-        )?[0];
-        fs::write(&count_delete, &expected_delete)?;
-        count_changing_edit(&count_delete, "delete-middle-2k-ops-1", 1)?;
-        expected_delete.drain(edit.offset as usize..edit.offset as usize + edit.deleted);
-        if fs::read(&count_delete)? != expected_delete {
-            return Err("count-changing delete byte oracle".into());
         }
         let (size, actual) = digest(&payload)?;
         let mut expected_hash = Sha256::new();
