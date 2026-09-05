@@ -3,7 +3,7 @@
 FROM rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4 AS build
 
 ARG TARGETARCH
-ARG CARGO_BUILD_JOBS=8
+ARG CARGO_BUILD_JOBS=2
 
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
@@ -30,6 +30,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
       *) exit 1 ;; \
     esac \
  && rustup target add "$target" \
+ && cargo clean --release --target "$target" \
+      -p layerfs-content -p layerfs-materialization -p layerfs-layerstack-store \
+      -p layerfs-workspace -p layerfs-monitor -p layerfs-sdk \
+      -p layerfs-daemon -p layerfs-fuse -p fs-benchmark-pro \
  && rustc --edition=2021 -C opt-level=3 -C strip=symbols \
       --remap-path-prefix=/workload=. /workload/workload.rs -o /fs-benchmark-workload \
  && cargo build --locked --release --target "$target" --jobs "$CARGO_BUILD_JOBS" \

@@ -798,7 +798,7 @@ fn update_store_edited_hash(
     Ok(())
 }
 
-fn create_store_footprint_fixture(root: &Path, control_id: &str, tier: u64) -> Result<()> {
+pub(crate) fn create_store_footprint_fixture(root: &Path, control_id: &str, tier: u64) -> Result<()> {
     let control = store_footprint::control(control_id)?;
     if root.exists() || ![10, 100, 1_000, 10_000, 100_000].contains(&tier) {
         return Err("Store-footprint fixture arguments".into());
@@ -1192,6 +1192,20 @@ fn run() -> Result<()> {
         [command] if command == "noop" => Ok(()),
         [command, path] if command == "digest" => print_digest(path),
         [command, path] if command == "digest-inode" => print_digest_inode(path),
+        [command, path, start, end] if command == "digest-range-inode" => {
+            use std::os::unix::fs::{FileExt, MetadataExt};
+            let file = File::open(path)?;
+            let metadata = file.metadata()?;
+            let start: u64 = start.parse()?;
+            let end: u64 = end.parse()?;
+            if start > end || end > metadata.len() || end - start > 192 * 1024 {
+                return Err("invalid digest boundary range".into());
+            }
+            let mut bytes = vec![0; (end - start) as usize];
+            file.read_exact_at(&mut bytes, start)?;
+            println!("{}\t{}\t{}", metadata.len(), sdk_edit_common::sha256_hex(&bytes), metadata.ino());
+            Ok(())
+        }
         [command, path] if command == "stat-inode" => {
             use std::os::unix::fs::MetadataExt;
             let metadata = fs::metadata(path)?;
@@ -1201,6 +1215,9 @@ fn run() -> Result<()> {
         [command, path] if command == "read" => print_read(path),
         [command, path, scenario] if command == "namespace-verify" => {
             print_namespace(path, scenario)
+        }
+        [command, path, scenario] if command == "namespace-verify-fast" => {
+            namespace_verify_fast(Path::new(path), scenario)
         }
         [command, fixture, path] if command == "create" => {
             let started = std::time::Instant::now();
@@ -1618,6 +1635,47 @@ fn print_read(path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
+fn namespace_verify_fast(root: &Path, scenario: &str) -> Result<()> {
+    use std::collections::BTreeSet;
+    let plan = namespace_plan(scenario)?;
+    validate_namespace_metadata(&fs::symlink_metadata(root)?, true)?;
+    let mut indices = BTreeSet::new();
+    for directory in [0, plan.scenario.data_directories / 2, plan.scenario.data_directories - 1] {
+        let first = (directory * NAMESPACE_FILES_PER_DIRECTORY) as usize;
+        indices.extend([first, first + NAMESPACE_FILES_PER_DIRECTORY as usize - 1]);
+    }
+    for class in [NamespaceClass::Empty, NamespaceClass::Tiny, NamespaceClass::Small, NamespaceClass::Medium, NamespaceClass::Anchor] {
+        if let Some(index) = plan.files.iter().position(|file| file.class == class) {
+            indices.insert(index);
+        }
+    }
+    // ponytail: at most 11 paths and 64 KiB per path; this is explicit sampled coverage.
+    let mut verified_bytes = 0;
+    let mut paths = Vec::new();
+    for index in indices {
+        let planned = &plan.files[index];
+        let path = root.join(&planned.relative_path);
+        let parent = fs::symlink_metadata(path.parent().ok_or("namespace sample parent")?)?;
+        let metadata = fs::symlink_metadata(&path)?;
+        if !parent.is_dir() || !metadata.is_file() || metadata.len() != planned.size {
+            return Err("namespace sample type or length".into());
+        }
+        validate_namespace_metadata(&parent, true)?;
+        validate_namespace_metadata(&metadata, false)?;
+        let mut expected = vec![0; planned.size.min(65536) as usize];
+        NamespaceContentStream::new(plan.scenario, planned).fill(&mut expected);
+        let mut observed = vec![0; expected.len()];
+        File::open(path)?.read_exact(&mut observed)?;
+        if observed != expected {
+            return Err("namespace sample bytes".into());
+        }
+        verified_bytes += observed.len();
+        paths.push(planned.relative_path.as_str());
+    }
+    println!("sampled_files={}\nverified_bytes={verified_bytes}\nsampled_paths={}", paths.len(), paths.join(","));
+    Ok(())
+}
+
 fn print_namespace(path: impl AsRef<Path>, scenario: &str) -> Result<()> {
     let plan = namespace_plan(scenario)?;
     let summary = namespace_digest_with_plan(path.as_ref(), &plan)?;
@@ -2025,7 +2083,7 @@ fn self_check() -> Result<()> {
             || NAMESPACE_DIGEST_PROFILE != "namespace-file-digest-tree-v2"
             || NAMESPACE_EDIT_CONTRACT != "content-only-normalized-mtime-v1"
             || NAMESPACE_LIFECYCLE_PROFILE != "commit-head-exact-reopen-v2"
-            || NAMESPACE_INIT_DIAGNOSTIC_PROFILE != "initialization-only-diagnostic-v1"
+            || NAMESPACE_INIT_DIAGNOSTIC_PROFILE != "initialization-only-fast-v2"
         {
             return Err("namespace-v2 evidence identity".into());
         }

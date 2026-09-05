@@ -11,6 +11,36 @@ const SDK: [&str; 3] = [
     "edit_canonical_chunk_count",
 ];
 
+fn fixture_info(family: &str, case: &str, seed: u8) -> AnyResult<()> {
+    if SDK.contains(&family) {
+        return sdk_edit_fixture_info(sdk_edit_scenario(family, case)?.fixture_bytes);
+    }
+    let (plan, bytes, files) = if family == "init_namespace" {
+        let plan = workload_source::namespace_plan(case)?;
+        (
+            format!("{plan:?}"),
+            plan.scenario.logical_bytes,
+            plan.scenario.regular_files,
+        )
+    } else if family == "store_footprint" {
+        let control = workload_source::store_footprint::control(case)?;
+        (
+            format!("{control:?}"),
+            control.logical_bytes,
+            control.regular_files,
+        )
+    } else {
+        return super::workspace_bench::fixture_info(
+            &workload_source::workspace_registry::resolve(case)?,
+            seed,
+            None,
+        );
+    };
+    let plan_sha256 = workload_source::sdk_edit_common::sha256_hex(plan.as_bytes());
+    println!("{{\"fixture_profile\":\"namespace-input-v2\",\"input_mode\":\"directory\",\"input_plan_sha256\":\"{plan_sha256}\",\"fixture_bytes\":{bytes},\"regular_files\":{files}}}");
+    Ok(())
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "Arguments mirror the emitted registry columns"
@@ -78,7 +108,11 @@ fn list(family_filter: Option<&str>, case_filter: Option<&str>) -> AnyResult<()>
                 case.final_bytes <= 524_288_000,
                 case.fixture_bytes,
                 1,
-                (case.fixture_bytes / 1_048_576) as usize,
+                if case.id.contains("500mib") {
+                    500
+                } else {
+                    (case.fixture_bytes / 1_048_576) as usize
+                },
                 true,
             );
         }
@@ -264,9 +298,9 @@ fn prepare(family: &str, id: &str, seed: u8, root: &Path) -> AnyResult<()> {
         fixture
     } else if family == "store_footprint" {
         let control = workload_source::store_footprint::control(id)?;
-        let output = Command::new("/usr/local/bin/fs-benchmark-workload")
+        let output = Command::new(std::env::current_exe()?)
             .args([
-                OsString::from("store-footprint-fixture"),
+                OsString::from("infra-footprint-fixture"),
                 payload.as_os_str().into(),
                 id.into(),
                 control.infra_tier.to_string().into(),
@@ -346,7 +380,13 @@ fn run_selected(
     {
         return Err("prepared receipt mismatch".into());
     }
-    let payload = root.join("payload");
+    let payload = if matches!(family, "init_namespace" | "store_footprint") && host_store() {
+        PathBuf::from(
+            std::env::var_os("LAYERFS_BENCH_PREPARED_INPUT").ok_or("host prepared input")?,
+        )
+    } else {
+        root.join("payload")
+    };
     let work = root.join("work");
     let profile = "reused-first-sample-uncontrolled";
     let source = std::env::var("LAYERFS_BENCH_SOURCE_ARM").unwrap_or_else(|_| "candidate".into());
@@ -371,6 +411,7 @@ fn run_selected(
                 seed.into(),
                 &field(&fixture, "fixture_digest")?,
                 profile,
+                Some(&ContainerId(container.into())),
             )
         } else {
             namespace_verify_case(
@@ -429,7 +470,7 @@ fn run_selected(
                 id.into(),
                 source.as_str().into(),
                 container.into(),
-                "-".into(),
+                std::env::var_os("LAYERFS_SDK_EDIT_PERFORMANCE_ROWS").unwrap_or_else(|| "-".into()),
             ]);
         }
         let code_hash =
@@ -513,6 +554,8 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         .map(|s| s.to_str().ok_or("infra arguments must be UTF-8"))
         .collect::<Result<Vec<_>, _>>()?;
     match text.as_slice() {
+        ["infra-fixture-info",family,case,seed]=>fixture_info(family,case,seed.parse()?),
+        ["infra-footprint-fixture",root,case,tier]=>workload_source::create_store_footprint_fixture(Path::new(root),case,tier.parse()?),
         ["infra-list"]=>list(None, None),
         ["infra-list",family]=>list(Some(family), None),
         ["infra-list",family,case]=>list(Some(family), Some(case)),

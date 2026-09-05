@@ -839,6 +839,7 @@ fn run() -> AnyResult<()> {
             iteration.to_string_lossy().parse()?,
             &fixture_digest.to_string_lossy(),
             &fixture_cache_profile.to_string_lossy(),
+            None,
         ),
         [command, root, fixture, container, scenario, seed, source, fixture_cache_profile]
             if command == "same-count-performance" =>
@@ -1097,10 +1098,9 @@ fn sdk_edit_combined_registry_self_check() -> AnyResult<()> {
             combined.push('\n');
         }
     }
-    if workload_source::sdk_edit_common::sha256_hex(combined.as_bytes())
-        != workload_source::sdk_edit_common::COMBINED_REGISTRY_SHA256
-    {
-        return Err("combined SDK edit registry manifest".into());
+    let combined_sha256 = workload_source::sdk_edit_common::sha256_hex(combined.as_bytes());
+    if combined_sha256 != workload_source::sdk_edit_common::COMBINED_REGISTRY_SHA256 {
+        return Err(format!("combined SDK edit registry manifest {combined_sha256}").into());
     }
     Ok(())
 }
@@ -3742,7 +3742,8 @@ fn store_footprint_case(
     let container_before = container_cgroup_snapshot(&container_id)?;
     let total_started = Instant::now();
     let store = Arc::new(LayerStackStore::create(&store_path)?);
-    let client = Client::connect(store.clone())?;
+    let binding = benchmark_container_binding(root, &container_id)?;
+    let client = benchmark_client(store.clone(), binding.as_ref())?;
     let store_baseline_bytes = std::fs::metadata(&store_path)?.len();
     let initialization_started = Instant::now();
     let initialized = client.initialize_layerstack(
@@ -3761,6 +3762,7 @@ fn store_footprint_case(
         &client.monitor_snapshot()?,
         OperationFamily::LayerStackInitialize,
     )?;
+    let create_started = Instant::now();
     let branch = client.fork_branch(
         EntityName::new("main")?,
         LocalForkSource::Layer {
@@ -3778,8 +3780,10 @@ fn store_footprint_case(
         },
         projection: Some(WorkspaceProjection::Fuse),
     })?;
+    let create_ns = elapsed_ns(create_started);
     let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
         .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
+    let execution_started = Instant::now();
     let output = execute_workload(
         &client,
         workspace.id,
@@ -3789,6 +3793,7 @@ fn store_footprint_case(
             OsString::from(edit_path),
         ],
     )?;
+    let execution_ns = elapsed_ns(execution_started);
     let attempted_operations = output_u64(&output, "attempted_operations")?;
     let completed_operations = output_u64(&output, "completed_operations")?;
     let final_file_bytes = output_u64(&output, "final_file_bytes")?;
@@ -3805,7 +3810,11 @@ fn store_footprint_case(
     };
     visible_head(&client, branch, head)?;
     let commit_ns = elapsed_ns(commit_started);
+    let end_started = Instant::now();
     client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    let end_ns = elapsed_ns(end_started);
+    let product_call_sum_ns = initialization_ns + create_ns + execution_ns + commit_ns + end_ns;
+    println!("{{\"kind\":\"product-timing\",\"product_call_sum_ns\":{product_call_sum_ns},\"initialization_ns\":{initialization_ns},\"create_ns\":{create_ns},\"exec_ns\":{execution_ns},\"commit_and_visibility_ns\":{commit_ns},\"end_ns\":{end_ns}}}");
     if client.active_workspace_count()? != 0 || client.active_execution_count()? != 0 {
         return Err("Store-footprint cleanup".into());
     }
@@ -3831,7 +3840,7 @@ fn store_footprint_case(
     if verify {
         let reopen_started = Instant::now();
         let reopened_store = Arc::new(LayerStackStore::connect(&store_path)?);
-        let reopened = Client::connect(reopened_store.clone())?;
+        let reopened = benchmark_client(reopened_store.clone(), binding.as_ref())?;
         visible_head(&reopened, branch, head)?;
         let pinned = reopened_store.pin_branch(branch)?;
         let commit_id = head.ok_or("Store-footprint missing Commit")?;
@@ -3845,6 +3854,24 @@ fn store_footprint_case(
         }
         reopen_ns = elapsed_ns(reopen_started);
         let verification_started = Instant::now();
+        use std::os::unix::fs::FileExt;
+        let edit_offset = workload_source::namespace_edit_offset(edit_size)?;
+        let start = edit_offset.saturating_sub(65536);
+        let end = edit_size.min(edit_offset + workload_source::NAMESPACE_EDIT_MARKER.len() as u64 + 65536);
+        let mut expected_bytes = vec![0; (end - start) as usize];
+        std::fs::File::open(fixture.join(edit_path))?.read_exact_at(&mut expected_bytes, start)?;
+        let marker = (edit_offset - start) as usize;
+        expected_bytes[marker..marker + workload_source::NAMESPACE_EDIT_MARKER.len()]
+            .copy_from_slice(workload_source::NAMESPACE_EDIT_MARKER);
+        let expected_sha = workload_source::sdk_edit_common::sha256_hex(&expected_bytes);
+        let mut sink = SdkEditHashSink(workload_source::Sha256::new());
+        layerfs_content::filesystem::read_range(
+            &layerfs_layerstack_store::CoreReader(&pinned.reader), pinned.root,
+            &layerfs_content::CanonicalPath::new(edit_path)?, start..end, &mut sink,
+        )?;
+        if workload_source::hex(&sink.0.finish()) != expected_sha {
+            return Err("Store-footprint canonical edit boundary".into());
+        }
         let reopened_workspace = reopened.create_workspace_session(CreateWorkspaceSession {
             branch_id: branch,
             placement: WorkspacePlacement::Container {
@@ -3865,20 +3892,21 @@ fn store_footprint_case(
             reopened_workspace.id,
             vec![
                 workload,
-                OsString::from("store-footprint-digest"),
-                OsString::from("."),
+                OsString::from("digest-range-inode"),
+                OsString::from(edit_path),
+                OsString::from(start.to_string()),
+                OsString::from(end.to_string()),
             ],
         )?;
         eprintln!(
-            "layerfs-store-verifier-phase-v1 event=tree-digest-complete elapsed_ns={}",
+            "layerfs-store-verifier-phase-v1 event=edit-boundary-complete elapsed_ns={}",
             elapsed_ns(verification_started)
         );
-        if output_u64(&output, "regular_files")? != expected_files
-            || output_u64(&output, "logical_bytes")? != expected_logical_bytes
-            || output_string(&output, "tree_digest")? != edited_digest
-        {
-            return Err("Store-footprint exact reopen digest".into());
+        let (observed_size, observed_sha, _) = sdk_edit_digest_inode(&output)?;
+        if observed_size != edit_size || observed_sha != expected_sha {
+            return Err("Store-footprint FUSE edit boundary".into());
         }
+        println!("{{\"kind\":\"store-footprint-boundary-proof\",\"verification_profile\":\"storage-accounting-reopen-and-edit-boundary-v1\",\"sampled_path\":\"{edit_path}\",\"verified_start\":{start},\"verified_end\":{end},\"verified_bytes\":{},\"boundary_sha256\":\"{expected_sha}\",\"full_namespace_verified\":false,\"full_file_bytes_verified\":false,\"status\":\"pass\"}}", end-start);
         reopened.end_workspace_session(reopened_workspace.id, EndWorkspaceMode::Clean)?;
         eprintln!(
             "layerfs-store-verifier-phase-v1 event=workspace-ended elapsed_ns={}",
@@ -4157,51 +4185,40 @@ fn namespace_verify_case(
     std::fs::create_dir(root)?;
     let store_path = root.join("store.sqlite");
     let store = Arc::new(LayerStackStore::create(&store_path)?);
-    let client = Client::connect(store.clone())?;
+    let binding = benchmark_container_binding(root, &container_id)?;
+    let client = benchmark_client(store.clone(), binding.as_ref())?;
     let initialized = client.initialize_layerstack(
         EntityName::new(format!("{}-{source}-{seed}-verify", scenario.id))?,
         LayerStackInitialization::Directory(fixture.to_owned()),
     )?;
+    let scans = store.take_layerstack_initialization_receipts();
+    let [scan] = scans.as_slice() else {
+        return Err("namespace initialization receipt cardinality".into());
+    };
+    if scan.scanned_files != scenario.regular_files || scan.scanned_bytes != scenario.logical_bytes {
+        return Err("namespace initialization counts".into());
+    }
     let branch = client.fork_branch(
         EntityName::new("main")?,
         LocalForkSource::Layer {
             layer_id: initialized.genesis_layer_id,
         },
     )?;
-    let workspace = client.create_workspace_session(CreateWorkspaceSession {
-        branch_id: branch,
-        placement: namespace_placement(
-            &container_id,
-            scenario,
-            usize::from(seed),
-            "verify-prepare",
-        ),
-        projection: Some(WorkspaceProjection::Fuse),
-    })?;
     let workload = std::env::var_os("LAYERFS_BENCH_WORKLOAD")
         .unwrap_or_else(|| OsString::from("fs-benchmark-workload"));
-    execute_workload(
-        &client,
-        workspace.id,
-        vec![
-            workload.clone(),
-            OsString::from("namespace-edit"),
-            OsString::from(edit_path),
-        ],
-    )?;
-    let head = match client.commit_workspace_session(workspace.id)? {
-        WorkspaceCommitResult::Created { commit_id, .. } => Some(commit_id),
-        result => {
-            return Err(format!("namespace verifier preparation Commit failed: {result:?}").into())
-        }
-    };
-    client.end_workspace_session(workspace.id, EndWorkspaceMode::Clean)?;
+    let initial = store.pin_branch(branch)?;
+    let head = initial.branch.head_commit_id;
+    let initial_root = initial.root;
+    drop(initial);
     drop(client);
     drop(store);
 
     let started = Instant::now();
     let reopened_store = Arc::new(LayerStackStore::connect(&store_path)?);
-    let reopened = Client::connect(reopened_store)?;
+    if reopened_store.pin_branch(branch)?.root != initial_root {
+        return Err("namespace persisted root mismatch".into());
+    }
+    let reopened = benchmark_client(reopened_store, binding.as_ref())?;
     visible_head(&reopened, branch, head)?;
     let reopened_workspace = reopened.create_workspace_session(CreateWorkspaceSession {
         branch_id: branch,
@@ -4213,38 +4230,23 @@ fn namespace_verify_case(
         reopened_workspace.id,
         vec![
             workload,
-            OsString::from("namespace-verify"),
+            OsString::from("namespace-verify-fast"),
             OsString::from("."),
             OsString::from(scenario.id),
         ],
     )?;
-    let verified = parse_namespace_verification(&output)?;
-    let expected = namespace_manifest(scenario, edited_digest)?;
-    if verified.manifest != expected {
-        return Err("namespace exact verifier mismatch".into());
+    let sampled_files = output_u64(&output, "sampled_files")?;
+    let verified_bytes = output_u64(&output, "verified_bytes")?;
+    let sampled_paths = output_string(&output, "sampled_paths")?;
+    if sampled_files == 0 || sampled_files > 11 || verified_bytes > 11 * 65536 {
+        return Err("namespace sample coverage bounds".into());
     }
     reopened.end_workspace_session(reopened_workspace.id, EndWorkspaceMode::Clean)?;
     if reopened.active_workspace_count()? != 0 || reopened.active_execution_count()? != 0 {
         return Err("namespace verifier cleanup".into());
     }
     let verification_ns = elapsed_ns(started);
-    println!(
-        "{{\"schema\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"display_alias\":\"{}\",\"display_name\":\"{}\",\"verification_id\":\"exact-result\",\"mode\":\"verify\",\"source_arm\":\"{}\",\"seed\":{},\"status\":\"pass\",\"expected_file_bytes\":{},\"observed_file_bytes\":{},\"expected_sha256\":\"{}\",\"observed_sha256\":\"{}\",\"root_status\":\"pass\",\"fresh_reopen_status\":\"pass\",\"resource_status\":\"pass\",\"cleanup_status\":\"pass\",\"verification_ns\":{},\"maximum_verifier_buffer_bytes\":{},\"verifier_worker_count\":{}}}",
-        workload_source::VERIFICATION_SCHEMA,
-        workload_source::FAMILY_ID,
-        scenario.id,
-        scenario.alias,
-        scenario.display_name,
-        source,
-        seed,
-        expected.logical_bytes,
-        verified.manifest.logical_bytes,
-        expected.digest,
-        verified.manifest.digest,
-        verification_ns,
-        verified.maximum_verifier_buffer_bytes,
-        verified.verifier_worker_count,
-    );
+    println!("{{\"schema\":\"namespace-sampled-verification-v1\",\"family_id\":\"init_namespace\",\"scenario_id\":\"{}\",\"source_arm\":\"{source}\",\"seed\":{seed},\"status\":\"pass\",\"verification_profile\":\"import-counts-reopen-and-sampled-fuse-v1\",\"initial_root\":\"{initial_root}\",\"root_status\":\"pass-reopen-equality\",\"scanned_files\":{},\"scanned_bytes\":{},\"sampled_files\":{sampled_files},\"verified_bytes\":{verified_bytes},\"sampled_paths\":\"{sampled_paths}\",\"full_namespace_verified\":false,\"full_file_bytes_verified\":false,\"fresh_reopen_status\":\"pass\",\"cleanup_status\":\"pass\",\"verification_ns\":{verification_ns}}}", scenario.id, scan.scanned_files, scan.scanned_bytes);
     Ok(())
 }
 
@@ -4823,6 +4825,7 @@ fn namespace_init_diagnostic(
     iteration: usize,
     fixture_digest: &str,
     fixture_cache_profile: &str,
+    container: Option<&ContainerId>,
 ) -> AnyResult<()> {
     if iteration == 0
         || !fixture.is_dir()
@@ -4842,7 +4845,11 @@ fn namespace_init_diagnostic(
     std::fs::create_dir(root)?;
     let store_path = root.join("store.sqlite");
     let store = Arc::new(LayerStackStore::create(&store_path)?);
-    let client = Client::connect(store.clone())?;
+    let binding = container
+        .map(|id| benchmark_container_binding(root, id))
+        .transpose()?
+        .flatten();
+    let client = benchmark_client(store.clone(), binding.as_ref())?;
     let store_baseline_bytes = std::fs::metadata(&store_path)?.len();
     let setup_ns = elapsed_ns(setup_started);
     if !store.take_layerstack_initialization_receipts().is_empty() {
@@ -4910,7 +4917,7 @@ fn namespace_init_diagnostic(
         connection_cache_target_bytes: sqlite_t1_connection_cache_target_bytes,
     } = sqlite_resources_after;
     println!(
-        "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"init-only-diagnostic\",\"nonterminal\":true,\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{layerstack_init_ns},\"teardown_ns\":{teardown_ns},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{},\"process_t0_rss_bytes\":{},\"process_t1_rss_bytes\":{},\"process_t1_rss_growth_bytes\":{},\"process_t0_peak_rss_bytes\":{},\"process_t1_peak_rss_bytes\":{},\"process_initialization_incremental_peak_rss_bytes\":{},\"process_initialization_peak_status\":\"{initialization_peak_status}\",\"process_t0_swaps\":{},\"process_t1_swaps\":{},\"process_t0_physical_footprint_bytes\":{},\"process_t1_physical_footprint_bytes\":{},\"initialization_user_cpu_ns\":{},\"initialization_system_cpu_ns\":{},\"initialization_disk_read_bytes\":{},\"initialization_disk_write_bytes\":{},\"initialization_context_switches\":{},\"process_threads_before\":{},\"process_threads_after\":{},\"sqlite_t0_memory_used_bytes\":{sqlite_t0_memory_used_bytes},\"sqlite_t0_memory_peak_bytes\":{sqlite_t0_memory_peak_bytes},\"sqlite_t0_page_cache_overflow_bytes\":{sqlite_t0_page_cache_overflow_bytes},\"sqlite_t0_page_cache_overflow_peak_bytes\":{sqlite_t0_page_cache_overflow_peak_bytes},\"sqlite_t0_allocation_count\":{sqlite_t0_allocation_count},\"sqlite_t0_allocation_peak_count\":{sqlite_t0_allocation_peak_count},\"sqlite_t0_connection_cache_used_bytes\":{sqlite_t0_connection_cache_used_bytes},\"sqlite_connection_cache_target_bytes\":{sqlite_t0_connection_cache_target_bytes},\"sqlite_t1_memory_used_bytes\":{sqlite_t1_memory_used_bytes},\"sqlite_t1_memory_peak_bytes\":{sqlite_t1_memory_peak_bytes},\"sqlite_t1_page_cache_overflow_bytes\":{sqlite_t1_page_cache_overflow_bytes},\"sqlite_t1_page_cache_overflow_peak_bytes\":{sqlite_t1_page_cache_overflow_peak_bytes},\"sqlite_t1_allocation_count\":{sqlite_t1_allocation_count},\"sqlite_t1_allocation_peak_count\":{sqlite_t1_allocation_peak_count},\"sqlite_t1_connection_cache_used_bytes\":{sqlite_t1_connection_cache_used_bytes},\"sqlite_t1_connection_cache_target_bytes\":{sqlite_t1_connection_cache_target_bytes}}}",
+        "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"init-only-diagnostic\",\"nonterminal\":false,\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{layerstack_init_ns},\"teardown_ns\":{teardown_ns},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{},\"process_t0_rss_bytes\":{},\"process_t1_rss_bytes\":{},\"process_t1_rss_growth_bytes\":{},\"process_t0_peak_rss_bytes\":{},\"process_t1_peak_rss_bytes\":{},\"process_initialization_incremental_peak_rss_bytes\":{},\"process_initialization_peak_status\":\"{initialization_peak_status}\",\"process_t0_swaps\":{},\"process_t1_swaps\":{},\"process_t0_physical_footprint_bytes\":{},\"process_t1_physical_footprint_bytes\":{},\"initialization_user_cpu_ns\":{},\"initialization_system_cpu_ns\":{},\"initialization_disk_read_bytes\":{},\"initialization_disk_write_bytes\":{},\"initialization_context_switches\":{},\"process_threads_before\":{},\"process_threads_after\":{},\"sqlite_t0_memory_used_bytes\":{sqlite_t0_memory_used_bytes},\"sqlite_t0_memory_peak_bytes\":{sqlite_t0_memory_peak_bytes},\"sqlite_t0_page_cache_overflow_bytes\":{sqlite_t0_page_cache_overflow_bytes},\"sqlite_t0_page_cache_overflow_peak_bytes\":{sqlite_t0_page_cache_overflow_peak_bytes},\"sqlite_t0_allocation_count\":{sqlite_t0_allocation_count},\"sqlite_t0_allocation_peak_count\":{sqlite_t0_allocation_peak_count},\"sqlite_t0_connection_cache_used_bytes\":{sqlite_t0_connection_cache_used_bytes},\"sqlite_connection_cache_target_bytes\":{sqlite_t0_connection_cache_target_bytes},\"sqlite_t1_memory_used_bytes\":{sqlite_t1_memory_used_bytes},\"sqlite_t1_memory_peak_bytes\":{sqlite_t1_memory_peak_bytes},\"sqlite_t1_page_cache_overflow_bytes\":{sqlite_t1_page_cache_overflow_bytes},\"sqlite_t1_page_cache_overflow_peak_bytes\":{sqlite_t1_page_cache_overflow_peak_bytes},\"sqlite_t1_allocation_count\":{sqlite_t1_allocation_count},\"sqlite_t1_allocation_peak_count\":{sqlite_t1_allocation_peak_count},\"sqlite_t1_connection_cache_used_bytes\":{sqlite_t1_connection_cache_used_bytes},\"sqlite_t1_connection_cache_target_bytes\":{sqlite_t1_connection_cache_target_bytes}}}",
         workload_source::NAMESPACE_SCHEMA,
         scenario.id,
         scenario.fixture_profile,
@@ -5060,10 +5067,7 @@ fn sdk_edit_scenario(
 
 fn sdk_edit_fixture_info(fixture_bytes: u64) -> AnyResult<()> {
     use workload_source::sdk_edit_common as fixture;
-    let index = fixture::SIZES
-        .iter()
-        .position(|size| *size == fixture_bytes)
-        .ok_or("SDK edit fixture size")?;
+    let index = fixture::fixture_index(fixture_bytes).ok_or("SDK edit fixture size")?;
     println!("{{\"fixture_profile\":\"{}\",\"fixture_bytes\":{},\"fixture_sha256\":\"{}\",\"canonical_file_root\":\"{}\",\"mapping_root\":\"{}\",\"extent_count\":{},\"directory_mode\":488,\"file_mode\":416,\"mtime_seconds\":1700000000,\"generator_seed\":{}}}",
         fixture::FIXTURE_PROFILE, fixture_bytes, fixture::FIXTURE_SHA256[index],
         fixture::FIXTURE_FILE_ROOT[index], fixture::FIXTURE_MAP_ROOT[index], fixture::FIXTURE_EXTENTS[index], 0x4c41_5945_5246_5331_u64);
@@ -5072,9 +5076,7 @@ fn sdk_edit_fixture_info(fixture_bytes: u64) -> AnyResult<()> {
 
 fn sdk_edit_prepare(root: &Path, fixture_bytes: u64) -> AnyResult<()> {
     use std::os::unix::fs::PermissionsExt;
-    let size_index = workload_source::sdk_edit_common::SIZES
-        .iter()
-        .position(|size| *size == fixture_bytes)
+    let size_index = workload_source::sdk_edit_common::fixture_index(fixture_bytes)
         .ok_or("SDK edit fixture size")?;
     if root.exists() {
         return Err("SDK edit prepared root already exists".into());
@@ -5254,7 +5256,8 @@ fn sdk_edit_worker(
     let store = Arc::new(LayerStackStore::connect(root.join("store.sqlite"))?);
     let initial = store.pin_branch(branch)?;
     let initial_branch_root = initial.root;
-    let client = Client::connect(store.clone())?;
+    let binding = benchmark_container_binding(root, &container)?;
+    let client = benchmark_client(store.clone(), binding.as_ref())?;
     let create_started = Instant::now();
     let session = client.create_workspace_session(CreateWorkspaceSession {
         branch_id: branch,
@@ -5927,17 +5930,6 @@ fn sdk_edit_digest_inode(output: &OutputPage) -> AnyResult<(u64, String, u64)> {
     Err("SDK edit digest-inode output".into())
 }
 
-fn sdk_edit_hash(
-    source: &dyn layerfs_layerstack_store::ObjectSource,
-    root: layerfs_content::ObjectId,
-) -> AnyResult<String> {
-    let reader = layerfs_layerstack_store::CoreReader(source);
-    let path = layerfs_content::CanonicalPath::new("payload.bin")?;
-    let mut sink = SdkEditHashSink(workload_source::Sha256::new());
-    layerfs_content::filesystem::stream(&reader, root, &path, &mut sink)?;
-    Ok(workload_source::hex(&sink.0.finish()))
-}
-
 #[allow(clippy::too_many_arguments)]
 fn sdk_edit_verify(
     root: &Path,
@@ -6493,6 +6485,32 @@ fn case_placement(
             root: root.join("mount"),
         },
     }
+}
+
+fn benchmark_container_binding(
+    root: &Path,
+    container: &ContainerId,
+) -> AnyResult<Option<layerfs_sdk::ContainerBinding>> {
+    if infra::host_store() {
+        let manager = layerfs_sdk::ContainerManager::open(
+            root.parent()
+                .ok_or("benchmark sample parent")?
+                .join("container-control"),
+        )?;
+        Ok(Some(manager.connect(&container.0)?.binding()))
+    } else {
+        Ok(None)
+    }
+}
+
+fn benchmark_client(
+    store: Arc<LayerStackStore>,
+    binding: Option<&layerfs_sdk::ContainerBinding>,
+) -> AnyResult<Client> {
+    Ok(match binding {
+        Some(binding) => Client::connect_with_container(store, binding.clone())?,
+        None => Client::connect(store)?,
+    })
 }
 
 fn reopen_visible(path: &Path, branch: BranchId, expected: Option<CommitId>) -> AnyResult<()> {

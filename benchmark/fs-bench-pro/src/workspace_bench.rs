@@ -7,22 +7,14 @@ fn sample_binding(
     root: &Path,
     container: &ContainerId,
 ) -> AnyResult<Option<layerfs_sdk::ContainerBinding>> {
-    if super::infra::host_store() {
-        let manager = layerfs_sdk::ContainerManager::open(root.join("container-control"))?;
-        Ok(Some(manager.connect(&container.0)?.binding()))
-    } else {
-        Ok(None)
-    }
+    benchmark_container_binding(root, container)
 }
 
 fn sample_client(
     store: Arc<LayerStackStore>,
     binding: &Option<layerfs_sdk::ContainerBinding>,
 ) -> AnyResult<Client> {
-    Ok(match binding {
-        Some(binding) => Client::connect_with_container(store, binding.clone())?,
-        None => Client::connect(store)?,
-    })
+    benchmark_client(store, binding.as_ref())
 }
 
 fn host_continuation_proof(
@@ -771,7 +763,7 @@ fn entry_info(entries: &[Entry]) -> AnyResult<(u64, usize, String)> {
     Ok((bytes, files, workload_source::hex(&hash.finish())))
 }
 
-fn fixture_info(case: &Case, seed: u8, branch: Option<BranchId>) -> AnyResult<()> {
+pub(crate) fn fixture_info(case: &Case, seed: u8, branch: Option<BranchId>) -> AnyResult<()> {
     let entries = registry::fixture(case, seed)?;
     let (bytes, files, mut plan) = entry_info(&entries)?;
     if case.kind == "git-tool" {

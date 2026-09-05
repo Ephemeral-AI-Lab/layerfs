@@ -3,6 +3,14 @@ use std::collections::BTreeSet;
 
 pub(crate) const SIZES: [u64; 4] = [1_048_576, 10_485_760, 104_857_600, 524_288_000];
 pub(crate) const SIZE_LABELS: [&str; 4] = ["1", "10", "100", "500"];
+pub(crate) const PREPARED_SIZES: [u64; 6] = [
+    1_048_576,
+    10_485_760,
+    104_857_600,
+    524_283_904,
+    524_285_952,
+    524_288_000,
+];
 pub(crate) const FIXTURE_PROFILE: &str = "sdk-edit-standard-content-v1";
 pub(crate) const PERFORMANCE_SCHEMA: &str = "fs-bench-pro-sdk-edit-performance-v1";
 pub(crate) const VERIFICATION_SCHEMA: &str = "fs-bench-pro-sdk-edit-verification-v1";
@@ -12,26 +20,36 @@ pub(crate) const FIXTURE_SCHEMA: &str = "fs-bench-pro-sdk-edit-fixture-v1";
 pub(crate) const CGROUP_SCHEMA: &str = "fs-bench-pro-sdk-edit-cgroup-v1";
 pub(crate) const PROCESS_RSS_SCHEMA: &str = "fs-bench-pro-sdk-edit-process-rss-v1";
 pub(crate) const COMBINED_REGISTRY_SHA256: &str =
-    "1773c7b82f739eaf1c2b8a2877f56baaa7e72b26ac8980802bdb82c80e270af6";
-pub(crate) const FIXTURE_SHA256: [&str; 4] = [
+    "46d45fb445e2f1cd721c523ff8f4602c425364786f43b4ea2f81c0b4a55557e4";
+pub(crate) const FIXTURE_SHA256: [&str; 6] = [
     "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
     "29c89128c748e4404f31b0147d447bd524d7b75afc98d56ac4debac762ee4b79",
     "1bb2d79d54f72ae15eb0bb76ad715b9aafeba8ff8f9aa4f47bad3e3f101885bd",
+    "f1b6c61d9c126beba89dd2a310f727fd63cbbf131b793a78fe21247238c98c1f",
+    "0e2cc5b14abf95553ba633a11b395c80de3f0a1642cdef0adf753cb5984fbe55",
     "bd782f202ec4c40a2070a1d08b78f5135a0ac604b871e4907846740bde906157",
 ];
-pub(crate) const FIXTURE_FILE_ROOT: [&str; 4] = [
+pub(crate) const FIXTURE_FILE_ROOT: [&str; 6] = [
     "8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078",
     "dd79a6666e83927d787c8a7679b06f4c98ca5f80b6abd48d94b5e8f84aad1c85",
     "bbee7155df021324495d88954be4db125eca49442b50aadc16439f61f6c32efe",
+    "6c74b4ba6ad67f352a0bd85879a2f16a77511286bf9a73883d5c8858d2eded8f",
+    "138fcae123c3a4fccbf38aa38b2d01f60e13d087cb108c2ff1f8f456ecf78552",
     "e4ab3cdbf81fe421e6bd2df0b34e57639845dcf244d127507cf15d6ebe01e9a3",
 ];
-pub(crate) const FIXTURE_MAP_ROOT: [&str; 4] = [
+pub(crate) const FIXTURE_MAP_ROOT: [&str; 6] = [
     "dcea0efdabc05e8cc5634505601cf682ee362c7e16e6a6c228b4b699b16b3eea",
     "85cc86ea39b444756034d586424a0575b325aabea5beaf7c249a20b4aadb1638",
     "113604cbe8daefa95427d079c28e82bc6c1a78fd353bc7839b5e72c78cbd84b2",
+    "0c41bc4191786cb8e745bff035b57ef3acdc5b2a15823deea3068f952e06e256",
+    "7a9a8ff51ce03c379d19b4997fafdf9170c7bc4e3a0a3c9f20ad2c7b9a80ab70",
     "9fe7687518d436f9b88c2e983566dd4110fd118b749becf9b087fb60fcc33ee3",
 ];
-pub(crate) const FIXTURE_EXTENTS: [u64; 4] = [54, 544, 5_394, 26_995];
+pub(crate) const FIXTURE_EXTENTS: [u64; 6] = [54, 544, 5_394, 26_994, 26_995, 26_995];
+
+pub(crate) fn fixture_index(bytes: u64) -> Option<usize> {
+    PREPARED_SIZES.iter().position(|size| *size == bytes)
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ReplacementKind {

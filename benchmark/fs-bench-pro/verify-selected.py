@@ -123,7 +123,10 @@ def _same_identity(old, selected):
     for key in (
         "seed", "repetition", "source_identity", "input_identity", "setup_identity",
         "product_identity", "harness_identity", "image_identity", "topology", "host_executor",
+        "source_arm",
     ):
+        if key in ("seed", "repetition") and selected.get("route") == "sdk":
+            continue
         old_value = old.get(key, old.get("image") if key == "image_identity" else None)
         selected_value = selected.get(key, selected.get("image") if key == "image_identity" else None)
         if old_value != selected_value:
@@ -321,6 +324,7 @@ def run(runner, argv=None, clock=time.monotonic, publisher=publish_receipt):
         "case": selected.get("case", selected.get("scenario_id")),
         "seed": selected.get("seed"),
         "repetition": selected.get("repetition"),
+        "source_arm": selected.get("source_arm"),
         "source_identity": selected.get("source_identity"),
         "input_identity": selected.get("input_identity"),
         "setup_identity": selected.get("setup_identity"),

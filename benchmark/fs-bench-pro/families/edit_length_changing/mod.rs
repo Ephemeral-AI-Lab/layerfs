@@ -2,7 +2,7 @@ use super::sdk_edit_common::{self, Operation, ReplacementKind, Scenario};
 
 pub(crate) const FAMILY_ID: &str = "edit_length_changing";
 pub(crate) const DEFINITION_MANIFEST_SHA256: &str =
-    "b6e8d0ab87a2ed72234623198994a460484bd950a04bb81a99a9aecda06c4390";
+    "f59a1a68a19b95e1dcc8e6e5e273c7279c69fca373adca9980a9a9ffbd9fa517";
 pub(crate) const ROTATIONS: [usize; 5] = [0, 13, 26, 7, 20];
 
 fn insert(len: u64) -> (u64, u64) {
@@ -99,18 +99,47 @@ pub(crate) const OPERATIONS: [Operation; 8] = [
 
 pub(crate) fn registry() -> Vec<Scenario> {
     sdk_edit_common::scenarios(FAMILY_ID, &OPERATIONS)
+        .into_iter()
+        .map(|mut row| {
+            if row.fixture_bytes == 524_288_000 && row.final_bytes > row.fixture_bytes {
+                let growth = row.final_bytes - row.fixture_bytes;
+                row.fixture_bytes -= growth;
+                (row.start, row.delete_len) = (OPERATIONS
+                    .iter()
+                    .find(|operation| operation.key == row.operation_key)
+                    .expect("registered operation")
+                    .locate)(row.fixture_bytes);
+                row.final_bytes = row.fixture_bytes - row.delete_len + row.replacement_len;
+                row.id = row.id.replace("-on-500mib-", "-on-500mib-result-capped-v2-");
+                row.plan_sha256 = sdk_edit_common::plan_sha256(
+                    FAMILY_ID,
+                    &row.id,
+                    row.fixture_bytes,
+                    row.start,
+                    row.delete_len,
+                    row.replacement_kind,
+                    row.replacement_len,
+                    row.payload_sha256,
+                );
+            }
+            row
+        })
+        .collect()
 }
 
 pub(crate) fn self_check() -> Result<(), String> {
     let rows = registry();
     sdk_edit_common::validate_registry(&rows, 32)?;
-    if sdk_edit_common::sha256_hex(sdk_edit_common::registry_tsv(&rows).as_bytes())
-        != DEFINITION_MANIFEST_SHA256
-    {
-        return Err("length-changing registry manifest".into());
+    let registry_sha256 =
+        sdk_edit_common::sha256_hex(sdk_edit_common::registry_tsv(&rows).as_bytes());
+    if registry_sha256 != DEFINITION_MANIFEST_SHA256 {
+        return Err(format!("length-changing registry manifest {registry_sha256}"));
     }
     if rows.iter().any(|row| {
         row.final_bytes == row.fixture_bytes
+            || row.final_bytes > 524_288_000
+            || (row.id.contains("500mib-result-capped-v2")
+                != (row.fixture_bytes < 524_288_000 && row.final_bytes == 524_288_000))
             || match row.replacement_kind {
                 ReplacementKind::Inline => {
                     sdk_edit_common::sha256_hex(&sdk_edit_common::replacement_bytes(row))

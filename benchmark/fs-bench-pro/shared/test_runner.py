@@ -54,7 +54,7 @@ class RunnerTests(unittest.TestCase):
         self.assertLessEqual(remaining, 5)
 
     def resolve(self, argv, row):
-        args = runner.build_parser().parse_args(["--family", "example", "--image", "sealed", "--case", "case", *argv])
+        args = runner.build_parser().parse_args(["--family", "example", "--topology", "docker", "--image", "sealed", "--case", "case", *argv])
         image = {"Id": "sha256:image", "Os": "linux", "Architecture": "arm64",
                  "Config": {"Labels": {"dev.layerfs.source-seal": "source"}}}
         with patch.object(runner, "image_info", return_value=image), patch.object(runner, "_command", return_value=SimpleNamespace(stdout=json.dumps({"family_id": "example", "scenario_id": "case", **row}))):
@@ -86,6 +86,24 @@ class RunnerTests(unittest.TestCase):
     def test_count_rejected(self):
         with self.assertRaisesRegex(ValueError, "positive"):
             self.resolve(["--perf-samples", "0"], {})
+
+    def test_shared_fast_settings_and_explicit_timer(self):
+        for family in runner.HOST_FAMILIES:
+            args = runner.build_parser().parse_args(["--family", family])
+            self.assertEqual((args.topology, args.cpus, args.memory_mib, args.timeout),
+                             ("host-store", 2, 2048, 15))
+            self.assertIsNone(args.perf_samples)
+        self.assertEqual(len(runner.HOST_FAMILIES), 9)
+        row = {"identities": {"timer": "product_call_sum_ns"}, "command_wall_ns": 999,
+               "records": [{"complete_ns": 888}, {"product_call_sum_ns": 123}]}
+        self.assertEqual(runner._timer(row), ("product_call_sum_ns", 123))
+        row["records"] = [{"complete_ns": 888}]
+        self.assertEqual(runner._timer(row), ("product_call_sum_ns", None))
+
+    def test_sdk_repetitions_share_input_identity(self):
+        _, one = self.resolve(["--repetition", "1"], {"route": "sdk", "inherited": True, "seed_max": 5})
+        _, five = self.resolve(["--repetition", "5"], {"route": "sdk", "inherited": True, "seed_max": 5})
+        self.assertEqual(one["input_identity"], five["input_identity"])
 
     def test_parse_only_complete_json(self):
         self.assertEqual(runner.records('log\nPREFIX\t{"kind":"done"}\n{"truncated":'), [{"kind": "done"}])

@@ -1,6 +1,6 @@
 # Issue 38 four-family qualification
 
-Status: TERMINAL_PASS for the frozen Docker campaign and the subsequent host-owned SQLite follow-up under the user-authorized strict <1.25 median scaling gate. Each topology has its own complete114-sample assessment and bounded proof evidence; host/container resource scopes remain separate.
+Status: TERMINAL PASS for the user-authorized nine-family infrastructure unification and fast baseline: 118 single performance samples and 27 selected independent proofs. See [nine-family fast baseline](nine-family-fast-baseline.md) for timings, exact sampled coverage, retained failures, and source differences. The earlier four-family Docker/host campaigns remain completed under their recorded scope. The expanded two-arm campaign was stopped at the user's request; it is not the current gate. Other families are deferred to issue #39.
 Started 2026-09-05 from `46de7d42918257cd9e86075833d4f7f45af62a67` on
 `codex/issue38-four-families`. Current user instructions supersede historical
 runtime.sh, removed runner, fresh-Workspace and full-baseline requirements.

@@ -1,5 +1,4 @@
 use super::*;
-use std::io::Read;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run(
@@ -20,13 +19,12 @@ pub(crate) fn run(
         performance_rows.split(',').collect::<Vec<_>>()
     };
     if !bound_rows.is_empty()
-        && (bound_rows.len() != 5
-            || bound_rows.iter().any(|row| row.is_empty())
+        && (bound_rows.iter().any(|row| row.is_empty())
             || bound_rows
                 .iter()
                 .collect::<std::collections::BTreeSet<_>>()
                 .len()
-                != 5)
+                != bound_rows.len())
     {
         return Err("SDK edit verifier performance row binding".into());
     }
@@ -68,7 +66,12 @@ pub(crate) fn run(
         layerfs_content::file::rope::FileStateRoot(initial_resolved.record.content_root),
         &mut Default::default(),
     )?;
-    let initial_sha256 = sdk_edit_hash(&initial.reader, initial_root)?;
+    let initial_sha256 = "not-performed";
+    let verify_start = scenario.start.saturating_sub(65536);
+    let verify_end = scenario.final_bytes.min(scenario.start + scenario.replacement_len + 65536);
+    if verify_end < verify_start || verify_end - verify_start > 192 * 1024 {
+        return Err("SDK edit verifier boundary range".into());
+    }
     let initial_payload_ids = payload_ids(&initial.reader, initial_root, "payload.bin")?;
     let untouched_payload_ids = untouched_payload_ids(
         &initial.reader,
@@ -94,7 +97,9 @@ pub(crate) fn run(
             WorkspaceFileReplacement::Zero(scenario.replacement_len)
         }
     };
-    let client = Client::connect(store.clone())?;
+    // Keep one authenticated daemon owner alive across the Store/Client reopen.
+    let binding = benchmark_container_binding(root, &container)?;
+    let client = benchmark_client(store.clone(), binding.as_ref())?;
     let session = client.create_workspace_session(CreateWorkspaceSession {
         branch_id: branch,
         placement: WorkspacePlacement::Container {
@@ -138,8 +143,10 @@ pub(crate) fn run(
         session.id,
         vec![
             workload,
-            OsString::from("digest-inode"),
+            OsString::from("digest-range-inode"),
             OsString::from("payload.bin"),
+            OsString::from(verify_start.to_string()),
+            OsString::from(verify_end.to_string()),
         ],
     )?;
     let (fuse_bytes, fuse_sha256, final_fuse_inode) = sdk_edit_digest_inode(&fuse_output)?;
@@ -205,7 +212,7 @@ pub(crate) fn run(
     drop(store);
 
     let reopened_store = Arc::new(LayerStackStore::connect(&store_path)?);
-    let reopened_client = Client::connect(reopened_store.clone())?;
+    let reopened_client = benchmark_client(reopened_store.clone(), binding.as_ref())?;
     let page = reopened_client.query(Query::new(QueryKind::Branches).limit(512))?;
     if page.continuation.is_some()
         || !page.items.iter().any(|item| {
@@ -229,7 +236,11 @@ pub(crate) fn run(
         layerfs_content::file::rope::FileStateRoot(observed_resolved.record.content_root),
         &mut Default::default(),
     )?;
-    let observed_sha256 = sdk_edit_hash(&observed.reader, observed.root)?;
+    let mut boundary_sink = SdkEditHashSink(workload_source::Sha256::new());
+    layerfs_content::filesystem::read_range(
+        &observed_reader, observed.root, &path, verify_start..verify_end, &mut boundary_sink,
+    )?;
+    let observed_sha256 = workload_source::hex(&boundary_sink.0.finish());
     let mut observed_payload_ids = std::collections::BTreeSet::new();
     let (_, mapping_counters) = layerfs_content::file::rope::visit_extents(
         &observed_reader,
@@ -247,25 +258,17 @@ pub(crate) fn run(
     } else {
         untouched_payload_ids.is_subset(&observed_payload_ids)
     };
-    let (materialized_bytes, materialized_sha256) = materialized_digest(
-        &observed.reader,
-        observed.root,
-        &root.join(format!("materialized-{}.bin", std::process::id())),
-        scenario.final_bytes,
-    )?;
     let base_reader = reopened_store.snapshot_reader(initial_root);
     let expected_sha256 =
-        independent_digest(&base_reader, initial_root, &scenario, &logical_replacement)?;
-    let size_index = workload_source::sdk_edit_common::SIZES
-        .iter()
-        .position(|size| *size == scenario.fixture_bytes)
+        independent_digest(&base_reader, initial_root, &scenario, &logical_replacement, verify_start..verify_end)?;
+    let size_index = workload_source::sdk_edit_common::fixture_index(scenario.fixture_bytes)
         .ok_or("SDK edit verifier size")?;
-    let semantic_valid = initial_sha256
-        == workload_source::sdk_edit_common::FIXTURE_SHA256[size_index]
+    let semantic_valid = initial_resolved.record.content_root.to_string()
+        == workload_source::sdk_edit_common::FIXTURE_FILE_ROOT[size_index]
+        && initial_state.mapping_root.to_string() == workload_source::sdk_edit_common::FIXTURE_MAP_ROOT[size_index]
+        && initial_state.logical_len == scenario.fixture_bytes
         && observed_sha256 == expected_sha256
         && fuse_sha256 == expected_sha256
-        && materialized_sha256 == expected_sha256
-        && materialized_bytes == scenario.final_bytes
         && initial_fuse_bytes == scenario.fixture_bytes
         && initial_fuse_inode == final_fuse_inode
         && fuse_bytes == scenario.final_bytes
@@ -282,7 +285,6 @@ pub(crate) fn run(
         && if family == workload_source::edit_canonical_chunk_count::FAMILY_ID {
             let frozen = workload_source::edit_canonical_chunk_count::expected(&scenario);
             observed_state.extent_count == frozen.final_count
-                && observed_sha256 == frozen.final_sha256
                 && observed_resolved.record.content_root.to_string() == frozen.file_root
                 && observed_state.mapping_root.to_string() == frozen.map_sha256
         } else {
@@ -359,14 +361,14 @@ pub(crate) fn run(
         source_arm,
         scenario.plan_sha256,
         bound_rows.iter().map(|row| format!("\"{row}\"")).collect::<Vec<_>>().join(","),
-        if bound_rows.is_empty() { "unbound-selected-mode" } else { "bound-five-performance-rows" },
+        if bound_rows.is_empty() { "unbound-selected-mode" } else { "bound-performance-rows" },
         scenario.fixture_bytes,
         scenario.final_bytes,
         expected_sha256,
         observed_sha256,
         fuse_sha256,
-        materialized_bytes,
-        materialized_sha256,
+        0,
+        "not-performed",
         initial_root,
         observed.root,
         observed_resolved.record.content_root,
@@ -442,9 +444,21 @@ pub(crate) fn run(
         sdk_edit_lifecycle_json(&lifecycle), observed_state.extent_count, observed_payload_ids.len(),
         mapping_counters.nodes_read, observed_state.tree_level));
     result.push('}');
-    if bound_rows.is_empty() {
+    // Conformance is a separate regression receipt, never implied by timing-row binding.
+    if conformance == "unbound-selected-mode" {
         result = result.replace("\"sealed-conformance\"", "\"unbound-selected\"");
     }
+    result = result.replace(
+        "\"materialized_status\":\"pass\"",
+        "\"materialized_status\":\"not-performed-fast-verification\"",
+    );
+    result = result.replace("\"fresh_fuse_reopen\":true", "\"fresh_fuse_reopen\":false");
+    result = result.replace("\"expected_sha256\":", "\"expected_boundary_sha256\":")
+        .replace("\"observed_sha256\":", "\"canonical_boundary_sha256\":")
+        .replace("\"fuse_sha256\":", "\"fuse_boundary_sha256\":")
+        .replace("\"independent_byte_oracle\":true", "\"independent_boundary_oracle\":true");
+    result.pop();
+    result.push_str(&format!(",\"verification_profile\":\"canonical-roots-and-boundaries-v1\",\"full_file_bytes_verified\":false,\"verified_start\":{verify_start},\"verified_end\":{verify_end},\"verified_bytes\":{}}}", verify_end - verify_start));
     println!("{result}");
     Ok(())
 }
@@ -480,41 +494,12 @@ fn untouched_payload_ids(
     Ok(ids)
 }
 
-fn materialized_digest(
-    source: &dyn layerfs_layerstack_store::ObjectSource,
-    root: layerfs_content::ObjectId,
-    target: &Path,
-    expected_len: u64,
-) -> AnyResult<(u64, String)> {
-    let reader = layerfs_layerstack_store::CoreReader(source);
-    let path = layerfs_content::CanonicalPath::new("payload.bin")?;
-    let mut output = std::fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(target)?;
-    layerfs_content::filesystem::read_range(&reader, root, &path, 0..expected_len, &mut output)?;
-    output.sync_all()?;
-    drop(output);
-    let bytes = std::fs::metadata(target)?.len();
-    let mut input = std::io::BufReader::new(std::fs::File::open(target)?);
-    let mut hash = workload_source::Sha256::new();
-    let mut buffer = [0_u8; 1024 * 1024];
-    loop {
-        let read = input.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        hash.update(&buffer[..read]);
-    }
-    std::fs::remove_file(target)?;
-    Ok((bytes, workload_source::hex(&hash.finish())))
-}
-
 fn independent_digest(
     source: &dyn layerfs_layerstack_store::ObjectSource,
     initial_root: layerfs_content::ObjectId,
     scenario: &workload_source::sdk_edit_common::Scenario,
     replacement: &[u8],
+    range: std::ops::Range<u64>,
 ) -> AnyResult<String> {
     let reader = layerfs_layerstack_store::CoreReader(source);
     let path = layerfs_content::CanonicalPath::new("payload.bin")?;
@@ -523,7 +508,7 @@ fn independent_digest(
         &reader,
         initial_root,
         &path,
-        0..scenario.start,
+        range.start..scenario.start,
         &mut sink,
     )?;
     sink.write_all(replacement)?;
@@ -532,7 +517,7 @@ fn independent_digest(
         &reader,
         initial_root,
         &path,
-        suffix..scenario.fixture_bytes,
+        suffix..suffix + (range.end - scenario.start - scenario.replacement_len),
         &mut sink,
     )?;
     Ok(workload_source::hex(&sink.0.finish()))

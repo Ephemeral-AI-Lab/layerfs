@@ -22,6 +22,12 @@ REPO = BENCH.parent.parent
 sys.path.insert(0, str(HERE))
 import runtime
 
+HOST_FAMILIES = ("payload_create_read", "dedup_workspace_reuse", "dedup_cross_file", "dedup_cdc_locality",
+                 "edit_length_preserving", "edit_length_changing", "edit_canonical_chunk_count",
+                 "init_namespace", "store_footprint")
+TIMERS = {"workspace": "pure_call_sum_ns", "sdk": "edit_commit_ns",
+          "namespace": "layerstack_init_ns", "store-footprint": "product_call_sum_ns"}
+
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -35,8 +41,10 @@ def harness_identity():
 def build_parser(include_modes=True):
     p = argparse.ArgumentParser(description="Full Docker/FUSE workloads; fast means one full sample, never reduced work.")
     p.add_argument("--family", required=True)
-    p.add_argument("--topology", choices=("docker", "host-store"), default="docker")
+    p.add_argument("--topology", choices=("docker", "host-store"), default="host-store")
     p.add_argument("--host-binary", default=str(REPO / "target/release/fs-benchmark-pro"))
+    p.add_argument("--source-arm", choices=("baseline", "candidate"), default="candidate")
+    p.add_argument("--performance-rows", default="-")
     p.add_argument("--case")
     p.add_argument("--seed", type=int)
     p.add_argument("--repetition", type=int)
@@ -98,7 +106,7 @@ def source_build_args():
     def git(*argv):
         return _text(runtime.run(["git", "-C", str(REPO), *argv], deadline=runtime.Deadline.after(10)).stdout).strip()
     paths = sorted(p for root in (REPO / "crates", REPO / "tools", BENCH)
-                   for p in root.rglob("*") if p.is_file() and p.suffix in (".rs", ".toml", ".sh", ".py")
+                   for p in root.rglob("*") if p.is_file() and p.suffix in (".rs", ".toml", ".sh", ".py", ".sql")
                    and "target" not in p.parts and "__pycache__" not in p.parts)
     paths += [REPO / "Cargo.toml", REPO / "Cargo.lock", BENCH / "Dockerfile.layerfs"]
     source = hashlib.sha256()
@@ -143,8 +151,8 @@ def resolve_selection(args, deadline):
     if host:
         if platform.system() != "Darwin":
             raise ValueError("host Store qualification requires macOS + Docker Desktop")
-        if args.family not in ("payload_create_read", "dedup_workspace_reuse", "dedup_cross_file", "dedup_cdc_locality"):
-            raise ValueError("host Store currently supports only the four construction families")
+        if args.family not in HOST_FAMILIES:
+            raise ValueError("family host migration is deferred to issue #39")
         host_identity = json.loads(Path(args.host_binary + ".identity.json").read_text())
         if runtime.file_sha256(args.host_binary) != host_identity["binary_sha256"]:
             raise ValueError("host binary seal mismatch; rebuild with --build-host")
@@ -188,7 +196,7 @@ def resolve_selection(args, deadline):
     if fresh and args.setup == "clone":
         raise ValueError("initialization requires a fresh output Store; clone is not applicable")
     setup = "fresh-output" if fresh else (args.setup or "clone")
-    input_identity = digest({"family": args.family, "case": args.case, "seed": seed,
+    input_identity = digest({"family": args.family, "case": args.case, "seed": 1 if inherited else seed,
                              "source": source, "recipe": row})
     if args.source and args.source != source:
         raise ValueError("selected source identity does not match image")
@@ -199,8 +207,12 @@ def resolve_selection(args, deadline):
                  "input_identity": input_identity, "setup_identity": setup,
                  "image": info["Id"], "runtime_image": info["Id"],
                  "product_identity": identity.get("dev.layerfs.product-seal"),
-                 "harness_identity": harness_identity(), "environment": {"os": info.get("Os"), "architecture": info.get("Architecture")},
+                 "harness_identity": harness_identity(), "environment": {"os": info.get("Os"), "architecture": info.get("Architecture"),
+                     "container_cpus": args.cpus, "container_memory_mib": args.memory_mib,
+                     "topology": args.topology, "host_cpu_capped": False if host else None},
                  "verification_supported": row.get("verification_supported", True)}
+    selection["source_arm"] = args.source_arm
+    selection["timer"] = TIMERS.get(row.get("route"))
     selection["topology"] = args.topology
     if host:
         selection.update(host_executor=host_identity, image_source_identity=identity.get("dev.layerfs.source-seal"),
@@ -213,11 +225,14 @@ HOST_ROOT = REPO / "benchmark-results/host-store"
 
 
 def _host_acquire(args, selection, deadline):
-    fixture = records(_command([args.host_binary, "workspace-fixture-info", selection["case"], str(selection["seed"])], deadline).stdout)[-1]
+    sdk = selection.get("route") == "sdk"
+    fixture_command = [args.host_binary, "infra-fixture-info", selection["family"], selection["case"], str(selection["seed"])]
+    fixture = records(_command(fixture_command, deadline).stdout)[-1]
     native = selection["setup_identity"] == "fresh-output"
-    compatibility = {"contract": "layerfs-canonical-v5-workspace-fixture-v1", "fixture": fixture,
-        "schema_sha256": selection["host_executor"]["schema_sha256"],
-        "seed": selection["seed"]}
+    compatibility = {"contract": "sdk-edit-prepared-store-cache-v1" if sdk else "layerfs-canonical-v5-workspace-fixture-v1",
+        "fixture": fixture, "schema_sha256": selection["host_executor"]["schema_sha256"]}
+    if not sdk and selection.get("route") not in ("namespace", "store-footprint"):
+        compatibility["seed"] = selection["seed"]
     if native:
         compatibility.update(family=selection["family"], case=selection["case"])
     key = digest(compatibility)
@@ -231,8 +246,27 @@ def _host_acquire(args, selection, deadline):
         staging = HOST_ROOT / "samples" / ("prepare-" + uuid.uuid4().hex)
         staging.parent.mkdir(parents=True, exist_ok=True)
         try:
-            _command([args.host_binary, "infra-prepare", selection["family"], selection["case"], str(selection["seed"]), str(staging)], deadline,
-                     env={"LAYERFS_BENCH_HOST_STORE": "1", "LAYERFS_BENCH_LOCAL_RUNTIME": "0"})
+            if sdk:
+                staging.mkdir()
+                prepared = records(_command([args.host_binary, "sdk-edit-prepare", str(staging / "payload"),
+                                             str(selection["fixture_bytes"])], deadline).stdout)[-1]
+                (staging / "payload/branch-id").write_text(prepared["branch_id"])
+                qualifications = ["family\tcase\tplan\tinitial\texpected\tfile\tmap\tinitial_count\tfinal_count\tdigest\n"]
+                for family in ("edit_length_preserving", "edit_length_changing", "edit_canonical_chunk_count"):
+                    listed = records(_command([args.host_binary, "infra-list", family], deadline).stdout)
+                    for row in listed:
+                        if row.get("fixture_bytes") == selection["fixture_bytes"] and row.get("supported", True):
+                            output = _command([args.host_binary, "sdk-edit-qualify", str(staging / "payload"),
+                                               prepared["branch_id"], family, row["scenario_id"]], deadline).stdout
+                            qualifications.append(_text(output))
+                (staging / "qualification.tsv").write_text("".join(qualifications))
+                (staging / "manifest.json").write_text(json.dumps({
+                    "schema": "fs-bench-infra-prepared-v1",
+                    "input_qualification_sha256": runtime.file_sha256(staging / "qualification.tsv")
+                }))
+            else:
+                _command([args.host_binary, "infra-prepare", selection["family"], selection["case"], str(selection["seed"]), str(staging)], deadline,
+                         env={"LAYERFS_BENCH_HOST_STORE": "1", "LAYERFS_BENCH_LOCAL_RUNTIME": "0"})
             (staging / "host-owner.json").write_text(json.dumps({"owner": runtime.OWNER}))
             if not native:
                 master = staging / "payload/store.sqlite"
@@ -247,7 +281,7 @@ def _host_acquire(args, selection, deadline):
                         "files": files, "data_bytes": sum(item.get("bytes", 0) for item in files.values())}
             (staging / "host-cache.json").write_text(json.dumps(manifest, sort_keys=True))
             for path in staging.rglob("*"):
-                if path.is_file() and not path.is_symlink() and not (native and path.is_relative_to(staging / "payload/input")):
+                if path.is_file() and not path.is_symlink() and not (native and path.is_relative_to(staging / "payload")):
                     path.chmod(path.stat().st_mode & ~0o222)
             staging.rename(root)
         except BaseException:
@@ -256,12 +290,19 @@ def _host_acquire(args, selection, deadline):
                 runtime.remove_host_owned(staging)
             raise
     manifest = json.loads((root / "host-cache.json").read_text())
-    if manifest["compatibility"] != compatibility or runtime.host_tree_identity(root, _deadline(deadline)) != manifest["files"]:
+    if manifest["compatibility"] != compatibility or json.loads((root / "host-owner.json").read_text()).get("owner") != runtime.OWNER:
         raise ValueError("host prepared cache compatibility/content mismatch")
+    # ponytail: owned native inputs trust their prepared recipe; sampled verification
+    # detects selected content faults. Recreate this disposable cache if it is modified.
+    if not native and runtime.host_tree_identity(root, _deadline(deadline)) != manifest["files"]:
+        raise ValueError("host prepared Store content mismatch")
     removed = [] if fresh else runtime.evict_host_cache(HOST_ROOT, root)
+    if native:
+        fixture = json.loads((root / "fixture.json").read_text())
     return {"image": selection["image"], "host_root": str(root), "cache_key": key, "cache_hit": hit,
             "one_shot": fresh, "producer": manifest["producer"], "compatibility": compatibility,
-            "fixture": fixture, "data_bytes": manifest["data_bytes"], "evicted": removed}
+            "fixture": fixture, "data_bytes": manifest["data_bytes"], "evicted": removed,
+            "input_validation": "owned-prepared-recipe" if native else "full-master-identity"}
 
 
 def _host_sample(prepared, selection, name, deadline):
@@ -273,18 +314,24 @@ def _host_sample(prepared, selection, name, deadline):
     fixture = dict(prepared["fixture"])
     receipt = {"sample_root": str(sample), "prepared_root": str(master), "setup_mode": selection["setup_identity"]}
     if selection["setup_identity"] == "fresh-output":
-        shutil.copyfile(master / "input-qualification.tsv", sample / "input-qualification.tsv")
+        if (master / "input-qualification.tsv").exists():
+            shutil.copyfile(master / "input-qualification.tsv", sample / "input-qualification.tsv")
+        source = master / ("payload" if selection.get("route") in ("namespace", "store-footprint") else "payload/input")
         receipt.update(clone_method="not-applicable", fixture_reuse_method="host-prepared-source",
-                       prepared_input_root=str(master / "payload/input"), fresh_output_stores=[str(sample / "payload/store.sqlite")])
+                       prepared_input_root=str(source), fresh_output_stores=[str(sample / "payload/store.sqlite"), str(sample / "work/store.sqlite")])
     else:
         receipt.update(runtime.closed_store_copy(master / "store.sqlite", sample / "payload/store.sqlite", deadline=_deadline(deadline)))
         fixture["branch_id"] = (master / "payload/branch-id").read_text().strip()
         (sample / "payload/branch-id").write_text(fixture["branch_id"])
+        if selection.get("route") == "sdk":
+            shutil.copyfile(master / "qualification.tsv", sample / "qualification.tsv")
     encoded = json.dumps(fixture, separators=(",", ":")) + "\n"
     (sample / "fixture.json").write_text(encoded)
     manifest = json.loads((master / "manifest.json").read_text())
     manifest.update(family_id=selection["family"], scenario_id=selection["case"], seed=selection["seed"],
                     fixture_receipt_sha256=hashlib.sha256(encoded.encode()).hexdigest())
+    if selection.get("route") == "sdk":
+        manifest["input_qualification_sha256"] = runtime.file_sha256(sample / "qualification.tsv")
     (sample / "manifest.json").write_text(json.dumps(manifest, separators=(",", ":")))
     (sample / "selection.tsv").write_text(f"{selection['family']}\t{selection['case']}\t{selection['seed']}\n")
     return receipt
@@ -361,13 +408,17 @@ def execute_selected(args, *, deadline, verification=False):
         run_started = time.monotonic_ns()
         result["phase"] = "product-command"
         command_end = min(work_end, time.monotonic() + (45 if verification else args.timeout))
-        command_env = {"LAYERFS_V013_IMAGE": selection["image"]}
+        command_env = {"LAYERFS_V013_IMAGE": selection["image"],
+                       "LAYERFS_BENCH_SOURCE_ARM": selection["source_arm"]}
+        if args.performance_rows != "-":
+            command_env["LAYERFS_SDK_EDIT_PERFORMANCE_ROWS"] = args.performance_rows
         if selection["family"] in ("dedup_cross_file", "dedup_cdc_locality"):
             command_env["LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE"] = selection["input_identity"][:16]
         if host:
             command_env.update(LAYERFS_BENCH_HOST_STORE="1", LAYERFS_BENCH_LOCAL_RUNTIME="0",
                 LAYERFS_EXEC_TRANSPORT="daemon", LAYERFS_FUSE_TRANSPORT="daemon",
-                LAYERFS_BENCH_PREPARED_INPUT=str(Path(prepared["host_root"]) / "payload/input"),
+                LAYERFS_BENCH_WORKLOAD="/usr/local/bin/fs-benchmark-workload",
+                LAYERFS_BENCH_PREPARED_INPUT=result["setup"].get("prepared_input_root", str(Path(prepared["host_root"]) / "payload/input")),
                 TMPDIR=str(host_sample_path))
         operation = ["infra-run", selection["family"], selection["case"], str(selection["seed"]),
                      "verify" if verification else "performance", str(host_sample_path) if host else "/var/lib/fs-bench/sample", sample.id]
@@ -376,6 +427,12 @@ def execute_selected(args, *, deadline, verification=False):
         result["command_wall_ns"] = time.monotonic_ns() - run_started
         result["records"] = records(command.stdout)
         result["records"].extend(initialization_diagnostics(command.stderr))
+        if not verification:
+            timer, elapsed = _timer(result)
+            if elapsed is None:
+                raise RuntimeError(f"missing declared product timer: {timer}")
+            if elapsed > 15_000_000_000:
+                raise RuntimeError("product time exceeded the shared 15-second limit")
         if command.truncated:
             raise RuntimeError("selected command output exceeded compact receipt limit")
         result["phase"] = "resource-finalization"
@@ -421,7 +478,7 @@ def execute_selected(args, *, deadline, verification=False):
                     raise RuntimeError("cannot confirm failed-start container cleanup")
             if host_sample_path is not None and host_sample_path.exists():
                 runtime.remove_host_owned(host_sample_path)
-            if host and prepared:
+            if host and prepared and selection["setup_identity"] != "fresh-output":
                 master = Path(prepared["host_root"])
                 manifest = json.loads((master / "host-cache.json").read_text())
                 if runtime.host_tree_identity(master, _deadline(deadline)) != manifest["files"]:
@@ -440,13 +497,14 @@ def execute_selected(args, *, deadline, verification=False):
 
 
 def _timer(row):
+    declared = row.get("identities", {}).get("timer")
     for record in reversed(row.get("records", [])):
-        keys = ("layerstack_init_ns",) if row.get("identities", {}).get("route") == "namespace" else (
+        keys = (declared,) if declared else ("layerstack_init_ns",) if row.get("identities", {}).get("route") == "namespace" else (
             "edit_commit_ns", "edit_commit_end_ns", "pure_call_sum_ns", "initialize_ns", "execution_ns", "complete_ns", "complete_lifecycle_ns")
         for key in keys:
             if isinstance(record.get(key), (float, int)):
                 return key, record[key]
-    return "command_wall_ns", row.get("command_wall_ns")
+    return declared or "unavailable", None
 
 
 def main(argv=None):
