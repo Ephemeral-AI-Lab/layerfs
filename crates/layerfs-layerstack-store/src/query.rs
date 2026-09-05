@@ -393,6 +393,25 @@ impl LayerStackStore {
         })
     }
 
+    pub fn reachable_root_storage(&self, root: ObjectId) -> Result<CanonicalStorage> {
+        let mut seen = crate::SpillableObjectSet::empty()?;
+        let mut active = BTreeSet::new();
+        let mut objects = 0_u64;
+        let mut encoded_bytes = 0_u64;
+        traverse_root(
+            self,
+            root,
+            &mut seen,
+            &mut active,
+            &mut objects,
+            &mut encoded_bytes,
+        )?;
+        Ok(CanonicalStorage {
+            objects,
+            encoded_bytes,
+        })
+    }
+
     pub fn storage_snapshot(&self) -> Result<StoreStorageSnapshot> {
         fn len(path: &std::path::Path) -> Result<u64> {
             match std::fs::metadata(path) {
@@ -467,8 +486,17 @@ fn traverse_root(
         return Err(StoreError::Integrity("object cycle"));
     }
     let canonical = store.db.read_object_row(id)?;
-    *objects = objects.saturating_add(1);
-    *encoded_bytes = encoded_bytes.saturating_add(canonical.len() as u64);
+    *objects = objects
+        .checked_add(1)
+        .ok_or(StoreError::Integrity("reachable storage overflow"))?;
+    *encoded_bytes = encoded_bytes
+        .checked_add(
+            canonical
+                .len()
+                .try_into()
+                .map_err(|_| StoreError::Integrity("reachable storage overflow"))?,
+        )
+        .ok_or(StoreError::Integrity("reachable storage overflow"))?;
     let mut children = layerfs_content::object::references::referenced_objects(&canonical)?;
     children.sort();
     children.dedup();
