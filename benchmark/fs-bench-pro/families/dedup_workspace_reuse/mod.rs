@@ -16,12 +16,20 @@ pub(crate) fn cases() -> Vec<Case> {
             case.id.push_str("-compact-v2");
         }
     }
+    // Fixed-base controls preserve the original scaling experiment; compact
+    // cases remain separate smoke selections.
+    cases.extend([1, 10].map(|tier| Case {
+        id: format!("dedup-workspace-unique-{tier}-base128-v3"),
+        family: FAMILY,
+        tier,
+        kind: "unique",
+    }));
     cases
 }
 pub(crate) fn base_file_count(case: &Case) -> Result<usize> {
     match case.tier {
-        1 | 10 => Ok(case.tier),
-        100 | 500 => Ok(128),
+        1 | 10 if case.id.ends_with("-compact-v2") => Ok(case.tier),
+        1 | 10 | 100 | 500 => Ok(128),
         _ => Err("workspace reuse tier".into()),
     }
 }
@@ -63,18 +71,18 @@ pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>>
     Ok(entries)
 }
 pub(crate) fn self_check() -> Result<()> {
-    d::check_registry(&cases(), 12)?;
+    d::check_registry(&cases(), 14)?;
     for case in cases() {
         let base_files = base_file_count(&case)?;
-        if (case.tier <= 10) != case.id.ends_with("-compact-v2") {
+        if (case.tier <= 10 && !case.id.ends_with("-base128-v3"))
+            != case.id.ends_with("-compact-v2")
+        {
             return Err("workspace reuse compact case identity".into());
         }
-        if d::total(&expected(&case, 1, 1)?)
-            != (base_files as u64 + case.tier as u64) * d::MIB
-        {
+        if d::total(&expected(&case, 1, 1)?) != (base_files as u64 + case.tier as u64) * d::MIB {
             return Err("workspace reuse size".into());
         }
-        if case.tier <= 10 {
+        if case.id.ends_with("-compact-v2") {
             for step in 0..=1 {
                 let state = expected(&case, 1, step)?;
                 let files = state

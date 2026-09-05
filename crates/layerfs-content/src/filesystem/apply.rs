@@ -367,11 +367,33 @@ pub fn build_initial_directory(
     store: &mut impl ObjectStore,
     entries: impl IntoIterator<Item = (crate::CanonicalName, InodeId)>,
 ) -> CoreResult<DirectoryStateRoot> {
+    // Bound the sorted preview; larger and unordered inputs retain streaming insertion.
+    const SORTED_ENTRY_LIMIT: usize = 512;
+    let mut entries = entries.into_iter();
+    let prefix = entries
+        .by_ref()
+        .take(SORTED_ENTRY_LIMIT + 1)
+        .collect::<Vec<_>>();
     let mut deferred = DeferredDirectory::new(store);
     let mut root = empty_directory(&mut deferred)?;
-    for (name, inode) in entries {
-        root = directory_insert(&mut deferred, root, name, inode)?.0;
-        deferred.prune_to(root)?;
+    if prefix.len() > 1
+        && prefix.len() <= SORTED_ENTRY_LIMIT
+        && prefix.windows(2).all(|pair| pair[0].0 < pair[1].0)
+    {
+        root = crate::tree::batch::directory_apply_sorted_with_budget(
+            &mut deferred,
+            root,
+            prefix
+                .into_iter()
+                .map(|(name, inode)| Ok((name, Some(inode)))),
+            crate::tree::batch::SORTED_TREE_UPDATE_SCRATCH_BYTES,
+        )?
+        .0;
+    } else {
+        for (name, inode) in prefix.into_iter().chain(entries) {
+            root = directory_insert(&mut deferred, root, name, inode)?.0;
+            deferred.prune_to(root)?;
+        }
     }
     deferred.commit(root)?;
     Ok(root)
@@ -830,6 +852,53 @@ mod tests {
             self.objects.insert(id, canonical.to_vec());
             Ok(id)
         }
+    }
+
+    #[test]
+    fn initial_directory_sorted_transfer_matches_insertion_and_fallback() {
+        for count in [0, 1, 100, 189, 190, 285, 500, 513] {
+            for reverse in [false, true] {
+                let mut entries = (0..count)
+                    .map(|index| {
+                        let name = format!("f{index:04}{}", "x".repeat(index % 37));
+                        (
+                            crate::CanonicalName::new(&name).unwrap(),
+                            InodeId::allocate([47; 32], index as u64),
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                if reverse {
+                    entries.reverse();
+                }
+                let mut expected = CountingStore::default();
+                let mut deferred = DeferredDirectory::new(&mut expected);
+                let mut root = empty_directory(&mut deferred).unwrap();
+                for (name, inode) in entries.iter().cloned() {
+                    root = directory_insert(&mut deferred, root, name, inode)
+                        .unwrap()
+                        .0;
+                    deferred.prune_to(root).unwrap();
+                }
+                deferred.commit(root).unwrap();
+                let mut actual = CountingStore::default();
+                assert_eq!(
+                    build_initial_directory(&mut actual, entries).unwrap(),
+                    root,
+                    "count={count}, reverse={reverse}"
+                );
+                assert_eq!(actual.objects, expected.objects);
+            }
+        }
+        let entry = (
+            crate::CanonicalName::new("duplicate").unwrap(),
+            InodeId::allocate([47; 32], 0),
+        );
+        let mut store = CountingStore::default();
+        assert_eq!(
+            build_initial_directory(&mut store, [entry.clone(), entry]),
+            Err(CoreError::NameCollision)
+        );
+        assert!(store.objects.is_empty());
     }
 
     fn object(byte: u8) -> ObjectId {

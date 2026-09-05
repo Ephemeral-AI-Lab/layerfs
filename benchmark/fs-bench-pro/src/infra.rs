@@ -453,7 +453,10 @@ fn run_selected(
         let args = [
             OsString::from("workspace-run"),
             payload.as_os_str().into(),
-            if family == "workspace_reliability" {
+            if matches!(
+                family,
+                "workspace_reliability" | "dedup_cross_file" | "dedup_cdc_locality"
+            ) {
                 OsString::from("/var/lib/fs-bench/prepared/payload/input")
             } else {
                 payload.join("input").as_os_str().into()

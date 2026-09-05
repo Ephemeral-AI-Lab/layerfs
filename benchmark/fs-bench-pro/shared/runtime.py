@@ -1086,17 +1086,20 @@ def prepare_sample(
     prepared_root: str = PREPARED_ROOT,
     sample_root: str = SAMPLE_ROOT,
     master_store_relative: str | None = "payload/store.sqlite",
+    reuse_prepared_input: bool = False,
     output_store_relative: str | Sequence[str] = (
         "work/store.sqlite", "payload/store.sqlite"
     ),
 ) -> dict:
-    """Copy prepared state into the writable upper layer before product timing."""
+    """Create writable sample state, optionally reusing native source fixtures."""
     prepared_root = _internal_path(prepared_root)
     sample_root = _internal_path(sample_root)
     if prepared_root == sample_root:
         raise ValueError("prepared and sample roots must differ")
     if mode not in {"clone", "fresh", "fresh-output"}:
         raise ValueError("sample setup mode must be clone, fresh, or fresh-output")
+    if reuse_prepared_input and mode != "fresh-output":
+        raise ValueError("prepared input reuse requires fresh-output setup")
     output_store_relatives = (
         [_relative(output_store_relative)]
         if isinstance(output_store_relative, str)
@@ -1119,28 +1122,44 @@ def prepare_sample(
         deadline=deadline,
         output_limit=4096,
     )
-    reflink = container.exec(
-        ["/bin/cp", "-a", "--reflink=always", prepared_root, sample_root],
-        deadline=deadline,
-        output_limit=64 * 1024,
-        check=False,
-    )
-    if reflink.returncode == 0:
-        method = "linux-reflink"
-        fallback_wall_ns = 0
-    else:
-        cleanup = container.exec(
-            ["/bin/rm", "-rf", "--", sample_root],
+    if reuse_prepared_input:
+        metadata_copy = container.exec(
+            [
+                "/bin/sh", "-ceu",
+                'test -d "$1/payload/input"; mkdir -p "$2/payload"; '
+                'find "$1" -maxdepth 1 -type f -exec cp -a --target-directory="$2" -- {} +',
+                "reuse-prepared-input", prepared_root, sample_root,
+            ],
             deadline=deadline,
             output_limit=4096,
         )
-        copied = container.exec(
-            ["/bin/cp", "-a", "--reflink=never", prepared_root, sample_root],
+        method = "not-applicable"
+        reflink_wall_ns = None
+        fallback_wall_ns = None
+    else:
+        reflink = container.exec(
+            ["/bin/cp", "-a", "--reflink=always", prepared_root, sample_root],
             deadline=deadline,
             output_limit=64 * 1024,
+            check=False,
         )
-        method = "byte-copy"
-        fallback_wall_ns = cleanup.wall_ns + copied.wall_ns
+        if reflink.returncode == 0:
+            method = "linux-reflink"
+            fallback_wall_ns = 0
+        else:
+            cleanup = container.exec(
+                ["/bin/rm", "-rf", "--", sample_root],
+                deadline=deadline,
+                output_limit=4096,
+            )
+            copied = container.exec(
+                ["/bin/cp", "-a", "--reflink=never", prepared_root, sample_root],
+                deadline=deadline,
+                output_limit=64 * 1024,
+            )
+            method = "byte-copy"
+            fallback_wall_ns = cleanup.wall_ns + copied.wall_ns
+        reflink_wall_ns = reflink.wall_ns
     manifest_pair = container.exec(
         [
             "/usr/bin/sha256sum",
@@ -1159,10 +1178,16 @@ def prepare_sample(
     receipt = {
         "setup_mode": mode,
         "clone_method": method,
-        "reflink_attempt_wall_ns": reflink.wall_ns,
+        "reflink_attempt_wall_ns": reflink_wall_ns,
         "fallback_wall_ns": fallback_wall_ns,
         "manifest_sha256": manifest_hashes[0],
     }
+    if reuse_prepared_input:
+        receipt.update(
+            fixture_reuse_method="prepared-image-source",
+            prepared_input_root=f"{prepared_root}/payload/input",
+            metadata_copy_wall_ns=metadata_copy.wall_ns,
+        )
     if mode in {"clone", "fresh"}:
         master = f"{prepared_root}/{master_store_relative}"
         sample = f"{sample_root}/{master_store_relative}"
@@ -1200,7 +1225,7 @@ def prepare_sample(
         absent = container.exec(
             [
                 "/bin/sh", "-ceu",
-                'shift; for path do test ! -e "$path"; done',
+                'for path do test ! -e "$path"; done',
                 "fresh-output", *outputs,
             ],
             deadline=deadline,

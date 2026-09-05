@@ -106,6 +106,13 @@ pub struct WorkspaceCommitReceipt {
     pub object_admission_begin_ns: u64,
     pub object_admission_insert_ns: u64,
     pub object_admission_commit_ns: u64,
+    /// Selected canonical bytes moved from candidate memory into admission pages.
+    pub object_admission_memory_owned_bytes: u64,
+    /// Selected canonical bytes read from spill and moved into admission pages;
+    /// excludes framing, read-ahead and physical filesystem I/O amplification.
+    pub object_admission_spill_readback_bytes: u64,
+    /// Additional borrowed-byte copies at this candidate-to-admission boundary.
+    pub object_admission_borrowed_copy_bytes: u64,
     pub publication_ns: u64,
     pub publication_begin_ns: u64,
     pub publication_payload_ns: u64,
@@ -462,6 +469,19 @@ pub(crate) fn note_workspace_admission(
             receipt.object_admission_begin_ns = begin_ns;
             receipt.object_admission_insert_ns = insert_ns;
             receipt.object_admission_commit_ns = commit_ns;
+        }
+    });
+}
+
+pub(crate) fn note_workspace_candidate_delivery(
+    memory_owned_bytes: u64,
+    spill_readback_bytes: u64,
+) {
+    WORKSPACE_COMMIT.with(|current| {
+        if let Some(receipt) = current.borrow_mut().as_mut() {
+            receipt.object_admission_memory_owned_bytes = memory_owned_bytes;
+            receipt.object_admission_spill_readback_bytes = spill_readback_bytes;
+            receipt.object_admission_borrowed_copy_bytes = 0;
         }
     });
 }

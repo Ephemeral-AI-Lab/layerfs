@@ -219,6 +219,25 @@ impl PieceTree {
         if end > self.len() {
             return Err(StoreError::InvalidInput("file range"));
         }
+        let mut replacement = replacement.into_iter();
+        let first = replacement.next();
+        let mut replacement = replacement.peekable();
+        if self.root.is_none() && start == self.contiguous_spool_len && delete_len == 0 {
+            if let Some(Piece::Spool { offset, len }) = &first {
+                if *offset == self.contiguous_spool_len && replacement.peek().is_none() {
+                    let len = offset
+                        .checked_add(*len)
+                        .filter(|len| *len <= MAX_RESULT_BYTES)
+                        .ok_or(StoreError::InvalidInput("workspace piece limit"))?;
+                    // One contiguous spool has no inline/zero bytes and costs
+                    // at most one length record, regardless of write count.
+                    let mut next = self.clone();
+                    next.contiguous_spool_len = len;
+                    check_logical_allocation_charge(next.logical_allocation_charge()?)?;
+                    return Ok(next);
+                }
+            }
+        }
         let mut next = self.clone();
         if next.contiguous_spool_len != 0 {
             let piece = Piece::Spool {
@@ -233,7 +252,7 @@ impl PieceTree {
         let (left, tail) = split(&root, start, &mut next)?;
         let (_, right) = split(&tail, delete_len, &mut next)?;
         let mut middle = None;
-        for piece in replacement {
+        for piece in first.into_iter().chain(replacement) {
             if piece.len() == 0 {
                 continue;
             }
@@ -590,6 +609,91 @@ mod tests {
         let accepted = charge + remaining / node_charge * node_charge;
         check_logical_allocation_charge(accepted).unwrap();
         assert!(check_logical_allocation_charge(accepted + node_charge).is_err());
+    }
+
+    #[test]
+    fn sequential_spool_appends_stay_inline_and_fragmented_writes_fall_back() {
+        let mut tree = PieceTree::empty();
+        for index in 0..500 {
+            tree = tree
+                .replace(
+                    index * 1024,
+                    0,
+                    [Piece::Spool {
+                        offset: index * 1024,
+                        len: 1024,
+                    }],
+                )
+                .unwrap();
+            assert!(tree.root.is_none());
+            assert_eq!(tree.count(), 1);
+            assert_eq!(tree.height(), 1);
+            assert_eq!(tree.logical_allocation_charge().unwrap(), 8);
+        }
+        assert_eq!(
+            tree.pieces(),
+            vec![Piece::Spool {
+                offset: 0,
+                len: 512000
+            }]
+        );
+        for source in [0, tree.len() - 1, tree.len() + 1] {
+            let next = tree
+                .replace(
+                    tree.len(),
+                    0,
+                    [Piece::Spool {
+                        offset: source,
+                        len: 1,
+                    }],
+                )
+                .unwrap();
+            assert_eq!(next.count(), 2);
+            assert_eq!(
+                next.range(tree.len() - 1, tree.len() + 1).unwrap(),
+                vec![
+                    Piece::Spool {
+                        offset: tree.len() - 1,
+                        len: 1
+                    },
+                    Piece::Spool {
+                        offset: source,
+                        len: 1
+                    },
+                ]
+            );
+        }
+        let overwritten = tree
+            .replace(
+                7,
+                1,
+                [Piece::Spool {
+                    offset: tree.len(),
+                    len: 1,
+                }],
+            )
+            .unwrap();
+        assert_eq!(
+            overwritten.range(7, 8).unwrap(),
+            vec![Piece::Spool {
+                offset: tree.len(),
+                len: 1
+            }]
+        );
+        assert_eq!(
+            tree.range(7, 8).unwrap(),
+            vec![Piece::Spool { offset: 7, len: 1 }]
+        );
+        assert!(tree
+            .replace(
+                tree.len(),
+                0,
+                [Piece::Spool {
+                    offset: tree.len(),
+                    len: MAX_RESULT_BYTES,
+                }]
+            )
+            .is_err());
     }
 
     #[test]

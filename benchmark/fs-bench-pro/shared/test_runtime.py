@@ -1,6 +1,9 @@
 import sys
+import subprocess
+import tempfile
+from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import runtime
 
@@ -13,6 +16,44 @@ class RuntimeTests(unittest.TestCase):
         result = runtime.run([sys.executable, "-c", "import time;time.sleep(2)"], deadline=runtime.Deadline.after(.05), check=False)
         self.assertTrue(result.timed_out)
         self.assertNotEqual(result.returncode, 0)
+
+    def test_native_source_reuse_preserves_all_fresh_output_checks(self):
+        def execute(argv, **kwargs):
+            output = b"abc prepared/manifest.json\nabc sample/manifest.json\n" if argv[0] == "/usr/bin/sha256sum" else b""
+            return runtime.CommandResult(tuple(argv), 0, output, b"", 7, False, False)
+
+        sample = Mock()
+        sample.exec.side_effect = execute
+        receipt = runtime.prepare_sample(sample, mode="fresh-output", reuse_prepared_input=True,
+                                         deadline=runtime.Deadline.after(1))
+        commands = [call.args[0] for call in sample.exec.call_args_list]
+        self.assertFalse(any("--reflink" in " ".join(argv) for argv in commands))
+        copy = next(argv for argv in commands if "reuse-prepared-input" in argv)
+        self.assertIn('-maxdepth 1 -type f', copy[2])
+        self.assertEqual(receipt["clone_method"], "not-applicable")
+        self.assertIsNone(receipt["reflink_attempt_wall_ns"])
+        self.assertIsNone(receipt["fallback_wall_ns"])
+        self.assertEqual(receipt["prepared_input_root"], runtime.PREPARED_ROOT + "/payload/input")
+        self.assertEqual(receipt["fixture_reuse_method"], "prepared-image-source")
+        self.assertEqual(receipt["fresh_output_stores"],
+                         [runtime.SAMPLE_ROOT + "/work/store.sqlite", runtime.SAMPLE_ROOT + "/payload/store.sqlite"])
+        fresh = next(argv for argv in commands if "fresh-output" in argv)
+        self.assertEqual(fresh[4:], receipt["fresh_output_stores"])
+        # Execute the actual guard with either output present, including the first argument.
+        with tempfile.TemporaryDirectory() as directory:
+            outputs = [str(Path(directory) / name) for name in ("first.sqlite", "second.sqlite")]
+            command = [*fresh[:4], *outputs]
+            self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
+            for output in outputs:
+                Path(output).touch()
+                self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+                Path(output).unlink()
+
+        sample.reset_mock()
+        with self.assertRaisesRegex(ValueError, "fresh-output"):
+            runtime.prepare_sample(sample, mode="clone", reuse_prepared_input=True,
+                                   deadline=runtime.Deadline.after(1))
+        sample.exec.assert_not_called()
 
     def test_volume_rejected(self):
         value = {"Image": "image", "State": {"Running": True}, "Mounts": [{"Type": "volume"}]}

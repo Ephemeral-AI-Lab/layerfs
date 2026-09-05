@@ -51,6 +51,11 @@ class RunnerTests(unittest.TestCase):
     def test_parse_only_complete_json(self):
         self.assertEqual(runner.records('log\nPREFIX\t{"kind":"done"}\n{"truncated":'), [{"kind": "done"}])
 
+    def test_native_diagnostics_remain_explicit_debug_text(self):
+        line = "layerfs-initialization-producer-v1 nonce=abcd producer=0 files=100"
+        self.assertEqual(runner.initialization_diagnostics("unrelated\n" + line),
+                         [{"kind": "initialization-debug-text", "details": line}])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2040,10 +2040,29 @@ mod tests {
                 .unwrap();
         }
         workspace.fsync(Some(file.node)).unwrap();
-        let captured_root = match &workspace.capture {
-            crate::capture::CaptureState::Ready(captured) => captured.root,
-            _ => panic!("sequential capture did not finish"),
-        };
+        if let Data::File(FileData::Edited { pieces, .. }) =
+            &mut workspace.nodes.get_mut(&file.node).unwrap().data
+        {
+            *pieces = crate::file_edit::PieceTree::empty()
+                .replace(
+                    0,
+                    0,
+                    [
+                        crate::file_edit::Piece::Spool { offset: 0, len: 1 },
+                        crate::file_edit::Piece::Spool {
+                            offset: 1,
+                            len: data.len() as u64 - 1,
+                        },
+                    ],
+                )
+                .unwrap();
+            assert_eq!(pieces.count(), 2);
+        }
+        let captured = workspace
+            .take_capture()
+            .expect("sequential capture is reusable");
+        let captured_root = captured.root;
+        workspace.capture = crate::capture::CaptureState::Ready(Box::new(captured));
 
         let store = workspace.store.clone();
         let branch = store.branch(workspace.branch_id).unwrap().unwrap();

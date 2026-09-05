@@ -82,6 +82,14 @@ def records(output):
     return result
 
 
+def initialization_diagnostics(output):
+    return [{"kind": "initialization-debug-text", "details": line}
+            for line in _text(output).splitlines()
+            if line.startswith(("layerfs-initialization-diagnostic-",
+                                "layerfs-initialization-producer-",
+                                "layerfs-initialization-commits-"))]
+
+
 def source_build_args():
     def git(*argv):
         return _text(runtime.run(["git", "-C", str(REPO), *argv], deadline=runtime.Deadline.after(10)).stdout).strip()
@@ -237,18 +245,23 @@ def execute_selected(args, *, deadline, verification=False):
             {"family": selection["family"], "run": name}, deadline=_deadline(work_end),
             cpus=args.cpus, memory_bytes=args.memory_mib * 1024**2)
         result["phase"] = "sample-setup"
-        result["setup"] = runtime.prepare_sample(sample, mode="clone" if selection["setup_identity"] == "fresh" else selection["setup_identity"], deadline=_deadline(work_end))
+        result["setup"] = runtime.prepare_sample(sample, mode="clone" if selection["setup_identity"] == "fresh" else selection["setup_identity"], deadline=_deadline(work_end),
+            reuse_prepared_input=selection["family"] in ("dedup_cross_file", "dedup_cdc_locality"))
         result["preparation_wall_ns"] = time.monotonic_ns() - setup_started
         before = cgroup_snapshot(sample, work_end)
         run_started = time.monotonic_ns()
         result["phase"] = "product-command"
         command_end = min(work_end, time.monotonic() + (45 if verification else args.timeout))
+        command_env = {"LAYERFS_V013_IMAGE": selection["image"]}
+        if selection["family"] in ("dedup_cross_file", "dedup_cdc_locality"):
+            command_env["LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE"] = selection["input_identity"][:16]
         command = sample.exec_coordinator(["infra-run", selection["family"], selection["case"], str(selection["seed"]),
                      "verify" if verification else "performance", "/var/lib/fs-bench/sample", sample.id],
                      deadline=_deadline(command_end), output_limit=1024**2,
-                     env={"LAYERFS_V013_IMAGE": selection["image"]})
+                     env=command_env)
         result["command_wall_ns"] = time.monotonic_ns() - run_started
         result["records"] = records(command.stdout)
+        result["records"].extend(initialization_diagnostics(command.stderr))
         if command.truncated:
             raise RuntimeError("selected command output exceeded compact receipt limit")
         result["phase"] = "resource-finalization"
@@ -321,7 +334,11 @@ def main(argv=None):
                 raise RuntimeError("another benchmark owns the measurement lock") from error
             values = source_build_args()
             tag = "layerfs-bench-infra:" + values["LAYERFS_SOURCE_SEAL"][:16]
-            result = runtime.build_image(REPO, tag, values, deadline=runtime.Deadline.after(900), jobs=2)
+            try:
+                result = runtime.build_image(REPO, tag, values, deadline=runtime.Deadline.after(900), jobs=2)
+            except runtime.CommandFailure as error:
+                print(_text(error.result.stderr)[-16384:], file=sys.stderr)
+                return error.result.returncode or 1
         if result.returncode:
             print(_text(result.stderr)[-16384:], file=sys.stderr)
             return result.returncode

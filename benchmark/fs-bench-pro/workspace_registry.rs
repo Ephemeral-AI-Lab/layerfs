@@ -91,10 +91,10 @@ pub(crate) fn steps(case: &Case) -> usize {
 
 pub(crate) fn self_check() -> Result<()> {
     let rows = cases();
-    if rows.len() != 130 || rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len() != 130 {
-        return Err("Workspace registry must have 130 unique timed IDs".into());
+    if rows.len() != 132 || rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len() != 132 {
+        return Err("Workspace registry must have 132 unique timed IDs".into());
     }
-    for (family, expected) in FAMILIES.iter().zip([8,20,12,4,4,16,4,10,20,12,20]) {
+    for (family, expected) in FAMILIES.iter().zip([8,20,12,4,4,16,4,10,20,14,20]) {
         if rows.iter().filter(|r| r.family == *family).count() != expected {
             return Err(format!("wrong membership for {family}").into());
         }
@@ -164,7 +164,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<()> {
         }
         [command] if command == "workspace-self-check" => {
             self_check()?;
-            println!("registry_status=pass\ntimed_case_count=130\nsample_slot_count=390");
+            println!("registry_status=pass\ntimed_case_count=132\nsample_slot_count=396");
         }
         [command, id, seed, step, mode] if command == "workspace-apply" => {
             if !matches!(mode.as_str(), "performance" | "verify") { return Err("invalid workload mode".into()); }

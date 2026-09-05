@@ -5,7 +5,7 @@ use crate::objects::{
     InitializationDirectAdmissionWriter, InitializationObjectSlab, InitializationSegmentAdmission,
     InitializationSlabQueueMetrics, InitializationSlabWriter, InitializationSlabWriterMetrics,
     InitializationSqlPhase, InitializationTaskObjectBuffer, ObjectBuffer,
-    INITIALIZATION_SLAB_OBJECTS, INITIALIZATION_SLAB_QUEUE_SLOTS,
+    INITIALIZATION_SLAB_QUEUE_SLOTS,
 };
 #[cfg(test)]
 use crate::objects::{
@@ -893,6 +893,7 @@ const INITIALIZATION_APPEND_PENDING_BYTES: usize = 1024 * 1024;
 const INITIALIZATION_PAIR_PENDING_BYTES: usize = 256 * 1024;
 const INITIALIZATION_FINAL_PENDING_BYTES: usize = 64 * 1024;
 const INITIALIZATION_TASK_BLOCK_LIMIT: usize = 1_000;
+const INITIALIZATION_TASK_FILE_LIMIT: usize = 512;
 
 struct RootDirectoryTask {
     name: layerfs_content::CanonicalName,
@@ -957,53 +958,64 @@ fn direct_initialize_root_directories_inner(
         };
         root_tasks.push((task, file_type.is_dir()));
     }
+    let worker_limit = std::thread::available_parallelism()
+        .map(std::num::NonZeroUsize::get)
+        .unwrap_or(1)
+        .min(8);
+    let split_flat_directory = root_tasks
+        .iter()
+        .filter(|(_, directory)| *directory)
+        .count()
+        == 1;
+    let mut discovery_read_dir_calls = 1;
     let mut flat = None;
-    let tasks = if root_tasks.len() == 1 && root_tasks[0].1 {
-        let (directory, _) = root_tasks.pop().expect("one root task");
-        let mut files = Vec::new();
-        let mut flat_files = true;
-        for entry in std::fs::read_dir(&directory.native)? {
-            let entry = entry?;
-            if !entry.file_type()?.is_file() {
-                flat_files = false;
-                break;
-            }
-            files.push(layerfs_content::CanonicalName::from_bytes(
-                entry.file_name().as_bytes(),
-            )?);
+    let mut tasks = Vec::new();
+    for (directory, is_directory) in root_tasks {
+        if !is_directory {
+            tasks.push(DirectInitializationTask::File(directory));
+            continue;
         }
-        if flat_files && files.len() > 1 {
-            files.sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
-            let tasks = files
-                .chunks(INITIALIZATION_SLAB_OBJECTS)
-                .enumerate()
-                .map(|(index, chunk)| DirectInitializationTask::FlatFiles {
-                    start: index * INITIALIZATION_SLAB_OBJECTS,
-                    end: index * INITIALIZATION_SLAB_OBJECTS + chunk.len(),
-                })
-                .collect::<Vec<_>>();
-            flat = Some(FlatRootDirectory {
-                name: directory.name,
-                logical: directory.logical,
-                native: directory.native,
-                files,
-            });
-            tasks
-        } else {
-            vec![DirectInitializationTask::Directory(directory)]
-        }
-    } else {
-        root_tasks
-            .into_iter()
-            .map(|(task, directory)| {
-                if directory {
-                    DirectInitializationTask::Directory(task)
-                } else {
-                    DirectInitializationTask::File(task)
+        if split_flat_directory {
+            let mut files = Vec::new();
+            let mut flat_files = true;
+            discovery_read_dir_calls += 1;
+            for entry in std::fs::read_dir(&directory.native)? {
+                let entry = entry?;
+                if !entry.file_type()?.is_file() {
+                    flat_files = false;
+                    break;
                 }
-            })
-            .collect()
-    };
+                files.push(layerfs_content::CanonicalName::from_bytes(
+                    entry.file_name().as_bytes(),
+                )?);
+            }
+            if flat_files && files.len() > 1 {
+                files.sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
+                // ponytail: file-count balancing; use byte weights if uneven files leave a tail.
+                let files_per_task = files
+                    .len()
+                    .div_ceil(worker_limit * 4)
+                    .clamp(16, INITIALIZATION_TASK_FILE_LIMIT);
+                tasks.extend(
+                    files
+                        .chunks(files_per_task)
+                        .enumerate()
+                        .map(|(index, chunk)| DirectInitializationTask::FlatFiles {
+                            start: index * files_per_task,
+                            end: index * files_per_task + chunk.len(),
+                        }),
+                );
+                flat = Some(FlatRootDirectory {
+                    name: directory.name,
+                    logical: directory.logical,
+                    native: directory.native,
+                    files,
+                });
+                continue;
+            }
+        }
+        tasks.push(DirectInitializationTask::Directory(directory));
+    }
     if tasks.len() > INITIALIZATION_TASK_BLOCK_LIMIT {
         return Ok(None);
     }
@@ -1038,11 +1050,7 @@ fn direct_initialize_root_directories_inner(
                         .sum::<u64>()
             })
             .unwrap_or(0);
-    let workers = std::thread::available_parallelism()
-        .map(std::num::NonZeroUsize::get)
-        .unwrap_or(1)
-        .min(8)
-        .min(tasks.len());
+    let workers = worker_limit.min(tasks.len());
     let queue = std::sync::Arc::new(InitializationSlabQueueMetrics::default());
     let (sender, receiver) =
         std::sync::mpsc::sync_channel::<InitializationObjectSlab>(INITIALIZATION_SLAB_QUEUE_SLOTS);
@@ -1362,11 +1370,14 @@ fn direct_initialize_root_directories_inner(
     let mut scanned_bytes = 0_u64;
     let mut source = SourceImportMetrics {
         symlink_metadata_calls: 1,
-        read_dir_calls: 1,
+        read_dir_calls: discovery_read_dir_calls,
         ..SourceImportMetrics::default()
     };
     for task in prepared_tasks {
-        if flat.is_some() {
+        if matches!(
+            tasks[task.index],
+            DirectInitializationTask::FlatFiles { .. }
+        ) {
             flat_children.extend(task.children);
         } else {
             root_children.extend(task.children);
@@ -1381,7 +1392,6 @@ fn direct_initialize_root_directories_inner(
     }
     if flat.is_some() {
         source.symlink_metadata_calls += 1;
-        source.read_dir_calls += 1;
         root_children.reserve(1);
     }
     let parent_final_state_peak_bytes = (root_children.capacity()
@@ -1404,7 +1414,19 @@ fn direct_initialize_root_directories_inner(
             .sum::<u64>();
     let mut final_objects = InitializationDirectAdmissionWriter::new(&mut admission);
     final_objects.note_transient_owned_bytes(parent_final_state_peak_bytes)?;
-    let mut parent_pairs = Vec::new();
+    let mut parent_pair = None;
+    let parent_pair_offset = pair_blocks
+        .iter()
+        .take_while(|block| {
+            !matches!(
+                tasks[block.task_ordinal],
+                DirectInitializationTask::FlatFiles { .. }
+            )
+        })
+        .try_fold(0_u64, |count, block| count.checked_add(block.pair_count))
+        .ok_or(StoreError::Integrity(
+            "Layer initialization inode pair count",
+        ))?;
     if let Some(flat) = flat {
         use std::os::unix::fs::{MetadataExt, PermissionsExt};
         let flat_metadata = std::fs::symlink_metadata(&flat.native)?;
@@ -1438,8 +1460,9 @@ fn direct_initialize_root_directories_inner(
                 Ok(record) => record,
                 Err(error) => return Err(final_objects.error(error)),
             };
-        parent_pairs.push((flat_inode, flat_record));
+        parent_pair = Some((flat_inode, flat_record));
         root_children.push((flat.name, flat_inode));
+        root_children.sort_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
     }
     let content = match layerfs_content::filesystem::build_initial_directory(
         &mut final_objects,
@@ -1474,13 +1497,23 @@ fn direct_initialize_root_directories_inner(
             Err(error) => return Err(final_objects.error(error)),
         };
     let mut pair_stream = crate::objects::CompactInodePairStream::new(pairs, pair_blocks)?;
+    let mut pair_offset = 0_u64;
+    // Preserve the legacy preorder, including the split directory before its files.
+    let ordered_pairs = std::iter::from_fn(|| {
+        if pair_offset == parent_pair_offset {
+            if let Some(pair) = parent_pair.take() {
+                return Some(Ok(pair));
+            }
+        }
+        let pair = pair_stream.next();
+        pair_offset += u64::from(pair.is_some());
+        pair
+    });
     let (inode_table, insert_node_peak_len, insert_node_peak_capacity) =
         match layerfs_content::tree::inode::build_initial_inode_table_from_pairs(
             &mut final_objects,
             root_inode,
-            std::iter::once(Ok((root_inode, root_record)))
-                .chain(parent_pairs.into_iter().map(Ok))
-                .chain(&mut pair_stream),
+            std::iter::once(Ok((root_inode, root_record))).chain(ordered_pairs),
         ) {
             Ok(table) => table,
             Err(error) => return Err(final_objects.error(error)),
@@ -3179,14 +3212,14 @@ mod tests {
             .unwrap();
         assert_eq!(direct.scanned_files, 4_000);
         assert!(direct.diagnostics.worker_count <= 8);
-        assert_eq!(
-            direct
-                .diagnostics
-                .producers
-                .iter()
-                .map(|producer| producer.metrics.producer_tasks)
-                .sum::<u64>(),
-            4_000_u64.div_ceil(INITIALIZATION_SLAB_OBJECTS as u64)
+        let task_count = direct
+            .diagnostics
+            .producers
+            .iter()
+            .map(|producer| producer.metrics.producer_tasks)
+            .sum::<u64>();
+        assert!(
+            (4_000_u64.div_ceil(INITIALIZATION_TASK_FILE_LIMIT as u64)..=32).contains(&task_count)
         );
         let (expected, files, _) = legacy_directory_root(&source, [29; 32]).unwrap();
         assert_eq!(files, 4_000);
@@ -3214,6 +3247,38 @@ mod tests {
         assert_eq!((files, bytes), (2, 10));
         assert_direct_objects(&store, &direct, &expected);
 
+        drop(expected);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn mixed_root_split_directory_preserves_inode_preorder() {
+        let root = temporary("mixed-root-split");
+        let source = root.join("source");
+        let directory = source.join("variants");
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(source.join("reference"), b"before").unwrap();
+        std::fs::write(source.join("z-last"), b"after").unwrap();
+        for file in 0..500_u64 {
+            std::fs::write(directory.join(format!("f{file:04}")), file.to_be_bytes()).unwrap();
+        }
+        let store = LayerStackStore::create(root.join("store.sqlite")).unwrap();
+        let direct = direct_initialize_root_directories(&store.db, &source, [41; 32])
+            .unwrap()
+            .unwrap();
+        assert_eq!((direct.scanned_files, direct.scanned_bytes), (502, 4_011));
+        assert!(
+            direct
+                .diagnostics
+                .producers
+                .iter()
+                .map(|producer| producer.metrics.producer_tasks)
+                .sum::<u64>()
+                > 3
+        );
+        let (expected, _, _) = legacy_directory_root(&source, [41; 32]).unwrap();
+        assert_direct_objects(&store, &direct, &expected);
         drop(expected);
         drop(store);
         std::fs::remove_dir_all(root).unwrap();

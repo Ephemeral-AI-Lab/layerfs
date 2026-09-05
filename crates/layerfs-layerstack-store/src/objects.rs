@@ -1811,18 +1811,32 @@ impl DeferredObjectStore {
             DeferredObjects::Memory { rows, .. } => {
                 order.visit(|id| visitor(id, rows.get(&id).ok_or(StoreError::MissingObject(id))?))
             }
-            DeferredObjects::Spill(spill) => spill.visit_ordered(order, visitor),
+            DeferredObjects::Spill(spill) => {
+                spill.visit_ordered(order, &mut |id, bytes| visitor(id, bytes))
+            }
         }
     }
 
-    #[cfg(test)]
     fn consume_prevalidated_pages(
         mut self,
         mut visitor: impl FnMut(Vec<CanonicalObject>) -> Result<()>,
     ) -> Result<()> {
+        // Admission publishes only after every selected object is durable; its
+        // delivery order need not be the graph traversal's child-first order.
+        if matches!(self.storage, DeferredObjects::Spill(_)) {
+            let mut selected = SpillableObjectSet::empty()?;
+            self.reachable
+                .visit(|id| selected.insert_page(&[id]).map(|_| ()))?;
+            self.reachable = self.order_missing(&selected)?;
+        }
+        let mut memory_owned_bytes = 0_u64;
+        let mut spill_readback_bytes = 0_u64;
         let mut page = Vec::with_capacity(INITIALIZATION_ADMISSION_BATCH_COUNT);
         let mut page_bytes = 0_usize;
         let mut push = |object: CanonicalObject| {
+            if object.bytes.len() > ADMISSION_BATCH_BYTES {
+                return Err(StoreError::Integrity("canonical object admission size"));
+            }
             if !page.is_empty()
                 && (page.len() == INITIALIZATION_ADMISSION_BATCH_COUNT
                     || page_bytes.saturating_add(object.bytes.len()) > ADMISSION_BATCH_BYTES)
@@ -1839,16 +1853,16 @@ impl DeferredObjectStore {
         };
         match &mut self.storage {
             DeferredObjects::Memory { rows, .. } => self.reachable.visit(|id| {
-                push(CanonicalObject {
-                    id,
-                    bytes: rows.remove(&id).ok_or(StoreError::MissingObject(id))?,
-                })
+                let bytes = rows.remove(&id).ok_or(StoreError::MissingObject(id))?;
+                memory_owned_bytes = memory_owned_bytes.saturating_add(bytes.len() as u64);
+                push(CanonicalObject { id, bytes })
             })?,
             DeferredObjects::Spill(spill) => {
                 spill.visit_ordered(&self.reachable, &mut |id, bytes| {
+                    spill_readback_bytes = spill_readback_bytes.saturating_add(bytes.len() as u64);
                     push(CanonicalObject {
                         id,
-                        bytes: bytes.to_vec(),
+                        bytes: std::mem::take(bytes),
                     })
                 })?;
             }
@@ -1856,6 +1870,10 @@ impl DeferredObjectStore {
         if !page.is_empty() {
             visitor(page)?;
         }
+        crate::telemetry::note_workspace_candidate_delivery(
+            memory_owned_bytes,
+            spill_readback_bytes,
+        );
         Ok(())
     }
 
@@ -2185,11 +2203,25 @@ impl SpillObjects {
     }
 
     fn visit_ids(&self, visitor: &mut dyn FnMut(ObjectId) -> Result<()>) -> Result<()> {
+        if let Some(index) = &self.index {
+            if index.len() <= CANDIDATE_MEMORY_BYTES / std::mem::size_of::<(u64, ObjectId)>() {
+                let mut order = index
+                    .iter()
+                    .map(|(id, (offset, _))| (*offset, *id))
+                    .collect::<Vec<_>>();
+                order.sort_unstable_by_key(|(offset, _)| *offset);
+                for (_, id) in order {
+                    visitor(id)?;
+                }
+                return Ok(());
+            }
+        }
         let mut file = self
             .reader
             .lock()
             .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
         file.seek(SeekFrom::Start(0))?;
+        let mut file = BufReader::with_capacity(CANDIDATE_SPILL_BUFFER_BYTES, &mut *file);
         loop {
             let mut object_id = [0; 32];
             match file.read_exact(&mut object_id) {
@@ -2200,49 +2232,46 @@ impl SpillObjects {
             let mut length = [0; 8];
             file.read_exact(&mut length)?;
             visitor(ObjectId::from_bytes(&object_id)?)?;
-            file.seek(SeekFrom::Current(
+            file.seek_relative(
                 i64::try_from(u64::from_le_bytes(length))
                     .map_err(|_| StoreError::Integrity("candidate object length"))?,
-            ))?;
+            )?;
         }
     }
 
     fn visit_ordered(
         &self,
         order: &IdOrder,
-        visitor: &mut dyn FnMut(ObjectId, &[u8]) -> Result<()>,
+        visitor: &mut dyn FnMut(ObjectId, &mut Vec<u8>) -> Result<()>,
     ) -> Result<()> {
         let mut file = self
             .reader
             .lock()
             .map_err(|_| StoreError::Integrity("candidate spool lock"))?;
         file.seek(SeekFrom::Start(0))?;
+        let mut file = BufReader::with_capacity(CANDIDATE_SPILL_BUFFER_BYTES, &mut *file);
+        let mut position = 0_u64;
         let mut canonical = Vec::new();
-        order.visit(|expected| loop {
-            let mut object_id = [0; 32];
-            match file.read_exact(&mut object_id) {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    return Err(StoreError::MissingObject(expected));
-                }
-                Err(error) => return Err(error.into()),
-            }
-            let mut length = [0; 8];
-            file.read_exact(&mut length)?;
-            let length = usize::try_from(u64::from_le_bytes(length))
+        order.visit(|expected| {
+            let (offset, length) = self
+                .location(expected)?
+                .ok_or(StoreError::MissingObject(expected))?;
+            let length = usize::try_from(length)
                 .map_err(|_| StoreError::Integrity("candidate object length"))?;
-            if object_id == *expected.as_bytes() {
-                if length > OBJECT_PAGE_BYTES {
-                    return Err(StoreError::InvalidInput("candidate object page"));
-                }
-                canonical.resize(length, 0);
-                file.read_exact(&mut canonical)?;
-                return visitor(expected, &canonical);
+            if length > OBJECT_PAGE_BYTES {
+                return Err(StoreError::InvalidInput("candidate object page"));
             }
-            file.seek(SeekFrom::Current(
-                i64::try_from(length)
-                    .map_err(|_| StoreError::Integrity("candidate object length"))?,
-            ))?;
+            let distance = i64::try_from(i128::from(offset) - i128::from(position))
+                .map_err(|_| StoreError::Integrity("candidate object offset"))?;
+            // Retain buffered sequential read-ahead, while still supporting
+            // arbitrary graph orders for borrowed visitors.
+            file.seek_relative(distance)?;
+            canonical.resize(length, 0);
+            file.read_exact(&mut canonical)?;
+            position = offset
+                .checked_add(length as u64)
+                .ok_or(StoreError::Integrity("candidate object length"))?;
+            visitor(expected, &mut canonical)
         })
     }
 
@@ -2984,15 +3013,16 @@ impl<'a> InitializationSegmentAdmission<'a> {
 
 pub(crate) fn admit_checked_objects(
     db: &crate::schema::StoreDb,
-    objects: &DeferredObjectStore,
+    objects: DeferredObjectStore,
     statement_number: &mut u64,
 ) -> Result<CheckedAdmission> {
     let mut admission = CheckedAdmission::default();
-    let mut batch = Vec::with_capacity(ADMISSION_BATCH_COUNT);
-    let mut batch_bytes = 0_usize;
-    let mut flush = |batch: &mut Vec<CanonicalObject>, batch_bytes: &mut usize| -> Result<()> {
-        if batch.is_empty() {
-            return Ok(());
+    objects.consume_prevalidated_pages(|mut batch| {
+        batch.sort_unstable_by_key(|object| object.id);
+        let mut batch_bytes = 0_usize;
+        for object in &batch {
+            layerfs_content::authenticate_identity(&object.bytes, object.id)?;
+            batch_bytes = batch_bytes.saturating_add(object.bytes.len());
         }
         let begin_started = Instant::now();
         let mut connection = db.writer()?;
@@ -3001,7 +3031,7 @@ pub(crate) fn admit_checked_objects(
         let begin_ns = elapsed_ns(begin_started);
         let mut outcomes = Vec::with_capacity(batch.len());
         let metrics =
-            insert_checked_object_batch(&transaction, batch, statement_number, &mut |inserted| {
+            insert_checked_object_batch(&transaction, &batch, statement_number, &mut |inserted| {
                 outcomes.push(inserted)
             })?;
         let commit_started = Instant::now();
@@ -3012,7 +3042,7 @@ pub(crate) fn admit_checked_objects(
         admission.transactions += 1;
         admission.max_transaction_objects =
             admission.max_transaction_objects.max(batch.len() as u64);
-        admission.max_transaction_bytes = admission.max_transaction_bytes.max(*batch_bytes as u64);
+        admission.max_transaction_bytes = admission.max_transaction_bytes.max(batch_bytes as u64);
         admission.begin_ns = admission.begin_ns.saturating_add(begin_ns);
         admission.insert_ns = admission.insert_ns.saturating_add(metrics.insert_ns);
         admission.commit_ns = admission.commit_ns.saturating_add(commit_ns);
@@ -3033,30 +3063,8 @@ pub(crate) fn admit_checked_objects(
                     .saturating_add(object.bytes.len() as u64);
             }
         }
-        batch.clear();
-        *batch_bytes = 0;
-        Ok(())
-    };
-
-    objects.visit_prevalidated_order(&objects.reachable, &mut |id, bytes| {
-        layerfs_content::authenticate_identity(bytes, id)?;
-        if bytes.len() > ADMISSION_BATCH_BYTES {
-            return Err(StoreError::Integrity("canonical object admission size"));
-        }
-        if !batch.is_empty()
-            && (batch.len() == ADMISSION_BATCH_COUNT
-                || batch_bytes.saturating_add(bytes.len()) > ADMISSION_BATCH_BYTES)
-        {
-            flush(&mut batch, &mut batch_bytes)?;
-        }
-        batch_bytes = batch_bytes.saturating_add(bytes.len());
-        batch.push(CanonicalObject {
-            id,
-            bytes: bytes.to_vec(),
-        });
         Ok(())
     })?;
-    flush(&mut batch, &mut batch_bytes)?;
     if admission.candidate_objects != admission.inserted_objects + admission.reused_objects
         || admission.candidate_bytes != admission.inserted_bytes + admission.reused_bytes
         || admission.max_transaction_objects > ADMISSION_BATCH_COUNT as u64
@@ -3820,6 +3828,65 @@ mod tests {
         for suffix in ["-journal", "-wal", "-shm"] {
             assert!(!PathBuf::from(format!("{}{suffix}", index_path.display())).exists());
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn spilled_candidate_visits_selected_objects_in_graph_order() {
+        let mut segment = DeferredObjectStore::new_all_reachable().unwrap();
+        let mut ids = Vec::new();
+        for payload in [b"first".as_slice(), b"discarded", b"last"] {
+            let bytes = layerfs_content::encode_bytes_object(payload).unwrap();
+            let id = ObjectId::for_bytes(&bytes);
+            segment.put(id, &bytes).unwrap();
+            ids.push(id);
+        }
+        segment.spill().unwrap();
+        let mut segment = segment.all_reachable().unwrap();
+        if let DeferredObjects::Spill(spill) = &segment.storage {
+            spill
+                .reader
+                .lock()
+                .unwrap()
+                .seek(SeekFrom::Start(7))
+                .unwrap();
+            let mut physical_ids = Vec::new();
+            spill
+                .visit_ids(&mut |id| {
+                    physical_ids.push(id);
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(physical_ids, ids);
+            assert_eq!(
+                spill.reader.lock().unwrap().stream_position().unwrap(),
+                7,
+                "bounded resident offset index needs no payload framing scan"
+            );
+        }
+        let order = IdOrder::Memory(vec![ids[2], ids[0]]);
+        let mut visited = Vec::new();
+        segment
+            .visit_prevalidated_order(&order, &mut |id, bytes| {
+                layerfs_content::authenticate_identity(bytes, id)?;
+                visited.push(id);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(visited, vec![ids[2], ids[0]]);
+        segment.reachable = order;
+        let mut owned = Vec::new();
+        segment
+            .consume_prevalidated_pages(|page| {
+                for object in &page {
+                    layerfs_content::authenticate_identity(&object.bytes, object.id)?;
+                }
+                owned.extend(page.into_iter().map(|object| object.id));
+                Ok(())
+            })
+            .unwrap();
+        // The same exact subset is delivered physically, excluding the middle row.
+        assert_eq!(owned, vec![ids[0], ids[2]]);
     }
 
     #[cfg(unix)]

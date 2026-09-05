@@ -463,7 +463,7 @@ impl LayerStackStore {
         let admission = if up_to_date {
             Default::default()
         } else {
-            admit_checked_objects(&self.db, &built.objects, &mut statement_number)?
+            admit_checked_objects(&self.db, built.objects, &mut statement_number)?
         };
         crate::telemetry::note_workspace_admission(
             admission.transactions,
