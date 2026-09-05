@@ -214,10 +214,6 @@ fn uptodate(client: &Client, id: WorkspaceId) -> AnyResult<()> {
     Ok(())
 }
 fn docker(container: &ContainerId, args: &[&str]) -> AnyResult<std::process::Output> {
-    if std::env::var("LAYERFS_BENCH_LOCAL_RUNTIME").as_deref() == Ok("1") {
-        let (program, arguments) = args.split_first().ok_or("empty local proof command")?;
-        return Ok(Command::new(program).args(arguments).output()?);
-    }
     Ok(std::process::Command::new("docker")
         .arg("exec")
         .arg(&container.0)

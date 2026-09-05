@@ -1,5 +1,7 @@
 """Small offline checks for sample identity and compact result parsing."""
 import json
+import io
+from contextlib import redirect_stderr
 import time
 import tempfile
 import sqlite3
@@ -12,6 +14,20 @@ import runner
 
 
 class RunnerTests(unittest.TestCase):
+    def test_docker_topology_rejected_before_execution(self):
+        with patch.object(runner, "_command") as command:
+            for modes in (True, False):
+                with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+                    runner.build_parser(include_modes=modes).parse_args(
+                        ["--family", "payload_create_read", "--topology", "docker"])
+                self.assertEqual(error.exception.code, 2)
+            args = runner.build_parser().parse_args(["--family", "payload_create_read"])
+            args.topology = "docker"
+            args._selection = {"topology": "docker"}
+            with self.assertRaisesRegex(ValueError, "host-store"):
+                runner.resolve_selection(args, time.monotonic() + 1)
+            command.assert_not_called()
+
     def test_host_cache_semantic_reuse_and_sample_isolation(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(runner, "HOST_ROOT", Path(directory)):
             fixture = {"fixture_profile": "test-v1", "input_mode": "store", "input_plan_sha256": "plan", "fixture_bytes": 0}
@@ -54,10 +70,11 @@ class RunnerTests(unittest.TestCase):
         self.assertLessEqual(remaining, 5)
 
     def resolve(self, argv, row):
-        args = runner.build_parser().parse_args(["--family", "example", "--topology", "docker", "--image", "sealed", "--case", "case", *argv])
+        args = runner.build_parser().parse_args(["--family", "payload_create_read", "--image", "sealed", "--case", "case", *argv])
         image = {"Id": "sha256:image", "Os": "linux", "Architecture": "arm64",
-                 "Config": {"Labels": {"dev.layerfs.source-seal": "source"}}}
-        with patch.object(runner, "image_info", return_value=image), patch.object(runner, "_command", return_value=SimpleNamespace(stdout=json.dumps({"family_id": "example", "scenario_id": "case", **row}))):
+                 "Config": {"Labels": {"dev.layerfs.source-seal": "source", "dev.layerfs.product-seal": "product"}}}
+        host_identity = {"binary_sha256": "binary", "LAYERFS_PRODUCT_SEAL": "product", "LAYERFS_SOURCE_SEAL": "source"}
+        with patch.object(runner.platform, "system", return_value="Darwin"), patch.object(runner.runtime, "file_sha256", return_value="binary"), patch.object(Path, "read_text", return_value=json.dumps(host_identity)), patch.object(runner, "image_info", return_value=image), patch.object(runner, "_command", return_value=SimpleNamespace(stdout=json.dumps({"family_id": "payload_create_read", "scenario_id": "case", **row}))):
             return args, runner.resolve_selection(args, 999999999)
 
     def test_n_does_not_change_seed(self):

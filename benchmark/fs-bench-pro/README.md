@@ -2,10 +2,11 @@
 
 See the [benchmark quick note](QUICKSTART.md) for the current environment and fast iteration commands.
 
-Selected benchmarks with real LayerFS daemon/FUSE execution. The default
-`host-store` topology runs SDK/Workspace/SQLite on macOS and daemon/FUSE/workloads
-inside Docker Linux. The explicit `docker` topology keeps product work and
-Stores in Linux. No project bind mounts, data volumes or Docker socket are used.
+Selected benchmarks with real LayerFS daemon/FUSE execution. The only supported
+topology is `host-store`: SDK/Workspace/SQLite run on macOS; Docker Linux runs
+the daemon, FUSE, and workload helper. Docker-owned SQLite is permanently
+prohibited. The container image does not include the benchmark coordinator.
+No project bind mounts, data volumes or Docker socket are used.
 
 ## Source layout
 
@@ -115,9 +116,9 @@ or `verification.json`, plus a bounded `failure.log` when needed.
 Performance logs contain identities, sample timers/resources, status and a
 summary. A performance PASS does not imply verification PASS.
 
-Prepared data is a bounded disposable Docker cache. Independent sample
-Stores and containers are removed; no input tree or database is exported
-by default. Cached/copied input is not claimed to be cold.
+Prepared data is a bounded disposable host cache. Independent host sample
+Stores and Linux runtime containers are removed after each run. Cached/copied
+input is not claimed to be cold.
 
 Compact-v2 ordinary/reuse fixtures and compact-v3 namespace profiles have
 distinct identities from historical lower tiers. Do not mix unlike profiles
@@ -127,8 +128,9 @@ in scaling comparisons.
 
 Root-level shell wrappers and the obsolete host-based runner/custody/report
 pipeline have been removed. There is no compatibility or archive directory.
-Use the corresponding frozen Git revision to reproduce historical
-commands and reports; current family scripts are the supported interface.
+Frozen Git revisions preserve historical commands and reports for inspection.
+They do not authorize new Docker-owned SQLite runs; current family scripts
+are the supported interface.
 Historical roadmap/results documents remain historical records, not
 instructions to run deleted scripts on this revision.
 
@@ -136,9 +138,9 @@ See the [current infrastructure specification](../../docs/roadmap/0.1/0.1.3/benc
 and [issue #45](https://github.com/Ephemeral-AI-Lab/layerfs/issues/45).
 
 
-### Host-owned SQLite comparison
+### Host-owned SQLite execution
 
-The four construction families also support `--topology host-store`. Build the host coordinator with `python3 shared/runner.py --build-host`, then use the same family `perf.sh`/`verify.sh`, selectors and seeds. Pass the frozen compatible Linux image with `--image`; host and image product seals must match. Host binary identity is sealed beside `target/release/fs-benchmark-pro`. The Linux image keeps its original source identity. Default host performance output is `benchmark-results/host-store/results/run-…`; pass an explicit host results directory for verification.
+All enabled families use host-owned SQLite. `--topology host-store` remains an optional explicit spelling; `--topology docker` is rejected. Families awaiting host migration fail explicitly and have no Docker fallback. Build the host coordinator with `python3 shared/runner.py --build-host`, then use the same family `perf.sh`/`verify.sh`, selectors and seeds. Pass the frozen compatible Linux image with `--image`; host and image product seals must match. Host binary identity is sealed beside `target/release/fs-benchmark-pro`. The Linux image keeps its original source identity. Default host performance output is `benchmark-results/host-store/results/run-…`; pass an explicit host results directory for verification.
 
 Example (from this directory):
 

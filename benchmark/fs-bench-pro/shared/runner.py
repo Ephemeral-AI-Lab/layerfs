@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Selected Docker/Linux benchmarks. One compact log, independent samples."""
+"""Host-owned SQLite benchmarks; Docker runs daemon/FUSE/workloads only."""
 from __future__ import annotations
 
 import argparse
@@ -41,7 +41,7 @@ def harness_identity():
 def build_parser(include_modes=True):
     p = argparse.ArgumentParser(description="Full Docker/FUSE workloads; fast means one full sample, never reduced work.")
     p.add_argument("--family", required=True)
-    p.add_argument("--topology", choices=("docker", "host-store"), default="host-store")
+    p.add_argument("--topology", choices=("host-store",), default="host-store")
     p.add_argument("--host-binary", default=str(REPO / "target/release/fs-benchmark-pro"))
     p.add_argument("--source-arm", choices=("baseline", "candidate"), default="candidate")
     p.add_argument("--performance-rows", default="-")
@@ -131,6 +131,8 @@ def image_info(image, deadline):
 
 
 def resolve_selection(args, deadline):
+    if args.topology != "host-store":
+        raise ValueError("Docker-owned SQLite is prohibited; use host-store")
     if getattr(args, "_selection", None):
         return args._selection
     if not args.image:
@@ -146,21 +148,17 @@ def resolve_selection(args, deadline):
     source = identity.get("dev.layerfs.source-seal")
     if not source:
         raise ValueError("image lacks source seal")
-    host = args.topology == "host-store"
-    host_identity = None
-    if host:
-        if platform.system() != "Darwin":
-            raise ValueError("host Store qualification requires macOS + Docker Desktop")
-        if args.family not in HOST_FAMILIES:
-            raise ValueError("family host migration is deferred to issue #39")
-        host_identity = json.loads(Path(args.host_binary + ".identity.json").read_text())
-        if runtime.file_sha256(args.host_binary) != host_identity["binary_sha256"]:
-            raise ValueError("host binary seal mismatch; rebuild with --build-host")
-        if host_identity["LAYERFS_PRODUCT_SEAL"] != identity.get("dev.layerfs.product-seal"):
-            raise ValueError("host and Linux image product seals differ")
-        source = host_identity["LAYERFS_SOURCE_SEAL"]
-    result = _command(([args.host_binary, "infra-list", args.family] if host else ["docker", "run", "--rm", "--network", "none", "--cpus", "1", "--memory", "256m",
-                       "--entrypoint", "/usr/local/bin/fs-benchmark-pro", info["Id"], "infra-list", args.family])
+    if platform.system() != "Darwin":
+        raise ValueError("host Store qualification requires macOS + Docker Desktop")
+    if args.family not in HOST_FAMILIES:
+        raise ValueError("family host migration is deferred to issue #39")
+    host_identity = json.loads(Path(args.host_binary + ".identity.json").read_text())
+    if runtime.file_sha256(args.host_binary) != host_identity["binary_sha256"]:
+        raise ValueError("host binary seal mismatch; rebuild with --build-host")
+    if host_identity["LAYERFS_PRODUCT_SEAL"] != identity.get("dev.layerfs.product-seal"):
+        raise ValueError("host and Linux image product seals differ")
+    source = host_identity["LAYERFS_SOURCE_SEAL"]
+    result = _command([args.host_binary, "infra-list", args.family]
                       + ([args.case] if args.case else []), deadline)
     rows = [row for row in records(result.stdout) if row.get("family_id") == args.family]
     if not rows:
@@ -209,14 +207,13 @@ def resolve_selection(args, deadline):
                  "product_identity": identity.get("dev.layerfs.product-seal"),
                  "harness_identity": harness_identity(), "environment": {"os": info.get("Os"), "architecture": info.get("Architecture"),
                      "container_cpus": args.cpus, "container_memory_mib": args.memory_mib,
-                     "topology": args.topology, "host_cpu_capped": False if host else None},
+                     "topology": args.topology, "host_cpu_capped": False},
                  "verification_supported": row.get("verification_supported", True)}
     selection["source_arm"] = args.source_arm
     selection["timer"] = TIMERS.get(row.get("route"))
     selection["topology"] = args.topology
-    if host:
-        selection.update(host_executor=host_identity, image_source_identity=identity.get("dev.layerfs.source-seal"),
-                         host_environment={"os": platform.system(), "architecture": platform.machine(), "cpu_count": os.cpu_count()})
+    selection.update(host_executor=host_identity, image_source_identity=identity.get("dev.layerfs.source-seal"),
+                     host_environment={"os": platform.system(), "architecture": platform.machine(), "cpu_count": os.cpu_count()})
     args._selection = selection
     return selection
 
@@ -265,8 +262,7 @@ def _host_acquire(args, selection, deadline):
                     "input_qualification_sha256": runtime.file_sha256(staging / "qualification.tsv")
                 }))
             else:
-                _command([args.host_binary, "infra-prepare", selection["family"], selection["case"], str(selection["seed"]), str(staging)], deadline,
-                         env={"LAYERFS_BENCH_HOST_STORE": "1", "LAYERFS_BENCH_LOCAL_RUNTIME": "0"})
+                _command([args.host_binary, "infra-prepare", selection["family"], selection["case"], str(selection["seed"]), str(staging)], deadline)
             (staging / "host-owner.json").write_text(json.dumps({"owner": runtime.OWNER}))
             if not native:
                 master = staging / "payload/store.sqlite"
@@ -337,21 +333,6 @@ def _host_sample(prepared, selection, name, deadline):
     return receipt
 
 
-def _acquire(args, selection, deadline):
-    if args.topology == "host-store":
-        return _host_acquire(args, selection, deadline)
-    key = digest({"input": selection["input_identity"], "runtime": selection["image"], "setup": selection["setup_identity"]})
-    fresh = selection["setup_identity"] == "fresh"
-    if fresh:
-        key = digest({"key": key, "one_shot": uuid.uuid4().hex})
-    cache = runtime.PreparedCache("layerfs-bench-infra")
-    labels = {"family": selection["family"], "source": selection["source_identity"], "input": selection["input_identity"]}
-    prepared = runtime.create_prepared_image(selection["image"], key,
-        ["infra-prepare", selection["family"], selection["case"], str(selection["seed"]), "/var/lib/fs-bench/prepared"],
-        labels, deadline=_deadline(deadline), cache=cache, retain=not fresh)
-    return prepared
-
-
 def cgroup_snapshot(sample, deadline):
     command = _command(["docker", "exec", sample.id, "sh", "-c",
         "cat /sys/fs/cgroup/cpu.stat; printf 'memory_peak '; cat /sys/fs/cgroup/memory.peak; "
@@ -377,16 +358,15 @@ def execute_selected(args, *, deadline, verification=False):
     sample = None
     sample_name = None
     host_sample_path = None
-    host = args.topology == "host-store"
     prepared = None
     result = {"status": "INCOMPLETE", "identities": selection, "checks": [], "omissions": [],
               "phase": "preparation",
               "sampled_paths_or_ranges": [], "reused_proof_identities": [],
-              "resource_precision": "separate host process CPU/RSS/IO and container lifetime peak/command CPU" if host else "sample-container lifetime peak; command-window CPU/IO deltas"}
+              "resource_precision": "separate host process CPU/RSS/IO and container lifetime peak/command CPU"}
     work_end = deadline - 4
     try:
         setup_started = time.monotonic_ns()
-        prepared = _acquire(args, selection, work_end)
+        prepared = _host_acquire(args, selection, work_end)
         result["preparation"] = prepared
         if args.prepare_only:
             result["status"] = "PASS"
@@ -396,13 +376,11 @@ def execute_selected(args, *, deadline, verification=False):
         result["phase"] = "runtime-start"
         sample = runtime.start_sample(prepared["image"], name,
             {"family": selection["family"], "run": name}, deadline=_deadline(work_end),
-            cpus=args.cpus, memory_bytes=args.memory_mib * 1024**2, host_store=host)
+            cpus=args.cpus, memory_bytes=args.memory_mib * 1024**2)
         result["phase"] = "sample-setup"
         result["environment_observation"] = sample.observation
-        if host:
-            host_sample_path = HOST_ROOT / "samples" / name
-        result["setup"] = _host_sample(prepared, selection, name, work_end) if host else runtime.prepare_sample(sample, mode="clone" if selection["setup_identity"] == "fresh" else selection["setup_identity"], deadline=_deadline(work_end),
-            reuse_prepared_input=selection["family"] in ("dedup_cross_file", "dedup_cdc_locality"))
+        host_sample_path = HOST_ROOT / "samples" / name
+        result["setup"] = _host_sample(prepared, selection, name, work_end)
         result["preparation_wall_ns"] = time.monotonic_ns() - setup_started
         before = cgroup_snapshot(sample, work_end)
         run_started = time.monotonic_ns()
@@ -414,16 +392,13 @@ def execute_selected(args, *, deadline, verification=False):
             command_env["LAYERFS_SDK_EDIT_PERFORMANCE_ROWS"] = args.performance_rows
         if selection["family"] in ("dedup_cross_file", "dedup_cdc_locality"):
             command_env["LAYERFS_INITIALIZATION_DIAGNOSTIC_NONCE"] = selection["input_identity"][:16]
-        if host:
-            command_env.update(LAYERFS_BENCH_HOST_STORE="1", LAYERFS_BENCH_LOCAL_RUNTIME="0",
-                LAYERFS_EXEC_TRANSPORT="daemon", LAYERFS_FUSE_TRANSPORT="daemon",
-                LAYERFS_BENCH_WORKLOAD="/usr/local/bin/fs-benchmark-workload",
-                LAYERFS_BENCH_PREPARED_INPUT=result["setup"].get("prepared_input_root", str(Path(prepared["host_root"]) / "payload/input")),
-                TMPDIR=str(host_sample_path))
+        command_env.update(LAYERFS_EXEC_TRANSPORT="daemon", LAYERFS_FUSE_TRANSPORT="daemon",
+            LAYERFS_BENCH_WORKLOAD="/usr/local/bin/fs-benchmark-workload",
+            LAYERFS_BENCH_PREPARED_INPUT=result["setup"].get("prepared_input_root", str(Path(prepared["host_root"]) / "payload/input")),
+            TMPDIR=str(host_sample_path))
         operation = ["infra-run", selection["family"], selection["case"], str(selection["seed"]),
-                     "verify" if verification else "performance", str(host_sample_path) if host else "/var/lib/fs-bench/sample", sample.id]
-        command = (_command([args.host_binary, *operation], command_end, env=command_env, output_limit=1024**2)
-                   if host else sample.exec_coordinator(operation, deadline=_deadline(command_end), output_limit=1024**2, env=command_env))
+                     "verify" if verification else "performance", str(host_sample_path), sample.id]
+        command = _command([args.host_binary, *operation], command_end, env=command_env, output_limit=1024**2)
         result["command_wall_ns"] = time.monotonic_ns() - run_started
         result["records"] = records(command.stdout)
         result["records"].extend(initialization_diagnostics(command.stderr))
@@ -441,9 +416,7 @@ def execute_selected(args, *, deadline, verification=False):
             "sample_container_lifetime_peak_bytes": after["memory_peak"],
             "memory_current_bytes": after["memory_current"], "swap_current_bytes": after["swap_current"],
             "oom_kill_delta": after.get("oom_kill", 0) - before.get("oom_kill", 0),
-            "measurement_scope": "inclusive container command window including coordinator; not operation-only peak"}
-        if host:
-            result["resources"]["measurement_scope"] = "Linux daemon/FUSE container command window; host coordinator/Store process CPU/RSS/IO reported separately in records; host CPU is not container-capped"
+            "measurement_scope": "Linux daemon/FUSE container command window; host coordinator/Store process CPU/RSS/IO reported separately in records; host CPU is not container-capped"}
         result["status"] = "PASS" if command.returncode == 0 and result["records"] and not result["resources"]["oom_kill_delta"] else "FAIL"
         result["slow"] = result["command_wall_ns"] >= 5_000_000_000
         result["checks"] = [r for r in result["records"] if "verif" in str(r.get("kind", "")) or "proof" in str(r.get("kind", ""))]
@@ -478,16 +451,14 @@ def execute_selected(args, *, deadline, verification=False):
                     raise RuntimeError("cannot confirm failed-start container cleanup")
             if host_sample_path is not None and host_sample_path.exists():
                 runtime.remove_host_owned(host_sample_path)
-            if host and prepared and selection["setup_identity"] != "fresh-output":
+            if prepared and selection["setup_identity"] != "fresh-output":
                 master = Path(prepared["host_root"])
                 manifest = json.loads((master / "host-cache.json").read_text())
                 if runtime.host_tree_identity(master, _deadline(deadline)) != manifest["files"]:
                     raise RuntimeError("prepared host master changed during sample")
                 result["prepared_master_unchanged"] = True
-            if prepared and prepared.get("one_shot") and host:
+            if prepared and prepared.get("one_shot"):
                 runtime.remove_host_owned(prepared["host_root"])
-            elif prepared and prepared.get("one_shot"):
-                _command(["docker", "image", "rm", prepared.get("cache_tag", prepared["image"])], deadline)
             result["cleanup"] = {"status": "PASS", "wall_ns": time.monotonic_ns() - cleanup_started}
         except Exception as error:
             result["cleanup"] = {"status": "FAIL", "error": str(error)[-2048:]}
@@ -538,7 +509,7 @@ def main(argv=None):
         return 0
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.topology == "host-store" and args.output == parser.get_default("output"):
+    if args.output == parser.get_default("output"):
         args.output = str(HOST_ROOT / "results" / ("run-" + uuid.uuid4().hex[:12]))
     if args.verification:
         parser.error("use the family verify.sh or verify-selected.py for bounded verification")
@@ -572,7 +543,7 @@ def main(argv=None):
                 stream.flush()
             emit({"kind": "header", "schema": "layerfs-perf-v1", "identities": selection,
                   "requested_samples": count, "full_workload": True, "cpus": args.cpus,
-                  "memory_mib": args.memory_mib, "resource_limit_scope": "Linux container only; host CPU not capped" if args.topology == "host-store" else "entire Linux sample container", "verification_status": "NOT_RUN"})
+                  "memory_mib": args.memory_mib, "resource_limit_scope": "Linux container only; host CPU not capped", "verification_status": "NOT_RUN"})
             for index in range(1, count + 1):
                 row = execute_selected(args, deadline=time.monotonic() + args.setup_timeout + args.timeout + 10)
                 row.update(kind="sample", sample_index=index)

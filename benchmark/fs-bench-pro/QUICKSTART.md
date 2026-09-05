@@ -1,5 +1,6 @@
 # LayerFS benchmark quick note
 
+- **Permanent policy:** Docker-owned SQLite and container-side benchmark coordinators are prohibited. Use host-owned Stores for preparation, performance, and verification; migrate unsupported families to the host instead of restoring a Docker fallback.
 - **Environment:** macOS runs the SDK, Workspace processing, and embedded SQLite. Docker Linux runs the daemon, workload helper, and real FUSE.
 - **Limits:** container **2 CPUs / 2 GiB RAM / no swap / 256 PIDs**. Host CPU is uncapped. No Docker data mounts.
 - **Iteration:** reuse preparation, run **one performance sample**, then the selected fast proof. Run serially.
@@ -13,8 +14,9 @@ Docker Desktop must be running. The runner manages sample containers and FUSE; n
 ```bash
 cd /Users/yifanxu/Ephemeral-AI-Lab/layerfs
 
-# Existing verified build on this machine. Rebuild below after source changes.
-export LAYERFS_BENCH_IMAGE=layerfs-bench-infra:55ca9045fd83ba2f
+# Build the host coordinator and the daemon/workload-only Linux image.
+python3 benchmark/fs-bench-pro/shared/runner.py --build-host
+export LAYERFS_BENCH_IMAGE="$(python3 benchmark/fs-bench-pro/shared/runner.py --build-image)"
 
 # List cases without running benchmarks.
 target/release/fs-benchmark-pro infra-list edit_length_changing

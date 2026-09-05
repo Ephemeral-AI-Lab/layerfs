@@ -1,5 +1,11 @@
 # v0.1.3 benchmark infrastructure optimization
 
+> Hosting amendment, 2026-09-05: Docker-owned SQLite is permanently prohibited.
+> Current execution is host SDK/Workspace/spool/SQLite with Linux daemon/FUSE/workloads.
+> This supersedes the Docker prepared-image and coordinator design below, which
+> remains a historical record. See [current benchmark rules](../../../general/benchmark_rules.md).
+
+
 Status: infrastructure migration completed with bounded representative smoke coverage;
 closure evidence and explicit exclusions are recorded in section 15. No full-matrix
 performance qualification or release readiness is claimed.

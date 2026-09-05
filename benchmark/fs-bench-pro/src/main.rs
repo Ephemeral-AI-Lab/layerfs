@@ -59,28 +59,6 @@ struct ContainerCgroupSnapshot {
 }
 
 fn container_cgroup_snapshot(container: &ContainerId) -> AnyResult<ContainerCgroupSnapshot> {
-    if std::env::var("LAYERFS_BENCH_LOCAL_RUNTIME").as_deref() == Ok("1") {
-        let cgroup = Path::new("/sys/fs/cgroup");
-        let number = |name: &str| -> AnyResult<u64> {
-            Ok(std::fs::read_to_string(cgroup.join(name))?.trim().parse()?)
-        };
-        let events = std::fs::read_to_string(cgroup.join("memory.events"))?;
-        let event = |key: &str| -> AnyResult<u64> {
-            Ok(events
-                .lines()
-                .find_map(|line| line.strip_prefix(&format!("{key} ")))
-                .ok_or("missing local cgroup event")?
-                .parse()?)
-        };
-        return Ok(ContainerCgroupSnapshot {
-            memory_current: number("memory.current")?,
-            memory_peak: number("memory.peak")?,
-            swap_current: number("memory.swap.current")?,
-            pids_current: number("pids.current")?,
-            oom: event("oom")?,
-            oom_kill: event("oom_kill")?,
-        });
-    }
     let output = Command::new("docker")
         .args([
             "exec",
@@ -682,6 +660,12 @@ fn main() {
 }
 
 fn run() -> AnyResult<()> {
+    if !cfg!(target_os = "macos") {
+        return Err(
+            "benchmark coordinator requires the macOS host; Docker-owned SQLite is prohibited"
+                .into(),
+        );
+    }
     let _commit_diagnostics = layerfs_sdk::capture_workspace_commit_diagnostics()?;
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
     if args
@@ -4575,16 +4559,12 @@ fn benchmark_container_binding(
     root: &Path,
     container: &ContainerId,
 ) -> AnyResult<Option<layerfs_sdk::ContainerBinding>> {
-    if infra::host_store() {
-        let manager = layerfs_sdk::ContainerManager::open(
-            root.parent()
-                .ok_or("benchmark sample parent")?
-                .join("container-control"),
-        )?;
-        Ok(Some(manager.connect(&container.0)?.binding()))
-    } else {
-        Ok(None)
-    }
+    let manager = layerfs_sdk::ContainerManager::open(
+        root.parent()
+            .ok_or("benchmark sample parent")?
+            .join("container-control"),
+    )?;
+    Ok(Some(manager.connect(&container.0)?.binding()))
 }
 
 fn benchmark_client(

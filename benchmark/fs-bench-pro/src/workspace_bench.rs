@@ -537,17 +537,16 @@ fn fast_verify_branch(
     let exchange = PathBuf::from(std::env::var("LAYERFS_V013_VERIFIER_EXCHANGE_HOST")?);
     let name = format!("fast-covered-{step}.tsv");
     std::fs::write(exchange.join(&name), text.as_bytes())?;
-    if super::infra::host_store()
-        && (!Command::new("docker")
-            .args(["exec", &container.0, "mkdir", "-p", "/verification"])
+    if !Command::new("docker")
+        .args(["exec", &container.0, "mkdir", "-p", "/verification"])
+        .status()?
+        .success()
+        || !Command::new("docker")
+            .arg("cp")
+            .arg(exchange.join(&name))
+            .arg(format!("{}:/verification/{name}", container.0))
             .status()?
             .success()
-            || !Command::new("docker")
-                .arg("cp")
-                .arg(exchange.join(&name))
-                .arg(format!("{}:/verification/{name}", container.0))
-                .status()?
-                .success())
     {
         return Err("host verification exchange copy failed".into());
     }
@@ -844,9 +843,6 @@ fn prepare(root: &Path, case: &Case, seed: u8) -> AnyResult<()> {
 }
 
 fn native_preparation(root: &Path, command: &[String]) -> AnyResult<()> {
-    if std::env::var("LAYERFS_BENCH_LOCAL_RUNTIME").as_deref() == Ok("1") {
-        return workload_source::workspace_registry::dispatch(command);
-    }
     let image = std::env::var("LAYERFS_V013_IMAGE")?;
     let stage = std::fs::canonicalize(root.parent().ok_or("Git preparation stage")?)?;
     let mount = format!("type=bind,src={},dst=/preparation", stage.display());
@@ -1698,7 +1694,7 @@ fn run_case(
                 &container,
             )?;
             observed(&client, &mut verifier_operation)?;
-            if super::infra::host_store() && case.family == "payload_create_read" {
+            if case.family == "payload_create_read" {
                 host_continuation_proof(&client, &reopened, root, &container)?;
             }
         }

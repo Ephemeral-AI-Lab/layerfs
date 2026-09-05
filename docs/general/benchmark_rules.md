@@ -2,6 +2,15 @@
 
 > **Status:** Current general guide.
 
+**Permanent hosting rule:** benchmark SDK/coordinator, Workspace processing,
+spool, and SQLite MUST run on the macOS host. Docker is only for Linux
+daemon/FUSE/workloads. Docker-owned SQLite, prepared Store images, and
+container-side benchmark coordinators MUST NOT be restored or executed.
+Unsupported families require host migration, never a Docker fallback. This
+rule supersedes older Docker-owned benchmark plans; historical results remain
+evidence only for their recorded topology.
+
+
 This document is the normative policy for LayerFS performance benchmarks.
 `MUST`, `MUST NOT`, `SHOULD`, and `MAY` are normative. A `MUST` or `MUST
 NOT` violation makes the affected sample invalid and the campaign

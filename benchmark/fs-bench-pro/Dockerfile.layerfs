@@ -35,12 +35,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
       --remap-path-prefix=/src/benchmark/fs-bench-pro=. \
       benchmark/fs-bench-pro/workload/main.rs -o /fs-benchmark-workload \
  && cargo build --locked --release --target "$target" --jobs "$CARGO_BUILD_JOBS" \
-      -p layerfs-daemon -p fs-benchmark-pro \
+      -p layerfs-daemon \
  && cargo build --locked --release --target "$target" --jobs "$CARGO_BUILD_JOBS" \
       -p layerfs-fuse --no-default-features --features proxy \
  && cp "target/$target/release/layerfs-daemon" /layerfs-daemon \
- && cp "target/$target/release/layerfs-fuse" /layerfs-fuse \
- && cp "target/$target/release/fs-benchmark-pro" /fs-benchmark-pro
+ && cp "target/$target/release/layerfs-fuse" /layerfs-fuse
 
 ARG LAYERFS_SOURCE_COMMIT
 ARG LAYERFS_SOURCE_TREE
@@ -66,15 +65,13 @@ RUN mkdir -p /run/layerfs /workspace /var/tmp/layerfs-owned /var/lib/fs-bench \
  && chmod 0700 /run/layerfs
 
 COPY --from=build /fs-benchmark-workload /usr/local/bin/fs-benchmark-workload
-COPY --from=build /fs-benchmark-pro /usr/local/bin/fs-benchmark-pro
 COPY --from=build /layerfs-daemon /usr/local/bin/layerfs-daemon
 COPY --from=build /layerfs-fuse /usr/local/bin/layerfs-fuse
 COPY benchmark/fs-bench-pro/shared/daemon-entrypoint.sh /usr/local/bin/layerfs-daemon-entrypoint
-RUN chmod 0555 /usr/local/bin/fs-benchmark-pro /usr/local/bin/fs-benchmark-workload \
+RUN chmod 0555 /usr/local/bin/fs-benchmark-workload \
                   /usr/local/bin/layerfs-daemon \
                   /usr/local/bin/layerfs-fuse /usr/local/bin/layerfs-daemon-entrypoint \
  && /usr/local/bin/fs-benchmark-workload self-check \
- && /usr/local/bin/fs-benchmark-pro workspace-self-check \
  && test -x /usr/local/bin/layerfs-daemon
 
 ARG LAYERFS_SOURCE_COMMIT

@@ -41,6 +41,8 @@ class LayoutTests(unittest.TestCase):
                 self.assertIn(target, text)
                 self.assertIn("--family " + family.name, text)
         dockerfile = (BENCH / "Dockerfile.layerfs").read_text()
+        self.assertNotIn("/usr/local/bin/fs-benchmark-pro", dockerfile)
+        self.assertNotIn('release/fs-benchmark-pro', dockerfile)
         copy = re.search(r"^COPY (\S+) /usr/local/bin/layerfs-daemon-entrypoint$", dockerfile, re.M)
         self.assertIsNotNone(copy)
         entry = BENCH.parent.parent / copy.group(1)
