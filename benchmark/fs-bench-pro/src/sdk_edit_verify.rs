@@ -68,7 +68,9 @@ pub(crate) fn run(
     )?;
     let initial_sha256 = "not-performed";
     let verify_start = scenario.start.saturating_sub(65536);
-    let verify_end = scenario.final_bytes.min(scenario.start + scenario.replacement_len + 65536);
+    let verify_end = scenario
+        .final_bytes
+        .min(scenario.start + scenario.replacement_len + 65536);
     if verify_end < verify_start || verify_end - verify_start > 192 * 1024 {
         return Err("SDK edit verifier boundary range".into());
     }
@@ -238,7 +240,11 @@ pub(crate) fn run(
     )?;
     let mut boundary_sink = SdkEditHashSink(workload_source::Sha256::new());
     layerfs_content::filesystem::read_range(
-        &observed_reader, observed.root, &path, verify_start..verify_end, &mut boundary_sink,
+        &observed_reader,
+        observed.root,
+        &path,
+        verify_start..verify_end,
+        &mut boundary_sink,
     )?;
     let observed_sha256 = workload_source::hex(&boundary_sink.0.finish());
     let mut observed_payload_ids = std::collections::BTreeSet::new();
@@ -259,13 +265,19 @@ pub(crate) fn run(
         untouched_payload_ids.is_subset(&observed_payload_ids)
     };
     let base_reader = reopened_store.snapshot_reader(initial_root);
-    let expected_sha256 =
-        independent_digest(&base_reader, initial_root, &scenario, &logical_replacement, verify_start..verify_end)?;
+    let expected_sha256 = independent_digest(
+        &base_reader,
+        initial_root,
+        &scenario,
+        &logical_replacement,
+        verify_start..verify_end,
+    )?;
     let size_index = workload_source::sdk_edit_common::fixture_index(scenario.fixture_bytes)
         .ok_or("SDK edit verifier size")?;
     let semantic_valid = initial_resolved.record.content_root.to_string()
         == workload_source::sdk_edit_common::FIXTURE_FILE_ROOT[size_index]
-        && initial_state.mapping_root.to_string() == workload_source::sdk_edit_common::FIXTURE_MAP_ROOT[size_index]
+        && initial_state.mapping_root.to_string()
+            == workload_source::sdk_edit_common::FIXTURE_MAP_ROOT[size_index]
         && initial_state.logical_len == scenario.fixture_bytes
         && observed_sha256 == expected_sha256
         && fuse_sha256 == expected_sha256
@@ -453,10 +465,14 @@ pub(crate) fn run(
         "\"materialized_status\":\"not-performed-fast-verification\"",
     );
     result = result.replace("\"fresh_fuse_reopen\":true", "\"fresh_fuse_reopen\":false");
-    result = result.replace("\"expected_sha256\":", "\"expected_boundary_sha256\":")
+    result = result
+        .replace("\"expected_sha256\":", "\"expected_boundary_sha256\":")
         .replace("\"observed_sha256\":", "\"canonical_boundary_sha256\":")
         .replace("\"fuse_sha256\":", "\"fuse_boundary_sha256\":")
-        .replace("\"independent_byte_oracle\":true", "\"independent_boundary_oracle\":true");
+        .replace(
+            "\"independent_byte_oracle\":true",
+            "\"independent_boundary_oracle\":true",
+        );
     result.pop();
     result.push_str(&format!(",\"verification_profile\":\"canonical-roots-and-boundaries-v1\",\"full_file_bytes_verified\":false,\"verified_start\":{verify_start},\"verified_end\":{verify_end},\"verified_bytes\":{}}}", verify_end - verify_start));
     println!("{result}");

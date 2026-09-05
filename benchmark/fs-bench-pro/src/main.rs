@@ -1936,7 +1936,8 @@ fn store_footprint_case(
         use std::os::unix::fs::FileExt;
         let edit_offset = workload_source::namespace_edit_offset(edit_size)?;
         let start = edit_offset.saturating_sub(65536);
-        let end = edit_size.min(edit_offset + workload_source::NAMESPACE_EDIT_MARKER.len() as u64 + 65536);
+        let end = edit_size
+            .min(edit_offset + workload_source::NAMESPACE_EDIT_MARKER.len() as u64 + 65536);
         let mut expected_bytes = vec![0; (end - start) as usize];
         std::fs::File::open(fixture.join(edit_path))?.read_exact_at(&mut expected_bytes, start)?;
         let marker = (edit_offset - start) as usize;
@@ -1945,8 +1946,11 @@ fn store_footprint_case(
         let expected_sha = workload_source::sdk_edit_common::sha256_hex(&expected_bytes);
         let mut sink = SdkEditHashSink(workload_source::Sha256::new());
         layerfs_content::filesystem::read_range(
-            &layerfs_layerstack_store::CoreReader(&pinned.reader), pinned.root,
-            &layerfs_content::CanonicalPath::new(edit_path)?, start..end, &mut sink,
+            &layerfs_layerstack_store::CoreReader(&pinned.reader),
+            pinned.root,
+            &layerfs_content::CanonicalPath::new(edit_path)?,
+            start..end,
+            &mut sink,
         )?;
         if workload_source::hex(&sink.0.finish()) != expected_sha {
             return Err("Store-footprint canonical edit boundary".into());
@@ -2274,7 +2278,8 @@ fn namespace_verify_case(
     let [scan] = scans.as_slice() else {
         return Err("namespace initialization receipt cardinality".into());
     };
-    if scan.scanned_files != scenario.regular_files || scan.scanned_bytes != scenario.logical_bytes {
+    if scan.scanned_files != scenario.regular_files || scan.scanned_bytes != scenario.logical_bytes
+    {
         return Err("namespace initialization counts".into());
     }
     let branch = client.fork_branch(
