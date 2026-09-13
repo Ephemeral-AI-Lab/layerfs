@@ -12,6 +12,12 @@ Continue through implementation, debugging, correctness, the full included bench
 campaign, evidence publication, and verified issue closure. A draft, partial feature,
 single passing family, or promises to continue are not completion.
 
+**Successor: take over execution now.** The previous agent stopped after Phase 1
+contract research and a consumer audit. A phase boundary, progress comment,
+documentation commit, or blocker on one dependency is not a stopping condition.
+Do not finish a turn with "Phase 1 complete; ready for Phase 2" or ask whether to
+continue. This instruction already authorizes every remaining scoped phase.
+
 The owner's latest completion requirement is stronger than the earlier statement
 that benchmark reporting could finish with failed results: **do not close #124 or
 #125 merely because failures were honestly documented. Resolve required failures
@@ -43,9 +49,35 @@ Do not execute that handoff. Read `cases.json` as the source of #122 exclusions,
 not as this campaign's include list. References to #122 infrastructure do not
 authorize running its scenarios.
 
-Inspect actual current source and git status. These snapshot documents may still
-be uncommitted in the main checkout: preserve them before using a different checkout.
-Do not start from an older clean worktree and lose the specification. Preserve
+Read the predecessor's durable state before choosing work:
+
+- `docs/roadmap/0.1/0.1.6/overlay-snapshot-progress.md`
+- `docs/roadmap/0.1/0.1.6/overlay-snapshot-contract-resolution.md`
+- `docs/roadmap/0.1/0.1.6/overlay-snapshot-verification-ledger.md`
+- `docs/roadmap/0.1/0.1.6/evidence/v1-probe/` and `evidence/phase1-catalog/`
+  (both relative to the same v0.1.6 directory).
+
+The predecessor commits are `a7b565640`, `56c8d29c6`, `bfb06a019`, and
+`f996a56d7`, following documentation commit `86f6a0a0f`. At this handoff they
+contain contracts, probe evidence, and audits; no product implementation or final
+benchmark campaign has been completed. Verify current state rather than assuming
+it has not advanced. Contract decisions are not implementation test passes.
+
+The V1 probe demonstrates a real writable-mapping visibility problem. Preserve
+that result and keep its acceptance obligation open. The previous blanket wait
+for an owner V1 decision before starting Phases 2–5 is superseded: implement
+independent work immediately and investigate compliant V1 mechanisms alongside it.
+None of the proposed semantic relaxations has been approved. Recording the blocker
+does not satisfy V1 or authorize claiming the entire feature complete.
+
+First post a concise takeover update to #124 with retained evidence, unresolved
+obligations, and the next concrete implementation task. Then execute that task in
+the same run; do not end after the update or another planning document. Start with
+the smallest dependency-ready Phase 2 overlay behavior and its focused check.
+
+Inspect actual current source and git status. Preserve local changes before using
+a different checkout. Do not start from an older clean worktree and lose the
+specification or predecessor's evidence. Preserve
 unrelated changes, other agents' work, existing fixtures, and raw evidence. Freeze
 the authoritative scoped documents in source as required before implementation/
 benchmark work, and attach immutable links to the issues.
@@ -86,6 +118,22 @@ kernel-visible data, or fabricate a passing result. Record a precise blocker if
 external input is truly required; keep the issues open and continue independent
 authorized work. Exhausted assumptions are not evidence of terminal success.
 
+Scope blockers to their actual dependencies:
+
+| Work | Proceed while V1 mapping visibility remains unresolved? |
+| --- | --- |
+| Host overlay roots/indexes, leased-source installation, payload ownership, replay, quotas and reclamation | Yes: implement and check the resolved component contracts. |
+| Owned snapshot readers and host ownership of acknowledged ordinary mutations | Yes: prove their component behavior without claiming complete kernel visibility. |
+| Commit attempt lifecycle, canonical predecessor correspondence, staged construction and publication receipts | Yes where a stable owned input suffices; full public-path acceptance remains pending. |
+| Non-Commit consumer audit and replacement preparation | Yes; delete a shared primitive only after every required consumer has a correct replacement. |
+| Full supported-surface snapshot correctness and final benchmark campaign | No: resolve V1 and all other required correctness obligations first. |
+
+Use bounded, distinct hypotheses for V1; reuse the existing probe unless a changed
+mechanism or environment justifies another run. Ask only for indispensable external
+input, and continue ready work while awaiting it. An unanswered question is not a
+blanket hold on unrelated implementation. Do not hide incomplete integration behind
+a fallback that violates the governing rules.
+
 ## Execute the seven phases and update issues on every completion
 
 Follow the implementation plan's phases:
@@ -98,6 +146,10 @@ Follow the implementation plan's phases:
 6. Complete correctness/integration and seal the benchmark candidate.
 7. **Final phase: run the full existing benchmark suite excluding #122, repair
    measured failures as necessary, publish numbers, and complete terminal validation.**
+
+Phase numbers organize deliverables, not an all-or-nothing scheduling barrier.
+Keep unresolved exits visibly open while progressing dependency-ready work in
+later phases. Phase 7 still requires the correct sealed candidate from Phase 6.
 
 After each phase actually completes, post a completion comment to #124 before
 claiming or proceeding on that completion. Mirror benchmark-facing changes and
@@ -211,6 +263,30 @@ acceptance criterion behind fast inner Commit time, shorten workloads, weaken
 oracles, raise deadlines after a miss, or seek new waivers to force closure.
 
 ## Persistence, delegation, and resumability
+
+Run this execution loop until verified terminal success:
+
+1. Read the durable next action and select the highest-priority dependency-ready
+   implementation or verification task.
+2. Make the change or test a new concrete hypothesis; run the smallest relevant
+   check and repair failures. Retain unaffected passes under the rules above.
+3. Record source, evidence, remaining failures, and the next executable action.
+4. When a phase actually completes, publish its required issue comment immediately.
+   A phase comment is an intermediate checkpoint, not a final response.
+5. Immediately execute the next ready task. Repeat through the full included
+   benchmark campaign, required repairs, evidence publication, and verified closure.
+
+Before any nonterminal final response, audit all remaining work: name each blocker,
+the exact tasks it prevents, and whether any independent task can still advance.
+If any authorized task can advance, continue working instead of ending the turn.
+Do not stop because a subagent finished, a tool yielded a running process, a phase
+ended, context was compacted, or the remaining work is lengthy. Wait for running
+work, integrate its result, and continue; keep progress updates intermediate.
+
+Only if every remaining path genuinely requires unavailable external input or
+resources may execution report an external block. Record the concrete evidence,
+exhausted independent work and exact intervention needed; keep both issues open.
+Never manufacture PASS, relax the contract, or close issues to satisfy persistence.
 
 Use bounded subagents for independent implementation responsibilities or adversarial
 reviews when useful. Assign non-overlapping file ownership, warn them about shared

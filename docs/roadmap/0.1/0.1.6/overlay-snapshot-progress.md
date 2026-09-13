@@ -12,12 +12,18 @@ for that work; the append-only record of individual checks is
 | Item | Value |
 | --- | --- |
 | Phase | 1 (contracts and frozen source of truth) — complete for V2/V3/V4 and for V1's acknowledged-bytes half; V1 mapping visibility is an open blocker requiring an owner decision |
-| Next concrete action | Owner selects one option in [contract resolution §1](overlay-snapshot-contract-resolution.md#the-decision-required); then Phases 2–5 implementation begins |
+| Next concrete action | Successor implements the smallest dependency-ready Phase 2 host overlay behavior and focused check; investigate compliant V1 mechanisms alongside independent implementation |
 | Phases 2–6 | Not started. No product code for this feature exists |
 | Phase 7 | Not started. No benchmark case was executed for #124/#125 |
 | Active processes | None. No build, container, mount, or benchmark is running |
 | Measurement lock | Not held |
-| Blocking external input | Yes: V1 option 1/2/3 decision. Everything else in Phase 1 is closed |
+| Unresolved contract | V1 mapping visibility remains open. No option relaxing semantics has owner approval; this does not block all Phase 2–5 component work |
+
+Scheduling correction (2026-09-14): the owner requested continued execution through
+terminal success. The predecessor's blanket wait before Phases 2–5 is superseded
+by the [successor handoff](overlay-snapshot-handoff-prompt.md). This corrects the
+next action, not the recorded probe result. V2/V3/V4 contract decisions still need
+implementation evidence; full public snapshot acceptance and Phase 7 remain pending.
 
 ## Frozen source and identities
 
@@ -54,14 +60,14 @@ for that work; the append-only record of individual checks is
 
 1. Read [contract resolution](overlay-snapshot-contract-resolution.md) §1 for the
    open V1 decision, then §2–§4 for the selected V2/V3/V4 contracts.
-2. Do not start Phase 2–5 code that would ship a weaker visibility model; the
-   implementation plan's Phase 1 exit condition forbids it.
+2. Implement dependency-ready Phase 2–5 components immediately, while keeping V1
+   open. Do not ship or claim a weaker visibility model as full snapshot support.
 3. Reuse the frozen pass ledger rather than re-running unaffected checks; the
    ledger records why each retained pass is still valid.
 4. Re-enumerate the benchmark catalog from the sealed candidate before any Phase 7
    execution; the recorded scope ledger is provisional by construction.
 
-## Ordered next actions once V1 is decided
+## Ordered next actions, subject to actual dependencies
 
 1. Phase 2: add the host overlay root bundle and typed persistent indexes
    (`overlay.rs`), atomic leased-source-root installation, dual change indexes,

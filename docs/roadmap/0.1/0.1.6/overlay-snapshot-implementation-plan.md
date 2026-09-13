@@ -89,6 +89,13 @@ Exit evidence: explicit resolved contract decisions and source links; remaining
 blockers are concrete and cannot be marked complete. No code claiming full public
 snapshot support proceeds on a known weaker visibility model.
 
+An unresolved contract blocks only its dependent implementation or acceptance
+claims. Continue dependency-ready work in later phases, keeping unresolved exits
+open; do not turn a V1 visibility blocker into a blanket hold on host overlay,
+ownership, snapshot-reader, or staging components. Phase completion updates are
+intermediate checkpoints: immediately continue the next ready task. Full public
+correctness and the final benchmark campaign still require every relevant contract.
+
 ## Phase 2 — Implement shared host overlay backing and atomic live state
 
 Work:
