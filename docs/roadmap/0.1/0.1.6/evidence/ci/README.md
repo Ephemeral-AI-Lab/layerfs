@@ -26,3 +26,15 @@ still in progress and neither #124 nor #125 is eligible for closure.
   `c95588f30760e08235d56b513e48b92a9defd9b7`: workspace Clippy FAIL on unwired
   private overlay/correspondence code. Both failing-step logs are preserved.
   Complete production integration; suppressing dead-code checks is not the fix.
+
+- Run `34786208371` at `3f4a26d4a555918ea79a90bb69995946fa605abb`:
+  native Rust 1.85.1 FAIL in
+  `overlay::tests::fixed_inode_metadata_and_linked_ranges_remain_owned_after_live_drop`.
+  Its pre-aggregate fixture passed an arbitrary index root as file ranges; the
+  shared inline-accounting helper correctly rejected missing range metadata.
+  Replace that fixture with a real Inline range tree and verify retained bytes
+  after root cleanup. No production validation is weakened. The exact repaired
+  check passes on the ongoing integration binary `13b51d2ce155a98d9362900306ddb1840e368f26998824b3f1c9cf49bb45c627`;
+  `../phase3-host-operations/lease-ci-attempt02-result.json` records its full
+  tested source. This targeted pass is not a final-candidate or full-CI claim;
+  the subsequent remote run will qualify the published repair commit.

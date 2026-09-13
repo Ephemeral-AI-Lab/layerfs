@@ -957,10 +957,31 @@ mod tests {
     #[test]
     fn fixed_inode_metadata_and_linked_ranges_remain_owned_after_live_drop() {
         let overlay = overlay();
-        let empty = overlay.index.empty_root().unwrap();
-        let ranges = overlay
-            .index
-            .set(&empty, b"range", b"captured bytes")
+        let payload = crate::overlay_payload::Payload::temporary(
+            &std::env::temp_dir(),
+            crate::overlay_payload::Limits {
+                physical_bytes: 1024 * 1024,
+                owners: 32,
+                readers: 2,
+                writes: 2,
+                index: Limits::default(),
+            },
+        )
+        .unwrap();
+        let ranges = crate::overlay_ranges::Ranges::new(
+            overlay.index.clone(),
+            payload,
+            crate::overlay_ranges::Limits::default(),
+        )
+        .unwrap();
+        let origin = crate::correspondence::OriginSequence::new([42; 16])
+            .allocate()
+            .unwrap();
+        let tree = ranges
+            .append(
+                &ranges.empty(),
+                crate::overlay_ranges::OwnedPiece::inline(b"captured bytes", origin).unwrap(),
+            )
             .unwrap();
         let record = InodeRecord {
             attr: Attr {
@@ -980,7 +1001,7 @@ mod tests {
         };
         overlay
             .mutate(|m| {
-                m.put_inode_record(record, Some(&ranges))?;
+                m.put_inode_record(record, tree.root())?;
                 m.put_binding(NodeId(1), b"file", Some(NodeId(42)))
             })
             .unwrap();
@@ -989,14 +1010,23 @@ mod tests {
         assert_eq!(decoded, record);
         assert_eq!(snapshot.root.next_inode, 43);
         let index = overlay.index.clone();
-        drop(ranges);
-        drop(empty);
+        drop(tree);
         drop(snapshot);
         drop(overlay);
+        for _ in 0..16 {
+            index.reclaim(128).unwrap();
+        }
+        let tree = ranges.restore(retained).unwrap();
+        let mut bytes = [0; 14];
         assert_eq!(
-            index.get(&retained.unwrap(), b"range").unwrap().as_deref(),
-            Some(&b"captured bytes"[..])
+            ranges
+                .read_range(&tree, &mut bytes, 0, |_, _, _| {
+                    Err(std::io::Error::other("fixture has no canonical ranges"))
+                })
+                .unwrap(),
+            14
         );
+        assert_eq!(&bytes, b"captured bytes");
         let mut malformed = record.encode().unwrap();
         malformed[4] = 1;
         assert!(InodeRecord::decode(NodeId(42), &malformed).is_err());

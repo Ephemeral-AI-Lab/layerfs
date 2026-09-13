@@ -1,0 +1,6 @@
+
+running 1 test
+test overlay::tests::fixed_inode_metadata_and_linked_ranges_remain_owned_after_live_drop ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 153 filtered out; finished in 0.01s
+
