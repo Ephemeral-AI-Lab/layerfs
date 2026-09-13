@@ -329,11 +329,7 @@ struct AliasBinding {
     length: u64,
 }
 
-fn alias_binding(
-    source: &dyn ObjectSource,
-    root: ObjectId,
-    path: &str,
-) -> AnyResult<AliasBinding> {
+fn alias_binding(source: &dyn ObjectSource, root: ObjectId, path: &str) -> AnyResult<AliasBinding> {
     let view = namespace_view(source, root)?;
     let inode = view
         .inodes
@@ -730,12 +726,14 @@ pub(crate) fn declared_regular_length(
         return Err("declared regular length requires a regular inode".into());
     }
     let reader = CoreReader(source);
-    Ok(reader.with_authenticated_canonical(record.content_root, |canonical| {
-        Ok(match small_bytes(canonical)? {
-            Some(raw) => raw.len() as u64,
-            None => extent_codec::decode_file_state(canonical)?.logical_len,
-        })
-    })?)
+    Ok(
+        reader.with_authenticated_canonical(record.content_root, |canonical| {
+            Ok(match small_bytes(canonical)? {
+                Some(raw) => raw.len() as u64,
+                None => extent_codec::decode_file_state(canonical)?.logical_len,
+            })
+        })?,
+    )
 }
 
 /// Read one declared byte range of a persisted regular file through the Store

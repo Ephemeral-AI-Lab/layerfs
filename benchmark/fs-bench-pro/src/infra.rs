@@ -11,9 +11,7 @@ fn fixture_info(family: &str, case: &str, seed: u8) -> AnyResult<()> {
     if SDK.contains(&family) {
         return sdk_edit_fixture_info(sdk_edit_scenario(family, case)?.fixture_bytes);
     }
-    if workload_source::v016_stages::mixed_case(case)?
-        .is_some_and(|row| row.extended)
-    {
+    if workload_source::v016_stages::mixed_case(case)?.is_some_and(|row| row.extended) {
         println!(
             "{}",
             capture(&[
@@ -203,7 +201,9 @@ fn list(family_filter: Option<&str>, case_filter: Option<&str>) -> AnyResult<()>
         if !selected(case.family, &case.id) {
             continue;
         }
-        let v016 = workload_source::v016_stages::mixed_case(&case.id).ok().flatten();
+        let v016 = workload_source::v016_stages::mixed_case(&case.id)
+            .ok()
+            .flatten();
         if v016.is_some_and(|row| row.extended) {
             // Explicit extended cases are never listed as regular selections.
             continue;

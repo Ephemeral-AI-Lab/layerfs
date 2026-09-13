@@ -774,12 +774,17 @@ impl PieceTree {
             compact.pieces()
         } else if let Some(slice) = &self.compact_spool {
             vec![Piece::Spool {
-                segment: slice.segment.clone(), offset: slice.offset, len: slice.len,
+                segment: slice.segment.clone(),
+                offset: slice.offset,
+                len: slice.len,
             }]
         } else {
             Vec::new()
         };
-        let mut cursor = PieceCursor { stack: Vec::new(), compact: compact.into_iter() };
+        let mut cursor = PieceCursor {
+            stack: Vec::new(),
+            compact: compact.into_iter(),
+        };
         cursor.descend(self.root.clone());
         cursor
     }
@@ -1392,13 +1397,21 @@ mod tests {
         let mut tree = PieceTree::empty();
         for n in 0..513_u64 {
             let piece = if n % 2 == 0 {
-                Piece::Spool { segment: crate::backing::test_backing(), offset: n * 3, len: 3 }
-            } else { Piece::Zero { len: 3 } };
+                Piece::Spool {
+                    segment: crate::backing::test_backing(),
+                    offset: n * 3,
+                    len: 3,
+                }
+            } else {
+                Piece::Zero { len: 3 }
+            };
             tree = tree.replace(tree.len(), 0, [piece]).unwrap();
         }
         let height = tree.height();
         let mut held = tree.cursor();
-        tree = tree.replace(0, tree.len(), [Piece::Zero { len: 1 }]).unwrap();
+        tree = tree
+            .replace(0, tree.len(), [Piece::Zero { len: 1 }])
+            .unwrap();
         let mut seen = 0_u64;
         while let Some(piece) = held.next() {
             assert!(held.stack.len() <= height);
@@ -1407,21 +1420,45 @@ mod tests {
                     assert_eq!(seen % 2, 0);
                     assert_eq!((offset, len), (seen * 3, 3));
                 }
-                Piece::Zero { len } => { assert_eq!(seen % 2, 1); assert_eq!(len, 3); }
+                Piece::Zero { len } => {
+                    assert_eq!(seen % 2, 1);
+                    assert_eq!(len, 3);
+                }
                 _ => panic!("unexpected range"),
             }
             seen += 1;
         }
         assert_eq!(seen, 513);
-        assert_eq!(tree.cursor().collect::<Vec<_>>(), vec![Piece::Zero { len: 1 }]);
+        assert_eq!(
+            tree.cursor().collect::<Vec<_>>(),
+            vec![Piece::Zero { len: 1 }]
+        );
         let compact = PieceTree::compact_inline(
-            FileContentRoot(ObjectId::for_bytes(b"base")), 20, 5, Arc::from(&b"abc"[..]),
-        ).unwrap();
-        assert_eq!(compact.cursor().map(|p| p.len()).collect::<Vec<_>>(), vec![5, 3, 12]);
-        let spool = PieceTree::empty().replace(0, 0, [Piece::Spool {
-            segment: crate::backing::test_backing(), offset: 8, len: 10,
-        }]).unwrap();
-        assert_eq!(spool.cursor().map(|p| p.len()).collect::<Vec<_>>(), vec![10]);
+            FileContentRoot(ObjectId::for_bytes(b"base")),
+            20,
+            5,
+            Arc::from(&b"abc"[..]),
+        )
+        .unwrap();
+        assert_eq!(
+            compact.cursor().map(|p| p.len()).collect::<Vec<_>>(),
+            vec![5, 3, 12]
+        );
+        let spool = PieceTree::empty()
+            .replace(
+                0,
+                0,
+                [Piece::Spool {
+                    segment: crate::backing::test_backing(),
+                    offset: 8,
+                    len: 10,
+                }],
+            )
+            .unwrap();
+        assert_eq!(
+            spool.cursor().map(|p| p.len()).collect::<Vec<_>>(),
+            vec![10]
+        );
         assert!(PieceTree::empty().cursor().next().is_none());
     }
 

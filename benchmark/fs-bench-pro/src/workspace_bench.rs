@@ -1659,7 +1659,9 @@ fn run_case(
                         .ok_or("boundary operation outside the declared schedule")?;
                     use workload_source::file_size_transition::BoundaryOp;
                     let (edit_start, delete_len, len, visit) = match operation {
-                        BoundaryOp::Overwrite { offset, len, visit } => (*offset, *len, *len, *visit),
+                        BoundaryOp::Overwrite { offset, len, visit } => {
+                            (*offset, *len, *len, *visit)
+                        }
                         BoundaryOp::Append { len, visit } => {
                             let current =
                                 workload_source::file_size_transition::declared_length(case, step)?;
@@ -1686,8 +1688,7 @@ fn run_case(
                             (0, current, *len, step)
                         }
                     };
-                    let alias_plan =
-                        workload_source::file_size_transition::plan(&case.id)?.alias;
+                    let alias_plan = workload_source::file_size_transition::plan(&case.id)?.alias;
                     if alias_plan {
                         // The declared alias schedule is POSIX: append through
                         // the alias, append through the target, truncate
@@ -1734,7 +1735,9 @@ fn run_case(
                         let replacement = if len == 0 {
                             Vec::new()
                         } else {
-                            workload_source::file_size_transition::replacement(case, seed, visit, len)?
+                            workload_source::file_size_transition::replacement(
+                                case, seed, visit, len,
+                            )?
                         };
                         let request = WorkspaceFileRangeEdit {
                             workspace_id: session.id,
@@ -1762,10 +1765,7 @@ fn run_case(
                                 ("phase", quote("sdk-edit")),
                                 ("step", step.to_string()),
                                 ("elapsed_ns", edit_ns.to_string()),
-                                (
-                                    "operation",
-                                    quote(&format!("{operation:?}")),
-                                ),
+                                ("operation", quote(&format!("{operation:?}"))),
                             ],
                         );
                         observed(&client, &mut last_operation)?;
@@ -2202,7 +2202,8 @@ fn run_case(
                         case,
                         registry::steps(case) - 1,
                     )?;
-                    let final_published = final_root.ok_or("v0.1.6 alias oracle: final root absent")?;
+                    let final_published =
+                        final_root.ok_or("v0.1.6 alias oracle: final root absent")?;
                     let before_reader = reopened.snapshot_reader(before_root);
                     let after_reader = reopened.snapshot_reader(final_published);
                     let classes = super::workspace_verify::verify_alias_classes(
@@ -2216,18 +2217,17 @@ fn run_case(
                         declared_after,
                         declared_alias,
                     )?;
-                    let shared = workload_source::file_size_transition::pre_replacement_shared(
-                        case, seed,
-                    )?;
+                    let shared =
+                        workload_source::file_size_transition::pre_replacement_shared(case, seed)?;
                     emit(
                         "v016-alias-inode-classes",
                         &[
                             ("kind_scope", quote("independent declared oracle")),
+                            ("pre_replacement_root", quote(&before_root.to_string())),
                             (
-                                "pre_replacement_root",
-                                quote(&before_root.to_string()),
+                                "pre_replacement_inode",
+                                quote(&workload_source::hex(&classes.before_inode.0)),
                             ),
-                            ("pre_replacement_inode", quote(&workload_source::hex(&classes.before_inode.0))),
                             (
                                 "pre_replacement_ref_count",
                                 classes.before_ref_count.to_string(),
@@ -2236,26 +2236,33 @@ fn run_case(
                                 "pre_replacement_content_root",
                                 quote(&classes.before_content_root.to_string()),
                             ),
-                            ("target_inode", quote(&workload_source::hex(&classes.after_inode.0))),
+                            (
+                                "target_inode",
+                                quote(&workload_source::hex(&classes.after_inode.0)),
+                            ),
                             ("target_ref_count", classes.target_ref_count.to_string()),
                             (
                                 "target_content_root",
                                 quote(&classes.target_content_root.to_string()),
                             ),
-                            ("alias_inode", quote(&workload_source::hex(&classes.alias_inode.0))),
+                            (
+                                "alias_inode",
+                                quote(&workload_source::hex(&classes.alias_inode.0)),
+                            ),
                             ("alias_ref_count", classes.alias_ref_count.to_string()),
                             (
                                 "alias_content_root",
                                 quote(&classes.alias_content_root.to_string()),
                             ),
-                            ("separated", (classes.after_inode != classes.alias_inode).to_string()),
+                            (
+                                "separated",
+                                (classes.after_inode != classes.alias_inode).to_string(),
+                            ),
                             ("pre_replacement_shared", shared.to_string()),
                         ],
                     );
                     if classes.after_inode == classes.alias_inode || !shared {
-                        return Err(
-                            "v0.1.6 alias replacement did not separate the inode".into()
-                        );
+                        return Err("v0.1.6 alias replacement did not separate the inode".into());
                     }
                     emit(
                         "v016-alias-posix-steps",
