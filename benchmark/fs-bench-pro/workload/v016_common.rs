@@ -24,6 +24,8 @@ pub(crate) const TINY: u64 = 4_096;
 pub(crate) const WITNESS: u64 = 4_096;
 
 pub(crate) const DIRECTORY_NAME_CAP: usize = 100;
+/// The initial directory mode of every declared directory.
+pub(crate) const DEFAULT_DIRECTORY_MODE: u32 = 0o750;
 pub(crate) const RESERVED_PATHS: usize = 16;
 pub(crate) const RESERVED_BYTES: u64 = 65_536;
 
@@ -429,31 +431,35 @@ pub(crate) fn load_fixture(tier: &LoadTier, seed: u8) -> Result<LoadFixture> {
         .map(|index| tiny_file(1_160 + index))
         .collect::<Result<_>>()?;
 
-    // Witnesses and the remaining targets are ordinary class members.
+    // Witnesses and the remaining targets are ordinary class members. The
+    // packed layout skips the tiny class's reserved role ordinals, so a class
+    // ordinal after the first class maps into the packed space by subtracting
+    // those reservations.
+    let packed = |class: usize, offset: usize| -> String {
+        // Class ordinals below the tiny class's reservation count are already
+        // inside the packed space.
+        let base = class_base[class].saturating_sub(tiny_role_files.min(class_base[class]));
+        ordinal_path(base + offset)
+    };
     let witnesses = Witnesses {
         empty: ordinal_path(class_base[0]),
         tiny: [
-            ordinal_path(class_base[0] + classes[0].count + 1_400),
-            ordinal_path(class_base[0] + classes[0].count + 1_401),
+            packed(1, 1_400),
+            packed(1, 1_401),
         ],
-        medium: [
-            ordinal_path(class_base[2] + 2),
-            ordinal_path(class_base[3] + 1),
-        ],
-        boundary_exact: ordinal_path(class_base[4] + 1),
-        large: ordinal_path(class_base[7] + 1),
-        anchors: (0..tier.anchors)
-            .map(|index| ordinal_path(class_base[8] + index))
-            .collect(),
+        medium: [packed(2, 2), packed(3, 1)],
+        boundary_exact: packed(4, 1),
+        large: packed(7, 1),
+        anchors: (0..tier.anchors).map(|index| packed(8, index)).collect(),
     };
     let edit = EditTargets {
         tiny_pwrite,
-        medium_overwrite: ordinal_path(class_base[2]),
-        medium_net_zero: ordinal_path(class_base[2] + 1),
-        medium_replace_tail: ordinal_path(class_base[3]),
-        sdk_insert: ordinal_path(class_base[7]),
-        sdk_delete: ordinal_path(class_base[7] + 2),
-        anchor_overwrite: ordinal_path(class_base[8]),
+        medium_overwrite: packed(2, 0),
+        medium_net_zero: packed(2, 1),
+        medium_replace_tail: packed(3, 0),
+        sdk_insert: packed(7, 0),
+        sdk_delete: packed(7, 2),
+        anchor_overwrite: packed(8, 0),
     };
     let links = link_roles_of(&move_dest, &link_targets)?;
     let fixture = LoadFixture {
@@ -473,8 +479,8 @@ pub(crate) fn load_fixture(tier: &LoadTier, seed: u8) -> Result<LoadFixture> {
             deletion_root,
             move_dest,
             scratch,
-            boundary_below: ordinal_path(class_base[4]),
-            boundary_above: ordinal_path(class_base[6]),
+            boundary_below: packed(4, 0),
+            boundary_above: packed(6, 0),
             edit,
             links,
         },
@@ -498,7 +504,10 @@ fn link_roles_of(move_dest: &[String], link_targets: &[String]) -> Result<LinkRo
         };
         let link_path = format!("{}/sl{index:02}", move_dest[1]);
         let target = match kind {
-            SymlinkKind::Resolvable => format!("../../{}", link_targets[index]),
+            // Relative to the link's own parent: one level below the fixture
+            // root while the populated directory sits under `move_dest`, and at
+            // the fixture root in the cycles that keep it in place.
+            SymlinkKind::Resolvable => format!("../{}", link_targets[index]),
             SymlinkKind::Dangling => "ghost-v016".to_string(),
             SymlinkKind::SelfLoop => ".".to_string(),
         };
@@ -595,6 +604,62 @@ pub(crate) fn validate_load_fixture(fixture: &LoadFixture) -> Result<()> {
     if main.len() != 16 {
         return Err("v0.1.6 stage-2 target cardinality".into());
     }
+    // Every declared role path must exist in the entry list and every parent
+    // directory must be declared, so a stage cannot fail on a missing path.
+    let declared_paths: BTreeSet<&str> =
+        fixture.entries.iter().map(|entry| entry.path.as_str()).collect();
+    let directories: BTreeSet<&str> = fixture
+        .entries
+        .iter()
+        .filter(|entry| matches!(entry.kind, EntryKind::Directory))
+        .map(|entry| entry.path.as_str())
+        .collect();
+    let mut declared_roles: Vec<(&str, &String)> = Vec::new();
+    for (label, rows) in [
+        ("refresh", &fixture.roles.refresh_pool),
+        ("move-a", &fixture.roles.move_a),
+        ("move-b", &fixture.roles.move_b),
+        ("deletion", &fixture.roles.deletion),
+        ("link", &fixture.roles.link_targets),
+        ("edit", &fixture.roles.edit_targets),
+        ("attr", &fixture.roles.attr_extra),
+    ] {
+        for path in rows {
+            declared_roles.push((label, path));
+        }
+    }
+    let stage2_targets = fixture.main_edit_targets();
+    for path in &stage2_targets {
+        declared_roles.push(("stage2", path));
+    }
+    for path in fixture.roles.move_dest.iter().chain(&fixture.roles.scratch) {
+        if !directories.contains(path.as_str()) {
+            return Err(format!("v0.1.6 role directory is not declared: {path}").into());
+        }
+    }
+    for (label, path) in declared_roles {
+        if !declared_paths.contains(path.as_str()) {
+            return Err(format!("v0.1.6 role path is not declared ({label}): {path}").into());
+        }
+        let (parent, _) = path
+            .rsplit_once('/')
+            .ok_or_else(|| format!("v0.1.6 role path has no parent: {path}"))?;
+        if !directories.contains(parent) {
+            return Err(format!("v0.1.6 role parent is not declared: {parent}").into());
+        }
+    }
+    for entry in &fixture.entries {
+        if entry.path == "." || matches!(entry.kind, EntryKind::Directory) {
+            continue;
+        }
+        let (parent, _) = entry
+            .path
+            .rsplit_once('/')
+            .ok_or_else(|| format!("v0.1.6 entry path has no parent: {}", entry.path))?;
+        if !directories.contains(parent) {
+            return Err(format!("v0.1.6 entry parent is not declared: {}", entry.path).into());
+        }
+    }
     Ok(())
 }
 
@@ -631,7 +696,10 @@ pub(crate) struct CycleCounters {
 
 pub(crate) const CYCLE: CycleCounters = CycleCounters {
     created_commits: 5,
-    regular_unlinks: 96,
+    // Explicit `unlink` calls: sixty-four refresh paths in stage 1, the
+    // thirty-two subtree members in stage 5, and the twelve persisted links
+    // the stage-5 recipe removes.
+    regular_unlinks: 108,
     ordinary_regular_creates: 96,
     temporary_regular_creates: 4,
     rename_overwrites: 4,
@@ -752,18 +820,20 @@ pub(crate) fn attribute_mtime(cycle: usize, branch_tag: u64) -> i64 {
 }
 
 /// Stage-3 scratch names for one cycle. The eight scratch directories are
-/// removed before their eight replacement names are created; odd cycles create
-/// the registered names, even cycles the alternating set.
+/// removed before their eight replacement names are created; odd cycles remove
+/// the registered names and create the alternating set, even cycles remove the
+/// alternates and restore the registered names. Every cycle therefore ends with
+/// exactly eight scratch directories in place.
 pub(crate) fn scratch_for_cycle(fixture: &LoadFixture, cycle: usize) -> (Vec<String>, Vec<String>) {
     let names = fixture.roles.scratch.clone();
+    let alternate: Vec<String> = names
+        .iter()
+        .map(|path| format!("{path}x"))
+        .collect();
     if cycle % 2 == 1 {
-        (names.clone(), names)
-    } else {
-        let alternate: Vec<String> = names
-            .iter()
-            .map(|path| format!("{path}x"))
-            .collect();
         (names, alternate)
+    } else {
+        (alternate, names)
     }
 }
 
@@ -841,12 +911,28 @@ impl Topology {
     }
 }
 
+pub(crate) fn tier_of_case(id: &str) -> Result<&'static LoadTier> {
+    if id.contains("100mb-5000") {
+        Ok(&L100)
+    } else if id.contains("500mb-30000") {
+        Ok(&L500)
+    } else {
+        Err(format!("v0.1.6 case ID does not name a load tier: {id}").into())
+    }
+}
+
+/// The registered fixture of one v0.1.6 M1 case.
+pub(crate) fn fixture_for_case(id: &str, seed: u8) -> Result<Vec<Entry>> {
+    Ok(load_fixture(tier_of_case(id)?, seed)?.entries)
+}
+
 pub(crate) fn self_check() -> Result<()> {
     for tier in [&L100, &L500] {
         for seed in 1..=3 {
             validate_load_fixture(&load_fixture(tier, seed)?)?;
         }
     }
+
     if cohort_for_cycle(1)? != 0 || cohort_for_cycle(2)? != 0 {
         return Err("v0.1.6 K10 recurrence prefix".into());
     }
@@ -886,6 +972,19 @@ pub(crate) fn self_check() -> Result<()> {
                 return Err(format!("v0.1.6 topology cardinality {topology:?} K{k}").into());
             }
         }
+    }
+    // Every registered M1 case resolves to a tier and a valid fixture.
+    for id in super::v016_stages::MIXED_IDS
+        .into_iter()
+        .chain(super::v016_stages::WORKSPACE_IDS)
+        .chain(super::v016_stages::BRANCH_IDS)
+        .chain(super::v016_stages::EXTENDED_IDS)
+    {
+        if super::v016_stages::mixed_case(id)?.is_none() {
+            return Err(format!("v0.1.6 case {id} has no declared topology").into());
+        }
+        let fixture = load_fixture(tier_of_case(id)?, 1)?;
+        validate_load_fixture(&fixture)?;
     }
     for tier in [&L100, &L500] {
         let fixture = load_fixture(tier, 1)?;

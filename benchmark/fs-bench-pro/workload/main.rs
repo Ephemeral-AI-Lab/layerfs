@@ -56,8 +56,24 @@ pub(crate) use init_namespace::*;
 #[allow(dead_code)]
 pub(crate) mod file_size_transition { include!("../families/file_size_transition/mod.rs"); }
 #[allow(dead_code)]
+pub(crate) mod multi_workspace_development { include!("../families/multi_workspace_development/mod.rs"); }
+#[allow(dead_code)]
+pub(crate) mod branch_development { include!("../families/branch_development/mod.rs"); }
+#[allow(dead_code)]
 pub(crate) mod v016_common {
     include!("v016_common.rs");
+}
+#[allow(dead_code)]
+pub(crate) mod v016_stages {
+    include!("v016_stages.rs");
+}
+#[allow(dead_code)]
+pub(crate) mod v016_m1 {
+    include!("v016_m1.rs");
+}
+#[allow(dead_code)]
+pub(crate) mod v016_local {
+    include!("v016_local.rs");
 }
 #[allow(dead_code)]
 pub(crate) mod sdk_edit_common {
@@ -1119,6 +1135,21 @@ fn main() {
 
 fn run() -> Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args.first().is_some_and(|arg| arg == "v016-m1-stage") {
+        return v016_m1::run_command(&args[1..]);
+    }
+    if args.first().is_some_and(|arg| arg == "v016-m1-check") {
+        return v016_m1::check_command(&args[1..]);
+    }
+    if args.first().is_some_and(|arg| arg == "v016-m1-witness") {
+        return v016_m1::witness_command(&args[1..]);
+    }
+    if args.first().is_some_and(|arg| arg == "v016-m1-setmode") {
+        return v016_m1::setmode_command(&args[1..]);
+    }
+    if args.first().is_some_and(|arg| arg == "v016-local-workload") {
+        return v016_local::run_command(&args[1..]);
+    }
     if args.first().is_some_and(|arg| arg == "workspace-verify-fast") {
         let [_, id, seed, step, binding] = args.as_slice() else { return Err("workspace-verify-fast CASE SEED STEP CERT_BINDING".into()); };
         let case = workspace_registry::cases().into_iter().find(|case| &case.id == id).ok_or("unknown fast verifier case")?;

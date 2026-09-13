@@ -225,6 +225,9 @@ def _failure_log(output, error):
 def _add_reuse_argument(parser):
     if not any("--reuse-pass" in action.option_strings for action in parser._actions):
         parser.add_argument("--reuse-pass", help="reuse one exact identity-matched verification.json PASS")
+    if not any("--extended" in action.option_strings for action in parser._actions):
+        parser.add_argument("--extended", action="store_true",
+                            help="Explicitly select one declared extended case by its exact ID")
 
 
 def _parse(runner, argv):
@@ -273,15 +276,22 @@ def run(runner, argv=None, clock=time.monotonic, publisher=publish_receipt):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as cause:
             raise RuntimeError("another benchmark owns the measurement lock") from cause
-        selected = validate_selection(args, runner.resolve_selection(args, deadline=work_deadline))
-        if clock() >= work_deadline:
-            raise TimeoutError("selection authentication consumed the 45-second work allowance")
+        selection = runner.resolve_selection(args, deadline=work_deadline)
+        if selection.get("supported") is False and not getattr(args, "extended", False):
+            raise ValueError(
+                selection.get("unsupported_reason", "unsupported selected proof")
+            )
+        selected = validate_selection(args, selection)
+        # A selected case may declare its own complete-command deadline, which
+        # then replaces the shared 45/59-second allowance from entry.
         policy = runner.verification_policy(selected)
         selected["verification_policy"] = policy
-        # Selection stays bounded to 45 seconds; scaled work is charged from
-        # the original invocation start, never from the end of preparation.
         work_deadline = started + policy["work_limit_seconds"]
         hard_deadline = started + policy["hard_limit_seconds"]
+        if clock() >= work_deadline:
+            raise TimeoutError(
+                f"selection authentication consumed the {policy['work_limit_seconds']:g}-second work allowance"
+            )
         if selected.get("verification_supported") is False:
             result = {
                 "status": "INCOMPLETE",

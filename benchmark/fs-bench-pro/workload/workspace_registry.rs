@@ -2,11 +2,12 @@ use super::workspace_common::{Case, Entry, Receipt};
 use super::Result;
 use std::path::Path;
 
-pub(crate) const FAMILIES: [&str; 12] = [
+pub(crate) const FAMILIES: [&str; 14] = [
     "payload_create_read", "tiny_file_churn", "directory_construction_traversal",
     "git_tool_workflow", "namespace_mutation", "workspace_change_locality",
     "mixed_load_bearing", "dedup_cross_file", "dedup_cdc_locality",
     "dedup_workspace_reuse", "dedup_branch_history", "file_size_transition",
+    "multi_workspace_development", "branch_development",
 ];
 
 pub(crate) fn cases() -> Vec<Case> {
@@ -23,6 +24,8 @@ pub(crate) fn cases() -> Vec<Case> {
     rows.extend(super::dedup_workspace_reuse::cases());
     rows.extend(super::dedup_branch_history::cases());
     rows.extend(super::file_size_transition::cases());
+    rows.extend(super::multi_workspace_development::cases());
+    rows.extend(super::branch_development::cases());
     rows
 }
 
@@ -53,6 +56,8 @@ macro_rules! dispatch_family {
             "dedup_workspace_reuse" => super::dedup_workspace_reuse::$function($case $(, $arg)*),
             "dedup_branch_history" => super::dedup_branch_history::$function($case $(, $arg)*),
             "file_size_transition" => super::file_size_transition::$function($case $(, $arg)*),
+            "multi_workspace_development" => super::multi_workspace_development::$function($case $(, $arg)*),
+            "branch_development" => super::branch_development::$function($case $(, $arg)*),
             other => Err(format!("unknown Workspace family: {other}").into()),
         }
     };
@@ -108,12 +113,17 @@ pub(crate) fn steps(case: &Case) -> usize {
 
 pub(crate) fn self_check() -> Result<()> {
     let rows = cases();
-    if rows.len() != 139 || rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len() != 139 {
-        return Err("Workspace registry must have 139 unique timed IDs".into());
+    if rows.len() != 154 || rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len() != 154 {
+        return Err(format!("Workspace registry must have 154 unique timed IDs, observed {} rows / {} unique", rows.len(), rows.iter().map(|r| &r.id).collect::<std::collections::BTreeSet<_>>().len()).into());
     }
-    for (family, expected) in FAMILIES.iter().zip([8,20,12,4,4,16,4,10,20,14,20,7]) {
-        if rows.iter().filter(|r| r.family == *family).count() != expected {
-            return Err(format!("wrong membership for {family}").into());
+    let observed: Vec<(&&str, usize)> = FAMILIES
+        .iter()
+        .map(|family| (family, rows.iter().filter(|r| r.family == *family).count()))
+        .collect();
+    let declared: [usize; 14] = [8, 20, 12, 4, 4, 16, 10, 10, 20, 14, 20, 7, 5, 4];
+    for ((family, count), expected) in observed.iter().zip(declared) {
+        if *count != expected {
+            return Err(format!("wrong membership for {family}: observed {count}, declared {expected}").into());
         }
     }
     if rows.iter().any(|r| ![1,10,100,500].contains(&r.tier)) { return Err("invalid tier".into()); }
@@ -128,6 +138,9 @@ pub(crate) fn self_check() -> Result<()> {
     super::mixed_load_bearing::self_check()?;
     super::workspace_reliability::self_check()?;
     super::file_size_transition::self_check()?;
+    super::multi_workspace_development::self_check()?;
+    super::branch_development::self_check()?;
+    super::v016_stages::self_check()?;
     super::v016_common::self_check()?;
     Ok(())
 }
@@ -188,7 +201,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<()> {
         }
         [command] if command == "workspace-self-check" => {
             self_check()?;
-            println!("registry_status=pass\ntimed_case_count=139\nsample_slot_count=417");
+            println!("registry_status=pass\ntimed_case_count=154\nsample_slot_count=462");
         }
         [command, id, seed, step, mode] if command == "workspace-apply" => {
             if !matches!(mode.as_str(), "performance" | "verify") { return Err("invalid workload mode".into()); }

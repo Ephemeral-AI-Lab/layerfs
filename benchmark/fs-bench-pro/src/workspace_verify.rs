@@ -356,6 +356,277 @@ pub(crate) fn verify_root(
     verify_root_split(source, root, entries, "")
 }
 
+/// One path's explicit metadata from the live namespace view.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ViewMetadata {
+    pub(crate) permission_mode: u32,
+    pub(crate) mtime_seconds: i64,
+    pub(crate) mtime_nanoseconds: u32,
+}
+
+/// One complete namespace snapshot: every canonical path with its resolved
+/// inode record and its explicit metadata. Reading the namespace is bounded; no
+/// file byte, content root or payload is read here.
+pub(crate) struct NamespaceView {
+    pub(crate) paths: BTreeMap<String, inode::InodeRecordV1>,
+    pub(crate) inodes: BTreeMap<String, inode::InodeId>,
+    pub(crate) metadata: BTreeMap<String, ViewMetadata>,
+}
+
+impl NamespaceView {
+    pub(crate) fn inode(&self, path: &str) -> Option<inode::InodeId> {
+        self.inodes.get(path).copied()
+    }
+}
+
+/// Read the explicit mode and mtime of one inode from its metadata tree.
+fn read_view_metadata(
+    reader: &CoreReader<'_>,
+    root: ObjectId,
+    path: &str,
+) -> AnyResult<ViewMetadata> {
+    let entries = metadata::metadata_tree_entries(reader, root)?;
+    let mut mode = None;
+    let mut timestamp = None;
+    for entry in entries {
+        if entry.key.domain != "portable" || !matches!(entry.key.key.as_slice(), b"mode" | b"mtime")
+        {
+            return Err(format!("unexpected canonical metadata: {path}").into());
+        }
+        let maximum = if entry.key.key == b"mode" { 4 } else { 12 };
+        let state = rope::state(
+            reader,
+            rope::FileStateRoot(entry.value_file_root),
+            &mut Default::default(),
+        )?;
+        if state.logical_len != maximum {
+            return Err("canonical metadata length".into());
+        }
+        let mut value = Vec::new();
+        rope::read_all(
+            reader,
+            rope::FileStateRoot(entry.value_file_root),
+            &mut value,
+        )?;
+        if entry.key.key == b"mode" {
+            mode = Some(u32::from_be_bytes(value.as_slice().try_into()?));
+        } else {
+            timestamp = Some((
+                i64::from_be_bytes(value[..8].try_into()?),
+                u32::from_be_bytes(value[8..].try_into()?),
+            ));
+        }
+    }
+    let (mtime_seconds, mtime_nanoseconds) =
+        timestamp.ok_or_else(|| format!("canonical metadata mtime: {path}"))?;
+    Ok(ViewMetadata {
+        permission_mode: mode.ok_or_else(|| format!("canonical metadata mode: {path}"))?,
+        mtime_seconds,
+        mtime_nanoseconds,
+    })
+}
+
+/// Read the complete authenticated namespace of one snapshot. Every path the
+/// snapshot contains is visited through the directory tree, so a missing or
+/// extra path is observable without trusting a cached manifest.
+pub(crate) fn namespace_view(
+    source: &dyn ObjectSource,
+    root: ObjectId,
+) -> AnyResult<NamespaceView> {
+    let reader = CoreReader(source);
+    let namespace = AuthenticatedNamespaceIndex::load(source, root)?;
+    let mut paths = BTreeMap::new();
+    let mut inodes = BTreeMap::new();
+    let mut metadata = BTreeMap::new();
+    let mut seen = BTreeSet::new();
+    let mut pending = vec![(".".to_owned(), namespace.root_inode)];
+    while let Some((path, id)) = pending.pop() {
+        if !seen.insert(path.clone()) {
+            return Err("canonical path repeated".into());
+        }
+        let resolved = namespace.resolve_inode(id)?;
+        resolved.record.validate(path == ".")?;
+        let is_directory = resolved.record.kind == inode::InodeKind::Directory;
+        if inodes.insert(path.clone(), id).is_some() {
+            return Err("canonical namespace repeated an inode binding".into());
+        }
+        let value = read_view_metadata(&reader, resolved.record.metadata_root, &path)?;
+        metadata.insert(path.clone(), value);
+        if is_directory {
+            let mut after = None;
+            loop {
+                let page = directory::directory_page_after(
+                    &reader,
+                    directory::DirectoryStateRoot(resolved.record.content_root),
+                    after.as_ref(),
+                    127,
+                    8192,
+                    &mut Default::default(),
+                )?;
+                for (name, child_inode) in &page.entries {
+                    let child = if path == "." {
+                        name.as_str().to_owned()
+                    } else {
+                        format!("{path}/{}", name.as_str())
+                    };
+                    pending.push((child, *child_inode));
+                }
+                match page.continuation {
+                    Some(next) => {
+                        if after.as_ref().is_some_and(|previous| previous >= &next) {
+                            return Err("canonical directory cursor did not advance".into());
+                        }
+                        after = Some(next);
+                    }
+                    None => break,
+                }
+            }
+        }
+        paths.insert(path, resolved.record);
+    }
+    if paths.len() != seen.len() {
+        return Err("canonical namespace size".into());
+    }
+    Ok(NamespaceView {
+        paths,
+        inodes,
+        metadata,
+    })
+}
+
+/// Independently recompute the persisted content root of one regular file from
+/// its declared bytes. This proves the Store's own content identity without
+/// reading the payload back through the Store.
+pub(crate) fn declared_content_root(entry: &Entry) -> AnyResult<Option<ObjectId>> {
+    let content = match &entry.kind {
+        EntryKind::File(content) => content,
+        _ => return Ok(None),
+    };
+    // SmallContent carries 1..131,071 bytes; empty files have their own
+    // representation and are proved by their declared length and type.
+    if content.len() == 0 || content.len() >= 131_072 {
+        return Ok(None);
+    }
+    let mut bytes = Vec::with_capacity(content.len() as usize);
+    content.write_to(&mut bytes)?;
+    Ok(Some(expected_small_root(&bytes)?))
+}
+
+/// One commit's identity and parent edge, observed through the public query
+/// surface after a reopen.
+pub(crate) struct CommitRecord {
+    pub(crate) id: layerfs_sdk::CommitId,
+    pub(crate) parent_commit_id: Option<layerfs_sdk::CommitId>,
+}
+
+pub(crate) fn commit_records(
+    client: &Client,
+    wanted: &[layerfs_sdk::CommitId],
+) -> AnyResult<BTreeMap<layerfs_sdk::CommitId, CommitRecord>> {
+    let expected: BTreeSet<layerfs_sdk::CommitId> = wanted.iter().copied().collect();
+    let mut records = BTreeMap::new();
+    let mut query = Query::new(QueryKind::Commits).limit(127);
+    loop {
+        let page = client.query(query.clone())?;
+        for item in &page.items {
+            if let QueryItem::Commit(commit) = item {
+                if expected.contains(&commit.id) {
+                    records.insert(
+                        commit.id,
+                        CommitRecord {
+                            id: commit.id,
+                            parent_commit_id: commit.parent_commit_id,
+                        },
+                    );
+                }
+            }
+        }
+        if records.len() == expected.len() {
+            break;
+        }
+        let Some(next) = page.into_next_query(&query) else {
+            break;
+        };
+        query = next;
+    }
+    if records.len() != expected.len() {
+        return Err(format!(
+            "reopened Store does not expose every retained commit: {} of {}",
+            records.len(),
+            expected.len()
+        )
+        .into());
+    }
+    Ok(records)
+}
+
+pub(crate) fn inode_regular() -> inode::InodeKind {
+    inode::InodeKind::RegularFile
+}
+
+pub(crate) fn inode_directory() -> inode::InodeKind {
+    inode::InodeKind::Directory
+}
+
+pub(crate) fn inode_symlink() -> inode::InodeKind {
+    inode::InodeKind::Symlink
+}
+
+/// The declared logical length of one persisted regular file. SmallContent
+/// carries its bytes inline; chunked files declare a logical length in their
+/// file-state record. Reading the file-state header performs no payload read.
+pub(crate) fn declared_regular_length(
+    source: &dyn ObjectSource,
+    record: &inode::InodeRecordV1,
+) -> AnyResult<u64> {
+    if record.kind != inode::InodeKind::RegularFile {
+        return Err("declared regular length requires a regular inode".into());
+    }
+    let reader = CoreReader(source);
+    Ok(reader.with_authenticated_canonical(record.content_root, |canonical| {
+        Ok(match small_bytes(canonical)? {
+            Some(raw) => raw.len() as u64,
+            None => extent_codec::decode_file_state(canonical)?.logical_len,
+        })
+    })?)
+}
+
+/// Read one declared byte range of a persisted regular file through the Store
+/// reader and compare it with the independent recipe value.
+pub(crate) fn verify_declared_range(
+    source: &dyn ObjectSource,
+    root: ObjectId,
+    path: &str,
+    range: std::ops::Range<u64>,
+    expected: &[u8],
+) -> AnyResult<()> {
+    let view = namespace_view(source, root)?;
+    let id = view
+        .inode(path)
+        .ok_or_else(|| format!("declared verification path absent from the snapshot: {path}"))?;
+    let record = view
+        .paths
+        .get(path)
+        .ok_or("declared verification record")?
+        .clone();
+    if record.kind != inode::InodeKind::RegularFile {
+        return Err(format!("declared verification path is not regular: {path}").into());
+    }
+    let reader = CoreReader(source);
+    let mut observed = Vec::with_capacity(expected.len());
+    read_regular(
+        &reader,
+        rope::FileStateRoot(record.content_root),
+        range,
+        &mut observed,
+    )?;
+    if observed != expected {
+        return Err(format!("declared range mismatch: {path}").into());
+    }
+    let _ = id;
+    Ok(())
+}
+
 /// Verify one snapshot. `split_class` names a declared path whose inode class
 /// is declared to be its own rather than its hard-link target's: the v0.1.6
 /// alias plan replaces the target name while the alias keeps the previous

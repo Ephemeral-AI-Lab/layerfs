@@ -769,7 +769,35 @@ fn entry_info(entries: &[Entry]) -> AnyResult<(u64, usize, String)> {
     Ok((bytes, files, workload_source::hex(&hash.finish())))
 }
 
+/// Fixture and input identity of one registered v0.1.6 M1 case. The extended
+/// rows are registered by ID rather than through the workspace registry, so the
+/// fixture contract is reported from the same class tables the fixture uses.
 pub(crate) fn fixture_info(case: &Case, seed: u8, branch: Option<BranchId>) -> AnyResult<()> {
+    if let Some(row) = workload_source::v016_stages::mixed_case(&case.id)? {
+        let tier = if row.tier == "L100" {
+            &workload_source::v016_common::L100
+        } else {
+            &workload_source::v016_common::L500
+        };
+        let fixture = workload_source::v016_common::load_fixture(tier, seed)?;
+        let (bytes, files, plan) = entry_info(&fixture.entries)?;
+        let plan = workload_source::sdk_edit_common::sha256_hex(
+            format!(
+                "v016-m1-{}-t{}-k{}\n{plan}",
+                row.tier, row.topology as u8, row.k
+            )
+            .as_bytes(),
+        );
+        print!(
+            "{{\"fixture_profile\":\"workspace-input-v1\",\"fixture_bytes\":{bytes},\"regular_files\":{files},\"input_plan_sha256\":{},\"input_mode\":\"store\"",
+            quote(&plan)
+        );
+        if let Some(branch) = branch {
+            print!(",\"branch_id\":{}", quote(&branch.to_string()));
+        }
+        println!("}}");
+        return Ok(());
+    }
     let entries = registry::fixture(case, seed)?;
     let (bytes, files, mut plan) = entry_info(&entries)?;
     if case.kind == "git-tool" {
@@ -1124,7 +1152,7 @@ pub(crate) fn observed(client: &Client, after: &mut u64) -> AnyResult<()> {
     Ok(())
 }
 
-fn resource_receipt(label: &str, snapshot: ProcessResourceSnapshot) {
+pub(crate) fn resource_receipt(label: &str, snapshot: ProcessResourceSnapshot) {
     emit(
         "host-resources",
         &[
@@ -1309,7 +1337,8 @@ fn run_case(
             || case.kind == "boundaries"
             || case.family == "workspace_reliability"
             || case.family == "edit_length_changing_capped"
-            || case.family == "file_size_transition")
+            || case.family == "file_size_transition"
+            || super::v016_mixed::is_mixed(case))
     {
         return Err("fast-verify-v2 is for active ordinary/dedup routine cases; targeted and already-qualified capped cases keep their own route".into());
     }
@@ -2580,6 +2609,102 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         .map(|s| s.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     match args.as_slice() {
+        [command, root, id, seed, container] if command == "workspace-v016-chmod-probe" => {
+            // Diagnostic only: one bounded chmod probe on the sealed input. It
+            // produces no benchmark receipt and answers whether a directory
+            // chmod and a file chmod reach the published Store.
+            let case = registry::resolve(id)?;
+            if !super::v016_mixed::is_mixed(&case) {
+                return Err("the chmod probe requires a v0.1.6 M1 case".into());
+            }
+            let path = Path::new(root).join("store.sqlite");
+            let store = Arc::new(LayerStackStore::connect(&path)?);
+            let container = ContainerId(container.clone());
+            let binding = sample_binding(Path::new(root), &container)?;
+            let client = sample_client(store.clone(), &binding)?;
+            let branch: BranchId = std::fs::read_to_string(Path::new(root).join("branch-id"))?
+                .trim()
+                .parse()?;
+            let pristine_root = store.pin_branch(branch)?.root;
+            let session = client.create_workspace_session(CreateWorkspaceSession {
+                branch_id: branch,
+                placement: case_placement(
+                    &Some(container.clone()),
+                    Path::new(root),
+                    seed.parse()?,
+                    "v016-chmod-probe",
+                ),
+                projection: Some(WorkspaceProjection::Fuse),
+            })?;
+            let output = execute(
+                &client,
+                session.id,
+                vec![
+                    "/usr/local/bin/fs-benchmark-workload".into(),
+                    "v016-m1-setmode".into(),
+                    "d052".into(),
+                    "700".into(),
+                ],
+            )?;
+            let directory_receipt = output_text(&output)?;
+            let output = execute(
+                &client,
+                session.id,
+                vec![
+                    "/usr/local/bin/fs-benchmark-workload".into(),
+                    "v016-m1-setmode".into(),
+                    "d000/f00050".into(),
+                    "600".into(),
+                ],
+            )?;
+            let file_receipt = output_text(&output)?;
+            // Touch nothing else: the commit must publish exactly the two chmod
+            // changes if the runtime records attribute-only mutations.
+            let status = client.commit_workspace_session_with_status(session.id)?;
+            let created = match &status.result {
+                WorkspaceCommitResult::Created { commit_id, .. } => Some(*commit_id),
+                WorkspaceCommitResult::UpToDate { head } => *head,
+                _ => None,
+            };
+            let pinned = store.pin_branch(branch)?;
+            let view = super::workspace_verify::namespace_view(&pinned.reader, pinned.root)?;
+            let directory_mode = view
+                .metadata
+                .get("d052")
+                .map(|meta| format!("{:o}", meta.permission_mode))
+                .unwrap_or_else(|| "absent".into());
+            let file_mode = view
+                .metadata
+                .get("d000/f00050")
+                .map(|meta| format!("{:o}", meta.permission_mode))
+                .unwrap_or_else(|| "absent".into());
+            client.end_workspace_session(session.id, EndWorkspaceMode::Clean)?;
+            emit(
+                "v016-chmod-probe",
+                &[
+                    ("case", quote(&case.id)),
+                    ("pristine_root", quote(&pristine_root.to_string())),
+                    ("directory_receipt", quote(&directory_receipt)),
+                    ("file_receipt", quote(&file_receipt)),
+                    ("commit_outcome", quote(&format!("{status:?}"))),
+                    (
+                        "commit_id",
+                        created
+                            .map(|id| quote(&id.to_string()))
+                            .unwrap_or_else(|| "null".into()),
+                    ),
+                    ("published_directory_mode", quote(&directory_mode)),
+                    ("published_file_mode", quote(&file_mode)),
+                    (
+                        "scope",
+                        quote(
+                            "diagnostic only: one workspace, one directory chmod, one file chmod, one full-status Commit, then the published modes are read back from the Store",
+                        ),
+                    ),
+                ],
+            );
+            Ok(())
+        }
         [command, root, id, seed, evidence] if command == "workspace-qualify-input" => {
             resource_receipt("before-input-qualification", process_resource_snapshot()?);
             let _sampler = HostSampler::start()?;
@@ -2696,8 +2821,8 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
                 "self-check",
                 &[
                     ("status", quote("pass")),
-                    ("timed_case_count", "139".into()),
-                    ("sample_slot_count", "417".into()),
+                    ("timed_case_count", "154".into()),
+                    ("sample_slot_count", "462".into()),
                 ],
             );
             Ok(())
@@ -2743,12 +2868,47 @@ pub(crate) fn dispatch(args: &[OsString]) -> AnyResult<()> {
         [command, id, seed] if command == "workspace-fixture-info" => {
             fixture_info(&registry::resolve(id)?, seed.parse()?, None)
         }
+        [command, id, seed] if command == "workspace-v016-fixture-info" => {
+            let row = workload_source::v016_stages::mixed_case(id)?
+                .ok_or("v0.1.6 extended fixture info requires a registered M1 case")?;
+            let declared = Case {
+                id: id.clone(),
+                family: if row.topology == workload_source::v016_stages::Topology::Four {
+                    "multi_workspace_development"
+                } else {
+                    "mixed_load_bearing"
+                },
+                tier: if row.k > 10 { 100 } else { 10 },
+                kind: "v016-m1-extended",
+            };
+            fixture_info(&declared, seed.parse()?, None)
+        }
         [command, root, id, seed] if command == "workspace-prepare" => {
             prepare(Path::new(root), &registry::resolve(id)?, seed.parse()?)
         }
         [command, root, input, id, seed, mode, container] if command == "workspace-run" => {
             let case = registry::resolve(id)?;
             runtime_observation_window(id, mode, || {
+                if super::v016_mixed::is_mixed(&case) {
+                    if !matches!(mode.as_str(), "performance" | "verify") {
+                        return Err(
+                            "v0.1.6 M1 cases run performance and verify through their own route"
+                                .into(),
+                        );
+                    }
+                    resource_receipt("before-mi", process_resource_snapshot()?);
+                    let _sampler = HostSampler::start()?;
+                    let outcome = super::v016_mixed::run_case(
+                        Path::new(root),
+                        &case,
+                        seed.parse()?,
+                        mode,
+                        ContainerId(container.clone()),
+                        mode == "verify",
+                    );
+                    resource_receipt("after-mi", process_resource_snapshot()?);
+                    return outcome;
+                }
                 if case.family == "workspace_reliability" {
                     if mode != "verify" || seed != "1" {
                         return Err("reliability requires verify mode and fixed seed1".into());
