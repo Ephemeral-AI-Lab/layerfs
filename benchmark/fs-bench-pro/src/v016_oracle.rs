@@ -125,6 +125,11 @@ impl ShadowState {
             .map(|path| format!("{destination}/{}", &path[prefix.len()..]))
             .collect();
         self.directories.retain(|path| !path.starts_with(&prefix));
+        // The moved subtree's own root is a namespace entry too, so the exact
+        // source path moves with its descendants.
+        if self.directories.remove(source) {
+            self.directories.insert(destination.to_owned());
+        }
         self.directories.extend(moved_directories);
         if let Some(mode) = self.directory_modes.remove(source) {
             self.directory_modes.insert(destination.to_owned(), mode);
@@ -390,6 +395,7 @@ fn link_name(parent: &str, name: &str) -> String {
 fn apply_stage4(
     fixture: &v016::LoadFixture,
     cycle: usize,
+    branch_tag: u64,
     shadow: &mut ShadowState,
 ) -> AnyResult<()> {
     let (link_parent, symlink_parent) = link_layout(fixture, cycle);
@@ -403,7 +409,9 @@ fn apply_stage4(
             .paths
             .remove(&link_name(&symlink_parent, &format!("sl{index:02}")));
     }
-    let mtime = v016::attribute_mtime(cycle, 0);
+    // The explicit attribute mtime is epoch + 10*cycle + branch_tag, so the
+    // declaration follows the branch that performed the stage.
+    let mtime = v016::attribute_mtime(cycle, branch_tag);
     for path in v016::attribute_targets(fixture)? {
         shadow.modes.insert(path.clone(), v016::attribute_mode(cycle, true));
         shadow.mtimes.insert(path, mtime);
@@ -432,12 +440,20 @@ fn apply_stage4(
 }
 
 /// Stage 5: the subtree recreation, the four atomic saves and the link removals.
+/// The recreated deletion root is a new directory on the live filesystem, so its
+/// declared mode is the live mode the helper measured, not the stage-4 chmod and
+/// not an assumed default.
 fn apply_stage5(
     fixture: &v016::LoadFixture,
     cycle: usize,
     branch_salt: &str,
     shadow: &mut ShadowState,
+    observed: &BTreeMap<String, u32>,
 ) -> AnyResult<()> {
+    let deletion_root = fixture.roles.deletion_root.clone();
+    shadow
+        .directory_modes
+        .insert(deletion_root.clone(), observed_directory_mode(observed, &deletion_root)?);
     let (link_parent, symlink_parent) = link_layout(fixture, cycle);
     for index in 0..v016::DELETION_SUBTREE_FILES {
         let path = fixture
@@ -477,11 +493,14 @@ fn apply_stage5(
 
 /// Stage 3: the scratch-directory replacement and the two populated directory
 /// moves. A move relocates every declared descendant, so the shadow's paths are
-/// remapped rather than re-declared under the old root.
+/// remapped rather than re-declared under the old root. The live mode of every
+/// created directory is the mode the workload measured on the live filesystem,
+/// never an assumed runtime default.
 fn apply_stage3(
     fixture: &v016::LoadFixture,
     cycle: usize,
     shadow: &mut ShadowState,
+    observed: &BTreeMap<String, u32>,
 ) -> AnyResult<()> {
     let (remove, create) = stages::scratch_names(fixture, cycle);
     if remove.len() != v016::SCRATCH_DIRS || create.len() != v016::SCRATCH_DIRS {
@@ -489,9 +508,12 @@ fn apply_stage3(
     }
     for path in &remove {
         shadow.directory_modes.remove(path);
+        shadow.directories.remove(path);
     }
     for path in &create {
-        shadow.directory_modes.insert(path.clone(), v016::DEFAULT_DIRECTORY_MODE);
+        let mode = observed_directory_mode(observed, path)?;
+        shadow.directories.insert(path.clone());
+        shadow.directory_modes.insert(path.clone(), mode);
     }
     for (source, destination) in stages::move_rows(fixture, cycle) {
         if source == destination {
@@ -502,18 +524,31 @@ fn apply_stage3(
     Ok(())
 }
 
+/// One directory the stage helper created, with the live mode it measured.
+fn observed_directory_mode(
+    observed: &BTreeMap<String, u32>,
+    path: &str,
+) -> AnyResult<u32> {
+    observed
+        .get(path)
+        .copied()
+        .ok_or_else(|| format!("v0.1.6 created directory {path} has no live mode observation").into())
+}
+
 fn apply_cycle(
     fixture: &v016::LoadFixture,
     cycle: usize,
     branch_salt: &str,
+    branch_tag: u64,
     shadow: &mut ShadowState,
+    observed: &BTreeMap<String, u32>,
 ) -> AnyResult<()> {
     apply_stage1(fixture, cycle, branch_salt, shadow)?;
     apply_stage2(fixture, cycle, shadow)?;
     apply_sdk_stage2(fixture, cycle, shadow)?;
-    apply_stage3(fixture, cycle, shadow)?;
-    apply_stage4(fixture, cycle, shadow)?;
-    apply_stage5(fixture, cycle, branch_salt, shadow)?;
+    apply_stage3(fixture, cycle, shadow, observed)?;
+    apply_stage4(fixture, cycle, branch_tag, shadow)?;
+    apply_stage5(fixture, cycle, branch_salt, shadow, observed)?;
     Ok(())
 }
 
@@ -635,7 +670,10 @@ fn verify_root_against_shadow(
                     &Entry::file(path.clone(), content.clone()),
                 )? {
                     if declared != record.content_root {
-                        mismatches.push(format!("content root {path}"));
+                        mismatches.push(format!(
+                            "content root {path}: declared {declared} published {}",
+                            record.content_root
+                        ));
                     }
                     small += 1;
                 }
@@ -783,11 +821,26 @@ pub(crate) fn verify_case(
         .collect();
     let records = super::workspace_verify::commit_records(client, &wanted)?;
     let distinct: BTreeSet<CommitId> = wanted.iter().copied().collect();
+    // A forked child resumes from the fork point, so its first local commit's
+    // published parent is that inherited commit, not `None`. Every later local
+    // commit chains to the previous local commit as usual.
+    let fork_points: BTreeMap<usize, CommitId> = if mixed_case.topology == Topology::Branch {
+        let fork = sessions
+            .first()
+            .and_then(|trunk| trunk.commits.get(mixed::TRUNK_FORK_COMMIT - 1).copied());
+        match fork {
+            Some(commit) => sessions
+                .iter()
+                .skip(1)
+                .map(|worker| (worker.index, commit))
+                .collect(),
+            None => BTreeMap::new(),
+        }
+    } else {
+        BTreeMap::new()
+    };
     for worker in sessions {
-        // A child branch's first local commit is a new commit on that branch:
-        // its ancestry is the inherited fork state, checked below, not a local
-        // parent edge in the child's own chain.
-        let mut previous: Option<CommitId> = None;
+        let mut previous: Option<CommitId> = fork_points.get(&worker.index).copied();
         for commit in &worker.commits {
             let record = records
                 .get(commit)
@@ -858,13 +911,41 @@ pub(crate) fn verify_case(
             &roots,
         );
     }
-    // The independent final-state proof, one shadow per live branch.
+    // The independent final-state proof, one shadow per live branch. A branch
+    // that forked from the trunk inherits every cycle the trunk already
+    // published, replayed with the trunk's own branch identity and with the
+    // live directory modes the trunk measured, before its own cycles are
+    // applied.
+    let trunk = sessions
+        .iter()
+        .find(|worker| worker.cycle_start > 1)
+        .and_then(|_| sessions.first());
     for worker in sessions {
         let mut shadow = shadow_from_fixture(&fixture);
+        if worker.cycle_start > 1 {
+            let parent = trunk.ok_or("v0.1.6 inherited branch parent")?;
+            for cycle in 1..worker.cycle_start {
+                apply_cycle(
+                    &fixture,
+                    cycle,
+                    &parent.branch_salt,
+                    parent.branch_tag,
+                    &mut shadow,
+                    &parent.created_directory_modes,
+                )?;
+            }
+        }
         let cycles = worker.commits.len() / stages::STAGES;
         for offset in 0..cycles {
             let cycle = worker.cycle_start + offset;
-            apply_cycle(&fixture, cycle, &worker.branch_salt, &mut shadow)?;
+            apply_cycle(
+                &fixture,
+                cycle,
+                &worker.branch_salt,
+                worker.branch_tag,
+                &mut shadow,
+                &worker.created_directory_modes,
+            )?;
         }
         let final_root = worker
             .roots
@@ -1037,7 +1118,14 @@ fn verify_exhaustive(
     let cycles = declared_commits / stages::STAGES;
     let mut states = 0usize;
     for cycle in 1..=cycles {
-        apply_cycle(fixture, cycle, &worker.branch_salt, &mut shadow)?;
+        apply_cycle(
+            fixture,
+            cycle,
+            &worker.branch_salt,
+            worker.branch_tag,
+            &mut shadow,
+            &worker.created_directory_modes,
+        )?;
         let commit_index = cycle * stages::STAGES - 1;
         let root = worker.roots[commit_index];
         verify_root_against_shadow(

@@ -527,10 +527,26 @@ impl Helper {
             fs::remove_dir(path).map_err(|error| format!("rmdir {path}: {error}"))?;
             self.ledger.rmdir += 1;
         }
+        let mut created_modes = Vec::new();
         for path in &create {
             fs::create_dir(path).map_err(|error| format!("mkdir {path}: {error}"))?;
             self.ledger.mkdir += 1;
+            // The live mode of a directory this workload creates is a runtime
+            // property, not a workload argument: `create_dir` passes the
+            // process default and the runtime decides the result. It is
+            // measured here so the declared state uses the observed mode
+            // instead of an assumed one.
+            let mode = fs::metadata(path)
+                .map_err(|error| format!("mkdir mode {path}: {error}"))?
+                .permissions()
+                .mode()
+                & 0o7777;
+            if mode & 0o7000 != 0 {
+                return Err(format!("v0.1.6 created directory {path} carries {mode:o}").into());
+            }
+            created_modes.push((path.clone(), format!("{mode:o}")));
         }
+        self.rows("mkdir-mode", created_modes);
         let mut rows = Vec::new();
         for (source, destination) in stages::move_rows(&self.fixture, cycle) {
             if source == destination {
@@ -840,6 +856,21 @@ impl Helper {
         // Recreate the subtree with recurrent and generation-specific bytes.
         fs::create_dir(&root)?;
         self.ledger.mkdir += 1;
+        // The recreated root's live mode is measured for the same reason as the
+        // stage-3 scratch directories: the published mode must be compared with
+        // what the runtime actually produced, not with an assumed default.
+        let recreated_mode = fs::metadata(&root)
+            .map_err(|error| format!("mkdir mode {root}: {error}"))?
+            .permissions()
+            .mode()
+            & 0o7777;
+        if recreated_mode & 0o7000 != 0 {
+            return Err(format!("v0.1.6 recreated directory {root} carries {recreated_mode:o}").into());
+        }
+        self.rows(
+            "mkdir-mode",
+            vec![(root.clone(), format!("{recreated_mode:o}"))],
+        );
         for index in 0..v016::DELETION_SUBTREE_FILES {
             let path = self.fixture.roles.deletion[index].clone();
             let content =
@@ -1155,6 +1186,22 @@ pub(crate) fn run_command(args: &[String]) -> Result<()> {
     for (name, value) in &observed {
         println!("m1_observed_{name}={value}");
     }
+    // The live mode of every directory this stage created, as measured on the
+    // live filesystem. The independent oracle uses these observations instead
+    // of assuming a runtime default.
+    let created: Vec<String> = helper
+        .evidence
+        .iter()
+        .filter(|row| row.key == "mkdir-mode")
+        .map(|row| {
+            format!(
+                "{}:{}",
+                row.fields.get("name").map(String::as_str).unwrap_or(""),
+                row.fields.get("value").map(String::as_str).unwrap_or("")
+            )
+        })
+        .collect();
+    println!("m1_created_directory_modes={}", created.join(","));
     let mut evidence = String::from("[");
     for (index, row) in helper.evidence.iter().enumerate() {
         if index > 0 {

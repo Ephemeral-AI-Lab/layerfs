@@ -1371,6 +1371,11 @@ fn run_case(
     let mut final_root = None;
     let branch;
     let mut history = Vec::new();
+    // The declared POSIX steps of the v0.1.6 alias schedule, with their
+    // receipts, and the retained root after every published Commit. The alias
+    // oracle needs the root immediately before the replacement Commit.
+    let mut alias_steps: Vec<(usize, String)> = Vec::new();
+    let mut published_roots: Vec<(usize, layerfs_content::ObjectId)> = Vec::new();
     let mut genesis_root = None;
     let mut genesis_head = None;
     let mut fast_certificate = None;
@@ -1681,44 +1686,90 @@ fn run_case(
                             (0, current, *len, step)
                         }
                     };
-                    let replacement = if len == 0 {
-                        Vec::new()
+                    let alias_plan =
+                        workload_source::file_size_transition::plan(&case.id)?.alias;
+                    if alias_plan {
+                        // The declared alias schedule is POSIX: append through
+                        // the alias, append through the target, truncate
+                        // through each name, then one atomic replacement that
+                        // must leave the original alias holding the
+                        // pre-replacement inode. It runs inside the live
+                        // workspace, so the same schedule is measured in both
+                        // modes and no SDK/POSIX ratio is pooled.
+                        let alias_start = product_budget.start_clock("posix-alias-step")?;
+                        let result = super::execute(
+                            &client,
+                            session.id,
+                            vec![
+                                "/usr/local/bin/fs-benchmark-workload".into(),
+                                "v016-boundary-alias".into(),
+                                seed.to_string().into(),
+                                (step + 1).to_string().into(),
+                            ],
+                        );
+                        let alias_ns = product_budget.finish_clock(alias_start)?;
+                        product_budget.end(
+                            "posix-alias-step",
+                            alias_ns,
+                            result.as_ref().err().map(ToString::to_string),
+                        )?;
+                        let output = result?;
+                        pure_call_sum_ns = pure_call_sum_ns
+                            .checked_add(alias_ns)
+                            .ok_or("phase sum overflow")?;
+                        let receipt = output_text(&output)?;
+                        emit(
+                            "phase",
+                            &[
+                                ("phase", quote("posix-alias-step")),
+                                ("step", step.to_string()),
+                                ("elapsed_ns", alias_ns.to_string()),
+                                ("operation", quote(&format!("{operation:?}"))),
+                                ("receipt", quote(&receipt)),
+                            ],
+                        );
+                        alias_steps.push((step, receipt));
+                        observed(&client, &mut last_operation)?;
                     } else {
-                        workload_source::file_size_transition::replacement(case, seed, visit, len)?
-                    };
-                    let request = WorkspaceFileRangeEdit {
-                        workspace_id: session.id,
-                        path: workload_source::file_size_transition::TARGET.to_string(),
-                        start: edit_start,
-                        delete_len,
-                        replacement: WorkspaceFileReplacement::Inline(replacement),
-                    };
-                    product_budget.begin("sdk-edit")?;
-                    let start = product_budget.start_clock("sdk-edit")?;
-                    let result = client.edit_workspace_file_range(request);
-                    let edit_ns = product_budget.finish_clock(start)?;
-                    product_budget.end(
-                        "sdk-edit",
-                        edit_ns,
-                        result.as_ref().err().map(ToString::to_string),
-                    )?;
-                    result?;
-                    pure_call_sum_ns = pure_call_sum_ns
-                        .checked_add(edit_ns)
-                        .ok_or("phase sum overflow")?;
-                    emit(
-                        "phase",
-                        &[
-                            ("phase", quote("sdk-edit")),
-                            ("step", step.to_string()),
-                            ("elapsed_ns", edit_ns.to_string()),
-                            (
-                                "operation",
-                                quote(&format!("{operation:?}")),
-                            ),
-                        ],
-                    );
-                    observed(&client, &mut last_operation)?;
+                        let replacement = if len == 0 {
+                            Vec::new()
+                        } else {
+                            workload_source::file_size_transition::replacement(case, seed, visit, len)?
+                        };
+                        let request = WorkspaceFileRangeEdit {
+                            workspace_id: session.id,
+                            path: workload_source::file_size_transition::TARGET.to_string(),
+                            start: edit_start,
+                            delete_len,
+                            replacement: WorkspaceFileReplacement::Inline(replacement),
+                        };
+                        product_budget.begin("sdk-edit")?;
+                        let start = product_budget.start_clock("sdk-edit")?;
+                        let result = client.edit_workspace_file_range(request);
+                        let edit_ns = product_budget.finish_clock(start)?;
+                        product_budget.end(
+                            "sdk-edit",
+                            edit_ns,
+                            result.as_ref().err().map(ToString::to_string),
+                        )?;
+                        result?;
+                        pure_call_sum_ns = pure_call_sum_ns
+                            .checked_add(edit_ns)
+                            .ok_or("phase sum overflow")?;
+                        emit(
+                            "phase",
+                            &[
+                                ("phase", quote("sdk-edit")),
+                                ("step", step.to_string()),
+                                ("elapsed_ns", edit_ns.to_string()),
+                                (
+                                    "operation",
+                                    quote(&format!("{operation:?}")),
+                                ),
+                            ],
+                        );
+                        observed(&client, &mut last_operation)?;
+                    }
                 } else if case.kind == "workspace-distributed-sdk-edit"
                     || workload_source::dedup_workloads::is_sdk(case)
                 {
@@ -1855,6 +1906,7 @@ fn run_case(
                 {
                     let pinned = store.pin_branch(branch)?;
                     final_root = Some(pinned.root);
+                    published_roots.push((step, pinned.root));
                     emit(
                         "published-root",
                         &[
@@ -2130,36 +2182,98 @@ fn run_case(
                 // v0.1.6 alias proof: the surviving alias must keep the
                 // pre-replacement inode while the target holds a separate one.
                 if workload_source::file_size_transition::plan(&case.id)?.alias {
-                    // The surviving alias keeps the pre-replacement inode while
-                    // the target holds a separate one. The roots come from the
-                    // independent declared oracle, not from the mutation path.
-                    let alias_root = receipt
-                        .file_roots
-                        .get(workload_source::file_size_transition::ALIAS)
-                        .ok_or("v0.1.6 alias proof: alias root absent")?;
-                    let target_root = receipt
-                        .file_roots
-                        .get(workload_source::file_size_transition::TARGET)
-                        .ok_or("v0.1.6 alias proof: target root absent")?;
+                    // The pre-replacement state is the root the previous Commit
+                    // published, so the oracle compares two retained states of
+                    // the same branch rather than a fixture with a result.
+                    let before_root = published_roots
+                        .iter()
+                        .find(|(published, _)| *published == registry::steps(case) - 2)
+                        .map(|(_, root)| *root)
+                        .ok_or("v0.1.6 alias oracle: pre-replacement root absent")?;
+                    let declared_before = workload_source::file_size_transition::declared_length(
+                        case,
+                        registry::steps(case) - 1,
+                    )?;
+                    let declared_after = workload_source::file_size_transition::declared_length(
+                        case,
+                        registry::steps(case),
+                    )?;
+                    let declared_alias = workload_source::file_size_transition::declared_length(
+                        case,
+                        registry::steps(case) - 1,
+                    )?;
+                    let final_published = final_root.ok_or("v0.1.6 alias oracle: final root absent")?;
+                    let before_reader = reopened.snapshot_reader(before_root);
+                    let after_reader = reopened.snapshot_reader(final_published);
+                    let classes = super::workspace_verify::verify_alias_classes(
+                        &before_reader,
+                        before_root,
+                        &after_reader,
+                        final_published,
+                        workload_source::file_size_transition::TARGET,
+                        workload_source::file_size_transition::ALIAS,
+                        declared_before,
+                        declared_after,
+                        declared_alias,
+                    )?;
                     let shared = workload_source::file_size_transition::pre_replacement_shared(
                         case, seed,
                     )?;
-                    let separated = alias_root != target_root;
                     emit(
                         "v016-alias-inode-classes",
                         &[
                             ("kind_scope", quote("independent declared oracle")),
-                            ("alias_object_root", quote(&alias_root.to_string())),
-                            ("target_object_root", quote(&target_root.to_string())),
-                            ("separated", separated.to_string()),
+                            (
+                                "pre_replacement_root",
+                                quote(&before_root.to_string()),
+                            ),
+                            ("pre_replacement_inode", quote(&workload_source::hex(&classes.before_inode.0))),
+                            (
+                                "pre_replacement_ref_count",
+                                classes.before_ref_count.to_string(),
+                            ),
+                            (
+                                "pre_replacement_content_root",
+                                quote(&classes.before_content_root.to_string()),
+                            ),
+                            ("target_inode", quote(&workload_source::hex(&classes.after_inode.0))),
+                            ("target_ref_count", classes.target_ref_count.to_string()),
+                            (
+                                "target_content_root",
+                                quote(&classes.target_content_root.to_string()),
+                            ),
+                            ("alias_inode", quote(&workload_source::hex(&classes.alias_inode.0))),
+                            ("alias_ref_count", classes.alias_ref_count.to_string()),
+                            (
+                                "alias_content_root",
+                                quote(&classes.alias_content_root.to_string()),
+                            ),
+                            ("separated", (classes.after_inode != classes.alias_inode).to_string()),
                             ("pre_replacement_shared", shared.to_string()),
                         ],
                     );
-                    if !separated || !shared {
+                    if classes.after_inode == classes.alias_inode || !shared {
                         return Err(
                             "v0.1.6 alias replacement did not separate the inode".into()
                         );
                     }
+                    emit(
+                        "v016-alias-posix-steps",
+                        &[
+                            (
+                                "steps",
+                                format!(
+                                    "[{}]",
+                                    alias_steps
+                                        .iter()
+                                        .map(|(step, receipt)| quote(&format!("{step}:{receipt}")))
+                                        .collect::<Vec<_>>()
+                                        .join(",")
+                                ),
+                            ),
+                            ("posix_operations", "true".into()),
+                        ],
+                    );
                 }
             }
             if case.family.starts_with("dedup_") {

@@ -19,7 +19,7 @@ pub(crate) const FAMILY_BRANCH: &str = "branch_development";
 /// The two-workspace discard/reopen event is fixed at local commit 5.
 const DISCARD_COMMIT: usize = 5;
 /// The trunk fork point of the branch topology.
-const TRUNK_FORK_COMMIT: usize = 5;
+pub(crate) const TRUNK_FORK_COMMIT: usize = 5;
 pub(crate) const TRUNK_COMMITS: usize = 10;
 
 pub(crate) fn is_mixed(case: &Case) -> bool {
@@ -222,11 +222,15 @@ pub(crate) struct Worker {
     /// (the branch topology's trunk keeps its published commit list).
     session: Option<WorkspaceId>,
     pub(crate) branch_salt: String,
-    branch_tag: u64,
+    pub(crate) branch_tag: u64,
     pub(crate) cycle_start: usize,
     pub(crate) mount: String,
     pub(crate) commits: Vec<CommitId>,
     pub(crate) roots: Vec<layerfs_content::ObjectId>,
+    /// The live mode of every directory the stage helpers created on this
+    /// branch, as measured by the helper itself. The independent oracle
+    /// declares the observed mode rather than an assumed runtime default.
+    pub(crate) created_directory_modes: BTreeMap<String, u32>,
 }
 
 pub(crate) struct Runtime {
@@ -300,6 +304,31 @@ fn expect_counter(rows: &BTreeMap<String, String>, name: &str) -> AnyResult<usiz
         .get(&format!("m1_observed_{name}"))
         .ok_or_else(|| format!("v0.1.6 helper receipt is missing {name}"))?;
     Ok(value.parse::<usize>()?)
+}
+
+/// The live modes of the directories one stage created, measured by the helper
+/// and reported as `path:mode` pairs. An empty list means the stage created no
+/// directory; a malformed entry is a hard error.
+fn parse_created_directory_modes(
+    rows: &BTreeMap<String, String>,
+) -> AnyResult<Vec<(String, u32)>> {
+    let raw = rows
+        .get("m1_created_directory_modes")
+        .ok_or("v0.1.6 helper receipt is missing m1_created_directory_modes")?;
+    let mut parsed = Vec::new();
+    if raw.is_empty() {
+        return Ok(parsed);
+    }
+    for row in raw.split(',') {
+        let (path, mode) = row
+            .rsplit_once(':')
+            .ok_or_else(|| format!("v0.1.6 created-directory row {row}"))?;
+        if path.is_empty() {
+            return Err("v0.1.6 created-directory path".into());
+        }
+        parsed.push((path.to_owned(), u32::from_str_radix(mode, 8)?));
+    }
+    Ok(parsed)
 }
 
 /// The helper's own counters must equal the declared per-stage table, including
@@ -448,7 +477,7 @@ struct StageOutcome {
 
 fn run_stage(
     runtime: &Runtime,
-    worker: &Worker,
+    worker: &mut Worker,
     cycle: usize,
     ordinal: usize,
     local_commit: usize,
@@ -499,6 +528,29 @@ fn run_stage(
             .collect(),
     )?;
     let (rows, evidence) = parse_helper_receipt(&text)?;
+    let created_modes = match parse_created_directory_modes(&rows) {
+        Ok(created) => created,
+        Err(error) => {
+            emit(
+                "v016-stage-receipt-failure",
+                &[
+                    ("case", quote(&runtime.case_id)),
+                    ("branch", worker.index.to_string()),
+                    ("cycle", cycle.to_string()),
+                    ("stage", (stage as usize).to_string()),
+                    ("error", quote(&error.to_string())),
+                    ("helper_receipt", quote(&text)),
+                ],
+            );
+            return Err(error);
+        }
+    };
+    for (path, mode) in &created_modes {
+        if mode & !0o1777u32 != 0 {
+            return Err(format!("v0.1.6 created directory {path} carries {mode:o}").into());
+        }
+        worker.created_directory_modes.insert(path.clone(), *mode);
+    }
     if let Err(error) = check_stage_counters(&rows, stage) {
         emit(
             "v016-stage-receipt-failure",
@@ -535,6 +587,10 @@ fn run_stage(
     let status = runtime.client.commit_workspace_session_with_status(session)?;
     let commit_ns = super::elapsed_ns(commit_started);
     let commit_id = expect_created(&status, local_commit)?;
+    // The declared per-cycle counters count one published Commit and one POSIX
+    // helper execution per stage, both observed here rather than in a receipt.
+    bump_observed_counter("created_commits", 1)?;
+    bump_observed_counter("posix_helper_executions", 1)?;
     let pinned = runtime.store.pin_branch(worker.branch)?;
     let commit_end = runtime.elapsed();
     runtime.shared.record(worker.index, commit_start, commit_end)?;
@@ -628,6 +684,17 @@ pub(crate) fn observed_counters() -> AnyResult<BTreeMap<String, usize>> {
         .clone())
 }
 
+/// One declared cycle counter that no stage receipt carries: the host itself
+/// counts the Commits it published and the helper executions it launched.
+fn bump_observed_counter(name: &str, delta: usize) -> AnyResult<()> {
+    let mut counters = observed_counters_cell()
+        .lock()
+        .map_err(|_| "v0.1.6 observed counters lock")?;
+    let entry = counters.entry(name.to_owned()).or_default();
+    *entry = entry.checked_add(delta).ok_or("v0.1.6 counter overflow")?;
+    Ok(())
+}
+
 fn add_observed_counters(rows: &BTreeMap<&'static str, usize>) -> AnyResult<()> {
     let mut counters = observed_counters_cell()
         .lock()
@@ -712,6 +779,7 @@ fn start_sessions(runtime: &Runtime, count: usize) -> AnyResult<Vec<Worker>> {
             mount,
             commits: Vec::new(),
             roots: Vec::new(),
+            created_directory_modes: BTreeMap::new(),
         });
     }
     Ok(workers)
@@ -892,6 +960,7 @@ fn start_children(
             mount,
             commits: Vec::new(),
             roots: Vec::new(),
+            created_directory_modes: BTreeMap::new(),
         });
     }
     Ok(workers)

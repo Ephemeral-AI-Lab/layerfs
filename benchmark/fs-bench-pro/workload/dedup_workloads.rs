@@ -275,8 +275,21 @@ pub(crate) fn check_registry(cases: &[Case], count: usize) -> Result<()> {
 
 pub(crate) fn is_sdk(case: &Case) -> bool {
     case.family == "dedup_branch_history"
-        && matches!(case.kind, "distributed" | "hotset" | "recurring")
+        && matches!(
+            case.kind,
+            "distributed" | "hotset" | "recurring" | "large-hotset" | "boundary-cycle"
+        )
 }
+
+/// The declared 256 B hot regions of the large-hotset profile: two 1 MiB files
+/// with head/middle/tail regions that start at A and alternate with B on every
+/// visit to that exact region.
+pub(crate) const HOTSET_REGION_LEN: u64 = 256;
+pub(crate) const HOTSET_A: &str = "hotset-a";
+pub(crate) const HOTSET_B: &str = "hotset-b";
+/// The declared 256 B Z region of the compact branch controls.
+pub(crate) const BRANCH_REGION_LEN: u64 = 256;
+pub(crate) const BRANCH_Z: &str = "branch-z";
 
 pub(crate) const HISTORY_UNRELATED_MIXED_V2_PROFILE: &str = "history-unrelated-mixed-v2";
 pub(crate) const MIXED_V2_FILES: usize = 10;
@@ -398,7 +411,7 @@ pub(crate) fn sdk_edits(case: &Case, seed: u8, step: usize) -> Result<Vec<SdkEdi
     if !is_sdk(case) {
         return Err("dedup case is not SDK".into());
     }
-    Ok(vec![super::dedup_branch_history::edit(case, seed, step)?])
+    super::dedup_branch_history::edits(case, seed, step)
 }
 
 struct AcknowledgedWrite<'a, W>(&'a mut W, &'a mut u64);

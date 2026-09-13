@@ -300,6 +300,153 @@ pub(crate) fn persist_snapshot(
     Ok(())
 }
 
+/// The dedicated v0.1.6 alias oracle: one declared path pair is proved to share
+/// exactly one inode before the replacement Commit and to hold two distinct
+/// inodes afterwards, each with the reference count its declared class requires.
+///
+/// This is deliberately separate from the generic class verifier: the generic
+/// route derives one reference count per declared class for the whole snapshot
+/// and therefore cannot express "one shared inode before, two classes after"
+/// inside a single schedule. The reference-count check itself is unchanged and
+/// still applies to both states.
+pub(crate) struct AliasClassProof {
+    pub(crate) before_inode: inode::InodeId,
+    pub(crate) before_ref_count: u64,
+    pub(crate) after_inode: inode::InodeId,
+    pub(crate) alias_inode: inode::InodeId,
+    pub(crate) target_ref_count: u64,
+    pub(crate) alias_ref_count: u64,
+    pub(crate) before_content_root: ObjectId,
+    pub(crate) target_content_root: ObjectId,
+    pub(crate) alias_content_root: ObjectId,
+}
+
+/// One inode's declared proof material, read from a retained root.
+struct AliasBinding {
+    inode: inode::InodeId,
+    ref_count: u64,
+    content_root: ObjectId,
+    length: u64,
+}
+
+fn alias_binding(
+    source: &dyn ObjectSource,
+    root: ObjectId,
+    path: &str,
+) -> AnyResult<AliasBinding> {
+    let view = namespace_view(source, root)?;
+    let inode = view
+        .inodes
+        .get(path)
+        .copied()
+        .ok_or_else(|| format!("v0.1.6 alias oracle: path absent: {path}"))?;
+    let record = view
+        .paths
+        .get(path)
+        .ok_or_else(|| format!("v0.1.6 alias oracle: record absent: {path}"))?;
+    if record.kind != inode_regular() {
+        return Err(format!("v0.1.6 alias oracle: {path} is not a regular file").into());
+    }
+    Ok(AliasBinding {
+        inode,
+        ref_count: record.namespace_ref_count,
+        content_root: record.content_root,
+        length: declared_regular_length(source, record)?,
+    })
+}
+
+pub(crate) fn verify_alias_classes(
+    before_source: &dyn ObjectSource,
+    before_root: ObjectId,
+    after_source: &dyn ObjectSource,
+    after_root: ObjectId,
+    target: &str,
+    alias: &str,
+    declared_before_len: u64,
+    declared_after_len: u64,
+    declared_alias_len: u64,
+) -> AnyResult<AliasClassProof> {
+    let shared = alias_binding(before_source, before_root, target)?;
+    let before_alias = alias_binding(before_source, before_root, alias)?;
+    // (a) both names hold one shared inode before the replacement.
+    if shared.inode != before_alias.inode {
+        return Err(format!(
+            "v0.1.6 alias oracle: {target} and {alias} are not one shared inode before the replacement"
+        )
+        .into());
+    }
+    if shared.ref_count != 2 {
+        return Err(format!(
+            "v0.1.6 alias oracle: shared inode reference count {}, declared 2",
+            shared.ref_count
+        )
+        .into());
+    }
+    if shared.content_root != before_alias.content_root {
+        return Err("v0.1.6 alias oracle: shared inode content roots differ".into());
+    }
+    if shared.length != declared_before_len {
+        return Err(format!(
+            "v0.1.6 alias oracle: pre-replacement target length {}, declared {declared_before_len}",
+            shared.length
+        )
+        .into());
+    }
+    // (b) and (c) two distinct inodes after, each with its declared class count.
+    let after_target = alias_binding(after_source, after_root, target)?;
+    let after_alias = alias_binding(after_source, after_root, alias)?;
+    if after_target.inode == after_alias.inode {
+        return Err(format!(
+            "v0.1.6 alias oracle: {target} and {alias} still share inode {:?} after the replacement",
+            after_target.inode
+        )
+        .into());
+    }
+    if after_target.ref_count != 1 || after_alias.ref_count != 1 {
+        return Err(format!(
+            "v0.1.6 alias oracle: reference counts {} and {} after the replacement, declared 1 and 1",
+            after_target.ref_count, after_alias.ref_count
+        )
+        .into());
+    }
+    if after_target.length != declared_after_len {
+        return Err(format!(
+            "v0.1.6 alias oracle: replacement target length {}, declared {declared_after_len}",
+            after_target.length
+        )
+        .into());
+    }
+    if after_alias.length != declared_alias_len {
+        return Err(format!(
+            "v0.1.6 alias oracle: surviving alias length {}, declared {declared_alias_len}",
+            after_alias.length
+        )
+        .into());
+    }
+    // The surviving alias keeps the pre-replacement inode and its content.
+    if after_alias.inode != shared.inode {
+        return Err(format!(
+            "v0.1.6 alias oracle: surviving alias inode {:?} is not the pre-replacement inode {:?}",
+            after_alias.inode, shared.inode
+        )
+        .into());
+    }
+    if after_alias.content_root != shared.content_root {
+        return Err("v0.1.6 alias oracle: surviving alias content root changed".into());
+    }
+    Ok(AliasClassProof {
+        before_inode: shared.inode,
+        before_ref_count: shared.ref_count,
+        after_inode: after_target.inode,
+        alias_inode: after_alias.inode,
+        target_ref_count: after_target.ref_count,
+        alias_ref_count: after_alias.ref_count,
+        before_content_root: shared.content_root,
+        target_content_root: after_target.content_root,
+        alias_content_root: after_alias.content_root,
+    })
+}
+
 /// Read the complete authenticated global inode index once per immutable proof.
 /// Directory entries already carry inode IDs, so callers need not resolve each
 /// path from the root again. This does not certify or skip any file content.
@@ -770,7 +917,11 @@ pub(crate) fn verify_root_split(
                     return Err(format!("canonical hard-link class mismatch: {path}").into());
                 }
                 if resolved.record.namespace_ref_count != reference_counts[class] {
-                    return Err(format!("canonical hard-link reference count: {path}").into());
+                    return Err(format!(
+                        "canonical hard-link reference count: {path} observed {} declared {}",
+                        resolved.record.namespace_ref_count, reference_counts[class]
+                    )
+                    .into());
                 }
                 let file_root = rope::FileStateRoot(resolved.record.content_root);
                 file_roots.insert(path.clone(), resolved.record.content_root);
@@ -1696,7 +1847,11 @@ pub(crate) fn verify_fast_snapshot(
                         .insert(class.to_owned(), id)
                         .is_some_and(|old| old != id)
                 {
-                    return Err("fast regular type/alias/reference count".into());
+                    return Err(format!(
+                        "fast regular type/alias/reference count: {path} observed {} declared {}",
+                        record.namespace_ref_count, reference_counts[class]
+                    )
+                    .into());
                 }
                 if !delta.changed_paths.contains(&path)
                     && certificate

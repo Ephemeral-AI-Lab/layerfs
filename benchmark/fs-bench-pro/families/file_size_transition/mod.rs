@@ -22,6 +22,15 @@ pub(crate) const WITNESS: &str = "data/witness.bin";
 pub(crate) const ALIAS: &str = "data/alias.bin";
 pub(crate) const TEMPORARY: &str = "data/.target.bin.tmp";
 
+/// The explicit metadata every declared boundary file carries. The alias plan
+/// writes through POSIX names, which would otherwise publish a runtime mtime,
+/// and it creates a temporary file whose creation mode would otherwise be a
+/// runtime default; both are set to these declared values so the final state is
+/// a declaration rather than an observation.
+pub(crate) const TARGET_MODE: u32 = 0o640;
+pub(crate) const DECLARED_MTIME_SECONDS: i64 = super::workspace_common::MTIME;
+pub(crate) const DECLARED_MTIME_NANOSECONDS: u32 = 0;
+
 /// Fixed-overwrite offsets are 0 then 2048, identical across sizes.
 pub(crate) const OVERWRITE_OFFSETS: [u64; 2] = [0, 2_048];
 pub(crate) const OVERWRITE_LEN: u64 = 256;
@@ -59,10 +68,14 @@ pub(crate) fn cases() -> Vec<Case> {
 pub(crate) fn fixture(case: &Case, seed: u8) -> Result<Vec<Entry>> {
     let plan = plan(&case.id)?;
     let mut entries = vec![Entry::directory("."), Entry::directory("data")];
-    entries.push(Entry::file(
+    let mut target = Entry::file(
         TARGET,
         d::content(FAMILY_ID, "target", seed, 0, "boundary-target", plan.initial_len)?,
-    ));
+    );
+    target.mode = TARGET_MODE;
+    target.mtime_seconds = DECLARED_MTIME_SECONDS;
+    target.mtime_nanoseconds = DECLARED_MTIME_NANOSECONDS;
+    entries.push(target);
     entries.push(Entry::file(
         WITNESS,
         d::content(FAMILY_ID, "witness", seed, 0, "boundary-witness", v016::WITNESS)?,
@@ -133,6 +146,21 @@ pub(crate) fn replacement(case: &Case, seed: u8, visit: usize, len: u64) -> Resu
     Ok(out)
 }
 
+/// The bytes of the alias plan's final atomic replacement. The recipe profile
+/// and the ordinal are part of the declaration, so the host oracle and the
+/// workload helper generate exactly the same replacement from it.
+pub(crate) fn atomic_replacement(
+    case: &Case,
+    seed: u8,
+    ordinal: usize,
+    len: u64,
+) -> Result<Vec<u8>> {
+    let bytes = d::content(FAMILY_ID, "atomic-replace", seed, ordinal, &case.id, len)?;
+    let mut out = Vec::with_capacity(len as usize);
+    bytes.write_to(&mut out)?;
+    Ok(out)
+}
+
 /// True when the declared pre-replacement state still holds the alias and the
 /// target as the same inode class, which the host alias proof re-checks against
 /// the independently derived recipe.
@@ -195,9 +223,7 @@ pub(crate) fn expected(case: &Case, seed: u8, step: usize) -> Result<Vec<Entry>>
                 bytes.truncate(keep);
             }
             BoundaryOp::AtomicReplace { len } => {
-                let mut out = Vec::new();
-                d::content(FAMILY_ID, "atomic-replace", seed, index, &case.id, *len)?
-                    .write_to(&mut out)?;
+                let out = atomic_replacement(case, seed, index, *len)?;
                 previous_bytes = Some(bytes);
                 bytes = out;
             }

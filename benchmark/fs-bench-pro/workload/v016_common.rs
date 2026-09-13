@@ -1039,10 +1039,20 @@ mod tests {
             assert_eq!(fixture.roles.move_a.len(), 32);
             assert_eq!(fixture.roles.deletion.len(), 32);
             assert_eq!(fixture.main_edit_targets().len(), 16);
+            // Odd cycles remove the registered scratch directories and create
+            // their `x` counterparts; even cycles do the exact reverse, so the
+            // two sets alternate and never coincide.
+            let registered = fixture.roles.scratch.clone();
+            let alternate: Vec<String> = registered
+                .iter()
+                .map(|path| format!("{path}x"))
+                .collect();
             let (remove, create) = super::scratch_for_cycle(&fixture, 1);
-            assert_eq!(remove.len(), 8);
-            assert_eq!(create, remove);
+            assert_eq!(remove, registered);
+            assert_eq!(create, alternate);
             let (remove, create) = super::scratch_for_cycle(&fixture, 2);
+            assert_eq!(remove, alternate);
+            assert_eq!(create, registered);
             assert_ne!(create, remove);
             // The recurrent pair in every group of four is exact across branches.
             let a = super::stage1_contents(&fixture, 1, "a").unwrap();

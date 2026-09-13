@@ -76,6 +76,14 @@ pub(crate) mod v016_local {
     include!("v016_local.rs");
 }
 #[allow(dead_code)]
+pub(crate) mod v016_boundary {
+    include!("v016_boundary.rs");
+}
+#[allow(dead_code)]
+pub(crate) mod v016_compact {
+    include!("v016_compact.rs");
+}
+#[allow(dead_code)]
 pub(crate) mod sdk_edit_common {
     include!("sdk_edit_common.rs");
 }
@@ -1149,6 +1157,9 @@ fn run() -> Result<()> {
     }
     if args.first().is_some_and(|arg| arg == "v016-local-workload") {
         return v016_local::run_command(&args[1..]);
+    }
+    if args.first().is_some_and(|arg| arg == "v016-boundary-alias") {
+        return v016_boundary::run_command(&args[1..]);
     }
     if args.first().is_some_and(|arg| arg == "workspace-verify-fast") {
         let [_, id, seed, step, binding] = args.as_slice() else { return Err("workspace-verify-fast CASE SEED STEP CERT_BINDING".into()); };
