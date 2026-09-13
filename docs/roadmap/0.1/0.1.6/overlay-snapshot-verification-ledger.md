@@ -354,3 +354,11 @@ break, not as qualification of the new behavior.
 - validity: this is the current host-dispatch pass. The older full-frame test
   missed a valid acknowledgment update. Numeric cookie and unchanged wire codec
   passes are retained because their exercised paths did not change.
+
+### L19 — owner CI budget update; historical failure retained
+
+- identity: full native CI, Rust 1.85.1, bounded jobs=4, run34789404326.
+- source: product/test source `7a4a920acfc40a456508f27ef28c526068de7f92`; original `tools/test-fast.sh` ceiling120s.
+- environment: GitHub Actions runner and toolchain recorded in raw log.
+- result: all native selections passed; enclosing CI step FAIL at125s under its original120s ceiling. Raw: `evidence/ci/run-34789404326-failed.log`. Preserve FAIL; do not relabel as a historical PASS.
+- validity: current evidence of that historical attempt. Owner subsequently authorized150s for CI; `tools/test-fast.sh` and current development guidance updated accordingly. No benchmark/correctness contract changed; no timing optimization or repeated full suite requested by this change. Shell syntax checked with `bash -n tools/test-fast.sh`.
