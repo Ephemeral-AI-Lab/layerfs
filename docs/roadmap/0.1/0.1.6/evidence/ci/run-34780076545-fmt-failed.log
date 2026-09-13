@@ -1,0 +1,1023 @@
+rust	Run cargo +1.96.0 fmt --all --check	﻿2026-09-13T20:13:27.0792078Z ##[group]Run cargo +1.96.0 fmt --all --check
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.0792477Z [36;1mcargo +1.96.0 fmt --all --check[0m
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.0830121Z shell: /usr/bin/bash -e {0}
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.0830391Z ##[endgroup]
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1943556Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/infra.rs:11:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1944620Z      if SDK.contains(&family) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1945328Z          return sdk_edit_fixture_info(sdk_edit_scenario(family, case)?.fixture_bytes);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1946167Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1952668Z -    if workload_source::v016_stages::mixed_case(case)?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1953157Z -        .is_some_and(|row| row.extended)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1953476Z -    {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1953884Z +    if workload_source::v016_stages::mixed_case(case)?.is_some_and(|row| row.extended) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1954353Z          println!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1954579Z              "{}",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1954827Z              capture(&[
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1955294Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/infra.rs:203:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1955783Z          if !selected(case.family, &case.id) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1956088Z              continue;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1956349Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1956705Z -        let v016 = workload_source::v016_stages::mixed_case(&case.id).ok().flatten();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1957544Z +        let v016 = workload_source::v016_stages::mixed_case(&case.id)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1957929Z +            .ok()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1958183Z +            .flatten();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1958455Z          if v016.is_some_and(|row| row.extended) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1958893Z              // Explicit extended cases are never listed as regular selections.
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.1959324Z              continue;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2933138Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:27:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2934213Z  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2935140Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2935679Z  fn plan_of(case: &Case) -> AnyResult<MixedCase> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2936468Z -    stages::mixed_case(&case.id)?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2937574Z -        .ok_or_else(|| format!("not a v0.1.6 M1 case: {}", case.id).into())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2938770Z +    stages::mixed_case(&case.id)?.ok_or_else(|| format!("not a v0.1.6 M1 case: {}", case.id).into())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2939737Z  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2940114Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2940681Z  fn tier_of(name: &str) -> AnyResult<&'static v016::LoadTier> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2941723Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:87:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2942533Z  impl Budget {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2942936Z      fn check(&self, phase: &str) -> AnyResult<()> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2943532Z          if super::elapsed_ns(self.started) > self.limit_ns {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2944055Z -            return Err(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2944655Z -                format!("v0.1.6 complete-command deadline exceeded during {phase}").into(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2945343Z -            );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2945953Z +            return Err(format!("v0.1.6 complete-command deadline exceeded during {phase}").into());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2946658Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2947182Z          Ok(())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2947507Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2948069Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:144:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2948647Z          let rows = self.intervals.lock().map_err(|_| "v0.1.6 interval lock")?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2949047Z          let mut rounds = 0usize;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2949430Z          for (index, (left_worker, left_start, left_end)) in rows.iter().enumerate() {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2949966Z -            if rows.iter().skip(index + 1).any(|(right_worker, right_start, right_end)| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2950396Z -                left_worker != right_worker
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2950766Z -                    && (*left_end).min(*right_end) > (*left_start).max(*right_start)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2951412Z -            }) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2951622Z +            if rows
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2951830Z +                .iter()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2952064Z +                .skip(index + 1)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2952362Z +                .any(|(right_worker, right_start, right_end)| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2952697Z +                    left_worker != right_worker
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2953069Z +                        && (*left_end).min(*right_end) > (*left_start).max(*right_start)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2953432Z +                })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2953628Z +            {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2953817Z                  rounds += 1;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2954033Z              }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2954212Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2954561Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:177:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2954968Z          Ok(())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2955151Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2955368Z      fn pure_call_sum_ns(&self) -> AnyResult<u64> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2955657Z -        Ok(*self
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2955857Z -            .pure_call_ns
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2956073Z -            .lock()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2956292Z -            .map_err(|_| "v0.1.6 timer lock")?)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2956653Z +        Ok(*self.pure_call_ns.lock().map_err(|_| "v0.1.6 timer lock")?)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2957586Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2958065Z      fn samples(&self) -> AnyResult<(Vec<u64>, Vec<u64>)> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2958610Z          Ok((
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2959207Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:187:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2959797Z -            self.commit_ns.lock().map_err(|_| "v0.1.6 timer lock")?.clone(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2960152Z +            self.commit_ns
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2960378Z +                .lock()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2960614Z +                .map_err(|_| "v0.1.6 timer lock")?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2960889Z +                .clone(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2961327Z              self.execution_ns
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2961560Z                  .lock()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2961802Z                  .map_err(|_| "v0.1.6 timer lock")?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2962232Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:309:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2962767Z  /// The live modes of the directories one stage created, measured by the helper
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2963281Z  /// and reported as `path:mode` pairs. An empty list means the stage created no
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2963701Z  /// directory; a malformed entry is a hard error.
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2964024Z -fn parse_created_directory_modes(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2964375Z -    rows: &BTreeMap<String, String>,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2964653Z -) -> AnyResult<Vec<(String, u32)>> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2965130Z +fn parse_created_directory_modes(rows: &BTreeMap<String, String>) -> AnyResult<Vec<(String, u32)>> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2965601Z      let raw = rows
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2965823Z          .get("m1_created_directory_modes")
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2966204Z          .ok_or("v0.1.6 helper receipt is missing m1_created_directory_modes")?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2966955Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:492:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2967470Z          stage,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2967660Z      );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2967892Z      let started = Instant::now();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2968422Z -    let output = match super::execute(runtime.client.as_ref(), worker.session.ok_or("v0.1.6 stage session")?, argv.clone()) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2968997Z +    let output = match super::execute(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2969266Z +        runtime.client.as_ref(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2969545Z +        worker.session.ok_or("v0.1.6 stage session")?,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2969842Z +        argv.clone(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2970043Z +    ) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2970233Z          Ok(output) => output,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2970464Z          Err(error) => {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2970676Z              emit(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2971027Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:584:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2971636Z      let commit_start = runtime.elapsed();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2971936Z      let commit_started = Instant::now();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2972271Z      let session = worker.session.ok_or("v0.1.6 commit session")?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2972732Z -    let status = runtime.client.commit_workspace_session_with_status(session)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2973124Z +    let status = runtime
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2973337Z +        .client
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2973577Z +        .commit_workspace_session_with_status(session)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2973942Z      let commit_ns = super::elapsed_ns(commit_started);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2974297Z      let commit_id = expect_created(&status, local_commit)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2974738Z      // The declared per-cycle counters count one published Commit and one POSIX
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2975276Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:593:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2975761Z      bump_observed_counter("posix_helper_executions", 1)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2976134Z      let pinned = runtime.store.pin_branch(worker.branch)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2976468Z      let commit_end = runtime.elapsed();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2977071Z -    runtime.shared.record(worker.index, commit_start, commit_end)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2977436Z +    runtime
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2977619Z +        .shared
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2977854Z +        .record(worker.index, commit_start, commit_end)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2978145Z      emit(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2978332Z          "v016-commit",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2978532Z          &[
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2978864Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:615:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2979347Z      add_observed_counters(&stages::stage_counters(stage))?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2979689Z      runtime.shared.add_pure_call(execution_ns)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2980004Z      runtime.shared.add_pure_call(commit_ns)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2980525Z -    runtime.shared.record_stage(StageKind::Execution, execution_ns)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2980878Z +    runtime
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2981055Z +        .shared
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2981295Z +        .record_stage(StageKind::Execution, execution_ns)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2981681Z      runtime.shared.record_stage(StageKind::Commit, commit_ns)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2982012Z      Ok(StageOutcome {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2982216Z          commit_id,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2982564Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:658:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2982971Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2983270Z  /// The declared operation counters of the selected invocation, as observed by
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2983649Z  /// the stage helpers.
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2984009Z -static OBSERVED: std::sync::OnceLock<Mutex<BTreeMap<String, usize>>> =
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2984385Z -    std::sync::OnceLock::new();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2984822Z +static OBSERVED: std::sync::OnceLock<Mutex<BTreeMap<String, usize>>> = std::sync::OnceLock::new();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2985268Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2985545Z  fn observed_counters_cell() -> &'static Mutex<BTreeMap<String, usize>> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2985979Z      OBSERVED.get_or_init(|| Mutex::new(BTreeMap::new()))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2986432Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:997:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2987104Z                  ("branch", worker.index.to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2987452Z                  ("branch_id", quote(&worker.branch.to_string())),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2987818Z                  ("local_commits", worker.commits.len().to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2988223Z -                ("head", quote(&format!("{:?}", pinned.branch.head_commit_id))),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2988568Z +                (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2988766Z +                    "head",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2989058Z +                    quote(&format!("{:?}", pinned.branch.head_commit_id)),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2989386Z +                ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2989761Z                  ("root", quote(&pinned.root.to_string())),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2990045Z                  (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2990251Z                      "commit_ids",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2990638Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:1017:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2991075Z      let mixed = runtime.plan.mixed;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2991374Z      let declared = runtime.plan.declared_commits();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2991673Z      if total != declared {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2991897Z -        return Err(format!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2992216Z -            "v0.1.6 observed Created commits {total} != declared {declared}"
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2992556Z -        )
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2992734Z -        .into());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2992924Z +        return Err(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2993266Z +            format!("v0.1.6 observed Created commits {total} != declared {declared}").into(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2993665Z +        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2993844Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2994117Z      if total != mixed.topology.total_commits(mixed.k) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2994418Z          return Err(format!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2994796Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:1145:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2995238Z      let path = root.join("store.sqlite");
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2995573Z      let store = Arc::new(LayerStackStore::connect(&path)?);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2996000Z      let binding = super::workspace_bench::sample_binding(root, &container)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2996513Z -    let client = Arc::new(super::workspace_bench::sample_client(store.clone(), &binding)?);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2997231Z +    let client = Arc::new(super::workspace_bench::sample_client(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2997567Z +        store.clone(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2997773Z +        &binding,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2997961Z +    )?);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2998163Z      let pristine = store.pin_branch(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2998466Z          std::fs::read_to_string(root.join("branch-id"))?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2998898Z              .trim()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2999252Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:1188:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.2999688Z                  "declared_total_commits",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3000009Z                  mixed.topology.total_commits(mixed.k).to_string(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3000320Z              ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3000599Z +            ("declared_roots", mixed.topology.roots(mixed.k).to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3000940Z              (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3001135Z -                "declared_roots",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3001419Z -                mixed.topology.roots(mixed.k).to_string(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3001707Z -            ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3001889Z -            (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3002109Z                  "declared_longest_ancestry",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3002459Z                  mixed.topology.longest_ancestry(mixed.k).to_string(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3002784Z              ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3003125Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_mixed.rs:1209:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3003546Z                      "selected"
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3003765Z                  }),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3003951Z              ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3004130Z -
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3004296Z              (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3004497Z                  "declared_live_envelope",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3004755Z                  format!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3064727Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_oracle.rs:6:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3066012Z  // final retained root. Nothing here reads the mutated Store to decide what the
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3066658Z  // expected value is.
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3067285Z  use super::*;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3067554Z +use layerfs_content::ObjectId;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3067908Z  use std::collections::{BTreeMap, BTreeSet};
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3068280Z  use std::sync::Arc;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3068568Z -use layerfs_content::ObjectId;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3069130Z  use workload_source::v016_common as v016;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3069576Z  use workload_source::v016_stages::{self as stages, Topology};
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3070116Z  use workload_source::workspace_common::{Content, Entry, EntryKind};
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3070770Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_oracle.rs:140:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3071371Z              .filter(|(path, _)| path.starts_with(&prefix))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3071930Z              .map(|(path, value)| (format!("{destination}/{}", &path[prefix.len()..]), *value))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3072427Z              .collect();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3072757Z -        self.directory_modes.retain(|path, _| !path.starts_with(&prefix));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3073142Z +        self.directory_modes
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3073421Z +            .retain(|path, _| !path.starts_with(&prefix));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3073736Z          for (path, value) in moved_modes {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3074042Z              self.directory_modes.insert(path, value);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3074331Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3074679Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_oracle.rs:413:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3075179Z      // declaration follows the branch that performed the stage.
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3075564Z      let mtime = v016::attribute_mtime(cycle, branch_tag);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3075908Z      for path in v016::attribute_targets(fixture)? {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3076320Z -        shadow.modes.insert(path.clone(), v016::attribute_mode(cycle, true));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3076689Z +        shadow
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3077021Z +            .modes
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3077294Z +            .insert(path.clone(), v016::attribute_mode(cycle, true));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3077650Z          shadow.mtimes.insert(path, mtime);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3077907Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3078165Z      // Four 64-byte writes on the four distinct 4 KiB alias targets.
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3078795Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_oracle.rs:451:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3079239Z      observed: &BTreeMap<String, u32>,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3079493Z  ) -> AnyResult<()> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3079772Z      let deletion_root = fixture.roles.deletion_root.clone();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3080087Z -    shadow
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3080277Z -        .directory_modes
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3080641Z -        .insert(deletion_root.clone(), observed_directory_mode(observed, &deletion_root)?);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3081079Z +    shadow.directory_modes.insert(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3081336Z +        deletion_root.clone(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3081621Z +        observed_directory_mode(observed, &deletion_root)?,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3081916Z +    );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3082184Z      let (link_parent, symlink_parent) = link_layout(fixture, cycle);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3082559Z      for index in 0..v016::DELETION_SUBTREE_FILES {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3082848Z          let path = fixture
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3083228Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_oracle.rs:525:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3083644Z  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3083810Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3084102Z  /// One directory the stage helper created, with the live mode it measured.
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3084482Z -fn observed_directory_mode(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3084728Z -    observed: &BTreeMap<String, u32>,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3084983Z -    path: &str,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3085182Z -) -> AnyResult<u32> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3085385Z -    observed
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3085570Z -        .get(path)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3085766Z -        .copied()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3086148Z -        .ok_or_else(|| format!("v0.1.6 created directory {path} has no live mode observation").into())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3086891Z +fn observed_directory_mode(observed: &BTreeMap<String, u32>, path: &str) -> AnyResult<u32> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3087371Z +    observed.get(path).copied().ok_or_else(|| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3087783Z +        format!("v0.1.6 created directory {path} has no live mode observation").into()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3088296Z +    })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3088467Z  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3088636Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3088807Z  fn apply_cycle(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3089165Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_oracle.rs:684:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3089588Z                  ranges,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3089799Z              } => {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3090005Z                  if ranges.is_empty() {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3090403Z -                    return Err(format!("v0.1.6 {label} large path has no declared range: {path}")
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3090810Z -                        .into());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3091055Z +                    return Err(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3091408Z +                        format!("v0.1.6 {label} large path has no declared range: {path}").into(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3091795Z +                    );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3091997Z                  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3092217Z                  for (offset, length) in ranges {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3092524Z                      let start = (*offset).min(*len);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3092960Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/v016_oracle.rs:1039:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3093514Z      if counters.get("created_commits").copied().unwrap_or(0) != declared_commits {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3094078Z          return Err("v0.1.6 published Created commit count differs from the declared total".into());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3094498Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3094830Z -    if counters.get("posix_helper_executions").copied().unwrap_or(0) != declared_commits {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3095243Z +    if counters
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3095457Z +        .get("posix_helper_executions")
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3095712Z +        .copied()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3095905Z +        .unwrap_or(0)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3096114Z +        != declared_commits
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3096326Z +    {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3096666Z          return Err("v0.1.6 POSIX helper execution count differs from the declared total".into());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3097338Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3097531Z      super::v016_mixed::emit(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3527363Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:1659:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3528909Z                          .ok_or("boundary operation outside the declared schedule")?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3529718Z                      use workload_source::file_size_transition::BoundaryOp;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3530265Z                      let (edit_start, delete_len, len, visit) = match operation {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3530895Z -                        BoundaryOp::Overwrite { offset, len, visit } => (*offset, *len, *len, *visit),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3531498Z +                        BoundaryOp::Overwrite { offset, len, visit } => {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3531934Z +                            (*offset, *len, *len, *visit)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3532294Z +                        }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3532642Z                          BoundaryOp::Append { len, visit } => {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3533059Z                              let current =
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3533471Z                                  workload_source::file_size_transition::declared_length(case, step)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3534085Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:1686:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3534573Z                              (0, current, *len, step)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3534851Z                          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3535069Z                      };
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3535287Z -                    let alias_plan =
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3535647Z -                        workload_source::file_size_transition::plan(&case.id)?.alias;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3536173Z +                    let alias_plan = workload_source::file_size_transition::plan(&case.id)?.alias;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3536594Z                      if alias_plan {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3537207Z                          // The declared alias schedule is POSIX: append through
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3537825Z                          // the alias, append through the target, truncate
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3538352Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:1734:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3538838Z                          let replacement = if len == 0 {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3539143Z                              Vec::new()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3539398Z                          } else {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3539795Z -                            workload_source::file_size_transition::replacement(case, seed, visit, len)?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3540300Z +                            workload_source::file_size_transition::replacement(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3540668Z +                                case, seed, visit, len,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3540948Z +                            )?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3541180Z                          };
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3541443Z                          let request = WorkspaceFileRangeEdit {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3541780Z                              workspace_id: session.id,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3542245Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:1762:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3542730Z                                  ("phase", quote("sdk-edit")),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3543063Z                                  ("step", step.to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3543392Z                                  ("elapsed_ns", edit_ns.to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3543695Z -                                (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3543950Z -                                    "operation",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3544271Z -                                    quote(&format!("{operation:?}")),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3544569Z -                                ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3544868Z +                                ("operation", quote(&format!("{operation:?}"))),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3545195Z                              ],
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3545417Z                          );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3545801Z                          observed(&client, &mut last_operation)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3546283Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:2202:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3546725Z                          case,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3547131Z                          registry::steps(case) - 1,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3547414Z                      )?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3547789Z -                    let final_published = final_root.ok_or("v0.1.6 alias oracle: final root absent")?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3548229Z +                    let final_published =
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3548579Z +                        final_root.ok_or("v0.1.6 alias oracle: final root absent")?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3549017Z                      let before_reader = reopened.snapshot_reader(before_root);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3549455Z                      let after_reader = reopened.snapshot_reader(final_published);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3549897Z                      let classes = super::workspace_verify::verify_alias_classes(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3550435Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:2216:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3550895Z                          declared_after,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3551158Z                          declared_alias,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3551401Z                      )?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3551759Z -                    let shared = workload_source::file_size_transition::pre_replacement_shared(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3552162Z -                        case, seed,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3552402Z -                    )?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3552615Z +                    let shared =
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3553003Z +                        workload_source::file_size_transition::pre_replacement_shared(case, seed)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3553418Z                      emit(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3553656Z                          "v016-alias-inode-classes",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3553936Z                          &[
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3554335Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:2225:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3554977Z                              ("kind_scope", quote("independent declared oracle")),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3555396Z +                            ("pre_replacement_root", quote(&before_root.to_string())),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3555744Z                              (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3555996Z -                                "pre_replacement_root",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3556308Z -                                quote(&before_root.to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3556623Z +                                "pre_replacement_inode",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3557119Z +                                quote(&workload_source::hex(&classes.before_inode.0)),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3557470Z                              ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3557864Z -                            ("pre_replacement_inode", quote(&workload_source::hex(&classes.before_inode.0))),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3558290Z                              (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3558551Z                                  "pre_replacement_ref_count",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3558884Z                                  classes.before_ref_count.to_string(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3559367Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:2236:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3559847Z                                  "pre_replacement_content_root",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3560206Z                                  quote(&classes.before_content_root.to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3560538Z                              ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3560896Z -                            ("target_inode", quote(&workload_source::hex(&classes.after_inode.0))),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3561291Z +                            (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3561525Z +                                "target_inode",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3561984Z +                                quote(&workload_source::hex(&classes.after_inode.0)),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3562564Z +                            ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3563377Z                              ("target_ref_count", classes.target_ref_count.to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3564009Z                              (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3564435Z                                  "target_content_root",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3565237Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:2243:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3566118Z                                  quote(&classes.target_content_root.to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3566697Z                              ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3567306Z -                            ("alias_inode", quote(&workload_source::hex(&classes.alias_inode.0))),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3567720Z +                            (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3567959Z +                                "alias_inode",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3568309Z +                                quote(&workload_source::hex(&classes.alias_inode.0)),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3568652Z +                            ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3568960Z                              ("alias_ref_count", classes.alias_ref_count.to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3569314Z                              (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3569553Z                                  "alias_content_root",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3570005Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:2249:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3570516Z                                  quote(&classes.alias_content_root.to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3570874Z                              ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3571245Z -                            ("separated", (classes.after_inode != classes.alias_inode).to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3571653Z +                            (
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3571898Z +                                "separated",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3572254Z +                                (classes.after_inode != classes.alias_inode).to_string(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3572608Z +                            ),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3572895Z                              ("pre_replacement_shared", shared.to_string()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3573418Z                          ],
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3573637Z                      );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3574036Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_bench.rs:2255:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3574569Z                      if classes.after_inode == classes.alias_inode || !shared {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3574926Z -                        return Err(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3575270Z -                            "v0.1.6 alias replacement did not separate the inode".into()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3575626Z -                        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3575974Z +                        return Err("v0.1.6 alias replacement did not separate the inode".into());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3576357Z                      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3576565Z                      emit(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.3577075Z                          "v016-alias-posix-steps",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4059470Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_verify.rs:329:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4060529Z      length: u64,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4060800Z  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4061028Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4061258Z -fn alias_binding(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4061548Z -    source: &dyn ObjectSource,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4061867Z -    root: ObjectId,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4062141Z -    path: &str,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4062426Z -) -> AnyResult<AliasBinding> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4063010Z +fn alias_binding(source: &dyn ObjectSource, root: ObjectId, path: &str) -> AnyResult<AliasBinding> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4063661Z      let view = namespace_view(source, root)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4064027Z      let inode = view
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4064242Z          .inodes
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4064646Z Diff in /home/runner/work/layerfs/layerfs/benchmark/fs-bench-pro/src/workspace_verify.rs:730:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4065251Z          return Err("declared regular length requires a regular inode".into());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4065643Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4066072Z      let reader = CoreReader(source);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4066483Z -    Ok(reader.with_authenticated_canonical(record.content_root, |canonical| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4067236Z -        Ok(match small_bytes(canonical)? {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4067542Z -            Some(raw) => raw.len() as u64,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4067964Z -            None => extent_codec::decode_file_state(canonical)?.logical_len,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4068336Z -        })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4068521Z -    })?)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4068704Z +    Ok(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4069017Z +        reader.with_authenticated_canonical(record.content_root, |canonical| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4069441Z +            Ok(match small_bytes(canonical)? {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4069751Z +                Some(raw) => raw.len() as u64,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4070128Z +                None => extent_codec::decode_file_state(canonical)?.logical_len,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4070491Z +            })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4070683Z +        })?,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4070879Z +    )
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4071059Z  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4071238Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:27.4071545Z  /// Read one declared byte range of a persisted regular file through the Store
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5602477Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:96:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5603493Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5603838Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5604325Z      pub(crate) fn acquire(&self) -> Result<Arc<OverlayRoot>> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5605098Z -        let current = self.current.lock().map_err(|_| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5605928Z -            StoreError::Integrity("overlay installation lock")
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5606576Z -        })?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5610569Z +        let current = self
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5611076Z +            .current
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5611509Z +            .lock()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5612156Z +            .map_err(|_| StoreError::Integrity("overlay installation lock"))?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5612771Z          Ok(Arc::clone(&current))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5613200Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5613482Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5614521Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:110:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5615271Z          let mut mutation = Mutation {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5615724Z              index: &self.index,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5616151Z              candidate: OverlayRoot {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5617092Z -                sequence: source.sequence.checked_add(1).ok_or(StoreError::InvalidInput(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5617807Z -                    "overlay sequence overflow",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5618249Z -                ))?,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5618589Z +                sequence: source
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5618995Z +                    .sequence
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5619395Z +                    .checked_add(1)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5620037Z +                    .ok_or(StoreError::InvalidInput("overlay sequence overflow"))?,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5620707Z                  base_root: source.base_root,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5621225Z                  next_inode: source.next_inode,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5621838Z                  index: source.index.clone(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5622600Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:119:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5623343Z              },
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5623673Z          };
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5624007Z          apply(&mut mutation)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5624673Z -        Ok(PreparedMutation { source, candidate: Arc::new(mutation.candidate) })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5625385Z +        Ok(PreparedMutation {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5625796Z +            source,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5626243Z +            candidate: Arc::new(mutation.candidate),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5626743Z +        })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5627355Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5627659Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5628175Z      /// A stale root is returned to the caller for release/repreparation outside
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5629126Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:126:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5630395Z      /// this lock. Per-inode revision equality cannot authorize a root replacement.
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5631303Z      pub(crate) fn install(&self, prepared: PreparedMutation) -> Result<bool> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5631998Z          let previous = {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5632447Z -            let mut current = self.current.lock().map_err(|_| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5632859Z -                StoreError::Integrity("overlay installation lock")
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5633175Z -            })?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5633382Z +            let mut current = self
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5633617Z +                .current
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5633822Z +                .lock()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5634133Z +                .map_err(|_| StoreError::Integrity("overlay installation lock"))?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5634559Z              if !Arc::ptr_eq(&current, &prepared.source) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5634864Z                  return Ok(false);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5635087Z              }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5635440Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:139:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5635862Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5636027Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5636363Z      pub(crate) fn inode(&self, root: &OverlayRoot, inode: NodeId) -> Result<Option<Vec<u8>>> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5637228Z -        Ok(self.index.get(&root.index, &ChangeKey::Inode(inode).encode()?)?)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5637616Z +        Ok(self
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5637799Z +            .index
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5638066Z +            .get(&root.index, &ChangeKey::Inode(inode).encode()?)?)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5638374Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5638538Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5638809Z      /// None means consult immutable backing; Some(None) is a retained mask.
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5639318Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:146:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5639734Z      pub(crate) fn binding(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5640016Z -        &self, root: &OverlayRoot, parent: NodeId, name: &[u8],
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5640329Z +        &self,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5640705Z +        root: &OverlayRoot,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5640930Z +        parent: NodeId,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5641146Z +        name: &[u8],
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5641365Z      ) -> Result<Option<Option<NodeId>>> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5641775Z -        self.index.get(&root.index, &ChangeKey::Binding(parent, name.to_vec()).encode()?)?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5642174Z +        self.index
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5642362Z +            .get(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5642556Z +                &root.index,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5642842Z +                &ChangeKey::Binding(parent, name.to_vec()).encode()?,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5643145Z +            )?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5643332Z              .map(|bytes| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5643574Z                  let value = decode_sequence(&bytes)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5643876Z                  Ok((value != 0).then_some(NodeId(value)))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5644312Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:153:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5644724Z -            }).transpose()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5644937Z +            })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5645118Z +            .transpose()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5645315Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5645475Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5645748Z      /// Each batch seeks past the caller's last key, so covered prefixes and
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5646248Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:157:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5646699Z      /// previously returned pages are not scanned again.
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5647316Z      pub(crate) fn changes(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5647622Z -        &self, root: &OverlayRoot, covered: u64, after: Option<&[u8]>,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5647947Z +        &self,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5648133Z +        root: &OverlayRoot,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5648351Z +        covered: u64,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5648558Z +        after: Option<&[u8]>,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5648806Z      ) -> Result<Vec<(Vec<u8>, u64, ChangeKey)>> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5649233Z          if covered >= root.sequence {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5649500Z              return Ok(Vec::new());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5649886Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:170:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5650405Z              Some(_) => return Err(StoreError::InvalidInput("overlay change cursor")),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5650799Z              None => Bound::Included(first.as_slice()),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5651068Z          };
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5651413Z -        self.index.scan(&root.index, start, Bound::Excluded(&[CHANGE_SEQUENCE + 1]), CHANGE_BATCH)?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5651858Z -            .into_iter().map(|(key, value)| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5652115Z +        self.index
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5652301Z +            .scan(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5652489Z +                &root.index,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5652704Z +                start,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5652939Z +                Bound::Excluded(&[CHANGE_SEQUENCE + 1]),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5653233Z +                CHANGE_BATCH,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5653451Z +            )?
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5653641Z +            .into_iter()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5653852Z +            .map(|(key, value)| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5654112Z                  if key.len() < 18 || !value.is_empty() {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5654478Z                      return Err(StoreError::Integrity("overlay sequence index"));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5654820Z                  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5655180Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:181:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5655591Z                  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5655831Z                  let change = ChangeKey::decode(&key[9..])?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5656147Z                  Ok((key, sequence, change))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5656403Z -            }).collect()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5656601Z +            })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5656923Z +            .collect()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5657118Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5657280Z  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5657436Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5657760Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:188:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5658296Z  impl Mutation<'_> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5658567Z      pub(crate) fn allocate_inode(&mut self) -> Result<NodeId> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5658908Z          let id = self.candidate.next_inode;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5659220Z -        self.candidate.next_inode = id.checked_add(1)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5659516Z +        self.candidate.next_inode = id
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5659769Z +            .checked_add(1)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5660073Z              .ok_or(StoreError::InvalidInput("overlay inode overflow"))?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5660405Z          Ok(NodeId(id))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5660597Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5660919Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:200:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5661313Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5661472Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5661650Z      pub(crate) fn put_binding(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5661974Z -        &mut self, parent: NodeId, name: &[u8], inode: Option<NodeId>,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5662310Z +        &mut self,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5662503Z +        parent: NodeId,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5662710Z +        name: &[u8],
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5662914Z +        inode: Option<NodeId>,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5663138Z      ) -> Result<()> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5663361Z          if inode.is_some_and(|id| id.0 == 0) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5663726Z              return Err(StoreError::InvalidInput("overlay inode identity"));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5664219Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:207:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5664613Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5664872Z          let key = ChangeKey::Binding(parent, name.to_vec()).encode()?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5682392Z          self.candidate.index = self.index.set(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5682894Z -            &self.candidate.index, &key, &inode.map_or(0, |id| id.0).to_be_bytes(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5683316Z +            &self.candidate.index,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5683787Z +            &key,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5684043Z +            &inode.map_or(0, |id| id.0).to_be_bytes(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5684322Z          )?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5684517Z          self.changed(&key)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5684737Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5685082Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:220:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5685646Z              self.candidate.index = self.index.remove(&self.candidate.index, &old_key)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5686044Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5686253Z          self.candidate.index = self.index.set(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5686648Z -            &self.candidate.index, &by_key, &self.candidate.sequence.to_be_bytes(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5687350Z +            &self.candidate.index,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5687599Z +            &by_key,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5687832Z +            &self.candidate.sequence.to_be_bytes(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5688099Z          )?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5688306Z          self.candidate.index = self.index.set(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5688709Z -            &self.candidate.index, &sequence_key(self.candidate.sequence, key), &[],
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5689109Z +            &self.candidate.index,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5689398Z +            &sequence_key(self.candidate.sequence, key),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5689692Z +            &[],
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5689875Z          )?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5690049Z          Ok(())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5690225Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5690565Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:234:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5690986Z          let key = key.encode()?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5691280Z          let by_key = [vec![CHANGE_KEY], key.clone()].concat();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5691674Z          if self.index.get(&self.candidate.index, &by_key)?.as_deref()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5692046Z -            == Some(sequence.to_be_bytes().as_slice()) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5692362Z +            == Some(sequence.to_be_bytes().as_slice())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5692627Z +        {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5692938Z              self.candidate.index = self.index.remove(&self.candidate.index, &by_key)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5693502Z -            self.candidate.index = self.index.remove(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5693858Z -                &self.candidate.index, &sequence_key(sequence, &key),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5694177Z -            )?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5694387Z +            self.candidate.index = self
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5694640Z +                .index
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5694944Z +                .remove(&self.candidate.index, &sequence_key(sequence, &key))?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5695288Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5695457Z          Ok(())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5695633Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5695958Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:253:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5696364Z  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5696534Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5696746Z  fn decode_sequence(bytes: &[u8]) -> Result<u64> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5697209Z -    Ok(u64::from_be_bytes(bytes.try_into()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5697556Z -        .map_err(|_| StoreError::Integrity("overlay integer"))?))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5697891Z +    Ok(u64::from_be_bytes(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5698107Z +        bytes
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5698292Z +            .try_into()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5698790Z +            .map_err(|_| StoreError::Integrity("overlay integer"))?,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5699346Z +    ))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5699636Z  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5699923Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5700522Z  /// One authenticated transport session. Reservations precede mutation installation;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5701575Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:284:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5702359Z          if max_requests == 0 || max_bytes == 0 {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5703063Z              return Err(StoreError::InvalidInput("overlay replay limits"));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5703660Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5704109Z -        Ok(Self { session, watermark: 0, max_requests, max_bytes,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5705067Z -            reserved_bytes: 0, slots: BTreeMap::new() })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5705591Z +        Ok(Self {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5705934Z +            session,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5706305Z +            watermark: 0,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5706692Z +            max_requests,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5707334Z +            max_bytes,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5707711Z +            reserved_bytes: 0,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5708176Z +            slots: BTreeMap::new(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5708610Z +        })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5708928Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5709225Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5709546Z      pub(crate) fn admit(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5710227Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:292:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5711159Z -        &mut self, session: [u8; 16], sequence: u64, response_bytes: usize,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5711795Z +        &mut self,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5712161Z +        session: [u8; 16],
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5712566Z +        sequence: u64,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5712975Z +        response_bytes: usize,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5713416Z      ) -> Result<ReplayAdmission> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5713883Z          if session != self.session {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5714395Z              return Ok(ReplayAdmission::Unknown);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5715176Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:305:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5715928Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5716379Z          if sequence - self.watermark > self.max_requests as u64
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5717280Z              || self.slots.len() >= self.max_requests
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5718005Z -            || response_bytes > self.max_bytes.saturating_sub(self.reserved_bytes) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5718914Z +            || response_bytes > self.max_bytes.saturating_sub(self.reserved_bytes)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5719578Z +        {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5720095Z              return Err(StoreError::InvalidInput("overlay replay capacity"));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5720721Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5721409Z -        self.slots.insert(sequence, ReplaySlot { reserved: response_bytes, result: None });
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5722433Z +        self.slots.insert(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5722833Z +            sequence,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5723205Z +            ReplaySlot {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5723628Z +                reserved: response_bytes,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5724104Z +                result: None,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5724490Z +            },
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5724798Z +        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5725115Z          self.reserved_bytes += response_bytes;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5725632Z          Ok(ReplayAdmission::New)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5726055Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5726661Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:315:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5727632Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5728187Z      pub(crate) fn finish(&mut self, sequence: u64, result: Arc<[u8]>) -> Result<()> {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5728939Z -        let slot = self.slots.get_mut(&sequence)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5729458Z +        let slot = self
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5729836Z +            .slots
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5730183Z +            .get_mut(&sequence)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5730752Z              .ok_or(StoreError::Integrity("unadmitted overlay result"))?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5731481Z          if slot.result.is_some() || result.len() > slot.reserved {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5732225Z              return Err(StoreError::Integrity("overlay result reservation"));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5733139Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:334:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5734067Z              return Err(StoreError::InvalidInput("overlay replay watermark"));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5734708Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5735098Z          for sequence in self.watermark + 1..=through {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5735818Z -            if self.slots.get(&sequence).is_none_or(|slot| slot.result.is_none()) {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5736733Z -                return Err(StoreError::InvalidInput("unresolved overlay acknowledgment"));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5737967Z +            if self
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5738348Z +                .slots
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5738734Z +                .get(&sequence)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5739228Z +                .is_none_or(|slot| slot.result.is_none())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5739748Z +            {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5740150Z +                return Err(StoreError::InvalidInput(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5740732Z +                    "unresolved overlay acknowledgment",
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5741238Z +                ));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5741582Z              }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5741908Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5742305Z          for sequence in self.watermark + 1..=through {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5743097Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:351:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5743857Z      use super::*;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5744207Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5744534Z      fn overlay() -> Overlay {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5745221Z -        Overlay::temporary(&std::env::temp_dir(), ObjectId::for_bytes(b"base"), Limits {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5746178Z -            max_pages: 4096, max_roots: 128, max_key_bytes: 384, max_value_bytes: 1024,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5747097Z -        }).unwrap()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5747496Z +        Overlay::temporary(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5747922Z +            &std::env::temp_dir(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5748380Z +            ObjectId::for_bytes(b"base"),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5748813Z +            Limits {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5749172Z +                max_pages: 4096,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5749584Z +                max_roots: 128,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5750102Z +                max_key_bytes: 384,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5750559Z +                max_value_bytes: 1024,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5750996Z +            },
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5751314Z +        )
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5751616Z +        .unwrap()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5751933Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5752220Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5752512Z      #[test]
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5753132Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:360:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5754387Z      fn stale_disjoint_writer_reprepares_without_losing_updates_or_retained_roots() {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5755113Z          let overlay = overlay();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5755587Z          let before = overlay.acquire().unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5756353Z -        let a = overlay.prepare(before.clone(), |m| m.put_inode(NodeId(2), b"A")).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5757617Z -        let b = overlay.prepare(before.clone(), |m| m.put_inode(NodeId(3), b"B")).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5758348Z +        let a = overlay
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5758873Z +            .prepare(before.clone(), |m| m.put_inode(NodeId(2), b"A"))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5759463Z +            .unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5759822Z +        let b = overlay
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5760347Z +            .prepare(before.clone(), |m| m.put_inode(NodeId(3), b"B"))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5760968Z +            .unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5761414Z          assert!(overlay.install(a).unwrap());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5762013Z          let captured = overlay.acquire().unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5762584Z          assert!(!overlay.install(b).unwrap());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5763383Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:368:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5764502Z -        let b = overlay.prepare(overlay.acquire().unwrap(), |m| m.put_inode(NodeId(3), b"B")).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5765307Z +        let b = overlay
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5765900Z +            .prepare(overlay.acquire().unwrap(), |m| m.put_inode(NodeId(3), b"B"))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5766575Z +            .unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5767289Z          assert!(overlay.install(b).unwrap());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5767868Z          let current = overlay.acquire().unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5768713Z -        assert_eq!(overlay.inode(&current, NodeId(2)).unwrap().as_deref(), Some(&b"A"[..]));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5769721Z -        assert_eq!(overlay.inode(&current, NodeId(3)).unwrap().as_deref(), Some(&b"B"[..]));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5770714Z +        assert_eq!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5771207Z +            overlay.inode(&current, NodeId(2)).unwrap().as_deref(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5771799Z +            Some(&b"A"[..])
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5772083Z +        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5772266Z +        assert_eq!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5772550Z +            overlay.inode(&current, NodeId(3)).unwrap().as_deref(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5772880Z +            Some(&b"B"[..])
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5773089Z +        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5773362Z          assert_eq!(overlay.inode(&captured, NodeId(3)).unwrap(), None);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5773783Z          assert_eq!(overlay.inode(&before, NodeId(2)).unwrap(), None);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5774354Z -        assert_eq!(overlay.changes(&current, captured.sequence, None).unwrap()[0].2, ChangeKey::Inode(NodeId(3)));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5774840Z +        assert_eq!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5775140Z +            overlay.changes(&current, captured.sequence, None).unwrap()[0].2,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5775521Z +            ChangeKey::Inode(NodeId(3))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5775767Z +        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5775934Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5776098Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5776267Z      #[test]
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5776609Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:379:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5777418Z      fn tracking_replaces_old_sequence_and_cleanup_keeps_masks_and_newer_changes() {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5777817Z          let overlay = overlay();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5778134Z -        let first = overlay.prepare(overlay.acquire().unwrap(), |m| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5778488Z -            m.put_inode(NodeId(2), b"A")?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5778790Z -            m.put_binding(NodeId(1), b"removed", None)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5779073Z -        }).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5779283Z +        let first = overlay
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5779537Z +            .prepare(overlay.acquire().unwrap(), |m| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5779839Z +                m.put_inode(NodeId(2), b"A")?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5780324Z +                m.put_binding(NodeId(1), b"removed", None)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5780607Z +            })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5780788Z +            .unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5781020Z          assert!(overlay.install(first).unwrap());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5781333Z          let snapshot = overlay.acquire().unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5781790Z -        let second = overlay.prepare(snapshot.clone(), |m| m.put_inode(NodeId(2), b"B")).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5782227Z +        let second = overlay
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5782535Z +            .prepare(snapshot.clone(), |m| m.put_inode(NodeId(2), b"B"))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5782867Z +            .unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5783103Z          assert!(overlay.install(second).unwrap());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5783467Z -        let cleanup = overlay.prepare(overlay.acquire().unwrap(), |m| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5783906Z -            for (_, sequence, key) in overlay.changes(&snapshot, 0, None)? {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5784285Z -                m.forget_covered(&key, sequence)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5784557Z -            }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5784739Z -            Ok(())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5784922Z -        }).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5785125Z +        let cleanup = overlay
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5785383Z +            .prepare(overlay.acquire().unwrap(), |m| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5785749Z +                for (_, sequence, key) in overlay.changes(&snapshot, 0, None)? {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5786129Z +                    m.forget_covered(&key, sequence)?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5786398Z +                }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5786583Z +                Ok(())
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5787012Z +            })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5787237Z +            .unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5787484Z          assert!(overlay.install(cleanup).unwrap());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5787800Z          let current = overlay.acquire().unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5788224Z -        assert_eq!(overlay.binding(&current, NodeId(1), b"removed").unwrap(), Some(None));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5788786Z +        assert_eq!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5789066Z +            overlay.binding(&current, NodeId(1), b"removed").unwrap(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5789390Z +            Some(None)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5789584Z +        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5789829Z          let changes = overlay.changes(&current, 0, None).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5790159Z          assert_eq!(changes.len(), 1);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5790522Z -        assert_eq!((changes[0].1, &changes[0].2), (2, &ChangeKey::Inode(NodeId(2))));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5790894Z +        assert_eq!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5791101Z +            (changes[0].1, &changes[0].2),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5791375Z +            (2, &ChangeKey::Inode(NodeId(2)))
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5791632Z +        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5791901Z          assert_eq!(overlay.changes(&snapshot, 0, None).unwrap().len(), 2);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5792246Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5792412Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5792744Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:405:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5793226Z      fn failed_preparation_never_installs_partial_state() {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5793537Z          let overlay = overlay();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5793804Z          let before = overlay.acquire().unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5794119Z -        assert!(overlay.prepare(before.clone(), |m| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5794451Z -            m.put_inode(NodeId(2), b"must not escape")?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5794762Z -            m.put_binding(NodeId(1), b"..", None)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5795031Z -        }).is_err());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5795232Z +        assert!(overlay
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5795460Z +            .prepare(before.clone(), |m| {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5795763Z +                m.put_inode(NodeId(2), b"must not escape")?;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5796076Z +                m.put_binding(NodeId(1), b"..", None)
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5796341Z +            })
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5796524Z +            .is_err());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5796936Z          assert!(Arc::ptr_eq(&before, &overlay.acquire().unwrap()));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5798067Z          assert_eq!(overlay.inode(&before, NodeId(2)).unwrap(), None);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5798675Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5799140Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:417:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5799701Z      fn replay_retains_lost_reply_and_never_reapplies_stale_or_unknown_request() {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5800104Z          let session = [1; 16];
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5800421Z          let mut replay = ReplayWindow::new(session, 2, 8).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5800884Z -        assert!(matches!(replay.admit(session, 1, 8).unwrap(), ReplayAdmission::New));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5801427Z -        assert!(matches!(replay.admit(session, 1, 8).unwrap(), ReplayAdmission::Unknown));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5801837Z +        assert!(matches!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5802077Z +            replay.admit(session, 1, 8).unwrap(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5802357Z +            ReplayAdmission::New
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5802591Z +        ));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5802772Z +        assert!(matches!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5803018Z +            replay.admit(session, 1, 8).unwrap(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5803300Z +            ReplayAdmission::Unknown
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5803544Z +        ));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5803776Z          assert!(replay.acknowledge(session, 1).is_err());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5804113Z          assert!(replay.admit(session, 2, 1).is_err());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5804459Z          replay.finish(1, Arc::from(&b"appended"[..])).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5804930Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:426:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5805466Z              ReplayAdmission::Completed(bytes) => assert_eq!(&*bytes, b"appended"),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5805915Z              _ => panic!("lost reply must return the installed result"),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5806252Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5806578Z -        assert!(matches!(replay.admit([2; 16], 1, 8).unwrap(), ReplayAdmission::Unknown));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5807633Z +        assert!(matches!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5807895Z +            replay.admit([2; 16], 1, 8).unwrap(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5808190Z +            ReplayAdmission::Unknown
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5808434Z +        ));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5808654Z          replay.acknowledge(session, 1).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5808972Z          assert!(replay.admit(session, 1, 8).is_err());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5809284Z          assert_eq!(replay.reserved_bytes, 0);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5809713Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace/src/overlay.rs:433:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5810177Z          assert!(replay.admit(session, 4, 1).is_err());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5810588Z -        assert!(matches!(replay.admit(session, 3, 1).unwrap(), ReplayAdmission::New));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5810986Z +        assert!(matches!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5811223Z +            replay.admit(session, 3, 1).unwrap(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5811499Z +            ReplayAdmission::New
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5811733Z +        ));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5811956Z          replay.finish(3, Arc::from(&b"x"[..])).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5812296Z          assert!(replay.acknowledge(session, 3).is_err());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5812718Z -        assert!(matches!(replay.admit(session, 2, 1).unwrap(), ReplayAdmission::New));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5813114Z +        assert!(matches!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5813345Z +            replay.admit(session, 2, 1).unwrap(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5813611Z +            ReplayAdmission::New
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5813832Z +        ));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5814049Z          replay.finish(2, Arc::from(&b"y"[..])).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5814359Z          replay.acknowledge(session, 3).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.5814649Z          assert!(replay.slots.is_empty());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6269526Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace-core/src/file_edit.rs:774:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6270548Z              compact.pieces()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6270949Z          } else if let Some(slice) = &self.compact_spool {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6271669Z              vec![Piece::Spool {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6272129Z -                segment: slice.segment.clone(), offset: slice.offset, len: slice.len,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6272651Z +                segment: slice.segment.clone(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6273015Z +                offset: slice.offset,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6273332Z +                len: slice.len,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6273666Z              }]
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6273897Z          } else {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6274139Z              Vec::new()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6274640Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace-core/src/file_edit.rs:781:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6275215Z          };
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6275656Z -        let mut cursor = PieceCursor { stack: Vec::new(), compact: compact.into_iter() };
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6276202Z +        let mut cursor = PieceCursor {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6276579Z +            stack: Vec::new(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6277222Z +            compact: compact.into_iter(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6277565Z +        };
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6277784Z          cursor.descend(self.root.clone());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6278088Z          cursor
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6278279Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6278669Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace-core/src/file_edit.rs:1392:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6279171Z          let mut tree = PieceTree::empty();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6279458Z          for n in 0..513_u64 {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6279701Z              let piece = if n % 2 == 0 {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6280125Z -                Piece::Spool { segment: crate::backing::test_backing(), offset: n * 3, len: 3 }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6280570Z -            } else { Piece::Zero { len: 3 } };
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6280861Z +                Piece::Spool {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6281147Z +                    segment: crate::backing::test_backing(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6281455Z +                    offset: n * 3,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6281702Z +                    len: 3,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6282093Z +                }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6282295Z +            } else {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6282529Z +                Piece::Zero { len: 3 }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6282786Z +            };
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6283046Z              tree = tree.replace(tree.len(), 0, [piece]).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6283368Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6283564Z          let height = tree.height();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6284023Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace-core/src/file_edit.rs:1400:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6284512Z          let mut held = tree.cursor();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6284880Z -        tree = tree.replace(0, tree.len(), [Piece::Zero { len: 1 }]).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6285263Z +        tree = tree
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6285523Z +            .replace(0, tree.len(), [Piece::Zero { len: 1 }])
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6285833Z +            .unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6286062Z          let mut seen = 0_u64;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6286320Z          while let Some(piece) = held.next() {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6286640Z              assert!(held.stack.len() <= height);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6287497Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace-core/src/file_edit.rs:1407:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6288166Z                      assert_eq!(seen % 2, 0);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6288470Z                      assert_eq!((offset, len), (seen * 3, 3));
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6288749Z                  }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6289045Z -                Piece::Zero { len } => { assert_eq!(seen % 2, 1); assert_eq!(len, 3); }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6289426Z +                Piece::Zero { len } => {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6289693Z +                    assert_eq!(seen % 2, 1);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6289958Z +                    assert_eq!(len, 3);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6290198Z +                }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6290414Z                  _ => panic!("unexpected range"),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6290673Z              }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6290860Z              seen += 1;
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6291265Z Diff in /home/runner/work/layerfs/layerfs/crates/layerfs-workspace-core/src/file_edit.rs:1414:
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6291856Z          }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6292039Z          assert_eq!(seen, 513);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6292400Z -        assert_eq!(tree.cursor().collect::<Vec<_>>(), vec![Piece::Zero { len: 1 }]);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6292780Z +        assert_eq!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6293006Z +            tree.cursor().collect::<Vec<_>>(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6293286Z +            vec![Piece::Zero { len: 1 }]
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6293532Z +        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6293743Z          let compact = PieceTree::compact_inline(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6294166Z -            FileContentRoot(ObjectId::for_bytes(b"base")), 20, 5, Arc::from(&b"abc"[..]),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6294562Z -        ).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6294914Z -        assert_eq!(compact.cursor().map(|p| p.len()).collect::<Vec<_>>(), vec![5, 3, 12]);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6295406Z -        let spool = PieceTree::empty().replace(0, 0, [Piece::Spool {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6295831Z -            segment: crate::backing::test_backing(), offset: 8, len: 10,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6296170Z -        }]).unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6296492Z -        assert_eq!(spool.cursor().map(|p| p.len()).collect::<Vec<_>>(), vec![10]);
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6297076Z +            FileContentRoot(ObjectId::for_bytes(b"base")),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6297366Z +            20,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6297552Z +            5,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6297749Z +            Arc::from(&b"abc"[..]),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6297980Z +        )
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6298153Z +        .unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6298348Z +        assert_eq!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6298613Z +            compact.cursor().map(|p| p.len()).collect::<Vec<_>>(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6298933Z +            vec![5, 3, 12]
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6299139Z +        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6299338Z +        let spool = PieceTree::empty()
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6299591Z +            .replace(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6299788Z +                0,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6300108Z +                0,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6300311Z +                [Piece::Spool {
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6300583Z +                    segment: crate::backing::test_backing(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6300876Z +                    offset: 8,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6301098Z +                    len: 10,
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6301308Z +                }],
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6301493Z +            )
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6301678Z +            .unwrap();
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6301882Z +        assert_eq!(
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6302134Z +            spool.cursor().map(|p| p.len()).collect::<Vec<_>>(),
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6302438Z +            vec![10]
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6302638Z +        );
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6302879Z          assert!(PieceTree::empty().cursor().next().is_none());
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6303185Z      }
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6303358Z  
+rust	Run cargo +1.96.0 fmt --all --check	2026-09-13T20:13:28.6436591Z ##[error]Process completed with exit code 1.

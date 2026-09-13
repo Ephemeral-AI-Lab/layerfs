@@ -1,0 +1,48 @@
+{
+  "failed_head": "5996231830eb05c986f7f9dcbb4b24cc52288281",
+  "command": "cargo +1.96.0 fmt --all --check",
+  "paths": [
+    {
+      "path": "benchmark/fs-bench-pro/src/infra.rs",
+      "head_formatted_only": true,
+      "preserved_working_changes": false,
+      "formatted_blob": "14dfbe80631408ef762ee49b7d95876e8c5137bd"
+    },
+    {
+      "path": "benchmark/fs-bench-pro/src/v016_mixed.rs",
+      "head_formatted_only": true,
+      "preserved_working_changes": false,
+      "formatted_blob": "a4cf1870e0b94fc030628852fe8e60d4a93e0535"
+    },
+    {
+      "path": "benchmark/fs-bench-pro/src/v016_oracle.rs",
+      "head_formatted_only": true,
+      "preserved_working_changes": false,
+      "formatted_blob": "94a07ae0182eb8ad98eaf05186feae0462458938"
+    },
+    {
+      "path": "benchmark/fs-bench-pro/src/workspace_bench.rs",
+      "head_formatted_only": true,
+      "preserved_working_changes": false,
+      "formatted_blob": "5578edf0f84ebf342a433b8538271de124323a57"
+    },
+    {
+      "path": "benchmark/fs-bench-pro/src/workspace_verify.rs",
+      "head_formatted_only": true,
+      "preserved_working_changes": false,
+      "formatted_blob": "23b06cfac924f1a9b58b2a042e1f77566c6c45cb"
+    },
+    {
+      "path": "crates/layerfs-workspace-core/src/file_edit.rs",
+      "head_formatted_only": true,
+      "preserved_working_changes": false,
+      "formatted_blob": "cdae680de56bd499a50b2319a37b34931e4c4eef"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay.rs",
+      "head_formatted_only": true,
+      "preserved_working_changes": true,
+      "formatted_blob": "fd953808193346128feedac56c82b0bf72503478"
+    }
+  ]
+}

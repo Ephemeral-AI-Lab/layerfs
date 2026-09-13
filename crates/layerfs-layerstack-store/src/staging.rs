@@ -177,9 +177,9 @@ pub struct WorkspacePublicationReceipt {
     pub published_ns: Option<u64>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WorkspacePublicationResolution {
-    Published(WorkspacePublicationReceipt),
+    Published(Box<WorkspacePublicationReceipt>),
     NotPublished,
     Unknown,
 }
@@ -198,7 +198,7 @@ impl LayerStackStore {
     ) -> Result<WorkspacePublicationResolution> {
         let connection = self.db.reader()?;
         if let Some(receipt) = publication_from_connection(&connection, attempt)? {
-            return Ok(WorkspacePublicationResolution::Published(receipt));
+            return Ok(WorkspacePublicationResolution::Published(Box::new(receipt)));
         }
         let (branch, root) =
             crate::workspace::workspace_snapshot_from_connection(&connection, attempt.branch_id)?;
@@ -244,14 +244,14 @@ impl LayerStackStore {
                 {
                     return Err(StoreError::Integrity("publication witness context"));
                 }
-                return Ok(WorkspacePublicationResolution::Published(
+                return Ok(WorkspacePublicationResolution::Published(Box::new(
                     WorkspacePublicationReceipt {
                         attempt: *attempt,
                         head_after: Some(id),
                         up_to_date: false,
                         published_ns: None,
                     },
-                ));
+                )));
             }
             if Some(id) == attempt.expected_head {
                 break;
@@ -537,7 +537,7 @@ mod tests {
         let store = LayerStackStore::connect(root.join("store.sqlite")).unwrap();
         assert_eq!(
             store.resolve_workspace_publication(&created).unwrap(),
-            WorkspacePublicationResolution::Published(first_receipt)
+            WorkspacePublicationResolution::Published(Box::new(first_receipt))
         );
         let mut wrong = created;
         wrong.covered_sequence += 1;

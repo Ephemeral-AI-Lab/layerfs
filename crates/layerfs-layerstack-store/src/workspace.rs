@@ -722,7 +722,7 @@ impl LayerStackStore {
             CommitOutcome::Committed {
                 commit_id: commit.id,
                 root_id: commit.root_id,
-                counters: counters,
+                counters,
                 candidate_objects: admission.candidate_objects,
                 candidate_bytes: admission.candidate_bytes,
                 inserted_objects: admission.inserted_objects,

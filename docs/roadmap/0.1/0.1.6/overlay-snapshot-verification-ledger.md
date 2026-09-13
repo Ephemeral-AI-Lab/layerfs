@@ -192,3 +192,19 @@ break, not as qualification of the new behavior.
 - validity: current Store component evidence; runtime snapshot/coverage/End/Discard
   integration remains pending. Receipt insertion atomically retains Created and
   UpToDate, but this is not a claim that ordinary Workspace Commit uses it yet.
+
+### L10 — Required CI and retained failures
+
+- identity: PR #126 CI runs `34780076545` and `34780263723`, original failed
+  heads/steps, pure format repair and targeted Store Clippy repair.
+- source: exact heads `5996231830eb05c986f7f9dcbb4b24cc52288281` and
+  `2728aebd38ac5d3b2a8a1379b3259684512284b0`; subsequent receipt boxing/shorthand
+  source in the associated repair commit. `evidence/ci/README.md` names commands.
+- environment: GitHub Ubuntu CI, Rust 1.85.1 tests / 1.96.0 fmt+Clippy; targeted
+  Store repair uses local Rust 1.96.0. No performance measurement.
+- result: first CI FAIL_FMT; second fmt/Python/full-native-tests PASS then
+  FAIL_CLIPPY (redundant field + large enum). Store repair Clippy PASS and one
+  exact affected publication regression PASS. Full raw failures retained.
+- validity: current for recorded heads only. No lint/oracle gate disabled; no
+  #122 benchmark executed. New snapshot components/ownership changes still need
+  affected verification and final CI; these passes do not seal a candidate.
