@@ -64,8 +64,8 @@ and reports exactly what the daemon observed. Container kernel
 
 | # | Mechanism | Preserves mapping semantics | Non-freezing | Bounded acquisition | Verdict |
 | --- | --- | --- | --- | --- | --- |
-| M1 | `syncfs` on the mount at acquisition | yes | yes (no operation exclusion) | **no** — work is proportional to dirty payload; a store concurrent with the flush can land on either side, so the boundary is not a single cut | forbidden by rule §6 ("drain the entire cache", "bounded work independent of … payload bytes") |
-| M2 | per-file flush of files that can hold kernel-dirty bytes (daemon self-open + `fsync`), optionally combined with M1 for open-unlinked inodes | yes | yes | **no** — still payload-proportional; also cannot be enumerated exactly (the daemon cannot see mappings) | same rule tension as M1 |
+| M1 | `syncfs` on the mount at acquisition | yes | yes (no operation exclusion) | **no** — work is proportional to dirty payload; a store concurrent with the flush can land on either side, and a store that completes before the flush returns can still miss its collection point, so the boundary is not a single observable cut | forbidden by rule §6 ("drain the entire cache", "bounded work independent of … payload bytes") |
+| M2 | per-file flush of files that can hold kernel-dirty bytes (daemon self-open + `fsync`), optionally combined with M1 for open-unlinked inodes | yes | yes | **no** — still payload-proportional; the daemon cannot see mappings, so the candidate set is "every cached writable open"; same collection-point boundary caveat as M1; no path exists for open-unlinked inodes | same rule tension as M1 |
 | M3 | Refuse/removal of writable shared mappings (`FOPEN_DIRECT_IO` handles only) | **no** | yes | yes | forbidden: "do not silently disable … mmap"; the kernel currently accepts the mapping and `crates/layerfs-sdk/tests/live_fuse.rs:180` asserts the supported surface |
 | M4 | Snapshot host-installed state only; treat kernel-dirty mapped bytes as outside the snapshot | **no** (bytes a concurrent reader can see are omitted) | yes | yes | forbidden: "Capturing consistent daemon metadata while omitting bytes promised visible by the filesystem contract is incorrect" |
 | M5 | Real-file backing with kernel/file-system snapshot support (`FUSE_PASSTHROUGH`, reflink/APFS clone, hole-based COW) | partial | yes | mixed | changes the canonical storage model (one backing file per inode, unbounded descriptors), still cannot see un-flushed dirty pages of the backing file, and needs kernel ≥ 6.9 plus `CAP_SYS_ADMIN` |
@@ -86,6 +86,12 @@ owner decision before the full-surface implementation is complete:
    "bounded acquisition" clause is narrowed to "bounded by kernel-dirty state, not
    by total files/changed files/pieces", and the per-file/completeness limits
    above become declared contract text. Ordinary filesystem operations continue.
+   This option is weaker than the current behavior in one respect that must be
+   declared rather than assumed: FUSE offers no way to fence a mapping's stores, so
+   a store that *completes* before the flush returns can still miss the kernel's
+   internal collection point, while a store issued during the flush can be included.
+   The exact boundary would therefore be "the kernel's collection point inside the
+   flush", not the flush's return, and the contract must say so.
 2. **Narrow the supported surface** for writable shared mappings on Workspace
    files (M3): the product would refuse `MAP_SHARED` + `PROT_WRITE` on cached
    handles, and the existing tests that assert that surface
@@ -184,6 +190,18 @@ semantics are rewritten):
    replay results, arenas/descriptors, and reclamation records, with a documented
    aggregate policy across Workspaces. No cap silently removes canonical validation
    or an existing public input limit.
+10. **Bounded substitution, not bounded duplication.** After a successful publication,
+    live ranges that still reference temporary bytes which are now canonical must be
+    interchangeable with canonical backing, otherwise live state pins the temporary
+    spool forever and repeated Commits accumulate redundant temporary histories — the
+    failure rule §5 forbids. Selected contract: a per-range (not per-inode, not
+    per-file) *backing substitution* that requires exact byte/length equivalence
+    against the retained canonical object, retains canonical ownership while any
+    reader holds the old range, and keeps the old source alive until those readers
+    release it. It changes no live content, offset, inode identity, namespace entry or
+    generation, and it installs no captured state, so it is not checkpoint
+    installation. Until safe substitution is possible for a given range, its physical
+    bytes stay explicitly charged rather than being silently assumed reclaimed.
 
 **V2 exit evidence (not yet produced):** root-race (two disjoint writers from one
 root), replay/exactly-once, quota and short-I/O failure at transitions,
@@ -262,16 +280,24 @@ Selected contract:
 
 1. **Minimal explicit Store receipt.** Add one table, `workspace_publications`,
    written *inside* the same publication transaction:
-   `(workspace_id, attempt_id, outcome_kind, root_id, head_after, base_after,
+   `(workspace_id, attempt_key, outcome_kind, root_id, head_after, base_after,
    covered_sequence, published_ns)`. One row per resolved attempt; it is the
    authoritative record for both `Committed` and `UpToDate`. This is the explicit,
    minimal schema change the specification requires; it is not a hidden helper and
    not an outcome log.
+   **The key must be derived, not random.** Attempt identity is in-memory, so a random
+   attempt id cannot resolve uncertainty after a process restart, and #124's retry
+   contract requires exactly that ("retry must use the same candidate and expected
+   context instead of rebuilding from newer live state"). `attempt_key` is therefore
+   the deterministic tuple
+   `(workspace_id, candidate_root, expected_head, new_base_layer)`, which is also
+   what makes the `Committed` case independently derivable: the same tuple yields
+   `CommitId::derive(root, parent, base)`. A retry of the same candidate recomputes
+   the same `attempt_key` and therefore finds its receipt.
 2. **Resolution procedure on uncertainty** (all four cases use only authoritative
    Store state):
-   - receipt exists for `(workspace_id, attempt_id)` → the outcome is exactly the
-     recorded one; apply the receipt, then delete it as part of the idempotent
-     acknowledgment;
+   - receipt exists for `attempt_key` → the outcome is exactly the recorded one;
+     apply the receipt, then delete it as part of the idempotent acknowledgment;
    - no receipt, and the branch head is still the attempt's `expected_head` with the
      attempt's `expected_base` → the transaction cannot have advanced the branch
      (the advance is conditional on exactly those values) and no `UpToDate` receipt

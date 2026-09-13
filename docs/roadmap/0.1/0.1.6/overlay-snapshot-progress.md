@@ -60,3 +60,26 @@ for that work; the append-only record of individual checks is
    ledger records why each retained pass is still valid.
 4. Re-enumerate the benchmark catalog from the sealed candidate before any Phase 7
    execution; the recorded scope ledger is provisional by construction.
+
+## Ordered next actions once V1 is decided
+
+1. Phase 2: add the host overlay root bundle and typed persistent indexes
+   (`overlay.rs`), atomic leased-source-root installation, dual change indexes,
+   payload arenas with declared block release, replay window, reclamation
+   accounting; verify with the root-race, replay, quota/short-I/O,
+   partial-retention, stale-reference and tombstone tests named in
+   [resolution §2](overlay-snapshot-contract-resolution.md).
+2. Phase 3: add the owned snapshot reader/cursors (`snapshot.rs`) and the
+   host-installed acknowledgment path for ordinary mutations; keep mount identity,
+   inode identity, descriptors and working directories; verify exact
+   live/snapshot separation on the public FUSE/SDK path.
+3. Phase 4: move Commit to independent attempts with the owned snapshot, the V4
+   receipt and the V3 correspondence, keeping `workspace_stages` and conditional
+   publication; verify C1-excludes-x/C2-includes-x, no-op coverage and lost replies.
+4. Phase 5: remove the freeze/quiesce/checkpoint coupling after auditing the
+   non-Commit consumers listed in [resolution §5](overlay-snapshot-contract-resolution.md).
+5. Phase 6: correctness/integration, then the million-changed-file proof with fresh
+   Store reopen, then seal the candidate and hand it to #125.
+6. Phase 7 (#125): re-enumerate the registry, freeze the include/exclude manifest,
+   execute under the measurement lock, publish real numbers, repair measured
+   defects and re-run only invalidated evidence.

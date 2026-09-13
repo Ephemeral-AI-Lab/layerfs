@@ -63,6 +63,49 @@ source, environment, result, validity.
   those passes were collected from. Re-running them now would produce no new
   information and would violate the reuse rule.
 
+### L4 — Adversarial self-review of the new V2/V4 contracts
+
+- identity: static review pass over [contract resolution](overlay-snapshot-contract-resolution.md)
+  §2 and §4 against the rule's failure/ownership clauses and the existing Store
+  transaction code.
+- source: contract resolution at `a7b565640…` and the follow-up commit that applies
+  the two corrections below.
+- environment: none (no execution).
+- result: two defects found and corrected before any implementation depends on them.
+  (a) V4 keyed the publication receipt by an in-memory attempt identity, which cannot
+  resolve uncertainty after a process restart; the key is now the deterministic
+  `(workspace_id, candidate_root, expected_head, new_base_layer)` tuple, which also
+  reproduces `CommitId::derive`. (b) V2 lacked the bounded-substitution obligation,
+  so live ranges referencing temporary bytes that had already become canonical would
+  pin the temporary spool indefinitely; §2.10 now specifies per-range exact-equivalence
+  substitution with canonical ownership retained.
+- validity: current. This is review evidence about contract text, not about a
+  candidate; it does not qualify any product behavior.
+
+### L5 — V1 boundary-ordering precision
+
+- identity: review of the V1 option-1 wording against the observed flush behaviour.
+- source: contract resolution §1 (mechanism table M1/M2 and option 1), probe evidence
+  `evidence/v1-probe/run.log`.
+- environment: same probe environment as L1.
+- result: recorded that neither `syncfs` nor a per-file `fsync` yields an observable
+  cut: a store that completes before the flush returns can still miss the kernel's
+  internal collection point. Option 1 is therefore presented as "boundary = the
+  kernel's collection point inside the flush", not as a clean per-file boundary.
+- validity: current; refinement of L1, which it does not invalidate.
+
+
+- identity: whole-repository scope check over the working tree.
+- source: `git status`/`git diff` against
+  `86f6a0a0ff3de2d524b4984ab9c6b5de5272b18b`.
+- environment: macOS host, Cargo 1.96.0 / rustc 1.96.0 available; no build run.
+- result: pass. The only changes are documentation and evidence; no
+  `crates/`, `benchmark/` (harness), fixture, or configuration file is modified.
+- validity: current, and it is the reason every previously recorded product pass
+  remains reusable: the exercised product source is byte-identical to the commit
+  those passes were collected from. Re-running them now would produce no new
+  information and would violate the reuse rule.
+
 ## Retained passes from earlier work (not re-run by this ledger)
 
 | Pass family | Recorded by | Why still valid |
