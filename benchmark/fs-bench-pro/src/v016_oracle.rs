@@ -1192,17 +1192,49 @@ fn verify_discard(
         .paths
         .get(&path)
         .ok_or_else(|| format!("v0.1.6 discard witness absent: {path}"))?;
-    // A's discarded session never committed, and cycle 1 only rewrote cohort 0,
-    // so the witness still carries its sealed initial recipe.
-    let declared = super::workspace_verify::declared_content_root(&Entry::file(
-        path.clone(),
-        fixture.content(&path)?.clone(),
-    ))?
-    .ok_or("v0.1.6 discard witness declared root")?;
-    if declared != record.content_root {
+    // A's discarded session never committed, so the witness must carry exactly
+    // what the declared schedule leaves there. The witness is a refresh-pool
+    // member of a rotating cohort, so a deep history legitimately rewrites it
+    // in a later cycle: the declaration is the shadow's state for this branch,
+    // not the pristine fixture recipe.
+    let mut shadow = shadow_from_fixture(fixture);
+    let cycles = first.commits.len() / stages::STAGES;
+    for offset in 0..cycles {
+        apply_cycle(
+            fixture,
+            first.cycle_start + offset,
+            &first.branch_salt,
+            first.branch_tag,
+            &mut shadow,
+            &first.created_directory_modes,
+        )?;
+    }
+    let (declared, declared_root, declared_length) = match shadow.paths.get(&path) {
+        Some(Shadow::File(content)) => {
+            let root = super::workspace_verify::declared_content_root(&Entry::file(
+                path.clone(),
+                content.clone(),
+            ))?
+            .ok_or("v0.1.6 discard witness declared root")?;
+            (root, root, content.len())
+        }
+        Some(Shadow::Ranged { len, .. }) => {
+            return Err(format!(
+                "v0.1.6 discard witness {path} is declared as a {len}-byte ranged file"
+            )
+            .into())
+        }
+        None => {
+            return Err(format!(
+                "v0.1.6 discard witness {path} is not part of the declared regular inventory"
+            )
+            .into())
+        }
+    };
+    if declared_root != record.content_root {
         let observed = super::workspace_verify::declared_regular_length(source, record)?;
         return Err(format!(
-            "v0.1.6 discarded mutation is present in the published branch state: {path} declared root {declared} observed {} length {observed}",
+            "v0.1.6 discarded mutation is present in the published branch state: {path} declared root {declared} observed {} length {observed} declared_length {declared_length}",
             record.content_root
         )
         .into());
@@ -1218,12 +1250,16 @@ fn verify_discard(
             ),
             (
                 "declared_root",
-                super::v016_mixed::quote(&declared.to_string()),
+                super::v016_mixed::quote(&declared_root.to_string()),
+            ),
+            (
+                "declared_length",
+                declared_length.to_string(),
             ),
             (
                 "scope",
                 super::v016_mixed::quote(
-                    "discarded session mutation absent from the published branch state",
+                    "discarded session mutation absent from the published branch state; the declaration is the branch's own scheduled state after every cycle it published",
                 ),
             ),
         ],

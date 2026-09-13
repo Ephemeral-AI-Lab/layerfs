@@ -51,9 +51,37 @@ def perf_row(case, seed):
     identities = sample.get("identities", {})
     records = sample.get("records", [])
     commits = [row for row in records if row.get("kind") == "v016-commit"]
+    # Every route publishes its Commits with its own evidence row: the M1 mixed
+    # route emits `v016-commit`, the host-orchestrated boundary and history
+    # routes emit `published-root`, and every route emits a `phase` row carrying
+    # the full `WorkspaceCommitStatus`. The count below is always an observed
+    # count, never the requested one.
+    published = [row for row in records if row.get("kind") == "published-root"]
+    statuses = [
+        row
+        for row in records
+        if row.get("kind") == "phase" and row.get("phase") == "commit" and row.get("outcome")
+    ]
+    created_statuses = [row for row in statuses if "result: Created" in row["outcome"]]
+    presentation_failed = [
+        row
+        for row in statuses
+        if "presentation_failed: true" in row["outcome"]
+    ] + [
+        row
+        for row in commits
+        if str(row.get("presentation_failed")).lower() == "true"
+    ]
+    observed_commits = len(commits) + len(published)
     commit_ns = sorted(
         int(row["commit_ns"]) for row in commits if isinstance(row.get("commit_ns"), (int, float))
     )
+    if not commit_ns:
+        commit_ns = sorted(
+            int(row["elapsed_ns"])
+            for row in statuses
+            if isinstance(row.get("elapsed_ns"), (int, float))
+        )
     median = commit_ns[len(commit_ns) // 2] if commit_ns else None
     counters = {}
     for row in records:
@@ -76,7 +104,10 @@ def perf_row(case, seed):
             (row.get("pure_call_sum_ns") for row in records if row.get("kind") == "v016-timers"),
             None,
         ),
-        "created_commits": len(commits),
+        "created_commits_observed": observed_commits,
+        "created_commit_status_rows": len(created_statuses),
+        "created_commits_source": "observed evidence rows",
+        "presentation_failed": len(presentation_failed) > 0,
         "commit_ns_samples": len(commit_ns),
         "commit_ns_median": median,
         "commit_ns_min": commit_ns[0] if commit_ns else None,
@@ -162,6 +193,15 @@ def main():
                 if row["perf"]["status"] in ("PASS", "N/A")
                 and row["verify"]["status"] == "PASS"
                 else "FAIL"
+            )
+            # A row also carries the requested Commit count so a reader can see
+            # whether the observed publication matches the request.
+            row["requested_commits"] = case.get("new_commits_total")
+            observed = row["perf"].get("created_commits_observed")
+            row["publication_matches_request"] = (
+                None
+                if observed is None or case.get("new_commits_total") is None
+                else observed == case.get("new_commits_total")
             )
             rows.append(row)
     document = {
