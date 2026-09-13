@@ -29,6 +29,13 @@ Use the [handoff prompt](handoff-prompt.md) to continue this work.
 
 | Document | Purpose |
 | --- | --- |
+| [Overlay and snapshot rules](overlay-snapshot-rule.md) | Product requirements for non-pausing Commit, shared backing, locality, and resource bounds; not a qualification result |
+| [Snapshot-Isolated Workspace architecture](overlay-snapshot-architecture-design.md) | Reviewed pre-specification diagrams, component boundaries, complexity analysis, gaps, and open decisions |
+| [Snapshot-Isolated Workspace specification](overlay-snapshot-spec.md) | Detailed resulting contracts, selected storage/correspondence mechanisms, interfaces, removal/addition inventory, and existing-benchmark evaluation; explicit correctness/design blockers |
+| [Specification adversarial review](overlay-snapshot-spec-review.md) | Capture/Commit speed and correctness counterexamples, corrections, and remaining unqualified decisions |
+| [Snapshot implementation plan](overlay-snapshot-implementation-plan.md) | Seven phases tracked by [#124](https://github.com/Ephemeral-AI-Lab/layerfs/issues/124), ending with the full non-#122 benchmark campaign in [#125](https://github.com/Ephemeral-AI-Lab/layerfs/issues/125) |
+| [Snapshot implementation handoff prompt](overlay-snapshot-handoff-prompt.md) | Execution prompt: phase-completion issue updates, targeted reruns with a pass ledger, and verified terminal success before closing #124/#125 |
+| [Exact #122 benchmark exclusions](benchmark-exclusions-issue122.json) | 36 case-level exclusions for the snapshot campaign; inherited cases in shared families remain included |
 | [Family and case plan](benchmark-families.md) | Six families, exact case membership, topology and commit counts |
 | [Fixtures](fixtures.md) | Byte equations, path/inode counts, content variance and namespace layout |
 | [Mixed workloads](workloads.md) | Five-stage operations, deterministic repetition, concurrent/fork schedules |

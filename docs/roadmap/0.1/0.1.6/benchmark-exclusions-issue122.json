@@ -1,0 +1,231 @@
+{
+  "schema": "layerfs-issue122-benchmark-exclusions-v1",
+  "excluded_issue": "https://github.com/Ephemeral-AI-Lab/layerfs/issues/122",
+  "captured_on": "2026-09-14",
+  "source_case_plan": "docs/roadmap/0.1/0.1.6/cases.json",
+  "source_case_plan_sha256": "6a89e9ac1c5df25eb0a4a495cf013d0eb8ab66f55b10281de1f5d72b0a0fcdc8",
+  "source_commit_at_planning": "0814cc37f1dafb6041930c74489107f4a5035a26",
+  "known_case_count": 36,
+  "regular_case_count": 33,
+  "extended_case_count": 3,
+  "exclude_all_modes_and_case_specific_preparation": true,
+  "selection_rule": "Exclude exact issue-owned case identities and any explicitly reconciled renamed/versioned successors; do not exclude inherited cases merely for sharing a family. Reconcile issue and live registry before freezing the execution manifest.",
+  "cases": [
+    {
+      "family": "dedup_branch_history",
+      "id": "v016-history-large-hotset-k10-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "dedup_branch_history",
+      "id": "v016-history-large-hotset-k100-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "dedup_branch_history",
+      "id": "v016-history-namespace-inode-k10-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "dedup_branch_history",
+      "id": "v016-history-namespace-inode-k100-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "dedup_branch_history",
+      "id": "v016-history-boundary-cycle-k10-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "dedup_branch_history",
+      "id": "v016-history-boundary-cycle-k100-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "file_size_transition",
+      "id": "v016-boundary-small-control-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "file_size_transition",
+      "id": "v016-boundary-below-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "file_size_transition",
+      "id": "v016-boundary-exact-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "file_size_transition",
+      "id": "v016-boundary-above-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "file_size_transition",
+      "id": "v016-boundary-large-control-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "file_size_transition",
+      "id": "v016-boundary-roundtrip-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "file_size_transition",
+      "id": "v016-boundary-alias-roundtrip-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "mixed_load_bearing",
+      "id": "v016-mixed-development-100mb-5000-k10-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "mixed_load_bearing",
+      "id": "v016-mixed-development-100mb-5000-k100-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "mixed_load_bearing",
+      "id": "v016-mixed-development-500mb-30000-k10-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "mixed_load_bearing",
+      "id": "v016-mixed-development-500mb-30000-k100-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "multi_workspace_development",
+      "id": "v016-workspace-mixed-100mb-5000-k10-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "multi_workspace_development",
+      "id": "v016-workspace-mixed-100mb-5000-k100-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "multi_workspace_development",
+      "id": "v016-workspace-mixed-500mb-30000-k10-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "multi_workspace_development",
+      "id": "v016-workspace-mixed-500mb-30000-k100-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "branch_development",
+      "id": "v016-branch-mixed-100mb-5000-k10-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "branch_development",
+      "id": "v016-branch-mixed-100mb-5000-k100-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "branch_development",
+      "id": "v016-branch-mixed-500mb-30000-k10-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "branch_development",
+      "id": "v016-branch-mixed-500mb-30000-k100-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "branch_development",
+      "id": "v016-branch-convergent-content-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "branch_development",
+      "id": "v016-branch-fork-descendant-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "historical_access",
+      "id": "v016-access-boundary-before-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "historical_access",
+      "id": "v016-access-boundary-after-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "historical_access",
+      "id": "v016-access-inode-before-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "historical_access",
+      "id": "v016-access-inode-after-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "historical_access",
+      "id": "v016-access-fork-point-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "historical_access",
+      "id": "v016-access-divergent-head-v1",
+      "version": 1,
+      "lane": "regular"
+    },
+    {
+      "family": "mixed_load_bearing",
+      "id": "v016-mixed-exhaustive-100mb-5000-k100-v1",
+      "version": 1,
+      "lane": "extended"
+    },
+    {
+      "family": "mixed_load_bearing",
+      "id": "v016-mixed-exhaustive-500mb-30000-k100-v1",
+      "version": 1,
+      "lane": "extended"
+    },
+    {
+      "family": "multi_workspace_development",
+      "id": "v016-workspace-four-100mb-5000-k100-v1",
+      "version": 1,
+      "lane": "extended"
+    }
+  ]
+}
