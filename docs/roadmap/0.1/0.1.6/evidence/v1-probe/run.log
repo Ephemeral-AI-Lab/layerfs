@@ -1,0 +1,15 @@
+probe: mounted write-through cached FUSE session
+probe: negotiated minor=31 flags=0x21 max_write=1048576
+probe: post-store still had 0 write requests after 1000 ms
+probe: after-map-store daemon_write_requests=0 daemon_bytes=0 daemon_saw_first_byte=0 observed_after_ms=-1
+probe: after-syncfs daemon_write_requests=1 daemon_first_byte=65 observed_after_ms=0
+probe: post-second-store still had 1 write requests after 500 ms
+probe: after-second-store daemon_saw_second_byte=0 observed_after_ms=-1
+probe: per-file self-open pre-fsync daemon_write_requests=1 daemon_saw_third_byte=0
+probe: post-third-store still had 1 write requests after 300 ms
+probe: per-file self-open post-fsync daemon_write_requests=2 daemon_third_byte=67 observed_after_ms=0 third_store_wait_ms=-1
+probe: post-unlinked-store still had 2 write requests after 300 ms
+probe: open-unlinked daemon_saw_fourth_byte=0 self_open_errno=2 store_wait_ms=-1
+probe: open-unlinked after-syncfs daemon_fourth_byte=68 observed_after_ms=0
+probe: server read returned -1 errno=19 (No such device)
+exit=0
