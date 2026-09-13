@@ -1,0 +1,58 @@
+   Compiling layerfs-layerstack-store v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-layerstack-store)
+   Compiling layerfs-workspace v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `allocate_inode` is never used
+   --> crates/layerfs-workspace/src/overlay.rs:189:19
+    |
+188 | impl Mutation<'_> {
+    | ----------------- method in this implementation
+189 |     pub(crate) fn allocate_inode(&mut self) -> Result<NodeId> {
+    |                   ^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `pending_roots` and `reclaimed_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_index.rs:51:9
+   |
+48 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+51 |     pub pending_roots: usize,
+   |         ^^^^^^^^^^^^^
+...
+55 |     pub reclaimed_pages: u64,
+   |         ^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: `layerfs-workspace` (lib test) generated 4 warnings (run `cargo fix --lib -p layerfs-workspace --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.22s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-7a70d4db173d6a6f)
+
+running 8 tests
+test overlay::tests::replay_retains_lost_reply_and_never_reapplies_stale_or_unknown_request ... ok
+test overlay_index::tests::root_admission_and_foreign_roots_fail_before_installation ... ok
+test overlay::tests::failed_preparation_never_installs_partial_state ... ok
+test overlay_index::tests::quota_and_torn_prepare_keep_source_readable_and_reclaim_abandoned_pages ... ok
+test overlay::tests::stale_disjoint_writer_reprepares_without_losing_updates_or_retained_roots ... ok
+test overlay::tests::tracking_replaces_old_sequence_and_cleanup_keeps_masks_and_newer_changes ... ok
+test cow_tree::tests::failed_spool_io_does_not_advance_the_overlay ... ok
+test overlay_index::tests::retained_roots_split_merge_seek_and_release_without_resident_page_graph ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 85 filtered out; finished in 0.17s
+

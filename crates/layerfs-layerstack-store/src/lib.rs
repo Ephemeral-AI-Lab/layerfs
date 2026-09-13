@@ -29,6 +29,10 @@ pub use records::{
     LayerRecordPage, LayerStackInitialization, LayerStackRecord, LayerStackRecordPage,
     LocalForkSource, Page, StoreCounts, StoreStorageSnapshot, WorkspaceReadReceipt, WorkspaceStage,
 };
+pub use staging::{
+    WorkspacePublicationAttempt, WorkspacePublicationReceipt, WorkspacePublicationResolution,
+    WORKSPACE_PUBLICATION_ANCESTRY_LIMIT, WORKSPACE_PUBLICATION_LIMIT,
+};
 pub use store::LayerStackStore;
 pub use telemetry::{
     begin_workspace_commit, capture_workspace_commit_diagnostics, note_workspace_capture,

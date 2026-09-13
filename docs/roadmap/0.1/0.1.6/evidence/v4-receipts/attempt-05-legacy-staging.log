@@ -1,0 +1,9 @@
+   Compiling layerfs-layerstack-store v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-layerstack-store)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.71s
+     Running tests/v5.rs (target/debug/deps/v5-964fa8409fd532a4)
+
+running 1 test
+test v4_rejection_and_legacy_v6_staging_preserve_exact_publication_semantics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

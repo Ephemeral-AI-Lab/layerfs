@@ -1,0 +1,27 @@
+warning: variable does not need to be mutable
+   --> crates/layerfs-layerstack-store/src/objects/admission/metadata_tests.rs:265:9
+    |
+265 |     let mut f = Fixture::new();
+    |         ----^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `layerfs-layerstack-store` (lib test) generated 1 warning (run `cargo fix --lib -p layerfs-layerstack-store --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_layerstack_store-1df70e3f7470c3b7)
+
+running 9 tests
+test schema::compatibility::legacy_open_contract_rejects_native_store_before_writer_configuration ... ok
+test schema::tests::wal_store_is_rejected_without_mutation ... ok
+test schema::compatibility::native_format_reopens_writes_and_retains_mixed_dependency_reads ... ok
+test schema::compatibility::unsupported_versions_and_native_header_downgrade_reject_without_mutation ... ok
+test schema::compatibility::schema9_small_records_remain_nonpromoting_after_reopen ... ok
+test schema::compatibility::scoped_inode_reservations_are_durable_disjoint_and_never_recycled ... ok
+test schema::compatibility::legacy_format_reads_authenticates_and_writes_without_promotion ... ok
+test schema::tests::preflight_defers_foreign_key_scan_but_connect_and_upgrade_reject_without_mutation ... ok
+test schema::tests::every_owned_connection_uses_the_frozen_runtime_pragmas ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 146 filtered out; finished in 5.24s
+

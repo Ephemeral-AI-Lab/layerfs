@@ -26,10 +26,10 @@ pub struct PreparedFileEdit {
 impl PreparedFileEdit {
     pub fn backing_ranges(&self) -> impl Iterator<Item = SpoolSlice> {
         let pieces = match &self.before {
-            FileData::Edited { pieces, .. } => pieces.pieces(),
-            FileData::Base { .. } => Vec::new(),
+            FileData::Edited { pieces, .. } => pieces.cursor(),
+            FileData::Base { .. } => PieceTree::empty().cursor(),
         };
-        pieces.into_iter().filter_map(|piece| match piece {
+        pieces.filter_map(|piece| match piece {
             Piece::Spool {
                 segment,
                 offset,
@@ -739,7 +739,51 @@ pub struct PieceTree {
     compact_spool_splice: Option<Box<CompactSpoolSplice>>,
 }
 
+/// Owned in-order traversal with at most one tree path and three compact pieces
+/// resident. A later live edit cannot change this cursor's ranges or backing.
+pub struct PieceCursor {
+    stack: Vec<Arc<PieceNode>>,
+    compact: std::vec::IntoIter<Piece>,
+}
+
+impl PieceCursor {
+    fn descend(&mut self, mut node: Link) {
+        while let Some(current) = node {
+            node = current.left.clone();
+            self.stack.push(current);
+        }
+    }
+}
+
+impl Iterator for PieceCursor {
+    type Item = Piece;
+
+    fn next(&mut self) -> Option<Piece> {
+        if let Some(piece) = self.compact.next() {
+            return Some(piece);
+        }
+        let node = self.stack.pop()?;
+        self.descend(node.right.clone());
+        Some(node.piece.clone())
+    }
+}
+
 impl PieceTree {
+    pub fn cursor(&self) -> PieceCursor {
+        let compact = if let Some(compact) = self.compact() {
+            compact.pieces()
+        } else if let Some(slice) = &self.compact_spool {
+            vec![Piece::Spool {
+                segment: slice.segment.clone(), offset: slice.offset, len: slice.len,
+            }]
+        } else {
+            Vec::new()
+        };
+        let mut cursor = PieceCursor { stack: Vec::new(), compact: compact.into_iter() };
+        cursor.descend(self.root.clone());
+        cursor
+    }
+
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -1342,6 +1386,44 @@ fn visit_range(
 mod tests {
     use super::*;
     use layerfs_content::ObjectId;
+
+    #[test]
+    fn piece_cursor_retains_old_ranges_with_only_a_tree_path_resident() {
+        let mut tree = PieceTree::empty();
+        for n in 0..513_u64 {
+            let piece = if n % 2 == 0 {
+                Piece::Spool { segment: crate::backing::test_backing(), offset: n * 3, len: 3 }
+            } else { Piece::Zero { len: 3 } };
+            tree = tree.replace(tree.len(), 0, [piece]).unwrap();
+        }
+        let height = tree.height();
+        let mut held = tree.cursor();
+        tree = tree.replace(0, tree.len(), [Piece::Zero { len: 1 }]).unwrap();
+        let mut seen = 0_u64;
+        while let Some(piece) = held.next() {
+            assert!(held.stack.len() <= height);
+            match piece {
+                Piece::Spool { offset, len, .. } => {
+                    assert_eq!(seen % 2, 0);
+                    assert_eq!((offset, len), (seen * 3, 3));
+                }
+                Piece::Zero { len } => { assert_eq!(seen % 2, 1); assert_eq!(len, 3); }
+                _ => panic!("unexpected range"),
+            }
+            seen += 1;
+        }
+        assert_eq!(seen, 513);
+        assert_eq!(tree.cursor().collect::<Vec<_>>(), vec![Piece::Zero { len: 1 }]);
+        let compact = PieceTree::compact_inline(
+            FileContentRoot(ObjectId::for_bytes(b"base")), 20, 5, Arc::from(&b"abc"[..]),
+        ).unwrap();
+        assert_eq!(compact.cursor().map(|p| p.len()).collect::<Vec<_>>(), vec![5, 3, 12]);
+        let spool = PieceTree::empty().replace(0, 0, [Piece::Spool {
+            segment: crate::backing::test_backing(), offset: 8, len: 10,
+        }]).unwrap();
+        assert_eq!(spool.cursor().map(|p| p.len()).collect::<Vec<_>>(), vec![10]);
+        assert!(PieceTree::empty().cursor().next().is_none());
+    }
 
     #[test]
     fn contiguous_spool_records_fit_workspace_budget_and_preserve_edit_limits() {

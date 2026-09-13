@@ -1,0 +1,17 @@
+warning: unused variable: `edits`
+   --> crates/layerfs-workspace-core/src/lib.rs:342:43
+    |
+342 |         let Data::File(FileData::Edited { edits, .. }) =
+    |                                           ^^^^^ help: try ignoring the field: `edits: _`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `layerfs-workspace-core` (lib test) generated 1 warning (run `cargo fix --lib -p layerfs-workspace-core --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace_core-5134e2de6b333e9f)
+
+running 1 test
+test file_edit::tests::piece_cursor_retains_old_ranges_with_only_a_tree_path_resident ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+

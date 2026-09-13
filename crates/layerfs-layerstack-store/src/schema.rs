@@ -7,6 +7,9 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 
+pub(crate) const WORKSPACE_PUBLICATIONS_SCHEMA: &str =
+    include_str!("../sql/schema/workspace_publications.sql");
+
 pub const APPLICATION_ID: i64 = 0x4c46_534c;
 pub const SCHEMA_VERSION: i64 = 10;
 pub const LEGACY_SCHEMA_VERSION: i64 = 6;
@@ -560,7 +563,22 @@ fn verify_schema_layout(connection: &Connection, version: i64) -> Result<()> {
     {
         return Err(StoreError::WrongStoreSchema);
     }
-    if schema_objects(connection)? != expected_schema_objects(version)? {
+    // Receipt metadata is an explicit optional extension to every supported
+    // canonical format. Validate its exact SQL too; arbitrary extra schema still
+    // fails before writer configuration, and opening legacy Stores adds nothing.
+    let mut actual = schema_objects(connection)?;
+    let mut expected = expected_schema_objects(version)?;
+    if actual
+        .iter()
+        .any(|(_, name, _, _)| name == "workspace_publications")
+    {
+        let extension = Connection::open_in_memory()?;
+        extension.execute_batch(WORKSPACE_PUBLICATIONS_SCHEMA)?;
+        expected.extend(schema_objects(&extension)?);
+        actual.sort();
+        expected.sort();
+    }
+    if actual != expected {
         return Err(StoreError::WrongStoreSchema);
     }
     Ok(())
@@ -581,6 +599,7 @@ fn prepare_manifest(connection: &Connection) -> Result<()> {
                 | "schema/v8.sql"
                 | "schema/v9.sql"
                 | "schema/v10.sql"
+                | "schema/workspace_publications.sql"
                 | "schema/migrate_to_v9.sql"
                 | "schema/migrate_v7_to_v8.sql"
                 | "schema/migrate_v4_to_v5.sql"

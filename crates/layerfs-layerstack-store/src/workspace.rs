@@ -429,6 +429,112 @@ impl LayerStackStore {
         built: BuiltRoot,
         admission: crate::WorkspaceAdmission,
     ) -> Result<CommitOutcome> {
+        self.commit_workspace_candidate_inner(
+            workspace_id,
+            expected,
+            expected_root,
+            new_base_layer_id,
+            built,
+            admission,
+            None,
+        )
+        .map(|(outcome, _)| outcome)
+    }
+
+    /// Admit and publish this immutable attempt, retaining authoritative proof
+    /// until the caller applies coverage and explicitly acknowledges the receipt.
+    pub fn commit_workspace_candidate_retained(
+        &self,
+        attempt: &crate::WorkspacePublicationAttempt,
+        built: BuiltRoot,
+        admission: crate::WorkspaceAdmission,
+    ) -> Result<crate::WorkspacePublicationReceipt> {
+        if built.root_id != attempt.candidate_root
+            || admission.workspace_id != attempt.workspace_id
+            || !self.db.same_instance(&admission.db)
+        {
+            return Err(StoreError::Integrity(
+                "Workspace publication candidate owner",
+            ));
+        }
+        if let Some(receipt) =
+            crate::staging::publication_from_connection(&*self.db.reader()?, attempt)?
+        {
+            return Ok(receipt);
+        }
+        let expected = self.publication_expected_branch(attempt)?;
+        self.commit_workspace_candidate_inner(
+            attempt.workspace_id,
+            &expected,
+            attempt.expected_root,
+            attempt.new_base,
+            built,
+            admission,
+            Some(attempt),
+        )?
+        .1
+        .ok_or(StoreError::Integrity(
+            "Workspace publication receipt missing",
+        ))
+    }
+
+    /// Retry exactly the retained canonical stage; no current live data is read
+    /// and no content construction or admission is repeated.
+    pub fn publish_workspace_stage(
+        &self,
+        attempt: &crate::WorkspacePublicationAttempt,
+    ) -> Result<crate::WorkspacePublicationReceipt> {
+        let _operation = self.db.enter_operation()?;
+        if let Some(receipt) =
+            crate::staging::publication_from_connection(&*self.db.reader()?, attempt)?
+        {
+            return Ok(receipt);
+        }
+        let expected = self.publication_expected_branch(attempt)?;
+        self.publish_workspace_stage_inner(
+            &expected,
+            attempt.expected_root,
+            attempt.new_base,
+            crate::WorkspaceStage {
+                workspace_id: attempt.workspace_id,
+                branch_id: attempt.branch_id,
+                root_id: attempt.candidate_root,
+            },
+            BuildCounters::default(),
+            None,
+            0,
+            Some(attempt),
+        )?
+        .1
+        .ok_or(StoreError::Integrity(
+            "Workspace publication receipt missing",
+        ))
+    }
+
+    fn publication_expected_branch(
+        &self,
+        attempt: &crate::WorkspacePublicationAttempt,
+    ) -> Result<BranchRecord> {
+        let mut expected = self
+            .branch(attempt.branch_id)?
+            .ok_or(StoreError::NotFound("Branch"))?;
+        expected.layer_stack_id = attempt.layer_stack_id;
+        expected.head_commit_id = attempt.expected_head;
+        expected.base_layer_id = attempt.expected_base;
+        Ok(expected)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn commit_workspace_candidate_inner(
+        &self,
+        workspace_id: [u8; 16],
+        expected: &BranchRecord,
+        expected_root: ObjectId,
+        new_base_layer_id: LayerId,
+        built: BuiltRoot,
+        admission: crate::WorkspaceAdmission,
+        publication: Option<&crate::WorkspacePublicationAttempt>,
+    ) -> Result<(CommitOutcome, Option<crate::WorkspacePublicationReceipt>)> {
         if admission.workspace_id != workspace_id || !self.db.same_instance(&admission.db) {
             return Err(StoreError::Integrity("Workspace admission owner"));
         }
@@ -448,8 +554,7 @@ impl LayerStackStore {
         }
 
         let started = Instant::now();
-        let (admission, mut statement_number, session) =
-            admission.admit_remaining(built.objects)?;
+        let (admission, statement_number, session) = admission.admit_remaining(built.objects)?;
         crate::telemetry::note_workspace_admission(
             admission.transactions,
             admission.max_transaction_objects,
@@ -487,6 +592,34 @@ impl LayerStackStore {
         let stage =
             session.resolve(self.stage_workspace_root(workspace_id, expected.id, built.root_id))?;
         session.retain();
+        self.publish_workspace_stage_inner(
+            expected,
+            expected_root,
+            new_base_layer_id,
+            stage,
+            built.counters,
+            candidate_receipt,
+            statement_number,
+            publication,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn publish_workspace_stage_inner(
+        &self,
+        expected: &BranchRecord,
+        expected_root: ObjectId,
+        new_base_layer_id: LayerId,
+        stage: crate::WorkspaceStage,
+        counters: BuildCounters,
+        candidate_receipt: Option<crate::CandidateReceipt>,
+        mut statement_number: u64,
+        publication: Option<&crate::WorkspacePublicationAttempt>,
+    ) -> Result<(CommitOutcome, Option<crate::WorkspacePublicationReceipt>)> {
+        let workspace_id = stage.workspace_id;
+        let up_to_date =
+            stage.root_id == expected_root && new_base_layer_id == expected.base_layer_id;
+        let admission = candidate_receipt.unwrap_or_default();
         let publication_started = Instant::now();
         let begin_started = Instant::now();
         let mut connection = self.db.writer()?;
@@ -511,6 +644,16 @@ impl LayerStackStore {
             return Err(StoreError::Integrity("Workspace publication source"));
         }
 
+        if !transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM layers WHERE layer_id=?1 AND layer_stack_id=?2)",
+            rusqlite::params![
+                new_base_layer_id.as_slice(),
+                expected.layer_stack_id.as_slice()
+            ],
+            |row| row.get::<_, bool>(0),
+        )? {
+            return Err(StoreError::Integrity("Branch LayerStack ownership"));
+        }
         let metadata_started = Instant::now();
         let outcome = if up_to_date {
             delete_workspace_stage(&transaction, stage)?;
@@ -521,8 +664,8 @@ impl LayerStackStore {
             }
         } else {
             let commit = CommitRecord {
-                id: CommitId::derive(built.root_id, expected.head_commit_id, new_base_layer_id),
-                root_id: built.root_id,
+                id: CommitId::derive(stage.root_id, expected.head_commit_id, new_base_layer_id),
+                root_id: stage.root_id,
                 parent_commit_id: expected.head_commit_id,
                 base_layer_id: new_base_layer_id,
             };
@@ -579,7 +722,7 @@ impl LayerStackStore {
             CommitOutcome::Committed {
                 commit_id: commit.id,
                 root_id: commit.root_id,
-                counters: built.counters,
+                counters: counters,
                 candidate_objects: admission.candidate_objects,
                 candidate_bytes: admission.candidate_bytes,
                 inserted_objects: admission.inserted_objects,
@@ -588,10 +731,17 @@ impl LayerStackStore {
                 reused_bytes: admission.reused_bytes,
             }
         };
+        let publication_receipt = publication
+            .map(|attempt| crate::staging::insert_workspace_publication(&transaction, attempt))
+            .transpose()?;
         let metadata_ns = elapsed_ns(metadata_started);
         let commit_started = Instant::now();
         transaction.commit()?;
         let commit_ns = elapsed_ns(commit_started);
+        if publication.is_some() {
+            // A post-commit failure intentionally retains the authoritative receipt.
+            crate::schema::fail_transaction_statement(u64::MAX - 3)?;
+        }
         crate::telemetry::note_workspace_publication(begin_ns, 0, 0, metadata_ns, commit_ns);
         crate::telemetry::note_workspace_commit_phase(
             crate::WorkspaceCommitPhase::Publication,
@@ -600,7 +750,7 @@ impl LayerStackStore {
         if let Some(receipt) = candidate_receipt {
             crate::telemetry::record_validated_candidate(receipt);
         }
-        Ok(outcome)
+        Ok((outcome, publication_receipt))
     }
 
     fn load_workspace_snapshot(
@@ -628,7 +778,7 @@ impl LayerStackStore {
     }
 }
 
-fn workspace_snapshot_from_connection(
+pub(crate) fn workspace_snapshot_from_connection(
     connection: &rusqlite::Connection,
     branch_id: BranchId,
 ) -> Result<(BranchRecord, ObjectId)> {

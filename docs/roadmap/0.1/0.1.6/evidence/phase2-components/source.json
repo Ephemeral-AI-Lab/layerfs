@@ -1,0 +1,69 @@
+{
+  "source": "exact staged component source; no benchmark candidate claim",
+  "base": "333f3caca56f5d3eb042709217113216da4aa3ef",
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+  "files": [
+    {
+      "path": "crates/layerfs-fuse/src/live_wire.rs",
+      "sha256": "4341b6876bf1c9f6c2394f25a53e9803227088dd4ece67681e1dc0c0599d42bc",
+      "git_blob": "457e1ecce89460156067deefd68f6a2eeac2563a"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/sql/schema/workspace_publications.sql",
+      "sha256": "9c66467b6f90de50589f08ba16b3ddf5e2ed9574c1591f658b10b1f607312013",
+      "git_blob": "ed7bfa2837600612adb184e17ed152784281debf"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/lib.rs",
+      "sha256": "d897e76a7b2bd1e005abb3c20c3462f0337bc295906b5cf0beea323a9d58aeb3",
+      "git_blob": "c42578bfb6134b85b803937bcbf8a7ee733104ec"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/schema.rs",
+      "sha256": "c4798b04aa9e5552c9404c72b64fb30a76a9ff3b6f1281e084745e450ffbafd5",
+      "git_blob": "f39e43c5e443a384a0168990a3c7abbf406aefac"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/staging.rs",
+      "sha256": "3979de21a1332eeb89f9785825e1c8c86ce8cede531dd69c933215f29b09ba46",
+      "git_blob": "0329c4bd0186677c6de54b6b98fc7208311b2531"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/statements.rs",
+      "sha256": "c94dc8099d89a9479292a9ff123609b98a2a383c13354383a13cb8a828ae760c",
+      "git_blob": "00da4d5b19314759cca6419e912eac5f293ff3d8"
+    },
+    {
+      "path": "crates/layerfs-layerstack-store/src/workspace.rs",
+      "sha256": "2028c5a0f6e09427984fb2926e5d63ff731173b10be2445873272ae78ced42be",
+      "git_blob": "a98ed548bd4dace19d3fa594dffea7513ddd7301"
+    },
+    {
+      "path": "crates/layerfs-workspace-core/src/file_edit.rs",
+      "sha256": "c0847443a644fd6a2a0e3d9ff0c38ec63c083388b8c24c3209a5ea26e796c99e",
+      "git_blob": "e11932ce6471c02798f24d655bbd014e7251f8b0"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/file_io.rs",
+      "sha256": "26f2799fe6dfc2ee47ae836de473a94993827b7c4eed803115b58c2433a0a7e0",
+      "git_blob": "0b0745fc33f17f618caa1430658dc08566717d3a"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/lib.rs",
+      "sha256": "d4a149e68b2f53d662121b9eec3f539b23515a5590ae662ece7dc9fdb0f7c403",
+      "git_blob": "616168db7b65d36d78141011d26a344ffb0fa816"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay.rs",
+      "sha256": "4b7677ccfcce1d4dcf33435cfb10387804c557f0392aab3c603ed3ff5ba582a4",
+      "git_blob": "09d63347bc818a525aa94bb02a5cba4212a4946a"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay_index.rs",
+      "sha256": "26b46659ed06c516d94479413c98bfd28d60350ad0658626d00df676fd2f20ca",
+      "git_blob": "7680a5811415d98f18fbdb6c27a13bf2f596ffbb"
+    }
+  ]
+}

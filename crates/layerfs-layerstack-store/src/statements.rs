@@ -7,6 +7,10 @@ pub const ALL: &[(&str, &str)] = &[
     ("schema/v9.sql", schema::V9),
     ("schema/v10.sql", schema::V10),
     (
+        "schema/workspace_publications.sql",
+        crate::schema::WORKSPACE_PUBLICATIONS_SCHEMA,
+    ),
+    (
         "schema/reserve_inode_serials.sql",
         schema::RESERVE_INODE_SERIALS,
     ),
@@ -149,7 +153,7 @@ mod tests {
             .collect::<Vec<_>>();
         registered.sort();
         assert_eq!(files, registered);
-        assert_eq!(ALL.len(), 51);
+        assert_eq!(ALL.len(), 52);
 
         let connection = Connection::open_in_memory().unwrap();
         connection
@@ -213,6 +217,7 @@ mod tests {
                     | "schema/v8.sql"
                     | "schema/v9.sql"
                     | "schema/v10.sql"
+                    | "schema/workspace_publications.sql"
                     | "schema/migrate_to_v9.sql"
                     | "schema/migrate_v7_to_v8.sql"
                     | "schema/migrate_v4_to_v5.sql"

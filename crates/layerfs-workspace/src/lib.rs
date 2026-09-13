@@ -14,6 +14,8 @@ mod live_backing;
 
 mod cow_tree;
 mod output;
+mod overlay;
+mod overlay_index;
 mod projection;
 mod reconcile;
 mod registry;

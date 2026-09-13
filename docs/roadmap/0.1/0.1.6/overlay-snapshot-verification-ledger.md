@@ -161,3 +161,34 @@ break, not as qualification of the new behavior.
   forced writeback is the sole path to those bytes. It does not qualify product
   snapshot isolation. See `evidence/v1-investigation/README.md` for scope and
   remaining kernel/adapter capability, and independent work that continues.
+
+### L8 — First dependency-ready overlay and cursor implementation
+
+- identity: seven new root/index/replay tests, one owned cursor test, five affected
+  existing regressions; exact selectors/counts in `evidence/phase2-components/README.md`.
+- source: staged implementation recorded by `evidence/phase2-components/source.json`;
+  `overlay.rs`, initial `overlay_index.rs` blob `7680a5811415d98f18fbdb6c27a13bf2f596ffbb`,
+  core piece cursor and its wire/host consumers. Test binary SHA-256 in README.
+- environment: macOS host, rustc 1.96.0 / Cargo 1.96.0; no measurement sample.
+- result: 13 distinct tests PASS. Two initial zero-test selections are retained
+  INVALID_EVIDENCE; one initial index compile failure is retained and repaired by
+  an explicit closure parameter type. Raw logs and reproduction commands preserved.
+- validity: current for this first component implementation. Later graph/payload
+  ownership changes require affected index/root checks, not blanket reruns of
+  passing wire/core consumers. Does not prove public full snapshot semantics,
+  Phase 2 completion, or benchmark custody.
+
+### L9 — Bounded Store publication receipt component
+
+- identity: 2 new receipt tests and 14 affected existing Store tests; source,
+  selectors and environment in `evidence/v4-receipts/verification.jsonl`.
+- source: explicit `workspace_publications.sql` extension, Store staging/workspace
+  publication APIs, exact schema validation and statement registry. Exact hashes
+  in `evidence/v4-receipts/final-source.json`.
+- environment: native macOS/Cargo; component fault injection and fresh Store reopen.
+- result: 16 distinct tests PASS, one compile failure retained and repaired. Last
+  test-only addition rejects a Commit appearing solely on another branch; only
+  that test was rerun, retaining unaffected earlier passes. No benchmark run.
+- validity: current Store component evidence; runtime snapshot/coverage/End/Discard
+  integration remains pending. Receipt insertion atomically retains Created and
+  UpToDate, but this is not a claim that ordinary Workspace Commit uses it yet.
