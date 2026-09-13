@@ -1,0 +1,95 @@
+{
+  "component": "private overlay metadata ownership",
+  "product_source": {
+    "path": "crates/layerfs-workspace/src/overlay_index.rs",
+    "sha256": "53f6ea71a632b456fab0c9eda600d90e966407cdccd1dc3ad6c26349b4515a7d",
+    "git_blob": "0315d39d7c627a1fcffb5181bc800b07f0d2a5be",
+    "base_head": "2728aebd38ac5d3b2a8a1379b3259684512284b0"
+  },
+  "source_custody_note": "New boundary tests were appended after exact Cargo reproducer passed; production source is unchanged between that run and the standalone regression binary.",
+  "environment": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "release": "25.4.0",
+    "toolchain": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+  },
+  "standalone_compile": "rustc --edition 2021 --test crates/layerfs-workspace/src/overlay_index.rs -o /tmp/layerfs-overlay-index-header-tests",
+  "binary_sha256": "f574c9dc23b1bb7a726452281ac32db4a6dd00251bed5dd05c7450f7866c64a2",
+  "results": [
+    {
+      "identity": "uncertain_ownership_write_readback_cannot_leak_a_child_reference",
+      "result": "PASS",
+      "validity": "current component implementation",
+      "command": "cargo test -p layerfs-workspace --lib overlay_index::tests::uncertain_ownership_write_readback_cannot_leak_a_child_reference -- --nocapture",
+      "raw": "index-uncertain-header-attempt03.log"
+    },
+    {
+      "identity": "reclaim_header_faults_never_double_release_or_lose_cleanup",
+      "result": "PASS",
+      "validity": "current component implementation",
+      "command": "/tmp/layerfs-overlay-index-header-tests tests::reclaim_header_faults_never_double_release_or_lose_cleanup --exact --nocapture",
+      "raw": "index-header-boundaries-attempt02.log"
+    },
+    {
+      "identity": "uncertain_read_lease_and_cleanup_retry_keep_the_source_owned",
+      "result": "PASS",
+      "validity": "current component implementation",
+      "command": "/tmp/layerfs-overlay-index-header-tests tests::uncertain_read_lease_and_cleanup_retry_keep_the_source_owned --exact --nocapture",
+      "raw": "index-lease-uncertainty-attempt01.log"
+    },
+    {
+      "identity": "retained_roots_split_merge_seek_and_release_without_resident_page_graph",
+      "result": "PASS",
+      "validity": "current component implementation",
+      "command": "/tmp/layerfs-overlay-index-header-tests tests::retained_roots_split_merge_seek_and_release_without_resident_page_graph --exact --nocapture",
+      "raw": "index-owned-graph-regression-attempt01.log"
+    },
+    {
+      "identity": "quota_and_torn_prepare_keep_source_readable_and_reclaim_abandoned_pages",
+      "result": "PASS",
+      "validity": "current component implementation",
+      "command": "/tmp/layerfs-overlay-index-header-tests tests::quota_and_torn_prepare_keep_source_readable_and_reclaim_abandoned_pages --exact --nocapture",
+      "raw": "index-quota-regression-attempt01.log"
+    },
+    {
+      "identity": "disk_owned_links_and_payload_tokens_survive_root_drop_and_failed_reclaim",
+      "result": "PASS",
+      "validity": "current component implementation",
+      "command": "/tmp/layerfs-overlay-index-header-tests tests::disk_owned_links_and_payload_tokens_survive_root_drop_and_failed_reclaim --exact --nocapture",
+      "raw": "index-external-regression-attempt01.log"
+    }
+  ],
+  "retained_failures": [
+    {
+      "raw": "index-uncertain-header-attempt01.log",
+      "result": "NOT_RUN",
+      "reason": "correspondence.rs E0689 prevented compile; fixed separately by its owner"
+    },
+    {
+      "raw": "index-uncertain-header-attempt02.log",
+      "result": "FAIL",
+      "reason": "completed child reference increment plus failed receipt/readback leaked 3 overflow pages; fixed with bounded exact pending header intent"
+    },
+    {
+      "raw": "index-header-boundaries-attempt01.log",
+      "result": "NOT_RUN",
+      "reason": "standalone exact filter omitted tests:: prefix; 0 tests, corrected exact identity in attempt02"
+    }
+  ],
+  "reused_passes": [
+    {
+      "identity": "root_admission_and_foreign_roots_fail_before_installation",
+      "evidence": "index-ownership-attempt01.log",
+      "reason": "empty-root admission/foreign-root validation unchanged; these do not execute page ownership writes"
+    },
+    {
+      "identity": "floor_descends_without_scanning_predecessor_prefix_and_batches_bound_bytes",
+      "evidence": "index-ownership-attempt01.log",
+      "reason": "floor and bounded scan logic unchanged; changed shared ownership path separately revalidated by affected graph/quota/external checks"
+    }
+  ],
+  "remaining": [
+    "metadata interior physical reclaim currently reuses slots; all bytes stay charged until final arena truncation",
+    "complete product supported-surface integration and V1 remain outside this component proof"
+  ]
+}

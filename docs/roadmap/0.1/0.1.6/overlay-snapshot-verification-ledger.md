@@ -208,3 +208,73 @@ break, not as qualification of the new behavior.
 - validity: current for recorded heads only. No lint/oracle gate disabled; no
   #122 benchmark executed. New snapshot components/ownership changes still need
   affected verification and final CI; these passes do not seal a candidate.
+
+### L11 — Disk ownership, physical relocation and uncertain I/O repairs
+
+- identity: typed index set/remove/floor/scan, external payload and linked roots,
+  retained snapshots, exact quota, ambiguous header write/readback, every reclaim
+  write boundary, physical relocation/corruption/truncate retry, read-only ticket
+  retirement and cleanup readiness.
+- source: exact final Index blob `da9eff967602acbdee497614f58b2d721e52a47a`, SHA-256
+  `023b463b31c3ab29347123dd2da01e4247efd4352f008f0291c718b6d4c8dcd4`;
+  `evidence/phase2-components/index-relocation-manifest.json` and preceding
+  `index-ownership-recovery-manifest.json` bind each command/source/binary.
+- environment: native macOS arm64, rustc 1.96.0; scoped Cargo/standalone component
+  checks serialized separately from benchmark measurement.
+- result: 13 compatible index PASS checks plus retained admission pass. Original
+  failures (three leaked pages after ambiguous increment, read-only ticket
+  exhaustion, premature cleanup readiness) remain raw evidence with targeted
+  repairs. Data arena reclaims physically while held snapshots stay readable;
+  bounded header/reverse catalog highwater remains separately charged.
+- validity: current component evidence. Supersedes earlier index passes only
+  where leaf ownership/physical layout/retirement paths changed; untouched
+  wire/core cursor passes remain retained. No public-path or phase-completion claim.
+
+### L12 — Payload + range integration
+
+- identity: exact 64-MiB source/one-byte retention; held physical reader;
+  disk metadata owner; quota/short-I/O; repeated source append; range split/merge,
+  unequal edits, truncation/lineage, 1024-piece localized cursor; cleanup.
+- source/environment/commands: `evidence/phase2-payload/README.md` and
+  `integration-review.md`, `evidence/phase2-ranges/README.md`, their append-only
+  ledgers and per-attempt JSON bind all product/dependency/binary identities.
+- result: four distinct range checks PASS; payload targeted checks PASS with
+  valid pass reuse. Measured payload `67,108,864 -> 4,096 -> 0` allocated bytes;
+  only 4,096 bytes relocated. Repeated append retains one source-location record.
+  Three real shared failures were preserved and repaired: old-reader retirement
+  incorrectly blocked unrelated allocation; truncated append consumed input;
+  cleanup status omitted queued/disk release work. Unrelated compilation blocks
+  remain NOT_RUN, never PASS.
+- validity: current for the recorded exact dependency identities; earlier passes
+  explicitly invalidated for their changed source/ownership paths. These are
+  development component measurements, not benchmark rows or candidate custody.
+
+### L13 — Metadata-only canonical predecessor correspondence
+
+- identity: reviewed nonzero-anchor/zero-gap plans, shifted/overlapping ranges,
+  fresh/equivalent lineage, malformed provenance, journal/index bounds and 180
+  fragmented intervals across cursor batches; huge-zero metadata case.
+- source/environment/commands: `evidence/v3-correspondence/README.md`,
+  `verification.jsonl` and attempt source manifests. No payload encoder replaced.
+- result: four focused checks PASS; the huge-zero case reuses `1 PiB + 1` logical
+  bytes with one anchor/plan fragment and 49 journal bytes, with zero payload reads.
+  This is an algorithm fixture, not a claim to bypass existing public file limits.
+- validity: current component evidence after recorded shared-index revalidation.
+  Actual shared builder/public C1/C2 integration remains required.
+
+### L14 — Owned Snapshot content and bounded metadata installation
+
+- identity: eight targeted overlay tests including complete-root races, preserved
+  binding masks, fixed inode metadata/linked ownership, canonical aliases,
+  no dirty history on immutable cache acquisition, FIFO mutation admission and
+  snapshot independence, exact captured payload after live replacement/owner drop.
+- source: current Overlay/Snapshot and final Index/Payload/Ranges; exact source
+  hashes recorded in `evidence/phase2-components/snapshot-integration-source.json`.
+- environment: macOS native rustc 1.96.0; exact command in
+  `snapshot-content-attempt01.log`; no FUSE benchmark or kernel qualification.
+- result: 8 PASS. Replay check was deliberately skipped and its unaffected L8
+  pass reused. Snapshot reads `captured`, current reads `live`; independent range
+  reads and EOF behavior stay correct after dropping the live owner.
+- validity: current host-installed-state proof only. Generic-FUSE V1 remains
+  OPEN, as do host operation/candidate/coordinator/public adapter integration,
+  complete resource admission, final correctness/capacity and full Phase 7.

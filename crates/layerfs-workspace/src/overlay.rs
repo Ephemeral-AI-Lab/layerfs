@@ -3,19 +3,108 @@
 //! These roots describe host-installed state; kernel mapping visibility is a
 //! separate obligation of the FUSE adapter, not a property of an Arc clone.
 use crate::overlay_index::{Index, Limits, Root};
+use layerfs_content::tree::inode::InodeId;
 use layerfs_content::{CanonicalName, ObjectId};
 use layerfs_layerstack_store::{Result, StoreError};
-use layerfs_workspace_core::NodeId;
+use layerfs_workspace_core::{Attr, Kind, NodeId};
 use std::collections::BTreeMap;
-use std::ops::Bound;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 
 const INODE: u8 = 1;
 const BINDING: u8 = 2;
 const CHANGE_KEY: u8 = 3;
-const CHANGE_SEQUENCE: u8 = 4;
-const CHANGE_BATCH: usize = 128;
+pub(crate) const CHANGE_SEQUENCE: u8 = 4;
+pub(crate) const CANONICAL_INODE: u8 = 5;
+pub(crate) const REVERSE_BINDING: u8 = 6;
+pub(crate) const CHANGE_BATCH: usize = 128;
+
+/// Fixed metadata; file ranges and directory bindings live in their own trees.
+/// No growing alias list, directory delta map, or piece vector is embedded here.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct InodeRecord {
+    pub(crate) attr: Attr,
+    pub(crate) revision: u64,
+    pub(crate) pins: u32,
+    pub(crate) canonical: Option<InodeId>,
+    pub(crate) base: Option<ObjectId>,
+    pub(crate) parent: Option<NodeId>,
+}
+
+impl InodeRecord {
+    pub(crate) fn encode(self) -> Result<[u8; 128]> {
+        if self.attr.node.0 == 0
+            || self.parent.is_some_and(|id| id.0 == 0)
+            || self.attr.mtime_nanoseconds >= 1_000_000_000
+            || self.attr.mode & !0o7777 != 0
+        {
+            return Err(StoreError::InvalidInput("overlay inode metadata"));
+        }
+        let mut out = [0; 128];
+        out[0] = 1;
+        out[1] = match self.attr.kind {
+            Kind::File => 1,
+            Kind::Directory => 2,
+            Kind::Symlink => 3,
+        };
+        out[2] = u8::from(self.canonical.is_some());
+        out[3] = u8::from(self.base.is_some());
+        out[8..16].copy_from_slice(&self.revision.to_be_bytes());
+        out[16..20].copy_from_slice(&self.attr.mode.to_be_bytes());
+        out[20..24].copy_from_slice(&self.attr.links.to_be_bytes());
+        out[24..28].copy_from_slice(&self.pins.to_be_bytes());
+        out[32..40].copy_from_slice(&self.attr.mtime_seconds.to_be_bytes());
+        out[40..44].copy_from_slice(&self.attr.mtime_nanoseconds.to_be_bytes());
+        if let Some(id) = self.canonical {
+            out[48..80].copy_from_slice(id.as_bytes());
+        }
+        if let Some(root) = self.base {
+            out[80..112].copy_from_slice(root.as_bytes());
+        }
+        out[112..120].copy_from_slice(&self.parent.map_or(0, |id| id.0).to_be_bytes());
+        out[120..128].copy_from_slice(&self.attr.size.to_be_bytes());
+        Ok(out)
+    }
+
+    pub(crate) fn decode(node: NodeId, bytes: &[u8]) -> Result<Self> {
+        if bytes.len() != 128 || bytes[0] != 1 || bytes[2] > 1 || bytes[3] > 1 {
+            return Err(StoreError::Integrity("overlay inode record"));
+        }
+        let u32_at =
+            |offset: usize| u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap());
+        let parent = decode_sequence(&bytes[112..120])?;
+        let record = Self {
+            attr: Attr {
+                node,
+                size: decode_sequence(&bytes[120..128])?,
+                kind: match bytes[1] {
+                    1 => Kind::File,
+                    2 => Kind::Directory,
+                    3 => Kind::Symlink,
+                    _ => return Err(StoreError::Integrity("overlay inode kind")),
+                },
+                mode: u32_at(16),
+                links: u32_at(20),
+                mtime_seconds: i64::from_be_bytes(bytes[32..40].try_into().unwrap()),
+                mtime_nanoseconds: u32_at(40),
+            },
+            revision: decode_sequence(&bytes[8..16])?,
+            pins: u32_at(24),
+            canonical: (bytes[2] == 1).then(|| InodeId(bytes[48..80].try_into().unwrap())),
+            base: if bytes[3] == 1 {
+                Some(ObjectId::from_bytes(&bytes[80..112])?)
+            } else {
+                None
+            },
+            parent: (parent != 0).then_some(NodeId(parent)),
+        };
+        if record.encode()?.as_slice() != bytes {
+            return Err(StoreError::Integrity("noncanonical overlay inode record"));
+        }
+        Ok(record)
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ChangeKey {
@@ -24,7 +113,7 @@ pub(crate) enum ChangeKey {
 }
 
 impl ChangeKey {
-    fn encode(&self) -> Result<Vec<u8>> {
+    pub(crate) fn encode(&self) -> Result<Vec<u8>> {
         let (kind, node, name) = match self {
             Self::Inode(node) => (INODE, node, &[][..]),
             Self::Binding(node, name) => {
@@ -42,7 +131,7 @@ impl ChangeKey {
         Ok(out)
     }
 
-    fn decode(bytes: &[u8]) -> Result<Self> {
+    pub(crate) fn decode(bytes: &[u8]) -> Result<Self> {
         if bytes.len() < 9 {
             return Err(StoreError::Integrity("overlay change key"));
         }
@@ -57,16 +146,41 @@ impl ChangeKey {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct OverlayRoot {
     pub(crate) sequence: u64,
     pub(crate) base_root: ObjectId,
     pub(crate) next_inode: u64,
-    index: Root,
+    pub(crate) index: Root,
 }
 
 pub(crate) struct Overlay {
     index: Index,
     current: Mutex<Arc<OverlayRoot>>,
+    admission: Mutex<MutationQueue>,
+    available: Condvar,
+    preparation_attempts: AtomicU64,
+    root_conflicts: AtomicU64,
+}
+
+#[derive(Default)]
+struct MutationQueue {
+    next: u64,
+    serving: u64,
+}
+
+// Bounded ordinary-mutation admission. Snapshot/read/Commit construction never
+// acquires this queue. Payload transfers precede metadata preparation.
+const MAX_QUEUED_MUTATIONS: u64 = 64;
+
+struct MutationTurn<'a>(&'a Overlay);
+impl Drop for MutationTurn<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut queue) = self.0.admission.lock() {
+            queue.serving += 1;
+            self.0.available.notify_all();
+        }
+    }
 }
 
 pub(crate) struct PreparedMutation {
@@ -83,9 +197,17 @@ pub(crate) struct Mutation<'a> {
 impl Overlay {
     pub(crate) fn temporary(directory: &Path, base_root: ObjectId, limits: Limits) -> Result<Self> {
         let index = Index::temporary(directory, limits)?;
+        Self::from_index(index, base_root)
+    }
+
+    pub(crate) fn from_index(index: Index, base_root: ObjectId) -> Result<Self> {
         let root = index.empty_root()?;
         Ok(Self {
             index,
+            admission: Mutex::new(MutationQueue::default()),
+            available: Condvar::new(),
+            preparation_attempts: AtomicU64::new(0),
+            root_conflicts: AtomicU64::new(0),
             current: Mutex::new(Arc::new(OverlayRoot {
                 sequence: 0,
                 base_root,
@@ -108,6 +230,7 @@ impl Overlay {
         source: Arc<OverlayRoot>,
         apply: impl FnOnce(&mut Mutation<'_>) -> Result<()>,
     ) -> Result<PreparedMutation> {
+        self.preparation_attempts.fetch_add(1, Ordering::Relaxed);
         let mut mutation = Mutation {
             index: &self.index,
             candidate: OverlayRoot {
@@ -136,6 +259,7 @@ impl Overlay {
                 .lock()
                 .map_err(|_| StoreError::Integrity("overlay installation lock"))?;
             if !Arc::ptr_eq(&current, &prepared.source) {
+                self.root_conflicts.fetch_add(1, Ordering::Relaxed);
                 return Ok(false);
             }
             std::mem::replace(&mut *current, prepared.candidate)
@@ -144,75 +268,81 @@ impl Overlay {
         Ok(true)
     }
 
-    pub(crate) fn inode(&self, root: &OverlayRoot, inode: NodeId) -> Result<Option<Vec<u8>>> {
-        Ok(self
-            .index
-            .get(&root.index, &ChangeKey::Inode(inode).encode()?)?)
+    /// FIFO turns bound preparation and prevent disjoint writers starving one
+    /// another through speculative whole-root retries. A turn owns no root lock
+    /// while it reads/writes index pages; readers can use their retained roots.
+    pub(crate) fn mutate(
+        &self,
+        mut apply: impl FnMut(&mut Mutation<'_>) -> Result<()>,
+    ) -> Result<()> {
+        let mut queue = self
+            .admission
+            .lock()
+            .map_err(|_| StoreError::Integrity("overlay mutation admission"))?;
+        if queue.next - queue.serving >= MAX_QUEUED_MUTATIONS {
+            return Err(StoreError::StoreBusy);
+        }
+        let ticket = queue.next;
+        queue.next = ticket
+            .checked_add(1)
+            .ok_or(StoreError::InvalidInput("overlay mutation ticket overflow"))?;
+        while ticket != queue.serving {
+            queue = self
+                .available
+                .wait(queue)
+                .map_err(|_| StoreError::Integrity("overlay mutation admission"))?;
+        }
+        drop(queue);
+        let _turn = MutationTurn(self);
+        // Direct prepared callers may have raced the ticket. They must rebase;
+        // no immutable candidate is patched under installation synchronization.
+        for _ in 0..3 {
+            let prepared = self.prepare(self.acquire()?, &mut apply)?;
+            if self.install(prepared)? {
+                return Ok(());
+            }
+        }
+        Err(StoreError::StoreBusy)
     }
 
-    /// None means consult immutable backing; Some(None) is a retained mask.
-    pub(crate) fn binding(
+    pub(crate) fn snapshot(&self) -> Result<crate::snapshot::Snapshot> {
+        Ok(crate::snapshot::Snapshot::new(
+            self.index.clone(),
+            self.acquire()?,
+        ))
+    }
+
+    #[cfg(test)]
+    fn inode(&self, root: &Arc<OverlayRoot>, inode: NodeId) -> Result<Option<Vec<u8>>> {
+        crate::snapshot::Snapshot::new(self.index.clone(), root.clone()).inode(inode)
+    }
+
+    #[cfg(test)]
+    fn binding(
         &self,
-        root: &OverlayRoot,
+        root: &Arc<OverlayRoot>,
         parent: NodeId,
         name: &[u8],
     ) -> Result<Option<Option<NodeId>>> {
-        self.index
-            .get(
-                &root.index,
-                &ChangeKey::Binding(parent, name.to_vec()).encode()?,
-            )?
-            .map(|bytes| {
-                let value = decode_sequence(&bytes)?;
-                Ok((value != 0).then_some(NodeId(value)))
-            })
-            .transpose()
+        crate::snapshot::Snapshot::new(self.index.clone(), root.clone()).binding(parent, name)
     }
 
-    /// Each batch seeks past the caller's last key, so covered prefixes and
-    /// previously returned pages are not scanned again.
-    pub(crate) fn changes(
+    #[cfg(test)]
+    fn changes(
         &self,
-        root: &OverlayRoot,
+        root: &Arc<OverlayRoot>,
         covered: u64,
         after: Option<&[u8]>,
     ) -> Result<Vec<(Vec<u8>, u64, ChangeKey)>> {
-        if covered >= root.sequence {
-            return Ok(Vec::new());
-        }
-        let mut first = vec![CHANGE_SEQUENCE];
-        first.extend_from_slice(&(covered + 1).to_be_bytes());
-        let start = match after {
-            Some(after) if after >= first.as_slice() && after.first() == Some(&CHANGE_SEQUENCE) => {
-                Bound::Excluded(after)
-            }
-            Some(_) => return Err(StoreError::InvalidInput("overlay change cursor")),
-            None => Bound::Included(first.as_slice()),
-        };
-        self.index
-            .scan(
-                &root.index,
-                start,
-                Bound::Excluded(&[CHANGE_SEQUENCE + 1]),
-                CHANGE_BATCH,
-            )?
-            .into_iter()
-            .map(|(key, value)| {
-                if key.len() < 18 || !value.is_empty() {
-                    return Err(StoreError::Integrity("overlay sequence index"));
-                }
-                let sequence = decode_sequence(&key[1..9])?;
-                if sequence > root.sequence {
-                    return Err(StoreError::Integrity("overlay future change"));
-                }
-                let change = ChangeKey::decode(&key[9..])?;
-                Ok((key, sequence, change))
-            })
-            .collect()
+        crate::snapshot::Snapshot::new(self.index.clone(), root.clone()).changes(covered, after)
     }
 }
 
 impl Mutation<'_> {
+    pub(crate) fn view(&self) -> crate::snapshot::Snapshot {
+        crate::snapshot::Snapshot::new(self.index.clone(), Arc::new(self.candidate.clone()))
+    }
+
     pub(crate) fn allocate_inode(&mut self) -> Result<NodeId> {
         let id = self.candidate.next_inode;
         self.candidate.next_inode = id
@@ -223,7 +353,84 @@ impl Mutation<'_> {
 
     pub(crate) fn put_inode(&mut self, inode: NodeId, record: &[u8]) -> Result<()> {
         let key = ChangeKey::Inode(inode).encode()?;
+        if inode.0 >= self.candidate.next_inode {
+            self.candidate.next_inode = inode
+                .0
+                .checked_add(1)
+                .ok_or(StoreError::InvalidInput("overlay inode overflow"))?;
+        }
         self.candidate.index = self.index.set(&self.candidate.index, &key, record)?;
+        self.changed(&key)
+    }
+
+    pub(crate) fn put_inode_record(
+        &mut self,
+        record: InodeRecord,
+        ranges: Option<&Root>,
+    ) -> Result<()> {
+        self.store_inode_record(record, ranges, true)
+    }
+
+    pub(crate) fn cache_inode_record(
+        &mut self,
+        record: InodeRecord,
+        ranges: Option<&Root>,
+    ) -> Result<()> {
+        self.store_inode_record(record, ranges, false)
+    }
+
+    pub(crate) fn store_inode_record(
+        &mut self,
+        record: InodeRecord,
+        ranges: Option<&Root>,
+        changed: bool,
+    ) -> Result<()> {
+        let bytes = record.encode()?;
+        let key = ChangeKey::Inode(record.attr.node).encode()?;
+        if record.attr.node.0 >= self.candidate.next_inode {
+            self.candidate.next_inode = record
+                .attr
+                .node
+                .0
+                .checked_add(1)
+                .ok_or(StoreError::InvalidInput("overlay inode overflow"))?;
+        }
+        self.candidate.index =
+            self.index
+                .set_linked(&self.candidate.index, &key, &bytes, ranges)?;
+        if let Some(canonical) = record.canonical {
+            let key = [vec![CANONICAL_INODE], canonical.as_bytes().to_vec()].concat();
+            let bytes = record.attr.node.0.to_be_bytes();
+            match self.index.get(&self.candidate.index, &key)? {
+                Some(old) if old != bytes => {
+                    return Err(StoreError::Integrity(
+                        "canonical overlay inode already assigned",
+                    ))
+                }
+                Some(_) => {}
+                None => {
+                    self.candidate.index = self.index.set(&self.candidate.index, &key, &bytes)?
+                }
+            }
+        }
+        if changed {
+            self.changed(&key)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn remove_inode_record(&mut self, inode: NodeId) -> Result<()> {
+        let key = ChangeKey::Inode(inode).encode()?;
+        let bytes = self
+            .index
+            .get(&self.candidate.index, &key)?
+            .ok_or(StoreError::NotFound("overlay inode"))?;
+        let record = InodeRecord::decode(inode, &bytes)?;
+        if let Some(canonical) = record.canonical {
+            let canonical = [vec![CANONICAL_INODE], canonical.as_bytes().to_vec()].concat();
+            self.candidate.index = self.index.remove(&self.candidate.index, &canonical)?;
+        }
+        self.candidate.index = self.index.remove(&self.candidate.index, &key)?;
         self.changed(&key)
     }
 
@@ -233,16 +440,52 @@ impl Mutation<'_> {
         name: &[u8],
         inode: Option<NodeId>,
     ) -> Result<()> {
+        self.store_binding(parent, name, inode, true)
+    }
+
+    pub(crate) fn cache_binding(
+        &mut self,
+        parent: NodeId,
+        name: &[u8],
+        inode: Option<NodeId>,
+    ) -> Result<()> {
+        self.store_binding(parent, name, inode, false)
+    }
+
+    fn store_binding(
+        &mut self,
+        parent: NodeId,
+        name: &[u8],
+        inode: Option<NodeId>,
+        changed: bool,
+    ) -> Result<()> {
         if inode.is_some_and(|id| id.0 == 0) {
             return Err(StoreError::InvalidInput("overlay inode identity"));
         }
         let key = ChangeKey::Binding(parent, name.to_vec()).encode()?;
+        if let Some(old) = self.index.get(&self.candidate.index, &key)? {
+            let old = decode_sequence(&old)?;
+            if old != 0 {
+                let reverse = reverse_binding_key(NodeId(old), parent, name);
+                self.candidate.index = self.index.remove(&self.candidate.index, &reverse)?;
+            }
+        }
         self.candidate.index = self.index.set(
             &self.candidate.index,
             &key,
             &inode.map_or(0, |id| id.0).to_be_bytes(),
         )?;
-        self.changed(&key)
+        if let Some(inode) = inode {
+            self.candidate.index = self.index.set(
+                &self.candidate.index,
+                &reverse_binding_key(inode, parent, name),
+                &[],
+            )?;
+        }
+        if changed {
+            self.changed(&key)?;
+        }
+        Ok(())
     }
 
     fn changed(&mut self, key: &[u8]) -> Result<()> {
@@ -282,6 +525,15 @@ impl Mutation<'_> {
     }
 }
 
+pub(crate) fn reverse_binding_key(inode: NodeId, parent: NodeId, name: &[u8]) -> Vec<u8> {
+    let mut key = Vec::with_capacity(17 + name.len());
+    key.push(REVERSE_BINDING);
+    key.extend_from_slice(&inode.0.to_be_bytes());
+    key.extend_from_slice(&parent.0.to_be_bytes());
+    key.extend_from_slice(name);
+    key
+}
+
 fn sequence_key(sequence: u64, key: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(9 + key.len());
     out.push(CHANGE_SEQUENCE);
@@ -290,7 +542,7 @@ fn sequence_key(sequence: u64, key: &[u8]) -> Vec<u8> {
     out
 }
 
-fn decode_sequence(bytes: &[u8]) -> Result<u64> {
+pub(crate) fn decode_sequence(bytes: &[u8]) -> Result<u64> {
     Ok(u64::from_be_bytes(
         bytes
             .try_into()
@@ -513,6 +765,352 @@ mod tests {
             .is_err());
         assert!(Arc::ptr_eq(&before, &overlay.acquire().unwrap()));
         assert_eq!(overlay.inode(&before, NodeId(2)).unwrap(), None);
+    }
+
+    #[test]
+    fn owned_snapshot_outlives_live_owner_and_acquires_without_index_io() {
+        let overlay = overlay();
+        let initial = overlay
+            .prepare(overlay.acquire().unwrap(), |m| {
+                m.put_inode(NodeId(2), b"captured")?;
+                m.put_binding(NodeId(1), b"name", Some(NodeId(2)))
+            })
+            .unwrap();
+        assert!(overlay.install(initial).unwrap());
+        let before = overlay.index.stats().unwrap();
+        let snapshot = overlay.snapshot().unwrap();
+        let after = overlay.index.stats().unwrap();
+        assert_eq!(
+            (before.page_reads, before.page_writes, before.root_leases),
+            (after.page_reads, after.page_writes, after.root_leases)
+        );
+        let later = overlay
+            .prepare(overlay.acquire().unwrap(), |m| {
+                m.put_inode(NodeId(2), b"newer")?;
+                m.put_binding(NodeId(1), b"name", None)
+            })
+            .unwrap();
+        assert!(overlay.install(later).unwrap());
+        drop(overlay);
+        assert_eq!(
+            snapshot.inode(NodeId(2)).unwrap().as_deref(),
+            Some(&b"captured"[..])
+        );
+        assert_eq!(
+            snapshot.binding(NodeId(1), b"name").unwrap(),
+            Some(Some(NodeId(2)))
+        );
+        assert_eq!(snapshot.changes(0, None).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn bounded_fifo_preparation_keeps_snapshot_acquisition_independent() {
+        let overlay = overlay();
+        std::thread::scope(|scope| {
+            let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+            let (release_tx, release_rx) = std::sync::mpsc::channel();
+            let owner = &overlay;
+            let writer = scope.spawn(move || {
+                owner.mutate(|m| {
+                    m.put_inode(NodeId(2), b"prepared")?;
+                    ready_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    Ok(())
+                })
+            });
+            ready_rx.recv().unwrap();
+            // A pending ordinary preparation owns its source graph, not the
+            // installation lock. Capture sees the old complete state promptly.
+            let snapshot = overlay.snapshot().unwrap();
+            assert_eq!(snapshot.root.sequence, 0);
+            assert_eq!(snapshot.inode(NodeId(2)).unwrap(), None);
+            release_tx.send(()).unwrap();
+            writer.join().unwrap().unwrap();
+            let writers = (3..19)
+                .map(|id| {
+                    scope.spawn(move || {
+                        owner.mutate(|m| {
+                            let allocated = m.allocate_inode()?;
+                            m.put_inode(allocated, &(id as u64).to_be_bytes())
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            for writer in writers {
+                writer.join().unwrap().unwrap();
+            }
+            assert_eq!(snapshot.inode(NodeId(2)).unwrap(), None);
+        });
+        let current = overlay.snapshot().unwrap();
+        for id in 2..19 {
+            assert!(current.inode(NodeId(id)).unwrap().is_some());
+        }
+        assert_eq!(current.root.sequence, 17);
+        assert_eq!(overlay.root_conflicts.load(Ordering::Relaxed), 0);
+        assert_eq!(overlay.preparation_attempts.load(Ordering::Relaxed), 17);
+    }
+
+    #[test]
+    fn fixed_inode_metadata_and_linked_ranges_remain_owned_after_live_drop() {
+        let overlay = overlay();
+        let empty = overlay.index.empty_root().unwrap();
+        let ranges = overlay
+            .index
+            .set(&empty, b"range", b"captured bytes")
+            .unwrap();
+        let record = InodeRecord {
+            attr: Attr {
+                node: NodeId(42),
+                size: 14,
+                kind: Kind::File,
+                mode: 0o640,
+                links: 2,
+                mtime_seconds: -1,
+                mtime_nanoseconds: 123,
+            },
+            revision: 7,
+            pins: 1,
+            canonical: Some(InodeId([3; 32])),
+            base: Some(ObjectId::for_bytes(b"base content")),
+            parent: None,
+        };
+        overlay
+            .mutate(|m| {
+                m.put_inode_record(record, Some(&ranges))?;
+                m.put_binding(NodeId(1), b"file", Some(NodeId(42)))
+            })
+            .unwrap();
+        let snapshot = overlay.snapshot().unwrap();
+        let (decoded, retained) = snapshot.inode_record(NodeId(42)).unwrap().unwrap();
+        assert_eq!(decoded, record);
+        assert_eq!(snapshot.root.next_inode, 43);
+        let index = overlay.index.clone();
+        drop(ranges);
+        drop(empty);
+        drop(snapshot);
+        drop(overlay);
+        assert_eq!(
+            index.get(&retained.unwrap(), b"range").unwrap().as_deref(),
+            Some(&b"captured bytes"[..])
+        );
+        let mut malformed = record.encode().unwrap();
+        malformed[4] = 1;
+        assert!(InodeRecord::decode(NodeId(42), &malformed).is_err());
+        assert!(InodeRecord::decode(NodeId(0), &record.encode().unwrap()).is_err());
+        let mut malformed = record;
+        malformed.attr.mtime_nanoseconds = 1_000_000_000;
+        assert!(malformed.encode().is_err());
+    }
+
+    #[test]
+    fn cached_base_identity_and_alias_indexes_do_not_create_dirty_history() {
+        let overlay = overlay();
+        let record = InodeRecord {
+            attr: Attr {
+                node: NodeId(2),
+                size: 0,
+                kind: Kind::File,
+                mode: 0o640,
+                links: 2,
+                mtime_seconds: 0,
+                mtime_nanoseconds: 0,
+            },
+            revision: 0,
+            pins: 0,
+            canonical: Some(InodeId([7; 32])),
+            base: None,
+            parent: None,
+        };
+        overlay
+            .mutate(|m| {
+                m.cache_inode_record(record, None)?;
+                m.cache_binding(NodeId(1), b"a", Some(NodeId(2)))?;
+                m.cache_binding(NodeId(1), b"b", Some(NodeId(2)))
+            })
+            .unwrap();
+        let before = overlay.snapshot().unwrap();
+        assert!(before.changes(0, None).unwrap().is_empty());
+        assert!(before.changes(before.root.sequence + 1, None).is_err());
+        assert_eq!(
+            before.canonical_inode(InodeId([7; 32])).unwrap(),
+            Some(NodeId(2))
+        );
+        assert_eq!(before.aliases(NodeId(2), None).unwrap().len(), 2);
+        overlay
+            .mutate(|m| {
+                m.put_binding(NodeId(1), b"a", None)?;
+                m.put_binding(NodeId(1), b"c", Some(NodeId(2)))
+            })
+            .unwrap();
+        let after = overlay.snapshot().unwrap();
+        assert_eq!(
+            after
+                .aliases(NodeId(2), None)
+                .unwrap()
+                .into_iter()
+                .map(|(_, _, name)| name)
+                .collect::<Vec<_>>(),
+            vec![b"b".to_vec(), b"c".to_vec()]
+        );
+        assert_eq!(
+            after.bindings(NodeId(1), Some(b"a")).unwrap(),
+            vec![
+                (b"b".to_vec(), Some(NodeId(2))),
+                (b"c".to_vec(), Some(NodeId(2)))
+            ]
+        );
+        assert_eq!(before.bindings(NodeId(1), None).unwrap().len(), 2);
+        let mut wrong = record;
+        wrong.attr.node = NodeId(99);
+        assert!(overlay
+            .mutate(|m| m.cache_inode_record(wrong, None))
+            .is_err());
+        assert_eq!(
+            overlay
+                .snapshot()
+                .unwrap()
+                .canonical_inode(InodeId([7; 32]))
+                .unwrap(),
+            Some(NodeId(2))
+        );
+    }
+
+    #[test]
+    fn snapshot_reads_exact_owned_payload_after_live_replacement_and_owner_drop() {
+        use crate::correspondence::OriginSequence;
+        use crate::overlay_payload::{Limits as PayloadLimits, Payload};
+        use crate::overlay_ranges::{Limits as RangeLimits, OwnedPiece, Ranges};
+        use layerfs_layerstack_store::{
+            EntityName, LayerStackInitialization, LayerStackStore, LocalForkSource,
+        };
+        let directory = std::env::temp_dir().join(format!(
+            "layerfs-owned-snapshot-{}",
+            crate::WorkspaceId::new()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        {
+            let store = LayerStackStore::create(directory.join("store.sqlite")).unwrap();
+            let init = store
+                .initialize_layerstack(
+                    EntityName::new("snapshot").unwrap(),
+                    LayerStackInitialization::Empty,
+                )
+                .unwrap();
+            let branch = store
+                .fork_branch(
+                    EntityName::new("main").unwrap(),
+                    LocalForkSource::Layer {
+                        layer_id: init.genesis_layer_id,
+                    },
+                )
+                .unwrap();
+            let pinned = store.pin_branch(branch).unwrap();
+            let policy = Limits {
+                max_pages: 16384,
+                ..Limits::default()
+            };
+            let payload = Payload::temporary(
+                &directory,
+                PayloadLimits {
+                    physical_bytes: 1024 * 1024,
+                    owners: 4096,
+                    readers: 16,
+                    writes: 4,
+                    index: policy,
+                },
+            )
+            .unwrap();
+            let index =
+                Index::temporary_with_owner(&directory, policy, Arc::new(payload.clone())).unwrap();
+            let ranges =
+                Ranges::new(index.clone(), payload.clone(), RangeLimits::default()).unwrap();
+            let origins = OriginSequence::new([3; 16]);
+            let bytes = payload.write_from(&mut &b"captured"[..], 8).unwrap();
+            let initial = ranges
+                .append(
+                    &ranges.empty(),
+                    OwnedPiece::payload(bytes, origins.allocate().unwrap()).unwrap(),
+                )
+                .unwrap();
+            let overlay = Overlay::from_index(index, pinned.root).unwrap();
+            let mut record = InodeRecord {
+                attr: Attr {
+                    node: NodeId(2),
+                    size: 8,
+                    kind: Kind::File,
+                    mode: 0o640,
+                    links: 1,
+                    mtime_seconds: 0,
+                    mtime_nanoseconds: 0,
+                },
+                revision: 0,
+                pins: 0,
+                canonical: None,
+                base: None,
+                parent: None,
+            };
+            overlay
+                .mutate(|m| {
+                    let mut root = record;
+                    root.attr.node = NodeId(1);
+                    root.attr.size = 0;
+                    root.attr.kind = Kind::Directory;
+                    root.attr.links = 2;
+                    root.parent = Some(NodeId(1));
+                    m.cache_inode_record(root, None)?;
+                    m.put_inode_record(record, initial.root())?;
+                    m.put_binding(NodeId(1), b"file", Some(NodeId(2)))
+                })
+                .unwrap();
+            let captured = overlay.snapshot().unwrap();
+            let changed = ranges
+                .replace(
+                    &initial,
+                    0,
+                    8,
+                    [OwnedPiece::inline(b"live", origins.allocate().unwrap())],
+                )
+                .unwrap();
+            record.attr.size = 4;
+            record.revision = 1;
+            overlay
+                .mutate(|m| m.put_inode_record(record, changed.root()))
+                .unwrap();
+            let live = overlay.snapshot().unwrap();
+            drop(initial);
+            drop(changed);
+            drop(overlay);
+            let mut bytes = [0; 8];
+            assert_eq!(
+                captured
+                    .read_at(&ranges, &pinned.reader, NodeId(2), 0, &mut bytes)
+                    .unwrap(),
+                8
+            );
+            assert_eq!(&bytes, b"captured");
+            let mut bytes = [0; 4];
+            assert_eq!(
+                live.read_at(&ranges, &pinned.reader, NodeId(2), 0, &mut bytes)
+                    .unwrap(),
+                4
+            );
+            assert_eq!(&bytes, b"live");
+            assert_eq!(
+                captured
+                    .read_at(&ranges, &pinned.reader, NodeId(2), 2, &mut bytes)
+                    .unwrap(),
+                4
+            );
+            assert_eq!(&bytes, b"ptur");
+            assert_eq!(
+                captured
+                    .read_at(&ranges, &pinned.reader, NodeId(2), u64::MAX, &mut bytes)
+                    .unwrap(),
+                0
+            );
+            assert_eq!(&bytes, b"ptur");
+        }
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

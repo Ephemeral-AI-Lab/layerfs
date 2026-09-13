@@ -19,12 +19,15 @@ const MIN_KEYS: usize = 3;
 const MAX_CHILDREN: usize = 8;
 const MIN_CHILDREN: usize = 4;
 const MAX_KEY_BYTES: usize = 384;
-const INLINE_BYTES: usize = 64;
+const INLINE_BYTES: usize = 128;
+const MAX_SCAN_BYTES: usize = 4 * 1024 * 1024;
 const MAX_HEIGHT: usize = 64;
 const NONE: u64 = u64::MAX;
 const FREE: u64 = 0;
 const LIVE: u64 = 1;
 const RECLAIM: u64 = 2;
+const RETIRING: u64 = 3;
+const REVERSE: u64 = 4;
 const MAGIC: u64 = 0x3158495357464c;
 
 #[derive(Clone, Copy, Debug)]
@@ -48,6 +51,9 @@ impl Default for Limits {
 pub(crate) struct Stats {
     pub allocated_pages: u64,
     pub live_pages: u64,
+    pub data_pages: u64,
+    pub catalog_bytes: u64,
+    pub relocated_pages: u64,
     pub pending_roots: usize,
     pub root_leases: usize,
     pub page_reads: u64,
@@ -55,6 +61,14 @@ pub(crate) struct Stats {
     pub reclaimed_pages: u64,
     /// Actual filesystem allocation; free slots remain charged until truncation.
     pub physical_bytes: u64,
+    pub reclamation_pending: bool,
+}
+/// Metadata leaves own these opaque disk-backed payload tokens independently of
+/// the caller's in-memory leases. Errors must leave the requested count unchanged;
+/// implementations resolve any ambiguous I/O before returning a result.
+pub(crate) trait ExternalOwner: Send + Sync {
+    fn retain(&self, token: u64) -> io::Result<()>;
+    fn release(&self, token: u64) -> io::Result<()>;
 }
 #[derive(Clone)]
 pub(crate) struct Index(Arc<Inner>);
@@ -86,6 +100,11 @@ impl Drop for RootOwner {
 }
 struct Storage {
     file: File,
+    catalog: File,
+    max_pages: u64,
+    slots: u64,
+    relocated: u64,
+    pending_truncate: Option<u64>,
     high_water: u64,
     live_pages: u64,
     free: u64,
@@ -95,10 +114,23 @@ struct Storage {
     reclaimed: u64,
     // A failed prepare retains at most one page's acquired child references.
     // They remain charged and are retried before any further allocation.
-    rollback: Vec<u64>,
-    abandoned: Option<u64>,
+    rollback: Vec<Reference>,
+    external: Option<Arc<dyn ExternalOwner>>,
+    abandoned: Option<(u64, u64)>,
+    // One exact desired-header receipt, retained across ambiguous physical I/O.
+    // No later ownership arithmetic runs until this write intent is resolved.
+    pending_header: Option<(u64, Header)>,
+    deferred_error: Option<io::Error>,
     #[cfg(test)]
     fail_write_after: Option<usize>,
+    #[cfg(test)]
+    uncertain_write_once: bool,
+    #[cfg(test)]
+    header_read_error: std::sync::atomic::AtomicBool,
+    #[cfg(test)]
+    fail_truncate_once: bool,
+    #[cfg(test)]
+    corrupt_move_once: bool,
 }
 #[derive(Clone, Copy, Debug)]
 struct Header {
@@ -107,6 +139,7 @@ struct Header {
     next: u64,
     state: u64,
     cursor: u64,
+    location: u64,
 }
 #[derive(Clone)]
 enum Value {
@@ -117,6 +150,13 @@ enum Value {
 struct Entry {
     key: Vec<u8>,
     value: Value,
+    external: Option<u64>,
+    linked: Option<u64>,
+}
+#[derive(Clone, Copy)]
+enum Reference {
+    Page(u64),
+    External(u64),
 }
 #[derive(Clone)]
 struct Child {
@@ -130,17 +170,22 @@ enum Node {
     Overflow { next: Option<u64>, bytes: Vec<u8> },
 }
 impl Node {
-    fn references(&self) -> Vec<u64> {
+    fn references(&self) -> Vec<Reference> {
         match self {
             Self::Leaf(entries) => entries
                 .iter()
-                .filter_map(|e| match e.value {
-                    Value::Overflow { page, .. } => Some(page),
-                    Value::Inline(_) => None,
+                .flat_map(|e| {
+                    let page = match e.value {
+                        Value::Overflow { page, .. } => Some(Reference::Page(page)),
+                        Value::Inline(_) => None,
+                    };
+                    page.into_iter()
+                        .chain(e.external.map(Reference::External))
+                        .chain(e.linked.map(Reference::Page))
                 })
                 .collect(),
-            Self::Branch(children) => children.iter().map(|c| c.page).collect(),
-            Self::Overflow { next, .. } => next.iter().copied().collect(),
+            Self::Branch(children) => children.iter().map(|c| Reference::Page(c.page)).collect(),
+            Self::Overflow { next, .. } => next.iter().copied().map(Reference::Page).collect(),
         }
     }
     fn lower(&self) -> io::Result<&[u8]> {
@@ -175,43 +220,70 @@ fn quota(message: &str) -> io::Error {
 
 impl Index {
     pub(crate) fn temporary(directory: &Path, limits: Limits) -> io::Result<Self> {
+        Self::create(directory, limits, None)
+    }
+    pub(crate) fn temporary_with_owner(
+        directory: &Path,
+        limits: Limits,
+        owner: Arc<dyn ExternalOwner>,
+    ) -> io::Result<Self> {
+        Self::create(directory, limits, Some(owner))
+    }
+    fn create(
+        directory: &Path,
+        limits: Limits,
+        external: Option<Arc<dyn ExternalOwner>>,
+    ) -> io::Result<Self> {
         if limits.max_pages == 0
-            || limits.max_pages > u64::MAX / PAGE_BYTES as u64
+            || limits.max_pages > u64::MAX / (PAGE_BYTES + 4 * HEADER_BYTES) as u64
             || limits.max_roots < 4
             || limits.max_key_bytes == 0
             || limits.max_key_bytes > MAX_KEY_BYTES
-            || limits.max_value_bytes > u32::MAX as usize
+            || limits.max_value_bytes > MAX_SCAN_BYTES
         {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 "invalid overlay index limits",
             ));
         }
+        let mut retired = VecDeque::new();
+        retired
+            .try_reserve_exact(limits.max_roots)
+            .map_err(|_| quota("overlay root/reclamation memory admission exhausted"))?;
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        let file = loop {
-            let path = directory.join(format!(
-                ".overlay-index-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-            match OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create_new(true)
-                .mode(0o600)
-                .open(&path)
-            {
-                Ok(file) => {
-                    fs::remove_file(path)?;
-                    break file;
+        let make_file = || -> io::Result<File> {
+            loop {
+                let path = directory.join(format!(
+                    ".overlay-index-{}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ));
+                match OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create_new(true)
+                    .mode(0o600)
+                    .open(&path)
+                {
+                    Ok(file) => {
+                        fs::remove_file(path)?;
+                        break Ok(file);
+                    }
+                    Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
+                    Err(e) => return Err(e),
                 }
-                Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
-                Err(e) => return Err(e),
             }
         };
+        let file = make_file()?;
+        let catalog = make_file()?;
         Ok(Self(Arc::new(Inner {
             storage: Mutex::new(Storage {
                 file,
+                catalog,
+                max_pages: limits.max_pages,
+                slots: 0,
+                relocated: 0,
+                pending_truncate: None,
                 high_water: 0,
                 live_pages: 0,
                 free: NONE,
@@ -219,12 +291,23 @@ impl Index {
                 reads: 0,
                 writes: 0,
                 reclaimed: 0,
-                rollback: Vec::with_capacity(MAX_CHILDREN),
+                rollback: Vec::with_capacity(MAX_KEYS * 3),
+                external,
                 abandoned: None,
+                pending_header: None,
+                deferred_error: None,
                 #[cfg(test)]
                 fail_write_after: None,
+                #[cfg(test)]
+                uncertain_write_once: false,
+                #[cfg(test)]
+                header_read_error: false.into(),
+                #[cfg(test)]
+                fail_truncate_once: false,
+                #[cfg(test)]
+                corrupt_move_once: false,
             }),
-            retired: Mutex::new(VecDeque::with_capacity(limits.max_roots)),
+            retired: Mutex::new(retired),
             roots: AtomicUsize::new(0),
             limits,
         })))
@@ -262,6 +345,15 @@ impl Index {
     pub(crate) fn get(&self, root: &Root, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
         self.check(root, key)?;
         let mut storage = self.0.storage.lock().unwrap();
+        storage
+            .lookup(root.0.page, key)?
+            .map(|entry| storage.value(&entry.value, self.0.limits.max_value_bytes))
+            .transpose()
+    }
+    /// Greatest key <= `key`, reached by one bounded B+tree search path.
+    pub(crate) fn floor(&self, root: &Root, key: &[u8]) -> io::Result<Option<(Vec<u8>, Vec<u8>)>> {
+        self.check(root, key)?;
+        let mut storage = self.0.storage.lock().unwrap();
         let mut page = root.0.page;
         for _ in 0..MAX_HEIGHT {
             let Some(id) = page else {
@@ -269,23 +361,80 @@ impl Index {
             };
             match storage.node(id)? {
                 Node::Leaf(entries) => {
-                    return match entries.binary_search_by(|e| e.key.as_slice().cmp(key)) {
-                        Ok(i) => storage
-                            .value(&entries[i].value, self.0.limits.max_value_bytes)
-                            .map(Some),
-                        Err(_) => Ok(None),
-                    }
+                    let index = entries.partition_point(|entry| entry.key.as_slice() <= key);
+                    let Some(index) = index.checked_sub(1) else {
+                        return Ok(None);
+                    };
+                    return Ok(Some((
+                        entries[index].key.clone(),
+                        storage.value(&entries[index].value, self.0.limits.max_value_bytes)?,
+                    )));
                 }
                 Node::Branch(children) => {
                     page = Some(children[child_position(&children, key)?].page)
                 }
-                Node::Overflow { .. } => return Err(corrupt("overflow in index path")),
+                _ => return Err(corrupt("overflow in index path")),
             }
         }
         Err(corrupt("overlay index height exceeded"))
     }
-    pub(crate) fn set(&self, root: &Root, key: &[u8], value: &[u8]) -> io::Result<Root> {
+    /// Acquires a bounded root owner while the source graph still owns the link.
+    pub(crate) fn get_linked(
+        &self,
+        root: &Root,
+        key: &[u8],
+    ) -> io::Result<Option<(Vec<u8>, Option<Root>)>> {
         self.check(root, key)?;
+        let mut storage = self.0.storage.lock().unwrap();
+        let Some(entry) = storage.lookup(root.0.page, key)? else {
+            return Ok(None);
+        };
+        let value = storage.value(&entry.value, self.0.limits.max_value_bytes)?;
+        let linked = entry
+            .linked
+            .map(|page| self.retain(&mut storage, page))
+            .transpose()?;
+        Ok(Some((value, linked)))
+    }
+    pub(crate) fn set_linked(
+        &self,
+        root: &Root,
+        key: &[u8],
+        value: &[u8],
+        linked: Option<&Root>,
+    ) -> io::Result<Root> {
+        if let Some(linked) = linked {
+            self.check(linked, &[])?;
+        }
+        self.set_record(root, key, value, None, linked.and_then(|r| r.0.page))
+    }
+    pub(crate) fn set(&self, root: &Root, key: &[u8], value: &[u8]) -> io::Result<Root> {
+        self.set_owned(root, key, value, None)
+    }
+    pub(crate) fn set_owned(
+        &self,
+        root: &Root,
+        key: &[u8],
+        value: &[u8],
+        external: Option<u64>,
+    ) -> io::Result<Root> {
+        self.set_record(root, key, value, external, None)
+    }
+    fn set_record(
+        &self,
+        root: &Root,
+        key: &[u8],
+        value: &[u8],
+        external: Option<u64>,
+        linked: Option<u64>,
+    ) -> io::Result<Root> {
+        self.check(root, key)?;
+        if external == Some(NONE) {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "reserved overlay payload token",
+            ));
+        }
         if value.len() > self.0.limits.max_value_bytes {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
@@ -294,6 +443,12 @@ impl Index {
         }
         self.reclaim(16)?;
         let mut storage = self.0.storage.lock().unwrap();
+        if external.is_some() && storage.external.is_none() {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                "overlay payload owner missing",
+            ));
+        }
         let mut overflow = None;
         let value = if value.len() <= INLINE_BYTES {
             Value::Inline(value.to_vec())
@@ -318,6 +473,8 @@ impl Index {
         let entry = Entry {
             key: key.to_vec(),
             value,
+            external,
+            linked,
         };
         let mut pages = if let Some(page) = root.0.page {
             self.insert(&mut storage, page, entry, 0)?
@@ -447,8 +604,15 @@ impl Index {
         Ok(Some((node, holds)))
     }
     fn retain(&self, storage: &mut Storage, page: u64) -> io::Result<Root> {
+        storage.retry_rollback()?;
+        self.release_retired(storage, 1)?;
+        storage.report_write_error()?;
         let mut root = self.ticket()?;
         storage.increment(page)?;
+        if let Err(error) = storage.report_write_error() {
+            storage.rollback.push(Reference::Page(page));
+            return Err(error);
+        }
         Arc::get_mut(&mut root.0).unwrap().page = Some(page);
         Ok(root)
     }
@@ -479,10 +643,9 @@ impl Index {
         if let Some(page) = root.0.page {
             storage.scan(
                 page,
-                start,
-                end,
+                (start, end),
                 limit,
-                &mut output,
+                (&mut output, &mut 0),
                 0,
                 self.0.limits.max_value_bytes,
             )?;
@@ -517,26 +680,43 @@ impl Index {
             }
             reclaimed += usize::from(storage.reclaim_one()?);
         }
-        // Tail truncation is the physical-release backend. Interior free slots
-        // are reusable but remain charged; never report them as freed blocks.
+        storage.finish_pending_header()?;
+        storage.finish_pending_truncate()?;
+        // Dense data-slot evacuation releases obsolete physical pages while old
+        // roots remain leased. The bounded catalog's highwater stays charged.
         if storage.live_pages == 0 && storage.reclaim == NONE && storage.abandoned.is_none() {
             storage.file.set_len(0)?;
+            storage.catalog.set_len(0)?;
             storage.high_water = 0;
+            storage.slots = 0;
             storage.free = NONE;
         }
+        storage.report_write_error()?;
         Ok(reclaimed)
     }
     pub(crate) fn stats(&self) -> io::Result<Stats> {
         let storage = self.0.storage.lock().unwrap();
+        let pending_roots = self.0.retired.lock().unwrap().len();
         Ok(Stats {
             allocated_pages: storage.high_water,
             live_pages: storage.live_pages,
-            pending_roots: self.0.retired.lock().unwrap().len(),
+            data_pages: storage.slots,
+            catalog_bytes: storage.catalog.metadata()?.blocks() * 512,
+            relocated_pages: storage.relocated,
+            pending_roots,
             root_leases: self.0.roots.load(Ordering::Acquire),
             page_reads: storage.reads,
             page_writes: storage.writes,
             reclaimed_pages: storage.reclaimed,
-            physical_bytes: storage.file.metadata()?.blocks() * 512,
+            physical_bytes: (storage.file.metadata()?.blocks()
+                + storage.catalog.metadata()?.blocks())
+                * 512,
+            reclamation_pending: pending_roots != 0
+                || storage.reclaim != NONE
+                || storage.abandoned.is_some()
+                || !storage.rollback.is_empty()
+                || storage.pending_header.is_some()
+                || storage.pending_truncate.is_some(),
         })
     }
 }
@@ -589,10 +769,14 @@ fn merge(child: Node, sibling: Node, before: bool) -> io::Result<Node> {
 
 impl Storage {
     fn header(&self, page: u64) -> io::Result<Option<Header>> {
+        #[cfg(test)]
+        if self.header_read_error.swap(false, Ordering::SeqCst) {
+            return Err(io::Error::other("injected ownership readback failure"));
+        }
         let mut bytes = [0; BODY_OFFSET];
         match self
-            .file
-            .read_exact_at(&mut bytes, page * PAGE_BYTES as u64)
+            .catalog
+            .read_exact_at(&mut bytes, page * (2 * HEADER_BYTES) as u64)
         {
             Ok(()) => {}
             Err(e) if e.kind() == ErrorKind::UnexpectedEof => return Ok(None),
@@ -612,41 +796,77 @@ impl Storage {
         self.header(page)?
             .ok_or_else(|| corrupt("missing overlay ownership header"))
     }
-    fn raw_write(&mut self, bytes: &[u8], offset: u64) -> io::Result<()> {
+    fn raw_write(&mut self, catalog: bool, bytes: &[u8], offset: u64) -> io::Result<()> {
+        let file = if catalog { &self.catalog } else { &self.file };
         #[cfg(test)]
         if let Some(remaining) = &mut self.fail_write_after {
             if *remaining == 0 {
                 self.fail_write_after = None;
+                if self.uncertain_write_once {
+                    self.uncertain_write_once = false;
+                    file.write_all_at(bytes, offset)?;
+                    if catalog {
+                        self.header_read_error.store(true, Ordering::SeqCst);
+                    }
+                    return Err(io::Error::other(
+                        "injected complete write with failed receipt",
+                    ));
+                }
                 // Exercise a torn write, not only a pre-I/O rejection.
-                self.file.write_all_at(&bytes[..bytes.len() / 2], offset)?;
+                file.write_all_at(&bytes[..bytes.len() / 2], offset)?;
                 return Err(io::Error::other("injected overlay short write"));
             }
             *remaining -= 1;
         }
-        self.file.write_all_at(bytes, offset)
+        file.write_all_at(bytes, offset)
     }
     fn put_header(&mut self, page: u64, mut header: Header) -> io::Result<()> {
+        self.finish_pending_header()?;
         header.sequence = self.header(page)?.map_or(Ok(1), |h| {
             h.sequence
                 .checked_add(1)
                 .ok_or_else(|| corrupt("overlay header sequence exhausted"))
         })?;
         let bytes = header.encode();
-        let offset = page * PAGE_BYTES as u64 + (header.sequence % 2) * HEADER_BYTES as u64;
-        if let Err(error) = self.raw_write(&bytes, offset) {
+        let offset = page * (2 * HEADER_BYTES) as u64 + (header.sequence % 2) * HEADER_BYTES as u64;
+        if let Err(error) = self.raw_write(true, &bytes, offset) {
             // A failed/short write can never destroy the other valid slot. If
             // the new slot completed despite an error, recognize its receipt.
-            if self
-                .header(page)?
-                .is_some_and(|h| h.sequence == header.sequence)
-            {
-                return Ok(());
+            match self.header(page) {
+                Ok(Some(receipt)) if receipt.sequence == header.sequence => return Ok(()),
+                Ok(_) => return Err(error),
+                Err(_) => {
+                    // Transfer the exact write intent into a bounded owner. The
+                    // caller records the logical acquisition/release normally,
+                    // so abandoning a prepare can still undo it exactly once.
+                    // The public operation surfaces the retained I/O error.
+                    self.pending_header = Some((page, header));
+                    self.deferred_error.get_or_insert(error);
+                    return Ok(());
+                }
             }
-            return Err(error);
         }
         Ok(())
     }
+    fn finish_pending_header(&mut self) -> io::Result<()> {
+        if let Some((page, header)) = self.pending_header {
+            let offset =
+                page * (2 * HEADER_BYTES) as u64 + (header.sequence % 2) * HEADER_BYTES as u64;
+            // Rewriting the identical sequence/count is idempotent even when
+            // the first write applied. Never recompute refs +/- 1 on a retry.
+            self.raw_write(true, &header.encode(), offset)?;
+            self.pending_header = None;
+        }
+        Ok(())
+    }
+    fn report_write_error(&mut self) -> io::Result<()> {
+        match self.deferred_error.take() {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
     fn increment(&mut self, page: u64) -> io::Result<()> {
+        self.finish_pending_header()?;
         let mut header = self.live_header(page)?;
         if header.state != LIVE || header.refs == 0 {
             return Err(corrupt("retain of unowned overlay page"));
@@ -658,6 +878,7 @@ impl Storage {
         self.put_header(page, header)
     }
     fn decrement(&mut self, page: u64) -> io::Result<()> {
+        self.finish_pending_header()?;
         let mut header = self.live_header(page)?;
         if header.state != LIVE || header.refs == 0 {
             return Err(corrupt("release of unowned overlay page"));
@@ -673,6 +894,26 @@ impl Storage {
             self.reclaim = page;
         }
         Ok(())
+    }
+    fn retain_reference(&mut self, reference: Reference) -> io::Result<()> {
+        match reference {
+            Reference::Page(page) => self.increment(page),
+            Reference::External(token) => self
+                .external
+                .as_ref()
+                .ok_or_else(|| corrupt("overlay payload owner missing"))?
+                .retain(token),
+        }
+    }
+    fn release_reference(&mut self, reference: Reference) -> io::Result<()> {
+        match reference {
+            Reference::Page(page) => self.decrement(page),
+            Reference::External(token) => self
+                .external
+                .as_ref()
+                .ok_or_else(|| corrupt("overlay payload owner missing"))?
+                .release(token),
+        }
     }
     fn allocate(&mut self, node: &Node, max_pages: u64) -> io::Result<u64> {
         self.retry_rollback()?;
@@ -693,11 +934,17 @@ impl Storage {
             self.high_water += 1;
             page
         };
+        let location = self.slots;
+        self.slots += 1;
         self.live_pages += 1;
-        self.abandoned = Some(page);
-        self.raw_write(&body, page * PAGE_BYTES as u64 + BODY_OFFSET as u64)?;
+        self.abandoned = Some((page, location));
+        self.raw_write(
+            false,
+            &body,
+            location * PAGE_BYTES as u64 + BODY_OFFSET as u64,
+        )?;
         for child in node.references() {
-            self.increment(child)?;
+            self.retain_reference(child)?;
             self.rollback.push(child);
         }
         self.put_header(
@@ -708,25 +955,102 @@ impl Storage {
                 next: NONE,
                 state: LIVE,
                 cursor: 0,
+                location,
             },
         )?;
+        self.write_reverse(location, page)?;
+        self.report_write_error()?;
         self.rollback.clear();
         self.abandoned = None;
         self.writes += 1;
         Ok(page)
     }
     fn retry_rollback(&mut self) -> io::Result<()> {
+        self.finish_pending_header()?;
+        self.finish_pending_truncate()?;
         while let Some(page) = self.rollback.last().copied() {
-            self.decrement(page)?;
+            self.release_reference(page)?;
             self.rollback.pop();
         }
-        if let Some(page) = self.abandoned {
+        if let Some((page, _)) = self.abandoned {
             self.free_page(page)?;
             self.abandoned = None;
         }
         Ok(())
     }
+    fn write_reverse(&mut self, slot: u64, page: u64) -> io::Result<()> {
+        self.put_header(
+            self.max_pages + slot,
+            Header {
+                sequence: 0,
+                refs: page,
+                next: NONE,
+                state: REVERSE,
+                cursor: 0,
+                location: slot,
+            },
+        )
+    }
+    fn reverse(&self, slot: u64) -> io::Result<u64> {
+        let header = self
+            .header(self.max_pages + slot)?
+            .ok_or_else(|| corrupt("missing overlay reverse location"))?;
+        if header.state != REVERSE || header.location != slot || header.refs >= self.high_water {
+            return Err(corrupt("invalid overlay reverse location"));
+        }
+        Ok(header.refs)
+    }
+    fn finish_pending_truncate(&mut self) -> io::Result<()> {
+        if let Some(length) = self.pending_truncate {
+            #[cfg(test)]
+            if self.fail_truncate_once {
+                self.fail_truncate_once = false;
+                return Err(io::Error::other("injected metadata truncation failure"));
+            }
+            self.file.set_len(length)?;
+            self.pending_truncate = None;
+        }
+        Ok(())
+    }
     fn free_page(&mut self, page: u64) -> io::Result<()> {
+        self.finish_pending_header()?;
+        self.finish_pending_truncate()?;
+        let location = match self.abandoned {
+            Some((id, slot)) if id == page => slot,
+            _ => self.live_header(page)?.location,
+        };
+        if location >= self.slots {
+            return Err(corrupt("invalid retired overlay location"));
+        }
+        let last = self.slots - 1;
+        if location != last {
+            let source = self.reverse(last)?;
+            let mut header = self.live_header(source)?;
+            if source == page || (header.location != last && header.location != location) {
+                return Err(corrupt("inconsistent overlay evacuation source"));
+            }
+            let mut bytes = [0; PAGE_BYTES];
+            self.file
+                .read_exact_at(&mut bytes, last * PAGE_BYTES as u64)?;
+            self.raw_write(false, &bytes, location * PAGE_BYTES as u64)?;
+            #[cfg(test)]
+            if self.corrupt_move_once {
+                self.corrupt_move_once = false;
+                self.file.write_all_at(
+                    &[bytes[BODY_OFFSET + 1] ^ 1],
+                    location * PAGE_BYTES as u64 + BODY_OFFSET as u64 + 1,
+                )?;
+            }
+            let mut verify = [0; PAGE_BYTES];
+            self.file
+                .read_exact_at(&mut verify, location * PAGE_BYTES as u64)?;
+            if bytes != verify {
+                return Err(corrupt("overlay evacuation verification failed"));
+            }
+            header.location = location;
+            self.put_header(source, header)?;
+            self.write_reverse(location, source)?;
+        }
         self.put_header(
             page,
             Header {
@@ -735,11 +1059,17 @@ impl Storage {
                 next: self.free,
                 state: FREE,
                 cursor: 0,
+                location: NONE,
             },
         )?;
         self.free = page;
         self.live_pages -= 1;
+        self.slots -= 1;
         self.reclaimed += 1;
+        self.relocated += u64::from(location != last);
+        // Completion of the logical release precedes fallible physical cleanup;
+        // the caller can advance the reclaim queue without replaying releases.
+        self.pending_truncate = Some(self.slots * PAGE_BYTES as u64);
         Ok(())
     }
     fn node(&mut self, page: u64) -> io::Result<Node> {
@@ -747,11 +1077,36 @@ impl Storage {
         if header.state != LIVE && header.state != RECLAIM {
             return Err(corrupt("read of free overlay page"));
         }
+        if header.location >= self.slots {
+            return Err(corrupt("overlay location outside arena"));
+        }
         let mut body = [0; BODY_BYTES];
-        self.file
-            .read_exact_at(&mut body, page * PAGE_BYTES as u64 + BODY_OFFSET as u64)?;
+        self.file.read_exact_at(
+            &mut body,
+            header.location * PAGE_BYTES as u64 + BODY_OFFSET as u64,
+        )?;
         self.reads += 1;
         Node::decode(&body)
+    }
+    fn lookup(&mut self, mut page: Option<u64>, key: &[u8]) -> io::Result<Option<Entry>> {
+        for _ in 0..MAX_HEIGHT {
+            let Some(id) = page else {
+                return Ok(None);
+            };
+            match self.node(id)? {
+                Node::Leaf(entries) => {
+                    return Ok(entries
+                        .binary_search_by(|e| e.key.as_slice().cmp(key))
+                        .ok()
+                        .map(|i| entries[i].clone()))
+                }
+                Node::Branch(children) => {
+                    page = Some(children[child_position(&children, key)?].page)
+                }
+                _ => return Err(corrupt("overflow in index path")),
+            }
+        }
+        Err(corrupt("overlay index height exceeded"))
     }
     fn child(&mut self, root: &Root) -> io::Result<Child> {
         let page = root.0.page.ok_or_else(|| corrupt("empty child root"))?;
@@ -793,14 +1148,15 @@ impl Storage {
     fn scan(
         &mut self,
         page: u64,
-        start: Bound<&[u8]>,
-        end: Bound<&[u8]>,
+        bounds: (Bound<&[u8]>, Bound<&[u8]>),
         limit: usize,
-        output: &mut Vec<(Vec<u8>, Vec<u8>)>,
+        output_state: (&mut Vec<(Vec<u8>, Vec<u8>)>, &mut usize),
         height: usize,
         maximum: usize,
     ) -> io::Result<()> {
-        if output.len() >= limit {
+        let (start, end) = bounds;
+        let (output, output_bytes) = output_state;
+        if output.len() >= limit || *output_bytes >= MAX_SCAN_BYTES {
             return Ok(());
         }
         if height >= MAX_HEIGHT {
@@ -815,6 +1171,16 @@ impl Storage {
                     if above(&entry.key, end) || output.len() == limit {
                         break;
                     }
+                    let value_len = match &entry.value {
+                        Value::Inline(v) => v.len(),
+                        Value::Overflow { len, .. } => *len,
+                    };
+                    let bytes = entry.key.len() + value_len;
+                    if !output.is_empty() && bytes > MAX_SCAN_BYTES.saturating_sub(*output_bytes) {
+                        *output_bytes = MAX_SCAN_BYTES;
+                        break;
+                    }
+                    *output_bytes += bytes;
                     output.push((entry.key, self.value(&entry.value, maximum)?));
                 }
             }
@@ -824,10 +1190,20 @@ impl Storage {
                     Bound::Unbounded => 0,
                 };
                 for child in &children[begin..] {
-                    if above(&child.lower, end) || output.len() == limit {
+                    if above(&child.lower, end)
+                        || output.len() == limit
+                        || *output_bytes >= MAX_SCAN_BYTES
+                    {
                         break;
                     }
-                    self.scan(child.page, start, end, limit, output, height + 1, maximum)?;
+                    self.scan(
+                        child.page,
+                        (start, end),
+                        limit,
+                        (output, output_bytes),
+                        height + 1,
+                        maximum,
+                    )?;
                 }
             }
             _ => return Err(corrupt("overflow in index path")),
@@ -835,6 +1211,7 @@ impl Storage {
         Ok(())
     }
     fn reclaim_one(&mut self) -> io::Result<bool> {
+        self.finish_pending_header()?;
         // Ownership changes are journaled in the page's cursor. A cursor update
         // must precede the child's release. Its reserved zero-reference parent
         // remains on the disk stack until all child releases are complete.
@@ -843,10 +1220,14 @@ impl Storage {
             return Ok(false);
         }
         let mut header = self.live_header(page)?;
-        if header.state != RECLAIM || header.refs != 0 {
+        if (header.state != RECLAIM && header.state != RETIRING) || header.refs != 0 {
             return Err(corrupt("invalid overlay reclaim queue"));
         }
-        let children = self.node(page)?.references();
+        let children = if header.state == RETIRING {
+            Vec::new()
+        } else {
+            self.node(page)?.references()
+        };
         if let Some(&child) = children.get(header.cursor as usize) {
             // Keep the pending release in bounded runtime state if either I/O
             // fails; retry_rollback drains it before another allocation/reclaim.
@@ -855,6 +1236,10 @@ impl Storage {
             self.rollback.push(child);
             self.retry_rollback()?;
             return Ok(false);
+        }
+        if header.state != RETIRING {
+            header.state = RETIRING;
+            self.put_header(page, header)?;
         }
         self.free_page(page)?;
         self.reclaim = header.next;
@@ -885,7 +1270,7 @@ impl Header {
             self.next,
             self.state,
             self.cursor,
-            0,
+            self.location,
         ]
         .into_iter()
         .enumerate()
@@ -907,6 +1292,7 @@ impl Header {
             next: word(3),
             state: word(4),
             cursor: word(5),
+            location: word(6),
         })
     }
 }
@@ -927,6 +1313,8 @@ impl Node {
                 body.push(entries.len() as u8);
                 for entry in entries {
                     put_key(&mut body, &entry.key)?;
+                    body.extend(entry.external.unwrap_or(NONE).to_le_bytes());
+                    body.extend(entry.linked.unwrap_or(NONE).to_le_bytes());
                     match &entry.value {
                         Value::Inline(bytes) => {
                             body.push(0);
@@ -977,6 +1365,10 @@ impl Node {
                 let mut entries = Vec::with_capacity(count);
                 for _ in 0..count {
                     let key = reader.key()?;
+                    let external = reader.u64()?;
+                    let external = (external != NONE).then_some(external);
+                    let linked = reader.u64()?;
+                    let linked = (linked != NONE).then_some(linked);
                     let kind = reader.byte()?;
                     let len = reader.u32()? as usize;
                     let value = match kind {
@@ -990,7 +1382,12 @@ impl Node {
                     if entries.last().is_some_and(|e: &Entry| e.key >= key) {
                         return Err(corrupt("unordered overlay leaf"));
                     }
-                    entries.push(Entry { key, value });
+                    entries.push(Entry {
+                        key,
+                        value,
+                        external,
+                        linked,
+                    });
                 }
                 Ok(Self::Leaf(entries))
             }
@@ -1217,5 +1614,456 @@ mod tests {
         drop(roots);
         drain(&index);
         assert!(index.empty_root().is_ok());
+    }
+    #[test]
+    fn disk_owned_links_and_payload_tokens_survive_root_drop_and_failed_reclaim() {
+        struct Owner {
+            refs: AtomicUsize,
+            fail_release: std::sync::atomic::AtomicBool,
+        }
+        impl ExternalOwner for Owner {
+            fn retain(&self, token: u64) -> io::Result<()> {
+                assert_eq!(token, 19);
+                self.refs.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+            fn release(&self, token: u64) -> io::Result<()> {
+                assert_eq!(token, 19);
+                if self.fail_release.swap(false, Ordering::SeqCst) {
+                    return Err(io::Error::other("injected payload release failure"));
+                }
+                assert!(self.refs.fetch_sub(1, Ordering::SeqCst) > 0);
+                Ok(())
+            }
+        }
+        let owner = Arc::new(Owner {
+            refs: AtomicUsize::new(1),
+            fail_release: false.into(),
+        });
+        let index =
+            Index::temporary_with_owner(&std::env::temp_dir(), Limits::default(), owner.clone())
+                .unwrap();
+        let empty = index.empty_root().unwrap();
+        let range = index
+            .set_owned(&empty, b"range", b"payload descriptor", Some(19))
+            .unwrap();
+        let directory = index
+            .set_linked(&empty, b"inode", b"fixed attributes", Some(&range))
+            .unwrap();
+        drop(range);
+        drain(&index);
+        assert_eq!(owner.refs.load(Ordering::SeqCst), 2);
+        let (_, reader) = index.get_linked(&directory, b"inode").unwrap().unwrap();
+        let reader = reader.unwrap();
+        drop(directory);
+        drain(&index);
+        assert_eq!(
+            index.get(&reader, b"range").unwrap(),
+            Some(b"payload descriptor".to_vec())
+        );
+        // A failed leaf publication releases acquired external ownership exactly
+        // once; its original linked/read roots remain readable.
+        index.0.storage.lock().unwrap().fail_write_after = Some(1);
+        assert!(index
+            .set_owned(&reader, b"range", b"failed replacement", Some(19))
+            .is_err());
+        drain(&index);
+        assert_eq!(owner.refs.load(Ordering::SeqCst), 2);
+        drop(reader);
+        owner.fail_release.store(true, Ordering::SeqCst);
+        assert!(index.reclaim(64).is_err());
+        assert_eq!(owner.refs.load(Ordering::SeqCst), 2);
+        assert!(index.stats().unwrap().reclamation_pending);
+        drain(&index);
+        assert_eq!(owner.refs.load(Ordering::SeqCst), 1);
+        drop(empty);
+        drain(&index);
+        assert_eq!(index.stats().unwrap().physical_bytes, 0);
+    }
+    #[test]
+    fn floor_descends_without_scanning_predecessor_prefix_and_batches_bound_bytes() {
+        let index = index(4096);
+        let mut root = index.empty_root().unwrap();
+        for n in 1u32..130 {
+            root = index
+                .set(&root, &(n * 2).to_be_bytes(), &n.to_be_bytes())
+                .unwrap();
+        }
+        assert_eq!(index.floor(&root, &0u32.to_be_bytes()).unwrap(), None);
+        let before = index.stats().unwrap().page_reads;
+        assert_eq!(
+            index
+                .floor(&root, &201u32.to_be_bytes())
+                .unwrap()
+                .unwrap()
+                .0,
+            200u32.to_be_bytes()
+        );
+        assert!(index.stats().unwrap().page_reads - before <= 4);
+        assert_eq!(
+            index
+                .floor(&root, &202u32.to_be_bytes())
+                .unwrap()
+                .unwrap()
+                .0,
+            202u32.to_be_bytes()
+        );
+        assert_eq!(
+            index
+                .floor(&root, &999u32.to_be_bytes())
+                .unwrap()
+                .unwrap()
+                .0,
+            258u32.to_be_bytes()
+        );
+        let large = Index::temporary(
+            &std::env::temp_dir(),
+            Limits {
+                max_value_bytes: MAX_SCAN_BYTES,
+                ..Limits::default()
+            },
+        )
+        .unwrap();
+        let empty = large.empty_root().unwrap();
+        let root = large.set(&empty, b"a", &vec![3; 3 * 1024 * 1024]).unwrap();
+        let root = large.set(&root, b"b", &vec![7; 3 * 1024 * 1024]).unwrap();
+        assert_eq!(
+            large
+                .scan(&root, Bound::Unbounded, Bound::Unbounded, 1024)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            large
+                .scan(&root, Bound::Excluded(b"a"), Bound::Unbounded, 1024)
+                .unwrap()[0]
+                .0,
+            b"b"
+        );
+    }
+    #[test]
+    fn uncertain_ownership_write_readback_cannot_leak_a_child_reference() {
+        let index = index(64);
+        let empty = index.empty_root().unwrap();
+        let root = index.set(&empty, b"retained", &[23; 9000]).unwrap();
+        drain(&index);
+        {
+            let mut storage = index.0.storage.lock().unwrap();
+            // Replacement leaf body is write 0; retaining its old overflow
+            // child is write 1. The latter applies, but loses both receipts.
+            storage.fail_write_after = Some(1);
+            storage.uncertain_write_once = true;
+        }
+        assert!(index.set(&root, b"new", b"candidate").is_err());
+        assert_eq!(index.get(&root, b"retained").unwrap(), Some(vec![23; 9000]));
+        drain(&index);
+        drop(root);
+        drop(empty);
+        drain(&index);
+        assert_eq!(
+            index.stats().unwrap().live_pages,
+            0,
+            "unpublished child's retained ref leaked"
+        );
+    }
+    #[test]
+    fn reclaim_header_faults_never_double_release_or_lose_cleanup() {
+        // Four pages / three edges require at most 4*5 + 3*2 + 1 writes,
+        // including relocation. Stop only after the first untriggered position;
+        // every earlier failed boundary must preserve ownership and drain.
+        for uncertain in [false, true] {
+            let mut triggered = 0;
+            let mut exhausted = false;
+            for boundary in 0..=27 {
+                let index = index(64);
+                let empty = index.empty_root().unwrap();
+                let root = index.set(&empty, b"value", &[29; 9000]).unwrap();
+                drain(&index);
+                drop(root);
+                drop(empty);
+                {
+                    let mut storage = index.0.storage.lock().unwrap();
+                    storage.fail_write_after = Some(boundary);
+                    storage.uncertain_write_once = uncertain;
+                }
+                let result = index.reclaim(128);
+                let hit = index
+                    .0
+                    .storage
+                    .lock()
+                    .unwrap()
+                    .fail_write_after
+                    .take()
+                    .is_none();
+                if hit {
+                    assert!(result.is_err(), "fault {boundary} did not surface");
+                    triggered += 1;
+                } else {
+                    result.unwrap();
+                }
+                drain(&index);
+                let stats = index.stats().unwrap();
+                assert_eq!(
+                    stats.live_pages, 0,
+                    "fault {boundary}, uncertain {uncertain}"
+                );
+                assert_eq!(stats.root_leases, 0);
+                assert_eq!(stats.physical_bytes, 0);
+                assert!(!stats.reclamation_pending);
+                if !hit {
+                    exhausted = true;
+                    break;
+                }
+            }
+            assert!(exhausted, "fault coverage did not reach final write");
+            assert!(triggered >= 11);
+        }
+    }
+    #[test]
+    fn uncertain_read_lease_and_cleanup_retry_keep_the_source_owned() {
+        let index = index(64);
+        let empty = index.empty_root().unwrap();
+        let range = index.set(&empty, b"range", &[31; 9000]).unwrap();
+        let directory = index
+            .set_linked(&empty, b"inode", b"attributes", Some(&range))
+            .unwrap();
+        drop(range);
+        drain(&index);
+        {
+            let mut storage = index.0.storage.lock().unwrap();
+            storage.fail_write_after = Some(0);
+            storage.uncertain_write_once = true;
+        }
+        assert!(index.get_linked(&directory, b"inode").is_err());
+        assert!(index.stats().unwrap().reclamation_pending);
+        // The first cleanup retry also fails. The exact pending write remains
+        // owned; source reads do not need successful metadata writeback.
+        index.0.storage.lock().unwrap().fail_write_after = Some(0);
+        assert!(index.reclaim(64).is_err());
+        assert_eq!(
+            index.get(&directory, b"inode").unwrap(),
+            Some(b"attributes".to_vec())
+        );
+        drain(&index);
+        let (_, reader) = index.get_linked(&directory, b"inode").unwrap().unwrap();
+        let reader = reader.unwrap();
+        assert_eq!(index.get(&reader, b"range").unwrap(), Some(vec![31; 9000]));
+        drop(directory);
+        drop(empty);
+        drain(&index);
+        assert_eq!(index.get(&reader, b"range").unwrap(), Some(vec![31; 9000]));
+        drop(reader);
+        drain(&index);
+        assert_eq!(index.stats().unwrap().live_pages, 0);
+    }
+    #[test]
+    fn physical_pages_relocate_and_reclaim_under_a_retained_snapshot() {
+        let index = index(256);
+        let empty = index.empty_root().unwrap();
+        let snapshot = index.set(&empty, b"stable", b"snapshot bytes").unwrap();
+        let mut root = index
+            .set(&snapshot, b"temporary", &[41; 64 * 1024])
+            .unwrap();
+        let peak = index.stats().unwrap();
+        root = index.remove(&root, b"temporary").unwrap();
+        drain(&index);
+        let compact = index.stats().unwrap();
+        assert!(compact.relocated_pages > 0);
+        assert_eq!(compact.data_pages, compact.live_pages);
+        assert!(
+            compact.physical_bytes < peak.physical_bytes,
+            "dead data blocks were not physically released"
+        );
+        assert_eq!(
+            index.get(&snapshot, b"stable").unwrap(),
+            Some(b"snapshot bytes".to_vec())
+        );
+        assert_eq!(
+            index.get(&root, b"stable").unwrap(),
+            Some(b"snapshot bytes".to_vec())
+        );
+        let pages = compact.allocated_pages;
+        for n in 0..200u32 {
+            root = index.set(&root, b"reused", &n.to_le_bytes()).unwrap();
+            drain(&index);
+        }
+        assert!(
+            index.stats().unwrap().allocated_pages <= pages + 1,
+            "dead IDs grew with mutation history"
+        );
+        assert_eq!(index.get(&snapshot, b"reused").unwrap(), None);
+        drop(root);
+        drop(snapshot);
+        drop(empty);
+        drain(&index);
+        assert_eq!(index.stats().unwrap().physical_bytes, 0);
+    }
+    #[test]
+    fn maximum_sized_leaf_keeps_fixed_inode_records_inline() {
+        let entries = (0..MAX_KEYS)
+            .map(|n| {
+                let mut key = vec![b'x'; MAX_KEY_BYTES];
+                *key.last_mut().unwrap() = n as u8;
+                Entry {
+                    key,
+                    value: Value::Inline(vec![n as u8; INLINE_BYTES]),
+                    external: None,
+                    linked: None,
+                }
+            })
+            .collect();
+        let encoded = Node::Leaf(entries).encode().unwrap();
+        let Node::Leaf(decoded) = Node::decode(&encoded).unwrap() else {
+            panic!("wrong page kind");
+        };
+        assert_eq!(decoded.len(), MAX_KEYS);
+        assert!(decoded
+            .iter()
+            .all(|e| matches!(&e.value, Value::Inline(bytes) if bytes.len() == 128)));
+        assert!(Node::Leaf(decoded).references().is_empty());
+    }
+    #[test]
+    fn repeated_linked_reads_reuse_admitted_root_tickets() {
+        let index = Index::temporary(
+            &std::env::temp_dir(),
+            Limits {
+                max_roots: 8,
+                ..Limits::default()
+            },
+        )
+        .unwrap();
+        let empty = index.empty_root().unwrap();
+        let range = index.set(&empty, b"range", b"readable").unwrap();
+        let directory = index
+            .set_linked(&empty, b"inode", b"attributes", Some(&range))
+            .unwrap();
+        drop(range);
+        drain(&index);
+        for _ in 0..32 {
+            let (_, reader) = index.get_linked(&directory, b"inode").unwrap().unwrap();
+            assert_eq!(
+                index.get(&reader.unwrap(), b"range").unwrap(),
+                Some(b"readable".to_vec())
+            );
+        }
+        drop(directory);
+        drop(empty);
+        drain(&index);
+        assert_eq!(index.stats().unwrap().root_leases, 0);
+    }
+    #[test]
+    fn relocation_faults_keep_a_live_tail_page_readable() {
+        for uncertain in [false, true] {
+            let mut exhausted = false;
+            for boundary in 0..=27 {
+                let index = index(64);
+                let empty = index.empty_root().unwrap();
+                let garbage = index.set(&empty, b"garbage", &[43; 9000]).unwrap();
+                let snapshot = index.set(&empty, b"live", b"unchanged tail bytes").unwrap();
+                drain(&index);
+                drop(garbage);
+                {
+                    let mut storage = index.0.storage.lock().unwrap();
+                    storage.fail_write_after = Some(boundary);
+                    storage.uncertain_write_once = uncertain;
+                }
+                let result = index.reclaim(128);
+                let hit = index
+                    .0
+                    .storage
+                    .lock()
+                    .unwrap()
+                    .fail_write_after
+                    .take()
+                    .is_none();
+                if hit {
+                    assert!(result.is_err(), "fault {boundary} did not surface");
+                } else {
+                    result.unwrap();
+                }
+                assert_eq!(
+                    index.get(&snapshot, b"live").unwrap(),
+                    Some(b"unchanged tail bytes".to_vec())
+                );
+                drain(&index);
+                assert_eq!(
+                    index.get(&snapshot, b"live").unwrap(),
+                    Some(b"unchanged tail bytes".to_vec())
+                );
+                assert_eq!(index.stats().unwrap().live_pages, 1);
+                drop(snapshot);
+                drop(empty);
+                drain(&index);
+                assert_eq!(index.stats().unwrap().physical_bytes, 0);
+                if !hit {
+                    exhausted = true;
+                    break;
+                }
+            }
+            assert!(exhausted, "fault coverage did not reach final move write");
+        }
+    }
+    #[test]
+    fn failed_copy_verification_and_truncation_preserve_source_and_charges() {
+        for corrupt_copy in [true, false] {
+            let index = index(64);
+            let empty = index.empty_root().unwrap();
+            let garbage = index.set(&empty, b"garbage", &[47; 9000]).unwrap();
+            let snapshot = index.set(&empty, b"live", b"source bytes").unwrap();
+            drain(&index);
+            let peak = index.stats().unwrap();
+            drop(garbage);
+            {
+                let mut storage = index.0.storage.lock().unwrap();
+                storage.corrupt_move_once = corrupt_copy;
+                storage.fail_truncate_once = !corrupt_copy;
+            }
+            assert!(index.reclaim(128).is_err());
+            assert_eq!(
+                index.get(&snapshot, b"live").unwrap(),
+                Some(b"source bytes".to_vec())
+            );
+            let failed = index.stats().unwrap();
+            assert!(failed.reclamation_pending);
+            if !corrupt_copy {
+                assert!(
+                    failed.physical_bytes
+                        > failed.catalog_bytes + failed.data_pages * PAGE_BYTES as u64,
+                    "failed physical truncation was incorrectly marked free"
+                );
+            }
+            drain(&index);
+            assert!(index.stats().unwrap().physical_bytes < peak.physical_bytes);
+            assert_eq!(
+                index.get(&snapshot, b"live").unwrap(),
+                Some(b"source bytes".to_vec())
+            );
+            drop(snapshot);
+            drop(empty);
+            drain(&index);
+            assert_eq!(index.stats().unwrap().physical_bytes, 0);
+        }
+    }
+    #[test]
+    fn queued_root_releases_are_reported_as_pending_cleanup() {
+        let index = index(64);
+        let empty = index.empty_root().unwrap();
+        let root = index.set(&empty, b"key", b"value").unwrap();
+        drop(root);
+        let pending = index.stats().unwrap();
+        assert!(pending.pending_roots > 0);
+        assert!(
+            pending.reclamation_pending,
+            "queued owner release was reported settled"
+        );
+        drop(empty);
+        for _ in 0..64 {
+            if !index.stats().unwrap().reclamation_pending {
+                break;
+            }
+            index.reclaim(8).unwrap();
+        }
+        assert_eq!(index.stats().unwrap().physical_bytes, 0);
     }
 }

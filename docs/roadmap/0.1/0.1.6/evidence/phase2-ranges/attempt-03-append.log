@@ -1,0 +1,77 @@
+   Compiling layerfs-workspace v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `pending_roots` and `reclaimed_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_index.rs:57:9
+   |
+51 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+57 |     pub pending_roots: usize,
+   |         ^^^^^^^^^^^^^
+...
+61 |     pub reclaimed_pages: u64,
+   |         ^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `reserved_bytes`, `readers`, `pending_writes`, `reclaimed_bytes`, and `recovery_index_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:35:9
+   |
+33 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+34 |     pub physical_bytes: u64,
+35 |     pub reserved_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+...
+39 |     pub readers: usize,
+   |         ^^^^^^^
+40 |     pub pending_releases: usize,
+41 |     pub pending_writes: usize,
+   |         ^^^^^^^^^^^^^^
+...
+44 |     pub reclaimed_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+45 |     pub cleanup_pending: bool,
+46 |     pub recovery_index_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `split_visits` and `merge_visits` are never read
+  --> crates/layerfs-workspace/src/overlay_ranges.rs:52:9
+   |
+49 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+52 |     pub split_visits: u64,
+   |         ^^^^^^^^^^^^
+53 |     pub merge_visits: u64,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: `layerfs-workspace` (lib test) generated 5 warnings (run `cargo fix --lib -p layerfs-workspace --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.18s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-7a70d4db173d6a6f)
+
+running 1 test
+test overlay_ranges::tests::append_frontier_coalesces_without_reusing_truncated_origin_coordinates ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 118 filtered out; finished in 0.54s
+

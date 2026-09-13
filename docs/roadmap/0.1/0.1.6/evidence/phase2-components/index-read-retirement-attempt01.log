@@ -1,0 +1,15 @@
+
+running 1 test
+
+thread 'tests::repeated_linked_reads_reuse_admitted_root_tickets' (11688410) panicked at crates/layerfs-workspace/src/overlay_index.rs:1920:70:
+called `Result::unwrap()` on an `Err` value: Custom { kind: StorageFull, error: "overlay root/reclamation admission exhausted" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test tests::repeated_linked_reads_reuse_admitted_root_tickets ... FAILED
+
+failures:
+
+failures:
+    tests::repeated_linked_reads_reuse_admitted_root_tickets
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+

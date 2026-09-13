@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "overlay_payload::tests",
+    "--",
+    "--nocapture"
+  ],
+  "source_sha256": {
+    "crates/layerfs-workspace/src/overlay_payload.rs": "b6bff5a1b568ada35f53b865070d38e800178b78977e7167dee5b776b707072f",
+    "crates/layerfs-workspace/src/overlay_index.rs": "0861934291ed15995e334419de26927a5e8c33d504084ea59e9fb9afa5af538a",
+    "crates/layerfs-workspace/src/lib.rs": "231bc1aad9853ca04c1a99cb0ca608cc6a68d8b5e30ad2923acbc78ddc5ba20e",
+    "Cargo.lock": "ddef31ec251492102f76c51f8916006bcf35f12818ffd864c2500192e262f4f4"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "timestamp_unix": 1789332333.576326,
+  "invalidates_previous_reason": "P1 fixed allocation/append cleanup predicate; constructor now admits configured slot arrays fallibly; shared Index physical relocation and read-only ticket retirement changed dependency. Exact original P1 failure retained attempt04.",
+  "returncode": 101
+}

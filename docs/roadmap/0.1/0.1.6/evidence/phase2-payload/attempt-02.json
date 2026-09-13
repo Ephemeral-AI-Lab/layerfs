@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "overlay_payload::tests::partial_retention_disk_owner_reader_quota_and_short_write",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "source_sha256": {
+    "crates/layerfs-workspace/src/overlay_payload.rs": "3fbeaf38a2bd3161ca2ac1c5ed9e91128c1965240c493a47373f575563e90081",
+    "crates/layerfs-workspace/src/overlay_index.rs": "a1524b35e5dbc9f7a17f7e0f89013c0757b10710d1cedd52a0fd9656c7e99f27",
+    "crates/layerfs-workspace/src/lib.rs": "cee4f8a05e3a8c17500a635657e1d3a7b0ed4c662cb476ccd0d647ca88b073ed",
+    "Cargo.lock": "ddef31ec251492102f76c51f8916006bcf35f12818ffd864c2500192e262f4f4"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "timestamp_unix": 1789331079.098612,
+  "invalidates_previous_reason": "Payload counted interval coalescing, outstanding catalog write reservations and new churn oracle changed; shared Index ownership uncertainty fix changed retain/decrement/reclaim paths.",
+  "returncode": 0
+}

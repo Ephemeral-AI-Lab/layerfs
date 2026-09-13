@@ -1,0 +1,18 @@
+{
+  "captured_ns": 1789332852684460000,
+  "head": "6d907bc43361c76583314f476854f328c790baee",
+  "source_sha256": {
+    "crates/layerfs-workspace/src/overlay_ranges.rs": "0f9040dbb4f303356d6a31aceb7fad7568f6b4811c68f98e808a43d380515e65",
+    "crates/layerfs-workspace/src/overlay_index.rs": "27622b044e6c0f71d94c64452b4e147f23ca32ce6d7f88b2157a3c49b79c1cc7",
+    "crates/layerfs-workspace/src/overlay_payload.rs": "cc25e6a7dba97a604eda493ea56c37d57aa83f3f111f575e70bbd9e034c771a4",
+    "crates/layerfs-workspace/src/correspondence.rs": "b6d94da394c0e1fd6a3554d6cb5804a164c9baebaac1bf8a2ed00d91ea056f1a",
+    "crates/layerfs-workspace/src/lib.rs": "231bc1aad9853ca04c1a99cb0ca608cc6a68d8b5e30ad2923acbc78ddc5ba20e",
+    "Cargo.toml": "c202e42c19edf22234ea20034af66768450b3bc3fe83c6893ab6a239d9263451",
+    "Cargo.lock": "ddef31ec251492102f76c51f8916006bcf35f12818ffd864c2500192e262f4f4"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: aarch64-apple-darwin\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+  "command": "cargo test -p layerfs-workspace --lib overlay_ranges::tests::append_frontier_coalesces_without_reusing_truncated_origin_coordinates -- --exact --nocapture",
+  "prior_failure": "A shared payload build stopped at new Summary::decode closure index inferred i32; fixed explicit usize. No range test ran there. Raw failure retained in phase2-payload agent attempt05 log.",
+  "reason": "Previously failed case; shared Payload::append now returns None without reading if owner end differs from never-reused source highwater, allowing fresh-source/fresh-origin fallback. Range production and test unchanged."
+}

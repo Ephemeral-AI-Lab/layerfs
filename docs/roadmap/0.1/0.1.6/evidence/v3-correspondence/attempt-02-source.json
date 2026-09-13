@@ -1,0 +1,16 @@
+{
+  "captured_ns": 1789330988102565000,
+  "head": "2728aebd38ac5d3b2a8a1379b3259684512284b0",
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: aarch64-apple-darwin\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+  "command": "cargo test -p layerfs-workspace --lib correspondence::tests:: -- --nocapture",
+  "source_sha256": {
+    "crates/layerfs-workspace/src/correspondence.rs": "d69e4e58e6293be203aa3ae8bf0bb5183315df266fac66ee0c8509a547c1a0c7",
+    "crates/layerfs-workspace/src/overlay_index.rs": "c0c5fbc3eb4f5805175e9b0ad4eb68fb3732eadff7a8c0b6cca769f2ff5b767c",
+    "crates/layerfs-workspace/src/lib.rs": "cee4f8a05e3a8c17500a635657e1d3a7b0ed4c662cb476ccd0d647ca88b073ed",
+    "Cargo.lock": "ddef31ec251492102f76c51f8916006bcf35f12818ffd864c2500192e262f4f4",
+    "Cargo.toml": "c202e42c19edf22234ea20034af66768450b3bc3fe83c6893ab6a239d9263451"
+  },
+  "scope": "Metadata-only correspondence component; no canonical builder, FUSE, benchmark or #122 execution.",
+  "prior_failure": "Shared index test compile stopped on ambiguous integer old_end in correspondence::plan; explicit u64 fix; raw failure retained at ../phase2-components/index-uncertain-header-attempt01.log. No correspondence tests previously ran."
+}

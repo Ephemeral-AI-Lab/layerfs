@@ -1,0 +1,17 @@
+warning: fields `pending_roots` and `reclaimed_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_index.rs:52:9
+   |
+49 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+52 |     pub pending_roots: usize,
+   |         ^^^^^^^^^^^^^
+...
+56 |     pub reclaimed_pages: u64,
+   |         ^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: 1 warning emitted
+

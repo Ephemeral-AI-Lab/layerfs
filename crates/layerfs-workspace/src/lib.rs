@@ -3,6 +3,7 @@
 mod capture;
 mod changes;
 mod container;
+mod correspondence;
 mod daemon;
 mod docker;
 mod docker_engine;
@@ -16,10 +17,13 @@ mod cow_tree;
 mod output;
 mod overlay;
 mod overlay_index;
+mod overlay_payload;
+mod overlay_ranges;
 mod projection;
 mod reconcile;
 mod registry;
 mod session;
+mod snapshot;
 mod worker;
 
 pub use container::{

@@ -1,0 +1,123 @@
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `cache_inode_record` and `cache_binding` are never used
+   --> crates/layerfs-workspace/src/overlay.rs:365:19
+    |
+336 | impl Mutation<'_> {
+    | ----------------- methods in this implementation
+...
+365 |     pub(crate) fn cache_inode_record(
+    |                   ^^^^^^^^^^^^^^^^^^
+...
+422 |     pub(crate) fn cache_binding(
+    |                   ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `catalog_bytes`, `pending_roots`, and `reclaimed_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_index.rs:55:9
+   |
+51 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+55 |     pub catalog_bytes: u64,
+   |         ^^^^^^^^^^^^^
+56 |     pub relocated_pages: u64,
+57 |     pub pending_roots: usize,
+   |         ^^^^^^^^^^^^^
+...
+61 |     pub reclaimed_pages: u64,
+   |         ^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `reserved_bytes`, `readers`, `pending_writes`, `reclaimed_bytes`, and `recovery_index_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:35:9
+   |
+33 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+34 |     pub physical_bytes: u64,
+35 |     pub reserved_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+...
+39 |     pub readers: usize,
+   |         ^^^^^^^
+40 |     pub pending_releases: usize,
+41 |     pub pending_writes: usize,
+   |         ^^^^^^^^^^^^^^
+...
+44 |     pub reclaimed_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+45 |     pub cleanup_pending: bool,
+46 |     pub recovery_index_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `split_visits` and `merge_visits` are never read
+  --> crates/layerfs-workspace/src/overlay_ranges.rs:52:9
+   |
+49 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+52 |     pub split_visits: u64,
+   |         ^^^^^^^^^^^^
+53 |     pub merge_visits: u64,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: methods `canonical_inode` and `aliases` are never used
+  --> crates/layerfs-workspace/src/snapshot.rs:42:19
+   |
+19 | impl Snapshot {
+   | ------------- methods in this implementation
+...
+42 |     pub(crate) fn canonical_inode(&self, inode: InodeId) -> Result<Option<NodeId>> {
+   |                   ^^^^^^^^^^^^^^^
+...
+58 |     pub(crate) fn aliases(
+   |                   ^^^^^^^
+
+warning: `layerfs-workspace` (lib test) generated 7 warnings (run `cargo fix --lib -p layerfs-workspace --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-7a70d4db173d6a6f)
+
+running 4 tests
+
+thread 'overlay_ranges::tests::disk_child_links_and_exact_payload_slice_own_bytes_without_old_tree' (11705913) panicked at crates/layerfs-workspace/src/overlay_ranges.rs:1096:9:
+assertion `left == right` failed
+  left: 4096
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test overlay_ranges::tests::disk_child_links_and_exact_payload_slice_own_bytes_without_old_tree ... FAILED
+test overlay_ranges::tests::unequal_edits_split_merge_truncate_and_snapshot_match_byte_oracle ... ok
+
+thread 'overlay_ranges::tests::append_frontier_coalesces_without_reusing_truncated_origin_coordinates' (11705912) panicked at crates/layerfs-workspace/src/overlay_ranges.rs:1135:14:
+called `Result::unwrap()` on an `Err` value: Custom { kind: InvalidInput, error: "noncontiguous payload owners" }
+test overlay_ranges::tests::append_frontier_coalesces_without_reusing_truncated_origin_coordinates ... FAILED
+test overlay_ranges::tests::thousand_piece_small_edit_and_read_follow_paths_without_suffix_rekey ... ok
+
+failures:
+
+failures:
+    overlay_ranges::tests::append_frontier_coalesces_without_reusing_truncated_origin_coordinates
+    overlay_ranges::tests::disk_child_links_and_exact_payload_slice_own_bytes_without_old_tree
+
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 112 filtered out; finished in 2.68s
+
+error: test failed, to rerun pass `-p layerfs-workspace --lib`

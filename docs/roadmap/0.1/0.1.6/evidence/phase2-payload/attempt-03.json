@@ -1,0 +1,22 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "overlay_payload::tests",
+    "--",
+    "--nocapture"
+  ],
+  "source_sha256": {
+    "crates/layerfs-workspace/src/overlay_payload.rs": "38e3b7d9f27b5fbf16e5e33be946bdcc135125e1ae351857d8547753d70ed004",
+    "crates/layerfs-workspace/src/overlay_index.rs": "53f6ea71a632b456fab0c9eda600d90e966407cdccd1dc3ad6c26349b4515a7d",
+    "crates/layerfs-workspace/src/lib.rs": "cee4f8a05e3a8c17500a635657e1d3a7b0ed4c662cb476ccd0d647ca88b073ed",
+    "Cargo.lock": "ddef31ec251492102f76c51f8916006bcf35f12818ffd864c2500192e262f4f4"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "timestamp_unix": 1789331473.3316128,
+  "invalidates_previous_reason": "Payload SOURCE highwater/count records changed creation/subrange/release lifecycle and shared copy_input helper; new append/join and exact sustained-append oracle added. Shared Index final ownership uncertainty fix applies.",
+  "returncode": 0
+}
