@@ -1,0 +1,116 @@
+   Compiling layerfs-workspace v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `index` and `policy` are never read
+  --> crates/layerfs-workspace/src/host_overlay.rs:41:16
+   |
+36 | pub(crate) struct HostOverlay {
+   |                   ----------- fields in this struct
+...
+41 |     pub(crate) index: Index,
+   |                ^^^^^
+42 |     pub(crate) budget: Arc<Budget>,
+43 |     pub(crate) policy: ResourcePolicy,
+   |                ^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `append`, `pin`, and `maintain` are never used
+   --> crates/layerfs-workspace/src/host_overlay.rs:531:19
+    |
+ 48 | impl HostOverlay {
+    | ---------------- methods in this implementation
+...
+531 |     pub(crate) fn append(&self, node: NodeId, bytes: &[u8]) -> Result<usize> {
+    |                   ^^^^^^
+...
+771 |     pub(crate) fn pin(&self, node: NodeId, truncate: bool) -> Result<()> {
+    |                   ^^^
+...
+867 |     pub(crate) fn maintain(&self) -> Result<bool> {
+    |                   ^^^^^^^^
+
+warning: methods `policy` and `limits` are never used
+   --> crates/layerfs-workspace/src/overlay_budget.rs:302:19
+    |
+256 | impl Budget {
+    | ----------- methods in this implementation
+...
+302 |     pub(crate) fn policy(&self) -> ResourcePolicy {
+    |                   ^^^^^^
+...
+305 |     pub(crate) fn limits(&self) -> Components {
+    |                   ^^^^^^
+
+warning: field `reclaimed_pages` is never read
+  --> crates/layerfs-workspace/src/overlay_index.rs:61:9
+   |
+51 | pub(crate) struct Stats {
+   |                   ----- field in this struct
+...
+61 |     pub reclaimed_pages: u64,
+   |         ^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `reserved_bytes`, `pending_writes`, `reclaimed_bytes`, and `recovery_index_pages` are never read
+  --> crates/layerfs-workspace/src/overlay_payload.rs:35:9
+   |
+33 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+34 |     pub physical_bytes: u64,
+35 |     pub reserved_bytes: u64,
+   |         ^^^^^^^^^^^^^^
+...
+41 |     pub pending_writes: usize,
+   |         ^^^^^^^^^^^^^^
+...
+44 |     pub reclaimed_bytes: u64,
+   |         ^^^^^^^^^^^^^^^
+45 |     pub cleanup_pending: bool,
+46 |     pub recovery_index_pages: u64,
+   |         ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `split_visits` and `merge_visits` are never read
+  --> crates/layerfs-workspace/src/overlay_ranges.rs:52:9
+   |
+49 | pub(crate) struct Stats {
+   |                   ----- fields in this struct
+...
+52 |     pub split_visits: u64,
+   |         ^^^^^^^^^^^^
+53 |     pub merge_visits: u64,
+   |         ^^^^^^^^^^^^
+   |
+   = note: `Stats` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: `layerfs-workspace` (lib test) generated 8 warnings (run `cargo fix --lib -p layerfs-workspace --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.81s
+     Running unittests src/lib.rs (target/debug/deps/layerfs_workspace-7a70d4db173d6a6f)
+
+running 3 tests
+test host_overlay::tests::canonical_cold_snapshot_alias_write_splice_and_failed_batch_are_isolated ... host canonical/cold snapshot, hardlink lazy import, unequal splice and failed batch: PASS
+ok
+test host_overlay::tests::directory_pages_advance_over_tombstones_without_materializing_namespace ... host bounded directory pagination PASS:128 tombstones followed by2 visible entries
+ok
+test host_overlay::tests::namespace_rename_snapshots_and_open_unlinked_handles_keep_identity ... host namespace/open-unlinked identity PASS; concurrent rename snapshot observations=29049
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 129 filtered out; finished in 2.59s
+

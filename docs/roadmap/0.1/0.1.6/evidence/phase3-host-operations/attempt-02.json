@@ -1,0 +1,29 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "--lib",
+    "host_overlay::tests",
+    "--",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "source_sha256": {
+    "host_overlay.rs": "cce32f04e01b46ff9d5731253da6638a3831a850df46f2140f9274438dea5575",
+    "overlay.rs": "bf1c2b788d56e19056681447f6f19acb063d4651dccd4eb31a60545f8f1297dc",
+    "snapshot.rs": "a8fb619ea156faabb611d25884cad92ef3f1d705e82c96e4387671f0f1fe1da6",
+    "overlay_budget.rs": "222dcd2623e95288fbabc576c7287c25791e6e3f391b1fc818f46124d77c5c83",
+    "overlay_index.rs": "023b463b31c3ab29347123dd2da01e4247efd4352f008f0291c718b6d4c8dcd4",
+    "overlay_payload.rs": "bedda0147dddecb013097b62c12362f9330d45487ef5c52414bc5ce080a65b4c",
+    "overlay_ranges.rs": "23c7e947da7f4443db78e9737398cfb7c8bd706c09c052ba725a344201980c8f",
+    "correspondence.rs": "c48b173ad66684c7b3e4025214b9277615ab5148e3452b62541521d45e00acc3",
+    "lib.rs": "bc959a9f21433599b81e5546dfec688fe7fdcb6434330c3f515729b44f43fcf9"
+  },
+  "environment": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "timestamp_unix": 1789335183.1028218,
+  "reason": "Retry3 failed constructor-dependent checks: root zero namespace-refcount must follow logical root validation rather than non-root acquire_inode. Ordinary overwrite now uses payload representation as existing write contract does; no prior passing checks.",
+  "returncode": 0
+}

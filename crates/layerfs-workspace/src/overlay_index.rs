@@ -99,8 +99,8 @@ impl Drop for RootOwner {
     }
 }
 struct Storage {
-    file: File,
-    catalog: File,
+    file: Arc<File>,
+    catalog: Arc<File>,
     max_pages: u64,
     slots: u64,
     relocated: u64,
@@ -278,8 +278,8 @@ impl Index {
         let catalog = make_file()?;
         Ok(Self(Arc::new(Inner {
             storage: Mutex::new(Storage {
-                file,
-                catalog,
+                file: Arc::new(file),
+                catalog: Arc::new(catalog),
                 max_pages: limits.max_pages,
                 slots: 0,
                 relocated: 0,
@@ -693,6 +693,21 @@ impl Index {
         }
         storage.report_write_error()?;
         Ok(reclaimed)
+    }
+    /// Explicit fsync only: resolve the one bounded pending ownership write,
+    /// then flush actual backing descriptors without an installation/storage
+    /// lock. This does not drain the graph or create crash-recoverable roots.
+    pub(crate) fn sync_data(&self) -> io::Result<()> {
+        let files = {
+            let mut storage = self.0.storage.lock().unwrap();
+            storage.finish_pending_header()?;
+            storage.report_write_error()?;
+            [storage.file.clone(), storage.catalog.clone()]
+        };
+        for file in files {
+            file.sync_data()?;
+        }
+        Ok(())
     }
     pub(crate) fn stats(&self) -> io::Result<Stats> {
         let storage = self.0.storage.lock().unwrap();
@@ -2065,5 +2080,46 @@ mod tests {
             index.reclaim(8).unwrap();
         }
         assert_eq!(index.stats().unwrap().physical_bytes, 0);
+    }
+    #[test]
+    fn explicit_sync_flushes_data_and_catalog_and_preserves_root_ownership() {
+        let index = index(64);
+        let empty = index.empty_root().unwrap();
+        let snapshot = index.set(&empty, b"key", b"old").unwrap();
+        let current = index.set(&snapshot, b"key", b"new").unwrap();
+        drop(index.set(&current, b"discarded", b"private").unwrap());
+        let before = index.stats().unwrap();
+        index.sync_data().unwrap();
+        let after = index.stats().unwrap();
+        assert_eq!(
+            before.pending_roots, after.pending_roots,
+            "fsync drained root owners"
+        );
+        assert_eq!(before.reclaimed_pages, after.reclaimed_pages);
+        assert_eq!(index.get(&snapshot, b"key").unwrap(), Some(b"old".to_vec()));
+        assert_eq!(index.get(&current, b"key").unwrap(), Some(b"new".to_vec()));
+        // A socket is an actual descriptor that cannot fsync. Both backing
+        // descriptors must surface that error; a metadata-only no-op cannot pass.
+        for catalog in [false, true] {
+            let (socket, _peer) = std::os::unix::net::UnixStream::pair().unwrap();
+            let fd: std::os::fd::OwnedFd = socket.into();
+            let invalid = Arc::new(File::from(fd));
+            let original = {
+                let mut storage = index.0.storage.lock().unwrap();
+                if catalog {
+                    std::mem::replace(&mut storage.catalog, invalid)
+                } else {
+                    std::mem::replace(&mut storage.file, invalid)
+                }
+            };
+            assert!(index.sync_data().is_err());
+            let mut storage = index.0.storage.lock().unwrap();
+            if catalog {
+                storage.catalog = original;
+            } else {
+                storage.file = original;
+            }
+        }
+        index.sync_data().unwrap();
     }
 }

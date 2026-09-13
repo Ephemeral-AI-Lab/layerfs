@@ -18,6 +18,7 @@ const CHANGE_KEY: u8 = 3;
 pub(crate) const CHANGE_SEQUENCE: u8 = 4;
 pub(crate) const CANONICAL_INODE: u8 = 5;
 pub(crate) const REVERSE_BINDING: u8 = 6;
+const KERNEL_REFERENCE: u8 = 7;
 pub(crate) const CHANGE_BATCH: usize = 128;
 
 /// Fixed metadata; file ranges and directory bindings live in their own trees.
@@ -148,9 +149,11 @@ impl ChangeKey {
 
 #[derive(Clone)]
 pub(crate) struct OverlayRoot {
+    pub(crate) installation_sequence: u64,
     pub(crate) sequence: u64,
     pub(crate) base_root: ObjectId,
     pub(crate) next_inode: u64,
+    pub(crate) live_inline_bytes: u64,
     pub(crate) index: Root,
 }
 
@@ -190,8 +193,9 @@ pub(crate) struct PreparedMutation {
 
 /// A private candidate can only escape after its entire operation succeeds.
 pub(crate) struct Mutation<'a> {
-    index: &'a Index,
-    candidate: OverlayRoot,
+    pub(super) index: &'a Index,
+    pub(super) candidate: OverlayRoot,
+    logical_change: bool,
 }
 
 impl Overlay {
@@ -209,9 +213,11 @@ impl Overlay {
             preparation_attempts: AtomicU64::new(0),
             root_conflicts: AtomicU64::new(0),
             current: Mutex::new(Arc::new(OverlayRoot {
+                installation_sequence: 0,
                 sequence: 0,
                 base_root,
                 next_inode: 2,
+                live_inline_bytes: 0,
                 index: root,
             })),
         })
@@ -233,17 +239,28 @@ impl Overlay {
         self.preparation_attempts.fetch_add(1, Ordering::Relaxed);
         let mut mutation = Mutation {
             index: &self.index,
+            logical_change: false,
             candidate: OverlayRoot {
+                installation_sequence: source
+                    .installation_sequence
+                    .checked_add(1)
+                    .ok_or(StoreError::InvalidInput("overlay installation overflow"))?,
                 sequence: source
                     .sequence
                     .checked_add(1)
                     .ok_or(StoreError::InvalidInput("overlay sequence overflow"))?,
                 base_root: source.base_root,
                 next_inode: source.next_inode,
+                live_inline_bytes: source.live_inline_bytes,
                 index: source.index.clone(),
             },
         };
         apply(&mut mutation)?;
+        if !mutation.logical_change {
+            // Cache, handle ownership, equivalent backing substitution and
+            // covered-entry retirement change root identity, not user generation.
+            mutation.candidate.sequence = source.sequence;
+        }
         Ok(PreparedMutation {
             source,
             candidate: Arc::new(mutation.candidate),
@@ -339,6 +356,49 @@ impl Overlay {
 }
 
 impl Mutation<'_> {
+    pub(crate) fn kernel_references(&self, inode: NodeId) -> Result<u64> {
+        let key = [vec![KERNEL_REFERENCE], inode.0.to_be_bytes().to_vec()].concat();
+        self.index
+            .get(&self.candidate.index, &key)?
+            .map_or(Ok(0), |bytes| decode_sequence(&bytes))
+    }
+
+    pub(crate) fn set_kernel_references(&mut self, inode: NodeId, count: u64) -> Result<()> {
+        if inode.0 == 0 {
+            return Err(StoreError::InvalidInput("kernel inode"));
+        }
+        let key = [vec![KERNEL_REFERENCE], inode.0.to_be_bytes().to_vec()].concat();
+        self.candidate.index = if count == 0 {
+            self.index.remove(&self.candidate.index, &key)?
+        } else {
+            self.index
+                .set(&self.candidate.index, &key, &count.to_be_bytes())?
+        };
+        Ok(())
+    }
+
+    pub(crate) fn kernel_reference_page(&self) -> Result<Vec<(NodeId, u64)>> {
+        use std::ops::Bound::Included;
+        self.index
+            .scan(
+                &self.candidate.index,
+                Included(&[KERNEL_REFERENCE]),
+                Included(&[KERNEL_REFERENCE + 1]),
+                CHANGE_BATCH,
+            )?
+            .into_iter()
+            .map(|(key, bytes)| {
+                if key.len() != 9 || key[0] != KERNEL_REFERENCE {
+                    return Err(StoreError::Integrity("kernel reference index"));
+                }
+                Ok((
+                    NodeId(decode_sequence(&key[1..])?),
+                    decode_sequence(&bytes)?,
+                ))
+            })
+            .collect()
+    }
+
     pub(crate) fn view(&self) -> crate::snapshot::Snapshot {
         crate::snapshot::Snapshot::new(self.index.clone(), Arc::new(self.candidate.clone()))
     }
@@ -387,6 +447,26 @@ impl Mutation<'_> {
     ) -> Result<()> {
         let bytes = record.encode()?;
         let key = ChangeKey::Inode(record.attr.node).encode()?;
+        let before = match self.index.get_linked(&self.candidate.index, &key)? {
+            Some((bytes, root))
+                if InodeRecord::decode(record.attr.node, &bytes)?.attr.kind == Kind::File =>
+            {
+                crate::overlay_ranges::Ranges::root_inline_bytes(self.index, root.as_ref())?
+            }
+            _ => 0,
+        };
+        let after = if record.attr.kind == Kind::File {
+            crate::overlay_ranges::Ranges::root_inline_bytes(self.index, ranges)?
+        } else {
+            0
+        };
+        let inline = self
+            .candidate
+            .live_inline_bytes
+            .checked_sub(before)
+            .and_then(|value| value.checked_add(after))
+            .filter(|value| *value <= layerfs_workspace_core::file_edit::MAX_INLINE_PER_WORKSPACE)
+            .ok_or(StoreError::InvalidInput("workspace inline limit"))?;
         if record.attr.node.0 >= self.candidate.next_inode {
             self.candidate.next_inode = record
                 .attr
@@ -416,22 +496,38 @@ impl Mutation<'_> {
         if changed {
             self.changed(&key)?;
         }
+        self.candidate.live_inline_bytes = inline;
         Ok(())
     }
 
     pub(crate) fn remove_inode_record(&mut self, inode: NodeId) -> Result<()> {
         let key = ChangeKey::Inode(inode).encode()?;
-        let bytes = self
+        let (bytes, ranges) = self
             .index
-            .get(&self.candidate.index, &key)?
+            .get_linked(&self.candidate.index, &key)?
             .ok_or(StoreError::NotFound("overlay inode"))?;
         let record = InodeRecord::decode(inode, &bytes)?;
+        let inline = if record.attr.kind == Kind::File {
+            crate::overlay_ranges::Ranges::root_inline_bytes(self.index, ranges.as_ref())?
+        } else {
+            0
+        };
+        let retained_inline = self
+            .candidate
+            .live_inline_bytes
+            .checked_sub(inline)
+            .ok_or(StoreError::Integrity("workspace inline charge"))?;
         if let Some(canonical) = record.canonical {
             let canonical = [vec![CANONICAL_INODE], canonical.as_bytes().to_vec()].concat();
             self.candidate.index = self.index.remove(&self.candidate.index, &canonical)?;
         }
         self.candidate.index = self.index.remove(&self.candidate.index, &key)?;
-        self.changed(&key)
+        if record.attr.kind == Kind::Directory {
+            self.remove_cookie_directory(inode)?;
+        }
+        self.changed(&key)?;
+        self.candidate.live_inline_bytes = retained_inline;
+        Ok(())
     }
 
     pub(crate) fn put_binding(
@@ -462,6 +558,7 @@ impl Mutation<'_> {
         if inode.is_some_and(|id| id.0 == 0) {
             return Err(StoreError::InvalidInput("overlay inode identity"));
         }
+        self.store_cookie_binding(parent, name, inode)?;
         let key = ChangeKey::Binding(parent, name.to_vec()).encode()?;
         if let Some(old) = self.index.get(&self.candidate.index, &key)? {
             let old = decode_sequence(&old)?;
@@ -489,6 +586,7 @@ impl Mutation<'_> {
     }
 
     fn changed(&mut self, key: &[u8]) -> Result<()> {
+        self.logical_change = true;
         let by_key = [vec![CHANGE_KEY], key.to_vec()].concat();
         if let Some(old) = self.index.get(&self.candidate.index, &by_key)? {
             let old_sequence = decode_sequence(&old)?;
@@ -563,6 +661,7 @@ pub(crate) struct ReplayWindow {
 
 struct ReplaySlot {
     reserved: usize,
+    request_digest: [u8; 32],
     result: Option<Arc<[u8]>>,
 }
 
@@ -591,6 +690,7 @@ impl ReplayWindow {
         &mut self,
         session: [u8; 16],
         sequence: u64,
+        request_digest: [u8; 32],
         response_bytes: usize,
     ) -> Result<ReplayAdmission> {
         if session != self.session {
@@ -600,6 +700,9 @@ impl ReplayWindow {
             return Err(StoreError::InvalidInput("stale overlay request"));
         }
         if let Some(slot) = self.slots.get(&sequence) {
+            if slot.request_digest != request_digest {
+                return Err(StoreError::InvalidInput("overlay replay request changed"));
+            }
             return Ok(match &slot.result {
                 Some(result) => ReplayAdmission::Completed(result.clone()),
                 None => ReplayAdmission::Unknown,
@@ -615,6 +718,7 @@ impl ReplayWindow {
             sequence,
             ReplaySlot {
                 reserved: response_bytes,
+                request_digest,
                 result: None,
             },
         );
@@ -929,6 +1033,7 @@ mod tests {
             })
             .unwrap();
         let before = overlay.snapshot().unwrap();
+        assert_eq!(before.root.sequence, 0);
         assert!(before.changes(0, None).unwrap().is_empty());
         assert!(before.changes(before.root.sequence + 1, None).is_err());
         assert_eq!(
@@ -972,6 +1077,43 @@ mod tests {
                 .canonical_inode(InodeId([7; 32]))
                 .unwrap(),
             Some(NodeId(2))
+        );
+    }
+
+    #[test]
+    fn ownership_only_install_keeps_generation_but_still_rejects_stale_root() {
+        let overlay = overlay();
+        overlay.mutate(|m| m.put_inode(NodeId(2), b"A")).unwrap();
+        let original = overlay.acquire().unwrap();
+        let stale = overlay
+            .prepare(original.clone(), |m| m.put_inode(NodeId(3), b"B"))
+            .unwrap();
+        overlay
+            .mutate(|m| m.forget_covered(&ChangeKey::Inode(NodeId(2)), original.sequence))
+            .unwrap();
+        let cleaned = overlay.acquire().unwrap();
+        assert_eq!(cleaned.sequence, original.sequence);
+        assert_eq!(
+            cleaned.installation_sequence,
+            original.installation_sequence + 1
+        );
+        assert!(!Arc::ptr_eq(&original, &cleaned));
+        assert!(!overlay.install(stale).unwrap());
+        assert!(overlay
+            .snapshot()
+            .unwrap()
+            .changes(0, None)
+            .unwrap()
+            .is_empty());
+        overlay.mutate(|m| m.put_inode(NodeId(3), b"B")).unwrap();
+        assert_eq!(
+            overlay
+                .snapshot()
+                .unwrap()
+                .changes(original.sequence, None)
+                .unwrap()
+                .len(),
+            1
         );
     }
 
@@ -1118,36 +1260,37 @@ mod tests {
         let session = [1; 16];
         let mut replay = ReplayWindow::new(session, 2, 8).unwrap();
         assert!(matches!(
-            replay.admit(session, 1, 8).unwrap(),
+            replay.admit(session, 1, [7; 32], 8).unwrap(),
             ReplayAdmission::New
         ));
         assert!(matches!(
-            replay.admit(session, 1, 8).unwrap(),
+            replay.admit(session, 1, [7; 32], 8).unwrap(),
             ReplayAdmission::Unknown
         ));
         assert!(replay.acknowledge(session, 1).is_err());
-        assert!(replay.admit(session, 2, 1).is_err());
+        assert!(replay.admit(session, 2, [7; 32], 1).is_err());
         replay.finish(1, Arc::from(&b"appended"[..])).unwrap();
-        match replay.admit(session, 1, 8).unwrap() {
+        assert!(replay.admit(session, 1, [8; 32], 8).is_err());
+        match replay.admit(session, 1, [7; 32], 8).unwrap() {
             ReplayAdmission::Completed(bytes) => assert_eq!(&*bytes, b"appended"),
             _ => panic!("lost reply must return the installed result"),
         }
         assert!(matches!(
-            replay.admit([2; 16], 1, 8).unwrap(),
+            replay.admit([2; 16], 1, [7; 32], 8).unwrap(),
             ReplayAdmission::Unknown
         ));
         replay.acknowledge(session, 1).unwrap();
-        assert!(replay.admit(session, 1, 8).is_err());
+        assert!(replay.admit(session, 1, [7; 32], 8).is_err());
         assert_eq!(replay.reserved_bytes, 0);
-        assert!(replay.admit(session, 4, 1).is_err());
+        assert!(replay.admit(session, 4, [7; 32], 1).is_err());
         assert!(matches!(
-            replay.admit(session, 3, 1).unwrap(),
+            replay.admit(session, 3, [7; 32], 1).unwrap(),
             ReplayAdmission::New
         ));
         replay.finish(3, Arc::from(&b"x"[..])).unwrap();
         assert!(replay.acknowledge(session, 3).is_err());
         assert!(matches!(
-            replay.admit(session, 2, 1).unwrap(),
+            replay.admit(session, 2, [7; 32], 1).unwrap(),
             ReplayAdmission::New
         ));
         replay.finish(2, Arc::from(&b"y"[..])).unwrap();

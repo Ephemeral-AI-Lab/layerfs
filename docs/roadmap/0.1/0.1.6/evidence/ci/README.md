@@ -21,3 +21,8 @@ only; they are not the final supported-surface or benchmark campaign.
 
 Full CI must be read back after subsequent changes. Component integration is
 still in progress and neither #124 nor #125 is eligible for closure.
+
+- Run `34781059906` at `6d907bc43` and run `34782823313` at
+  `c95588f30760e08235d56b513e48b92a9defd9b7`: workspace Clippy FAIL on unwired
+  private overlay/correspondence code. Both failing-step logs are preserved.
+  Complete production integration; suppressing dead-code checks is not the fix.

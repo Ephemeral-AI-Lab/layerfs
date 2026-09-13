@@ -35,6 +35,9 @@ pub(crate) struct Stats {
     pub reserved_bytes: u64,
     pub index_physical_bytes: u64,
     pub live_block_bytes: u64,
+    /// Legacy ordinary-spool charge: live coverage clipped to source highwater.
+    /// SDK-inline sources use the same physical backing but are excluded here.
+    pub chargeable_bytes: u64,
     pub owners: usize,
     pub readers: usize,
     pub pending_releases: usize,
@@ -57,6 +60,9 @@ struct Inner {
     released: Mutex<VecDeque<u64>>,
     maintenance: Mutex<()>,
     neighbor_visits: AtomicU64,
+    // Drop after files/state so aggregate backing admission cannot be released
+    // while an independent OwnedRange or physical reader still owns this arena.
+    _lifetime: Option<Arc<dyn std::any::Any + Send + Sync>>,
 }
 struct State {
     root: Root,
@@ -72,6 +78,7 @@ struct State {
     writes: Vec<Reservation>,
     readers: Vec<Option<(usize, u64)>>,
     live_bytes: u64,
+    chargeable_bytes: u64,
     visits: u64,
     relocated: u64,
     reclaimed: u64,
@@ -210,6 +217,20 @@ impl Token {
 
 impl Payload {
     pub(crate) fn temporary(directory: &Path, limits: Limits) -> io::Result<Self> {
+        Self::create(directory, limits, None)
+    }
+    pub(crate) fn temporary_with_lifetime(
+        directory: &Path,
+        limits: Limits,
+        lifetime: Arc<dyn std::any::Any + Send + Sync>,
+    ) -> io::Result<Self> {
+        Self::create(directory, limits, Some(lifetime))
+    }
+    fn create(
+        directory: &Path,
+        limits: Limits,
+        lifetime: Option<Arc<dyn std::any::Any + Send + Sync>>,
+    ) -> io::Result<Self> {
         if limits.physical_bytes < 2 * MOVE
             || limits.owners == 0
             || limits.readers == 0
@@ -252,6 +273,7 @@ impl Payload {
                 writes,
                 readers,
                 live_bytes: 0,
+                chargeable_bytes: 0,
                 visits: 0,
                 relocated: 0,
                 reclaimed: 0,
@@ -262,10 +284,28 @@ impl Payload {
             released: Mutex::new(released),
             maintenance: Mutex::new(()),
             neighbor_visits: AtomicU64::new(0),
+            _lifetime: lifetime,
         })))
     }
 
     pub(crate) fn write_from(&self, reader: &mut impl Read, len: u64) -> io::Result<OwnedRange> {
+        self.write_classified(reader, len, true)
+    }
+    /// Preserve SDK-inline input classification without retaining its payload
+    /// in RAM or creating a second storage/encoding pipeline.
+    pub(crate) fn write_inline_from(
+        &self,
+        reader: &mut impl Read,
+        len: u64,
+    ) -> io::Result<OwnedRange> {
+        self.write_classified(reader, len, false)
+    }
+    fn write_classified(
+        &self,
+        reader: &mut impl Read,
+        len: u64,
+        spool_charge: bool,
+    ) -> io::Result<OwnedRange> {
         if len == 0 {
             return Err(invalid("empty payload extent"));
         }
@@ -331,15 +371,21 @@ impl Payload {
             };
             let root = self.put_location(&state.root, location)?;
             let root = self.put_cover(&root, token.source, 0, allocated, 1)?;
-            let root = self
-                .0
-                .index
-                .set(&root, &key(SOURCE, token.source, 0), &words(&[len, 1]))?;
+            let root = self.0.index.set(
+                &root,
+                &key(SOURCE, token.source, 0),
+                &words(&[len, 1, u64::from(spool_charge)]),
+            )?;
             let root = self
                 .0
                 .index
                 .set(&root, &key(TOKEN, reservation.id, 0), &token.encode())?;
+            let chargeable = state
+                .chargeable_bytes
+                .checked_add(if spool_charge { len } else { 0 })
+                .ok_or_else(|| quota("payload charge overflow"))?;
             state.root = root;
+            state.chargeable_bytes = chargeable;
             state.live_bytes += allocated;
             state.owners += 1;
             Ok(OwnedRange {
@@ -441,8 +487,8 @@ impl Payload {
                 state = self.0.available.wait(state).unwrap();
             }
             let owner = self.token(&state.root, owner)?;
-            let (high, _) = self.source(&state.root, owner.source)?;
-            if owner.start.checked_add(owner.len) != Some(high) {
+            let (high, _, spool_charge) = self.source(&state.root, owner.source)?;
+            if !spool_charge || owner.start.checked_add(owner.len) != Some(high) {
                 // A truncated/older view cannot extend the source occurrence.
                 // Decide before reading: the caller must use a fresh lineage.
                 return Ok(None);
@@ -521,6 +567,7 @@ impl Payload {
             let begin = high / BLOCK * BLOCK;
             let boundary = aligned(high)?;
             let mut added_live = aligned(end)? - boundary;
+            let mut added_charge = len;
             if begin < boundary {
                 if let Some((start, stop, refs)) =
                     self.cover_at(&root, location.source, begin, &mut state.visits)?
@@ -543,6 +590,9 @@ impl Payload {
                 } else {
                     root = self.put_cover(&root, location.source, begin, boundary, 1)?;
                     added_live += BLOCK;
+                    added_charge = added_charge
+                        .checked_add(high - begin)
+                        .ok_or_else(|| quota("payload charge overflow"))?;
                 }
             }
             if boundary < aligned(end)? {
@@ -557,15 +607,21 @@ impl Payload {
                         .1
                         .checked_add(1)
                         .ok_or_else(|| quota("payload source owners"))?,
+                    u64::from(source.2),
                 ]),
             )?;
             root = self
                 .0
                 .index
                 .set(&root, &key(TOKEN, reservation.id, 0), &token.encode())?;
+            let chargeable = state
+                .chargeable_bytes
+                .checked_add(added_charge)
+                .ok_or_else(|| quota("payload charge overflow"))?;
             state.root = root;
             state.owners += 1;
             state.live_bytes += added_live;
+            state.chargeable_bytes = chargeable;
             Ok(OwnedRange {
                 payload: self.clone(),
                 token: reservation.id,
@@ -692,6 +748,7 @@ impl Payload {
                     .1
                     .checked_add(1)
                     .ok_or_else(|| quota("payload source owners"))?,
+                u64::from(source.2),
             ]),
         )?;
         state.root = root;
@@ -946,6 +1003,7 @@ impl Payload {
         if token.refs != 0 {
             return Err(corrupt("payload live release token"));
         }
+        let source = self.source(&state.root, token.source)?;
         let end = aligned(token.start + token.len)?;
         let (start, stop, refs) = self
             .cover_at(&state.root, token.source, token.cursor, &mut state.visits)?
@@ -966,14 +1024,13 @@ impl Payload {
         if stop_here == end {
             root = self.0.index.remove(&root, job)?;
             root = self.0.index.remove(&root, &key(TOKEN, id, 0))?;
-            let source = self.source(&root, token.source)?;
             root = if source.1 == 1 {
                 self.0.index.remove(&root, &key(SOURCE, token.source, 0))?
             } else {
                 self.0.index.set(
                     &root,
                     &key(SOURCE, token.source, 0),
-                    &words(&[source.0, source.1 - 1]),
+                    &words(&[source.0, source.1 - 1, u64::from(source.2)]),
                 )?
             };
         } else {
@@ -982,7 +1039,20 @@ impl Payload {
                 .index
                 .set(&root, &key(TOKEN, id, 0), &token.encode())?;
         }
+        let removed_charge = if refs == 1 && source.2 {
+            stop_here
+                .min(source.0)
+                .checked_sub(released_start.min(source.0))
+                .ok_or_else(|| corrupt("payload clipped coverage order"))?
+        } else {
+            0
+        };
+        let chargeable = state
+            .chargeable_bytes
+            .checked_sub(removed_charge)
+            .ok_or_else(|| corrupt("payload charge underflow"))?;
         state.root = root;
+        state.chargeable_bytes = chargeable;
         if refs == 1 {
             state.live_bytes -= stop_here - released_start;
             state.sweep = true;
@@ -1056,16 +1126,16 @@ impl Payload {
         }
         Ok(())
     }
-    fn source(&self, root: &Root, id: u64) -> io::Result<(u64, u64)> {
+    fn source(&self, root: &Root, id: u64) -> io::Result<(u64, u64, bool)> {
         let bytes = self
             .0
             .index
             .get(root, &key(SOURCE, id, 0))?
             .ok_or_else(|| corrupt("payload source absent"))?;
-        if bytes.len() != 16 || word(&bytes, 1)? == 0 {
+        if bytes.len() != 24 || word(&bytes, 1)? == 0 || word(&bytes, 2)? > 1 {
             return Err(corrupt("payload source record"));
         }
-        Ok((word(&bytes, 0)?, word(&bytes, 1)?))
+        Ok((word(&bytes, 0)?, word(&bytes, 1)?, word(&bytes, 2)? == 1))
     }
     fn token(&self, root: &Root, id: u64) -> io::Result<Token> {
         let token = self
@@ -1174,6 +1244,15 @@ impl Payload {
             &key(PHYSICAL, location.arena as u64, !location.offset),
         )
     }
+    /// Flush private data and its indexed ownership for an explicit fsync.
+    /// Acknowledged writes are already host-owned; no state/root lock or global
+    /// writer drain is held across these calls. This does not publish a Commit.
+    pub(crate) fn sync_data(&self) -> io::Result<()> {
+        for file in &self.0.files {
+            file.sync_data()?;
+        }
+        self.0.index.sync_data()
+    }
     pub(crate) fn stats(&self) -> io::Result<Stats> {
         let state = self.0.state.lock().unwrap();
         let pending_releases = state.release_jobs + self.0.released.lock().unwrap().len();
@@ -1182,6 +1261,7 @@ impl Payload {
             reserved_bytes: state.tails.iter().sum(),
             index_physical_bytes: self.0.index.stats()?.physical_bytes,
             live_block_bytes: state.live_bytes,
+            chargeable_bytes: state.chargeable_bytes,
             owners: state.owners,
             readers: state.readers.iter().flatten().count(),
             pending_releases,
@@ -1667,5 +1747,129 @@ mod tests {
                 ErrorKind::StorageFull
             );
         }
+    }
+    #[test]
+    fn chargeable_spool_counts_clipped_shared_coverage_and_excludes_sdk_inline() -> io::Result<()> {
+        let payload = Payload::temporary(
+            &std::env::temp_dir(),
+            Limits {
+                physical_bytes: 8 * MOVE,
+                owners: 128,
+                readers: 4,
+                writes: 4,
+                index: IndexLimits {
+                    max_pages: 8192,
+                    max_roots: 256,
+                    ..IndexLimits::default()
+                },
+            },
+        )?;
+        let original = payload.write_from(&mut &b"ABCD"[..], 4)?;
+        assert_eq!(payload.stats()?.chargeable_bytes, 4);
+        assert_eq!(payload.stats()?.live_block_bytes, BLOCK);
+        let original_token = original.token();
+        payload.retain(original_token)?;
+        let slice = original.subrange(1, 1)?;
+        assert_eq!(
+            payload.stats()?.chargeable_bytes,
+            4,
+            "shared coverage counted twice"
+        );
+        let tail = payload.append_to(&original, &mut &b"EFGH"[..], 4)?.unwrap();
+        let joined = payload.join(&original, &tail)?;
+        assert_eq!(payload.stats()?.chargeable_bytes, 8);
+        drop(original);
+        payload.release(original_token)?;
+        drop((slice, tail));
+        drain(&payload)?;
+        assert_eq!(payload.stats()?.chargeable_bytes, 8);
+        payload.0.state.lock().unwrap().fail_after = Some(0);
+        assert!(payload.append_to(&joined, &mut &b"FAIL"[..], 4).is_err());
+        assert_eq!(
+            payload.stats()?.chargeable_bytes,
+            8,
+            "failed append changed published charge"
+        );
+        drain(&payload)?;
+        drop(joined);
+        drain(&payload)?;
+        assert_eq!(payload.stats()?.chargeable_bytes, 0);
+
+        let full = payload.write_from(&mut Repeated(0x52), 4 * BLOCK)?;
+        let middle = full.subrange(BLOCK + 1, 1)?;
+        let duplicate = middle.subrange(0, 1)?;
+        drop(full);
+        drain(&payload)?;
+        assert_eq!(payload.stats()?.chargeable_bytes, BLOCK);
+        assert_eq!(payload.stats()?.live_block_bytes, BLOCK);
+        drop(middle);
+        drain(&payload)?;
+        assert_eq!(payload.stats()?.chargeable_bytes, BLOCK);
+        let inline = payload.write_inline_from(&mut Repeated(0x61), 128)?;
+        assert_eq!(
+            payload.stats()?.chargeable_bytes,
+            BLOCK,
+            "SDK inline changed ordinary-spool charge"
+        );
+        assert_eq!(payload.stats()?.live_block_bytes, 2 * BLOCK);
+        let mut unread = std::io::Cursor::new(b"new");
+        assert!(payload.append_to(&inline, &mut unread, 3)?.is_none());
+        assert_eq!(
+            unread.position(),
+            0,
+            "ordinary append consumed inline-class input"
+        );
+        let ordinary = payload.write_from(&mut unread, 3)?;
+        assert_eq!(payload.stats()?.chargeable_bytes, BLOCK + 3);
+        drop((ordinary, inline));
+        drain(&payload)?;
+        assert_eq!(payload.stats()?.chargeable_bytes, BLOCK);
+        drop(duplicate);
+        drain(&payload)?;
+        let settled = payload.stats()?;
+        assert_eq!(settled.chargeable_bytes, 0);
+        assert_eq!(settled.live_block_bytes, 0);
+        assert_eq!(settled.physical_bytes, 0);
+        Ok(())
+    }
+    #[test]
+    fn explicit_sync_flushes_both_private_arenas_and_returns_io_failures() -> io::Result<()> {
+        let mut payload = Payload::temporary(
+            &std::env::temp_dir(),
+            Limits {
+                physical_bytes: 8 * MOVE,
+                owners: 128,
+                readers: 4,
+                writes: 4,
+                index: IndexLimits {
+                    max_pages: 8192,
+                    max_roots: 256,
+                    ..IndexLimits::default()
+                },
+            },
+        )?;
+        let ordinary = payload.write_from(&mut &b"ordinary"[..], 8)?;
+        let inline = payload.write_inline_from(&mut &b"inline"[..], 6)?;
+        let before = payload.stats()?;
+        payload.sync_data()?;
+        assert_eq!(payload.stats()?.chargeable_bytes, before.chargeable_bytes);
+        let mut bytes = [0; 8];
+        ordinary.read_exact_at(&mut bytes, 0)?;
+        assert_eq!(&bytes, b"ordinary");
+        drop((ordinary, inline));
+        for arena in 0..2 {
+            let (socket, _peer) = std::os::unix::net::UnixStream::pair()?;
+            let fd: std::os::fd::OwnedFd = socket.into();
+            let original = std::mem::replace(
+                &mut Arc::get_mut(&mut payload.0).unwrap().files[arena],
+                File::from(fd),
+            );
+            assert!(payload.sync_data().is_err());
+            Arc::get_mut(&mut payload.0).unwrap().files[arena] = original;
+        }
+        payload.sync_data()?;
+        drain(&payload)?;
+        assert_eq!(payload.stats()?.physical_bytes, 0);
+        Ok(())
     }
 }

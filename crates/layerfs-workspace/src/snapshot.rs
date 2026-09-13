@@ -57,6 +57,31 @@ impl Snapshot {
         Ok(tree)
     }
 
+    pub(crate) fn readlink(
+        &self,
+        ranges: &crate::overlay_ranges::Ranges,
+        node: NodeId,
+    ) -> Result<Vec<u8>> {
+        let (record, root) = self
+            .inode_record(node)?
+            .ok_or(StoreError::NotFound("snapshot inode"))?;
+        if record.attr.kind != layerfs_workspace_core::Kind::Symlink || record.attr.size > 4096 {
+            return Err(StoreError::InvalidInput("snapshot readlink"));
+        }
+        let tree = ranges.restore(root)?;
+        if tree.len() != record.attr.size {
+            return Err(StoreError::Integrity("snapshot symlink length"));
+        }
+        let mut bytes = vec![0; record.attr.size as usize];
+        let filled = ranges.read_range(&tree, &mut bytes, 0, |_, _, _| {
+            Err(std::io::Error::other("symlink canonical file range"))
+        })?;
+        if filled != bytes.len() {
+            return Err(StoreError::Integrity("short snapshot symlink"));
+        }
+        Ok(bytes)
+    }
+
     pub(crate) fn read_at(
         &self,
         ranges: &crate::overlay_ranges::Ranges,
@@ -66,20 +91,8 @@ impl Snapshot {
         output: &mut [u8],
     ) -> Result<usize> {
         let tree = self.file_ranges(ranges, inode)?;
-        let start = offset.min(tree.len());
-        let stop = tree.len().min(start.saturating_add(output.len() as u64));
-        let mut filled = 0;
-        for next in ranges.cursor(&tree, start, stop)? {
-            let (position, piece) = next?;
-            if position != start + filled as u64 {
-                return Err(StoreError::Integrity("snapshot range coverage"));
-            }
-            let length = usize::try_from(piece.piece.length)
-                .map_err(|_| StoreError::Integrity("snapshot range length"))?;
-            let target = output
-                .get_mut(filled..filled + length)
-                .ok_or(StoreError::Integrity("snapshot range output"))?;
-            ranges.read_piece(&piece, target, 0, |root, bytes, offset| {
+        Ok(
+            ranges.read_range(&tree, output, offset, |root, bytes, offset| {
                 let len = bytes.len() as u64;
                 let mut target = bytes;
                 let counters = layerfs_content::file::content::read_range(
@@ -95,13 +108,8 @@ impl Snapshot {
                 reader
                     .note_rope_read(counters)
                     .map_err(std::io::Error::other)
-            })?;
-            filled += length;
-        }
-        if filled as u64 != stop - start {
-            return Err(StoreError::Integrity("short snapshot read"));
-        }
-        Ok(filled)
+            })?,
+        )
     }
 
     pub(crate) fn canonical_inode(&self, inode: InodeId) -> Result<Option<NodeId>> {

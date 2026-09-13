@@ -5,7 +5,7 @@ mod checkpoint;
 pub mod file_edit;
 mod limits;
 pub mod namespace;
-pub use limits::ResourcePolicy;
+pub use limits::{OverlayPolicy, ResourcePolicy};
 
 use layerfs_content::file::content::FileContentRoot;
 use layerfs_content::tree::directory::DirectoryStateRoot;

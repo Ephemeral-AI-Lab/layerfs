@@ -3,10 +3,12 @@
 Status: Dated planning checkpoint; not release evidence or a product contract.
 Phase 1 output for [#124](https://github.com/Ephemeral-AI-Lab/layerfs/issues/124),
 2026-09-15. V2, V3 and V4 are resolved to implementable contracts against the
-current source. **V1 is resolved to a precise platform incompatibility that
-requires an owner decision; it is not implemented, not waived, and not silently
-worked around.** No product behavior in this document is claimed as implemented or
-measured.
+current source. **V1 remains OPEN: the checked generic FUSE mechanisms do not
+provide the required immutable acquisition epoch.** The owner requires a generic
+FUSE solution; LinuxKit identifies only the Docker Desktop test kernel. No custom
+VM/kernel dependency or semantic relaxation is approved. Independent implementation
+continues. This document's contract decisions are not implementation test passes;
+see the append-only verification ledger for actual checks.
 
 Governing documents: [rule](overlay-snapshot-rule.md),
 [specification](overlay-snapshot-spec.md),
@@ -20,7 +22,7 @@ Frozen source for this resolution: commit `86f6a0a0ff3de2d524b4984ab9c6b5de5272b
 `0814cc37f1dafb6041930c74489107f4a5035a26` recorded by the specification; the
 inspected live source is that baseline plus the documentation commit.
 
-## 1. V1 — kernel visibility: demonstrated incompatibility (blocking)
+## 1. V1 — kernel visibility: checked mechanisms remain insufficient
 
 **Successor correction:** the predecessor's exclusivity statements below are
 historical and superseded by the [retrieval investigation](evidence/v1-investigation/README.md).
@@ -61,9 +63,9 @@ and reports exactly what the daemon observed. Container kernel
 - In cached write-through mode only `write(2)` is delivered synchronously
   ([FUSE I/O modes](https://docs.kernel.org/filesystems/fuse/fuse-io.html));
   mapped stores are written back later by the VM.
-- The kernel exposes no facility to read current page-cache bytes. The only
-  triggers are per-file `fsync`/`msync`/`munmap`, filesystem-wide `syncfs`, and
-  memory pressure.
+- The predecessor claimed no retrieval facility existed. That claim was
+  refuted by `FUSE_NOTIFY_RETRIEVE` in the follow-up probe. Retrieval exposes
+  dirty bytes but does not make its retained pages immutable.
 - `FUSE_DIRECT_IO_ALLOW_MMAP` does not remove this: the first shared mapping of a
   direct-I/O file enters caching inode I/O mode (`fuse_file_cached_io_open`), after
   which mapped stores are cached and written back lazily.
@@ -79,14 +81,16 @@ and reports exactly what the daemon observed. Container kernel
 | M5 | Real-file backing with kernel/file-system snapshot support (`FUSE_PASSTHROUGH`, reflink/APFS clone, hole-based COW) | partial | yes | mixed | changes the canonical storage model (one backing file per inode, unbounded descriptors), still cannot see un-flushed dirty pages of the backing file, and needs kernel ≥ 6.9 plus `CAP_SYS_ADMIN` |
 | M6 | Read the dirty pages out of the writer's address space (`process_vm_readv` after enumerating `/proc/<pid>/maps`) | yes | yes | **no** | rejected: requires enumerating every process and mapping in the client's namespace, cannot cover other containers, and produces torn reads that are not a consistent cut |
 
-### The decision required
+### Unapproved predecessor alternatives (historical)
 
-The rule and the specification jointly require (a) exact snapshot visibility for
-writable mappings, (b) no global freeze, (c) no whole-cache drainage, (d) bounded
-acquisition work independent of payload bytes, and (e) preservation of the existing
-supported mapping surface. The probe shows the platform offers no mechanism
-satisfying all five at once. One of the following must therefore be an explicit
-owner decision before the full-surface implementation is complete:
+The rule and specification still require exact writable-mapping visibility,
+non-pausing operation, no whole-cache drainage, bounded acquisition independent
+of payload, and preservation of the supported mapping surface. The checked probe
+mechanisms do not meet that combination; this is not evidence that every possible
+generic FUSE mechanism has been exhausted. The predecessor listed the alternatives
+below. None was approved. They are retained as history, not an active permission
+request or a hold on independent implementation. The later user clarification
+requires a generic FUSE solution and does not authorize a custom kernel/VM adapter.
 
 1. **Permit a bounded acquisition-time writeback barrier** (M2, plus M1 for
    open-unlinked inodes): the acquisition boundary becomes "after the daemon has
@@ -110,15 +114,13 @@ owner decision before the full-surface implementation is complete:
    non-pausing Commit as not achievable for the full supported surface and stop
    #124 rather than ship a weaker visibility model.
 
-Until one is chosen, no code may claim full public snapshot support: the plan's
-Phase 1 exit condition ("no code claiming full public snapshot support proceeds on
-a known weaker visibility model") is satisfied by recording this blocker, and the
-implementation issue stays open. The other Phase 2–5 obligations below are
-independent of this decision and are specified now so that implementation can be
-scheduled either way.
+Full public snapshot support cannot be claimed while V1 remains unresolved.
+Recording the blocker does not satisfy V1 or complete Phase 1. The implementation
+issue stays open, and independent Phase 2–5 work continues under the successor
+execution instruction without waiting for an answer to these historical options.
 
 One further consequence of removing the current mechanism must be declared
-whichever option is chosen: the `syncfs` in `flush_kernel_cache` is not only a
+under any eventual compliant replacement: the `syncfs` in `flush_kernel_cache` is not only a
 visibility trigger, it is also where the product observes kernel-side writeback
 errors ("syncfs observes the mount's writeback error sequence, including kernel-side
 allocation errors", `crates/layerfs-fuse/src/live_owner.rs:2619-2621`). A Commit that

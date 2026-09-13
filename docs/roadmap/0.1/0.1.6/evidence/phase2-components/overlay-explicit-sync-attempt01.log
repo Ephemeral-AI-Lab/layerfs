@@ -1,0 +1,42 @@
+   Compiling layerfs-fuse v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-fuse)
+   Compiling layerfs-workspace v0.1.5 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/crates/layerfs-workspace)
+warning: unused import: `PieceTree`
+    --> crates/layerfs-workspace/src/file_io.rs:1229:56
+     |
+1229 |         use layerfs_workspace_core::file_edit::{Piece, PieceTree};
+     |                                                        ^^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0277]: `?` couldn't convert the error to `layerfs_layerstack_store::StoreError`
+   --> crates/layerfs-workspace/src/host_overlay.rs:313:34
+    |
+313 |         self.policy.check(charge)?;
+    |                     -------------^ the trait `From<layerfs_workspace_core::Error>` is not implemented for `layerfs_layerstack_store::StoreError`
+    |                     |
+    |                     this can't be annotated with `?` because it has type `Result<_, layerfs_workspace_core::Error>`
+    |
+    = note: the question mark operation (`?`) implicitly performs a conversion on the error value using the `From` trait
+help: `layerfs_layerstack_store::StoreError` implements trait `From<T>`
+   --> crates/layerfs-layerstack-store/src/error.rs:56:1
+    |
+ 56 | impl From<rusqlite::Error> for StoreError {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `From<rusqlite::error::Error>`
+...
+ 78 | impl From<std::io::Error> for StoreError {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `From<std::io::Error>`
+...
+ 84 | impl From<layerfs_content::CoreError> for StoreError {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `From<CoreError>`
+
+warning: unused variable: `dirty`
+    --> crates/layerfs-workspace/src/file_io.rs:1472:36
+     |
+1472 |                 let (charge, _, _, dirty, _) = workspace.pending_charge_snapshot();
+     |                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_dirty`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+For more information about this error, try `rustc --explain E0277`.
+warning: `layerfs-workspace` (lib test) generated 2 warnings
+error: could not compile `layerfs-workspace` (lib test) due to 1 previous error; 2 warnings emitted

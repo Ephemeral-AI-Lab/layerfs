@@ -12,10 +12,10 @@ for that work; the append-only record of individual checks is
 | Item | Value |
 | --- | --- |
 | Phase | 2 in progress; V1 acceptance remains OPEN and V2/V3/V4 remain implementation obligations |
-| Next concrete action | Integrate HostOverlay ordinary filesystem operations and shared candidate construction from the now-readable owned Snapshot; wire aggregate resource policy and then the per-Workspace Commit coordinator / FUSE adapter |
-| Phases 2–6 | Phase 2 disk roots/payload/ranges/owned reads have component evidence; host ordinary-operation core and Phase 4 candidate adapter are being implemented. No whole phase or public-path acceptance claimed |
+| Next concrete action | Finish cumulative host spool/inline limits; compile and check shared snapshot candidate with the new attempt coordinator; wire generic FUSE host-operation transport and public lifecycle |
+| Phases 2–6 | Phase 2 disk roots/payload/ranges/owned reads have component evidence; host ordinary-operation, logical quota, kernel-reference and server/cookie cores have focused evidence; the FUSE client and Phase 4 candidate adapter are being integrated. No whole phase or public-path acceptance claimed |
 | Phase 7 | Not started. No benchmark case was executed for #124/#125 |
-| Active processes | No root Cargo process. Agents own host_overlay.rs, changes.rs/snapshot_candidate.rs, and resource policy/overlay_budget.rs respectively; coordinate Cargo serially. No benchmark running |
+| Active processes | No root Cargo process. Candidate agent next compiles owned candidate + coordinator; host agent adds generic host_client and kernel callback ownership; budget agent reviews host cookies/replay. Root server/cookie checks passed. No benchmark running |
 | Measurement lock | Not held |
 | Unresolved contract | V1: NOTIFY_RETRIEVE supplies dirty bytes but retains mutable pages, not a snapshot. See follow-up investigation; no relaxation approved |
 
@@ -35,7 +35,7 @@ implementation evidence; full public snapshot acceptance and Phase 7 remain pend
 | Takeover comment | https://github.com/Ephemeral-AI-Lab/layerfs/issues/124#issuecomment-5655720706 |
 | Reviewable implementation | https://github.com/Ephemeral-AI-Lab/layerfs/pull/126 (draft; not terminal) |
 | Initial product component commit | `5996231830eb05c986f7f9dcbb4b24cc52288281`; formatter repair `2728aebd3`, Store Clippy repair `6d907bc43` |
-| CI status | Original fmt failure repaired. Rust 1.85.1 full native run passed 550 selections in 95s on `2728aebd3`; latest published CI still fails on unwired overlay dead code and old index scan arity. Complete integration; no lint disablement |
+| CI status | Original fmt failure repaired. Rust 1.85.1 full native run passed 550 selections in 95s on `2728aebd3`; latest CI34782823313 at c95588f still fails on unwired overlay dead code; index scan arity is repaired. Complete integration; no lint disablement |
 | Source baseline named by the specification | `0814cc37f1dafb6041930c74489107f4a5035a26` |
 | Phase-1 enumerating binary | `target/release/fs-benchmark-pro`, `LAYERFS_SOURCE_COMMIT=536aaf9ded4e09a9ccfcf2b251aa4db995b383e6` (documentation-only difference from the documentation commit), product seal `276c5970…`, compilation seal `8b63c852…` |
 | Regression suite source commit used for the frozen pass ledger | `3e308a8f2` (recorded by the existing v0.1.5/#120 evidence) |
@@ -74,12 +74,12 @@ implementation evidence; full public snapshot acceptance and Phase 7 remain pend
 ## Current independent integration ownership
 
 - `v1_mechanism`: `host_overlay.rs`, concrete host ordinary-operation core over
-  Overlay/Index/Payload/Ranges; previous payload source is stable and reviewed.
+  Overlay/Index/Payload/Ranges plus generic FUSE host wire/client and kernel-lifetime integration; host core has three recorded passing checks, cumulative quota wiring remains underway.
 - `publication_receipts`: `changes.rs` / optional `snapshot_candidate.rs`, owned
   input adapter to the existing shared canonical construction; V3/range components
-  are stable. No second content encoder or all-node map permitted.
+  are receiving shared read/aggregate and persisted-description prerequisites. No second content encoder or all-node map permitted.
 - `overlay_index`: core `limits.rs` / `overlay_budget.rs`, bounded defaults and
-  aggregate host admission. Index source is stable with physical relocation and
+  aggregate host admission and Payload logical charge classification. Index source is stable with physical relocation and
   exact uncertain ownership/writeback-receipt repairs.
 - Root: Snapshot/InodeRecord/binding integration, per-Workspace attempt/lifecycle
   and production FUSE/SDK entry integration, CI, evidence and issue updates.

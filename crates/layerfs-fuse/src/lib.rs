@@ -43,6 +43,9 @@ mod immutable_read_cache;
 pub mod live_wire;
 
 #[cfg(feature = "live")]
+pub mod host_wire;
+
+#[cfg(feature = "live")]
 pub mod live_transport;
 
 #[cfg(feature = "live")]

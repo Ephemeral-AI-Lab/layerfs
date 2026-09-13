@@ -69,6 +69,8 @@ pub(crate) struct Piece {
     // A logical origin may extend only on its original never-rewound source.
     // Equivalent canonical substitution never grants a new extension frontier.
     extend_source: Option<u64>,
+    // Public SDK inline accounting survives transfer to disk/canonical backing.
+    inline_charge: bool,
 }
 pub(crate) struct OwnedPiece {
     pub piece: Piece,
@@ -88,6 +90,7 @@ impl OwnedPiece {
             origin: Some(origin),
             origin_offset,
             extend_source: None,
+            inline_charge: false,
         })
     }
     pub(crate) fn zero(length: u64) -> io::Result<Self> {
@@ -97,6 +100,7 @@ impl OwnedPiece {
             origin: None,
             origin_offset: 0,
             extend_source: None,
+            inline_charge: false,
         })
     }
     pub(crate) fn inline(input: &[u8], origin: OriginId) -> io::Result<Self> {
@@ -111,6 +115,7 @@ impl OwnedPiece {
             origin: Some(origin),
             origin_offset: 0,
             extend_source: None,
+            inline_charge: true,
         })
     }
     pub(crate) fn payload(range: OwnedRange, origin: OriginId) -> io::Result<Self> {
@@ -122,12 +127,19 @@ impl OwnedPiece {
             origin: Some(origin),
             origin_offset: 0,
             extend_source: Some(range.source()),
+            inline_charge: false,
         };
         piece.validate()?;
         Ok(Self {
             piece,
             _payload: Some(range),
         })
+    }
+    pub(crate) fn inline_payload(range: OwnedRange, origin: OriginId) -> io::Result<Self> {
+        let mut owned = Self::payload(range, origin)?;
+        owned.piece.inline_charge = true;
+        owned.piece.extend_source = None;
+        Ok(owned)
     }
     fn plain(piece: Piece) -> io::Result<Self> {
         piece.validate()?;
@@ -193,12 +205,13 @@ impl Piece {
         }
         bytes[32..40].copy_from_slice(&self.origin_offset.to_be_bytes());
         bytes[40..48].copy_from_slice(&self.extend_source.unwrap_or(0).to_be_bytes());
-        bytes[48] = match self.source {
-            Source::Base { .. } => 0,
-            Source::Payload { .. } => 1,
-            Source::Zero => 2,
-            Source::Inline { .. } => 3,
-        };
+        bytes[48] = (if self.inline_charge { 0x80 } else { 0 })
+            | match self.source {
+                Source::Base { .. } => 0,
+                Source::Payload { .. } => 1,
+                Source::Zero => 2,
+                Source::Inline { .. } => 3,
+            };
         bytes
     }
     fn backing(self) -> Vec<u8> {
@@ -216,7 +229,7 @@ impl Piece {
             return Err(corrupt("range piece metadata"));
         }
         let length = u64::from_be_bytes(metadata[..8].try_into().unwrap());
-        let source = match metadata[48] {
+        let source = match metadata[48] & 0x7f {
             0 if backing.len() == 40 => Source::Base {
                 root: ObjectId::from_bytes(&backing[..32])
                     .map_err(|_| corrupt("range base identity"))?,
@@ -244,6 +257,7 @@ impl Piece {
             },
             origin_offset: u64::from_be_bytes(metadata[32..40].try_into().unwrap()),
             extend_source: (extend != 0).then_some(extend),
+            inline_charge: metadata[48] & 0x80 != 0,
         };
         piece.validate()?;
         if piece.metadata().as_slice() != metadata {
@@ -259,16 +273,22 @@ struct Summary {
     height: u64,
     priority: u64,
     left_length: u64,
+    zero_bytes: u64,
+    inline_bytes: u64,
+    payload_bytes: u64,
 }
 impl Summary {
-    fn encode(self) -> [u8; 40] {
-        let mut bytes = [0; 40];
+    fn encode(self) -> [u8; 64] {
+        let mut bytes = [0; 64];
         for (i, value) in [
             self.length,
             self.count,
             self.height,
             self.priority,
             self.left_length,
+            self.zero_bytes,
+            self.inline_bytes,
+            self.payload_bytes,
         ]
         .into_iter()
         .enumerate()
@@ -278,7 +298,7 @@ impl Summary {
         bytes
     }
     fn decode(bytes: &[u8]) -> io::Result<Self> {
-        if bytes.len() != 40 {
+        if bytes.len() != 64 {
             return Err(corrupt("range node summary"));
         }
         let word = |i: usize| u64::from_be_bytes(bytes[i * 8..i * 8 + 8].try_into().unwrap());
@@ -288,12 +308,23 @@ impl Summary {
             height: word(2),
             priority: word(3),
             left_length: word(4),
+            zero_bytes: word(5),
+            inline_bytes: word(6),
+            payload_bytes: word(7),
         };
         if summary.length == 0
             || summary.count == 0
             || summary.height == 0
             || summary.height > MAX_HEIGHT
             || summary.left_length >= summary.length
+            || summary
+                .zero_bytes
+                .checked_add(summary.inline_bytes)
+                .is_none_or(|n| n > summary.length)
+            || summary
+                .zero_bytes
+                .checked_add(summary.payload_bytes)
+                .is_none_or(|n| n > summary.length)
         {
             return Err(corrupt("invalid range node summary"));
         }
@@ -314,6 +345,15 @@ impl Tree {
     }
     pub(crate) fn height(&self) -> u64 {
         self.summary.height
+    }
+    pub(crate) fn zero_bytes(&self) -> u64 {
+        self.summary.zero_bytes
+    }
+    pub(crate) fn inline_bytes(&self) -> u64 {
+        self.summary.inline_bytes
+    }
+    pub(crate) fn payload_bytes(&self) -> u64 {
+        self.summary.payload_bytes
     }
     pub(crate) fn root(&self) -> Option<&Root> {
         self.root.as_ref()
@@ -359,6 +399,13 @@ impl Ranges {
             cursors: AtomicU64::new(0),
         })))
     }
+    pub(crate) fn root_inline_bytes(index: &Index, root: Option<&Root>) -> io::Result<u64> {
+        let Some(root) = root else { return Ok(0) };
+        let header = index
+            .get(root, META)?
+            .ok_or_else(|| corrupt("missing range aggregate"))?;
+        Ok(Summary::decode(&header)?.inline_bytes)
+    }
     pub(crate) fn empty(&self) -> Tree {
         Tree::default()
     }
@@ -384,6 +431,9 @@ impl Ranges {
         if tree.len() > self.0.limits.max_length
             || tree.count() > self.0.limits.max_pieces
             || tree.height() > self.0.limits.max_height
+            || tree.zero_bytes() > layerfs_workspace_core::file_edit::MAX_LOGICAL_ZERO_BYTES
+            || tree.zero_bytes().div_ceil(8192)
+                > layerfs_workspace_core::file_edit::MAX_PREDICTED_ZERO_EXTENTS
         {
             return Err(quota("range tree limits"));
         }
@@ -455,10 +505,42 @@ impl Ranges {
             height: add(left.height().max(right.height()), 1)?,
             priority,
             left_length: left.len(),
+            zero_bytes: add(
+                add(
+                    left.zero_bytes(),
+                    if matches!(piece.source, Source::Zero) {
+                        piece.length
+                    } else {
+                        0
+                    },
+                )?,
+                right.zero_bytes(),
+            )?,
+            inline_bytes: add(
+                add(
+                    left.inline_bytes(),
+                    if piece.inline_charge { piece.length } else { 0 },
+                )?,
+                right.inline_bytes(),
+            )?,
+            payload_bytes: add(
+                add(
+                    left.payload_bytes(),
+                    if matches!(piece.source, Source::Payload { .. }) {
+                        piece.length
+                    } else {
+                        0
+                    },
+                )?,
+                right.payload_bytes(),
+            )?,
         };
         if summary.length > self.0.limits.max_length
             || summary.count > self.0.limits.max_pieces
             || summary.height > self.0.limits.max_height
+            || summary.zero_bytes > layerfs_workspace_core::file_edit::MAX_LOGICAL_ZERO_BYTES
+            || summary.zero_bytes.div_ceil(8192)
+                > layerfs_workspace_core::file_edit::MAX_PREDICTED_ZERO_EXTENTS
         {
             return Err(quota("range tree limits"));
         }
@@ -469,6 +551,8 @@ impl Ranges {
         }
         Ok(summary)
     }
+    // ponytail: one 4-KiB leaf per range node, plus transient COW pages;
+    // pack nodes together if measured metadata pressure requires that change.
     fn node(&self, piece: Piece, priority: u64, left: &Tree, right: &Tree) -> io::Result<Tree> {
         let summary = self.summary(piece, priority, left, right)?;
         let mut root = self.0.index.empty_root()?;
@@ -751,17 +835,55 @@ impl Ranges {
         cursor.descend(tree.clone(), 0)?;
         Ok(cursor)
     }
+    /// Transient reads are already protected by this owned root. Do not allocate
+    /// a fresh payload-owner token for every streaming read buffer.
+    pub(crate) fn read_range(
+        &self,
+        tree: &Tree,
+        output: &mut [u8],
+        offset: u64,
+        mut base: impl FnMut(ObjectId, &mut [u8], u64) -> io::Result<()>,
+    ) -> io::Result<usize> {
+        let start = offset.min(tree.len());
+        let stop = tree.len().min(start.saturating_add(output.len() as u64));
+        let mut cursor = self.cursor(tree, start, stop)?;
+        let mut filled = 0;
+        while let Some((position, piece, local, length)) = cursor.next_raw()? {
+            if position != start + filled as u64 {
+                return Err(corrupt("range read coverage"));
+            }
+            let length = usize::try_from(length).map_err(|_| corrupt("range read width"))?;
+            let target = output
+                .get_mut(filled..filled + length)
+                .ok_or_else(|| corrupt("range read output"))?;
+            self.read_source(piece, target, local, &mut base)?;
+            filled += length;
+        }
+        if filled as u64 != stop - start {
+            return Err(corrupt("short range read"));
+        }
+        Ok(filled)
+    }
     pub(crate) fn read_piece(
         &self,
         piece: &OwnedPiece,
         output: &mut [u8],
         offset: u64,
+        base: impl FnMut(ObjectId, &mut [u8], u64) -> io::Result<()>,
+    ) -> io::Result<()> {
+        self.read_source(piece.piece, output, offset, base)
+    }
+    fn read_source(
+        &self,
+        piece: Piece,
+        output: &mut [u8],
+        offset: u64,
         mut base: impl FnMut(ObjectId, &mut [u8], u64) -> io::Result<()>,
     ) -> io::Result<()> {
-        if add(offset, output.len() as u64)? > piece.piece.length {
+        if add(offset, output.len() as u64)? > piece.length {
             return Err(invalid("range read bounds"));
         }
-        match piece.piece.source {
+        match piece.source {
             Source::Base {
                 root,
                 offset: start,
@@ -840,6 +962,26 @@ impl Cursor {
                 )));
             }
         }
+    }
+    /// Metadata-only initial predecessor mapping. The optional location is a
+    /// canonical Base root/offset, never an unowned raw payload token.
+    pub(crate) fn next_base_descriptor(
+        &mut self,
+    ) -> io::Result<Option<(Descriptor, Option<(ObjectId, u64)>)>> {
+        self.next_raw()?
+            .map(|(offset, piece, local, length)| {
+                let mut descriptor = piece.descriptor(offset);
+                descriptor.length = length;
+                if descriptor.origin.is_some() {
+                    descriptor.origin_offset = add(descriptor.origin_offset, local)?;
+                }
+                let base = match piece.source {
+                    Source::Base { root, offset } => Some((root, add(offset, local)?)),
+                    _ => None,
+                };
+                Ok((descriptor, base))
+            })
+            .transpose()
     }
     /// Descriptor-only iteration keeps the root during its metadata pass, without
     /// acquiring a new payload token for every visited descriptor.
@@ -990,6 +1132,128 @@ mod tests {
         fn drop(&mut self) {
             fs::remove_dir_all(&self.directory).unwrap();
         }
+    }
+
+    #[test]
+    fn logical_inline_charge_survives_payload_backing_and_splits() {
+        let f = Fixture::new();
+        let bytes = vec![9; 1024];
+        let owner = f
+            .ranges
+            .0
+            .payload
+            .write_from(&mut bytes.as_slice(), bytes.len() as u64)
+            .unwrap();
+        let tree = f
+            .ranges
+            .append(
+                &f.ranges.empty(),
+                OwnedPiece::inline_payload(owner, f.origins.allocate().unwrap()).unwrap(),
+            )
+            .unwrap();
+        assert_eq!((tree.inline_bytes(), tree.payload_bytes()), (1024, 1024));
+        assert_eq!(
+            Ranges::root_inline_bytes(&f.ranges.0.index, tree.root()).unwrap(),
+            1024
+        );
+        let sliced = f.ranges.truncate(&tree, 17).unwrap();
+        assert_eq!((sliced.inline_bytes(), sliced.payload_bytes()), (17, 17));
+        let appended = f
+            .ranges
+            .append_from(&sliced, &mut &b"x"[..], 1, &f.origins)
+            .unwrap();
+        assert_eq!(appended.inline_bytes(), 17);
+        assert_eq!(appended.payload_bytes(), 18);
+    }
+
+    #[test]
+    fn repeated_snapshot_reads_allocate_no_per_buffer_payload_owners() {
+        let f = Fixture::new();
+        let bytes = vec![42; 4096];
+        let payload = f
+            .ranges
+            .0
+            .payload
+            .write_from(&mut bytes.as_slice(), bytes.len() as u64)
+            .unwrap();
+        let tree = f
+            .ranges
+            .append(
+                &f.ranges.empty(),
+                OwnedPiece::payload(payload, f.origins.allocate().unwrap()).unwrap(),
+            )
+            .unwrap();
+        f.drain();
+        let before = f.ranges.0.payload.stats().unwrap();
+        for offset in 0..5000 {
+            let mut byte = [0];
+            assert_eq!(
+                f.ranges
+                    .read_range(&tree, &mut byte, offset % 4096, |_, _, _| panic!(
+                        "payload called canonical reader"
+                    ))
+                    .unwrap(),
+                1
+            );
+            assert_eq!(byte, [42]);
+        }
+        let after = f.ranges.0.payload.stats().unwrap();
+        assert_eq!(after.owners, before.owners);
+        assert_eq!(after.pending_releases, 0);
+        assert_eq!(after.readers, 0);
+    }
+
+    #[test]
+    fn exact_zero_limit_and_cached_backing_aggregates_survive_disk_restore() {
+        let f = Fixture::new();
+        let limit = layerfs_workspace_core::file_edit::MAX_LOGICAL_ZERO_BYTES;
+        let exact = f
+            .ranges
+            .append(&f.ranges.empty(), OwnedPiece::zero(limit).unwrap())
+            .unwrap();
+        assert_eq!(exact.zero_bytes(), limit);
+        assert!(f
+            .ranges
+            .append(&exact, OwnedPiece::zero(1).unwrap())
+            .is_err());
+        assert_eq!(exact.len(), limit);
+        let inline = f.ranges.append(&exact, f.inline(b"abc")).unwrap();
+        let payload = f
+            .ranges
+            .0
+            .payload
+            .write_from(&mut &b"12345"[..], 5)
+            .unwrap();
+        let mixed = f
+            .ranges
+            .append(
+                &inline,
+                OwnedPiece::payload(payload, f.origins.allocate().unwrap()).unwrap(),
+            )
+            .unwrap();
+        let restored = f.ranges.restore(mixed.root().cloned()).unwrap();
+        assert_eq!(
+            (
+                restored.zero_bytes(),
+                restored.inline_bytes(),
+                restored.payload_bytes()
+            ),
+            (limit, 3, 5)
+        );
+        let shortened = f.ranges.truncate(&restored, limit + 4).unwrap();
+        assert_eq!(
+            (
+                shortened.zero_bytes(),
+                shortened.inline_bytes(),
+                shortened.payload_bytes()
+            ),
+            (limit, 3, 1)
+        );
+        let mut cursor = f.ranges.cursor(&shortened, limit, limit + 4).unwrap();
+        let (descriptor, base) = cursor.next_base_descriptor().unwrap().unwrap();
+        assert_eq!(descriptor.kind, Kind::Inline);
+        assert!(base.is_none());
+        assert_eq!(descriptor.length, 3);
     }
 
     #[test]

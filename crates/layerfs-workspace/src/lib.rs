@@ -10,12 +10,16 @@ mod docker_engine;
 mod execution;
 pub(crate) use layerfs_workspace_core::file_edit;
 mod file_io;
+mod host_directories;
+mod host_operations;
+mod host_overlay;
 mod lifecycle;
 mod live_backing;
 
 mod cow_tree;
 mod output;
 mod overlay;
+mod overlay_budget;
 mod overlay_index;
 mod overlay_payload;
 mod overlay_ranges;

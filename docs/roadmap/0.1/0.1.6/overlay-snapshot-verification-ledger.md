@@ -278,3 +278,79 @@ break, not as qualification of the new behavior.
 - validity: current host-installed-state proof only. Generic-FUSE V1 remains
   OPEN, as do host operation/candidate/coordinator/public adapter integration,
   complete resource admission, final correctness/capacity and full Phase 7.
+
+
+### L15 — Overlay policy, ownership lifetime and host operations
+
+- identity: one exact/+1 core overlay policy check; four host aggregate/index/FD,
+  operation reservation and detached-owner lifetime checks; three host operation
+  checks covering cold canonical reads, retained snapshots, aliases, unequal SDK
+  splices, atomic failed batches, concurrent rename, open-unlinked identity and
+  tombstone-only directory pagination.
+- source/environment: `evidence/phase2-components/overlay-budget-manifest.json`
+  and `evidence/phase3-host-operations/attempt-02.json` bind exact source hashes,
+  native macOS arm64 Rust 1.96.0, commands and raw logs.
+- result: policy 1 PASS; budget 4 PASS; host operations 3 PASS. Host attempt-01
+  failed all three checks during root initialization: non-root `acquire_inode`
+  incorrectly rejected the namespace root's valid zero incoming references.
+  Host attempt-02 reuses existing canonical root resolution and passes, including
+  29,049 snapshots observed during concurrent namespace changes.
+- validity: recorded component identities only. Later shared range-summary/read
+  changes and cumulative quota wiring require the directly affected checks;
+  separate replay/index/Store passes remain reusable where dependencies did not
+  change. These results do not prove generic-FUSE V1 or integrated Commit.
+
+### L16 — Retained CI integration failure
+
+- identity/source: GitHub CI `34781059906` at `6d907bc43` and `34782823313` at
+  `c95588f30760e08235d56b513e48b92a9defd9b7`; remote Rust 1.96.0 workspace Clippy.
+- result: FAIL; raw logs preserved in `evidence/ci/`. New private overlay and
+  correspondence components have no production callers yet, so `-D warnings`
+  correctly rejects dead code. The earlier index scan arity issue was repaired.
+- validity: failures remain current evidence of incomplete product integration.
+  No `allow(dead_code)`, public API exposure solely for lints, or test-only hiding
+  is accepted as the repair. Complete ordinary-operation/candidate/lifecycle
+  integration before claiming CI success.
+
+
+### L17 — Shared reader prerequisites, logical quotas, kernel references and host dispatch
+
+- identity/source: range summary/zero limit and root-protected streaming reads
+  (7 checks), persisted metadata description (1), affected Snapshot reader (1),
+  bound in `evidence/phase4-candidate/prereq-01-source.json`. Host operation,
+  exact logical quotas, kernel reference/detach, wire, installation generation
+  and request-digest checks bind source in `evidence/phase3-host-operations/`.
+- environment: native macOS arm64 Rust 1.96.0; exact commands and raw results in
+  each attempt manifest; no benchmarks or Linux FUSE workload executed.
+- result: prerequisites 9 PASS; host 5 distinct PASS (4 from attempt03 retained,
+  1 targeted attempt04); wire 2 PASS; exact root-generation and replay-digest
+  checks 1 PASS each. Host attempt03's remaining failure was a test expecting
+  128 visible names despite two scanned tombstones; the repaired oracle follows
+  continuation and verifies all 131 live entries, without changing production code.
+- further integration: `dispatch-cookie-attempt01.json` records two new exact
+  tests from one compiled binary: stable numeric directory cookies across 301
+  cold names, aliases, deletion/cursor resume and repeated create/remove (PASS,
+  3.40s), and exact host dispatch/reply replay including kernel-owned orphan and
+  retained snapshot reads (PASS, 0.02s). These are test wall times, not benchmark
+  measurements. Replay binds the entire request digest; mismatched, stale and
+  unknown-session identities never reapply an operation.
+- validity: the shared reader/aggregate and binding ownership changes explicitly
+  invalidated the three earlier host checks; their directly affected reruns now
+  pass. Pure test-oracle repair did not invalidate the other four host passes.
+  Original failures remain preserved. Generic-FUSE mmap, actual client transport,
+  shared candidate/C1/C2/public lifecycle and final capacity/campaign remain open.
+
+
+### L18 — Reviewed replay acknowledgment correction
+
+- identity: the L17 host-dispatch check extended with a sequence-2 retry carrying
+  the identical mutation while cumulative acknowledgment advances from 0 to 1.
+- source/environment/commands: `evidence/phase3-host-operations/replay-ack-attempt01.json`
+  and `replay-ack-attempt02.json`, native Rust 1.96.0; raw logs retained alongside.
+- result: attempt01 FAIL (Invalid); attempt02 PASS after hashing operation bytes
+  separately from the session/sequence key and acknowledgment metadata. Known
+  failures, lost results, changed-body rejection, stale/unknown requests and
+  kernel-orphan snapshot reads remain in the same exact check.
+- validity: this is the current host-dispatch pass. The older full-frame test
+  missed a valid acknowledgment update. Numeric cookie and unchanged wire codec
+  passes are retained because their exercised paths did not change.

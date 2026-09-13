@@ -1066,6 +1066,42 @@ struct WorkerFileResults {
     counters: layerfs_layerstack_store::BuildCounters,
 }
 impl FileResultWriter {
+    fn write_result(
+        &mut self,
+        index: &File,
+        ordinal: usize,
+        id: NodeId,
+        len: u64,
+        root: ObjectId,
+        before: Option<InodeRecordV1>,
+    ) -> Result<()> {
+        let before = before.map(encode_inode_record).transpose()?;
+        let mut record = Vec::with_capacity(308);
+        record.extend_from_slice(&id.0.to_le_bytes());
+        record.extend_from_slice(&len.to_le_bytes());
+        record.extend_from_slice(root.as_bytes());
+        record.extend_from_slice(&(before.as_ref().map_or(0, Vec::len) as u32).to_le_bytes());
+        if let Some(before) = before {
+            record.extend_from_slice(&before);
+        }
+        self.journal.write_all(&record)?;
+        let mut location = [0; 24];
+        location[..8].copy_from_slice(&(self.worker as u64 + 1).to_le_bytes());
+        location[8..16].copy_from_slice(&self.offset.to_le_bytes());
+        location[16..].copy_from_slice(&(record.len() as u64).to_le_bytes());
+        let offset = (ordinal as u64)
+            .checked_mul(FILE_TASK_BYTES)
+            .and_then(|v| v.checked_add(8))
+            .ok_or(StorageError::Integrity("file task offset"))?;
+        index.write_all_at(&location, offset)?;
+        self.offset = self
+            .offset
+            .checked_add(record.len() as u64)
+            .ok_or(StorageError::Integrity("file result offset"))?;
+        self.count += 1;
+        Ok(())
+    }
+
     fn finish(mut self) -> Result<WorkerFileResults> {
         self.journal.flush()?;
         let io_bytes = self.journal.capacity();
@@ -1179,14 +1215,16 @@ impl RemovedSmallCandidates {
                 }
                 pending.push((base, CanonicalName::from_bytes(name)?));
                 if pending.len() == limit {
-                    if !discovery.bindings(inputs, &pending, limit)? {
+                    if !discovery.bindings(&inputs.reader, inputs.base_inodes, &pending, limit)? {
                         return Ok(Self::default());
                     }
                     pending.clear();
                 }
             }
         }
-        if !pending.is_empty() && !discovery.bindings(inputs, &pending, limit)? {
+        if !pending.is_empty()
+            && !discovery.bindings(&inputs.reader, inputs.base_inodes, &pending, limit)?
+        {
             return Ok(Self::default());
         }
         drop(pending);
@@ -1210,7 +1248,13 @@ impl RemovedSmallCandidates {
                     &mut NamespaceCounters::default(),
                 )?;
                 if !discovery.charge(page.entries.len(), 0)
-                    || !discovery.records(inputs, &page.entries, depth, limit)?
+                    || !discovery.records(
+                        &inputs.reader,
+                        inputs.base_inodes,
+                        &page.entries,
+                        depth,
+                        limit,
+                    )?
                 {
                     return Ok(Self::default());
                 }
@@ -1243,7 +1287,8 @@ impl RemovedSmallDiscovery {
 
     fn bindings(
         &mut self,
-        inputs: &StableFileInputs<'_>,
+        reader: &layerfs_layerstack_store::SnapshotReader,
+        base_inodes: InodeTableRoot,
         keys: &[(DirectoryStateRoot, CanonicalName)],
         limit: usize,
     ) -> Result<bool> {
@@ -1251,7 +1296,7 @@ impl RemovedSmallDiscovery {
             return Ok(false);
         }
         let found = layerfs_content::tree::directory::directory_lookup_many(
-            &CoreReader(&inputs.reader),
+            &CoreReader(reader),
             keys,
             &mut NamespaceCounters::default(),
         )?;
@@ -1260,12 +1305,13 @@ impl RemovedSmallDiscovery {
             .zip(found)
             .filter_map(|((_, name), inode)| inode.map(|id| (name.clone(), id)))
             .collect();
-        self.records(inputs, &records, 0, limit)
+        self.records(reader, base_inodes, &records, 0, limit)
     }
 
     fn records(
         &mut self,
-        inputs: &StableFileInputs<'_>,
+        reader: &layerfs_layerstack_store::SnapshotReader,
+        base_inodes: InodeTableRoot,
         names: &[(CanonicalName, InodeId)],
         depth: usize,
         limit: usize,
@@ -1277,12 +1323,7 @@ impl RemovedSmallDiscovery {
             return Ok(false);
         }
         let ids: Vec<_> = names.iter().map(|(_, id)| *id).collect();
-        let records = FrontierInodes::base_records(
-            &CoreReader(&inputs.reader),
-            inputs.base_inodes,
-            &ids,
-            limit,
-        )?;
+        let records = FrontierInodes::base_records(&CoreReader(reader), base_inodes, &ids, limit)?;
         for ((name, _), record) in names.iter().zip(records) {
             match record.kind {
                 InodeKind::RegularFile => {
@@ -1587,31 +1628,7 @@ impl StableFileInputs<'_> {
             (built.root_id, built.counters)
         };
         add_build_counters(&mut worker.counters, counters);
-        let before = before.map(encode_inode_record).transpose()?;
-        let mut record = Vec::with_capacity(308);
-        record.extend_from_slice(&id.0.to_le_bytes());
-        record.extend_from_slice(&input.len.to_le_bytes());
-        record.extend_from_slice(root.as_bytes());
-        record.extend_from_slice(&(before.as_ref().map_or(0, Vec::len) as u32).to_le_bytes());
-        if let Some(before) = before {
-            record.extend_from_slice(&before);
-        }
-        worker.journal.write_all(&record)?;
-        let mut location = [0; 24];
-        location[..8].copy_from_slice(&(worker.worker as u64 + 1).to_le_bytes());
-        location[8..16].copy_from_slice(&worker.offset.to_le_bytes());
-        location[16..].copy_from_slice(&(record.len() as u64).to_le_bytes());
-        let offset = (ordinal as u64)
-            .checked_mul(FILE_TASK_BYTES)
-            .and_then(|v| v.checked_add(8))
-            .ok_or(StorageError::Integrity("file task offset"))?;
-        index.write_all_at(&location, offset)?;
-        worker.offset = worker
-            .offset
-            .checked_add(record.len() as u64)
-            .ok_or(StorageError::Integrity("file result offset"))?;
-        worker.count += 1;
-        Ok(())
+        worker.write_result(index, ordinal, id, input.len, root, before)
     }
 }
 
@@ -3066,6 +3083,18 @@ impl FrontierInodes {
         budget: u64,
         io_bytes: usize,
     ) -> Result<()> {
+        self.apply_references_observed(objects, base, journal, budget, io_bytes, &mut |_| Ok(()))
+    }
+
+    fn apply_references_observed(
+        &mut self,
+        objects: &ObjectBuffer<'_>,
+        base: &CoreReader<'_>,
+        journal: Option<(File, u64)>,
+        budget: u64,
+        io_bytes: usize,
+        removed: &mut impl FnMut(InodeId) -> Result<()>,
+    ) -> Result<()> {
         let Some((file, count)) = journal else {
             return Ok(());
         };
@@ -3120,6 +3149,7 @@ impl FrontierInodes {
                             Some(record),
                             amount,
                             budget.saturating_sub(retained),
+                            removed,
                         )?;
                     }
                 }
@@ -3139,6 +3169,7 @@ impl FrontierInodes {
         prefetched: Option<InodeRecordV1>,
         amount: u64,
         budget: u64,
+        removed: &mut impl FnMut(InodeId) -> Result<()>,
     ) -> Result<()> {
         struct Cursor {
             root: DirectoryStateRoot,
@@ -3155,6 +3186,9 @@ impl FrontierInodes {
                 // Earlier additions/releases override authenticated page prefetch.
                 let record = self.change_references(objects, inode, prefetched, amount, false)?;
                 note_commit_phase(WorkspaceCommitPhase::DeletionRecords, started);
+                if record.namespace_ref_count == 0 {
+                    removed(inode)?;
+                }
                 if record.namespace_ref_count == 0 && record.kind == InodeKind::Directory {
                     directories.push(Cursor {
                         root: DirectoryStateRoot(record.content_root),

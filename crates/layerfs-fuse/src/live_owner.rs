@@ -912,6 +912,7 @@ impl LiveOwner {
         let policy = ResourcePolicy {
             max_spool_bytes: input.u64().map_err(io)?,
             max_final_delta_memory_bytes: input.u64().map_err(io)?,
+            ..ResourcePolicy::default()
         };
         let (id, node) = wire::node_in(input.0, |_, _, _| Err(wire::invalid())).map_err(io)?;
         if id != ROOT {

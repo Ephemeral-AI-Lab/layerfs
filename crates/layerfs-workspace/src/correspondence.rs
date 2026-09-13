@@ -270,6 +270,60 @@ impl Description {
         self.records += 1;
         Ok(())
     }
+    /// Persist a completed canonical description using owned metadata links.
+    /// No live range or payload token is included in this graph.
+    pub(crate) fn persist(&self) -> io::Result<Root> {
+        let canonical = self
+            .canonical_root
+            .ok_or_else(|| invalid("unpublished correspondence description"))?;
+        let mut header = [0; 56];
+        header[..8].copy_from_slice(&self.inode.0.to_be_bytes());
+        header[8..40].copy_from_slice(canonical.as_bytes());
+        header[40..48].copy_from_slice(&self.length.to_be_bytes());
+        header[48..56].copy_from_slice(&self.records.to_be_bytes());
+        let root = self.index.empty_root()?;
+        let root = self.index.set(&root, &[0], &header)?;
+        let root = self
+            .index
+            .set_linked(&root, &[1], &[], Some(&self.offsets))?;
+        self.index.set_linked(&root, &[2], &[], Some(&self.origins))
+    }
+    pub(crate) fn restore(index: &Index, root: &Root) -> io::Result<Self> {
+        let header = index
+            .get(root, &[0])?
+            .ok_or_else(|| invalid("missing correspondence header"))?;
+        if header.len() != 56 {
+            return Err(invalid("correspondence header length"));
+        }
+        let inode = NodeId(u64::from_be_bytes(header[..8].try_into().unwrap()));
+        let length = u64::from_be_bytes(header[40..48].try_into().unwrap());
+        let records = u64::from_be_bytes(header[48..56].try_into().unwrap());
+        if inode.0 == 0 || (length == 0) != (records == 0) || records > length {
+            return Err(invalid("correspondence header values"));
+        }
+        let linked = |key| -> io::Result<Root> {
+            let (value, child) = index
+                .get_linked(root, &[key])?
+                .ok_or_else(|| invalid("missing correspondence index"))?;
+            if !value.is_empty() {
+                return Err(invalid("correspondence index link"));
+            }
+            child.map_or_else(|| index.empty_root(), Ok)
+        };
+        Ok(Self {
+            index: index.clone(),
+            offsets: linked(1)?,
+            origins: linked(2)?,
+            inode,
+            canonical_root: Some(
+                ObjectId::from_bytes(&header[8..40])
+                    .map_err(|_| invalid("correspondence canonical root"))?,
+            ),
+            length,
+            records,
+            build_index_operations: 0,
+        })
+    }
     fn cursor(&self) -> DescriptorCursor<'_> {
         DescriptorCursor {
             description: self,
@@ -964,6 +1018,35 @@ mod tests {
             length,
             zero,
         }
+    }
+
+    #[test]
+    fn persisted_description_owns_only_metadata_and_restores_complete_indexes() {
+        let f = Fixture::new();
+        let origin = f.origin();
+        let old = f.description(&[data(0, 7, origin, 0), zero(7, 9)], true);
+        let root = old.persist().unwrap();
+        drop(old);
+        for _ in 0..16 {
+            f.index.reclaim(64).unwrap();
+        }
+        let restored = Description::restore(&f.index, &root).unwrap();
+        let current = f.description(&[data(0, 3, origin, 2), zero(3, 9)], false);
+        let result = plan(&restored, &current, &f.directory, 4096).unwrap();
+        assert_eq!(
+            result
+                .into_iter()
+                .unwrap()
+                .collect::<io::Result<Vec<_>>>()
+                .unwrap(),
+            [base(2, 0, 3), base(7, 3, 9)]
+        );
+        let empty = f.description(&[], true);
+        let persisted = empty.persist().unwrap();
+        drop(empty);
+        let empty = Description::restore(&f.index, &persisted).unwrap();
+        assert_eq!((empty.length, empty.records), (0, 0));
+        assert!(empty.cursor().next(&mut 0).unwrap().is_none());
     }
 
     #[test]

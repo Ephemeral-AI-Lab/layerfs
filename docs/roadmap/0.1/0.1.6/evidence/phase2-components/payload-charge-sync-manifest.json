@@ -1,0 +1,65 @@
+{
+  "scope": "Narrow host logical-spool accounting and explicit filesystem sync; no Commit snapshot barrier or complete V1 assertion.",
+  "sources": [
+    {
+      "path": "crates/layerfs-workspace/src/overlay_payload.rs",
+      "sha256": "bd8b2cf3e350d2ae1f0bc56a679971b18bd804b04e221ce2367dafc52030aae1",
+      "git_blob": "ec3d64744a236834891bbb0846ba56a8fe8922da"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay_index.rs",
+      "sha256": "6b75be37d139b6358a43ef89955a59063828a4eec2e269a15f9631134e2e0c60",
+      "git_blob": "7e9b17574dc55e1ed74c3012b3a2d3ba830d2bd6"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay_budget.rs",
+      "sha256": "222dcd2623e95288fbabc576c7287c25791e6e3f391b1fc818f46124d77c5c83",
+      "git_blob": "2fa0bf340b8b22e656beeaaaf2d9a8b16e9a958a"
+    }
+  ],
+  "base_head": "c95588f30760e08235d56b513e48b92a9defd9b7",
+  "environment": {
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+  },
+  "logical_spool": "Stats.chargeable_bytes is the union of ordinary-spool source coverage, clipped to each source highwater. Fresh4B charges4; a surviving middle1B lease in a larger source charges its4KiB block; overlapping tokens and retained metadata references do not double charge. write_from is ordinary; write_inline_from uses the same physical pipeline but immutable source flag false. Ordinary append refuses an inline source before reading input. Physical/live block accounting includes both classes.",
+  "private_source_record_change": "SOURCE row expands from16 to24bytes: highwater, token-owner count, immutable ordinary-spool flag. There is no restart/private-format compatibility claim; anonymous runtime state is freshly constructed.",
+  "sync_contract": "Old Workspace test fsync checked/observed segments; LiveOwner flushed append/facts and CHECK only observed highwater/metrics. New explicit sync_data calls actual data/catalog and both arena descriptors, propagates I/O errors, and performs no graph/owner drain. Index File fields are Arc<File> so2 handles can be retained under a short storage lock then synced after the lock releases, without dup/new fds. Root/install locks are not held. Runtime-private unlinked arenas and in-memory roots are not a crash-recoverable Workspace; this does not publish a branch or implement snapshot acquisition.",
+  "results": [
+    {
+      "identity": "overlay_payload::tests::chargeable_spool_counts_clipped_shared_coverage_and_excludes_sdk_inline",
+      "command": "cargo test -p layerfs-workspace --lib overlay_payload::tests::chargeable_spool_counts_clipped_shared_coverage_and_excludes_sdk_inline -- --nocapture",
+      "raw": "payload-chargeable-attempt01.log",
+      "result": "PASS",
+      "covered": "shared/external owners, clipped tails, append and failed append, retained middle block, SDK-inline class, unread cross-class append fallback, finalzero"
+    },
+    {
+      "identity": "overlay_index::tests::explicit_sync_flushes_data_and_catalog_and_preserves_root_ownership",
+      "command": "cargo test -p layerfs-workspace --lib explicit_sync_flushes -- --nocapture",
+      "raw": "overlay-explicit-sync-attempt02.log",
+      "result": "PASS",
+      "covered": "actual data/catalog fd sync, socket fd errors, captured bytes unchanged, retired roots not drained"
+    },
+    {
+      "identity": "overlay_payload::tests::explicit_sync_flushes_both_private_arenas_and_returns_io_failures",
+      "command": "cargo test -p layerfs-workspace --lib explicit_sync_flushes -- --nocapture",
+      "raw": "overlay-explicit-sync-attempt02.log",
+      "result": "PASS",
+      "covered": "bothactualarena fds, fd error propagation, old data and charge retained, clean finalreclaim"
+    }
+  ],
+  "retained_failures": [
+    {
+      "raw": "overlay-explicit-sync-attempt01.log",
+      "result": "NOT_RUN",
+      "reason": "HostOverlay policy.check returned core Error without existing live_error conversion; HostOverlay owner added map_err(crate::live_error), then same new filter passed."
+    }
+  ],
+  "validity": "Chargeability PASS precedes only the new explicit sync methods/Arc descriptor retention; charge arithmetic and classified source format unchanged. Existing quota/budget evidence remains in overlay-budget-manifest.json and is not relabeled with later source identities. Old descriptor/range algorithm passes alone do not certify newly added source-class accounting; this new case does.",
+  "integration_requirements": [
+    "Host callers must preflight current ordinary charge+new bytes before append/write, then recheck exact charge before live inode publication; rejection must not poison never-rewound sourcehighwater.",
+    "Host fsync invokes both Payload::sync_data (includingprivateindex) and thegeneral metadata Index::sync_data.",
+    "Bounded ordinary request scheduling must wait/retry active-writer/prepared contention instead of leaking WouldBlock as a permanent acknowledged mutation failure."
+  ],
+  "benchmark_scope": "No benchmark or issue122 scenario executed."
+}

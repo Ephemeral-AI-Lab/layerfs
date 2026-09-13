@@ -1,0 +1,110 @@
+{
+  "scope": "Host overlay policy/admission component; these tests do not prove integrated legacy spool/inline enforcement or full FUSE snapshot correctness.",
+  "sources": [
+    {
+      "path": "crates/layerfs-workspace-core/src/limits.rs",
+      "sha256": "604661247b88ac821329243505814083946672a61ab4e91aeab37efeb79aa69d",
+      "git_blob": "35ffd85f865757b068f734532f887c78cb777a70"
+    },
+    {
+      "path": "crates/layerfs-workspace-core/src/lib.rs",
+      "sha256": "049b71c1844707a2330f44009aec9ad4151962c30a224135882d318b02117228",
+      "git_blob": "cc9a76555534f5e76606cb0430847c776992229f"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay_budget.rs",
+      "sha256": "222dcd2623e95288fbabc576c7287c25791e6e3f391b1fc818f46124d77c5c83",
+      "git_blob": "2fa0bf340b8b22e656beeaaaf2d9a8b16e9a958a"
+    },
+    {
+      "path": "crates/layerfs-workspace/src/overlay_payload.rs",
+      "sha256": "bedda0147dddecb013097b62c12362f9330d45487ef5c52414bc5ce080a65b4c",
+      "git_blob": "5e9c7d479484d428f00c34097471f4d0bbb77c38"
+    },
+    {
+      "path": "crates/layerfs-fuse/src/live_owner.rs",
+      "sha256": "c9dd6529784e8e1c453f18f7ca0339493b90e48daadd5d653d8d4e1188ce385b",
+      "git_blob": "7a37b4a651d32ba12c394c5b6a8cb4016444901c"
+    }
+  ],
+  "base_head": "c95588f30760e08235d56b513e48b92a9defd9b7",
+  "environment": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+  },
+  "selected_defaults": {
+    "full_metadata_index_bytes": 4294967296,
+    "metadata_pages": 986895,
+    "full_payload_index_bytes": 1073741824,
+    "payload_index_pages": 246723,
+    "legacy_spool_limit_bytes": 1073741824,
+    "retained_payload_reserve_bytes": 1073741824,
+    "payload_physical_ceiling_with_recovery_bytes": 2147549184,
+    "payload_recovery_bytes": 65536,
+    "scratch_disk_ceiling_bytes": 268435456,
+    "reserved_disk_per_workspace_bytes": 7784693760,
+    "resident_ceiling_bytes": 33554432,
+    "bounded_fixed_resident_reservation_bytes": 5846016,
+    "index_record_limit_bytes": 8192,
+    "root_tickets_per_index": 16384,
+    "payload_owner_slots": 8192,
+    "readers": 32,
+    "writers": 4,
+    "prepared": 4,
+    "requests": 256,
+    "replay_entries": 256,
+    "replay_bytes": 262144,
+    "transport_ceiling_bytes": 8388608,
+    "backing_files": 6,
+    "total_fd_reservation": 8,
+    "operation_resident_bytes": {
+      "Read": 131072,
+      "Write": 262144,
+      "Prepare": 524288,
+      "Request": 0,
+      "Scratch": 0
+    }
+  },
+  "aggregate_defaults": {
+    "overlay_memory_ceiling_bytes": 134217728,
+    "reserved_disk_ceiling_bytes": 137438953472,
+    "reserved_fds": 512,
+    "existing_scheduler_domains": "Live128MiB and transfer32MiB semaphores reused; overlay aggregate memory counts additional transfer reservations once."
+  },
+  "accounting": "Disk reservations guarantee bounded quotas across Workspaces; they are not actual disk use/RSS. Actual data/catalog/spool occupancy remains in component Stats. Bounded resident owner tables/page working sets and replay capacity reserve live permits; additional owned request/cursor/journal buffers use scoped live/transfer permits. Scratch/file permits must remain with resources until those resources close.",
+  "lifetime": "Payload Inner holds Budget keepalive as its last field; independent OwnedRange, physical reader and metadata Index Root all retain it. Budget contains no Payload/Index resource, avoiding a cycle. Aggregate disk/FD/fixed resident charges release after the last backing owner closes.",
+  "compatibility": "Original max_spool_bytes/max_final_delta_memory_bytes fields and checks unchanged. ResourcePolicy remote seed still consumes exactly two u64 values; new host-only overlay field uses Default locally. Existing1TiB maximum file result,8193pieces and4096-byte symlink limit are retained.",
+  "results": [
+    {
+      "identity": "limits::tests::overlay_capacity_checks_accept_exact_and_reject_plus_one",
+      "mode": "native core unit",
+      "result": "PASS",
+      "raw": "overlay-policy-attempt01.log",
+      "command": "cargo test -p layerfs-workspace-core --lib limits::tests::overlay_capacity_checks_accept_exact_and_reject_plus_one -- --nocapture"
+    },
+    {
+      "identity": "overlay_budget::tests::full_index_capacity_and_operation_limits_accept_exact_reject_plus_one",
+      "result": "PASS"
+    },
+    {
+      "identity": "overlay_budget::tests::two_workspaces_share_aggregate_reservation_and_failed_op_does_not_leak",
+      "result": "PASS"
+    },
+    {
+      "identity": "overlay_budget::tests::detached_snapshot_and_payload_range_retain_aggregate_admission",
+      "result": "PASS"
+    },
+    {
+      "identity": "overlay_budget::tests::aggregate_counter_and_policy_overflow_are_rejected_without_wraparound",
+      "result": "PASS"
+    }
+  ],
+  "budget_command": "cargo test -p layerfs-workspace --lib overlay_budget::tests:: -- --nocapture",
+  "budget_raw": "overlay-budget-attempt01.log",
+  "reused_passes": "Existing legacy spool/final-delta boundary checks remain unchanged; not rerun. Payload operations are unchanged except optional last-field lifetime retention; independent retained-range lifetime is explicitly tested.",
+  "remaining": [
+    "HostOverlay must enforce legacy cumulative spool and inline policies in addition to this physical admission factory; parent/host agent notified.",
+    "Wire and SDK integration must retain operation permits with their actual buffers/journals/replies; no benchmark or full surface acceptance asserted."
+  ]
+}

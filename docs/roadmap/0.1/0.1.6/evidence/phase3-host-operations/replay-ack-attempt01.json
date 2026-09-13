@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "+1.96.0",
+    "test",
+    "-p",
+    "layerfs-workspace",
+    "--lib",
+    "host_operations::tests::lost_replies_bind_exact_requests_and_keep_kernel_owned_orphans_readable",
+    "--",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "source": {
+    "crates/layerfs-workspace/src/host_operations.rs": "86c10068105aa6dc0a52ed80df13bacda77c24d6e879c42e0965dd88f02eceba",
+    "crates/layerfs-workspace/src/overlay.rs": "371377754091b42435654ba3d22d5847f1fd665fa84ed50579248ab176b31c7a",
+    "crates/layerfs-fuse/src/host_wire.rs": "75974393268348f9c4131e3dad8caf97127bcef38810317ad2d72ede635ea978"
+  },
+  "reason": "New adversarial regression: sequence2 same mutation retry may advance acknowledgment0->1; old full-frame digest incorrectly rejects it.",
+  "timestamp_unix": 1789337422.706502,
+  "returncode": 101
+}
