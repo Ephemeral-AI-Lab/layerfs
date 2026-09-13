@@ -140,3 +140,24 @@ Unchanged rows are *not* evidence for the new design: they describe the current
 frozen product, whose Commit path still contains the freeze this work must remove.
 They are retained as the regression baseline that the future candidate must not
 break, not as qualification of the new behavior.
+
+### L7 — V1 retrieval mechanism correction and ownership counterexample
+
+- identity: V1-H1 dirty mmap retrieval, V1-H2 mutation after notification before
+  daemon read, V1-H3 open-unlinked retrieval by inode ID. Single changed-mechanism
+  probe; original no-trigger experiment is reused, not repeated.
+- source: `evidence/v1-investigation/retrieve_probe.c` includes the retained
+  `evidence/v1-probe/probe.c`; exact source/image/dependency hashes and command in
+  `run-01.json`, `SHA256SUMS`, and pinned primary-source register `sources.json`.
+- environment: deployed `6.12.76-linuxkit`, Linux aarch64, GCC 12.2.0, image
+  `sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4`;
+  short standalone probe under the existing measurement lock, released afterward.
+- result: byte-retrieval assertions PASS; **snapshot mechanism REFUTED**.
+  Retrieved 4096 bytes without WRITE callbacks, also after unlink. H2 returned B
+  after A was current at notification and a later mapped B completed before read.
+  Full supported-surface V1 acceptance remains OPEN. No benchmark was executed.
+- validity: current. Original L1 observations remain valid; invalidates only the
+  predecessor's claim that the kernel has no buffer-retrieval facility and that
+  forced writeback is the sole path to those bytes. It does not qualify product
+  snapshot isolation. See `evidence/v1-investigation/README.md` for scope and
+  remaining kernel/adapter capability, and independent work that continues.

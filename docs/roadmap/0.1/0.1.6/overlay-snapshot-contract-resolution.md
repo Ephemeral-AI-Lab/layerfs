@@ -22,6 +22,14 @@ inspected live source is that baseline plus the documentation commit.
 
 ## 1. V1 — kernel visibility: demonstrated incompatibility (blocking)
 
+**Successor correction:** the predecessor's exclusivity statements below are
+historical and superseded by the [retrieval investigation](evidence/v1-investigation/README.md).
+`FUSE_NOTIFY_RETRIEVE` reads dirty cached bytes without writeback, including by
+open-unlinked inode identity. Its retained page references remain mutable: a
+mapped store after notification changed the eventual reply. Thus V1 remains open,
+but "no retrieval facility" and a universal impossibility claim are unsupported.
+No semantic relaxation is approved; independent Phase 2–5 execution continues.
+
 ### What was tested
 
 A dependency-free probe (`benchmark-results/v016/v1-probe/probe.c`, raw log

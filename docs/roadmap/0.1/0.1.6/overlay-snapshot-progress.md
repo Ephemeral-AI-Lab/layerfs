@@ -11,13 +11,13 @@ for that work; the append-only record of individual checks is
 
 | Item | Value |
 | --- | --- |
-| Phase | 1 (contracts and frozen source of truth) — complete for V2/V3/V4 and for V1's acknowledged-bytes half; V1 mapping visibility is an open blocker requiring an owner decision |
-| Next concrete action | Successor implements the smallest dependency-ready Phase 2 host overlay behavior and focused check; investigate compliant V1 mechanisms alongside independent implementation |
-| Phases 2–6 | Not started. No product code for this feature exists |
+| Phase | 2 in progress; V1 acceptance remains OPEN and V2/V3/V4 remain implementation obligations |
+| Next concrete action | Run leased-root race/change-index/replay checks when the private disk index is ready; integrate payload ownership and owned readers; continue retained publication receipt checks |
+| Phases 2–6 | Phase 2 components being implemented; Phase 4 Store receipts being implemented independently. No phase completion or public-path acceptance claimed |
 | Phase 7 | Not started. No benchmark case was executed for #124/#125 |
-| Active processes | None. No build, container, mount, or benchmark is running |
+| Active processes | Store receipt agent owns the serialized Cargo slot; disk-index and payload agents edit separate files; no benchmark running. Inspect current processes before resuming |
 | Measurement lock | Not held |
-| Unresolved contract | V1 mapping visibility remains open. No option relaxing semantics has owner approval; this does not block all Phase 2–5 component work |
+| Unresolved contract | V1: NOTIFY_RETRIEVE supplies dirty bytes but retains mutable pages, not a snapshot. See follow-up investigation; no relaxation approved |
 
 Scheduling correction (2026-09-14): the owner requested continued execution through
 terminal success. The predecessor's blanket wait before Phases 2–5 is superseded
@@ -31,6 +31,8 @@ implementation evidence; full public snapshot acceptance and Phase 7 remain pend
 | --- | --- |
 | Authoritative documents | rule, spec, spec-review, architecture, implementation-plan, this file, contract resolution, exclusion manifest — all under `docs/roadmap/0.1/0.1.6/` |
 | Documentation commit | `86f6a0a0ff3de2d524b4984ab9c6b5de5272b18b` (rule/spec/review/architecture/plan/handoff + exclusion manifest) |
+| Successor frozen instruction commit | `554b866838e50468b312f9d8e9ef70dc2988a38e` on `codex/snapshot-isolated-workspace`; preserves all three scoped local edits from takeover |
+| Takeover comment | https://github.com/Ephemeral-AI-Lab/layerfs/issues/124#issuecomment-5655720706 |
 | Source baseline named by the specification | `0814cc37f1dafb6041930c74489107f4a5035a26` |
 | Phase-1 enumerating binary | `target/release/fs-benchmark-pro`, `LAYERFS_SOURCE_COMMIT=536aaf9ded4e09a9ccfcf2b251aa4db995b383e6` (documentation-only difference from the documentation commit), product seal `276c5970…`, compilation seal `8b63c852…` |
 | Regression suite source commit used for the frozen pass ledger | `3e308a8f2` (recorded by the existing v0.1.5/#120 evidence) |
@@ -41,6 +43,8 @@ implementation evidence; full public snapshot acceptance and Phase 7 remain pend
 | Evidence | Location |
 | --- | --- |
 | V1 kernel-visibility probe (source, log, hashes) | `docs/roadmap/0.1/0.1.6/evidence/v1-probe/` |
+| V1 retrieval correction (new mechanism, retained-page counterexample) | `docs/roadmap/0.1/0.1.6/evidence/v1-investigation/` |
+| Phase 2 focused component logs | `docs/roadmap/0.1/0.1.6/evidence/phase2-components/`; cursor attempt01 selected zero tests and is invalid; attempt02 executed one PASS |
 | Phase-1 benchmark catalog and scope ledger | `docs/roadmap/0.1/0.1.6/evidence/phase1-catalog/` |
 | Local raw run directory for the same probe | `benchmark-results/v016/v1-probe/` (git-ignored raw evidence, preserved in place) |
 | Local raw catalog directory | `benchmark-results/v016/phase1-catalog/` |
