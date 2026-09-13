@@ -109,6 +109,15 @@ implementation issue stays open. The other Phase 2–5 obligations below are
 independent of this decision and are specified now so that implementation can be
 scheduled either way.
 
+One further consequence of removing the current mechanism must be declared
+whichever option is chosen: the `syncfs` in `flush_kernel_cache` is not only a
+visibility trigger, it is also where the product observes kernel-side writeback
+errors ("syncfs observes the mount's writeback error sequence, including kernel-side
+allocation errors", `crates/layerfs-fuse/src/live_owner.rs:2619-2621`). A Commit that
+no longer performs it stops surfacing those errors at that boundary, so the
+replacement contract must say where writeback errors are observed and delivered to
+the caller instead of silently dropping them.
+
 ### The second half of V1 is separable and is not blocked
 
 "Acknowledged data previously buffered only in the container" is a product change,
@@ -336,7 +345,19 @@ candidate, and an unresolvable case that must stay `unknown`.
 | Bootstrapping base-root retarget | `base_root`, `base_inodes`, `expected_head` on publication (`lifecycle.rs:308-321`) | Separate live provenance from published comparison context |
 | Build-duration live borrow | `Workspace::commit(&mut self)` and `changes::CandidateInputs`/`FrozenWorkspaceChanges` (`layerfs-workspace-core/src/lib.rs:123-152`) | Replace with owned snapshot access and bounded cursors |
 | Kernel cache flush path | `live_owner.rs:2580-2630` (`flush_kernel_cache`: `inval_inode` + `syncfs`) | Not reused by Commit; **still required** by its own consumers until V1 is decided |
-| Must-audit non-Commit consumers | `ensure_active` (`execution.rs`, `file_io.rs`, `cow_tree.rs`), `install_checkpoint`/`finish_checkpoint` (`live_owner.rs`, `layerfs-workspace-core/src/checkpoint.rs`), `mutation_generation`/`mutation_paths` (`session.rs`, `registry.rs`, `reconcile.rs`, `projection.rs`, `live_backing.rs`) | Preserve their independent semantics (fsync, SDK cache coordination, reconciliation, diagnostics, explicit End/Discard); delete only what becomes unreachable |
+| Must-audit non-Commit consumers | see §5.1 | Preserve their independent semantics; delete only what becomes unreachable |
+
+### 5.1 Non-Commit consumer audit (required before Phase 5 deletes anything)
+
+| Helper | Actual consumers | Disposition |
+| --- | --- | --- |
+| Container cut gate + `flush_kernel_cache` (`live_owner.rs:2580-2690`, `2946-2967`, `3196-3210`, `1935`) | **not only Commit**: the ordinary SDK splice path takes the same cut with `freeze_diagnostic(false, …)` before reading live-owner state (`live_owner.rs:2956-2961`), `wire::FREEZE`/`wire::RESUME` are the host-driven Commit path, `prepare_shutdown` takes the cut (`:2568`), and `gate.cache_flush()` is used directly at `:1936` | Keep the primitive. Commit must stop using the *complete-dirty-prefix* flavor (`publish = true`, whole-prefix facts), not delete the cut, its edit-path use, or shutdown drain |
+| `syncfs` role beyond visibility | the same call is the product's kernel **writeback-error channel** (`live_owner.rs:2619-2621`: "syncfs observes the mount's writeback error sequence, including kernel-side allocation errors") | A Commit that no longer calls it also stops surfacing kernel-side writeback errors at that boundary; the replacement must state where those errors are observed, or the semantic loss must be declared |
+| Host `install_checkpoint` (`live_backing.rs:2080`) | `lifecycle.rs:642` Commit presentation plus `live_backing.rs:1209/1512/1661/1673` tests | Remove only the Commit call; keep the function while remote/explicit install paths exist |
+| Container checkpoint installation (`live_owner.rs:363-380`) | `validate_checkpoint_record` / `install_checkpoint_record` / `finish_checkpoint`, driven by `wire::INSTALL_BEGIN`/`INSTALL_END` (`:3224-3235`) | Independent of the host Commit path; must keep working |
+| `Workspace::ensure_active` (`lifecycle.rs:355-364`) | `cow_tree.rs:224,585-692`, `execution.rs:175`, `file_io.rs:409,491,523` — i.e. every read, write and namespace operation | Redefine to lifecycle validity only. Note: `objects.rs:2570,4058,4230` define an unrelated admission-session `ensure_active`; it must not be conflated |
+| `pending_stage` / `pending_publication` / `pending_checkpoint` | `lifecycle.rs` (commit fast path, `discard`, `end_clean`, `recover_workspace_presentation`, verification state), `cow_tree.rs:96`, `live_backing.rs` (remote install) | Move attempt state into the attempt record; preserve `discard`/`end_clean` and remote-install behavior |
+| `mutation_generation` / `mutation_paths` | `session.rs`, `registry.rs`, `changes.rs`, `reconcile.rs`, `file_io.rs`, `projection.rs`, `live_backing.rs`, `layerfs-fuse/src/live_owner.rs` (`wire::OBSERVE`), `file_edit.rs`, `checkpoint.rs` | Replacement must keep: OBSERVE diagnostics, reconciliation invalidation (`invalidate_if_mutated`), capture invalidation, and report/telemetry consumers. The checkpoint generation-equality check disappears with installation and must not be silently repurposed |
 
 ## 6. Benchmark catalog recorded for Phase 7
 

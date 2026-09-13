@@ -106,9 +106,29 @@ source, environment, result, validity.
   those passes were collected from. Re-running them now would produce no new
   information and would violate the reuse rule.
 
-## Retained passes from earlier work (not re-run by this ledger)
+### L6 — Non-Commit consumer audit (Phase 5 prerequisite)
 
-| Pass family | Recorded by | Why still valid |
+- identity: static call-site audit of the helpers Phase 5 would delete, over the
+  frozen product source.
+- source: contract resolution §5.1; call sites in
+  `crates/layerfs-fuse/src/live_owner.rs`, `crates/layerfs-workspace/src/lifecycle.rs`,
+  `live_backing.rs`, `cow_tree.rs`, `execution.rs`, `file_io.rs`,
+  `layerfs-workspace-core/src/{checkpoint.rs,file_edit.rs}`, `session.rs`,
+  `registry.rs`, `reconcile.rs`, `projection.rs`.
+- environment: none (no execution).
+- result: pass, with three findings that change the removal plan.
+  (a) The cut gate is shared with the ordinary SDK splice path
+  (`live_owner.rs:2956-2961`), `prepare_shutdown` and a direct `gate.cache_flush()`
+  call, so Commit must stop using the complete-dirty-prefix flavour rather than the
+  cut being deleted. (b) The container has its own checkpoint installation
+  (`live_owner.rs:363-380`, `INSTALL_BEGIN`/`INSTALL_END`) independent of the host
+  path, so removing the host Commit call does not remove that machinery.
+  (c) The `syncfs` call is also the product's kernel writeback-error channel, so a
+  Commit that stops calling it changes error-reporting semantics unless the
+  replacement states where those errors are observed.
+- validity: current. Call-site analysis of unchanged source.
+
+## Retained passes from earlier work (not re-run by this ledger)| Pass family | Recorded by | Why still valid |
 | --- | --- | --- |
 | v0.1.6 M1 fixture/mixed/alias/boundary verification and performance rows | commits `d6ce37b5b`, `536aaf9de`, `3f38e82ca`, `12c047ca1`, `dcd8ed591` | product source unchanged since those runs (L3); no fixture, oracle, image or harness input changed |
 | v0.1.5 #120 terminal campaign (227 registered selections) | `docs/roadmap/0.1/0.1.3/…`, #120 reports | same reason; also outside this campaign's scope and custody |
