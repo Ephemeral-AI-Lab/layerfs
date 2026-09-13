@@ -128,7 +128,9 @@ source, environment, result, validity.
   replacement states where those errors are observed.
 - validity: current. Call-site analysis of unchanged source.
 
-## Retained passes from earlier work (not re-run by this ledger)| Pass family | Recorded by | Why still valid |
+## Retained passes from earlier work (not re-run by this ledger)
+
+| Pass family | Recorded by | Why still valid |
 | --- | --- | --- |
 | v0.1.6 M1 fixture/mixed/alias/boundary verification and performance rows | commits `d6ce37b5b`, `536aaf9de`, `3f38e82ca`, `12c047ca1`, `dcd8ed591` | product source unchanged since those runs (L3); no fixture, oracle, image or harness input changed |
 | v0.1.5 #120 terminal campaign (227 registered selections) | `docs/roadmap/0.1/0.1.3/…`, #120 reports | same reason; also outside this campaign's scope and custody |
